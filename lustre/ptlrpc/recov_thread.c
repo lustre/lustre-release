@@ -515,7 +515,7 @@ static int log_process_thread(void *args)
         SIGNAL_MASK_UNLOCK(current, flags);
         unlock_kernel();
 
-        rc = llog_create(ctxt, &llh, &logid, NULL, NULL);
+        rc = llog_create(ctxt, &llh, &logid, NULL);
         if (rc) {
                 CERROR("llog_create failed %d\n", rc);
                 RETURN(rc);

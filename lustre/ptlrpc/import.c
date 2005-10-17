@@ -24,11 +24,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #ifdef __KERNEL__
 # include <linux/config.h>
 # include <linux/module.h>
@@ -96,7 +91,6 @@ int ptlrpc_init_import(struct obd_import *imp)
 
         return 0;
 }
-EXPORT_SYMBOL(ptlrpc_init_import);
 
 #define UUID_STR "_UUID"
 static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uuid_len)
@@ -108,7 +102,7 @@ static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uu
 
         if (*uuid_len < strlen(UUID_STR))
                 return;
-        
+
         if (!strncmp(*uuid_start + *uuid_len - strlen(UUID_STR),
                     UUID_STR, strlen(UUID_STR)))
                 *uuid_len -= strlen(UUID_STR);
@@ -268,7 +262,7 @@ static int import_select_connection(struct obd_import *imp)
                 RETURN(-EINVAL);
         }
 
-        if (imp->imp_conn_current && 
+        if (imp->imp_conn_current &&
             imp->imp_conn_current->oic_item.next != &imp->imp_conn_list) {
                 imp_conn = list_entry(imp->imp_conn_current->oic_item.next,
                                       struct obd_import_conn, oic_item);
@@ -289,6 +283,10 @@ static int import_select_connection(struct obd_import *imp)
         dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
         class_export_put(dlmexp);
 
+        if (imp->imp_conn_current && (imp->imp_conn_current != imp_conn)) {
+                LCONSOLE_WARN("Changing connection for %s to %s\n",
+                              imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid);
+        }
         imp->imp_conn_current = imp_conn;
         CDEBUG(D_HA, "%s: import %p using connection %s\n",
                imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid);
@@ -377,8 +375,12 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         aa->pcaa_peer_committed = committed_before_reconnect;
         aa->pcaa_initial_connect = initial_connect;
 
-        if (aa->pcaa_initial_connect)
+        if (aa->pcaa_initial_connect) {
                 imp->imp_replayable = 1;
+                /* On an initial connect, we don't know which one of a 
+                   failover server pair is up.  Don't wait long. */
+                request->rq_timeout = max((int)(obd_timeout / 20), 5);
+        }
 
         DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
         ptlrpcd_add_req(request);
@@ -390,7 +392,6 @@ out:
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(ptlrpc_connect_import);
 
 static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 {
@@ -448,7 +449,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 
         /* All imports are pingable */
         imp->imp_pingable = 1;
-        
+
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                         CDEBUG(D_HA, "connected to replayable target: %s\n",
@@ -538,7 +539,23 @@ finish:
                         RETURN(0);
                 }
         } else {
+                struct obd_connect_data *ocd;
+
+                ocd = lustre_swab_repbuf(request, 0,
+                                         sizeof *ocd, lustre_swab_connect);
+                if (ocd == NULL) {
+                        CERROR("Wrong connect data from server\n");
+                        rc = -EPROTO;
+                        GOTO(out, rc);
+                }
                 spin_lock_irqsave(&imp->imp_lock, flags);
+                /*
+                 * check that server granted subset of flags we asked for.
+                 */
+                LASSERT((ocd->ocd_connect_flags &
+                         imp->imp_connect_data.ocd_connect_flags) ==
+                        ocd->ocd_connect_flags);
+                imp->imp_connect_data = *ocd;
                 if (imp->imp_conn_current != NULL) {
                         list_del(&imp->imp_conn_current->oic_item);
                         list_add(&imp->imp_conn_current->oic_item,
@@ -581,7 +598,7 @@ static int completed_replay_interpret(struct ptlrpc_request *req,
                 ptlrpc_import_recovery_state_machine(req->rq_import);
         } else {
                 CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
-                       "reconnecting\n", 
+                       "reconnecting\n",
                        req->rq_import->imp_obd->obd_name, req->rq_status);
                 ptlrpc_connect_import(req->rq_import, NULL);
         }

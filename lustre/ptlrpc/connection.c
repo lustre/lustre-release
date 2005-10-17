@@ -46,61 +46,85 @@ void ptlrpc_dump_connections(void)
 
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid=%s)\n",
+                CERROR("Connection %p/%s has refcount %d (nid=%s->%s)\n",
                        c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
+                       libcfs_nid2str(c->c_self), 
                        libcfs_nid2str(c->c_peer.nid));
         }
         EXIT;
 }
 
-struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
-                                                struct obd_uuid *uuid)
+struct ptlrpc_connection*
+ptlrpc_lookup_conn_locked (lnet_process_id_t peer)
 {
-        struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
-        ENTRY;
+        struct list_head         *tmp;
 
-        CDEBUG(D_INFO, "peer is %s\n", libcfs_id2str(peer));
-
-        spin_lock(&conn_lock);
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(&peer, &c->c_peer, sizeof(peer)) == 0) {
-                        ptlrpc_connection_addref(c);
-                        GOTO(out, c);
-                }
+
+                if (peer.nid == c->c_peer.nid &&
+                    peer.pid == c->c_peer.pid)
+                        return ptlrpc_connection_addref(c);
         }
 
-        list_for_each_safe(tmp, pos, &conn_unused_list) {
+        list_for_each(tmp, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(&peer, &c->c_peer, sizeof(peer)) == 0) {
-                        ptlrpc_connection_addref(c);
+
+                if (peer.nid == c->c_peer.nid &&
+                    peer.pid == c->c_peer.pid) {
                         list_del(&c->c_link);
                         list_add(&c->c_link, &conn_list);
-                        GOTO(out, c);
+                        return ptlrpc_connection_addref(c);
                 }
         }
 
-        /* FIXME: this should be a slab once we can validate slab addresses
-         * without OOPSing */
-        OBD_ALLOC_GFP(c, sizeof(*c), GFP_ATOMIC);
-	
-        if (c == NULL)
-                GOTO(out, c);
+        return NULL;
+}
 
-        if (uuid && uuid->uuid)                         /* XXX ???? */
-                obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
-        atomic_set(&c->c_refcount, 0);
-        memcpy(&c->c_peer, &peer, sizeof(c->c_peer));
 
-        ptlrpc_connection_addref(c);
+struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
+                                                lnet_nid_t self, struct obd_uuid *uuid)
+{
+        struct ptlrpc_connection *c;
+        struct ptlrpc_connection *c2;
+        ENTRY;
 
-        list_add(&c->c_link, &conn_list);
+        CDEBUG(D_INFO, "self %s peer %s\n", 
+               libcfs_nid2str(self), libcfs_id2str(peer));
 
-        EXIT;
- out:
+        spin_lock(&conn_lock);
+
+        c = ptlrpc_lookup_conn_locked(peer);
+        
         spin_unlock(&conn_lock);
-        return c;
+
+        if (c != NULL)
+                RETURN (c);
+        
+        OBD_ALLOC(c, sizeof(*c));
+        if (c == NULL)
+                RETURN (NULL);
+
+        atomic_set(&c->c_refcount, 1);
+        c->c_peer = peer;
+        c->c_self = self;
+        if (uuid != NULL)
+                obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
+
+        spin_lock(&conn_lock);
+
+        c2 = ptlrpc_lookup_conn_locked(peer);
+        if (c2 == NULL)
+                list_add(&c->c_link, &conn_list);
+        
+        spin_unlock(&conn_lock);
+
+        if (c2 == NULL)
+                RETURN (c);
+        
+        OBD_FREE(c, sizeof(*c));
+        RETURN (c2);
 }
 
 int ptlrpc_put_connection(struct ptlrpc_connection *c)

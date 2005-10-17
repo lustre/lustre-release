@@ -202,6 +202,7 @@ void request_in_callback(lnet_event_t *ev)
                 req->rq_reqlen = ev->mlength;
         do_gettimeofday(&req->rq_arrival_time);
         req->rq_peer = ev->initiator;
+        req->rq_self = ev->target.nid;
         req->rq_rqbd = rqbd;
         req->rq_phase = RQ_PHASE_NEW;
 #if CRAY_XT3
@@ -341,7 +342,8 @@ static void ptlrpc_master_callback(lnet_event_t *ev)
         callback (ev);
 }
 
-int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, lnet_process_id_t *peer)
+int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, 
+                         lnet_process_id_t *peer, lnet_nid_t *self)
 {
         int               best_dist = 0;
         int               best_order = 0;
@@ -350,17 +352,24 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, lnet_process_id_t *peer)
         int               portals_compatibility;
         int               dist;
         int               order;
-        lnet_nid_t        nid;
+        lnet_nid_t        dst_nid;
+        lnet_nid_t        src_nid;
 
-        portals_compatibility = LNetCtl(IOC_PORTAL_PORTALS_COMPATIBILITY, NULL);
-        
+        portals_compatibility = LNetCtl(IOC_LIBCFS_PORTALS_COMPATIBILITY, NULL);
+
+        peer->pid = LUSTRE_SRV_LNET_PID;
+
         /* Choose the matching UUID that's closest */
-        peer->pid = LUSTRE_SRV_PTL_PID;
-
-        while (lustre_uuid_to_peer(uuid->uuid, &nid, count++) == 0) {
-                dist = LNetDist(nid, &order);
+        while (lustre_uuid_to_peer(uuid->uuid, &dst_nid, count++) == 0) {
+                dist = LNetDist(dst_nid, &src_nid, &order);
                 if (dist < 0)
                         continue;
+
+                if (dist == 0) {                /* local! use loopback LND */
+                        peer->nid = *self = LNET_MKNID(LNET_MKNET(LOLND, 0), 0);
+                        rc = 0;
+                        break;
+                }
                 
                 LASSERT (order >= 0);
                 if (rc < 0 ||
@@ -374,18 +383,18 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, lnet_process_id_t *peer)
                                  * NET, so if I'm reading new config logs, or
                                  * getting configured by (new) lconf I can
                                  * still talk to old servers. */
-                                nid = PTL_MKNID(0, PTL_NIDADDR(nid));
+                                dst_nid = LNET_MKNID(0, LNET_NIDADDR(dst_nid));
+                                src_nid = LNET_MKNID(0, LNET_NIDADDR(src_nid));
                         }
-                        peer->nid = nid;
+                        peer->nid = dst_nid;
+                        *self = src_nid;
                         rc = 0;
                 }
         }
 
         CDEBUG(D_WARNING,"%s->%s\n", uuid->uuid, libcfs_id2str(*peer));
         if (rc != 0) 
-                LCONSOLE_ERROR("I couldn't find a NID for %s. Are the networks "
-                               "alive? Is routing set up?\n", uuid->uuid);
-
+                CERROR("No NID found for %s\n", uuid->uuid);
         return rc;
 }
 
@@ -432,7 +441,7 @@ lnet_pid_t ptl_get_pid(void)
 #ifndef  __KERNEL__
         pid = getpid();
 #else
-        pid = LUSTRE_SRV_PTL_PID;
+        pid = LUSTRE_SRV_LNET_PID;
 #endif
         return pid;
 }
@@ -514,7 +523,7 @@ liblustre_check_events (int timeout)
         if (rc == 0)
                 RETURN(0);
         
-        LASSERT (rc == -EOVERFLOW || rc == 0);
+        LASSERT (rc == -EOVERFLOW || rc == 1);
         
         /* liblustre: no asynch callback so we can't affort to miss any
          * events... */

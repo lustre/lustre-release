@@ -49,16 +49,17 @@ void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
 {
         struct ptlrpc_connection *c;
-        lnet_process_id_t          peer;
+        lnet_nid_t                self;
+        lnet_process_id_t         peer;
         int                       err;
 
-        err = ptlrpc_uuid_to_peer(uuid, &peer);
+        err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
         if (err != 0) {
                 CERROR("cannot find peer %s!\n", uuid->uuid);
                 return NULL;
         }
 
-        c = ptlrpc_get_connection(peer, uuid);
+        c = ptlrpc_get_connection(peer, self, uuid);
         if (c) {
                 memcpy(c->c_remote_uuid.uuid,
                        uuid->uuid, sizeof(c->c_remote_uuid.uuid));
@@ -72,16 +73,18 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
 void ptlrpc_readdress_connection(struct ptlrpc_connection *conn,
                                  struct obd_uuid *uuid)
 {
+        lnet_nid_t        self;
         lnet_process_id_t peer;
-        int              err;
+        int               err;
 
-        err = ptlrpc_uuid_to_peer(uuid, &peer);
+        err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
         if (err != 0) {
                 CERROR("cannot find peer %s!\n", uuid->uuid);
                 return;
         }
 
-        memcpy(&conn->c_peer, &peer, sizeof (peer));
+        conn->c_peer = peer;
+        conn->c_self = self;
         return;
 }
 
@@ -636,7 +639,7 @@ static int after_reply(struct ptlrpc_request *req)
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
                         req->rq_commit_cb(req);
                         spin_lock_irqsave(&imp->imp_lock, flags);
-		}
+                }
 
                 if (req->rq_transno > imp->imp_max_transno)
                         imp->imp_max_transno = req->rq_transno;
@@ -1494,13 +1497,13 @@ restart:
                 lwi = LWI_INTR(interrupted_request, req);
                 rc = l_wait_event(req->rq_reply_waitq,
                                   (req->rq_send_state == imp->imp_state ||
-                                   req->rq_err),
+                                   req->rq_err || req->rq_intr),
                                   &lwi);
-                DEBUG_REQ(D_HA, req, "\"%s\" awake: (%s == %s or %d == 1)",
+                DEBUG_REQ(D_HA, req, "\"%s\" awake: (%s == %s or %d/%d == 1)",
                           current->comm,
                           ptlrpc_import_state_name(imp->imp_state),
                           ptlrpc_import_state_name(req->rq_send_state),
-                          req->rq_err);
+                          req->rq_err, req->rq_intr);
 
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 list_del_init(&req->rq_list);

@@ -68,7 +68,8 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
         CDEBUG(D_NET, "Sending %d bytes to portal %d, xid "LPD64"\n",
                len, portal, xid);
 
-        rc = LNetPut (*mdh, ack, conn->c_peer, portal, xid, 0, 0);
+        rc = LNetPut (conn->c_self, *mdh, ack, 
+                      conn->c_peer, portal, xid, 0, 0);
         if (rc != 0) {
                 int rc2;
                 /* We're going to get an UNLINK event when I unlink below,
@@ -85,11 +86,11 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
 
 int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
 {
-        int                 rc;
-        int                 rc2;
-        lnet_process_id_t    peer;
-        lnet_md_t            md;
-        __u64               xid;
+        struct ptlrpc_connection *conn = desc->bd_export->exp_connection;
+        int                       rc;
+        int                       rc2;
+        lnet_md_t                 md;
+        __u64                     xid;
         ENTRY;
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_BULK_PUT_NET)) 
@@ -100,7 +101,6 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         LASSERT (desc->bd_type == BULK_PUT_SOURCE ||
                  desc->bd_type == BULK_GET_SINK);
         desc->bd_success = 0;
-        peer = desc->bd_export->exp_connection->c_peer;
 
         md.user_ptr = &desc->bd_cbid;
         md.eq_handle = ptlrpc_eq_h;
@@ -125,24 +125,25 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         xid = desc->bd_req->rq_xid;
         CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d "
                "id %s xid "LPX64"\n", desc->bd_iov_count,
-               desc->bd_nob, desc->bd_portal, libcfs_id2str(peer), xid);
+               desc->bd_nob, desc->bd_portal, 
+               libcfs_id2str(conn->c_peer), xid);
 
         /* Network is about to get at the memory */
         desc->bd_network_rw = 1;
 
         if (desc->bd_type == BULK_PUT_SOURCE)
-                rc = LNetPut (desc->bd_md_h, LNET_ACK_REQ, peer,
-                              desc->bd_portal, xid, 0, 0);
+                rc = LNetPut (conn->c_self, desc->bd_md_h, LNET_ACK_REQ, 
+                              conn->c_peer, desc->bd_portal, xid, 0, 0);
         else
-                rc = LNetGet (desc->bd_md_h, peer,
-                              desc->bd_portal, xid, 0);
+                rc = LNetGet (conn->c_self, desc->bd_md_h, 
+                              conn->c_peer, desc->bd_portal, xid, 0);
 
         if (rc != 0) {
                 /* Can't send, so we unlink the MD bound above.  The UNLINK
                  * event this creates will signal completion with failure,
                  * so we return SUCCESS here! */
                 CERROR("Transfer(%s, %d, "LPX64") failed: %d\n",
-                       libcfs_id2str(peer), desc->bd_portal, xid, rc);
+                       libcfs_id2str(conn->c_peer), desc->bd_portal, xid, rc);
                 rc2 = LNetMDUnlink(desc->bd_md_h);
                 LASSERT (rc2 == 0);
         }
@@ -335,7 +336,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
         req->rq_repmsg->opc    = req->rq_reqmsg->opc;
 
         if (req->rq_export == NULL) 
-                conn = ptlrpc_get_connection(req->rq_peer, NULL);
+                conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);
         else
                 conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 
@@ -375,6 +376,62 @@ int ptlrpc_error(struct ptlrpc_request *req)
         rc = ptlrpc_send_reply (req, 0);
         RETURN(rc);
 }
+
+int ptl_send_rpc_nowait(struct ptlrpc_request *request)
+{
+        int rc;
+        struct ptlrpc_connection *connection;
+        unsigned long flags;
+        ENTRY;
+
+        LASSERT (request->rq_type == PTL_RPC_MSG_REQUEST);
+
+        if (request->rq_import->imp_obd &&
+            request->rq_import->imp_obd->obd_fail) {
+                CDEBUG(D_HA, "muting rpc for failed imp obd %s\n",
+                       request->rq_import->imp_obd->obd_name);
+                /* this prevents us from waiting in ptlrpc_queue_wait */
+                request->rq_err = 1;
+                RETURN(-ENODEV);
+        }
+        
+        connection = request->rq_import->imp_connection;
+
+        request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
+        request->rq_reqmsg->type = PTL_RPC_MSG_REQUEST;
+        request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
+
+        spin_lock_irqsave (&request->rq_lock, flags);
+        /* If the MD attach succeeds, there _will_ be a reply_in callback */
+        request->rq_receiving_reply = 0;
+        /* Clear any flags that may be present from previous sends. */
+        request->rq_replied = 0;
+        request->rq_err = 0;
+        request->rq_timedout = 0;
+        request->rq_net_err = 0;
+        request->rq_resend = 0;
+        request->rq_restart = 0;
+        spin_unlock_irqrestore (&request->rq_lock, flags);
+
+        ptlrpc_request_addref(request);       /* +1 ref for the SENT callback */
+
+        request->rq_sent = CURRENT_SECONDS;
+        ptlrpc_pinger_sending_on_import(request->rq_import);
+        rc = ptl_send_buf(&request->rq_req_md_h, 
+                          request->rq_reqmsg, request->rq_reqlen,
+                          LNET_NOACK_REQ, &request->rq_req_cbid, 
+                          connection,
+                          request->rq_request_portal,
+                          request->rq_xid);
+        if (rc == 0) {
+                ptlrpc_lprocfs_rpc_sent(request);
+        } else {
+                ptlrpc_req_finished (request);          /* drop callback ref */
+        }
+
+        return rc;
+}
+
 
 int ptl_send_rpc(struct ptlrpc_request *request)
 {
