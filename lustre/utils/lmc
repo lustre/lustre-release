@@ -669,7 +669,7 @@ def add_net(gen, lustre, options):
         sys.exit(2)
 
     real_net_type = net_type
-    if net_type == 'lnet':
+    if net_type == 'lnet' and string.find(nid,'@') > 0:
         real_net_type = string.split(nid,'@')[1]
 
     # testing network
@@ -677,7 +677,8 @@ def add_net(gen, lustre, options):
         if options.verbose:
             print "Skip the remote host networking test."
     elif (node_name != 'client') and (real_net_type == 'tcp'):
-        print "Testing network on", node_name
+        if options.verbose:
+            print "Testing network on", node_name
         target = string.split(nid,'@')[0]
         out = runcmd("ping -c 1 -w 10 %s" %target)
         if out != 0:

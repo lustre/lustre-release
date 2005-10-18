@@ -2082,7 +2082,7 @@ def doHost(lustreDB, hosts):
             if config.service:
                 tgt_select[config.service] = h
                 config.group = config.service
-                print "Startup the", config.group, "service on current node."
+                print "Configure the", config.group, "service on current node."
             break
     if not node_db:
         panic('No host entry found.')
