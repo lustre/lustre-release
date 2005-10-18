@@ -586,8 +586,9 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         if (pos + len > lli->lli_maxbytes)
                 RETURN(-ERANGE);
 
-        lustre_build_lock_params(session->lis_cmd,
-                                 lli->lli_open_flags, pos, len, &p);
+        lustre_build_lock_params(session->lis_cmd, lli->lli_open_flags,
+                                 lli->lli_sbi->ll_connect_flags,
+                                 pos, len, &p);
 
         iogroup = get_io_group(inode, max_io_pages(len, iovlen), &p);
         if (IS_ERR(iogroup))

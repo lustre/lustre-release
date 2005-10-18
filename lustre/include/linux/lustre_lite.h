@@ -94,6 +94,7 @@ struct lustre_rw_params {
  * to put it in.
  */
 static inline void lustre_build_lock_params(int cmd, unsigned long open_flags,
+                                            __u64 connect_flags,
                                             loff_t pos, ssize_t len,
                                             struct lustre_rw_params *params)
 {
@@ -108,21 +109,19 @@ static inline void lustre_build_lock_params(int cmd, unsigned long open_flags,
         if (cmd == OBD_BRW_WRITE && (open_flags & O_APPEND)) {
                 params->lrp_policy.l_extent.start = 0;
                 params->lrp_policy.l_extent.end   = OBD_OBJECT_EOF;
-        } else {
-#ifdef __KERNEL__
-                /*
-                 * nothing special for the kernel. In the future llite may use
-                 * OST-side locks for small writes into highly contended
-                 * files.
-                 */
-#else
+        } else if (LIBLUSTRE_CLIENT && (connect_flags & OBD_CONNECT_SRVLOCK)) {
                 /*
                  * liblustre: OST-side locking for all non-O_APPEND
                  * reads/writes.
                  */
                 params->lrp_lock_mode = LCK_NL;
                 params->lrp_brw_flags = OBD_BRW_SRVLOCK;
-#endif
+        } else {
+                /*
+                 * nothing special for the kernel. In the future llite may use
+                 * OST-side locks for small writes into highly contended
+                 * files.
+                 */
         }
         params->lrp_ast_flags = (open_flags & O_NONBLOCK) ?
                 LDLM_FL_BLOCK_NOWAIT : 0;
