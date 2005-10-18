@@ -63,7 +63,7 @@ struct lustre_cfg {
         uint32_t lcfg_num; 
         uint32_t lcfg_flags;
         uint64_t lcfg_nid;
-        uint32_t lcfg_nal;
+        uint32_t lcfg_nal;                      /* not used any more */
 
         uint32_t lcfg_bufcount;
         uint32_t lcfg_buflens[0];
@@ -236,11 +236,7 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 struct lustre_mount_data {
         uint32_t lmd_magic;
         uint32_t lmd_flags;
-        uint64_t lmd_local_nid;
-        uint64_t lmd_server_nid;
-        uint32_t lmd_nal;
-        uint32_t lmd_server_ipaddr;
-        uint32_t lmd_port;
+        uint64_t lmd_nid;
         char     lmd_mds[64];
         char     lmd_profile[64];
 };

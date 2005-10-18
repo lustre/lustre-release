@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71 101"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
@@ -1886,7 +1886,7 @@ run_test 48b "Access removed working dir (should return errors)="
 
 test_48c() { # bug 2350
 	check_kernel_version 36 || return 0
-	#sysctl -w portals.debug=-1
+	#sysctl -w lnet.debug=-1
 	#set -vx
 	mkdir -p $DIR/d48c/dir
 	cd $DIR/d48c/dir
@@ -1909,7 +1909,7 @@ run_test 48c "Access removed working subdir (should return errors)"
 
 test_48d() { # bug 2350
 	check_kernel_version 36 || return 0
-	#sysctl -w portals.debug=-1
+	#sysctl -w lnet.debug=-1
 	#set -vx
 	mkdir -p $DIR/d48d/dir
 	cd $DIR/d48d/dir
@@ -1933,7 +1933,7 @@ run_test 48d "Access removed parent subdir (should return errors)"
 
 test_48e() { # bug 4134
 	check_kernel_version 41 || return 0
-	#sysctl -w portals.debug=-1
+	#sysctl -w lnet.debug=-1
 	#set -vx
 	mkdir -p $DIR/d48e/dir
 	cd $DIR/d48e/dir
@@ -2317,8 +2317,8 @@ run_test 63 "Verify oig_wait interruption does not crash ======="
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked
 test_63b() {
-	DBG_SAVE=`sysctl -n portals.debug`
-	sysctl -w portals.debug=-1
+	DBG_SAVE=`sysctl -n lnet.debug`
+	sysctl -w lnet.debug=-1
 
 	# ensure we have a grant to do async writes
 	dd if=/dev/zero of=/mnt/lustre/f63b bs=4k count=1
@@ -2328,13 +2328,13 @@ test_63b() {
 	sysctl -w lustre.fail_loc=0x80000406
 	multiop /mnt/lustre/f63b Owy && \
 		$LCTL dk /tmp/test63b.debug && \
-		sysctl -w portals.debug=$DBG_SAVE && \
+		sysctl -w lnet.debug=$DBG_SAVE && \
 		error "sync didn't return ENOMEM"
 	grep -q locked /proc/fs/lustre/llite/fs*/dump_page_cache && \
 		$LCTL dk /tmp/test63b.debug && \
-		sysctl -w portls.debug=$DBG_SAVE && \
+		sysctl -w lnet.debug=$DBG_SAVE && \
 		error "locked page left in cache after async error" || true
-	sysctl -w portals.debug=$DBG_SAVE
+	sysctl -w lnet.debug=$DBG_SAVE
 }
 run_test 63b "async write errors should be returned to fsync ==="
 

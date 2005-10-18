@@ -293,7 +293,6 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
         struct ptlrpc_reply_state *oldrep;
         struct ptlrpc_service     *svc;
         unsigned long              flags;
-        char                       str[PTL_NALFMT_SIZE];
         int                        i;
 
         /* CAVEAT EMPTOR: spinlock order */
@@ -309,7 +308,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                                 "new %d old %d\n", req->rq_xid,
                                 req->rq_reqmsg->opc, oldrep->rs_msg.opc);
 
-                svc = oldrep->rs_srv_ni->sni_service;
+                svc = oldrep->rs_service;
                 spin_lock (&svc->srv_lock);
 
                 list_del_init (&oldrep->rs_exp_list);
@@ -318,7 +317,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                       " o%d NID %s\n",
                       oldrep->rs_nlocks, oldrep,
                       oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_msg.opc,
-                      ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
+                      libcfs_nid2str(exp->exp_connection->c_peer.nid));
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)
                         ptlrpc_save_lock(req,
@@ -2103,7 +2102,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         int rc;
         ENTRY;
 
-#if CRAY_PORTALS
+#if CRAY_XT3
         rec->ur_uc.luc_fsuid = req->rq_uid;
 #endif
 
@@ -2122,7 +2121,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         /* checked by unpacker */
         LASSERT(rec->ur_opcode < REINT_MAX && reinters[rec->ur_opcode] != NULL);
 
-#if CRAY_PORTALS
+#if CRAY_XT3
         if (rec->ur_uc.luc_uce)
                 rec->ur_uc.luc_fsgid = rec->ur_uc.luc_uce->ue_primary;
 #endif

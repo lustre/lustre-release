@@ -46,7 +46,7 @@
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
+                              struct llog_logid *logid, char *name)
 {
         struct obd_import *imp;
         struct llogd_body req_body;
@@ -85,7 +85,8 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 bufcount++;
         }
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_CREATE,bufcount,size,tmp);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_CREATE, 
+                              bufcount, size, tmp);
         if (!req)
                 GOTO(err_free, rc = -ENOMEM);
 
@@ -185,7 +186,8 @@ static int llog_client_read_header(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_READ_HEADER,1,&size,NULL);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_READ_HEADER,
+                              1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 

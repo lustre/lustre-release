@@ -57,10 +57,6 @@ CLIENTS=${CLIENTS:-"uml3"}
 
 rm -f $config
 
-h2localhost () {
-	echo localhost
-}
-	
 h2tcp () {
 	case $1 in
 	client) echo '\*' ;;
@@ -76,7 +72,7 @@ h2elan () {
 }
 
 h2gm () {
-	echo `gmnalnid -n$1`
+	echo `gmlndnid -n$1`
 }
 
 h2iib () {

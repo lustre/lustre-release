@@ -39,7 +39,7 @@ display_elapsed_time() {
 
 set_debug_level() 
 {
-    $PDSH $CLIENTS "echo $1 > /proc/sys/portals/debug"
+    $PDSH $CLIENTS "echo $1 > /proc/sys/lnet/debug"
 }
 
 debug_client_on()

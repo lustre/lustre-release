@@ -1138,7 +1138,7 @@ int main(int argc, char * const argv[])
 
         free(buf_alloc);
 
-        printf("liblustre is about shutdown\n");
+        printf("liblustre is about to shutdown\n");
         __liblustre_cleanup_();
 
         printf("complete successfully\n");

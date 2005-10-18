@@ -17,8 +17,8 @@ rm -f $OOS
 
 sleep 1	# to ensure we get up-to-date statfs info
 
-#echo -1 > /proc/sys/portals/debug
-#echo 0x40a8 > /proc/sys/portals/subsystem_debug
+#echo -1 > /proc/sys/lnet/debug
+#echo 0x40a8 > /proc/sys/lnet/subsystem_debug
 #lctl clear
 #lctl debug_daemon start /r/tmp/debug 1024
 

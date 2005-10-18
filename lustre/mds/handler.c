@@ -400,7 +400,7 @@ static int mds_disconnect(struct obd_export *exp)
                 struct ptlrpc_reply_state *rs =
                         list_entry(exp->exp_outstanding_replies.next,
                                    struct ptlrpc_reply_state, rs_exp_list);
-                struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+                struct ptlrpc_service *svc = rs->rs_service;
 
                 spin_lock(&svc->srv_lock);
                 list_del_init(&rs->rs_exp_list);
@@ -1114,7 +1114,7 @@ int mds_handle(struct ptlrpc_request *req)
                 if (req->rq_export == NULL) {
                         CERROR("operation %d on unconnected MDS from %s\n",
                                req->rq_reqmsg->opc,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }
@@ -1541,9 +1541,12 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         mds_quota_setup(mds);
 
+        /* Wait for mds_postrecov trying to clear orphans until 9439 is fixed */
+        obd->obd_async_recov = 0;
         rc = mds_postsetup(obd);
         if (rc)
                 GOTO(err_fs, rc);
+        obd->obd_async_recov = 0;
 
         lprocfs_init_vars(mds, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -1653,7 +1656,6 @@ err_llog:
 
 int mds_postrecov(struct obd_device *obd)
 {
-        struct mds_obd *mds = &obd->u.mds;
         int rc, item = 0;
         ENTRY;
 
@@ -1679,36 +1681,11 @@ int mds_postrecov(struct obd_device *obd)
                 item = rc;
         }
 
-        rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
-                          0, NULL);
-        if (rc)
-                GOTO(out, rc);
-        
-        rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
-                          obd->u.mds.mds_lov_desc.ld_tgt_count,
-                          NULL, NULL, NULL);
-        if (rc) {
-                CERROR("%s: failed at llog_origin_connect: %d\n", 
-                       obd->obd_name, rc);
-                GOTO(out, rc);
-        }
-        
-        /* remove the orphaned precreated objects */
-        rc = mds_lov_clearorphans(mds, NULL /* all OSTs */);
-        if (rc) {
-                GOTO(err_llog, rc);
-        }
+        /* Does anyone need this to be synchronous ever? */
+        mds_lov_start_synchronize(obd, NULL, obd->obd_async_recov);
 
 out:
         RETURN(rc < 0 ? rc : item);
-
-err_llog:
-        /* cleanup all llogging subsystems */
-        rc = obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
-        if (rc)
-                CERROR("%s: failed to cleanup llogging subsystems\n",
-                        obd->obd_name);
-        goto out;
 }
 
 int mds_lov_clean(struct obd_device *obd)

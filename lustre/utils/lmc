@@ -75,7 +75,7 @@ Object creation command summary:
   --node node_name
   --nid nid
   --cluster_id 
-  --nettype tcp|elan|gm|openib|iib|vib|ra
+  --nettype tcp|elan|gm|openib|iib|vib|ra|ptl|lnet
   --hostaddr ip[/netmask]
   --port port
   --tcpbuf size
@@ -164,11 +164,12 @@ lmc_options = [
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
     # network 
-    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib/vib/ra.", PARAM),
+    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib/vib/ra/ptl/lnet.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
     ('hostaddr', "Optional argument to specify the host address.", PARAMLIST),
     ('cluster_id', "Specify the cluster ID", PARAM, "0"),
+    ('nonet', "Skip the remote host networking check"),
 
     # routes
     ('route', "Add a new route for the cluster.", PARAM),
@@ -273,6 +274,7 @@ def new_lustre(dom):
     </lustre>""" % (Lustre.CONFIG_VERSION, ldlm_name, ldlm_uuid)
     return dom.parseString(str)
 
+
 names = {}
 uuids = {}
 
@@ -327,6 +329,10 @@ class GenConfig:
             self.addText(new, str)
         node.appendChild(new)
         return new
+
+    def recordtime(self, timestr):
+        lustre = self.doc.getElementsByTagName("lustre")
+        lustre[0].setAttribute("mtime", timestr)
 
     def network(self, name, uuid, nid, cluster_id, net, hostaddr="",
                 port=0):
@@ -584,6 +590,15 @@ def get_attr(dom_node, attr, default=""):
 ############################################################
 # Top level commands
 #
+def runcmd(cmd):
+    f = os.popen(cmd)
+    ret = f.close()
+    if ret:
+        ret = ret >> 8
+    else:
+        ret = 0
+    return ret
+
 def set_node_options(gen, node, options):
     if options.router:
         node.setAttribute('router', '1')
@@ -645,14 +660,29 @@ def add_net(gen, lustre, options):
     hostaddr = get_option(options, 'hostaddr')
     net_type = get_option(options, 'nettype')
 
-    if net_type in ('tcp','openib','ra'):
+    if net_type in ('lnet','tcp','openib','ra'):
         port = get_option_int(options, 'port')
-    elif net_type in ('elan','gm','iib','vib','lo','cray_kern_nal'):
+    elif net_type in ('elan','gm','iib','vib','lo','ptl'):
         port = 0
     else:
         print "Unknown net_type: ", net_type
         sys.exit(2)
 
+    real_net_type = net_type
+    if net_type == 'lnet':
+        real_net_type = string.split(nid,'@')[1]
+
+    # testing network
+    if options.nonet:
+        if options.verbose:
+            print "Skip the remote host networking test."
+    elif node_name != 'client' and real_net_type in ('tcp'):
+        print "Testing network on", node_name
+        target = string.split(nid,'@')[0]
+        out = runcmd("ping -c 1 -w 10 %s" %target)
+        if out != 0:
+            print "Could not connect to", node_name,", Please check network."
+            
     ret = findByName(lustre, node_name, "node")
     if not ret:
         node = do_add_node(gen, lustre, options, node_name)
@@ -1170,6 +1200,10 @@ def main():
             panic(string.join(sys.argv),e)
         except Lustre.OptionError, e:
             panic("lmc", e)
+
+    #record timestamp
+    timestr = string.split(str(time.time()), '.')
+    gen.recordtime(timestr[0])
 
     if outFile == '-':
         printDoc(doc)

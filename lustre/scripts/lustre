@@ -138,7 +138,7 @@ status() {
 	egrep -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
 
 	# check for any routes - on a portals router this is the only thing
-	[ "`cat /proc/sys/portals/routes 2> /dev/null`" ] && STATE="running"
+	[ "`cat /proc/sys/lnet/routes 2> /dev/null`" ] && STATE="running"
 	
 	# check for any configured devices (may indicate partial startup)
 	[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial"

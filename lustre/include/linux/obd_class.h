@@ -89,8 +89,7 @@ void ping_evictor_stop(void);
 #endif
 
 
-/* buf should be len PTL_NALFMT_SIZE */
-char *obd_export_nid2str(struct obd_export *exp, char *buf);
+char *obd_export_nid2str(struct obd_export *exp);
 
 int obd_export_evict_by_nid(struct obd_device *obd, char *nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid);
@@ -107,7 +106,6 @@ void class_decref(struct obd_device *obd);
 struct config_llog_instance {
         char * cfg_instance;
         struct obd_uuid cfg_uuid;
-        ptl_nid_t  cfg_local_nid;
 };
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg);
@@ -1136,8 +1134,8 @@ typedef __u8 class_uuid_t[16];
 void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
 
 /* lustre_peer.c    */
-int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid);
-int class_add_uuid(char *uuid, __u64 nid, __u32 nal);
+int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index);
+int class_add_uuid(char *uuid, __u64 nid);
 int class_del_uuid (char *uuid);
 void class_init_uuidlist(void);
 void class_exit_uuidlist(void);

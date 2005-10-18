@@ -269,7 +269,6 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 static void dump_exports(struct obd_device *obd)
 {
         struct obd_export *exp, *n;
-        char ipbuf[PTL_NALFMT_SIZE];
 
         list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
                 struct ptlrpc_reply_state *rs;
@@ -285,7 +284,7 @@ static void dump_exports(struct obd_device *obd)
 
                 CDEBUG(D_IOCTL, "%s: %p %s %s %d %d %d: %p %s\n",
                        obd->obd_name, exp, exp->exp_client_uuid.uuid,
-                       obd_export_nid2str(exp, ipbuf),
+                       obd_export_nid2str(exp),
                        atomic_read(&exp->exp_refcount),
                        exp->exp_failed, nreplies, first_reply,
                        nreplies > 3 ? "..." : "");
@@ -553,7 +552,6 @@ void class_del_profile(char *prof)
 int class_process_config(struct lustre_cfg *lcfg)
 {
         struct obd_device *obd;
-        char nidstr[PTL_NALFMT_SIZE];
         int err;
 
         LASSERT(lcfg && !IS_ERR(lcfg));
@@ -567,13 +565,10 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_ADD_UUID: {
                 CDEBUG(D_IOCTL, "adding mapping from uuid %s to nid "LPX64
-                       " (%s), nal %x\n", lustre_cfg_string(lcfg, 1),
-                       lcfg->lcfg_nid,
-                       portals_nid2str(lcfg->lcfg_nal, lcfg->lcfg_nid, nidstr),
-                       lcfg->lcfg_nal);
+                       " (%s)\n", lustre_cfg_string(lcfg, 1),
+                       lcfg->lcfg_nid, libcfs_nid2str(lcfg->lcfg_nid));
 
-                err = class_add_uuid(lustre_cfg_string(lcfg, 1), lcfg->lcfg_nid,
-                                     lcfg->lcfg_nal);
+                err = class_add_uuid(lustre_cfg_string(lcfg, 1), lcfg->lcfg_nid);
                 GOTO(out, err);
         }
         case LCFG_DEL_UUID: {
@@ -716,8 +711,23 @@ static int class_config_llog_handler(struct llog_handle * handle,
 
                 lcfg_new->lcfg_num   = lcfg->lcfg_num;
                 lcfg_new->lcfg_flags = lcfg->lcfg_flags;
-                lcfg_new->lcfg_nid   = lcfg->lcfg_nid;
-                lcfg_new->lcfg_nal   = lcfg->lcfg_nal;
+
+                /* XXX Hack to try to remain binary compatible with
+                 * pre-newconfig logs */
+                if (lcfg->lcfg_nal != 0 &&      /* pre-newconfig log? */
+                    (lcfg->lcfg_nid >> 32) == 0) {
+                        __u32 addr = (__u32)(lcfg->lcfg_nid & 0xffffffff);
+
+                        lcfg_new->lcfg_nid =
+                                LNET_MKNID(LNET_MKNET(lcfg->lcfg_nal, 0), addr);
+                        CWARN("Converted pre-newconfig NAL %d NID %x to %s\n",
+                              lcfg->lcfg_nal, addr,
+                              libcfs_nid2str(lcfg_new->lcfg_nid));
+                } else {
+                        lcfg_new->lcfg_nid = lcfg->lcfg_nid;
+                }
+
+                lcfg_new->lcfg_nal = 0; /* illegal value for obsolete field */
 
                 rc = class_process_config(lcfg_new);
                 lustre_cfg_free(lcfg_new);
@@ -727,26 +737,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 break;
         }
         case PTL_CFG_REC: {
-                struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
-                if (pcfg->pcfg_version != PORTALS_CFG_VERSION) {
-                        if (pcfg->pcfg_version == __swab32(PORTALS_CFG_VERSION)) {
-                                CDEBUG(D_OTHER, "swabbing portals_cfg %p\n",
-                                       pcfg);
-                                lustre_swab_portals_cfg(pcfg);
-                        } else {
-                                CERROR("Unknown portals_cfg version: %#x "
-                                       "(expecting %#x)\n",
-                                       pcfg->pcfg_version,
-                                       PORTALS_CFG_VERSION);
-                                RETURN(-EINVAL);
-                        }
-                }
-                if (pcfg->pcfg_command ==NAL_CMD_REGISTER_MYNID &&
-                    cfg->cfg_local_nid != PTL_NID_ANY) {
-                        pcfg->pcfg_nid = cfg->cfg_local_nid;
-                }
-
-                rc = libcfs_nal_cmd(pcfg);
+                CWARN("Ignoring obsolete portals config\n");
                 break;
         }
         default:
@@ -807,43 +798,18 @@ int class_config_dump_handler(struct llog_handle * handle,
                 if (lcfg->lcfg_flags)
                         CDEBUG(D_INFO, "       flags: %x\n", lcfg->lcfg_flags);
                 if (lcfg->lcfg_nid)
-                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
-                               lcfg->lcfg_nid);
+                        CDEBUG(D_INFO, "         nid: %s\n",
+                               libcfs_nid2str(lcfg->lcfg_nid));
                 if (lcfg->lcfg_nal)
-                        CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_nal);
+                        CDEBUG(D_INFO, "         nal: %x (obsolete)\n", lcfg->lcfg_nal);
                 if (lcfg->lcfg_num)
-                        CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_num);
+                        CDEBUG(D_INFO, "         num: %x\n", lcfg->lcfg_num);
                 for (i = 1; i < lcfg->lcfg_bufcount; i++)
                         if (LUSTRE_CFG_BUFLEN(lcfg, i) > 0)
                                 CDEBUG(D_INFO, "     inlbuf%d: %s\n", i,
                                        lustre_cfg_string(lcfg, i));
         } else if (rec->lrh_type == PTL_CFG_REC) {
-                struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
-                CDEBUG(D_INFO, "pcfg command: %d\n", pcfg->pcfg_command);
-                if (pcfg->pcfg_nal)
-                        CDEBUG(D_INFO, "         nal: %x\n",
-                               pcfg->pcfg_nal);
-                if (pcfg->pcfg_gw_nal)
-                        CDEBUG(D_INFO, "      gw_nal: %x\n",
-                               pcfg->pcfg_gw_nal);
-                if (pcfg->pcfg_nid)
-                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
-                               pcfg->pcfg_nid);
-                if (pcfg->pcfg_nid2)
-                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
-                               pcfg->pcfg_nid2);
-                if (pcfg->pcfg_nid3)
-                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
-                               pcfg->pcfg_nid3);
-                if (pcfg->pcfg_misc)
-                        CDEBUG(D_INFO, "         nid: %d\n",
-                               pcfg->pcfg_misc);
-                if (pcfg->pcfg_id)
-                        CDEBUG(D_INFO, "          id: %x\n",
-                               pcfg->pcfg_id);
-                if (pcfg->pcfg_flags)
-                        CDEBUG(D_INFO, "       flags: %x\n",
-                               pcfg->pcfg_flags);
+                CDEBUG(D_INFO, "Obsolete pcfg command\n");
         } else {
                 CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);
                 rc = -EINVAL;

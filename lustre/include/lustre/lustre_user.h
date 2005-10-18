@@ -255,4 +255,8 @@ struct if_quotactl {
 #endif
 #endif /* !LPU64 */
 
+#ifndef offsetof
+# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
+#endif
+
 #endif /* _LUSTRE_USER_H */

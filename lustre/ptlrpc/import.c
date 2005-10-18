@@ -119,7 +119,6 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
         spin_lock_irqsave(&imp->imp_lock, flags);
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
-                char nidbuf[PTL_NALFMT_SIZE];
                 char *target_start;
                 int   target_len;
 
@@ -130,14 +129,13 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
                                "lost; in progress operations using this "
                                "service will %s.\n",
                                target_len, target_start,
-                               ptlrpc_peernid2str(&imp->imp_connection->c_peer,
-                                                  nidbuf),
-                               imp->imp_replayable
+                               libcfs_nid2str(imp->imp_connection->c_peer.nid),
+                               imp->imp_replayable 
                                ? "wait for recovery to complete"
                                : "fail");
 
                 if (obd_dump_on_timeout)
-                        portals_debug_dumplog();
+                        libcfs_debug_dumplog();
 
                 CWARN("%s: connection lost to %s@%s\n",
                       imp->imp_obd->obd_name,
@@ -569,7 +567,7 @@ finish:
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
                         CERROR("this is bug 7269 - please attach log there\n");
                         if (bug7269_dump == 0)
-                                portals_debug_dumplog();
+                                libcfs_debug_dumplog();
                         bug7269_dump = 1;
                 }
         }
@@ -726,7 +724,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_RECOVER) {
-                char nidbuf[PTL_NALFMT_SIZE];
+                char   *nidstr;
 
                 CDEBUG(D_HA, "reconnected to %s@%s\n",
                        imp->imp_target_uuid.uuid,
@@ -740,12 +738,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
                 deuuidify(imp->imp_target_uuid.uuid, NULL,
                           &target_start, &target_len);
-                ptlrpc_peernid2str(&imp->imp_connection->c_peer,
-                                   nidbuf);
+                nidstr = libcfs_nid2str(imp->imp_connection->c_peer.nid);
 
                 LCONSOLE_INFO("Connection restored to service %.*s using nid "
-                              "%s.\n",
-                              target_len, target_start, nidbuf);
+                              "%s.\n", target_len, target_start, nidstr);
 
                 CWARN("%s: connection restored to %s@%s\n",
                       imp->imp_obd->obd_name,

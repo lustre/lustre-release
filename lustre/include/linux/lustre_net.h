@@ -34,60 +34,35 @@
 
 #include <libcfs/kp30.h>
 // #include <linux/obd.h>
-#include <portals/p30.h>
+#include <lnet/lnet.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_import.h>
 #include <linux/lprocfs_status.h>
 
 /* MD flags we _always_ use */
-#define PTLRPC_MD_OPTIONS  (PTL_MD_EVENT_START_DISABLE | \
-                            PTL_MD_LUSTRE_COMPLETION_SEMANTICS)
+#define PTLRPC_MD_OPTIONS  0
 
-/* Define some large-ish maxima for bulk I/O 
- * CAVEAT EMPTOR, with multinet (i.e. gateways forwarding between networks)
+/* Define maxima for bulk I/O 
+ * CAVEAT EMPTOR, with multinet (i.e. routers forwarding between networks)
  * these limits are system wide and not interface-local. */
-#define PTLRPC_MAX_BRW_SIZE     (1 << 20)
-#define PTLRPC_MAX_BRW_PAGES    512
+#define PTLRPC_MAX_BRW_SIZE     LNET_MTU
+#define PTLRPC_MAX_BRW_PAGES    (PTLRPC_MAX_BRW_SIZE/PAGE_SIZE)
 
-/* ...reduce to fit... */
-
-#if CRAY_PORTALS
-/* include a cray header here if relevant
- * NB liblustre SIZE/PAGES is affected too, but it merges contiguous
- * chunks, so FTTB, it always used contiguous MDs */
-#else
-# include <portals/lib-types.h>
-#endif
-
-#if (defined(PTL_MTU) && (PTL_MTU < PTLRPC_MAX_BRW_SIZE))
-# undef  PTLRPC_MAX_BRW_SIZE
-# define PTLRPC_MAX_BRW_SIZE  PTL_MTU
-#endif
-#if (defined(PTL_MD_MAX_IOV) && (PTL_MD_MAX_IOV < PTLRPC_MAX_BRW_PAGES ))
-# undef  PTLRPC_MAX_BRW_PAGES
-# define PTLRPC_MAX_BRW_PAGES PTL_MD_MAX_IOV
-#endif
-
-/* ...and make consistent... */
-
+/* When PAGE_SIZE is a constant, we can check our arithmetic here with cpp! */
 #ifdef __KERNEL__
-#if (PTLRPC_MAX_BRW_SIZE > PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
-# undef  PTLRPC_MAX_BRW_SIZE
-# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
-#else
-# undef  PTLRPC_MAX_BRW_PAGES
-# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MAX_BRW_SIZE / PAGE_SIZE)
-#endif
-
-#if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
-#error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
-#endif
-#else /* !__KERNEL__ */
-/* PAGE_SIZE isn't a constant, can't use CPP on it.  We assume that the
- * limit is on the number of pages for large pages, which is currently true. */
-# undef  PTLRPC_MAX_BRW_PAGES
-# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MAX_BRW_SIZE / PAGE_SIZE)
+# if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
+#  error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
+# endif
+# if (PTLRPC_MAX_BRW_SIZE != (PTLRPC_MAX_BRW_PAGES * PAGE_SIZE))
+#  error "PTLRPC_MAX_BRW_SIZE isn't PTLRPC_MAX_BRW_PAGES * PAGE_SIZE"
+# endif
+# if (PTLRPC_MAX_BRW_SIZE > LNET_MTU)
+#  error "PTLRPC_MAX_BRW_SIZE too big"
+# endif
+# if (PTLRPC_MAX_BRW_PAGES > LNET_MAX_IOV)
+#  error "PTLRPC_MAX_BRW_PAGES too big"
+# endif
 #endif /* __KERNEL__ */
 
 /* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
@@ -155,14 +130,10 @@
 #define PTLBD_BUFSIZE    (32 * 1024)
 #define PTLBD_MAXREQSIZE 1024
 
-struct ptlrpc_peer {
-        ptl_process_id_t  peer_id;
-        struct ptlrpc_ni *peer_ni;
-};
-
 struct ptlrpc_connection {
         struct list_head        c_link;
-        struct ptlrpc_peer      c_peer;
+        lnet_nid_t              c_self;
+        lnet_process_id_t       c_peer;
         struct obd_uuid         c_remote_uuid;
         atomic_t                c_refcount;
 };
@@ -244,7 +215,7 @@ struct ptlrpc_bulk_desc;
  * ptlrpc callback & work item stuff
  */
 struct ptlrpc_cb_id {
-        void   (*cbid_fn)(ptl_event_t *ev);     /* specific callback fn */
+        void   (*cbid_fn)(lnet_event_t *ev);     /* specific callback fn */
         void    *cbid_arg;                      /* additional arg */
 };
 
@@ -252,35 +223,35 @@ struct ptlrpc_cb_id {
 #define RS_DEBUG     1
 
 struct ptlrpc_reply_state {
-        struct ptlrpc_cb_id   rs_cb_id;
-        struct list_head      rs_list;
-        struct list_head      rs_exp_list;
-        struct list_head      rs_obd_list;
+        struct ptlrpc_cb_id    rs_cb_id;
+        struct list_head       rs_list;
+        struct list_head       rs_exp_list;
+        struct list_head       rs_obd_list;
 #if RS_DEBUG
-        struct list_head      rs_debug_list;
+        struct list_head       rs_debug_list;
 #endif
         /* updates to following flag serialised by srv_request_lock */
-        unsigned int          rs_difficult:1;   /* ACK/commit stuff */
-        unsigned int          rs_scheduled:1;   /* being handled? */
-        unsigned int          rs_scheduled_ever:1; /* any schedule attempts? */
-        unsigned int          rs_handled:1;     /* been handled yet? */
-        unsigned int          rs_on_net:1;      /* reply_out_callback pending? */
-        unsigned int          rs_prealloc:1;      /* rs from prealloc list */
+        unsigned int           rs_difficult:1;     /* ACK/commit stuff */
+        unsigned int           rs_scheduled:1;     /* being handled? */
+        unsigned int           rs_scheduled_ever:1;/* any schedule attempts? */
+        unsigned int           rs_handled:1;  /* been handled yet? */
+        unsigned int           rs_on_net:1;   /* reply_out_callback pending? */
+        unsigned int           rs_prealloc:1; /* rs from prealloc list */
 
-        int                   rs_size;
-        __u64                 rs_transno;
-        __u64                 rs_xid;
-        struct obd_export    *rs_export;
-        struct ptlrpc_srv_ni *rs_srv_ni;
-        ptl_handle_md_t       rs_md_h;
-        atomic_t              rs_refcount;
+        int                    rs_size;
+        __u64                  rs_transno;
+        __u64                  rs_xid;
+        struct obd_export     *rs_export;
+        struct ptlrpc_service *rs_service;
+        lnet_handle_md_t       rs_md_h;
+        atomic_t               rs_refcount;
 
         /* locks awaiting client reply ACK */
-        int                   rs_nlocks;
-        struct lustre_handle  rs_locks[RS_MAX_LOCKS];
-        ldlm_mode_t           rs_modes[RS_MAX_LOCKS];
+        int                    rs_nlocks;
+        struct lustre_handle   rs_locks[RS_MAX_LOCKS];
+        ldlm_mode_t            rs_modes[RS_MAX_LOCKS];
         /* last member: variable sized reply message */
-        struct lustre_msg     rs_msg;
+        struct lustre_msg      rs_msg;
 };
 
 struct ptlrpc_thread;
@@ -299,7 +270,7 @@ struct ptlrpc_request_pool {
         int prp_rq_size;
         void (*prp_populate)(struct ptlrpc_request_pool *, int);
 };
-        
+
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
@@ -341,26 +312,27 @@ struct ptlrpc_request {
         enum lustre_imp_state rq_send_state;
 
         /* client+server request */
-        ptl_handle_md_t      rq_req_md_h;
+        lnet_handle_md_t     rq_req_md_h;
         struct ptlrpc_cb_id  rq_req_cbid;
 
         /* server-side... */
         struct timeval       rq_arrival_time;       /* request arrival time */
         struct ptlrpc_reply_state *rq_reply_state;  /* separated reply state */
         struct ptlrpc_request_buffer_desc *rq_rqbd; /* incoming request buffer*/
-#if CRAY_PORTALS
-        ptl_uid_t            rq_uid;            /* peer uid, used in MDS only */
+#if CRAY_XT3
+# error "Need to get the uid from the event?"
+        __u32                rq_uid;            /* peer uid, used in MDS only */
 #endif
-        
+
         /* client-only incoming reply */
-        ptl_handle_md_t      rq_reply_md_h;
+        lnet_handle_md_t     rq_reply_md_h;
         wait_queue_head_t    rq_reply_waitq;
         struct ptlrpc_cb_id  rq_reply_cbid;
 
-        struct ptlrpc_peer rq_peer; /* XXX see service.c can this be removed? */
-        char               rq_peerstr[PTL_NALFMT_SIZE];
-        struct obd_export *rq_export;
-        struct obd_import *rq_import;
+        lnet_nid_t           rq_self;
+        lnet_process_id_t    rq_peer;
+        struct obd_export   *rq_export;
+        struct obd_import   *rq_import;
 
         void (*rq_replay_cb)(struct ptlrpc_request *);
         void (*rq_commit_cb)(struct ptlrpc_request *);
@@ -471,12 +443,12 @@ struct ptlrpc_bulk_desc {
         __u64                  bd_last_xid;
 
         struct ptlrpc_cb_id    bd_cbid;         /* network callback info */
-        ptl_handle_md_t        bd_md_h;         /* associated MD */
+        lnet_handle_md_t        bd_md_h;         /* associated MD */
         
-#if (!CRAY_PORTALS && defined(__KERNEL__))
-        ptl_kiov_t             bd_iov[0];
+#if defined(__KERNEL__)
+        lnet_kiov_t             bd_iov[0];
 #else
-        ptl_md_iovec_t         bd_iov[0];
+        lnet_md_iovec_t         bd_iov[0];
 #endif
 };
 
@@ -494,32 +466,12 @@ struct ptlrpc_thread {
 struct ptlrpc_request_buffer_desc {
         struct list_head       rqbd_list;
         struct list_head       rqbd_reqs;
-        struct ptlrpc_srv_ni  *rqbd_srv_ni;
-        ptl_handle_md_t        rqbd_md_h;
+        struct ptlrpc_service *rqbd_service;
+        lnet_handle_md_t       rqbd_md_h;
         int                    rqbd_refcount;
         char                  *rqbd_buffer;
         struct ptlrpc_cb_id    rqbd_cbid;
         struct ptlrpc_request  rqbd_req;
-};
-
-/* event queues are per-ni, because one day we may get a hardware
- * supported NAL that delivers events asynchonously wrt kernel portals
- * into the eq.
- */
-struct ptlrpc_ni { /* Generic interface state */
-        char                   *pni_name;
-        int                     pni_number;
-        ptl_handle_ni_t         pni_ni_h;
-        ptl_handle_eq_t         pni_eq_h;
-};
-
-struct ptlrpc_srv_ni {
-        /* Interface-specific service state */
-        struct ptlrpc_service  *sni_service;    /* owning service */
-        struct ptlrpc_ni       *sni_ni;         /* network interface */
-        struct list_head        sni_active_rqbds;   /* req buffers receiving */
-        struct list_head        sni_active_replies; /* all the active replies */
-        int                     sni_nrqbd_receiving; /* # posted request buffers */
 };
 
 typedef int (*svc_handler_t)(struct ptlrpc_request *req);
@@ -552,11 +504,14 @@ struct ptlrpc_service {
         svcreq_printfn_t  srv_request_history_print_fn; /* service-specific print fn */
 
         struct list_head  srv_idle_rqbds;       /* request buffers to be reposted */
+        struct list_head  srv_active_rqbds;     /* req buffers receiving */
         struct list_head  srv_history_rqbds;    /* request buffer history */
+        int               srv_nrqbd_receiving;  /* # posted request buffers */
         int               srv_n_history_rqbds;  /* # request buffers in history */
         int               srv_max_history_rqbds; /* max # request buffers in history */
 
         atomic_t          srv_outstanding_replies;
+        struct list_head  srv_active_replies;   /* all the active replies */
         struct list_head  srv_reply_queue;      /* replies waiting for service */
 
         wait_queue_head_t srv_waitq; /* all threads sleep on this */
@@ -588,43 +543,30 @@ struct ptlrpc_service {
          */
         void (*srv_done)(struct ptlrpc_thread *thread);
 
-        struct ptlrpc_srv_ni srv_interfaces[0];
+        //struct ptlrpc_srv_ni srv_interfaces[0];
 };
 
-static inline char *ptlrpc_peernid2str(struct ptlrpc_peer *p, char *str)
-{
-        LASSERT(p->peer_ni != NULL);
-        return (portals_nid2str(p->peer_ni->pni_number, p->peer_id.nid, str));
-}
-
-static inline char *ptlrpc_id2str(struct ptlrpc_peer *p, char *str)
-{
-        LASSERT(p->peer_ni != NULL);
-        return (portals_id2str(p->peer_ni->pni_number, p->peer_id, str));
-}
-
 /* ptlrpc/events.c */
-extern struct ptlrpc_ni ptlrpc_interfaces[];
-extern int              ptlrpc_ninterfaces;
-extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid, struct ptlrpc_peer *peer);
-extern void request_out_callback (ptl_event_t *ev);
-extern void reply_in_callback(ptl_event_t *ev);
-extern void client_bulk_callback (ptl_event_t *ev);
-extern void request_in_callback(ptl_event_t *ev);
-extern void reply_out_callback(ptl_event_t *ev);
-extern void server_bulk_callback (ptl_event_t *ev);
-extern int ptlrpc_default_nal(void);
+extern lnet_handle_eq_t ptlrpc_eq_h;
+extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid, 
+                               lnet_process_id_t *peer, lnet_nid_t *self);
+extern void request_out_callback (lnet_event_t *ev);
+extern void reply_in_callback(lnet_event_t *ev);
+extern void client_bulk_callback (lnet_event_t *ev);
+extern void request_in_callback(lnet_event_t *ev);
+extern void reply_out_callback(lnet_event_t *ev);
+extern void server_bulk_callback (lnet_event_t *ev);
 
 /* ptlrpc/connection.c */
 void ptlrpc_dump_connections(void);
 void ptlrpc_readdress_connection(struct ptlrpc_connection *, struct obd_uuid *);
-struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
-                                                struct obd_uuid *uuid);
+struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
+                                                lnet_nid_t self, struct obd_uuid *uuid);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 void ptlrpc_init_connection(void);
 void ptlrpc_cleanup_connection(void);
-extern ptl_pid_t ptl_get_pid(void);
+extern lnet_pid_t ptl_get_pid(void);
 
 /* ptlrpc/niobuf.c */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc);

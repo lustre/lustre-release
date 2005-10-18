@@ -578,6 +578,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
 
         /* Ensure that this close's handle is fixed up during replay. */
         LASSERT(och != NULL);
+        LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
         mod = och->och_mod;
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
@@ -585,8 +586,8 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                         /* FIXME This should be an ASSERT, but until we
                            figure out why it can be poisoned here, give 
                            a reasonable return. bug 6155 */
-                        CERROR("LBUG POISONED req %p!\n", mod->mod_open_req);
-                        ptlrpc_free_req(req);
+                        CERROR("LBUG POISONED open %p!\n", mod->mod_open_req);
+                        ptlrpc_req_finished(req);
                         GOTO(out, rc = -EIO);
                 }
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");

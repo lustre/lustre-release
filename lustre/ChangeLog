@@ -1,7 +1,29 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
+       * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
+	 INTEROPERATE with older versions automatically.  Please read the 
+	 user documentation before upgrading any part of a live system.
        * bug fixes
 
+Severity   : enhancement
+Bugzilla   : 7981/8208
+Description: Introduced Lustre Networking (LNET)
+Details    : LNET is new networking infrastructure for Lustre, it includes
+	     a reorganized network configuration mode (see the user
+	     documentation for full details) as well as support for routing
+	     between different network fabrics.  Lustre Networking Devices
+	     (LNDs) for the supported network fabrics have also been
+	     created for this new infrastructure.
+
+Severity   : enhancement
+Bugzilla   : 7982
+Description: Configuration change for the XT3 
+	     The PTLLND is now used to run Lustre over Portals on the XT3
+	     The configure option(s) --with-cray-portals are no longer used.
+	     Rather --with-portals=<path-to-portals-includes> is used to
+	     enable building on the XT3.  In addition to enable XT3 specific
+	     features the option --enable-cray-xt3 must be used.
+	
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407
@@ -276,64 +298,71 @@ Severity   : minor
 Bugzilla   : 7278
 Description: O_CREAT|O_EXCL open flags in liblustre always return -EEXIST
 Details    : Make libsysio to not enforce O_EXCL by clearing the flag,
-             for liblustre O_EXCL is enforced by MDS.
+	     for liblustre O_EXCL is enforced by MDS.
 
 Severity   : minor
 Bugzilla   : 6455
 Description: readdir never returns NULL in liblustre.
 Details    : Corrected llu_iop_getdirentries logic, to return offset of next
-             dentry in struct dirent.
+	     dentry in struct dirent.
 
 Severity   : minor
 Bugzilla   : 7137
 Frequency  : liblustre only, depends on application IO pattern
 Description: liblustre clients evicted if not contacting servers
 Details    : Don't put liblustre clients into the ping_evictor list, so
-             they will not be evicted by the pinger ever.
+	     they will not be evicted by the pinger ever.
 
 Severity   : enhancement
 Bugzilla   : 6902
 Description: Add ability to evict clients by NID from MDS.
 Details    : By echoing "nid:$NID" string into
-             /proc/fs/lustre/mds/.../evict_client client with nid that equals to
-             $NID would be instantly evicted from this MDS and from all active
-             OSTs connected to it.
+	     /proc/fs/lustre/mds/.../evict_client client with nid that equals to
+	     $NID would be instantly evicted from this MDS and from all active
+	     OSTs connected to it.
 
 Severity   : minor
 Bugzilla   : 7198
 Description: Do not query file size twice, somewhat slowing stat(2) calls.
 Details    : lookup_it_finish() used to query file size from OSTs that was not
-             needed.
+	     needed.
 
 Severity   : minor
 Bugzilla   : 6237
 Description: service threads change working directory to that of init
 Details    : Starting lustre service threads may pin the working directory
-             of the parent thread, making that filesystem busy.  Threads
-             now change to the working directory of init to avoid this.
+	     of the parent thread, making that filesystem busy.  Threads
+	     now change to the working directory of init to avoid this.
 
 Severity   : minor
 Bugzilla   : 6827
 Frequency  : during shutdown only
 Description: shutdown with a failed MDS or OST can cause unmount to hang
 Details    : Don't resend DISCONNECT messages in ptlrpc_disconnect_import()
-             if server is down.
+	     if server is down.
 
 Severity   : minor
 Bugzilla   : 7331
 Frequency  : 2.6 only
 Description: chmod/chown may include an extra supplementary group
 Details    : ll{,u}_mdc_pack_op_data() does not properly initialize the
-             supplementary group and if none is specified this is used.
+	     supplementary group and if none is specified this is used.
 
 Severity   : minor
 Bugzilla   : 5479 (6816)
 Frequency  : rare
 Description: Racing open + rm can assert client in mdc_set_open_replay_data()
 Details    : If lookup is in progress on a file that is unlinked we might try
-             to revalidate the inode and fail in revalidate after lookup is
-             complete and ll_file_open() enqueues the open again but
-             it_open_error() was not checking DISP_OPEN_OPEN errors correctly.
+	     to revalidate the inode and fail in revalidate after lookup is
+	     complete and ll_file_open() enqueues the open again but
+	     it_open_error() was not checking DISP_OPEN_OPEN errors correctly.
+
+Severity   : minor
+Frequency  : always, if lconf --abort_recovery used
+Bugzilla   : 7047
+Description: lconf --abort_recovery fails with 'Operation not supported'
+Details    : lconf was attempting to abort recovery on the MDT device and not
+	     the MDS device
 
 ------------------------------------------------------------------------------
 
@@ -343,10 +372,10 @@ Details    : If lookup is in progress on a file that is unlinked we might try
 
 Severity   : major
 Frequency  : rare (only unsupported configurations with a node running as an 
-             OST and a client)
+	     OST and a client)
 Bugzilla   : 6514, 5137
 Description: Mounting a Lustre file system on a node running as an OST could
-             lead to deadlocks
+	     lead to deadlocks
 Details    : OSTs now allocate memory needed to write out data at
              startup, instead of when needed, to avoid having to
              allocate memory in possibly low memory situations.

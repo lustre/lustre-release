@@ -1,6 +1,6 @@
 ## Liblustre excecutables & libraries Makefile
 
-AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
+AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir)/lnet/ulnds
 AM_CFLAGS = $(LLCFLAGS)
 AM_LIBS = $(LIBEFENCE) $(LIBREADLINE)
 

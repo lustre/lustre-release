@@ -49,7 +49,7 @@
 #include <unistd.h>
 #endif
 
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 
 #include <liblustre.h>
 #include <linux/obd.h>

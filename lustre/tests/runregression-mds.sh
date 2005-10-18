@@ -48,7 +48,7 @@ USED=`expr $USED + 16`	# Some space for the status file
 THREADS=1
 while [ $THREADS -lt 196 ]; do
 	echo "starting $THREADS threads at `date`"
-	[ $V -gt 0 ] || echo 0 > /proc/sys/portals/debug
+	[ $V -gt 0 ] || echo 0 > /proc/sys/lnet/debug
 	$SRCDIR/createdestroy /mnt/lustre/file-$$ $COUNT $V $THREADS
 	$SRCDIR/openclose /mnt/lustre/file-$$ $COUNT $THREADS
 	THREADS=`expr $THREADS + 5`

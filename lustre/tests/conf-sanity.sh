@@ -22,6 +22,7 @@ PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
 MOUNTLUSTRE=${MOUNTLUSTRE:-/sbin/mount.lustre}
+HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh
 
@@ -96,7 +97,7 @@ cleanup() {
 	stop_mds $FORCE || return 201
 	stop_ost $FORCE || return 202
 	# catch case where these return just fine, but modules are still not unloaded
-	/sbin/lsmod | egrep -q "portals|libcfs"
+	/sbin/lsmod | egrep -q "lnet|libcfs"
 	if [ 1 -ne $? ]; then
 		echo "modules still loaded..."
 		/sbin/lsmod
@@ -215,7 +216,7 @@ test_5() {
 	stop_mds  || return 4
 	stop_ost || return 5
 
-	lsmod | grep -q portals && return 6
+	lsmod | grep -q lnet && return 6
 	return 0
 }
 run_test 5 "force cleanup mds, then cleanup"
@@ -234,7 +235,7 @@ test_5b() {
 	stop_mds || return 2
 	stop_ost || return 3
 
-	lsmod | grep -q portals && return 4
+	lsmod | grep -q lnet && return 4
 	return 0
 
 }
@@ -254,7 +255,7 @@ test_5c() {
 	stop_mds || return 2
 	stop_ost || return 3
 
-	lsmod | grep -q portals && return 4
+	lsmod | grep -q lnet && return 4
 	return 0
 
 }
@@ -275,7 +276,7 @@ test_5d() {
 	
 	stop_mds || return 3
 
-	lsmod | grep -q portals && return 4
+	lsmod | grep -q lnet && return 4
 	return 0
 
 }
@@ -327,14 +328,14 @@ test_9() {
         start_ost
         start_mds
         mount_client $MOUNT
-        CHECK_PTLDEBUG="`cat /proc/sys/portals/debug`"
+        CHECK_PTLDEBUG="`cat /proc/sys/lnet/debug`"
         if [ $CHECK_PTLDEBUG = "1" ]; then
            echo "lmc --debug success"
         else
            echo "lmc --debug: want 1, have $CHECK_PTLDEBUG"
            return 1
         fi
-        CHECK_SUBSYSTEM="`cat /proc/sys/portals/subsystem_debug`"
+        CHECK_SUBSYSTEM="`cat /proc/sys/lnet/subsystem_debug`"
         if [ $CHECK_SUBSYSTEM = "2" ]; then
            echo "lmc --subsystem success"
         else
@@ -351,14 +352,14 @@ test_9() {
         # check lconf --ptldebug/subsystem overriding lmc --ptldebug/subsystem
         start_ost
         start_mds
-        CHECK_PTLDEBUG="`do_facet mds sysctl portals.debug | cut -d= -f2`"
+        CHECK_PTLDEBUG="`do_facet mds sysctl lnet.debug | cut -d= -f2`"
         if [ $CHECK_PTLDEBUG = "3" ]; then
            echo "lconf --debug success"
         else
            echo "lconf --debug: want 3, have $CHECK_PTLDEBUG"
            return 1
         fi
-        CHECK_SUBSYS="`do_facet mds sysctl portals.subsystem_debug|cut -d= -f2`"
+        CHECK_SUBSYS="`do_facet mds sysctl lnet.subsystem_debug|cut -d= -f2`"
         if [ $CHECK_SUBSYS = "20" ]; then
            echo "lconf --subsystem success"
         else
@@ -439,8 +440,8 @@ test_12() {
         # test double quote
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
         [ -f "$BATCHFILE" ] && rm -f $BATCHFILE
-        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
-        echo "--add mds --node localhost --mds mds1 --mkfsoptions \"-I 128\"" >> $BATCHFILE
+        echo "--add net --node $HOSTNAME --nid $HOSTNAME --nettype tcp" > $BATCHFILE
+        echo "--add mds --node $HOSTNAME --mds mds1 --mkfsoptions \"-I 128\"" >> $BATCHFILE
         # --mkfsoptions "-I 128"
         do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
         if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
@@ -451,16 +452,16 @@ test_12() {
         fi
         rm -f $XMLCONFIG
         rm -f $BATCHFILE
-        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
-        echo "--add mds --node localhost --mds mds1 --mkfsoptions \"-I 128" >> $BATCHFILE
+        echo "--add net --node $HOSTNAME --nid $HOSTNAME --nettype tcp" > $BATCHFILE
+        echo "--add mds --node $HOSTNAME --mds mds1 --mkfsoptions \"-I 128" >> $BATCHFILE
         # --mkfsoptions "-I 128
         do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
         echo "unmatched double quote should return error"
 
         # test single quote
         rm -f $BATCHFILE
-        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
-        echo "--add mds --node localhost --mds mds1 --mkfsoptions '-I 128'" >> $BATCHFILE
+        echo "--add net --node $HOSTNAME --nid $HOSTNAME --nettype tcp" > $BATCHFILE
+        echo "--add mds --node $HOSTNAME --mds mds1 --mkfsoptions '-I 128'" >> $BATCHFILE
         # --mkfsoptions '-I 128'
         do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
         if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
@@ -471,16 +472,16 @@ test_12() {
         fi
         rm -f $XMLCONFIG
         rm -f $BATCHFILE
-        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
-        echo "--add mds --node localhost --mds mds1 --mkfsoptions '-I 128" >> $BATCHFILE
+        echo "--add net --node $HOSTNAME --nid $HOSTNAME --nettype tcp" > $BATCHFILE
+        echo "--add mds --node $HOSTNAME --mds mds1 --mkfsoptions '-I 128" >> $BATCHFILE
         # --mkfsoptions '-I 128
         do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
         echo "unmatched single quote should return error"
 
         # test backslash
         rm -f $BATCHFILE
-        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
-        echo "--add mds --node localhost --mds mds1 --mkfsoptions \-\I\ \128" >> $BATCHFILE
+        echo "--add net --node $HOSTNAME --nid $HOSTNAME --nettype tcp" > $BATCHFILE
+        echo "--add mds --node $HOSTNAME --mds mds1 --mkfsoptions \-\I\ \128" >> $BATCHFILE
         # --mkfsoptions \-\I\ \128
         do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
         if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
@@ -491,8 +492,8 @@ test_12() {
         fi
         rm -f $XMLCONFIG
         rm -f $BATCHFILE
-        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
-        echo "--add mds --node localhost --mds mds1 --mkfsoptions -I\ 128\\" >> $BATCHFILE
+        echo "--add net --node $HOSTNAME --nid $HOSTNAME --nettype tcp" > $BATCHFILE
+        echo "--add mds --node $HOSTNAME --mds mds1 --mkfsoptions -I\ 128\\" >> $BATCHFILE
         # --mkfsoptions -I\ 128\
         do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
         echo "backslash followed by nothing should return error"
@@ -510,9 +511,9 @@ test_13() {
         # check long uuid will be truncated properly and uniquely
         echo "To generate XML configuration file(with long ost name): $XMLCONFIG"
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
-        do_lmc --add net --node localhost --nid localhost.localdomain --nettype tcp
-        do_lmc --add mds --node localhost --mds mds1_name_longer_than_31characters
-        do_lmc --add mds --node localhost --mds mds2_name_longer_than_31characters
+        do_lmc --add net --node $HOSTNAME --nid $HOSTNAME --nettype tcp
+        do_lmc --add mds --node $HOSTNAME --mds mds1_name_longer_than_31characters
+        do_lmc --add mds --node $HOSTNAME --mds mds2_name_longer_than_31characters
         if [ ! -f "$XMLCONFIG" ]; then
                 echo "Error:no file $XMLCONFIG created!"
                 return 1

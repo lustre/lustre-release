@@ -1,6 +1,7 @@
 #!/usr/bin/expect
 
 spawn lwizard $argv
+HOSTNAME=`hostname`
 set timeout 3
 expect {
 	"overwrite existing" {
@@ -8,7 +9,7 @@ expect {
 	}
 }
 expect "HOSTNAME for mds"
-send -- "localhost\n"
+send -- "$HOSTNAME\n"
 expect "network INTERFACE"
 send -- "192.168.1.29/24 10.0.0.29/24\n"
 expect "enter the device or loop file name for mds"
@@ -18,7 +19,7 @@ send -- "10000\n"
 expect "configure FAILOVER"
 send -- "n\n"
 expect "HOSTNAME for ost"
-send -- "localhost\n"
+send -- "$HOSTNAME\n"
 expect "network INTERFACE"
 send -- "192.168.1.29/24 10.0.0.29/24\n"
 expect "device or loop file name for ost"

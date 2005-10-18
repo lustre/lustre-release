@@ -173,15 +173,14 @@ int lustre_pack_reply (struct ptlrpc_request *req,
         size = offsetof (struct ptlrpc_reply_state, rs_msg) + msg_len;
         OBD_ALLOC (rs, size);
         if (unlikely(rs == NULL)) {
-                rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_srv_ni->sni_service,
-                                         size);
+                rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
                 if (!rs)
                         RETURN (-ENOMEM);
         }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
-        rs->rs_srv_ni = req->rq_rqbd->rqbd_srv_ni;
+        rs->rs_service = req->rq_rqbd->rqbd_service;
         rs->rs_size = size;
         INIT_LIST_HEAD(&rs->rs_exp_list);
         INIT_LIST_HEAD(&rs->rs_obd_list);
@@ -211,7 +210,7 @@ void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
 
         if (unlikely(rs->rs_prealloc)) {
                 unsigned long flags;
-                struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+                struct ptlrpc_service *svc = rs->rs_service;
 
                 spin_lock_irqsave(&svc->srv_lock, flags);
                 list_add(&rs->rs_list,
@@ -723,7 +722,7 @@ static void print_lum_objs(struct lov_user_md *lum)
         struct lov_user_ost_data *lod;
         int i;
         ENTRY;
-        if (!(portal_debug & D_OTHER)) /* don't loop on nothing */
+        if (!(libcfs_debug & D_OTHER)) /* don't loop on nothing */
                 return;
         CDEBUG(D_OTHER, "lov_user_md_objects: %p\n", lum);
         for (i = 0; i < lum->lmm_stripe_count; i++) {
@@ -2158,8 +2157,6 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_SETATTR_REC);
         LASSERTF(OBD_CFG_REC == 274857984, " found %lld\n",
                  (long long)OBD_CFG_REC);
-        LASSERTF(PTL_CFG_REC == 274923520, " found %lld\n",
-                 (long long)PTL_CFG_REC);
         LASSERTF(LLOG_GEN_REC == 274989056, " found %lld\n",
                  (long long)LLOG_GEN_REC);
         LASSERTF(LLOG_HDR_MAGIC == 275010873, " found %lld\n",

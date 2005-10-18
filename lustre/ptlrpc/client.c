@@ -49,16 +49,17 @@ void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
 {
         struct ptlrpc_connection *c;
-        struct ptlrpc_peer peer;
-        int err;
+        lnet_nid_t                self;
+        lnet_process_id_t         peer;
+        int                       err;
 
-        err = ptlrpc_uuid_to_peer(uuid, &peer);
+        err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
         if (err != 0) {
                 CERROR("cannot find peer %s!\n", uuid->uuid);
                 return NULL;
         }
 
-        c = ptlrpc_get_connection(&peer, uuid);
+        c = ptlrpc_get_connection(peer, self, uuid);
         if (c) {
                 memcpy(c->c_remote_uuid.uuid,
                        uuid->uuid, sizeof(c->c_remote_uuid.uuid));
@@ -72,16 +73,18 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
 void ptlrpc_readdress_connection(struct ptlrpc_connection *conn,
                                  struct obd_uuid *uuid)
 {
-        struct ptlrpc_peer peer;
-        int err;
+        lnet_nid_t        self;
+        lnet_process_id_t peer;
+        int               err;
 
-        err = ptlrpc_uuid_to_peer(uuid, &peer);
+        err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
         if (err != 0) {
                 CERROR("cannot find peer %s!\n", uuid->uuid);
                 return;
         }
 
-        memcpy(&conn->c_peer, &peer, sizeof (peer));
+        conn->c_peer = peer;
+        conn->c_self = self;
         return;
 }
 
@@ -97,7 +100,7 @@ static inline struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal
         init_waitqueue_head(&desc->bd_waitq);
         desc->bd_max_iov = npages;
         desc->bd_iov_count = 0;
-        desc->bd_md_h = PTL_INVALID_HANDLE;
+        desc->bd_md_h = LNET_INVALID_HANDLE;
         desc->bd_portal = portal;
         desc->bd_type = type;
 
@@ -636,7 +639,7 @@ static int after_reply(struct ptlrpc_request *req)
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
                         req->rq_commit_cb(req);
                         spin_lock_irqsave(&imp->imp_lock, flags);
-		}
+                }
 
                 if (req->rq_transno > imp->imp_max_transno)
                         imp->imp_max_transno = req->rq_transno;
@@ -654,7 +657,6 @@ static int after_reply(struct ptlrpc_request *req)
 
 static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 {
-        char                   str[PTL_NALFMT_SIZE];
         struct obd_import     *imp;
         unsigned long          flags;
         int rc;
@@ -698,12 +700,11 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         req->rq_reqmsg->status = current->pid;
-        CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:ni:nid:opc"
-               " %s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
+        CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc"
+               " %s:%s:%d:"LPU64":%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid, req->rq_reqmsg->status,
                req->rq_xid,
-               imp->imp_connection->c_peer.peer_ni->pni_name,
-               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
+               libcfs_nid2str(imp->imp_connection->c_peer.nid),
                req->rq_reqmsg->opc);
 
         rc = ptl_send_rpc(req);
@@ -717,7 +718,6 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
 int ptlrpc_check_set(struct ptlrpc_request_set *set)
 {
-        char str[PTL_NALFMT_SIZE];
         unsigned long flags;
         struct list_head *tmp;
         int force_timer_recalc = 0;
@@ -917,12 +917,11 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                                      req->rq_status);
                 }
 
-                CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:"
-                       "opc %s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
+                CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"
+                       "opc %s:%s:%d:"LPU64":%s:%d\n", current->comm,
                        imp->imp_obd->obd_uuid.uuid, req->rq_reqmsg->status,
                        req->rq_xid,
-                       imp->imp_connection->c_peer.peer_ni->pni_name,
-                       ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
+                       libcfs_nid2str(imp->imp_connection->c_peer.nid),
                        req->rq_reqmsg->opc);
 
                 set->set_remaining--;
@@ -951,7 +950,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         ptlrpc_unregister_reply (req);
 
         if (obd_dump_on_timeout)
-                portals_debug_dumplog();
+                libcfs_debug_dumplog();
 
         if (req->rq_bulk != NULL)
                 ptlrpc_unregister_bulk (req);
@@ -1263,7 +1262,7 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         if (!ptlrpc_client_receiving_reply(request))
                 return;
 
-        PtlMDUnlink (request->rq_reply_md_h);
+        LNetMDUnlink (request->rq_reply_md_h);
 
         /* We have to l_wait_event() whatever the result, to give liblustre
          * a chance to run reply_in_callback() */
@@ -1457,7 +1456,6 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
-        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         int brc;
         struct l_wait_info lwi;
@@ -1473,12 +1471,11 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         /* for distributed debugging */
         req->rq_reqmsg->status = current->pid;
         LASSERT(imp->imp_obd != NULL);
-        CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:ni:nid:opc "
-               "%s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
+        CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc "
+               "%s:%s:%d:"LPU64":%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid,
                req->rq_reqmsg->status, req->rq_xid,
-               imp->imp_connection->c_peer.peer_ni->pni_name,
-               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
+               libcfs_nid2str(imp->imp_connection->c_peer.nid),
                req->rq_reqmsg->opc);
 
         /* Mark phase here for a little debug help */
@@ -1570,12 +1567,11 @@ restart:
         l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req), &lwi);
         DEBUG_REQ(D_NET, req, "-- done sleeping");
 
-        CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:opc "
-               "%s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
+        CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:opc "
+               "%s:%s:%d:"LPU64":%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid,
                req->rq_reqmsg->status, req->rq_xid,
-               imp->imp_connection->c_peer.peer_ni->pni_name,
-               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
+               libcfs_nid2str(imp->imp_connection->c_peer.nid),
                req->rq_reqmsg->opc);
 
         spin_lock_irqsave(&imp->imp_lock, flags);

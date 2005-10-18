@@ -23,7 +23,7 @@
 #include <lustre/lustre_user.h>
 #include <linux/obd_lov.h>
 
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 
 
 #define MAX_LOV_UUID_COUNT      1000

@@ -62,7 +62,7 @@ int ldlm_expired_completion_wait(void *data)
                         ldlm_namespace_dump(D_DLMTRACE,
                                             lock->l_resource->lr_namespace);
                         if (last_dump == 0)
-                                portals_debug_dumplog();
+                                libcfs_debug_dumplog();
                 }
                 RETURN(0);
         }
@@ -693,12 +693,11 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 rc = ptlrpc_queue_wait(req);
 
                 if (rc == ESTALE) {
-                        char str[PTL_NALFMT_SIZE];
                         CERROR("client/server (nid %s) out of sync"
                                " -- not fatal, flags %d\n",
-                               ptlrpc_peernid2str(&req->rq_import->
-                                                  imp_connection->c_peer, str),
-lock->l_flags);
+                               libcfs_nid2str(req->rq_import->
+                                              imp_connection->c_peer.nid),
+                               lock->l_flags);
                 } else if (rc == -ETIMEDOUT) {
                         ptlrpc_req_finished(req);
                         GOTO(restart, rc);

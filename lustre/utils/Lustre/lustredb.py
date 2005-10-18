@@ -213,6 +213,9 @@ class LustreDB:
     def get_version(self):
         return self.get_val('version')
 
+    def get_mtime(self):
+        return self.get_val('mtime')
+
 class LustreDB_XML(LustreDB):
     def __init__(self, dom, root_node):
         LustreDB.__init__(self)

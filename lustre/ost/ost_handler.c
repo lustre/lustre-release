@@ -345,21 +345,12 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
         int i;
 
         for (i = 0; i < desc->bd_iov_count; i++) {
-#ifdef CRAY_PORTALS
-                char *ptr = desc->bd_iov[i].iov_base;
-                int len = desc->bd_iov[i].iov_len;
-#else
                 struct page *page = desc->bd_iov[i].kiov_page;
                 int off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
                 char *ptr = kmap(page) + off;
                 int len = desc->bd_iov[i].kiov_len;
-#endif
 
                 cksum = crc32_le(cksum, ptr, len);
-#ifndef CRAY_PORTALS
-                kunmap(page);
-                LL_CDEBUG_PAGE(D_PAGE, page, "off %d checksum %x\n", off,cksum);
-#endif
         }
 
         return cksum;
@@ -693,14 +684,14 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                "evicting %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                         class_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                 }
         }
 
@@ -860,16 +851,21 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 cksum_counter++;
                 if (client_cksum != cksum) {
                         CERROR("Bad checksum: client %x, server %x id %s\n",
-                               client_cksum, cksum, req->rq_peerstr);
+                               client_cksum, cksum,
+                               libcfs_id2str(req->rq_peer));
                         cksum_counter = 0;
                         repbody->oa.o_cksum = cksum;
                         repbody->oa.o_valid |= OBD_MD_FLCKSUM;
                 } else if ((cksum_counter & (-cksum_counter)) ==
                            cksum_counter) {
-                        CWARN("Checksum %u from %s: %x OK\n",
-                              cksum_counter, req->rq_peerstr, cksum);
+                        CWARN("Checksum %u from %s: %x OK\n", cksum_counter, 
+                              libcfs_id2str(req->rq_peer), cksum);
                 } else {
-                        CDEBUG(D_PAGE, "checksum %x confirmed\n", cksum);
+                        cksum_counter++;
+                        if ((cksum_counter & (-cksum_counter)) == cksum_counter)
+                                CWARN("Checksum %u from %s: %x OK\n",
+                                      cksum_counter,
+                                      libcfs_id2str(req->rq_peer), cksum);
                 }
         }
 
@@ -922,14 +918,14 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                req->rq_export->exp_obd->obd_name,
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                         class_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                 }
         }
         RETURN(rc);
@@ -1124,7 +1120,7 @@ static int ost_handle(struct ptlrpc_request *req)
 
                 if (req->rq_export == NULL) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
-                               req->rq_reqmsg->opc, req->rq_peerstr);
+                               req->rq_reqmsg->opc, libcfs_id2str(req->rq_peer));
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }

@@ -48,7 +48,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
-#include <portals/types.h>
+#include <lnet/types.h>
 #include <libcfs/list.h>
 #include <linux/lustre_log.h>
 #include "ptlrpc_internal.h"

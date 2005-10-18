@@ -336,7 +336,9 @@ test_4() {
  
     #Check FS
     echo "Test Lustre stability after OST failure"
-    client_df
+    client_df &
+    DFPIDA=$!
+    sleep 5
 
     #MDS Portion
     echo "Failing MDS"
@@ -348,7 +350,7 @@ test_4() {
     reboot_facet mds
 
     client_df &
-    DFPID=$!
+    DFPIDB=$!
     sleep 5
 
     #Reintegration
@@ -362,7 +364,8 @@ test_4() {
     start mds
     #Check FS
     
-    wait $DFPID
+    wait $DFPIDA
+    wait $DFPIDB
     clients_recover_osts ost1
     echo "Test Lustre stability after MDS failover"
     client_df || return 1
@@ -385,7 +388,9 @@ test_5() {
     
     #Check FS
     echo "Test Lustre stability after OST failure"
-    client_df
+    client_df &
+    DFPIDA=$!
+    sleep 5
     
     #OST Portion
     echo "Failing OST"
@@ -394,7 +399,9 @@ test_5() {
 
     #Check FS
     echo "Test Lustre stability after OST failure"
-    client_df
+    client_df &
+    DFPIDB=$!
+    sleep 5
 
     #Reintegration
     echo "Reintegrating OSTs"
@@ -407,6 +414,8 @@ test_5() {
     clients_recover_osts ost2
     sleep $TIMEOUT
 
+    wait $DFPIDA
+    wait $DFPIDB
     client_df || return 2
 }
 run_test 5 "Fifth Failure Mode: OST/OST `date`"
@@ -428,7 +437,9 @@ test_6() {
 
     #Check FS
     echo "Test Lustre stability after OST failure"
-    client_df
+    client_df &
+    DFPIDA=$!
+    sleep 5
 
     #CLIENT Portion
     echo "Failing CLIENTs"
@@ -436,7 +447,9 @@ test_6() {
     
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
-    client_df
+    client_df &
+    DFPIDB=$!
+    sleep 5
     
     #Reintegration
     echo "Reintegrating OST/CLIENTs"
@@ -445,6 +458,8 @@ test_6() {
     reintegrate_clients
     sleep 5 
 
+    wait $DFPIDA
+    wait $DFPIDB
     echo "Verifying mount"
     client_df || return 3
 }
@@ -539,15 +554,19 @@ test_8() {
 
     #Check FS
     echo "Test Lustre stability after OST failure"
-    client_df
-    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
-    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
+    client_df &
+    DFPID=$!
+    sleep 5
+    #non-failout hangs forever here
+    #$PDSH $LIVE_CLIENT "ls -l $MOUNT"
+    #$PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
     
     #Reintegration
     echo "Reintegrating CLIENTs/OST"
     reintegrate_clients
     wait_for ost1
     start ost1
+    wait $DFPID
     client_df || return 1
     client_touch testfile2 || return 2
 

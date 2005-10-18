@@ -33,14 +33,6 @@
 
 extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
-struct pingcli_args {
-        ptl_nid_t mynid;
-        ptl_nid_t nid;
-	ptl_pid_t port;
-        int count;
-        int size;
-};
-
 static int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)
 {
 	int   rc = -EINVAL;
@@ -68,11 +60,11 @@ static int connect_echo_client(void)
 {
 	struct lustre_cfg *lcfg;
         struct lustre_cfg_bufs bufs;
-	ptl_nid_t nid;
+        lnet_nid_t nid;
 	char *peer = "ECHO_PEER_NID";
 	class_uuid_t osc_uuid, echo_uuid;
 	struct obd_uuid osc_uuid_str, echo_uuid_str;
-	int nal, err;
+	int err;
 	ENTRY;
 
         generate_random_uuid(osc_uuid);
@@ -80,22 +72,17 @@ static int connect_echo_client(void)
         generate_random_uuid(echo_uuid);
         class_uuid_unparse(echo_uuid, &echo_uuid_str);
 
-        if (ptl_parse_nid(&nid, echo_server_nid)) {
+        nid = libcfs_str2nid(echo_server_nid);
+        if (nid == LNET_NID_ANY) {
                 CERROR("Can't parse NID %s\n", echo_server_nid);
                 RETURN(-EINVAL);
         }
-        nal = ptl_name2nal("tcp");
-        if (nal <= 0) {
-                CERROR("Can't parse NAL tcp\n");
-                RETURN(-EINVAL);
-        }
 
-	/* add uuid */
+        /* add uuid */
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        lcfg->lcfg_nal = nal;
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {
@@ -103,8 +90,9 @@ static int connect_echo_client(void)
                 RETURN(-EINVAL);
 	}
 
-	/* attach osc */
-        lustre_cfg_bufs_reset(&bufs, LUSTRE_OSC_NAME);
+        /* attach osc */
+        lustre_cfg_bufs_reset(&bufs, osc_dev_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_OSC_NAME);
         lustre_cfg_bufs_set_string(&bufs, 2, osc_uuid_str.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         err = class_process_config(lcfg);
@@ -238,11 +226,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	portal_debug = 0;
-	portal_subsystem_debug = 0;
+        libcfs_debug = 0;
+        libcfs_subsystem_debug = 0;
 
         liblustre_init_random();
-        liblustre_set_nal_nid();
 
         if (liblustre_init_current(argv[0]) ||
 	    init_obdclass() || init_lib_portals() ||

@@ -33,7 +33,7 @@ bin_PROGRAMS = mcreate munlink
 endif # TESTS
 
 stat_SOURCES = stat.c stat_fs.h
-# mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
+# mkdirdeep_LDADD=-L$(top_builddir)/lnet/utils -lptlctl $(LIBREADLINE)
 mmap_sanity_SOURCES= mmap_sanity.c
 
 if MPITESTS

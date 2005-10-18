@@ -21,8 +21,8 @@ fi
 [ "$COUNT" ] || COUNT=1000
 #[ "$DEBUG_LVL" ] || DEBUG_LVL=0x370200
 [ "$DEBUG_LVL" ] || DEBUG_LVL=0
-[ "$DEBUG_OFF" ] || DEBUG_OFF="sysctl -w portals.debug=$DEBUG_LVL"
-[ "$DEBUG_ON" ] || DEBUG_ON="sysctl -w portals.debug=0x33f0480"
+[ "$DEBUG_OFF" ] || DEBUG_OFF="sysctl -w lnet.debug=$DEBUG_LVL"
+[ "$DEBUG_ON" ] || DEBUG_ON="sysctl -w lnet.debug=0x33f0480"
 
 LIBLUSTRE=${LIBLUSTRE:-../liblustre}
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-$LIBLUSTRE/tests}
@@ -154,7 +154,7 @@ for NAME in $CONFIGS; do
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_TARGET=$MDSNODE:/$MDSNAME/$CLIENT
 		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
-		#export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/portals/debug`
+		#export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/lnet/debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 		fi

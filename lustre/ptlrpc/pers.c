@@ -38,14 +38,13 @@
 #include "ptlrpc_internal.h"
 
 #ifdef __KERNEL__
-#if !CRAY_PORTALS
 
-void ptlrpc_fill_bulk_md (ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
+void ptlrpc_fill_bulk_md (lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
 {
         LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
-        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_KIOV | PTL_MD_PHYS)));
+        LASSERT (!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV | LNET_MD_PHYS)));
 
-        md->options |= PTL_MD_KIOV;
+        md->options |= LNET_MD_KIOV;
         md->start = &desc->bd_iov[0];
         md->length = desc->bd_iov_count;
 }
@@ -53,7 +52,7 @@ void ptlrpc_fill_bulk_md (ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
                           int pageoffset, int len)
 {
-        ptl_kiov_t *kiov = &desc->bd_iov[desc->bd_iov_count];
+        lnet_kiov_t *kiov = &desc->bd_iov[desc->bd_iov_count];
 
         kiov->kiov_page = page;
         kiov->kiov_offset = pageoffset;
@@ -62,62 +61,23 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
         desc->bd_iov_count++;
 }
 
-#else  /* CRAY_PORTALS */
-#ifdef PTL_MD_KIOV
-#error "Conflicting compilation directives"
-#endif
-
-void ptlrpc_fill_bulk_md (ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
-{
-        LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
-        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_PHYS)));
-        
-        md->options |= (PTL_MD_IOVEC | PTL_MD_PHYS);
-        md->start = &desc->bd_iov[0];
-        md->length = desc->bd_iov_count;
-}
-
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
-                          int pageoffset, int len)
-{
-        ptl_md_iovec_t *iov = &desc->bd_iov[desc->bd_iov_count];
-
-        /* Should get a compiler warning if sizeof(physaddr) > sizeof(void *) */
-        iov->iov_base = (void *)(page_to_phys(page) + pageoffset);
-        iov->iov_len = len;
-
-        desc->bd_iov_count++;
-}
-
-#endif /* CRAY_PORTALS */
 #else /* !__KERNEL__ */
 
-void ptlrpc_fill_bulk_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
+void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
 {
-#if CRAY_PORTALS
-        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_PHYS)));
-#if defined(REDSTORM) && (NALID_FROM_IFACE(CRAY_QK_NAL) == PTL_IFACE_SS_ACCEL)
-       /* Enforce iov_count == 1 constraint only for SeaStar accel mode on
-        * compute nodes (ie, REDSTORM)
-        *
-        * iov_count of > 1 is supported via PTL_MD_IOVEC in other contexts */
-        LASSERT (desc->bd_iov_count == 1);
-#endif
-#else
-        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_KIOV | PTL_MD_PHYS)));
-#endif
+        LASSERT (!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV | LNET_MD_PHYS)));
         if (desc->bd_iov_count == 1) {
                 md->start = desc->bd_iov[0].iov_base;
                 md->length = desc->bd_iov[0].iov_len;
                 return;
         }
         
-        md->options |= PTL_MD_IOVEC;
+        md->options |= LNET_MD_IOVEC;
         md->start = &desc->bd_iov[0];
         md->length = desc->bd_iov_count;
 }
 
-static int can_merge_iovs(ptl_md_iovec_t *existing, ptl_md_iovec_t *candidate)
+static int can_merge_iovs(lnet_md_iovec_t *existing, lnet_md_iovec_t *candidate)
 {
         if (existing->iov_base + existing->iov_len == candidate->iov_base) 
                 return 1;
@@ -133,7 +93,7 @@ static int can_merge_iovs(ptl_md_iovec_t *existing, ptl_md_iovec_t *candidate)
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page, 
                           int pageoffset, int len)
 {
-        ptl_md_iovec_t *iov = &desc->bd_iov[desc->bd_iov_count];
+        lnet_md_iovec_t *iov = &desc->bd_iov[desc->bd_iov_count];
 
         iov->iov_base = page->addr + pageoffset;
         iov->iov_len = len;

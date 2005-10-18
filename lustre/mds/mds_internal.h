@@ -154,6 +154,8 @@ int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_set_nextid(struct obd_device *obd);
 int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
+int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
+                              int nonblock);
 int mds_post_mds_lovconf(struct obd_device *obd);
 int mds_notify(struct obd_device *obd, struct obd_device *watched, int active);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
@@ -207,7 +209,7 @@ int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
 int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc);
 void mds_adjust_qunit(struct obd_device *obd, uid_t cuid, gid_t cgid,
-		      uid_t puid, gid_t pgid, int rc);
+                      uid_t puid, gid_t pgid, int rc);
 int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);

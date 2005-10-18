@@ -464,7 +464,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
 
 /* XXX _IOWR('f', 250, long) has been defined in
- * portals/include/libcfs/kp30.h for debug, don't use it
+ * lnet/include/libcfs/kp30.h for debug, don't use it
  */
 
 /* Until such time as we get_info the per-stripe maximum from the OST,
@@ -724,7 +724,6 @@ do {                                                                           \
 #else
 #define LIBLUSTRE_CLIENT (1)
 #endif
-
 
 #endif /* _LUSTRE_LIB_H */
 

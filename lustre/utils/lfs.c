@@ -33,8 +33,8 @@
 #include <pwd.h>
 #include <grp.h>
 
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
@@ -53,7 +53,13 @@
 #define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
 #define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
 
-unsigned int portal_subsystem_debug = 0;
+/* Where is this stupid thing supposed to be defined? */
+#ifndef USRQUOTA
+# define USRQUOTA 0
+# define GRPQUOTA 1
+#endif
+
+unsigned int libcfs_subsystem_debug = 0;
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);

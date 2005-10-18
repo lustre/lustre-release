@@ -70,3 +70,4 @@ mmap_sanity
 rmdirmany
 flock_test
 writemany
+random-reads

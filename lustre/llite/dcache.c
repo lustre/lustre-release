@@ -165,7 +165,7 @@ restart:
                         CERROR("called on root (?) dentry=%p, inode=%p "
                                "ino=%lu\n", dentry, inode, inode->i_ino);
                         lustre_dump_dentry(dentry, 1);
-                        portals_debug_dumpstack(NULL);
+                        libcfs_debug_dumpstack(NULL);
                 } else if (d_mountpoint(dentry)) {
                         /* For mountpoints we skip removal of the dentry
                            which happens solely because we have a lock on it

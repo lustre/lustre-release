@@ -1,7 +1,7 @@
 #!/bin/sh
 MNT=${MNT:-/mnt/lustre}
 DIR=${DIR:-$MNT/`hostname`}
-#[ -e /proc/sys/portals/debug ] && echo 0 > /proc/sys/portals/debug 
+#[ -e /proc/sys/lnet/debug ] && echo 0 > /proc/sys/lnet/debug 
 mkdir -p $DIR
 TGT=$DIR/client.txt
 SRC=${SRC:-/usr/lib/dbench/client.txt}

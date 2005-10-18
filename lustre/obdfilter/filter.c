@@ -2633,7 +2633,6 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
 {
         struct obd_device *obd;
         struct llog_ctxt *ctxt;
-        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         ENTRY;
 
@@ -2648,7 +2647,7 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
                 RETURN(-EINVAL);
 
         CWARN("%s: received MDS connection from %s\n", obd->obd_name,
-              ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
+              obd_export_nid2str(exp));
         obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */

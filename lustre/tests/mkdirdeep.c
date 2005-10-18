@@ -2,8 +2,8 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Compile with:
- * cc -I../../portals/include -o mkdirdeep mkdirdeep.c
- *    -L../../portals/linux/utils -lptlctl
+ * cc -I../../lnet/include -o mkdirdeep mkdirdeep.c
+ *    -L../../lnet/linux/utils -lptlctl
  */
 
 #include <stdio.h>

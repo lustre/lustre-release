@@ -65,7 +65,7 @@ if [ ! -z "$EVAL" ]; then
 fi
 
 if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w portals.debug=0 || true
+    sysctl -w lnet.debug=0 || true
     FORCE=--force cleanup
     exit
 fi

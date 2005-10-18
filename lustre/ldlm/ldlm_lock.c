@@ -1172,10 +1172,9 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
 
 void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
 {
-        char str[PTL_NALFMT_SIZE];
         struct obd_device *obd = NULL;
 
-        if (!((portal_debug | D_ERROR) & level))
+        if (!((libcfs_debug | D_ERROR) & level))
                 return;
 
         if (!lock) {
@@ -1189,17 +1188,15 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {
-                CDEBUG(level, "  Node: NID %s on %s (rhandle: "LPX64")\n",
-                       ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer, str),
-                       lock->l_export->exp_connection->c_peer.peer_ni->pni_name,
+                CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
+                       libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid),
                        lock->l_remote_handle.cookie);
         } else if (obd == NULL) {
                 CDEBUG(level, "  Node: local\n");
         } else {
                 struct obd_import *imp = obd->u.cli.cl_import;
-                CDEBUG(level, "  Node: NID %s on %s (rhandle: "LPX64")\n",
-                       ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
-                       imp->imp_connection->c_peer.peer_ni->pni_name,
+                CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
+                       libcfs_nid2str(imp->imp_connection->c_peer.nid),
                        lock->l_remote_handle.cookie);
         }
         CDEBUG(level, "  Resource: %p ("LPU64"/"LPU64")\n", lock->l_resource,

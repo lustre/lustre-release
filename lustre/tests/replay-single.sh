@@ -47,7 +47,7 @@ cleanup() {
 }
 
 if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w portals.debug=0 || true
+    sysctl -w lnet.debug=0 || true
     FORCE=--force cleanup
     exit
 fi
@@ -837,8 +837,8 @@ test_42() {
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
-    DEBUG42=`sysctl -n portals.debug`
-    sysctl -w portals.debug=-1
+    DEBUG42=`sysctl -n lnet.debug`
+    sysctl -w lnet.debug=-1
     facet_failover ost
     
     # osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
@@ -846,7 +846,7 @@ test_42() {
     #[ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
-    sysctl -w portals.debug=$DEBUG42
+    sysctl -w lnet.debug=$DEBUG42
     unlinkmany $DIR/$tfile-%d 400 400
     $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
 }

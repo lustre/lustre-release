@@ -29,20 +29,12 @@
 #ifdef __KERNEL__
 #include <linux/kmod.h>   /* for request_module() */
 #include <linux/module.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
-#include <linux/obd_ost.h>
-#include <linux/random.h>
-#include <linux/slab.h>
-#include <linux/pagemap.h>
-#include <linux/quota.h>
 #else
 #include <liblustre.h>
-#include <linux/obd_class.h>
+#endif
 #include <linux/lustre_mds.h>
 #include <linux/obd_ost.h>
-#include <linux/obd.h>
-#endif
+#include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_quota.h>
 
@@ -1014,7 +1006,7 @@ void class_fail_export(struct obd_export *exp)
                exp, exp->exp_client_uuid.uuid);
 
         if (obd_dump_on_timeout)
-                portals_debug_dumplog();
+                libcfs_debug_dumplog();
 
         /* Most callers into obd_disconnect are removing their own reference
          * (request, for example) in addition to the one from the hash table.
@@ -1028,6 +1020,15 @@ void class_fail_export(struct obd_export *exp)
                        exp, exp->exp_client_uuid.uuid);
 }
 EXPORT_SYMBOL(class_fail_export);
+
+char *obd_export_nid2str(struct obd_export *exp)
+{
+        if (exp->exp_connection != NULL)
+                return libcfs_nid2str(exp->exp_connection->c_peer.nid);
+        
+        return "(no nid)";
+}
+EXPORT_SYMBOL(obd_export_nid2str);
 
 /* Ping evictor thread */
 #ifdef __KERNEL__
@@ -1070,7 +1071,7 @@ static int ping_evictor_main(void *arg)
         ENTRY;
 
         lock_kernel();
-        kportal_daemonize("ping_evictor");
+        libcfs_daemonize("ping_evictor");
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
@@ -1108,16 +1109,13 @@ static int ping_evictor_main(void *arg)
                                          struct obd_export,exp_obd_chain_timed);
 
                         if (expire_time > exp->exp_last_request_time) {
-                                char ipbuf[PTL_NALFMT_SIZE];
-
                                 class_export_get(exp);
                                 spin_unlock(&obd->obd_dev_lock);
-
                                 LCONSOLE_WARN("%s: haven't heard from %s in %ld"
                                               " seconds.  I think it's dead, "
                                               "and I am evicting it.\n",
                                               obd->obd_name,
-                                              obd_export_nid2str(exp, ipbuf),
+                                              obd_export_nid2str(exp),
                                               (long)(CURRENT_SECONDS -
                                                    exp->exp_last_request_time));
 
@@ -1181,7 +1179,6 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 {
         struct obd_export *oldest_exp;
         time_t oldest_time;
-        char str[PTL_NALFMT_SIZE];
 
         ENTRY;
 
@@ -1237,9 +1234,8 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
                         exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
                                 3 * PING_INTERVAL;
                         CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
-                               exp->exp_obd->obd_name,
-                               ptlrpc_peernid2str(&exp->exp_connection->c_peer,
-                                                  str), oldest_time);
+                               exp->exp_obd->obd_name, obd_export_nid2str(exp),
+                               oldest_time);
                 }
         } else {
                 if (CURRENT_SECONDS > (exp->exp_obd->obd_eviction_timer +
@@ -1256,23 +1252,6 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 }
 EXPORT_SYMBOL(class_update_export_timer);
 
-char *obd_export_nid2str(struct obd_export *exp, char *ipbuf)
-{
-        struct ptlrpc_peer *peer;
-
-        peer = exp->exp_connection ? &exp->exp_connection->c_peer : NULL;
-
-        if (peer && peer->peer_ni) {
-                portals_nid2str(peer->peer_ni->pni_number,
-                                peer->peer_id.nid,
-                                ipbuf);
-        } else {
-                snprintf(ipbuf, PTL_NALFMT_SIZE, "(no nid)");
-        }
-
-        return ipbuf;
-}
-
 #define EVICT_BATCH 32
 int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
 {
@@ -1283,13 +1262,10 @@ int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
 search_again:
         spin_lock(&obd->obd_dev_lock);
         list_for_each(p, &obd->obd_exports) {
-                char ipbuf[PTL_NALFMT_SIZE];
-
                 doomed_exp[num_to_evict] = list_entry(p, struct obd_export,
                                                       exp_obd_chain);
-                obd_export_nid2str(doomed_exp[num_to_evict], ipbuf);
-
-                if (strcmp(ipbuf, nid) == 0) {
+                if (strcmp(obd_export_nid2str(doomed_exp[num_to_evict]), nid)
+                    == 0) {
                         class_export_get(doomed_exp[num_to_evict]);
                         if (++num_to_evict == EVICT_BATCH)
                                 break;

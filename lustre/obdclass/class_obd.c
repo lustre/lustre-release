@@ -75,7 +75,7 @@
 
 #ifndef __KERNEL__
 /* liblustre workaround */
-atomic_t portal_kmemory = {0};
+atomic_t libcfs_kmemory = {0};
 #endif
 
 struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -175,22 +175,24 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 {
         char *buf = NULL;
         struct obd_ioctl_data *data;
-        struct portals_debug_ioctl_data *debug_data;
+        struct libcfs_debug_ioctl_data *debug_data;
         struct obd_device *obd = NULL;
         int err = 0, len = 0;
         ENTRY;
 
+#ifdef __KERNEL__
         if (current->fsuid != 0)
                 RETURN(err = -EACCES);
+#endif
 
         if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
                 RETURN(err = -ENOTTY);
 
         /* only for debugging */
-        if (cmd == PTL_IOC_DEBUG_MASK) {
-                debug_data = (struct portals_debug_ioctl_data*)arg;
-                portal_subsystem_debug = debug_data->subs;
-                portal_debug = debug_data->debug;
+        if (cmd == LIBCFS_IOC_DEBUG_MASK) {
+                debug_data = (struct libcfs_debug_ioctl_data*)arg;
+                libcfs_subsystem_debug = debug_data->subs;
+                libcfs_debug = debug_data->debug;
                 return 0;
         }
 
@@ -296,11 +298,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
 
         case OBD_IOC_CLOSE_UUID: {
-                ptl_nid_t       peer_nid;
-                __u32           peer_nal;
-                CDEBUG(D_IOCTL, "closing all connections to uuid %s\n",
+                CDEBUG(D_IOCTL, "closing all connections to uuid %s (NOOP)\n",
                        data->ioc_inlbuf1);
-                lustre_uuid_to_peer(data->ioc_inlbuf1, &peer_nal, &peer_nid);
                 GOTO(out, err = 0);
         }
 
@@ -464,7 +463,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
         int rc = 0, i;
         *eof = 1;
 
-        if (portals_catastrophe)
+        if (libcfs_catastrophe)
                 rc += snprintf(page + rc, count - rc, "LBUG\n");
 
         spin_lock(&obd_dev_lock);
