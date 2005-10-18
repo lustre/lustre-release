@@ -329,11 +329,16 @@ fi
 
 #LB_LINUX_CONFIG_BIG_STACK
 
-# Portals tests
-LP_PROG_LINUX
+# LNet tests
+LN_PROG_LINUX
 
 # Lustre tests
 LC_PROG_LINUX
+
+# Portals tests
+if test "$PORTALS" ; then
+	LP_PROG_LINUX
+fi
 ])
 
 #

@@ -51,6 +51,7 @@ if [ "$child" != "HEAD" -a "`cat $dir/CVS/Tag 2> /dev/null`" != "T$child" ]; the
 fi
 
 TEST_FILE=${TEST_FILE:-ChangeLog} # does this need to be smarter?
+[ $dir = "build" ] && TEST_FILE=lbuild
 check_tag() {
 	[ -z "$1" ] && echo "check_tag() missing arg" && exit3
 	[ "$1" = "HEAD" ] && return
