@@ -185,6 +185,8 @@ done
 f=/etc/modules.conf
 if [ -f $f ] && ! grep llite $f >/dev/null 2>/dev/null ; then
 	cat >> $f <<EOF
+add below ptlrpc ksocklnd
+add below llite osc
 alias lustre llite
 EOF
 fi
