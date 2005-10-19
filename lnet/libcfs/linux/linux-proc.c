@@ -282,6 +282,8 @@ int insert_proc(void)
         ent->write_proc = trace_write_debug_mb;
         ent->read_proc = trace_read_debug_mb;
 
+        proc_symlink("sys/portals", NULL, "/proc/sys/lnet");
+
         return 0;
 }
 
@@ -303,6 +305,7 @@ void remove_proc(void)
         remove_proc_entry(dir, 0);
 #endif /* PORTALS_PROFILING */
 
+        remove_proc_entry("sys/portals", NULL);
         remove_proc_entry("sys/lnet/dump_kernel", NULL);
         remove_proc_entry("sys/lnet/daemon_file", NULL);
         remove_proc_entry("sys/lnet/debug_mb", NULL);
