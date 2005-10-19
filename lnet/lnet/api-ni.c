@@ -1120,7 +1120,7 @@ LNetInit(void)
 #else
         /* Register LNDs
          * NB the order here determines default 'networks=' order */
-# if HAVE_CRAY_XT3
+# if CRAY_XT3
         LNET_REGISTER_ULND(the_ptllnd);
 # endif
 # if HAVE_LIBPTHREAD
