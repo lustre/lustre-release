@@ -485,7 +485,7 @@ lnet_create_interface_cookie (void)
         int            rc = gettimeofday (&tv, NULL);
         LASSERT (rc == 0);
 #else
-	do_gettimeofday(&tv);
+        do_gettimeofday(&tv);
 #endif
         cookie = tv.tv_sec;
         cookie *= 1000000;
@@ -982,15 +982,20 @@ lnet_startup_lndnis (void)
 #ifdef __KERNEL__
                 if (lnd == NULL) {
                         LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
-                        request_module(libcfs_lnd2modname(lnd_type));
+                        rc = request_module(libcfs_lnd2modname(lnd_type));
                         LNET_MUTEX_DOWN(&the_lnet.ln_lnd_mutex);
 
                         lnd = lnet_find_lnd_by_type(lnd_type);
                         if (lnd == NULL) {
                                 LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
-                                CERROR("Can't load LND %s, module %s\n",
+                                CERROR("Can't load LND %s, module %s, rc=%d\n",
                                        libcfs_lnd2str(lnd_type),
-                                       libcfs_lnd2modname(lnd_type));
+                                       libcfs_lnd2modname(lnd_type), rc);
+#ifndef CONFIG_KMOD
+                                LCONSOLE_ERROR("Your kernel must be compiled "
+                                               "with CONFIG_KMOD set for "
+                                               "automatic module loading.");
+#endif
                                 goto failed;
                         }
                 }
