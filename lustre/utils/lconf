@@ -1149,6 +1149,8 @@ class MDSDEV(Module):
             self.active = 1
         else:
             self.active = 0
+        if self.active and config.group and config.group != mds.get_val('group', mds.get_val('name')):
+            self.active = 0
 
         self.inode_size = self.db.get_val_int('inodesize', 0)
         if self.inode_size == 0:
@@ -2051,7 +2053,8 @@ def doCheckMtime(lustreDB, hosts):
                   break
     if mdsdb:
         if lustreDB.get_mtime():
-            print "Checking mtime of the LLOG"
+            if config.verbose:
+                print "Checking XML modification time"
             devpath = mdsdb.get_val('devpath','')
             xmtime = string.atof(lustreDB.get_mtime())
             runcmd("mkdir /tmp/lustre-XXXX/")
