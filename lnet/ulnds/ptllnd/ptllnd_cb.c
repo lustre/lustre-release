@@ -339,6 +339,16 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 return 0;
         }
 
+        PJK_UT_MSG("niov  =%d\n",niov);
+        PJK_UT_MSG("offset=%d\n",offset);
+        PJK_UT_MSG("len   =%d\n",len);
+
+
+        /*
+         * Remove iovec's at the beginning that
+         * are skipped because of the offset.
+         * Adjust the offset accordingly
+         */
         for (;;) {
                 LASSERT (niov > 0);
                 if (offset < iov->iov_len)
@@ -348,30 +358,43 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 iov++;
         }
 
+        PJK_UT_MSG("niov  =%d (after)\n",niov);
+        PJK_UT_MSG("offset=%d (after)\n",offset);
+        PJK_UT_MSG("len   =%d (after)\n",len);
+
         for (;;) {
+                int temp_offset = offset;
+                int resid = len;
                 LIBCFS_ALLOC(piov, niov * sizeof(*piov));
                 if (piov == NULL)
                         return -ENOMEM;
 
                 for (npiov = 0;; npiov++) {
+                        PJK_UT_MSG("npiov=%d\n",npiov);
+                        PJK_UT_MSG("offset=%d\n",temp_offset);
+                        PJK_UT_MSG("len=%d\n",resid);
+                        PJK_UT_MSG("iov[npiov].iov_len=%d\n",iov[npiov].iov_len);
+
                         LASSERT (npiov < niov);
-                        LASSERT (iov->iov_len >= offset);
+                        LASSERT (iov->iov_len >= temp_offset);
 
-                        piov[npiov].iov_base = iov[npiov].iov_base + offset;
-                        piov[npiov].iov_len = iov[npiov].iov_len - offset;
-
-                        if (piov[npiov].iov_len >= len) {
-                                piov[npiov].iov_len = len;
+                        piov[npiov].iov_base = iov[npiov].iov_base + temp_offset;
+                        piov[npiov].iov_len = iov[npiov].iov_len - temp_offset;
+                        
+                        if (piov[npiov].iov_len >= resid) {
+                                piov[npiov].iov_len = resid;
                                 npiov++;
                                 break;
                         }
-                        iov++;
-                        offset = 0;
+                        resid -= piov[npiov].iov_len;
+                        temp_offset = 0;
                 }
 
                 if (npiov == niov) {
                         tx->tx_niov = niov;
                         tx->tx_iov = piov;
+                        PJK_UT_MSG("tx->tx_iov=%p\n",tx->tx_iov);
+                        PJK_UT_MSG("tx->tx_niov=%d\n",tx->tx_niov);
                         return 0;
                 }
 
@@ -1283,18 +1306,8 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
 
         isbulk = PtlHandleIsEqual(event->md_handle, tx->tx_bulkmdh);
         PJK_UT_MSG("isbulk=%d\n",isbulk);
-        if (isbulk) {
-                void *ptr;
-
-                if ((event->md.options & PTL_MD_IOVEC) == 0)
-                        ptr = tx->tx_iov[0].iov_base;
-                else
-                        ptr = tx->tx_iov;
-
-                LASSERT (event->md.start == ptr);
-                if (unlinked)
-                        tx->tx_bulkmdh = PTL_INVALID_HANDLE;
-        }
+        if ( isbulk && unlinked )
+                tx->tx_bulkmdh = PTL_INVALID_HANDLE;
 
         LASSERT (!isreq != !isbulk);            /* always one and only 1 match */
 

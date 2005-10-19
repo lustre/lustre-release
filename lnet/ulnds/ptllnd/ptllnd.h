@@ -218,6 +218,19 @@ lnet2ptlnid(lnet_nid_t lnet_nid)
  */
 //#define PJK_DEBUGGING
 
+/*
+ * A note about lprintf():
+ *  Normally printf() is redirected to stdout of the console
+ *  from which yod launched the catamount application.  However
+ *  there is a lot of initilziation code that runs before this
+ *  redirection is hooked up, and printf() seems to go to the bit bucket
+ *
+ *  To get any kind of debug output and init time lprintf() can
+ *  be used to output to the console from which bookqk was used to
+ *  boot the catamount node.  This works for debugging some simple
+ *  cases.
+ */
+
 #ifdef PJK_DEBUGGING
 
 #define PJK_UT_MSG_ALWAYS(fmt, a...)                    \
