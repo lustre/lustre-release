@@ -1063,9 +1063,11 @@ int main(int argc , char *const argv[])
                         strcat(mop.mo_ldd.ldd_mount_opts, ",iopen_nopriv");
                 if ((get_os_version() == 24) && IS_OST(&mop.mo_ldd))
                         strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
+                /* When do we want extents and mballoc? 
                 if (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
                         strcat(mop.mo_ldd.ldd_mount_opts, ",extents,mballoc");
                 }
+                */
                 break;
         }
         case LDD_MT_SMFS: {
