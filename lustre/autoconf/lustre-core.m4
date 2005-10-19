@@ -414,6 +414,21 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+AC_DEFUN([LC_FUNC_PAGE_MAPPED],
+[AC_MSG_CHECKING([if kernel offers page_mapped])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/mm.h>
+],[
+	page_mapped(NULL);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_PAGE_MAPPED, 1, [page_mapped found])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+
 #
 # LC_PROG_LINUX
 #
@@ -437,6 +452,7 @@ LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
 LC_FUNC_DEV_SET_RDONLY
 LC_FUNC_FILEMAP_FDATAWRITE
 LC_STRUCT_STATFS
+LC_FUNC_PAGE_MAPPED
 ])
 
 #

@@ -287,6 +287,7 @@ static inline int mapping_mapped(struct address_space *mapping)
 #define ll_zap_page_range(vma, addr, len)  zap_page_range(vma->vm_mm, addr, len)
 #endif
 
+#ifndef HAVE_PAGE_MAPPED
 /* Poor man's page_mapped. substract from page count, counts from
    buffers/pagecache and our own count (we are supposed to hold one reference).
    What is left are user mappings and also others who work with this page now,
@@ -295,6 +296,7 @@ static inline int page_mapped(struct page *page)
 {
         return page_count(page) - !!page->mapping - !!page->buffers - 1;
 }
+#endif /* !HAVE_PAGE_MAPPED */
 
 #endif /* end of 2.4 compat macros */
 
