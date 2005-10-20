@@ -10,7 +10,7 @@ LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
 sbin_scripts = lconf lmc llanalyze llstat.pl llobdstat.pl lactive	\
 	load_ldap.sh lrun lwizard
-bin_scripts = lfind lstripe llog_reader
+bin_scripts = lfind lstripe
 
 if UTILS
 rootsbin_SCRIPTS = mount.lustre
