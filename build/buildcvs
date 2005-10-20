@@ -24,7 +24,7 @@ case "$lustretag" in
 	portalstag="b1_2"
 	;;
 
-    b1_4 | b1_4_acl)
+    b1_4 | b1_4_*)
 	snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
