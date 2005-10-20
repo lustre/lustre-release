@@ -327,6 +327,12 @@ if test "x$ARCH_UM" = "x" ; then
 fi
 ])
 
+LB_LINUX_CONFIG([KMOD],[],[
+	AC_MSG_WARN([])
+	AC_MSG_WARN([Kernel module loading support is highly recommended.])
+	AC_MSG_WARN([])
+])
+
 #LB_LINUX_CONFIG_BIG_STACK
 
 # LNet tests
