@@ -712,6 +712,7 @@ static struct mod_paths {
         {"cobd", "lustre/cobd"},
         {"cmobd", "lustre/cmobd"},
         {"confobd", "lustre/obdclass"},
+        {"lquota", "lustre/quota"},
         {NULL, NULL}
 };
 

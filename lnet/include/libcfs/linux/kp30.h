@@ -186,6 +186,8 @@ do {                                                                    \
 # include <sys/ioctl.h>                         /* for _IOWR */
 
 # define CFS_MODULE_PARM(name, t, type, perm, desc)
+#define PORTAL_SYMBOL_GET(x) inter_module_get(#x)
+#define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
 
 #endif /* End of !__KERNEL__ */
 
