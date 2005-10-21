@@ -212,8 +212,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         if (req->l_policy_data.l_extent.gid ==
                              lock->l_policy_data.l_extent.gid) {
                                 /* found it */
-                                ldlm_resource_insert_lock_after(lock,
-                                                                req);
+                                ldlm_resource_insert_lock_after(lock, req);
                                 RETURN(0);
                         }
                         continue;
