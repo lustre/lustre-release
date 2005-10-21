@@ -268,12 +268,12 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         /* Ok, we hit non-GROUP lock, there should be no
                            more GROUP locks later on, queue in front of
                            first non-GROUP lock */
-                                
+
                                 ldlm_resource_insert_lock_after(lock, req);
                                 list_del_init(&lock->l_res_link);
                                 ldlm_resource_insert_lock_after(req, lock);
                                 RETURN(0);
-                        }  
+                        }
                         if (req->l_policy_data.l_extent.gid ==
                              lock->l_policy_data.l_extent.gid) {
                                 /* found it */
@@ -307,7 +307,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         ldlm_add_ast_work_item(lock, req, NULL, 0);
         }
 
-        return(compat);
+        RETURN(compat);
 destroylock:
         list_del_init(&req->l_res_link);
         ldlm_lock_destroy(req);
