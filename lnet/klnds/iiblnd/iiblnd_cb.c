@@ -58,7 +58,6 @@ kibnal_tx_done (kib_tx_t *tx)
 {
         int        rc = tx->tx_status;
         int        i;
-        FSTATUS    frc;
 
         LASSERT (!in_interrupt());
         LASSERT (!tx->tx_queued);               /* mustn't be queued for sending */
@@ -131,7 +130,6 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
 {
         kib_conn_t   *conn = rx->rx_conn;
         int           rc = 0;
-        unsigned long flags;
         FSTATUS       frc;
 
         LASSERT (!in_interrupt());
@@ -142,7 +140,8 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
                 .Length  = IBNAL_MSG_SIZE,
         };
 
-        rx->rx_wrq = (IB_WORK_REQ) {
+        rx->rx_wrq = (IB_WORK_REQ2) {
+                .Next          = NULL;
                 .WorkReqId     = kibnal_ptr2wreqid(rx, IBNAL_WID_RX),
                 .MessageLen    = IBNAL_MSG_SIZE,
                 .DSList        = &rx->rx_gl,
@@ -167,7 +166,7 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
         rx->rx_nob = -1;                        /* flag posted */
         mb();
 
-        frc = iibt_postrecv(conn->ibc_qp, &rx->rx_wrq);
+        frc = iibt_postrecv2(conn->ibc_qp, &rx->rx_wrq, NULL);
         if (frc == FSUCCESS) {
                 if (credit) {
                         spin_lock(&conn->ibc_lock);
@@ -425,7 +424,6 @@ kibnal_rx_complete (IB_WORK_COMPLETION *wc, __u64 rxseq)
         unsigned long flags;
         int           rc;
 
-        CDEBUG(D_NET, "rx %p conn %p\n", rx, conn);
         LASSERT (rx->rx_nob < 0);               /* was posted */
         rx->rx_nob = 0;                         /* isn't now */
         mb();
@@ -486,7 +484,6 @@ kibnal_rx_complete (IB_WORK_COMPLETION *wc, __u64 rxseq)
         return;
         
  failed:
-        CDEBUG(D_NET, "rx %p conn %p\n", rx, conn);
         kibnal_close_conn(conn, -EIO);
  ignore:
         /* Don't re-post rx & drop its ref on conn */
@@ -805,7 +802,6 @@ kibnal_check_sends (kib_conn_t *conn)
         int             rc;
         int             done;
         int             i;
-        int             nwork;
 
         LASSERT (conn->ibc_state >= IBNAL_CONN_ESTABLISHED);
         
@@ -894,29 +890,18 @@ kibnal_check_sends (kib_conn_t *conn)
 
                 list_add (&tx->tx_list, &conn->ibc_active_txs);
 
-                /* Drop the lock while I send (this can re-order sends) */
-                spin_unlock(&conn->ibc_lock);
-
                 LASSERT (tx->tx_nwrq > 0);
 
-                rc = -ECONNABORTED;
+                rc = 0;
                 frc = FSUCCESS;
-                nwork = 0;
-                if (conn->ibc_state == IBNAL_CONN_ESTABLISHED) {
-                        /* Driver only accepts 1 item at a time */
-                        for (i = 0; i < tx->tx_nwrq; i++) {
-                                frc = iibt_postsend(conn->ibc_qp, 
-                                                    &tx->tx_wrq[i]);
-                                if (frc != FSUCCESS) {
-                                        rc = -EIO;
-                                        break;
-                                }
-                                CDEBUG(D_NET, "posted tx wrq %p\n", 
-                                       &tx->tx_wrq[i]);
-                        }
+                if (conn->ibc_state != IBNAL_CONN_ESTABLISHED) {
+                        rc = -ECONNABORTED;
+                } else {
+                        frc = iibt_postsend2(conn->ibc_qp, tx->tx_wrq, NULL);
+                        if (frc != FSUCCESS)
+                                rc = -EIO;
                 }
 
-                spin_lock(&conn->ibc_lock);
                 if (rc != 0) {
                         /* NB credits are transferred in the actual
                          * message, which can only be the last work item */
@@ -960,8 +945,9 @@ kibnal_tx_complete (IB_WORK_COMPLETION *wc)
         int           failed = wc->Status != WRStatusSuccess;
         int           idle;
 
-        CDEBUG(D_NET, "tx %p conn %p sending %d nwrq %d status %d\n", 
-               tx, conn, tx->tx_sending, tx->tx_nwrq, wc->Status);
+        CDEBUG(D_NET, "%s: sending %d nwrq %d status %d\n", 
+               libcfs_nid2str(conn->ibc_peer->ibp_nid),
+               tx->tx_sending, tx->tx_nwrq, wc->Status);
 
         LASSERT (tx->tx_sending > 0);
 
@@ -1012,7 +998,7 @@ void
 kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob)
 {
         IB_LOCAL_DATASEGMENT *gl = &tx->tx_gl[tx->tx_nwrq];
-        IB_WORK_REQ          *wrq = &tx->tx_wrq[tx->tx_nwrq];
+        IB_WORK_REQ2         *wrq = &tx->tx_wrq[tx->tx_nwrq];
         int                   nob = offsetof (kib_msg_t, ibm_u) + body_nob;
 
         LASSERT (tx->tx_nwrq >= 0 && 
@@ -1026,6 +1012,8 @@ kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob)
                 .Length  = IBNAL_MSG_SIZE,
                 .Lkey    = kibnal_data.kib_whole_mem.md_lkey,
         };
+
+        wrq->Next           = NULL;             /* This is the last one */
 
         wrq->WorkReqId      = kibnal_ptr2wreqid(tx, IBNAL_WID_TX);
         wrq->Operation      = WROpSend;
@@ -1062,6 +1050,7 @@ kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
 
         wrq = &tx->tx_wrq[0];
 
+        wrq->Next           = wrq + 1;
         wrq->WorkReqId      = kibnal_ptr2wreqid(tx, IBNAL_WID_RDMA);
         wrq->Operation      = WROpRdmaWrite;
         wrq->DSList         = gl;
@@ -1129,6 +1118,7 @@ kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
 
                 wrq = &tx->tx_wrq[tx->tx_nwrq];
 
+                wrq->Next           = wrq + 1;
                 wrq->WorkReqId      = kibnal_ptr2wreqid(tx, IBNAL_WID_RDMA);
                 wrq->Operation      = WROpRdmaWrite;
                 wrq->DSList         = gl;
@@ -1802,7 +1792,6 @@ kibnal_conn_disconnected(kib_conn_t *conn)
         struct list_head *nxt;
         kib_tx_t         *tx;
         FSTATUS           frc;
-        int               done;
 
         LASSERT (conn->ibc_state >= IBNAL_CONN_INIT_QP);
 
@@ -1923,6 +1912,7 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active, int rc)
 
                 list_del (&tx->tx_list);
                 /* complete now */
+                tx->tx_waiting = 0;
                 tx->tx_status = -EHOSTUNREACH;
                 kibnal_tx_done (tx);
         } while (!list_empty (&zombies));
@@ -1935,7 +1925,6 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         struct list_head  txs;
         kib_tx_t         *tx;
         unsigned long     flags;
-        int               i;
 
         LASSERT (conn->ibc_state >= IBNAL_CONN_INIT_QP);
         LASSERT (conn->ibc_state < IBNAL_CONN_ESTABLISHED);
@@ -1956,11 +1945,14 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         LASSERT(conn->ibc_state == IBNAL_CONN_CONNECTING);
         kibnal_set_conn_state(conn, IBNAL_CONN_ESTABLISHED);
 
-        CDEBUG(D_WARNING, "Connection %p -> %s ESTABLISHED\n",
-               conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+        CDEBUG(D_WARNING, "Connection %s ESTABLISHED\n",
+               libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
+        kibnal_conn_addref(conn);               /* +1 ref for ibc_list */
+        list_add_tail(&conn->ibc_list, &peer->ibp_conns);
+        
         if (!kibnal_peer_active(peer)) {
                 /* peer has been deleted */
                 kibnal_close_conn_locked(conn, -ECONNABORTED);
@@ -1975,9 +1967,7 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         peer->ibp_connecting--;
         peer->ibp_reconnect_interval = 0;       /* OK to reconnect at any time */
 
-        /* Add conn to peer's list and nuke any dangling conns from a different
-         * peer instance... */
-        kibnal_conn_addref(conn);               /* +1 ref for ibc_list */
+        /* Nuke any dangling conns from a different peer instance... */
         kibnal_close_stale_conns_locked(peer, conn->ibc_incarnation);
 
         /* grab txs blocking for a conn */
@@ -2023,7 +2013,6 @@ kibnal_check_connreject(kib_conn_t *conn, int active, CM_REJECT_INFO *rej)
 {
         kib_peer_t *peer = conn->ibc_peer;
         unsigned    long flags;
-        FSTATUS     frc;
 
         if (rej->Reason != RC_STALE_CONN) {
                 CERROR("%s connection to %s rejected: %d\n",
@@ -2058,8 +2047,10 @@ kibnal_check_connreject(kib_conn_t *conn, int active, CM_REJECT_INFO *rej)
 void
 kibnal_cm_disconnect_callback(kib_conn_t *conn, CM_CONN_INFO *info)
 {
-        CDEBUG(D_NET, "status 0x%x\n", info->Status);
-
+        CDEBUG(D_WARNING, "%s: state %d, status 0x%x\n", 
+               libcfs_nid2str(conn->ibc_peer->ibp_nid),
+               conn->ibc_state, info->Status);
+        
         LASSERT (conn->ibc_state >= IBNAL_CONN_ESTABLISHED);
 
         switch (info->Status) {
@@ -2067,21 +2058,15 @@ kibnal_cm_disconnect_callback(kib_conn_t *conn, CM_CONN_INFO *info)
                 LBUG();
                 break;
 
-        case FCM_DISCONNECT_REPLY:
-                /* You can't get this if you set TIMEWAIT */
-                CERROR("Unexpected FCM_DISCONNECT_REPLY for %s\n",
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                LBUG();
-                break;
-                
         case FCM_DISCONNECT_REQUEST:
                 /* Schedule conn to iibt_cm_disconnect() if it wasn't already */
                 kibnal_close_conn (conn, 0);
                 break;
 
-        case FCM_DISCONNECTED:
-                CDEBUG(D_NET, "Connection %p -> %s disconnected.\n",
-                       conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+        case FCM_DISCONNECT_REPLY:              /* peer acks my disconnect req */
+        case FCM_DISCONNECTED:                  /* end of TIME_WAIT */
+                CDEBUG(D_NET, "Connection %s disconnected.\n",
+                       libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kibnal_conn_decref(conn);       /* Lose CM's ref */
                 break;
         }
@@ -2093,14 +2078,12 @@ kibnal_cm_passive_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         kib_conn_t       *conn = arg;
 
         CDEBUG(D_NET, "status 0x%x\n", info->Status);
-        kibnal_set_conn_state(conn, IBNAL_CONN_CONNECTING);
 
         /* Established Connection Notifier */
         switch (info->Status) {
         default:
-                CERROR("Unexpected status %d on Connection %p -> %s\n",
-                       info->Status, conn, 
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid));
+                CERROR("Unexpected status %d on Connection %s\n",
+                       info->Status, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 LBUG();
                 break;
 
@@ -2342,8 +2325,8 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
                 return;
         }
                         
-        CDEBUG(D_NET, "Connection %p -> %s REP_RECEIVED.\n",
-               conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+        CDEBUG(D_NET, "Connection %s REP_RECEIVED.\n",
+               libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
         conn->ibc_incarnation = msg->ibm_srcstamp;
         conn->ibc_credits = IBNAL_MSG_QUEUE_SIZE;
@@ -2365,12 +2348,13 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
                              &conn->ibc_cvars->cv_cmci, 
                              NULL, NULL, NULL, NULL);
 
-        if (frc == FCM_CONNECT_ESTABLISHED)
+        if (frc == FCM_CONNECT_ESTABLISHED) {
                 kibnal_connreq_done(conn, 1, 0);
-
-
-        CERROR("Connection %p -> %s CMAccept failed: %d\n",
-               conn, libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
+                return;
+        }
+        
+        CERROR("Connection %s CMAccept failed: %d\n",
+               libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
         kibnal_connreq_done(conn, 1, -ECONNABORTED);
 }
 
@@ -2383,9 +2367,8 @@ kibnal_cm_active_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
 
         switch (info->Status) {
         default:
-                CERROR("unknown status %d on Connection %p -> %s\n", 
-                       info->Status, conn, 
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid));
+                CERROR("unknown status %d on Connection %s\n", 
+                       info->Status, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 LBUG();
                 break;
 
@@ -2527,7 +2510,6 @@ kibnal_service_get_callback (void *arg, QUERY *qry,
         kib_conn_t              *conn = arg;
         SERVICE_RECORD_RESULTS  *svc;
         FSTATUS                  frc;
-        lnet_nid_t               nid;
 
         if (qrslt->Status != FSUCCESS || 
             qrslt->ResultDataSize < sizeof(*svc)) {
@@ -2888,10 +2870,7 @@ kibnal_scheduler(void *arg)
         FSTATUS            frc2;
         IB_WORK_COMPLETION wc;
         kib_rx_t          *rx;
-        kib_tx_t          *tx;
         unsigned long      flags;
-        int                rc;
-        int                did_something;
         __u64              rxseq = 0;
         int                busy_loops = 0;
 

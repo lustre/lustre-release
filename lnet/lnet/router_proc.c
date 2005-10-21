@@ -416,7 +416,7 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
         int                       nrefs;
 
         if (lpsi->lpsi_off == 0) {
-                seq_printf(s, "%-16s %4s %5s %5s %5s %5s %5s %5s %s\n", 
+                seq_printf(s, "%-24s %4s %5s %5s %5s %5s %5s %5s %s\n", 
                            "nid", "refs", "state", "max", 
                            "rtr", "min", "tx", "min", "queue");
                 return 0;
@@ -445,7 +445,7 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
 
         LNET_UNLOCK();
 
-        seq_printf(s, "%-16s %4d %5s %5d %5d %5d %5d %5d %d\n", 
+        seq_printf(s, "%-24s %4d %5s %5d %5d %5d %5d %5d %d\n", 
                    libcfs_nid2str(nid), nrefs, alive ? "up" : "down",
                    maxcr, rtrcr, minrtrcr, txcr, mintxcr, txqnob);
         return 0;
@@ -753,7 +753,7 @@ lnet_ni_seq_show (struct seq_file *s, void *iter)
         int                     nref;
 
         if (lnsi->lnsi_off == 0) {
-                seq_printf(s, "%-16s %4s %4s %5s %5s %5s\n",
+                seq_printf(s, "%-24s %4s %4s %5s %5s %5s\n",
                            "nid", "refs", "peer", "max", "tx", "min");
                 return 0;
         }
@@ -773,7 +773,7 @@ lnet_ni_seq_show (struct seq_file *s, void *iter)
 
         LNET_UNLOCK();
 
-        seq_printf(s, "%-16s %4d %4d %5d %5d %5d\n",
+        seq_printf(s, "%-24s %4d %4d %5d %5d %5d\n",
                    libcfs_nid2str(nid), nref, 
                    npeertxcr, maxtxcr, txcr, mintxcr);
         return 0;

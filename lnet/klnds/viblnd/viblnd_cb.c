@@ -1985,6 +1985,7 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active)
 
                 list_del (&tx->tx_list);
                 /* complete now */
+                tx->tx_waiting = 0;
                 tx->tx_status = -EHOSTUNREACH;
                 kibnal_tx_done (tx);
         } while (!list_empty (&zombies));

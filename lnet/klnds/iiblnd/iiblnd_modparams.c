@@ -68,7 +68,7 @@ CFS_MODULE_PARM(peer_credits, "i", int, 0444,
 		"# concurrent sends to 1 peer");
 
 static int sd_retries = IBNAL_SD_RETRIES;
-CFS_MODULE_PARM(sa_retries, "i", int, 0444,
+CFS_MODULE_PARM(sd_retries, "i", int, 0444,
 		"# times to retry SD queries");
 
 kib_tunables_t kibnal_tunables = {

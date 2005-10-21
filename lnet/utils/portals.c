@@ -1260,7 +1260,7 @@ lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize,
         if (data.ioc_u32[2] != sizeof(lwt_event_t) ||
             data.ioc_u32[3] != offsetof(lwt_event_t, lwte_where)) {
                 fprintf(stderr,"kernel/user LWT event mismatch %d(%d),%d(%d)\n",
-                        (int)data.ioc_u32[2], sizeof(lwt_event_t),
+                        (int)data.ioc_u32[2], (int)sizeof(lwt_event_t),
                         (int)data.ioc_u32[3],
                         (int)offsetof(lwt_event_t, lwte_where));
                 return (-1);

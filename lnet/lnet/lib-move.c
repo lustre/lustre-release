@@ -26,6 +26,10 @@
 
 #include <lnet/lib-lnet.h>
 
+static int local_nid_dist_zero = 1;
+CFS_MODULE_PARM(local_nid_dist_zero, "i", int, 0444,
+                "Reserved");
+
 /* forward ref */
 static void lnet_commit_md (lnet_libmd_t *md, lnet_msg_t *msg);
 
@@ -732,21 +736,28 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 int
 lnet_compare_routers(lnet_peer_t *p1, lnet_peer_t *p2)
 {
-        /* Go for the one with more available credits.
-         * Otherwise go for the minimum queue depth */
+        /* FIRST compare available send credits 
+         * (sends block immediately when peer credits are <= 0)
+         * THEN compare queue depth */
         if (p1->lp_txcredits > 0) {
                 
                 if (p1->lp_txcredits > p2->lp_txcredits)
                         return 1;
                 
                 if (p1->lp_txcredits < p2->lp_txcredits)
-                        return 0;
+                        return -1;
 
         } else if (p2->lp_txcredits > 0) {
-                return 0;
+                return -1;
         }
+
+        if (p1->lp_txqnob > p2->lp_txqnob)
+                return 1;
         
-        return (p1->lp_txqnob > p2->lp_txqnob);
+        if (p1->lp_txqnob < p2->lp_txqnob)
+                return -1;
+        
+        return 0;
 }
 
 
@@ -1148,6 +1159,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
         lnet_ni_t        *local_ni;
         lnet_remotenet_t *rnet;
         lnet_route_t     *route;
+        lnet_route_t     *best_route;
         struct list_head *tmp;
         lnet_peer_t      *lp;
         lnet_peer_t      *lp2;
@@ -1237,14 +1249,17 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 
                 /* Find the best gateway I can use */
                 lp = NULL;
+                best_route = NULL;
                 list_for_each(tmp, &rnet->lrn_routes) {
                         route = list_entry(tmp, lnet_route_t, lr_list);
                         lp2 = route->lr_gateway;
 
                         if (lp2->lp_alive &&
                             (src_ni == NULL || lp2->lp_ni == src_ni) &&
-                            (lp == NULL || lnet_compare_routers(lp2, lp)))
+                            (lp == NULL || lnet_compare_routers(lp2, lp) > 0)) {
+                                best_route = route;
                                 lp = lp2;
+                        }
                 }
 
                 if (lp == NULL) {
@@ -1255,6 +1270,11 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                                libcfs_id2str(msg->msg_target));
                         return -EHOSTUNREACH;
                 }
+
+                /* Place selected route at the end of the route list to ensure
+                 * fairness; everything else being equal... */
+                list_del(&best_route->lr_list);
+                list_add_tail(&best_route->lr_list, &rnet->lrn_routes);
 
                 if (src_ni == NULL) {
                         src_ni = lp->lp_ni;
@@ -2130,13 +2150,18 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
         lnet_remotenet_t *rnet;
         __u32             dstnet = LNET_NIDNET(dstnid);
         int               hops;
-        int               order = 0;
+        int               order = 2;
+
+        /* if !local_nid_dist_zero, I don't return a distance of 0 ever
+         * (when lustre sees a distance of 0, it substitutes 0@lo), so I
+         * keep order 0 free for 0@lo and order 1 free for a local NID
+         * match */
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
         LNET_LOCK();
-        
+
         list_for_each (e, &the_lnet.ln_nis) {
                 ni = list_entry(e, lnet_ni_t, ni_list);
                 
@@ -2154,7 +2179,8 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
                                         *orderp = 1;
                         }
                         LNET_UNLOCK();
-                        return 0;
+
+                        return local_nid_dist_zero ? 0 : 1;
                 }
 
                 if (LNET_NIDNET(ni->ni_nid) == dstnet ||

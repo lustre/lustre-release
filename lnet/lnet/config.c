@@ -1166,19 +1166,25 @@ lnet_parse_ip2nets (char **networksp, char *ip2nets)
         int        nip = lnet_ipaddr_enumerate(&ipaddrs);
         int        rc;
 
-        if (nip == 0) {
-                CERROR("I have no IP addresses\n");
-                return -ENOENT;
-        }
-
-        if (nip <= 0) {
-                CERROR("Can't enumerate IP interfaces: %d\n", nip);
+        if (nip <=0) {
+                if (nip < 0) {
+                        rc = nip;
+                        CERROR("Can't enumerate IP interfaces: %d\n", nip);
+                } else {
+                        rc = -ENOENT;
+                        CERROR("No local IP interfaces\n");
+                }
+                
+                LCONSOLE_ERROR("Can't match networks in ip2nets\n");
                 return nip;
         }
 
         rc = lnet_match_networks (networksp, ip2nets, ipaddrs, nip);
         lnet_ipaddr_free_enumeration(ipaddrs, nip);
-        
+
+        if (rc != 0)
+                LCONSOLE_ERROR("Error %d parsing ip2nets\n", rc);
+
         return rc;
 }
 

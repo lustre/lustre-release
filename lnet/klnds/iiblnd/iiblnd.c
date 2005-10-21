@@ -350,6 +350,7 @@ kibnal_create_cep(lnet_nid_t nid)
         return NULL;
 }
 
+#define IBNAL_CHECK_ADVERT 1
 #if IBNAL_CHECK_ADVERT
 void
 kibnal_service_query_done (void *arg, QUERY *qry, 
@@ -358,7 +359,7 @@ kibnal_service_query_done (void *arg, QUERY *qry,
         int                    *rcp = arg;
         FSTATUS                 frc = qry_result->Status;
         SERVICE_RECORD_RESULTS *svc_rslt;
-        SERVICE_RECORD         *svc;
+        IB_SERVICE_RECORD      *svc;
         lnet_nid_t              nid;
 
         if (frc != FSUCCESS || qry_result->ResultDataSize == 0) {
@@ -372,7 +373,7 @@ kibnal_service_query_done (void *arg, QUERY *qry,
 
         if (svc_rslt->NumServiceRecords < 1) {
                 CERROR("Check advert: %d records\n",
-                       svc->NumServiceRecords);
+                       svc_rslt->NumServiceRecords);
                 *rcp = -ENOENT;
                 goto out;
         }
@@ -380,15 +381,21 @@ kibnal_service_query_done (void *arg, QUERY *qry,
         svc = &svc_rslt->ServiceRecords[0];
         nid = le64_to_cpu(*kibnal_service_nid_field(svc));
         
+        CDEBUG(D_NET, "Check advert: %s "LPX64" "LPX64":%04x\n",
+               libcfs_nid2str(nid), svc->RID.ServiceID, 
+               svc->RID.ServiceGID.Type.Global.InterfaceID, 
+               svc->RID.ServiceP_Key);
+
         if (nid != kibnal_data.kib_ni->ni_nid) {
                 CERROR("Check advert: Bad NID %s (%s expected)\n",
-                       nid, kibnal_data.kib_ni->ni_nid);
+                       libcfs_nid2str(nid),
+                       libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
                 *rcp = -EINVAL;
                 goto out;
         }
 
         if (svc->RID.ServiceID != *kibnal_tunables.kib_service_number) {
-                CERROR("Check advert: Bad ServiceID "LPX64" ("LPX64" expected)\n",
+                CERROR("Check advert: Bad ServiceID "LPX64" (%x expected)\n",
                        svc->RID.ServiceID,
                        *kibnal_tunables.kib_service_number);
                 *rcp = -EINVAL;
@@ -411,7 +418,7 @@ kibnal_service_query_done (void *arg, QUERY *qry,
                 goto out;
         }
 
-        CDEBUG(D_WARNING, "Check advert OK\n");
+        CDEBUG(D_NET, "Check advert OK\n");
         *rcp = 0;
                 
  out:
@@ -499,7 +506,7 @@ kibnal_advertise (void)
             sizeof(svc->ServiceName)) {
                 CERROR("Service name '%s' too long (%d chars max)\n",
                        *kibnal_tunables.kib_service_name,
-                       sizeof(svc->ServiceName) - 1);
+                       (int)sizeof(svc->ServiceName) - 1);
                 return -EINVAL;
         }
 
@@ -565,7 +572,9 @@ kibnal_unadvertise (int expect_success)
 
         down (&kibnal_data.kib_listener_signal);
 
-        if ((frc2 -= FSUCCESS) == !!expect_success)
+        CDEBUG(D_NET, "Unadvertise rc: %d\n", frc2);
+
+        if ((frc2 == FSUCCESS) == !!expect_success)
                 return;
 
         if (expect_success)
@@ -619,13 +628,9 @@ kibnal_start_listener(void)
         unsigned long  flags;
         int            rc;
         FSTATUS        frc;
-        __u32          u32val;
 
         LASSERT (kibnal_data.kib_listener_cep == NULL);
         init_MUTEX_LOCKED (&kibnal_data.kib_listener_signal);
-
-        /* remove any previous advert (crashed node etc) */
-        kibnal_unadvertise(0);
 
         cep = kibnal_create_cep(LNET_NID_ANY);
         if (cep == NULL)
@@ -751,9 +756,8 @@ kibnal_find_peer_locked (lnet_nid_t nid)
                 if (peer->ibp_nid != nid)
                         continue;
 
-                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
-                       peer, libcfs_nid2str(nid), 
-                       atomic_read (&peer->ibp_refcount));
+                CDEBUG(D_NET, "got peer %s (%d)\n",
+                       libcfs_nid2str(nid), atomic_read (&peer->ibp_refcount));
                 return (peer);
         }
         return (NULL);
@@ -898,7 +902,7 @@ kibnal_del_peer (lnet_nid_t nid)
                         rc = 0;         /* matched something */
                 }
         }
- out:
+
         write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
 
         return (rc);
@@ -1149,6 +1153,7 @@ kibnal_create_conn (lnet_nid_t nid)
 
         /* 1 ref for caller */
         atomic_set (&conn->ibc_refcount, 1);
+        CDEBUG(D_WARNING, "New conn %p\n", conn);
         return (conn);
         
  failed:
@@ -1159,12 +1164,13 @@ kibnal_create_conn (lnet_nid_t nid)
 void
 kibnal_destroy_conn (kib_conn_t *conn)
 {
-        int     rc;
         FSTATUS frc;
 
         LASSERT (!in_interrupt());
         
-        CDEBUG (D_NET, "connection %p\n", conn);
+        CDEBUG (D_NET, "connection %s\n", 
+                (conn->ibc_peer) == NULL ? "<ANON>" :
+                libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
         LASSERT (atomic_read (&conn->ibc_refcount) == 0);
         LASSERT (list_empty(&conn->ibc_early_rxs));
@@ -1554,7 +1560,6 @@ kibnal_register_all_memory(void)
         IB_MR_PHYS_BUFFER  phys;
         IB_ACCESS_CONTROL  access;
         FSTATUS            frc;
-        int                rc;
 
         memset(&access, 0, sizeof(access));
         access.s.MWBindable = 1;
@@ -1571,9 +1576,6 @@ kibnal_register_all_memory(void)
 
         si_meminfo(&si);
         total = ((__u64)si.totalram) * si.mem_unit;
-
-        if (total < ((__u64)max_mapnr) * PAGE_SIZE)
-                total = ((__u64)max_mapnr) * PAGE_SIZE;
 
         if (total == 0) {
                 CERROR("Can't determine memory size\n");
@@ -1786,7 +1788,7 @@ kibnal_startup (lnet_ni_t *ni)
         
         /* Find IP address from <ipif base name><number> */
         snprintf(ipif_name, sizeof(ipif_name), "%s%d",
-                 *kibnal_tunables.kib_ipif_basename, kibnal_data.kib_hca_idx);
+                 *kibnal_tunables.kib_ipif_basename, kibnal_data.kib_hca_idx + 1);
         if (strlen(ipif_name) == sizeof(ipif_name - 1)) {
                 CERROR("IPoIB interface name %s truncated\n", ipif_name);
                 return -EINVAL;
@@ -1859,9 +1861,10 @@ kibnal_startup (lnet_ni_t *ni)
                                           *kibnal_tunables.kib_sd_retries;
 
         for (i = 0; i < IBNAL_N_SCHED; i++) {
-                rc = kibnal_thread_start (kibnal_scheduler, (void *)i);
+                rc = kibnal_thread_start (kibnal_scheduler,
+                                          (void *)(unsigned long)i);
                 if (rc != 0) {
-                        CERROR("Can't spawn iibnal scheduler[%d]: %d\n",
+                        CERROR("Can't spawn iib scheduler[%d]: %d\n",
                                i, rc);
                         goto failed;
                 }
@@ -1869,7 +1872,7 @@ kibnal_startup (lnet_ni_t *ni)
 
         rc = kibnal_thread_start (kibnal_connd, NULL);
         if (rc != 0) {
-                CERROR ("Can't spawn iibnal connd: %d\n", rc);
+                CERROR ("Can't spawn iib connd: %d\n", rc);
                 goto failed;
         }
 

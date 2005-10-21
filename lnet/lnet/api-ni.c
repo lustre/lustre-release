@@ -51,43 +51,21 @@ lnet_get_routes(void)
 char *
 lnet_get_networks(void)
 {
+        int     rc;
+
         if (*networks != 0 && *ip2nets != 0) {
                 LCONSOLE_ERROR("Please specify EITHER 'networks' or 'ip2nets'"
                                " but not both at once\n");
                 return NULL;
         }
         
+        if (*ip2nets != 0) {
+                rc = lnet_parse_ip2nets(&networks, ip2nets);
+                return (rc == 0) ? networks : NULL;
+        }
+
         if (*networks != 0)
                 return networks;
-        
-        if (*ip2nets != 0) {
-                int   rc = lnet_parse_ip2nets(&networks, ip2nets);
-
-                switch (rc) {
-                case 0:
-                        return networks;
-
-                case -ENOENT:
-                        LCONSOLE_ERROR("Can't match any networks in "
-                                       "ip2nets\n");
-                        break;
-                        
-                case -ENOMEM:
-                        LCONSOLE_ERROR("Out of memory parsing ip2nets\n");
-                        break;
-                        
-                case -EINVAL:
-                        LCONSOLE_ERROR("Can't parse ip2nets\n");
-                        break;
-                        
-                default:
-                        LCONSOLE_ERROR("Unexpected error %d parsing ip2nets\n",
-                                       rc);
-                        break;
-                }
-                
-                return NULL;
-        }
 
         return "tcp";
 }
@@ -142,15 +120,32 @@ char *
 lnet_get_networks (void)
 {
         static char       default_networks[256];
+        char             *networks = getenv ("LNET_NETWORKS");
+        char             *ip2nets  = getenv ("LNET_IP2NETS");
         char             *str;
         char             *sep;
         int               len;
         int               nob;
+        int               rc;
         struct list_head *tmp;
 
-        str = getenv ("LNET_NETWORKS");
-        if (str != NULL)
-                return str;
+#if NOT_YET
+        if (networks != NULL && ip2nets != NULL) {
+                LCONSOLE_ERROR("Please set EITHER 'LNET_NETWORKS' or "
+                               "'LNET_IP2NETS' but not both at once\n");
+                return NULL;
+        }
+
+        if (ip2nets != NULL) {
+                rc = lnet_parse_ip2nets(&networks, ip2nets);
+                return (rc == 0) ? networks : NULL;
+        }
+#else
+        ip2nets = NULL;
+        rc = 0;
+#endif
+        if (networks != NULL)
+                return networks;
 
         /* In userland, the default 'networks=' is the list of known net types */
 
@@ -343,9 +338,7 @@ lnet_register_lnd (lnd_t *lnd)
         list_add_tail (&lnd->lnd_list, &the_lnet.ln_lnds);
         lnd->lnd_refcount = 0;
 
-        if (lnd->lnd_type != LOLND)
-                LCONSOLE(0, "%s LND registered\n",
-                         libcfs_lnd2str(lnd->lnd_type));
+        CDEBUG(D_NET, "%s LND registered\n", libcfs_lnd2str(lnd->lnd_type));
 
         LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
 }
@@ -360,9 +353,7 @@ lnet_unregister_lnd (lnd_t *lnd)
         LASSERT (lnd->lnd_refcount == 0);
         
         list_del (&lnd->lnd_list);
-        if (lnd->lnd_type != LOLND)
-                LCONSOLE(0, "%s LND unregistered\n",
-                         libcfs_lnd2str(lnd->lnd_type));
+        CDEBUG(D_NET, "%s LND unregistered\n", libcfs_lnd2str(lnd->lnd_type));
 
         LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
 }
@@ -931,7 +922,7 @@ lnet_shutdown_lndnis (void)
                  * itself...  */
 
                 if (!islo)
-                        LCONSOLE(0, "Removed NI %s\n", 
+                        LCONSOLE(0, "Removed LNI %s\n", 
                                  libcfs_nid2str(ni->ni_nid));
 
                 LIBCFS_FREE(ni, sizeof(*ni));
@@ -1021,7 +1012,7 @@ lnet_startup_lndnis (void)
                 LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
 
                 if (rc != 0) {
-                        LCONSOLE_ERROR("Error %d starting up NI %s\n",
+                        LCONSOLE_ERROR("Error %d starting up LNI %s\n",
                                        rc, libcfs_lnd2str(lnd->lnd_type));
                         LNET_LOCK();
                         lnd->lnd_refcount--;
@@ -1059,7 +1050,7 @@ lnet_startup_lndnis (void)
 #endif
                 if (ni->ni_peertxcredits == 0 ||
                     ni->ni_maxtxcredits == 0) {
-                        LCONSOLE_ERROR("NI %s has no %scredits\n",
+                        LCONSOLE_ERROR("LNI %s has no %scredits\n",
                                        libcfs_lnd2str(lnd->lnd_type),
                                        ni->ni_peertxcredits == 0 ?
                                        "" : "per-peer ");
@@ -1068,7 +1059,7 @@ lnet_startup_lndnis (void)
 
                 ni->ni_txcredits = ni->ni_mintxcredits = ni->ni_maxtxcredits;
                         
-                LCONSOLE(0, "Added NI %s [%d/%d]\n", 
+                LCONSOLE(0, "Added LNI %s [%d/%d]\n", 
                          libcfs_nid2str(ni->ni_nid),
                          ni->ni_peertxcredits, ni->ni_txcredits);
 

@@ -78,7 +78,7 @@
 
 /* defaults for modparams/tunables */
 #define IBNAL_IPIF_BASENAME          "ib"       /* IPoIB interface basename */
-#define IBNAL_SERVICE_NAME           "iibnal"   /* global service name */
+#define IBNAL_SERVICE_NAME           "iiblnd"   /* global service name */
 #define IBNAL_SERVICE_NUMBER         0x11b9a2   /* global service number */
 #define IBNAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry... */
 #define IBNAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this */
@@ -353,7 +353,7 @@ typedef struct kib_rx                           /* receive message */
         int                       rx_nob;       /* # bytes received (-1 while posted) */
         __u64                     rx_hca_msg;   /* pre-mapped buffer (hca vaddr) */
         kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
-        IB_WORK_REQ               rx_wrq;
+        IB_WORK_REQ2              rx_wrq;
         IB_LOCAL_DATASEGMENT      rx_gl;        /* and its memory */
 } kib_rx_t;
 
@@ -373,13 +373,13 @@ typedef struct kib_tx                           /* transmit message */
         __u64                     tx_hca_msg;   /* pre-mapped buffer (HCA vaddr) */
         int                       tx_nwrq;      /* # send work items */
 #if IBNAL_USE_FMR
-        IB_WORK_REQ               tx_wrq[2];    /* send work items... */
+        IB_WORK_REQ2              tx_wrq[2];    /* send work items... */
         IB_LOCAL_DATASEGMENT      tx_gl[2];     /* ...and their memory */
         kib_rdma_desc_t           tx_rd[1];     /* rdma descriptor */
         kib_md_t                  tx_md;        /* mapping */
         __u64                    *tx_pages;     /* page phys addrs */
 #else
-        IB_WORK_REQ              *tx_wrq;       /* send work items... */
+        IB_WORK_REQ2             *tx_wrq;       /* send work items... */
         IB_LOCAL_DATASEGMENT     *tx_gl;        /* ...and their memory */
         kib_rdma_desc_t          *tx_rd;        /* rdma descriptor (src buffers) */
 #endif
@@ -605,16 +605,19 @@ iibt_qp_destroy(IB_HANDLE qp_handle)
         return IIBT_IF.Vpi.DestroyQP(qp_handle);
 }
 
+
 static inline FSTATUS
-iibt_postrecv(IB_HANDLE qp_handle, IB_WORK_REQ *work_req)
+iibt_postrecv2(IB_HANDLE qp_handle, IB_WORK_REQ2 *work_req,
+               IB_WORK_REQ2 **failed_work_req)
 {
-        return IIBT_IF.Vpi.PostRecv(qp_handle, work_req);
+        return IIBT_IF.Vpi.PostRecv2(qp_handle, work_req, failed_work_req);
 }
 
 static inline FSTATUS
-iibt_postsend(IB_HANDLE qp_handle, IB_WORK_REQ *work_req)
+iibt_postsend2(IB_HANDLE qp_handle, IB_WORK_REQ2 *work_req,
+               IB_WORK_REQ2 **failed_work_req)
 {
-        return IIBT_IF.Vpi.PostSend(qp_handle, work_req);
+        return IIBT_IF.Vpi.PostSend2(qp_handle, work_req, failed_work_req);
 }
 
 static inline FSTATUS
@@ -711,12 +714,6 @@ iibt_cm_connect (IB_HANDLE cep, CM_REQUEST_INFO *req,
 {
         return IIBT_IF.Cmi.CmConnect (cep, req, callback, arg);
 }
-
-static inline int wrq_signals_completion(IB_WORK_REQ *wrq)
-{
-        return wrq->Req.SendRC.Options.s.SignaledCompletion == 1;
-}
-
 
 /******************************************************************************/
 
@@ -892,12 +889,22 @@ kibnal_wreqid2type (__u64 wreqid)
         return (wreqid & IBNAL_WID_MASK);
 }
 
+#if 0
 static inline void
 kibnal_set_conn_state (kib_conn_t *conn, int state)
 {
+        CDEBUG(D_WARNING,"%p state %d\n", conn, state);
         conn->ibc_state = state;
         mb();
 }
+#else
+#define kibnal_set_conn_state(conn, state)              \
+do {                                                    \
+        CDEBUG(D_WARNING,"%p state %d\n", conn, state); \
+        conn->ibc_state = state;                        \
+        mb();                                           \
+} while (0)
+#endif
 
 #if IBNAL_USE_FMR
 
