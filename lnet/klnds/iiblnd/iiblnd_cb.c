@@ -141,7 +141,7 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
         };
 
         rx->rx_wrq = (IB_WORK_REQ2) {
-                .Next          = NULL;
+                .Next          = NULL,
                 .WorkReqId     = kibnal_ptr2wreqid(rx, IBNAL_WID_RX),
                 .MessageLen    = IBNAL_MSG_SIZE,
                 .DSList        = &rx->rx_gl,
@@ -166,7 +166,7 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
         rx->rx_nob = -1;                        /* flag posted */
         mb();
 
-        frc = iibt_postrecv2(conn->ibc_qp, &rx->rx_wrq, NULL);
+        frc = iba_post_recv2(conn->ibc_qp, &rx->rx_wrq, NULL);
         if (frc == FSUCCESS) {
                 if (credit) {
                         spin_lock(&conn->ibc_lock);
@@ -801,7 +801,6 @@ kibnal_check_sends (kib_conn_t *conn)
         FSTATUS         frc;
         int             rc;
         int             done;
-        int             i;
 
         LASSERT (conn->ibc_state >= IBNAL_CONN_ESTABLISHED);
         
@@ -897,7 +896,7 @@ kibnal_check_sends (kib_conn_t *conn)
                 if (conn->ibc_state != IBNAL_CONN_ESTABLISHED) {
                         rc = -ECONNABORTED;
                 } else {
-                        frc = iibt_postsend2(conn->ibc_qp, tx->tx_wrq, NULL);
+                        frc = iba_post_send2(conn->ibc_qp, tx->tx_wrq, NULL);
                         if (frc != FSUCCESS)
                                 rc = -EIO;
                 }
@@ -1037,7 +1036,7 @@ kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
         kib_msg_t            *ibmsg = tx->tx_msg;
         kib_rdma_desc_t      *srcrd = tx->tx_rd;
         IB_LOCAL_DATASEGMENT *gl;
-        IB_WORK_REQ          *wrq;
+        IB_WORK_REQ2         *wrq;
         int                   rc;
 
 #if IBNAL_USE_FMR
@@ -1798,7 +1797,7 @@ kibnal_conn_disconnected(kib_conn_t *conn)
         kibnal_set_conn_state(conn, IBNAL_CONN_DISCONNECTED);
 
         /* move QP to error state to make posted work items complete */
-        frc = iibt_qp_modify(conn->ibc_qp, &qpam, NULL);
+        frc = iba_modify_qp(conn->ibc_qp, &qpam, NULL);
         if (frc != FSUCCESS)
                 CERROR("can't move qp state to error: %d\n", frc);
 
@@ -1945,7 +1944,7 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         LASSERT(conn->ibc_state == IBNAL_CONN_CONNECTING);
         kibnal_set_conn_state(conn, IBNAL_CONN_ESTABLISHED);
 
-        CDEBUG(D_WARNING, "Connection %s ESTABLISHED\n",
+        CDEBUG(D_NET, "Connection %s ESTABLISHED\n",
                libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
@@ -2003,7 +2002,7 @@ kibnal_reject (lnet_nid_t nid, IB_HANDLE cep, int reason)
         
         LASSERT (msg < &msgs[nmsg]);
         
-        frc = iibt_cm_reject(cep, msg);
+        frc = iba_cm_reject(cep, msg);
         if (frc != FSUCCESS)
                 CERROR("Error %d rejecting %s\n", frc, libcfs_nid2str(nid));
 }
@@ -2047,7 +2046,7 @@ kibnal_check_connreject(kib_conn_t *conn, int active, CM_REJECT_INFO *rej)
 void
 kibnal_cm_disconnect_callback(kib_conn_t *conn, CM_CONN_INFO *info)
 {
-        CDEBUG(D_WARNING, "%s: state %d, status 0x%x\n", 
+        CDEBUG(D_NET, "%s: state %d, status 0x%x\n", 
                libcfs_nid2str(conn->ibc_peer->ibp_nid),
                conn->ibc_state, info->Status);
         
@@ -2059,7 +2058,7 @@ kibnal_cm_disconnect_callback(kib_conn_t *conn, CM_CONN_INFO *info)
                 break;
 
         case FCM_DISCONNECT_REQUEST:
-                /* Schedule conn to iibt_cm_disconnect() if it wasn't already */
+                /* Schedule conn to iba_cm_disconnect() if it wasn't already */
                 kibnal_close_conn (conn, 0);
                 break;
 
@@ -2255,16 +2254,16 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         LASSERT (conn->ibc_cep == NULL);
         kibnal_set_conn_state(conn, IBNAL_CONN_CONNECTING);
 
-        frc = iibt_cm_accept(cep, 
-                             &conn->ibc_cvars->cv_cmci,
-                             NULL,
-                             kibnal_cm_passive_callback, conn, 
-                             &conn->ibc_cep);
+        frc = iba_cm_accept(cep, 
+                            &conn->ibc_cvars->cv_cmci,
+                            NULL,
+                            kibnal_cm_passive_callback, conn, 
+                            &conn->ibc_cep);
 
         if (frc == FSUCCESS || frc == FPENDING)
                 return;
         
-        CERROR("iibt_cm_accept(%s) failed: %d\n", 
+        CERROR("iba_cm_accept(%s) failed: %d\n", 
                libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
         kibnal_connreq_done(conn, 0, -ECONNABORTED);
 }
@@ -2344,9 +2343,9 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
 
         memset(&conn->ibc_cvars->cv_cmci, 0, sizeof(conn->ibc_cvars->cv_cmci));
         
-        frc = iibt_cm_accept(conn->ibc_cep, 
-                             &conn->ibc_cvars->cv_cmci, 
-                             NULL, NULL, NULL, NULL);
+        frc = iba_cm_accept(conn->ibc_cep, 
+                            &conn->ibc_cvars->cv_cmci, 
+                            NULL, NULL, NULL, NULL);
 
         if (frc == FCM_CONNECT_ESTABLISHED) {
                 kibnal_connreq_done(conn, 1, 0);
@@ -2476,8 +2475,8 @@ kibnal_pathreq_callback (void *arg, QUERY *qry,
         kibnal_set_conn_state(conn, IBNAL_CONN_CONNECTING);
 
         /* cm callback gets my conn ref */
-        frc = iibt_cm_connect(conn->ibc_cep, req, 
-                              kibnal_cm_active_callback, conn);
+        frc = iba_cm_connect(conn->ibc_cep, req, 
+                             kibnal_cm_active_callback, conn);
         if (frc == FPENDING || frc == FSUCCESS)
                 return;
         
@@ -2543,12 +2542,12 @@ kibnal_service_get_callback (void *arg, QUERY *qry,
                 conn->ibc_cvars->cv_svcrec.RID.ServiceGID.Type.Global.InterfaceID;
 
         /* kibnal_pathreq_callback gets my conn ref */
-        frc = iibt_sd_query_port_fabric_information(kibnal_data.kib_sd,
-                                                    kibnal_data.kib_port_guid,
-                                                    qry, 
-                                                    kibnal_pathreq_callback,
-                                                    &kibnal_data.kib_sdretry,
-                                                    conn);
+        frc = iba_sd_query_port_fabric_info(kibnal_data.kib_sd,
+                                            kibnal_data.kib_port_guid,
+                                            qry, 
+                                            kibnal_pathreq_callback,
+                                            &kibnal_data.kib_sdretry,
+                                            conn);
         if (frc == FPENDING)
                 return;
 
@@ -2589,12 +2588,12 @@ kibnal_connect_peer (kib_peer_t *peer)
                 peer->ibp_nid);
 
         /* kibnal_service_get_callback gets my conn ref */
-        frc = iibt_sd_query_port_fabric_information(kibnal_data.kib_sd,
-                                                    kibnal_data.kib_port_guid,
-                                                    qry,
-                                                    kibnal_service_get_callback,
-                                                    &kibnal_data.kib_sdretry, 
-                                                    conn);
+        frc = iba_sd_query_port_fabric_info(kibnal_data.kib_sd,
+                                            kibnal_data.kib_port_guid,
+                                            qry,
+                                            kibnal_service_get_callback,
+                                            &kibnal_data.kib_sdretry, 
+                                            conn);
         if (frc == FPENDING)
                 return;
 
@@ -2702,7 +2701,7 @@ kibnal_disconnect_conn (kib_conn_t *conn)
 
         kibnal_conn_disconnected(conn);
                 
-        frc = iibt_cm_disconnect(conn->ibc_cep, NULL, NULL);
+        frc = iba_cm_disconnect(conn->ibc_cep, NULL, NULL);
         switch (frc) {
         case FSUCCESS:
                 break;
@@ -2902,11 +2901,11 @@ kibnal_scheduler(void *arg)
                         spin_unlock_irqrestore(&kibnal_data.kib_sched_lock,
                                                flags);
                         
-                        frc = iibt_cq_poll(kibnal_data.kib_cq, &wc);
+                        frc = iba_poll_cq(kibnal_data.kib_cq, &wc);
                         if (frc == FNOT_DONE) {
                                 /* CQ empty */
-                                frc2 = iibt_cq_rearm(kibnal_data.kib_cq,
-                                                     CQEventSelNextWC);
+                                frc2 = iba_rearm_cq(kibnal_data.kib_cq,
+                                                    CQEventSelNextWC);
                                 LASSERT (frc2 == FSUCCESS);
                         }
                         

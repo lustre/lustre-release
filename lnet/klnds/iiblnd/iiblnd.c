@@ -307,7 +307,7 @@ kibnal_create_cep(lnet_nid_t nid)
         __u32          u32val;
         IB_HANDLE      cep;
 
-        cep = iibt_cm_create_cep(CM_RC_TYPE);
+        cep = iba_cm_create_cep(CM_RC_TYPE);
         if (cep == NULL) {
                 CERROR ("Can't create CEP for %s\n",
                         (nid == LNET_NID_ANY) ? "listener" :
@@ -317,16 +317,16 @@ kibnal_create_cep(lnet_nid_t nid)
 
         if (nid == LNET_NID_ANY) {
                 u32val = 1;
-                frc = iibt_cm_modify_cep(cep, CM_FLAG_ASYNC_ACCEPT,
-                                         (char *)&u32val, sizeof(u32val), 0);
+                frc = iba_cm_modify_cep(cep, CM_FLAG_ASYNC_ACCEPT,
+                                        (char *)&u32val, sizeof(u32val), 0);
                 if (frc != FSUCCESS) {
                         CERROR("Can't set async_accept: %d\n", frc);
                         goto failed;
                 }
 
                 u32val = 0;                     /* sets system max */
-                frc = iibt_cm_modify_cep(cep, CM_FLAG_LISTEN_BACKLOG,
-                                         (char *)&u32val, sizeof(u32val), 0);
+                frc = iba_cm_modify_cep(cep, CM_FLAG_LISTEN_BACKLOG,
+                                        (char *)&u32val, sizeof(u32val), 0);
                 if (frc != FSUCCESS) {
                         CERROR("Can't set listen backlog: %d\n", frc);
                         goto failed;
@@ -334,8 +334,8 @@ kibnal_create_cep(lnet_nid_t nid)
         }
         
         u32val = 1;
-        frc = iibt_cm_modify_cep(cep, CM_FLAG_TIMEWAIT_CALLBACK,
-                                 (char *)&u32val, sizeof(u32val), 0);
+        frc = iba_cm_modify_cep(cep, CM_FLAG_TIMEWAIT_CALLBACK,
+                                (char *)&u32val, sizeof(u32val), 0);
         if (frc != FSUCCESS) {
                 CERROR("Can't set timewait_callback for %s: %d\n", 
                         (nid == LNET_NID_ANY) ? "listener" :
@@ -346,7 +346,7 @@ kibnal_create_cep(lnet_nid_t nid)
         return cep;
         
  failed:
-        iibt_cm_destroy_cep(cep);
+        iba_cm_destroy_cep(cep);
         return NULL;
 }
 
@@ -441,12 +441,12 @@ kibnal_check_advert (void)
                                 kibnal_data.kib_ni->ni_nid);
         qry.InputValue.ServiceRecordValue.ComponentMask = KIBNAL_SERVICE_KEY_MASK;
 
-        frc = iibt_sd_query_port_fabric_information(kibnal_data.kib_sd, 
-                                                    kibnal_data.kib_port_guid,
-                                                    &qry, 
-                                                    kibnal_service_query_done,
-                                                    &kibnal_data.kib_sdretry, 
-                                                    &rc);
+        frc = iba_sd_query_port_fabric_info(kibnal_data.kib_sd, 
+                                            kibnal_data.kib_port_guid,
+                                            &qry, 
+                                            kibnal_service_query_done,
+                                            &kibnal_data.kib_sdretry, 
+                                            &rc);
         if (frc != FPENDING) {
                 CERROR ("Immediate error %d checking SM service\n", frc);
                 return -EIO;
@@ -516,12 +516,12 @@ kibnal_advertise (void)
                svc->RID.ServiceID, svc->ServiceName, 
                libcfs_nid2str(le64_to_cpu(*kibnal_service_nid_field(svc))));
 
-        frc = iibt_sd_port_fabric_operation(kibnal_data.kib_sd,
-                                            kibnal_data.kib_port_guid,
-                                            &fod, 
-                                            kibnal_service_setunset_done, 
-                                            &kibnal_data.kib_sdretry,
-                                            &frc2);
+        frc = iba_sd_port_fabric_operation(kibnal_data.kib_sd,
+                                           kibnal_data.kib_port_guid,
+                                           &fod, 
+                                           kibnal_service_setunset_done, 
+                                           &kibnal_data.kib_sdretry,
+                                           &frc2);
 
         if (frc != FSUCCESS && frc != FPENDING) {
                 CERROR ("Immediate error %d advertising NID %s\n",
@@ -558,12 +558,12 @@ kibnal_unadvertise (int expect_success)
                svc->ServiceName, 
                libcfs_nid2str(le64_to_cpu(*kibnal_service_nid_field(svc))));
         
-        frc = iibt_sd_port_fabric_operation(kibnal_data.kib_sd,
-                                            kibnal_data.kib_port_guid,
-                                            &fod, 
-                                            kibnal_service_setunset_done, 
-                                            &kibnal_data.kib_sdretry, 
-                                            &frc2);
+        frc = iba_sd_port_fabric_operation(kibnal_data.kib_sd,
+                                           kibnal_data.kib_port_guid,
+                                           &fod, 
+                                           kibnal_service_setunset_done, 
+                                           &kibnal_data.kib_sdretry, 
+                                           &frc2);
         if (frc != FSUCCESS && frc != FPENDING) {
                 CERROR ("Immediate error %d unadvertising NID %s\n",
                         frc, libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
@@ -598,13 +598,13 @@ kibnal_stop_listener(int normal_shutdown)
 
         kibnal_unadvertise(normal_shutdown);
 
-        frc = iibt_cm_cancel(cep);
+        frc = iba_cm_cancel(cep);
         if (frc != FSUCCESS && frc != FPENDING)
                 CERROR ("Error %d stopping listener\n", frc);
 
         down(&kibnal_data.kib_listener_signal);
 
-        frc = iibt_cm_destroy_cep(cep);
+        frc = iba_cm_destroy_cep(cep);
         if (frc != FSUCCESS)
                 CERROR ("Error %d destroying listener CEP\n", frc);
 
@@ -639,11 +639,11 @@ kibnal_start_listener(void)
         memset (&info, 0, sizeof(info));
         info.ListenAddr.EndPt.SID = *kibnal_tunables.kib_service_number;
 
-        frc = iibt_cm_listen(cep, &info, kibnal_listen_callback, NULL);
+        frc = iba_cm_listen(cep, &info, kibnal_listen_callback, NULL);
         if (frc != FSUCCESS && frc != FPENDING) {
-                CERROR ("iibt_cm_listen error: %d\n", frc);
+                CERROR ("iba_cm_listen error: %d\n", frc);
 
-                iibt_cm_destroy_cep(cep);
+                iba_cm_destroy_cep(cep);
                 return -EIO;
         }
 
@@ -977,7 +977,7 @@ kibnal_conn_rts(kib_conn_t *conn,
         GetAVFromPath(0, path, &modify_attr.PathMTU, NULL, 
                       &modify_attr.DestAV);
 
-        frc = iibt_qp_modify(qp, &modify_attr, NULL);
+        frc = iba_modify_qp(qp, &modify_attr, NULL);
         if (frc != FSUCCESS) {
                 CERROR("Can't set QP %s ready to receive: %d\n",
                        libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
@@ -1007,14 +1007,14 @@ kibnal_conn_rts(kib_conn_t *conn,
                                            IB_QP_ATTR_RNRRETRYCOUNT),
         };
 
-        frc = iibt_qp_modify(qp, &modify_attr, NULL);
+        frc = iba_modify_qp(qp, &modify_attr, NULL);
         if (frc != FSUCCESS) {
                 CERROR("Can't set QP %s ready to send: %d\n",
                        libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
                 return -EIO;
         }
 
-        frc = iibt_qp_query(conn->ibc_qp, &conn->ibc_cvars->cv_qpattrs, NULL);
+        frc = iba_query_qp(conn->ibc_qp, &conn->ibc_cvars->cv_qpattrs, NULL);
         if (frc != FSUCCESS) {
                 CERROR ("Can't query QP %s attributes: %d\n",
                         libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
@@ -1113,8 +1113,8 @@ kibnal_create_conn (lnet_nid_t nid)
                 .PDHandle                = kibnal_data.kib_pd,
                 .SendSignaledCompletions = TRUE,
         };
-        frc = iibt_qp_create(kibnal_data.kib_hca, &params.qp_create, NULL,
-                             &conn->ibc_qp, &conn->ibc_cvars->cv_qpattrs);
+        frc = iba_create_qp(kibnal_data.kib_hca, &params.qp_create, NULL,
+                            &conn->ibc_qp, &conn->ibc_cvars->cv_qpattrs);
         if (frc != 0) {
                 CERROR ("Can't create QP %s: %d\n", libcfs_nid2str(nid), frc);
                 goto failed;
@@ -1137,14 +1137,14 @@ kibnal_create_conn (lnet_nid_t nid)
                         },
                 },
         };
-        frc = iibt_qp_modify(conn->ibc_qp, &params.qp_attr, NULL);
+        frc = iba_modify_qp(conn->ibc_qp, &params.qp_attr, NULL);
         if (frc != 0) {
                 CERROR ("Can't set QP %s state to INIT: %d\n",
                         libcfs_nid2str(nid), frc);
                 goto failed;
         }
 
-        frc = iibt_qp_query(conn->ibc_qp, &conn->ibc_cvars->cv_qpattrs, NULL);
+        frc = iba_query_qp(conn->ibc_qp, &conn->ibc_cvars->cv_qpattrs, NULL);
         if (frc != FSUCCESS) {
                 CERROR ("Can't query QP %s attributes: %d\n",
                         libcfs_nid2str(nid), frc);
@@ -1153,7 +1153,7 @@ kibnal_create_conn (lnet_nid_t nid)
 
         /* 1 ref for caller */
         atomic_set (&conn->ibc_refcount, 1);
-        CDEBUG(D_WARNING, "New conn %p\n", conn);
+        CDEBUG(D_NET, "New conn %p\n", conn);
         return (conn);
         
  failed:
@@ -1194,14 +1194,14 @@ kibnal_destroy_conn (kib_conn_t *conn)
         }
 
         if (conn->ibc_cep != NULL) {
-                frc = iibt_cm_destroy_cep(conn->ibc_cep);
+                frc = iba_cm_destroy_cep(conn->ibc_cep);
                 if (frc != FSUCCESS)
                         CERROR("Error destroying CEP %p: %d\n",
                                conn->ibc_cep, frc);
         }
 
         if (conn->ibc_qp != NULL) {
-                frc = iibt_qp_destroy(conn->ibc_qp);
+                frc = iba_destroy_qp(conn->ibc_qp);
                 if (frc != FSUCCESS)
                         CERROR("Error destroying QP %p: %d\n",
                                conn->ibc_qp, frc);
@@ -1588,20 +1588,19 @@ kibnal_register_all_memory(void)
         phys.PhysAddr = 0;
         phys.Length = total;
 
-        frc = iibt_register_contig_physical_memory(
-                kibnal_data.kib_hca, 0, &phys, 1, 0,
-                kibnal_data.kib_pd, access,
-                &kibnal_data.kib_whole_mem.md_handle,
-                &kibnal_data.kib_whole_mem.md_addr,
-                &kibnal_data.kib_whole_mem.md_lkey,
-                &kibnal_data.kib_whole_mem.md_rkey);
+        frc = iba_register_contig_pmr(kibnal_data.kib_hca, 0, &phys, 1, 0,
+                                      kibnal_data.kib_pd, access,
+                                      &kibnal_data.kib_whole_mem.md_handle,
+                                      &kibnal_data.kib_whole_mem.md_addr,
+                                      &kibnal_data.kib_whole_mem.md_lkey,
+                                      &kibnal_data.kib_whole_mem.md_rkey);
 
         if (frc != FSUCCESS) {
                 CERROR("registering physical memory failed: %d\n", frc);
                 return -EIO;
         }
 
-        CDEBUG(D_WARNING, "registered phys mem from "LPX64" for "LPU64"\n", 
+        CDEBUG(D_NET, "registered phys mem from "LPX64" for "LPU64"\n", 
                phys.PhysAddr, phys.Length);
 
         return 0;
@@ -1642,7 +1641,7 @@ kibnal_shutdown (lnet_ni_t *ni)
                 /* fall through */
 
         case IBNAL_INIT_CQ:
-                rc = iibt_cq_destroy(kibnal_data.kib_cq);
+                rc = iba_destroy_cq(kibnal_data.kib_cq);
                 if (rc != 0)
                         CERROR ("Destroy CQ error: %d\n", rc);
                 /* fall through */
@@ -1652,19 +1651,19 @@ kibnal_shutdown (lnet_ni_t *ni)
                 /* fall through */
 
         case IBNAL_INIT_MD:
-                rc = iibt_deregister_memory(kibnal_data.kib_whole_mem.md_handle);
+                rc = iba_deregister_mr(kibnal_data.kib_whole_mem.md_handle);
                 if (rc != FSUCCESS)
                         CERROR ("Deregister memory: %d\n", rc);
                 /* fall through */
 
         case IBNAL_INIT_PD:
-                rc = iibt_pd_free(kibnal_data.kib_pd);
+                rc = iba_free_pd(kibnal_data.kib_pd);
                 if (rc != 0)
                         CERROR ("Destroy PD error: %d\n", rc);
                 /* fall through */
 
         case IBNAL_INIT_SD:
-                rc = iibt_sd_deregister(kibnal_data.kib_sd);
+                rc = iba_sd_deregister(kibnal_data.kib_sd);
                 if (rc != 0)
                         CERROR ("Deregister SD error: %d\n", rc);
                 /* fall through */
@@ -1675,7 +1674,7 @@ kibnal_shutdown (lnet_ni_t *ni)
                 /* fall through */
 
         case IBNAL_INIT_HCA:
-                rc = iibt_close_hca(kibnal_data.kib_hca);
+                rc = iba_close_ca(kibnal_data.kib_hca);
                 if (rc != 0)
                         CERROR ("Close HCA  error: %d\n", rc);
                 /* fall through */
@@ -1813,14 +1812,6 @@ kibnal_startup (lnet_ni_t *ni)
         do_gettimeofday(&tv);
         kibnal_data.kib_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
-        frc = IbtGetInterfaceByVersion(IBT_INTERFACE_VERSION_2, 
-                                       &kibnal_data.kib_interfaces);
-        if (frc != FSUCCESS) {
-                CERROR("IbtGetInterfaceByVersion(IBT_INTERFACE_VERSION_2) = %d\n",
-                       frc);
-                return -ENOSYS;
-        }
-
         PORTAL_MODULE_USE;
 
         rwlock_init(&kibnal_data.kib_global_lock);
@@ -1878,7 +1869,7 @@ kibnal_startup (lnet_ni_t *ni)
 
         n = sizeof(kibnal_data.kib_hca_guids) /
             sizeof(kibnal_data.kib_hca_guids[0]);
-        frc = iibt_get_hca_guids(&n, kibnal_data.kib_hca_guids);
+        frc = iba_get_caguids(&n, kibnal_data.kib_hca_guids);
         if (frc != FSUCCESS) {
                 CERROR ("Can't get HCA guids: %d\n", frc);
                 goto failed;
@@ -1896,7 +1887,7 @@ kibnal_startup (lnet_ni_t *ni)
         }
         
         /* Infinicon has per-HCA notification callbacks */
-        frc = iibt_open_hca(kibnal_data.kib_hca_guids[kibnal_data.kib_hca_idx],
+        frc = iba_open_ca(kibnal_data.kib_hca_guids[kibnal_data.kib_hca_idx],
                             kibnal_hca_callback,
                             kibnal_hca_async_callback,
                             NULL,
@@ -1913,8 +1904,8 @@ kibnal_startup (lnet_ni_t *ni)
 
         kibnal_data.kib_hca_attrs.PortAttributesList = NULL;
         kibnal_data.kib_hca_attrs.PortAttributesListSize = 0;
-        frc = iibt_query_hca(kibnal_data.kib_hca,
-                             &kibnal_data.kib_hca_attrs, NULL);
+        frc = iba_query_ca(kibnal_data.kib_hca,
+                           &kibnal_data.kib_hca_attrs, NULL);
         if (frc != FSUCCESS) {
                 CERROR ("Can't size port attrs: %d\n", frc);
                 goto failed;
@@ -1929,8 +1920,8 @@ kibnal_startup (lnet_ni_t *ni)
         kibnal_data.kib_init = IBNAL_INIT_PORTATTRS;
         /*****************************************************/
         
-        frc = iibt_query_hca(kibnal_data.kib_hca, &kibnal_data.kib_hca_attrs,
-                             NULL);
+        frc = iba_query_ca(kibnal_data.kib_hca, &kibnal_data.kib_hca_attrs,
+                           NULL);
         if (frc != FSUCCESS) {
                 CERROR ("Can't get port attrs for HCA %d: %d\n",
                         kibnal_data.kib_hca_idx, frc);
@@ -1972,7 +1963,7 @@ kibnal_startup (lnet_ni_t *ni)
 
         CDEBUG(D_NET, "got guid "LPX64"\n", kibnal_data.kib_port_guid);
         
-        frc = iibt_sd_register(&kibnal_data.kib_sd, NULL);
+        frc = iba_sd_register(&kibnal_data.kib_sd, NULL);
         if (frc != FSUCCESS) {
                 CERROR ("Can't register with SD: %d\n", frc);
                 goto failed;
@@ -1982,7 +1973,7 @@ kibnal_startup (lnet_ni_t *ni)
         kibnal_data.kib_init = IBNAL_INIT_SD;
         /*****************************************************/
 
-        frc = iibt_pd_allocate(kibnal_data.kib_hca, 0, &kibnal_data.kib_pd);
+        frc = iba_alloc_pd(kibnal_data.kib_hca, 0, &kibnal_data.kib_pd);
         if (frc != FSUCCESS) {
                 CERROR ("Can't create PD: %d\n", rc);
                 goto failed;
@@ -2012,9 +2003,9 @@ kibnal_startup (lnet_ni_t *ni)
         kibnal_data.kib_init = IBNAL_INIT_TXD;
         /*****************************************************/
         
-        frc = iibt_cq_create(kibnal_data.kib_hca, IBNAL_CQ_ENTRIES(),
-                             &kibnal_data.kib_cq, &kibnal_data.kib_cq,
-                             &n);
+        frc = iba_create_cq(kibnal_data.kib_hca, IBNAL_CQ_ENTRIES(),
+                            &kibnal_data.kib_cq, &kibnal_data.kib_cq,
+                            &n);
         if (frc != FSUCCESS) {
                 CERROR ("Can't create RX CQ: %d\n", frc);
                 goto failed;
@@ -2030,7 +2021,7 @@ kibnal_startup (lnet_ni_t *ni)
                 goto failed;
         }
 
-        rc = iibt_cq_rearm(kibnal_data.kib_cq, CQEventSelNextWC);
+        rc = iba_rearm_cq(kibnal_data.kib_cq, CQEventSelNextWC);
         if (rc != 0) {
                 CERROR ("Failed to re-arm completion queue: %d\n", rc);
                 goto failed;
