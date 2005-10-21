@@ -43,7 +43,7 @@ i=0
 devs=()
 for d in $scsidevs; do
     devs[$i]=`sg_map | awk "{if ($ 2 == \"$d\") print $ 1}"`
-    if [ -z "$devs[$i]" ]; then
+    if [ -z "${devs[$i]}" ]; then
 	echo "Can't find SG device for $d"
 	exit 1
     fi
