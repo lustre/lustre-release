@@ -724,6 +724,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                  
                 RETURN(0);
         }
+#if HAVE_QUOTA_SUPPORT
         case OBD_IOC_QUOTACTL: {
                 struct if_quotactl qctl;
                 struct obd_quotactl oqctl;
@@ -834,6 +835,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 RETURN(rc?:error);
         }
+#endif /* HAVE_QUOTA_SUPPORT */
         case OBD_IOC_GETNAME: {  
                 struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
                 if (!obd)

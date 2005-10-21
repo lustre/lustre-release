@@ -44,6 +44,10 @@
 #include "parser.h"
 #include "obdctl.h"
 
+unsigned int libcfs_subsystem_debug = 0;
+
+#ifdef HAVE_QUOTA_SUPPORT
+
 /* FIXME: Q_SYNC ... commands defined in linux/quota.h seems broken,
  *        so define new commands with the value in kernel */
 #define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
@@ -59,7 +63,7 @@
 # define GRPQUOTA 1
 #endif
 
-unsigned int libcfs_subsystem_debug = 0;
+#endif /* HAVE_QUOTA_SUPPORT */
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
@@ -68,12 +72,14 @@ static int lfs_getstripe(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 static int lfs_catinfo(int argc, char **argv);
+#ifdef HAVE_QUOTA_SUPPORT
 static int lfs_quotachog(int argc, char **argv);
 static int lfs_quotacheck(int argc, char **argv);
 static int lfs_quotaon(int argc, char **argv);
 static int lfs_quotaoff(int argc, char **argv);
 static int lfs_setquota(int argc, char **argv);
 static int lfs_quota(int argc, char **argv);
+#endif
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -104,6 +110,7 @@ command_t cmdlist[] = {
          "\tkeywords are one of followings: config, deletions.\n"
          "\tnode name must be provided when use keyword config."},
         {"osts", lfs_osts, 0, "osts"},
+#ifdef HAVE_QUOTA_SUPPORT
         {"quotachog",lfs_quotachog, 0,
          "Change all files owner or group in specified filesystem.\n"
          "usage: quotachog [-i] <filesystem>\n"
@@ -122,6 +129,7 @@ command_t cmdlist[] = {
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
          "usage: quota -t [ -u |-g ] <filesystem>\n"
          "       quota [ -o obd_uuid ] [ -u | -g ] [name] <filesystem>"},
+#endif
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -429,7 +437,7 @@ static int lfs_catinfo(int argc, char **argv)
         return rc;
 }
 
-
+#ifdef HAVE_QUOTA_SUPPORT
 static int lfs_quotachog(int argc, char **argv)
 {
 
@@ -953,6 +961,7 @@ static int lfs_quota(int argc, char **argv)
         print_quota(mnt, name, &qctl);
         return 0;
 }
+#endif /* HAVE_QUOTA_SUPPORT */
 
 int main(int argc, char **argv)
 {
