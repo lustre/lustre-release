@@ -130,11 +130,12 @@ init_options(struct lustre_mount_data *lmd)
 }
 
 int
-print_options(struct lustre_mount_data *lmd)
+print_options(struct lustre_mount_data *lmd, const char *options)
 {
         printf("nid:             %s\n", libcfs_nid2str(lmd->lmd_nid));
         printf("mds:             %s\n", lmd->lmd_mds);
         printf("profile:         %s\n", lmd->lmd_profile);
+        printf("options:         %s\n", options);
 
         return 0;
 }
@@ -296,15 +297,13 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd,
         }
         strcpy(lmd->lmd_profile, profile);
 
-        if (verbose)
-                print_options(lmd);
         return 0;
 }
 
 int main(int argc, char *const argv[])
 {
-        char *source, *target, *options = "";
-        int i, nargs = 3, opt, rc, flags;
+        char *source, *target, *options = "", optbuf[65536] = { '\0' };
+        int i, nargs = 3, opt, rc, flags, buflen = sizeof(optbuf) - 1;
         struct lustre_mount_data lmd;
         static struct option long_opt[] = {
                 {"fake", 0, 0, 'f'},
@@ -374,10 +373,21 @@ int main(int argc, char *const argv[])
                 exit(32);
 
         init_options(&lmd);
-        rc = build_data(source, options, &lmd, &flags);
+
+        /* need to copy options, as parse_options->strtok() clobbers it
+         * and we can't use it later to put in /etc/mtab. */
+        if (strlen(options) > buflen)
+                fprintf(stderr, "%s: options too long (%d > %d), ignore last\n",
+                        progname, strlen(options), buflen);
+        strncpy(optbuf, options, buflen);
+
+        rc = build_data(source, optbuf, &lmd, &flags);
         if (rc) {
                 exit(1);
         }
+
+        if (verbose)
+                print_options(&lmd, options);
 
         rc = access(target, F_OK);
         if (rc) {
