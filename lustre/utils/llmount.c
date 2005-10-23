@@ -264,7 +264,7 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd,
                         profile = s + 1;
                 } else {
                         fprintf(stderr, "%s: directory to mount not in "
-                                "host:/mds/profile format\n",
+                                "nid:/mds/profile format\n",
                                 progname);
                         return(1);
                 }
@@ -285,13 +285,13 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd,
                 return 1;
         }
 
-        if (strlen(mds) > sizeof(lmd->lmd_mds) + 1) {
+        if (strlen(mds) + 1 > sizeof(lmd->lmd_mds)) {
                 fprintf(stderr, "%s: mds name too long\n", progname);
                 return(1);
         }
         strcpy(lmd->lmd_mds, mds);
 
-        if (strlen(profile) > sizeof(lmd->lmd_profile) + 1) {
+        if (strlen(profile) + 1 > sizeof(lmd->lmd_profile)) {
                 fprintf(stderr, "%s: profile name too long\n", progname);
                 return(1);
         }
