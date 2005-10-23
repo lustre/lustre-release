@@ -481,11 +481,18 @@ void
 ksocknal_launch_connection_locked (ksock_route_t *route)
 {
         unsigned long     flags;
+        int               bits;
 
         /* called holding write lock on ksnd_global_lock */
-        LASSERT (!route->ksnr_connecting);
+        LASSERT (route->ksnr_connecting == 0);
+
+        bits = *ksocknal_tunables.ksnd_typed_conns ?
+               KSNR_TYPED_ROUTES : (1 << SOCKLND_CONN_ANY);
+        bits &= ~route->ksnr_connected;
         
-        route->ksnr_connecting = 1;             /* scheduling conn for connd */
+        LASSERT (bits != 0);
+        
+        route->ksnr_connecting = bits;          /* scheduling conn for connd */
         ksocknal_route_addref(route);           /* extra ref for connd */
         
         spin_lock_irqsave (&ksocknal_data.ksnd_connd_lock, flags);
@@ -623,21 +630,17 @@ ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
         
         list_for_each (tmp, &peer->ksnp_routes) {
                 route = list_entry (tmp, ksock_route_t, ksnr_list);
-                bits  = route->ksnr_connected;
+                bits  = route->ksnr_connected | route->ksnr_connecting;
 
                 if (*ksocknal_tunables.ksnd_typed_conns) {
-                        /* All typed connections established? */
+                        /* All typed connections (being) established? */
                         if ((bits & KSNR_TYPED_ROUTES) == KSNR_TYPED_ROUTES)
                                 continue;
                 } else {
-                        /* Untyped connection established? */
+                        /* Untyped connection (being) established? */
                         if ((bits & (1 << SOCKLND_CONN_ANY)) != 0)
                                 continue;
                 }
-                
-                /* connection being established? */
-                if (route->ksnr_connecting)
-                        continue;
 
                 /* too soon to retry this guy? */
                 if (!(route->ksnr_retry_interval == 0 || /* first attempt */
@@ -660,7 +663,7 @@ ksocknal_find_connecting_route_locked (ksock_peer_t *peer)
         list_for_each (tmp, &peer->ksnp_routes) {
                 route = list_entry (tmp, ksock_route_t, ksnr_list);
                 
-                if (route->ksnr_connecting)
+                if (route->ksnr_connecting != 0)
                         return (route);
         }
         
@@ -1348,12 +1351,10 @@ ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn, lnet_nid_t peer_nid,
         int                  rc;
         lnet_nid_t           srcnid;
 
-        LASSERT (conn->ksnc_type != SOCKLND_CONN_NONE);
         LASSERT (0 <= nipaddrs && nipaddrs <= LNET_MAX_INTERFACES);
 
         /* No need for getconnsock/putconnsock */
         LASSERT (!conn->ksnc_closing);
-
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
         hmv->magic         = cpu_to_le32 (LNET_PROTO_TCP_MAGIC);
         hmv->version_major = cpu_to_le16 (LNET_PROTO_TCP_VERSION_MAJOR);
@@ -1437,6 +1438,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         if (rc != 0) {
                 CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr));
+                LASSERT (rc < 0 && rc != -EALREADY);
                 return (rc);
         }
 
@@ -1454,6 +1456,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 if (rc != 0) {
                         CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
                                 rc, HIPQUAD(conn->ksnc_ipaddr));
+                        LASSERT (rc < 0 && rc != -EALREADY);
                         return (rc);
                 }
         }
@@ -1470,6 +1473,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         if (rc != 0) {
                 CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr));
+                LASSERT (rc < 0 && rc != -EALREADY);
                 return (rc);
         }
         
@@ -1497,6 +1501,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         if (rc != 0) {
                 CERROR ("Error %d reading rest of HELLO hdr from %u.%u.%u.%u\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr));
+                LASSERT (rc < 0 && rc != -EALREADY);
                 return (rc);
         }
 
@@ -1561,6 +1566,9 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                                 HIPQUAD(conn->ksnc_ipaddr));
                         return (-EPROTO);
                 }
+        } else if (type == SOCKLND_CONN_NONE) {
+                /* lost a connection race */
+                return -EALREADY;
         } else if (ksocknal_invert_type(type) != conn->ksnc_type) {
                 CERROR ("Mismatched types: me %d, %s ip %u.%u.%u.%u %d\n",
                         conn->ksnc_type, libcfs_id2str(*peerid), 
@@ -1613,7 +1621,11 @@ ksocknal_connect (ksock_route_t *route)
         unsigned long     flags;
         int               type;
         struct socket    *sock;
+        cfs_time_t        deadline;
         int               rc = 0;
+
+        deadline = cfs_time_add(cfs_time_current(), 
+                                cfs_time_seconds(*ksocknal_tunables.ksnd_timeout));
 
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
 
@@ -1636,32 +1648,43 @@ ksocknal_connect (ksock_route_t *route)
 
                 write_unlock_irqrestore(&ksocknal_data.ksnd_global_lock, flags);
 
+                if (cfs_time_aftereq(cfs_time_current(), deadline)) {
+                        lnet_connect_console_error(-ETIMEDOUT, peer->ksnp_id.nid,
+                                                   route->ksnr_ipaddr,
+                                                   route->ksnr_port);
+                        goto failed;
+                }
+                
                 rc = lnet_connect(&sock, peer->ksnp_id.nid,
-                                 route->ksnr_myipaddr, 
-                                 route->ksnr_ipaddr, route->ksnr_port);
+                                  route->ksnr_myipaddr, 
+                                  route->ksnr_ipaddr, route->ksnr_port);
                 if (rc != 0)
                         goto failed;
 
                 rc = ksocknal_create_conn(peer->ksnp_ni, route, sock, type);
-                if (rc != 0) {
+                if (rc < 0) {
                         lnet_connect_console_error(rc, peer->ksnp_id.nid,
-                                                  route->ksnr_ipaddr, 
-                                                  route->ksnr_port);
+                                                   route->ksnr_ipaddr, 
+                                                   route->ksnr_port);
                         goto failed;
+                }
+
+                if (rc != 0) {
+                        /* lost connection race; peer is connecting to me, so
+                         * give her some time... */
+                        cfs_pause(cfs_time_seconds(1));
                 }
                 
                 write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
         }
 
-        LASSERT (route->ksnr_connecting);
-        route->ksnr_connecting = 0;
+        LASSERT (route->ksnr_connecting == 0);
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
         return;
 
  failed:
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
 
-        LASSERT (route->ksnr_connecting);
         route->ksnr_connecting = 0;
 
         /* This is a retry rather than a new connection */

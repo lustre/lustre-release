@@ -313,7 +313,7 @@ typedef struct ksock_route
         __u32               ksnr_myipaddr;      /* my IP */
         __u32               ksnr_ipaddr;        /* IP address to connect to */
         int                 ksnr_port;          /* port to connect to */
-        unsigned int        ksnr_connecting:1;  /* autoconnect in progress */
+        unsigned int        ksnr_connecting:4;  /* autoconnect in progress by type */
         unsigned int        ksnr_connected:4;   /* connections established by type */
         unsigned int        ksnr_deleted:1;     /* been removed from peer? */
         unsigned int        ksnr_share_count;   /* created explicitly? */

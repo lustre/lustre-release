@@ -42,7 +42,7 @@ ksocknal_lib_tunables_init ()
 #endif
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "typed", ksocknal_tunables.ksnd_typed_conns, 
-		 sizeof (int), 0644, NULL, &proc_dointvec};
+		 sizeof (int), 0444, NULL, &proc_dointvec};
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "min_bulk", ksocknal_tunables.ksnd_min_bulk, 
 		 sizeof (int), 0644, NULL, &proc_dointvec};

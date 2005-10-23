@@ -736,25 +736,16 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 int
 lnet_compare_routers(lnet_peer_t *p1, lnet_peer_t *p2)
 {
-        /* FIRST compare available send credits 
-         * (sends block immediately when peer credits are <= 0)
-         * THEN compare queue depth */
-        if (p1->lp_txcredits > 0) {
-                
-                if (p1->lp_txcredits > p2->lp_txcredits)
-                        return 1;
-                
-                if (p1->lp_txcredits < p2->lp_txcredits)
-                        return -1;
-
-        } else if (p2->lp_txcredits > 0) {
-                return -1;
-        }
-
-        if (p1->lp_txqnob > p2->lp_txqnob)
+        if (p1->lp_txqnob < p2->lp_txqnob)
                 return 1;
         
-        if (p1->lp_txqnob < p2->lp_txqnob)
+        if (p1->lp_txqnob > p2->lp_txqnob)
+                return -1;
+        
+        if (p1->lp_txcredits > p2->lp_txcredits)
+                return 1;
+        
+        if (p1->lp_txcredits < p2->lp_txcredits)
                 return -1;
         
         return 0;

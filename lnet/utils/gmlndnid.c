@@ -153,6 +153,6 @@ int main(int argc, char **argv)
         }
 
         nid = u_getgmnid(name, get_local_id);
-        printf("%u\n", nid);
+        printf("0x%x\n", nid);
         exit(0);
 }

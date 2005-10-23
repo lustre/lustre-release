@@ -602,6 +602,7 @@ lnet_alloc_rtrpools(int im_a_router)
         
         if (!strcmp(forwarding, "")) {
                 /* not set either way */
+                forwarding = im_a_router ? "enabled(implicit)" : "disabled(default)";
                 if (!im_a_router)
                         return 0;
         } else if (!strcmp(forwarding, "disabled")) {

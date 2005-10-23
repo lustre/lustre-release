@@ -335,6 +335,7 @@ ksocknal_associate_route_conn_locked(ksock_route_t *route, ksock_conn_t *conn)
         }
 
         route->ksnr_connected |= (1<<type);
+        route->ksnr_connecting &= ~(1<<type);
         route->ksnr_conn_count++;
 
         /* Successful connection => further attempts can
@@ -351,7 +352,7 @@ ksocknal_add_route_locked (ksock_peer_t *peer, ksock_route_t *route)
         ksock_route_t     *route2;
 
         LASSERT (route->ksnr_peer == NULL);
-        LASSERT (!route->ksnr_connecting);
+        LASSERT (route->ksnr_connecting == 0);
         LASSERT (route->ksnr_connected == 0);
 
         /* LASSERT(unique) */
@@ -964,7 +965,9 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         ksock_sched_t     *sched;
         unsigned int       irq;
         ksock_tx_t        *tx;
+        int                bits;
         int                rc;
+        char              *warn = NULL;
 
         LASSERT (route == NULL == (type == SOCKLND_CONN_NONE));
 
@@ -1024,8 +1027,17 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         }
 
         rc = ksocknal_recv_hello (ni, conn, &peerid, &incarnation, ipaddrs);
-        if (rc < 0)
+        if (rc < 0) {
+                if (rc == -EALREADY) {
+                        CDEBUG(D_NET, "Lost connection race with %s\n", 
+                               libcfs_id2str(peerid));
+                        /* Not an actual failure: return +ve RC so active
+                         * connector can back off */
+                        rc = EALREADY;
+                }
                 goto failed_1;
+        }
+        
         nipaddrs = rc;
         LASSERT (peerid.nid != LNET_NID_ANY);
 
@@ -1037,6 +1049,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                 ksocknal_create_routes(peer, conn->ksnc_port,
                                        ipaddrs, nipaddrs);
                 rc = 0;
+                write_lock_irqsave (global_lock, flags);
         } else {
                 rc = ksocknal_create_peer(&peer, ni, peerid);
                 if (rc != 0)
@@ -1050,33 +1063,65 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                          * table (which takes my ref) */
                         list_add_tail(&peer->ksnp_list,
                                       ksocknal_nid2peerlist(peerid.nid));
-                } else  {
+                } else {
                         ksocknal_peer_decref(peer);
                         peer = peer2;
                 }
+
                 /* +1 ref for me */
                 ksocknal_peer_addref(peer);
 
+                /* Am I already connecting/connected to this guy?  Resolve in
+                 * favour of higher NID... */
+                rc = 0;
+                if (peerid.nid < ni->ni_nid) {
+                        bits = (1 << conn->ksnc_type);
+
+                        list_for_each(tmp, &peer->ksnp_routes) {
+                                route = list_entry(tmp, ksock_route_t, 
+                                                   ksnr_list);
+                        
+                                if (route->ksnr_ipaddr != conn->ksnc_ipaddr)
+                                        continue;
+                                
+                                if ((route->ksnr_connecting & bits) == 0)
+                                        continue;
+
+                                rc = EALREADY;  /* not a failure */
+                                warn = "connection race";
+                                break;
+                        }
+                }
+                
                 write_unlock_irqrestore(global_lock, flags);
 
-                nipaddrs = ksocknal_select_ips(peer, ipaddrs, nipaddrs);
-                rc = ksocknal_send_hello (ni, conn, peerid.nid,
-                                          ipaddrs, nipaddrs);
-                if (rc < 0)
+                if (rc != 0) {
+                        /* set CONN_NONE makes returned HELLO acknowledge I
+                         * lost a connection race */
+                        conn->ksnc_type = SOCKLND_CONN_NONE;
+                        ksocknal_send_hello (ni, conn, peerid.nid,
+                                             ipaddrs, 0);
+                } else {
+                        nipaddrs = ksocknal_select_ips(peer, ipaddrs, nipaddrs);
+                        rc = ksocknal_send_hello (ni, conn, peerid.nid,
+                                                  ipaddrs, nipaddrs);
+                }
+                
+                write_lock_irqsave(global_lock, flags);
+                if (rc != 0)
                         goto failed_2;
         }
-
-        write_lock_irqsave (global_lock, flags);
 
         if (peer->ksnp_closing ||
             (route != NULL && route->ksnr_deleted)) {
                 /* route/peer got closed under me */
                 rc = -ESTALE;
-                goto failed_3;
+                warn = "peer/route removed";
+                goto failed_2;
         }
 
-        /* Refuse to duplicate an existing connection (both sides might
-         * connect at once), unless this is a loopback connection */
+        /* Refuse to duplicate an existing connection, unless this is a
+         * loopback connection */
         if (conn->ksnc_ipaddr != conn->ksnc_myipaddr) {
                 list_for_each(tmp, &peer->ksnp_conns) {
                         conn2 = list_entry(tmp, ksock_conn_t, ksnc_list);
@@ -1087,11 +1132,9 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                             conn2->ksnc_incarnation != incarnation)
                                 continue;
 
-                        CWARN("Not creating duplicate connection to "
-                              "%u.%u.%u.%u type %d\n",
-                              HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_type);
-                        rc = -EALREADY;
-                        goto failed_3;
+                        rc = 0;    /* more of a NOOP than a failure */
+                        warn = "duplicate";
+                        goto failed_2;
                 }
         }
 
@@ -1152,12 +1195,12 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         }
 
         rc = ksocknal_close_stale_conns_locked(peer, incarnation);
+        write_unlock_irqrestore (global_lock, flags);
+
         if (rc != 0)
                 CERROR ("Closed %d stale conns to %s ip %d.%d.%d.%d\n",
                         rc, libcfs_id2str(conn->ksnc_peer->ksnp_id),
                         HIPQUAD(conn->ksnc_ipaddr));
-
-        write_unlock_irqrestore (global_lock, flags);
 
         ksocknal_lib_bind_irq (irq);
 
@@ -1176,14 +1219,22 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         ksocknal_conn_decref(conn);
         return (0);
 
- failed_3:
+ failed_2:
         if (!peer->ksnp_closing &&
             list_empty (&peer->ksnp_conns) &&
             list_empty (&peer->ksnp_routes))
                 ksocknal_unlink_peer_locked(peer);
         write_unlock_irqrestore(global_lock, flags);
 
- failed_2:
+        if (warn != NULL) {
+                if (rc < 0)
+                        CERROR("Not creating conn %s type %d: %s\n",
+                               libcfs_id2str(peerid), conn->ksnc_type, warn);
+                else
+                        CDEBUG(D_NET, "Not creating conn %s type %d: %s\n",
+                              libcfs_id2str(peerid), conn->ksnc_type, warn);
+        }
+        
         ksocknal_peer_decref(peer);
 
  failed_1:
@@ -1191,9 +1242,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
  failed_0:
         libcfs_sock_release(sock);
-
-        LASSERT (rc != 0);
-        return (rc);
+        return rc;
 }
 
 void

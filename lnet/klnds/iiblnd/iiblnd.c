@@ -1785,7 +1785,8 @@ kibnal_startup (lnet_ni_t *ni)
                 }
         }
         
-        /* Find IP address from <ipif base name><number> */
+        /* Find IP address from <ipif base name><number+1> 
+         * (Infinicon IPoIB starts at ib1:) */
         snprintf(ipif_name, sizeof(ipif_name), "%s%d",
                  *kibnal_tunables.kib_ipif_basename, kibnal_data.kib_hca_idx + 1);
         if (strlen(ipif_name) == sizeof(ipif_name - 1)) {

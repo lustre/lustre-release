@@ -49,7 +49,7 @@ CFS_MODULE_PARM(eager_ack, "i", int, 0644,
                 "send tcp ack packets eagerly");
 
 static int typed_conns = SOCKNAL_TYPED_CONNS;
-CFS_MODULE_PARM(typed_conns, "i", int, 0644,
+CFS_MODULE_PARM(typed_conns, "i", int, 0444,
                 "use different sockets for bulk");
 
 static int min_bulk = SOCKNAL_MIN_BULK;

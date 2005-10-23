@@ -87,7 +87,8 @@ libcfs_next_nidstring (void)
 static int  libcfs_lo_str2addr(char *str, int nob, __u32 *addr);
 static void libcfs_ip_addr2str(__u32 addr, char *str);
 static int  libcfs_ip_str2addr(char *str, int nob, __u32 *addr);
-static void libcfs_num_addr2str(__u32 addr, char *str);
+static void libcfs_decnum_addr2str(__u32 addr, char *str);
+static void libcfs_hexnum_addr2str(__u32 addr, char *str);
 static int  libcfs_num_str2addr(char *str, int nob, __u32 *addr);
 
 struct netstrfns {
@@ -102,7 +103,7 @@ static struct netstrfns  libcfs_netstrfns[] = {
         {.nf_type     = LOLND,
          .nf_name     = "lo",
          .nf_modname  = "klolnd",
-         .nf_addr2str = libcfs_num_addr2str,
+         .nf_addr2str = libcfs_decnum_addr2str,
          .nf_str2addr = libcfs_lo_str2addr},
         {.nf_type     = SOCKLND,
          .nf_name     = "tcp",
@@ -132,17 +133,17 @@ static struct netstrfns  libcfs_netstrfns[] = {
         {.nf_type     = QSWLND,
          .nf_name     = "elan",
          .nf_modname  = "kqswlnd",
-         .nf_addr2str = libcfs_num_addr2str,
+         .nf_addr2str = libcfs_decnum_addr2str,
          .nf_str2addr = libcfs_num_str2addr},
         {.nf_type     = GMLND,
          .nf_name     = "gm",
          .nf_modname  = "kgmlnd",
-         .nf_addr2str = libcfs_num_addr2str,
+         .nf_addr2str = libcfs_hexnum_addr2str,
          .nf_str2addr = libcfs_num_str2addr},
         {.nf_type     = PTLLND,
          .nf_name     = "ptl",
          .nf_modname  = "kptllnd",
-         .nf_addr2str = libcfs_num_addr2str,
+         .nf_addr2str = libcfs_decnum_addr2str,
          .nf_str2addr = libcfs_num_str2addr},
         /* placeholder for net0 alias.  It MUST BE THE LAST ENTRY */
         {.nf_type     = -1},
@@ -229,23 +230,35 @@ libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
 }
 
 void
-libcfs_num_addr2str(__u32 addr, char *str)
+libcfs_decnum_addr2str(__u32 addr, char *str)
 {
         snprintf(str, LNET_NIDSTR_SIZE, "%u", addr);
+}
+
+void
+libcfs_hexnum_addr2str(__u32 addr, char *str)
+{
+        snprintf(str, LNET_NIDSTR_SIZE, "0x%x", addr);
 }
 
 int
 libcfs_num_str2addr(char *str, int nob, __u32 *addr)
 {
-        __u32   a;
-        int     n = nob;
+        int     n;
 
-        if (sscanf(str, "%u%n", &a, &n) < 1 ||
-            n != nob)
-                return 0;
+        n = nob;
+        if (sscanf(str, "0x%x%n", addr, &n) >= 1 && n == nob)
+                return 1;
 
-        *addr = a;
-        return 1;
+        n = nob;
+        if (sscanf(str, "0X%x%n", addr, &n) >= 1 && n == nob)
+                return 1;
+
+        n = nob;
+        if (sscanf(str, "%u%n", addr, &n) >= 1 && n == nob)
+                return 1;
+        
+        return 0;
 }
 
 struct netstrfns *
