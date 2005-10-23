@@ -111,6 +111,7 @@ ksocknal_create_peer (ksock_peer_t **peerp, lnet_ni_t *ni, lnet_process_id_t id)
         peer->ksnp_id = id;
         atomic_set (&peer->ksnp_refcount, 1);   /* 1 ref for caller */
         peer->ksnp_closing = 0;
+        peer->ksnp_accepting = 0;
         CFS_INIT_LIST_HEAD (&peer->ksnp_conns);
         CFS_INIT_LIST_HEAD (&peer->ksnp_routes);
         CFS_INIT_LIST_HEAD (&peer->ksnp_tx_queue);
@@ -143,6 +144,7 @@ ksocknal_destroy_peer (ksock_peer_t *peer)
                 libcfs_id2str(peer->ksnp_id), peer);
 
         LASSERT (atomic_read (&peer->ksnp_refcount) == 0);
+        LASSERT (peer->ksnp_accepting == 0);
         LASSERT (list_empty (&peer->ksnp_conns));
         LASSERT (list_empty (&peer->ksnp_routes));
         LASSERT (list_empty (&peer->ksnp_tx_queue));
@@ -952,6 +954,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                       struct socket *sock, int type)
 {
         rwlock_t          *global_lock = &ksocknal_data.ksnd_global_lock;
+        CFS_LIST_HEAD     (zombies);
         __u32              ipaddrs[LNET_MAX_INTERFACES];
         int                nipaddrs;
         lnet_process_id_t   peerid;
@@ -1070,7 +1073,8 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
                 /* +1 ref for me */
                 ksocknal_peer_addref(peer);
-
+                peer->ksnp_accepting++;
+                
                 /* Am I already connecting/connected to this guy?  Resolve in
                  * favour of higher NID... */
                 rc = 0;
@@ -1108,6 +1112,8 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                 }
                 
                 write_lock_irqsave(global_lock, flags);
+                peer->ksnp_accepting--;
+                
                 if (rc != 0)
                         goto failed_2;
         }
@@ -1222,8 +1228,12 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
  failed_2:
         if (!peer->ksnp_closing &&
             list_empty (&peer->ksnp_conns) &&
-            list_empty (&peer->ksnp_routes))
+            list_empty (&peer->ksnp_routes)) {
+                list_add(&zombies, &peer->ksnp_tx_queue);
+                list_del_init(&peer->ksnp_tx_queue);
                 ksocknal_unlink_peer_locked(peer);
+        }
+        
         write_unlock_irqrestore(global_lock, flags);
 
         if (warn != NULL) {
@@ -1234,7 +1244,8 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                         CDEBUG(D_NET, "Not creating conn %s type %d: %s\n",
                               libcfs_id2str(peerid), conn->ksnc_type, warn);
         }
-        
+
+        ksocknal_txlist_done(ni, &zombies);
         ksocknal_peer_decref(peer);
 
  failed_1:

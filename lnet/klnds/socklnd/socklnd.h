@@ -323,10 +323,11 @@ typedef struct ksock_route
 typedef struct ksock_peer
 {
         struct list_head    ksnp_list;          /* stash on global peer list */
-        lnet_process_id_t    ksnp_id;            /* who's on the other end(s) */
+        lnet_process_id_t   ksnp_id;            /* who's on the other end(s) */
         atomic_t            ksnp_refcount;      /* # users */
         int                 ksnp_sharecount;    /* lconf usage counter */
         int                 ksnp_closing;       /* being closed */
+        int                 ksnp_accepting;     /* # passive connections pending */
         int                 ksnp_error;         /* errno on closing last conn */
         struct list_head    ksnp_conns;         /* all active connections */
         struct list_head    ksnp_routes;        /* routes */
@@ -457,7 +458,8 @@ extern int ksocknal_close_conn_and_siblings (ksock_conn_t *conn, int why);
 extern int ksocknal_close_matching_conns (lnet_process_id_t id, __u32 ipaddr);
 
 extern void ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn);
-extern void ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch);
+extern void ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx, int asynch);
+extern void ksocknal_txlist_done (lnet_ni_t *ni, struct list_head *txlist);
 extern void ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive);
 extern int ksocknal_thread_start (int (*fn)(void *arg), void *arg);
 extern void ksocknal_thread_fini (void);

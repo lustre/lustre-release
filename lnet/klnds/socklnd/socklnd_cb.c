@@ -357,7 +357,7 @@ ksocknal_zc_callback (zccd_t *zcd)
 #endif
 
 void
-ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch)
+ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx, int asynch)
 {
         ENTRY;
 
@@ -373,11 +373,28 @@ ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch)
 #endif
         }
 
-        lnet_finalize (peer->ksnp_ni, tx->tx_lnetmsg,
-                      (tx->tx_resid == 0) ? 0 : -EIO);
-
+        lnet_finalize (ni, tx->tx_lnetmsg, (tx->tx_resid == 0) ? 0 : -EIO);
         ksocknal_free_tx (tx);
         EXIT;
+}
+
+void
+ksocknal_txlist_done (lnet_ni_t *ni, struct list_head *txlist)
+{
+        ksock_tx_t *tx;
+        
+        while (!list_empty (txlist)) {
+                tx = list_entry (txlist->next, ksock_tx_t, tx_list);
+
+                CERROR ("Deleting packet type %d len %d %s->%s\n",
+                        le32_to_cpu (tx->tx_lnetmsg->msg_hdr.type),
+                        le32_to_cpu (tx->tx_lnetmsg->msg_hdr.payload_length),
+                        libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.src_nid)),
+                        libcfs_nid2str(le64_to_cpu (tx->tx_lnetmsg->msg_hdr.dest_nid)));
+
+                list_del (&tx->tx_list);
+                ksocknal_tx_done (ni, tx, 0);
+        }
 }
 
 void
@@ -399,7 +416,7 @@ ksocknal_tx_launched (ksock_tx_t *tx)
 #endif
         /* Any zero-copy-ness (if any) has completed; I can complete the
          * transmit now, avoiding an extra schedule */
-        ksocknal_tx_done (tx->tx_conn->ksnc_peer, tx, 0);
+        ksocknal_tx_done (tx->tx_conn->ksnc_peer->ksnp_ni, tx, 0);
 }
 
 int
@@ -767,19 +784,13 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
                 return (0);
         }
 
-        route = ksocknal_find_connecting_route_locked (peer);
-        if (route != NULL) {
-                /* At least 1 connection is being established; queue the
-                 * message... */
-                list_add_tail (&tx->tx_list, &peer->ksnp_tx_queue);
-                write_unlock_irqrestore (g_lock, flags);
-                return (0);
-        }
-        
-        write_unlock_irqrestore (g_lock, flags);
+        LASSERT (peer->ksnp_accepting > 0 ||
+                 ksocknal_find_connecting_route_locked (peer) != NULL);
 
-        CERROR("Peer entry with no routes: %s\n", libcfs_id2str(id));
-        return (-EHOSTUNREACH);
+        /* Queue the message until a connection is established */
+        list_add_tail (&tx->tx_list, &peer->ksnp_tx_queue);
+        write_unlock_irqrestore (g_lock, flags);
+        return 0;
 }
 
 int
@@ -1249,7 +1260,8 @@ int ksocknal_scheduler (void *arg)
                         list_del (&tx->tx_list);
                         spin_unlock_irqrestore (&sched->kss_lock, flags);
 
-                        ksocknal_tx_done (tx->tx_conn->ksnc_peer, tx, 1);
+                        ksocknal_tx_done (tx->tx_conn->ksnc_peer->ksnp_ni,
+                                          tx, 1);
 
                         spin_lock_irqsave (&sched->kss_lock, flags);
                 }
@@ -1616,7 +1628,6 @@ void
 ksocknal_connect (ksock_route_t *route)
 {
         CFS_LIST_HEAD    (zombies);
-        ksock_tx_t       *tx;
         ksock_peer_t     *peer = route->ksnr_peer;
         unsigned long     flags;
         int               type;
@@ -1700,18 +1711,17 @@ ksocknal_connect (ksock_route_t *route)
         route->ksnr_timeout = cfs_time_add(cfs_time_current(),
                                            route->ksnr_retry_interval);
 
-        if (!list_empty (&peer->ksnp_tx_queue) &&
-            ksocknal_find_connecting_route_locked (peer) == NULL) {
+        if (!list_empty(&peer->ksnp_tx_queue) &&
+            peer->ksnp_accepting != 0 &&
+            ksocknal_find_connecting_route_locked(peer) == NULL) {
+                /* ksnp_tx_queue is queued on a conn on successful
+                 * connection */
                 LASSERT (list_empty (&peer->ksnp_conns));
 
-                /* None of the connections that the blocked packets are
-                 * waiting for have been successful.  Complete them now... */
-                do {
-                        tx = list_entry (peer->ksnp_tx_queue.next,
-                                         ksock_tx_t, tx_list);
-                        list_del (&tx->tx_list);
-                        list_add_tail (&tx->tx_list, &zombies);
-                } while (!list_empty (&peer->ksnp_tx_queue));
+                /* take all the blocked packets while I've got the lock and
+                 * complete below... */
+                list_add(&zombies, &peer->ksnp_tx_queue);
+                list_del_init(&peer->ksnp_tx_queue);
         }
 
 #if 0           /* irrelevent with only eager routes */
@@ -1723,19 +1733,7 @@ ksocknal_connect (ksock_route_t *route)
 #endif
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
 
-        while (!list_empty (&zombies)) {
-                tx = list_entry (zombies.next, ksock_tx_t, tx_list);
-
-                CERROR ("Deleting packet type %d len %d %s->%s\n",
-                        le32_to_cpu (tx->tx_lnetmsg->msg_hdr.type),
-                        le32_to_cpu (tx->tx_lnetmsg->msg_hdr.payload_length),
-                        libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.src_nid)),
-                        libcfs_nid2str(le64_to_cpu (tx->tx_lnetmsg->msg_hdr.dest_nid)));
-
-                list_del (&tx->tx_list);
-                /* complete now */
-                ksocknal_tx_done (peer, tx, 0);
-        }
+        ksocknal_txlist_done(peer->ksnp_ni, &zombies);
 }
 
 int
