@@ -424,6 +424,16 @@ typedef struct kib_conn
 #define IBNAL_CONN_DISCONNECTING     4          /* to send disconnect req */
 #define IBNAL_CONN_DISCONNECTED      5          /* no more QP or CM traffic */
 
+/* CAVEAT EMPTOR: keep in sync with kibnal_reject() */
+#define IBNAL_REJECT_NO_RESOURCES    0          /* Out of memory/conns etc */
+#define IBNAL_REJECT_CONN_RACE       1          /* You lost connection race */
+#define IBNAL_REJECT_FATAL           2          /* Anything else */
+
+/* types of connection */
+#define IBNAL_CONN_ACTIVE            0          /* active connect */
+#define IBNAL_CONN_PASSIVE           1          /* passive connect */
+#define IBNAL_CONN_WAITING           2          /* waiting for connect */
+
 typedef struct kib_peer
 {
         struct list_head    ibp_list;           /* stash on global peer list */
@@ -433,7 +443,10 @@ typedef struct kib_peer
         int                 ibp_persistence;    /* "known" peer refs */
         struct list_head    ibp_conns;          /* all active connections */
         struct list_head    ibp_tx_queue;       /* msgs waiting for a conn */
-        int                 ibp_connecting;     /* connecting+accepting */
+        int                 ibp_connecting;     /* active connects in progress */
+        int                 ibp_accepting;      /* passive connects in progress */
+        int                 ibp_passivewait;    /* waiting for peer to connect */
+        unsigned long       ibp_passivewait_deadline; /* when passive wait must complete */
         unsigned long       ibp_reconnect_time; /* when reconnect may be attempted */
         unsigned long       ibp_reconnect_interval; /* exponential backoff */
 } kib_peer_t;
@@ -505,6 +518,15 @@ kibnal_peer_active(kib_peer_t *peer)
 {
         /* Am I in the peer hash table? */
         return (!list_empty(&peer->ibp_list));
+}
+
+static inline int
+kibnal_peer_connecting(kib_peer_t *peer)
+{
+        /* Am I expecting a connection to materialise? */
+        return (peer->ibp_connecting != 0 ||
+                peer->ibp_accepting != 0 ||
+                peer->ibp_passivewait);
 }
 
 static inline void

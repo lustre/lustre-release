@@ -1265,7 +1265,7 @@ kibnal_launch_tx (kib_tx_t *tx, lnet_nid_t nid)
                 return;
         }
 
-        if (peer->ibp_connecting == 0) {
+        if (!kibnal_peer_connecting(peer)) {
                 if (!(peer->ibp_reconnect_interval == 0 || /* first attempt */
                       time_after_eq(jiffies, peer->ibp_reconnect_time))) {
                         write_unlock_irqrestore(g_lock, flags);
@@ -1852,51 +1852,61 @@ kibnal_conn_disconnected(kib_conn_t *conn)
 }
 
 void
-kibnal_peer_connect_failed (kib_peer_t *peer, int active, int rc)
+kibnal_peer_connect_failed (kib_peer_t *peer, int type)
 {
         LIST_HEAD        (zombies);
         kib_tx_t         *tx;
         unsigned long     flags;
 
-        LASSERT (rc != 0);
-
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
-        LASSERT (peer->ibp_connecting != 0);
-        peer->ibp_connecting--;
+        LASSERT (kibnal_peer_connecting(peer));
 
-        if (peer->ibp_connecting != 0) {
-                /* another connection attempt under way (e.g. STALE on first
-                 * attempt)... */
+        switch (type) {
+        case IBNAL_CONN_ACTIVE:
+                LASSERT (peer->ibp_connecting > 0);
+                peer->ibp_connecting--;
+                break;
+                
+        case IBNAL_CONN_PASSIVE:
+                LASSERT (peer->ibp_accepting > 0);
+                peer->ibp_accepting--;
+                break;
+                
+        case IBNAL_CONN_WAITING:
+                /* Can't assert; I might be racing with a successful connection
+                 * which clears passivewait */
+                peer->ibp_passivewait = 0;
+                break;
+        default:
+                LBUG();
+        }
+
+        if (kibnal_peer_connecting(peer) ||     /* another attempt underway */
+            !list_empty(&peer->ibp_conns)) {    /* got connected */
                 write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
                 return;
         }
 
-        if (list_empty(&peer->ibp_conns)) {
-                /* Say when active connection can be re-attempted */
-                peer->ibp_reconnect_interval *= 2;
-                peer->ibp_reconnect_interval =
-                        MAX(peer->ibp_reconnect_interval,
-                            *kibnal_tunables.kib_min_reconnect_interval);
-                peer->ibp_reconnect_interval =
-                        MIN(peer->ibp_reconnect_interval,
-                            *kibnal_tunables.kib_max_reconnect_interval);
-                
-                peer->ibp_reconnect_time = jiffies + 
-                                           peer->ibp_reconnect_interval * HZ;
+        /* Say when active connection can be re-attempted */
+        peer->ibp_reconnect_interval *= 2;
+        peer->ibp_reconnect_interval =
+                MAX(peer->ibp_reconnect_interval,
+                    *kibnal_tunables.kib_min_reconnect_interval);
+        peer->ibp_reconnect_interval =
+                MIN(peer->ibp_reconnect_interval,
+                    *kibnal_tunables.kib_max_reconnect_interval);
+        
+        peer->ibp_reconnect_time = jiffies + peer->ibp_reconnect_interval * HZ;
 
-                /* Take peer's blocked transmits to complete with error */
-                list_add(&zombies, &peer->ibp_tx_queue);
-                list_del_init(&peer->ibp_tx_queue);
+        /* Take peer's blocked transmits to complete with error */
+        list_add(&zombies, &peer->ibp_tx_queue);
+        list_del_init(&peer->ibp_tx_queue);
                 
-                if (kibnal_peer_active(peer) &&
-                    (peer->ibp_persistence == 0)) {
-                        /* failed connection attempt on non-persistent peer */
-                        kibnal_unlink_peer_locked (peer);
-                }
-        } else {
-                /* Can't have blocked transmits if there are connections */
-                LASSERT (list_empty(&peer->ibp_tx_queue));
+        if (kibnal_peer_active(peer) &&
+            (peer->ibp_persistence == 0)) {
+                /* failed connection attempt on non-persistent peer */
+                kibnal_unlink_peer_locked (peer);
         }
         
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
@@ -1918,23 +1928,24 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active, int rc)
 }
 
 void
-kibnal_connreq_done (kib_conn_t *conn, int active, int status)
+kibnal_connreq_done (kib_conn_t *conn, int type, int status)
 {
         kib_peer_t       *peer = conn->ibc_peer;
         struct list_head  txs;
         kib_tx_t         *tx;
         unsigned long     flags;
 
+        LASSERT (type == IBNAL_CONN_ACTIVE || type == IBNAL_CONN_PASSIVE);
         LASSERT (conn->ibc_state >= IBNAL_CONN_INIT_QP);
         LASSERT (conn->ibc_state < IBNAL_CONN_ESTABLISHED);
-        LASSERT (peer->ibp_connecting > 0);
+        LASSERT (kibnal_peer_connecting(peer));
 
         LIBCFS_FREE(conn->ibc_cvars, sizeof(*conn->ibc_cvars));
         conn->ibc_cvars = NULL;
 
         if (status != 0) {
                 /* failed to establish connection */
-                kibnal_peer_connect_failed(conn->ibc_peer, active, status);
+                kibnal_peer_connect_failed(conn->ibc_peer, type);
                 kibnal_conn_disconnected(conn);
                 kibnal_conn_decref(conn);       /* Lose CM's ref */
                 return;
@@ -1949,6 +1960,7 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
+        peer->ibp_passivewait = 0;              /* not waiting (got conn now) */
         kibnal_conn_addref(conn);               /* +1 ref for ibc_list */
         list_add_tail(&conn->ibc_list, &peer->ibp_conns);
         
@@ -1957,13 +1969,25 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
                 kibnal_close_conn_locked(conn, -ECONNABORTED);
                 write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
 
-                kibnal_peer_connect_failed(conn->ibc_peer, active, 
-                                           -ECONNABORTED);
+                kibnal_peer_connect_failed(conn->ibc_peer, type);
                 kibnal_conn_decref(conn);       /* lose CM's ref */
                 return;
         }
         
-        peer->ibp_connecting--;
+        switch (type) {
+        case IBNAL_CONN_ACTIVE:
+                LASSERT (peer->ibp_connecting > 0);
+                peer->ibp_connecting--;
+                break;
+
+        case IBNAL_CONN_PASSIVE:
+                LASSERT (peer->ibp_accepting > 0);
+                peer->ibp_accepting--;
+                break;
+        default:
+                LBUG();
+        }
+        
         peer->ibp_reconnect_interval = 0;       /* OK to reconnect at any time */
 
         /* Nuke any dangling conns from a different peer instance... */
@@ -1988,41 +2012,46 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
 }
 
 void
-kibnal_reject (lnet_nid_t nid, IB_HANDLE cep, int reason)
+kibnal_reject (lnet_nid_t nid, IB_HANDLE cep, int why)
 {
-        static CM_REJECT_INFO msgs[] = {{.Reason = RC_USER_REJ},
-                                        {.Reason = RC_NO_RESOURCES}};
-        const int       nmsg = sizeof(msgs)/sizeof(msgs[0]);
-        CM_REJECT_INFO *msg;
+        /* CAVEAT EMPTOR: keep IBNAL_REJECT_xxx in sync */
+        static CM_REJECT_INFO msgs[3] = {
+                {.Reason = RC_NO_RESOURCES},    /* IBNAL_REJECT_NO_RESOURCES */
+                {.Reason = RC_USER_REJ,         /* IBNAL_REJECT_CONN_RACE */
+                 .PrivateData[0] = 0},
+                {.Reason = RC_USER_REJ,         /* IBNAL_REJECT_FATAL */
+                 .PrivateData[0] = 1}};
+
+        CM_REJECT_INFO *msg = &msgs[why];
         FSTATUS         frc;
 
-        for (msg = &msgs[0]; msg < &msgs[nmsg]; msg++)
-                if (msg->Reason == reason)
-                        break;
-        
-        LASSERT (msg < &msgs[nmsg]);
-        
+        LASSERT (why >= 0 && why < sizeof(msgs)/sizeof(msgs[0]));
+
         frc = iba_cm_reject(cep, msg);
         if (frc != FSUCCESS)
                 CERROR("Error %d rejecting %s\n", frc, libcfs_nid2str(nid));
 }
 
 void
-kibnal_check_connreject(kib_conn_t *conn, int active, CM_REJECT_INFO *rej)
+kibnal_check_connreject(kib_conn_t *conn, int type, CM_REJECT_INFO *rej)
 {
         kib_peer_t *peer = conn->ibc_peer;
         unsigned    long flags;
 
-        if (rej->Reason != RC_STALE_CONN) {
-                CERROR("%s connection to %s rejected: %d\n",
-                       active ? "Active" : "Passive",
-                       libcfs_nid2str(peer->ibp_nid), rej->Reason);
-        } else {
-                if (!active) {
+        LASSERT (type == IBNAL_CONN_ACTIVE ||
+                 type == IBNAL_CONN_PASSIVE);
+
+        CDEBUG(D_NET, "%s connection with %s rejected: %d (%d)\n",
+               (type == IBNAL_CONN_ACTIVE) ? "Active" : "Passive",
+               libcfs_nid2str(peer->ibp_nid), rej->Reason, rej->PrivateData[0]);
+
+        switch (rej->Reason) {
+        case RC_STALE_CONN:
+                if (type == IBNAL_CONN_PASSIVE) {
                         CERROR("Connection to %s rejected (stale QP)\n",
                                libcfs_nid2str(peer->ibp_nid));
                 } else {
-                        CWARN("Connection to %s rejected (stale QP): "
+                        CWARN("Connection from %s rejected (stale QP): "
                               "retrying...\n", libcfs_nid2str(peer->ibp_nid));
 
                         /* retry from scratch to allocate a new conn 
@@ -2038,9 +2067,37 @@ kibnal_check_connreject(kib_conn_t *conn, int active, CM_REJECT_INFO *rej)
                  * ref since kibnal_connreq_done() drops the CM's ref on conn
                  * on failure */
                 kibnal_conn_addref(conn);
+                break;
+
+        case RC_USER_REJ:
+                if (type == IBNAL_CONN_ACTIVE && 
+                    rej->PrivateData[0] == 0) {
+                        /* lost connection race */
+                        CWARN("Connection to %s rejected "
+                              "(lost connection race)\n",
+                              libcfs_nid2str(peer->ibp_nid));
+
+                        write_lock_irqsave(&kibnal_data.kib_global_lock, 
+                                           flags);
+
+                        if (list_empty(&peer->ibp_conns)) {
+                                peer->ibp_passivewait = 1;
+                                peer->ibp_passivewait_deadline =
+                                        jiffies + 
+                                        (*kibnal_tunables.kib_timeout * HZ);
+                        }
+                        write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
+                                                flags);
+                        break;
+                }
+                /* fall through */
+        default:
+                CERROR("%s connection with %s rejected: %d\n",
+                       (type == IBNAL_CONN_ACTIVE) ? "Active" : "Passive",
+                       libcfs_nid2str(peer->ibp_nid), rej->Reason);
         }
         
-        kibnal_connreq_done(conn, 1, -ECONNRESET);
+        kibnal_connreq_done(conn, type, -ECONNREFUSED);
 }
 
 void
@@ -2087,15 +2144,16 @@ kibnal_cm_passive_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                 break;
 
         case FCM_CONNECT_TIMEOUT:
-                kibnal_connreq_done(conn, 0, -ETIMEDOUT);
+                kibnal_connreq_done(conn, IBNAL_CONN_PASSIVE, -ETIMEDOUT);
                 break;
                 
         case FCM_CONNECT_REJECT:
-                kibnal_check_connreject(conn, 0, &info->Info.Reject);
+                kibnal_check_connreject(conn, IBNAL_CONN_PASSIVE, 
+                                        &info->Info.Reject);
                 break;
 
         case FCM_CONNECT_ESTABLISHED:
-                kibnal_connreq_done(conn, 0, 0);
+                kibnal_connreq_done(conn, IBNAL_CONN_PASSIVE, 0);
                 break;
 
         case FCM_DISCONNECT_REQUEST:
@@ -2107,7 +2165,7 @@ kibnal_cm_passive_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
 }
 
 int
-kibnal_accept (kib_conn_t **connp, kib_msg_t *msg, int nob)
+kibnal_accept (kib_conn_t **connp, IB_HANDLE cep, kib_msg_t *msg, int nob)
 {
         lnet_nid_t     nid;
         kib_conn_t    *conn;
@@ -2119,6 +2177,7 @@ kibnal_accept (kib_conn_t **connp, kib_msg_t *msg, int nob)
         rc = kibnal_unpack_msg(msg, nob);
         if (rc != 0) {
                 CERROR("Error %d unpacking connreq\n", rc);
+                kibnal_reject(LNET_NID_ANY, cep, IBNAL_REJECT_FATAL);
                 return -EPROTO;
         }
 
@@ -2127,6 +2186,7 @@ kibnal_accept (kib_conn_t **connp, kib_msg_t *msg, int nob)
         if (msg->ibm_type != IBNAL_MSG_CONNREQ) {
                 CERROR("Can't accept %s: bad request type %d (%d expected)\n",
                        libcfs_nid2str(nid), msg->ibm_type, IBNAL_MSG_CONNREQ);
+                kibnal_reject(nid, cep, IBNAL_REJECT_FATAL);
                 return -EPROTO;
         }
         
@@ -2135,6 +2195,7 @@ kibnal_accept (kib_conn_t **connp, kib_msg_t *msg, int nob)
                        libcfs_nid2str(nid), 
                        libcfs_nid2str(msg->ibm_dstnid), 
                        libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
+                kibnal_reject(nid, cep, IBNAL_REJECT_FATAL);
                 return -EPROTO;
         }
         
@@ -2149,18 +2210,22 @@ kibnal_accept (kib_conn_t **connp, kib_msg_t *msg, int nob)
                        IBNAL_MSG_QUEUE_SIZE,
                        IBNAL_MSG_SIZE,
                        IBNAL_MAX_RDMA_FRAGS);
+                kibnal_reject(nid, cep, IBNAL_REJECT_FATAL);
                 return -EPROTO;
         }
 
         conn = kibnal_create_conn(nid);
-        if (conn == NULL)
+        if (conn == NULL) {
+                kibnal_reject(nid, cep, IBNAL_REJECT_NO_RESOURCES);
                 return -ENOMEM;
-
+        }
+        
         /* assume 'nid' is a new peer */
         rc = kibnal_create_peer(&peer, nid);
         if (rc != 0) {
                 kibnal_conn_decref(conn);
-                return rc;
+                kibnal_reject(nid, cep, IBNAL_REJECT_NO_RESOURCES);
+                return -ENOMEM;
         }
         
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
@@ -2169,13 +2234,25 @@ kibnal_accept (kib_conn_t **connp, kib_msg_t *msg, int nob)
         if (peer2 == NULL) {
                 /* peer table takes my ref on peer */
                 list_add_tail (&peer->ibp_list, kibnal_nid2peerlist(nid));
+                LASSERT (peer->ibp_connecting == 0);
         } else {
                 kibnal_peer_decref(peer);
                 peer = peer2;
+
+                if (peer->ibp_connecting != 0 &&
+                    peer->ibp_nid < kibnal_data.kib_ni->ni_nid) {
+                        /* Resolve concurrent connection attempts in favour of
+                         * the higher NID */
+                        write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
+                                                flags);
+                        kibnal_conn_decref(conn);
+                        kibnal_reject(nid, cep, IBNAL_REJECT_CONN_RACE);
+                        return -EALREADY;
+                }
         }
 
         kibnal_peer_addref(peer); /* +1 ref for conn */
-        peer->ibp_connecting++;
+        peer->ibp_accepting++;
 
         kibnal_set_conn_state(conn, IBNAL_CONN_CONNECTING);
         conn->ibc_peer = peer;
@@ -2185,7 +2262,7 @@ kibnal_accept (kib_conn_t **connp, kib_msg_t *msg, int nob)
         write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
 
         *connp = conn;
-        return (0);
+        return 0;
 }
 
 void
@@ -2196,6 +2273,7 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         CM_REPLY_INFO    *rep;
         kib_conn_t       *conn;
         FSTATUS           frc;
+        int               reason;
         int               rc;
         
         LASSERT(arg == NULL); /* no conn yet for passive */
@@ -2209,13 +2287,10 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         
         LASSERT (info->Status == FCM_CONNECT_REQUEST);
 
-        rc = kibnal_accept(&conn, (kib_msg_t *)req->PrivateData, 
+        rc = kibnal_accept(&conn, cep, (kib_msg_t *)req->PrivateData, 
                            CM_REQUEST_INFO_USER_LEN);
-        if (rc != 0) {
-                kibnal_reject(LNET_NID_ANY, cep,
-                              (rc == -EPROTO) ? RC_USER_REJ : RC_NO_RESOURCES);
+        if (rc != 0)                   /* kibnal_accept has rejected */
                 return;
-        }
 
         conn->ibc_cvars->cv_path = req->PathInfo.Path;
         
@@ -2225,8 +2300,9 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                              req->CEPInfo.OfferedResponderResources,
                              req->CEPInfo.StartingPSN);
         if (rc != 0) {
-                kibnal_reject(conn->ibc_peer->ibp_nid, cep, RC_NO_RESOURCES);
-                kibnal_connreq_done(conn, 0, -ECONNABORTED);
+                kibnal_reject(conn->ibc_peer->ibp_nid, cep, 
+                              IBNAL_REJECT_NO_RESOURCES);
+                kibnal_connreq_done(conn, IBNAL_CONN_PASSIVE, -ECONNABORTED);
                 return;
         }
 
@@ -2265,7 +2341,7 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         
         CERROR("iba_cm_accept(%s) failed: %d\n", 
                libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
-        kibnal_connreq_done(conn, 0, -ECONNABORTED);
+        kibnal_connreq_done(conn, IBNAL_CONN_PASSIVE, -ECONNABORTED);
 }
 
 void
@@ -2280,8 +2356,8 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
         if (rc != 0) {
                 CERROR ("Error %d unpacking connack from %s\n",
                         rc, libcfs_nid2str(nid));
-                kibnal_reject(nid, conn->ibc_cep, RC_USER_REJ);
-                kibnal_connreq_done(conn, 1, -EPROTO);
+                kibnal_reject(nid, conn->ibc_cep, IBNAL_REJECT_FATAL);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EPROTO);
                 return;
         }
                         
@@ -2289,8 +2365,8 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
                 CERROR("Bad connack request type %d (%d expected) from %s\n",
                        msg->ibm_type, IBNAL_MSG_CONNREQ,
                        libcfs_nid2str(msg->ibm_srcnid));
-                kibnal_reject(nid, conn->ibc_cep, RC_USER_REJ);
-                kibnal_connreq_done(conn, 1, -EPROTO);
+                kibnal_reject(nid, conn->ibc_cep, IBNAL_REJECT_FATAL);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EPROTO);
                 return;
         }
 
@@ -2303,8 +2379,8 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
                        libcfs_nid2str(msg->ibm_dstnid),
                        libcfs_nid2str(kibnal_data.kib_ni->ni_nid),
                        msg->ibm_dststamp, kibnal_data.kib_incarnation);
-                kibnal_reject(nid, conn->ibc_cep, RC_USER_REJ);
-                kibnal_connreq_done(conn, 1, -EPROTO);
+                kibnal_reject(nid, conn->ibc_cep, IBNAL_REJECT_FATAL);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EPROTO);
                 return;
         }
         
@@ -2319,8 +2395,8 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
                        IBNAL_MSG_QUEUE_SIZE,
                        IBNAL_MSG_SIZE,
                        IBNAL_MAX_RDMA_FRAGS);
-                kibnal_reject(nid, conn->ibc_cep, RC_USER_REJ);
-                kibnal_connreq_done(conn, 1, -EPROTO);
+                kibnal_reject(nid, conn->ibc_cep, IBNAL_REJECT_FATAL);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EPROTO);
                 return;
         }
                         
@@ -2336,8 +2412,8 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
                              rep->ArbResponderResources,
                              rep->StartingPSN);
         if (rc != 0) {
-                kibnal_reject(nid, conn->ibc_cep, RC_NO_RESOURCES);
-                kibnal_connreq_done(conn, 1, -EIO);
+                kibnal_reject(nid, conn->ibc_cep, IBNAL_REJECT_NO_RESOURCES);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EIO);
                 return;
         }
 
@@ -2348,13 +2424,13 @@ kibnal_check_connreply(kib_conn_t *conn, CM_REPLY_INFO *rep)
                             NULL, NULL, NULL, NULL);
 
         if (frc == FCM_CONNECT_ESTABLISHED) {
-                kibnal_connreq_done(conn, 1, 0);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, 0);
                 return;
         }
         
         CERROR("Connection %s CMAccept failed: %d\n",
                libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
-        kibnal_connreq_done(conn, 1, -ECONNABORTED);
+        kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -ECONNABORTED);
 }
 
 void
@@ -2372,11 +2448,12 @@ kibnal_cm_active_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                 break;
 
         case FCM_CONNECT_TIMEOUT:
-                kibnal_connreq_done(conn, 1, -ETIMEDOUT);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -ETIMEDOUT);
                 break;
                 
         case FCM_CONNECT_REJECT:
-                kibnal_check_connreject(conn, 1, &info->Info.Reject);
+                kibnal_check_connreject(conn, IBNAL_CONN_ACTIVE,
+                                        &info->Info.Reject);
                 break;
 
         case FCM_CONNECT_REPLY:
@@ -2425,14 +2502,14 @@ kibnal_pathreq_callback (void *arg, QUERY *qry,
                 CERROR ("pathreq %s failed: status %d data size %d\n", 
                         libcfs_nid2str(conn->ibc_peer->ibp_nid),
                         qrslt->Status, qrslt->ResultDataSize);
-                kibnal_connreq_done(conn, 1, -EHOSTUNREACH);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
                 return;
         }
 
         if (path->NumPathRecords < 1) {
                 CERROR ("pathreq %s failed: no path records\n",
                         libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                kibnal_connreq_done(conn, 1, -EHOSTUNREACH);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
                 return;
         }
 
@@ -2443,7 +2520,7 @@ kibnal_pathreq_callback (void *arg, QUERY *qry,
 
         conn->ibc_cep = kibnal_create_cep(conn->ibc_peer->ibp_nid);
         if (conn->ibc_cep == NULL) {
-                kibnal_connreq_done(conn, 1, -ENOMEM);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -ENOMEM);
                 return;
         }
 
@@ -2482,7 +2559,7 @@ kibnal_pathreq_callback (void *arg, QUERY *qry,
         
         CERROR ("Connect %s failed: %d\n", 
                 libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
-        kibnal_connreq_done(conn, 1, -EHOSTUNREACH);
+        kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
 }
 
 void
@@ -2515,7 +2592,7 @@ kibnal_service_get_callback (void *arg, QUERY *qry,
                 CERROR ("Lookup %s failed: status %d data size %d\n", 
                         libcfs_nid2str(conn->ibc_peer->ibp_nid),
                         qrslt->Status, qrslt->ResultDataSize);
-                kibnal_connreq_done(conn, 1, -EHOSTUNREACH);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
                 return;
         }
 
@@ -2523,7 +2600,7 @@ kibnal_service_get_callback (void *arg, QUERY *qry,
         if (svc->NumServiceRecords < 1) {
                 CERROR ("lookup %s failed: no service records\n",
                         libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                kibnal_connreq_done(conn, 1, -EHOSTUNREACH);
+                kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
                 return;
         }
 
@@ -2553,7 +2630,7 @@ kibnal_service_get_callback (void *arg, QUERY *qry,
 
         CERROR ("pathreq %s failed: %d\n", 
                 libcfs_nid2str(conn->ibc_peer->ibp_nid), frc);
-        kibnal_connreq_done(conn, 1, -EHOSTUNREACH);
+        kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
 }
 
 void
@@ -2568,7 +2645,7 @@ kibnal_connect_peer (kib_peer_t *peer)
         conn = kibnal_create_conn(peer->ibp_nid);
         if (conn == NULL) {
                 CERROR ("Can't allocate conn\n");
-                kibnal_peer_connect_failed (peer, 1, -ENOMEM);
+                kibnal_peer_connect_failed(peer, IBNAL_CONN_ACTIVE);
                 return;
         }
 
@@ -2598,7 +2675,7 @@ kibnal_connect_peer (kib_peer_t *peer)
                 return;
 
         CERROR("Lookup %s failed: %d\n", libcfs_nid2str(peer->ibp_nid), frc);
-        kibnal_connreq_done(conn, 1, -EHOSTUNREACH);
+        kibnal_connreq_done(conn, IBNAL_CONN_ACTIVE, -EHOSTUNREACH);
 }
 
 int
@@ -2638,8 +2715,9 @@ kibnal_conn_timed_out (kib_conn_t *conn)
 }
 
 void
-kibnal_check_conns (int idx)
+kibnal_check_peers (int idx)
 {
+        rwlock_t          *rwlock = &kibnal_data.kib_global_lock;
         struct list_head  *peers = &kibnal_data.kib_peers[idx];
         struct list_head  *ptmp;
         kib_peer_t        *peer;
@@ -2651,10 +2729,27 @@ kibnal_check_conns (int idx)
         /* NB. We expect to have a look at all the peers and not find any
          * rdmas to time out, so we just use a shared lock while we
          * take a look... */
-        read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
+        read_lock_irqsave(rwlock, flags);
 
         list_for_each (ptmp, peers) {
                 peer = list_entry (ptmp, kib_peer_t, ibp_list);
+
+                if (peer->ibp_passivewait) {
+                        LASSERT (list_empty(&peer->ibp_conns));
+                        
+                        if (!time_after_eq(jiffies, 
+                                           peer->ibp_passivewait_deadline))
+                                continue;
+                        
+                        kibnal_peer_addref(peer); /* ++ ref for me... */
+                        read_unlock_irqrestore(rwlock, flags);
+
+                        kibnal_peer_connect_failed(peer, IBNAL_CONN_WAITING);
+                        kibnal_peer_decref(peer); /* ...until here */
+                        
+                        /* start again now I've dropped the lock */
+                        goto again;
+                }
 
                 list_for_each (ctmp, &peer->ibp_conns) {
                         conn = list_entry (ctmp, kib_conn_t, ibc_list);
@@ -2675,8 +2770,7 @@ kibnal_check_conns (int idx)
                         
                         kibnal_conn_addref(conn); /* 1 ref for me... */
 
-                        read_unlock_irqrestore(&kibnal_data.kib_global_lock,
-                                               flags);
+                        read_unlock_irqrestore(rwlock, flags);
 
                         CERROR("Timed out RDMA with %s\n",
                                libcfs_nid2str(peer->ibp_nid));
@@ -2689,7 +2783,7 @@ kibnal_check_conns (int idx)
                 }
         }
 
-        read_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
+        read_unlock_irqrestore(rwlock, flags);
 }
 
 void
@@ -2805,7 +2899,7 @@ kibnal_connd (void *arg)
                                 chunk = 1;
 
                         for (i = 0; i < chunk; i++) {
-                                kibnal_check_conns (peer_index);
+                                kibnal_check_peers (peer_index);
                                 peer_index = (peer_index + 1) % 
                                              kibnal_data.kib_peer_hash_size;
                         }

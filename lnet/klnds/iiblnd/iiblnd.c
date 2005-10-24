@@ -723,7 +723,7 @@ kibnal_destroy_peer (kib_peer_t *peer)
         LASSERT (atomic_read (&peer->ibp_refcount) == 0);
         LASSERT (peer->ibp_persistence == 0);
         LASSERT (!kibnal_peer_active(peer));
-        LASSERT (peer->ibp_connecting == 0);
+        LASSERT (!kibnal_peer_connecting(peer));
         LASSERT (list_empty (&peer->ibp_conns));
         LASSERT (list_empty (&peer->ibp_tx_queue));
 
@@ -749,9 +749,9 @@ kibnal_find_peer_locked (lnet_nid_t nid)
 
                 peer = list_entry (tmp, kib_peer_t, ibp_list);
 
-                LASSERT (peer->ibp_persistence != 0 || /* persistent peer */
-                         peer->ibp_connecting != 0 || /* creating conns */
-                         !list_empty (&peer->ibp_conns));  /* active conn */
+                LASSERT (peer->ibp_persistence != 0 ||
+                         kibnal_peer_connecting(peer) ||
+                         !list_empty (&peer->ibp_conns));
 
                 if (peer->ibp_nid != nid)
                         continue;
@@ -791,7 +791,7 @@ kibnal_get_peer_info (int index, lnet_nid_t *nidp, int *persistencep)
 
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence != 0 ||
-                                 peer->ibp_connecting != 0 ||
+                                 kibnal_peer_connecting(peer) ||
                                  !list_empty (&peer->ibp_conns));
 
                         if (index-- > 0)
@@ -892,7 +892,7 @@ kibnal_del_peer (lnet_nid_t nid)
                 list_for_each_safe (ptmp, pnxt, &kibnal_data.kib_peers[i]) {
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence != 0 ||
-                                 peer->ibp_connecting != 0 ||
+                                 kibnal_peer_connecting(peer) ||
                                  !list_empty (&peer->ibp_conns));
 
                         if (!(nid == LNET_NID_ANY || peer->ibp_nid == nid))
@@ -924,8 +924,8 @@ kibnal_get_conn_by_idx (int index)
                 list_for_each (ptmp, &kibnal_data.kib_peers[i]) {
 
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
-                        LASSERT (peer->ibp_persistence > 0 ||
-                                 peer->ibp_connecting != 0 ||
+                        LASSERT (peer->ibp_persistence != 0 ||
+                                 kibnal_peer_connecting(peer) ||
                                  !list_empty (&peer->ibp_conns));
 
                         list_for_each (ctmp, &peer->ibp_conns) {
@@ -1294,7 +1294,7 @@ kibnal_close_matching_conns (lnet_nid_t nid)
 
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence != 0 ||
-                                 peer->ibp_connecting != 0 ||
+                                 kibnal_peer_connecting(peer) ||
                                  !list_empty (&peer->ibp_conns));
 
                         if (!(nid == LNET_NID_ANY || nid == peer->ibp_nid))

@@ -1462,13 +1462,11 @@ kibnal_close_conn (kib_conn_t *conn, int why)
 }
 
 void
-kibnal_peer_connect_failed (kib_peer_t *peer, int rc)
+kibnal_peer_connect_failed (kib_peer_t *peer)
 {
         LIST_HEAD        (zombies);
         kib_tx_t         *tx;
         unsigned long     flags;
-
-        LASSERT (rc != 0);
 
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
@@ -1651,7 +1649,7 @@ kibnal_connreq_done (kib_conn_t *conn, int status)
 
         write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
 
-        kibnal_peer_connect_failed (conn->ibc_peer, status);
+        kibnal_peer_connect_failed (conn->ibc_peer);
 }
 
 int
@@ -2092,7 +2090,7 @@ kibnal_connect_peer (kib_peer_t *peer)
         conn = kibnal_create_conn();
         if (conn == NULL) {
                 CERROR ("Can't allocate conn\n");
-                kibnal_peer_connect_failed (peer, -ENOMEM);
+                kibnal_peer_connect_failed (peer);
                 return;
         }
 
