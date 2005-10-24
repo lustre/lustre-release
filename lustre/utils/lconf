@@ -2607,6 +2607,7 @@ lconf_options = [
     ('inactive', """The name of an inactive service, to be ignored during
                     mounting (currently OST-only). Can be repeated.""",
                 PARAMLIST),
+    ('user_xattr', """Enable user_xattr support on MDS""", FLAG, 0),
     ]
 
 def main():
