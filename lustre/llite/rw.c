@@ -475,8 +475,9 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
 
                 if (page->mapping != NULL) {
                         ll_teardown_mmaps(page->mapping,
-                                          (__u64)page->index<<PAGE_CACHE_SHIFT,
-                                          (__u64)((page->index+1)<<PAGE_CACHE_SHIFT) - 1);
+                                         (__u64)page->index<<PAGE_CACHE_SHIFT,
+                                         ((__u64)page->index<<PAGE_CACHE_SHIFT)|
+					  ~PAGE_CACHE_MASK);
                         if (!PageDirty(page) && !page_mapped(page)) {
                                 ll_ra_accounting(llap, page->mapping);
                                 ll_truncate_complete_page(page);
