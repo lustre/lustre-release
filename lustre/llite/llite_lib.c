@@ -871,11 +871,10 @@ void ll_clear_inode(struct inode *inode)
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
         mdc_change_cbdata(sbi->ll_mdc_exp, &fid, null_if_equal, inode);
 
-        if (lli->lli_smd)
+        if (lli->lli_smd) {
                 obd_change_cbdata(sbi->ll_osc_exp, lli->lli_smd,
                                   null_if_equal, inode);
 
-        if (lli->lli_smd) {
                 obd_free_memmd(sbi->ll_osc_exp, &lli->lli_smd);
                 lli->lli_smd = NULL;
         }
@@ -1180,7 +1179,9 @@ void ll_inode_size_lock(struct inode *inode, int lock_lsm)
         LASSERT(lli->lli_size_sem_owner == NULL);
         lli->lli_size_sem_owner = current;
         lsm = lli->lli_smd;
-        if (lsm != NULL && lock_lsm)
+        LASSERTF(lsm != NULL || lock_lsm == 0, "lsm %p, lock_lsm %d\n",
+                 lsm, lock_lsm);
+        if (lock_lsm)
                 lov_stripe_lock(lsm);
 }
 
@@ -1191,7 +1192,9 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
 
         lli = ll_i2info(inode);
         lsm = lli->lli_smd;
-        if (lsm != NULL && unlock_lsm)
+        LASSERTF(lsm != NULL || unlock_lsm == 0, "lsm %p, lock_lsm %d\n",
+                 lsm, unlock_lsm);
+        if (unlock_lsm)
                 lov_stripe_unlock(lsm);
         LASSERT(lli->lli_size_sem_owner == current);
         lli->lli_size_sem_owner = NULL;
@@ -1212,9 +1215,10 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                         }
                         CDEBUG(D_INODE, "adding lsm %p to inode %lu/%u(%p)\n",
                                lsm, inode->i_ino, inode->i_generation, inode);
-                        ll_inode_size_lock(inode, 0);
+                        /* ll_inode_size_lock() requires it is only called
+                         * with lli_smd != NULL or lock_lsm == 0 or we can
+                         * race between lock/unlock.  bug 9547 */
                         lli->lli_smd = lsm;
-                        ll_inode_size_unlock(inode, 0);
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;

@@ -673,16 +673,18 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
-int ll_glimpse_size(struct inode *inode)
+int ll_glimpse_size(struct inode *inode, int ast_flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        int rc, flags = LDLM_FL_HAS_INTENT;
+        int rc;
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %lu\n", inode->i_ino);
+
+        ast_flags |= LDLM_FL_HAS_INTENT;
 
         /* NOTE: this looks like DLM lock request, but it may not be one. Due
          *       to LDLM_FL_HAS_INTENT flag, this is glimpse request, that
@@ -692,7 +694,7 @@ int ll_glimpse_size(struct inode *inode)
          *       will be returned for each stripe. DLM lock on [0, EOF] is
          *       acquired only if there were no conflicting locks. */
         rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
-                         LCK_PR, &flags, ll_extent_lock_callback,
+                         LCK_PR, &ast_flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
         if (rc == -ENOENT)
@@ -727,6 +729,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         ENTRY;
 
         LASSERT(lockh->cookie == 0);
+        LASSERT(lsm != NULL);
 
         /* don't drop the mmapped file to LRU */
         if (mapping_mapped(inode->i_mapping))
@@ -870,7 +873,7 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                 /* A glimpse is necessary to determine whether we return a
                  * short read (B) or some zeroes at the end of the buffer (C) */
                 ll_inode_size_unlock(inode, 1);
-                retval = ll_glimpse_size(inode);
+                retval = ll_glimpse_size(inode, 0);
                 if (retval)
                         goto out;
         } else {
@@ -1286,10 +1289,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 {
         struct inode *inode = file->f_dentry->d_inode;
-        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct lustre_handle lockh = {0};
         loff_t retval;
         ENTRY;
         retval = offset + ((origin == 2) ? inode->i_size :
@@ -1300,16 +1301,16 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */
-                ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF }};
                 int nonblock = 0, rc;
 
                 if (file->f_flags & O_NONBLOCK)
                         nonblock = LDLM_FL_BLOCK_NOWAIT;
 
-                rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
-                                    nonblock);
-                if (rc != 0)
-                        RETURN(rc);
+                if (lsm != NULL) {
+                        rc = ll_glimpse_size(inode, nonblock);
+                        if (rc != 0)
+                                RETURN(rc);
+                }
 
                 ll_inode_size_lock(inode, 0);
                 offset += inode->i_size;
@@ -1330,8 +1331,6 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
                 retval = offset;
         }
 
-        if (origin == 2)
-                ll_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
         RETURN(retval);
 }
 
@@ -1560,7 +1559,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
-        rc = ll_glimpse_size(inode);
+        rc = ll_glimpse_size(inode, 0);
         RETURN(rc);
 }
 

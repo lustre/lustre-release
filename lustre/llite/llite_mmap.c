@@ -404,7 +404,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         if (pgoff >= size) {
                 lov_stripe_unlock(lsm);
-                ll_glimpse_size(inode);
+                ll_glimpse_size(inode, 0);
         } else {
                 /* XXX change inode size without ll_inode_size_lock() held!
                  *     there is a race condition with truncate path. (see
@@ -600,7 +600,7 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
                 vma->vm_ops = &ll_file_vm_ops;
                 vma->vm_ops->open(vma);
                 /* update the inode's size and mtime */
-                rc = ll_glimpse_size(file->f_dentry->d_inode);
+                rc = ll_glimpse_size(file->f_dentry->d_inode, 0);
         }
 
         RETURN(rc);
