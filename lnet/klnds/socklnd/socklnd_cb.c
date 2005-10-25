@@ -784,13 +784,19 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
                 return (0);
         }
 
-        LASSERT (peer->ksnp_accepting > 0 ||
-                 ksocknal_find_connecting_route_locked (peer) != NULL);
-
-        /* Queue the message until a connection is established */
-        list_add_tail (&tx->tx_list, &peer->ksnp_tx_queue);
+        if (peer->ksnp_accepting > 0 ||
+            ksocknal_find_connecting_route_locked (peer) != NULL) {
+                /* Queue the message until a connection is established */
+                list_add_tail (&tx->tx_list, &peer->ksnp_tx_queue);
+                write_unlock_irqrestore (g_lock, flags);
+                return 0;
+        }
+        
         write_unlock_irqrestore (g_lock, flags);
-        return 0;
+
+        /* NB Routes may be ignored if connections to them failed recently */
+        CERROR("No usable routes to %s\n", libcfs_id2str(id));
+        return (-EHOSTUNREACH);
 }
 
 int

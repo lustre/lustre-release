@@ -2273,7 +2273,6 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         CM_REPLY_INFO    *rep;
         kib_conn_t       *conn;
         FSTATUS           frc;
-        int               reason;
         int               rc;
         
         LASSERT(arg == NULL); /* no conn yet for passive */
