@@ -165,8 +165,8 @@ rm -f %{_libdir}/lustre/python/Lustre/*.pyc
 if [ ! -e /dev/obd ]; then
    mknod /dev/obd c 10 241
 fi
-if [ ! -e /dev/portals ]; then
-   mknod /dev/portals c 10 240
+if [ ! -e /dev/lnet ]; then
+   mknod /dev/lnet c 10 240
 fi
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
