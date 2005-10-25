@@ -76,7 +76,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
         ptllnd_tx_t       *tx;
         int                rc;
 
-        PJK_UT_MSG(">>> nid=" LPX64 "\n",nid);
+        PJK_UT_MSG(">>> nid=%s\n",libcfs_nid2str(nid));
 
         LASSERT (LNET_NIDNET(nid) == LNET_NIDNET(ni->ni_nid));
 
@@ -808,7 +808,7 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
 
         LASSERT (msg->msg_niov <= PTL_MD_MAX_IOV); /* !!! */
 
-        PJK_UT_MSG("msg=%p nid=" LPX64 "\n",msg,msg->msg_target.nid);
+        PJK_UT_MSG("msg=%p nid=%s\n",msg,libcfs_nid2str(msg->msg_target.nid));
         PJK_UT_MSG("is_target_router=%d\n",msg->msg_target_is_router);
         PJK_UT_MSG("msg_niov=%d\n",msg->msg_niov);
         PJK_UT_MSG("msg_offset=%d\n",msg->msg_offset);
@@ -1039,7 +1039,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         int            rc;
 
 
-        PJK_UT_MSG(">>> initiator =" LPX64 " nob=%d\n",initiator.nid,nob);
+        PJK_UT_MSG(">>> initiator=%s nob=%d\n",ptllnd_ptlid2str(initiator),nob);
 
         if (nob < basenob) {
                 CERROR("Short receive from %s\n",
@@ -1063,6 +1063,8 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 __swab64s(&msg->ptlm_dstnid);
                 __swab64s(&msg->ptlm_seq);
         }
+        
+        PJK_UT_MSG_ALWAYS("src = %s\n",libcfs_nid2str(msg->ptlm_srcnid));
 
         if (msg->ptlm_version != PTLLND_MSG_VERSION) {
                 CERROR("Bad version %d from %s\n", (__u32)msg->ptlm_version,
@@ -1084,6 +1086,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                        libcfs_nid2str(msg->ptlm_srcnid));
                 return;
         }
+       
 
         switch (msg->ptlm_type) {
         case PTLLND_MSG_TYPE_PUT:
@@ -1112,7 +1115,9 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 break;
 
         case PTLLND_MSG_TYPE_HELLO:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_HELLO\n");
+                PJK_UT_MSG_ALWAYS("PTLLND_MSG_TYPE_HELLO from %s(%s)\n",
+                               libcfs_nid2str(msg->ptlm_srcnid),
+                               ptllnd_ptlid2str(initiator));
                 if (nob < basenob + sizeof(kptl_hello_msg_t)) {
                         CERROR("Short hello from %s(%s)\n",
                                libcfs_nid2str(msg->ptlm_srcnid),

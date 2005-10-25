@@ -380,6 +380,17 @@ ptllnd_startup (lnet_ni_t *ni)
         }
 
         ni->ni_data = plni;
+        
+        /*
+         * For redundant routing to work the router on the
+         * return (which could be diffrent than the router
+         * on the forward path needs to know the originating
+         * PID of the Catamount client.
+         * To make this work properly we just force
+         * the lnet pid to the pid of this process.
+         */
+        the_lnet.ln_pid = getpid();
+        PJK_UT_MSG("Forcing LNET pid to %d\n",the_lnet.ln_pid);
 
         plni->plni_stamp = ptllnd_get_timestamp();
         plni->plni_nrxs = 0;
@@ -409,7 +420,7 @@ ptllnd_startup (lnet_ni_t *ni)
                 rc = -ENODEV;
                 goto failed2;
         }
-        PJK_UT_MSG("plni->plni_nih=%p\n",plni->plni_nih);
+        PJK_UT_MSG("plni->plni_nih=%x\n",plni->plni_nih);
 
         rc = PtlEQAlloc(plni->plni_nih, plni->plni_eq_size,
                         PTL_EQ_HANDLER_NONE, &plni->plni_eqh);
@@ -418,7 +429,7 @@ ptllnd_startup (lnet_ni_t *ni)
                 rc = -ENODEV;
                 goto failed3;
         }
-        PJK_UT_MSG("plni->plni_eqh=%p\n",plni->plni_eqh);
+        PJK_UT_MSG("plni->plni_eqh=%x\n",plni->plni_eqh);
 
         /*
          * Fetch the Portals NID
