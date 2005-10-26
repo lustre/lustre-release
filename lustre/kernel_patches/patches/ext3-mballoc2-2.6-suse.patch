@@ -568,10 +568,10 @@ Index: linux-2.6.5-7.201/fs/ext3/mballoc.c
 +	int max, max2, i, j, k, count;
 +	void *buddy, *buddy2;
 +
-+	if (!test_opt(e3b->bd_sb, MBALLOC))
++	if (likely(!ext3_mb_aggressive))
 +		return;
 +
-+	if (unlikely(!ext3_mb_aggressive))
++	if (!test_opt(e3b->bd_sb, MBALLOC))
 +		return;
 +
 +	while (order > 1) {
@@ -2134,7 +2134,7 @@ Index: linux-2.6.5-7.201/fs/ext3/mballoc.c
 +extern void ext3_free_blocks_old(handle_t *handle, struct inode *inode,
 +				 unsigned long block, unsigned long count);
 +void ext3_free_blocks(handle_t *handle, struct inode *inode,
-+			unsigned long block, unsigned long count, int metadata)
++		      unsigned long block, unsigned long count, int metadata)
 +{
 +	int freed;
 +
