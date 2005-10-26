@@ -938,7 +938,7 @@ class Module:
 
     def info(self, *args):
         msg = string.join(map(str,args))
-        print self.module_name + ":", self.name, self.uuid, msg
+        log (self.module_name + ":", self.name, self.uuid, msg)
 
     def cleanup(self):
         """ default cleanup, used for most modules """
@@ -2071,15 +2071,16 @@ def doCheckMtime(lustreDB, hosts):
                 try:
                     out = os.stat("/tmp/lustre-XXXX/LOGS")
                 except OSError:
-                    runcmd("umount -f /tmp/lustre-XXXX/")
+                    runcmd("umount -f /tmp/lustre-XXXX")
                     panic("Warning: Can't read Lustre logs." 
                           " Please run --write_conf to update.")
-                runcmd("umount -f /tmp/lustre-XXXX/")
+                runcmd("umount -f /tmp/lustre-XXXX")
                 try:
                     kmtime = int(out[8])
                 except ValueError:
                     kmtime = xmtime
                 if xmtime > kmtime :
+                    debug('xmtime ', xmtime, '> kmtime', kmtime)
                     panic("Warning: the startup logs are older than the XML file." 
                           " Please run --write_conf to update.")
         else:
@@ -2132,15 +2133,11 @@ def doHost(lustreDB, hosts):
         if not mod_loaded('lnet'):
             return
 
-        if config.force:
-            # the command line can override this value
-            timeout = 5
         # ugly hack, only need to run lctl commands for --dump
         if config.lctl_dump or config.record:
             for_each_profile(node_db, prof_list, doCleanup)
             return
 
-        sys_set_timeout(timeout)
         sys_set_ptldebug(ptldebug)
         sys_set_subsystem(subsystem)
         sys_set_lustre_upcall(lustre_upcall)

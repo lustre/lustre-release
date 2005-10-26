@@ -237,15 +237,15 @@ Details    : it is now possible to store extended attributes in the Lustre
 Severity   : enhancement
 Bugzilla   : 7293
 Description: Add possibility (config option) to show minimal available OST free
-             space.
+	     space.
 Details    : When compiled with --enable-mindf configure option, statfs(2)
-             (and so, df) will return least minimal free space available from
-             all OSTs as amount of free space on FS, instead of summary of
-             free spaces of all OSTs.
+	     (and so, df) will return least minimal free space available from
+	     all OSTs as amount of free space on FS, instead of summary of
+	     free spaces of all OSTs.
 
-Severity   : minor
+Severity   : enhancement
 Bugzilla   : 7311
-Description: An optimization: do not expand extent locks acquired on OST-side
+Description: do not expand extent locks acquired on OST-side
 Details    : Modify ldlm_extent_policy() to not expand local locks, acquired
 	     by server: they are not cached anyway.
 
@@ -254,8 +254,19 @@ Frequency  : seldom, when mmap is used/files executed from lustre
 Bugzilla   : 9482
 Description: Unmmap pages before throwing them away from read cache.
 Details    : llap_shrink cache now attempts to unmap pages before discarding
-             them (if unmapping failed - do not discard).  SLES9 kernel has
-             extra checks that trigger if this unmapping is not done first.
+	     them (if unmapping failed - do not discard).  SLES9 kernel has
+	     extra checks that trigger if this unmapping is not done first.
+
+Severity   : minor
+Frequency  : when migrating failover services
+Bugzilla   : 6395, 9514
+Description: When migrating a subset of services from a node (e.g. failback
+	     from a failover service node) the remaining services would
+	     time out and evict clients.
+Details    : lconf --force (implied by --failover) sets the global obd_timeout
+	     to 5 seconds in order to quickly disconnect, but this caused
+	     other RPCs to time out too quickly.  Do not change the global
+	     obd_timeout for force cleanup, only set it for DISCONNECT RPCs.
 
 ------------------------------------------------------------------------------
 
