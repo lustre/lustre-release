@@ -218,6 +218,28 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
         return;
 }
 
+static void print_setup_cfg(struct lustre_cfg *lcfg)
+{
+        struct lov_desc *desc;
+
+        if ((lcfg->lcfg_bufcount == 2) && 
+            (lcfg->lcfg_buflens[1] == sizeof(*desc))) {
+                printf("lov_setup ");
+                printf("0:%s ", lustre_cfg_string(lcfg, 0));
+                printf("1:(struct lov_desc)\n");
+                desc = (struct lov_desc*)(lustre_cfg_string(lcfg, 1));
+                printf("      uuid=%s, ", (char*)desc->ld_uuid.uuid);
+                printf("stripe count=%d, ", desc->ld_default_stripe_count);
+                printf("size=%lld, ", desc->ld_default_stripe_size);
+                printf("offset=%lld, ", desc->ld_default_stripe_offset);
+                printf("pattern=%d", desc->ld_pattern);
+        } else {
+                printf("setup    ");
+                print_1_cfg(lcfg);
+        }
+        return;
+}
+
 void print_lustre_cfg(struct lustre_cfg *lcfg)
 {
         enum lcfg_command_type cmd = le32_to_cpu(lcfg->lcfg_command);
@@ -229,8 +251,7 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
                 break;
         }
         case(LCFG_SETUP):{
-                printf("setup    ");
-                print_1_cfg(lcfg);
+                print_setup_cfg(lcfg);
                 break;
         }
         case(LCFG_DETACH):{
@@ -245,8 +266,8 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
         }
         case(LCFG_ADD_UUID):{
                 printf("add_uuid ");
-                printf("nid="LPX64"=%s ", lcfg->lcfg_nid, 
-                       libcfs_nid2str(lcfg->lcfg_nid));
+                printf("nid=%s("LPX64") ",  
+                       libcfs_nid2str(lcfg->lcfg_nid), lcfg->lcfg_nid);
                 /* obsolete */
                 if (lcfg->lcfg_nal) 
                         printf("nal=%d ", lcfg->lcfg_nal);
