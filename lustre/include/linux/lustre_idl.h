@@ -96,10 +96,10 @@
 #define MGMT_REPLY_PORTAL              25
 #define MGMT_CLI_REQUEST_PORTAL        26
 #define MGMT_CLI_REPLY_PORTAL          27
-//#define MGC_REQUEST_PORTAL           28 
+#define MGC_REQUEST_PORTAL             28 
 #define MGC_REPLY_PORTAL               29
 #define MGS_REQUEST_PORTAL             30
-//#define MGS_REPLY_PORTAL             31
+#define MGS_REPLY_PORTAL               31
 
 
 #define SVC_KILLED               1
@@ -1086,7 +1086,6 @@ struct llog_gen_rec {
 
 struct llog_log_hdr {
         struct llog_rec_hdr     llh_hdr;
-        __u64                   llh_version;
         __u64                   llh_timestamp;
         __u32                   llh_count;
         __u32                   llh_bitmap_offset;
@@ -1095,7 +1094,8 @@ struct llog_log_hdr {
         __u32                   llh_cat_idx;
         /* for a catalog the first plain slot is next to it */
         struct obd_uuid         llh_tgtuuid;
-        __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 23];
+        __u64                   llh_version;
+        __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 21];
         __u32                   llh_bitmap[LLOG_BITMAP_BYTES/sizeof(__u32)];
         struct llog_rec_tail    llh_tail;
 } __attribute__((packed));
@@ -1125,13 +1125,13 @@ enum llogd_rpc_ops {
 
 struct llogd_body {
         struct llog_logid  lgd_logid;
-        __u64 lgd_local_version;
         __u32 lgd_ctxt_idx;
         __u32 lgd_llh_flags;
         __u32 lgd_index;
         __u32 lgd_saved_index;
         __u32 lgd_len;
         __u64 lgd_cur_offset;
+        __u64 lgd_local_version;
 } __attribute__((packed));
 
 struct llogd_conn_body {

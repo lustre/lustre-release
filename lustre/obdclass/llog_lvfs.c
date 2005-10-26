@@ -425,8 +425,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
         RETURN(-EIO);
 }
 
-static struct file *llog_filp_open(char* fsname, char *name, 
-                                   int flags, int mode)
+static struct file *llog_filp_open(char *name, int flags, int mode)
 {
         char *logname;
         struct file *filp;
@@ -435,12 +434,9 @@ static struct file *llog_filp_open(char* fsname, char *name,
         OBD_ALLOC(logname, PATH_MAX);
         if (logname == NULL)
                 return ERR_PTR(-ENOMEM); 
-        if (fsname)
-              len = snprintf(logname, PATH_MAX, "%s/%s/%s",
-                             MOUNT_CONFIGS_DIR, fsname, name);
-        else
-              len = snprintf(logname, PATH_MAX, "%s/%s", 
-                             MOUNT_CONFIGS_DIR, name);
+
+        len = snprintf(logname, PATH_MAX, "%s/%s", 
+                       MOUNT_CONFIGS_DIR, name);
 
         if (len >= PATH_MAX - 1) {
                 filp = ERR_PTR(-ENAMETOOLONG);
@@ -459,7 +455,7 @@ static struct file *llog_filp_open(char* fsname, char *name,
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char* fsname, char *name)
+                            struct llog_logid *logid, char *name)
 {
         struct llog_handle *handle;
         struct obd_device *obd;
@@ -510,16 +506,10 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                handle->lgh_file = llog_filp_open(fsname, name, open_flags, 0644);
+                handle->lgh_file = llog_filp_open(name, open_flags, 0644);
 
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
-
-                rc = obd_lvfs_open_llog(ctxt->loc_exp, 
-                                   handle->lgh_file->f_dentry->d_inode->i_ino,
-                                   handle->lgh_file->f_dentry);
-                if (rc)
-                        GOTO(cleanup, rc);
 
                 handle->lgh_id.lgl_ogr = 1;
                 handle->lgh_id.lgl_oid =

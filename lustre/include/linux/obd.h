@@ -337,6 +337,7 @@ struct mgs_obd {
         struct vfsmount                 *mgs_vfsmnt;
         struct super_block              *mgs_sb;
         struct dentry                   *mgs_configs_dir;
+        struct list_head                 mgs_open_llogs;
 };
 
 struct mds_obd {
@@ -360,7 +361,7 @@ struct mds_obd {
         struct dentry                   *mds_logs_dir;
         struct dentry                   *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
-//        struct llog_handle              *mds_catalog;
+        struct llog_handle              *mds_catalog;
         struct obd_device               *mds_osc_obd; /* XXX lov_obd */
         struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;

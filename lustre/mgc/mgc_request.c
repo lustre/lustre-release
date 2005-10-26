@@ -25,7 +25,6 @@
  *  requests are coming * in over the wire, so object target modules
  *  do not have a full * method table.)
  */
-
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif

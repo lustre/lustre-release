@@ -189,6 +189,8 @@ struct llog_operations {
 
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
+extern struct llog_operations mgs_llog_lvfs_ops;
+
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int count, struct llog_catid *idarray);
 

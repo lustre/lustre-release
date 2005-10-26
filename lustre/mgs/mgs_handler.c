@@ -154,6 +154,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
         char *options = NULL;
+        char *ns_name = "MGS";
         struct mgs_obd *mgs = &obd->u.mgs;
         struct vfsmount *mnt;
         unsigned long page;
@@ -196,7 +197,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
         /*namespace for mgs llog */
-        sprintf(ns_name, "mgs-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL) {
                 mgs_cleanup(obd);
@@ -213,7 +213,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         INIT_LIST_HEAD(&mgs->mgs_open_llogs);
-        INIT_LIST_HEAD(&mgs->mgs_update_llhs);
+ //       INIT_LIST_HEAD(&mgs->mgs_update_llhs);
 
         rc = llog_start_commit_thread();
         if (rc < 0)
@@ -275,7 +275,7 @@ static int mgs_postsetup(struct obd_device *obd)
         ENTRY;
 
         rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
-                        &llog_lvfs_ops);
+                        &mgs_llog_lvfs_ops);
         RETURN(rc);
 }
 
@@ -509,9 +509,10 @@ static int mgt_setup(struct obd_device *obd, obd_count len, void *buf)
 
         mgs->mgs_service =
                 ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
-                                MGS_REQUEST_PORTAL, MGC_REPLY_PORTAL,
-                                MGS_SERVICE_WATCHDOG_TIMEOUT,
-                                mgs_handle, "mgs", obd->obd_proc_entry, NULL);
+                                MGS_MAXREPSIZE, MGS_REQUEST_PORTAL, 
+                                MGC_REPLY_PORTAL, MGS_SERVICE_WATCHDOG_TIMEOUT,
+                                mgs_handle, "mgs", obd->obd_proc_entry, NULL,
+                                MGT_NUM_THREADS);
 
         if (!mgs->mgs_service) {
                 CERROR("failed to start service\n");
@@ -532,6 +533,7 @@ err_lprocfs:
         return rc;
 }
 
+
 static int mgt_cleanup(struct obd_device *obd)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
@@ -545,8 +547,8 @@ static int mgt_cleanup(struct obd_device *obd)
 }
 
 struct lvfs_callback_ops mgs_lvfs_ops = {
-        l_fid2dentry:     mgs_lvfs_fid2dentry,
-        l_open_llog:      mgs_lvfs_open_llog,
+     //     l_fid2dentry:     mgs_lvfs_fid2dentry,
+    //    l_open_llog:      mgs_lvfs_open_llog,
 };
 
 /* use obd ops to offer management infrastructure */
