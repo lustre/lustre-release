@@ -64,9 +64,11 @@ command_t cmdlist[] = {
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
         {"--net", jt_opt_net, 0, "run <command> after setting network to <net>\n"
-         "usage: --net <tcp/elan/myrinet> <command>"},
-        {"network", jt_ptl_network, 0, "set current NID"
-         "usage: network net"},
+         "usage: --net <tcp/elan/gm/...> <command>"},
+        {"network", jt_ptl_network, 0, "configure LNET"
+         "usage: network up|down"},
+        {"net", jt_ptl_network, 0, "configure LNET"
+         "usage: net up|down"},
         {"list_nids", jt_ptl_list_nids, 0, "list local NIDs"
          "usage: list_nids [all]"},
         {"which_nid", jt_ptl_which_nid, 0, "choose a NID"
