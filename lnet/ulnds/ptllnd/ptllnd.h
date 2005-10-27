@@ -237,11 +237,7 @@ lnet2ptlnid(lnet_nid_t lnet_nid)
 do{                                                     \
         lprintf("ptllnd:%-30s:",__FUNCTION__);          \
         lprintf(fmt,## a);                              \
-        printf("ptllnd:%-30s:",__FUNCTION__);           \
-        printf(fmt,## a);                               \
 }while(0)
-
-//        CDEBUG(D_TRACE,fmt,## a);
 
 
 #define PJK_UT_MSG_SIMULATION(fmt, a...)        PJK_UT_MSG_ALWAYS(fmt, ## a )

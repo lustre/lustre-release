@@ -56,16 +56,18 @@ ptllnd_get_tunables(lnet_ni_t *ni)
         int          max_immediate;
         int          msgs_per_buffer;
         int          rc;
+        int          temp;
 
         rc = ptllnd_parse_int_tunable(&plni->plni_portal,
                                       "PTLLND_PORTAL", PTLLND_PORTAL);
         if (rc != 0)
                 return rc;
 
-        rc = ptllnd_parse_int_tunable(&plni->plni_pid,
+        rc = ptllnd_parse_int_tunable(&temp,
                                       "PTLLND_PID", PTLLND_PID);
         if (rc != 0)
                 return rc;
+        plni->plni_pid = (ptl_pid_t)temp;
 
         rc = ptllnd_parse_int_tunable(&plni->plni_peer_credits,
                                       "PTLLND_PEERCREDITS", PTLLND_PEERCREDITS);

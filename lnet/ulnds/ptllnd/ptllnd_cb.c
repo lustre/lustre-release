@@ -25,7 +25,7 @@ ptllnd_ptlid2str(ptl_process_id_t id)
         static int  idx = 0;
 
         snprintf(strs[idx], sizeof(strs[0]),
-                 "%d-"LPD64, id.pid, (__u64)id.nid);
+                 "%d-"LPU64, id.pid, (__u64)id.nid);
 
         return strs[idx++];
 }
@@ -526,7 +526,8 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
 
                 list_del_init(&tx->tx_list);
 
-                PJK_UT_MSG("Sending at TX=%p type=%d\n",tx,tx->tx_type);
+                PJK_UT_MSG("Sending at TX=%p type=%s (%d)\n",tx,
+                        get_msg_type_string(tx->tx_type),tx->tx_type);
 
                 if (tx->tx_type == PTLLND_MSG_TYPE_NOOP &&
                     (!list_empty(&peer->plp_txq) ||
@@ -728,7 +729,7 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
         int              rc;
 
         PJK_UT_MSG(">>> peer=%p type=%d tx=%p\n",peer,type,tx);
-        PJK_UT_MSG("niov=%d offset=%d len=%d\n",niov,offset,len);
+        PJK_UT_MSG("niov=%u offset=%u len=%u\n",niov,offset,len);
         PJK_UT_MSG("matchbits " LPX64 "\n",matchbits);
 
         LASSERT (type == PTLLND_RDMA_READ ||
@@ -1080,7 +1081,12 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 return;
         }
 
-        if (msg->ptlm_dststamp != plni->plni_stamp) {
+        /*
+         * Always allow dststamp of 0 because a 2nd router could
+         * be trying to connect (i.e a HELLO message), and it will
+         * ALWAYS use dststamp == 0
+         */
+        if (msg->ptlm_dststamp != 0 && msg->ptlm_dststamp != plni->plni_stamp) {
                 CERROR("Bad dststamp "LPX64"("LPX64" expected) from %s\n",
                        msg->ptlm_dststamp, plni->plni_stamp,
                        libcfs_nid2str(msg->ptlm_srcnid));
@@ -1115,7 +1121,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 break;
 
         case PTLLND_MSG_TYPE_HELLO:
-                PJK_UT_MSG_ALWAYS("PTLLND_MSG_TYPE_HELLO from %s(%s)\n",
+                PJK_UT_MSG("PTLLND_MSG_TYPE_HELLO from %s(%s)\n",
                                libcfs_nid2str(msg->ptlm_srcnid),
                                ptllnd_ptlid2str(initiator));
                 if (nob < basenob + sizeof(kptl_hello_msg_t)) {
@@ -1128,6 +1134,12 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                         __swab64s(&msg->ptlm_u.hello.kptlhm_matchbits);
                         __swab32s(&msg->ptlm_u.hello.kptlhm_max_msg_size);
                 }
+                break;
+                
+        case PTLLND_MSG_TYPE_NOOP:
+                PJK_UT_MSG("PTLLND_MSG_TYPE_NOOP from %s(%s)\n",
+                               libcfs_nid2str(msg->ptlm_srcnid),
+                               ptllnd_ptlid2str(initiator));        
                 break;
 
         default:
