@@ -51,6 +51,7 @@ lnet_get_routes(void)
 char *
 lnet_get_networks(void)
 {
+        char   *nets;
         int     rc;
 
         if (*networks != 0 && *ip2nets != 0) {
@@ -60,8 +61,8 @@ lnet_get_networks(void)
         }
         
         if (*ip2nets != 0) {
-                rc = lnet_parse_ip2nets(&networks, ip2nets);
-                return (rc == 0) ? networks : NULL;
+                rc = lnet_parse_ip2nets(&nets, ip2nets);
+                return (rc == 0) ? nets : NULL;
         }
 
         if (*networks != 0)
@@ -1099,6 +1100,8 @@ LNetInit(void)
         lnet_assert_wire_constants ();
         LASSERT (!the_lnet.ln_init);
 
+        memset(&the_lnet, 0, sizeof(the_lnet));
+
         rc = lnet_get_portals_compatibility();
         if (rc < 0)
                 return rc;
@@ -1157,6 +1160,12 @@ LNetNIInit(lnet_pid_t requested_pid)
                 goto out;
         }
 
+        if (requested_pid == LNET_PID_ANY) {
+                /* Don't instantiate LNET just for me */
+                rc = -ENETDOWN;
+                goto failed0;
+        }
+        
         rc = lnet_prepare(requested_pid);
         if (rc != 0)
                 goto failed0;

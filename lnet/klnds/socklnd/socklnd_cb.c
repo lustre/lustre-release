@@ -1739,6 +1739,7 @@ ksocknal_connect (ksock_route_t *route)
 #endif
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
 
+        ksocknal_peer_failed(peer);
         ksocknal_txlist_done(peer->ksnp_ni, &zombies);
 }
 

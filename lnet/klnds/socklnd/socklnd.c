@@ -1323,6 +1323,34 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
 }
 
 void
+ksocknal_peer_failed (ksock_peer_t *peer)
+{
+        time_t    last_alive = 0;
+        int       notify = 0;
+
+        /* There has been a connection failure or comms error; but I'll only
+         * tell LNET I think the peer is dead if there are no connections or
+         * connection attempts in existance. */
+        
+        read_lock (&ksocknal_data.ksnd_global_lock);
+
+        if (list_empty(&peer->ksnp_conns) &&
+            peer->ksnp_accepting == 0 &&
+            ksocknal_find_connecting_route_locked(peer) == NULL) {
+                notify = 1;
+                last_alive = cfs_time_current_sec() - 
+                             cfs_duration_sec(cfs_time_current() - 
+                                              peer->ksnp_last_alive);
+        }
+        
+        read_unlock (&ksocknal_data.ksnd_global_lock);
+
+        if (notify)
+                lnet_notify (peer->ksnp_ni, peer->ksnp_id.nid, 0,
+                             last_alive);
+}
+
+void
 ksocknal_terminate_conn (ksock_conn_t *conn)
 {
         /* This gets called by the reaper (guaranteed thread context) to
@@ -1332,9 +1360,7 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
         unsigned long   flags;
         ksock_peer_t   *peer = conn->ksnc_peer;
         ksock_sched_t  *sched = conn->ksnc_scheduler;
-        struct timeval  now;
-        time_t          then = 0;
-        int             notify = 0;
+        int             failed = 0;
 
         LASSERT(conn->ksnc_closing);
 
@@ -1368,12 +1394,7 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
         if (peer->ksnp_error != 0) {
                 /* peer's last conn closed in error */
                 LASSERT (list_empty (&peer->ksnp_conns));
-
-                /* convert peer's last-known-alive timestamp from jiffies */
-                do_gettimeofday (&now);
-                then = now.tv_sec - cfs_duration_sec(cfs_time_sub(cfs_time_current(),
-                                                                  peer->ksnp_last_alive));
-                notify = 1;
+                failed = 1;
         }
 
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
@@ -1385,9 +1406,8 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
          * zero-copy transmits will therefore complete in finite time. */
         ksocknal_connsock_decref(conn);
 
-        /* no auto-down for now */
-        //        if (notify)
-        //                lnet_notify (peer->ksnp_ni, peer->ksnp_id.nid, 0, then);
+        if (failed)
+                ksocknal_peer_failed(peer);
 }
 
 void
@@ -1864,7 +1884,7 @@ ksocknal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 
         case IOC_LIBCFS_ADD_PEER: {
                 lnet_process_id_t  id = {.nid = data->ioc_nid,
-                                        .pid = LUSTRE_SRV_LNET_PID};
+                                         .pid = LUSTRE_SRV_LNET_PID};
                 return ksocknal_add_peer (ni, id,
                                           data->ioc_u32[0], /* IP */
                                           data->ioc_u32[1]); /* port */

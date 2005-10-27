@@ -434,7 +434,6 @@ ksocknal_peer_decref (ksock_peer_t *peer)
                 ksocknal_destroy_peer (peer);
 }
 
-
 int ksocknal_startup (lnet_ni_t *ni);
 void ksocknal_shutdown (lnet_ni_t *ni);
 int ksocknal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
@@ -448,6 +447,7 @@ int ksocknal_accept(lnet_ni_t *ni, struct socket *sock);
 extern int ksocknal_add_peer(lnet_ni_t *ni, lnet_process_id_t id, __u32 ip, int port);
 extern ksock_peer_t *ksocknal_find_peer_locked (lnet_ni_t *ni, lnet_process_id_t id);
 extern ksock_peer_t *ksocknal_find_peer (lnet_ni_t *ni, lnet_process_id_t id);
+extern void ksocknal_peer_failed (ksock_peer_t *peer);
 extern int ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                                  struct socket *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
@@ -463,6 +463,7 @@ extern void ksocknal_txlist_done (lnet_ni_t *ni, struct list_head *txlist);
 extern void ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive);
 extern int ksocknal_thread_start (int (*fn)(void *arg), void *arg);
 extern void ksocknal_thread_fini (void);
+extern ksock_route_t *ksocknal_find_connecting_route_locked (ksock_peer_t *peer);
 extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);
 extern int ksocknal_scheduler (void *arg);
 extern int ksocknal_connd (void *arg);

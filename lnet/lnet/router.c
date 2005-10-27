@@ -39,6 +39,10 @@ static int large_router_buffers = 32;
 CFS_MODULE_PARM(large_router_buffers, "i", int, 0444,
                 "# of large messages to buffer in the router");
 
+static int auto_down_routers = 1;
+CFS_MODULE_PARM(auto_down_routers, "i", int, 0444,
+                "Automatically mark routers down on comms error");
+
 typedef struct
 {
         work_struct_t           kpru_tq;
@@ -94,7 +98,7 @@ int
 lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
 {
         lnet_peer_t         *lp = NULL;
-        struct timeval       now;
+        time_t               now = cfs_time_current_sec();
 
         CDEBUG (D_NET, "%s notifying %s: %s\n",
                 (ni == NULL) ? "userspace" : libcfs_nid2str(ni->ni_nid),
@@ -110,13 +114,12 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
         }
 
         /* can't do predictions... */
-        do_gettimeofday (&now);
-        if (when > now.tv_sec) {
+        if (when > now) {
                 CWARN ("Ignoring prediction from %s of %s %s "
                        "%ld seconds in the future\n",
                        (ni == NULL) ? "userspace" : libcfs_nid2str(ni->ni_nid),
                        libcfs_nid2str(gateway_nid), alive ? "up" : "down",
-                       when - now.tv_sec);
+                       when - now);
                 return -EINVAL;
         }
 
@@ -126,18 +129,26 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
         if (lp == NULL) {
                 /* gateway not found */
                 LNET_UNLOCK();
-                CDEBUG (D_NET, "Gateway not found\n");
-                return (0);
+                CDEBUG(D_NET, "Gateway not found\n");
+                return 0;
         }
 
         if (when < lp->lp_timestamp) {
                 /* out of date information */
                 lnet_peer_decref_locked(lp);
                 LNET_UNLOCK();
-                CDEBUG (D_NET, "Out of date\n");
-                return (0);
+                CDEBUG(D_NET, "Out of date\n");
+                return 0;
         }
 
+        if (ni != NULL && !alive &&             /* LND telling me she's down */
+            !auto_down_routers) {               /* auto-down disabled */
+                lnet_peer_decref_locked(lp);
+                LNET_UNLOCK();
+                CDEBUG(D_NET, "Auto-down disabled\n");
+                return 0;
+        }
+        
         /* update timestamp */
         lp->lp_timestamp = when;
 
@@ -145,8 +156,8 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
                 /* new date for old news */
                 lnet_peer_decref_locked(lp);
                 LNET_UNLOCK();
-                CDEBUG (D_NET, "Old news\n");
-                return (0);
+                CDEBUG(D_NET, "Old news\n");
+                return 0;
         }
 
         lp->lp_alive = alive;
@@ -156,14 +167,13 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
         CDEBUG(D_NET, "set %s %d\n", libcfs_nid2str(gateway_nid), alive);
 
         if (ni == NULL) {
-                /* userland notified me: notify NAL? */
+                /* userland notified me: notify LND? */
                 ni = lp->lp_ni;
                 if (ni->ni_lnd->lnd_notify != NULL) {
                         ni->ni_lnd->lnd_notify(ni, gateway_nid, alive);
                 }
         } else {
-                /* It wasn't userland that notified me... */
-                LBUG(); /* LND notification disabled for now */
+                /* LND notified me: */
                 CWARN ("Upcall: NID %s is %s\n",
                        libcfs_nid2str(gateway_nid),
                        alive ? "alive" : "dead");
@@ -602,7 +612,6 @@ lnet_alloc_rtrpools(int im_a_router)
         
         if (!strcmp(forwarding, "")) {
                 /* not set either way */
-                forwarding = im_a_router ? "enabled(implicit)" : "disabled(default)";
                 if (!im_a_router)
                         return 0;
         } else if (!strcmp(forwarding, "disabled")) {

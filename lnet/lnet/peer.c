@@ -142,7 +142,6 @@ lnet_find_peer_locked (lnet_nid_t nid)
 int
 lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
 {
-        struct timeval  now;
 	lnet_peer_t    *lp;
 	lnet_peer_t    *lp2;
 
@@ -160,15 +159,13 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
                 return -ENOMEM;
         }
 
-	do_gettimeofday (&now);
-
         memset(lp, 0, sizeof(*lp));             /* zero counters etc */
         
 	CFS_INIT_LIST_HEAD(&lp->lp_txq);
         CFS_INIT_LIST_HEAD(&lp->lp_rtrq);
 	
 	lp->lp_alive = 1;
-	lp->lp_timestamp = now.tv_sec;
+	lp->lp_timestamp = cfs_time_current_sec();
 	lp->lp_nid = nid;
         lp->lp_refcount = 2;                    /* 1 for caller; 1 for hash */
 

@@ -25,74 +25,84 @@
 #define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
-static int config_on_load = 1;
+static int config_on_load = 0;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,
                 "configure network at module load");
 
-static int lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
+static struct semaphore lnet_config_mutex;
+
+int
+lnet_configure (void *arg)
 {
-        int                initrc;
-        int                rc;
+        /* 'arg' only there so I can be passed to cfs_kernel_thread() */
+        int    rc = 0;
 
-        if (cmd == IOC_LIBCFS_UNCONFIGURE) {
-                /* ghastly hack to prevent repeated net config */
-                LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
-                initrc = the_lnet.ln_niinit_self;
-                the_lnet.ln_niinit_self = 0;
-                rc = the_lnet.ln_refcount;
-                LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
+        LNET_MUTEX_DOWN(&lnet_config_mutex);
 
-                if (initrc) {
-                        rc--;
+        if (!the_lnet.ln_niinit_self) {
+                rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
+                if (rc >= 0) {
+                        the_lnet.ln_niinit_self = 1;
+                        rc = 0;
+                }
+        }
+
+        LNET_MUTEX_UP(&lnet_config_mutex);
+        return rc;
+}
+
+int
+lnet_unconfigure (void)
+{
+        int   refcount;
+        
+        LNET_MUTEX_DOWN(&lnet_config_mutex);
+
+        if (the_lnet.ln_niinit_self)
+                LNetNIFini();
+
+        LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+        refcount = the_lnet.ln_refcount;
+        LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
+
+        LNET_MUTEX_UP(&lnet_config_mutex);
+        return (refcount == 0) ? 0 : -EBUSY;
+}
+
+int
+lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
+{
+        int   rc;
+
+        switch (cmd) {
+        case IOC_LIBCFS_CONFIGURE:
+                return lnet_configure(NULL);
+
+        case IOC_LIBCFS_UNCONFIGURE:
+                return lnet_unconfigure();
+                
+        default:
+                /* Passing LNET_PID_ANY only gives me a ref if the net is up
+                 * already; I'll need it to ensure the net can't go down while
+                 * I'm called into it */
+                rc = LNetNIInit(LNET_PID_ANY);
+                if (rc >= 0) {
+                        rc = LNetCtl(cmd, data);
                         LNetNIFini();
                 }
-                
-                return rc == 0 ? 0 : -EBUSY;
+                return rc;
         }
-        
-        initrc = LNetNIInit(LUSTRE_SRV_LNET_PID);
-        if (initrc < 0)
-                RETURN (-ENETDOWN);
-
-        rc = LNetCtl(cmd, data);
-
-        if (initrc == 0) {
-                LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
-                /* I instantiated the network */
-                the_lnet.ln_niinit_self = 1;
-                LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
-        } else {
-                LNetNIFini();
-        }
-        
-        return rc;
 }
 
 DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);
 
 int
-lnet_configure (void *arg)
-{
-        int    rc;
-
-        LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
-        the_lnet.ln_niinit_self = 1;
-        LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
-
-        rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
-        if (rc < 0) {
-                LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
-                the_lnet.ln_niinit_self = 0;
-                LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
-        }
-
-        return 0;
-}
-
-static int init_lnet(void)
+init_lnet(void)
 {
         int                  rc;
         ENTRY;
+
+        init_mutex(&lnet_config_mutex);
 
         rc = LNetInit();
         if (rc != 0) {
@@ -112,7 +122,8 @@ static int init_lnet(void)
         RETURN(0);
 }
 
-static void fini_lnet(void)
+void
+fini_lnet(void)
 {
         int rc;
 
@@ -163,4 +174,4 @@ MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
 
-cfs_module(portals, "1.0.0", init_lnet, fini_lnet);
+cfs_module(lnet, "1.0.0", init_lnet, fini_lnet);

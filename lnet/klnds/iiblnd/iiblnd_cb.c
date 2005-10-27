@@ -834,6 +834,25 @@ kibnal_check_sends (kib_conn_t *conn)
                 LASSERT (conn->ibc_credits >= 0);
                 LASSERT (conn->ibc_credits <= IBNAL_MSG_QUEUE_SIZE);
 
+                if (conn->ibc_state != IBNAL_CONN_ESTABLISHED) {
+                        list_del (&tx->tx_list);
+                        tx->tx_queued = 0;
+                        tx->tx_status -ECONNABORTED;
+                        tx->tx_waiting = 0;
+                        done = (tx->tx_sending == 0);
+                        if (!done)
+                                list_add_tail(&tx->tx_list, 
+                                              &conn->ibc_active_txs);
+                        spin_unlock(&conn->ibc_lock);
+
+                        CDEBUG (D_NET, "Abort transmit to %s (closing)\n",
+                                libcfs_nid2str(conn->ibc_peer->ibp_nid));
+                        
+                        if (done)
+                                kibnal_tx_done(tx);
+                        continue;
+                }
+                
                 if (conn->ibc_nsends_posted == IBNAL_MSG_QUEUE_SIZE) {
                         CDEBUG(D_NET, "%s: posted enough\n",
                                libcfs_nid2str(conn->ibc_peer->ibp_nid));

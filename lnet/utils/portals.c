@@ -277,7 +277,7 @@ int jt_ptl_network(int argc, char **argv)
         int                      rc;
 
         if (argc < 2) {
-                fprintf(stderr, "usage: %s <net>|down\n", argv[0]);
+                fprintf(stderr, "usage: %s <net>|up|down\n", argv[0]);
                 return 0;
         }
 
@@ -292,10 +292,25 @@ int jt_ptl_network(int argc, char **argv)
                 }
                 
                 if (errno == EBUSY)
-                        fprintf(stderr, "LNET busy");
+                        fprintf(stderr, "LNET busy\n");
                 else
                         fprintf(stderr, "LNET unconfigure error %d: %s\n",
                                 errno, strerror(errno));
+                return -1;
+        }
+        
+        if (!strcmp(argv[1], "configure") ||
+            !strcmp(argv[1], "up")) {
+                LIBCFS_IOC_INIT(data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_CONFIGURE, &data);
+                
+                if (rc == 0) {
+                        printf ("LNET configured\n");
+                        return 0;
+                }
+                
+                fprintf(stderr, "LNET configure error %d: %s\n",
+                        errno, strerror(errno));
                 return -1;
         }
         

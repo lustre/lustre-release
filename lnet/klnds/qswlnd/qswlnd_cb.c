@@ -32,8 +32,7 @@ kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
         do_gettimeofday (&now);
         then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
 
-        /* no auto-down for now */
-        //        lnet_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
+        lnet_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
 }
 
 void

@@ -437,6 +437,7 @@ extern int libcfs_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_LIBCFS_UNCONFIGURE             _IOWR('e', 56, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_PORTALS_COMPATIBILITY   _IOWR('e', 57, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_LNET_DIST               _IOWR('e', 58, IOCTL_LIBCFS_TYPE)
+#define IOC_LIBCFS_CONFIGURE               _IOWR('e', 59, IOCTL_LIBCFS_TYPE)
 /* lnd ioctls */
 #define IOC_LIBCFS_REGISTER_MYNID          _IOWR('e', 70, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_LIBCFS_TYPE)

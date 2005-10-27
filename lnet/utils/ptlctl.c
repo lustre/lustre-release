@@ -29,7 +29,8 @@
 
 
 command_t list[] = {
-        {"network", jt_ptl_network, 0,"select a network (args: LND name)"},
+        {"network", jt_ptl_network, 0,"select/configure network (args: up|down|LND name)"},
+        {"net", jt_ptl_network, 0,"select/configure network (args: up|down|LND name)"},
         {"list_nids", jt_ptl_list_nids, 0,"list local NIDs"},
         {"which_nid", jt_ptl_which_nid, 0,"select the closest NID"},
         {"print_interfaces", jt_ptl_print_interfaces, 0, "print interface entries (no args)"},
