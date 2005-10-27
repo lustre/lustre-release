@@ -214,7 +214,8 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
 {
         int i;
         for (i = 0; i <  lcfg->lcfg_bufcount; i++)
-                printf("%d:%s ", i, lustre_cfg_string(lcfg, i));
+                printf("%d:%.*s  ", i, lcfg->lcfg_buflens[i], 
+                       (char*)lustre_cfg_buf(lcfg, i));
         return;
 }
 
