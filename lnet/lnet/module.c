@@ -58,8 +58,10 @@ lnet_unconfigure (void)
         
         LNET_MUTEX_DOWN(&lnet_config_mutex);
 
-        if (the_lnet.ln_niinit_self)
+        if (the_lnet.ln_niinit_self) {
+                the_lnet.ln_niinit_self = 0;
                 LNetNIFini();
+        }
 
         LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
         refcount = the_lnet.ln_refcount;
