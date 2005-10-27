@@ -231,8 +231,8 @@ kptllnd_start_bulk_rdma(
                 op == PTL_MD_OP_GET ? TX_TYPE_LARGE_PUT_RESPONSE :
                                       TX_TYPE_LARGE_GET_RESPONSE);
         if(tx == NULL){
-                CERROR ("Can't start bulk rdma %d to "FMT_NID": tx descs exhausted\n",
-                        op, rx->rx_initiator.nid);
+                CERROR ("Can't start bulk rdma %d to " FMT_NID ": tx descs exhausted\n",
+                        op,rx->rx_initiator.nid);
                 return -ENOMEM;
         }
 
@@ -389,7 +389,7 @@ kptllnd_do_put(
         kptllnd_init_msg (tx->tx_msg,
                           PTLLND_MSG_TYPE_PUT,
                           sizeof(kptl_request_msg_t));
-        kptllnd_tx_launch(tx, lntmsg->msg_target.nid,lntmsg);
+        kptllnd_tx_launch(tx, lntmsg->msg_target, lntmsg);
 }
 
 int
@@ -456,8 +456,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                  */
                 tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_LARGE_PUT);
                 if(tx == NULL){
-                        CERROR ("Can't send %d to "LPX64": tx descs exhausted\n",
-                                type, target.nid);
+                        CERROR ("Can't send %d to %s: tx descs exhausted\n",
+                                type, libcfs_id2str(target));
                         return -ENOMEM;
                 }
 
@@ -483,8 +483,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                  */
                 tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_LARGE_GET);
                 if(tx == NULL){
-                        CERROR ("Can't send %d to "LPX64": tx descs exhausted\n",
-                                type, target.nid);
+                        CERROR ("Can't send %d to %s: tx descs exhausted\n",
+                                type, libcfs_id2str(target));
                         return -ENOMEM;
                 }
 
@@ -543,8 +543,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                          */
                         tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_LARGE_PUT);
                         if(tx == NULL){
-                                CERROR ("Can't send %d to "LPX64": tx descs exhausted\n",
-                                        type, target.nid);
+                                CERROR ("Can't send %d to %s: tx descs exhausted\n",
+                                        type, libcfs_id2str(target));
                                 return -ENOMEM;
                         }
 
@@ -572,12 +572,12 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                                 /* RDMA not expected */
                                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob]);
                                 if (nob > *kptllnd_tunables.kptl_max_msg_size) {
-                                        CERROR("REPLY for "LPX64" too big but RDMA not requested:"
+                                        CERROR("REPLY for %s too big but RDMA not requested:"
                                                "%d (max for message is %d)\n",
-                                               target.nid, payload_nob,
+                                               libcfs_id2str(target), payload_nob,
                                                *kptllnd_tunables.kptl_max_msg_size);
-                                        CERROR("Can't REPLY IMMEDIATE %d to "LPX64"\n",
-                                               nob, target.nid);
+                                        CERROR("Can't REPLY IMMEDIATE %d to %s\n",
+                                               nob, libcfs_id2str(target));
                                         return -EINVAL;
                                 }
                                 break;
@@ -586,8 +586,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                         /* Incoming message consistent with RDMA? */
                         if (rx->rx_msg->ptlm_type != PTLLND_MSG_TYPE_GET) {
-                                CERROR("REPLY to "LPX64" bad msg type %x!!!\n",
-                                       target.nid, rx->rx_msg->ptlm_type);
+                                CERROR("REPLY to %s bad msg type %x!!!\n",
+                                       libcfs_id2str(target), rx->rx_msg->ptlm_type);
                                 return -EINVAL;
                         }
 
@@ -615,8 +615,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                  */
                 tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
                 if(tx == NULL){
-                        CERROR ("Can't send %d to "LPX64": tx descs exhausted\n",
-                                type, target.nid);
+                        CERROR ("Can't send %d to %s: tx descs exhausted\n",
+                                type, libcfs_id2str(target));
                         return -ENOMEM;
                 }
         }else{
@@ -660,7 +660,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
 
 launch:
-        kptllnd_tx_launch(tx, target.nid,lntmsg);
+        kptllnd_tx_launch(tx, target, lntmsg);
         PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
         return 0;
 }

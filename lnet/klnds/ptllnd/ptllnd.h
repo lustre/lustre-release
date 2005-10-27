@@ -529,19 +529,18 @@ kptllnd_peer_check_bucket (
 void
 kptllnd_tx_launch (
         kptl_tx_t *tx,
-        lnet_nid_t target_nid,
+        lnet_process_id_t target,
         lnet_msg_t *ptlmsg );
 
 kptl_peer_t *
 kptllnd_peer_find (
         kptl_data_t *kptllnd_data,
-        lnet_nid_t nid);
+        lnet_process_id_t target);
 
 kptl_peer_t *
 kptllnd_peer_handle_hello (
         kptl_data_t *kptllnd_data,
-        lnet_nid_t nid,
-        int pid,
+        lnet_process_id_t initiator,
         kptl_msg_t *msg);
 
 static inline struct list_head *
@@ -665,13 +664,13 @@ do{                                                     \
 #define PJK_UT_MSG_SIMULATION(fmt, a...)        PJK_UT_MSG_ALWAYS(fmt, ## a )
 
 
-#if 0
+#if 1
 #define PJK_UT_MSG_DATA(fmt, a...)              PJK_UT_MSG_ALWAYS(fmt, ## a )
 #else
 #define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)
 #endif
 
-#if 0
+#if 1
 #define PJK_UT_MSG(fmt, a...)                   PJK_UT_MSG_ALWAYS(fmt, ## a )
 #else
 #define PJK_UT_MSG(fmt, a...)                   do{}while(0)

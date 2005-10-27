@@ -517,7 +517,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
                 STAT_UPDATE(kps_rx_unlink_event);
 
         if(!rxbp->rxbp_shutdown){
-                PJK_UT_MSG("RXB Callback %s(%d) rxb=%p nid="FMT_NID" unlink=%d\n",
+                PJK_UT_MSG("RXB Callback %s(%d) rxb=%p id="FMT_NID" unlink=%d\n",
                         get_ev_type_string(ev->type),ev->type,
                         rxb,ev->initiator.nid,unlinked);
         }
@@ -625,12 +625,18 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         kptl_peer_t            *peer = NULL;
         int                     returned_credits = 0;
         int                     type = msg->ptlm_type;
-        lnet_nid_t              lnet_initiator_nid = ptl2lnetnid(kptllnd_data,rx->rx_initiator.nid);
+        lnet_process_id_t       lnet_initiator;
         unsigned long           flags;
 
 
         PJK_UT_MSG_DATA(">>> RXRXRXRXRXRXRXRXRXRXRXRX\n");
         PJK_UT_MSG_DATA("rx=%p nob=%d\n",rx,rx->rx_nob);
+
+        /*
+         * Setup the intiator for LNET
+         */        
+        lnet_initiator.nid = ptl2lnetnid(kptllnd_data,rx->rx_initiator.nid);
+        lnet_initiator.pid = rx->rx_initiator.pid;
 
         /*
          * If the nob==0 then silently discard this message
@@ -650,19 +656,18 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         PJK_UT_MSG_DATA("Msg NOB = %d\n",msg->ptlm_nob);
         PJK_UT_MSG_DATA("Credits back from peer=%d\n",msg->ptlm_credits);
         PJK_UT_MSG_DATA("Seq # ="LPX64"\n",msg->ptlm_seq);
-        PJK_UT_MSG_DATA("lnet RX nid=" LPX64 "\n",lnet_initiator_nid);
+        PJK_UT_MSG_DATA("lnet RX nid=" LPX64 "\n",lnet_initiator.nid);
         PJK_UT_MSG("ptl  RX nid=" FMT_NID " pid=%d\n",rx->rx_initiator.nid,rx->rx_initiator.pid);
 
         if(type == PTLLND_MSG_TYPE_HELLO)
         {
                 peer = kptllnd_peer_handle_hello(
                         kptllnd_data,
-                        lnet_initiator_nid,
-                        rx->rx_initiator.pid,
+                        lnet_initiator,
                         msg);
                 if( peer == NULL){
-                        CERROR ("Failed to create peer for "LPX64"\n",
-                                lnet_initiator_nid);
+                        CERROR ("Failed to create peer for %s\n",
+                                libcfs_id2str(lnet_initiator));
                         goto exit;
                 }
 
@@ -677,10 +682,10 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         }
         else
         {
-                peer = kptllnd_peer_find(kptllnd_data,lnet_initiator_nid);
+                peer = kptllnd_peer_find(kptllnd_data,lnet_initiator);
                 if( peer == NULL){
-                        CERROR ("No connection with "LPX64"\n",
-                                lnet_initiator_nid);
+                        CERROR ("No connection with %s\n",
+                                libcfs_id2str(lnet_initiator));
                         goto exit;
                 }
 
@@ -921,7 +926,7 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
                         *kptllnd_tunables.kptl_peercredits);
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
-                PJK_UT_MSG_ALWAYS("Peer=%p Credits=%d Outstanding=%d\n",
+                PJK_UT_MSG("Peer=%p Credits=%d Outstanding=%d\n",
                         peer,peer->peer_credits,peer->peer_outstanding_credits);
 
                 /* Have I received credits that will let me send? */
