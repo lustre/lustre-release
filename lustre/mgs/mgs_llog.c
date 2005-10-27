@@ -43,10 +43,12 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_disk.h>
 #include <linux/lustre_mgs.h>
-#include "llog_internal.h"
 #include "mgs_internal.h"
 
 static struct lustre_cfg_bufs llog_bufs;
+
+static int mgs_do_record(struct obd_device *obd, struct llog_handle *llh,
+                         void *cfg_buf);
 
 static int record_attach(struct obd_device *obd, struct llog_handle *llh,
                          char* name, char *type, char *uuid)
@@ -61,15 +63,15 @@ static int record_attach(struct obd_device *obd, struct llog_handle *llh,
         if (uuid)
                lustre_cfg_bufs_set_string(&llog_bufs, 2, uuid);
 
-        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
+        lcfg = lustre_cfg_new(LCFG_ATTACH, &llog_bufs);
 
-        rc = mgs_do_record(obd, llh, lcfg, 0);
+        rc = mgs_do_record(obd, llh, (void *)lcfg);
 
         lustre_cfg_free(lcfg);
         return rc;
 }
 
-static int record_add_uuid(struct obd_device *obd, struct llog_handl *llh,
+static int record_add_uuid(struct obd_device *obd, struct llog_handle *llh,
                            uint64_t nid, char *uuid)
 {
         struct lustre_cfg *lcfg;
@@ -79,17 +81,17 @@ static int record_add_uuid(struct obd_device *obd, struct llog_handl *llh,
         if (uuid)
                 lustre_cfg_bufs_set_string(&llog_bufs, 1, uuid);
 
-        lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
+        lcfg = lustre_cfg_new(LCFG_ADD_UUID, &llog_bufs);
         lcfg->lcfg_nid = nid;
 
-        rc = mgs_do_record(obd, llh, lcfg, 0);
+        rc = mgs_do_record(obd, llh, (void *)lcfg);
 
         lustre_cfg_free(lcfg);
         return rc;
 }
 
 static int record_lov_setup(struct obd_device *obd, struct llog_handle *llh,
-                            char *device_name, struct *lov_desc)
+                            char *device_name, struct lov_desc *desc)
 {
        struct lustre_cfg *lcfg;
         int rc;
@@ -98,28 +100,28 @@ static int record_lov_setup(struct obd_device *obd, struct llog_handle *llh,
 
         lustre_cfg_bufs_set(&llog_bufs, 1, desc, sizeof(*desc));
 
-        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
+        lcfg = lustre_cfg_new(LCFG_SETUP, &llog_bufs);
 
-        rc = mgs_do_record(obd, llh, lcfg, 0);
+        rc = mgs_do_record(obd, llh, (void *)lcfg);
 
         lustre_cfg_free(lcfg);
         return rc;
-
 }
+
 static int record_setup(struct obd_device *obd, struct llog_handle *llh,
                         char *device_name, int args, char**argv)
 {
         struct lustre_cfg *lcfg;
-        int rc;
+        int i, rc;
 
         lustre_cfg_bufs_reset(&llog_bufs, device_name);
 
         for(i = 1; i < args ; i++)
                 lustre_cfg_bufs_set_string(&llog_bufs, i, argv[i-1]);
         
-        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
+        lcfg = lustre_cfg_new(LCFG_SETUP, &llog_bufs);
 
-        rc = mgs_do_record(obd, llh, lcfg, 0);
+        rc = mgs_do_record(obd, llh, (void *)lcfg);
 
         lustre_cfg_free(lcfg);
         return rc;
@@ -145,9 +147,9 @@ static int record_lov_modify_tgts(struct obd_device *obd,
         lustre_cfg_bufs_set_string(&llog_bufs, 2, index);
         lustre_cfg_bufs_set_string(&llog_bufs, 3, gen);
 
-        lcfg = lustre_cfg_new(cmd, &bufs);
+        lcfg = lustre_cfg_new(cmd, &llog_bufs);
 
-        rc = mgs_do_record(obd, llh, lcfg, 0);
+        rc = mgs_do_record(obd, llh, (void *)lcfg);
 
         lustre_cfg_free(lcfg);
         return rc;
@@ -166,30 +168,31 @@ static int record_mount_point(struct obd_device *obd, struct llog_handle *llh,
         if (mdc_name)
                 lustre_cfg_bufs_set_string(&llog_bufs, 2, mdc_name);
 
-        lcfg = lustre_cfg_new(cmd, &bufs);
+        lcfg = lustre_cfg_new(cmd, &llog_bufs);
 
-        rc = mgs_do_record(obd, llh, lcfg, 0);
+        rc = mgs_do_record(obd, llh, (void *)lcfg);
 
         lustre_cfg_free(lcfg);
         return rc;
 }                                  
 
-struct mgs_open_llog* mgs_find_open_llog(struct obd_device *obd, char *name)
+struct mgs_open_llog* find_mgs_open_llog(struct obd_device *obd, char *name)
 {
+        struct mgs_obd *mgs= &obd->u.mgs;
         struct list_head *tmp;
-        struct mgc_open_llog *mol;
+        struct mgs_open_llog *mol;
         char fsname[40];
         char *p;
 
-        p = strrchr(name, '/')
+        p = strrchr(name, '/');
         if (p != NULL)
                 strncpy(fsname, name, p - name);
         else
                 return NULL;
 
-        list_for_each(tmp, &mgc->mgc_open_llogs) {
-                mol = list_entry(tmp, struct mgc_open_llog, mol_list);
-                if !strcmp(mol->name, fsname)
+        list_for_each(tmp, &mgs->mgs_open_llogs) {
+                mol = list_entry(tmp, struct mgs_open_llog, mol_list);
+                if (!strcmp(mol->mol_fsname, fsname))
                         return mol;
         }
         return NULL;
@@ -220,22 +223,14 @@ static int mgs_start_record(struct obd_device *obd,
         RETURN(rc);
 }
 
-static int mgs_end_record(struct obd_device *obd, 
-                          struct obd_ioctl_data *data)
+static int mgs_end_record(struct obd_device *obd,
+                          struct llog_handle *llh, char* name)
 {
-        static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
-        struct mgs_obd *mgs = &obd->u.mgs;
         struct lvfs_run_ctxt saved;
-        struct mgs_open_llog *mol;
-        char *name = data->ioc_inlbuf1;
         int rc = 0;
 
-        mol = mgs_find_open_llog(obd, name);
-        if (!mol)
-                RETURN(-EINVAL);
-
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = llog_close(mol->mol_cfg_llh);
+        rc = llog_close(llh);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         RETURN(rc);
@@ -244,10 +239,8 @@ static int mgs_end_record(struct obd_device *obd,
 static int mgs_clear_record(struct obd_device *obd, 
                             struct llog_handle *llh, char *name)
 {
-        static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
-        struct mgs_obd *mgs = &obd->u.mgs;
         struct lvfs_run_ctxt saved;
-        struct llog_handel **llh_res;
+        struct llog_handle **llh_res;
         int rc = 0;
 
         if (llh)
@@ -268,59 +261,38 @@ static int mgs_clear_record(struct obd_device *obd,
 }
 
 static int mgs_do_record(struct obd_device *obd, struct llog_handle *llh,
-                         struct obd_ioctl_data *data, int from_user)
+                         void *cfg_buf)
 {
-        char *name = data->ioc_inlbuf1;
-        char *cfg_buf;
+        
+        struct lvfs_run_ctxt saved;
         struct llog_rec_hdr rec;
         int rc = 0;
 
-        rec.lrh_len = llog_data_len(data->ioc_plen1);
-
-        if (data->ioc_type == LUSTRE_CFG_TYPE) {
-                rec.lrh_type = OBD_CFG_REC;
-        } else {
-                CERROR("unknown cfg record type:%d \n", data->ioc_type);
-                RETURN(-EINVAL);
-        }
-
-        if (from_user) {
-                OBD_ALLOC(cfg_buf, data->ioc_plen1);
-                if (cfg_buf == NULL)
-                        RETURN(-ENOMEM);
-                rc = copy_from_user(cfg_buf, data->ioc_pbuf1, data->ioc_plen1);
-                if (rc) {
-                        OBD_FREE(cfg_buf, data->ioc_plen1);
-                        RETURN(rc);
-                }
-        } else
-                cfg_buf = data->ioc_bulk;
- 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = llog_write_rec(llh, &rec, NULL, 0, cfg_buf, -1);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        OBD_FREE(cfg_buf, data->ioc_plen1);
         RETURN(rc);
 }
 
-static int mgs_write_mds_llog(struct obd_device *obd, char* logname)
+static int mgs_write_mds_llog(struct obd_device *obd, char* name)
 {
         struct mgs_open_llog *mol;
         struct llog_handle *llh;
         struct system_db *db;
-        struct ost_info *oinfo;
+        struct list_head *tmp;
         int i, rc = 0;
 
         mol = find_mgs_open_llog(obd, name);
         if (!mol)
                 RETURN(-EINVAL);
 
-        db = mol->mol_db;
+        db = mol->mol_system_db;
         if(!db)
                 RETURN(-EINVAL);
 
-        llh = mol->mol_llh;
+        llh = mol->mol_cfg_llh;
+
         rc = mgs_clear_record(obd, llh, name);
         if (rc) {
                 CERROR("failed to clear log %s: %d\n", name, rc);
@@ -339,7 +311,7 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* logname)
                 RETURN(rc);
         }
 
-        rc = record_lov_setup(obd, llh, db->mds_name, &db->lov_desc);
+        rc = record_lov_setup(obd, llh, db->mds_name, &db->lovdesc);
         if (rc) {
                 CERROR("failed to record log(setup) %s: %d\n", name, rc);
                 RETURN(rc);
@@ -352,16 +324,22 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* logname)
         }
 
         i = 0;
-        list_for_each(oinfo, &db->ost_infos) {
+        list_for_each(tmp, &db->ost_infos) {
                 char   ostuuid[64];
                 char   nodeuuid[64];
+                char   devname[64];
+                char   index[16];
+                char   *setup_argv[2];
+                struct ost_info *oinfo = list_entry(tmp, struct ost_info,
+                                                    osi_list);
+
                 sprintf(ostuuid,  "%s_UUID", oinfo->osi_ostname);
                 sprintf(nodeuuid, "%s_UUID", oinfo->osi_nodename);
 
                 rc = record_add_uuid(obd, llh, oinfo->osi_nid, nodeuuid);
                 if (rc) {
                         CERROR("failed to record log(add_uuid) %s: %d\n",
-                               logname, rc);
+                               name, rc);
                         RETURN(rc);
                 }
 
@@ -369,22 +347,25 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* logname)
                                    "osc", db->mds_uuid);
                 if (rc) {
                         CERROR("failed to record log(attach_uuid) %s: %d\n",
-                               logname, rc);
+                               name, rc);
                         RETURN(rc);
                 }
 
                 sprintf(devname,"OSC_%s_%s_%s",
-                        db->mgs_nodename, oinfo->osi_ostname, db->mds_name);
+                        db->mds_nodename, oinfo->osi_ostname, db->mds_name);
 
-                rc = record_setup(obd, llh, devname, 2, ostuuid, nodeuuid);
+                setup_argv[0] = ostuuid;
+                setup_argv[1] = nodeuuid;
+                rc = record_setup(obd, llh, devname, 2, setup_argv);
                 if (rc) {
                         CERROR("failed to record log(setup) %s: %d\n",
                                name, rc);
                         RETURN(rc);
                 }
 
+                sprintf(index, "%d", oinfo->osi_stripe_index);
                 rc = record_lov_modify_tgts(obd, llh, db->mds_name, "add", ostuuid,
-                                            atoi(oinfo->osi_stripe_index), "1");
+                                            index, "1");
                 if (rc) {
                         CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
                                name, rc);
@@ -392,7 +373,7 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* logname)
                 }
         }
         
-        rc = record_mount_point(obd, llh, db->mgs_name, db->lov_name);
+        rc = record_mount_point(obd, llh, db->mds_name, db->lov_name, NULL);
         if (rc) {
                 CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
                        name, rc);
@@ -430,7 +411,6 @@ int mgs_update_llog(struct obd_device *obd, char *name)
         return rc;
 }
 
-
 int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                   void *karg, void *uarg)
 {
@@ -446,28 +426,87 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         switch (cmd) {
         case OBD_IOC_RECORD: {
-                rc = mgs_start_record(obd, data);
+                char *name = data->ioc_inlbuf1;
+                if (mgs->mgs_cfg_llh)
+                        RETURN(-EBUSY);
+
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
+                                 &mgs->mgs_cfg_llh, NULL,  name);
+                if (rc == 0)
+                        llog_init_handle(mgs->mgs_cfg_llh, LLOG_F_IS_PLAIN,
+                                         &cfg_uuid);
+                else
+                        mgs->mgs_cfg_llh = NULL;
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 RETURN(rc);
         }
 
         case OBD_IOC_ENDRECORD: {
-                rc = mgs_end_record(obd, data);
+               if (!mgs->mgs_cfg_llh)
+                        RETURN(-EBADF);
+
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = llog_close(mgs->mgs_cfg_llh);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                mgs->mgs_cfg_llh = NULL;
                 RETURN(rc);
         }
 
         case OBD_IOC_CLEAR_LOG: {
-                rc = mgs_clear_record(obd, data);
+                char *name = data->ioc_inlbuf1;
+                if (mgs->mgs_cfg_llh)
+                        RETURN(-EBUSY);
+
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
+                                 &mgs->mgs_cfg_llh, NULL, name);
+                if (rc == 0) {
+                        llog_init_handle(mgs->mgs_cfg_llh, LLOG_F_IS_PLAIN,
+                                         NULL);
+
+                        rc = llog_destroy(mgs->mgs_cfg_llh);
+                        llog_free_handle(mgs->mgs_cfg_llh);
+                }
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                mgs->mgs_cfg_llh = NULL;
                 RETURN(rc);
         }
 
         case OBD_IOC_DORECORD: {
-                rc = mgs_do_record(obd, data, 1);
-                RETURN(rc);
-        }
+                char *cfg_buf;
+                struct llog_rec_hdr rec;
+                if (!mgs->mgs_cfg_llh)
+                        RETURN(-EBADF);
 
-        case OBD_IOC_UPDATE_LOG: {
-                rc = mgs_update_llog(obd, data);
+                rec.lrh_len = llog_data_len(data->ioc_plen1);
+
+                if (data->ioc_type == LUSTRE_CFG_TYPE) {
+                        rec.lrh_type = OBD_CFG_REC;
+                } else {
+                        CERROR("unknown cfg record type:%d \n", data->ioc_type);
+                        RETURN(-EINVAL);
+                }
+
+                OBD_ALLOC(cfg_buf, data->ioc_plen1);
+                if (cfg_buf == NULL)
+                        RETURN(-EINVAL);
+                rc = copy_from_user(cfg_buf, data->ioc_pbuf1, data->ioc_plen1);
+                if (rc) {
+                        OBD_FREE(cfg_buf, data->ioc_plen1);
+                        RETURN(rc);
+                }
+
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = llog_write_rec(mgs->mgs_cfg_llh, &rec, NULL, 0,
+                                    cfg_buf, -1);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                OBD_FREE(cfg_buf, data->ioc_plen1);
                 RETURN(rc);
+
         }
         case OBD_IOC_PARSE: {
                 struct llog_ctxt *ctxt =
@@ -706,9 +745,9 @@ static int mgs_llog_lvfs_read_header(struct llog_handle *handle)
 /* returns negative in on error; 0 if success && reccookie == 0; 1 otherwise */
 /* appends if idx == -1, otherwise overwrites record idx. */
 static int mgs_llog_lvfs_write_rec(struct llog_handle *loghandle,
-                               struct llog_rec_hdr *rec,
-                               struct llog_cookie *reccookie, int cookiecount,
-                               void *buf, int idx)
+                                   struct llog_rec_hdr *rec,
+                                   struct llog_cookie *reccookie, int cookiecount,
+                                   void *buf, int idx)
 {
         struct llog_log_hdr *llh;
         int reclen = rec->lrh_len, index, rc;

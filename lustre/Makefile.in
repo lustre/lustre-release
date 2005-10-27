@@ -8,8 +8,7 @@ subdir-m += osc
 subdir-m += obdecho
 subdir-m += mgc
 
-@SERVER_TRUE@subdir-m += mds obdfilter ost
-# mgs
+@SERVER_TRUE@subdir-m += mds obdfilter ost mgs
 @CLIENT_TRUE@subdir-m += mdc llite 
 
 @INCLUDE_RULES@
