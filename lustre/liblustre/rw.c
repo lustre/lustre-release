@@ -52,6 +52,7 @@ struct llu_io_group
 {
         struct obd_io_group    *lig_oig;
         struct inode           *lig_inode;
+        struct lustre_rw_params *lig_params;
         int                     lig_maxpages;
         int                     lig_npages;
         __u64                   lig_rwcount;
@@ -262,10 +263,11 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
         ENTRY;
 
         LASSERT(lockh->cookie == 0);
+        CLASSERT(ELDLM_OK == 0);
 
         /* XXX phil: can we do this?  won't it screw the file size up? */
         if ((fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK)) ||
-            (sbi->ll_flags & LL_SBI_NOLCK))
+            (sbi->ll_flags & LL_SBI_NOLCK) || mode == LCK_NL)
                 RETURN(0);
 
         CDEBUG(D_DLMTRACE, "Locking inode %llu, start "LPU64" end "LPU64"\n",
@@ -297,9 +299,11 @@ int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
         int rc;
         ENTRY;
 
+        CLASSERT(ELDLM_OK == 0);
+
         /* XXX phil: can we do this?  won't it screw the file size up? */
         if ((fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK)) ||
-            (sbi->ll_flags & LL_SBI_NOLCK))
+            (sbi->ll_flags & LL_SBI_NOLCK) || mode == LCK_NL)
                 RETURN(0);
 
         rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh);
@@ -352,7 +356,7 @@ static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
         if (rc != 0) {
                 if (cmd & OBD_BRW_WRITE)
-                        CERROR("writeback error on page %p index %ld: %d\n", 
+                        CERROR("writeback error on page %p index %ld: %d\n",
                                page, page->index, rc);
         }
         EXIT;
@@ -377,11 +381,13 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
         void *llap_cookie = group->lig_llap_cookies +
                 llap_cookie_size * group->lig_npages;
         int i, rc, npages = 0, ret_bytes = 0;
+        int local_lock;
         ENTRY;
 
         if (!exp)
                 RETURN(-EINVAL);
 
+        local_lock = group->lig_params->lrp_lock_mode != LCK_NL;
         /* prepare the pages array */
 	do {
                 unsigned long index, offset, bytes;
@@ -393,8 +399,8 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
                         bytes = count;
 
                 /* prevent read beyond file range */
-                if ((cmd == OBD_BRW_READ) &&
-                    (pos + bytes) >= st->st_size) {
+                if (/* local_lock && */
+                    cmd == OBD_BRW_READ && pos + bytes >= st->st_size) {
                         if (pos >= st->st_size)
                                 break;
                         bytes = st->st_size - pos;
@@ -441,9 +447,41 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
 
                 rc = obd_queue_group_io(exp, lsm, NULL, group->lig_oig,
                                         llap->llap_cookie, cmd,
-                                        page->_offset, page->_count, 0,
+                                        page->_offset, page->_count,
+                                        group->lig_params->lrp_brw_flags,
                                         ASYNC_READY | ASYNC_URGENT |
                                         ASYNC_COUNT_STABLE | ASYNC_GROUP_SYNC);
+                if (!local_lock && cmd == OBD_BRW_READ) {
+                        /*
+                         * In OST-side locking case short reads cannot be
+                         * detected properly.
+                         *
+                         * The root of the problem is that
+                         *
+                         * kms = lov_merge_size(lsm, 1);
+                         * if (end > kms)
+                         *         glimpse_size(inode);
+                         * else
+                         *         st->st_size = kms;
+                         *
+                         * logic in the read code (both llite and liblustre)
+                         * only works correctly when client holds DLM lock on
+                         * [start, end]. Without DLM lock KMS can be
+                         * completely out of date, and client can either make
+                         * spurious short-read (missing concurrent write), or
+                         * return stale data (missing concurrent
+                         * truncate). For llite client this is fatal, because
+                         * incorrect data are cached and can be later sent
+                         * back to the server (vide bug 5047). This is hard to
+                         * fix by handling short-reads on the server, as there
+                         * is no easy way to communicate file size (or amount
+                         * of bytes read/written) back to the client,
+                         * _especially_ because OSC pages can be sliced and
+                         * dices into multiple RPCs arbitrary. Fortunately,
+                         * liblustre doesn't cache data and the worst case is
+                         * that we get race with concurrent write or truncate.
+                         */
+                }
                 if (rc) {
                         LASSERT(rc < 0);
                         RETURN(rc);
@@ -456,7 +494,8 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
 }
 
 static
-struct llu_io_group * get_io_group(struct inode *inode, int maxpages)
+struct llu_io_group * get_io_group(struct inode *inode, int maxpages,
+                                   struct lustre_rw_params *params)
 {
         struct llu_io_group *group;
         int rc;
@@ -473,6 +512,7 @@ struct llu_io_group * get_io_group(struct inode *inode, int maxpages)
         I_REF(inode);
         group->lig_inode = inode;
         group->lig_maxpages = maxpages;
+        group->lig_params = params;
         group->lig_llaps = (struct ll_async_page *)(group + 1);
         group->lig_pages = (struct page *)(&group->lig_llaps[maxpages]);
         group->lig_llap_cookies = (void *)(&group->lig_pages[maxpages]);
@@ -524,12 +564,11 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         struct lustre_handle lockh = {0};
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct obd_export *exp = NULL;
-        ldlm_policy_data_t policy;
         struct llu_io_group *iogroup;
-        int astflag = (lli->lli_open_flags & O_NONBLOCK) ?
-                       LDLM_FL_BLOCK_NOWAIT : 0;
+        struct lustre_rw_params p;
         __u64 kms;
-        int err, is_read, lock_mode, iovidx, ret;
+        int err, is_read, iovidx, ret;
+        int local_lock;
         ENTRY;
 
         /* in a large iov read/write we'll be repeatedly called.
@@ -547,44 +586,48 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         if (pos + len > lli->lli_maxbytes)
                 RETURN(-ERANGE);
 
-        iogroup = get_io_group(inode, max_io_pages(len, iovlen));
+        lustre_build_lock_params(session->lis_cmd, lli->lli_open_flags,
+                                 lli->lli_sbi->ll_connect_flags,
+                                 pos, len, &p);
+
+        iogroup = get_io_group(inode, max_io_pages(len, iovlen), &p);
         if (IS_ERR(iogroup))
                 RETURN(PTR_ERR(iogroup));
 
-        is_read = session->lis_cmd == OBD_BRW_READ;
-        lock_mode = is_read ? LCK_PR : LCK_PW;
+        local_lock = p.lrp_lock_mode != LCK_NL;
 
-        if (!is_read && (lli->lli_open_flags & O_APPEND)) {
-                policy.l_extent.start = 0;
-                policy.l_extent.end = OBD_OBJECT_EOF;
-        } else {
-                policy.l_extent.start = pos;
-                policy.l_extent.end = pos + len - 1;
-        }
-
-        err = llu_extent_lock(fd, inode, lsm, lock_mode, &policy,
-                              &lockh, astflag);
+        err = llu_extent_lock(fd, inode, lsm, p.lrp_lock_mode, &p.lrp_policy,
+                              &lockh, p.lrp_ast_flags);
         if (err != ELDLM_OK)
                 GOTO(err_put, err);
 
+        is_read = (session->lis_cmd == OBD_BRW_READ);
         if (is_read) {
+                /*
+                 * If OST-side locking is used, KMS can be completely out of
+                 * date, and, hence, cannot be used for short-read
+                 * detection. Rely in OST to handle short reads in that case.
+                 */
                 kms = lov_merge_size(lsm, 1);
-                if (policy.l_extent.end > kms) {
-                        /* A glimpse is necessary to determine whether we
-                         * return a short read or some zeroes at the end of
-                         * the buffer */
+                if (p.lrp_policy.l_extent.end > kms) {
+                        /* A glimpse is necessary to determine whether
+                         * we return a short read or some zeroes at
+                         * the end of the buffer
+                         *
+                         * In the case of OST-side locking KMS can be
+                         * completely out of date and short-reads maybe
+                         * mishandled. See llu_queue_pio() for more detailed
+                         * comment.
+                         */
                         if ((err = llu_glimpse_size(inode))) {
                                 llu_extent_unlock(fd, inode, lsm,
-                                                  lock_mode, &lockh);
+                                                  p.lrp_lock_mode, &lockh);
                                 GOTO(err_put, err);
                         }
-                } else {
+                } else
                         st->st_size = kms;
-                }
-        } else {
-                if (lli->lli_open_flags & O_APPEND)
-                        pos = st->st_size;
-        }
+        } else if (lli->lli_open_flags & O_APPEND)
+                pos = st->st_size;
 
         for (iovidx = 0; iovidx < iovlen; iovidx++) {
                 char *buf = (char *) iovec[iovidx].iov_base;
@@ -595,17 +638,18 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                 if (len < count)
                         count = len;
                 if (IS_BAD_PTR(buf) || IS_BAD_PTR(buf + count)) {
-                        llu_extent_unlock(fd, inode, lsm, lock_mode, &lockh);
+                        llu_extent_unlock(fd, inode,
+                                          lsm, p.lrp_lock_mode, &lockh);
                         GOTO(err_put, err = -EFAULT);
                 }
 
                 if (is_read) {
-                        if (pos >= st->st_size)
+                        if (/* local_lock && */ pos >= st->st_size)
                                 break;
                 } else {
                         if (pos >= lli->lli_maxbytes) {
-                                llu_extent_unlock(fd, inode, lsm, lock_mode,
-                                                  &lockh);
+                                llu_extent_unlock(fd, inode, lsm,
+                                                  p.lrp_lock_mode, &lockh);
                                 GOTO(err_put, err = -EFBIG);
                         }
                         if (pos + count >= lli->lli_maxbytes)
@@ -614,7 +658,8 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
 
                 ret = llu_queue_pio(session->lis_cmd, iogroup, buf, count, pos);
                 if (ret < 0) {
-                        llu_extent_unlock(fd, inode, lsm, lock_mode, &lockh);
+                        llu_extent_unlock(fd, inode,
+                                          lsm, p.lrp_lock_mode, &lockh);
                         GOTO(err_put, err = ret);
                 } else {
                         pos += ret;
@@ -632,7 +677,10 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         }
         LASSERT(len == 0 || is_read); /* libsysio should guarantee this */
 
-        err = llu_extent_unlock(fd, inode, lsm, lock_mode, &lockh);
+        /*
+         * BUG: lock is released too early. Fix is in bug 9296.
+         */
+        err = llu_extent_unlock(fd, inode, lsm, p.lrp_lock_mode, &lockh);
         if (err)
                 CERROR("extent unlock error %d\n", err);
 
@@ -712,11 +760,13 @@ static int llu_file_rwx(struct inode *ino,
         if (cc >= 0) {
                 LASSERT(!ioctx->ioctx_cc);
                 ioctx->ioctx_private = session;
-                RETURN(0);
+                cc = 0;
         } else {
                 put_io_session(session);
-                RETURN(cc);
         }
+
+        liblustre_wait_event(0);
+        RETURN(cc);
 }
 
 int llu_iop_read(struct inode *ino,
@@ -781,6 +831,7 @@ int llu_iop_iodone(struct ioctx *ioctx)
 
         put_io_session(session);
         ioctx->ioctx_private = NULL;
+        liblustre_wait_event(0);
 
         RETURN(1);
 }

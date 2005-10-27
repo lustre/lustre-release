@@ -40,8 +40,6 @@
 #include <linux/lustre_quota.h>
 #include "filter_internal.h"
 
-#warning "implement writeback mode -bzzz"
-
 /* 512byte block min */
 #define MAX_BLOCKS_PER_PAGE (PAGE_SIZE / 512)
 struct dio_request {
@@ -51,7 +49,6 @@ struct dio_request {
         int               dr_max_pages;
         int               dr_npages;
         int               dr_error;
-        unsigned long     dr_flag;     /* indicating if there is client cache page in this rpc */
         struct page     **dr_pages;
         unsigned long    *dr_blocks;
         spinlock_t        dr_lock;
@@ -424,24 +421,29 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         struct dio_request *dreq = iobuf;
         struct inode *inode = dchild->d_inode;
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-        int rc, rc2;
+        int rc, rc2, create;
+        struct semaphore *sem;
         ENTRY;
 
-        LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
         LASSERTF(dreq->dr_npages <= dreq->dr_max_pages, "%d,%d\n",
                  dreq->dr_npages, dreq->dr_max_pages);
         LASSERT(dreq->dr_npages <= OBDFILTER_CREATED_SCRATCHPAD_ENTRIES);
-        LASSERT(dreq->dr_npages > 0 || rw != OBD_BRW_WRITE);
 
-        if (dreq->dr_npages == 0)
-                RETURN(0);
-
+        if (rw == OBD_BRW_READ) {
+                if (dreq->dr_npages == 0)
+                        RETURN(0);
+                create = 0;
+                sem = NULL;
+        } else {
+                LASSERTF(rw == OBD_BRW_WRITE, "%x\n", rw);
+                LASSERT(dreq->dr_npages > 0);
+                create = 1;
+                sem = &obd->u.filter.fo_alloc_lock;
+        }
 remap:
-        rc = fsfilt_map_inode_pages(obd, inode,
-                                    dreq->dr_pages, dreq->dr_npages,
-                                    dreq->dr_blocks,
-                                    obdfilter_created_scratchpad,
-                                    rw == OBD_BRW_WRITE, NULL);
+        rc = fsfilt_map_inode_pages(obd, inode, dreq->dr_pages,
+                                    dreq->dr_npages, dreq->dr_blocks,
+                                    obdfilter_created_scratchpad, create, sem);
 
         if (rc == -EDQUOT) {
                 LASSERT(rw == OBD_BRW_WRITE &&
@@ -471,9 +473,13 @@ remap:
                 up(&inode->i_sem);
 
                 rc2 = filter_finish_transno(exp, oti, 0);
-                if (rc2 != 0)
-                        CERROR("can't close transaction: %d\n", rc);
+                if (rc2 != 0) {
+                        CERROR("can't close transaction: %d\n", rc2);
+                        if (rc == 0)
+                                rc = rc2;
+                }
 
+                rc2 =fsfilt_commit_async(obd,inode,oti->oti_handle,wait_handle);
                 if (rc == 0)
                         rc = rc2;
                 if (rc != 0)
@@ -524,6 +530,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
         struct lvfs_ucred *uc = NULL;
+        void *wait_handle;
         int   total_size = 0;
         ENTRY;
 
@@ -595,18 +602,18 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         /* filter_direct_io drops i_sem */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, dreq, exp, &iattr,
-                              oti, NULL);
+                              oti, &wait_handle);
         if (rc == 0)
-                obdo_from_inode(oa, inode, 
-                                FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
-        else 
+                obdo_from_inode(oa, inode,
+                                FILTER_VALID_FLAGS |OBD_MD_FLUID |OBD_MD_FLGID);
+        else
                 obdo_from_inode(oa, inode, OBD_MD_FLUID | OBD_MD_FLGID);
 
         filter_get_quota_flag(obd, oa);
 
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
-        err = fsfilt_commit(obd, inode, oti->oti_handle, obd_sync_filter);
+        err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err)
                 rc = err;
 

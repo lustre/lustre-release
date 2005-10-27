@@ -321,7 +321,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if (err) 
+        if (err)
                 RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
@@ -464,7 +464,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
 
 /* XXX _IOWR('f', 250, long) has been defined in
- * portals/include/libcfs/kp30.h for debug, don't use it
+ * lnet/include/libcfs/kp30.h for debug, don't use it
  */
 
 /* Until such time as we get_info the per-stripe maximum from the OST,
@@ -611,7 +611,7 @@ do {                                                                           \
             if (condition)                                                     \
                     break;                                                     \
             if (signal_pending(current)) {                                     \
-                    if (__timed_out) {                                         \
+                    if (!info->lwi_timeout || __timed_out) {                   \
                             break;                                             \
                     } else {                                                   \
                             /* We have to do this here because some signals */ \
@@ -633,7 +633,7 @@ do {                                                                           \
         RECALC_SIGPENDING;                                                     \
         SIGNAL_MASK_UNLOCK(current, irqflags);                                 \
                                                                                \
-        if (__timed_out && signal_pending(current)) {                          \
+        if ((!info->lwi_timeout || __timed_out) && signal_pending(current)) {  \
                 if (info->lwi_on_signal)                                       \
                         info->lwi_on_signal(info->lwi_cb_data);                \
                 ret = -EINTR;                                                  \
@@ -700,24 +700,36 @@ do {                                                                           \
         __ret;                                                                 \
 })
 
-#define LMD_MAGIC 0xbdacbdac
+#define LMD_MAGIC_R1 0xbdacbdac
+#define LMD_MAGIC    0xbdacbd02
 
 #define lmd_bad_magic(LMDP)                                             \
 ({                                                                      \
         struct lustre_mount_data *_lmd__ = (LMDP);                      \
         int _ret__ = 0;                                                 \
         if (!_lmd__) {                                                  \
-                CERROR("Missing mount data: "                           \
+                LCONSOLE_ERROR("Missing mount data: "                   \
                        "check that /sbin/mount.lustre is installed.\n");\
                 _ret__ = 1;                                             \
+        } else if (_lmd__->lmd_magic == LMD_MAGIC_R1) {                 \
+                LCONSOLE_ERROR("You're using an old version of "        \
+                       "/sbin/mount.lustre.  Please install version "   \
+                       "1.%d\n", LMD_MAGIC & 0xFF);                     \
+                _ret__ = 1;                                             \
         } else if (_lmd__->lmd_magic != LMD_MAGIC) {                    \
-                CERROR("Invalid mount data (%#x != %#x): "              \
+                LCONSOLE_ERROR("Invalid mount data (%#x != %#x): "      \
                        "check that /sbin/mount.lustre is installed\n",  \
                        _lmd__->lmd_magic, LMD_MAGIC);                   \
                 _ret__ = 1;                                             \
         }                                                               \
         _ret__;                                                         \
 })
+
+#ifdef __KERNEL__
+#define LIBLUSTRE_CLIENT (0)
+#else
+#define LIBLUSTRE_CLIENT (1)
+#endif
 
 #endif /* _LUSTRE_LIB_H */
 

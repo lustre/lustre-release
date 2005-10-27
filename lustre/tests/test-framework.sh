@@ -4,6 +4,7 @@ set -e
 
 export REFORMAT=""
 export VERBOSE=false
+export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
 assert_env() {
@@ -89,15 +90,20 @@ zconf_mount() {
 
     do_node $client mkdir $mnt 2> /dev/null || :
 
+    # Only supply -o to mount if we have options
+    if [ -n "$MOUNTOPT" ]; then
+        MOUNTOPT="-o $MOUNTOPT"
+    fi
+
     if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
-		`facet_active_host mds`:/mds_svc/client_facet $mnt || return 1
+	do_node $client mount -t lustre $MOUNTOPT \
+		`facet_nid mds`:/mds_svc/client_facet $mnt || return 1
     else
 	# this is so cheating
 	do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG > \
 		/dev/null || return 2
-	do_node $client $LLMOUNT -o nettype=$NETTYPE,$MOUNTOPT \
-		`facet_active_host mds`:/mds_svc/client_facet $mnt || return 4
+	do_node $client $LLMOUNT $MOUNTOPT \
+		`facet_nid mds`:/mds_svc/client_facet $mnt || return 4
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -182,8 +188,8 @@ replay_barrier() {
     df $MOUNT
     do_facet $facet $LCTL --device %${facet}_svc readonly
     do_facet $facet $LCTL --device %${facet}_svc notransno
-    do_facet $facet $LCTL mark "REPLAY BARRIER"
-    $LCTL mark "REPLAY BARRIER"
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
+    $LCTL mark "local REPLAY BARRIER"
 }
 
 replay_barrier_nodf() {
@@ -191,8 +197,8 @@ replay_barrier_nodf() {
     do_facet $facet sync
     do_facet $facet $LCTL --device %${facet}_svc readonly
     do_facet $facet $LCTL --device %${facet}_svc notransno
-    do_facet $facet $LCTL mark "REPLAY BARRIER"
-    $LCTL mark "REPLAY BARRIER"
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
+    $LCTL mark "local REPLAY BARRIER"
 }
 
 mds_evict_client() {
@@ -223,27 +229,30 @@ do_lmc() {
 
 h2gm () {
    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-       $PDSH $1 $GMNALNID -l | cut -d\  -f2
+       ID=`$PDSH $1 $GMNALNID -l | cut -d\  -f2`
+       echo $ID"@gm"
    fi
 }
 
 h2tcp() {
    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-   echo $1 
+   echo $1"@tcp" 
    fi
 }
 declare -fx h2tcp
 
 h2elan() {
    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-   echo $1 | sed 's/[^0-9]*//g'
+   ID=`echo $1 | sed 's/[^0-9]*//g'`
+   echo $ID"@elan"
    fi
 }
 declare -fx h2elan
 
 h2openib() {
    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-   echo $1 | sed 's/[^0-9]*//g'
+   ID=`echo $1 | sed 's/[^0-9]*//g'`
+   echo $ID"@openib"
    fi
 }
 declare -fx h2openib
@@ -259,6 +268,10 @@ facet_nid() {
    HOST=`facet_host $facet`
    if [ -z "$HOST" ]; then
 	echo "The env variable ${facet}_HOST must be set."
+	exit 1
+   fi
+   if [ -z "$NETTYPE" ]; then
+	echo "The env variable NETTYPE must be set."
 	exit 1
    fi
    echo `h2$NETTYPE $HOST`
@@ -329,8 +342,7 @@ add_facet() {
     echo "add facet $facet: `facet_host $facet`"
     do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
         --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
-    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
-	--nettype $NETTYPE
+    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` --nettype lnet
 }
 
 add_mds() {

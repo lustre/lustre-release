@@ -254,6 +254,7 @@ test_10b() {
 	yes "R" | dd of=$TMP/f10b bs=3k count=1 || error "dd random"
 	truncate $TMP/f10b 4096 || error "truncate 4096"
 	cmp $TMP/f10b $TMP/f10b-lustre || error "file miscompare"
+	rm $TMP/f10b $TMP/f10b-lustre
 }
 run_test 10b "write of file with sub-page size on multiple mounts "
 
@@ -311,6 +312,7 @@ test_14a() {
         multiop $DIR2/d14/multiop Oc && error "expected error, got success"
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
+        rm $TMP/test14.junk
 }
 run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
 
@@ -323,6 +325,7 @@ test_14b() { # bug 3192
         truncate $DIR2/d14/multiop 0 && error "expected error, got success"
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
+        rm $TMP/test14.junk
 }
 run_test 14b "truncate of executing file returns -ETXTBSY ======"
 
@@ -336,6 +339,7 @@ test_14c() { # bug 3430
 	kill -USR1 $MULTIPID || return 2
 	wait $MULTIPID || return 3
 	#cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
+	rm $TMP/test14.junk
 }
 run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 

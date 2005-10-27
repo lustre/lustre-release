@@ -19,5 +19,6 @@ llmount
 l_getgroups
 mount.lustre
 wiretest
+llog_reader
 .*.cmd
 .*.d

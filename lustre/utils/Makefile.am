@@ -4,9 +4,9 @@ SUBDIRS = Lustre
 
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
-AM_LDFLAGS := -L$(top_builddir)/portals/utils
+AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
-LIBPTLCTL := $(top_builddir)/portals/utils/libptlctl.a
+LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
 sbin_scripts = lconf lmc llanalyze llstat.pl llobdstat.pl lactive	\
 	load_ldap.sh lrun lwizard
@@ -15,8 +15,8 @@ bin_scripts = lfind lstripe
 if UTILS
 rootsbin_SCRIPTS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest llmount  \
-                l_getgroups
-bin_PROGRAMS = lfs
+	l_getgroups
+bin_PROGRAMS = lfs llog_reader
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
 bin_SCRIPTS = $(bin_scripts)
@@ -42,8 +42,14 @@ lload_SOURCES = lload.c
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c parser.c obd.c
+
+llog_reader_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
+llog_reader_DEPENDENCIES := $(LIBPTLCTL)
+llog_reader_SOURCES = llog_reader.c
+
 llmount_SOURCES = llmount.c 
-llmount_LDADD = $(LIBREADLINE) $(LIBPTLCTL)
+llmount_CFLAGS = $(LLMOUNT_GM_CFLAGS)
+llmount_LDADD = $(LIBREADLINE) $(LIBPTLCTL) $(LLMOUNT_GM_LDADD)
 llmount_DEPENDENCIES := $(LIBPTLCTL)
 
 EXTRA_DIST = $(bin_scripts) $(sbin_scripts)

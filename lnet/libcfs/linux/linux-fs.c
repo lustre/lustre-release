@@ -1,4 +1,4 @@
-# define DEBUG_SUBSYSTEM S_PORTALS
+# define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/fs.h>
 #include <linux/ctype.h>
@@ -28,4 +28,19 @@ cfs_filp_open (const char *name, int flags, int mode, int *err)
 	return filp;
 }
 
+ssize_t
+cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
+{
+	mm_segment_t fs;
+	ssize_t size;
+
+        fs = get_fs();
+        set_fs(KERNEL_DS);
+        size = filp->f_op->write(filp, (char *)buf, count, offset);
+        set_fs(fs);
+
+	return size;
+}
+
 EXPORT_SYMBOL(cfs_filp_open);
+EXPORT_SYMBOL(cfs_user_write);

@@ -29,7 +29,11 @@
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
+#ifdef _AIX
+#include "syscall_AIX.h"
+#else
 #include <syscall.h>
+#endif
 #include <sys/utsname.h>
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -44,22 +48,15 @@
 
 #include "lutil.h"
 
-#if CRAY_PORTALS
-void portals_debug_dumplog(void){};
-#endif
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
-unsigned int portal_debug = 0;
+unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
+unsigned int libcfs_debug = 0;
 
 struct task_struct     *current;
-ptl_handle_ni_t         tcpnal_ni;
-ptl_nid_t               tcpnal_mynid;
 
 void *inter_module_get(char *arg)
 {
-        if (!strcmp(arg, "tcpnal_ni"))
-                return &tcpnal_ni;
-        else if (!strcmp(arg, "ldlm_cli_cancel_unused"))
+        if (!strcmp(arg, "ldlm_cli_cancel_unused"))
                 return ldlm_cli_cancel_unused;
         else if (!strcmp(arg, "ldlm_namespace_cleanup"))
                 return ldlm_namespace_cleanup;
@@ -67,52 +64,6 @@ void *inter_module_get(char *arg)
                 return ldlm_replay_locks;
         else
                 return NULL;
-}
-
-char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
-{
-        if (nid == PTL_NID_ANY) {
-                snprintf(str, PTL_NALFMT_SIZE, "%s", "PTL_NID_ANY");
-                return str;
-        }
-
-        switch(NALID_FROM_IFACE(nal)){
-#if !CRAY_PORTALS
-        case TCPNAL:
-                /* userspace NAL */
-        case IIBNAL:
-        case OPENIBNAL:
-        case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
-                         (__u32)(nid >> 32), HIPQUAD(nid));
-                break;
-        case QSWNAL:
-        case GMNAL:
-                snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
-                         (__u32)(nid >> 32), (__u32)nid);
-                break;
-#else
-        case PTL_IFACE_SS:
-        case PTL_IFACE_SS_ACCEL:
-                snprintf(str, PTL_NALFMT_SIZE, "%u", (__u32)nid);
-                break;
-#endif
-        default:
-                snprintf(str, PTL_NALFMT_SIZE, "?%x? %llx",
-                         nal, (long long)nid);
-                break;
-        }
-        return str;
-}
-
-char *portals_id2str(int nal, ptl_process_id_t id, char *str)
-{
-        int   len;
-        
-        portals_nid2str(nal, id.nid, str);
-        len = strlen(str);
-        snprintf(str + len, PTL_NALFMT_SIZE - len, ",%u", id.pid);
-        return str;
 }
 
 /*
@@ -228,38 +179,6 @@ static void init_capability(int *res)
 #endif
 }
 
-void liblustre_set_nal_nid()
-{
-#ifdef HAVE_GETHOSTBYNAME
-        pid_t pid;
-        uint32_t ip;
-        struct in_addr in;
-
-        /* need to setup mynid before tcpnal initialization */
-        /* a meaningful nid could help debugging */
-        ip = get_ipv4_addr();
-        if (ip == 0)
-                get_random_bytes(&ip, sizeof(ip));
-        pid = getpid() & 0xffffffff;
-        tcpnal_mynid = ((uint64_t)pid << 32) | ip;
-
-        in.s_addr = htonl(ip);
-        CDEBUG(D_RPCTRACE | D_VFSTRACE, "TCPNAL NID: %016Lx (%u:%s)\n",
-               (long long)tcpnal_mynid, pid, inet_ntoa(in));
-#else
-        pid_t pid;
-        uint32_t ip;
-
-        ip = _my_pnid;
-        if (ip & 0xFF)
-                ip <<= 8;
-        pid = getpid() & 0xFF;
-        tcpnal_mynid = ip | pid;
-        CDEBUG(D_RPCTRACE | D_VFSTRACE, "NAL NID: %08x (%u)\n",
-               tcpnal_mynid, pid);
-#endif
-}
-
 int in_group_p(gid_t gid)
 {
         int i;
@@ -313,13 +232,12 @@ void generate_random_uuid(unsigned char uuid_out[16])
 
 int init_lib_portals()
 {
-        int max_interfaces;
         int rc;
         ENTRY;
 
-        rc = PtlInit(&max_interfaces);
-        if (rc != PTL_OK) {
-                CERROR("PtlInit failed: %d\n", rc);
+        rc = LNetInit();
+        if (rc != 0) {
+                CERROR("LNetInit failed: %d\n", rc);
                 RETURN (-ENXIO);
         }
         RETURN(0);
@@ -329,11 +247,4 @@ extern void ptlrpc_exit_portals(void);
 void cleanup_lib_portals()
 {
         ptlrpc_exit_portals();
-}
-
-int
-libcfs_nal_cmd(struct portals_cfg *pcfg)
-{
-        /* handle portals command if we want */
-        return 0;
 }

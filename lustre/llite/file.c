@@ -154,7 +154,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PW, &data,
                          &lockh, lmm, lmmsize, ldlm_completion_ast,
-                         ll_mdc_blocking_ast, NULL);
+                         ll_mdc_blocking_ast, NULL, 0);
         if (rc < 0)
                 CERROR("lock enqueue: err: %d\n", rc);
         RETURN(rc);
@@ -233,7 +233,7 @@ int ll_file_open(struct inode *inode, struct file *file)
                 if (rc) {
                         ll_file_data_put(fd);
                         GOTO(out, rc);
-        }
+                }
         }
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
@@ -473,9 +473,11 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                                       &lock->l_resource->lr_name, LDLM_EXTENT,
                                       &tmpex, LCK_PR | LCK_PW, &lockh);
                 if (rc2 == 0 && page->mapping != NULL) {
+                        struct ll_async_page *llap = llap_cast_private(page);
                         // checking again to account for writeback's lock_page()
                         LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");
-                        ll_ra_accounting(page, inode->i_mapping);
+                        if (llap)
+                                ll_ra_accounting(llap, inode->i_mapping);
                         ll_truncate_complete_page(page);
                 }
                 unlock_page(page);
@@ -534,10 +536,11 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 stripe = ll_lock_to_stripe_offset(inode, lock);
                 if (stripe < 0)
                         goto iput;
+
                 ll_pgcache_remove_extent(inode, lsm, lock, stripe);
 
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
-                down(&lli->lli_size_sem);
+                lov_stripe_lock(lsm);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
 
@@ -545,7 +548,7 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
-                up(&lli->lli_size_sem);
+                lov_stripe_unlock(lsm);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 //ll_try_done_writing(inode);
         iput:
@@ -670,19 +673,28 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
-int ll_glimpse_size(struct inode *inode)
+int ll_glimpse_size(struct inode *inode, int ast_flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        int rc, flags = LDLM_FL_HAS_INTENT;
+        int rc;
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %lu\n", inode->i_ino);
 
+        ast_flags |= LDLM_FL_HAS_INTENT;
+
+        /* NOTE: this looks like DLM lock request, but it may not be one. Due
+         *       to LDLM_FL_HAS_INTENT flag, this is glimpse request, that
+         *       won't revoke any conflicting DLM locks held. Instead,
+         *       ll_glimpse_callback() will be called on each client
+         *       holding a DLM lock against this file, and resulting size
+         *       will be returned for each stripe. DLM lock on [0, EOF] is
+         *       acquired only if there were no conflicting locks. */
         rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
-                         LCK_PR, &flags, ll_extent_lock_callback,
+                         LCK_PR, &ast_flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
         if (rc == -ENOENT)
@@ -692,10 +704,10 @@ int ll_glimpse_size(struct inode *inode)
                 RETURN(rc > 0 ? -EIO : rc);
         }
 
-        down(&lli->lli_size_sem);
+        ll_inode_size_lock(inode, 1);
         inode->i_size = lov_merge_size(lli->lli_smd, 0);
         inode->i_blocks = lov_merge_blocks(lli->lli_smd);
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 1);
         LTIME_S(inode->i_mtime) =
                 lov_merge_mtime(lli->lli_smd, LTIME_S(inode->i_mtime));
 
@@ -713,11 +725,11 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                    int ast_flags)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_inode_info *lli = ll_i2info(inode);
         int rc;
         ENTRY;
 
         LASSERT(lockh->cookie == 0);
+        LASSERT(lsm != NULL);
 
         /* don't drop the mmapped file to LRU */
         if (mapping_mapped(inode->i_mapping))
@@ -741,16 +753,18 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         if (policy->l_extent.start == 0 &&
             policy->l_extent.end == OBD_OBJECT_EOF) {
                 /* vmtruncate()->ll_truncate() first sets the i_size and then
-                 * the kms under both a DLM lock and the i_sem.  If we don't
-                 * get the i_sem here we can match the DLM lock and reset
-                 * i_size from the kms before the truncating path has updated
-                 * the kms.  generic_file_write can then trust the stale i_size
-                 * when doing appending writes and effectively cancel the
-                 * result of the truncate.  Getting the i_sem after the enqueue
-                 * maintains the DLM -> i_sem acquiry order. */
-                down(&lli->lli_size_sem);
+                 * the kms under both a DLM lock and the
+                 * ll_inode_size_lock().  If we don't get the
+                 * ll_inode_size_lock() here we can match the DLM lock and
+                 * reset i_size from the kms before the truncating path has
+                 * updated the kms.  generic_file_write can then trust the
+                 * stale i_size when doing appending writes and effectively
+                 * cancel the result of the truncate.  Getting the
+                 * ll_inode_size_lock() after the enqueue maintains the DLM
+                 * -> ll_inode_size_lock() acquiring order. */
+                ll_inode_size_lock(inode, 1);
                 inode->i_size = lov_merge_size(lsm, 1);
-                up(&lli->lli_size_sem);
+                ll_inode_size_unlock(inode, 1);
         }
 
         if (rc == 0)
@@ -785,6 +799,7 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_lock_tree tree;
         struct ll_lock_tree_node *node;
+        struct ll_ra_read bead;
         int rc;
         ssize_t retval;
         __u64 kms;
@@ -833,18 +848,38 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         if (rc != 0)
                 RETURN(rc);
 
-        down(&lli->lli_size_sem);
+        ll_inode_size_lock(inode, 1);
+        /*
+         * Consistency guarantees: following possibilities exist for the
+         * relation between region being read and real file size at this
+         * moment:
+         *
+         *  (A): the region is completely inside of the file;
+         *
+         *  (B-x): x bytes of region are inside of the file, the rest is
+         *  outside;
+         *
+         *  (C): the region is completely outside of the file.
+         *
+         * This classification is stable under DLM lock acquired by
+         * ll_tree_lock() above, because to change class, other client has to
+         * take DLM lock conflicting with our lock. Also, any updates to
+         * ->i_size by other threads on this client are serialized by
+         * ll_inode_size_lock(). This guarantees that short reads are handled
+         * correctly in the face of concurrent writes and truncates.
+         */
         kms = lov_merge_size(lsm, 1);
         if (*ppos + count - 1 > kms) {
-                /* A glimpse is necessary to determine whether we return a short
-                 * read or some zeroes at the end of the buffer */
-                up(&lli->lli_size_sem);
-                retval = ll_glimpse_size(inode);
+                /* A glimpse is necessary to determine whether we return a
+                 * short read (B) or some zeroes at the end of the buffer (C) */
+                ll_inode_size_unlock(inode, 1);
+                retval = ll_glimpse_size(inode, 0);
                 if (retval)
                         goto out;
         } else {
+                /* region is within kms and, hence, within real file size (A) */
                 inode->i_size = kms;
-                up(&lli->lli_size_sem);
+                ll_inode_size_unlock(inode, 1);
         }
 
         CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
@@ -856,7 +891,11 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
 #else
         file->f_ra.ra_pages = 0;
 #endif
+        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
+        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+        ll_ra_read_in(file, &bead);
         retval = generic_file_read(file, buf, count, ppos);
+        ll_ra_read_ex(file, &bead);
 
  out:
         ll_tree_unlock(&tree);
@@ -887,7 +926,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 
         /* If file was opened for LL_IOC_LOV_SETSTRIPE but the ioctl wasn't
          * called on the file, don't fail the below assertion (bug 2388). */
-        if (file->f_flags & O_LOV_DELAY_CREATE && 
+        if (file->f_flags & O_LOV_DELAY_CREATE &&
             ll_i2info(inode)->lli_smd == NULL)
                 RETURN(-EBADF);
 
@@ -896,7 +935,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         if (file->f_flags & O_APPEND)
                 node = ll_node_from_inode(inode, 0, OBD_OBJECT_EOF, LCK_PW);
         else
-                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1, 
+                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1,
                                           LCK_PW);
 
         if (IS_ERR(node))
@@ -1250,9 +1289,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 {
         struct inode *inode = file->f_dentry->d_inode;
-        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        struct lustre_handle lockh = {0};
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
         loff_t retval;
         ENTRY;
         retval = offset + ((origin == 2) ? inode->i_size :
@@ -1263,21 +1301,20 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */
-                ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF }};
-                struct ll_inode_info *lli = ll_i2info(inode);
                 int nonblock = 0, rc;
 
                 if (file->f_flags & O_NONBLOCK)
                         nonblock = LDLM_FL_BLOCK_NOWAIT;
 
-                rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
-                                    nonblock);
-                if (rc != 0)
-                        RETURN(rc);
+                if (lsm != NULL) {
+                        rc = ll_glimpse_size(inode, nonblock);
+                        if (rc != 0)
+                                RETURN(rc);
+                }
 
-                down(&lli->lli_size_sem);
+                ll_inode_size_lock(inode, 0);
                 offset += inode->i_size;
-                up(&lli->lli_size_sem);
+                ll_inode_size_unlock(inode, 0);
         } else if (origin == 1) { /* SEEK_CUR */
                 offset += file->f_pos;
         }
@@ -1294,8 +1331,6 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
                 retval = offset;
         }
 
-        if (origin == 2)
-                ll_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
         RETURN(retval);
 }
 
@@ -1524,7 +1559,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
-        rc = ll_glimpse_size(inode);
+        rc = ll_glimpse_size(inode, 0);
         RETURN(rc);
 }
 
@@ -1533,7 +1568,6 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat)
 {
         struct inode *inode = de->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
         int res = 0;
 
         res = ll_inode_revalidate_it(de, it);
@@ -1554,10 +1588,10 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
         stat->ctime = inode->i_ctime;
         stat->blksize = inode->i_blksize;
 
-        down(&lli->lli_size_sem);
+        ll_inode_size_lock(inode, 0);
         stat->size = inode->i_size;
         stat->blocks = inode->i_blocks;
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
 
         return 0;
 }
@@ -1603,5 +1637,9 @@ struct inode_operations ll_file_inode_operations = {
 #else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
+        .setxattr       = ll_setxattr,
+        .getxattr       = ll_getxattr,
+        .listxattr      = ll_listxattr,
+        .removexattr    = ll_removexattr,
 };
 

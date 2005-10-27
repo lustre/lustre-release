@@ -114,7 +114,7 @@ static int expired_lock_main(void *arg)
 
         ENTRY;
         lock_kernel();
-        kportal_daemonize("ldlm_elt");
+        libcfs_daemonize("ldlm_elt");
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -137,8 +137,8 @@ static int expired_lock_main(void *arg)
                         spin_unlock_bh(&waiting_locks_spinlock);
 
                         /* from waiting_locks_callback, but not in timer */
-                        portals_debug_dumplog();
-                        portals_run_lbug_upcall(__FILE__,
+                        libcfs_debug_dumplog();
+                        libcfs_run_lbug_upcall(__FILE__,
                                                 "waiting_locks_callback",
                                                 expired_lock_thread.elt_dump);
 
@@ -189,10 +189,9 @@ static int expired_lock_main(void *arg)
 static void waiting_locks_callback(unsigned long unused)
 {
         struct ldlm_lock *lock, *last = NULL;
-        char str[PTL_NALFMT_SIZE];
 
         if (obd_dump_on_timeout)
-                portals_debug_dumplog();
+                libcfs_debug_dumplog();
 
         spin_lock_bh(&waiting_locks_spinlock);
         while (!list_empty(&waiting_locks_list)) {
@@ -206,7 +205,7 @@ static void waiting_locks_callback(unsigned long unused)
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
                            "%s@%s nid %s ",lock->l_export->exp_client_uuid.uuid,
                            lock->l_export->exp_connection->c_remote_uuid.uuid,
-                           ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer,str));
+                           libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid));
 
                 if (lock == last) {
                         LDLM_ERROR(lock, "waiting on lock multiple times");
@@ -223,9 +222,9 @@ static void waiting_locks_callback(unsigned long unused)
 
                         /* LBUG(); */
                         CEMERG("would be an LBUG, but isn't (bug 5653)\n");
-                        portals_debug_dumpstack(NULL);
-                        /*blocks* portals_debug_dumplog(); */
-                        /*blocks* portals_run_lbug_upcall(file, func, line); */
+                        libcfs_debug_dumpstack(NULL);
+                        /*blocks* libcfs_debug_dumplog(); */
+                        /*blocks* libcfs_run_lbug_upcall(file, func, line); */
                         break;
                 }
                 last = lock;
@@ -272,7 +271,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 LDLM_ERROR(lock, "not waiting on destroyed lock (bug 5653)");
                 if (time_after(jiffies, next)) {
                         next = jiffies + 14400 * HZ;
-                        portals_debug_dumpstack(NULL);
+                        libcfs_debug_dumpstack(NULL);
                 }
                 return 0;
         }
@@ -363,19 +362,18 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
                             const char *ast_type)
 {
         struct ptlrpc_connection *conn = lock->l_export->exp_connection;
-        char str[PTL_NALFMT_SIZE];
-
-        ptlrpc_peernid2str(&conn->c_peer, str);
+        char                     *str = libcfs_nid2str(conn->c_peer.nid);
 
         LCONSOLE_ERROR("A client on nid %s was evicted from service %s.\n",
                        str, lock->l_export->exp_obd->obd_name);
 
-        LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID "LPX64
+        LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID %s"
                    " (%s)", ast_type, rc, lock->l_export->exp_client_uuid.uuid,
-                   conn->c_remote_uuid.uuid, conn->c_peer.peer_id.nid, str);
+                   conn->c_remote_uuid.uuid, libcfs_nid2str(conn->c_peer.nid), 
+                   str);
 
         if (obd_dump_on_timeout)
-                portals_debug_dumplog();
+                libcfs_debug_dumplog();
         class_fail_export(lock->l_export);
 }
 
@@ -383,15 +381,14 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                                  struct ptlrpc_request *req, int rc,
                                  const char *ast_type)
 {
-        struct ptlrpc_peer *peer = &req->rq_import->imp_connection->c_peer;
-        char str[PTL_NALFMT_SIZE];
+        lnet_process_id_t peer = req->rq_import->imp_connection->c_peer;
 
         if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
                 LASSERT(lock->l_export);
                 if (lock->l_export->exp_libclient) {
                         LDLM_DEBUG(lock, "%s AST to liblustre client (nid %s)"
                                    " timeout, just cancelling lock", ast_type,
-                                   ptlrpc_peernid2str(peer, str));
+                                   libcfs_nid2str(peer.nid));
                         ldlm_lock_cancel(lock);
                         rc = -ERESTART;
                 } else {
@@ -405,11 +402,11 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                 if (rc == -EINVAL)
                         LDLM_DEBUG(lock, "client (nid %s) returned %d"
                                    " from %s AST - normal race",
-                                   ptlrpc_peernid2str(peer, str),
+                                   libcfs_nid2str(peer.nid),
                                    req->rq_repmsg->status, ast_type);
                 else
                         LDLM_ERROR(lock, "client (nid %s) returned %d "
-                                   "from %s AST", ptlrpc_peernid2str(peer, str),
+                                   "from %s AST", libcfs_nid2str(peer.nid),
                                    (req->rq_repmsg != NULL) ?
                                    req->rq_repmsg->status : 0, ast_type);
                 ldlm_lock_cancel(lock);
@@ -429,6 +426,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         struct ldlm_request *body;
         struct ptlrpc_request *req;
         int rc = 0, size = sizeof(*body);
+        int instant_cancel = 0;
         ENTRY;
 
         if (flag == LDLM_CB_CANCELING) {
@@ -461,6 +459,9 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         }
 #endif
 
+        if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK)
+                instant_cancel = 1;
+
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LDLM_BL_CALLBACK, 1, &size, NULL);
         if (req == NULL) {
@@ -476,14 +477,21 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         LDLM_DEBUG(lock, "server preparing blocking AST");
         req->rq_replen = lustre_msg_size(0, NULL);
-
-        if (lock->l_granted_mode == lock->l_req_mode)
+        if (instant_cancel) {
+                ldlm_lock_cancel(lock);
+//                ldlm_reprocess_all(lock->l_resource);
+        } else if (lock->l_granted_mode == lock->l_req_mode) {
                 ldlm_add_waiting_lock(lock);
+        }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_timeout = ldlm_timeout; /* timeout for initial AST reply */
-        rc = ptlrpc_queue_wait(req);
+        if (unlikely(instant_cancel)) {
+                rc = ptl_send_rpc_nowait(req);
+        } else {
+                rc = ptlrpc_queue_wait(req);
+        }
         if (rc != 0)
                 rc = ldlm_handle_ast_error(lock, req, rc, "blocking");
 
@@ -557,6 +565,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 body->lock_flags |= LDLM_FL_AST_SENT;
+                body->lock_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
                 ldlm_add_waiting_lock(lock); /* start the lock-timeout clock */
         }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -765,6 +774,7 @@ existing_lock:
                 rc = -ENOTCONN;
         } else if (lock->l_flags & LDLM_FL_AST_SENT) {
                 dlm_rep->lock_flags |= LDLM_FL_AST_SENT;
+                dlm_rep->lock_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
                 if (lock->l_granted_mode == lock->l_req_mode)
                         ldlm_add_waiting_lock(lock);
         }
@@ -902,7 +912,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                        " from client %s id %s\n",
                        dlm_req->lock_handle1.cookie,
                        req->rq_export->exp_client_uuid.uuid,
-                       req->rq_peerstr);
+                       libcfs_id2str(req->rq_peer));
                 LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock "
                                   "(cookie "LPU64")",
                                   dlm_req->lock_handle1.cookie);
@@ -951,6 +961,10 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
         LDLM_DEBUG(lock, "client blocking AST callback handler START");
 
         lock->l_flags |= LDLM_FL_CBPENDING;
+
+        if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK)
+                lock->l_flags |= LDLM_FL_CANCEL;
+
         do_ast = (!lock->l_readers && !lock->l_writers);
 
         if (do_ast) {
@@ -1136,7 +1150,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                        "export cookie "LPX64"; this is "
                        "normal if this node rebooted with a lock held\n",
                        req->rq_reqmsg->opc,
-                       req->rq_peerstr,
+                       libcfs_id2str(req->rq_peer),
                        req->rq_reqmsg->handle.cookie);
 
                 dlm_req = lustre_swab_reqbuf(req, 0, sizeof (*dlm_req),
@@ -1237,7 +1251,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         switch (req->rq_reqmsg->opc) {
         case LDLM_BL_CALLBACK:
                 CDEBUG(D_INODE, "blocking ast\n");
-                ldlm_callback_reply(req, 0);
+                if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK))
+                        ldlm_callback_reply(req, 0);
                 if (ldlm_bl_to_thread(ns, &dlm_req->lock_desc, lock))
                         ldlm_handle_bl_callback(ns, &dlm_req->lock_desc, lock);
                 break;
@@ -1271,7 +1286,7 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                 struct ldlm_request *dlm_req;
 
                 CERROR("operation %d from %s with bad export cookie "LPU64"\n",
-                       req->rq_reqmsg->opc, req->rq_peerstr,
+                       req->rq_reqmsg->opc, libcfs_id2str(req->rq_peer),
                        req->rq_reqmsg->handle.cookie);
 
                 dlm_req = lustre_swab_reqbuf(req, 0, sizeof (*dlm_req),
@@ -1339,7 +1354,7 @@ static int ldlm_bl_thread_main(void *arg)
                 char name[sizeof(current->comm)];
                 snprintf(name, sizeof(name) - 1, "ldlm_bl_%02d",
                          bltd->bltd_num);
-                kportal_daemonize(name);
+                libcfs_daemonize(name);
         }
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -1431,7 +1446,7 @@ static int ldlm_setup(void)
         ldlm_state->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_MAXREPSIZE, LDLM_CB_REQUEST_PORTAL,
-                                LDLM_CB_REPLY_PORTAL, 1500,
+                                LDLM_CB_REPLY_PORTAL, ldlm_timeout * 900,
                                 ldlm_callback_handler, "ldlm_cbd",
                                 ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS);
 
@@ -1633,6 +1648,8 @@ EXPORT_SYMBOL(ldlm_lock_allow_match);
 
 /* ldlm_request.c */
 EXPORT_SYMBOL(ldlm_completion_ast);
+EXPORT_SYMBOL(ldlm_blocking_ast);
+EXPORT_SYMBOL(ldlm_glimpse_ast);
 EXPORT_SYMBOL(ldlm_expired_completion_wait);
 EXPORT_SYMBOL(ldlm_cli_convert);
 EXPORT_SYMBOL(ldlm_cli_enqueue);

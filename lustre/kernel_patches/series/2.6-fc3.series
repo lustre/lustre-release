@@ -19,4 +19,3 @@ hostfs_readdir_large.patch
 ext3-patch-fuzz-fixup-fc3.patch
 uml-exprt-clearuser.patch
 fsprivate-2.6.patch
-ext3-ialloc-2.6.patch

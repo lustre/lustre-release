@@ -63,7 +63,7 @@ CSTKO=/tmp/checkstack.orig
 
 checkstack:
 	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv ${CSTK} ${CSTKO} || true
-	for i in ${SUBDIRS} portals/knals/*; do				     \
+	for i in ${SUBDIRS} lnet/klnds/*; do				     \
 		MOD=$$i/`basename $$i`.o;				     \
 		[ -f $$MOD ] && objdump -d $$MOD | perl tests/checkstack.pl; \
 	done | sort -nr > ${CSTK}

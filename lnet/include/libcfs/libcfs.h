@@ -22,7 +22,7 @@
 #include <stdio.h>
 #endif
 
-#define PORTAL_DEBUG
+#define LIBCFS_DEBUG
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
@@ -33,13 +33,13 @@
 /*
  *  Debugging
  */
-extern unsigned int portal_subsystem_debug;
-extern unsigned int portal_stack;
-extern unsigned int portal_debug;
-extern unsigned int portal_printk;
+extern unsigned int libcfs_subsystem_debug;
+extern unsigned int libcfs_stack;
+extern unsigned int libcfs_debug;
+extern unsigned int libcfs_printk;
 
 /* Has there been an LBUG? */
-extern unsigned int portals_catastrophe;
+extern unsigned int libcfs_catastrophe;
 
 /*
  * struct ptldebug_header is defined in libcfs/<os>/libcfs.h
@@ -58,15 +58,15 @@ extern unsigned int portals_catastrophe;
 #define S_LLITE       0x00000080
 #define S_RPC         0x00000100
 #define S_MGMT        0x00000200
-#define S_PORTALS     0x00000400
-#define S_NAL         0x00000800 /* ALL NALs */
+#define S_LNET        0x00000400
+#define S_LND         0x00000800 /* ALL LNDs */
 #define S_PINGER      0x00001000
 #define S_FILTER      0x00002000
 #define S_PTLBD       0x00004000
 #define S_ECHO        0x00008000
 #define S_LDLM        0x00010000
 #define S_LOV         0x00020000
-#define S_PTLROUTER   0x00040000
+/* unused */
 #define S_COBD        0x00080000
 #define S_SM          0x00100000
 #define S_ASOBD       0x00200000
@@ -76,6 +76,8 @@ extern unsigned int portals_catastrophe;
 #define S_SEC         0x02000000
 #define S_GSS         0x04000000
 #define S_GKS         0x08000000
+#define S_MGC         0x10000000
+#define S_MGS         0x20000000
 /* If you change these values, please keep these files up to date...
  *    portals/utils/debug.c
  *    utils/lconf
@@ -124,9 +126,9 @@ extern unsigned int portals_catastrophe;
 do {                                                                          \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||         \
-            (portal_debug & (mask) &&                                         \
-             portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
-                portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
+            (libcfs_debug & (mask) &&                                         \
+             libcfs_subsystem_debug & DEBUG_SUBSYSTEM))                       \
+                libcfs_debug_msg(DEBUG_SUBSYSTEM, mask,                       \
                                   __FILE__, __FUNCTION__, __LINE__,           \
                                   CDEBUG_STACK, format, ## a);                \
 } while (0)
@@ -140,14 +142,14 @@ do {                                                                          \
                                                                               \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (cfs_time_after(cfs_time_current(), cdebug_next)) {                \
-                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
+                libcfs_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,      \
                                   __FUNCTION__, __LINE__, CDEBUG_STACK,       \
                                   cdebug_format, ## a);                       \
                 if (cdebug_count) {                                           \
-                        portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
-                                          __FILE__, __FUNCTION__, __LINE__,0, \
-                                          "previously skipped %d similar "    \
-                                          "messages\n", cdebug_count);        \
+                        libcfs_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,        \
+                                         __FILE__, __FUNCTION__, __LINE__, 0, \
+                                         "previously skipped %d similar "     \
+                                         "messages\n", cdebug_count);         \
                         cdebug_count = 0;                                     \
                 }                                                             \
                 if (cfs_time_after(cfs_time_current(),                        \
@@ -161,11 +163,11 @@ do {                                                                          \
                                        cdebug_delay*2;                        \
                 cdebug_next = cfs_time_current() + cdebug_delay;              \
         } else {                                                              \
-                portals_debug_msg(DEBUG_SUBSYSTEM,                            \
-                                  portal_debug &                              \
-                                  ~(D_EMERG|D_ERROR|D_WARNING|D_CONSOLE),     \
-                                  __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK, cdebug_format, ## a);         \
+                libcfs_debug_msg(DEBUG_SUBSYSTEM,                             \
+                                 libcfs_debug &                               \
+                                 ~(D_EMERG|D_ERROR|D_WARNING|D_CONSOLE),      \
+                                 __FILE__, __FUNCTION__, __LINE__,            \
+                                 CDEBUG_STACK, cdebug_format, ## a);          \
                 cdebug_count++;                                               \
         }                                                                     \
 } while (0)
@@ -185,8 +187,8 @@ do {                                                                    \
 #define CDEBUG(mask, format, a...)                                      \
 do {                                                                    \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||   \
-            (portal_debug & (mask) &&                                   \
-             portal_subsystem_debug & DEBUG_SUBSYSTEM))                 \
+            (libcfs_debug & (mask) &&                                   \
+             libcfs_subsystem_debug & DEBUG_SUBSYSTEM))                 \
                 fprintf(stderr, "(%s:%d:%s()) " format,                 \
                         __FILE__, __LINE__, __FUNCTION__, ## a);        \
 } while (0)
@@ -249,129 +251,47 @@ do {                                                                    \
 #endif /* !CDEBUG_ENTRY_EXIT */
 
 
-#define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID
-
-/*
- * eeb cfg
- * ecf6
- * ecfG
- */
-#define PORTALS_CFG_VERSION 0xecf60001
-
-struct portals_cfg {
-        __u32 pcfg_version;
-        __u32 pcfg_command;
-
-        __u32 pcfg_nal;
-        __u32 pcfg_flags;
-
-        __u32 pcfg_gw_nal;
-        __u32 pcfg_padding1;
-
-        __u64 pcfg_nid;
-        __u64 pcfg_nid2;
-        __u64 pcfg_nid3;
-        __u32 pcfg_id;
-        __u32 pcfg_misc;
-        __u32 pcfg_fd;
-        __u32 pcfg_count;
-        __u32 pcfg_size;
-        __u32 pcfg_wait;
-
-        __u32 pcfg_plen1; /* buffers in userspace */
-        __u32 pcfg_plen2; /* buffers in userspace */
-        __u32 pcfg_alloc_size;  /* size of this allocated portals_cfg */
-        char  pcfg_pbuf[0];
-};
-
-#define PCFG_INIT(pcfg, cmd)                            \
-do {                                                    \
-        memset(&(pcfg), 0, sizeof((pcfg)));             \
-        (pcfg).pcfg_version = PORTALS_CFG_VERSION;      \
-        (pcfg).pcfg_command = (cmd);                    \
-                                                        \
-} while (0)
-
-#define PCFG_INIT_PBUF(pcfg, cmd, plen1, plen2)                         \
-        do {                                                            \
-                int bufsize = size_round(sizeof(*(pcfg)));              \
-                bufsize += size_round(plen1) + size_round(plen2);       \
-                PORTAL_ALLOC((pcfg), bufsize);                          \
-                if ((pcfg)) {                                           \
-                        memset((pcfg), 0, bufsize);                     \
-                        (pcfg)->pcfg_version = PORTALS_CFG_VERSION;     \
-                        (pcfg)->pcfg_command = (cmd);                   \
-                        (pcfg)->pcfg_plen1 = (plen1);                   \
-                        (pcfg)->pcfg_plen2 = (plen2);                   \
-                        (pcfg)->pcfg_alloc_size = bufsize;              \
-                }                                                       \
-        } while (0)
-
-#define PCFG_FREE_PBUF(pcfg) PORTAL_FREE((pcfg), (pcfg)->pcfg_alloc_size)
-
-#define PCFG_PBUF(pcfg, idx)                                            \
-        (0 == (idx)                                                     \
-         ? ((char *)(pcfg) + size_round(sizeof(*(pcfg))))               \
-         : (1 == (idx)                                                  \
-            ? ((char *)(pcfg) + size_round(sizeof(*(pcfg))) + size_round(pcfg->pcfg_plen1)) \
-            : (NULL)))
-
-typedef int (nal_cmd_handler_fn)(struct portals_cfg *, void *);
-int libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *arg);
-int libcfs_nal_cmd(struct portals_cfg *pcfg);
-void libcfs_nal_cmd_unregister(int nal);
-
-struct portal_ioctl_data {
-        __u32 ioc_len;
-        __u32 ioc_version;
-        __u64 ioc_nid;
-        __u64 ioc_nid2;
-        __u64 ioc_nid3;
-        __u32 ioc_count;
-        __u32 ioc_nal;
-        __u32 ioc_nal_cmd;
-        __u32 ioc_fd;
-        __u32 ioc_id;
-
-        __u32 ioc_flags;
-        __u32 ioc_size;
-
-        __u32 ioc_wait;
-        __u32 ioc_timeout;
-        __u32 ioc_misc;
-
-        __u32 ioc_inllen1;
-        char *ioc_inlbuf1;
-        __u32 ioc_inllen2;
-        char *ioc_inlbuf2;
-
-        __u32 ioc_plen1; /* buffers in userspace */
-        char *ioc_pbuf1;
-        __u32 ioc_plen2; /* buffers in userspace */
-        char *ioc_pbuf2;
-
-        char ioc_bulk[0];
-};
-
+#define LUSTRE_SRV_LNET_PID      LUSTRE_LNET_PID
 
 #ifdef __KERNEL__
 
 #include <libcfs/list.h>
 
+struct libcfs_ioctl_data;                       /* forward ref */
+
 struct libcfs_ioctl_handler {
         struct list_head item;
-        int (*handle_ioctl)(struct portal_ioctl_data *data,
-                            unsigned int cmd, unsigned long args);
+        int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_data *data);
 };
 
 #define DECLARE_IOCTL_HANDLER(ident, func)              \
         struct libcfs_ioctl_handler ident = {           \
-                .item = CFS_LIST_HEAD_INIT(ident.item),     \
+                .item = CFS_LIST_HEAD_INIT(ident.item), \
                 .handle_ioctl = func                    \
         }
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
+
+/* libcfs tcpip */
+#define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
+#define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
+
+int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
+int libcfs_ipif_enumerate(char ***names);
+void libcfs_ipif_free_enumeration(char **names, int n);
+int libcfs_sock_listen(struct socket **sockp, __u32 ip, int port, int backlog);
+int libcfs_sock_accept(struct socket **newsockp, struct socket *sock);
+void libcfs_sock_abort_accept(struct socket *sock);
+int libcfs_sock_connect(struct socket **sockp, int *fatal,
+                        __u32 local_ip, int local_port,
+                        __u32 peer_ip, int peer_port);
+int libcfs_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
+int libcfs_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
+int libcfs_sock_getaddr(struct socket *socket, int remote, __u32 *ip, int *port);
+int libcfs_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
+int libcfs_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
+void libcfs_sock_release(struct socket *sock);
 
 /* libcfs watchdogs */
 struct lc_watchdog;
@@ -472,10 +392,13 @@ static inline time_t cfs_unix_seconds(void)
         result;                                                 \
 })
 
-extern void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
-                              const int line, unsigned long stack,
-                              char *format, ...)
+extern void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
+                             const int line, unsigned long stack,
+                             char *format, ...)
             __attribute__ ((format (printf, 7, 8)));
+
+extern void libcfs_assertion_failed(char *expr, char *file, 
+                                    const char *fn, const int line);
 
 static inline void cfs_slow_warning(cfs_time_t now, int seconds, char *msg)
 {

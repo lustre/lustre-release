@@ -66,9 +66,6 @@ struct group_info *groups_alloc(int ngroups)
 
 void groups_free(struct group_info *ginfo)
 {
-        if (!ginfo)
-                return;
-
         LASSERT(ginfo->ngroups <= NGROUPS_SMALL);
         LASSERT(ginfo->nblocks == 1);
         LASSERT(ginfo->blocks[0] == ginfo->small_block);
@@ -96,7 +93,8 @@ static struct upcall_cache_entry *alloc_entry(__u64 key)
 /* protected by hash lock */
 static void free_entry(struct upcall_cache_entry *entry)
 {
-        groups_free(entry->ue_group_info);
+        if (entry->ue_group_info)
+                groups_free(entry->ue_group_info);
         list_del(&entry->ue_hash);
         CDEBUG(D_OTHER, "destroy cache entry %p for key "LPU64"\n",
                entry, entry->ue_key);

@@ -165,7 +165,7 @@ restart:
                         CERROR("called on root (?) dentry=%p, inode=%p "
                                "ino=%lu\n", dentry, inode, inode->i_ino);
                         lustre_dump_dentry(dentry, 1);
-                        portals_debug_dumpstack(NULL);
+                        libcfs_debug_dumpstack(NULL);
                 } else if (d_mountpoint(dentry)) {
                         /* For mountpoints we skip removal of the dentry
                            which happens solely because we have a lock on it
@@ -303,7 +303,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                                de->d_name.name, de->d_name.len, 0);
 
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
-                             &req, ll_mdc_blocking_ast);
+                             &req, ll_mdc_blocking_ast, 0);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)

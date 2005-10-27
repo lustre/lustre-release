@@ -27,7 +27,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include "obdctl.h"
 #include "parser.h"
 
@@ -64,9 +64,15 @@ command_t cmdlist[] = {
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
         {"--net", jt_opt_net, 0, "run <command> after setting network to <net>\n"
-         "usage: --net <tcp/elan/myrinet> <command>"},
-        {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
-         "usage: network <tcp/elan/myrinet>"},
+         "usage: --net <tcp/elan/gm/...> <command>"},
+        {"network", jt_ptl_network, 0, "configure LNET"
+         "usage: network up|down"},
+        {"net", jt_ptl_network, 0, "configure LNET"
+         "usage: net up|down"},
+        {"list_nids", jt_ptl_list_nids, 0, "list local NIDs"
+         "usage: list_nids [all]"},
+        {"which_nid", jt_ptl_which_nid, 0, "choose a NID"
+         "usage: which_nid NID [NID...]"},
         {"interface_list", jt_ptl_print_interfaces,0,"print interface entries\n"
          "usage: interface_list"},
         {"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
@@ -81,8 +87,6 @@ command_t cmdlist[] = {
          "usage: del_autoconn [<nid>] [<host>] [ks]"},
         {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
          "usage: conn_list"},
-        {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
-         "usage: connect <host> <port> [iIOC]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
          "usage: disconnect [<nid>]"},
         {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits\n"
@@ -91,8 +95,6 @@ command_t cmdlist[] = {
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet networks.\n"
          "usage: mynid [<nid>]"},
-        {"shownid", jt_ptl_shownid, 0, "print the local NID\n"
-         "usage: shownid"},
         {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid> <net_type>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
@@ -118,9 +120,6 @@ command_t cmdlist[] = {
          "Omitting the count means indefinitely, 0 means restore, "
          "otherwise fail 'count' messages.\n"
          "usage: fail nid|_all_ [count]"},
-        {"loopback", jt_ptl_loopback, 0, "print loopback state\n"
-         "With arg enable/disable\n"
-         "usage: loopback [on|off]"},
 
         /* Device selection commands */
         {"=== device selection ===", jt_noop, 0, "device selection"},

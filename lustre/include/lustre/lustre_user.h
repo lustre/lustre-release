@@ -15,7 +15,7 @@
 #include <lustre/types.h>
 #endif
 
-#ifdef HAVE_LINUX_QUOTA_H
+#ifdef HAVE_QUOTA_SUPPORT
 #include <linux/quota.h>
 #endif
 
@@ -160,6 +160,7 @@ struct mds_grp_downcall_data {
         __u32           mgd_groups[0];
 };
 
+
 #ifndef __KERNEL__
 #define NEED_QUOTA_DEFS
 #else
@@ -168,6 +169,8 @@ struct mds_grp_downcall_data {
 #  define NEED_QUOTA_DEFS
 # endif
 #endif
+
+#ifdef HAVE_QUOTA_SUPPORT
 
 #ifdef NEED_QUOTA_DEFS
 #ifndef QUOTABLOCK_BITS
@@ -219,7 +222,7 @@ struct if_dqblk {
 #define QIF_ALL         (QIF_LIMITS | QIF_USAGE | QIF_TIMES)
 #endif
 
-#endif /* !__KERNEL__ */
+#endif /* NEED_QUOTA_DEFS */
 
 struct if_quotactl {
         int                     qc_cmd;
@@ -231,6 +234,13 @@ struct if_quotactl {
         char                    obd_type[10];
         struct obd_uuid         obd_uuid;
 };
+
+#else
+
+struct if_quotactl {
+};
+
+#endif /* HAVE_QUOTA_SUPPORT */
 
 #ifndef LPU64
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
@@ -254,5 +264,9 @@ struct if_quotactl {
 # define LPSSZ "%ld"
 #endif
 #endif /* !LPU64 */
+
+#ifndef offsetof
+# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
+#endif
 
 #endif /* _LUSTRE_USER_H */

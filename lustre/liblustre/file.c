@@ -189,7 +189,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
 
         if (!S_ISREG(st->st_mode))
                 GOTO(out_release, rc = 0);
-                
+
         fd = lli->lli_file_data;
 
         lsm = lli->lli_smd;
@@ -210,22 +210,20 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         it->it_op_release(it);
         OBD_FREE(it, sizeof(*it));
 
-        /* libsysio haven't doing anything for O_TRUNC. here we
-         * simply simulate it as open(...); truncate(...);
-         */
-        if (rc == 0 && (flags & O_TRUNC) &&
-            S_ISREG(st->st_mode)) {
+        /* libsysio hasn't done anything for O_TRUNC. here we
+         * simply simulate it as open(...); truncate(...); */
+        if (rc == 0 && (flags & O_TRUNC) && S_ISREG(st->st_mode)) {
                 struct iattr attr;
 
                 memset(&attr, 0, sizeof(attr));
                 attr.ia_size = 0;
                 attr.ia_valid |= ATTR_SIZE | ATTR_RAW;
-                rc  = llu_setattr_raw(inode, &attr);
-                if (rc) {
+                rc = llu_setattr_raw(inode, &attr);
+                if (rc)
                         CERROR("error %d truncate in open()\n", rc);
-                }
         }
 
+        liblustre_wait_event(0);
         RETURN(rc);
 }
 
@@ -357,7 +355,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         RETURN(rc);
 }
 
-int llu_file_release(struct inode *inode)
+static int llu_file_release(struct inode *inode)
 {
         struct ll_file_data *fd;
         struct llu_sb_info *sbi = llu_i2sbi(inode);
@@ -401,6 +399,7 @@ int llu_iop_close(struct inode *inode)
         }
         /* if open count == 0 && stale_flag is set, should we
          * remove the inode immediately? */
+        liblustre_wait_event(0);
         return 0;
 }
 
@@ -416,8 +415,8 @@ _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off)
         RETURN(off);
 }
 
-/* this isn't where truncate starts.   roughly:
- * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
+/* this isn't where truncate starts.  roughly:
+ * llu_iop_{open,setattr}->llu_setattr_raw->llu_vmtruncate->llu_truncate
  * we grab the lock back in setattr_raw to avoid races. */
 static void llu_truncate(struct inode *inode)
 {

@@ -24,7 +24,7 @@ noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany rmdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
-noinst_PROGRAMS += mmap_sanity flock_test writemany
+noinst_PROGRAMS += mmap_sanity flock_test writemany random-reads
 if MPITESTS
 noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
 endif
@@ -33,7 +33,7 @@ bin_PROGRAMS = mcreate munlink
 endif # TESTS
 
 stat_SOURCES = stat.c stat_fs.h
-# mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
+# mkdirdeep_LDADD=-L$(top_builddir)/lnet/utils -lptlctl $(LIBREADLINE)
 mmap_sanity_SOURCES= mmap_sanity.c
 
 if MPITESTS

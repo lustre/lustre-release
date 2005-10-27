@@ -1,0 +1,45 @@
+#!/bin/sh
+
+# reduce LEVELS from 3 => 2 by CFS
+LEVELS=2 ;		[ -z "$1" ] || LEVELS=$1
+DIRS=10 ;		[ -z "$2" ] || DIRS=$2
+FILES=10 ;		[ -z "$2" ] || FILES=$3
+NUMBER_OF_ACLS=50 ;	[ -z "$3" ] || NUMBER_OF_ACLS=$4
+
+function random_dir() {
+	mkdir -p $1
+	#setfacl -s "u::rwx,u:$[($RANDOM % $NUMBER_OF_ACLS)+1000]:rwx,g::rx,o:-" $1
+}
+
+function random_file() {
+	touch $1
+	#setfacl -s "u::rw,u:$[($RANDOM % $NUMBER_OF_ACLS)+1000]:rw,g::r,o:-" $1
+}
+
+function create () {
+	local LEVEL=$1
+	if [ $LEVEL -eq 0 ]; then
+		local I=0
+		while [ $I -lt $FILES ]; do
+			random_file file$I
+			I=$[$I+1]
+		done
+	else
+		local I=0
+		while [ $I -lt $DIRS ]; do
+			random_dir dir$I
+			cd dir$I
+			create $[$LEVEL-1]
+			cd ..
+			I=$[$I+1]
+		done
+	fi
+	return
+}
+
+mkdir -p tree
+cd tree
+create $LEVELS
+cd ..
+exit 0
+

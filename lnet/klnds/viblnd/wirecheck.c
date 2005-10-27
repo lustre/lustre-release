@@ -5,11 +5,19 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <portals/api-support.h>
-#include <portals/lib-types.h>
+
+#include <lnet/api-support.h>
+
+/* This ghastly hack to allows me to include lib-types.h It doesn't affect any
+ * assertions generated here (but fails-safe if it ever does) */
+typedef struct {
+        int     counter;
+} atomic_t;
+
+#include <lnet/lib-types.h>
 
 #define IBNAL_USE_FMR 1
-#include "vibnal_wire.h"
+#include "viblnd_wire.h"
 
 #ifndef HAVE_STRNLEN
 #define strnlen(s, i) strlen(s)

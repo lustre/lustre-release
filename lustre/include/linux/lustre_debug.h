@@ -30,7 +30,7 @@
 do { if (index > ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT)) {             \
         CERROR("bad page index %lu > %Lu\n", index,                     \
                ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT));                \
-        portal_debug = ~0UL;                                            \
+        libcfs_debug = ~0UL;                                            \
         OP;                                                             \
 }} while(0)
 
@@ -38,7 +38,7 @@ do { if (index > ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT)) {             \
 do { if (offset > ASSERT_MAX_SIZE_MB << 20) {                           \
         CERROR("bad file offset %Lu > %Lu\n", offset,                   \
                ASSERT_MAX_SIZE_MB << 20);                               \
-        portal_debug = ~0UL;                                            \
+        libcfs_debug = ~0UL;                                            \
         OP;                                                             \
 }} while(0)
 

@@ -1,15 +1,15 @@
-# define DEBUG_SUBSYSTEM S_PORTALS
+# define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
-void portals_debug_dumpstack(cfs_task_t *tsk)
+void libcfs_debug_dumpstack(cfs_task_t *tsk)
 { 
 	return;
 }
 
-cfs_task_t *portals_current(void)
+cfs_task_t *libcfs_current(void)
 { 
 	return cfs_current();
 }

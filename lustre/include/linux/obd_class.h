@@ -64,19 +64,19 @@ int class_name2dev(char *name);
 struct obd_device *class_name2obd(char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
-struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid, 
+struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           char * typ_name,
                                           struct obd_uuid *grp_uuid);
 struct obd_device * class_find_client_notype(struct obd_uuid *tgt_uuid,
                                              struct obd_uuid *grp_uuid);
-struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, 
+struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
                                            int *next);
 
 int oig_init(struct obd_io_group **oig);
 void oig_add_one(struct obd_io_group *oig,
                   struct oig_callback_context *occ);
-void oig_complete_one(struct obd_io_group *oig, 
-                       struct oig_callback_context *occ, int rc);
+void oig_complete_one(struct obd_io_group *oig,
+                      struct oig_callback_context *occ, int rc);
 void oig_release(struct obd_io_group *oig);
 int oig_wait(struct obd_io_group *oig);
 /* ping evictor */
@@ -89,8 +89,7 @@ void ping_evictor_stop(void);
 #endif
 
 
-/* buf should be len PTL_NALFMT_SIZE */
-char *obd_export_nid2str(struct obd_export *exp, char *buf);
+char *obd_export_nid2str(struct obd_export *exp);
 
 int obd_export_evict_by_nid(struct obd_device *obd, char *nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid);
@@ -107,7 +106,6 @@ void class_decref(struct obd_device *obd);
 struct config_llog_instance {
         char * cfg_instance;
         struct obd_uuid cfg_uuid;
-        ptl_nid_t  cfg_local_nid;
 };
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg);
@@ -160,9 +158,7 @@ int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 void class_disconnect_stale_exports(struct obd_device *obddev);
-/* generic operations shared by various OBD types */
-int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
-int class_multi_cleanup(struct obd_device *obddev);
+void class_manual_cleanup(struct obd_device *obd);
 
 /* obdo.c */
 #ifdef __KERNEL__
@@ -533,16 +529,20 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
 
 static inline int obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                               struct obd_uuid *cluuid,
-                              struct obd_connect_data *data)
+                              struct obd_connect_data *d)
 {
         int rc;
+        __u64 ocf = d ? d->ocd_connect_flags : 0; /* for post-condition check */
         ENTRY;
 
         OBD_CHECK_DEV_ACTIVE(obd);
         OBD_CHECK_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(conn, obd, cluuid, data);
+        rc = OBP(obd, connect)(conn, obd, cluuid, d);
+        /* check that only subset is granted */
+        LASSERT(ergo(d != NULL,
+                     (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
         RETURN(rc);
 }
 
@@ -1134,8 +1134,8 @@ typedef __u8 class_uuid_t[16];
 void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
 
 /* lustre_peer.c    */
-int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid);
-int class_add_uuid(char *uuid, __u64 nid, __u32 nal);
+int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index);
+int class_add_uuid(char *uuid, __u64 nid);
 int class_del_uuid (char *uuid);
 void class_init_uuidlist(void);
 void class_exit_uuidlist(void);

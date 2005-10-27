@@ -33,8 +33,8 @@
 #include <pwd.h>
 #include <grp.h>
 
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
@@ -43,6 +43,10 @@
 
 #include "parser.h"
 #include "obdctl.h"
+
+unsigned int libcfs_subsystem_debug = 0;
+
+#ifdef HAVE_QUOTA_SUPPORT
 
 /* FIXME: Q_SYNC ... commands defined in linux/quota.h seems broken,
  *        so define new commands with the value in kernel */
@@ -53,7 +57,13 @@
 #define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
 #define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
 
-unsigned int portal_subsystem_debug = 0;
+/* Where is this stupid thing supposed to be defined? */
+#ifndef USRQUOTA
+# define USRQUOTA 0
+# define GRPQUOTA 1
+#endif
+
+#endif /* HAVE_QUOTA_SUPPORT */
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
@@ -62,12 +72,14 @@ static int lfs_getstripe(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 static int lfs_catinfo(int argc, char **argv);
+#ifdef HAVE_QUOTA_SUPPORT
 static int lfs_quotachog(int argc, char **argv);
 static int lfs_quotacheck(int argc, char **argv);
 static int lfs_quotaon(int argc, char **argv);
 static int lfs_quotaoff(int argc, char **argv);
 static int lfs_setquota(int argc, char **argv);
 static int lfs_quota(int argc, char **argv);
+#endif
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -77,7 +89,7 @@ command_t cmdlist[] = {
          "delete the default striping pattern from an existing directory\n"
          "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
          "       or \n"
-         "       setstripe -d <dirname>\n"
+         "       setstripe -d <dirname>   (to delete default striping)\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default, -1 all)"},
@@ -98,6 +110,7 @@ command_t cmdlist[] = {
          "\tkeywords are one of followings: config, deletions.\n"
          "\tnode name must be provided when use keyword config."},
         {"osts", lfs_osts, 0, "osts"},
+#ifdef HAVE_QUOTA_SUPPORT
         {"quotachog",lfs_quotachog, 0,
          "Change all files owner or group in specified filesystem.\n"
          "usage: quotachog [-i] <filesystem>\n"
@@ -116,6 +129,7 @@ command_t cmdlist[] = {
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
          "usage: quota -t [ -u |-g ] <filesystem>\n"
          "       quota [ -o obd_uuid ] [ -u | -g ] [name] <filesystem>"},
+#endif
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -138,30 +152,30 @@ static int lfs_setstripe(int argc, char **argv)
         if (argc == 3) {
                 if (strcmp(argv[1], "-d") != 0)
                         return CMD_HELP;
-                
+
                 fname = argv[2];
-                st_size = -1;
+                st_size = 0;
+                st_offset = -1;
                 st_count = 0;
-                st_offset = 0;
         } else {
                 fname = argv[1];
 
-                // get the stripe size
+                /* get the stripe size */
                 st_size = strtoul(argv[2], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe size '%s'\n",
                                 argv[0], argv[2]);
                         return CMD_HELP;
                 }
-                
-                // get the stripe offset
+
+                /* get the stripe offset */
                 st_offset = strtoul(argv[3], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
                                 argv[0], argv[3]);
                         return CMD_HELP;
                 }
-                // get the stripe count
+                /* get the stripe count */
                 st_count = strtoul(argv[4], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe count '%s'\n",
@@ -423,7 +437,7 @@ static int lfs_catinfo(int argc, char **argv)
         return rc;
 }
 
-
+#ifdef HAVE_QUOTA_SUPPORT
 static int lfs_quotachog(int argc, char **argv)
 {
 
@@ -947,6 +961,7 @@ static int lfs_quota(int argc, char **argv)
         print_quota(mnt, name, &qctl);
         return 0;
 }
+#endif /* HAVE_QUOTA_SUPPORT */
 
 int main(int argc, char **argv)
 {

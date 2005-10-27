@@ -82,7 +82,7 @@ void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
         }
 }
 
-static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req, 
+static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
@@ -167,7 +167,7 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
         RETURN(0);
 }
 
-static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req, 
+static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
@@ -214,7 +214,7 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req, 
+static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
@@ -345,21 +345,12 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
         int i;
 
         for (i = 0; i < desc->bd_iov_count; i++) {
-#ifdef CRAY_PORTALS
-                char *ptr = desc->bd_iov[i].iov_base;
-                int len = desc->bd_iov[i].iov_len;
-#else
                 struct page *page = desc->bd_iov[i].kiov_page;
                 int off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
                 char *ptr = kmap(page) + off;
                 int len = desc->bd_iov[i].kiov_len;
-#endif
 
                 cksum = crc32_le(cksum, ptr, len);
-#ifndef CRAY_PORTALS
-                kunmap(page);
-                LL_CDEBUG_PAGE(D_PAGE, page, "off %d checksum %x\n", off,cksum);
-#endif
         }
 
         return cksum;
@@ -413,6 +404,94 @@ static void ost_nio_pages_put(struct ptlrpc_request *req,
         EXIT;
 }
 
+/* cut-n-paste of mds_blocking_ast() */
+static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                            void *data, int flag)
+{
+        int do_ast;
+        ENTRY;
+
+        if (flag == LDLM_CB_CANCELING) {
+                /* Don't need to do anything here. */
+                RETURN(0);
+        }
+
+        /* XXX layering violation!  -phil */
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        /* Get this: if mds_blocking_ast is racing with mds_intent_policy,
+         * such that mds_blocking_ast is called just before l_i_p takes the
+         * ns_lock, then by the time we get the lock, we might not be the
+         * correct blocking function anymore.  So check, and return early, if
+         * so. */
+        if (lock->l_blocking_ast != ost_blocking_ast) {
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                RETURN(0);
+        }
+
+        lock->l_flags |= LDLM_FL_CBPENDING;
+        do_ast = (!lock->l_readers && !lock->l_writers);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
+        if (do_ast) {
+                struct lustre_handle lockh;
+                int rc;
+
+                LDLM_DEBUG(lock, "already unused, calling ldlm_cli_cancel");
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0)
+                        CERROR("ldlm_cli_cancel: %d\n", rc);
+        } else {
+                LDLM_DEBUG(lock, "Lock still has references, will be "
+                           "cancelled later");
+        }
+        RETURN(0);
+}
+
+static int ost_brw_lock_get(int mode, struct obd_export *exp,
+                            struct obd_ioobj *obj, struct niobuf_remote *nb,
+                            struct lustre_handle *lh)
+{
+        int flags                 = 0;
+        int nrbufs                = obj->ioo_bufcnt;
+        struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
+        ldlm_policy_data_t policy;
+        int i;
+
+        ENTRY;
+
+        LASSERT(mode == LCK_PR || mode == LCK_PW);
+
+        /* EXPENSIVE ASSERTION */
+        for (i = 1; i < nrbufs; i ++)
+                LASSERT((nb[0].flags & OBD_BRW_SRVLOCK) ==
+                        (nb[i].flags & OBD_BRW_SRVLOCK));
+
+        if (nrbufs == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
+                RETURN(0);
+
+        policy.l_extent.start = nb[0].offset & CFS_PAGE_MASK;
+        policy.l_extent.end   = (nb[nrbufs - 1].offset +
+                                 nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
+
+        RETURN(ldlm_cli_enqueue(NULL, NULL, exp->exp_obd->obd_namespace,
+                                res_id, LDLM_EXTENT, &policy, mode, &flags,
+                                ldlm_blocking_ast, ldlm_completion_ast,
+                                ldlm_glimpse_ast,
+                                NULL, NULL, 0, NULL, lh));
+}
+
+static void ost_brw_lock_put(int mode,
+                             struct obd_ioobj *obj, struct niobuf_remote *niob,
+                             struct lustre_handle *lh)
+{
+        ENTRY;
+        LASSERT(mode == LCK_PR || mode == LCK_PW);
+        if (obj->ioo_bufcnt > 0 && niob[0].flags & OBD_BRW_SRVLOCK)
+                ldlm_lock_decref(lh, mode);
+        EXIT;
+}
+
 static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
         struct ptlrpc_bulk_desc *desc;
@@ -422,6 +501,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct obd_ioobj        *ioo;
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
+        struct lustre_handle     lockh;
         int                      size[1] = { sizeof(*body) };
         int                      comms_error = 0;
         int                      niocount;
@@ -488,15 +568,19 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         ost_nio_pages_get(req, local_nb, npages);
 
-        desc = ptlrpc_prep_bulk_exp (req, npages, 
+        desc = ptlrpc_prep_bulk_exp(req, npages,
                                      BULK_PUT_SOURCE, OST_BULK_PORTAL);
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
 
+        rc = ost_brw_lock_get(LCK_PR, req->rq_export, ioo, pp_rnb, &lockh);
+        if (rc != 0)
+                GOTO(out_bulk, rc);
+
         rc = obd_preprw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
                         ioo, npages, pp_rnb, local_nb, oti);
         if (rc != 0)
-                GOTO(out_bulk, rc);
+                GOTO(out_lock, rc);
 
         /* We're finishing using body->oa as an input variable */
         do_checksum = (body->oa.o_valid & OBD_MD_FLCKSUM);
@@ -511,7 +595,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         break;
                 }
 
-                LASSERT(page_rc <= pp_rnb[i].len);
+                LASSERTF(page_rc <= pp_rnb[i].len, "page_rc (%d) > "
+                         "pp_rnb[%d].len (%d)\n", page_rc, i, pp_rnb[i].len);
                 nob += page_rc;
                 if (page_rc != 0) {             /* some data! */
                         LASSERT (local_nb[i].page != NULL);
@@ -573,6 +658,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
         }
 
+ out_lock:
+        ost_brw_lock_put(LCK_PR, ioo, pp_rnb, &lockh);
  out_bulk:
         ptlrpc_free_bulk(desc);
  out:
@@ -597,14 +684,14 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                "evicting %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                         class_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                 }
         }
 
@@ -620,6 +707,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct obd_ioobj        *ioo;
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
+        struct lustre_handle     lockh;
         __u32                   *rcs;
         int                      size[2] = { sizeof(*body) };
         int                      objcount, niocount, npages;
@@ -704,10 +792,14 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         ost_nio_pages_get(req, local_nb, npages);
 
-        desc = ptlrpc_prep_bulk_exp (req, npages, 
+        desc = ptlrpc_prep_bulk_exp(req, npages,
                                      BULK_GET_SINK, OST_BULK_PORTAL);
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
+
+        rc = ost_brw_lock_get(LCK_PW, req->rq_export, ioo, pp_rnb, &lockh);
+        if (rc != 0)
+                GOTO(out_bulk, rc);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         do_checksum = (body->oa.o_valid & OBD_MD_FLCKSUM);
@@ -715,12 +807,12 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = obd_preprw(OBD_BRW_WRITE, req->rq_export, &body->oa, objcount,
                         ioo, npages, pp_rnb, local_nb, oti);
         if (rc != 0)
-                GOTO(out_bulk, rc);
+                GOTO(out_lock, rc);
 
         /* NB Having prepped, we must commit... */
 
         for (i = 0; i < npages; i++)
-                ptlrpc_prep_bulk_page(desc, local_nb[i].page, 
+                ptlrpc_prep_bulk_page(desc, local_nb[i].page,
                                       pp_rnb[i].offset & (PAGE_SIZE - 1),
                                       pp_rnb[i].len);
 
@@ -728,7 +820,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc == 0) {
                 lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
                                   ost_bulk_timeout, desc);
-                rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), 
+                rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc),
                                   &lwi);
                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                 if (rc == -ETIMEDOUT) {
@@ -737,7 +829,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 } else if (!desc->bd_success ||
                            desc->bd_nob_transferred != desc->bd_nob) {
                         DEBUG_REQ(D_ERROR, req, "%s bulk GET %d(%d)",
-                                  desc->bd_success ? 
+                                  desc->bd_success ?
                                   "truncated" : "network error on",
                                   desc->bd_nob_transferred, desc->bd_nob);
                         /* XXX should this be a different errno? */
@@ -759,16 +851,21 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 cksum_counter++;
                 if (client_cksum != cksum) {
                         CERROR("Bad checksum: client %x, server %x id %s\n",
-                               client_cksum, cksum, req->rq_peerstr);
+                               client_cksum, cksum,
+                               libcfs_id2str(req->rq_peer));
                         cksum_counter = 0;
                         repbody->oa.o_cksum = cksum;
                         repbody->oa.o_valid |= OBD_MD_FLCKSUM;
                 } else if ((cksum_counter & (-cksum_counter)) ==
                            cksum_counter) {
-                        CWARN("Checksum %u from %s: %x OK\n",
-                              cksum_counter, req->rq_peerstr, cksum);
+                        CWARN("Checksum %u from %s: %x OK\n", cksum_counter, 
+                              libcfs_id2str(req->rq_peer), cksum);
                 } else {
-                        CDEBUG(D_PAGE, "checksum %x confirmed\n", cksum);
+                        cksum_counter++;
+                        if ((cksum_counter & (-cksum_counter)) == cksum_counter)
+                                CWARN("Checksum %u from %s: %x OK\n",
+                                      cksum_counter,
+                                      libcfs_id2str(req->rq_peer), cksum);
                 }
         }
 
@@ -796,6 +893,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 LASSERT(j == npages);
         }
 
+ out_lock:
+        ost_brw_lock_put(LCK_PW, ioo, pp_rnb, &lockh);
  out_bulk:
         ptlrpc_free_bulk(desc);
  out:
@@ -819,14 +918,14 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                req->rq_export->exp_obd->obd_name,
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                         class_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                 }
         }
         RETURN(rc);
@@ -917,7 +1016,7 @@ out:
 
 static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
-        char *key, *val;
+        char *key, *val = NULL;
         int keylen, vallen, rc = 0;
         ENTRY;
 
@@ -932,11 +1031,12 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        val = lustre_msg_buf(req->rq_reqmsg, 1, 1);
-        vallen = lustre_msg_buflen(req->rq_reqmsg,1);
+        vallen = lustre_msg_buflen(req->rq_reqmsg, 1);
+        if (vallen)
+                val = lustre_msg_buf(req->rq_reqmsg, 1, 0);
 
         if (KEY_IS("evict_by_nid")) {
-                if (val)
+                if (val && vallen)
                         obd_export_evict_by_nid(exp->exp_obd, val);
 
                 GOTO(out, rc = 0);
@@ -1020,7 +1120,7 @@ static int ost_handle(struct ptlrpc_request *req)
 
                 if (req->rq_export == NULL) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
-                               req->rq_reqmsg->opc, req->rq_peerstr);
+                               req->rq_reqmsg->opc, libcfs_id2str(req->rq_peer));
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }
@@ -1156,7 +1256,7 @@ static int ost_handle(struct ptlrpc_request *req)
         /* FIXME - just reply status */
         case LLOG_ORIGIN_CONNECT:
                 DEBUG_REQ(D_INODE, req, "log connect\n");
-                rc = llog_handle_connect(req); 
+                rc = llog_handle_connect(req);
                 req->rq_status = rc;
                 rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc)
@@ -1324,6 +1424,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_service->srv_init = ost_thread_init;
         ost->ost_service->srv_done = ost_thread_done;
+        ost->ost_service->srv_cpu_affinity = 1;
         rc = ptlrpc_start_threads(obd, ost->ost_service, "ll_ost");
         if (rc)
                 GOTO(out_service, rc = -EINVAL);

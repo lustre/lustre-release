@@ -29,7 +29,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/queue.h>
 #ifndef __CYGWIN__
 # include <sys/statvfs.h>
@@ -138,7 +138,7 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        if (memcmp(lli->lli_smd, lsm, sizeof(*lsm))) {
+                        if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
                                 CERROR("lsm mismatch for inode %lld\n",
                                        (long long)st->st_ino);
                                 LBUG();
@@ -238,7 +238,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, LTIME_S(st->st_mtime), 
+                       valid, LTIME_S(st->st_mtime),
                        LTIME_S(st->st_ctime));
 
         if (valid & OBD_MD_FLATIME) {
@@ -329,7 +329,7 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         if (rc)
                 RETURN(rc);
 
-        refresh_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME | 
+        refresh_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                         OBD_MD_FLCTIME | OBD_MD_FLSIZE;
 
         obdo_refresh_inode(inode, &oa, refresh_valid);
@@ -512,6 +512,7 @@ static int llu_iop_getattr(struct pnode *pno,
                 LASSERT(!llu_i2info(ino)->lli_it);
         }
 
+        liblustre_wait_event(0);
         RETURN(rc);
 }
 
@@ -717,7 +718,8 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         }
                 }
 
-                /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
+                /* Won't invoke llu_vmtruncate(), as we already cleared
+                 * ATTR_SIZE */
                 inode_setattr(inode, attr);
         }
 
@@ -775,11 +777,12 @@ static int llu_iop_setattr(struct pnode *pno,
                            struct intnl_stat *stbuf)
 {
         struct iattr iattr;
+        int rc;
         ENTRY;
 
         liblustre_wait_event(0);
 
-        LASSERT(!(mask & ~(SETATTR_MTIME | SETATTR_ATIME | 
+        LASSERT(!(mask & ~(SETATTR_MTIME | SETATTR_ATIME |
                            SETATTR_UID | SETATTR_GID |
                            SETATTR_LEN | SETATTR_MODE)));
         memset(&iattr, 0, sizeof(iattr));
@@ -812,7 +815,9 @@ static int llu_iop_setattr(struct pnode *pno,
         iattr.ia_valid |= ATTR_RAW | ATTR_CTIME;
         iattr.ia_ctime = CURRENT_TIME;
 
-        RETURN(llu_setattr_raw(ino, &iattr));
+        rc = llu_setattr_raw(ino, &iattr);
+        liblustre_wait_event(0);
+        RETURN(rc);
 }
 
 #define EXT2_LINK_MAX           32000
@@ -829,6 +834,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         int err = -EMLINK;
         ENTRY;
 
+        liblustre_wait_event(0);
         if (llu_i2stat(dir)->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
@@ -838,6 +844,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
                          current->fsuid, current->fsgid, current->cap_effective,
                          0, &request);
         ptlrpc_req_finished(request);
+        liblustre_wait_event(0);
         RETURN(err);
 }
 
@@ -914,6 +921,7 @@ static int llu_iop_readlink(struct pnode *pno, char *data, size_t bufsize)
         int rc;
         ENTRY;
 
+        liblustre_wait_event(0);
         rc = llu_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
@@ -924,6 +932,7 @@ static int llu_iop_readlink(struct pnode *pno, char *data, size_t bufsize)
 
         ptlrpc_req_finished(request);
  out:
+        liblustre_wait_event(0);
         RETURN(rc);
 }
 
@@ -938,6 +947,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         int err = -EMLINK;
         ENTRY;
 
+        liblustre_wait_event(0);
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%llu\n",
                (int)pno->p_base->pb_name.len, pno->p_base->pb_name.name,
                (long long)llu_i2stat(dir)->st_ino);
@@ -968,6 +978,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         default:
                 err = -EINVAL;
         }
+        liblustre_wait_event(0);
         RETURN(err);
 }
 
@@ -1038,6 +1049,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         LASSERT(src);
         LASSERT(tgt);
 
+        liblustre_wait_event(0);
         llu_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
         rc = mdc_rename(llu_i2sbi(src)->ll_mdc_exp, &op_data,
                         oldname, oldnamelen, newname, newnamelen,
@@ -1047,6 +1059,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         }
 
         ptlrpc_req_finished(request);
+        liblustre_wait_event(0);
 
         RETURN(rc);
 }
@@ -1159,6 +1172,7 @@ static int llu_iop_statvfs(struct pnode *pno,
         buf->f_namemax = fs.f_namelen;
 #endif
 
+        liblustre_wait_event(0);
         RETURN(0);
 }
 #endif /* _HAVE_STATVFS */
@@ -1175,6 +1189,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         int err = -EMLINK;
         ENTRY;
 
+        liblustre_wait_event(0);
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%llu/%lu(%p)\n", len, name,
                (long long)st->st_ino, llu_i2info(dir)->lli_st_generation, dir);
 
@@ -1186,6 +1201,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
                          current->fsuid, current->fsgid, current->cap_effective,
                          0, &request);
         ptlrpc_req_finished(request);
+        liblustre_wait_event(0);
         RETURN(err);
 }
 
@@ -1199,6 +1215,8 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
         struct mdc_op_data op_data;
         int rc;
         ENTRY;
+
+        liblustre_wait_event(0);
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%llu/%lu(%p)\n", len, name,
                (long long)llu_i2stat(dir)->st_ino,
                llu_i2info(dir)->lli_st_generation, dir);
@@ -1207,6 +1225,7 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
         rc = mdc_unlink(llu_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         ptlrpc_req_finished(request);
 
+        liblustre_wait_event(0);
         RETURN(rc);
 }
 
@@ -1418,12 +1437,13 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
         struct llu_inode_info *lli = llu_i2info(ino);
         long flags;
         struct flock *flock;
-        long err;
+        long err = 0;
 
+        liblustre_wait_event(0);
         switch (cmd) {
         case F_GETFL:
                 *rtn = lli->lli_open_flags;
-                return 0;
+                break;
         case F_SETFL:
                 flags = va_arg(ap, long);
                 flags &= FCNTL_FLMASK;
@@ -1431,28 +1451,48 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                         CERROR("liblustre don't support O_NONBLOCK, O_ASYNC, "
                                "and O_DIRECT on file descriptor\n");
                         *rtn = -EINVAL;
-                        return EINVAL;
+                        err = EINVAL;
+                        break;
                 }
                 lli->lli_open_flags = (int)(flags & FCNTL_FLMASK) |
                                       (lli->lli_open_flags & ~FCNTL_FLMASK);
                 *rtn = 0;
-                return 0;
+                break;
         case F_GETLK:
+#ifdef F_GETLK64
+#if F_GETLK64 != F_GETLK
+        case F_GETLK64:
+#endif
+#endif
                 flock = va_arg(ap, struct flock *);
                 err = llu_fcntl_getlk(ino, flock);
                 *rtn = err? -1: 0;
-                return err;
+                break;
         case F_SETLK:
+#ifdef F_SETLKW64
+#if F_SETLKW64 != F_SETLKW
+        case F_SETLKW64:
+#endif
+#endif
         case F_SETLKW:
+#ifdef F_SETLK64
+#if F_SETLK64 != F_SETLK
+        case F_SETLK64:
+#endif
+#endif
                 flock = va_arg(ap, struct flock *);
                 err = llu_fcntl_setlk(ino, cmd, flock);
                 *rtn = err? -1: 0;
-                return err;
+                break;
+        default:
+                CERROR("unsupported fcntl cmd %x\n", cmd);
+                *rtn = -ENOSYS;
+                err = ENOSYS;
+                break;
         }
 
-        CERROR("unsupported fcntl cmd %x\n", cmd);
-        *rtn = -ENOSYS;
-        return ENOSYS;
+        liblustre_wait_event(0);
+        return err;
 }
 
 static int llu_get_grouplock(struct inode *inode, unsigned long arg)
@@ -1511,26 +1551,33 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
         memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
 
         RETURN(0);
-}       
+}
 
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
 {
         unsigned long arg;
+        int rc;
 
         liblustre_wait_event(0);
 
         switch (request) {
         case LL_IOC_GROUP_LOCK:
                 arg = va_arg(ap, unsigned long);
-                return llu_get_grouplock(ino, arg);
+                rc = llu_get_grouplock(ino, arg);
+                break;
         case LL_IOC_GROUP_UNLOCK:
                 arg = va_arg(ap, unsigned long);
-                return llu_put_grouplock(ino, arg);
+                rc = llu_put_grouplock(ino, arg);
+                break;
+        default:
+                CERROR("did not support ioctl cmd %lx\n", request);
+                rc = -ENOSYS;
+                break;
         }
 
-        CERROR("did not support ioctl cmd %lx\n", request);
-        return -ENOSYS;
+        liblustre_wait_event(0);
+        return rc;
 }
 
 /*
@@ -1589,7 +1636,7 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         inode = llu_new_inode(fs, &fid);
         if (inode)
                 llu_update_inode(inode, md->body, md->lsm);
-        
+
         return inode;
 }
 
@@ -1621,6 +1668,7 @@ llu_fsswop_mount(const char *source,
 	char *zconf_mdsnid, *zconf_mdsname, *zconf_profile;
         char *osc = NULL, *mdc = NULL;
         int async = 1, err = -EINVAL;
+        struct obd_connect_data ocd = {0,};
 
         ENTRY;
 
@@ -1717,12 +1765,14 @@ llu_fsswop_mount(const char *source,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, NULL /* ocd */);
+        ocd.ocd_connect_flags |= OBD_CONNECT_SRVLOCK;
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
+        sbi->ll_connect_flags = ocd.ocd_connect_flags;
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
@@ -1774,6 +1824,7 @@ llu_fsswop_mount(const char *source,
         ptlrpc_req_finished(request);
 
         CDEBUG(D_SUPER, "LibLustre: %s mounted successfully!\n", source);
+        liblustre_wait_event(0);
 
         return 0;
 

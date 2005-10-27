@@ -24,41 +24,48 @@
 # define EXPORT_SYMTAB
 #endif
 
-# define DEBUG_SUBSYSTEM S_PORTALS
-
-#include <libcfs/kp30.h>
-#include <libcfs/libcfs.h>
-
-#include "tracefile.h"
-
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS);
-EXPORT_SYMBOL(portal_subsystem_debug);
-
-unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
-                             D_RPCTRACE | D_VFSTRACE | D_CONFIG | D_IOCTL |
-                             D_CONSOLE);
-EXPORT_SYMBOL(portal_debug);
-
-unsigned int portal_printk;
-EXPORT_SYMBOL(portal_printk);
-
-unsigned int portal_stack;
-EXPORT_SYMBOL(portal_stack);
-
-unsigned int portals_catastrophe;
-EXPORT_SYMBOL(portals_catastrophe);
+# define DEBUG_SUBSYSTEM S_LNET
 
 #ifdef __KERNEL__
-atomic_t portal_kmemory = ATOMIC_INIT(0);
-EXPORT_SYMBOL(portal_kmemory);
+#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
+#include "tracefile.h"
+#else
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <sys/time.h>
+#include <libcfs/libcfs.h>
 #endif
+
+#ifdef __KERNEL__
+unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
+EXPORT_SYMBOL(libcfs_subsystem_debug);
+
+unsigned int libcfs_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
+                             D_RPCTRACE | D_VFSTRACE);
+EXPORT_SYMBOL(libcfs_debug);
+
+unsigned int libcfs_printk;
+EXPORT_SYMBOL(libcfs_printk);
+
+unsigned int libcfs_stack;
+EXPORT_SYMBOL(libcfs_stack);
+
+unsigned int libcfs_catastrophe;
+EXPORT_SYMBOL(libcfs_catastrophe);
+
+atomic_t libcfs_kmemory = ATOMIC_INIT(0);
+EXPORT_SYMBOL(libcfs_kmemory);
 
 static cfs_waitq_t debug_ctlwq;
 
 char debug_file_path[1024] = "/tmp/lustre-log";
 static char debug_file_name[1024];
 
-void portals_debug_dumplog_internal(void *arg)
+void libcfs_debug_dumplog_internal(void *arg)
 {
         CFS_DECL_JOURNAL_DATA;
 
@@ -72,16 +79,16 @@ void portals_debug_dumplog_internal(void *arg)
         CFS_POP_JOURNAL;
 }
 
-int portals_debug_dumplog_thread(void *arg)
+int libcfs_debug_dumplog_thread(void *arg)
 {
-        kportal_daemonize("");
+        libcfs_daemonize("");
         reparent_to_init();
-        portals_debug_dumplog_internal(arg);
+        libcfs_debug_dumplog_internal(arg);
         cfs_waitq_signal(&debug_ctlwq);
         return 0;
 }
 
-void portals_debug_dumplog(void)
+void libcfs_debug_dumplog(void)
 {
         int            rc;
         cfs_waitlink_t wait;
@@ -94,7 +101,7 @@ void portals_debug_dumplog(void)
         set_current_state(TASK_INTERRUPTIBLE);
         cfs_waitq_add(&debug_ctlwq, &wait);
 
-        rc = cfs_kernel_thread(portals_debug_dumplog_thread,
+        rc = cfs_kernel_thread(libcfs_debug_dumplog_thread,
                                (void *)(long)cfs_curproc_pid(),
                                CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0)
@@ -126,7 +133,7 @@ static int panic_dumplog(struct notifier_block *self, unsigned long unused1,
 
         while (current->lock_depth >= 0)
                 unlock_kernel();
-        portals_debug_dumplog();
+        libcfs_debug_dumplog();
         return 0;
 }
 
@@ -137,16 +144,10 @@ static struct notifier_block lustre_panic_notifier = {
 };
 #endif
 
-#ifdef CRAY_PORTALS
-extern void *lus_portals_debug;
-#endif
 
-int portals_debug_init(unsigned long bufsize)
+int libcfs_debug_init(unsigned long bufsize)
 {
         cfs_waitq_init(&debug_ctlwq);
-#ifdef CRAY_PORTALS
-        lus_portals_debug = &portals_debug_msg;
-#endif
 #ifdef PORTALS_DUMP_ON_PANIC
         /* This is currently disabled because it spews far too much to the
          * console on the rare cases it is ever triggered. */
@@ -155,29 +156,26 @@ int portals_debug_init(unsigned long bufsize)
         return tracefile_init();
 }
 
-int portals_debug_cleanup(void)
+int libcfs_debug_cleanup(void)
 {
         tracefile_exit();
 #ifdef PORTALS_DUMP_ON_PANIC
         notifier_chain_unregister(&panic_notifier_list, &lustre_panic_notifier);
 #endif
-#ifdef CRAY_PORTALS
-        lus_portals_debug = NULL;
-#endif
         return 0;
 }
 
-int portals_debug_clear_buffer(void)
+int libcfs_debug_clear_buffer(void)
 {
         trace_flush_pages();
         return 0;
 }
 
-/* Debug markers, although printed by S_PORTALS
+/* Debug markers, although printed by S_LNET
  * should not be be marked as such. */
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_UNDEFINED
-int portals_debug_mark_buffer(char *text)
+int libcfs_debug_mark_buffer(char *text)
 {
         CDEBUG(D_TRACE,"***************************************************\n");
         CDEBUG(D_WARNING, "DEBUG MARKER: %s\n", text);
@@ -186,75 +184,116 @@ int portals_debug_mark_buffer(char *text)
         return 0;
 }
 #undef DEBUG_SUBSYSTEM
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
-void portals_debug_set_level(unsigned int debug_level)
+void libcfs_debug_set_level(unsigned int debug_level)
 {
         printk(KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
                debug_level);
-        portal_debug = debug_level;
+        libcfs_debug = debug_level;
 }
 
-char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
-{
-        if (nid == PTL_NID_ANY) {
-                snprintf(str, PTL_NALFMT_SIZE, "%s", "PTL_NID_ANY");
-                return str;
-        }
+EXPORT_SYMBOL(libcfs_debug_dumplog);
+EXPORT_SYMBOL(libcfs_debug_set_level);
 
-        switch(NALID_FROM_IFACE(nal)){
-/* XXX this could be a nal method of some sort, 'cept it's config
- * dependent whether (say) socknal NIDs are actually IP addresses... */
-#if !CRAY_PORTALS
-        case TCPNAL:
-                /* userspace NAL */
-        case IIBNAL:
-        case VIBNAL:
-        case OPENIBNAL:
-        case RANAL:
-        case SOCKNAL: {
-                /* HIPQUAD requires __u32, but we can't cast in it */
-                __u32 nid32 = (__u32)nid;
-                if ((__u32)(nid >> 32)) {
-                        snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
-                                 (__u32)(nid >> 32), HIPQUAD(nid32));
-                } else {
-                        snprintf(str, PTL_NALFMT_SIZE, "%u.%u.%u.%u",
-                                 HIPQUAD(nid32));
-                }
-                break;
-        }
-        case QSWNAL:
-        case GMNAL:
-        case LONAL:
-                snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
-                         (__u32)(nid >> 32), (__u32)nid);
-                break;
-#else
-        case PTL_IFACE_SS:
-        case PTL_IFACE_SS_ACCEL:
-                snprintf(str, PTL_NALFMT_SIZE, "%u", (__u32)nid);
-                break;
+
+#else /* !__KERNEL__ */
+
+#include <libcfs/libcfs.h>
+
+int smp_processor_id = 1;
+char debug_file_path[1024] = "/tmp/lustre-log";
+char debug_file_name[1024];
+FILE *debug_file_fd;
+
+int portals_do_debug_dumplog(void *arg)
+{
+        printf("Look in %s\n", debug_file_name);
+        return 0;
+}
+
+
+void portals_debug_print(void)
+{
+        return;
+}
+
+
+void libcfs_debug_dumplog(void)
+{
+        printf("Look in %s\n", debug_file_name);
+        return;
+}
+
+
+int libcfs_debug_init(unsigned long bufsize)
+{ 
+        debug_file_fd = stdout;
+        return 0;
+}
+
+int libcfs_debug_cleanup(void)
+{
+        return 0; //close(portals_debug_fd);
+}
+
+int libcfs_debug_clear_buffer(void)
+{
+        return 0;
+}
+
+int libcfs_debug_mark_buffer(char *text)
+{
+
+        fprintf(debug_file_fd, "*******************************************************************************\n");
+        fprintf(debug_file_fd, "DEBUG MARKER: %s\n", text);
+        fprintf(debug_file_fd, "*******************************************************************************\n");
+
+        return 0;
+}
+
+/* FIXME: I'm not very smart; someone smarter should make this better. */
+void
+libcfs_debug_msg (int subsys, int mask, char *file, const char *fn, 
+                  const int line, unsigned long stack, char *format, ...)
+{
+        va_list       ap;
+        unsigned long flags;
+        struct timeval tv;
+        int nob;
+
+
+        /* NB since we pass a non-zero sized buffer (at least) on the first
+         * print, we can be assured that by the end of all the snprinting,
+         * we _do_ have a terminated buffer, even if our message got truncated.
+         */
+
+        gettimeofday(&tv, NULL);
+
+        nob += fprintf(debug_file_fd,
+                              "%02x:%06x:%d:%lu.%06lu ",
+                              subsys >> 24, mask, smp_processor_id,
+                              tv.tv_sec, tv.tv_usec);
+
+        nob += fprintf(debug_file_fd,
+                            "(%s:%d:%s() %d+%ld): ",
+                            file, line, fn, 0,
+                            8192 - ((unsigned long)&flags & 8191UL));
+
+        va_start (ap, format);
+        nob += fprintf(debug_file_fd, format, ap);
+        va_end (ap);
+
+
+}
+
+void
+libcfs_assertion_failed(char *expr, char *file, const char *func,
+                        const int line)
+{
+        libcfs_debug_msg(0, D_EMERG, file, func, line, 0,
+                         "ASSERTION(%s) failed\n", expr);
+        abort();
+}
+
 #endif
-        default:
-                snprintf(str, PTL_NALFMT_SIZE, "?%x? %llx",
-                         nal, (long long)nid);
-                break;
-        }
-        return str;
-}
-
-char *portals_id2str(int nal, ptl_process_id_t id, char *str)
-{
-        int   len;
-
-        portals_nid2str(nal, id.nid, str);
-        len = strlen(str);
-        snprintf(str + len, PTL_NALFMT_SIZE - len, "-%u", id.pid);
-        return str;
-}
-
-EXPORT_SYMBOL(portals_debug_dumplog);
-EXPORT_SYMBOL(portals_debug_set_level);
-EXPORT_SYMBOL(portals_nid2str);
-EXPORT_SYMBOL(portals_id2str);

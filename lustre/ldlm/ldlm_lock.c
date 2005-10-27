@@ -577,7 +577,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                 /* llite sometimes wants to match locks that will be
                  * canceled when their users drop, but we allow it to match
                  * if it passes in CBPENDING and the lock still has users.
-                 * this is generally only going to be used by children 
+                 * this is generally only going to be used by children
                  * whose parents already hold a lock so forward progress
                  * can still happen. */
                 if (lock->l_flags & LDLM_FL_CBPENDING &&
@@ -835,7 +835,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
 
         /* Some flags from the enqueue want to make it into the AST, via the
          * lock's l_flags. */
-        lock->l_flags |= (*flags & LDLM_AST_DISCARD_DATA);
+        lock->l_flags |= (*flags & (LDLM_AST_DISCARD_DATA|LDLM_INHERIT_FLAGS));
 
         /* This distinction between local lock trees is very important; a client
          * namespace only has information about locks taken by that client, and
@@ -941,6 +941,7 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list)
                 } else {
                         rc = 0;
                 }
+
                 if (rc == -ERESTART)
                         retval = rc;
                 else if (rc)
@@ -1018,12 +1019,15 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
 
 void ldlm_cancel_callback(struct ldlm_lock *lock)
 {
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        struct ldlm_namespace *ns;
+
+        ns = lock->l_resource->lr_namespace;
+        l_lock(&ns->ns_lock);
         if (!(lock->l_flags & LDLM_FL_CANCEL)) {
                 lock->l_flags |= LDLM_FL_CANCEL;
                 if (lock->l_blocking_ast) {
-                        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                        // l_check_no_ns_lock(lock->l_resource->lr_namespace);
+                        l_unlock(&ns->ns_lock);
+                        // l_check_no_ns_lock(ns);
                         lock->l_blocking_ast(lock, NULL, lock->l_ast_data,
                                              LDLM_CB_CANCELING);
                         return;
@@ -1031,7 +1035,7 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
                         LDLM_DEBUG(lock, "no blocking ast");
                 }
         }
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        l_unlock(&ns->ns_lock);
 }
 
 void ldlm_lock_cancel(struct ldlm_lock *lock)
@@ -1081,7 +1085,7 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
         struct ldlm_resource *res;
 
         l_lock(&ns->ns_lock);
-        while(!list_empty(&exp->exp_ldlm_data.led_held_locks)) { 
+        while(!list_empty(&exp->exp_ldlm_data.led_held_locks)) {
                 lock = list_entry(exp->exp_ldlm_data.led_held_locks.next,
                                   struct ldlm_lock, l_export_chain);
                 res = ldlm_resource_getref(lock->l_resource);
@@ -1168,10 +1172,9 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
 
 void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
 {
-        char str[PTL_NALFMT_SIZE];
         struct obd_device *obd = NULL;
 
-        if (!((portal_debug | D_ERROR) & level))
+        if (!((libcfs_debug | D_ERROR) & level))
                 return;
 
         if (!lock) {
@@ -1185,17 +1188,15 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {
-                CDEBUG(level, "  Node: NID %s on %s (rhandle: "LPX64")\n",
-                       ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer, str),
-                       lock->l_export->exp_connection->c_peer.peer_ni->pni_name,
+                CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
+                       libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid),
                        lock->l_remote_handle.cookie);
         } else if (obd == NULL) {
                 CDEBUG(level, "  Node: local\n");
         } else {
                 struct obd_import *imp = obd->u.cli.cl_import;
-                CDEBUG(level, "  Node: NID %s on %s (rhandle: "LPX64")\n",
-                       ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
-                       imp->imp_connection->c_peer.peer_ni->pni_name,
+                CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
+                       libcfs_nid2str(imp->imp_connection->c_peer.nid),
                        lock->l_remote_handle.cookie);
         }
         CDEBUG(level, "  Resource: %p ("LPU64"/"LPU64")\n", lock->l_resource,

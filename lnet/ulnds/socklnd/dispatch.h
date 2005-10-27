@@ -41,6 +41,4 @@ when now(void);
 /*
  * hacking for CFS internal MPI testing
  */ 
-#if !CRAY_PORTALS
 #define ENABLE_SELECT_DISPATCH
-#endif

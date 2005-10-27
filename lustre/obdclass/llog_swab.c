@@ -126,7 +126,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
         }
 
         case OBD_CFG_REC:
-        case PTL_CFG_REC:
+        case PTL_CFG_REC:                       /* obsolete */
                 /* these are swabbed as they are consumed */
                 break;
 
@@ -201,74 +201,12 @@ void lustre_swab_llog_hdr (struct llog_log_hdr *h)
 }
 EXPORT_SYMBOL(lustre_swab_llog_hdr);
 
-#define PRINT_PCFG32(x) CDEBUG(D_OTHER, "\tpcfg->pcfg_"#x": %#x\n", pcfg->pcfg_##x)
-#define PRINT_PCFG64(x) CDEBUG(D_OTHER, "\tpcfg->pcfg_"#x": "LPX64"\n", pcfg->pcfg_##x)
-
-static void print_portals_cfg(struct portals_cfg *pcfg)
-{
-        ENTRY;
-
-        if (!(portal_debug & D_OTHER)) /* don't loop on nothing */
-                return;
-        CDEBUG(D_OTHER, "portals_cfg: %p\n", pcfg);
-        PRINT_PCFG32(version);
-        PRINT_PCFG32(command);
-
-        PRINT_PCFG32(nal);
-        PRINT_PCFG32(flags);
-
-        PRINT_PCFG32(gw_nal);
-        PRINT_PCFG64(nid);
-        PRINT_PCFG64(nid2);
-        PRINT_PCFG64(nid3);
-        PRINT_PCFG32(id);
-        PRINT_PCFG32(misc);
-        PRINT_PCFG32(fd);
-        PRINT_PCFG32(count);
-        PRINT_PCFG32(size);
-        PRINT_PCFG32(wait);
-
-        PRINT_PCFG32(plen1);
-        PRINT_PCFG32(plen2);
-
-        EXIT;
-}
-
-void lustre_swab_portals_cfg(struct portals_cfg *pcfg)
-{
-        ENTRY;
-
-        __swab32s(&pcfg->pcfg_version);
-        __swab32s(&pcfg->pcfg_command);
-
-        __swab32s(&pcfg->pcfg_nal);
-        __swab32s(&pcfg->pcfg_flags);
-
-        __swab32s(&pcfg->pcfg_gw_nal);
-        __swab64s(&pcfg->pcfg_nid);
-        __swab64s(&pcfg->pcfg_nid2);
-        __swab64s(&pcfg->pcfg_nid3);
-        __swab32s(&pcfg->pcfg_id);
-        __swab32s(&pcfg->pcfg_misc);
-        __swab32s(&pcfg->pcfg_fd);
-        __swab32s(&pcfg->pcfg_count);
-        __swab32s(&pcfg->pcfg_size);
-        __swab32s(&pcfg->pcfg_wait);
-
-        __swab32s(&pcfg->pcfg_plen1);
-        __swab32s(&pcfg->pcfg_plen2);
-
-        print_portals_cfg(pcfg);
-        EXIT;
-}
-EXPORT_SYMBOL(lustre_swab_portals_cfg);
-
 static void print_lustre_cfg(struct lustre_cfg *lcfg)
 {
         int i;
         ENTRY;
 
-        if (!(portal_debug & D_OTHER)) /* don't loop on nothing */
+        if (!(libcfs_debug & D_OTHER)) /* don't loop on nothing */
                 return;
         CDEBUG(D_OTHER, "lustre_cfg: %p\n", lcfg);
         CDEBUG(D_OTHER, "\tlcfg->lcfg_version: %#x\n", lcfg->lcfg_version);
@@ -276,8 +214,7 @@ static void print_lustre_cfg(struct lustre_cfg *lcfg)
         CDEBUG(D_OTHER, "\tlcfg->lcfg_command: %#x\n", lcfg->lcfg_command);
         CDEBUG(D_OTHER, "\tlcfg->lcfg_num: %#x\n", lcfg->lcfg_num);
         CDEBUG(D_OTHER, "\tlcfg->lcfg_flags: %#x\n", lcfg->lcfg_flags);
-        CDEBUG(D_OTHER, "\tlcfg->lcfg_nid: "LPX64"\n", lcfg->lcfg_nid);
-        CDEBUG(D_OTHER, "\tlcfg->lcfg_nal: %#x\n", lcfg->lcfg_nal);
+        CDEBUG(D_OTHER, "\tlcfg->lcfg_nid: %s\n", libcfs_nid2str(lcfg->lcfg_nid));
 
         CDEBUG(D_OTHER, "\tlcfg->lcfg_bufcount: %d\n", lcfg->lcfg_bufcount);
         if (lcfg->lcfg_bufcount < LUSTRE_CFG_MAX_BUFCOUNT)
@@ -306,7 +243,6 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
         __swab32s(&lcfg->lcfg_num);
         __swab32s(&lcfg->lcfg_flags);
         __swab64s(&lcfg->lcfg_nid);
-        __swab32s(&lcfg->lcfg_nal);
 
         __swab32s(&lcfg->lcfg_bufcount);
         for (i = 0; i < lcfg->lcfg_bufcount && i < LUSTRE_CFG_MAX_BUFCOUNT; i++)

@@ -212,6 +212,110 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         RETURN(rc);
 }
 
+static
+int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
+                     int opcode, obd_valid valid, const char *xattr_name,
+                     const char *input, int input_size, int output_size,
+                     int flags, struct ptlrpc_request **request)
+{
+        struct ptlrpc_request *req;
+        struct mds_body *body;
+        int size[3] = {sizeof(*body)}, bufcnt = 1;
+        int xattr_namelen = 0, rc;
+        void *tmp;
+        ENTRY;
+
+        if (xattr_name) {
+                xattr_namelen = strlen(xattr_name) + 1;
+                size[bufcnt++] = xattr_namelen;
+        }
+        if (input_size) {
+                LASSERT(input);
+                size[bufcnt++] = input_size;
+        }
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), opcode,
+                              bufcnt, size, NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
+
+        /* request data */
+        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        memcpy(&body->fid1, fid, sizeof(*fid));
+        body->valid = valid;
+        body->eadatasize = output_size;
+        body->flags = flags;
+        mdc_pack_req_body(req);
+
+        if (xattr_name) {
+                tmp = lustre_msg_buf(req->rq_reqmsg, 1, xattr_namelen);
+                memcpy(tmp, xattr_name, xattr_namelen);
+        }
+        if (input_size) {
+                tmp = lustre_msg_buf(req->rq_reqmsg, bufcnt - 1, input_size);
+                memcpy(tmp, input, input_size);
+        }
+
+        /* reply buffers */
+        if (opcode == MDS_GETXATTR) {
+                size[0] = sizeof(*body);
+                bufcnt = 1;
+        } else {
+                bufcnt = 0;
+        }
+
+        if (output_size)
+                size[bufcnt++] = output_size;
+        req->rq_replen = lustre_msg_size(bufcnt, size);
+
+        /* make rpc */
+        if (opcode == MDS_SETXATTR)
+                mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+
+        rc = ptlrpc_queue_wait(req);
+
+        if (opcode == MDS_SETXATTR)
+                mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+
+        if (rc != 0)
+                GOTO(err_out, rc);
+
+        if (opcode == MDS_GETXATTR) {
+                body = lustre_swab_repbuf(req, 0, sizeof(*body),
+                                          lustre_swab_mds_body);
+                if (body == NULL) {
+                        CERROR ("Can't unpack mds_body\n");
+                        GOTO(err_out, rc = -EPROTO);
+                }
+        }
+out:
+        *request = req;
+        RETURN (rc);
+err_out:
+        ptlrpc_req_finished(req);
+        req = NULL;
+        goto out;
+}
+
+int mdc_setxattr(struct obd_export *exp, struct ll_fid *fid,
+                 obd_valid valid, const char *xattr_name,
+                 const char *input, int input_size,
+                 int output_size, int flags,
+                 struct ptlrpc_request **request)
+{
+        return mdc_xattr_common(exp, fid, MDS_SETXATTR, valid, xattr_name,
+                                input, input_size, output_size, flags, request);
+}
+
+int mdc_getxattr(struct obd_export *exp, struct ll_fid *fid,
+                 obd_valid valid, const char *xattr_name,
+                 const char *input, int input_size,
+                 int output_size, struct ptlrpc_request **request)
+{
+        return mdc_xattr_common(exp, fid, MDS_GETXATTR, valid, xattr_name,
+                                input, input_size, output_size, 0, request);
+}
+
 /* This should be called with both the request and the reply still packed. */
 void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
                                 int repoff)
@@ -474,6 +578,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
 
         /* Ensure that this close's handle is fixed up during replay. */
         LASSERT(och != NULL);
+        LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
         mod = och->och_mod;
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
@@ -481,8 +586,8 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                         /* FIXME This should be an ASSERT, but until we
                            figure out why it can be poisoned here, give 
                            a reasonable return. bug 6155 */
-                        CERROR("LBUG POISONED req %p!\n", mod->mod_open_req);
-                        ptlrpc_free_req(req);
+                        CERROR("LBUG POISONED open %p!\n", mod->mod_open_req);
+                        ptlrpc_req_finished(req);
                         GOTO(out, rc = -EIO);
                 }
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
@@ -1099,6 +1204,8 @@ EXPORT_SYMBOL(mdc_set_open_replay_data);
 EXPORT_SYMBOL(mdc_clear_open_replay_data);
 EXPORT_SYMBOL(mdc_store_inode_generation);
 EXPORT_SYMBOL(mdc_init_ea_size);
+EXPORT_SYMBOL(mdc_getxattr);
+EXPORT_SYMBOL(mdc_setxattr);
 
 module_init(mdc_init);
 module_exit(mdc_exit);

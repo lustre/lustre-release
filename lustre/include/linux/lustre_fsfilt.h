@@ -38,6 +38,8 @@ struct fsfilt_objinfo {
         int fso_bufcnt;
 };
 
+#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
+
 struct fsfilt_operations {
         struct list_head fs_list;
         struct module *fs_owner;

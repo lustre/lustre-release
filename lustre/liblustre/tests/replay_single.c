@@ -309,8 +309,8 @@ void t10()
         t_unlink(path2);
 }
 
-extern int portal_debug;
-extern int portal_subsystem_debug;
+extern int libcfs_debug;
+extern int libcfs_subsystem_debug;
 
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);

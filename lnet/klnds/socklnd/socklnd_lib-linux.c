@@ -1,65 +1,101 @@
-#include "socknal.h"
+#include "socklnd.h"
 
-#ifdef CONFIG_SYSCTL
-#define SOCKNAL_SYSCTL	200
-
-#define SOCKNAL_SYSCTL_TIMEOUT          1
-#define SOCKNAL_SYSCTL_EAGER_ACK        2
-#define SOCKNAL_SYSCTL_ZERO_COPY        3
-#define SOCKNAL_SYSCTL_TYPED            4
-#define SOCKNAL_SYSCTL_MIN_BULK         5
-#define SOCKNAL_SYSCTL_BUFFER_SIZE      6
-#define SOCKNAL_SYSCTL_NAGLE            7
-#define SOCKNAL_SYSCTL_IRQ_AFFINITY     8
-#define SOCKNAL_SYSCTL_KEEPALIVE_IDLE   9
-#define SOCKNAL_SYSCTL_KEEPALIVE_COUNT 10
-#define SOCKNAL_SYSCTL_KEEPALIVE_INTVL 11
-
-static ctl_table ksocknal_ctl_table[] = {
-        {SOCKNAL_SYSCTL_TIMEOUT, "timeout",
-         &ksocknal_tunables.ksnd_io_timeout, sizeof (int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_EAGER_ACK, "eager_ack",
-         &ksocknal_tunables.ksnd_eager_ack, sizeof (int),
-         0644, NULL, &proc_dointvec},
-#if SOCKNAL_ZC
-        {SOCKNAL_SYSCTL_ZERO_COPY, "zero_copy",
-         &ksocknal_tunables.ksnd_zc_min_frag, sizeof (int),
-         0644, NULL, &proc_dointvec},
-#endif
-        {SOCKNAL_SYSCTL_TYPED, "typed",
-         &ksocknal_tunables.ksnd_typed_conns, sizeof (int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_MIN_BULK, "min_bulk",
-         &ksocknal_tunables.ksnd_min_bulk, sizeof (int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_BUFFER_SIZE, "buffer_size",
-         &ksocknal_tunables.ksnd_buffer_size, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_NAGLE, "nagle",
-         &ksocknal_tunables.ksnd_nagle, sizeof(int),
-         0644, NULL, &proc_dointvec},
-#if CPU_AFFINITY
-        {SOCKNAL_SYSCTL_IRQ_AFFINITY, "irq_affinity",
-         &ksocknal_tunables.ksnd_irq_affinity, sizeof(int),
-         0644, NULL, &proc_dointvec},
-#endif
-        {SOCKNAL_SYSCTL_KEEPALIVE_IDLE, "keepalive_idle",
-         &ksocknal_tunables.ksnd_keepalive_idle, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_KEEPALIVE_COUNT, "keepalive_count",
-         &ksocknal_tunables.ksnd_keepalive_count, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_KEEPALIVE_INTVL, "keepalive_intvl",
-         &ksocknal_tunables.ksnd_keepalive_intvl, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        { 0 }
-};
+# if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+static ctl_table ksocknal_ctl_table[18];
 
 ctl_table ksocknal_top_ctl_table[] = {
-        {SOCKNAL_SYSCTL, "socknal", NULL, 0, 0555, ksocknal_ctl_table},
+        {200, "socknal", NULL, 0, 0555, ksocknal_ctl_table},
         { 0 }
 };
+
+int
+ksocknal_lib_tunables_init () 
+{
+	int    i = 0;
+	int    j = 1;
+	
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "timeout", ksocknal_tunables.ksnd_timeout, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "credits", ksocknal_tunables.ksnd_credits, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "peer_credits", ksocknal_tunables.ksnd_peercredits, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "nconnds", ksocknal_tunables.ksnd_nconnds, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "min_reconnectms", ksocknal_tunables.ksnd_min_reconnectms, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "max_reconnectms", ksocknal_tunables.ksnd_max_reconnectms, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "eager_ack", ksocknal_tunables.ksnd_eager_ack, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+#if SOCKNAL_ZC
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "zero_copy", ksocknal_tunables.ksnd_zc_min_frag, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+#endif
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "typed", ksocknal_tunables.ksnd_typed_conns, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "min_bulk", ksocknal_tunables.ksnd_min_bulk, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "buffer_size", ksocknal_tunables.ksnd_buffer_size, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "nagle", ksocknal_tunables.ksnd_nagle, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+#if CPU_AFFINITY
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "irq_affinity", ksocknal_tunables.ksnd_irq_affinity, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+#endif
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "keepalive_idle", ksocknal_tunables.ksnd_keepalive_idle, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "keepalive_count", ksocknal_tunables.ksnd_keepalive_count, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+	ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "keepalive_intvl", ksocknal_tunables.ksnd_keepalive_intvl, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+
+	LASSERT (j == i+1);
+	LASSERT (i < sizeof(ksocknal_ctl_table)/sizeof(ksocknal_ctl_table[0]));
+
+        ksocknal_tunables.ksnd_sysctl =
+                register_sysctl_table(ksocknal_top_ctl_table, 0);
+
+        if (ksocknal_tunables.ksnd_sysctl == NULL)
+		CWARN("Can't setup /proc tunables\n");
+
+	return 0;
+}
+
+void
+ksocknal_lib_tunables_fini () 
+{
+        if (ksocknal_tunables.ksnd_sysctl != NULL)
+                unregister_sysctl_table(ksocknal_tunables.ksnd_sysctl);	
+}
+#else
+int
+ksocknal_lib_tunables_init () 
+{
+	return 0;
+}
+
+void 
+ksocknal_lib_tunables_fini ()
+{
+}
 #endif
 
 void
@@ -100,8 +136,8 @@ ksocknal_lib_bind_irq (unsigned int irq)
         snprintf (cmdline, sizeof (cmdline),
                   "echo %d > /proc/irq/%u/smp_affinity", 1 << cpu, irq);
 
-        printk (KERN_INFO "Lustre: Binding irq %u to CPU %d with cmd: %s\n",
-                irq, cpu, cmdline);
+        LCONSOLE_INFO("Binding irq %u to CPU %d with cmd: %s\n",
+		      irq, cpu, cmdline);
 
         /* FIXME: Find a better method of setting IRQ affinity...
          */
@@ -113,12 +149,10 @@ ksocknal_lib_bind_irq (unsigned int irq)
 int
 ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 {
-        struct sockaddr_in sin;
-        int                len = sizeof (sin);
-        int                rc;
+        int rc = libcfs_sock_getaddr(conn->ksnc_sock, 1,
+				     &conn->ksnc_ipaddr,
+				     &conn->ksnc_port);
 
-        rc = conn->ksnc_sock->ops->getname (conn->ksnc_sock,
-                                            (struct sockaddr *)&sin, &len, 2);
         /* Didn't need the {get,put}connsock dance to deref ksnc_sock... */
         LASSERT (!conn->ksnc_closing);
 
@@ -127,17 +161,12 @@ ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
                 return rc;
         }
 
-        conn->ksnc_ipaddr = ntohl (sin.sin_addr.s_addr);
-        conn->ksnc_port   = ntohs (sin.sin_port);
-
-        rc = conn->ksnc_sock->ops->getname (conn->ksnc_sock,
-                                            (struct sockaddr *)&sin, &len, 0);
+        rc = libcfs_sock_getaddr(conn->ksnc_sock, 0,
+				 &conn->ksnc_myipaddr, NULL);
         if (rc != 0) {
                 CERROR ("Error %d getting sock local IP\n", rc);
                 return rc;
         }
-
-        conn->ksnc_myipaddr = ntohl (sin.sin_addr.s_addr);
 
         return 0;
 }
@@ -146,9 +175,10 @@ unsigned int
 ksocknal_lib_sock_irq (struct socket *sock)
 {
         int                irq = 0;
+#if CPU_AFFINITY
         struct dst_entry  *dst;
 
-        if (!ksocknal_tunables.ksnd_irq_affinity)
+        if (!*ksocknal_tunables.ksnd_irq_affinity)
                 return 0;
 
         dst = sk_dst_get (sock->sk);
@@ -163,7 +193,8 @@ ksocknal_lib_sock_irq (struct socket *sock)
                 dst_release (dst);
         }
 
-        return (irq);
+#endif
+        return irq;
 }
 
 #if (SOCKNAL_ZC && SOCKNAL_VADDR_ZC)
@@ -229,10 +260,10 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
 #if SOCKNAL_SINGLE_FRAG_TX
                 struct iovec    scratch;
                 struct iovec   *scratchiov = &scratch;
-                int             niov = 1;
+                unsigned int    niov = 1;
 #else
                 struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov;
-                int             niov = tx->tx_niov;
+                unsigned int    niov = tx->tx_niov;
 #endif
                 struct msghdr msg = {
                         .msg_name       = NULL,
@@ -266,7 +297,7 @@ int
 ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 {
         struct socket *sock = conn->ksnc_sock;
-        ptl_kiov_t    *kiov = tx->tx_kiov;
+        lnet_kiov_t    *kiov = tx->tx_kiov;
         int            rc;
         int            nob;
 
@@ -274,7 +305,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
          * or leave them alone. */
 
 #if SOCKNAL_ZC
-        if (kiov->kiov_len >= ksocknal_tunables.ksnd_zc_min_frag &&
+        if (kiov->kiov_len >= *ksocknal_tunables.ksnd_zc_min_frag &&
             (sock->sk->route_caps & NETIF_F_SG) &&
             (sock->sk->route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM))) {
                 struct page   *page = kiov->kiov_page;
@@ -297,13 +328,13 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
                 struct iovec  scratch;
                 struct iovec *scratchiov = &scratch;
-                int           niov = 1;
+                unsigned int  niov = 1;
 #else
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
                 struct iovec *scratchiov = conn->ksnc_tx_scratch_iov;
-                int           niov = tx->tx_nkiov;
+                unsigned int  niov = tx->tx_nkiov;
 #endif
                 struct msghdr msg = {
                         .msg_name       = NULL,
@@ -361,10 +392,10 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
 #if SOCKNAL_SINGLE_FRAG_RX
         struct iovec  scratch;
         struct iovec *scratchiov = &scratch;
-        int           niov = 1;
+        unsigned int  niov = 1;
 #else
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
-        int           niov = conn->ksnc_rx_niov;
+        unsigned int  niov = conn->ksnc_rx_niov;
 #endif
         struct iovec *iov = conn->ksnc_rx_iov;
         struct msghdr msg = {
@@ -405,15 +436,15 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 #if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK
         struct iovec  scratch;
         struct iovec *scratchiov = &scratch;
-        int           niov = 1;
+        unsigned int  niov = 1;
 #else
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
-        int           niov = conn->ksnc_rx_nkiov;
+        unsigned int  niov = conn->ksnc_rx_nkiov;
 #endif
-        ptl_kiov_t   *kiov = conn->ksnc_rx_kiov;
+        lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
         struct msghdr msg = {
                 .msg_name       = NULL,
                 .msg_namelen    = 0,
@@ -448,84 +479,6 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 }
 
 int
-ksocknal_lib_sock_write (struct socket *sock, void *buffer, int nob)
-{
-        int           rc;
-        mm_segment_t  oldmm = get_fs();
-
-        while (nob > 0) {
-                struct iovec  iov = {
-                        .iov_base = buffer,
-                        .iov_len  = nob
-                };
-                struct msghdr msg = {
-                        .msg_name       = NULL,
-                        .msg_namelen    = 0,
-                        .msg_iov        = &iov,
-                        .msg_iovlen     = 1,
-                        .msg_control    = NULL,
-                        .msg_controllen = 0,
-                        .msg_flags      = 0
-                };
-
-                set_fs (KERNEL_DS);
-                rc = sock_sendmsg (sock, &msg, iov.iov_len);
-                set_fs (oldmm);
-
-                if (rc < 0)
-                        return (rc);
-
-                if (rc == 0) {
-                        CERROR ("Unexpected zero rc\n");
-                        return (-ECONNABORTED);
-                }
-
-                buffer = ((char *)buffer) + rc;
-                nob -= rc;
-        }
-
-        return (0);
-}
-
-int
-ksocknal_lib_sock_read (struct socket *sock, void *buffer, int nob)
-{
-        int           rc;
-        mm_segment_t  oldmm = get_fs();
-
-        while (nob > 0) {
-                struct iovec  iov = {
-                        .iov_base = buffer,
-                        .iov_len  = nob
-                };
-                struct msghdr msg = {
-                        .msg_name       = NULL,
-                        .msg_namelen    = 0,
-                        .msg_iov        = &iov,
-                        .msg_iovlen     = 1,
-                        .msg_control    = NULL,
-                        .msg_controllen = 0,
-                        .msg_flags      = 0
-                };
-
-                set_fs (KERNEL_DS);
-                rc = sock_recvmsg (sock, &msg, iov.iov_len, 0);
-                set_fs (oldmm);
-
-                if (rc < 0)
-                        return (rc);
-
-                if (rc == 0)
-                        return (-ECONNABORTED);
-
-                buffer = ((char *)buffer) + rc;
-                nob -= rc;
-        }
-
-        return (0);
-}
-
-int
 ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int *nagle)
 {
         mm_segment_t   oldmm = get_fs ();
@@ -533,31 +486,23 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
         int            len;
         int            rc;
 
-        rc = ksocknal_getconnsock (conn);
+        rc = ksocknal_connsock_addref(conn);
         if (rc != 0) {
                 LASSERT (conn->ksnc_closing);
                 *txmem = *rxmem = *nagle = 0;
                 return (-ESHUTDOWN);
         }
 
-        set_fs (KERNEL_DS);
-
-        len = sizeof(*txmem);
-        rc = sock_getsockopt(sock, SOL_SOCKET, SO_SNDBUF,
-                             (char *)txmem, &len);
-        if (rc == 0) {
-                len = sizeof(*rxmem);
-                rc = sock_getsockopt(sock, SOL_SOCKET, SO_RCVBUF,
-                                     (char *)rxmem, &len);
-        }
+	rc = libcfs_sock_getbuf(sock, txmem, rxmem);
         if (rc == 0) {
                 len = sizeof(*nagle);
+		set_fs(KERNEL_DS);
                 rc = sock->ops->getsockopt(sock, SOL_TCP, TCP_NODELAY,
                                            (char *)nagle, &len);
+		set_fs(oldmm);
         }
 
-        set_fs (oldmm);
-        ksocknal_putconnsock (conn);
+        ksocknal_connsock_decref(conn);
 
         if (rc == 0)
                 *nagle = !*nagle;
@@ -565,6 +510,20 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
                 *txmem = *rxmem = *nagle = 0;
 
         return (rc);
+}
+
+int
+ksocknal_lib_buffersize (int current_sz, int tunable_sz)
+{
+	/* ensure >= SOCKNAL_MIN_BUFFER */
+	if (current_sz < SOCKNAL_MIN_BUFFER)
+		return MAX(SOCKNAL_MIN_BUFFER, tunable_sz);
+
+	if (tunable_sz > SOCKNAL_MIN_BUFFER)
+		return tunable_sz;
+	
+	/* leave alone */
+	return 0;
 }
 
 int
@@ -577,6 +536,8 @@ ksocknal_lib_setup_sock (struct socket *sock)
         int             keep_intvl;
         int             keep_count;
         int             do_keepalive;
+	int             sndbuf;
+	int             rcvbuf;
         struct linger   linger;
 
         sock->sk->sk_allocation = GFP_NOFS;
@@ -606,7 +567,7 @@ ksocknal_lib_setup_sock (struct socket *sock)
                 return (rc);
         }
 
-        if (!ksocknal_tunables.ksnd_nagle) {
+        if (!*ksocknal_tunables.ksnd_nagle) {
                 option = 1;
 
                 set_fs (KERNEL_DS);
@@ -619,34 +580,28 @@ ksocknal_lib_setup_sock (struct socket *sock)
                 }
         }
 
-        if (ksocknal_tunables.ksnd_buffer_size > 0) {
-                option = ksocknal_tunables.ksnd_buffer_size;
+	rc = libcfs_sock_getbuf(sock, &sndbuf, &rcvbuf);
+	if (rc != 0) {
+		CERROR("Can't get buffer sizes: %d\n", rc);
+		return rc;
+	}
 
-                set_fs (KERNEL_DS);
-                rc = sock_setsockopt (sock, SOL_SOCKET, SO_SNDBUF,
-                                      (char *)&option, sizeof (option));
-                set_fs (oldmm);
-                if (rc != 0) {
-                        CERROR ("Can't set send buffer %d: %d\n",
-                                option, rc);
-                        return (rc);
-                }
+	sndbuf = ksocknal_lib_buffersize(sndbuf,
+					 *ksocknal_tunables.ksnd_buffer_size);
+	rcvbuf = ksocknal_lib_buffersize(rcvbuf,
+					 *ksocknal_tunables.ksnd_buffer_size);
 
-                set_fs (KERNEL_DS);
-                rc = sock_setsockopt (sock, SOL_SOCKET, SO_RCVBUF,
-                                      (char *)&option, sizeof (option));
-                set_fs (oldmm);
-                if (rc != 0) {
-                        CERROR ("Can't set receive buffer %d: %d\n",
-                                option, rc);
-                        return (rc);
-                }
-        }
+	rc = libcfs_sock_setbuf(sock, sndbuf, rcvbuf);
+	if (rc != 0) {
+		CERROR ("Can't set buffer tx %d, rx %d buffers: %d\n",
+			sndbuf, rcvbuf, rc);
+		return (rc);
+	}
 
         /* snapshot tunables */
-        keep_idle  = ksocknal_tunables.ksnd_keepalive_idle;
-        keep_count = ksocknal_tunables.ksnd_keepalive_count;
-        keep_intvl = ksocknal_tunables.ksnd_keepalive_intvl;
+        keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle;
+        keep_count = *ksocknal_tunables.ksnd_keepalive_count;
+        keep_intvl = *ksocknal_tunables.ksnd_keepalive_intvl;
 
         do_keepalive = (keep_idle > 0 && keep_count > 0 && keep_intvl > 0);
 
@@ -693,135 +648,13 @@ ksocknal_lib_setup_sock (struct socket *sock)
         return (0);
 }
 
-int
-ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
-                      ksock_route_t *route, int local_port)
-{
-        struct sockaddr_in  locaddr;
-        struct sockaddr_in  srvaddr;
-        struct socket      *sock;
-        int                 rc;
-        int                 option;
-        mm_segment_t        oldmm = get_fs();
-        struct timeval      tv;
-
-        memset(&locaddr, 0, sizeof(locaddr));
-        locaddr.sin_family = AF_INET;
-        locaddr.sin_port = htons(local_port);
-        locaddr.sin_addr.s_addr =
-                (route->ksnr_myipaddr != 0) ? htonl(route->ksnr_myipaddr)
-                                            : INADDR_ANY;
-
-        memset (&srvaddr, 0, sizeof (srvaddr));
-        srvaddr.sin_family = AF_INET;
-        srvaddr.sin_port = htons (route->ksnr_port);
-        srvaddr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
-
-        *may_retry = 0;
-
-        rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
-        *sockp = sock;
-        if (rc != 0) {
-                CERROR ("Can't create autoconnect socket: %d\n", rc);
-                return (rc);
-        }
-
-        /* Ugh; have to map_fd for compatibility with sockets passed in
-         * from userspace.  And we actually need the sock->file refcounting
-         * that this gives you :) */
-
-        rc = sock_map_fd (sock);
-        if (rc < 0) {
-                sock_release (sock);
-                CERROR ("sock_map_fd error %d\n", rc);
-                return (rc);
-        }
-
-        /* NB the file descriptor (rc) now owns the ref on sock->file */
-        LASSERT (sock->file != NULL);
-        LASSERT (file_count(sock->file) == 1);
-
-        get_file(sock->file);                /* extra ref makes sock->file */
-        sys_close(rc);                       /* survive this close */
-
-        /* Still got a single ref on sock->file */
-        LASSERT (file_count(sock->file) == 1);
-
-        /* Set the socket timeouts, so our connection attempt completes in
-         * finite time */
-        tv.tv_sec = ksocknal_tunables.ksnd_io_timeout;
-        tv.tv_usec = 0;
-
-        set_fs (KERNEL_DS);
-        rc = sock_setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO,
-                              (char *)&tv, sizeof (tv));
-        set_fs (oldmm);
-        if (rc != 0) {
-                CERROR ("Can't set send timeout %d: %d\n",
-                        ksocknal_tunables.ksnd_io_timeout, rc);
-                goto failed;
-        }
-
-        set_fs (KERNEL_DS);
-        rc = sock_setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO,
-                              (char *)&tv, sizeof (tv));
-        set_fs (oldmm);
-        if (rc != 0) {
-                CERROR ("Can't set receive timeout %d: %d\n",
-                        ksocknal_tunables.ksnd_io_timeout, rc);
-                goto failed;
-        }
-
-        set_fs (KERNEL_DS);
-        option = 1;
-        rc = sock_setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
-                             (char *)&option, sizeof (option));
-        set_fs (oldmm);
-        if (rc != 0) {
-                CERROR("Can't set SO_REUSEADDR for socket: %d\n", rc);
-                goto failed;
-        }
-
-        rc = sock->ops->bind(sock,
-                             (struct sockaddr *)&locaddr, sizeof(locaddr));
-        if (rc == -EADDRINUSE) {
-                CDEBUG(D_NET, "Port %d already in use\n", local_port);
-                *may_retry = 1;
-                goto failed;
-        }
-        if (rc != 0) {
-                CERROR("Error trying to bind to reserved port %d: %d\n",
-                       local_port, rc);
-                goto failed;
-        }
-
-        rc = sock->ops->connect(sock,
-                                (struct sockaddr *)&srvaddr, sizeof(srvaddr),
-                                sock->file->f_flags);
-        if (rc == 0)
-                return 0;
-
-        /* EADDRNOTAVAIL probably means we're already connected to the same
-         * peer/port on the same local port on a differently typed
-         * connection.  Let our caller retry with a different local
-         * port... */
-        *may_retry = (rc == -EADDRNOTAVAIL);
-
-        CDEBUG(*may_retry ? D_NET : D_ERROR,
-               "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
-               HIPQUAD(route->ksnr_myipaddr), local_port,
-               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
-
- failed:
-        fput(sock->file);
-        return rc;
-}
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 struct tcp_opt *sock2tcp_opt(struct sock *sk)
 {
         return &(sk->tp_pinfo.af_tcp);
 }
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
+#define sock2tcp_opt(sk) tcp_sk(sk)
 #else
 struct tcp_opt *sock2tcp_opt(struct sock *sk)
 {
@@ -834,13 +667,17 @@ void
 ksocknal_lib_push_conn (ksock_conn_t *conn)
 {
         struct sock    *sk;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11))
         struct tcp_opt *tp;
+#else
+        struct tcp_sock *tp;
+#endif
         int             nonagle;
         int             val = 1;
         int             rc;
         mm_segment_t    oldmm;
 
-        rc = ksocknal_getconnsock (conn);
+        rc = ksocknal_connsock_addref(conn);
         if (rc != 0)                            /* being shut down */
                 return;
 
@@ -865,7 +702,7 @@ ksocknal_lib_push_conn (ksock_conn_t *conn)
         tp->nonagle = nonagle;
         release_sock (sk);
 
-        ksocknal_putconnsock (conn);
+        ksocknal_connsock_decref(conn);
 }
 
 extern void ksocknal_read_callback (ksock_conn_t *conn);

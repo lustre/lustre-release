@@ -75,11 +75,6 @@ typedef enum {
 #define LDLM_FL_BLOCK_NOWAIT   0x040000 // server told not to wait if blocked
 #define LDLM_FL_TEST_LOCK      0x080000 // return blocking lock
 
-/* These are flags that are mapped into the flags and ASTs of blocking locks */
-#define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
-/* Flags sent in AST lock_flags to be mapped into the receiving lock. */
-#define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
-
 /* XXX FIXME: This is being added to b_size as a low-risk fix to the fact that
  * the LVB filling happens _after_ the lock has been granted, so another thread
  * can match before the LVB has been updated.  As a dirty hack, we set
@@ -100,6 +95,18 @@ typedef enum {
 
 /* Don't drop lock covering mmapped file in LRU */
 #define LDLM_FL_NO_LRU         0x400000
+
+/* Immediatelly cancel such locks when they block some other locks. Send
+   cancel notification to original lock holder, but expect no reply. */
+#define LDLM_FL_CANCEL_ON_BLOCK 0x800000
+
+/* Flags flags inherited from parent lock when doing intents. */
+#define LDLM_INHERIT_FLAGS     (LDLM_FL_CANCEL_ON_BLOCK)
+
+/* These are flags that are mapped into the flags and ASTs of blocking locks */
+#define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
+/* Flags sent in AST lock_flags to be mapped into the receiving lock. */
+#define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -515,6 +522,9 @@ int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
 
 /* ldlm_request.c */
 int ldlm_expired_completion_wait(void *data);
+int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                      void *data, int flag);
+int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp);
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 int ldlm_cli_enqueue(struct obd_export *exp,
                      struct ptlrpc_request *req,
@@ -545,8 +555,6 @@ int ldlm_cli_join_lru(struct ldlm_namespace *, struct ldlm_res_id *,
 /* This has to be here because recursive inclusion sucks. */
 int intent_disposition(struct ldlm_reply *rep, int flag);
 void intent_set_disposition(struct ldlm_reply *rep, int flag);
-int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-                     void *data, int flag);
 
 
 /* ioctls for trying requests */

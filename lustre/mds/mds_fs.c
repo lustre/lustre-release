@@ -48,7 +48,8 @@
 
 #include "mds_internal.h"
 
-/* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
+/* This limit is arbitrary (32k clients on x86), but it is convenient to use
+ * 2^n * PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
 #define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
 
 #define LAST_RCVD "last_rcvd"
@@ -379,6 +380,9 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
                 obd->obd_recovery_start = CURRENT_SECONDS;
+                /* Only used for lprocfs_status */
+                obd->obd_recovery_end = obd->obd_recovery_start +
+                        OBD_RECOVERY_TIMEOUT / HZ;
         }
 
         mds->mds_mount_count = mount_count + 1;

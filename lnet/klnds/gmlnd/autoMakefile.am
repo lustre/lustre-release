@@ -4,12 +4,10 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if BUILD_GMNAL
-if !CRAY_PORTALS
-modulenet_DATA = kgmnal$(KMODEXT)
-endif
+if BUILD_GMLND
+modulenet_DATA = kgmlnd$(KMODEXT)
 endif
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(kgmnal-objs:%.o=%.c) gmnal.h
+DIST_SOURCES = $(kgmlnd-objs:%.o=%.c) gmlnd.h

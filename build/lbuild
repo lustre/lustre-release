@@ -234,6 +234,38 @@ uniqify()
     echo $(echo "$*" | xargs -n 1 | sort -u)
 }
 
+download_and_build_tarball() {
+    local TARGET=$1
+    local KERNEL_FILE=$2
+
+    local SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
+
+    echo "Downloading http://ftp.lustre.org/kernels/$TARGET/old/$SRPM..."
+    if ! wget -nv "http://ftp.lustre.org/kernels/$TARGET/old/$SRPM" \
+        -O "$KERNELDIR/$SRPM" ; then
+        fatal 1 "Could not download target $TARGET's kernel SRPM $SRPM from ftp.lustre.org."
+    fi
+
+    if [ "$TARGET" = "rhel-2.6" ]; then
+	RPMTOPDIR=$(mktemp -d $KERNELDIR/rpm_XXXXXX)
+	mkdir $RPMTOPDIR/BUILD/
+        rpm -ivh $KERNELDIR/$SRPM --define "_topdir $RPMTOPDIR" || \
+	    { rm -rf $RPMTOPDIR; fatal 1 "Error installing kernel SRPM."; }
+	$RPMBUILD -bp --nodeps --target i686 $RPMTOPDIR/SPECS/kernel-2.6.spec --define "_topdir $RPMTOPDIR"
+        pushd $RPMTOPDIR/BUILD/kernel-${lnxmaj}/linux-${lnxmaj} && {
+            make mrproper
+            cp configs/kernel-${lnxmaj}-i686-smp.config .config
+            make nonint_oldconfig > /dev/null
+            make include/linux/version.h 
+            rm -f .config
+            cd ..
+            tar cjf $KERNEL_FILE linux-${lnxmaj}
+        }
+        popd
+	rm -rf $RPMTOPDIR
+    fi
+}
+
 load_target()
 {
     EXTRA_VERSION_save="$EXTRA_VERSION"
@@ -258,10 +290,10 @@ load_target()
 	if [ ! -r "$KERNELDIR/$KERNEL" ] ; then
 	    if (( $DOWNLOAD )) ; then
 		echo "Downloading http://ftp.lustre.org/kernels/$CANONICAL_TARGET/old/$KERNEL..."
-		if ! wget -nv "http://ftp.lustre.org/kernels/$CANONICAL_TARGET/old/$KERNEL" \
-		    -O "$KERNELDIR/$KERNEL" ; then
-		    fatal 1 "Could not download target $TARGET's kernel file $KERNEL from ftp.lustre.org."
-		fi
+		if ! wget -nv "http://ftp.lustre.org/kernels/$CANONICAL_TARGET/old/$KERNEL" -O "$KERNELDIR/$KERNEL" ; then
+		    # see if we can do it with an SRPM from the download site
+		    download_and_build_tarball $CANONICAL_TARGET $KERNEL_FILE
+	        fi
 	    else
 		fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
 	    fi

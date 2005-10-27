@@ -30,7 +30,7 @@
 # include <linux/highmem.h>
 # include <linux/module.h>
 # include <linux/version.h>
-# include <portals/p30.h>
+# include <lnet/lnet.h>
 # include <linux/smp_lock.h>
 # include <asm/atomic.h>
 # include <asm/uaccess.h>
@@ -44,6 +44,7 @@
 # endif
 # if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #  include <linux/kallsyms.h>
+#  include <linux/moduleparam.h>
 # endif
 
 #include <libcfs/linux/portals_compat25.h>
@@ -93,19 +94,19 @@ static inline void our_cond_resched(void)
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
-        portals_catastrophe = 1;                                        \
-        portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(file, func, line);                      \
+        libcfs_catastrophe = 1;                                        \
+        libcfs_debug_dumplog();                                        \
+        libcfs_run_lbug_upcall(file, func, line);                      \
         panic("LBUG");                                                  \
 } while (0)
 #else
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \
-        portals_catastrophe = 1;                                        \
-        portals_debug_dumpstack(NULL);                                  \
-        portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(file, func, line);                      \
+        libcfs_catastrophe = 1;                                        \
+        libcfs_debug_dumpstack(NULL);                                  \
+        libcfs_debug_dumplog();                                        \
+        libcfs_run_lbug_upcall(file, func, line);                      \
         set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
         schedule();                                                     \
 } while (0)
@@ -118,7 +119,7 @@ do {                                                                    \
 #define PORTAL_SYMBOL_REGISTER(x) inter_module_register(#x, THIS_MODULE, &x)
 #define PORTAL_SYMBOL_UNREGISTER(x) inter_module_unregister(#x)
 
-#define PORTAL_SYMBOL_GET(x) ((typeof(&x))inter_module_get(#x))
+#define PORTAL_SYMBOL_GET(x) inter_module_get(#x)
 #define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
 
 #define PORTAL_MODULE_USE       MOD_INC_USE_COUNT
@@ -136,6 +137,20 @@ do {                                                                    \
 
 #endif
 
+/******************************************************************************/
+/* Module parameter support */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+# define CFS_MODULE_PARM(name, t, type, perm, desc) \
+        MODULE_PARM(name, t);\
+        MODULE_PARM_DESC(name, desc)
+
+# define CFS_SYSFS_MODULE_PARM  0 /* no sysfs module parameters */
+#else
+# define CFS_MODULE_PARM(name, t, type, perm, desc) \
+        module_param(name, type, perm);\
+        MODULE_PARM_DESC(name, desc)
+# define CFS_SYSFS_MODULE_PARM  1 /* module parameters accessible via sysfs */
+#endif
 /******************************************************************************/
 
 #if (__GNUC__)
@@ -157,14 +172,22 @@ do {                                                                    \
 #else  /* !__KERNEL__ */
 # include <stdio.h>
 # include <stdlib.h>
-#ifndef __CYGWIN__
-# include <stdint.h>
-#else
+#ifdef CRAY_XT3
+# include <ioctl.h>
+#elif defined(__CYGWIN__)
 # include <cygwin-ioctl.h>
+#else
+# include <stdint.h>
 #endif
 # include <unistd.h>
 # include <time.h>
 # include <limits.h>
+# include <errno.h>
+# include <sys/ioctl.h>                         /* for _IOWR */
+
+# define CFS_MODULE_PARM(name, t, type, perm, desc)
+#define PORTAL_SYMBOL_GET(x) inter_module_get(#x)
+#define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
 
 #endif /* End of !__KERNEL__ */
 
@@ -276,7 +299,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 
 /* ------------------------------------------------------------------ */
 
-#define IOCTL_PORTAL_TYPE long
+#define IOCTL_LIBCFS_TYPE long
 
 #ifdef __CYGWIN__
 # ifndef BITS_PER_LONG
@@ -298,8 +321,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
 #endif
 
-#if defined(__x86_64__) && defined(__KERNEL__)
-/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
+#if (defined(__x86_64__) && defined(__KERNEL__))
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"

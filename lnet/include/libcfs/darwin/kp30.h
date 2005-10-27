@@ -22,7 +22,7 @@
 
 #include <libcfs/darwin/darwin-lock.h>
 #include <libcfs/darwin/darwin-prim.h>
-#include <portals/p30.h>
+#include <lnet/lnet.h>
 
 #define our_cond_resched()              schedule_timeout(1);
 
@@ -32,7 +32,7 @@
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #endif
 
-#define LBUG_WITH_LOC(file, func, line)         portals_catastrophe = 1
+#define LBUG_WITH_LOC(file, func, line)    do {libcfs_catastrophe = 1;} while(0)
 
 /* --------------------------------------------------------------------- */
 
@@ -46,6 +46,14 @@
 #define PORTAL_MODULE_UNUSE                     do{int i = 0; i--;}while(0)
 
 #define printk(format, args...)                 printf(format, ## args)
+
+/******************************************************************************/
+/* Module parameter support */
+#define CFS_MODULE_PARM(name, t, type, perm, desc) \
+        this should force a syntax error
+
+#define CFS_SYSFS_MODULE_PARM    0 /* no sysfs access to module parameters */
+/******************************************************************************/
 
 #else  /* !__KERNEL__ */
 # include <stdio.h>
@@ -76,7 +84,7 @@ typedef struct {
 
 /* -------------------------------------------------------------------------- */
 
-#define IOCTL_PORTAL_TYPE struct portal_ioctl_data
+#define IOCTL_LIBCFS_TYPE struct libcfs_ioctl_data
 
 #define LPU64 "%llu"
 #define LPD64 "%lld"

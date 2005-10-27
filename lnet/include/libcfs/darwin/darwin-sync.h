@@ -237,7 +237,7 @@ void ksleep_wake_nr(struct ksleep_chan *chan, int nr);
 	.flags   = 0,					\
 	.event   = 0,					\
 	.hits    = 0,					\
-	.linkage = PTL_LIST_HEAD_INIT(name.linkage),	\
+	.linkage = CFS_LIST_HEAD_INIT(name.linkage),	\
 	.magic   = KSLEEP_LINK_MAGIC			\
 }
 

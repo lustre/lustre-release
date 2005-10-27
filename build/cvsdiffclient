@@ -28,10 +28,13 @@ if [ -f $TMP ]; then
 		[ "$TAG" ] && BRANCH="`sed 's/^T//' $TAG`" || BRANCH="HEAD"
 		echo "CVS: Branch $BRANCH" >> $TMP
 	fi
-	echo "CVS: did you update the ChangeLog for a bug fix?" >> $TMP
-	echo "CVS: did you update the hours spent in Bugzilla?" >> $TMP
-	echo "CVS: b=<bug>" >> $TMP
-	echo "CVS: r=<reviewed_by>" >> $TMP
+cat - >> $TMP <<- EOF
+	CVS: did you update the ChangeLog for a bug fix?
+	CVS: did you update the hours spent in Bugzilla?
+	CVS: did you verify/update the HLD/DLD in CVS?
+	CVS: b=<bug>
+	CVS: r=<reviewed_by>
+EOF
 
 	cat $1 >> $TMP
 	cp $TMP $1

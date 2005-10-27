@@ -1,0 +1,9 @@
+Steps for installation:
+
+Update /etc/snmp/snmpd.conf appending the following line:
+
+dlmod lustresnmp /usr/lib/lustre/snmp/lustresnmp.so
+
+Or the appropriate path to the snmp module.
+
+Then, restart the snmpd daemon.

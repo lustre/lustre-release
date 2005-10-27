@@ -74,6 +74,8 @@ struct ll_rpc_opcode {
         { MDS_SET_INFO,     "mds_set_info" },
         { MDS_QUOTACHECK,   "mds_quotacheck" },
         { MDS_QUOTACTL,     "mds_quotactl" },
+        { MDS_GETXATTR,     "mds_getxattr" },
+        { MDS_SETXATTR,     "mds_setxattr" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
@@ -335,9 +337,9 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                  * parser. Currently I only print stuff here I know is OK
                  * to look at coz it was set up in request_in_callback()!!! */
                 seq_printf(s, LPD64":%s:%s:"LPD64":%d:%s ",
-                           req->rq_history_seq,
-                           req->rq_peer.peer_ni->pni_name, req->rq_peerstr,
-                           req->rq_xid, req->rq_reqlen,ptlrpc_rqphase2str(req));
+                           req->rq_history_seq, libcfs_nid2str(req->rq_self), 
+                           libcfs_id2str(req->rq_peer), req->rq_xid, 
+                           req->rq_reqlen,ptlrpc_rqphase2str(req));
 
                 if (svc->srv_request_history_print_fn == NULL)
                         seq_printf(s, "\n");

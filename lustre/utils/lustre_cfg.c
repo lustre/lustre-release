@@ -49,7 +49,7 @@
 
 
 #include "obdctl.h"
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include "parser.h"
 #include <stdio.h>
 
@@ -253,9 +253,8 @@ int jt_obd_cleanup(int argc, char **argv)
 }
 
 static 
-int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal) 
+int do_add_uuid(char * func, char *uuid, lnet_nid_t nid) 
 {
-        char tmp[64];
         int rc;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
@@ -266,11 +265,10 @@ int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal)
 
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        lcfg->lcfg_nal = nal;
 
 #if 0
-        fprintf(stderr, "adding\tnal: %d\tnid: %d\tuuid: %s\n",
-               lcfg->lcfg_nid, lcfg->lcfg_nal, uuid);
+        fprintf(stderr, "adding\tnid: %d\tuuid: %s\n",
+               lcfg->lcfg_nid, uuid);
 #endif
         rc = lcfg_ioctl(func, OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
@@ -280,37 +278,30 @@ int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal)
                 return -1;
         }
 
-        printf ("Added uuid %s: %s\n", uuid, ptl_nid2str (tmp, nid));
+        printf ("Added uuid %s: %s\n", uuid, libcfs_nid2str(nid));
         return 0;
 }
 
 int jt_lcfg_add_uuid(int argc, char **argv)
 {
-        ptl_nid_t nid = 0;
-        int nal;
+        lnet_nid_t nid;
         
-        if (argc != 4) {                
+        if (argc != 3) {                
                 return CMD_HELP;
         }
 
-        if (ptl_parse_nid (&nid, argv[2]) != 0) {
+        nid = libcfs_str2nid(argv[2]);
+        if (nid == LNET_NID_ANY) {
                 fprintf (stderr, "Can't parse NID %s\n", argv[2]);
-                        return (-1);
+                return (-1);
         }
 
-        nal = ptl_name2nal(argv[3]);
-
-        if (nal <= 0) {
-                fprintf (stderr, "Can't parse NAL %s\n", argv[3]);
-                return -1;
-        }
-
-        return do_add_uuid(argv[0], argv[1], nid, nal);
+        return do_add_uuid(argv[0], argv[1], nid);
 }
 
-int obd_add_uuid(char *uuid, ptl_nid_t nid, int nal)
+int obd_add_uuid(char *uuid, lnet_nid_t nid)
 {
-        return do_add_uuid("obd_add_uuid", uuid, nid, nal);
+        return do_add_uuid("obd_add_uuid", uuid, nid);
 }
 
 int jt_lcfg_del_uuid(int argc, char **argv)

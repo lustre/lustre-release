@@ -817,6 +817,8 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                          pg->pg, pg->pg->private, pg->pg->index, pg->off,
                          pg_prev->pg, pg_prev->pg->private, pg_prev->pg->index,
                                  pg_prev->off);
+                LASSERT((pga[0].flag & OBD_BRW_SRVLOCK) ==
+                        (pg->flag & OBD_BRW_SRVLOCK));
 
                 ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~PAGE_MASK,
                                       pg->count);
@@ -906,6 +908,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                                 obd_count page_count, struct brw_page *pga,
                                 int rc)
 {
+        const lnet_process_id_t *peer =
+                        &req->rq_import->imp_connection->c_peer;
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct ost_body *body;
         __u32 client_cksum = 0;
@@ -968,32 +972,28 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                 handle_short_read(rc, page_count, pga);
 
         if (unlikely(oa->o_valid & OBD_MD_FLCKSUM)) {
-                struct ptlrpc_peer *peer =
-                        &req->rq_import->imp_connection->c_peer;
                 static int cksum_counter;
                 __u32 cksum = osc_checksum_bulk(rc, page_count, pga);
                 __u32 server_cksum = oa->o_cksum;
-                char str[PTL_NALFMT_SIZE];
-
-                ptlrpc_peernid2str(peer, str);
 
                 if (server_cksum == ~0 && rc > 0) {
                         CERROR("Protocol error: server %s set the 'checksum' "
                                "bit, but didn't send a checksum.  Not fatal, "
-                               "but please tell CFS.\n", str);
+                               "but please tell CFS.\n",
+                               libcfs_nid2str(peer->nid));
                         RETURN(0);
                 }
 
                 cksum_counter++;
+
                 if (server_cksum != cksum) {
-                        CERROR("Bad checksum: server %x != client %x, server "
-                               "NID "LPX64" (%s)\n", server_cksum, cksum,
-                               peer->peer_id.nid, str);
+                        CERROR("Bad checksum from %s: server %x != client %x\n",
+                               libcfs_nid2str(peer->nid), server_cksum, cksum);
                         cksum_counter = 0;
                         oa->o_cksum = cksum;
                 } else if ((cksum_counter & (-cksum_counter)) == cksum_counter){
-                        CWARN("Checksum %u from "LPX64" (%s) OK: %x\n",
-                              cksum_counter, peer->peer_id.nid, str, cksum);
+                        CWARN("Checksum %u from %s OK: %x\n",
+                              cksum_counter, libcfs_nid2str(peer->nid), cksum);
                 }
                 CDEBUG(D_PAGE, "checksum %x confirmed\n", cksum);
         } else if (unlikely(client_cksum)) {
@@ -1001,9 +1001,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
 
                 cksum_missed++;
                 if ((cksum_missed & (-cksum_missed)) == cksum_missed)
-                        CERROR("Request checksum %u from "LPX64", no reply\n",
-                               cksum_missed,
-                            req->rq_import->imp_connection->c_peer.peer_id.nid);
+                        CERROR("Checksum %u requested from %s but not sent\n",
+                               cksum_missed, libcfs_nid2str(peer->nid));
         }
 
         RETURN(0);
@@ -2099,6 +2098,16 @@ static int osc_set_async_flags(struct obd_export *exp,
         oap = oap_from_cookie(cookie);
         if (IS_ERR(oap))
                 RETURN(PTR_ERR(oap));
+
+        /*
+         * bug 7311: OST-side locking is only supported for liblustre for now
+         * (and liblustre never calls obd_set_async_flags(). I hope.), generic
+         * implementation has to handle case where OST-locked page was picked
+         * up by, e.g., ->writepage().
+         */
+        LASSERT(!(oap->oap_brw_flags & OBD_BRW_SRVLOCK));
+        LASSERT(!LIBLUSTRE_CLIENT); /* check that liblustre angels do fear to
+                                     * tread here. */
 
         if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
                 RETURN(-EIO);

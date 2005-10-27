@@ -12,9 +12,13 @@ parent=$1
 child=$2
 CHILD=`echo $child | sed -e "s/^b_//" | tr "[a-z]" "[A-Z]"`
 dir=${3:-.}
+if [ ! -d $dir ]; then
+    echo >&2 "${progname}: directory '$dir' does not exist."
+    exit 1
+fi
 module=$(basename $(<$dir/CVS/Repository))
 
-if [ "$module" = "lustre" ] ; then
+if [ "$module" = "lustre" ]; then
     echo >&2 "${progname}: You probably want to branch lustre or portals."
     echo >&2 "${progname}: Try using ${0} $parent $child lustre"
     exit 1
@@ -31,9 +35,12 @@ case $child in
   *) child="b_$child"
 esac
 
-if test "$parent" != "HEAD" -a -f $dir/CVS/Tag -a "`cat $dir/CVS/Tag`" != "T$parent"; then
-	echo "This script must be run within the $parent branch"
-	exit 1
+if [ "$parent" != "HEAD" -a -f $dir/CVS/Tag ]; then
+	# put in separate condition as bash evaluates all conditions unlike C
+	if [ "`cat $dir/CVS/Tag`" != "T$parent" ]; then
+		echo "This script must be run within the $parent branch"
+		exit 1
+	fi
 fi
 
 echo parent: $parent CHILD: $CHILD child: $child date: $date

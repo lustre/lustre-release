@@ -74,7 +74,7 @@
  */
 
 /*
- * mutex_t:
+ * mutex:
  *
  * - init_mutex(x)
  * - init_mutex_locked(x)

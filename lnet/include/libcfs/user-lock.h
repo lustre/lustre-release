@@ -67,8 +67,10 @@ void spin_lock_bh_init(spinlock_t *lock);
 void spin_lock_bh(spinlock_t *lock);
 void spin_unlock_bh(spinlock_t *lock);
 
-#define spin_lock_irqsave(l, flags) ({ spin_lock(l); (void)flags; })
-#define spin_unlock_irqrestore(l, flags)  ({ spin_unlock(l); (void)flags; })
+static inline void 
+spin_lock_irqsave(spinlock_t *l, unsigned long f) { spin_lock(l); }
+static inline void 
+spin_unlock_irqrestore(spinlock_t *l, unsigned long f) { spin_unlock(l); }
 
 /*
  * Semaphore
@@ -149,11 +151,15 @@ typedef struct rw_semaphore rwlock_t;
 #define write_lock(l)		down_write(l)
 #define write_unlock(l)		up_write(l)
 
-#define write_lock_irqsave(l, f)	write_lock(l)
-#define write_unlock_irqrestore(l, f)	write_unlock(l)
+static inline void
+write_lock_irqsave(rwlock_t *l, unsigned long f) { write_lock(l); }
+static inline void
+write_unlock_irqrestore(rwlock_t *l, unsigned long f) { write_unlock(l); }
 
-#define read_lock_irqsave(l, f)	        read_lock(l)
-#define read_unlock_irqrestore(l, f)	read_unlock(l)
+static inline void 
+read_lock_irqsave(rwlock_t *l, unsigned long f) { read_lock(l); }
+static inline void
+read_unlock_irqrestore(rwlock_t *l, unsigned long f) { read_unlock(l); }
 
 /* !__KERNEL__ */
 #endif

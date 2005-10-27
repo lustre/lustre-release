@@ -25,8 +25,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
 #include "parser.h"
 
 
@@ -53,7 +53,8 @@ int main(int argc, char **argv)
         if (dbg_initialize(argc, argv) < 0)
                 exit(2);
 
-        register_ioc_dev(PORTALS_DEV_ID, PORTALS_DEV_PATH);
+        register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH, 
+                         LNET_DEV_MAJOR, LNET_DEV_MINOR);
 
         Parser_init("debugctl > ", list);
         if (argc > 1)
@@ -61,6 +62,6 @@ int main(int argc, char **argv)
 
         Parser_commands();
 
-        unregister_ioc_dev(PORTALS_DEV_ID);
+        unregister_ioc_dev(LNET_DEV_ID);
         return 0;
 }

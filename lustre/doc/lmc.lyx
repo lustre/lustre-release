@@ -170,6 +170,11 @@ The arguments required are:
  scripts used by the client for recovery
 \layout Description
 
+--group_upcall\SpecialChar ~
+<path> Specify the location of the group upcall scripts used by the MDS
+ for determiningsupplementary group membership
+\layout Description
+
 --ptldebug\SpecialChar ~
 <debug_level> Set the portals debug level.
 \layout Description
@@ -597,19 +602,6 @@ nodename
 \emph default 
 Node on which the echo-client resides.
 \end_deeper 
-\layout Description
-
---add\SpecialChar ~
-mgmt Management/monitoring service.
-\begin_deeper 
-\layout Description
-
---node\SpecialChar ~
-nodename
-\emph on 
- 
-\emph default 
-Node on which the mgmt service resides.
 \layout Description
 
 \end_deeper 

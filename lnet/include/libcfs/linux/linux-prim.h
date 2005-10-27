@@ -164,6 +164,14 @@ static inline cfs_time_t cfs_timer_deadline(cfs_timer_t *t)
         return t->expires;
 }
 
+
+/* deschedule for a bit... */
+static inline void cfs_pause(cfs_duration_t ticks)
+{
+        set_current_state(TASK_UNINTERRUPTIBLE);
+        schedule_timeout(ticks);
+}
+
 #else   /* !__KERNEL__ */
 
 #include "../user-prim.h"

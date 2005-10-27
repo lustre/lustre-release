@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-SUBDIRS = libcfs portals knals unals router tests doc utils include	\
+SUBDIRS = libcfs lnet klnds ulnds tests doc utils include	\
 	autoconf
 
 sources:

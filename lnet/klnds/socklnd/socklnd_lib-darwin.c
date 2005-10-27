@@ -28,7 +28,7 @@
 #include <netinet/tcp.h>
 #include <sys/file.h>
 
-#include "socknal.h"
+#include "socklnd.h"
 
 #if 0
 #undef SOCKNAL_SINGLE_FRAG_TX
@@ -37,28 +37,31 @@
 #define SOCKNAL_SINGLE_FRAG_RX  1
 #endif
 
+#if !CFS_SYSFS_MODULE_PARM
+#error "this can't use ksocknal_tunables to get the addresses of the tuning vars"
+
 SYSCTL_DECL(_portals);
 
 SYSCTL_NODE (_portals,           OID_AUTO,       ksocknal,        CTLFLAG_RW, 
              0,                 "ksocknal_sysctl");
 
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       timeout, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_io_timeout, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_timeout, 
            0,                                   "timeout");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       eager_ack, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_eager_ack, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_eager_ack, 
            0,                                   "eager_ack");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       typed, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_typed_conns, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_typed_conns, 
            0,                                   "typed");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       min_bulk, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_min_bulk, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_min_bulk, 
            0,                                   "min_bulk");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       buffer_size, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_buffer_size, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_buffer_size, 
            0,                                   "buffer_size");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       nagle, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_nagle, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_nagle, 
            0,                                   "nagle");
 
 cfs_sysctl_table_t      ksocknal_top_ctl_table [] = {
@@ -72,73 +75,49 @@ cfs_sysctl_table_t      ksocknal_top_ctl_table [] = {
         NULL
 };
 
-static unsigned long  ksocknal_mbuf_size = (u_quad_t)SB_MAX * MCLBYTES / (MSIZE + MCLBYTES);
-
-struct socket *
-sockfd_lookup(int fd, void *foo)
+int
+ksocknal_lib_tunables_init ()
 {
-	struct socket *so;
-	struct file *fp;
-        CFS_DECL_FUNNEL_DATA;
+        ksocknal_tunables.ksnd_sysctl =
+                register_sysctl_table (ksocknal_top_ctl_table, 0);
 
-        CFS_NET_IN;
-	getsock(current_proc()->p_fd, fd, &fp);
-        CFS_NET_EX;
-	so = (struct socket *)fp->f_data;
-	so->reserved4 = fp;
-        CFS_CONE_IN;
-	fref(fp);
-        CFS_CONE_EX;
-	return so;
+        if (ksocknal_tunables.ksnd_sysctl == NULL)
+		return -ENOMEM;
+
+	return 0;
 }
+
+int
+ksocknal_lib_tunables_fini ()
+{
+        if (ksocknal_tunables.ksnd_sysctl != NULL)
+                unregister_sysctl_table (ksocknal_tunables.ksnd_sysctl);	
+}
+#else
+int
+ksocknal_lib_tunables_init ()
+{
+	return 0;
+}
+
+int
+ksocknal_lib_tunables_fini ()
+{
+}
+#endif
+
+static unsigned long  ksocknal_mbuf_size = (u_quad_t)SB_MAX * MCLBYTES / (MSIZE + MCLBYTES);
 
 extern struct fileops socketops;
 
-static int
-sock_map_fd (struct socket *so)
+void
+ksocknal_lib_release_sock(struct socket *so)
 {
-	struct file *fp;
-	int fd;
-        CFS_DECL_FUNNEL_DATA;
-	
-        CFS_CONE_IN;
-	falloc(current_proc(), &fp, &fd);
-	fp->f_flag = FREAD|FWRITE;
-	fp->f_type = DTYPE_SOCKET;
-	fp->f_ops = &socketops;
-	fp->f_data = (caddr_t)so;
-	so->reserved4 = fp;
-	*fdflags(current_proc(), fd) &= ~UF_RESERVED;
-        CFS_CONE_EX;
-
-	return fd;
-}
-
-static void
-sock_release(struct socket *so)
-{
-	struct file *fp;
         CFS_DECL_FUNNEL_DATA;
 
-	fp = (struct file *)so->reserved4;
-	so->reserved4 = NULL;
-	fp->f_data = NULL;
-        CFS_CONE_IN;
-	frele(fp);
-        CFS_CONE_EX;
         CFS_NET_IN;
 	soshutdown(so, 0);
         CFS_NET_EX;
-}
-
-static void
-sock_fdrelse(int fd)
-{ 
-        CFS_DECL_FUNNEL_DATA;
-
-        CFS_CONE_IN;
-        fdrelse(current_proc(), fd);
-        CFS_CONE_EX;
 }
 
 void
@@ -192,10 +171,10 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
 #if SOCKNAL_SINGLE_FRAG_TX 
         struct iovec    scratch; 
         struct iovec   *scratchiov = &scratch; 
-        int             niov = 1;
+        unsigned int    niov = 1;
 #else 
         struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov; 
-        int             niov = tx->tx_niov;
+        unsigned int    niov = tx->tx_niov;
 #endif
         struct socket *sock = conn->ksnc_sock;
         int            nob;
@@ -248,13 +227,13 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK 
         struct iovec  scratch; 
         struct iovec *scratchiov = &scratch; 
-        int           niov = 1;
+        unsigned int  niov = 1;
 #else
         struct iovec *scratchiov = conn->ksnc_tx_scratch_iov; 
-        int           niov = tx->tx_nkiov;
+        unsigned int  niov = tx->tx_nkiov;
 #endif
         struct socket *sock = conn->ksnc_sock;
-        ptl_kiov_t    *kiov = tx->tx_kiov;
+        lnet_kiov_t    *kiov = tx->tx_kiov;
         int            nob;
         int            rc;
         int            i;
@@ -390,10 +369,10 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
 #if SOCKNAL_SINGLE_FRAG_RX 
         struct iovec  scratch; 
         struct iovec *scratchiov = &scratch; 
-        int           niov = 1;
+        unsigned int  niov = 1;
 #else 
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov; 
-        int           niov = conn->ksnc_rx_niov;
+        unsigned int  niov = conn->ksnc_rx_niov;
 #endif
         struct iovec *iov = conn->ksnc_rx_iov;
         int          nob;
@@ -444,12 +423,12 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 #if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK 
         struct iovec  scratch; 
         struct iovec *scratchiov = &scratch; 
-        int           niov = 1;
+        unsigned int  niov = 1;
 #else 
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov; 
-        int           niov = conn->ksnc_rx_nkiov;
+        unsigned int  niov = conn->ksnc_rx_nkiov;
 #endif
-        ptl_kiov_t    *kiov = conn->ksnc_rx_kiov;
+        lnet_kiov_t    *kiov = conn->ksnc_rx_kiov;
         int           nob;
         int           rc;
         int           i;
@@ -589,7 +568,7 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
         int            rc;
         CFS_DECL_NET_DATA;
 
-        rc = ksocknal_getconnsock (conn);
+        rc = ksocknal_connsock_addref(conn);
         if (rc != 0) {
                 LASSERT (conn->ksnc_closing);
                 *txmem = *rxmem = *nagle = 0;
@@ -621,7 +600,7 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
         }
         CFS_NET_EX;
 
-        ksocknal_putconnsock (conn);
+        ksocknal_connsock_decref(conn);
 
         if (rc == 0)
                 *nagle = !*nagle;
@@ -665,7 +644,7 @@ ksocknal_lib_setup_sock (struct socket *so)
         }
 
 
-        if (!ksocknal_tunables.ksnd_nagle) { 
+        if (!*ksocknal_tunables.ksnd_nagle) { 
                 option = 1; 
                 bzero(&sopt, sizeof sopt);
                 sopt.sopt_dir = SOPT_SET; 
@@ -679,8 +658,8 @@ ksocknal_lib_setup_sock (struct socket *so)
                         goto out;
                 } 
         } 
-        if (ksocknal_tunables.ksnd_buffer_size > 0) { 
-                option = ksocknal_tunables.ksnd_buffer_size; 
+        if (*ksocknal_tunables.ksnd_buffer_size > 0) { 
+                option = *ksocknal_tunables.ksnd_buffer_size; 
                 if (option > ksocknal_mbuf_size) 
                         option = ksocknal_mbuf_size; 
                                                 
@@ -705,9 +684,9 @@ ksocknal_lib_setup_sock (struct socket *so)
                 }
         } 
         /* snapshot tunables */ 
-        keep_idle  = ksocknal_tunables.ksnd_keepalive_idle; 
-        keep_count = ksocknal_tunables.ksnd_keepalive_count; 
-        keep_intvl = ksocknal_tunables.ksnd_keepalive_intvl;
+        keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle; 
+        keep_count = *ksocknal_tunables.ksnd_keepalive_count; 
+        keep_intvl = *ksocknal_tunables.ksnd_keepalive_intvl;
 
         do_keepalive = (keep_idle > 0 && keep_count > 0 && keep_intvl > 0); 
         option = (do_keepalive ? 1 : 0); 
@@ -746,7 +725,7 @@ out:
 }
 
 int
-ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry, 
+ksocknal_lib_connect_sock (struct socket **sockp, int *fatal, 
                            ksock_route_t *route, int local_port)
 {
         struct sockaddr_in  locaddr;
@@ -774,7 +753,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         srvaddr.sin_port = htons (route->ksnr_port);
         srvaddr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
 
-        *may_retry = 0;
+        *fatal = 1;
 
         CFS_NET_IN;
         rc = socreate(PF_INET, &so, SOCK_STREAM, 0); 
@@ -785,21 +764,9 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
                 return (-rc);
         }
 
-        /*
-         * XXX
-         * Liang: what do we need here? 
-         */
-        fd = sock_map_fd (so);
-        if (fd < 0) {
-                sock_release (so);
-                CERROR ("sock_map_fd error %d\n", fd);
-                return (fd);
-        }
-        sock_fdrelse(fd);
-
         /* Set the socket timeouts, so our connection attempt completes in
          * finite time */
-        tv.tv_sec = ksocknal_tunables.ksnd_io_timeout;
+        tv.tv_sec = *ksocknal_tunables.ksnd_timeout;
         tv.tv_usec = 0;
         bzero(&sopt, sizeof sopt);
         sopt.sopt_dir = SOPT_SET;
@@ -813,7 +780,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         if (rc != 0) { 
                 CFS_NET_EX;
                 CERROR ("Can't set send timeout %d: %d\n",
-                        ksocknal_tunables.ksnd_io_timeout, rc);
+                        *ksocknal_tunables.ksnd_timeout, rc);
                 goto out;
         }
         sopt.sopt_level = SOL_SOCKET;
@@ -822,7 +789,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         if (rc != 0) {
                 CFS_NET_EX;
                 CERROR ("Can't set receive timeout %d: %d\n",
-                        ksocknal_tunables.ksnd_io_timeout, rc);
+                        *ksocknal_tunables.ksnd_timeout, rc);
                 goto out;
         } 
         option = 1;
@@ -840,7 +807,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         if (rc == EADDRINUSE) { 
                 CFS_NET_EX; 
                 CDEBUG(D_NET, "Port %d already in use\n", local_port); 
-                *may_retry = 1; 
+                *fatal = 0; 
                 goto out;
         }
         if (rc != 0) { 
@@ -850,14 +817,14 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
                 goto out; 
         }
         rc = soconnect(so, (struct sockaddr *)&srvaddr);
-        *may_retry = (rc == EADDRNOTAVAIL || rc == EADDRINUSE);
+        *fatal = !(rc == EADDRNOTAVAIL || rc == EADDRINUSE);
         if (rc != 0) { 
                 CFS_NET_EX;
                 if (rc != EADDRNOTAVAIL && rc != EADDRINUSE)
-                        CERROR ("Can't connect to nid "LPX64 
+                        CERROR ("Can't connect to %s"
                                 " local IP: %u.%u.%u.%u," 
                                 " remote IP: %u.%u.%u.%u/%d: %d\n", 
-                                route->ksnr_peer->ksnp_nid, 
+                                libcfs_id2str(route->ksnr_peer->ksnp_id, 
                                 HIPQUAD(route->ksnr_myipaddr), 
                                 HIPQUAD(route->ksnr_ipaddr), 
                                 route->ksnr_port, rc); 
@@ -875,10 +842,10 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
 
         rc = so->so_error; 
         if (rc != 0) { 
-                CERROR ("Error %d waiting for connection to nid "LPX64 
+                CERROR ("Error %d waiting for connection to %s" 
                         " local IP: %u.%u.%u.%u," 
                         " remote IP: %u.%u.%u.%u/%d: %d\n", rc,
-                        route->ksnr_peer->ksnp_nid, 
+                        libcfs_id2str(route->ksnr_peer->ksnp_id), 
                         HIPQUAD(route->ksnr_myipaddr), 
                         HIPQUAD(route->ksnr_ipaddr), 
                         route->ksnr_port, rc); 
@@ -887,8 +854,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         return (-rc);
 
  out:
-        rele_file(KSN_SOCK2FILE(so));
-
+        ksocknal_lib_release_sock(so);
         return (-rc);
 }
 
@@ -901,7 +867,7 @@ ksocknal_lib_push_conn(ksock_conn_t *conn)
         int             rc; 
         CFS_DECL_NET_DATA; 
         
-        rc = ksocknal_getconnsock (conn); 
+        rc = ksocknal_connsock_addref(conn); 
         if (rc != 0)            /* being shut down */ 
                 return; 
         sock = conn->ksnc_sock; 
@@ -916,7 +882,7 @@ ksocknal_lib_push_conn(ksock_conn_t *conn)
         sosetopt(sock, &sopt); 
         CFS_NET_EX; 
 
-        ksocknal_putconnsock (conn);
+        ksocknal_connsock_decref(conn);
         return;
 }
 

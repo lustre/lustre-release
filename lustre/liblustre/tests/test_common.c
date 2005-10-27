@@ -179,7 +179,7 @@ int t_open(const char *path)
 {
         int fd;
 
-        fd = open(path, O_RDWR);
+        fd = open(path, O_RDWR | O_LARGEFILE);
         if (fd < 0) {
                 printf("open(%s) error: %s\n", path, strerror(errno));
                 EXIT_RET(fd);
@@ -376,8 +376,23 @@ int t_fcntl(int fd, int cmd, ...)
 		}
 		break;
 	case F_GETLK:
+#ifdef F_GETLK64
+#if F_GETLK64 != F_GETLK
+        case F_GETLK64:
+#endif
+#endif
 	case F_SETLK:
+#ifdef F_SETLK64
+#if F_SETLK64 != F_SETLK
+        case F_SETLK64:
+#endif
+#endif
 	case F_SETLKW:
+#ifdef F_SETLKW64
+#if F_SETLKW64 != F_SETLKW
+        case F_SETLKW64:
+#endif
+#endif
 		lock = va_arg(ap, struct flock *);
 		va_end(ap);
 		rc = fcntl(fd, cmd, lock);

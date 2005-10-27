@@ -1,0 +1,13 @@
+#!/bin/sh
+
+lnds="ksocklnd kqswlnd kgmlnd kopeniblnd kiiblnd kviblnd kralnd kptllnd"
+
+if lctl network down > /dev/null 2>&1; then
+    for mod in $lnds; do
+	if grep "^$mod" /proc/modules >/dev/null 2>&1; then
+	    rmmod $mod
+	fi
+    done
+
+    rmmod lnet libcfs
+fi

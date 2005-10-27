@@ -149,16 +149,16 @@ int main (int argc, char *argv[]) {
                                         continue;
 
                                 printf("rank %d, loop %d: chunk %d corrupted "
-                                       "with chunk_size %d\n", rank, n, i, 
-                                       chunk_size);
+                                       "with chunk_size %d, page_size %d\n",
+                                       rank, n, i, chunk_size, getpagesize());
                                 printf("(ranks: page boundry, chunk boundry, "
                                        "page boundry)\n");
                                 for (j = 1 ; j < noProcessors; j++) {
                                         int b = j * chunk_size;
                                         printf("\t%c -> %c: %d %d %d\n", 
                                                'A' + j - 1, 'A' + j, 
-                                               b & ~(4096-1), b, 
-                                               (b + 4096) & ~(4096-1));
+                                               b & ~(getpagesize()-1), b, 
+                                               (b + getpagesize()) & ~(getpagesize()-1));
                                 }
 
                                 sprintf(command, "od -Ad -a %s", filename);

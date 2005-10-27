@@ -23,506 +23,478 @@
  *	This file contains all gmnal send and receive functions
  */
 
-#include "gmnal.h"
+#include "gmlnd.h"
 
-/*
- *	The caretaker thread
- *	This is main thread of execution for the NAL side
- *	This guy waits in gm_blocking_recvive and gets
- *	woken up when the myrinet adaptor gets an interrupt.
- *	Hands off receive operations to the receive thread 
- *	This thread Looks after gm_callbacks etc inline.
- */
+void
+gmnal_pack_msg(gmnal_ni_t *gmni, gmnal_msg_t *msg,
+               lnet_nid_t dstnid, int type)
+{
+        /* CAVEAT EMPTOR! this only sets the common message fields. */
+        msg->gmm_magic    = GMNAL_MSG_MAGIC;
+        msg->gmm_version  = GMNAL_MSG_VERSION;
+        msg->gmm_type     = type;
+        msg->gmm_srcnid   = lnet_ptlcompat_srcnid(gmni->gmni_ni->ni_nid,
+                                                  dstnid);
+        msg->gmm_dstnid   = dstnid;
+}
+
 int
-gmnal_ct_thread(void *arg)
+gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
 {
-	gmnal_ni_t		*gmnalni;
-	gm_recv_event_t		*rxevent = NULL;
-	gm_recv_t		*recv = NULL;
+        gmnal_msg_t *msg = GMNAL_NETBUF_MSG(&rx->rx_buf);
+        const int    hdr_size = offsetof(gmnal_msg_t, gmm_u);
+        int          buffnob = rx->rx_islarge ? gmni->gmni_large_msgsize :
+                                                gmni->gmni_small_msgsize;
+        int          flip;
 
-	if (!arg) {
-		CDEBUG(D_NET, "NO gmnalni. Exiting\n");
-		return(-1);
-	}
+        /* GM may not overflow our buffer */
+        LASSERT (rx->rx_recv_nob <= buffnob);
 
-	gmnalni = (gmnal_ni_t*)arg;
-	CDEBUG(D_NET, "gmnalni is [%p]\n", arg);
+        /* 6 bytes are enough to have received magic + version */
+        if (rx->rx_recv_nob < 6) {
+                CERROR("Short message from gmid %u: %d\n", 
+                       rx->rx_recv_gmid, rx->rx_recv_nob);
+                return -EPROTO;
+        }
 
-	sprintf(current->comm, "gmnal_ct");
+        if (msg->gmm_magic == GMNAL_MSG_MAGIC) {
+                flip = 0;
+        } else if (msg->gmm_magic == __swab32(GMNAL_MSG_MAGIC)) {
+                flip = 1;
+        } else {
+                CERROR("Bad magic from gmid %u: %08x\n", 
+                       rx->rx_recv_gmid, msg->gmm_magic);
+                return -EPROTO;
+        }
 
-	kportal_daemonize("gmnalctd");
+        if (msg->gmm_version != 
+            (flip ? __swab16(GMNAL_MSG_VERSION) : GMNAL_MSG_VERSION)) {
+                CERROR("Bad version from gmid %u: %d\n", 
+                       rx->rx_recv_gmid, msg->gmm_version);
+                return -EPROTO;
+        }
 
-	gmnalni->gmni_ctthread_flag = GMNAL_CTTHREAD_STARTED;
+        if (rx->rx_recv_nob < hdr_size) {
+                CERROR("Short message from %u: %d\n",
+                       rx->rx_recv_gmid, rx->rx_recv_nob);
+                return -EPROTO;
+        }
 
-	spin_lock(&gmnalni->gmni_gm_lock);
-	while(gmnalni->gmni_ctthread_flag == GMNAL_CTTHREAD_STARTED) {
-		CDEBUG(D_NET, "waiting\n");
-		rxevent = gm_blocking_receive_no_spin(gmnalni->gmni_port);
-		if (gmnalni->gmni_ctthread_flag == GMNAL_THREAD_STOP) {
-			CDEBUG(D_NET, "time to exit\n");
-			break;
-		}
-		CDEBUG(D_NET, "got [%s]\n", gmnal_rxevent(rxevent));
-		switch (GM_RECV_EVENT_TYPE(rxevent)) {
+        if (flip) {
+                /* leave magic unflipped as a clue to peer endianness */
+                __swab16s(&msg->gmm_version);
+                __swab16s(&msg->gmm_type);
+                __swab64s(&msg->gmm_srcnid);
+                __swab64s(&msg->gmm_dstnid);
+        }
+        
+        if (msg->gmm_srcnid == LNET_NID_ANY) {
+                CERROR("Bad src nid from %u: %s\n", 
+                       rx->rx_recv_gmid, libcfs_nid2str(msg->gmm_srcnid));
+                return -EPROTO;
+        }
 
-			case(GM_RECV_EVENT):
-				CDEBUG(D_NET, "CTTHREAD:: GM_RECV_EVENT\n");
-				recv = (gm_recv_t*)&rxevent->recv;
-				spin_unlock(&gmnalni->gmni_gm_lock);
-				gmnal_add_rxtwe(gmnalni, recv);
-				spin_lock(&gmnalni->gmni_gm_lock);
-				CDEBUG(D_NET, "CTTHREAD:: Added event to Q\n");
-			break;
-			case(_GM_SLEEP_EVENT):
-				/*
-				 *	Blocking receive above just returns
-				 *	immediatly with _GM_SLEEP_EVENT
-				 *	Don't know what this is
-				 */
-				CDEBUG(D_NET, "Sleeping in gm_unknown\n");
-				spin_unlock(&gmnalni->gmni_gm_lock);
-				gm_unknown(gmnalni->gmni_port, rxevent);
-				spin_lock(&gmnalni->gmni_gm_lock);
-				CDEBUG(D_NET, "Awake from gm_unknown\n");
-				break;
-				
-			default:
-				/*
-				 *	Don't know what this is
-				 *	gm_unknown will make sense of it
-				 *	Should be able to do something with
-				 *	FAST_RECV_EVENTS here.
-				 */
-				CDEBUG(D_NET, "Passing event to gm_unknown\n");
-				spin_unlock(&gmnalni->gmni_gm_lock);
-				gm_unknown(gmnalni->gmni_port, rxevent);
-				spin_lock(&gmnalni->gmni_gm_lock);
-				CDEBUG(D_NET, "Processed unknown event\n");
-		}
-	}
-	spin_unlock(&gmnalni->gmni_gm_lock);
-	gmnalni->gmni_ctthread_flag = GMNAL_THREAD_RESET;
-	CDEBUG(D_NET, "thread gmnalni [%p] is exiting\n", gmnalni);
-
-	return 0;
+        if (!lnet_ptlcompat_matchnid(gmni->gmni_ni->ni_nid, 
+                                     msg->gmm_dstnid)) {
+                CERROR("Bad dst nid from %u: %s\n",
+                       rx->rx_recv_gmid, libcfs_nid2str(msg->gmm_dstnid));
+                return -EPROTO;
+        }
+        
+        switch (msg->gmm_type) {
+        default:
+                CERROR("Unknown message type from %u: %x\n", 
+                       rx->rx_recv_gmid, msg->gmm_type);
+                return -EPROTO;
+                
+        case GMNAL_MSG_IMMEDIATE:
+                if (rx->rx_recv_nob < offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0])) {
+                        CERROR("Short IMMEDIATE from %u: %d("LPSZ")\n", 
+                               rx->rx_recv_gmid, rx->rx_recv_nob, 
+                               offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0]));
+                        return -EPROTO;
+                }
+                break;
+        }
+        return 0;
 }
 
-
-/*
- *	process a receive event
- */
-int 
-gmnal_rx_thread(void *arg)
+gmnal_tx_t *
+gmnal_get_tx(gmnal_ni_t *gmni)
 {
-        char                     name[16];
-	gmnal_ni_t		*gmnalni;
-	void			*buffer;
-	gmnal_rxtwe_t		*we = NULL;
-	int			rank;
+	gmnal_tx_t	 *tx = NULL;
 
-	if (!arg) {
-		CDEBUG(D_NET, "NO gmnalni. Exiting\n");
-		return(-1);
-	}
+        spin_lock(&gmni->gmni_tx_lock);
 
-	gmnalni = (gmnal_ni_t*)arg;
-	CDEBUG(D_NET, "gmnalni is [%p]\n", arg);
+        if (gmni->gmni_shutdown ||
+            list_empty(&gmni->gmni_idle_txs)) {
+                spin_unlock(&gmni->gmni_tx_lock);
+                return NULL;
+        }
+        
+        tx = list_entry(gmni->gmni_idle_txs.next, gmnal_tx_t, tx_list);
+        list_del(&tx->tx_list);
 
-	for (rank=0; rank<num_rx_threads; rank++)
-		if (gmnalni->gmni_rxthread_pid[rank] == current->pid)
-			break;
+        spin_unlock(&gmni->gmni_tx_lock);
 
-	snprintf(name, sizeof(name), "gmnal_rx_%d", rank);
-	kportal_daemonize(name);
-
-	/*
-	 * 	set 1 bit for each thread started
-	 *	doesn't matter which bit
-	 */
-	spin_lock(&gmnalni->gmni_rxthread_flag_lock);
-	if (gmnalni->gmni_rxthread_flag)
-		gmnalni->gmni_rxthread_flag = gmnalni->gmni_rxthread_flag*2 + 1;
-	else
-		gmnalni->gmni_rxthread_flag = 1;
-	CDEBUG(D_NET, "rxthread flag is [%ld]\n", gmnalni->gmni_rxthread_flag);
-	spin_unlock(&gmnalni->gmni_rxthread_flag_lock);
-
-	while(gmnalni->gmni_rxthread_stop_flag != GMNAL_THREAD_STOP) {
-		CDEBUG(D_NET, "RXTHREAD:: Receive thread waiting\n");
-		we = gmnal_get_rxtwe(gmnalni);
-		if (!we) {
-			CDEBUG(D_NET, "Receive thread time to exit\n");
-			break;
-		}
-
-		buffer = we->buffer;
-		switch(((gmnal_msghdr_t*)buffer)->gmm_type) {
-		case(GMNAL_SMALL_MESSAGE):
-			gmnal_pre_receive(gmnalni, we, GMNAL_SMALL_MESSAGE);
-		break;
-		default:
-#warning better handling
-			CERROR("Unsupported message type\n");
-			gmnal_rx_bad(gmnalni, we);
-		}
-		PORTAL_FREE(we, sizeof(gmnal_rxtwe_t));
-	}
-
-	spin_lock(&gmnalni->gmni_rxthread_flag_lock);
-	gmnalni->gmni_rxthread_flag/=2;
-	CDEBUG(D_NET, "rxthread flag is [%ld]\n", gmnalni->gmni_rxthread_flag);
-	spin_unlock(&gmnalni->gmni_rxthread_flag_lock);
-	CDEBUG(D_NET, "thread gmnalni [%p] is exiting\n", gmnalni);
-
-	return 0;
+        LASSERT (tx->tx_lntmsg == NULL);
+        LASSERT (tx->tx_ltxb == NULL);
+        LASSERT (!tx->tx_credit);
+        
+        return tx;
 }
 
-
-
-/*
- *	Start processing a small message receive
- *	Get here from gmnal_receive_thread
- *	Hand off to lib_parse, which calls cb_recv
- *	which hands back to gmnal_small_receive
- *	Deal with all endian stuff here.
- */
 void
-gmnal_pre_receive(gmnal_ni_t *gmnalni, gmnal_rxtwe_t *we, int gmnal_type)
+gmnal_tx_done(gmnal_tx_t *tx, int rc)
 {
-	gmnal_srxd_t	*srxd = NULL;
-	void		*buffer = NULL;
-	gmnal_msghdr_t	*gmnal_msghdr;
-	ptl_hdr_t	*portals_hdr;
+	gmnal_ni_t *gmni = tx->tx_gmni;
+        int         wake_sched = 0;
+        int         wake_idle = 0;
+        
+        LASSERT(tx->tx_lntmsg == NULL);
 
-	CDEBUG(D_NET, "gmnalni [%p], we[%p] type [%d]\n",
-	       gmnalni, we, gmnal_type);
+        spin_lock(&gmni->gmni_tx_lock);
+        
+        if (tx->tx_ltxb != NULL) {
+                wake_sched = 1;
+                list_add_tail(&tx->tx_ltxb->txb_list, &gmni->gmni_idle_ltxbs);
+                tx->tx_ltxb = NULL;
+        }
+        
+        if (tx->tx_credit) {
+                wake_sched = 1;
+                gmni->gmni_tx_credits++;
+                tx->tx_credit = 0;
+        }
+        
+        list_add_tail(&tx->tx_list, &gmni->gmni_idle_txs);
 
-	buffer = we->buffer;
+        if (wake_sched)
+                gmnal_check_txqueues_locked(gmni);
 
-	gmnal_msghdr = (gmnal_msghdr_t*)buffer;
-	portals_hdr = (ptl_hdr_t*)(buffer+sizeof(gmnal_msghdr_t));
-
-	CDEBUG(D_NET, "rx_event:: Sender node [%d], Sender Port [%d], "
-	       "type [%d], length [%d], buffer [%p]\n",
-               we->snode, we->sport, we->type, we->length, buffer);
-	CDEBUG(D_NET, "gmnal_msghdr:: Sender node [%u], magic [%d], "
-	       "gmnal_type [%d]\n", gmnal_msghdr->gmm_sender_gmid,
-	       gmnal_msghdr->gmm_magic, gmnal_msghdr->gmm_type);
-	CDEBUG(D_NET, "portals_hdr:: Sender node ["LPD64"], "
-	       "dest_node ["LPD64"]\n", portals_hdr->src_nid,
-	       portals_hdr->dest_nid);
-
-	/*
-	 *	Get a receive descriptor for this message
-	 */
-	srxd = gmnal_rxbuffer_to_srxd(gmnalni, buffer);
-	CDEBUG(D_NET, "Back from gmnal_rxbuffer_to_srxd\n");
-	if (!srxd) {
-		CERROR("Failed to get receive descriptor\n");
-                LBUG();
-	}
-
-	srxd->rx_gmni = gmnalni;
-	srxd->rx_type = gmnal_type;
-	srxd->rx_nsiov = gmnal_msghdr->gmm_niov;
-	srxd->rx_sender_gmid = gmnal_msghdr->gmm_sender_gmid;
-
-	CDEBUG(D_PORTALS, "Calling lib_parse buffer is [%p]\n",
-	       buffer+sizeof(gmnal_msghdr_t));
-
-	(void)lib_parse(gmnalni->gmni_libnal, portals_hdr, srxd);
-        /* Ignore error; we're connectionless */
-
-        gmnal_rx_requeue_buffer(gmnalni, srxd);
+        spin_unlock(&gmni->gmni_tx_lock);
 }
 
-
-
-/*
- *	After a receive has been processed, 
- *	hang out the receive buffer again.
- *	This implicitly returns a receive token.
- */
-void
-gmnal_rx_requeue_buffer(gmnal_ni_t *gmnalni, gmnal_srxd_t *srxd)
-{
-	CDEBUG(D_NET, "requeueing srxd[%p] gmnalni[%p]\n", srxd, gmnalni);
-
-	spin_lock(&gmnalni->gmni_gm_lock);
-	gm_provide_receive_buffer_with_tag(gmnalni->gmni_port, srxd->rx_buffer,
-                                           srxd->rx_gmsize, GM_LOW_PRIORITY, 0 );
-	spin_unlock(&gmnalni->gmni_gm_lock);
-}
-
-
-/*
- *	Handle a bad message
- *	A bad message is one we don't expect or can't interpret
- */
-void
-gmnal_rx_bad(gmnal_ni_t *gmnalni, gmnal_rxtwe_t *we)
-{
-        gmnal_srxd_t *srxd = gmnal_rxbuffer_to_srxd(gmnalni, 
-                                                    we->buffer);
-	if (srxd == NULL) {
-		CERROR("Can't find a descriptor for this buffer\n");
-		return;
-	}
-
-        gmnal_rx_requeue_buffer(gmnalni, srxd);
-}
-
-
-
-/*
- *	Start a small transmit. 
- *	Use the given send token (and wired transmit buffer).
- *	Copy headers to wired buffer and initiate gm_send from the wired buffer.
- *	The callback function informs when the send is complete.
- */
-ptl_err_t
-gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
-		ptl_hdr_t *hdr, int type, ptl_nid_t nid,
-		gmnal_stxd_t *stxd, int size)
-{
-	gmnal_ni_t	*gmnalni = (gmnal_ni_t*)libnal->libnal_data;
-	void		*buffer = NULL;
-	gmnal_msghdr_t	*msghdr = NULL;
-	int		tot_size = 0;
-	gm_status_t	gm_status = GM_SUCCESS;
-
-	CDEBUG(D_NET, "gmnal_small_tx libnal [%p] private [%p] cookie [%p] "
-	       "hdr [%p] type [%d] nid ["LPU64"] stxd [%p] "
-	       "size [%d]\n", libnal, private, cookie, hdr, type,
-	       nid, stxd, size);
-
-	CDEBUG(D_NET, "portals_hdr:: dest_nid ["LPU64"], src_nid ["LPU64"]\n",
-	       hdr->dest_nid, hdr->src_nid);
-
-        LASSERT ((nid >> 32) == 0);
-        LASSERT (gmnalni != NULL);
-
-	spin_lock(&gmnalni->gmni_gm_lock);
-	gm_status = gm_global_id_to_node_id(gmnalni->gmni_port, (__u32)nid, 
-                                            &stxd->tx_gmlid);
-	spin_unlock(&gmnalni->gmni_gm_lock);
-
-	if (gm_status != GM_SUCCESS) {
-		CERROR("Failed to obtain local id\n");
-		return(PTL_FAIL);
-	}
-
-	CDEBUG(D_NET, "Local Node_id is [%u][%x]\n", 
-               stxd->tx_gmlid, stxd->tx_gmlid);
-
-        stxd->tx_nid = nid;
-	stxd->tx_cookie = cookie;
-	stxd->tx_type = GMNAL_SMALL_MESSAGE;
-	stxd->tx_gm_priority = GM_LOW_PRIORITY;
-
-	/*
-	 *	Copy gmnal_msg_hdr and portals header to the transmit buffer
-	 *	Then send the message, as the data has previously been copied in
-	 *      (HP SFS 1380).
-	 */
-	buffer = stxd->tx_buffer;
-	msghdr = (gmnal_msghdr_t*)buffer;
-
-	msghdr->gmm_magic = GMNAL_MAGIC;
-	msghdr->gmm_type = GMNAL_SMALL_MESSAGE;
-	msghdr->gmm_sender_gmid = gmnalni->gmni_global_gmid;
-	CDEBUG(D_NET, "processing msghdr at [%p]\n", buffer);
-
-	buffer += sizeof(gmnal_msghdr_t);
-
-	CDEBUG(D_NET, "processing  portals hdr at [%p]\n", buffer);
-	gm_bcopy(hdr, buffer, sizeof(ptl_hdr_t));
-
-	buffer += sizeof(ptl_hdr_t);
-
-	CDEBUG(D_NET, "sending\n");
-	tot_size = size+sizeof(ptl_hdr_t)+sizeof(gmnal_msghdr_t);
-	stxd->tx_msg_size = tot_size;
-
-	CDEBUG(D_NET, "Calling gm_send_to_peer port [%p] buffer [%p] "
-	       "gmsize [%lu] msize [%d] nid ["LPU64"] local_gmid[%d] "
-	       "stxd [%p]\n", gmnalni->gmni_port, stxd->tx_buffer, 
-               stxd->tx_gm_size, stxd->tx_msg_size, nid, stxd->tx_gmlid, 
-               stxd);
-
-	spin_lock(&gmnalni->gmni_gm_lock);
-	gm_send_to_peer_with_callback(gmnalni->gmni_port, stxd->tx_buffer,
-				      stxd->tx_gm_size, stxd->tx_msg_size,
-                                      stxd->tx_gm_priority, stxd->tx_gmlid,
-				      gmnal_small_tx_callback, (void*)stxd);
-	spin_unlock(&gmnalni->gmni_gm_lock);
-	CDEBUG(D_NET, "done\n");
-
-	return(PTL_OK);
-}
-
-
-/*
- *	A callback to indicate the small transmit operation is compete
- *	Check for erros and try to deal with them.
- *	Call lib_finalise to inform the client application that the send 
- *	is complete and the memory can be reused.
- *	Return the stxd when finished with it (returns a send token)
- */
 void 
-gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
+gmnal_drop_sends_callback(struct gm_port *gm_port, void *context, 
+                          gm_status_t status)
 {
-	gmnal_stxd_t	*stxd = (gmnal_stxd_t*)context;
-	lib_msg_t	*cookie = stxd->tx_cookie;
-	gmnal_ni_t	*gmnalni = stxd->tx_gmni;
-	lib_nal_t	*libnal = gmnalni->gmni_libnal;
+	gmnal_tx_t	*tx = (gmnal_tx_t*)context;
 
-	if (!stxd) {
-		CDEBUG(D_NET, "send completion event for unknown stxd\n");
-		return;
-	}
-	if (status != GM_SUCCESS)
-		CERROR("Result of send stxd [%p] is [%s] to ["LPU64"]\n",
-		       stxd, gmnal_gm_error(status), stxd->tx_nid);
+        CDEBUG(D_NET, "status for tx [%p] is [%d][%s], nid %s\n", 
+               tx, status, gmnal_gmstatus2str(status),
+               libcfs_nid2str(tx->tx_nid));
+
+        gmnal_tx_done(tx, -EIO);
+}
+
+void 
+gmnal_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
+{
+	gmnal_tx_t	*tx = (gmnal_tx_t*)context;
+	gmnal_ni_t	*gmni = tx->tx_gmni;
 
 	switch(status) {
-		case(GM_SUCCESS):
-		break;
-
-
-
-		case(GM_SEND_DROPPED):
-		/*
-		 *	do a resend on the dropped ones
-		 */
-			CERROR("send stxd [%p] dropped, resending\n", context);
-			spin_lock(&gmnalni->gmni_gm_lock);
-			gm_send_to_peer_with_callback(gmnalni->gmni_port,
-						      stxd->tx_buffer,
-						      stxd->tx_gm_size,
-						      stxd->tx_msg_size,
-						      stxd->tx_gm_priority,
-						      stxd->tx_gmlid,
-						      gmnal_small_tx_callback,
-						      context);
-			spin_unlock(&gmnalni->gmni_gm_lock);
-		return;
-		case(GM_TIMED_OUT):
-		case(GM_SEND_TIMED_OUT):
-		/*
-		 *	drop these ones
-		 */
-			CDEBUG(D_NET, "calling gm_drop_sends\n");
-			spin_lock(&gmnalni->gmni_gm_lock);
-			gm_drop_sends(gmnalni->gmni_port, stxd->tx_gm_priority, 
-				      stxd->tx_gmlid, gm_port_id, 
-				      gmnal_drop_sends_callback, context);
-			spin_unlock(&gmnalni->gmni_gm_lock);
-
-		return;
-
-
-		/*
-		 *	abort on these ?
-		 */
-  		case(GM_TRY_AGAIN):
-  		case(GM_INTERRUPTED):
-  		case(GM_FAILURE):
-  		case(GM_INPUT_BUFFER_TOO_SMALL):
-  		case(GM_OUTPUT_BUFFER_TOO_SMALL):
-  		case(GM_BUSY):
-  		case(GM_MEMORY_FAULT):
-  		case(GM_INVALID_PARAMETER):
-  		case(GM_OUT_OF_MEMORY):
-  		case(GM_INVALID_COMMAND):
-  		case(GM_PERMISSION_DENIED):
-  		case(GM_INTERNAL_ERROR):
-  		case(GM_UNATTACHED):
-  		case(GM_UNSUPPORTED_DEVICE):
-  		case(GM_SEND_REJECTED):
-  		case(GM_SEND_TARGET_PORT_CLOSED):
-  		case(GM_SEND_TARGET_NODE_UNREACHABLE):
-  		case(GM_SEND_PORT_CLOSED):
-  		case(GM_NODE_ID_NOT_YET_SET):
-  		case(GM_STILL_SHUTTING_DOWN):
-  		case(GM_CLONE_BUSY):
-  		case(GM_NO_SUCH_DEVICE):
-  		case(GM_ABORTED):
-  		case(GM_INCOMPATIBLE_LIB_AND_DRIVER):
-  		case(GM_UNTRANSLATED_SYSTEM_ERROR):
-  		case(GM_ACCESS_DENIED):
-  		case(GM_NO_DRIVER_SUPPORT):
-  		case(GM_PTE_REF_CNT_OVERFLOW):
-  		case(GM_NOT_SUPPORTED_IN_KERNEL):
-  		case(GM_NOT_SUPPORTED_ON_ARCH):
-  		case(GM_NO_MATCH):
-  		case(GM_USER_ERROR):
-  		case(GM_DATA_CORRUPTED):
-  		case(GM_HARDWARE_FAULT):
-  		case(GM_SEND_ORPHANED):
-  		case(GM_MINOR_OVERFLOW):
-  		case(GM_PAGE_TABLE_FULL):
-  		case(GM_UC_ERROR):
-  		case(GM_INVALID_PORT_NUMBER):
-  		case(GM_DEV_NOT_FOUND):
-  		case(GM_FIRMWARE_NOT_RUNNING):
-  		case(GM_YP_NO_MATCH):
-		default:
-                gm_resume_sending(gmnalni->gmni_port, stxd->tx_gm_priority,
-                                  stxd->tx_gmlid, gm_port_id,
-                                  gmnal_resume_sending_callback, context);
+        case GM_SUCCESS:
+                gmnal_tx_done(tx, 0);
                 return;
 
+        case GM_SEND_DROPPED:
+                CERROR("Dropped tx %p to %s\n", tx, libcfs_nid2str(tx->tx_nid));
+                /* Another tx failed and called gm_drop_sends() which made this
+                 * one complete immediately */
+                gmnal_tx_done(tx, -EIO);
+                return;
+                        
+        default:
+                /* Some error; NB don't complete tx yet; we need its credit for
+                 * gm_drop_sends() */
+                CERROR("tx %p error %d(%s), nid %s\n", tx,
+                       status, gmnal_gmstatus2str(status), 
+                       libcfs_nid2str(tx->tx_nid));
+
+                spin_lock(&gmni->gmni_gm_lock);
+                gm_drop_sends(gmni->gmni_port, 
+                              tx->tx_ltxb != NULL ?
+                              GMNAL_LARGE_PRIORITY : GMNAL_SMALL_PRIORITY,
+                              tx->tx_gmlid, *gmnal_tunables.gm_port, 
+                              gmnal_drop_sends_callback, tx);
+                spin_unlock(&gmni->gmni_gm_lock);
+		return;
 	}
 
-	gmnal_return_stxd(gmnalni, stxd);
-	lib_finalize(libnal, stxd, cookie, PTL_OK);
-	return;
+        /* not reached */
+        LBUG();
 }
 
-/*
- *	After an error on the port
- *	call this to allow future sends to complete
- */
-void gmnal_resume_sending_callback(struct gm_port *gm_port, void *context,
-                                 gm_status_t status)
+void
+gmnal_check_txqueues_locked (gmnal_ni_t *gmni)
 {
-        gmnal_stxd_t    *stxd = (gmnal_stxd_t*)context;
-        gmnal_ni_t     *gmnalni = stxd->tx_gmni;
+        gmnal_tx_t    *tx;
+        gmnal_txbuf_t *ltxb;
+        int            gmsize;
+        int            pri;
+        void          *netaddr;
+        
+        tx = list_empty(&gmni->gmni_buf_txq) ? NULL :
+             list_entry(gmni->gmni_buf_txq.next, gmnal_tx_t, tx_list);
 
-        CDEBUG(D_NET, "status is [%d] context is [%p]\n", status, context);
-        gmnal_return_stxd(gmnalni, stxd);
-        lib_finalize(gmnalni->gmni_libnal, stxd, stxd->tx_cookie, PTL_FAIL);
-        return;
+        if (tx != NULL &&
+            (tx->tx_large_nob == 0 || 
+             !list_empty(&gmni->gmni_idle_ltxbs))) {
+
+                /* consume tx */
+                list_del(&tx->tx_list);
+                
+                LASSERT (tx->tx_ltxb == NULL);
+
+                if (tx->tx_large_nob != 0) {
+                        ltxb = list_entry(gmni->gmni_idle_ltxbs.next,
+                                          gmnal_txbuf_t, txb_list);
+
+                        /* consume large buffer */
+                        list_del(&ltxb->txb_list);
+
+                        spin_unlock(&gmni->gmni_tx_lock);
+
+                        /* Unlocking here allows sends to get re-ordered,
+                         * but we want to allow other CPUs to progress... */
+
+                        tx->tx_ltxb = ltxb;
+
+                        /* marshall message in tx_ltxb...
+                         * 1. Copy what was marshalled so far (in tx_buf) */
+                        memcpy(GMNAL_NETBUF_MSG(&ltxb->txb_buf),
+                               GMNAL_NETBUF_MSG(&tx->tx_buf), tx->tx_msgnob);
+
+                        /* 2. Copy the payload */
+                        if (tx->tx_large_iskiov)
+                                lnet_copy_kiov2kiov(
+                                        gmni->gmni_large_pages,
+                                        ltxb->txb_buf.nb_kiov,
+                                        tx->tx_msgnob,
+                                        tx->tx_large_niov,
+                                        tx->tx_large_frags.kiov,
+                                        tx->tx_large_offset,
+                                        tx->tx_large_nob);
+                        else
+                                lnet_copy_iov2kiov(
+                                        gmni->gmni_large_pages,
+                                        ltxb->txb_buf.nb_kiov,
+                                        tx->tx_msgnob,
+                                        tx->tx_large_niov,
+                                        tx->tx_large_frags.iov,
+                                        tx->tx_large_offset,
+                                        tx->tx_large_nob);
+
+                        tx->tx_msgnob += tx->tx_large_nob;
+
+                        /* We've copied everything... */
+                        lnet_finalize(gmni->gmni_ni, tx->tx_lntmsg, 0);
+                        tx->tx_lntmsg = NULL;
+
+                        spin_lock(&gmni->gmni_tx_lock);
+                }
+
+                LASSERT (tx->tx_lntmsg == NULL);
+
+                list_add_tail(&tx->tx_list, &gmni->gmni_cred_txq);
+        }
+
+        if (!list_empty(&gmni->gmni_cred_txq) &&
+            gmni->gmni_tx_credits != 0) {
+
+                tx = list_entry(gmni->gmni_cred_txq.next, gmnal_tx_t, tx_list);
+
+                /* consume tx and 1 credit */
+                list_del(&tx->tx_list);
+                gmni->gmni_tx_credits--;
+
+                spin_unlock(&gmni->gmni_tx_lock);
+
+                /* Unlocking here allows sends to get re-ordered, but we want
+                 * to allow other CPUs to progress... */
+
+                LASSERT(!tx->tx_credit);
+                tx->tx_credit = 1;
+
+                if (tx->tx_msgnob <= gmni->gmni_small_msgsize) {
+                        LASSERT (tx->tx_ltxb == NULL);
+                        netaddr = GMNAL_NETBUF_LOCAL_NETADDR(&tx->tx_buf);
+                        gmsize = gmni->gmni_small_gmsize;
+                        pri = GMNAL_SMALL_PRIORITY;
+                } else {
+                        LASSERT (tx->tx_ltxb != NULL);
+                        netaddr = GMNAL_NETBUF_LOCAL_NETADDR(&tx->tx_ltxb->txb_buf);
+                        gmsize = gmni->gmni_large_gmsize;
+                        pri = GMNAL_LARGE_PRIORITY;
+                }
+
+                spin_lock(&gmni->gmni_gm_lock);
+
+                gm_send_to_peer_with_callback(gmni->gmni_port, 
+                                              netaddr, gmsize, 
+                                              tx->tx_msgnob,
+                                              pri, 
+                                              tx->tx_gmlid,
+                                              gmnal_tx_callback, 
+                                              (void*)tx);
+
+                spin_unlock(&gmni->gmni_gm_lock);
+                spin_lock(&gmni->gmni_tx_lock);
+        }
 }
 
-
-void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context, 
-			        gm_status_t status)
+void
+gmnal_post_rx(gmnal_ni_t *gmni, gmnal_rx_t *rx)
 {
-	gmnal_stxd_t	*stxd = (gmnal_stxd_t*)context;
-	gmnal_ni_t	*gmnalni = stxd->tx_gmni;
+        int   gmsize = rx->rx_islarge ? gmni->gmni_large_gmsize :
+                                        gmni->gmni_small_gmsize;
+        int   pri    = rx->rx_islarge ? GMNAL_LARGE_PRIORITY :
+                                        GMNAL_SMALL_PRIORITY;
+        void *buffer = GMNAL_NETBUF_LOCAL_NETADDR(&rx->rx_buf);
 
-	CDEBUG(D_NET, "status is [%d] context is [%p]\n", status, context);
-	if (status == GM_SUCCESS) {
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_send_to_peer_with_callback(gm_port, stxd->tx_buffer, 
-					      stxd->tx_gm_size, 
-                                              stxd->tx_msg_size, 
-					      stxd->tx_gm_priority, 
-					      stxd->tx_gmlid, 
-					      gmnal_small_tx_callback, 
-					      context);
-		spin_unlock(&gmnalni->gmni_gm_lock);
-	} else {
-		CERROR("send_to_peer status for stxd [%p] is "
-		       "[%d][%s]\n", stxd, status, gmnal_gm_error(status));
-                /* Recycle the stxd */
-		gmnal_return_stxd(gmnalni, stxd);
-		lib_finalize(gmnalni->gmni_libnal, stxd, stxd->tx_cookie, PTL_FAIL);
+	CDEBUG(D_NET, "posting rx %p buf %p\n", rx, buffer);
+
+	spin_lock(&gmni->gmni_gm_lock);
+        gm_provide_receive_buffer_with_tag(gmni->gmni_port, 
+                                           buffer, gmsize, pri, 0);
+	spin_unlock(&gmni->gmni_gm_lock);
+}
+
+int
+gmnal_rx_thread(void *arg)
+{
+	gmnal_ni_t	*gmni = arg;
+	gm_recv_event_t	*rxevent = NULL;
+	gm_recv_t	*recv = NULL;
+        gmnal_rx_t      *rx;
+        int              rc;
+
+	libcfs_daemonize("gmnal_rxd");
+
+        down(&gmni->gmni_rx_mutex);
+
+	while (!gmni->gmni_shutdown) {
+
+                spin_lock(&gmni->gmni_gm_lock);
+		rxevent = gm_blocking_receive_no_spin(gmni->gmni_port);
+                spin_unlock(&gmni->gmni_gm_lock);
+
+                switch (GM_RECV_EVENT_TYPE(rxevent)) {
+                default:
+                        gm_unknown(gmni->gmni_port, rxevent);
+                        continue;
+
+                case GM_FAST_RECV_EVENT:
+                case GM_FAST_PEER_RECV_EVENT:
+                case GM_PEER_RECV_EVENT:
+                case GM_FAST_HIGH_RECV_EVENT:
+                case GM_FAST_HIGH_PEER_RECV_EVENT:
+                case GM_HIGH_PEER_RECV_EVENT:
+                case GM_RECV_EVENT:
+                case GM_HIGH_RECV_EVENT:
+                        break;
+                }
+                
+                recv = &rxevent->recv;
+                rx = gm_hash_find(gmni->gmni_rx_hash, 
+                                  gm_ntohp(recv->buffer));
+                LASSERT (rx != NULL);
+
+                rx->rx_recv_nob  = gm_ntoh_u32(recv->length);
+                rx->rx_recv_gmid = gm_ntoh_u16(recv->sender_node_id);
+                rx->rx_recv_port = gm_ntoh_u8(recv->sender_port_id);
+                rx->rx_recv_type = gm_ntoh_u8(recv->type);
+
+                switch (GM_RECV_EVENT_TYPE(rxevent)) {
+                case GM_FAST_RECV_EVENT:
+                case GM_FAST_PEER_RECV_EVENT:
+                case GM_FAST_HIGH_RECV_EVENT:
+                case GM_FAST_HIGH_PEER_RECV_EVENT:
+                        LASSERT (rx->rx_recv_nob <= PAGE_SIZE);
+
+                        memcpy(GMNAL_NETBUF_MSG(&rx->rx_buf),
+                               gm_ntohp(recv->message), rx->rx_recv_nob);
+                        break;
+                }
+
+                up(&gmni->gmni_rx_mutex);
+
+                CDEBUG (D_NET, "rx %p: buf %p(%p) nob %d\n", rx, 
+                        GMNAL_NETBUF_LOCAL_NETADDR(&rx->rx_buf),
+                        gm_ntohp(recv->buffer), rx->rx_recv_nob);
+
+                /* We're connectionless: simply drop packets with
+                 * errors */
+                rc = gmnal_unpack_msg(gmni, rx);
+                if (rc == 0) {
+                        gmnal_msg_t *msg = GMNAL_NETBUF_MSG(&rx->rx_buf);
+                        
+                        LASSERT (msg->gmm_type == GMNAL_MSG_IMMEDIATE);
+                        rc =  lnet_parse(gmni->gmni_ni, 
+                                         &msg->gmm_u.immediate.gmim_hdr,
+                                         msg->gmm_srcnid,
+                                         rx);
+                }
+
+                if (rc < 0)                     /* parse failure */
+                        gmnal_post_rx(gmni, rx);
+
+                down(&gmni->gmni_rx_mutex);
 	}
 
-	return;
+        up(&gmni->gmni_rx_mutex);
+
+	CDEBUG(D_NET, "exiting\n");
+        atomic_dec(&gmni->gmni_nthreads);
+	return 0;
 }
 
+void
+gmnal_stop_threads(gmnal_ni_t *gmni)
+{
+        int count = 2;
 
+        gmni->gmni_shutdown = 1;
+        mb();
+        
+        /* wake rxthread owning gmni_rx_mutex with an alarm. */
+	spin_lock(&gmni->gmni_gm_lock);
+	gm_set_alarm(gmni->gmni_port, &gmni->gmni_alarm, 0, NULL, NULL);
+	spin_unlock(&gmni->gmni_gm_lock);
+
+	while (atomic_read(&gmni->gmni_nthreads) != 0) {
+                count++;
+                if ((count & (count - 1)) == 0)
+                        CWARN("Waiting for %d threads to stop\n",
+                              atomic_read(&gmni->gmni_nthreads));
+                gmnal_yield(1);
+	}
+}
+
+int
+gmnal_start_threads(gmnal_ni_t *gmni)
+{
+        int     i;
+        int     pid;
+
+        LASSERT (!gmni->gmni_shutdown);
+        LASSERT (atomic_read(&gmni->gmni_nthreads) == 0);
+
+	gm_initialize_alarm(&gmni->gmni_alarm);
+
+	for (i = 0; i < num_online_cpus(); i++) {
+
+                pid = kernel_thread(gmnal_rx_thread, (void*)gmni, 0);
+                if (pid < 0) {
+                        CERROR("rx thread failed to start: %d\n", pid);
+                        gmnal_stop_threads(gmni);
+                        return pid;
+                }
+
+                atomic_inc(&gmni->gmni_nthreads);
+	}
+
+	return 0;
+}

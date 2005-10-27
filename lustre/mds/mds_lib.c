@@ -364,7 +364,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
 
         LASSERT(body != NULL); /* previously verified & swabbed by caller */
 
-#if CRAY_PORTALS
+#if CRAY_XT3
         ucred->luc_fsuid = req->rq_uid;
 #else
         ucred->luc_fsuid = body->fsuid;
@@ -382,7 +382,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                 return rc;
         }
 
-#if CRAY_PORTALS
+#if CRAY_XT3
         if (ucred->luc_uce)
                 ucred->luc_fsgid = ucred->luc_uce->ue_primary;
 #endif

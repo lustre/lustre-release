@@ -41,10 +41,9 @@
 #include <linux/lprocfs_status.h>
 
 struct uuid_nid_data {
-        struct list_head head;
-        ptl_nid_t nid;
-        char *uuid;
-        __u32 nal;
+        struct list_head un_list;
+        lnet_nid_t       un_nid;
+        char            *un_uuid;
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
@@ -63,7 +62,7 @@ void class_exit_uuidlist(void)
         class_del_uuid(NULL);
 }
 
-int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid)
+int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index)
 {
         struct list_head *tmp;
 
@@ -71,11 +70,11 @@ int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid)
 
         list_for_each(tmp, &g_uuid_list) {
                 struct uuid_nid_data *data =
-                        list_entry(tmp, struct uuid_nid_data, head);
+                        list_entry(tmp, struct uuid_nid_data, un_list);
 
-                if (strcmp(data->uuid, uuid) == 0) {
-                        *peer_nid = data->nid;
-                        *peer_nal = data->nal;
+                if (!strcmp(data->un_uuid, uuid) &&
+                    index-- == 0) {
+                        *peer_nid = data->un_nid;
 
                         spin_unlock (&g_uuid_lock);
                         return 0;
@@ -83,16 +82,16 @@ int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid)
         }
 
         spin_unlock (&g_uuid_lock);
-        return -1;
+        return -ENOENT;
 }
 
-int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
+int class_add_uuid(char *uuid, __u64 nid)
 {
         struct uuid_nid_data *data;
         int rc;
         int nob = strnlen (uuid, PAGE_SIZE) + 1;
 
-        LASSERT(nal != 0);
+        LASSERT(nid != 0);  /* valid newconfig NID is never zero */
 
         if (nob > PAGE_SIZE)
                 return -EINVAL;
@@ -102,20 +101,19 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
         if (data == NULL)
                 return -ENOMEM;
 
-        OBD_ALLOC(data->uuid, nob);
+        OBD_ALLOC(data->un_uuid, nob);
         if (data == NULL) {
                 OBD_FREE(data, sizeof(*data));
                 return -ENOMEM;
         }
 
-        CDEBUG(D_INFO, "add uuid %s "LPX64" %x\n", uuid, nid, nal);
-        memcpy(data->uuid, uuid, nob);
-        data->nid = nid;
-        data->nal = nal;
+        CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
+        memcpy(data->un_uuid, uuid, nob);
+        data->un_nid = nid;
 
         spin_lock (&g_uuid_lock);
 
-        list_add(&data->head, &g_uuid_list);
+        list_add(&data->un_list, &g_uuid_list);
 
         spin_unlock (&g_uuid_lock);
 
@@ -135,11 +133,11 @@ int class_del_uuid (char *uuid)
         spin_lock (&g_uuid_lock);
 
         list_for_each_safe(tmp, n, &g_uuid_list) {
-                data = list_entry(tmp, struct uuid_nid_data, head);
+                data = list_entry(tmp, struct uuid_nid_data, un_list);
 
-                if (uuid == NULL || strcmp(data->uuid, uuid) == 0) {
-                        list_del (&data->head);
-                        list_add (&data->head, &deathrow);
+                if (uuid == NULL || strcmp(data->un_uuid, uuid) == 0) {
+                        list_del (&data->un_list);
+                        list_add (&data->un_list, &deathrow);
                         if (uuid)
                                 break;
                 }
@@ -154,11 +152,11 @@ int class_del_uuid (char *uuid)
         }
 
         do {
-                data = list_entry(deathrow.next, struct uuid_nid_data, head);
+                data = list_entry(deathrow.next, struct uuid_nid_data, un_list);
 
-                list_del (&data->head);
+                list_del (&data->un_list);
 
-                OBD_FREE(data->uuid, strlen(data->uuid) + 1);
+                OBD_FREE(data->un_uuid, strlen(data->un_uuid) + 1);
                 OBD_FREE(data, sizeof(*data));
         } while (!list_empty (&deathrow));
 

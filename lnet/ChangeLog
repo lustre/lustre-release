@@ -1,32 +1,21 @@
-tba  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.4
-       * bug fixes
+2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
+	* Configuration change for the XT3
+             The PTLLND is now used to run Lustre over Portals on the XT3.
+	     The configure option(s) --with-cray-portals are no longer
+	     used.  Rather --with-portals=<path-to-portals-includes> is
+	     used to enable building on the XT3.  In addition to enable
+	     XT3 specific features the option --enable-cray-xt3 must be
+	     used.
 
-Severity   : major
-Frequency  : rare (large Voltaire clusters only)
-Bugzilla   : 6993
-Description: the default number of reserved transmit descriptors was too low
-             for some large clusters
-Details    : As a workaround, the number was increased.  A proper fix includes
-             a run-time tunable.
-
-2005-06-02  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.3
-       * bug fixes
-
-Severity   : major
-Frequency  : occasional (large-scale events, cluster reboot, network failure)
-Bugzilla   : 6411
-Description: too many error messages on console obscure actual problem and
-             can slow down/panic server, or cause recovery to fail repeatedly
-Details    : enable rate-limiting of console error messages, and some messages
-             that were console errors now only go to the kernel log
-
-Severity   : enhancement
-Bugzilla   : 1693
-Description: add /proc/sys/portals/catastrophe entry which will report if
-             that node has previously LBUGged
-
+2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
+	* Portals has been removed, replaced by LNET.
+  	   LNET is new networking infrastructure for Lustre, it includes a
+	   reorganized network configuration mode (see the user
+	   documentation for full details) as well as support for routing
+	   between different network fabrics.  Lustre Networking Devices
+	   (LNDS) for the supported network fabrics have also been created
+	   for this new infrastructure.
+	
 2005-04-06  Cluster File Systems, Inc. <info@clusterfs.com>
        * bugs
 	- update gmnal to use PTL_MTU, fix module refcounting (b=5786)

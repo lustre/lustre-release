@@ -28,16 +28,16 @@
 #include <sys/unistd.h>
 #include <mach/mach_types.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <libcfs/libcfs.h>
 
 static cfs_sysctl_table_header_t *portals_table_header = NULL;
-extern unsigned int portal_debug;
+extern unsigned int libcfs_debug;
 extern char debug_file_path[1024];
-extern unsigned int portal_subsystem_debug;
-extern unsigned int portal_printk;
-extern unsigned int portals_catastrophe;
-extern atomic_t portal_kmemory;
+extern unsigned int libcfs_subsystem_debug;
+extern unsigned int libcfs_printk;
+extern unsigned int libcfs_catastrophe;
+extern atomic_t libcfs_kmemory;
 
 extern long max_debug_mb;
 extern int cfs_trace_daemon SYSCTL_HANDLER_ARGS;
@@ -49,19 +49,19 @@ SYSCTL_NODE (,		        OID_AUTO,	portals,	CTLFLAG_RW,
 	     0,			"portals sysctl top");
 
 SYSCTL_INT(_portals,		        OID_AUTO,	debug,	
-	     CTLTYPE_INT | CTLFLAG_RW ,			&portal_debug,	
+	     CTLTYPE_INT | CTLFLAG_RW ,			&libcfs_debug,	
 	     0,		"debug");
 SYSCTL_INT(_portals,		        OID_AUTO,	subsystem_debug,	
-	     CTLTYPE_INT | CTLFLAG_RW,			&portal_subsystem_debug,	
+	     CTLTYPE_INT | CTLFLAG_RW,			&libcfs_subsystem_debug,	
 	     0,		"subsystem debug");
 SYSCTL_INT(_portals,		        OID_AUTO,	printk,	
-	     CTLTYPE_INT | CTLFLAG_RW,			&portal_printk,	
+	     CTLTYPE_INT | CTLFLAG_RW,			&libcfs_printk,	
 	     0,		"printk");
 SYSCTL_STRING(_portals,		        OID_AUTO,	debug_path,	
 	     CTLTYPE_STRING | CTLFLAG_RW,		debug_file_path,	
 	     1024,	"debug path");
 SYSCTL_INT(_portals,		        OID_AUTO,	memused,	
-	     CTLTYPE_INT | CTLFLAG_RW,			(int *)&portal_kmemory.counter,	
+	     CTLTYPE_INT | CTLFLAG_RW,			(int *)&libcfs_kmemory.counter,	
 	     0,		"memused");
 SYSCTL_PROC(_portals,		        OID_AUTO,	trace_daemon,
 	     CTLTYPE_STRING | CTLFLAG_RW,		0,
@@ -69,7 +69,6 @@ SYSCTL_PROC(_portals,		        OID_AUTO,	trace_daemon,
 SYSCTL_PROC(_portals,		        OID_AUTO,	debug_mb,
 	     CTLTYPE_INT | CTLFLAG_RW,		        &max_debug_mb,
 	     0,		&cfs_debug_mb,		        "L",	"max debug size");
-#warning "add 'catastrophe' entry for LBUG detection"
 
 
 static cfs_sysctl_table_t	top_table[] = {

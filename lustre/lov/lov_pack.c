@@ -211,8 +211,9 @@ static int lov_verify_lmm(void *lmm, int lmm_bytes, int *stripe_count)
         case LOV_MAGIC_V1:
                 return lov_verify_lmm_v1(lmm, lmm_bytes, stripe_count);
         default:
-                CERROR("bad disk LOV MAGIC: 0x%08X\n",
+                CERROR("bad disk LOV MAGIC: 0x%08X; dumping V1 LMM:\n",
                        le32_to_cpu(*(__u32 *)lmm));
+                lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
 }
@@ -227,6 +228,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern)
         if (!*lsmp)
                 return -ENOMEM;
 
+        spin_lock_init(&(*lsmp)->lsm_lock);
         (*lsmp)->lsm_magic = LOV_MAGIC;
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;

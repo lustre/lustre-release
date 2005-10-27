@@ -47,21 +47,18 @@
 #define ENV_LUSTRE_DUMPFILE             "LIBLUSTRE_DUMPFILE"
 #define ENV_LUSTRE_DEBUG_MASK           "LIBLUSTRE_DEBUG_MASK"
 #define ENV_LUSTRE_DEBUG_SUBSYS         "LIBLUSTRE_DEBUG_SUBSYS"
-#define ENV_LUSTRE_NAL_NAME             "LIBLUSTRE_NAL_NAME"
 
 /* both sys/queue.h (libsysio require it) and portals/lists.h have definition
  * of 'LIST_HEAD'. undef it to suppress warnings
  */
 #undef LIST_HEAD
-#include <portals/ptlctl.h>     /* needed for parse_dump */
+#include <lnet/lnetctl.h>     /* needed for parse_dump */
 
 #include "lutil.h"
 #include "llite_lib.h"
 
 static int lllib_init(void)
 {
-        liblustre_set_nal_nid();
-
         if (liblustre_init_current("liblustre") ||
             init_obdclass() ||
             init_lib_portals() ||
@@ -88,37 +85,23 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         class_uuid_t uuid;
         struct obd_uuid mdc_uuid;
         struct llog_ctxt *ctxt;
-        ptl_nid_t nid = 0;
-        int nal, err, rc = 0;
-        char *nal_name;
+        lnet_nid_t nid = 0;
+        int err, rc = 0;
         ENTRY;
 
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mdc_uuid);
 
-        if (ptl_parse_nid(&nid, mdsnid)) {
+        nid = libcfs_str2nid(mdsnid);
+        if (nid == LNET_NID_ANY) {
                 CERROR("Can't parse NID %s\n", mdsnid);
                 RETURN(-EINVAL);
         }
 
-        nal_name = getenv(ENV_LUSTRE_NAL_NAME);
-        if (!nal_name) {
-#if CRAY_PORTALS
-                nal_name = "cray_qk_nal";
-#else
-                nal_name = "tcp";
-#endif
-        }
-        nal = ptl_name2nal(nal_name);
-        if (nal <= 0) {
-                CERROR("Can't parse NAL %s\n", nal_name);
-                RETURN(-EINVAL);
-        }
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        lcfg->lcfg_nal = nal;
         rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (rc < 0)
@@ -263,8 +246,8 @@ int _sysio_lustre_init(void)
 #endif
 
 #if 0
-        portal_debug = -1;
-        portal_subsystem_debug = -1;
+        libcfs_debug = -1;
+        libcfs_subsystem_debug = -1;
 #endif
 
         liblustre_init_random();
@@ -284,11 +267,11 @@ int _sysio_lustre_init(void)
         /* debug masks */
         debug_mask = getenv(ENV_LUSTRE_DEBUG_MASK);
         if (debug_mask)
-                portal_debug = (unsigned int) strtol(debug_mask, NULL, 0);
+                libcfs_debug = (unsigned int) strtol(debug_mask, NULL, 0);
 
         debug_subsys = getenv(ENV_LUSTRE_DEBUG_SUBSYS);
         if (debug_subsys)
-                portal_subsystem_debug =
+                libcfs_subsystem_debug =
                                 (unsigned int) strtol(debug_subsys, NULL, 0);
 
 #ifndef INIT_SYSIO
@@ -377,9 +360,9 @@ void __liblustre_cleanup_(void)
          * liblutre. this dilema lead to another hack in
          * libsysio/src/file_hack.c FIXME
          */
-#ifdef INIT_SYSIO
         _sysio_shutdown();
+#ifdef INIT_SYSIO
         cleanup_lib_portals();
-        PtlFini();
+        LNetFini();
 #endif
 }

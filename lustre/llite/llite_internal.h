@@ -52,8 +52,8 @@ extern struct file_operations ll_pgcache_seq_fops;
 
 struct ll_inode_info {
         int                     lli_inode_magic;
-        int                     lli_size_pid;
         struct semaphore        lli_size_sem;
+        void                   *lli_size_sem_owner;
         struct semaphore        lli_open_sem;
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
@@ -80,6 +80,17 @@ struct ll_inode_info {
         struct inode            lli_vfs_inode;
 #endif
 };
+
+/*
+ * Locking to guarantee consistency of non-atomic updates to long long i_size,
+ * consistency between file size and KMS, and consistency within
+ * ->lli_smd->lsm_oinfo[]'s.
+ *
+ * Implemented by ->lli_size_sem and ->lsm_sem, nested in that order.
+ */
+
+void ll_inode_size_lock(struct inode *inode, int lock_lsm);
+void ll_inode_size_unlock(struct inode *inode, int unlock_lsm);
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff
 // static inline struct ll_inode_info *LL_I(struct inode *inode)
@@ -120,6 +131,7 @@ struct ll_ra_info {
 #define LL_SBI_NOLCK            0x1 /* DLM locking disabled (directio-only) */
 #define LL_SBI_CHECKSUM         0x2 /* checksum each page as it's written */
 #define LL_SBI_FLOCK            0x4
+#define LL_SBI_USER_XATTR       0x8 /* support user xattr */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -136,6 +148,7 @@ struct ll_sb_info {
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
+        __u64                     ll_connect_flags;
 
         struct hlist_head         ll_orphan_dentry_list; /*please don't ask -p*/
         struct ll_close_queue    *ll_lcq;
@@ -150,6 +163,13 @@ struct ll_sb_info {
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
         struct file_operations   *ll_fop;
+};
+
+struct ll_ra_read {
+        pgoff_t             lrr_start;
+        pgoff_t             lrr_count;
+        struct task_struct *lrr_reader;
+        struct list_head    lrr_linkage;
 };
 
 /*
@@ -192,7 +212,12 @@ struct ll_readahead_state {
          * not covered by DLM lock.
          */
         unsigned long   ras_next_readahead;
-
+        /*
+         * list of struct ll_ra_read's one per read(2) call current in
+         * progress against this file descriptor. Used by read-ahead code,
+         * protected by ->ras_lock.
+         */
+        struct list_head ras_read_beads;
 };
 
 extern kmem_cache_t *ll_file_data_slab;
@@ -251,12 +276,17 @@ struct ll_async_page {
         __u32 llap_checksum;
 };
 
+/*
+ * enumeration of llap_from_page() call-sites. Used to export statistics in
+ * /proc/fs/lustre/llite/fsN/dump_page_cache.
+ */
 enum {
         LLAP_ORIGIN_UNKNOWN = 0,
         LLAP_ORIGIN_READPAGE,
         LLAP_ORIGIN_READAHEAD,
         LLAP_ORIGIN_COMMIT_WRITE,
         LLAP_ORIGIN_WRITEPAGE,
+        LLAP_ORIGIN_REMOVEPAGE,
         LLAP__ORIGIN_MAX,
 };
 extern char *llap_origins[];
@@ -268,6 +298,10 @@ extern char *llap_origins[];
 #define ll_register_cache(cache) do {} while (0)
 #define ll_unregister_cache(cache) do {} while (0)
 #endif
+
+void ll_ra_read_in(struct file *f, struct ll_ra_read *rar);
+void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar);
+struct ll_ra_read *ll_ra_read_get(struct file *f);
 
 /* llite/lproc_llite.c */
 #ifdef LPROCFS
@@ -309,10 +343,9 @@ extern struct cache_definition ll_cache_definition;
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
-struct ll_async_page *llap_from_page(struct page *page, unsigned origin);
 struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
-void ll_ra_accounting(struct page *page, struct address_space *mapping);
+void ll_ra_accounting(struct ll_async_page *llap,struct address_space *mapping);
 void ll_truncate(struct inode *inode);
 
 /* llite/file.c */
@@ -328,7 +361,7 @@ int ll_extent_unlock(struct ll_file_data *, struct inode *,
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
-int ll_glimpse_size(struct inode *inode);
+int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
                   struct lookup_intent *it, struct ll_file_data *fd);
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
@@ -508,5 +541,13 @@ static inline __u64 ll_file_maxbytes(struct inode *inode)
 {
         return ll_i2info(inode)->lli_maxbytes;
 }
+
+/* llite/xattr.c */
+int ll_setxattr(struct dentry *dentry, const char *name,
+                const void *value, size_t size, int flags);
+int ll_getxattr(struct dentry *dentry, const char *name,
+                void *buffer, size_t size);
+int ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
+int ll_removexattr(struct dentry *dentry, const char *name);
 
 #endif /* LLITE_INTERNAL_H */

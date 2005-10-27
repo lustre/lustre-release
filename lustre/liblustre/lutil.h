@@ -28,7 +28,6 @@
 
 void liblustre_init_random(void);
 int liblustre_init_current(char *comm);
-void liblustre_set_nal_nid(void);
 int init_lib_portals(void);
 void cleanup_lib_portals(void);
 

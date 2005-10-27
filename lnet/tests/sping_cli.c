@@ -32,13 +32,13 @@
 #define DEBUG_SUBSYSTEM S_PINGER
 
 #include <libcfs/kp30.h>
-#include <portals/p30.h>
+#include <lnet/lnet.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <linux/poll.h>
 #include "ping.h"
-/* int portal_debug = D_PING_CLI;  */
+/* int libcfs_debug = D_PING_CLI;  */
 
 
 #define STDSIZE (sizeof(int) + sizeof(int) + 4) /* The data is 4 bytes
@@ -51,7 +51,7 @@ static struct pingcli_data *client = NULL;
 static int count = 0;
 
 static void
-pingcli_shutdown(ptl_handle_ni_t nih, int err)
+pingcli_shutdown(int err)
 {
         int rc;
 
@@ -62,29 +62,29 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
         switch (err) {
                 case 1:
                         /* Unlink any memory descriptors we may have used */
-                        if ((rc = PtlMDUnlink (client->md_out_head_h)))
-                                PDEBUG ("PtlMDUnlink", rc);
+                        if ((rc = LNetMDUnlink (client->md_out_head_h)))
+                                PDEBUG ("LNetMDUnlink", rc);
                 case 2:
                         /* Free the event queue */
-                        if ((rc = PtlEQFree (client->eq)))
-                                PDEBUG ("PtlEQFree", rc);
+                        if ((rc = LNetEQFree (client->eq)))
+                                PDEBUG ("LNetEQFree", rc);
 
-                        if ((rc = PtlMEUnlink (client->me)))
-                                PDEBUG ("PtlMEUnlink", rc);
+                        if ((rc = LNetMEUnlink (client->me)))
+                                PDEBUG ("LNetMEUnlink", rc);
                 case 3:
-                        PtlNIFini (nih);
+                        LNetNIFini ();
 
                 case 4:
                         /* Free our buffers */
                         if (client->outbuf != NULL)
-                                PORTAL_FREE (client->outbuf, STDSIZE);
+                                LIBCFS_FREE (client->outbuf, STDSIZE);
 
                         if (client->inbuf != NULL)
-                                PORTAL_FREE (client->inbuf, STDSIZE);
+                                LIBCFS_FREE (client->inbuf, STDSIZE);
 
 
                         if (client != NULL)
-                                PORTAL_FREE (client,
+                                LIBCFS_FREE (client,
                                                 sizeof(struct pingcli_data));
         }
 
@@ -92,156 +92,155 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
         CDEBUG (D_OTHER, "ping client released resources\n");
 } /* pingcli_shutdown() */
 
-static void pingcli_callback(ptl_event_t *ev)
+static void pingcli_callback(lnet_event_t *ev)
 {
         wake_up_process (client->tsk);
 }
 
 
-static struct pingcli_data *
-pingcli_start(struct portal_ioctl_data *args)
+static void
+pingcli_start(struct libcfs_ioctl_data *args)
 {
-        ptl_handle_ni_t nih = PTL_INVALID_HANDLE;
         unsigned ping_head_magic = PING_HEADER_MAGIC;
-        char str[PTL_NALFMT_SIZE];
         int rc;
 
         client->tsk = current;
-        client->args = args;
+        client->nid = args->ioc_nid;
+        client->count = args->ioc_count;
+        client->size = args->ioc_u32[0];
+        client->timeout = args->ioc_u32[1];
+        
+        CDEBUG (D_OTHER, "pingcli_setup args: nid %s (%s),  "
+                "size %u, count: %u, timeout: %u\n",
+                libcfs_nid2str(client->nid),
+                libcfs_nid2str(client->nid),
+                client->size, client->count, client->timeout);
 
-        CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  \
-                        nal %x, size %u, count: %u, timeout: %u\n",
-                        args->ioc_nid,
-                        portals_nid2str(args->ioc_nid, args->ioc_nal, str),
-                        args->ioc_nal, args->ioc_size,
-                        args->ioc_count, args->ioc_timeout);
 
-
-        PORTAL_ALLOC (client->outbuf, STDSIZE) ;
+        LIBCFS_ALLOC (client->outbuf, STDSIZE) ;
         if (client->outbuf == NULL)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
-                pingcli_shutdown (nih, 4);
-                return (NULL);
+                pingcli_shutdown (4);
+                return;
         }
 
-        PORTAL_ALLOC (client->inbuf,  STDSIZE);
+        LIBCFS_ALLOC (client->inbuf,  STDSIZE);
 
         if (client->inbuf == NULL)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
-                pingcli_shutdown (nih, 4);
-                return (NULL);
+                pingcli_shutdown (4);
+                return;
         }
 
         /* Aquire and initialize the proper nal for portals. */
-        rc = PtlNIInit(args->ioc_nal, 0, NULL, NULL, &nih);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP)
+        rc = LNetNIInit(0);
+        if (rc != 0 && rc != 1)
         {
-                CERROR ("NAL %x not loaded.\n", args->ioc_nal);
-                pingcli_shutdown (nih, 4);
-                return (NULL);
+                CERROR ("LNetNIInit: error %d\n", rc);
+                pingcli_shutdown (4);
+                return;
         }
 
         /* Based on the initialization aquire our unique portal ID. */
-        if ((rc = PtlGetId (nih, &client->myid)))
+        if ((rc = LNetGetId (1, &client->myid)))
         {
-                CERROR ("PtlGetId error %d\n", rc);
-                pingcli_shutdown (nih, 2);
-                return (NULL);
+                CERROR ("LNetGetId error %d\n", rc);
+                pingcli_shutdown (2);
+                return;
         }
 
         /* Setup the local match entries */
-        client->id_local.nid = PTL_NID_ANY;
-        client->id_local.pid = PTL_PID_ANY;
+        client->id_local.nid = LNET_NID_ANY;
+        client->id_local.pid = LNET_PID_ANY;
 
         /* Setup the remote match entries */
-        client->id_remote.nid = args->ioc_nid;
+        client->id_remote.nid = client->nid;
         client->id_remote.pid = 0;
 
-        if ((rc = PtlMEAttach (nih, PTL_PING_CLIENT,
-                   client->id_local, 0, ~0, PTL_RETAIN,
-                   PTL_INS_AFTER, &client->me)))
+        if ((rc = LNetMEAttach (PTL_PING_CLIENT,
+                   client->id_local, 0, ~0, LNET_RETAIN,
+                   LNET_INS_AFTER, &client->me)))
         {
-                CERROR ("PtlMEAttach error %d\n", rc);
-                pingcli_shutdown (nih, 2);
-                return (NULL);
+                CERROR ("LNetMEAttach error %d\n", rc);
+                pingcli_shutdown (2);
+                return;
         }
 
         /* Allocate the event queue for this network interface */
-        if ((rc = PtlEQAlloc (nih, 64, pingcli_callback, &client->eq)))
+        if ((rc = LNetEQAlloc (64, pingcli_callback, &client->eq)))
         {
-                CERROR ("PtlEQAlloc error %d\n", rc);
-                pingcli_shutdown (nih, 2);
-                return (NULL);
+                CERROR ("LNetEQAlloc error %d\n", rc);
+                pingcli_shutdown (2);
+                return;
         }
 
 
         client->md_in_head.start     = client->inbuf;
         client->md_in_head.length    = STDSIZE;
         client->md_in_head.threshold = 1;
-        client->md_in_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
+        client->md_in_head.options   = LNET_MD_OP_PUT;
         client->md_in_head.user_ptr  = NULL;
         client->md_in_head.eq_handle = client->eq;
         memset (client->inbuf, 0, STDSIZE);
 
         /* Attach the incoming buffer */
-        if ((rc = PtlMDAttach (client->me, client->md_in_head,
-                              PTL_UNLINK, &client->md_in_head_h))) {
-                CERROR ("PtlMDAttach error %d\n", rc);
-                pingcli_shutdown (nih, 1);
-                return (NULL);
+        if ((rc = LNetMDAttach (client->me, client->md_in_head,
+                              LNET_UNLINK, &client->md_in_head_h))) {
+                CERROR ("LNetMDAttach error %d\n", rc);
+                pingcli_shutdown (1);
+                return;
         }
 
         /* Setup the outgoing ping header */
         client->md_out_head.start     = client->outbuf;
         client->md_out_head.length    = STDSIZE;
         client->md_out_head.threshold = 1;
-        client->md_out_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
+        client->md_out_head.options   = LNET_MD_OP_PUT;
         client->md_out_head.user_ptr  = NULL;
-        client->md_out_head.eq_handle = PTL_EQ_NONE;
+        client->md_out_head.eq_handle = LNET_EQ_NONE;
 
         memcpy (client->outbuf, &ping_head_magic, sizeof(ping_head_magic));
 
         /* Bind the outgoing ping header */
-        if ((rc=PtlMDBind (nih, client->md_out_head,
-                           PTL_UNLINK, &client->md_out_head_h))) {
-                CERROR ("PtlMDBind error %d\n", rc);
-                pingcli_shutdown (nih, 1);
-                return (NULL);
+        if ((rc=LNetMDBind (client->md_out_head,
+                            LNET_UNLINK, &client->md_out_head_h))) {
+                CERROR ("LNetMDBind error %d\n", rc);
+                pingcli_shutdown (1);
+                return;
         }
         /* Put the ping packet */
-        if((rc = PtlPut (client->md_out_head_h, PTL_NOACK_REQ,
-                         client->id_remote, PTL_PING_SERVER, 0, 0, 0, 0))) {
-                PDEBUG ("PtlPut (header)", rc);
-                pingcli_shutdown (nih, 1);
-                return NULL;
+        if((rc = LNetPut (LNET_NID_ANY, client->md_out_head_h, LNET_NOACK_REQ,
+                          client->id_remote, PTL_PING_SERVER, 
+                          0, 0, 0))) {
+                PDEBUG ("LNetPut (header)", rc);
+                pingcli_shutdown (1);
+                return;
         }
 
         count = 0;
         set_current_state (TASK_INTERRUPTIBLE);
-        rc = schedule_timeout (20 * args->ioc_timeout);
+        rc = schedule_timeout (20 * client->timeout);
         if (rc == 0) {
                 CERROR ("Time out on the server\n");
-                pingcli_shutdown (nih, 2);
-                return NULL;
+                pingcli_shutdown (2);
+                return;
         } else {
                 CWARN("Received respose from the server \n");
         }
 
-        pingcli_shutdown (nih, 2);
+        pingcli_shutdown (2);
 
-        /* Success! */
-        return NULL;
 } /* pingcli_setup() */
 
 
 
 /* called by the portals_ioctl for ping requests */
-int kping_client(struct portal_ioctl_data *args)
+int kping_client(struct libcfs_ioctl_data *args)
 {
 
-        PORTAL_ALLOC (client, sizeof(struct pingcli_data));
+        LIBCFS_ALLOC (client, sizeof(struct pingcli_data));
         memset (client, 0, sizeof(struct pingcli_data));
         if (client == NULL)
         {

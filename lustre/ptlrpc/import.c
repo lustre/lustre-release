@@ -102,7 +102,7 @@ static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uu
 
         if (*uuid_len < strlen(UUID_STR))
                 return;
-        
+
         if (!strncmp(*uuid_start + *uuid_len - strlen(UUID_STR),
                     UUID_STR, strlen(UUID_STR)))
                 *uuid_len -= strlen(UUID_STR);
@@ -119,7 +119,6 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
         spin_lock_irqsave(&imp->imp_lock, flags);
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
-                char nidbuf[PTL_NALFMT_SIZE];
                 char *target_start;
                 int   target_len;
 
@@ -130,11 +129,13 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
                                "lost; in progress operations using this "
                                "service will %s.\n",
                                target_len, target_start,
-                               ptlrpc_peernid2str(&imp->imp_connection->c_peer,
-                                                  nidbuf),
+                               libcfs_nid2str(imp->imp_connection->c_peer.nid),
                                imp->imp_replayable 
                                ? "wait for recovery to complete"
                                : "fail");
+
+                if (obd_dump_on_timeout)
+                        libcfs_debug_dumplog();
 
                 CWARN("%s: connection lost to %s@%s\n",
                       imp->imp_obd->obd_name,
@@ -261,7 +262,7 @@ static int import_select_connection(struct obd_import *imp)
                 RETURN(-EINVAL);
         }
 
-        if (imp->imp_conn_current && 
+        if (imp->imp_conn_current &&
             imp->imp_conn_current->oic_item.next != &imp->imp_conn_list) {
                 imp_conn = list_entry(imp->imp_conn_current->oic_item.next,
                                       struct obd_import_conn, oic_item);
@@ -282,6 +283,10 @@ static int import_select_connection(struct obd_import *imp)
         dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
         class_export_put(dlmexp);
 
+        if (imp->imp_conn_current && (imp->imp_conn_current != imp_conn)) {
+                LCONSOLE_WARN("Changing connection for %s to %s\n",
+                              imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid);
+        }
         imp->imp_conn_current = imp_conn;
         CDEBUG(D_HA, "%s: import %p using connection %s\n",
                imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid);
@@ -358,7 +363,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 #endif
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
-        size[0] = sizeof(struct obd_connect_data);
+        /* Allow a slightly larger reply for future growth compatibility */
+        size[0] = sizeof(struct obd_connect_data) + 16 * sizeof(__u64);
         request->rq_replen = lustre_msg_size(1, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
@@ -369,8 +375,12 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         aa->pcaa_peer_committed = committed_before_reconnect;
         aa->pcaa_initial_connect = initial_connect;
 
-        if (aa->pcaa_initial_connect)
+        if (aa->pcaa_initial_connect) {
                 imp->imp_replayable = 1;
+                /* On an initial connect, we don't know which one of a 
+                   failover server pair is up.  Don't wait long. */
+                request->rq_timeout = max((int)(obd_timeout / 20), 5);
+        }
 
         DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
         ptlrpcd_add_req(request);
@@ -439,7 +449,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 
         /* All imports are pingable */
         imp->imp_pingable = 1;
-        
+
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                         CDEBUG(D_HA, "connected to replayable target: %s\n",
@@ -529,7 +539,23 @@ finish:
                         RETURN(0);
                 }
         } else {
+                struct obd_connect_data *ocd;
+
+                ocd = lustre_swab_repbuf(request, 0,
+                                         sizeof *ocd, lustre_swab_connect);
+                if (ocd == NULL) {
+                        CERROR("Wrong connect data from server\n");
+                        rc = -EPROTO;
+                        GOTO(out, rc);
+                }
                 spin_lock_irqsave(&imp->imp_lock, flags);
+                /*
+                 * check that server granted subset of flags we asked for.
+                 */
+                LASSERT((ocd->ocd_connect_flags &
+                         imp->imp_connect_data.ocd_connect_flags) ==
+                        ocd->ocd_connect_flags);
+                imp->imp_connect_data = *ocd;
                 if (imp->imp_conn_current != NULL) {
                         list_del(&imp->imp_conn_current->oic_item);
                         list_add(&imp->imp_conn_current->oic_item,
@@ -541,7 +567,7 @@ finish:
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
                         CERROR("this is bug 7269 - please attach log there\n");
                         if (bug7269_dump == 0)
-                                portals_debug_dumplog();
+                                libcfs_debug_dumplog();
                         bug7269_dump = 1;
                 }
         }
@@ -572,7 +598,7 @@ static int completed_replay_interpret(struct ptlrpc_request *req,
                 ptlrpc_import_recovery_state_machine(req->rq_import);
         } else {
                 CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
-                       "reconnecting\n", 
+                       "reconnecting\n",
                        req->rq_import->imp_obd->obd_name, req->rq_status);
                 ptlrpc_connect_import(req->rq_import, NULL);
         }
@@ -698,7 +724,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_RECOVER) {
-                char nidbuf[PTL_NALFMT_SIZE];
+                char   *nidstr;
 
                 CDEBUG(D_HA, "reconnected to %s@%s\n",
                        imp->imp_target_uuid.uuid,
@@ -712,12 +738,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
                 deuuidify(imp->imp_target_uuid.uuid, NULL,
                           &target_start, &target_len);
-                ptlrpc_peernid2str(&imp->imp_connection->c_peer,
-                                   nidbuf);
+                nidstr = libcfs_nid2str(imp->imp_connection->c_peer.nid);
 
                 LCONSOLE_INFO("Connection restored to service %.*s using nid "
-                              "%s.\n",
-                              target_len, target_start, nidbuf);
+                              "%s.\n", target_len, target_start, nidstr);
 
                 CWARN("%s: connection restored to %s@%s\n",
                       imp->imp_obd->obd_name,
@@ -750,13 +774,11 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         switch (imp->imp_connect_op) {
         case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
         case MDS_CONNECT: rq_opc = MDS_DISCONNECT; break;
-        case MGMT_CONNECT:rq_opc = MGMT_DISCONNECT;break;
         default:
                 CERROR("don't know how to disconnect from %s (connect_op %d)\n",
                        imp->imp_target_uuid.uuid, imp->imp_connect_op);
                 RETURN(-EINVAL);
         }
-
 
         if (ptlrpc_import_in_recovery(imp)) {
                 struct l_wait_info lwi;
@@ -779,6 +801,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
                  * it fails.  We can get through the above with a down server
                  * if the client doesn't know the server is gone yet. */
                 request->rq_no_resend = 1;
+                request->rq_timeout = 5;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
                 request->rq_send_state =  LUSTRE_IMP_CONNECTING;
                 request->rq_replen = lustre_msg_size(0, NULL);

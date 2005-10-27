@@ -159,7 +159,7 @@ int mdc_intent_lock(struct obd_export *exp,
                     void *lmm, int lmmsize,
                     struct lookup_intent *, int,
                     struct ptlrpc_request **reqp,
-                    ldlm_blocking_callback cb_blocking);
+                    ldlm_blocking_callback cb_blocking, int extra_lock_flags);
 int mdc_enqueue(struct obd_export *exp,
                 int lock_type,
                 struct lookup_intent *it,
@@ -170,7 +170,7 @@ int mdc_enqueue(struct obd_export *exp,
                 int lmmlen,
                 ldlm_completion_callback cb_completion,
                 ldlm_blocking_callback cb_blocking,
-                void *cb_data);
+                void *cb_data, int extra_lock_flags);
 
 /* mdc/mdc_request.c */
 int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp);
@@ -186,6 +186,15 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request);
+int mdc_setxattr(struct obd_export *exp, struct ll_fid *fid,
+                 obd_valid valid, const char *xattr_name,
+                 const char *input, int input_size,
+                 int output_size, int flags,
+                 struct ptlrpc_request **request);
+int mdc_getxattr(struct obd_export *exp, struct ll_fid *fid,
+                 obd_valid valid, const char *xattr_name,
+                 const char *input, int input_size,
+                 int output_size, struct ptlrpc_request **request);
 int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
              struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **);

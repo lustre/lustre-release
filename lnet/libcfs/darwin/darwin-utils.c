@@ -22,14 +22,14 @@
  * Darwin porting library
  * Make things easy to port
  */
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <mach/mach_types.h>
 #include <string.h>
 #include <sys/errno.h>
 #include <sys/types.h>
 #include <sys/fcntl.h>
-#include <portals/types.h>
+#include <lnet/types.h>
 
 #ifndef isspace
 inline int

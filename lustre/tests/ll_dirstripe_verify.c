@@ -23,7 +23,7 @@
 #include <lustre/lustre_user.h>
 #include <linux/obd_lov.h>
 
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 
 
 #define MAX_LOV_UUID_COUNT      1000
@@ -52,9 +52,9 @@ int read_proc_entry(char *proc_path, char *buf, int len)
 int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
             struct lov_user_md *lum_file2)
 {
-        int stripe_count;
-        int stripe_size;
-        int stripe_offset;
+        int stripe_count = 0;
+        int stripe_size = 0;
+        int stripe_offset = -1;
         int ost_count;
         char buf[128];
         char lov_path[PATH_MAX];
@@ -68,31 +68,37 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
 
         snprintf(lov_path, sizeof(lov_path) - 1, "/proc/fs/lustre/lov/%s", buf);
 
-        stripe_count = (int)lum_dir->lmm_stripe_count;
-        if (stripe_count == 0 || stripe_count == (__u16)-1) {
-                snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripecount", lov_path);
+        if (lum_dir == NULL) {
+                snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripecount",
+                         lov_path);
                 if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
-                        return 4;
+                        return 5;
 
                 stripe_count = atoi(buf);
+        } else {
+                stripe_count = (int)lum_dir->lmm_stripe_count;
         }
+        if (stripe_count == 0)
+                stripe_count = 1;
 
         snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/numobd", lov_path);
         if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
                 return 6;
 
         ost_count = atoi(buf);
-        stripe_count = stripe_count ? stripe_count : ost_count;
+        stripe_count = stripe_count > 0 ? stripe_count : ost_count;
 
         if (lum_file1->lmm_stripe_count != stripe_count) {
-                fprintf(stderr, "stripe count %d != %d\n",
+                fprintf(stderr, "file1 stripe count %d != dir %d\n",
                         lum_file1->lmm_stripe_count, stripe_count);
                 return 7;
         }
 
-        stripe_size = (int)lum_dir->lmm_stripe_size;
+        if (lum_dir != NULL)
+                stripe_size = (int)lum_dir->lmm_stripe_size;
         if (stripe_size == 0) {
-                snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripesize", lov_path);
+                snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripesize",
+                         lov_path);
                 if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
                         return 5;
 
@@ -100,24 +106,33 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
         }
 
         if (lum_file1->lmm_stripe_size != stripe_size) {
-                fprintf(stderr, "stripe size %d != %d\n",
+                fprintf(stderr, "file1 stripe size %d != dir %d\n",
                         lum_file1->lmm_stripe_size, stripe_size);
                 return 8;
         }
 
-        stripe_offset = (short int)lum_dir->lmm_stripe_offset;
+        if (lum_dir != NULL)
+                stripe_offset = (short int)lum_dir->lmm_stripe_offset;
         if (stripe_offset != -1) {
                 for (i = 0; i < stripe_count; i++)
                         if (lum_file1->lmm_objects[i].l_ost_idx !=
-                            (stripe_offset + i) % ost_count)
-                                return 9;
+                            (stripe_offset + i) % ost_count) {
+                                fprintf(stderr, "warning: file1 non-sequential "
+                                        "stripe[%d] %d != %d\n", i,
+                                        lum_file1->lmm_objects[i].l_ost_idx,
+                                        (stripe_offset + i) % ost_count);
+                        }
         } else if (lum_file2 != NULL) {
-                int next, idx;
-                next = (lum_file1->lmm_objects[stripe_count-1].l_ost_idx + 1)
-                       % ost_count;
+                int next, idx, stripe = stripe_count - 1;
+                next = (lum_file1->lmm_objects[stripe].l_ost_idx + 1) %
+                       ost_count;
                 idx = lum_file2->lmm_objects[0].l_ost_idx;
-                if (idx != next)
-                        return 10;
+                if (idx != next) {
+                        fprintf(stderr, "warning: non-sequential "
+                                "file1 stripe[%d] %d != file2 stripe[0] %d\n",
+                                stripe,
+                                lum_file1->lmm_objects[stripe].l_ost_idx, idx);
+                }
         }
 
         return 0;
@@ -152,9 +167,8 @@ int main(int argc, char **argv)
         rc = ioctl(dirfd(dir), LL_IOC_LOV_GETSTRIPE, lum_dir);
         if (rc) {
                 if (errno == ENODATA) {
-                        lum_dir->lmm_stripe_size = 0;
-                        lum_dir->lmm_stripe_count = 0;
-                        lum_dir->lmm_stripe_offset = -1;
+                        free(lum_dir);
+                        lum_dir = NULL;
                 } else {
                         rc = errno;
                         goto cleanup;

@@ -32,12 +32,11 @@
 #include <syslog.h>
 #include <errno.h>
 
-#include <portals/api-support.h>
-#include <portals/lib-types.h>
+#include <lnet/api-support.h>
+#include <lnet/lib-types.h>
 
 #include <gm.h>
 
-#define GMNAL_IOC_GET_GNID 1
 /*
  *      portals always uses unit 0
  *      Can this be configurable?
@@ -154,6 +153,6 @@ int main(int argc, char **argv)
         }
 
         nid = u_getgmnid(name, get_local_id);
-        printf("%u\n", nid);
+        printf("0x%x\n", nid);
         exit(0);
 }

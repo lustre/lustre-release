@@ -1,0 +1,55 @@
+Getfacl utility option parsing tests. This test can be run on a
+filesystem with or without ACL support.
+
+	$ mkdir test
+	$ cd test
+	$ umask 027
+	$ touch x
+	$ getfacl --omit-header x
+	> user::rw-
+	> group::r--
+	> other::---
+	> 
+
+	$ getfacl --omit-header --access x
+	> user::rw-
+	> group::r--
+	> other::---
+	> 
+
+	$ getfacl --omit-header -d x
+	$ getfacl --omit-header -d .
+	$ getfacl --omit-header -d /
+	> getfacl: Removing leading '/' from absolute path names
+	
+	$ getfacl --skip-base x
+	$ getfacl --omit-header --all-effective x
+	> user::rw-
+	> group::r--
+	> other::---
+	> 
+	
+	$ getfacl --omit-header --no-effective x
+	> user::rw-
+	> group::r--
+	> other::---
+	> 
+	
+	$ mkdir d
+	$ touch d/y
+	$ ln -s d l
+	$ getfacl -dR . | grep file | sort
+	> # file: .
+	> # file: d
+	> # file: d/y
+	> # file: x
+	
+	$ ln -s l ll
+	$ getfacl -dLR ll | grep file | sort
+	> # file: ll
+	> # file: ll/y
+	
+	$ rm l ll x
+	$ rm -rf d
+	$ cd ..
+	$ rmdir test

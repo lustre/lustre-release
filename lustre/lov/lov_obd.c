@@ -65,6 +65,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         struct obd_device *tgt_obd;
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct lustre_handle conn = {0, };
+        struct obd_import *imp;
 #ifdef __KERNEL__
         struct proc_dir_entry *lov_proc_dir;
 #endif
@@ -89,7 +90,12 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                 ptlrpc_activate_import(tgt_obd->u.cli.cl_import);
         }
 
-        if (tgt_obd->u.cli.cl_import->imp_invalid) {
+        /*
+         * Divine LOV knows that OBDs under it are OSCs.
+         */
+        imp = tgt_obd->u.cli.cl_import;
+
+        if (imp->imp_invalid) {
                 CERROR("not connecting OSC %s; administratively "
                        "disabled\n", tgt_uuid->uuid);
                 rc = obd_register_observer(tgt_obd, obd);
@@ -155,6 +161,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
         struct obd_export *exp;
+        __u64 connect_flags = data ? data->ocd_connect_flags : 0;
         int rc, rc2, i;
         ENTRY;
 
@@ -178,7 +185,12 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 rc = lov_connect_obd(obd, tgt, 0, data);
                 if (rc)
                         GOTO(out_disc, rc);
+                if (data)
+                        connect_flags &= data->ocd_connect_flags;
         }
+
+        if (data)
+                data->ocd_connect_flags = connect_flags;
 
         class_export_put(exp);
         RETURN (0);
@@ -253,9 +265,13 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         RETURN(0);
 }
 
+static int
+lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen);
+
 static int lov_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
+        struct obd_device *osc_obd;
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
         int rc, i;
@@ -272,8 +288,18 @@ static int lov_disconnect(struct obd_export *exp)
                 RETURN(rc);
 
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
-                if (tgt->ltd_exp)
-                        lov_disconnect_obd(obd, tgt);
+                if (tgt->ltd_exp) {
+                        osc_obd = class_exp2obd(tgt->ltd_exp);
+                        /* Disconnect and delete from list */
+                        lov_del_obd(obd, &tgt->uuid, i, tgt->ltd_gen);
+                        /* Cleanup the osc now - can't do it from 
+                           lov_cleanup because we just lost our only reference
+                           to it. */ 
+                        /* Use lov's force/fail flags. */
+                        osc_obd->obd_force = obd->obd_force;
+                        osc_obd->obd_fail = obd->obd_fail;
+                        class_manual_cleanup(osc_obd);
+                }
         }
 
         RETURN(rc);
@@ -570,7 +596,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
          * divisor in a 32-bit kernel, we cannot support a stripe width
          * of 4GB or larger on 32-bit CPUs. */
         count = desc->ld_default_stripe_count;
-        if ((count ? count : desc->ld_tgt_count) *
+        if ((count > 0 ? count : desc->ld_tgt_count) *
             desc->ld_default_stripe_size > ~0UL) {
                 CERROR("LOV: stripe width "LPU64"x%u > %lu on 32-bit system\n",
                        desc->ld_default_stripe_size, count, ~0UL);
@@ -580,7 +606,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Allocate space for target list */
         if (desc->ld_tgt_count)
                 count = desc->ld_tgt_count;
-        lov->bufsize = sizeof(struct lov_tgt_desc) * count;
+        lov->bufsize = sizeof(struct lov_tgt_desc) * max(count, 1);
         OBD_ALLOC(lov->tgts, lov->bufsize);
         if (lov->tgts == NULL) {
                 CERROR("Out of memory\n");
@@ -1806,8 +1832,21 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                         memcpy(osfs, &lov_sfs, sizeof(lov_sfs));
                         set = 1;
                 } else {
+#ifdef MIN_DF
+                        /* Sandia requested that df (and so, statfs) only
+                           returned minimal available space on 
+                           a single OST, so people would be able to
+                           write this much data guaranteed. */
+                        if (osfs->os_bavail > lov_sfs.os_bavail) {
+                                /* Presumably if new bavail is smaller,
+                                   new bfree is bigger as well */
+                                osfs->os_bfree = lov_sfs.os_bfree;
+                                osfs->os_bavail = lov_sfs.os_bavail;
+                        }
+#else
                         osfs->os_bfree += lov_sfs.os_bfree;
                         osfs->os_bavail += lov_sfs.os_bavail;
+#endif
                         osfs->os_blocks += lov_sfs.os_blocks;
                         /* XXX not sure about this one - depends on policy.
                          *   - could be minimum if we always stripe on all OBDs
@@ -2190,6 +2229,24 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
         RETURN(rc);
 }
 #endif
+
+
+void lov_stripe_lock(struct lov_stripe_md *md)
+{
+        LASSERT(md->lsm_lock_owner != current);
+        spin_lock(&md->lsm_lock);
+        LASSERT(md->lsm_lock_owner == NULL);
+        md->lsm_lock_owner = current;
+}
+EXPORT_SYMBOL(lov_stripe_lock);
+
+void lov_stripe_unlock(struct lov_stripe_md *md)
+{
+        LASSERT(md->lsm_lock_owner == current);
+        md->lsm_lock_owner = NULL;
+        spin_unlock(&md->lsm_lock);
+}
+EXPORT_SYMBOL(lov_stripe_unlock);
 
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,

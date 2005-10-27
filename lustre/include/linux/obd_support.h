@@ -93,6 +93,11 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_QUOTACHECK_NET      0x12d
 #define OBD_FAIL_MDS_QUOTACTL_NET        0x12e
 #define OBD_FAIL_MDS_CLIENT_ADD          0x12f
+#define OBD_FAIL_MDS_GETXATTR_NET        0x130
+#define OBD_FAIL_MDS_GETXATTR_PACK       0x131
+#define OBD_FAIL_MDS_SETXATTR_NET        0x132
+#define OBD_FAIL_MDS_SETXATTR            0x133
+#define OBD_FAIL_MDS_SETXATTR_WRITE      0x134
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -286,7 +291,7 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 # endif
 #endif  /* __KERNEL__ */
 
-extern atomic_t portal_kmemory;
+extern atomic_t libcfs_kmemory;
 
 #if defined(LUSTRE_UTILS) /* this version is for utils only */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
@@ -309,7 +314,7 @@ do {                                                                          \
                 CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
                 CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
+                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \
@@ -340,7 +345,7 @@ do {                                                                          \
                 CERROR("vmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
                 CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
+                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \
@@ -406,7 +411,7 @@ do {                                                                          \
                 CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n", \
                        (int)(size), __FILE__, __LINE__);                      \
                 CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
+                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \

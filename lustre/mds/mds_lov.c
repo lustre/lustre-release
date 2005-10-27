@@ -364,8 +364,6 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 if (data->ioc_type == LUSTRE_CFG_TYPE) {
                         rec.lrh_type = OBD_CFG_REC;
-                } else if (data->ioc_type == PORTALS_CFG_TYPE) {
-                        rec.lrh_type = PTL_CFG_REC;
                 } else {
                         CERROR("unknown cfg record type:%d \n", data->ioc_type);
                         RETURN(-EINVAL);
@@ -491,22 +489,13 @@ struct mds_lov_sync_info {
         struct obd_uuid   *mlsi_uuid;  /* target to sync */
 };
 
-int mds_lov_synchronize(void *data)
+static int __mds_lov_syncronize(void *data)
 {
         struct mds_lov_sync_info *mlsi = data;
         struct obd_device *obd;
         struct obd_uuid *uuid;
-        unsigned long flags;
         int rc = 0;
-
-        lock_kernel();
-        ptlrpc_daemonize();
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-        unlock_kernel();
+        ENTRY;
 
         obd = mlsi->mlsi_obd;
         uuid = mlsi->mlsi_uuid;
@@ -514,7 +503,6 @@ int mds_lov_synchronize(void *data)
         OBD_FREE(mlsi, sizeof(*mlsi));
 
         LASSERT(obd != NULL);
-        LASSERT(uuid != NULL);
 
         rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"),
                           "mds_conn", 0, uuid);
@@ -531,7 +519,8 @@ int mds_lov_synchronize(void *data)
         }
 
         CWARN("MDS %s: %s now active, resetting orphans\n",
-              obd->obd_name, uuid->uuid);
+              obd->obd_name, uuid ? (char *)uuid->uuid : "All OSC's");
+        
         rc = mds_lov_clearorphans(&obd->u.mds, uuid);
         if (rc != 0) {
                 CERROR("%s: failed at mds_lov_clearorphans: %d\n",
@@ -544,7 +533,24 @@ out:
         RETURN(rc);
 }
 
-int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid)
+int mds_lov_synchronize(void *data)
+{
+        unsigned long flags;
+
+        lock_kernel();
+        ptlrpc_daemonize();
+
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
+        unlock_kernel();
+
+        return (__mds_lov_syncronize(data));
+}
+
+int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
+                              int nonblock)
 {
         struct mds_lov_sync_info *mlsi;
         int rc;
@@ -561,14 +567,20 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid)
         /* We need to lock the mds in place for our new thread context. */
         class_export_get(obd->obd_self_export);
 
-        rc = kernel_thread(mds_lov_synchronize, mlsi, CLONE_VM | CLONE_FILES);
-        if (rc < 0)
-                CERROR("%s: error starting mds_lov_synchronize: %d\n",
-                       obd->obd_name, rc);
-        else {
-                CDEBUG(D_HA, "%s: mds_lov_synchronize thread: %d\n",
-                       obd->obd_name, rc);
-                rc = 0;
+        if (nonblock) {
+                /* Syncronize in the background */
+                rc = kernel_thread(mds_lov_synchronize, mlsi, CLONE_VM | CLONE_FILES);
+                if (rc < 0) {
+                        CERROR("%s: error starting mds_lov_synchronize: %d\n",
+                               obd->obd_name, rc);
+                        class_export_put(obd->obd_self_export);
+                } else {
+                        CDEBUG(D_HA, "%s: mds_lov_synchronize thread: %d\n",
+                               obd->obd_name, rc);
+                        rc = 0;
+                }
+        } else {
+                rc = __mds_lov_syncronize((void *)mlsi);
         }
 
         RETURN(rc);
@@ -595,8 +607,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
                       obd->obd_name, uuid->uuid);
         } else {
                 LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
-                
-                rc = mds_lov_start_synchronize(obd, uuid);
+                rc = mds_lov_start_synchronize(obd, uuid, 1);
         }
         RETURN(rc);
 }

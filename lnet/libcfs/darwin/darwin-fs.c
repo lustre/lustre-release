@@ -33,7 +33,7 @@
 #include <sys/filedesc.h>
 #include <sys/namei.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>

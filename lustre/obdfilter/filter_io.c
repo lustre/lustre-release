@@ -68,7 +68,7 @@ static void filter_free_dio_pages(int objcount, struct obd_ioobj *obj,
         for (i = 0; i < objcount; i++, obj++) {
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, res++)
                                 res->page = NULL;
-                        }
+        }
 }
 
 /* Grab the dirty and seen grant announcements from the incoming obdo.
@@ -551,9 +551,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         if (oa && oa->o_valid & OBD_MD_FLGRANT) {
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
                 oa->o_valid = OBD_MD_FLGRANT;
-        } else if (oa) {
+        } else if (oa)
                 oa->o_valid = 0;
-        }
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
@@ -660,11 +659,9 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         if (cmd == OBD_BRW_WRITE)
                 return filter_preprw_write(cmd, exp, oa, objcount, obj,
                                            niocount, nb, res, oti);
-
         if (cmd == OBD_BRW_READ)
                 return filter_preprw_read(cmd, exp, oa, objcount, obj,
                                           niocount, nb, res, oti);
-
         LBUG();
         return -EPROTO;
 }

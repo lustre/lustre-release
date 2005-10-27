@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71 101"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
@@ -37,6 +37,7 @@ LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
+RANDOM_READS=${RANDOM_READS:-"random-reads"}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 MUNLINK=${MUNLINK:-munlink}
@@ -215,6 +216,7 @@ echo preparing for tests involving mounts
 EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
 touch $EXT2_DEV
 mke2fs -j -F $EXT2_DEV 8000 > /dev/null
+echo # add a newline after mke2fs.
 
 umask 077
 
@@ -311,7 +313,7 @@ test_6a() {
 run_test 6a "touch .../f6a; chmod .../f6a ======================"
 
 test_6b() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6b" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
 	if [ ! -f $DIR/f6a ]; then
 		touch $DIR/f6a
 		chmod 0666 $DIR/f6a
@@ -322,7 +324,7 @@ test_6b() {
 run_test 6b "$RUNAS chmod .../f6a (should return error) =="
 
 test_6c() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6c" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
 	touch $DIR/f6c
 	chown $RUNAS_ID $DIR/f6c || error
 	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/f6c || error
@@ -330,7 +332,7 @@ test_6c() {
 run_test 6c "touch .../f6c; chown .../f6c ======================"
 
 test_6d() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6d" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
 	if [ ! -f $DIR/f6c ]; then
 		touch $DIR/f6c
 		chown $RUNAS_ID $DIR/f6c
@@ -341,7 +343,7 @@ test_6d() {
 run_test 6d "$RUNAS chown .../f6c (should return error) =="
 
 test_6e() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6e" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
 	touch $DIR/f6e
 	chgrp $RUNAS_ID $DIR/f6e || error
 	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/f6e || error
@@ -349,7 +351,7 @@ test_6e() {
 run_test 6e "touch .../f6e; chgrp .../f6e ======================"
 
 test_6f() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6f" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
 	if [ ! -f $DIR/f6e ]; then
 		touch $DIR/f6e
 		chgrp $RUNAS_ID $DIR/f6e
@@ -360,7 +362,7 @@ test_6f() {
 run_test 6f "$RUNAS chgrp .../f6e (should return error) =="
 
 test_6g() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6g" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
         mkdir $DIR/d6g || error
         chmod 777 $DIR/d6g || error
         $RUNAS mkdir $DIR/d6g/d || error
@@ -371,7 +373,7 @@ test_6g() {
 run_test 6g "Is new dir in sgid dir inheriting group?"
 
 test_6h() { # bug 7331
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6f" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
 	touch $DIR/f6h || error "touch failed"
 	chown $RUNAS_ID:$RUNAS_ID $DIR/f6h || error "initial chown failed"
 	$RUNAS -G$RUNAS_ID chown $RUNAS_ID:0 $DIR/f6h && error "chown worked"
@@ -529,7 +531,7 @@ test_19b() {
 run_test 19b "ls -l .../f19 (should return error) =============="
 
 test_19c() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 19c" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
 	$RUNAS touch $DIR/f19 && error || true
 }
 run_test 19c "$RUNAS touch .../f19 (should return error) =="
@@ -989,7 +991,7 @@ exhaust_all_precreations() {
 }
 
 test_27n() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping test" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
@@ -1002,7 +1004,7 @@ test_27n() {
 run_test 27n "create file with some full OSTs =================="
 
 test_27o() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping test" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27o
@@ -1015,7 +1017,7 @@ test_27o() {
 run_test 27o "create file with all full OSTs (should error) ===="
 
 test_27p() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping test" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
@@ -1033,7 +1035,7 @@ test_27p() {
 run_test 27p "append to a truncated file with some full OSTs ==="
 
 test_27q() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping test" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27q
@@ -1052,7 +1054,7 @@ test_27q() {
 run_test 27q "append to truncated file with all OSTs full (should error) ==="
 
 test_27r() {
-	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping test" && return
+	[ "$OSTCOUNT" -lt "2" -o -z "$MDS" ] && echo "skipping $TESTNAME" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27r
@@ -1395,9 +1397,6 @@ test_32r() {
 }
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
-#   chmod 444 /mnt/lustre/somefile
-#   open(/mnt/lustre/somefile, O_RDWR)
-#   Should return -1
 test_33() {
 	rm -f $DIR/test_33_file
 	touch $DIR/test_33_file
@@ -1408,7 +1407,7 @@ test_33() {
         log 33_2
 }
 run_test 33 "write file with mode 444 (should return error) ===="
-                                                                                                                                               
+
 test_33a() {
         rm -fr $DIR/d33
         mkdir -p $DIR/d33
@@ -1516,7 +1515,7 @@ test_36d() {
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	[ $RUNAS_ID -eq $UID ] && echo "skipping test 36e" && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping $TESTNAME" && return
 	[ ! -d $DIR/d36 ] && mkdir $DIR/d36
 	touch $DIR/d36/f36e
 	$RUNAS utime $DIR/d36/f36e && error "utime worked, want failure" || true
@@ -1635,16 +1634,12 @@ test_42b() {
         AFTERWRITES=`count_ost_writes`
         if [ $BEFOREWRITES -lt $AFTERWRITES ]; then
                 error "$BEFOREWRITES < $AFTERWRITES on unlink"
-                $LCTL dk | sort -k 4 -t: | gzip -9 > $TMP/debug-unlk.bug5195.gz
-                error "please put $TMP/debug-unlk.bug5195.gz on bug 5195 once"
         fi
         BEFOREWRITES=`count_ost_writes`
         sync || error "sync: $?"
         AFTERWRITES=`count_ost_writes`
         if [ $BEFOREWRITES -lt $AFTERWRITES ]; then
                 error "$BEFOREWRITES < $AFTERWRITES on sync"
-                $LCTL dk | sort -k 4 -t: | gzip -9 > $TMP/debug-sync.bug5195.gz
-                error "please put $TMP/debug-sync.bug5195.gz on bug 5195 once"
         fi
         dmesg | grep 'error from obd_brw_async' && error 'error writing back'
 	start_writeback
@@ -1718,6 +1713,7 @@ test_43a() {
         multiop $DIR/d43/multiop Oc && error "expected error, got success"
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
+        rm $TMP/test43.junk
 }
 run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 
@@ -1730,6 +1726,7 @@ test_43b() {
         truncate $DIR/d43/multiop 0 && error "expected error, got success"
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
+        rm $TMP/test43.junk
 }
 run_test 43b "truncate of file being executed should return -ETXTBSY"
 
@@ -1889,7 +1886,7 @@ run_test 48b "Access removed working dir (should return errors)="
 
 test_48c() { # bug 2350
 	check_kernel_version 36 || return 0
-	#sysctl -w portals.debug=-1
+	#sysctl -w lnet.debug=-1
 	#set -vx
 	mkdir -p $DIR/d48c/dir
 	cd $DIR/d48c/dir
@@ -1912,7 +1909,7 @@ run_test 48c "Access removed working subdir (should return errors)"
 
 test_48d() { # bug 2350
 	check_kernel_version 36 || return 0
-	#sysctl -w portals.debug=-1
+	#sysctl -w lnet.debug=-1
 	#set -vx
 	mkdir -p $DIR/d48d/dir
 	cd $DIR/d48d/dir
@@ -1936,7 +1933,7 @@ run_test 48d "Access removed parent subdir (should return errors)"
 
 test_48e() { # bug 4134
 	check_kernel_version 41 || return 0
-	#sysctl -w portals.debug=-1
+	#sysctl -w lnet.debug=-1
 	#set -vx
 	mkdir -p $DIR/d48e/dir
 	cd $DIR/d48e/dir
@@ -1982,7 +1979,7 @@ export NUMTEST=70000
 test_51b() {
 	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
 	[ $NUMFREE -lt 21000 ] && \
-		echo "skipping test 51b, not enough free inodes ($NUMFREE)" && \
+		echo "skipping $TESTNAME, not enough free inodes ($NUMFREE)" && \
 		return
 
 	check_kernel_version 40 || NUMTEST=31000
@@ -1994,7 +1991,7 @@ test_51b() {
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51c() {
-	[ ! -d $DIR/d51b ] && echo "skipping test 51c: $DIR/51b missing" && \
+	[ ! -d $DIR/d51b ] && echo "skipping $TESTNAME: $DIR/51b missing" && \
 		return
 
 	unlinkmany -d $DIR/d51b/t- $NUMTEST
@@ -2134,7 +2131,7 @@ check_fstype() {
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        check_fstype && echo "can't find fs $FSTYPE, skipping test 55" && return
+        check_fstype && echo "can't find fs $FSTYPE, skipping $TESTNAME" && return
         mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
         touch $DIR/d55/foo
         $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
@@ -2147,6 +2144,7 @@ run_test 55 "check iopen_connect_dentry() ======================"
 
 test_56() {
         rm -rf $DIR/d56
+        $LSTRIPE -d $DIR
         mkdir $DIR/d56
         mkdir $DIR/d56/dir
         NUMFILES=3
@@ -2319,8 +2317,8 @@ run_test 63 "Verify oig_wait interruption does not crash ======="
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked
 test_63b() {
-	DBG_SAVE=`sysctl -n portals.debug`
-	sysctl -w portals.debug=-1
+	DBG_SAVE=`sysctl -n lnet.debug`
+	sysctl -w lnet.debug=-1
 
 	# ensure we have a grant to do async writes
 	dd if=/dev/zero of=/mnt/lustre/f63b bs=4k count=1
@@ -2330,13 +2328,13 @@ test_63b() {
 	sysctl -w lustre.fail_loc=0x80000406
 	multiop /mnt/lustre/f63b Owy && \
 		$LCTL dk /tmp/test63b.debug && \
-		sysctl -w portals.debug=$DBG_SAVE && \
+		sysctl -w lnet.debug=$DBG_SAVE && \
 		error "sync didn't return ENOMEM"
 	grep -q locked /proc/fs/lustre/llite/fs*/dump_page_cache && \
 		$LCTL dk /tmp/test63b.debug && \
-		sysctl -w portls.debug=$DBG_SAVE && \
+		sysctl -w lnet.debug=$DBG_SAVE && \
 		error "locked page left in cache after async error" || true
-	sysctl -w portals.debug=$DBG_SAVE
+	sysctl -w lnet.debug=$DBG_SAVE
 }
 run_test 63b "async write errors should be returned to fsync ==="
 
@@ -2386,7 +2384,7 @@ test_65d() {
 	touch $DIR/d65/f4 $DIR/d65/f5
 	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
 }
-run_test 65d "directory setstripe $STRIPESIZE -1 $sc ======================"
+run_test 65d "directory setstripe $STRIPESIZE -1 $sc =============="
 
 test_65e() {
 	mkdir -p $DIR/d65
@@ -2396,7 +2394,7 @@ test_65e() {
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
-run_test 65e "directory setstripe 0 -1 0 ============="
+run_test 65e "directory setstripe 0 -1 0 ======================="
 
 test_65f() {
 	mkdir -p $DIR/d65f
@@ -2408,9 +2406,10 @@ test_65g() {
         mkdir -p $DIR/d65
         $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
         $LSTRIPE -d $DIR/d65 || error "setstripe"
-        $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || error "no stripe info failed"	
+        $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || \
+		error "delete default stripe failed"	
 }
-run_test 65g "directory setstripe -d ========"
+run_test 65g "directory setstripe -d ==========================="
 
 test_65h() {
         mkdir -p $DIR/d65
@@ -2419,7 +2418,7 @@ test_65h() {
         [ "`$LFS find -v $DIR/d65 | grep "^count"`" == \
           "`$LFS find -v $DIR/d65/dd1 | grep "^count"`" ] || error "stripe info inherit failed"
 }
-run_test 65h "directory stripe info inherit ======"
+run_test 65h "directory stripe info inherit ===================="
  
 test_65i() { # bug6367
         $LSTRIPE $MOUNT 65536 -1 -1
@@ -2432,6 +2431,7 @@ test_65j() { # bug6367
 		clean || error "failed to unmount"
 		start || error "failed to remount"
 	fi
+	$LSTRIPE -d $MOUNT || true
 }
 run_test 65j "get default striping on root directory (bug 6367)="
 
@@ -2446,7 +2446,7 @@ test_66() {
 run_test 66 "update inode blocks count on client ==============="
 
 test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
-	[ "$RUNAS_ID" = "$UID" ] && echo "skipping test 67" && return
+	[ "$RUNAS_ID" = "$UID" ] && echo "skipping $TESTNAME" && return
 	check_kernel_version 35 || return 0
 	mkdir $DIR/d67
 	chmod 771 $DIR/d67
@@ -2484,8 +2484,8 @@ swap_used() {
 # excercise swapping to lustre by adding a high priority swapfile entry
 # and then consuming memory until it is used.
 test_68() {
-	[ "$UID" != 0 ] && echo "skipping test 68 (must run as root)" && return
-	[ "`lsmod|grep obdfilter`" ] && echo "skipping test 68 (local OST)" && \
+	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
+	[ "`lsmod|grep obdfilter`" ] && echo "skipping $TESTNAME (local OST)" && \
 		return
 
 	find_loop_dev
@@ -2513,7 +2513,7 @@ run_test 68 "support swapping to Lustre ========================"
 # #define OBD_FAIL_OST_ENOENT 0x217
 test_69() {
 	[ -z "`lsmod|grep obdfilter`" ] &&
-		echo "skipping test 69 (remote OST)" && return
+		echo "skipping $TESTNAME (remote OST)" && return
 
 	f="$DIR/f69"
 	touch $f
@@ -2569,7 +2569,7 @@ run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
-	[ "$RUNAS_ID" = "$UID" ] && echo "skipping test 72" && return
+	[ "$RUNAS_ID" = "$UID" ] && echo "skipping $TESTNAME" && return
 	touch $DIR/f72
 	chmod 777 $DIR/f72
 	chmod ug+s $DIR/f72
@@ -2669,6 +2669,98 @@ test_100() {
 	done
 }
 run_test 100 "check local port using privileged port ==========="
+
+function get_named_value()
+{
+    local tag
+
+    tag=$1
+    while read ;do
+        line=$REPLY
+        case $line in
+        $tag*)
+            echo $line | sed "s/^$tag//"
+            break
+            ;;
+        esac
+    done
+}
+
+test_101() {
+	local s
+	local discard
+	local nreads
+
+	for s in $LPROC/osc/OSC_*/rpc_stats ;do
+		echo 0 > $s
+	done
+	for s in $LPROC/llite/*/read_ahead_stats ;do
+		echo 0 > $s
+	done
+
+	#
+	# randomly read 10000 of 64K chunks from 200M file.
+	#
+	nreads=10000
+	$RANDOM_READS -f $DIR/f101 -s200000000 -b65536 -C -n$nreads -t 180
+
+	discard=0
+	for s in $LPROC/llite/*/read_ahead_stats ;do
+		discard=$(($discard + $(cat $s | get_named_value 'read but discarded')))
+	done
+
+	if [ $(($discard * 10)) -gt $nreads ] ;then
+		cat $LPROC/osc/OSC_*/rpc_stats
+		cat $LPROC/llite/*/read_ahead_stats
+		error "too many ($discard) discarded pages" 
+	fi
+}
+run_test 101 "check read-ahead for random reads ==========="
+
+test_102() {
+	local testfile=$DIR/xattr_testfile
+
+	rm -f $testfile
+        touch $testfile
+
+	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
+	[ -z "`mount | grep " $DIR .*\<user_xattr\>"`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	echo "set/get xattr..."
+        setfattr -n trusted.name1 -v value1 $testfile || error
+        [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
+        grep "trusted.name1"`" == "trusted.name1=\"value1\"" ] || error
+ 
+        setfattr -n user.author1 -v author1 $testfile || error
+        [ "`getfattr -n user.author1 $testfile 2> /dev/null | \
+        grep "user.author1"`" == "user.author1=\"author1\"" ] || error
+
+	echo "listxattr..."
+        setfattr -n trusted.name2 -v value2 $testfile || error
+        setfattr -n trusted.name3 -v value3 $testfile || error
+        [ `getfattr -d -m "^trusted" $testfile 2> /dev/null | \
+        grep "trusted.name" | wc -l` -eq 3 ] || error
+
+ 
+        setfattr -n user.author2 -v author2 $testfile || error
+        setfattr -n user.author3 -v author3 $testfile || error
+        [ `getfattr -d -m "^user" $testfile 2> /dev/null | \
+        grep "user" | wc -l` -eq 3 ] || error
+
+	echo "remove xattr..."
+        setfattr -x trusted.name1 $testfile || error
+        getfattr -d -m trusted $testfile 2> /dev/null | \
+        grep "trusted.name1" && error || true
+
+        setfattr -x user.author1 $testfile || error
+        getfattr -d -m user $testfile 2> /dev/null | \
+        grep "user.author1" && error || true
+
+	echo "set lustre specific xattr (should be denied)..."
+	setfattr -n "trusted.lov" -v "invalid value" $testfile || true
+
+	rm -f $testfile
+}
+run_test 102 "user xattr test ====================="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

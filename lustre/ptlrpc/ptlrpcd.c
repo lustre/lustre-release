@@ -155,7 +155,7 @@ static int ptlrpcd(void *arg)
         unsigned long flags;
         ENTRY;
 
-        kportal_daemonize(pc->pc_name);
+        libcfs_daemonize(pc->pc_name);
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);

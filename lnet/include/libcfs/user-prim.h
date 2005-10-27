@@ -154,6 +154,16 @@ int  cfs_timer_is_armed(struct cfs_timer *t);
 cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 #endif
 
+#define in_interrupt()    (0)
+
+static inline void cfs_pause(cfs_duration_t d)
+{
+        struct timespec s;
+        
+        cfs_duration_nsec(d, &s);
+        nanosleep(&s, NULL);
+}
+
 typedef void cfs_psdev_t;
 
 static inline int cfs_psdev_register(cfs_psdev_t *foo)

@@ -266,6 +266,13 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                         if (rec->lrh_index == 0)
                                 GOTO(out, 0); /* no more records */
 
+                        if (rec->lrh_len == 0 || rec->lrh_len >LLOG_CHUNK_SIZE){
+                                CWARN("invalid length %d in llog record for "
+                                      "index %d\n", rec->lrh_len,
+                                rec->lrh_index);
+                                GOTO(out, 0);
+                        }
+
                         if (rec->lrh_index < index) {
                                 CDEBUG(D_OTHER, "skipping lrh_index %d\n",
                                        rec->lrh_index);

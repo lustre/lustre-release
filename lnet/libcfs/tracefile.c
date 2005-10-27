@@ -22,7 +22,7 @@
  */
 
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #define LUSTRE_TRACEFILE_PRIVATE
 #include "tracefile.h"
 
@@ -82,14 +82,12 @@ static void tage_to_tail(struct trace_page *tage, struct list_head *queue)
         list_move_tail(&tage->linkage, queue);
 }
 
-static void LASSERT_TAGE_INVARIANT(struct trace_page *tage)
+static int tage_invariant(struct trace_page *tage)
 {
-        LASSERT(tage != NULL);
-        LASSERT(tage->page != NULL);
-        LASSERTF(tage->used <= CFS_PAGE_SIZE, "used = %u, PAGE_SIZE %lu\n",
-                 tage->used, CFS_PAGE_SIZE);
-        LASSERTF(cfs_page_count(tage->page) > 0, "count = %d\n",
-                 cfs_page_count(tage->page));
+        return (tage != NULL &&
+                tage->page != NULL &&
+                tage->used <= CFS_PAGE_SIZE &&
+                cfs_page_count(tage->page) > 0);
 }
 
 /* return a page that has 'len' bytes left at the end */
@@ -165,8 +163,8 @@ static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
         return tage;
 }
 
-void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
-                       const int line, unsigned long stack, char *format, ...)
+void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
+                      const int line, unsigned long stack, char *format, ...)
 {
         struct trace_cpu_data *tcd;
         struct ptldebug_header header;
@@ -176,10 +174,6 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         va_list       ap;
         unsigned long flags;
 
-#ifdef CRAY_PORTALS
-        if (mask == D_PORTALS && !(portal_debug & D_PORTALS))
-                return;
-#endif
         if (strchr(file, '/'))
                 file = strrchr(file, '/') + 1;
 
@@ -233,15 +227,25 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         tage->used += needed;
         if (tage->used > CFS_PAGE_SIZE)
                 printk(KERN_EMERG
-                       "tage->used == %u in portals_debug_msg\n", tage->used);
+                       "tage->used == %u in libcfs_debug_msg\n", tage->used);
 
  out:
-        if ((mask & (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE)) || portal_printk)
+        if ((mask & (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE)) || libcfs_printk)
                 print_to_console(&header, mask, debug_buf, needed, file, fn);
 
         trace_put_tcd(tcd, flags);
 }
-EXPORT_SYMBOL(portals_debug_msg);
+EXPORT_SYMBOL(libcfs_debug_msg);
+
+void
+libcfs_assertion_failed(char *expr, char *file, 
+                        const char *func, const int line)
+{
+        libcfs_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK,
+                         "ASSERTION(%s) failed\n", expr);
+        LBUG();
+}
+EXPORT_SYMBOL(libcfs_assertion_failed);
 
 static void collect_pages_on_cpu(void *info)
 {
@@ -257,7 +261,7 @@ static void collect_pages_on_cpu(void *info)
         tcd->tcd_cur_pages = 0;
         if (pc->pc_want_daemon_pages) {
                 list_splice(&tcd->tcd_daemon_pages, &pc->pc_pages);
-                CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
+                CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
                 tcd->tcd_cur_daemon_pages = 0;
         }
         spin_unlock(&pc->pc_lock);
@@ -289,7 +293,7 @@ static void put_pages_back_on_cpu(void *info)
         spin_lock(&pc->pc_lock);
         list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
 
-                LASSERT_TAGE_INVARIANT(tage);
+                LASSERT(tage_invariant(tage));
 
                 if (tage->cpu != smp_processor_id())
                         continue;
@@ -326,7 +330,7 @@ static void put_pages_on_daemon_list_on_cpu(void *info)
         spin_lock(&pc->pc_lock);
         list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
 
-                LASSERT_TAGE_INVARIANT(tage);
+                LASSERT(tage_invariant(tage));
 
                 if (tage->cpu != smp_processor_id())
                         continue;
@@ -340,7 +344,7 @@ static void put_pages_on_daemon_list_on_cpu(void *info)
                         LASSERT(!list_empty(&tcd->tcd_daemon_pages));
                         victim = tage_from_list(tcd->tcd_daemon_pages.next);
 
-                        LASSERT_TAGE_INVARIANT(victim);
+                        LASSERT(tage_invariant(victim));
 
                         list_del(&victim->linkage);
                         tage_free(victim);
@@ -366,13 +370,12 @@ void trace_debug_print(void)
 
         spin_lock_init(&pc.pc_lock);
 
-        pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
                 char *p, *file, *fn;
                 cfs_page_t *page;
 
-                LASSERT_TAGE_INVARIANT(tage);
+                LASSERT(tage_invariant(tage));
 
                 page = tage->page;
                 p = cfs_page_address(page);
@@ -407,7 +410,7 @@ int tracefile_dump_all_pages(char *filename)
         down_write(&tracefile_sem);
 
         filp = cfs_filp_open(filename,
-                             O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0666, &rc);
+                             O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0600, &rc);
         if (!filp) {
                 printk(KERN_ERR "LustreError: can't open %s for dump: rc %d\n",
                        filename, rc);
@@ -427,7 +430,7 @@ int tracefile_dump_all_pages(char *filename)
         CFS_MMSPACE_OPEN;
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 
-                LASSERT_TAGE_INVARIANT(tage);
+                LASSERT(tage_invariant(tage));
 
                 rc = cfs_filp_write(filp, cfs_page_address(tage->page),
                                     tage->used, cfs_filp_poff(filp));
@@ -459,11 +462,10 @@ void trace_flush_pages(void)
 
         spin_lock_init(&pc.pc_lock);
 
-        pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 
-                LASSERT_TAGE_INVARIANT(tage);
+                LASSERT(tage_invariant(tage));
 
                 list_del(&tage->linkage);
                 tage_free(tage);
@@ -517,7 +519,7 @@ static int tracefiled(void *arg)
 
         /* we're started late enough that we pick up init's fs context */
         /* this is so broken in uml?  what on earth is going on? */
-        kportal_daemonize("ktracefiled");
+        libcfs_daemonize("ktracefiled");
         reparent_to_init();
 
         spin_lock_init(&pc.pc_lock);
@@ -558,7 +560,7 @@ static int tracefiled(void *arg)
 
                 /* mark the first header, so we can sort in chunks */
                 tage = tage_from_list(pc.pc_pages.next);
-                LASSERT_TAGE_INVARIANT(tage);
+                LASSERT(tage_invariant(tage));
 
                 hdr = cfs_page_address(tage->page);
                 hdr->ph_flags |= PH_FLAG_FIRST_RECORD;
@@ -566,7 +568,7 @@ static int tracefiled(void *arg)
                 list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
                         static loff_t f_pos;
 
-                        LASSERT_TAGE_INVARIANT(tage);
+                        LASSERT(tage_invariant(tage));
 
                         if (f_pos >= tracefile_size)
                                 f_pos = 0;
@@ -659,7 +661,7 @@ static void trace_cleanup_on_cpu(void *info)
         tcd->tcd_shutting_down = 1;
 
         list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
-                LASSERT_TAGE_INVARIANT(tage);
+                LASSERT(tage_invariant(tage));
 
                 list_del(&tage->linkage);
                 tage_free(tage);

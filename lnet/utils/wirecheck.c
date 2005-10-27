@@ -4,8 +4,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <portals/api-support.h>
-#include <portals/lib-types.h>
+#include <lnet/lib-lnet.h>
 
 #include <string.h>
 
@@ -25,14 +24,14 @@ do {                                            \
 
 #define STRINGIFY(a) #a
 
-#define CHECK_DEFINE(a)                                         \
-do {                                                            \
-        printf ("        LASSERT ("#a" == "STRINGIFY(a)");\n"); \
+#define CHECK_DEFINE(a)                                                 \
+do {                                                                    \
+        printf ("        CLASSERT ("#a" == "STRINGIFY(a)");\n");        \
 } while (0)
 
 #define CHECK_VALUE(a)                                  \
 do {                                                    \
-        printf ("        LASSERT ("#a" == %d);\n", a);  \
+        printf ("        CLASSERT ("#a" == %d);\n", a); \
 } while (0)
 
 #define CHECK_MEMBER_OFFSET(s,m)                \
@@ -59,64 +58,64 @@ do {                                            \
 } while (0)
 
 void
-check_ptl_handle_wire (void)
+check_lnet_handle_wire (void)
 {
-        CHECK_STRUCT (ptl_handle_wire_t);
-        CHECK_MEMBER (ptl_handle_wire_t, wh_interface_cookie);
-        CHECK_MEMBER (ptl_handle_wire_t, wh_object_cookie);
+        CHECK_STRUCT (lnet_handle_wire_t);
+        CHECK_MEMBER (lnet_handle_wire_t, wh_interface_cookie);
+        CHECK_MEMBER (lnet_handle_wire_t, wh_object_cookie);
 }
 
 void
-check_ptl_magicversion (void)
+check_lnet_magicversion (void)
 {
-        CHECK_STRUCT (ptl_magicversion_t);
-        CHECK_MEMBER (ptl_magicversion_t, magic);
-        CHECK_MEMBER (ptl_magicversion_t, version_major);
-        CHECK_MEMBER (ptl_magicversion_t, version_minor);
+        CHECK_STRUCT (lnet_magicversion_t);
+        CHECK_MEMBER (lnet_magicversion_t, magic);
+        CHECK_MEMBER (lnet_magicversion_t, version_major);
+        CHECK_MEMBER (lnet_magicversion_t, version_minor);
 }
 
 void
-check_ptl_hdr (void)
+check_lnet_hdr (void)
 {
-        CHECK_STRUCT (ptl_hdr_t);
-        CHECK_MEMBER (ptl_hdr_t, dest_nid);
-        CHECK_MEMBER (ptl_hdr_t, src_nid);
-        CHECK_MEMBER (ptl_hdr_t, dest_pid);
-        CHECK_MEMBER (ptl_hdr_t, src_pid);
-        CHECK_MEMBER (ptl_hdr_t, type);
-        CHECK_MEMBER (ptl_hdr_t, payload_length);
-        CHECK_MEMBER (ptl_hdr_t, msg);
+        CHECK_STRUCT (lnet_hdr_t);
+        CHECK_MEMBER (lnet_hdr_t, dest_nid);
+        CHECK_MEMBER (lnet_hdr_t, src_nid);
+        CHECK_MEMBER (lnet_hdr_t, dest_pid);
+        CHECK_MEMBER (lnet_hdr_t, src_pid);
+        CHECK_MEMBER (lnet_hdr_t, type);
+        CHECK_MEMBER (lnet_hdr_t, payload_length);
+        CHECK_MEMBER (lnet_hdr_t, msg);
 
         BLANK_LINE ();
         COMMENT ("Ack");
-        CHECK_MEMBER (ptl_hdr_t, msg.ack.dst_wmd);
-        CHECK_MEMBER (ptl_hdr_t, msg.ack.match_bits);
-        CHECK_MEMBER (ptl_hdr_t, msg.ack.mlength);
+        CHECK_MEMBER (lnet_hdr_t, msg.ack.dst_wmd);
+        CHECK_MEMBER (lnet_hdr_t, msg.ack.match_bits);
+        CHECK_MEMBER (lnet_hdr_t, msg.ack.mlength);
 
         BLANK_LINE ();
         COMMENT ("Put");
-        CHECK_MEMBER (ptl_hdr_t, msg.put.ack_wmd);
-        CHECK_MEMBER (ptl_hdr_t, msg.put.match_bits);
-        CHECK_MEMBER (ptl_hdr_t, msg.put.hdr_data);
-        CHECK_MEMBER (ptl_hdr_t, msg.put.ptl_index);
-        CHECK_MEMBER (ptl_hdr_t, msg.put.offset);
+        CHECK_MEMBER (lnet_hdr_t, msg.put.ack_wmd);
+        CHECK_MEMBER (lnet_hdr_t, msg.put.match_bits);
+        CHECK_MEMBER (lnet_hdr_t, msg.put.hdr_data);
+        CHECK_MEMBER (lnet_hdr_t, msg.put.ptl_index);
+        CHECK_MEMBER (lnet_hdr_t, msg.put.offset);
 
         BLANK_LINE ();
         COMMENT ("Get");
-        CHECK_MEMBER (ptl_hdr_t, msg.get.return_wmd);
-        CHECK_MEMBER (ptl_hdr_t, msg.get.match_bits);
-        CHECK_MEMBER (ptl_hdr_t, msg.get.ptl_index);
-        CHECK_MEMBER (ptl_hdr_t, msg.get.src_offset);
-        CHECK_MEMBER (ptl_hdr_t, msg.get.sink_length);
+        CHECK_MEMBER (lnet_hdr_t, msg.get.return_wmd);
+        CHECK_MEMBER (lnet_hdr_t, msg.get.match_bits);
+        CHECK_MEMBER (lnet_hdr_t, msg.get.ptl_index);
+        CHECK_MEMBER (lnet_hdr_t, msg.get.src_offset);
+        CHECK_MEMBER (lnet_hdr_t, msg.get.sink_length);
 
         BLANK_LINE ();
         COMMENT ("Reply");
-        CHECK_MEMBER (ptl_hdr_t, msg.reply.dst_wmd);
+        CHECK_MEMBER (lnet_hdr_t, msg.reply.dst_wmd);
 
         BLANK_LINE ();
         COMMENT ("Hello");
-        CHECK_MEMBER (ptl_hdr_t, msg.hello.incarnation);
-        CHECK_MEMBER (ptl_hdr_t, msg.hello.type);
+        CHECK_MEMBER (lnet_hdr_t, msg.hello.incarnation);
+        CHECK_MEMBER (lnet_hdr_t, msg.hello.type);
 }
 
 void
@@ -174,13 +173,13 @@ system_string (char *cmdline, char *str, int len)
 int
 main (int argc, char **argv)
 {
-        char unameinfo[80];
-        char gccinfo[80];
+        char unameinfo[256];
+        char gccinfo[256];
 
         system_string("uname -a", unameinfo, sizeof(unameinfo));
         system_string("gcc -v 2>&1 | tail -1", gccinfo, sizeof(gccinfo));
 
-        printf ("void lib_assert_wire_constants (void)\n"
+        printf ("void lnet_assert_wire_constants (void)\n"
                 "{\n"
                 "        /* Wire protocol assertions generated by 'wirecheck'\n"
                 "         * running on %s\n"
@@ -190,19 +189,23 @@ main (int argc, char **argv)
         BLANK_LINE ();
 
         COMMENT ("Constants...");
-        CHECK_DEFINE (PORTALS_PROTO_MAGIC);
-        CHECK_DEFINE (PORTALS_PROTO_VERSION_MAJOR);
-        CHECK_DEFINE (PORTALS_PROTO_VERSION_MINOR);
 
-        CHECK_VALUE (PTL_MSG_ACK);
-        CHECK_VALUE (PTL_MSG_PUT);
-        CHECK_VALUE (PTL_MSG_GET);
-        CHECK_VALUE (PTL_MSG_REPLY);
-        CHECK_VALUE (PTL_MSG_HELLO);
+        CHECK_DEFINE (LNET_PROTO_OPENIB_MAGIC);
+        CHECK_DEFINE (LNET_PROTO_RA_MAGIC);
 
-        check_ptl_handle_wire ();
-        check_ptl_magicversion ();
-        check_ptl_hdr ();
+        CHECK_DEFINE (LNET_PROTO_TCP_MAGIC);
+        CHECK_DEFINE (LNET_PROTO_TCP_VERSION_MAJOR);
+        CHECK_DEFINE (LNET_PROTO_TCP_VERSION_MINOR);
+
+        CHECK_VALUE (LNET_MSG_ACK);
+        CHECK_VALUE (LNET_MSG_PUT);
+        CHECK_VALUE (LNET_MSG_GET);
+        CHECK_VALUE (LNET_MSG_REPLY);
+        CHECK_VALUE (LNET_MSG_HELLO);
+
+        check_lnet_handle_wire ();
+        check_lnet_magicversion ();
+        check_lnet_hdr ();
 
         printf ("}\n\n");
 

@@ -62,7 +62,7 @@ int ldlm_expired_completion_wait(void *data)
                         ldlm_namespace_dump(D_DLMTRACE,
                                             lock->l_resource->lr_namespace);
                         if (last_dump == 0)
-                                portals_debug_dumplog();
+                                libcfs_debug_dumplog();
                 }
                 RETURN(0);
         }
@@ -151,6 +151,78 @@ noreproc:
         RETURN(0);
 }
 
+/*
+ * ->l_blocking_ast() callback for LDLM locks acquired by server-side OBDs.
+ */
+int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                      void *data, int flag)
+{
+        int do_ast;
+        ENTRY;
+
+        if (flag == LDLM_CB_CANCELING) {
+                /* Don't need to do anything here. */
+                RETURN(0);
+        }
+
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        /* Get this: if ldlm_blocking_ast is racing with intent_policy, such
+         * that ldlm_blocking_ast is called just before intent_policy method
+         * takes the ns_lock, then by the time we get the lock, we might not
+         * be the correct blocking function anymore.  So check, and return
+         * early, if so. */
+        if (lock->l_blocking_ast != ldlm_blocking_ast) {
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                RETURN(0);
+        }
+
+        lock->l_flags |= LDLM_FL_CBPENDING;
+        do_ast = (!lock->l_readers && !lock->l_writers);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
+        if (do_ast) {
+                struct lustre_handle lockh;
+                int rc;
+
+                LDLM_DEBUG(lock, "already unused, calling ldlm_cli_cancel");
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0)
+                        CERROR("ldlm_cli_cancel: %d\n", rc);
+        } else {
+                LDLM_DEBUG(lock, "Lock still has references, will be "
+                           "cancelled later");
+        }
+        RETURN(0);
+}
+
+/*
+ * ->l_glimpse_ast() for DLM extent locks acquired on the server-side. See
+ * comment in filter_intent_policy() on why you may need this.
+ */
+int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
+{
+        /*
+         * Returning -ELDLM_NO_LOCK_DATA actually works, but the reason for
+         * that is rather subtle: with OST-side locking, it may so happen that
+         * _all_ extent locks are held by the OST. If client wants to obtain
+         * current file size it calls ll{,u}_glimpse_size(), and (as locks are
+         * on the server), dummy glimpse callback fires and does
+         * nothing. Client still receives correct file size due to the
+         * following fragment in filter_intent_policy():
+         *
+         * rc = l->l_glimpse_ast(l, NULL); // this will update the LVB
+         * if (rc != 0 && res->lr_namespace->ns_lvbo &&
+         *     res->lr_namespace->ns_lvbo->lvbo_update) {
+         *         res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
+         * }
+         *
+         * that is, after glimpse_ast() fails, filter_lvbo_update() runs, and
+         * returns correct file size to the client.
+         */
+        return -ELDLM_NO_LOCK_DATA;
+}
+
 static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                                   struct ldlm_res_id res_id,
                                   __u32 type,
@@ -182,6 +254,7 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
         lock->l_flags |= LDLM_FL_LOCAL;
+        lock->l_flags |= *flags & LDLM_INHERIT_FLAGS;
         lock->l_lvb_swabber = lvb_swabber;
         if (policy != NULL)
                 memcpy(&lock->l_policy_data, policy, sizeof(*policy));
@@ -347,6 +420,14 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 GOTO(cleanup, rc);
         }
 
+        /*
+         * Liblustre client doesn't get extent locks, except for O_APPEND case
+         * where [0, OBD_OBJECT_EOF] lock is taken, or truncate, where
+         * [i_size, OBD_OBJECT_EOF] lock is taken.
+         */
+        LASSERT(ergo(LIBLUSTRE_CLIENT, type != LDLM_EXTENT ||
+                     policy->l_extent.end == OBD_OBJECT_EOF));
+
         reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
                                    lustre_swab_ldlm_reply);
         if (reply == NULL) {
@@ -360,6 +441,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         memcpy(&lock->l_remote_handle, &reply->lock_handle,
                sizeof(lock->l_remote_handle));
         *flags = reply->lock_flags;
+        lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
 
         CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%x\n",
                lock, reply->lock_handle.cookie, *flags);
@@ -399,7 +481,11 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         LDLM_DEBUG(lock,"client-side enqueue, new policy data");
         }
 
-        if ((*flags) & LDLM_FL_AST_SENT) {
+        if ((*flags) & LDLM_FL_AST_SENT ||
+            /* Cancel extent locks as soon as possible on a liblustre client,
+             * because it cannot handle asynchronous ASTs robustly (see
+             * bug 7311). */
+            (LIBLUSTRE_CLIENT && type == LDLM_EXTENT)) {
                 l_lock(&ns->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
                 l_unlock(&ns->ns_lock);
@@ -570,7 +656,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 /* Set this flag to prevent others from getting new references*/
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
-                local_only = (lock->l_flags & LDLM_FL_LOCAL_ONLY);
+                local_only = (lock->l_flags &
+                              (LDLM_FL_LOCAL_ONLY|LDLM_FL_CANCEL_ON_BLOCK));
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 ldlm_cancel_callback(lock);
 
@@ -606,11 +693,11 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 rc = ptlrpc_queue_wait(req);
 
                 if (rc == ESTALE) {
-                        char str[PTL_NALFMT_SIZE];
                         CERROR("client/server (nid %s) out of sync"
-                               " -- not fatal\n",
-                               ptlrpc_peernid2str(&req->rq_import->
-                                                  imp_connection->c_peer, str));
+                               " -- not fatal, flags %d\n",
+                               libcfs_nid2str(req->rq_import->
+                                              imp_connection->c_peer.nid),
+                               lock->l_flags);
                 } else if (rc == -ETIMEDOUT) {
                         ptlrpc_req_finished(req);
                         GOTO(restart, rc);

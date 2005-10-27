@@ -33,55 +33,38 @@
 #include <netinet/in.h>
 #include <pqtimer.h>
 #include <dispatch.h>
-#include <bridge.h>
-#include <ipmap.h>
+#include <procbridge.h>
 #include <connection.h>
-#include <pthread.h>
 #include <errno.h>
 #ifndef __CYGWIN__
 #include <syscall.h>
 #endif
 
-/* Function:  tcpnal_send
- * Arguments: nal:     pointer to my nal control block
- *            private: unused
- *            cookie:  passed back to the portals library
- *            hdr:     pointer to the portals header
- *            nid:     destination node
- *            pid:     destination process
- *            data:    body of the message
- *            len:     length of the body
- * Returns: zero on success
- *
+/*
  * sends a packet to the peer, after insuring that a connection exists
  */
-ptl_err_t tcpnal_send(lib_nal_t *n,
-                      void *private,
-                      lib_msg_t *cookie,
-                      ptl_hdr_t *hdr,
-                      int type,
-                      ptl_nid_t nid,
-                      ptl_pid_t pid,
-                      unsigned int niov,
-                      struct iovec *iov,
-                      size_t offset,
-                      size_t len)
+int tcpnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 {
+    lnet_hdr_t        *hdr = &lntmsg->msg_hdr;
+    lnet_process_id_t  target = lntmsg->msg_target;
+    unsigned int       niov = lntmsg->msg_niov;
+    struct iovec      *iov = lntmsg->msg_iov;
+    unsigned int       offset = lntmsg->msg_offset;
+    unsigned int       len = lntmsg->msg_len;
+
     connection c;
-    bridge b=(bridge)n->libnal_data;
+    bridge b=(bridge)ni->ni_data;
     struct iovec tiov[257];
     static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
-    ptl_err_t rc = PTL_OK;
+    int rc = 0;
     int   sysrc;
     int   total;
     int   ntiov;
     int i;
 
-    if (!(c=force_tcp_connection((manager)b->lower,
-                                 PNAL_IP(nid,b),
-                                 PNAL_PORT(nid,pid),
+    if (!(c=force_tcp_connection((manager)b->lower, target.nid,
                                  b->local)))
-        return(PTL_FAIL);
+        return(-EIO);
 
     /* TODO: these results should be checked. furthermore, provision
        must be made for the SIGPIPE which is delivered when
@@ -91,10 +74,11 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
        nonstandard */
 
     LASSERT (niov <= 256);
+    LASSERT (len == 0 || iov != NULL);          /* I don't understand kiovs */
 
     tiov[0].iov_base = hdr;
-    tiov[0].iov_len = sizeof(ptl_hdr_t);
-    ntiov = 1 + lib_extract_iov(256, &tiov[1], niov, iov, offset, len);
+    tiov[0].iov_len = sizeof(lnet_hdr_t);
+    ntiov = 1 + lnet_extract_iov(256, &tiov[1], niov, iov, offset, len);
 
     pthread_mutex_lock(&send_lock);
 #if 1
@@ -105,7 +89,7 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
     if (sysrc != total) {
             fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
                      rc, total, errno);
-            rc = PTL_FAIL;
+            rc = -errno;
     }
 #else
     for (i = total = 0; i <= ntiov; i++) {
@@ -114,7 +98,7 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
             if (rc != tiov[i].iov_len) {
                     fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
                              rc, tiov[i].iov_len, errno);
-                    rc = PTL_FAIL;
+                    rc = -errno;
                     break;
             }
             total += rc;
@@ -122,60 +106,46 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
 #endif
 #if 0
     fprintf (stderr, "sent %s total %d in %d frags\n", 
-             hdr->type == PTL_MSG_ACK ? "ACK" :
-             hdr->type == PTL_MSG_PUT ? "PUT" :
-             hdr->type == PTL_MSG_GET ? "GET" :
-             hdr->type == PTL_MSG_REPLY ? "REPLY" :
-             hdr->type == PTL_MSG_HELLO ? "HELLO" : "UNKNOWN",
+             hdr->type == LNET_MSG_ACK ? "ACK" :
+             hdr->type == LNET_MSG_PUT ? "PUT" :
+             hdr->type == LNET_MSG_GET ? "GET" :
+             hdr->type == LNET_MSG_REPLY ? "REPLY" :
+             hdr->type == LNET_MSG_HELLO ? "HELLO" : "UNKNOWN",
              total, niov + 1);
 #endif
     pthread_mutex_unlock(&send_lock);
 
-    if (rc == PTL_OK) {
-            /* NB the NAL only calls lib_finalize() if it returns PTL_OK
+    if (rc == 0) {
+            /* NB the NAL only calls lnet_finalize() if it returns 0
              * from cb_send() */
-            lib_finalize(n, private, cookie, PTL_OK);
+            lnet_finalize(ni, lntmsg, 0);
     }
 
     return(rc);
 }
 
 
-/* Function:  tcpnal_recv
- * Arguments: lib_nal_t *nal:    pointer to my nal control block
- *            void *private:     connection pointer passed through
- *                               lib_parse()
- *            lib_msg_t *cookie: passed back to portals library
- *            user_ptr data:     pointer to the destination buffer
- *            size_t mlen:       length of the body
- *            size_t rlen:       length of data in the network
- * Returns: zero on success
- *
- * blocking read of the requested data. must drain out the
- * difference of mainpulated and requested lengths from the network
- */
-ptl_err_t tcpnal_recv(lib_nal_t *n,
-                      void *private,
-                      lib_msg_t *cookie,
-                      unsigned int niov,
-                      struct iovec *iov,
-                      size_t offset,
-                      size_t mlen,
-                      size_t rlen)
-
+int tcpnal_recv(lnet_ni_t     *ni,
+                void         *private,
+                lnet_msg_t   *cookie,
+                int           delayed,
+                unsigned int  niov,
+                struct iovec *iov,
+                lnet_kiov_t  *kiov,
+                unsigned int  offset,
+                unsigned int  mlen,
+                unsigned int  rlen)
 {
     struct iovec tiov[256];
     int ntiov;
     int i;
 
-    if (!niov)
+    if (mlen == 0)
             goto finalize;
 
-    LASSERT(mlen);
-    LASSERT(rlen);
-    LASSERT(rlen >= mlen);
+    LASSERT(iov != NULL);                       /* I don't understand kiovs */
 
-    ntiov = lib_extract_iov(256, tiov, niov, iov, offset, mlen);
+    ntiov = lnet_extract_iov(256, tiov, niov, iov, offset, mlen);
     
     /* FIXME
      * 1. Is this effecient enough? change to use readv() directly?
@@ -187,7 +157,9 @@ ptl_err_t tcpnal_recv(lib_nal_t *n,
 
 finalize:
     /* FIXME; we always assume success here... */
-    lib_finalize(n, private, cookie, PTL_OK);
+    lnet_finalize(ni, cookie, 0);
+
+    LASSERT(rlen >= mlen);
 
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
@@ -197,7 +169,7 @@ finalize:
         free(trash);
     }
 
-    return(PTL_OK);
+    return(0);
 }
 
 
@@ -213,19 +185,28 @@ finalize:
 static int from_connection(void *a, void *d)
 {
     connection c = d;
-    bridge b = a;
-    ptl_hdr_t hdr;
+    bridge     b = a;
+    lnet_hdr_t hdr;
+    int  rc;
 
     if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
-        lib_parse(b->lib_nal, &hdr, c);
-        /*TODO: check error status*/
-        return(1);
+            /* replace dest_nid,pid (socknal sets its own) */
+            hdr.dest_nid = cpu_to_le64(b->b_ni->ni_nid);
+            hdr.dest_pid = cpu_to_le32(the_lnet.ln_pid);
+            
+            rc = lnet_parse(b->b_ni, &hdr, c->peer_nid, c);
+            if (rc < 0) {
+                    CERROR("Error %d from lnet_parse\n", rc);
+                    return 0;
+            }
+
+            return(1);
     }
     return(0);
 }
 
 
-static void tcpnal_shutdown(bridge b)
+void tcpnal_shutdown(bridge b)
 {
     shutdown_connections(b->lower);
 }
@@ -240,17 +221,11 @@ int tcpnal_init(bridge b)
 {
     manager m;
         
-    b->lib_nal->libnal_send=tcpnal_send;
-    b->lib_nal->libnal_recv=tcpnal_recv;
-    b->shutdown=tcpnal_shutdown;
-    
-    if (!(m=init_connections(PNAL_PORT(b->lib_nal->libnal_ni.ni_pid.nid,
-                                       b->lib_nal->libnal_ni.ni_pid.pid),
-                             from_connection,b))){
+    if (!(m=init_connections(from_connection,b))){
         /* TODO: this needs to shut down the
            newly created junk */
-        return(PTL_NAL_FAILED);
+        return(-ENXIO);
     }
     b->lower=m;
-    return(PTL_OK);
+    return(0);
 }

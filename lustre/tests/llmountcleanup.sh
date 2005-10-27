@@ -48,6 +48,6 @@ if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
 	mv $TMP/debug $TMP/debug-leak.`date +%s`
 	exit 254
 fi
-lsmod | grep portals && echo "modules still loaded" && exit 1
+lsmod | grep lnet && echo "modules still loaded" && exit 1
 
 exit $rc

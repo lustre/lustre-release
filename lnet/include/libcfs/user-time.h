@@ -98,6 +98,11 @@ static inline cfs_duration_t cfs_time_seconds(int seconds)
         return seconds;
 }
 
+static inline time_t cfs_time_current_sec(void)
+{
+        return cfs_time_seconds(cfs_time_current());
+}
+
 static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
 {
         return t1 < t2;

@@ -19,72 +19,64 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "gmnal.h"
+#include "gmlnd.h"
 
 
-/*
- *      -1 indicates default value.
- *      This is 1 thread per cpu
- *      See start_kernel_threads
- */
-int num_rx_threads = -1;
-int num_stxds = 5;
-int gm_port_id = 4;
+static int port = GMNAL_PORT;
+CFS_MODULE_PARM(port, "i", int, 0444,
+                "GM port to use for communications");
 
-int
-gmnal_cmd(struct portals_cfg *pcfg, void *private)
-{
-	gmnal_ni_t	*gmnalni = NULL;
-	char		*name = NULL;
-	int		nid = -2;
-	int		gmid;
-	gm_status_t	gm_status;
+static int ntx = GMNAL_NTX;
+CFS_MODULE_PARM(ntx, "i", int, 0444,
+                "# tx descriptors");
 
+static int ntx_peer = GMNAL_NTX_PEER;
+CFS_MODULE_PARM(ntx_peer, "i", int, 0444,
+                "# concurrent sends per peer");
 
-	CDEBUG(D_TRACE, "gmnal_cmd [%d] private [%p]\n",
-	       pcfg->pcfg_command, private);
-	gmnalni = (gmnal_ni_t*)private;
-	switch(pcfg->pcfg_command) {
-	/*
-	 * just reuse already defined GET_NID. Should define GMNAL version
-	 */
-	case(GMNAL_IOC_GET_GNID):
+static int nlarge_tx_bufs = GMNAL_NLARGE_TX_BUFS;
+CFS_MODULE_PARM(nlarge_tx_bufs, "i", int, 0444,
+                "# large tx message buffers");
 
-		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
-		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
+static int nrx_small = GMNAL_NRX_SMALL;
+CFS_MODULE_PARM(nrx_small, "i", int, 0444,
+                "# small rx message buffers");
 
-		spin_lock(&gmnalni->gmni_gm_lock);
-		//nid = gm_host_name_to_node_id(gmnalni->gmni_port, name);
-                gm_status = gm_host_name_to_node_id_ex(gmnalni->gmni_port, 0,
-                                                       name, &nid);
-		spin_unlock(&gmnalni->gmni_gm_lock);
-                if (gm_status != GM_SUCCESS) {
-                        CDEBUG(D_NET, "gm_host_name_to_node_id_ex(...host %s) "
-                               "failed[%d]\n", name, gm_status);
-                        return (-1);
-                } else
-		        CDEBUG(D_NET, "Local node %s id is [%d]\n", name, nid);
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_status = gm_node_id_to_global_id(gmnalni->gmni_port,
-						    nid, &gmid);
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_NET, "gm_node_id_to_global_id failed[%d]\n",
-			       gm_status);
-			return(-1);
-		}
-		CDEBUG(D_NET, "Global node is is [%u][%x]\n", gmid, gmid);
-		copy_to_user(PCFG_PBUF(pcfg, 2), &gmid, pcfg->pcfg_plen2);
-	break;
-	default:
-		CDEBUG(D_NET, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);
-		pcfg->pcfg_nid2 = -1;
-	}
+static int nrx_large = GMNAL_NRX_LARGE;
+CFS_MODULE_PARM(nrx_large, "i", int, 0444,
+                "# large rx message buffers");
 
+gmnal_tunables_t gmnal_tunables = {
+        .gm_port            = &port,
+        .gm_ntx             = &ntx,
+        .gm_ntx_peer        = &ntx_peer,
+        .gm_nlarge_tx_bufs  = &nlarge_tx_bufs,
+        .gm_nrx_small       = &nrx_small,
+        .gm_nrx_large       = &nrx_large,
+};
 
-	return(0);
-}
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+static ctl_table gmnal_ctl_table[] = {
+	{1, "port", &port,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{2, "ntx", &ntx, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{3, "ntx_peer", &ntx_peer, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{4, "nlarge_tx_bufs", &nlarge_tx_bufs, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{5, "nrx_small", &nrx_small, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{6, "nrx_large", &nrx_large, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{0}
+};
 
+static ctl_table gmnal_top_ctl_table[] = {
+	{207, "gmnal", NULL, 0, 0555, gmnal_ctl_table},
+	{0}
+};
+#endif
 
 static int __init
 gmnal_load(void)
@@ -92,10 +84,16 @@ gmnal_load(void)
 	int	status;
 	CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
 
-
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+        gmnal_tunables.gm_sysctl =
+                register_sysctl_table(gmnal_top_ctl_table, 0);
+        
+        if (gmnal_tunables.gm_sysctl == NULL)
+                CWARN("Can't setup /proc tunables\n");
+#endif
 	CDEBUG(D_NET, "Calling gmnal_init\n");
         status = gmnal_init();
-	if (status == PTL_OK) {
+	if (status == 0) {
 		CDEBUG(D_NET, "Portals GMNAL initialised ok\n");
 	} else {
 		CDEBUG(D_NET, "Portals GMNAL Failed to initialise\n");
@@ -107,25 +105,19 @@ gmnal_load(void)
 	return(0);
 }
 
-
 static void __exit
 gmnal_unload(void)
 {
 	gmnal_fini();
-	return;
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+        if (gmnal_tunables.gm_sysctl != NULL)
+                unregister_sysctl_table(gmnal_tunables.gm_sysctl);
+#endif
 }
 
-
 module_init(gmnal_load);
-
 module_exit(gmnal_unload);
 
-MODULE_PARM(num_rx_threads, "i");
-MODULE_PARM(num_stxds, "i");
-MODULE_PARM(gm_port_id, "i");
-
-MODULE_AUTHOR("Morgan Doyle");
-
-MODULE_DESCRIPTION("A Portals kernel NAL for Myrinet GM.");
-
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_DESCRIPTION("Kernel GM LND v1.01");
 MODULE_LICENSE("GPL");

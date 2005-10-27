@@ -17,7 +17,7 @@ JENSEN_ARCHS=""
 SMP_ARCHS="i686"
 UP_ARCHS=""
 
-# the modules in this kernel do not build with gcc 3.3 or 2.96
+# the modules in this kernel do not build with gcc 4 or 2.96
 for cc in gcc32 gcc33 ; do
     if which $cc >/dev/null 2>/dev/null ; then
         export CC=$cc

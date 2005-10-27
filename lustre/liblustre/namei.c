@@ -29,7 +29,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/queue.h>
 
 #ifdef HAVE_XTIO_H
@@ -104,11 +104,12 @@ void unhook_stale_inode(struct pnode *pno)
 
 void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 {
+        struct inode *inode;
         LASSERT(it);
         LASSERT(pnode);
 
-        if (it && pnode->p_base->pb_ino != NULL) {
-                struct inode *inode = pnode->p_base->pb_ino;
+        inode = pnode->p_base->pb_ino;
+        if (it->d.lustre.it_lock_mode && inode != NULL) {
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%llu/%lu)\n",
                        inode, (long long)llu_i2stat(inode)->st_ino,
                        llu_i2info(inode)->lli_st_generation);
@@ -212,7 +213,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
         RETURN(rc);
 }
 
-int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
+static int llu_pb_revalidate(struct pnode *pnode, int flags,
+                             struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
         struct it_cb_data icbd;
@@ -264,7 +266,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                                 pb->pb_ino, pb->pb_name.name,pb->pb_name.len,0);
 
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, flags,
-                             &req, llu_mdc_blocking_ast);
+                             &req, llu_mdc_blocking_ast,
+                             LDLM_FL_CANCEL_ON_BLOCK);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -430,7 +433,8 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                                 pnode->p_base->pb_name.len, flags);
 
         rc = mdc_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
-                             flags, &req, llu_mdc_blocking_ast);
+                             flags, &req, llu_mdc_blocking_ast,
+                             LDLM_FL_CANCEL_ON_BLOCK);
         if (rc < 0)
                 GOTO(out, rc);
 
@@ -501,11 +505,11 @@ translate_lookup_intent(struct intent *intent, const char *path)
         if (it->it_flags & O_CREAT) {
                 it->it_op |= IT_CREAT;
                 it->it_create_mode = *((int*)intent->int_arg1);
-                /* XXX libsysio hack. For O_EXCL, libsysio depends on
+                /* bug 7278: libsysio hack. For O_EXCL, libsysio depends on
                    this lookup to return negative result, but then there is no
                    way to find out original intent in ll_iop_open(). So we just
                    clear O_EXCL from libsysio flags here to avoid checking
-                   for negative result. O_EXCL would be enforced by MDS. */
+                   for negative result. O_EXCL will be enforced by MDS. */
                 *((int*)intent->int_arg2) &= ~O_EXCL;
         }
 
@@ -551,7 +555,7 @@ int llu_iop_lookup(struct pnode *pnode,
         if (pnode->p_mount->mnt_root == pnode) {
                 struct inode *i = pnode->p_base->pb_ino;
                 *inop = i;
-                return 0;
+                RETURN(0);
         }
 
         if (!pnode->p_base->pb_name.len)
@@ -563,7 +567,7 @@ int llu_iop_lookup(struct pnode *pnode,
         if (llu_pb_revalidate(pnode, 0, it)) {
                 LASSERT(pnode->p_base->pb_ino);
                 *inop = pnode->p_base->pb_ino;
-                RETURN(0);
+                GOTO(out, rc = 0);
         }
 
         rc = llu_lookup_it(pnode->p_parent->p_base->pb_ino, pnode, it, 0);
@@ -574,5 +578,7 @@ int llu_iop_lookup(struct pnode *pnode,
                         *inop = pnode->p_base->pb_ino;
         }
 
+out:
+        liblustre_wait_event(0);
         RETURN(rc);
 }

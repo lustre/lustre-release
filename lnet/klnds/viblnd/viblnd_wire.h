@@ -12,7 +12,7 @@ typedef struct kib_connparams
 
 typedef struct
 {
-        ptl_hdr_t         ibim_hdr;             /* portals header */
+        lnet_hdr_t        ibim_hdr;             /* portals header */
         char              ibim_payload[0];      /* piggy-backed payload */
 } WIRE_ATTR kib_immediate_msg_t;
 
@@ -48,7 +48,7 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         ibprm_hdr;            /* portals header */
+        lnet_hdr_t        ibprm_hdr;            /* portals header */
         __u64             ibprm_cookie;         /* opaque completion cookie */
 } WIRE_ATTR kib_putreq_msg_t;
 
@@ -61,7 +61,7 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         ibgm_hdr;             /* portals header */
+        lnet_hdr_t        ibgm_hdr;             /* portals header */
         __u64             ibgm_cookie;          /* opaque completion cookie */
         kib_rdma_desc_t   ibgm_rd;              /* rdma descriptor */
 } WIRE_ATTR kib_get_msg_t;

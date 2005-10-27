@@ -184,6 +184,9 @@ extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
 #define copy_from_user(kaddr, uaddr, size)	copyin((caddr_t)uaddr, (caddr_t)kaddr, size)
 #define copy_to_user(uaddr, kaddr, size)	copyout((caddr_t)kaddr, (caddr_t)uaddr, size)
 
+#error "need this define"
+#define strncpy_from_user(kaddr, uaddr, size) "something"
+
 #if defined (__ppc__)
 #define mb()  __asm__ __volatile__ ("sync" : : : "memory")
 #define rmb()  __asm__ __volatile__ ("sync" : : : "memory")
