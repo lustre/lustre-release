@@ -2118,7 +2118,6 @@ def doHost(lustreDB, hosts):
     
     elif config.write_conf:
         for_each_profile(node_db, prof_list, doModules)
-        sys_make_devices()
         for_each_profile(node_db, prof_list, doWriteconf)
         for_each_profile(node_db, prof_list, doUnloadModules)
         lustreDB.close()
@@ -2155,7 +2154,6 @@ def doHost(lustreDB, hosts):
             for_each_profile(node_db, prof_list, doSetup)
             return
 
-        sys_make_devices()
         sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
         sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
 
@@ -2477,12 +2475,6 @@ def sys_set_netmem_max(path, max):
         fp = open(path, 'w')
         fp.write('%d\n' %(max))
         fp.close()
-
-def sys_make_devices():
-    if not os.access('/dev/lnet', os.R_OK):
-        run('mknod /dev/lnet c 10 240')
-    if not os.access('/dev/obd', os.R_OK):
-        run('mknod /dev/obd c 10 241')
 
 
 # Add dir to the global PATH, if not already there.

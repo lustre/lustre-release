@@ -2250,7 +2250,8 @@ static void signal_server(int sig)
 int obd_initialize(int argc, char **argv)
 {
         shmem_setup();
-        register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
+        register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH,
+                         OBD_DEV_MAJOR, OBD_DEV_MINOR);
 
         return 0;
 }
