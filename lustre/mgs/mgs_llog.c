@@ -56,9 +56,8 @@ static int record_attach(struct obd_device *obd, struct llog_handle *llh,
         struct lustre_cfg *lcfg;
         int rc;
 
-        lustre_cfg_bufs_reset(&llog_bufs, NULL);
+        lustre_cfg_bufs_reset(&llog_bufs, name);
 
-        lustre_cfg_bufs_set_string(&llog_bufs, 0, name);
         lustre_cfg_bufs_set_string(&llog_bufs, 1, type);
         if (uuid)
                lustre_cfg_bufs_set_string(&llog_bufs, 2, uuid);
@@ -127,15 +126,15 @@ static int record_setup(struct obd_device *obd, struct llog_handle *llh,
         return rc;
 }
 
-static int record_lov_modify_tgts(struct obd_device *obd, 
+static int record_lov_modify_tgts(struct obd_device *obd,
                                   struct llog_handle *llh,
-                                  char *device_name, char *op, char *uuid,
+                                  char *lov_name, char *op, char *ost_uuid,
                                   char *index, char *gen)
 {
         struct lustre_cfg *lcfg;
         int cmd, rc; 
 
-        lustre_cfg_bufs_reset(&llog_bufs, device_name);
+        lustre_cfg_bufs_reset(&llog_bufs, lov_name);
 
         if (!strncmp(op, "add", 4)) {
                 cmd = LCFG_LOV_ADD_OBD;
@@ -143,7 +142,7 @@ static int record_lov_modify_tgts(struct obd_device *obd,
                 cmd = LCFG_LOV_DEL_OBD;
         } 
 
-        lustre_cfg_bufs_set_string(&llog_bufs, 1, uuid);
+        lustre_cfg_bufs_set_string(&llog_bufs, 1, ost_uuid);
         lustre_cfg_bufs_set_string(&llog_bufs, 2, index);
         lustre_cfg_bufs_set_string(&llog_bufs, 3, gen);
 
@@ -156,19 +155,19 @@ static int record_lov_modify_tgts(struct obd_device *obd,
 }                                  
 
 static int record_mount_point(struct obd_device *obd, struct llog_handle *llh,
-                              char *mds_name, char *lov_name, char *mdc_name)
+                              char *profile, char *lov_name, char *mdc_name)
 {
         struct lustre_cfg *lcfg;
-        int cmd, rc; 
+        int rc; 
 
         lustre_cfg_bufs_reset(&llog_bufs, NULL);
 
-        lustre_cfg_bufs_set_string(&llog_bufs, 1, mds_name);
+        lustre_cfg_bufs_set_string(&llog_bufs, 1, profile);
         lustre_cfg_bufs_set_string(&llog_bufs, 2, lov_name);
         if (mdc_name)
                 lustre_cfg_bufs_set_string(&llog_bufs, 2, mdc_name);
 
-        lcfg = lustre_cfg_new(cmd, &llog_bufs);
+        lcfg = lustre_cfg_new(LCFG_MOUNTOPT, &llog_bufs);
 
         rc = mgs_do_record(obd, llh, (void *)lcfg);
 
@@ -281,6 +280,8 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* name)
         struct llog_handle *llh;
         struct system_db *db;
         struct list_head *tmp;
+        char lov_name[64];
+        char uuid[64];
         int i, rc = 0;
 
         mol = find_mgs_open_llog(obd, name);
@@ -305,58 +306,52 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* name)
                 RETURN(rc);
         }
 
-        rc = record_attach(obd, llh, db->mds_name, "lov", db->mds_uuid);
+        /* the same uuid for lov and osc */
+        sprintf(uuid, "%s_lov_UUID", db->mds_name);
+        sprintf(lov_name, "lov_%s", db->mds_name);
+
+        rc = record_attach(obd, llh, lov_name, "lov", uuid);
         if (rc) {
                 CERROR("failed to record log(attach lov) %s: %d\n", name, rc);
                 RETURN(rc);
         }
 
-        rc = record_lov_setup(obd, llh, db->mds_name, &db->lovdesc);
+        rc = record_lov_setup(obd, llh, lov_name, &db->lovdesc);
         if (rc) {
                 CERROR("failed to record log(setup) %s: %d\n", name, rc);
                 RETURN(rc);
         }
 
-        rc = record_add_uuid(obd, llh, db->mds_nid, db->mds_uuid);
-        if (rc) {
-                CERROR("failed to record log(add uuid) %s: %d\n", name, rc);
-                RETURN(rc);
-        }
-
         i = 0;
         list_for_each(tmp, &db->ost_infos) {
-                char   ostuuid[64];
-                char   nodeuuid[64];
-                char   devname[64];
+                char   ost_node_uuid[64];
+                char   osc_name[64];
                 char   index[16];
                 char   *setup_argv[2];
                 struct ost_info *oinfo = list_entry(tmp, struct ost_info,
                                                     osi_list);
 
-                sprintf(ostuuid,  "%s_UUID", oinfo->osi_ostname);
-                sprintf(nodeuuid, "%s_UUID", oinfo->osi_nodename);
+                sprintf(ost_node_uuid, "%s_UUID", oinfo->osi_nodename);
+                sprintf(osc_name,"OSC_%s_%s_%s",
+                        db->mds_nodename, oinfo->osi_ostname, db->mds_name);
 
-                rc = record_add_uuid(obd, llh, oinfo->osi_nid, nodeuuid);
+                rc = record_add_uuid(obd, llh, oinfo->osi_nid, ost_node_uuid);
                 if (rc) {
                         CERROR("failed to record log(add_uuid) %s: %d\n",
                                name, rc);
                         RETURN(rc);
                 }
 
-                rc = record_attach(obd, llh, oinfo->osi_ostname, 
-                                   "osc", db->mds_uuid);
+                rc = record_attach(obd, llh, osc_name, "osc", uuid);
                 if (rc) {
                         CERROR("failed to record log(attach_uuid) %s: %d\n",
                                name, rc);
                         RETURN(rc);
                 }
 
-                sprintf(devname,"OSC_%s_%s_%s",
-                        db->mds_nodename, oinfo->osi_ostname, db->mds_name);
-
-                setup_argv[0] = ostuuid;
-                setup_argv[1] = nodeuuid;
-                rc = record_setup(obd, llh, devname, 2, setup_argv);
+                setup_argv[0] = oinfo->osi_ostuuid;
+                setup_argv[1] = ost_node_uuid;
+                rc = record_setup(obd, llh, osc_name, 2, setup_argv);
                 if (rc) {
                         CERROR("failed to record log(setup) %s: %d\n",
                                name, rc);
@@ -364,8 +359,8 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* name)
                 }
 
                 sprintf(index, "%d", oinfo->osi_stripe_index);
-                rc = record_lov_modify_tgts(obd, llh, db->mds_name, "add", ostuuid,
-                                            index, "1");
+                rc = record_lov_modify_tgts(obd, llh, lov_name, "add",
+                                            oinfo->osi_ostuuid, index, "1");
                 if (rc) {
                         CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
                                name, rc);
@@ -373,13 +368,160 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* name)
                 }
         }
         
-        rc = record_mount_point(obd, llh, db->mds_name, db->lov_name, NULL);
+        rc = record_mount_point(obd, llh, db->mds_name, lov_name, NULL);
         if (rc) {
                 CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
                        name, rc);
                 RETURN(rc);
         }
 
+        rc = mgs_end_record(obd, llh, name);
+        if (rc) {
+                CERROR("failed to record log %s: %d\n", name, rc);
+                RETURN(rc);
+        }
+
+        RETURN(rc);
+}
+
+static int mgs_write_client_llog(struct obd_device *obd, char* name)
+{
+        struct mgs_open_llog *mol;
+        struct llog_handle *llh;
+        struct system_db *db;
+        struct list_head *tmp;
+        char mds_node_uuid[64];
+        char lov_name[64];
+        char uuid[64];
+        char mdc_name[80];
+        char mdc_uuid[64];
+        char   *setup_argv[2];
+        int i, rc = 0;
+
+        mol = find_mgs_open_llog(obd, name);
+        if (!mol)
+                RETURN(-EINVAL);
+
+        db = mol->mol_system_db;
+        if(!db)
+                RETURN(-EINVAL);
+
+        llh = mol->mol_cfg_llh;
+
+        rc = mgs_clear_record(obd, llh, name);
+        if (rc) {
+                CERROR("failed to clear log %s: %d\n", name, rc);
+                RETURN(rc);
+        }
+
+        rc = mgs_start_record(obd, llh, name);
+        if (rc) {
+                CERROR("failed to record log %s: %d\n", name, rc);
+                RETURN(rc);
+        }
+
+
+        /* the same uuid for lov and osc */
+        sprintf(uuid, "%s_lov_UUID", db->mds_name);
+        sprintf(lov_name, "lov_client");
+
+        rc = record_attach(obd, llh, lov_name, "lov", uuid);
+        if (rc) {
+                CERROR("failed to record log(attach lov) %s: %d\n", name, rc);
+                RETURN(rc);
+        }
+
+        rc = record_lov_setup(obd, llh, lov_name, &db->lovdesc);
+        if (rc) {
+                CERROR("failed to record log(setup) %s: %d\n", name, rc);
+                RETURN(rc);
+        }
+
+        i = 0;
+        list_for_each(tmp, &db->ost_infos) {
+                char   ost_node_uuid[64];
+                char   osc_name[64];
+                char   index[16];
+                struct ost_info *oinfo = list_entry(tmp, struct ost_info,
+                                                    osi_list);
+
+                sprintf(ost_node_uuid, "%s_UUID", oinfo->osi_nodename);
+                sprintf(osc_name, "OSC_%s_%s_MNT_client",
+                        db->mds_nodename, oinfo->osi_ostname);
+
+                rc = record_add_uuid(obd, llh, oinfo->osi_nid, ost_node_uuid);
+                if (rc) {
+                        CERROR("failed to record log(add_uuid) %s: %d\n",
+                               name, rc);
+                        RETURN(rc);
+                }
+
+                rc = record_attach(obd, llh, osc_name, "osc", uuid);
+                if (rc) {
+                        CERROR("failed to record log(attach_uuid) %s: %d\n",
+                               name, rc);
+                        RETURN(rc);
+                }
+
+                setup_argv[0] = oinfo->osi_ostuuid;
+                setup_argv[1] = ost_node_uuid;
+                rc = record_setup(obd, llh, osc_name, 2, setup_argv);
+                if (rc) {
+                        CERROR("failed to record log(setup) %s: %d\n",
+                               name, rc);
+                        RETURN(rc);
+                }
+
+                sprintf(index, "%d", oinfo->osi_stripe_index);
+                rc = record_lov_modify_tgts(obd, llh, lov_name, "add",
+                                            oinfo->osi_ostuuid, index, "1");
+                if (rc) {
+                        CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
+                               name, rc);
+                        RETURN(rc);
+                }
+        }
+      
+        sprintf(mds_node_uuid, "%s_UUID", db->mds_nodename);
+        rc = record_add_uuid(obd, llh, db->mds_nid, mds_node_uuid);
+        if (rc) {
+                CERROR("failed to record log(add uuid) %s: %d\n",
+                       name, rc);
+                RETURN(rc);
+        }
+    
+        sprintf(mdc_name, "MDC_%s_%s_MNT_client",
+                db->mds_nodename, db->mds_name);
+        sprintf(mdc_uuid, "MDC_%s_UUID", db->fsname);
+
+        rc = record_attach(obd, llh, mdc_name, "mdc", mdc_uuid);
+        if (rc) {
+                CERROR("failed to record log(attach) %s: %d\n",
+                       name, rc);
+                RETURN(rc);
+        }
+
+        setup_argv[0] = db->mds_uuid;
+        setup_argv[1] = mds_node_uuid;
+        rc = record_setup(obd, llh, mdc_name, 2, setup_argv);
+        if (rc) {
+                CERROR("failed to record log(setup) %s: %d\n",
+                       name, rc);
+                RETURN(rc);
+        }
+
+        rc = record_mount_point(obd, llh, "client", lov_name, NULL);
+        if (rc) {
+                CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
+                       name, rc);
+                RETURN(rc);
+        }
+
+        rc = mgs_end_record(obd, llh, name);
+        if (rc) {
+                CERROR("failed to record log %s: %d\n", name, rc);
+                RETURN(rc);
+        }
         RETURN(rc);
 }
 
@@ -555,7 +697,6 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 lvfs_set_rdonly(lvfs_sbdev(obd->u.mgs.mgs_sb));
                 RETURN(0);
         }
-
 
         case OBD_IOC_LLOG_CHECK:
         case OBD_IOC_LLOG_CANCEL:
