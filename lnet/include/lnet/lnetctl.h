@@ -27,10 +27,16 @@
 
 #define LNET_DEV_ID 0
 #define LNET_DEV_PATH "/dev/lnet"
+#define LNET_DEV_MAJOR 10
+#define LNET_DEV_MINOR 240
 #define OBD_DEV_ID 1
 #define OBD_DEV_PATH "/dev/obd"
+#define OBD_DEV_MAJOR 10
+#define OBD_DEV_MINOR 241
 #define SMFS_DEV_ID  2
 #define SMFS_DEV_PATH "/dev/snapdev"
+#define SMFS_DEV_MAJOR 10
+#define SMFS_DEV_MINOR 242
 
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
@@ -75,7 +81,7 @@ int jt_dbg_panic(int argc, char **argv);
 /* l_ioctl.c */
 typedef int (ioc_handler_t)(int dev_id, unsigned int opc, void *buf);
 void set_ioc_handler(ioc_handler_t *handler);
-int register_ioc_dev(int dev_id, const char * dev_name);
+int register_ioc_dev(int dev_id, const char * dev_name, int major, int minor);
 void unregister_ioc_dev(int dev_id);
 int set_ioctl_dump(char * file);
 int l_ioctl(int dev_id, unsigned int opc, void *buf);

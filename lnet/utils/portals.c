@@ -264,7 +264,8 @@ int g_net_is_compatible (char *cmd, ...)
 
 int ptl_initialize(int argc, char **argv) 
 {
-        register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
+        register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH,
+                         LNET_DEV_MAJOR, LNET_DEV_MINOR);
         return 0;
 }
 
@@ -1204,8 +1205,8 @@ jt_ptl_print_routes (int argc, char **argv)
         struct libcfs_ioctl_data  data;
         int                       rc;
         int                       index;
-        __u32			  net;
-        lnet_nid_t		  nid;
+        __u32                     net;
+        lnet_nid_t                nid;
         unsigned int              hops;
         int                       alive;
 

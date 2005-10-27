@@ -53,7 +53,8 @@ int main(int argc, char **argv)
         if (dbg_initialize(argc, argv) < 0)
                 exit(2);
 
-        register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
+        register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH, 
+                         LNET_DEV_MAJOR, LNET_DEV_MINOR);
 
         Parser_init("debugctl > ", list);
         if (argc > 1)
