@@ -152,7 +152,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         ll_prepare_mdc_op_data(&data, parent->d_inode, NULL, name, len, O_RDWR);
 
-        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PW, &data,
+        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, itp, LCK_PW, &data,
                          &lockh, lmm, lmmsize, ldlm_completion_ast,
                          ll_mdc_blocking_ast, NULL, 0);
         if (rc < 0)
@@ -1481,6 +1481,7 @@ static int ll_have_md_lock(struct dentry *de)
         struct lustre_handle lockh;
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obddev;
+        ldlm_policy_data_t policy = { .l_inodebits = {MDS_INODELOCK_UPDATE}};
         int flags;
         ENTRY;
 
@@ -1493,19 +1494,12 @@ static int ll_have_md_lock(struct dentry *de)
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
-        /* FIXME use LDLM_FL_TEST_LOCK instead */
-        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, LCK_PR, &lockh)) {
-                ldlm_lock_decref(&lockh, LCK_PR);
+        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
+                            &policy, LCK_CR|LCK_CW|LCK_PR, &lockh)) {
                 RETURN(1);
         }
 
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, LCK_PW, &lockh)) {
-                ldlm_lock_decref(&lockh, LCK_PW);
-                RETURN(1);
-        }
         RETURN(0);
 }
 

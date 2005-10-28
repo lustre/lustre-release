@@ -208,6 +208,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         char *xattr = NULL;
         int xattrlen;
         int rc = -EOPNOTSUPP, err = 0;
+        __u64 lockpart;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
@@ -218,8 +219,14 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
-        de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_PW,
+        lockpart = MDS_INODELOCK_UPDATE;
+
+/*
+        de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
                                    &lockh, NULL, 0);
+*/
+        de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
+                                   &lockh, NULL, 0, lockpart);
         if (IS_ERR(de))
                 GOTO(out, rc = PTR_ERR(de));
 
@@ -287,9 +294,9 @@ out_trans:
 out_dput:
         l_dput(de);
         if (rc)
-                ldlm_lock_decref(&lockh, LCK_PW);
+                ldlm_lock_decref(&lockh, LCK_EX);
         else
-                ptlrpc_save_lock (req, &lockh, LCK_PW);
+                ptlrpc_save_lock (req, &lockh, LCK_EX);
 
         if (err && !rc)
                 rc = err;

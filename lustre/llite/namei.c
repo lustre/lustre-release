@@ -150,28 +150,33 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 break;
         case LDLM_CB_CANCELING: {
                 struct inode *inode = ll_inode_from_lock(lock);
+                __u64 bits = lock->l_policy_data.l_inodebits.bits;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
                         break;
-
-                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
-                          &(ll_i2info(inode)->lli_flags));
 
                 if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
                     lock->l_resource->lr_name.name[1] != inode->i_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%u (%p)",
                                    inode->i_ino, inode->i_generation, inode);
                 }
-                if (S_ISDIR(inode->i_mode)) {
+
+                if (bits & MDS_INODELOCK_UPDATE)
+                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
+                                  &(ll_i2info(inode)->lli_flags));
+
+                
+                if (S_ISDIR(inode->i_mode) &&
+                     (bits & MDS_INODELOCK_UPDATE))  {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
-
                         truncate_inode_pages(inode->i_mapping, 0);
                 }
 
                 if (inode->i_sb->s_root &&
-                    inode != inode->i_sb->s_root->d_inode)
+                    inode != inode->i_sb->s_root->d_inode &&
+                    (bits & MDS_INODELOCK_LOOKUP))
                         ll_unhash_aliases(inode);
                 iput(inode);
                 break;
@@ -374,7 +379,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
         RETURN(0);
 }
-
 
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                    struct lookup_intent *it, int lookup_flags)

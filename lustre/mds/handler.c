@@ -163,12 +163,13 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
-                                     char *name, int namelen)
+                                     char *name, int namelen, __u64 lockpart)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
         struct ldlm_res_id res_id = { .name = {0} };
         int flags = 0, rc;
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} }; 
         ENTRY;
 
         if (IS_ERR(de))
@@ -177,7 +178,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         res_id.name[0] = de->d_inode->i_ino;
         res_id.name[1] = de->d_inode->i_generation;
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_PLAIN, NULL, lock_mode, &flags,
+                              LDLM_IBITS, &policy, lock_mode, &flags,
                               ldlm_blocking_ast, ldlm_completion_ast,
                               NULL, NULL, NULL, 0, NULL, lockh);
         if (rc != ELDLM_OK) {
@@ -628,8 +629,8 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         return(rc);
 }
 
-static int mds_getattr_name(int offset, struct ptlrpc_request *req, int flags,
-                            struct lustre_handle *child_lockh)
+static int mds_getattr_name(int offset, struct ptlrpc_request *req,
+                            int child_part, struct lustre_handle *child_lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
@@ -707,13 +708,26 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req, int flags,
         }
 
         if (resent_req == 0) {
+            if (name) {
                 rc = mds_get_parent_child_locked(obd, &obd->u.mds, &body->fid1,
                                                  &parent_lockh, &dparent,
-                                                 LCK_PR, name, namesize,
-                                                 child_lockh, &dchild, LCK_PR,
-                                                 flags);
-                if (rc)
-                        GOTO(cleanup, rc);
+                                                 LCK_CR,
+                                                 MDS_INODELOCK_UPDATE,
+                                                 name, namesize,
+                                                 child_lockh, &dchild, LCK_CR,
+                                                 child_part);
+            } else {
+                        /* For revalidate by fid we always take UPDATE lock */
+                        dchild = mds_fid2locked_dentry(obd, &body->fid2, NULL,
+                                                       LCK_CR, child_lockh,
+                                                       NULL, 0,
+                                                       MDS_INODELOCK_UPDATE);
+                        LASSERT(dchild);
+                        if (IS_ERR(dchild))
+                                rc = PTR_ERR(dchild);
+            }
+            if (rc)
+                    GOTO(cleanup, rc);
         } else {
                 struct ldlm_lock *granted_lock;
                 struct ll_fid child_fid;
@@ -760,8 +774,8 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req, int flags,
         case 2:
                 if (resent_req == 0) {
                         if (rc && dchild->d_inode)
-                                ldlm_lock_decref(child_lockh, LCK_PR);
-                        ldlm_lock_decref(&parent_lockh, LCK_PR);
+                                ldlm_lock_decref(child_lockh, LCK_CR);
+                        ldlm_lock_decref(&parent_lockh, LCK_CR);
                         l_dput(dparent);
                 }
                 l_dput(dchild);
@@ -1206,11 +1220,11 @@ int mds_handle(struct ptlrpc_request *req)
                  * want to cancel.
                  */
                 lockh.cookie = 0;
-                rc = mds_getattr_name(0, req, 0, &lockh);
+                rc = mds_getattr_name(0, req, MDS_INODELOCK_UPDATE, &lockh);
                 /* this non-intent call (from an ioctl) is special */
                 req->rq_status = rc;
                 if (rc == 0 && lockh.cookie)
-                        ldlm_lock_decref(&lockh, LCK_PR);
+                        ldlm_lock_decref(&lockh, LCK_CR);
                 break;
         }
         case MDS_STATFS:
@@ -1882,6 +1896,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_reply *rep;
         struct lustre_handle lockh = { 0 };
         struct ldlm_lock *new_lock = NULL;
+        int getattr_part = MDS_INODELOCK_UPDATE;
         int rc, offset = 2, repsize[4] = {sizeof(struct ldlm_reply),
                                           sizeof(struct mds_body),
                                           mds->mds_max_mdsize,
@@ -1933,13 +1948,15 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 #endif 
                         RETURN(ELDLM_LOCK_ABORTED);
                 break;
-        case IT_GETATTR:
         case IT_LOOKUP:
+                        getattr_part = MDS_INODELOCK_LOOKUP;
+        case IT_GETATTR:
+                        getattr_part |= MDS_INODELOCK_LOOKUP;
         case IT_READDIR:
                 fixup_handle_for_resent_req(req, lock, &new_lock, &lockh);
                 rep->lock_policy_res2 = mds_getattr_name(offset, req,
-                                                     flags & LDLM_INHERIT_FLAGS,
-                                                     &lockh);
+                                                         getattr_part, &lockh);
+
                 /* FIXME: LDLM can set req->rq_status. MDS sets
                    policy_res{1,2} with disposition and status.
                    - replay: returns 0 & req->status is old status

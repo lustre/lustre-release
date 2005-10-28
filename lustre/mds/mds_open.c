@@ -818,7 +818,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct mds_export_data *med;
         struct lustre_handle parent_lockh;
         int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
-        int parent_mode = LCK_PR;
+        int parent_mode = LCK_CR;
         void *handle = NULL;
         struct dentry_params dp;
         uid_t parent_uid = 0;
@@ -878,10 +878,11 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         /* Step 1: Find and lock the parent */
         if (rec->ur_flags & MDS_OPEN_CREAT)
-                parent_mode = LCK_PW;
+                parent_mode = LCK_EX;
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
                                         &parent_lockh, rec->ur_name,
-                                        rec->ur_namelen - 1);
+                                        rec->ur_namelen - 1,
+                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
                 if (rc != -ENOENT) {

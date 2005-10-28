@@ -370,6 +370,29 @@ do {                                                                          \
                        lock->l_pid);                                          \
                 break;                                                        \
         }                                                                     \
+        if (lock->l_resource->lr_type == LDLM_IBITS) {                        \
+                CDEBUG(level, "### " format                                   \
+                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
+                       "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "  \
+                       "flags: %x remote: "LPX64" expref: %d "                \
+                       "pid %u\n" , ## a,                                     \
+                       lock->l_resource->lr_namespace->ns_name,               \
+                       lock, lock->l_handle.h_cookie,                         \
+                       atomic_read (&lock->l_refc),                           \
+                       lock->l_readers, lock->l_writers,                      \
+                       ldlm_lockname[lock->l_granted_mode],                   \
+                       ldlm_lockname[lock->l_req_mode],                       \
+                       lock->l_resource->lr_name.name[0],                     \
+                       lock->l_resource->lr_name.name[1],                     \
+                       lock->l_policy_data.l_inodebits.bits,                  \
+                       atomic_read(&lock->l_resource->lr_refcount),           \
+                       ldlm_typename[lock->l_resource->lr_type],              \
+                       lock->l_flags, lock->l_remote_handle.cookie,           \
+                       lock->l_export ?                                       \
+                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
+                       lock->l_pid);                                          \
+                break;                                                        \
+        }                                                                     \
         {                                                                     \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
