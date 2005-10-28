@@ -355,11 +355,24 @@ depend_kernel()
     rm -f rpm-release
     cp "$CONFIG_FILE" .config
     for oc in oldconfig_nonint silentoldconfig oldconfig ; do
-	if grep -q "$oc" Makefile ; then
-	    $MAKE "$MAKE_CC" $oc || fatal 1 "Error running make oldconfig"
+	if grep -q "^$oc:" Makefile ; then
+	    $MAKE "$MAKE_CC" $oc || fatal 1 "Error running make oldconfig ($oc)"
 	    break
 	fi
     done
+    # now notify if resulting .config is different than $CONFIG_FILE
+    if ! cmp "$CONFIG_FILE" .config; then
+        { cat <<EOF
+The result of a make $oc on file $CONFIG_FILE resulted in a difference when
+compared to $CONFIG_FILE in the following way:
+
+EOF
+        diff -ur "$CONFIG_FILE" .config
+        echo "Please consider updating $CONFIG_FILE."
+	echo -e "\nThe entire new .config file:\n"
+        cat .config
+        } | mail -s "kernel_config change" qa@lists.clusterfs.com
+    fi
     case "$VERSION" in
 	2.6*)
             $MAKE "$MAKE_CC" include/asm
