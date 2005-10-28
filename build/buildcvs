@@ -71,6 +71,12 @@ case "$lustretag" in
 	portalstag="b_ptlrpc_cleanup"
 	;;
 
+    # starting with 1_4_6, we have a tagged lnet too
+    b_release_1_4_[6-9]*)
+        portalstag=$lustretag
+        lnettag=$lustretag
+        ;;
+    
     b_release_*)
 	portalstag=$lustretag
 	;;
