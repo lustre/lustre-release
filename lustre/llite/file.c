@@ -1078,7 +1078,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         rc = mdc_req2lustre_md(req, 1, exp, &md);
         if (rc)
                 GOTO(out, rc);
-        ll_update_inode(f->f_dentry->d_inode, md.body, md.lsm);
+        ll_update_inode(f->f_dentry->d_inode, &md);
 
         rc = ll_local_open(f, &oit, fd);
         if (rc)
@@ -1526,7 +1526,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 struct ptlrpc_request *req = NULL;
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 struct ll_fid fid;
-                unsigned long valid = OBD_MD_FLGETATTR;
+                obd_valid valid = OBD_MD_FLGETATTR;
                 int ealen = 0;
 
                 if (S_ISREG(inode->i_mode)) {
@@ -1591,6 +1591,84 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
 }
 #endif
 
+static
+int lustre_check_acl(struct inode *inode, int mask)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct posix_acl *acl;
+        int rc;
+        ENTRY;
+
+        spin_lock(&lli->lli_lock);
+        acl = posix_acl_dup(lli->lli_posix_acl);
+        spin_unlock(&lli->lli_lock);
+
+        if (!acl)
+                RETURN(-EAGAIN);
+
+        rc = posix_acl_permission(inode, acl, mask);
+        posix_acl_release(acl);
+
+        RETURN(rc);
+}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
+int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+{
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
+               inode->i_ino, inode->i_generation, inode, mask);
+        return generic_permission(inode, mask, lustre_check_acl);
+}
+#else
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+#else
+int ll_inode_permission(struct inode *inode, int mask)
+#endif
+{
+        int mode = inode->i_mode;
+        int rc;
+
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
+               inode->i_ino, inode->i_generation, inode, mask);
+
+        if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
+            (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))
+                return -EROFS;
+        if ((mask & MAY_WRITE) && IS_IMMUTABLE(inode))
+                return -EACCES;
+        if (current->fsuid == inode->i_uid) {
+                mode >>= 6;
+        } else if (1) {
+                if (((mode >> 3) & mask & S_IRWXO) != mask)
+                        goto check_groups;
+                rc = lustre_check_acl(inode, mask);
+                if (rc == -EAGAIN)
+                        goto check_groups;
+                if (rc == -EACCES)
+                        goto check_capabilities;
+                return rc;
+        } else {
+check_groups:
+                if (in_group_p(inode->i_gid))
+                        mode >>= 3;
+        }
+        if ((mode & mask & S_IRWXO) == mask)
+                return 0;
+
+check_capabilities:
+        if (!(mask & MAY_EXEC) ||
+            (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
+                if (capable(CAP_DAC_OVERRIDE))
+                        return 0;
+
+        if (capable(CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
+            (S_ISDIR(inode->i_mode) && !(mask & MAY_WRITE))))
+                return 0;
+        return -EACCES;
+}
+#endif
+
 struct file_operations ll_file_operations = {
         .read           = ll_file_read,
         .write          = ll_file_write,
@@ -1631,6 +1709,7 @@ struct inode_operations ll_file_inode_operations = {
 #else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
+        .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,
         .listxattr      = ll_listxattr,

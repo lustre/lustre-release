@@ -811,6 +811,52 @@ struct file_lock {
         result;                                 \
 })
 
+/* ACL */
+struct posix_acl_entry {
+        short                   e_tag;
+        unsigned short          e_perm;
+        unsigned int            e_id;
+};
+
+struct posix_acl {
+        atomic_t                a_refcount;
+        unsigned int            a_count;
+        struct posix_acl_entry  a_entries[0];
+};
+
+typedef struct {
+        __u16           e_tag;
+        __u16           e_perm;
+        __u32           e_id;
+} xattr_acl_entry;
+
+typedef struct {
+        __u32           a_version;
+        xattr_acl_entry a_entries[0];
+} xattr_acl_header;
+
+static inline size_t xattr_acl_size(int count)
+{
+        return sizeof(xattr_acl_header) + count * sizeof(xattr_acl_entry);
+}
+
+static inline
+struct posix_acl * posix_acl_from_xattr(const void *value, size_t size)
+{
+        return NULL;
+}
+
+static inline
+int posix_acl_valid(const struct posix_acl *acl)
+{
+        return 0;
+}
+
+static inline
+void posix_acl_release(struct posix_acl *acl)
+{
+}
+
 #ifndef ENOTSUPP
 #define ENOTSUPP ENOTSUP
 #endif

@@ -33,5 +33,5 @@ ${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt $@ $conf_opt || exit 2
 [ $DEBUG ] && sysctl -w lnet.debug=$DEBUG
 
 if [ "$MOUNT2" ]; then
-	$LLMOUNT -v `hostname`:/mds1/client $MOUNT2 || exit 3
+	$LLMOUNT -v -o user_xattr,acl `hostname`:/mds1/client $MOUNT2 || exit 3
 fi

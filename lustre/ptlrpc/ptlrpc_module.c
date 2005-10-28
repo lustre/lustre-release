@@ -149,6 +149,7 @@ EXPORT_SYMBOL(ptlrpc_service_health_check);
 EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
+EXPORT_SYMBOL(lustre_shrink_reply);
 EXPORT_SYMBOL(lustre_free_reply_state);
 EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);

@@ -812,6 +812,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_body, eadatasize));
         LASSERTF((int)sizeof(((struct mds_body *)0)->eadatasize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->eadatasize));
+        LASSERTF((int)offsetof(struct mds_body, aclsize) == 152, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, aclsize));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->aclsize) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->aclsize));
         LASSERTF(FMODE_READ == 1, " found %lld\n",
                  (long long)FMODE_READ);
         LASSERTF(FMODE_WRITE == 2, " found %lld\n",

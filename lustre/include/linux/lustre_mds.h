@@ -13,6 +13,7 @@
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/dcache.h>
+# include <linux/xattr_acl.h>
 #endif
 #include <linux/lustre_handles.h>
 #include <libcfs/kp30.h>
@@ -36,8 +37,9 @@ struct ll_file_data;
 #define LUSTRE_MDC_NAME "mdc"
 
 struct lustre_md {
-        struct mds_body *body;
-        struct lov_stripe_md *lsm;
+        struct mds_body         *body;
+        struct lov_stripe_md    *lsm;
+        struct posix_acl        *posix_acl;
 };
 
 struct mdc_op_data {
@@ -126,6 +128,11 @@ struct mds_file_data {
         struct dentry        *mfd_dentry;
 };
 
+/* ACL */
+#define LUSTRE_POSIX_ACL_MAX_ENTRIES    (32)
+#define LUSTRE_POSIX_ACL_MAX_SIZE       \
+                (xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
+
 /* mds/mds_reint.c */
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
@@ -176,6 +183,7 @@ int mdc_enqueue(struct obd_export *exp,
 int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp);
 int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                       struct obd_export *exp, struct lustre_md *md);
+void mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
 int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
 int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 obd_valid valid, unsigned int ea_size,

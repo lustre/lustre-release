@@ -2762,6 +2762,44 @@ test_102() {
 }
 run_test 102 "user xattr test ====================="
 
+run_acl_subtest()
+{
+    $SAVE_PWD/acl/run $SAVE_PWD/acl/$1.test
+    return $?
+}
+
+test_103 () {
+    SAVE_UMASK=`umask`
+    umask 0022
+    cd $DIR
+
+    [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
+    [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
+
+    echo "performing cp ..."
+    run_acl_subtest cp || error
+    echo "performing getfacl-noacl..."
+    run_acl_subtest getfacl-noacl || error
+    echo "performing misc..."
+    run_acl_subtest misc || error
+#    XXX add back permission test when we support supplementary groups.
+#    echo "performing permissions..."
+#    run_acl_subtest permissions || error
+    echo "performing setfacl..."
+    run_acl_subtest setfacl || error
+
+    # inheritance test got from HP
+    echo "performing inheritance..."
+    cp $SAVE_PWD/acl/make-tree . || error
+    chmod +x make-tree || error
+    run_acl_subtest inheritance || error
+    rm -f make-tree
+
+    cd $SAVED_PWD
+    umask $SAVE_UMASK
+}
+run_test 103 "==============acl test ============="
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

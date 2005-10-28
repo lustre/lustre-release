@@ -720,6 +720,8 @@ int lustre_pack_request(struct ptlrpc_request *, int count, int *lens,
                         char **bufs);
 int lustre_pack_reply(struct ptlrpc_request *, int count, int *lens,
                       char **bufs);
+void lustre_shrink_reply(struct ptlrpc_request *req,
+                         int segment, unsigned int newlen, int move_data);
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs);
 int lustre_msg_size(int count, int *lengths);
 int lustre_unpack_msg(struct lustre_msg *m, int len);

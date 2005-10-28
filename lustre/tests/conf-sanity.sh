@@ -226,7 +226,7 @@ test_5b() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
+	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -247,7 +247,7 @@ test_5c() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && return 1
+	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && return 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -268,7 +268,7 @@ test_5d() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE $mds_HOST://mds_svc/client_facet $MOUNT  || return 1 
+	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST://mds_svc/client_facet $MOUNT  || return 1 
 
 	umount $MOUNT || return 2
 	# cleanup client modules

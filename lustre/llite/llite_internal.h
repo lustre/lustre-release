@@ -76,6 +76,9 @@ struct ll_inode_info {
         struct file_operations *ll_save_ffop;
         struct file_operations *ll_save_wfop;
         struct file_operations *ll_save_wrfop;
+
+        struct posix_acl       *lli_posix_acl;
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
@@ -128,10 +131,11 @@ struct ll_ra_info {
 };
 
 /* flags for sbi->ll_flags */
-#define LL_SBI_NOLCK            0x1 /* DLM locking disabled (directio-only) */
-#define LL_SBI_CHECKSUM         0x2 /* checksum each page as it's written */
-#define LL_SBI_FLOCK            0x4
-#define LL_SBI_USER_XATTR       0x8 /* support user xattr */
+#define LL_SBI_NOLCK            0x01 /* DLM locking disabled (directio-only) */
+#define LL_SBI_CHECKSUM         0x02 /* checksum each page as it's written */
+#define LL_SBI_FLOCK            0x04
+#define LL_SBI_USER_XATTR       0x08 /* support user xattr */
+#define LL_SBI_ACL              0x10 /* support ACL */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -371,6 +375,11 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 #endif
 struct ll_file_data *ll_file_data_get(void);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
+#else
+int ll_inode_permission(struct inode *inode, int mask);
+#endif
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);
@@ -398,8 +407,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr);
 int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                        unsigned long maxage);
-void ll_update_inode(struct inode *inode, struct mds_body *body,
-                     struct lov_stripe_md *lsm);
+void ll_update_inode(struct inode *inode, struct lustre_md *md);
 void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
@@ -545,9 +553,9 @@ static inline __u64 ll_file_maxbytes(struct inode *inode)
 /* llite/xattr.c */
 int ll_setxattr(struct dentry *dentry, const char *name,
                 const void *value, size_t size, int flags);
-int ll_getxattr(struct dentry *dentry, const char *name,
-                void *buffer, size_t size);
-int ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
+ssize_t ll_getxattr(struct dentry *dentry, const char *name,
+                    void *buffer, size_t size);
+ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
 int ll_removexattr(struct dentry *dentry, const char *name);
 
 #endif /* LLITE_INTERNAL_H */

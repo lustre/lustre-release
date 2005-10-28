@@ -243,5 +243,6 @@ struct lustre_mount_data {
 
 #define LMD_FLG_FLOCK           0x0001
 #define LMD_FLG_USER_XATTR      0x0002
+#define LMD_FLG_ACL             0x0004
 
 #endif // _LUSTRE_CFG_H

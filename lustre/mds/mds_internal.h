@@ -201,6 +201,9 @@ int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
+int mds_pack_acl(struct mds_export_data *med, struct inode *inode,
+                 struct lustre_msg *repmsg, struct mds_body *repbody,
+                 int repoff);
 
 /* mds/mds_xattr.c */
 int mds_setxattr(struct ptlrpc_request *req);

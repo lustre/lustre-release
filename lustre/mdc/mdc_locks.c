@@ -244,16 +244,14 @@ int mdc_enqueue(struct obd_export *exp,
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
         int size[5] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
         int rc, flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
-        int repsize[4] = {sizeof(struct ldlm_reply),
-                          sizeof(struct mds_body),
-                          obddev->u.cli.cl_max_mds_easize,
-                          obddev->u.cli.cl_max_mds_cookiesize};
+        int repbufcnt = 3, repsize[4] = {sizeof(struct ldlm_reply),
+                                         sizeof(struct mds_body),
+                                         obddev->u.cli.cl_max_mds_easize};
         struct ldlm_reply *dlm_rep;
         struct ldlm_intent *lit;
         struct ldlm_request *lockreq;
         void *eadata;
         unsigned long irqflags;
-        int   reply_buffers = 0;
         ENTRY;
 
 //        LDLM_DEBUG_NOLOCK("mdsintent=%s,name=%s,dir=%lu",
@@ -291,9 +289,8 @@ int mdc_enqueue(struct obd_export *exp,
                 /* pack the intended request */
                 mdc_open_pack(req, 2, data, it->it_create_mode, 0,
                               it->it_flags, lmm, lmmsize);
-                /* get ready for the reply */
-                reply_buffers = 3;
-                req->rq_replen = lustre_msg_size(3, repsize);
+
+                repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
         } else if (it->it_op & IT_UNLINK) {
                 size[2] = sizeof(struct mds_rec_unlink);
                 size[3] = data->namelen + 1;
@@ -309,11 +306,11 @@ int mdc_enqueue(struct obd_export *exp,
 
                 /* pack the intended request */
                 mdc_unlink_pack(req, 2, data);
-                /* get ready for the reply */
-                reply_buffers = 4;
-                req->rq_replen = lustre_msg_size(4, repsize);
+
+                repsize[repbufcnt++] = obddev->u.cli.cl_max_mds_cookiesize;
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
-                obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE;
+                obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
+                                  OBD_MD_FLACL;
                 size[2] = sizeof(struct mds_body);
                 size[3] = data->namelen + 1;
 
@@ -331,9 +328,8 @@ int mdc_enqueue(struct obd_export *exp,
 
                 /* pack the intended request */
                 mdc_getattr_pack(req, valid, 2, it->it_flags, data);
-                /* get ready for the reply */
-                reply_buffers = 3;
-                req->rq_replen = lustre_msg_size(3, repsize);
+
+                repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
         } else if (it->it_op == IT_READDIR) {
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
@@ -341,13 +337,14 @@ int mdc_enqueue(struct obd_export *exp,
                 if (!req)
                         RETURN(-ENOMEM);
 
-                /* get ready for the reply */
-                reply_buffers = 1;
-                req->rq_replen = lustre_msg_size(1, repsize);
-        }  else {
+                repbufcnt = 1;
+        } else {
                 LBUG();
                 RETURN(-EINVAL);
         }
+
+        /* get ready for the reply */
+        req->rq_replen = lustre_msg_size(repbufcnt, repsize);
 
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         rc = ldlm_cli_enqueue(exp, req, obddev->obd_namespace, res_id,
@@ -407,8 +404,8 @@ int mdc_enqueue(struct obd_export *exp,
                   it->it_op,it->d.lustre.it_disposition,it->d.lustre.it_status);
 
         /* We know what to expect, so we do any byte flipping required here */
-        LASSERT(reply_buffers == 4 || reply_buffers == 3 || reply_buffers == 1);
-        if (reply_buffers >= 3) {
+        LASSERT(repbufcnt == 4 || repbufcnt == 1);
+        if (repbufcnt == 4) {
                 struct mds_body *body;
 
                 body = lustre_swab_repbuf(req, 1, sizeof (*body),

@@ -85,6 +85,7 @@ stop() {
 }
 
 zconf_mount() {
+    local OPTIONS
     client=$1
     mnt=$2
 
@@ -92,17 +93,17 @@ zconf_mount() {
 
     # Only supply -o to mount if we have options
     if [ -n "$MOUNTOPT" ]; then
-        MOUNTOPT="-o $MOUNTOPT"
+        OPTIONS="-o $MOUNTOPT"
     fi
 
     if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre $MOUNTOPT \
+	do_node $client mount -t lustre $OPTIONS \
 		`facet_nid mds`:/mds_svc/client_facet $mnt || return 1
     else
 	# this is so cheating
 	do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG > \
 		/dev/null || return 2
-	do_node $client $LLMOUNT $MOUNTOPT \
+	do_node $client $LLMOUNT $OPTIONS \
 		`facet_nid mds`:/mds_svc/client_facet $mnt || return 4
     fi
 
@@ -346,20 +347,24 @@ add_facet() {
 }
 
 add_mds() {
-    facet=$1
+    local MOUNT_OPTS
+    local facet=$1
     shift
     rm -f ${facet}active
     add_facet $facet
+    [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
     do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc \
-    	--fstype $FSTYPE $* $MDSOPT
+    	--fstype $FSTYPE $* $MOUNT_OPTS
 }
 
 add_mdsfailover() {
-    facet=$1
+    local MOUNT_OPTS
+    local facet=$1
     shift
     add_facet ${facet}failover  --lustre_upcall $UPCALL
+    [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
     do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc \
-    	--fstype $FSTYPE $* $MDSOPT
+    	--fstype $FSTYPE $* $MOUNT_OPTS
 }
 
 add_ost() {
@@ -387,11 +392,13 @@ add_lov() {
 }
 
 add_client() {
-    facet=$1
+    local MOUNT_OPTS
+    local facet=$1
     mds=$2
     shift; shift
+    [ "x$CLIENTOPT" != "x" ] && MOUNT_OPTS="--clientoptions $CLIENTOPT"
     add_facet $facet --lustre_upcall $UPCALL
-    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $* $CLIENTOPT
+    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $* $MOUNT_OPTS
 }
 
 

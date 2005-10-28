@@ -554,6 +554,18 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
         }
 
+        lustre_shrink_reply(req, 2, body->eadatasize, 0);
+
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) {
+                int acl_off = body->eadatasize ? 3 : 2;
+
+                rc = mds_pack_acl(med, dchild->d_inode, req->rq_repmsg,
+                                  body, acl_off);
+                lustre_shrink_reply(req, acl_off, body->aclsize, 0);
+                if (!req->rq_status && rc)
+                        req->rq_status = rc;
+        }
+
         /* If we have -EEXIST as the status, and we were asked to create
          * exclusively, we can tell we failed because the file already existed.
          */
@@ -686,6 +698,19 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                                 OBD_MD_FLATIME | OBD_MD_FLMTIME);
         }
         up(&dchild->d_inode->i_sem);
+
+        lustre_shrink_reply(req, 2, body->eadatasize, 0);
+
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) {
+                int acl_off = body->eadatasize ? 3 : 2;
+
+                rc = mds_pack_acl(&req->rq_export->exp_mds_data,
+                                  dchild->d_inode, req->rq_repmsg,
+                                  body, acl_off);
+                lustre_shrink_reply(req, acl_off, body->aclsize, 0);
+                if (rc)
+                        RETURN(rc);
+        }
 
         intent_set_disposition(rep, DISP_OPEN_OPEN);
         mfd = mds_dentry_open(dchild, mds->mds_vfsmnt, flags, req);

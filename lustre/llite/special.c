@@ -332,6 +332,7 @@ struct inode_operations ll_special_inode_operations = {
 #else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
+        .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,
         .listxattr      = ll_listxattr,

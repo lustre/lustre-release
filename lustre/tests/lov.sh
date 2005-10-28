@@ -27,7 +27,8 @@ ECHO_CLIENT=${ECHO_CLIENT:-}
 STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-$((OSTCOUNT -1))}
 
-CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
+MDS_MOUNT_OPTS="user_xattr,acl,${MDS_MOUNT_OPTS:-""}"
+CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
 
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}
@@ -42,8 +43,11 @@ ${LMC} --add net --node $HOSTNAME --nid $HOSTNAME --nettype $NETTYPE || exit 11
 ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
 # configure mds server
+[ "x$MDS_MOUNT_OPTS" != "x" ] &&
+    MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
+
 ${LMC} --format --add mds --node $HOSTNAME --mds mds1 --fstype $FSTYPE \
-	--dev $MDSDEV --size $MDSSIZE $MDSOPT || exit 20
+	--dev $MDSDEV $MDS_MOUNT_OPTS --size $MDSSIZE $MDSOPT || exit 20
 
 # configure ost
 ${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \

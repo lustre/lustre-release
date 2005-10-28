@@ -22,7 +22,8 @@ OSTFAILOVER=${OSTFAILOVER:-}
 MOUNT=${MOUNT:-/mnt/lustre}
 FSTYPE=${FSTYPE:-ext3}
 
-CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
+MDS_MOUNT_OPTS="user_xattr,acl,${MDS_MOUNT_OPTS:-""}"
+CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
 
 NETTYPE=${NETTYPE:-tcp}
 NIDTYPE=${NIDTYPE:-$NETTYPE}
@@ -90,9 +91,12 @@ for NODE in `echo $MDSNODE $OSTNODES $CLIENTS | tr -s " " "\n" | sort -u`; do
 done
 
 # configure mds server
+[ "x$MDS_MOUNT_OPTS" != "x" ] &&
+    MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
+
 echo; echo "adding MDS on: $MDSNODE"
 ${LMC} -m $config --add mds --node $MDSNODE --mds mds1 --fstype $FSTYPE \
-	--dev $MDSDEV --size $MDSSIZE $MDSOPT || exit 10
+	--dev $MDSDEV $MDS_MOUNT_OPTS --size $MDSSIZE $MDSOPT || exit 10
 
 # configure ost
 ${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \

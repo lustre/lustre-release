@@ -361,7 +361,6 @@ struct mds_obd {
         int                              mds_has_lov_desc;
         struct lov_desc                  mds_lov_desc;
         obd_id                          *mds_lov_objids;
-        int                              mds_lov_objids_valid;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
         unsigned long                   *mds_client_bitmap;
@@ -371,6 +370,9 @@ struct mds_obd {
         struct lustre_quota_ctxt         mds_quota_ctxt;
         atomic_t                         mds_quotachecking;
         struct semaphore                 mds_health_sem;
+        unsigned long                    mds_lov_objids_valid:1,
+                                         mds_fl_user_xattr:1,
+                                         mds_fl_acl:1;
 };
 
 struct echo_obd {

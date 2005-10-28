@@ -155,6 +155,10 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         if (sb->s_flags & MS_RDONLY)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
+        if (sbi->ll_flags & LL_SBI_USER_XATTR)
+                data->ocd_connect_flags |= OBD_CONNECT_USER_XATTR;
+        if (sbi->ll_flags & LL_SBI_ACL)
+                data->ocd_connect_flags |= OBD_CONNECT_ACL;
 
         if (sbi->ll_flags & LL_SBI_FLOCK) {
                 sbi->ll_fop = &ll_file_operations_flock;
@@ -178,12 +182,28 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if (err)
                 GOTO(out_mdc, err);
 
+        /* async connect is surely finished by now */
+        *data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
+
         LASSERT(osfs.os_bsize);
         sb->s_blocksize = osfs.os_bsize;
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
         sbi->ll_namelen = osfs.os_namelen;
+
+        if ((sbi->ll_flags & LL_SBI_USER_XATTR) &&
+            !(data->ocd_connect_flags & OBD_CONNECT_USER_XATTR)) {
+                LCONSOLE_INFO("Disabling user_xattr feature because "
+                              "it is not supported on the server\n"); 
+                sbi->ll_flags &= ~LL_SBI_USER_XATTR;
+        }
+
+        if (((sbi->ll_flags & LL_SBI_ACL) == 0) !=
+            ((data->ocd_connect_flags & OBD_CONNECT_ACL) == 0)) {
+                CERROR("Server return unexpected ACL flags\n");
+                GOTO(out_mdc, err = -EBADE);
+        }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* We set sb->s_dev equal on all lustre clients in order to support
@@ -241,7 +261,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         /* make root inode
          * XXX: move this to after cbd setup? */
         err = mdc_getattr(sbi->ll_mdc_exp, &rootfid,
-                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
+                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLACL,
+                          0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_osc, err);
@@ -260,8 +281,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         ptlrpc_req_finished(request);
 
         if (root == NULL || is_bad_inode(root)) {
-                if (md.lsm != NULL)
-                        obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
+                mdc_free_lustre_md(sbi->ll_osc_exp, &md);
                 CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_root, err = -EBADF);
         }
@@ -462,6 +482,16 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
                         *flags &= ~tmp;
                         continue;
                 }
+                tmp = ll_set_opt("acl", this_char, LL_SBI_ACL);
+                if (tmp) {
+                        *flags |= tmp;
+                        continue;
+                }
+                tmp = ll_set_opt("noacl", this_char, LL_SBI_ACL);
+                if (tmp) {
+                        *flags &= ~tmp;
+                        continue;
+                }
         }
         EXIT;
 }
@@ -529,6 +559,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         class_uuid_t uuid;
         struct obd_uuid mdc_uuid;
         struct llog_ctxt *ctxt;
+        struct obd_connect_data *ocd = NULL;
         int rc = 0;
         int err;
         ENTRY;
@@ -549,7 +580,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (rc < 0)
-                GOTO(out, err);
+                GOTO(out, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
@@ -586,7 +617,14 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         if (rc)
                 GOTO(out_cleanup, rc);
 
-        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /* ocd */);
+        if (lmd->lmd_flags & LMD_FLG_ACL) {
+                OBD_ALLOC(ocd, sizeof(*ocd));
+                if (ocd == NULL)
+                        GOTO(out_cleanup, rc = -ENOMEM);
+                ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
+        }
+
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, rc);
                 GOTO(out_cleanup, rc);
@@ -650,7 +688,8 @@ out_del_uuid:
                 CERROR("del MDC UUID failed: rc = %d\n", err);
 
 out:
-
+        if (ocd)
+                OBD_FREE(ocd, sizeof(*ocd));
         RETURN(rc);
 }
 
@@ -702,6 +741,8 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                         sbi->ll_flags |= LL_SBI_FLOCK;
                 if (lmd->lmd_flags & LMD_FLG_USER_XATTR)
                         sbi->ll_flags |= LL_SBI_USER_XATTR;
+                if (lmd->lmd_flags & LMD_FLG_ACL)
+                        sbi->ll_flags |= LL_SBI_ACL;
 
                 /* generate a string unique to this super, let's try
                  the address of the super itself.*/
@@ -884,6 +925,13 @@ void ll_clear_inode(struct inode *inode)
                          strlen(lli->lli_symlink_name) + 1);
                 lli->lli_symlink_name = NULL;
         }
+
+        if (lli->lli_posix_acl) {
+                LASSERT(atomic_read(&lli->lli_posix_acl->a_refcount) == 1);
+                posix_acl_release(lli->lli_posix_acl);
+                lli->lli_posix_acl = NULL;
+        }
+
         lli->lli_inode_magic = LLI_INODE_DEAD;
 
         EXIT;
@@ -987,7 +1035,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * (bug 6196) */
                 inode_setattr(inode, attr);
 
-                ll_update_inode(inode, md.body, md.lsm);
+                ll_update_inode(inode, &md);
                 ptlrpc_req_finished(request);
 
                 if (!lsm || !S_ISREG(inode->i_mode)) {
@@ -1201,10 +1249,11 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
         up(&lli->lli_size_sem);
 }
 
-void ll_update_inode(struct inode *inode, struct mds_body *body,
-                     struct lov_stripe_md *lsm)
+void ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct mds_body *body = md->body;
+        struct lov_stripe_md *lsm = md->lsm;
 
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
@@ -1241,6 +1290,15 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
         } else {
                 inode->i_blksize = max(inode->i_blksize,
                                        inode->i_sb->s_blocksize);
+        }
+
+        LASSERT(!md->posix_acl || (body->valid & OBD_MD_FLACL));
+        if (body->valid & OBD_MD_FLACL) {
+                spin_lock(&lli->lli_lock);
+                if (lli->lli_posix_acl)
+                        posix_acl_release(lli->lli_posix_acl);
+                lli->lli_posix_acl = md->posix_acl;
+                spin_unlock(&lli->lli_lock);
         }
 
         if (body->valid & OBD_MD_FLID)
@@ -1317,7 +1375,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         LTIME_S(inode->i_atime) = 0;
         LTIME_S(inode->i_ctime) = 0;
         inode->i_rdev = 0;
-        ll_update_inode(inode, md->body, md->lsm);
+        ll_update_inode(inode, md);
 
         /* OIDEBUG(inode); */
 
@@ -1534,14 +1592,12 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                 RETURN(rc);
 
         if (*inode) {
-                ll_update_inode(*inode, md.body, md.lsm);
+                ll_update_inode(*inode, &md);
         } else {
                 LASSERT(sb);
                 *inode = ll_iget(sb, md.body->ino, &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
-                        /* free the lsm if we allocated one above */
-                        if (md.lsm != NULL)
-                                obd_free_memmd(exp, &md.lsm);
+                        mdc_free_lustre_md(exp, &md);
                         rc = -ENOMEM;
                         CERROR("new_inode -fatal: rc %d\n", rc);
                 }

@@ -207,10 +207,14 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 
 /* Connect flags */
 
-#define OBD_CONNECT_RDONLY       0x1ULL
-#define OBD_CONNECT_SRVLOCK     0x10ULL /* server takes locks for client */
+#define OBD_CONNECT_RDONLY      0x0001ULL
+#define OBD_CONNECT_SRVLOCK     0x0010ULL /* server takes locks for client */
+#define OBD_CONNECT_ACL         0x0080ULL
+#define OBD_CONNECT_USER_XATTR  0x0100ULL
 
-#define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
+#define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY |            \
+                                OBD_CONNECT_ACL |               \
+                                OBD_CONNECT_USER_XATTR)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK)
 #define ECHO_CONNECT_SUPPORTED (0)
 
@@ -380,6 +384,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLXATTR     (0x0000001000000000ULL) /* xattr */
 #define OBD_MD_FLXATTRLS   (0x0000002000000000ULL) /* xattr list */
 #define OBD_MD_FLXATTRRM   (0x0000004000000000ULL) /* xattr remove */
+#define OBD_MD_FLACL       (0x0000008000000000ULL) /* ACL */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -581,7 +586,7 @@ struct mds_body {
         __u32          generation;
         __u32          suppgid;
         __u32          eadatasize;
-        __u32          padding_1; /* also fix lustre_swab_mds_body */
+        __u32          aclsize;
         __u32          padding_2; /* also fix lustre_swab_mds_body */
         __u32          padding_3; /* also fix lustre_swab_mds_body */
         __u32          padding_4; /* also fix lustre_swab_mds_body */

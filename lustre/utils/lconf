@@ -778,7 +778,10 @@ def def_mount_options(fstype, target):
             #else:
             #    mountfsoptions = "%s,extents,mballoc" % (mountfsoptions)
         elif target == 'mds':
-            mountfsoptions = "%s,user_xattr" % (mountfsoptions)
+            if config.user_xattr:
+                mountfsoptions = "%s,user_xattr" % (mountfsoptions)
+            if config.acl:
+                mountfsoptions = "%s,acl" % (mountfsoptions)
         return mountfsoptions
     return ""
 
@@ -2607,6 +2610,7 @@ lconf_options = [
                     mounting (currently OST-only). Can be repeated.""",
                 PARAMLIST),
     ('user_xattr', """Enable user_xattr support on MDS""", FLAG, 0),
+    ('acl', """Enable ACL support on MDS""", FLAG, 0),
     ]
 
 def main():

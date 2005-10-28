@@ -328,6 +328,10 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, generation);
         CHECK_MEMBER(mds_body, suppgid);
         CHECK_MEMBER(mds_body, eadatasize);
+        CHECK_MEMBER(mds_body, aclsize);
+        CHECK_MEMBER(mds_body, padding_2);
+        CHECK_MEMBER(mds_body, padding_3);
+        CHECK_MEMBER(mds_body, padding_4);
 
         CHECK_VALUE(FMODE_READ);
         CHECK_VALUE(FMODE_WRITE);

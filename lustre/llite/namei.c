@@ -76,7 +76,7 @@ static int ll_test_inode(struct inode *inode, void *opaque)
 
         /* Apply the attributes in 'opaque' to this inode */
         if (!(inode->i_state & (I_FREEING | I_CLEAR)))
-                ll_update_inode(inode, md->body, md->lsm);
+                ll_update_inode(inode, md);
         return 1;
 }
 
@@ -895,6 +895,7 @@ struct inode_operations ll_dir_inode_operations = {
         .create             = ll_create_nd,
         .getattr_it         = ll_getattr,
 #endif
+        .permission         = ll_inode_permission,
         .setxattr           = ll_setxattr,
         .getxattr           = ll_getxattr,
         .listxattr          = ll_listxattr,

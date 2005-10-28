@@ -60,6 +60,7 @@ void usage(FILE *out)
                 "\t-o: filesystem mount options:\n"
                 "\t\tflock/noflock: enable/disable flock support\n"
                 "\t\tuser_xattr/nouser_xattr: enable/disable user extended attributes\n"
+                "\t\t{no}acl: enable/disable ACL support\n"
                 );
         exit(out != stdout);
 }
@@ -177,6 +178,8 @@ static const struct opt_map opt_map[] = {
   { "noflock",  1, 1, 0, LMD_FLG_FLOCK},   /* Disable flock support */
   { "user_xattr", 0, 0, 0, LMD_FLG_USER_XATTR}, /* Enable get/set user xattr */
   { "nouser_xattr", 1, 1, 0, LMD_FLG_USER_XATTR}, /* Disable user xattr */
+  { "acl",      0, 0, 0, LMD_FLG_ACL},     /* Enable ACL support */
+  { "noacl",    1, 1, 0, LMD_FLG_ACL},     /* Disable ACL support */
   /* please add new mount options to usage message */
   { NULL,       0, 0, 0, 0         }
 };

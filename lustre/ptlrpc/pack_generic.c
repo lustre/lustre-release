@@ -195,6 +195,59 @@ int lustre_pack_reply (struct ptlrpc_request *req,
         RETURN (0);
 }
 
+/*
+ * shrink @segment to size @newlen. if @move_data is non-zero, we also move
+ * data forward from @segment + 1.
+ * 
+ * if @newlen == 0, we remove the segment completely, but we still keep the
+ * totally bufcount the same to save possible data moving. this will leave a
+ * unused segment with size 0 at the tail, but that's ok.
+ *
+ * CAUTION:
+ * + if any buffers higher than @segment has been filled in, must call shrink
+ *   with non-zero @move_data.
+ * + caller should NOT keep pointers to msg buffers which higher than @segment
+ *   after call shrink.
+ */
+void lustre_shrink_reply(struct ptlrpc_request *req,
+                         int segment, unsigned int newlen, int move_data)
+{
+        struct lustre_msg *msg = req->rq_repmsg;
+        char              *tail = NULL, *newpos;
+        int                tail_len = 0, n;
+
+        LASSERT(req->rq_reply_state);
+        LASSERT(msg);
+        LASSERT(msg->bufcount > segment);
+        LASSERT(msg->buflens[segment] >= newlen);
+
+        if (msg->buflens[segment] == newlen)
+                return;
+
+        if (move_data && msg->bufcount > segment + 1) {
+                tail = lustre_msg_buf(msg, segment + 1, 0);
+                for (n = segment + 1; n < msg->bufcount; n++)
+                        tail_len += size_round(msg->buflens[n]);
+        }
+
+        msg->buflens[segment] = newlen;
+
+        if (tail && tail_len) {
+                newpos = lustre_msg_buf(msg, segment + 1, 0);
+                LASSERT(newpos <= tail);
+                if (newpos != tail)
+                        memcpy(newpos, tail, tail_len);
+        }
+
+        if (newlen == 0 && msg->bufcount > segment + 1) {
+                memmove(&msg->buflens[segment], &msg->buflens[segment + 1],
+                        (msg->bufcount - segment - 1) * sizeof(__u32));
+                msg->buflens[msg->bufcount - 1] = 0;
+        }
+
+        req->rq_replen = lustre_msg_size(msg->bufcount, msg->buflens);
+}
+
 void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
 {
         PTLRPC_RS_DEBUG_LRU_DEL(rs);
@@ -550,7 +603,7 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->generation);
         __swab32s (&b->suppgid);
         __swab32s (&b->eadatasize);
-        __swab32s (&b->padding_1);
+        __swab32s (&b->aclsize);
         __swab32s (&b->padding_2);
         __swab32s (&b->padding_3);
         __swab32s (&b->padding_4);
@@ -1637,6 +1690,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_body, eadatasize));
         LASSERTF((int)sizeof(((struct mds_body *)0)->eadatasize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->eadatasize));
+        LASSERTF((int)offsetof(struct mds_body, aclsize) == 152, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, aclsize));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->aclsize) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->aclsize));
         LASSERTF(FMODE_READ == 1, " found %lld\n",
                  (long long)FMODE_READ);
         LASSERTF(FMODE_WRITE == 2, " found %lld\n",

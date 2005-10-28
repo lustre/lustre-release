@@ -18,7 +18,8 @@ NETTYPE=${NETTYPE:-tcp}
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-400000}
 
-CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
+MDS_MOUNT_OPTS="user_xattr,acl,${MDS_MOUNT_OPTS:-""}"
+CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
 
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}
@@ -61,13 +62,13 @@ ${LMC} --add node --node $HOSTNAME || exit 10
 ${LMC} --add net --node $HOSTNAME --nid `h2$NETTYPE $HOSTNAME` --nettype $NETTYPE || exit 11
 ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
+# configure mds server
 [ "x$MDS_MOUNT_OPTS" != "x" ] &&
     MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
 
-# configure mds server
 ${LMC} --add mds --node $HOSTNAME --mds mds1 --fstype $FSTYPE \
-	--dev $MDSDEV \
-	$MDS_MOUNT_OPTS --size $MDSSIZE $JARG $IARG $MDSOPT || exit 20
+	--dev $MDSDEV $MDS_MOUNT_OPTS \
+	--size $MDSSIZE $JARG $IARG $MDSOPT || exit 20
 
 [ "x$OST_MOUNT_OPTS" != "x" ] &&
     OST_MOUNT_OPTS="--mountfsoptions $OST_MOUNT_OPTS"

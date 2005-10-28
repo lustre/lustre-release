@@ -98,13 +98,14 @@ int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid)
                               0);
 }
 
+static
 int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size, 
-                       struct ptlrpc_request *req)
+                       unsigned int acl_size, struct ptlrpc_request *req)
 {
         struct mds_body *body;
         void            *eadata;
         int              rc;
-        int              size[2] = {sizeof(*body), 0};
+        int              size[3] = {sizeof(*body)};
         int              bufcount = 1;
         ENTRY;
 
@@ -115,6 +116,11 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                 CDEBUG(D_INODE, "reserved %u bytes for MD/symlink in packet\n",
                        ea_size);
         }
+        if (acl_size) {
+                size[bufcount++] = acl_size;
+                CDEBUG(D_INODE, "reserved %u bytes for ACL\n", acl_size);
+        }
+
         req->rq_replen = lustre_msg_size(bufcount, size);
 
         mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
@@ -152,7 +158,7 @@ int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
         struct ptlrpc_request *req;
         struct mds_body *body;
         int size = sizeof(*body);
-        int rc;
+        int acl_size = 0, rc;
         ENTRY;
 
         /* XXX do we need to make another request here?  We just did a getattr
@@ -169,7 +175,11 @@ int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
         body->eadatasize = ea_size;
         mdc_pack_req_body(req);
 
-        rc = mdc_getattr_common(exp, ea_size, req);
+        /* currently only root inode will call us with FLACL */
+        if (valid & OBD_MD_FLACL)
+                acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
+
+        rc = mdc_getattr_common(exp, ea_size, acl_size, req);
         if (rc != 0) {
                 ptlrpc_req_finished (req);
                 req = NULL;
@@ -202,7 +212,7 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         LASSERT (strnlen (filename, namelen) == namelen - 1);
         memcpy(lustre_msg_buf(req->rq_reqmsg, 1, namelen), filename, namelen);
 
-        rc = mdc_getattr_common(exp, ea_size, req);
+        rc = mdc_getattr_common(exp, ea_size, 0, req);
         if (rc != 0) {
                 ptlrpc_req_finished (req);
                 req = NULL;
@@ -339,6 +349,45 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
                   rec->cr_replayfid.generation, rec->cr_replayfid.id);
 }
 
+static
+int mdc_unpack_acl(struct obd_export *exp, struct ptlrpc_request *req,
+                   struct lustre_md *md, unsigned int offset)
+{
+        struct mds_body  *body = md->body;
+        struct posix_acl *acl;
+        void             *buf;
+        int               rc;
+
+        if (!body->aclsize)
+                return 0;
+
+        buf = lustre_msg_buf(req->rq_repmsg, offset, body->aclsize);
+        if (!buf) {
+                CERROR("aclsize %u, bufcount %u, bufsize %u\n",
+                       body->aclsize, req->rq_repmsg->bufcount,
+                       (req->rq_repmsg->bufcount <= offset) ? -1 :
+                       req->rq_repmsg->buflens[offset]);
+                return -EPROTO;
+        }
+
+        acl = posix_acl_from_xattr(buf, body->aclsize);
+        if (IS_ERR(acl)) {
+                rc = PTR_ERR(acl);
+                CERROR("convert xattr to acl: %d\n", rc);
+                return rc;
+        }
+
+        rc = posix_acl_valid(acl);
+        if (rc) {
+                CERROR("validate acl: %d\n", rc);
+                posix_acl_release(acl);
+                return rc;
+        }
+
+        md->posix_acl = acl;
+        return 0;
+}
+
 int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                       struct obd_export *exp,
                       struct lustre_md *md)
@@ -352,6 +401,7 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
         md->body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*md->body));
         LASSERT (md->body != NULL);
         LASSERT_REPSWABBED (req, offset);
+        offset++;
 
         if (md->body->valid & OBD_MD_FLEASIZE) {
                 int lmmsize;
@@ -364,17 +414,48 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                         RETURN(-EPROTO);
                 }
                 lmmsize = md->body->eadatasize;
-                lmm = lustre_msg_buf(req->rq_repmsg, offset + 1, lmmsize);
+                lmm = lustre_msg_buf(req->rq_repmsg, offset, lmmsize);
                 LASSERT (lmm != NULL);
-                LASSERT_REPSWABBED (req, offset + 1);
+                LASSERT_REPSWABBED (req, offset);
 
                 rc = obd_unpackmd(exp, &md->lsm, lmm, lmmsize);
-                if (rc >= 0) {
-                        LASSERT (rc >= sizeof (*md->lsm));
-                        rc = 0;
-                }
+                if (rc < 0)
+                        RETURN(rc);
+
+                LASSERT (rc >= sizeof (*md->lsm));
+                rc = 0;
+
+                offset++;
         }
+
+        /* for ACL, it's possible that FLACL is set but aclsize is zero.
+         * only when aclsize != 0 there's an actual segment for ACL in
+         * reply buffer.
+         */
+        if ((md->body->valid & OBD_MD_FLACL) && md->body->aclsize) {
+                rc = mdc_unpack_acl(exp, req, md, offset);
+                if (rc)
+                        GOTO(err_out, rc);
+                offset++;
+        }
+out:
         RETURN(rc);
+
+err_out:
+        if (md->lsm)
+                obd_free_memmd(exp, &md->lsm);
+        goto out;
+}
+
+void mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
+{
+        if (md->lsm)
+                obd_free_memmd(exp, &md->lsm);
+
+        if (md->posix_acl) {
+                posix_acl_release(md->posix_acl);
+                md->posix_acl = NULL;
+        }
 }
 
 static void mdc_commit_open(struct ptlrpc_request *req)
@@ -1187,6 +1268,7 @@ MODULE_DESCRIPTION("Lustre Metadata Client");
 MODULE_LICENSE("GPL");
 
 EXPORT_SYMBOL(mdc_req2lustre_md);
+EXPORT_SYMBOL(mdc_free_lustre_md);
 EXPORT_SYMBOL(mdc_change_cbdata);
 EXPORT_SYMBOL(mdc_getstatus);
 EXPORT_SYMBOL(mdc_getattr);
