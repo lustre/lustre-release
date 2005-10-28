@@ -60,7 +60,7 @@ case "$lustretag" in
         buildtag="HEAD"
         ;;
         
-    v*) buildtag=$lustretag ;;
+    v* | b_release*) buildtag=$lustretag ;;
 
     # this is the branch table
     # keep this list sorted alphabetically!
