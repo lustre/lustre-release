@@ -354,8 +354,14 @@ depend_kernel()
     $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
     rm -f rpm-release
     cp "$CONFIG_FILE" .config
-    for oc in oldconfig_nonint silentoldconfig oldconfig ; do
-	if grep -q "^$oc:" Makefile ; then
+    # find the right file to grep in for the target
+    for makefile in scripts/kconfig/Makefile Makefile; do
+        if [ -f $makefile ]; then
+	    break
+	fi
+    done
+    for oc in nonint_oldconfig silentoldconfig oldconfig ; do
+	if grep -q "^$oc:" $makefile ; then
 	    $MAKE "$MAKE_CC" $oc || fatal 1 "Error running make oldconfig ($oc)"
 	    break
 	fi
