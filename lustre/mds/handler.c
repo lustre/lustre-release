@@ -1795,14 +1795,6 @@ int mds_postrecov(struct obd_device *obd)
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
 
-        /* set nextid first, so we are sure it happens */
-        rc = mds_lov_set_nextid(obd);
-        if (rc) {
-                CERROR ("%s: mds_lov_set_nextid failed\n",
-                        obd->obd_name);
-                GOTO(out, rc);
-        }
-
         /* clean PENDING dir */
         rc = mds_cleanup_pending(obd);
         if (rc < 0) {

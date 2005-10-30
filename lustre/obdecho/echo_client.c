@@ -222,9 +222,10 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                 oa->o_id = ++last_object_id;
 
         if (on_target) {
-                /* XXX get some filter group constants */
-                oa->o_gr = 2;
-                oa->o_valid |= OBD_MD_FLGROUP;
+                oa->o_gr = FILTER_GROUP_ECHO;
+                oa->o_flags = OBD_FL_CREATE_URGENT;
+                oa->o_valid |= OBD_MD_FLGROUP | OBD_MD_FLFLAGS;
+
                 rc = obd_create(ec->ec_exp, oa, &lsm, oti);
                 if (rc != 0)
                         goto failed;
@@ -1001,7 +1002,7 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 
         data->ioc_obdo1.o_valid &= ~OBD_MD_FLHANDLE;
         data->ioc_obdo1.o_valid |= OBD_MD_FLGROUP;
-        data->ioc_obdo1.o_gr = 2;
+        data->ioc_obdo1.o_gr = FILTER_GROUP_ECHO;
 
         switch((long)data->ioc_pbuf1) {
         case 1:
@@ -1222,7 +1223,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
                         oa = &data->ioc_obdo1;
-                        oa->o_gr = 2;
+                        oa->o_gr = FILTER_GROUP_ECHO;
                         oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eco_lsm, 
                                          &dummy_oti);

@@ -549,12 +549,18 @@ finish:
                         GOTO(out, rc);
                 }
                 spin_lock_irqsave(&imp->imp_lock, flags);
+                
                 /*
                  * check that server granted subset of flags we asked for.
                  */
                 LASSERT((ocd->ocd_connect_flags &
                          imp->imp_connect_data.ocd_connect_flags) ==
                         ocd->ocd_connect_flags);
+
+                if (OCD_CROW_ABLE(ocd)) {
+                        CDEBUG(D_HA, "connected to CROW capable target: %s\n",
+                               imp->imp_target_uuid.uuid);
+                }
                 imp->imp_connect_data = *ocd;
                 if (imp->imp_conn_current != NULL) {
                         list_del(&imp->imp_conn_current->oic_item);

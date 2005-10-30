@@ -152,7 +152,7 @@ check_obdo(void)
         CHECK_VALUE(OBD_MD_FLQOS);
         CHECK_VALUE(OBD_MD_FLCOOKIE);
         CHECK_VALUE(OBD_MD_FLGROUP);
-        CHECK_VALUE(OBD_MD_FLIFID);
+        CHECK_VALUE(OBD_MD_FLFID);
         CHECK_VALUE(OBD_MD_FLEPOCH);
         CHECK_VALUE(OBD_MD_FLGRANT);
         CHECK_VALUE(OBD_MD_FLDIREA);
@@ -211,7 +211,7 @@ check_obd_statfs(void)
         CHECK_MEMBER(obd_statfs, os_fsid);
         CHECK_MEMBER(obd_statfs, os_bsize);
         CHECK_MEMBER(obd_statfs, os_namelen);
-        CHECK_MEMBER(obd_statfs, os_spare);
+        CHECK_MEMBER(obd_statfs, os_state);
 }
 
 void

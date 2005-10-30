@@ -378,7 +378,7 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
 
 int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                           struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies)
+                          struct llog_cookie *logcookies, struct ll_fid *fid)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -413,6 +413,11 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                 oti.oti_logcookies = logcookies;
         }
 
+	LASSERT(fid != NULL);
+        oa->o_fid = fid->id;
+        oa->o_generation = fid->generation;
+	oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+
         /* do setattr from mds to ost asynchronously */
         rc = obd_setattr_async(mds->mds_osc_exp, oa, lsm, &oti);
         if (rc)
@@ -420,7 +425,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                        " on ost error %d\n", lsm->lsm_object_id, rc);
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
-  out:
+out:
         obdo_free(oa);
         RETURN(rc);
 }
@@ -617,7 +622,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         err = mds_finish_transno(mds, inode, handle, req, rc, 0);
         /* do mds to ost setattr if needed */
         if (!rc && !err && lmm_size)
-                mds_osc_setattr_async(obd, inode, lmm, lmm_size, logcookies);
+                mds_osc_setattr_async(obd, inode, lmm, lmm_size, 
+				      logcookies, rec->ur_fid1);
 
         switch (cleanup_phase) {
         case 2:

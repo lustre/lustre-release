@@ -310,14 +310,14 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct dentry *dchild, void **handle,
                               obd_id **ids)
 {
-        struct obdo *oa;
+        struct inode *inode = dchild->d_inode;
         struct obd_trans_info oti = { 0 };
-        struct mds_body *body;
         struct lov_stripe_md *lsm = NULL;
         struct lov_mds_md *lmm = NULL;
-        struct inode *inode = dchild->d_inode;
-        void *lmm_buf;
         int rc, lmm_bufsize, lmm_size;
+        struct mds_body *body;
+        struct obdo *oa;
+        void *lmm_buf;
         ENTRY;
 
         if (rec->ur_flags & MDS_OPEN_DELAY_CREATE ||
@@ -376,17 +376,17 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         oa = obdo_alloc();
         if (oa == NULL)
                 GOTO(out_ids, rc = -ENOMEM);
-        oa->o_mode = S_IFREG | 0600;
-        oa->o_id = inode->i_ino;
-        oa->o_generation = inode->i_generation;
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLTYPE |
+        oa->o_mode = S_IFREG | 0600;
+        oa->o_id = inode->i_ino;
+        oa->o_flags = OBD_FL_CREATE_CROW;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
         oa->o_size = 0;
 
-        obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|OBD_MD_FLMTIME|
-                        OBD_MD_FLCTIME);
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
         if (!(rec->ur_flags & MDS_OPEN_HAS_OBJS)) {
                 /* check if things like lfs setstripe are sending us the ea */
@@ -437,8 +437,14 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         }
         if (inode->i_size) {
                 oa->o_size = inode->i_size;
-                obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|
-                                OBD_MD_FLMTIME| OBD_MD_FLCTIME| OBD_MD_FLSIZE);
+                obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
+
+                /* pack lustre id to OST */
+                oa->o_fid = body->fid1.id;
+                oa->o_generation = body->fid1.generation;
+                oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+
                 rc = obd_setattr(mds->mds_osc_exp, oa, lsm, &oti);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
@@ -457,7 +463,10 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         LASSERT(lsm && lsm->lsm_object_id);
         lmm = NULL;
         rc = obd_packmd(mds->mds_osc_exp, &lmm, lsm);
-        LASSERT(rc >= 0);
+        if (rc < 0) {
+                CERROR("cannot pack lsm, err = %d\n", rc);
+                GOTO(out_oa, rc);
+        }
         lmm_size = rc;
         body->eadatasize = rc;
 

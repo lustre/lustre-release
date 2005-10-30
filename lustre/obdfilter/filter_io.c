@@ -512,21 +512,18 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
+        OBD_RACE(OBD_FAIL_OST_CLEAR_ORPHANS_RACE);
+
         iobuf = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
         cleanup_phase = 1;
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
-                                   obj->ioo_id);
+
+        /* make sure that object is already allocated */
+        dentry = filter_crow_object(exp->exp_obd, oa);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
         cleanup_phase = 2;
-
-        if (dentry->d_inode == NULL) {
-                CERROR("trying to BRW to non-existent file "LPU64"\n",
-                       obj->ioo_id);
-                GOTO(cleanup, rc = -ENOENT);
-        }
 
         fso.fso_dentry = dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
@@ -635,7 +632,7 @@ cleanup:
                 filter_iobuf_put(iobuf);
         case 2:
                 pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-                if (rc)
+                if (rc && dentry && !IS_ERR(dentry))
                         f_dput(dentry);
                 break;
         case 1:

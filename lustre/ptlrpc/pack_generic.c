@@ -518,13 +518,15 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab32s (&o->o_misc);
         __swab32s (&o->o_easize);
         __swab32s (&o->o_mds);
+        __swab32s (&o->o_stripe_idx);
         __swab32s (&o->o_padding_1);
-        __swab32s (&o->o_padding_2);
         /* o_inline is opaque */
 }
 
 void lustre_swab_obd_statfs (struct obd_statfs *os)
 {
+        int i;
+        
         __swab64s (&os->os_type);
         __swab64s (&os->os_blocks);
         __swab64s (&os->os_bfree);
@@ -535,7 +537,9 @@ void lustre_swab_obd_statfs (struct obd_statfs *os)
         __swab32s (&os->os_bsize);
         __swab32s (&os->os_namelen);
         __swab64s (&os->os_maxbytes);
-        /* no need to swap os_spare */
+
+        for (i = 0; i < sizeof(os->os_state) / sizeof(__u32); i++)
+                __swab32s (&os->os_state[i]);
 }
 
 void lustre_swab_obd_ioobj (struct obd_ioobj *ioo)
@@ -1292,8 +1296,8 @@ void lustre_assert_wire_constants(void)
                  (long long)OBD_MD_FLCOOKIE);
         LASSERTF(OBD_MD_FLGROUP == 16777216, " found %lld\n",
                  (long long)OBD_MD_FLGROUP);
-        LASSERTF(OBD_MD_FLIFID == 33554432, " found %lld\n",
-                 (long long)OBD_MD_FLIFID);
+        LASSERTF(OBD_MD_FLFID == 33554432, " found %lld\n",
+                 (long long)OBD_MD_FLFID);
         LASSERTF(OBD_MD_FLEPOCH == 67108864, " found %lld\n",
                  (long long)OBD_MD_FLEPOCH);
         LASSERTF(OBD_MD_FLGRANT == 134217728, " found %lld\n",
@@ -1420,10 +1424,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obd_statfs, os_namelen));
         LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_namelen) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_statfs *)0)->os_namelen));
-        LASSERTF((int)offsetof(struct obd_statfs, os_spare) == 104, " found %lld\n",
-                 (long long)(int)offsetof(struct obd_statfs, os_spare));
-        LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_spare) == 40, " found %lld\n",
-                 (long long)(int)sizeof(((struct obd_statfs *)0)->os_spare));
+        LASSERTF((int)offsetof(struct obd_statfs, os_state) == 104, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_statfs, os_state));
+        LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_state) == 40, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_statfs *)0)->os_state));
 
         /* Checks for struct obd_ioobj */
         LASSERTF((int)sizeof(struct obd_ioobj) == 24, " found %lld\n",

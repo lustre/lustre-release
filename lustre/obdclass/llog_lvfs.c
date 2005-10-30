@@ -515,9 +515,11 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 oa = obdo_alloc();
                 if (oa == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
-                /* XXX get some filter group constants */
-                oa->o_gr = 1;
-                oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
+
+                oa->o_gr = FILTER_GROUP_LLOG;
+                oa->o_flags = OBD_FL_CREATE_URGENT;
+                oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP | OBD_MD_FLFLAGS;
+
                 rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
                 if (rc)
                         GOTO(cleanup, rc);

@@ -2256,7 +2256,6 @@ int obd_initialize(int argc, char **argv)
         return 0;
 }
 
-
 void obd_finalize(int argc, char **argv)
 {
         struct sigaction sigact;

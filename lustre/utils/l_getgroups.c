@@ -30,6 +30,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <syslog.h>
 
 #include <lustre/lustre_user.h>

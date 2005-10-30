@@ -315,6 +315,7 @@ static int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
+        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         struct ptlrpc_request *request;
         struct ost_body *body;
         struct lov_stripe_md *lsm;
@@ -331,8 +332,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                         RETURN(rc);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_CREATE, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_CREATE,
+                                  1, &size, NULL);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
@@ -360,6 +361,16 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                 GOTO (out_req, rc = -EPROTO);
         }
 
+        if ((oa->o_valid & OBD_MD_FLFLAGS) && oa->o_flags == OBD_FL_DELORPHAN) {
+                struct obd_import *imp = class_exp2cliimp(exp);
+                /* MDS declares last known object, OSS responses
+                 * with next possible object -bzzz */
+                spin_lock(&oscc->oscc_lock);
+                oscc->oscc_next_id = body->oa.o_id;
+                spin_unlock(&oscc->oscc_lock);
+                CDEBUG(D_HA, "%s: set nextid "LPD64" after recovery\n",
+                       imp->imp_target_uuid.uuid, oa->o_id);
+        }
         memcpy(oa, &body->oa, sizeof(*oa));
 
         /* This should really be sent by the OST */
@@ -2791,7 +2802,8 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
          * during mount that would help a bit).  Having relative timestamps
          * is not so great if request processing is slow, while absolute
          * timestamps are not ideal because they need time synchronization. */
-        request = ptlrpc_prep_req(obd->u.cli.cl_import, OST_STATFS,0,NULL,NULL);
+        request = ptlrpc_prep_req(obd->u.cli.cl_import, OST_STATFS, 0,
+                                  NULL, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -3007,17 +3019,6 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         ENTRY;
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
-
-        if (KEY_IS("next_id")) {
-                if (vallen != sizeof(obd_id))
-                        RETURN(-EINVAL);
-                obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
-                CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
-                       exp->exp_obd->obd_name,
-                       obd->u.cli.cl_oscc.oscc_next_id);
-
-                RETURN(0);
-        }
 
         if (KEY_IS("unlinked")) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;

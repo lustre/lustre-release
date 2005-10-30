@@ -42,10 +42,11 @@
 /* Called with res->lr_lvb_sem held */
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
-        int rc = 0;
         struct ost_lvb *lvb = NULL;
+        struct filter_obd *filter;
         struct obd_device *obd;
         struct dentry *dentry;
+        int rc = 0;
         ENTRY;
 
         LASSERT(res);
@@ -57,39 +58,56 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                 RETURN(0);
 
         if (res->lr_lvb_data)
-                GOTO(out, rc = 0);
+                RETURN(0);
 
         OBD_ALLOC(lvb, sizeof(*lvb));
         if (lvb == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         res->lr_lvb_data = lvb;
         res->lr_lvb_len = sizeof(*lvb);
 
         obd = res->lr_namespace->ns_lvbp;
+        filter = &obd->u.filter;
         LASSERT(obd != NULL);
 
         dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
         if (IS_ERR(dentry))
-                GOTO(out, rc = PTR_ERR(dentry));
+                RETURN(PTR_ERR(dentry));
 
-        if (dentry->d_inode == NULL)
-                GOTO(out_dentry, rc = -ENOENT);
+        /* check if object being looked exists accordingly to last id. Thus,
+         * not-existing inode with id smaller than last created will look as a
+         * signal something wrong there. */
+        if (dentry->d_inode == NULL &&
+            res->lr_name.name[0] < filter_last_id(filter, 0)) {
+                CERROR("can't find object #"LPU64", whereas it "
+                       "should exist accordigly to last saved "
+                       "id\n", res->lr_name.name[0]);
+                RETURN(-ENOENT);
+        }
+        
+        if (dentry->d_inode == NULL) {
+                lvb->lvb_size = 0;
+                lvb->lvb_blocks = 0;
 
+                /* making client use MDS mtime as this one is zero, bigger one
+                 * will be taken and this does not break POSIX */
+                lvb->lvb_mtime = 0;
+        } else {
         lvb->lvb_size = dentry->d_inode->i_size;
         lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
         lvb->lvb_blocks = dentry->d_inode->i_blocks;
+        }
 
         CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
                "mtime: "LPU64", blocks: "LPU64"\n",
                res->lr_name.name[0], lvb->lvb_size,
                lvb->lvb_mtime, lvb->lvb_blocks);
 
- out_dentry:
         f_dput(dentry);
- out:
+
         /* Don't free lvb data on lookup error */
-        return rc;
+        RETURN(rc);
 }
 
 /* This will be called in two ways:

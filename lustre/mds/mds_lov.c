@@ -104,49 +104,39 @@ int mds_lov_write_objids(struct obd_device *obd)
         RETURN(rc);
 }
 
-int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
+int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {
-        int rc;
-        struct obdo oa;
-        struct obd_trans_info oti = {0};
         struct lov_stripe_md  *empty_ea = NULL;
+        struct obd_trans_info oti = { 0 };
+        struct obdo *oa;
+        int rc;
         ENTRY;
 
         LASSERT(mds->mds_lov_objids != NULL);
 
-        /* This create will in fact either create or destroy:  If the OST is
-         * missing objects below this ID, they will be created.  If it finds
-         * objects above this ID, they will be removed. */
-        memset(&oa, 0, sizeof(oa));
-        oa.o_valid = OBD_MD_FLFLAGS;
-        oa.o_flags = OBD_FL_DELORPHAN;
-        if (ost_uuid != NULL) {
-                memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
-                oa.o_valid |= OBD_MD_FLINLINE;
-        }
-        rc = obd_create(mds->mds_osc_exp, &oa, &empty_ea, &oti);
+        oa = obdo_alloc();
+        if (oa == NULL)
+                RETURN(-ENOMEM);
 
+        oa->o_valid = OBD_MD_FLFLAGS;
+        oa->o_flags = OBD_FL_DELORPHAN;
+
+        if (ost_uuid != NULL) {
+                memcpy(&oa->o_inline, ost_uuid, sizeof(*ost_uuid));
+                oa->o_valid |= OBD_MD_FLINLINE;
+        }
+
+        oti.oti_objid = mds->mds_lov_objids;
+        rc = obd_create(mds->mds_osc_exp, oa, &empty_ea, &oti);
+
+        obdo_free(oa);
         RETURN(rc);
 }
 
 /* update the LOV-OSC knowledge of the last used object id's */
-int mds_lov_set_nextid(struct obd_device *obd)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        int rc;
-        ENTRY;
-
-        LASSERT(!obd->obd_recovering);
-
-        LASSERT(mds->mds_lov_objids != NULL);
-
-        rc = obd_set_info(mds->mds_osc_exp, strlen("next_id"), "next_id",
-                          mds->mds_lov_desc.ld_tgt_count, mds->mds_lov_objids);
-        RETURN(rc);
-}
-
 int mds_lov_connect(struct obd_device *obd, char * lov_name)
 {
+        struct obd_connect_data *data = NULL;
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0,};
         int valsize;
@@ -166,8 +156,15 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 RETURN(-ENOTCONN);
         }
 
+        OBD_ALLOC_PTR(data);
+        if (!data)
+                RETURN(-ENOMEM);
+        data->ocd_connect_flags = OBD_CONNECT_CROW;
+
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid,
-                         NULL /* obd_connect_data */);
+                         data);
+        OBD_FREE_PTR(data);
+        
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);
@@ -521,9 +518,9 @@ static int __mds_lov_syncronize(void *data)
         CWARN("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, uuid ? (char *)uuid->uuid : "All OSC's");
         
-        rc = mds_lov_clearorphans(&obd->u.mds, uuid);
+        rc = mds_lov_clear_orphans(&obd->u.mds, uuid);
         if (rc != 0) {
-                CERROR("%s: failed at mds_lov_clearorphans: %d\n",
+                CERROR("%s: failed at mds_lov_clear_orphans: %d\n",
                        obd->obd_name, rc);
                 GOTO(out, rc);
         }

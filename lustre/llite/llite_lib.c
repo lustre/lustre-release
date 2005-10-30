@@ -952,7 +952,8 @@ void ll_clear_inode(struct inode *inode)
  */
 int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 {
-        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
@@ -1075,7 +1076,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
                                                            OBD_OBJECT_EOF } };
                 struct lustre_handle lockh = { 0 };
-                struct ll_inode_info *lli = ll_i2info(inode);
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
@@ -1115,14 +1115,20 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                 rc = err;
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
+                obd_flag flags;
                 struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
+                
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_valid = OBD_MD_FLID;
-                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
+                flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                        OBD_MD_FLFID | OBD_MD_FLGENER;
+                
+                obdo_from_inode(&oa, inode, flags);
                 rc = obd_setattr(sbi->ll_osc_exp, &oa, lsm, NULL);
                 if (rc)
                         CERROR("obd_setattr fails: rc=%d\n", rc);
@@ -1486,6 +1492,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 oa->o_flags = flags;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
 
+                obdo_from_inode(oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
                 rc = obd_setattr(sbi->ll_osc_exp, oa, lsm, NULL);
                 obdo_free(oa);
                 if (rc) {

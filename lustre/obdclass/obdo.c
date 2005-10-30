@@ -190,6 +190,10 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 dst->o_generation = src->i_generation;
                 newvalid |= OBD_MD_FLGENER;
         }
+        if (valid & OBD_MD_FLFID) {
+                dst->o_fid = src->i_ino;
+                newvalid |= OBD_MD_FLFID;
+        }
 
         dst->o_valid |= newvalid;
 }
@@ -265,6 +269,9 @@ EXPORT_SYMBOL(obdo_to_inode);
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
 {
 #ifdef __KERNEL__
+        CLASSERT(sizeof(struct lustre_handle) +
+                 sizeof(struct llog_cookie) <= sizeof(src->o_inline));
+        
         CDEBUG(D_INODE, "src obdo "LPX64" valid "LPX64", dst obdo "LPX64"\n",
                src->o_id, src->o_valid, dst->o_id);
 #endif

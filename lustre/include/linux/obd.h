@@ -180,6 +180,14 @@ struct obd_histogram {
 
 struct ost_server_data;
 
+#define FILTER_GROUP_LLOG 1
+#define FILTER_GROUP_ECHO 2
+
+struct filter_ext {
+        __u64                fe_start;
+        __u64                fe_end;
+};
+
 struct filter_obd {
         const char          *fo_fstype;
         struct super_block  *fo_sb;
@@ -187,15 +195,18 @@ struct filter_obd {
         struct dentry       *fo_dentry_O;
         struct dentry      **fo_dentry_O_groups;
         struct dentry      **fo_dentry_O_sub;
-        spinlock_t           fo_objidlock; /* protect fo_lastobjid increment */
-        spinlock_t           fo_translock; /* protect fsd_last_rcvd increment */
+        spinlock_t           fo_objidlock;      /* protect fo_lastobjid
+                                                 * increment */
+        
+        spinlock_t           fo_translock;      /* protect fsd_last_rcvd
+                                                 * increment */
+        
         struct file         *fo_rcvd_filp;
         struct filter_server_data *fo_fsd;
         unsigned long       *fo_last_rcvd_slots;
         __u64                fo_mount_count;
 
-        unsigned int         fo_destroy_in_progress:1;
-        struct semaphore     fo_create_lock;
+        int                  fo_destroy_in_progress;
 
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
@@ -259,6 +270,11 @@ struct filter_obd {
         struct lustre_quota_ctxt fo_quota_ctxt;
         spinlock_t               fo_quotacheck_lock;
         atomic_t                 fo_quotachecking;
+
+        /* objids black list stuff. See for detailed comment in
+         * filter_clear_orphans() */
+        struct filter_ext       *fo_blacklist;
+        spinlock_t               fo_blacklist_lock;
 };
 
 struct mds_server_data;
@@ -548,7 +564,7 @@ struct obd_device {
         __u64                   obd_last_committed;
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
-        struct obd_statfs       obd_osfs;
+        struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
         unsigned long           obd_osfs_age;   /* jiffies */
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];

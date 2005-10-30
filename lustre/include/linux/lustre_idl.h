@@ -206,16 +206,16 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_ASYNC       0x40
 
 /* Connect flags */
-
 #define OBD_CONNECT_RDONLY      0x0001ULL
 #define OBD_CONNECT_SRVLOCK     0x0010ULL /* server takes locks for client */
 #define OBD_CONNECT_ACL         0x0080ULL
 #define OBD_CONNECT_USER_XATTR  0x0100ULL
+#define OBD_CONNECT_CROW        0x0200ULL /* OST is CROW able */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY |            \
                                 OBD_CONNECT_ACL |               \
                                 OBD_CONNECT_USER_XATTR)
-#define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK)
+#define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_CROW)
 #define ECHO_CONNECT_SUPPORTED (0)
 
 /* This structure is used for both request and reply.
@@ -223,9 +223,14 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
  * If we eventually have separate connect data for different types, which we
  * almost certainly will, then perhaps we stick a union in here. */
 struct obd_connect_data {
-        __u64 ocd_connect_flags;
+        __u64 ocd_connect_flags;    /* connection flags, server should return
+                                     * subset of what is asked for. */
+        
         __u64 padding[8];
 };
+
+#define OCD_CROW_ABLE(ocd) \
+        ((ocd)->ocd_connect_flags & OBD_CONNECT_CROW)
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
 
@@ -282,7 +287,12 @@ typedef uint32_t        obd_count;
 #define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
+#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be created with crow */
+#define OBD_FL_CREATE_URGENT (0x00000800) /* object should be created asap (echo, llog) */
 
+/* this should be not smaller than sizeof(struct lustre_handle) + sizeof(struct
+ * llog_cookie) + sizeof(ll_fid). Nevertheless struct ll_fid is not longer
+ * stored in o_inline, we keep this just for case. */
 #define OBD_INLINESZ    80
 
 /* Note: 64-bit types are 64-bit aligned in structure */
@@ -297,6 +307,7 @@ struct obdo {
         obd_time                o_ctime;
         obd_blocks              o_blocks;       /* brw: cli sent cached bytes */
         obd_size                o_grant;
+        
         /* 32-bit fields start here: keep an even number of them via padding */
         obd_blksize             o_blksize;      /* optimal IO blocksize */
         obd_mode                o_mode;         /* brw: cli sent cache remain */
@@ -308,8 +319,8 @@ struct obdo {
         obd_count               o_misc;         /* brw: o_dropped */
         __u32                   o_easize;       /* epoch in ost writes */
         __u32                   o_mds;
+        __u32                   o_stripe_idx;   /* holds stripe idx */
         __u32                   o_padding_1;
-        __u32                   o_padding_2;
         char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
 };
 
@@ -371,7 +382,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLOSCOPQ    (0x00400000ULL) /* osc opaque data */
 #define OBD_MD_FLCOOKIE    (0x00800000ULL) /* log cancellation cookie */
 #define OBD_MD_FLGROUP     (0x01000000ULL) /* group */
-#define OBD_MD_FLIFID      (0x02000000ULL) /* ->ost write inline fid */
+#define OBD_MD_FLFID       (0x02000000ULL) /* ->ost write inline fid */
 #define OBD_MD_FLEPOCH     (0x04000000ULL) /* ->ost write easize is epoch */
 #define OBD_MD_FLGRANT     (0x08000000ULL) /* ost preallocation space grant */
 #define OBD_MD_FLDIREA     (0x10000000ULL) /* dir's extended attribute data */
@@ -416,7 +427,7 @@ struct obd_statfs {
         __u32           os_bsize;
         __u32           os_namelen;
         __u64           os_maxbytes;
-        __u32           os_spare[10];
+        __u32           os_state[10];
 };
 
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
@@ -543,9 +554,11 @@ typedef enum {
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
 struct ll_fid {
-        __u64 id;
-        __u32 generation;
-        __u32 f_type;
+        __u64 id;         /* holds object id */
+        __u32 generation; /* holds object generation */
+        
+        __u32 f_type;     /* holds object type or stripe idx when passing it to
+                           * OST for saving into EA. */
 };
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
@@ -1172,12 +1185,6 @@ extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
 
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
-
-static inline struct ll_fid *obdo_fid(struct obdo *oa)
-{
-        return (struct ll_fid *)(oa->o_inline + sizeof(struct lustre_handle) +
-                                 sizeof(struct llog_cookie));
-}
 
 /* qutoa */
 struct qunit_data {

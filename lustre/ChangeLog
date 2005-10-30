@@ -6,6 +6,15 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : enhancement
+Bugzilla   : 8888
+Description: Introduced CReate On Write (CROW)
+Details    : CROW is improved create approach, which defers OST objects
+	     creates to the time when they realy needed. This is when client 
+	     wants to perform first write to file for instance. Or when object 
+	     changes some of its attributes stored on OST. This should improve 
+	     create rate.
+
+Severity   : enhancement
 Bugzilla   : 7981/8208
 Description: Introduced Lustre Networking (LNET)
 Details    : LNET is new networking infrastructure for Lustre, it includes

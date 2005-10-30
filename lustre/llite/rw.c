@@ -165,8 +165,10 @@ void ll_truncate(struct inode *inode)
 
         oa.o_id = lsm->lsm_object_id;
         oa.o_valid = OBD_MD_FLID;
+
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                        OBD_MD_FLATIME |OBD_MD_FLMTIME |OBD_MD_FLCTIME);
+                        OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                        OBD_MD_FLFID | OBD_MD_FLGENER);
 
         ll_inode_size_unlock(inode, 0);
 
@@ -208,12 +210,13 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         pga.count = PAGE_SIZE;
         pga.flag = 0;
 
-        oa.o_id = lsm->lsm_object_id;
         oa.o_mode = inode->i_mode;
+        oa.o_id = lsm->lsm_object_id;
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
+        obdo_from_inode(&oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), &oa, lsm, 1, &pga,
-                     NULL);
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), &oa, lsm,
+                     1, &pga, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -349,14 +352,14 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         oa->o_valid = OBD_MD_FLID;
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd & OBD_BRW_WRITE) {
-                oa->o_valid |= OBD_MD_FLIFID | OBD_MD_FLEPOCH;
-                mdc_pack_fid(obdo_fid(oa), inode->i_ino, 0, inode->i_mode);
+                oa->o_valid |= OBD_MD_FLEPOCH;
                 oa->o_easize = ll_i2info(inode)->lli_io_epoch;
                 oa->o_uid = inode->i_uid;
                 oa->o_gid = inode->i_gid;
 
                 valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                               OBD_MD_FLUID | OBD_MD_FLGID;
+                        OBD_MD_FLUID | OBD_MD_FLGID |
+                        OBD_MD_FLFID | OBD_MD_FLGENER;
         }
 
         obdo_from_inode(oa, inode, valid_flags);

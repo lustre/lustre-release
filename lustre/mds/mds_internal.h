@@ -125,7 +125,7 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
                        struct lustre_handle *child_lockh);
 int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                           struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies);
+                          struct llog_cookie *logcookies, struct ll_fid *fid);
 
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
@@ -155,8 +155,8 @@ int mds_lov_disconnect(struct obd_device *obd);
 void mds_lov_set_cleanup_flags(struct obd_device *);
 int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
+int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 int mds_lov_set_nextid(struct obd_device *obd);
-int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
                               int nonblock);
 int mds_post_mds_lovconf(struct obd_device *obd);

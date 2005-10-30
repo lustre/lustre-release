@@ -322,6 +322,80 @@ test_15() {
 }
 run_test 15 "timeout waiting for lost client during replay, 1 client completes"
 
+test_15a() {
+    local ost_last_id=""
+    local osc_last_id=""
+    
+    replay_barrier mds
+    echo "data" > "$MOUNT2/${tfile}-m2"
+
+    umount $MOUNT2
+    facet_failover mds
+    df $MOUNT || return 1
+    
+    ost_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    osc_last_id=`cat /proc/fs/lustre/osc/*mds*/last_id`
+
+    echo "Ids after MDS<->OST synchonizing"
+    echo "--------------------------------"
+    echo "MDS last_id:"
+    echo $osc_last_id
+    echo "OST last_id:"
+    echo $ost_last_id
+
+    test "$ost_last_id" = "$osc_last_id" || {
+	echo "OST and MDS last_id are different. OST did not remove orphans?"
+	return 2
+    }
+
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
+
+test_15b() {
+    replay_barrier mds
+    echo "data" > "$MOUNT2/${tfile}-m2"
+    umount $MOUNT2
+
+    do_facet ost "sysctl -w lustre.fail_loc=0x80000802"
+    facet_failover mds
+
+    df $MOUNT || return 1
+    do_facet ost "sysctl -w lustre.fail_loc=0"
+    
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+run_test 15b "multiple delayed OST clear orphans"
+
+test_15c() {
+    local ost_last_id=""
+    local osc_last_id=""
+    
+    replay_barrier mds
+    for ((i=0;i<20000;i++)); do
+	echo "data" > "$MOUNT2/${tfile}-$i"
+    done
+    
+    umount $MOUNT2
+    facet_failover mds
+
+    df $MOUNT || return 1
+    
+    ost_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    osc_last_id=`cat /proc/fs/lustre/osc/*mds*/last_id`
+
+    test "$ost_last_id" = "$osc_last_id" || {
+	echo "OST and MDS last_id are different. OST did not remove orphans?"
+	return 2
+    }
+
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+run_test 15c "remove multiple OST orphans"
+
 test_16() {
     replay_barrier mds
     createmany -o $MOUNT1/$tfile- 25
