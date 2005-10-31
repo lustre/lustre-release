@@ -815,9 +815,9 @@ if test "$enable_libpthread" = "yes" ; then
 		[ENABLE_LIBPTHREAD="yes"],
 		[ENABLE_LIBPTHREAD="no"])
 	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
-		AC_MSG_RESULT([no libpthread is found])
-	else
 		AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
+	else
+		AC_MSG_RESULT([no libpthread is found])
 	fi
 else
 	AC_MSG_RESULT([no (disabled explicitly)])
@@ -855,7 +855,7 @@ if test x$enable_liblustre = xyes ; then
 			CAP_LIBS="-lcap"
 			AC_DEFINE([HAVE_LIBCAP], 1, [use libcap])
 		],
-		[CAP_LIBS=""])
+		[AC_MSG_ERROR([Need libpcap for liblustre])])
 	AC_SUBST(CAP_LIBS)
 
 	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
