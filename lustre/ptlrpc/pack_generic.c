@@ -525,8 +525,6 @@ void lustre_swab_obdo (struct obdo  *o)
 
 void lustre_swab_obd_statfs (struct obd_statfs *os)
 {
-        int i;
-        
         __swab64s (&os->os_type);
         __swab64s (&os->os_blocks);
         __swab64s (&os->os_bfree);
@@ -537,9 +535,8 @@ void lustre_swab_obd_statfs (struct obd_statfs *os)
         __swab32s (&os->os_bsize);
         __swab32s (&os->os_namelen);
         __swab64s (&os->os_maxbytes);
-
-        for (i = 0; i < sizeof(os->os_state) / sizeof(__u32); i++)
-                __swab32s (&os->os_state[i]);
+        __swab32s (&os->os_state);
+        /* no need to swap os_spare */
 }
 
 void lustre_swab_obd_ioobj (struct obd_ioobj *ioo)
@@ -1426,7 +1423,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct obd_statfs *)0)->os_namelen));
         LASSERTF((int)offsetof(struct obd_statfs, os_state) == 104, " found %lld\n",
                  (long long)(int)offsetof(struct obd_statfs, os_state));
-        LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_state) == 40, " found %lld\n",
+        LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_state) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_statfs *)0)->os_state));
 
         /* Checks for struct obd_ioobj */

@@ -544,7 +544,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct obd_statfs *)0)->os_namelen));
         LASSERTF((int)offsetof(struct obd_statfs, os_state) == 104, " found %lld\n",
                  (long long)(int)offsetof(struct obd_statfs, os_state));
-        LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_state) == 40, " found %lld\n",
+        LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_state) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_statfs *)0)->os_state));
 
         /* Checks for struct obd_ioobj */

@@ -427,7 +427,16 @@ struct obd_statfs {
         __u32           os_bsize;
         __u32           os_namelen;
         __u64           os_maxbytes;
-        __u32           os_state[10];
+        __u32           os_state;
+        __u32           os_spare1;
+        __u32           os_spare2;
+        __u32           os_spare3;
+        __u32           os_spare4;
+        __u32           os_spare5;
+        __u32           os_spare6;
+        __u32           os_spare7;
+        __u32           os_spare8;
+        __u32           os_spare9;
 };
 
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);

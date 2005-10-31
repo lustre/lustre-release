@@ -75,10 +75,10 @@ static int osc_check_state(struct obd_export *exp)
         int rc;
         ENTRY;
 
-        /* ->os_state[0] contains positive error code on remote OST. To convert
-         * it to usual errno form we have to make an sign inversion. */
+        /* ->os_state contains positive error code on remote OST. To convert it
+         * to usual errno form we have to make an sign inversion. */
         spin_lock(&exp->exp_obd->obd_osfs_lock);
-        rc = -exp->exp_obd->obd_osfs.os_state[0];
+        rc = -exp->exp_obd->obd_osfs.os_state;
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
         
         RETURN(rc);
