@@ -297,13 +297,17 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         dentry = filter_oa2dentry(obd, oa);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
-                dentry = NULL;
-                GOTO(cleanup, rc);
+                if (rc == -ENOENT) {
+                        inode = NULL;
+                } else {
+                        dentry = NULL;
+                        GOTO(cleanup, rc);
+                }
+        } else {
+                inode = dentry->d_inode;
         }
 
-        inode = dentry->d_inode;
-
-        if (oa)
+        if (oa && inode != NULL)
                 obdo_to_inode(inode, oa, OBD_MD_FLATIME);
 
         fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
@@ -322,9 +326,10 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                  */
                 LASSERT(lnb->page != NULL);
 
-                if (inode->i_size <= rnb->offset)
-                        /* If there's no more data, abort early.  lnb->rc == 0,
-                         * so it's easy to detect later. */
+                if (inode == NULL || inode->i_size <= rnb->offset)
+                        /* If there's no more data, or inode is not yet
+                         * allocated by CROW abort early. lnb->rc == 0, so it's
+                         * easy to detect later. */
                         break;
                 else
                         filter_alloc_dio_page(obd, inode, lnb);
@@ -341,10 +346,12 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(now, obd_timeout, "start_page_read");
 
-        rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
-                              NULL, NULL, NULL);
-        if (rc)
-                GOTO(cleanup, rc);
+        if (inode != NULL) {
+                rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
+                                      NULL, NULL, NULL);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
 
         lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_READ_BYTES, tot_bytes);
 

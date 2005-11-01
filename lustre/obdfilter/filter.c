@@ -1893,8 +1893,8 @@ static int filter_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
-struct dentry *__filter_oa2dentry(struct obd_device *obd,
-                                  struct obdo *oa, const char *what, int quiet)
+struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
+                                  const char *what, int quiet)
 {
         struct dentry *dchild = NULL;
         obd_gr group = 0;
@@ -1905,7 +1905,8 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd,
         dchild = filter_fid2dentry(obd, NULL, group, oa->o_id);
 
         if (IS_ERR(dchild)) {
-                CERROR("%s error looking up object: "LPU64"\n", what, oa->o_id);
+                CERROR("%s error looking up object: "LPU64"\n",
+                       what, oa->o_id);
                 RETURN(dchild);
         }
 
