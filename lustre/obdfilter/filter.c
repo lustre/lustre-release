@@ -2182,7 +2182,6 @@ filter_create_object(struct obd_device *obd, struct obdo *oa)
         int cleanup_phase = 0;
         int err = 0, rc = 0;
         void *handle = NULL;
-        int parent_locked;
         obd_gr group = 0;
         ENTRY;
 
@@ -2197,7 +2196,6 @@ filter_create_object(struct obd_device *obd, struct obdo *oa)
         if (IS_ERR(dparent))
                 GOTO(cleanup, dchild = dparent);
         cleanup_phase = 1;
-        parent_locked = 1;
 
         /* check if object is in blacklist. This should be done under parent
          * lock. */
@@ -2253,9 +2251,6 @@ filter_create_object(struct obd_device *obd, struct obdo *oa)
                 rc = 0;
         }
 
-        filter_parent_unlock(obd, dparent);
-        parent_locked = 0;
-
         /* nobody else is touching this newly created object */
         LASSERT(dchild->d_inode);
         
@@ -2295,8 +2290,7 @@ cleanup:
                         }
                 }
         case 1:
-                if (parent_locked)
-                        filter_parent_unlock(obd, dparent);
+                filter_parent_unlock(obd, dparent);
         case 0:
                 break;
         }
