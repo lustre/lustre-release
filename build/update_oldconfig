@@ -1,6 +1,6 @@
 #!/usr/bin/expect
 
-log_user 1
+log_user 0
 set spawnid [spawn make oldconfig]
 
 match_max 200
