@@ -171,7 +171,7 @@ BuildPreReq: bzip2, findutils, dev, gzip, m4
 
 Vendor: Cluster File Systems, Inc.
 URL: http://www.kernel.org/
-Buildroot: /var/tmp/%{name}-%{PACKAGE_VERSION}-root
+Buildroot: %{_tmppath}/%{name}-%{version}-root
 
 Source0: @LUSTRE_SOURCE@
 Source1: @KERNEL_SOURCE@
@@ -638,8 +638,9 @@ BuildObj ()
 	c="$RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}"
 	o="${c}-obj/%{_target_cpu}/$flavor"
 	mkdir -p $o
-	cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}${flavext}.config \
-		$o/.config
+        # use the one we just built
+	#cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}${flavext}.config \
+	cp .config $o/.config
         for oc in oldconfig_nonint silentoldconfig oldconfig ; do
 	    if grep -q "$oc" Makefile ; then
 	        OLDCONFIG="$oc"
@@ -719,7 +720,10 @@ if [ "%{buildbase}" -ne 0 ] ; then
 	done
     else # 2.4 rh-style
         perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
-        cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config
+        # get the one from the build we just completed as it might have picked
+        # up new options
+        #cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config
+        cp .config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config
         for oc in oldconfig_nonint silentoldconfig oldconfig ; do
 	    if grep -q "$oc" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile ; then
 		OLDCONFIG="$oc"
