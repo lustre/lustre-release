@@ -75,17 +75,6 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
-        /* check if object being looked exists accordingly to last id. Thus,
-         * not-existing inode with id smaller than last created will look as a
-         * signal something wrong there. */
-        if (dentry->d_inode == NULL &&
-            res->lr_name.name[0] < filter_last_id(filter, 0)) {
-                CERROR("can't find object #"LPU64", whereas it "
-                       "should exist accordigly to last saved "
-                       "id\n", res->lr_name.name[0]);
-                RETURN(-ENOENT);
-        }
-        
         if (dentry->d_inode == NULL) {
                 lvb->lvb_size = 0;
                 lvb->lvb_blocks = 0;
@@ -94,9 +83,9 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                  * will be taken and this does not break POSIX */
                 lvb->lvb_mtime = 0;
         } else {
-        lvb->lvb_size = dentry->d_inode->i_size;
-        lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
-        lvb->lvb_blocks = dentry->d_inode->i_blocks;
+                lvb->lvb_size = dentry->d_inode->i_size;
+                lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
+                lvb->lvb_blocks = dentry->d_inode->i_blocks;
         }
 
         CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
