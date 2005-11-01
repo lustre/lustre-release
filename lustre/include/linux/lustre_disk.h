@@ -65,19 +65,15 @@ static inline char *mt_str(enum ldd_mount_type mt)
         return mount_type_string[mt];
 }
 
-struct host_desc {
-        lnet_nid_t primary; 
-        lnet_nid_t backup;
-};
+#define MAX_FAILOVER_NIDS 10
 
 struct lustre_disk_data {
-        __u32     ldd_magic;
-        __u32     ldd_flags;                 /* LDD_SV_TYPE */
-        char      ldd_fsname[64];            /* filesystem this server is part of */
-        char      ldd_svname[64];            /* this server's name (lustre-mdt0001) */
-        char      ldd_mount_opts[128];       /* target fs mount opts */
-        //fixme just make this a string
-        struct host_desc    ldd_mgmtnid;     /* mgmt nid; lmd can override */
+        __u32      ldd_magic;
+        __u32      ldd_flags;           /* LDD_SV_TYPE */
+        char       ldd_fsname[64];      /* filesystem this server is part of */
+        char       ldd_svname[64];      /* this server's name (lustre-mdt0001) */
+        char       ldd_mount_opts[128]; /* target fs mount opts */
+        lnet_nid_t ldd_mgsnid[MAX_FAILOVER_NIDS]; /* mgmt nid list; lmd can override */
         enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
         //server failover list - must pass to mgs when we first register
 };
@@ -88,24 +84,23 @@ struct lustre_disk_data {
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /****************** mount command *********************/
-#define MAX_FAILOVER_LIST 10
 
-/* Passed by mount - no persistent info here */
+/* gleaned from the mount command - no persistent info here */
 struct lustre_mount_data {
         __u32      lmd_magic;
         __u32      lmd_flags;         /* lustre mount flags */
         __u16      lmd_mgsnid_count;  /* how many failover nids we have for the MGS */
-        lnet_nid_t lmd_mgsnid[MAX_FAILOVER_LIST];  /* who to contact at startup */
-        //struct lustre_disk_data *lmd_ldd; /* in-mem copy of ldd */
+        lnet_nid_t lmd_mgsnid[MAX_FAILOVER_NIDS];  /* who to contact at startup */
         char      *lmd_dev;           /* device or file system name */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
                                          _device_ mount options) */
 };
 
-#define LMD_FLG_FLOCK   0x0001  /* Enable flock */
-#define LMD_FLG_RECOVER 0x0002  /* Allow recovery */
-#define LMD_FLG_MNTCNF  0x1000  /* MountConf compat */
-#define LMD_FLG_CLIENT  0x2000  /* Mounting a client only; no real device */
+#define LMD_FLG_FLOCK        0x0001  /* Enable flock */
+#define LMD_FLG_USER_XATTR   0x0002  /* Enable extended attributes */
+#define LMD_FLG_RECOVER      0x0004  /* Allow recovery */
+#define LMD_FLG_MNTCNF       0x1000  /* MountConf compat */
+#define LMD_FLG_CLIENT       0x2000  /* Mounting a client only; no real device */
 
 /* 2nd half is for old clients */
 #define lmd_is_client(x) \

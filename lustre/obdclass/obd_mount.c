@@ -992,27 +992,54 @@ static void print_lmd(struct lustre_mount_data *lmd)
                 CERROR("fsname:  %s\n", lmd->lmd_dev);
         else
                 CERROR("device:  %s\n", lmd->lmd_dev);
+        CERROR("flags:   %x\n", lmd->lmd_flags);
         CERROR("options: %s\n", lmd->lmd_opts);
 }
 
 static int parse_lmd(char *options, struct lustre_mount_data *lmd)
 {
-        char *s1, *s2, *devname;
+        char *s1, *s2, *devname = NULL;
         ENTRY;
 
-        /* Linux 2.4 doesn't pass the device, so we stuck it at the end of 
-           the options. */
-        s1 = strstr(options, ",device=");
-        if (s1) {
-                devname = s1 + 8; /* strlen(",device=") */
-                *s1 = 0; /* cut it out of the options */
-        } else {
+        if (!options || !lmd) 
+                goto invalid;
+
+        /* default flags */
+        lmd->lmd_flags |= LMD_FLG_MNTCNF | LMD_FLG_RECOVER;
+
+        s1 == options;
+        while(*s1) {
+                while (*s1 == ' ')
+                        s1++;
+                if (strncmp(s1, "flock", 5) == 0)
+                        lmd->lmd_flags |= LMD_FLG_FLOCK;
+                if (strncmp(s1, "noflock", 7) == 0)
+                        lmd->lmd_flags &= ~LMD_FLG_FLOCK;
+                if (strncmp(s1, "user_xattr", 10) == 0)
+                        lmd->lmd_flags |= LMD_FLG_USER_XATTR;
+                if (strncmp(s1, "nouser_xattr", 12) == 0)
+                        lmd->lmd_flags &= ~LMD_FLG_USER_XATTR;
+                if (strncmp(s1, "recov", 5) == 0)
+                        lmd->lmd_flags |= LMD_FLG_RECOVER;
+                if (strncmp(s1, "norecov", 7) == 0)
+                        lmd->lmd_flags &= ~LMD_FLG_RECOVER;
+                /* Linux 2.4 doesn't pass the device, so we stuck it at the 
+                   end of the options. */
+                if (strncmp(s1, "device=", 7) == 0)
+                        devname = s1 + 7;
+                s2 = strstr(s1, ',');
+                if (s2 == NULL) 
+                        break;
+                s1 = s2 + 1;
+        }
+
+        if (!devname) {
                 LCONSOLE_ERROR("Can't find device name\n");
                 goto invalid;
         }
 
         if (strchr(devname, ',')) {
-                LCONSOLE_ERROR("No commas are allowed in the device name\n");
+                LCONSOLE_ERROR("Device name must be the final option\n");
                 goto invalid;
         }
 
@@ -1143,6 +1170,8 @@ struct super_block * lustre_get_sb(struct file_system_type *fs_type,
                                int flags, const char *devname, void * data)
 {
         /* calls back in fill super */
+        /* we could append devname= onto options (*data) here, 
+           but 2.4 doesn't get devname.  So we do it in mount_lustre.c */
         return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
 }
 

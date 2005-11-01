@@ -99,6 +99,8 @@ static void fatal(void)
         fprintf(stderr, "\n%s FATAL: ", progname);
 }
 
+/*================ utility functions =====================*/
+
 inline unsigned int 
 dev_major (unsigned long long int __dev)
 {
@@ -133,6 +135,39 @@ int get_os_version()
                         version = 26;
         }
         return version;
+}
+
+static int load_module(char *module_name)
+{
+        char buf[256];
+        int rc;
+        
+        vprint("loading %s\n", module_name);
+        sprintf(buf, "/sbin/modprobe %s", module_name);
+        rc = system(buf);
+        if (rc) {
+                fprintf(stderr, "%s: failed to modprobe %s (%d)\n", 
+                        progname, module_name, rc);
+                fprintf(stderr, "Check /etc/modules.conf\n");
+        }
+        return rc;
+}
+
+static int load_modules(struct mkfs_opts *mop)
+{
+        int rc = 0;
+
+        //client: rc = load_module("lustre");
+        vprint("Loading modules...");
+
+        /* portals, ksocknal, fsfilt, etc. in modules.conf */
+        rc = load_module("_lustre");
+        if (rc) return rc;
+
+        /* FIXME currently use the MDT to write llogs, should be a MGS */
+        rc = load_module("mds");
+        vprint("done\n");
+        return rc;
 }
 
 //Ugly implement. FIXME 
@@ -179,6 +214,8 @@ static void run_command_out()
                 fprintf(stderr, cmd_out[i]);
         }
 }
+
+/*============ disk dev functions ===================*/
 
 /* Setup a file in the first unused loop_device */
 int loop_setup(struct mkfs_opts *mop)
@@ -279,92 +316,6 @@ __u64 get_device_size(char* device)
         }
         
         return size;
-}
-
-void set_nid_pair(struct host_desc *nids, char *str)
-{
-        nids->primary = libcfs_str2nid(str);
-        // FIXME secondary too (,altnid)
-}
-
-/* Write the server config files */
-int write_local_files(struct mkfs_opts *mop)
-{
-        struct lr_server_data lsd;
-        char mntpt[] = "/tmp/mntXXXXXX";
-        char filepnm[128];
-        char *dev;
-        FILE *filep;
-        int ret = 0;
-
-        /* Mount this device temporarily in order to write these files */
-        vprint("mounting backing device\n");
-        if (!mkdtemp(mntpt)) {
-                fprintf(stderr, "Can't create temp mount point %s: %s\n",
-                        mntpt, strerror(errno));
-                return errno;
-        }
-
-        dev = mop->mo_device;
-        if (mop->mo_flags & MO_IS_LOOP) 
-                dev = mop->mo_loopdev;
-        
-        ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
-        if (ret) {
-                fprintf(stderr, "Unable to mount %s: %s\n", mop->mo_device,
-                        strerror(ret));
-                goto out_rmdir;
-        }
-
-        /* Set up initial directories */
-        sprintf(filepnm, "%s/%s", mntpt, MOUNT_CONFIGS_DIR);
-        ret = mkdir(filepnm, 0777);
-        if (ret) {
-                fprintf(stderr, "Can't make configs dir %s (%d)\n", 
-                        filepnm, ret);
-                goto out_umnt;
-        }
-
-        /* Save the persistent mount data into a file. Lustre must pre-read
-           this file to get the real mount options. */
-        vprint("Writing %s\n", MOUNT_DATA_FILE);
-        sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
-        filep = fopen(filepnm, "w");
-        if (!filep) {
-                fprintf(stderr, "Unable to create %s file\n", filepnm);
-                goto out_umnt;
-        }
-        fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
-        fclose(filep);
-        
-        /* Create the inital last_rcvd file */
-        vprint("Writing %s\n", LAST_RCVD);
-        sprintf(filepnm, "%s/%s", mntpt, LAST_RCVD);
-        filep = fopen(filepnm, "w");
-        if (!filep) {
-                ret = errno;
-                fprintf(stderr,"Unable to create %s file\n", filepnm);
-                goto out_umnt;
-        }
-        memset(&lsd, 0, sizeof(lsd));
-        strncpy(lsd.lsd_uuid, mop->mo_ldd.ldd_svname, sizeof(lsd.lsd_uuid));
-        lsd.lsd_index = mop->mo_index;
-        lsd.lsd_feature_compat |= cpu_to_le32(LR_COMPAT_COMMON_LR);
-        lsd.lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
-        lsd.lsd_client_start = cpu_to_le32(LR_CLIENT_START);
-        lsd.lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
-        if (IS_MDT(&mop->mo_ldd))
-                lsd.lsd_feature_rocompat = cpu_to_le32(MDS_ROCOMPAT_LOVOBJID);
-        
-        fwrite(&lsd, sizeof(lsd), 1, filep);
-        ret = 0;
-        fclose(filep);
-out_umnt:
-        vprint("unmounting backing device\n");
-        umount(mntpt);    
-out_rmdir:
-        rmdir(mntpt);
-        return ret;
 }
 
 int loop_format(struct mkfs_opts *mop)
@@ -476,8 +427,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         mop->mo_ldd.ldd_svname);
 
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
-                long journal_sz = 0;
-                if (journal_sz > 0) { /* FIXME */
+                long journal_sz = 0; /* FIXME default journal size */
+                if (journal_sz > 0) { 
                         sprintf(buf, " --journal_size %ld", journal_sz);
                         strcat(mop->mo_mkfsopts, buf);
                 }
@@ -523,37 +474,105 @@ out:
         return ret;
 }
 
-static int load_module(char *module_name)
+/* ==================== Lustre config functions =============*/
+
+void print_ldd(struct lustre_disk_data *ldd)
 {
-        char buf[256];
-        int rc;
-        
-        vprint("loading %s\n", module_name);
-        sprintf(buf, "/sbin/modprobe %s", module_name);
-        rc = system(buf);
-        if (rc) {
-                fprintf(stderr, "%s: failed to modprobe %s (%d)\n", 
-                        progname, module_name, rc);
-                fprintf(stderr, "Check /etc/modules.conf\n");
+        int count = 0;
+        printf("Permanent disk data:\n");
+        printf("Server:     %s\n", ldd->ldd_svname);
+        printf("Lustre FS:  %s\n", ldd->ldd_fsname);
+        printf("Mount type: %s\n", MT_STR(ldd));
+        printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
+        printf("MGS nids:");
+        while (count < MAX_FAILOVER_NIDS) {
+                if (ldd->ldd_mgsnid[count] == LNET_NID_ANY)
+                        break;
+                printf("%c %s", (count == 0) ? ' ' : ',',
+                       libcfs_nid2str(ldd->ldd_mgsnid[count]));
+                count++;
         }
-        return rc;
+        printf("\n");
 }
 
-static int load_modules(struct mkfs_opts *mop)
+/* Write the server config files */
+int write_local_files(struct mkfs_opts *mop)
 {
-        int rc = 0;
+        struct lr_server_data lsd;
+        char mntpt[] = "/tmp/mntXXXXXX";
+        char filepnm[128];
+        char *dev;
+        FILE *filep;
+        int ret = 0;
 
-        //client: rc = load_module("lustre");
-        vprint("Loading modules...");
+        /* Mount this device temporarily in order to write these files */
+        vprint("mounting backing device\n");
+        if (!mkdtemp(mntpt)) {
+                fprintf(stderr, "Can't create temp mount point %s: %s\n",
+                        mntpt, strerror(errno));
+                return errno;
+        }
 
-        /* portals, ksocknal, fsfilt, etc. in modules.conf */
-        rc = load_module("_lustre");
-        if (rc) return rc;
+        dev = mop->mo_device;
+        if (mop->mo_flags & MO_IS_LOOP) 
+                dev = mop->mo_loopdev;
+        
+        ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
+        if (ret) {
+                fprintf(stderr, "Unable to mount %s: %s\n", mop->mo_device,
+                        strerror(ret));
+                goto out_rmdir;
+        }
 
-        /* FIXME currently use the MDT to write llogs, should be a MGS */
-        rc = load_module("mds");
-        vprint("done\n");
-        return rc;
+        /* Set up initial directories */
+        sprintf(filepnm, "%s/%s", mntpt, MOUNT_CONFIGS_DIR);
+        ret = mkdir(filepnm, 0777);
+        if (ret) {
+                fprintf(stderr, "Can't make configs dir %s (%d)\n", 
+                        filepnm, ret);
+                goto out_umnt;
+        }
+
+        /* Save the persistent mount data into a file. Lustre must pre-read
+           this file to get the real mount options. */
+        vprint("Writing %s\n", MOUNT_DATA_FILE);
+        sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
+        filep = fopen(filepnm, "w");
+        if (!filep) {
+                fprintf(stderr, "Unable to create %s file\n", filepnm);
+                goto out_umnt;
+        }
+        fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
+        fclose(filep);
+        
+        /* Create the inital last_rcvd file */
+        vprint("Writing %s\n", LAST_RCVD);
+        sprintf(filepnm, "%s/%s", mntpt, LAST_RCVD);
+        filep = fopen(filepnm, "w");
+        if (!filep) {
+                ret = errno;
+                fprintf(stderr,"Unable to create %s file\n", filepnm);
+                goto out_umnt;
+        }
+        memset(&lsd, 0, sizeof(lsd));
+        strncpy(lsd.lsd_uuid, mop->mo_ldd.ldd_svname, sizeof(lsd.lsd_uuid));
+        lsd.lsd_index = mop->mo_index;
+        lsd.lsd_feature_compat |= cpu_to_le32(LR_COMPAT_COMMON_LR);
+        lsd.lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
+        lsd.lsd_client_start = cpu_to_le32(LR_CLIENT_START);
+        lsd.lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
+        if (IS_MDT(&mop->mo_ldd))
+                lsd.lsd_feature_rocompat = cpu_to_le32(MDS_ROCOMPAT_LOVOBJID);
+        
+        fwrite(&lsd, sizeof(lsd), 1, filep);
+        ret = 0;
+        fclose(filep);
+out_umnt:
+        vprint("unmounting backing device\n");
+        umount(mntpt);    
+out_rmdir:
+        rmdir(mntpt);
+        return ret;
 }
 
 static int jt_setup()
@@ -571,21 +590,6 @@ static int jt_setup()
         obd_initialize(0, NULL);
         return 0; 
 }
-
-
-#if 0
-// do we need this for aything?
-/* see jt_ptl_list_nids */
-int jt_getnids(lnet_nid_t *nidarray, int maxnids)
-{
-        struct libcfs_ioctl_data data;
-        int                      count;
-        int                      rc;
-        if (count == 0)
-                printf("<no local networks>\n");
-        return count;
-}
-#endif
 
 static void jt_print(char *cmd_name, int argc, char **argv)
 {
@@ -702,12 +706,7 @@ int write_llog_files(struct mkfs_opts *mop)
         }
         
         if (IS_MDT(&mop->mo_ldd)) {
-                lnet_nid_t nidarray[128];
                 char scnt[20], ssz[20], soff[20], spat[20];
-                char cliname[sizeof(mop->mo_ldd.ldd_fsname)];
-                char mdcname[sizeof(mop->mo_ldd.ldd_fsname)];
-                lnet_nid_t nid;
-                int numnids;
 
                 /* Write mds-conf log */
                 do_jt(jt_cfg_clear_log, "clear_log", name, 0);
@@ -859,21 +858,17 @@ static void make_sv_name(struct mkfs_opts *mop)
 
 void set_defaults(struct mkfs_opts *mop)
 {
-        char hostname[128];
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
         mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX;
-
+        mop->mo_ldd.ldd_mgsnid[0] = LNET_NID_ANY;
+        strcpy(mop->mo_ldd.ldd_fsname, "lustre");
         if (get_os_version() == 24) 
                 mop->mo_ldd.ldd_mount_type = LDD_MT_EXT3;
         else 
                 mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
         
-        strcpy(mop->mo_ldd.ldd_fsname, "lustre");
         mop->mo_stripe_count = 1;
         mop->mo_index = -1;
-
-        gethostname(hostname, sizeof(hostname));
-        //mop->mo_hostnid.primary = libcfs_str2nid(hostname);
 }
 
 static inline void badopt(char opt, char *type)
@@ -936,7 +931,7 @@ int main(int argc , char *const argv[])
                         }
                         break;
                 }
-                case 'C':
+                case 'C': /* Configdev */
                         //FIXME
                         exit(2);
                 case 'c':
@@ -973,11 +968,25 @@ int main(int argc , char *const argv[])
                                 badopt(opt, "MDT,OST");
                         }
                         break;
-                case 'm':
+                case 'm': {
+                        int count = 0;
+                        char *s1 = optarg, *s2;
                         if (IS_MGMT(&mop.mo_ldd))
                                 badopt(opt, "non-MGMT MDT,OST");
-                        set_nid_pair(&mop.mo_ldd.ldd_mgmtnid, optarg);
+                        while ((s2 = strsep(&s1, ","))){
+                                mop.mo_ldd.ldd_mgsnid[count++] =
+                                        libcfs_str2nid(s2);
+                                if (count >= MAX_FAILOVER_NIDS) {
+                                        fprintf(stderr, "too many MGS nids, "
+                                                "ignoring %s\n", s1);
+                                        break;
+                                } else {
+                                        mop.mo_ldd.ldd_mgsnid[count] = 
+                                                LNET_NID_ANY;
+                                }
+                        }
                         break;
+                }
                 case 'M':
                         mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MDT;
                         break;
@@ -1037,13 +1046,24 @@ int main(int argc , char *const argv[])
         }
 
         if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd) && 
-            mop.mo_ldd.ldd_mgmtnid.primary == LNET_NID_ANY) {
-                vprint("No MGMT specified, adding to this MDT\n");
+            mop.mo_ldd.ldd_mgsnid[0] == LNET_NID_ANY) {
+                int count;
+                __u64 *nids;
+                vprint("No MGS specified, adding to this MDT\n");
                 mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
-                //FIXME mop.mo_ldd.ldd_mgmt.primary == libcfs_str2nid(localhost);
+                count = jt_ptl_get_nids(&nids);
+                if (count > 0) {
+                        vprint("Adding %d local nids for MGS\n", count);
+                        memcpy(mop.mo_ldd.ldd_mgsnid, nids,
+                               sizeof(mop.mo_ldd.ldd_mgsnid));
+                        free(nids);
+                }
+                if (count < MAX_FAILOVER_NIDS) {
+                        mop.mo_ldd.ldd_mgsnid[count] = LNET_NID_ANY;
+                }
         }
 
-        if (mop.mo_ldd.ldd_mgmtnid.primary == LNET_NID_ANY) {
+        if (mop.mo_ldd.ldd_mgsnid[0] == LNET_NID_ANY) {
                 fatal();
                 fprintf(stderr, "Must specify either --mgmt or --mgmtnode\n");
                 usage(stderr);
@@ -1060,14 +1080,19 @@ int main(int argc , char *const argv[])
         case LDD_MT_LDISKFS: {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
                 if (IS_MDT(&mop.mo_ldd))
-                        strcat(mop.mo_ldd.ldd_mount_opts, ",iopen_nopriv");
+                        strcat(mop.mo_ldd.ldd_mount_opts,
+                               ",iopen_nopriv,user_xattr");
                 if ((get_os_version() == 24) && IS_OST(&mop.mo_ldd))
                         strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
-                /* When do we want extents and mballoc? 
-                if (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
+#if 0
+                /* Files created while extents are enabled cannot be read if
+                   mounted with a kernel that doesn't include the CFS patches.*/
+                if ((get_os_version() == 26) && IS_OST(&mop.mo_ldd) && 
+                    mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
                         strcat(mop.mo_ldd.ldd_mount_opts, ",extents,mballoc");
                 }
-                */
+#endif               
+ 
                 break;
         }
         case LDD_MT_SMFS: {
@@ -1108,6 +1133,9 @@ int main(int argc , char *const argv[])
                         return ret;
                 }
         }
+
+        if (verbose)
+                print_ldd(&(mop.mo_ldd));
 
         ret = make_lustre_backfs(&mop);
         if (ret != 0) {

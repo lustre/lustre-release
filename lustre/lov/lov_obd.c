@@ -278,7 +278,7 @@ static int lov_disconnect(struct obd_export *exp)
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (tgt->ltd_exp) {
                         /* Disconnect and delete from list */
-                        lov_del_obd(obd, &obd->obd_uuid, i, tgt->ltd_gen);
+                        lov_del_obd(obd, &tgt->uuid, i, tgt->ltd_gen);
                         /* Cleanup the osc now - can't do it from 
                            lov_cleanup because we lose our only reference to 
                            it right now. */ 

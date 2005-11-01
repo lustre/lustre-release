@@ -58,7 +58,7 @@ void usage(FILE *out)
                 "\t-h|--help: print this usage message\n"
                 "\t-n|--nomtab: do not update /etc/mtab after mount\n"
                 "\t-v|--verbose: print verbose config settings\n");
-        exit(out != stdout);
+        exit((out != stdout) ? EINVAL : 0);
 }
 
 static int load_module(char *module_name)
@@ -162,6 +162,7 @@ struct opt_map {
         int mask;               /* flag mask value */
 };
 
+/* These flags are parsed by mount, not lustre */
 static const struct opt_map opt_map[] = {
   { "defaults", 0, 0, 0         },      /* default options */
   { "rw",       1, 1, MS_RDONLY },      /* read-write */
@@ -301,13 +302,13 @@ int main(int argc, char *const argv[])
         }
 
         if (!force && check_mtab_entry(source, target, "lustre"))
-                exit(32);
+                return(EEXIST);
 
         rc = parse_options(options, &flags); 
         if (rc) {
                 fprintf(stderr, "%s: can't parse options: %s\n",
                         progname, options);
-                exit(1);
+                return(EINVAL);
         }
 
         rc = access(target, F_OK);
@@ -315,7 +316,7 @@ int main(int argc, char *const argv[])
                 rc = errno;
                 fprintf(stderr, "%s: %s inaccessible: %s\n", progname, target,
                         strerror(errno));
-                return 1;
+                return rc;
         }
 
         /* FIXME remove */
@@ -336,6 +337,7 @@ int main(int argc, char *const argv[])
                    lustre_fill_super.  Lustre ignores the flags, but mount 
                    does not. */
                 rc = mount(source, target, "lustre", flags, (void *)optcopy);
+
         if (rc) {
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname, 
                         source, target, strerror(errno));
