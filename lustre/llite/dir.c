@@ -224,7 +224,8 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
                 rc = mdc_enqueue(ll_i2sbi(dir)->ll_mdc_exp, LDLM_PLAIN, &it,
                                  LCK_PR, &data, &lockh, NULL, 0,
-                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir);
+                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir,
+                                 0);
 
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
@@ -723,6 +724,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                  
                 RETURN(0);
         }
+#if HAVE_QUOTA_SUPPORT
         case OBD_IOC_QUOTACTL: {
                 struct if_quotactl qctl;
                 struct obd_quotactl oqctl;
@@ -833,6 +835,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 RETURN(rc?:error);
         }
+#endif /* HAVE_QUOTA_SUPPORT */
         case OBD_IOC_GETNAME: {  
                 struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
                 if (!obd)

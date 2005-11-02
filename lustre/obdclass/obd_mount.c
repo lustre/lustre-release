@@ -571,7 +571,7 @@ static void lustre_stop_mgs(struct super_block *sb)
                 CERROR("Can not get mgs obd!\n");
                 goto out;
         }
-        class_manual_cleanup(obd, NULL);
+        class_manual_cleanup(obd);
 out:
         return;
 }
@@ -641,7 +641,7 @@ static void lustre_stop_mgc(struct super_block *sb)
 
         obd = sbi->lsi_mgc;
         if (obd) 
-                class_manual_cleanup(obd, NULL);
+                class_manual_cleanup(obd);
 }
           
 /***************** mount **************/
@@ -769,86 +769,38 @@ out_free:
                       
 static void server_put_super(struct super_block *sb)
 {
-        struct list_head dentry_list;
         struct lustre_sb_info *sbi = s2sbi(sb);
-        struct l_linux_dirent *dirent, *n;
         struct obd_device *obd;
-        struct mgc_obd *mgcobd;
-        char flags[2] = "";
-        int err;
                                                                                        
-        obd = sbi->lsi_mgc;
-        CERROR("server put_super %s\n", obd->obd_name);
-        mgcobd = &obd->u.mgc;
+        CERROR("server put_super %s\n", sbi->lsi_ldd->ldd_svname);
                                                                                        
         lustre_update_llog(obd);
                                                                                        
-        //FIXME cleanup does the mntput; we have to make sure MGS is done with
-        //it as well
-
-        if (sbi->lsi_flags & LSI_UMOUNT_FORCE)
-                strcat(flags, "A");
-        if (sbi->lsi_flags & LSI_UMOUNT_FAILOVER)
-                strcat(flags, "F");
-
-        /* Clean up all the -conf obd's in the LOGS directory.
-            FIXME this may not be complete / reasonable.
-            Really, we should have a list of every obd we started,
-            maybe an additional field to obd_device for group_uuid, then
-            just use lustre_manual_cleanup.
-            CRAY_MDS:
-                 client  client-clean  mdsA  mdsA-clean  mdsA-conf
-            CRAY_OST:
-                 OSS-conf  OST_uml2-conf
-            This does clean up oss, ost, mds, but not mdt. mdt is set up
-            as part of mdsA-conf.
-         */
-        
-        /* Find all the logs in the CONFIGS directory */
-        err = dentry_readdir(obd, mgcobd->mgc_configs_dir,
-                       mgcobd->mgc_vfsmnt, &dentry_list);
-        if (err)
-                CERROR("Can't read %s dir, %d\n", MOUNT_CONFIGS_DIR, err);
-                                                                                       
-        list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                char *logname;
-                int len;
-
-                list_del(&dirent->lld_list);
-                
-                logname = dirent->lld_name;
-                CERROR("file: %s\n", logname);
-
-                /* Confobd start adds "-conf" */
-                len = strlen(logname) - 5;
-                if ((len < 1) || (strcmp(logname + len, "-conf") != 0)) {
-                        CDEBUG(D_CONFIG, "ignoring %s\n", logname);
-                        OBD_FREE(dirent, sizeof(*dirent));
-                        continue;
-                }
-                logname[len] = 0;
-                                                                                       
-                obd = class_name2obd(logname);
-                if (!obd) {
-                        CERROR("no obd %s\n", logname);
-                        continue;
-                }
-                                                                                       
-                CERROR("stopping %s\n", logname);
-                class_manual_cleanup(obd, flags);
-
-                OBD_FREE(dirent, sizeof(*dirent));
+        obd = class_name2obd(sbi->lsi_ldd->ldd_svname);
+        if (obd) {
+                CERROR("stopping %s\n", obd->obd_name);
+                if (sbi->lsi_flags & LSI_UMOUNT_FORCE)
+                        obd->obd_force = 1;
+                if (sbi->lsi_flags & LSI_UMOUNT_FAILOVER)
+                        obd->obd_fail = 1;
+                class_manual_cleanup(obd);
+        } else {
+                CERROR("no obd %s\n", sbi->lsi_ldd->ldd_svname);
         }
-                                                                                       
-        /* FIXME so until we decide the above, completly evil hack 
-        the MDT, soon to be known as the MDS, will be started at insmod and 
-        removed at rmmod, so take out of here. */
-        obd = class_name2obd("MDT");
-        if (obd)
-                class_manual_cleanup(obd, flags);
-
         class_del_profile(sbi->lsi_ldd->ldd_svname);
+        /* clean the mgc */
         lustre_common_put_super(sb);
+                                                                                       
+        /* FIXME the MDT, soon to be known as the MDS, will be started
+           at insmod and removed at rmmod, so take out of here. */
+        obd = class_name2obd("MDT");
+        if (obd) {
+                if (sbi->lsi_flags & LSI_UMOUNT_FORCE)
+                        obd->obd_force = 1;
+                if (sbi->lsi_flags & LSI_UMOUNT_FAILOVER)
+                        obd->obd_fail = 1;
+                class_manual_cleanup(obd);
+        }
 }
 
 static void server_umount_begin(struct super_block *sb)
@@ -999,15 +951,29 @@ static void print_lmd(struct lustre_mount_data *lmd)
 static int parse_lmd(char *options, struct lustre_mount_data *lmd)
 {
         char *s1, *s2, *devname = NULL;
+        struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
         ENTRY;
 
-        if (!options || !lmd) 
-                goto invalid;
+        LASSERT(lmd);
+        if (!options) {
+                LCONSOLE_ERROR("Missing mount data: check that " 
+                               "/sbin/mount.lustre is installed.\n");
+                RETURN(-EINVAL);          
+        }
+        
+        /* Try to detect old lmd data in options */
+        if ((raw->lmd_magic & 0xffffff00) == (LMD_MAGIC & 0xffffff00)) { 
+                LCONSOLE_ERROR("You're using an old version of "        
+                               "/sbin/mount.lustre.  Please install version "   
+                               "1.%d\n", LMD_MAGIC & 0xFF);     
+                RETURN(-EINVAL);
+        }
+        lmd->lmd_magic = LMD_MAGIC;
 
         /* default flags */
         lmd->lmd_flags |= LMD_FLG_MNTCNF | LMD_FLG_RECOVER;
 
-        s1 == options;
+        s1 = options;
         while(*s1) {
                 while (*s1 == ' ')
                         s1++;
@@ -1027,14 +993,15 @@ static int parse_lmd(char *options, struct lustre_mount_data *lmd)
                    end of the options. */
                 if (strncmp(s1, "device=", 7) == 0)
                         devname = s1 + 7;
-                s2 = strstr(s1, ',');
+                s2 = strstr(s1, ",");
                 if (s2 == NULL) 
                         break;
                 s1 = s2 + 1;
         }
 
         if (!devname) {
-                LCONSOLE_ERROR("Can't find device name\n");
+                LCONSOLE_ERROR("Can't find the device name "
+                               "(need mount option 'device=...')\n");
                 goto invalid;
         }
 
@@ -1054,7 +1021,7 @@ static int parse_lmd(char *options, struct lustre_mount_data *lmd)
                         LCONSOLE_ERROR("Can't parse NID '%s'\n", s1);
                         goto invalid;
                 }
-                if (lmd->lmd_mgsnid_count >= MAX_FAILOVER_LIST) {
+                if (lmd->lmd_mgsnid_count >= MAX_FAILOVER_NIDS) {
                         LCONSOLE_ERROR("Too many NIDs: '%s'\n", s1);
                         goto invalid;
                 }
@@ -1093,6 +1060,7 @@ static int parse_lmd(char *options, struct lustre_mount_data *lmd)
         RETURN(0);
 
 invalid:
+        CERROR("Bad mount options %s\n", options);
         RETURN(-EINVAL);          
 }
 
@@ -1114,10 +1082,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
         /* Figure out the lmd from the mount options */
         if (parse_lmd((char *)data, lmd)) {
-                lustre_free_sbi(sb);
-                RETURN(-EINVAL);
-        }
-        if (lmd_bad_magic(lmd)) {
                 lustre_free_sbi(sb);
                 RETURN(-EINVAL);
         }

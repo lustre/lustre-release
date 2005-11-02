@@ -29,7 +29,11 @@
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
+#ifdef _AIX
+#include "syscall_AIX.h"
+#else
 #include <syscall.h>
+#endif
 #include <sys/utsname.h>
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -45,7 +49,7 @@
 #include "lutil.h"
 
 
-unsigned int libcfs_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
+unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
 unsigned int libcfs_debug = 0;
 
 struct task_struct     *current;

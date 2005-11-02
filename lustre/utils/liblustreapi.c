@@ -102,7 +102,7 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
                         "multiple of %d bytes", page_size);
                 goto out;
         }
-        if (stripe_offset < -1 || stripe_offset > LOV_MAX_STRIPE_COUNT) {
+        if (stripe_offset < -1 || stripe_offset > 2048) {
                 errno = rc = -EINVAL;
                 err_msg("error: bad stripe offset %d", stripe_offset);
                 goto out;
@@ -310,7 +310,7 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
         int i, obdstripe = 0;
 
         if (obdindex != OBD_NOT_FOUND) {
-                for (i = 0; i < lum->lmm_stripe_count; i++) {
+                for (i = 0; fname[0] && i < lum->lmm_stripe_count; i++) {
                         if (obdindex == lum->lmm_objects[i].l_ost_idx) {
                                 printf("%s/%s\n", dname, fname);
                                 obdstripe = 1;
@@ -866,4 +866,3 @@ out:
         cleanup_find(&param);
         return ret;
 }
-

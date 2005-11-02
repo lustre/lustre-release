@@ -9,7 +9,7 @@ ext3_headers := $(wildcard @LINUX@/fs/ext3/*.h)
 linux_headers := $(wildcard @LINUX@/include/linux/ext3*.h)
 
 ext3_sources := $(filter-out %.mod.c,$(wildcard @LINUX@/fs/ext3/*.c))
-new_sources := iopen.c iopen.h extents.c mballoc.c
+new_sources := iopen.c iopen.h extents.c mballoc.c proc.c
 new_headers := ext3_extents.h
 #quotafmt_sources := lustre_quota_fmt.c
 #quotafmt_headers := lustre_quota_fmt.h

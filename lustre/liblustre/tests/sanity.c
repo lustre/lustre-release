@@ -22,6 +22,7 @@
  */
 
 #define _BSD_SOURCE
+#define _FILE_OFFSET_BITS 64
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -358,9 +359,9 @@ int t14(char *name)
         char buf[1024];
         const int nfiles = 256;
         char *prefix = "test14_filename_long_prefix_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA___";
-	struct dirent64 *ent;
+        struct dirent64 *ent;
         int fd, i, rc, pos, index;
-	loff_t base = 0;
+        loff_t base = 0;
         ENTRY(">1 block(4k) directory readdir");
         snprintf(dir, MAX_PATH_LENGTH, "%s/test_t14_dir/", lustre_path);
 
@@ -373,12 +374,12 @@ int t14(char *name)
         fd = t_opendir(dir);
         printf("Listing...\n");
         index = 0;
-	while ((rc = getdirentries64(fd, buf, 1024, &base)) > 0) {
-		pos = 0;
-		while (pos < rc) {
+        while ((rc = getdirentries64(fd, buf, 1024, &base)) > 0) {
+                pos = 0;
+                while (pos < rc) {
                         char *item;
 
-			ent = (struct dirent64 *) ((char*) buf + pos);
+                        ent = (struct dirent64 *) ((char*) buf + pos);
                         item = (char *) ent->d_name;
                         if (!strcmp(item, ".") || !strcmp(item, ".."))
                                 goto iter;
@@ -386,16 +387,16 @@ int t14(char *name)
                                 printf("found bad name %s\n", item);
                                 return(-1);
                         }
-			printf("[%03d]: %s\n",
+                        printf("[%03d]: %s\n",
                                 index++, item + strlen(prefix));
 iter:
-			pos += ent->d_reclen;
-		}
-	}
-	if (rc < 0) {
-		printf("getdents error %d\n", rc);
+                        pos += ent->d_reclen;
+                }
+        }
+        if (rc < 0) {
+                printf("getdents error %d\n", rc);
                 return(-1);
-	}
+        }
         if (index != nfiles) {
                 printf("get %d files != %d\n", index, nfiles);
                 return(-1);
@@ -527,12 +528,27 @@ int t18b(char *name)
         LEAVE();
 }
 
+static int check_file_size(char *file, off_t size)
+{
+        struct stat statbuf;
+
+        if(stat(file, &statbuf) != 0) {
+                printf("Error stat(%s)\n", file);
+                return(1);
+        }
+        if (statbuf.st_size != size) {
+                printf("size of %s: %ld != %ld\n", file, statbuf.st_size, size);
+                return(-1);
+        }
+        return 0;
+}
+
 int t19(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd;
-        struct stat statbuf;
-        ENTRY("open(O_TRUNC) should trancate file to 0-length");
+        int result;
+        ENTRY("open(O_TRUNC) should truncate file to 0-length");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
 
         t_echo_create(file, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
@@ -543,14 +559,9 @@ int t19(char *name)
                 return(-1);
         }
         close(fd);
-        if(stat(file, &statbuf) != 0) {
-                printf("Error stat\n");
-                return(1);
-        }
-        if (statbuf.st_size != 0) {
-                printf("size %ld is not zero\n", statbuf.st_size);
-                return(-1);
-        }
+        result = check_file_size(file, 0);
+        if (result != 0)
+                return result;
         t_unlink(file);
         LEAVE();
 }
@@ -639,10 +650,10 @@ int t21(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd, ret;
-	struct flock lock = {
-		.l_type = F_RDLCK,
-		.l_whence = SEEK_SET,
-	};
+        struct flock lock = {
+                .l_type = F_RDLCK,
+                .l_whence = SEEK_SET,
+        };
 
         ENTRY("basic fcntl support");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t21_file", lustre_path);
@@ -659,13 +670,13 @@ int t21(char *name)
                 return(-1);
         }
 
-	t_fcntl(fd, F_SETLK, &lock);
-	t_fcntl(fd, F_GETLK, &lock);
-	lock.l_type = F_WRLCK;
-	t_fcntl(fd, F_SETLKW, &lock);
-	t_fcntl(fd, F_GETLK, &lock);
-	lock.l_type = F_UNLCK;
-	t_fcntl(fd, F_SETLK, &lock);
+        t_fcntl(fd, F_SETLK, &lock);
+        t_fcntl(fd, F_GETLK, &lock);
+        lock.l_type = F_WRLCK;
+        t_fcntl(fd, F_SETLKW, &lock);
+        t_fcntl(fd, F_GETLK, &lock);
+        lock.l_type = F_UNLCK;
+        t_fcntl(fd, F_SETLK, &lock);
 
         close(fd);
         t_unlink(file);
@@ -745,7 +756,7 @@ int t23(char *name)
         long long ret;
         loff_t off;
 
-        ENTRY("handle lseek > 2GB");
+        ENTRY("handle seek > 2GB");
         snprintf(path, MAX_PATH_LENGTH, "%s/f%s", lustre_path, name);
 
         fd = open(path, O_WRONLY | O_CREAT | O_LARGEFILE, 0666);
@@ -758,7 +769,7 @@ int t23(char *name)
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
                 printf("seek error for initial %llu != %llu\n",
-                       (long long)off, ret);
+                       ret, (long long)off);
                 return -1;
         }
 
@@ -766,35 +777,66 @@ int t23(char *name)
         if (ret != buf_size) {
                 printf("write error for %d != %llubytes @ %llu\n",
                        buf_size, ret, (long long)off);
+                if (ret == -1)
+                        perror("write");
                 return -1;
         }
 
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
-                printf("seek error for %llu != %llu\n", (long long)off, ret);
+                printf("seek < 2GB error for %llu != %llu\n",
+                       ret, (long long)off);
+                if (ret == -1)
+                        perror("seek < 2GB");
                 return -1;
         }
 
         ret = lseek(fd, off + buf_size - 2, SEEK_SET);
         if (ret != off + buf_size - 2) {
-                printf("seek error for %llu != %llu\n", (long long)off, ret);
+                printf("seek > 2GB error for %llu != %llu\n",
+                       ret, (long long)off);
+                if (ret == -1)
+                        perror("seek > 2GB");
                 return -1;
         }
 
         ret = lseek(fd, -buf_size + 2, SEEK_CUR);
         if (ret != off) {
-                printf("relative seek error for %d != %llu\n",
-                       -buf_size + 2, off);
+                printf("relative seek error for %d %llu != %llu\n",
+                       -buf_size + 2, ret, off);
+                if (ret == -1)
+                        perror("relative seek");
                 return -1;
         }
 
         ret = lseek(fd, 0, SEEK_END);
         if (ret != off + buf_size) {
                 printf("end seek error for %llu != %llu\n",
-                       (long long)off + buf_size, ret);
+                       ret, (long long)off + buf_size);
+                if (ret == -1)
+                        perror("end seek");
                 return -1;
         }
 
+        ret = lseek(fd, 0, SEEK_SET);
+        if (ret != 0) {
+                printf("seek 0 error for %llu != 0\n", ret);
+                if (ret == -1)
+                        perror("seek 0");
+                return -1;
+        }
+
+        off = 2048ULL * 1024 * 1024, SEEK_SET;
+        ret = lseek(fd, off, SEEK_SET);
+        if (ret != off) {
+                printf("seek 2GB error for %llu != %llu\n", ret, off);
+                if (ret == -1)
+                        perror("seek 2GB");
+                return -1;
+        }
+
+        close(fd);
+        t_unlink(path);
         LEAVE();
 }
 
@@ -809,6 +851,7 @@ static int pages_io(int xfer, loff_t pos)
         int fd, rc, i, j, data_error = 0;
         struct timeval tw1, tw2, tr1, tr2;
         double tw, tr;
+        loff_t ret;
 
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t50", lustre_path);
 
@@ -830,34 +873,44 @@ static int pages_io(int xfer, loff_t pos)
 
         t_touch(path);
 
-	fd = t_open(path);
+        fd = t_open(path);
 
         /* write */
-	lseek(fd, pos, SEEK_SET);
+        ret = lseek(fd, pos, SEEK_SET);
+        if (ret != pos) {
+                perror("write seek");
+                return 1;
+        }
         gettimeofday(&tw1, NULL);
-	for (i = 0, buf = buf_alloc; i < _npages;
+        for (i = 0, buf = buf_alloc; i < _npages;
              i += xfer, buf += xfer * PAGE_SIZE / sizeof(int)) {
                 rc = write(fd, buf, PAGE_SIZE * xfer);
                 if (rc != PAGE_SIZE * xfer) {
-                        printf("write error %d (i = %d)\n", rc, i);
+                        printf("write error (i %d, rc %d): %s\n", i, rc,
+                               strerror(errno));
                         return(1);
                 }
-	}
+        }
         gettimeofday(&tw2, NULL);
 
         memset(buf_alloc, 0, buf_size);
 
         /* read */
-	lseek(fd, pos, SEEK_SET);
+        ret = lseek(fd, pos, SEEK_SET);
+        if (ret != pos) {
+                perror("read seek");
+                return 1;
+        }
         gettimeofday(&tr1, NULL);
-	for (i = 0, buf = buf_alloc; i < _npages;
+        for (i = 0, buf = buf_alloc; i < _npages;
              i += xfer, buf += xfer * PAGE_SIZE / sizeof(int)) {
-		rc = read(fd, buf, PAGE_SIZE * xfer);
+                rc = read(fd, buf, PAGE_SIZE * xfer);
                 if (rc != PAGE_SIZE * xfer) {
-                        printf("read error %d (i = %d)\n", rc, i);
+                        printf("read error (i %d, rc %d): %s\n", i, rc,
+                               strerror(errno));
                         return(1);
                 }
-	}
+        }
         gettimeofday(&tr2, NULL);
 
         /* compute checksum */
@@ -868,12 +921,12 @@ static int pages_io(int xfer, loff_t pos)
                 }
                 if (sum != check_sum[i]) {
                         data_error = 1;
-                        printf("chunk %d checksum error: expected 0x%x, get 0x%x\n",
+                        printf("chunk %d checksum error expected %#x got %#x\n",
                                 i, check_sum[i], sum);
                 }
         }
 
-	t_close(fd);
+        t_close(fd);
         t_unlink(path);
         tw = (tw2.tv_sec - tw1.tv_sec) * 1000000 + (tw2.tv_usec - tw1.tv_usec);
         tr = (tr2.tv_sec - tr1.tv_sec) * 1000000 + (tr2.tv_usec - tr1.tv_usec);
@@ -906,16 +959,66 @@ int t50b(char *name)
         loff_t off_array[] = {1, 17, 255, 258, 4095, 4097, 8191,
                               1024*1024*1024*1024ULL};
         int np = 1, i;
-        loff_t offset = 0;
+        loff_t offset;
 
         ENTRY("4k un-aligned i/o sanity");
         for (i = 0; i < sizeof(off_array)/sizeof(loff_t); i++) {
                 offset = off_array[i];
                 printf("16 per xfer(total %d), offset %10lld...\t",
                         _npages, offset);
-                pages_io(16, offset);
+                if (pages_io(16, offset) != 0)
+                        return 1;
         }
 
+        LEAVE();
+}
+
+enum {
+        T51_STEP = 42,
+        T51_NR   = 1000
+};
+
+/*
+ * truncate(2) checks.
+ */
+int t51(char *name)
+{
+        char file[MAX_PATH_LENGTH] = "";
+        int fd;
+        struct stat statbuf;
+        off_t size;
+        int result;
+
+        ENTRY("truncate() should truncate file to proper length");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
+
+        for (size = 0; size < T51_NR * T51_STEP; size += T51_STEP) {
+                t_echo_create(file, "");
+                if (truncate(file, size) != 0) {
+                        printf("error truncating file: %s\n", strerror(errno));
+                        return(-1);
+                }
+                result = check_file_size(file, size);
+                if (result != 0)
+                        return result;
+                t_unlink(file);
+
+                t_echo_create(file, "");
+                fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
+                if (fd < 0) {
+                        printf("error open file: %s\n", strerror(errno));
+                        return(-1);
+                }
+                if (ftruncate(fd, size) != 0) {
+                        printf("error ftruncating file: %s\n", strerror(errno));
+                        return(-1);
+                }
+                close(fd);
+                result = check_file_size(file, size);
+                if (result != 0)
+                        return result;
+                t_unlink(file);
+        }
         LEAVE();
 }
 
@@ -961,13 +1064,14 @@ struct testlist {
         { t23, "23" },
         { t50, "50" },
         { t50b, "50b" },
+        { t51, "51" },
         { NULL, NULL }
 };
 
 int main(int argc, char * const argv[])
 {
         struct testlist *test;
-        int opt_index, c, numonly = 0;
+        int opt_index, c, rc = 0, numonly = 0;
         char *only[100];
         static struct option long_opts[] = {
                 {"dumpfile", 1, 0, 'd'},
@@ -1021,21 +1125,22 @@ int main(int argc, char * const argv[])
                         for (i = 0; i < numonly; i++) {
                                 if (len < strlen(only[i]))
                                         continue;
-                                if (strncmp(only[i], test->name, len) == 0) {
+                                if (strncmp(only[i], test->name,
+                                            strlen(only[i])) == 0) {
                                         run = 1;
                                         break;
                                 }
                         }
                 }
-                if (run && (test->test)(test->name) != 0)
+                if (run && (rc = (test->test)(test->name)) != 0)
                         break;
         }
 
         free(buf_alloc);
 
-	printf("liblustre is about to shutdown\n");
+        printf("liblustre is about to shutdown\n");
         __liblustre_cleanup_();
 
-	printf("complete successfully\n");
-	return 0;
+        printf("complete successfully\n");
+        return rc;
 }

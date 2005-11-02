@@ -47,6 +47,7 @@ static char *progname = NULL;
 
 void usage(FILE *out)
 {
+        fprintf(out, "%s v1.%d\n", progname, LMD_MAGIC & 0xFF);
         fprintf(out, "usage: %s <mdsnode>:/<mdsname>/<cfgname> <mountpt> "
                 "[-fhnv] [-o mntopt]\n", progname);
         fprintf(out, "\t<mdsnode>: nid of MDS (config) node\n"

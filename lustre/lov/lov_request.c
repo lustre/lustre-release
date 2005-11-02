@@ -132,6 +132,7 @@ int lov_update_enqueue_set(struct lov_request_set *set,
                 __u64 tmp = req->rq_md->lsm_oinfo->loi_rss;
 
                 LASSERT(lock != NULL);
+                lov_stripe_lock(set->set_md);
                 loi->loi_rss = tmp;
                 loi->loi_mtime = req->rq_md->lsm_oinfo->loi_mtime;
                 loi->loi_blocks = req->rq_md->lsm_oinfo->loi_blocks;
@@ -150,13 +151,16 @@ int lov_update_enqueue_set(struct lov_request_set *set,
                                    loi->loi_rss, loi->loi_kms,
                                    lock->l_policy_data.l_extent.end);
                 }
+                lov_stripe_unlock(set->set_md);
                 ldlm_lock_allow_match(lock);
                 LDLM_LOCK_PUT(lock);
         } else if (rc == ELDLM_LOCK_ABORTED && flags & LDLM_FL_HAS_INTENT) {
                 memset(lov_lockhp, 0, sizeof(*lov_lockhp));
+                lov_stripe_lock(set->set_md);
                 loi->loi_rss = req->rq_md->lsm_oinfo->loi_rss;
                 loi->loi_mtime = req->rq_md->lsm_oinfo->loi_mtime;
                 loi->loi_blocks = req->rq_md->lsm_oinfo->loi_blocks;
+                lov_stripe_unlock(set->set_md);
                 CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
                        " kms="LPU64"\n", loi->loi_rss, loi->loi_kms);
                 rc = ELDLM_OK;

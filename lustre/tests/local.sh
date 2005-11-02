@@ -18,6 +18,8 @@ NETTYPE=${NETTYPE:-tcp}
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-400000}
 
+CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
+
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}
 [ "$JSIZE" -gt 0 ] && JARG="--journal_size $JSIZE"
@@ -29,9 +31,34 @@ STRIPES_PER_OBJ=1	# 0 means stripe over all OSTs
 
 rm -f $config
 
+h2tcp () {
+	case $1 in
+	client) echo '\*' ;;
+	*) echo $1 ;;
+	esac
+}
+
+h2elan () {
+	case $1 in
+	client) echo '\*' ;;
+	*) echo $1 | sed "s/[^0-9]*//" ;;
+	esac
+}
+
+h2gm () {
+	echo `gmlndnid -n$1`
+}
+
+h2iib () {
+	case $1 in
+	client) echo '\*' ;;
+	*) echo $1 | sed "s/[^0-9]*//" ;;
+	esac
+}
+
 # create nodes
 ${LMC} --add node --node $HOSTNAME || exit 10
-${LMC} --add net --node $HOSTNAME --nid $HOSTNAME --nettype $NETTYPE || exit 11
+${LMC} --add net --node $HOSTNAME --nid `h2$NETTYPE $HOSTNAME` --nettype $NETTYPE || exit 11
 ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
 [ "x$MDS_MOUNT_OPTS" != "x" ] &&
@@ -54,6 +81,7 @@ ${LMC} --add ost --node $HOSTNAME --lov lov1 --fstype $FSTYPE \
 	$OST_MOUNT_OPTS --size $OSTSIZE $JARG $OSTOPT || exit 30
 
 # create client config
+[ "x$CLIENTOPT" != "x" ] && CLIENTOPT="--clientoptions $CLIENTOPT"
 ${LMC} --add mtpt --node $HOSTNAME --path $MOUNT \
 	--mds mds1 --lov lov1 $CLIENTOPT || exit 40
 ${LMC} --add mtpt --node client --path $MOUNT2 \

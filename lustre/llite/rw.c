@@ -102,10 +102,11 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
 }
 
 /* this isn't where truncate starts.   roughly:
- * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
- * we grab the lock back in setattr_raw to avoid races.
+ * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate. setattr_raw grabs
+ * DLM lock on [0, EOF], i_sem, ->lli_size_sem, and WRITE_I_ALLOC_SEM to
+ * avoid races.
  *
- * must be called with lli_size_sem held */
+ * must be called under ->lli_size_sem */
 void ll_truncate(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -116,7 +117,7 @@ void ll_truncate(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu=%#Lx\n",inode->i_ino,
                inode->i_generation, inode, inode->i_size, inode->i_size);
 
-        if (lli->lli_size_pid != current->pid) {
+        if (lli->lli_size_sem_owner != current) {
                 EXIT;
                 return;
         }
@@ -131,11 +132,16 @@ void ll_truncate(struct inode *inode)
 
         /* XXX I'm pretty sure this is a hack to paper over a more fundamental
          * race condition. */
+        lov_stripe_lock(lsm);
         if (lov_merge_size(lsm, 0) == inode->i_size) {
                 CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
                        lsm->lsm_object_id, inode->i_size, inode->i_size);
+                lov_stripe_unlock(lsm);
                 GOTO(out_unlock, 0);
         }
+
+        obd_adjust_kms(ll_i2obdexp(inode), lsm, inode->i_size, 1);
+        lov_stripe_unlock(lsm);
 
         if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
                      (inode->i_size & ~PAGE_MASK))) {
@@ -162,10 +168,7 @@ void ll_truncate(struct inode *inode)
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
                         OBD_MD_FLATIME |OBD_MD_FLMTIME |OBD_MD_FLCTIME);
 
-        obd_adjust_kms(ll_i2obdexp(inode), lsm, inode->i_size, 1);
-
-        lli->lli_size_pid = 0;
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
 
         rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
                        OBD_OBJECT_EOF, NULL);
@@ -179,8 +182,8 @@ void ll_truncate(struct inode *inode)
         return;
 
  out_unlock:
-        lli->lli_size_pid = 0;
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
+        EXIT;
 } /* ll_truncate */
 
 int ll_prepare_write(struct file *file, struct page *page, unsigned from,
@@ -230,9 +233,9 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         /* If are writing to a new page, no need to read old data.  The extent
          * locking will have updated the KMS, and for our purposes here we can
          * treat it like i_size. */
-        down(&lli->lli_size_sem);
+        lov_stripe_lock(lsm);
         kms = lov_merge_size(lsm, 1);
-        up(&lli->lli_size_sem);
+        lov_stripe_unlock(lsm);
         if (kms <= offset) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "kms "LPU64" <= offset "LPU64"\n",
                                kms, offset);
@@ -307,6 +310,7 @@ static int ll_ap_refresh_count(void *data, int cmd)
         struct ll_async_page *llap;
         struct lov_stripe_md *lsm;
         struct page *page;
+        struct inode *inode;
         __u64 kms;
         ENTRY;
 
@@ -315,12 +319,13 @@ static int ll_ap_refresh_count(void *data, int cmd)
 
         llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
-        lli = ll_i2info(page->mapping->host);
+        inode = page->mapping->host;
+        lli = ll_i2info(inode);
         lsm = lli->lli_smd;
 
-        //down(&lli->lli_size_sem);
+        lov_stripe_lock(lsm);
         kms = lov_merge_size(lsm, 1);
-        //up(&lli->lli_size_sem);
+        lov_stripe_unlock(lsm);
 
         /* catch race with truncate */
         if (((__u64)page->index << PAGE_SHIFT) >= kms)
@@ -468,10 +473,22 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                 page_cache_get(page);
                 spin_unlock(&sbi->ll_lock);
 
-                ++count;
                 if (page->mapping != NULL) {
-                        ll_ra_accounting(page, page->mapping);
-                        ll_truncate_complete_page(page);
+                        ll_teardown_mmaps(page->mapping,
+                                         (__u64)page->index<<PAGE_CACHE_SHIFT,
+                                         ((__u64)page->index<<PAGE_CACHE_SHIFT)|
+					  ~PAGE_CACHE_MASK);
+                        if (!PageDirty(page) && !page_mapped(page)) {
+                                ll_ra_accounting(llap, page->mapping);
+                                ll_truncate_complete_page(page);
+                                ++count;
+                        } else {
+                                LL_CDEBUG_PAGE(D_PAGE, page, "Not dropping page"
+                                                             " because it is "
+                                                             "%s\n",
+                                                              PageDirty(page)?
+                                                              "dirty":"mapped");
+                        }
                 }
                 unlock_page(page);
                 page_cache_release(page);
@@ -487,7 +504,7 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
         return count;
 }
 
-struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
+static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -501,12 +518,15 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 
         llap = llap_cast_private(page);
         if (llap != NULL) {
-                /* move to end of LRU list */
-                spin_lock(&sbi->ll_lock);
-                sbi->ll_pglist_gen++;
-                list_del_init(&llap->llap_pglist_item);
-                list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
-                spin_unlock(&sbi->ll_lock);
+                /* move to end of LRU list, except when page is just about to
+                 * die */
+                if (origin != LLAP_ORIGIN_REMOVEPAGE) {
+                        spin_lock(&sbi->ll_lock);
+                        sbi->ll_pglist_gen++;
+                        list_del_init(&llap->llap_pglist_item);
+                        list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
+                        spin_unlock(&sbi->ll_lock);
+                }
                 GOTO(out, llap);
         }
 
@@ -709,9 +729,11 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 
 out:
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
-        down(&lli->lli_size_sem);
+        ll_inode_size_lock(inode, 0);
         if (rc == 0) {
+                lov_stripe_lock(lsm);
                 obd_adjust_kms(exp, lsm, size, 0);
+                lov_stripe_unlock(lsm);
                 if (size > inode->i_size)
                         inode->i_size = size;
                 SetPageUptodate(page);
@@ -721,7 +743,7 @@ out:
                  * teardown our book-keeping here. */
                 ll_removepage(page);
         }
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
         RETURN(rc);
 }
 
@@ -916,14 +938,8 @@ static void ll_ra_stats_inc(struct address_space *mapping, enum ra_stat which)
         spin_unlock(&sbi->ll_lock);
 }
 
-void ll_ra_accounting(struct page *page, struct address_space *mapping)
+void ll_ra_accounting(struct ll_async_page *llap, struct address_space *mapping)
 {
-        struct ll_async_page *llap;
-
-        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
-        if (IS_ERR(llap))
-                return;
-
         if (!llap->llap_defer_uptodate || llap->llap_ra_used)
                 return;
 
@@ -949,6 +965,61 @@ static int index_in_window(unsigned long index, unsigned long point,
         return start <= index && index <= end;
 }
 
+static struct ll_readahead_state *ll_ras_get(struct file *f)
+{
+        struct ll_file_data       *fd;
+
+        fd = LUSTRE_FPRIVATE(f);
+        return &fd->fd_ras;
+}
+
+void ll_ra_read_in(struct file *f, struct ll_ra_read *rar)
+{
+        struct ll_readahead_state *ras;
+
+        ras = ll_ras_get(f);
+        rar->lrr_reader = current;
+
+        spin_lock(&ras->ras_lock);
+        list_add(&rar->lrr_linkage, &ras->ras_read_beads);
+        spin_unlock(&ras->ras_lock);
+}
+
+void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar)
+{
+        struct ll_readahead_state *ras;
+
+        ras = ll_ras_get(f);
+
+        spin_lock(&ras->ras_lock);
+        list_del_init(&rar->lrr_linkage);
+        spin_unlock(&ras->ras_lock);
+}
+
+static struct ll_ra_read *ll_ra_read_get_locked(struct ll_readahead_state *ras)
+{
+        struct ll_ra_read *scan;
+
+        list_for_each_entry(scan, &ras->ras_read_beads, lrr_linkage) {
+                if (scan->lrr_reader == current)
+                        return scan;
+        }
+        return NULL;
+}
+
+struct ll_ra_read *ll_ra_read_get(struct file *f)
+{
+        struct ll_readahead_state *ras;
+        struct ll_ra_read         *bead;
+
+        ras = ll_ras_get(f);
+
+        spin_lock(&ras->ras_lock);
+        bead = ll_ra_read_get_locked(ras);
+        spin_unlock(&ras->ras_lock);
+        return bead;
+}
+
 static int ll_readahead(struct ll_readahead_state *ras,
                          struct obd_export *exp, struct address_space *mapping,
                          struct obd_io_group *oig, int flags)
@@ -959,22 +1030,54 @@ static int ll_readahead(struct ll_readahead_state *ras,
         int rc, ret = 0, match_failed = 0;
         __u64 kms;
         unsigned int gfp_mask;
+        struct inode *inode;
+        struct lov_stripe_md *lsm;
+        struct ll_ra_read *bead;
         ENTRY;
 
-        kms = lov_merge_size(ll_i2info(mapping->host)->lli_smd, 1);
+        inode = mapping->host;
+        lsm = ll_i2info(inode)->lli_smd;
+
+        lov_stripe_lock(lsm);
+        kms = lov_merge_size(lsm, 1);
+        lov_stripe_unlock(lsm);
         if (kms == 0) {
                 ll_ra_stats_inc(mapping, RA_STAT_ZERO_LEN);
                 RETURN(0);
         }
 
         spin_lock(&ras->ras_lock);
+        bead = ll_ra_read_get_locked(ras);
         /* reserve a part of the read-ahead window that we'll be issuing */
         if (ras->ras_window_len) {
                 start = ras->ras_next_readahead;
                 end = ras->ras_window_start + ras->ras_window_len - 1;
+        }
+        if (bead != NULL) {
+                pgoff_t read_end;
+
+                start = max(start, bead->lrr_start);
+                read_end = bead->lrr_start + bead->lrr_count - 1;
+                if (ras->ras_consecutive > start - bead->lrr_start + 1)
+                        /*
+                         * if current read(2) is a part of larger sequential
+                         * read, make sure read-ahead is at least to the end
+                         * of the read region.
+                         *
+                         * XXX nikita: This doesn't work when some pages in
+                         * [lrr_start, start] were cached (and, as a result,
+                         * weren't counted in ->ras_consecutive).
+                         */
+                        end = max(end, read_end);
+                else
+                        /*
+                         * otherwise, clip read-ahead at the read boundary.
+                         */
+                        end = read_end;
+        }
+        if (end != 0) {
                 end = min(end, (unsigned long)((kms - 1) >> PAGE_CACHE_SHIFT));
                 ras->ras_next_readahead = max(end, end + 1);
-
                 RAS_CDEBUG(ras);
         }
         spin_unlock(&ras->ras_lock);
@@ -984,7 +1087,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 RETURN(0);
         }
 
-        reserved = ll_ra_count_get(ll_i2sbi(mapping->host), end - start + 1);
+        reserved = ll_ra_count_get(ll_i2sbi(inode), end - start + 1);
         if (reserved < end - start + 1)
                 ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
 
@@ -1040,7 +1143,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
         LASSERTF(reserved >= 0, "reserved %lu\n", reserved);
         if (reserved != 0)
-                ll_ra_count_put(ll_i2sbi(mapping->host), reserved);
+                ll_ra_count_put(ll_i2sbi(inode), reserved);
         if (i == end + 1 && end == (kms >> PAGE_CACHE_SHIFT))
                 ll_ra_stats_inc(mapping, RA_STAT_EOF);
 
@@ -1084,6 +1187,7 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
 {
         spin_lock_init(&ras->ras_lock);
         ras_reset(ras, 0);
+        INIT_LIST_HEAD(&ras->ras_read_beads);
 }
 
 static void ras_update(struct ll_sb_info *sbi, struct ll_readahead_state *ras,

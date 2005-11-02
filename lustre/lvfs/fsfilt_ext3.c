@@ -58,14 +58,6 @@
 #include <linux/ext3_extents.h>
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
-# define lock_24kernel() lock_kernel()
-# define unlock_24kernel() unlock_kernel()
-#else
-# define lock_24kernel() do {} while (0)
-# define unlock_24kernel() do {} while (0)
-#endif
-
 static kmem_cache_t *fcb_cache;
 
 struct fsfilt_cb_data {
@@ -79,7 +71,6 @@ struct fsfilt_cb_data {
 #ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
-#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -1093,7 +1084,8 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
                                block_count * EXT3_DATA_TRANS_BLOCKS + 2);
         unlock_24kernel();
         if (IS_ERR(handle)) {
-                CERROR("can't start transaction\n");
+                CERROR("can't start transaction for %d blocks (%d bytes)\n",
+                       block_count * EXT3_DATA_TRANS_BLOCKS + 2, bufsize);
                 return PTR_ERR(handle);
         }
 

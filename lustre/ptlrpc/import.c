@@ -774,13 +774,11 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         switch (imp->imp_connect_op) {
         case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
         case MDS_CONNECT: rq_opc = MDS_DISCONNECT; break;
-        case MGMT_CONNECT:rq_opc = MGMT_DISCONNECT;break;
         default:
                 CERROR("don't know how to disconnect from %s (connect_op %d)\n",
                        imp->imp_target_uuid.uuid, imp->imp_connect_op);
                 RETURN(-EINVAL);
         }
-
 
         if (ptlrpc_import_in_recovery(imp)) {
                 struct l_wait_info lwi;
@@ -803,6 +801,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
                  * it fails.  We can get through the above with a down server
                  * if the client doesn't know the server is gone yet. */
                 request->rq_no_resend = 1;
+                request->rq_timeout = 5;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
                 request->rq_send_state =  LUSTRE_IMP_CONNECTING;
                 request->rq_replen = lustre_msg_size(0, NULL);

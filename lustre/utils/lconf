@@ -105,7 +105,6 @@ subsystem_names = {
     "log" :          (1 << 6),
     "llite" :        (1 << 7),
     "rpc" :          (1 << 8),
-    "mgmt" :         (1 << 9),
     "portals" :      (1 << 10),
     "nal" :          (1 << 11),
     "pinger" :       (1 << 12),
@@ -325,7 +324,7 @@ class LCTLInterface:
 
     # create a new connection
     def add_uuid(self, net_type, uuid, nid):
-        if nid.find('@') < 0:
+        if net_type != 'lnet' and string.find(nid,'@') < 0:
             nidstr = nid + "@" + net_type
         else:
             nidstr = nid
@@ -384,6 +383,13 @@ class LCTLInterface:
   quit""" % (name)
         self.run(cmds)
 
+    def add_conn(self, name, conn_uuid):
+        cmds = """
+  cfg_device %s
+  add_conn %s
+  quit""" % (name, conn_uuid)
+        self.run(cmds)
+
     # create a new device with lctl
     def newdev(self, type, name, uuid, setup = ""):
         self.attach(type, name, uuid);
@@ -393,7 +399,7 @@ class LCTLInterface:
             self.cleanup(name, uuid, 0)
             raise e
         if (config.abort_recovery):
-            if (type == 'obdfilter' or type == 'mdt'):
+            if (type == 'obdfilter' or type == 'mds'):
                 self.abort_recovery(name)
 
     # cleanup a device
@@ -771,77 +777,10 @@ def def_mount_options(fstype, target):
                 mountfsoptions = "%s,asyncdel" % (mountfsoptions)
             #else:
             #    mountfsoptions = "%s,extents,mballoc" % (mountfsoptions)
+        elif target == 'mds':
+            mountfsoptions = "%s,user_xattr" % (mountfsoptions)
         return mountfsoptions
     return ""
-
-def sys_get_elan_position_file():
-    procfiles = ["/proc/elan/device0/position",
-                 "/proc/qsnet/elan4/device0/position",
-                 "/proc/qsnet/elan3/device0/position"]
-    for p in procfiles:
-        if os.access(p, os.R_OK):
-            return p
-    return ""
-
-def sys_get_local_nid(net_type, wildcard, cluster_id):
-    """Return the local address for the network type."""
-    local = ""
-
-    # don't need a real nid for config log - client will replace (bug5619)
-    if config.record:
-        local = "54321"
-    elif net_type in ('tcp','openib','iib','vib','ra','ptl'):
-        if  ':' in wildcard:
-            iface, star = string.split(wildcard, ':')
-            local = if2addr(iface)
-        elif net_type == 'vib':
-            local = if2addr('ipoib0')
-        else:
-            host = socket.gethostname()
-            local = socket.gethostbyname(host)
-        if not local:
-            panic("unable to determine ip for:", wildcard)
-    elif net_type == 'elan':
-        # awk '/NodeId/ { print $2 }' 'sys_get_elan_position_file()'
-        f = sys_get_elan_position_file()
-        if not f:
-            panic("unable to determine local Elan ID")
-        try:
-            fp = open(f, 'r')
-            lines = fp.readlines()
-            fp.close()
-            for l in lines:
-                a = string.split(l)
-                if a[0] == 'NodeId':
-                    elan_id = a[1]
-                    break
-            try:
-                nid = my_int(cluster_id) + my_int(elan_id)
-                local = "%d" % (nid)
-            except ValueError, e:
-                local = elan_id
-        except IOError, e:
-            log(e)
-    elif net_type == 'lo':
-        fixme("automatic local address for loopback")
-    elif net_type == 'gm':
-        found=0
-        paths = ['/usr/sbin', config.portals + "/utils"]
-        for path in paths:
-            gmlndnid = path + '/gmlndnid'
-            if (os.path.exists(gmlndnid) and os.access(gmlndnid, os.X_OK)):
-                found=1
-                break
-        if not found:
-            panic (gmlndnid, " not found or not executable on node with GM networking")
-        (rc, local) = run(gmlndnid, "-l")
-        if rc:
-            panic (gmlndnid, " failed")
-        local=string.rstrip(local[0])
-    else:
-        fixme("automatic local address for net type %s" % net_type)
-
-    return local
 
 def sys_get_branch():
     """Returns kernel release"""
@@ -999,7 +938,7 @@ class Module:
 
     def info(self, *args):
         msg = string.join(map(str,args))
-        print self.module_name + ":", self.name, self.uuid, msg
+        log (self.module_name + ":", self.name, self.uuid, msg)
 
     def cleanup(self):
         """ default cleanup, used for most modules """
@@ -1061,27 +1000,6 @@ class Network(Module):
 
     def cleanup(self):
         self.info(self.net_type, self.nid)
-
-class Management(Module):
-    def __init__(self, db):
-        Module.__init__(self, 'MGMT', db)
-        self.add_lustre_module('lvfs', 'lvfs')
-        self.add_lustre_module('obdclass', 'obdclass')
-        self.add_lustre_module('ptlrpc', 'ptlrpc')
-        self.add_lustre_module('mgmt', 'mgmt_svc')
-
-    def prepare(self):
-        if is_prepared(self.name):
-            return
-        self.info()
-        lctl.newdev("mgmt", self.name, self.uuid)
-
-    def safe_to_clean(self):
-        return 1
-
-    def cleanup(self):
-        if is_prepared(self.name):
-            Module.cleanup(self)
 
 # This is only needed to load the modules; the LDLM device
 # is now created automatically.
@@ -1323,8 +1241,8 @@ class MDSDEV(Module):
 
         except CommandError, e:
             if e.rc == 2:
-                panic("MDS is missing the config log. Need to run " +
-                       "lconf --write_conf.")
+                panic("MDS failed to start.  Check the syslog for details." +
+                      " (May need to run lconf --write-conf)")
             else:
                 raise e
 
@@ -1352,14 +1270,6 @@ class MDSDEV(Module):
             client.prepare()
             lctl.mount_option(self.name, client.get_name(), "")
             lctl.end_record()
-
-            config.cleanup = 1
-            lctl.clear_log(self.name, self.name + '-clean')
-            lctl.record(self.name, self.name + '-clean')
-            client.cleanup()
-            lctl.del_mount_option(self.name)
-            lctl.end_record()
-            config.cleanup = 0
             config.record = 0
 
         # record logs for each client
@@ -1399,26 +1309,6 @@ class MDSDEV(Module):
                                            client_name, self.name))
                         if config.verbose:
                             for s in out: log("record> ", string.strip(s))
-                        ret, out = run (sys.argv[0],
-                                        noexec_opt[old_noexec == 1],
-                                        "--cleanup --record --nomod",
-                                        "--record_log", client_name + "-clean",
-                                        "--record_device", self.name,
-                                        "--node", client_name,
-                                        config_options)
-                        if ret:
-              # In this case, although 0-conf mount works but 0-conf umount
-              # doesn't work. As a boring result, the user is forced to
-              # cleanup client service manually again and again. So I prefer
-              # deleting these two llogs together and let the user write_conf.
-                            lctl.clear_log(self.name, client_name)
-                            lctl.clear_log(self.name, client_name + '-clean')
-                            print out
-                            self.cleanup()
-                            panic("Record client log %s on %s failed" %(
-                                           client_name + '-clean', self.name))
-                        if config.verbose:
-                            for s in out: log("record> ", string.strip(s))
                         config.noexec = old_noexec
         try:
             lctl.cleanup(self.name, self.uuid, config.force, config.failover)
@@ -1428,6 +1318,21 @@ class MDSDEV(Module):
             cleanup_error(e.rc)
             Module.cleanup(self)
         clean_loop(self.devpath)
+
+        #change the mtime of LLOG to match the XML creation time
+        if toplustreDB.get_mtime():
+            mtime = string.atof(toplustreDB.get_mtime())
+            runcmd("mkdir /tmp/lustre-XXXX/")
+            if is_block(self.devpath):
+                ret, out = runcmd("mount %s /tmp/lustre-XXXX/" %self.devpath)
+            else:
+                ret, out = runcmd("mount -o loop %s /tmp/lustre-XXXX/" %self.devpath)
+            if ret:
+                print out[0]
+            os.utime("/tmp/lustre-XXXX/LOGS", (mtime, mtime))
+            runcmd("umount -f /tmp/lustre-XXXX/")
+        else:
+            print "XML file does not contain mtime, skip mtime checking."
 
     def mds_remaining(self):
         out = lctl.device_list()
@@ -1601,16 +1506,6 @@ class OSD(Module):
         if not self.osdtype == 'obdecho':
             clean_loop(self.devpath)
 
-def mgmt_uuid_for_fs(mtpt_name):
-    if not mtpt_name:
-        return ''
-    mtpt_db = toplustreDB.lookup_name(mtpt_name)
-    fs_uuid = mtpt_db.get_first_ref('filesystem')
-    fs = toplustreDB.lookup(fs_uuid)
-    if not fs:
-        return ''
-    return fs.get_first_ref('mgmt')
-
 # Generic client module, used by OSC and MDC
 class Client(Module):
     def __init__(self, tgtdb, uuid, module, fs_name, self_name=None,
@@ -1638,11 +1533,6 @@ class Client(Module):
         self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
 	self.lookup_backup_targets()
-        mgmt_uuid = mgmt_uuid_for_fs(fs_name)
-        if mgmt_uuid:
-            self.mgmt_name = mgmtcli_name_for_uuid(mgmt_uuid)
-        else:
-            self.mgmt_name = ''
         self.fs_name = fs_name
         if not module_dir:
             module_dir = module
@@ -1669,6 +1559,7 @@ class Client(Module):
                     devdb = toplustreDB.lookup(ref_uuid)
                     uuid = devdb.get_first_ref('target')
                     if self.target_uuid == uuid and self.tgt_dev_uuid != ref_uuid:
+                        debug("add backup target", ref_uuid)
                         self.backup_targets.append(ref_uuid)
 
     def prepare(self, ignore_connect_failure = 0):
@@ -1695,8 +1586,8 @@ class Client(Module):
                 debug("%s active" % self.target_uuid)
                 inactive_p = ""
             lctl.newdev(self.module, self.name, self.uuid,
-                        setup ="%s %s %s %s" % (self.target_uuid, srv.nid_uuid,
-                                                inactive_p, self.mgmt_name))
+                        setup ="%s %s %s" % (self.target_uuid, srv.nid_uuid,
+                                                inactive_p))
         else:
             panic("Unable to create OSC for ", self.target_uuid)
 
@@ -1708,6 +1599,8 @@ class Client(Module):
                 for srv in this_nets:
                     lctl.connect(srv)
                     break
+            if srv:
+                 lctl.add_conn(self.name, srv.nid_uuid);
 
 
     def cleanup(self):
@@ -1737,15 +1630,6 @@ class OSC(Client):
 
     def permits_inactive(self):
         return 1
-
-def mgmtcli_name_for_uuid(uuid):
-    return 'MGMTCLI_%s' % uuid
-
-class ManagementClient(Client):
-    def __init__(self, db, uuid):
-        Client.__init__(self, db, uuid, 'mgmt_cli', '',
-                        self_name = mgmtcli_name_for_uuid(db.getUUID()),
-                        module_dir = 'mgmt')
 
 class COBD(Module):
     def __init__(self, db):
@@ -1855,7 +1739,6 @@ class Mountpoint(Module):
         fs = self.db.lookup(self.fs_uuid)
         self.mds_uuid = fs.get_first_ref('mds')
         self.obd_uuid = fs.get_first_ref('obd')
-        self.mgmt_uuid = fs.get_first_ref('mgmt')
         obd = self.db.lookup(self.obd_uuid)
         client_uuid = generate_client_uuid(self.name)
         self.vosc = VOSC(obd, client_uuid, self.name)
@@ -1863,18 +1746,11 @@ class Mountpoint(Module):
 
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('llite', 'llite')
-        if self.mgmt_uuid:
-            self.mgmtcli = ManagementClient(db.lookup(self.mgmt_uuid),
-                                            client_uuid)
-        else:
-            self.mgmtcli = None
 
     def prepare(self):
         if fs_is_mounted(self.path):
             log(self.path, "already mounted.")
             return
-        if self.mgmtcli:
-            self.mgmtcli.prepare()
         self.vosc.prepare()
         self.mdc.prepare()
         mdc_name = self.mdc.name
@@ -1923,20 +1799,14 @@ class Mountpoint(Module):
 
         self.mdc.cleanup()
         self.vosc.cleanup()
-        if self.mgmtcli:
-            self.mgmtcli.cleanup()
 
     def load_module(self):
-        if self.mgmtcli:
-            self.mgmtcli.load_module()
         self.vosc.load_module()
         Module.load_module(self)
 
     def cleanup_module(self):
         Module.cleanup_module(self)
         self.vosc.cleanup_module()
-        if self.mgmtcli:
-            self.mgmtcli.cleanup_module()
 
 
 # ============================================================
@@ -1967,8 +1837,6 @@ def getServiceLevel(self):
         ret = 5
     elif type in ('ldlm',):
         ret = 20
-    elif type in ('mgmt',):
-        ret = 25
     elif type in ('osd', 'cobd'):
         ret = 30
     elif type in ('mdsdev',):
@@ -2057,8 +1925,6 @@ def newService(db):
         n = Mountpoint(db)
     elif type == 'echoclient':
         n = ECHO_CLIENT(db)
-    elif type == 'mgmt':
-        n = Management(db)
     else:
         panic("unknown service type:", type)
     return n
@@ -2082,10 +1948,15 @@ def for_each_profile(db, prof_list, operation):
 def doWriteconf(services):
     if config.nosetup:
         return
+    have_mds = 0
     for s in services:
         if s[1].get_class() == 'mdsdev':
             n = newService(s[1])
             n.write_conf()
+            have_mds = 1
+    if have_mds == 0:
+        panic("Cannot find mds device, please run --write_conf on the mds node.")
+
 
 def doSetup(services):
     if config.nosetup:
@@ -2163,6 +2034,58 @@ def doMakeServiceScript(services):
                 extra_error = ""
             panic("Error creating " + target_symlink + ": " + e[1] + extra_error)
 
+# Check mtime of LLOG
+def doCheckMtime(lustreDB, hosts):
+    for h in hosts:
+        node_db = lustreDB.lookup_name(h, 'node')
+        if node_db:
+            break
+    if not node_db:
+        return
+
+    mdsdb = 0
+    prof_list = node_db.get_refs('profile')
+    for prof_uuid in prof_list:
+        prof_db = node_db.lookup(prof_uuid)
+        if prof_db:
+            services = getServices(prof_db)
+            for s in services:
+               if s[1].get_class() == 'mdsdev':
+                  mdsdb = s[1]
+                  break
+    if mdsdb:
+        if lustreDB.get_mtime():
+            if config.verbose:
+                print "Checking XML modification time"
+            devpath = mdsdb.get_val('devpath','')
+            xmtime = int(lustreDB.get_mtime())
+            runcmd("mkdir /tmp/lustre-XXXX/")
+            # mounting ro causes confusing syslog errors 
+            if is_block(devpath):
+                ret, out = runcmd("mount %s /tmp/lustre-XXXX/" %devpath)
+            else:
+                ret, out = runcmd("mount -o loop %s /tmp/lustre-XXXX/" %devpath)
+            if ret:
+                print out[0]
+            else:
+                try:
+                    out = os.stat("/tmp/lustre-XXXX/LOGS")
+                except OSError:
+                    runcmd("umount -f /tmp/lustre-XXXX")
+                    panic("Warning: Can't read Lustre logs." 
+                          " Please run --write_conf to update.")
+                runcmd("umount -f /tmp/lustre-XXXX")
+                try:
+                    kmtime = int(out[8])
+                except ValueError:
+                    kmtime = xmtime
+                if xmtime > kmtime :
+                    debug('xmtime ', xmtime, '> kmtime', kmtime)
+                    panic("Warning: the startup logs are older than the XML file." 
+                          " Please run --write_conf to update.")
+        else:
+            print "XML file does not contain mtime, skip mtime checking."
+
 #
 # Load profile for
 def doHost(lustreDB, hosts):
@@ -2195,7 +2118,6 @@ def doHost(lustreDB, hosts):
     
     elif config.write_conf:
         for_each_profile(node_db, prof_list, doModules)
-        sys_make_devices()
         for_each_profile(node_db, prof_list, doWriteconf)
         for_each_profile(node_db, prof_list, doUnloadModules)
         lustreDB.close()
@@ -2210,15 +2132,11 @@ def doHost(lustreDB, hosts):
         if not mod_loaded('lnet'):
             return
 
-        if config.force:
-            # the command line can override this value
-            timeout = 5
         # ugly hack, only need to run lctl commands for --dump
         if config.lctl_dump or config.record:
             for_each_profile(node_db, prof_list, doCleanup)
             return
 
-        sys_set_timeout(timeout)
         sys_set_ptldebug(ptldebug)
         sys_set_subsystem(subsystem)
         sys_set_lustre_upcall(lustre_upcall)
@@ -2236,7 +2154,6 @@ def doHost(lustreDB, hosts):
             for_each_profile(node_db, prof_list, doSetup)
             return
 
-        sys_make_devices()
         sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
         sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
 
@@ -2415,22 +2332,14 @@ def doRecovery(lustreDB, lctl, tgt_uuid, client_uuid, nid_uuid):
     if not srv_list[0]:
         raise Lustre.LconfError("Unable to find a connection to:" + new_uuid)
 
-    for srv in srv_list:
-        log("Reconnecting", tgt_uuid, " to ",  srv.nid_uuid);
-        try:
-            oldsrv = get_server_by_nid_uuid(lustreDB, nid_uuid)
-            lustreDB.close()
-            if oldsrv:
-                lctl.disconnect(oldsrv)
-        except CommandError, e:
-            log("recover: disconnect", nid_uuid, "failed: ")
-            e.dump()
+    oldsrv = get_server_by_nid_uuid(lustreDB, nid_uuid)
+    lustreDB.close()
 
-        try:
-            lctl.connect(srv)
-        except CommandError, e:
-            log("recover: connect failed")
-            e.dump()
+    for srv in srv_list:
+        if oldsrv.net_type != srv.net_type:
+            continue
+
+        log("Reconnecting", tgt_uuid, "to", srv.nid_uuid)
 
         lctl.recover(client_uuid, srv.nid_uuid)
 
@@ -2471,7 +2380,7 @@ def sys_set_debug_path():
 
 def validate_upcall(upcall):
     import os
-    if upcall in ('DEFAULT',):
+    if upcall in ('DEFAULT','NONE'):
         pass
     elif os.path.exists(upcall):
         if not os.access(upcall, os.X_OK):
@@ -2566,12 +2475,6 @@ def sys_set_netmem_max(path, max):
         fp = open(path, 'w')
         fp.write('%d\n' %(max))
         fp.close()
-
-def sys_make_devices():
-    if not os.access('/dev/lnet', os.R_OK):
-        run('mknod /dev/lnet c 10 240')
-    if not os.access('/dev/obd', os.R_OK):
-        run('mknod /dev/obd c 10 241')
 
 
 # Add dir to the global PATH, if not already there.
@@ -2695,7 +2598,7 @@ lconf_options = [
     ('make_service_scripts', "Create per-service symlinks for use with clumanager"),
 # Client recovery options
     ('recover', "Recover a device"),
-    ('group', "The group of devices to configure or cleanup", PARAM),
+    ('group,g', "The group of devices to configure or cleanup", PARAM),
     ('tgt_uuid', "The failed target (required for recovery)", PARAM),
     ('client_uuid', "The failed client (required for recovery)", PARAM),
     ('conn_uuid', "The failed connection (required for recovery)", PARAM),
@@ -2703,6 +2606,7 @@ lconf_options = [
     ('inactive', """The name of an inactive service, to be ignored during
                     mounting (currently OST-only). Can be repeated.""",
                 PARAMLIST),
+    ('user_xattr', """Enable user_xattr support on MDS""", FLAG, 0),
     ]
 
 def main():
@@ -2779,6 +2683,10 @@ def main():
         print 'see lconf --help for command summary'
         sys.exit(1)
 
+    if config.reformat and config.cleanup:
+        panic("Options \"reformat\" and \"cleanup\" are incompatible. "+
+              "Please specify only one.")
+
     toplustreDB = lustreDB
 
     ver = lustreDB.get_version()
@@ -2806,6 +2714,9 @@ def main():
 
     if config.lctl_dump:
         lctl.use_save_file(config.lctl_dump)
+
+    if not (config.reformat or config.write_conf or config.cleanup):
+        doCheckMtime(lustreDB, node_list)
 
     if config.record:
         if not (config.record_device and config.record_log):

@@ -42,7 +42,7 @@
 
 struct uuid_nid_data {
         struct list_head un_list;
-        lnet_nid_t        un_nid;
+        lnet_nid_t       un_nid;
         char            *un_uuid;
 };
 

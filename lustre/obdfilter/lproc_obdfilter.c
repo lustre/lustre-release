@@ -265,7 +265,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
         }
 
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "discont pages        rpcs   %% cum %% |");
+        seq_printf(seq, "discont pages         rpcs   %% cum %% |");
         seq_printf(seq, "       rpcs   %% cum %%\n");
 
         read_tot = lprocfs_oh_sum(&filter->fo_r_discont_pages);
@@ -326,7 +326,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_write_rpc_hist.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%u:\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                seq_printf(seq, "%u:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                                  i, r, pct(r, read_tot),
                                  pct(read_cum, read_tot), w,
                                  pct(w, write_tot),
@@ -336,7 +336,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
         }
 
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "io time (jiffies = 1/%ds)     rpcs   %% cum %% |", HZ);
+        seq_printf(seq, "io time (1/%ds)     rpcs   %% cum %% |", HZ);
         seq_printf(seq, "       rpcs   %% cum %%\n");
 
         read_tot = lprocfs_oh_sum(&filter->fo_r_io_time);
@@ -349,7 +349,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_w_io_time.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%10u:\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                seq_printf(seq, "%u:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                                  1 << i, r, pct(r, read_tot),
                                  pct(read_cum, read_tot), w,
                                  pct(w, write_tot),

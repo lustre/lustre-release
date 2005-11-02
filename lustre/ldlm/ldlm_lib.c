@@ -683,8 +683,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (export->exp_connection != NULL)
                 ptlrpc_put_connection(export->exp_connection);
         export->exp_connection = ptlrpc_get_connection(req->rq_peer,
-                                                       req->rq_self, &remote_uuid);
-
+                                                       req->rq_self,
+                                                       &remote_uuid);
         if (rc == EALREADY) {
                 /* We indicate the reconnection in a flag, not an error code. */
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);

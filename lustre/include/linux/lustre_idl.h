@@ -45,6 +45,8 @@
 #else
 #ifdef __CYGWIN__
 # include <sys/types.h>
+#elif defined(_AIX)
+# include <inttypes.h>
 #else
 # include <stdint.h>
 #endif
@@ -210,15 +212,16 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 
 /* Connect flags */
 
-#define OBD_CONNECT_RDONLY 0x1
+#define OBD_CONNECT_RDONLY       0x1ULL
+#define OBD_CONNECT_SRVLOCK     0x10ULL /* server takes locks for client */
 
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
-#define OST_CONNECT_SUPPORTED  (0)
+#define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK)
 #define ECHO_CONNECT_SUPPORTED (0)
 
 /* This structure is used for both request and reply.
- *  
+ *
  * If we eventually have separate connect data for different types, which we
  * almost certainly will, then perhaps we stick a union in here. */
 struct obd_connect_data {
@@ -377,8 +380,12 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLUSRQUOTA  (0x20000000ULL) /* over quota flags sent from ost */
 #define OBD_MD_FLGRPQUOTA  (0x40000000ULL) /* over quota flags sent from ost */
 
-#define OBD_MD_MDS        (0x100000000ULL) /* where an inode lives on */
-#define OBD_MD_REINT      (0x200000000ULL) /* reintegrate oa */
+#define OBD_MD_MDS         (0x0000000100000000ULL) /* where an inode lives on */
+#define OBD_MD_REINT       (0x0000000200000000ULL) /* reintegrate oa */
+
+#define OBD_MD_FLXATTR     (0x0000001000000000ULL) /* xattr */
+#define OBD_MD_FLXATTRLS   (0x0000002000000000ULL) /* xattr list */
+#define OBD_MD_FLXATTRRM   (0x0000004000000000ULL) /* xattr remove */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -426,6 +433,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_GRANTED         0x40 /* the ost manages this */
 #define OBD_BRW_DROP            0x80 /* drop the page after IO */
 #define OBD_BRW_NOQUOTA        0x100
+#define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -493,6 +501,8 @@ typedef enum {
         MDS_SET_INFO     = 46,
         MDS_QUOTACHECK   = 47,
         MDS_QUOTACTL     = 48,
+        MDS_GETXATTR     = 49,
+        MDS_SETXATTR     = 50,
         MDS_LAST_OPC
 } mds_cmd_t;
 

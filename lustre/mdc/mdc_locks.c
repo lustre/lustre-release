@@ -235,14 +235,14 @@ int mdc_enqueue(struct obd_export *exp,
                 int lmmsize,
                 ldlm_completion_callback cb_completion,
                 ldlm_blocking_callback cb_blocking,
-                void *cb_data)
+                void *cb_data, int extra_lock_flags)
 {
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_exp2obd(exp);
         struct ldlm_res_id res_id =
                 { .name = {data->fid1.id, data->fid1.generation} };
         int size[5] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
-        int rc, flags = LDLM_FL_HAS_INTENT;
+        int rc, flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
         int repsize[4] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
                           obddev->u.cli.cl_max_mds_easize,
@@ -472,7 +472,7 @@ EXPORT_SYMBOL(mdc_enqueue);
 int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                     void *lmm, int lmmsize, struct lookup_intent *it,
                     int lookup_flags, struct ptlrpc_request **reqp,
-                    ldlm_blocking_callback cb_blocking)
+                    ldlm_blocking_callback cb_blocking, int extra_lock_flags)
 {
         struct lustre_handle lockh;
         struct ptlrpc_request *request;
@@ -526,7 +526,8 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
 
                 rc = mdc_enqueue(exp, LDLM_PLAIN, it, it_to_lock_mode(it),
                                  op_data, &lockh, lmm, lmmsize,
-                                 ldlm_completion_ast, cb_blocking, NULL);
+                                 ldlm_completion_ast, cb_blocking, NULL,
+                                 extra_lock_flags);
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));

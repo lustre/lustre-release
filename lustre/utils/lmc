@@ -75,7 +75,7 @@ Object creation command summary:
   --node node_name
   --nid nid
   --cluster_id 
-  --nettype tcp|elan|gm|openib|iib|vib|ra|ptl
+  --nettype tcp|elan|gm|openib|iib|vib|ra|ptl|lnet
   --hostaddr ip[/netmask]
   --port port
   --tcpbuf size
@@ -137,10 +137,6 @@ Object creation command summary:
 
 --add echo_client
   --node nodename
-
---add mgmt  - Management/monitoring service
-  --node node_name
-  --mgmt mgmt_service_name
 """
 
 PARAM = Lustre.Options.PARAM
@@ -168,11 +164,12 @@ lmc_options = [
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
     # network 
-    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib/vib/ra/ptl.", PARAM),
+    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib/vib/ra/ptl/lnet.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
     ('hostaddr', "Optional argument to specify the host address.", PARAMLIST),
     ('cluster_id', "Specify the cluster ID", PARAM, "0"),
+    ('nonet', "Skip the remote host networking check"),
 
     # routes
     ('route', "Add a new route for the cluster.", PARAM),
@@ -218,8 +215,6 @@ lmc_options = [
     # cobd
     ('real_obd', "Specify the real device for the cache obd system.", PARAM),
     ('cache_obd', "Specify the cache device for the cache obd system.", PARAM),
-
-    ('mgmt', "Specify management/monitoring service name.", PARAM, ""),
     ]
 
 def error(*args):
@@ -279,6 +274,7 @@ def new_lustre(dom):
     </lustre>""" % (Lustre.CONFIG_VERSION, ldlm_name, ldlm_uuid)
     return dom.parseString(str)
 
+
 names = {}
 uuids = {}
 
@@ -333,6 +329,10 @@ class GenConfig:
             self.addText(new, str)
         node.appendChild(new)
         return new
+
+    def recordtime(self, timestr):
+        lustre = self.doc.getElementsByTagName("lustre")
+        lustre[0].setAttribute("mtime", timestr)
 
     def network(self, name, uuid, nid, cluster_id, net, hostaddr="",
                 port=0):
@@ -470,13 +470,6 @@ class GenConfig:
         mdd.appendChild(self.ref("target", mds_uuid))
         return mdd
 
-    def mgmt(self, mgmt_name, mgmt_uuid, node_uuid):
-        mgmt = self.newService("mgmt", mgmt_name, mgmt_uuid)
-        mgmt.appendChild(self.ref("node", node_uuid))
-        # Placeholder until mgmt-service failover.
-        mgmt.appendChild(self.ref("active", mgmt_uuid))
-        return mgmt
-
     def mountpoint(self, name, uuid, fs_uuid, path, clientoptions):
         mtpt = self.newService("mountpoint", name, uuid)
         mtpt.appendChild(self.ref("filesystem", fs_uuid))
@@ -485,12 +478,10 @@ class GenConfig:
             self.addElement(mtpt, "clientoptions", clientoptions)
         return mtpt
 
-    def filesystem(self, name, uuid, mds_uuid, obd_uuid, mgmt_uuid):
+    def filesystem(self, name, uuid, mds_uuid, obd_uuid):
         fs = self.newService("filesystem", name, uuid)
         fs.appendChild(self.ref("mds", mds_uuid))
         fs.appendChild(self.ref("obd", obd_uuid))
-        if mgmt_uuid:
-            fs.appendChild(self.ref("mgmt", mgmt_uuid))
         return fs
         
     def echo_client(self, name, uuid, osc_uuid):
@@ -599,6 +590,15 @@ def get_attr(dom_node, attr, default=""):
 ############################################################
 # Top level commands
 #
+def runcmd(cmd):
+    f = os.popen(cmd)
+    ret = f.close()
+    if ret:
+        ret = ret >> 8
+    else:
+        ret = 0
+    return ret
+
 def set_node_options(gen, node, options):
     if options.router:
         node.setAttribute('router', '1')
@@ -660,7 +660,7 @@ def add_net(gen, lustre, options):
     hostaddr = get_option(options, 'hostaddr')
     net_type = get_option(options, 'nettype')
 
-    if net_type in ('tcp','openib','ra'):
+    if net_type in ('lnet','tcp','openib','ra'):
         port = get_option_int(options, 'port')
     elif net_type in ('elan','gm','iib','vib','lo','ptl'):
         port = 0
@@ -668,6 +668,22 @@ def add_net(gen, lustre, options):
         print "Unknown net_type: ", net_type
         sys.exit(2)
 
+    real_net_type = net_type
+    if net_type == 'lnet' and string.find(nid,'@') > 0:
+        real_net_type = string.split(nid,'@')[1]
+
+    # testing network
+    if options.nonet:
+        if options.verbose:
+            print "Skip the remote host networking test."
+    elif (node_name != 'client') and (real_net_type == 'tcp'):
+        if options.verbose:
+            print "Testing network on", node_name
+        target = string.split(nid,'@')[0]
+        out = runcmd("ping -c 1 -w 10 %s" %target)
+        if out != 0:
+            print "Could not connect to", node_name,", Please check network."
+            
     ret = findByName(lustre, node_name, "node")
     if not ret:
         node = do_add_node(gen, lustre, options, node_name)
@@ -760,23 +776,6 @@ def add_mds(gen, lustre, options):
                      mountfsoptions, group_upcall)
     lustre.appendChild(mdd)
                    
-
-def add_mgmt(gen, lustre, options):
-    node_name = get_option(options, 'node')
-    node_uuid = name2uuid(lustre, node_name, 'node')
-    mgmt_name = get_option(options, 'mgmt')
-    if not mgmt_name:
-        mgmt_name = new_name('MGMT_' + node_name)
-    mgmt_uuid = name2uuid(lustre, mgmt_name, 'mgmt', fatal=0)
-    if not mgmt_uuid:
-        mgmt_uuid = new_uuid(mgmt_name)
-        mgmt = gen.mgmt(mgmt_name, mgmt_uuid, node_uuid)
-        lustre.appendChild(mgmt)
-    else:
-        mgmt = lookup(lustre, mgmt_uuid)
-
-    node = findByName(lustre, node_name, "node")
-    node_add_profile(gen, node, 'mgmt', mgmt_uuid)
 
 def add_ost(gen, lustre, options):
     node_name = get_option(options, 'node')
@@ -947,25 +946,21 @@ def add_default_lov(gen, lustre, mds_name, lov_name):
     lovconfig = gen.lovconfig(lovconfig_name, lovconfig_uuid, uuid)
     lustre.appendChild(lovconfig)
 
-def new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid):
+def new_filesystem(gen, lustre, mds_uuid, obd_uuid):
     fs_name = new_name("FS_fsname")
     fs_uuid = new_uuid(fs_name)
     mds = lookup(lustre, mds_uuid)
     mds.appendChild(gen.ref("filesystem", fs_uuid))
-    fs = gen.filesystem(fs_name, fs_uuid, mds_uuid, obd_uuid, mgmt_uuid)
+    fs = gen.filesystem(fs_name, fs_uuid, mds_uuid, obd_uuid)
     lustre.appendChild(fs)
     return fs_uuid
 
-def get_fs_uuid(gen, lustre, mds_name, obd_name, mgmt_name):
+def get_fs_uuid(gen, lustre, mds_name, obd_name):
     mds_uuid = name2uuid(lustre, mds_name, tag='mds')
     obd_uuid = name2uuid(lustre, obd_name, tag='lov', fatal=0)
-    if mgmt_name:
-        mgmt_uuid = name2uuid(lustre, mgmt_name, tag='mgmt', fatal=1)
-    else:
-        mgmt_uuid = ''
     fs_uuid = lookup_filesystem(lustre, mds_uuid, obd_uuid)
     if not fs_uuid:
-        fs_uuid = new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid)
+        fs_uuid = new_filesystem(gen, lustre, mds_uuid, obd_uuid)
     return fs_uuid
     
 def add_mtpt(gen, lustre, options):
@@ -993,8 +988,7 @@ def add_mtpt(gen, lustre, options):
             lov_add_obd(gen, lov, ost_uuid)
 
     if fs_name == '':
-        mgmt_name = get_option(options, 'mgmt')
-        fs_uuid = get_fs_uuid(gen, lustre, mds_name, lov_name, mgmt_name)
+        fs_uuid = get_fs_uuid(gen, lustre, mds_name, lov_name)
     else:
         fs_uuid = name2uuid(lustre, fs_name, tag='filesystem')
 
@@ -1138,8 +1132,6 @@ def add(devtype, gen, lustre, options):
         add_echo_client(gen, lustre, options)
     elif devtype == 'cobd':
         add_cobd(gen, lustre, options)
-    elif devtype == 'mgmt':
-        add_mgmt(gen, lustre, options)
     else:
         error("unknown device type:", devtype)
     
@@ -1209,6 +1201,10 @@ def main():
             panic(string.join(sys.argv),e)
         except Lustre.OptionError, e:
             panic("lmc", e)
+
+    #record timestamp
+    timestr = string.split(str(time.time()), '.')
+    gen.recordtime(timestr[0])
 
     if outFile == '-':
         printDoc(doc)

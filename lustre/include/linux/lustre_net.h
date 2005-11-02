@@ -279,7 +279,7 @@ struct ptlrpc_request_pool {
         int prp_rq_size;
         void (*prp_populate)(struct ptlrpc_request_pool *, int);
 };
-        
+
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
@@ -321,7 +321,7 @@ struct ptlrpc_request {
         enum lustre_imp_state rq_send_state;
 
         /* client+server request */
-        lnet_handle_md_t      rq_req_md_h;
+        lnet_handle_md_t     rq_req_md_h;
         struct ptlrpc_cb_id  rq_req_cbid;
 
         /* server-side... */
@@ -332,16 +332,16 @@ struct ptlrpc_request {
 # error "Need to get the uid from the event?"
         __u32                rq_uid;            /* peer uid, used in MDS only */
 #endif
-        
+
         /* client-only incoming reply */
-        lnet_handle_md_t      rq_reply_md_h;
+        lnet_handle_md_t     rq_reply_md_h;
         wait_queue_head_t    rq_reply_waitq;
         struct ptlrpc_cb_id  rq_reply_cbid;
 
-        lnet_nid_t         rq_self;
-        lnet_process_id_t  rq_peer;
-        struct obd_export *rq_export;
-        struct obd_import *rq_import;
+        lnet_nid_t           rq_self;
+        lnet_process_id_t    rq_peer;
+        struct obd_export   *rq_export;
+        struct obd_import   *rq_import;
 
         void (*rq_replay_cb)(struct ptlrpc_request *);
         void (*rq_commit_cb)(struct ptlrpc_request *);

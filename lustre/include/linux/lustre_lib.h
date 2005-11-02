@@ -321,7 +321,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if (err) 
+        if (err)
                 RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
@@ -612,7 +612,7 @@ do {                                                                           \
             if (condition)                                                     \
                     break;                                                     \
             if (signal_pending(current)) {                                     \
-                    if (__timed_out) {                                         \
+                    if (!info->lwi_timeout || __timed_out) {                   \
                             break;                                             \
                     } else {                                                   \
                             /* We have to do this here because some signals */ \
@@ -634,7 +634,7 @@ do {                                                                           \
         RECALC_SIGPENDING;                                                     \
         SIGNAL_MASK_UNLOCK(current, irqflags);                                 \
                                                                                \
-        if (__timed_out && signal_pending(current)) {                          \
+        if ((!info->lwi_timeout || __timed_out) && signal_pending(current)) {  \
                 if (info->lwi_on_signal)                                       \
                         info->lwi_on_signal(info->lwi_cb_data);                \
                 ret = -EINTR;                                                  \
@@ -701,24 +701,13 @@ do {                                                                           \
         __ret;                                                                 \
 })
 
-#define LMD_MAGIC 0xbdacbdac
+#define LMD_MAGIC    0xbdacbd03
 
-#define lmd_bad_magic(LMDP)                                             \
-({                                                                      \
-        struct lustre_mount_data *_lmd__ = (LMDP);                      \
-        int _ret__ = 0;                                                 \
-        if (!_lmd__) {                                                  \
-                CERROR("Missing mount data: "                           \
-                       "check that /sbin/mount.lustre is installed.\n");\
-                _ret__ = 1;                                             \
-        } else if (_lmd__->lmd_magic != LMD_MAGIC) {                    \
-                CERROR("Invalid mount data (%#x != %#x): "              \
-                       "check that /sbin/mount.lustre is installed\n",  \
-                       _lmd__->lmd_magic, LMD_MAGIC);                   \
-                _ret__ = 1;                                             \
-        }                                                               \
-        _ret__;                                                         \
-})
+#ifdef __KERNEL__
+#define LIBLUSTRE_CLIENT (0)
+#else
+#define LIBLUSTRE_CLIENT (1)
+#endif
 
 #endif /* _LUSTRE_LIB_H */
 

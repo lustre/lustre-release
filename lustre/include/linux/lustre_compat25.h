@@ -56,6 +56,9 @@ void groups_free(struct group_info *ginfo);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
+#define lock_24kernel()         do {} while (0)
+#define unlock_24kernel()       do {} while (0)
+
 /*
  * OBD need working random driver, thus all our
  * initialization routines must be called after device
@@ -138,10 +141,21 @@ static inline int cleanup_group_info(void)
 
 #include <linux/proc_fs.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+#define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
+#endif
+
 #else /* 2.4.. */
+
+#define lock_24kernel()         lock_kernel()
+#define unlock_24kernel()       unlock_kernel()
 
 #ifdef HAVE_MM_INLINE
 #include <linux/mm_inline.h>
+#endif
+
+#ifndef pgoff_t
+#define pgoff_t unsigned long
 #endif
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
@@ -218,8 +232,8 @@ static inline void ll_redirty_page(struct page *page)
 
 static inline void __d_drop(struct dentry *dentry)
 {
-	list_del(&dentry->d_hash);
-	INIT_LIST_HEAD(&dentry->d_hash);
+        list_del(&dentry->d_hash);
+        INIT_LIST_HEAD(&dentry->d_hash);
 }
 
 static inline void lustre_daemonize_helper(void)
@@ -272,6 +286,17 @@ static inline int mapping_mapped(struct address_space *mapping)
 #else
 #define ll_zap_page_range(vma, addr, len)  zap_page_range(vma->vm_mm, addr, len)
 #endif
+
+#ifndef HAVE_PAGE_MAPPED
+/* Poor man's page_mapped. substract from page count, counts from
+   buffers/pagecache and our own count (we are supposed to hold one reference).
+   What is left are user mappings and also others who work with this page now,
+   but there are supposedly none. */
+static inline int page_mapped(struct page *page)
+{
+        return page_count(page) - !!page->mapping - !!page->buffers - 1;
+}
+#endif /* !HAVE_PAGE_MAPPED */
 
 #endif /* end of 2.4 compat macros */
 

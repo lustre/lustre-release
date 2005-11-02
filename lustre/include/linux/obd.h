@@ -83,6 +83,9 @@ static inline void loi_init(struct lov_oinfo *loi)
 }
 
 struct lov_stripe_md {
+        spinlock_t       lsm_lock;
+        void            *lsm_lock_owner; /* debugging */
+
         /* Public members. */
         __u64 lsm_object_id;        /* lov object id */
         __u64 lsm_object_gr;        /* lov object id */
@@ -96,6 +99,17 @@ struct lov_stripe_md {
         unsigned lsm_stripe_count;  /* number of objects being striped over */
         struct lov_oinfo lsm_oinfo[0];
 };
+
+/* compare all fields except for semaphore */
+static inline int lov_stripe_md_cmp(struct lov_stripe_md *m1,
+                                    struct lov_stripe_md *m2)
+{
+        return memcmp(&m1->lsm_object_id, &m2->lsm_object_id,
+                      (char *)&m2->lsm_oinfo[0] - (char *)&m2->lsm_object_id);
+}
+
+void lov_stripe_lock(struct lov_stripe_md *md);
+void lov_stripe_unlock(struct lov_stripe_md *md);
 
 struct obd_type {
         struct list_head typ_chain;
@@ -274,8 +288,6 @@ struct client_obd {
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
 
-        struct obd_device       *cl_mgmtcli_obd;
-
         /* the grant values are protected by loi_list_lock below */
         long                     cl_dirty;         /* all _dirty_ in bytes */
         long                     cl_dirty_max;     /* allowed w/o rpc */
@@ -320,7 +332,7 @@ struct client_obd {
         struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
 };
 
-/*a light client obd for mount-conf */
+/* a light client obd for mountconf */
 struct mgc_obd {
         struct obd_import       *mgc_import;
         struct semaphore         mgc_sem;
@@ -543,7 +555,7 @@ struct obd_device {
         unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
                 obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
                 obd_no_recov:1, obd_stopping:1, obd_starting:1,
-                obd_force:1, obd_fail:1;
+                obd_force:1, obd_fail:1, obd_async_recov:1;
         atomic_t                obd_refcount;
         wait_queue_head_t       obd_refcount_waitq;
         struct proc_dir_entry  *obd_proc_entry;
@@ -562,7 +574,8 @@ struct obd_device {
         struct llog_ctxt       *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device      *obd_observer;
         struct obd_export      *obd_self_export;
-        struct list_head        obd_exports_timed;  /* for ping evictor */
+        /* list of exports in LRU order, for ping evictor, with obd_dev_lock */
+        struct list_head        obd_exports_timed;
         time_t                  obd_eviction_timer; /* for ping evictor */
 
         /* XXX encapsulate all this recovery data into one struct */
@@ -629,8 +642,12 @@ struct obd_ops {
         int (*o_add_conn)(struct obd_import *imp, struct obd_uuid *uuid,
                           int priority);
         int (*o_del_conn)(struct obd_import *imp, struct obd_uuid *uuid);
+        /* connect to the target device with given connection
+         * data. @ocd->ocd_connect_flags is modified to reflect flags actually
+         * granted by the target, which are guaranteed to be a subset of flags
+         * asked for. If @ocd == NULL, use default parameters. */
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
-                         struct obd_uuid *cluuid, struct obd_connect_data *);
+                         struct obd_uuid *cluuid, struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,

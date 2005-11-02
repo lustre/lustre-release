@@ -7,9 +7,11 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file>
 .br
-.B lfs getstripe <file-name> 
+.B lfs getstripe <filename> 
 .br
 .B lfs setstripe <filename> <stripe-size> <start-ost> <stripe-cnt>
+.br
+.B lfs check <mds| osts| servers>
 .SH DESCRIPTION
 .B lfs
 can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and 
@@ -27,12 +29,17 @@ To list the extended attributes for a given filename or files in a directory or 
 .B getstripe 
 To list the striping pattern for given filename
 .TP
+.B check 
+Display the status of MDS or OSTs (as specified in the command) or all the servers (MDS and OSTs)
+.TP
+.B osts 
+List all the OSTs for the filesystem
+.TP
 .B help 
 Provides brief help on the various arguments
 .TP
 .B exit/quit 
 Quit the interactive lfs session
-
 .SH EXAMPLES
 .TP
 .B $lfs setstripe /mnt/lustre/file1 131072 0 1
@@ -49,5 +56,11 @@ Recursively list the extended attributes of all files in a given directory tree
 .TP
 .B $lfs find -r --obd OST2-UUID /mnt/lustre/
 List all the files that have objects on a specific OST
+.TP
+.B $lfs check servers 
+Check the status of all servers(mds, osts)
+.TP
+.B $lfs osts
+List all the OSTs
 .SH BUGS
 None are known.

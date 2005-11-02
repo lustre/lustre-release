@@ -135,7 +135,22 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
 static void ldlm_extent_policy(struct ldlm_resource *res,
                                struct ldlm_lock *lock, int *flags)
 {
-        struct ldlm_extent new_ex = { .start = 0, .end = ~0};
+        struct ldlm_extent new_ex = { .start = 0, .end = OBD_OBJECT_EOF };
+
+        if (lock->l_export == NULL)
+                /*
+                 * this is local lock taken by server (e.g., as a part of
+                 * OST-side locking, or unlink handling). Expansion doesn't
+                 * make a lot of sense for local locks, because they are
+                 * dropped immediately on operation completion and would only
+                 * conflict with other threads.
+                 */
+                return;
+
+        if (lock->l_policy_data.l_extent.start == 0 &&
+            lock->l_policy_data.l_extent.end == OBD_OBJECT_EOF)
+                /* fast-path whole file locks */
+                return;
 
         ldlm_extent_internal_policy(&res->lr_granted, lock, &new_ex);
         ldlm_extent_internal_policy(&res->lr_waiting, lock, &new_ex);
@@ -197,8 +212,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         if (req->l_policy_data.l_extent.gid ==
                              lock->l_policy_data.l_extent.gid) {
                                 /* found it */
-                                ldlm_resource_insert_lock_after(lock,
-                                                                req);
+                                ldlm_resource_insert_lock_after(lock, req);
                                 RETURN(0);
                         }
                         continue;
@@ -253,12 +267,12 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         /* Ok, we hit non-GROUP lock, there should be no
                            more GROUP locks later on, queue in front of
                            first non-GROUP lock */
-                                
+
                                 ldlm_resource_insert_lock_after(lock, req);
                                 list_del_init(&lock->l_res_link);
                                 ldlm_resource_insert_lock_after(req, lock);
                                 RETURN(0);
-                        }  
+                        }
                         if (req->l_policy_data.l_extent.gid ==
                              lock->l_policy_data.l_extent.gid) {
                                 /* found it */
@@ -292,7 +306,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         ldlm_add_ast_work_item(lock, req, NULL, 0);
         }
 
-        return(compat);
+        RETURN(compat);
 destroylock:
         list_del_init(&req->l_res_link);
         ldlm_lock_destroy(req);

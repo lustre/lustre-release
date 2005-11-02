@@ -228,6 +228,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern)
         if (!*lsmp)
                 return -ENOMEM;
 
+        spin_lock_init(&(*lsmp)->lsm_lock);
         (*lsmp)->lsm_magic = LOV_MAGIC;
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;

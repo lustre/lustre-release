@@ -22,6 +22,8 @@ OSTFAILOVER=${OSTFAILOVER:-}
 MOUNT=${MOUNT:-/mnt/lustre}
 FSTYPE=${FSTYPE:-ext3}
 
+CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
+
 NETTYPE=${NETTYPE:-tcp}
 NIDTYPE=${NIDTYPE:-$NETTYPE}
 
@@ -115,6 +117,7 @@ for NODE in $OSTNODES; do
 done
 
 # create client config(s)
+[ "x$CLIENTOPT" != "x" ] && CLIENTOPT="--clientoptions $CLIENTOPT"
 echo; echo -n "adding CLIENT on:"
 for NODE in $CLIENTS; do
 	echo -n " $NODE"

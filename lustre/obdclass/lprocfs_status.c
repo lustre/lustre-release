@@ -863,6 +863,10 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
         n = snprintf(page, count, "recovery_start: %lu\n",
                      obd->obd_recovery_start);
         page += n; len += n; count -= n;
+        n = snprintf(page, count, "time remaining: %lu\n",
+                     CURRENT_SECONDS >= obd->obd_recovery_end ? 0 : 
+                     obd->obd_recovery_end - CURRENT_SECONDS);
+        page += n; len += n; count -= n;
         n = snprintf(page, count, "connected_clients: %d/%d\n",
                      connected, max_recoverable);
         page += n; len += n; count -= n;

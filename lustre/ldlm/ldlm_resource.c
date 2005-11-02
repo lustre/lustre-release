@@ -683,6 +683,7 @@ void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
         list_del_init(&lock->l_res_link);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
+EXPORT_SYMBOL(ldlm_resource_unlink_lock);
 
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 {

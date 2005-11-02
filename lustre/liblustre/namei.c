@@ -29,7 +29,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/queue.h>
 
 #ifdef HAVE_XTIO_H
@@ -213,7 +213,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
         RETURN(rc);
 }
 
-int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
+static int llu_pb_revalidate(struct pnode *pnode, int flags,
+                             struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
         struct it_cb_data icbd;
@@ -265,7 +266,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                                 pb->pb_ino, pb->pb_name.name,pb->pb_name.len,0);
 
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, flags,
-                             &req, llu_mdc_blocking_ast);
+                             &req, llu_mdc_blocking_ast,
+                             LDLM_FL_CANCEL_ON_BLOCK);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -431,7 +433,8 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                                 pnode->p_base->pb_name.len, flags);
 
         rc = mdc_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
-                             flags, &req, llu_mdc_blocking_ast);
+                             flags, &req, llu_mdc_blocking_ast,
+                             LDLM_FL_CANCEL_ON_BLOCK);
         if (rc < 0)
                 GOTO(out, rc);
 
@@ -552,7 +555,7 @@ int llu_iop_lookup(struct pnode *pnode,
         if (pnode->p_mount->mnt_root == pnode) {
                 struct inode *i = pnode->p_base->pb_ino;
                 *inop = i;
-                return 0;
+                RETURN(0);
         }
 
         if (!pnode->p_base->pb_name.len)
@@ -564,7 +567,7 @@ int llu_iop_lookup(struct pnode *pnode,
         if (llu_pb_revalidate(pnode, 0, it)) {
                 LASSERT(pnode->p_base->pb_ino);
                 *inop = pnode->p_base->pb_ino;
-                RETURN(0);
+                GOTO(out, rc = 0);
         }
 
         rc = llu_lookup_it(pnode->p_parent->p_base->pb_ino, pnode, it, 0);
@@ -575,5 +578,7 @@ int llu_iop_lookup(struct pnode *pnode,
                         *inop = pnode->p_base->pb_ino;
         }
 
+out:
+        liblustre_wait_event(0);
         RETURN(rc);
 }

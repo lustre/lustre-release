@@ -132,7 +132,6 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct lustre_handle mdc_conn = {0, };
         struct lustre_md md;
         struct obd_connect_data *data = NULL;
-        kdev_t devno;
         int err;
         ENTRY;
 
@@ -185,10 +184,15 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
         sbi->ll_namelen = osfs.os_namelen;
 
-        devno = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
-                             strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
-        /* s_dev is also used in lt_compare() to compare two fs */
-        sb->s_dev = devno;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
+        /* We set sb->s_dev equal on all lustre clients in order to support
+         * NFS export clustering.  NFSD requires that the FSID be the same
+         * on all clients. */
+        /* s_dev is also used in lt_compare() to compare two fs, but that is
+         * only a node-local comparison. */
+        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
+                         strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
+#endif
 
         obd = class_name2obd(osc);
         if (!obd) {
@@ -207,6 +211,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
+        sbi->ll_connect_flags = data->ocd_connect_flags;
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
@@ -446,6 +451,16 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
                         *flags &= ~tmp;
                         continue;
                 }
+                tmp = ll_set_opt("user_xattr", this_char, LL_SBI_USER_XATTR);
+                if (tmp) {
+                        *flags |= tmp;
+                        continue;
+                }
+                tmp = ll_set_opt("nouser_xattr", this_char, LL_SBI_USER_XATTR);
+                if (tmp) {
+                        *flags &= ~tmp;
+                        continue;
+                }
         }
         EXIT;
 }
@@ -454,7 +469,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 {
         sema_init(&lli->lli_open_sem, 1);
         sema_init(&lli->lli_size_sem, 1);
-        lli->lli_size_pid = 0;
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
@@ -528,8 +542,8 @@ out_free:
                 int next = 0;
                 /* like client_put_super below */
                 while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
-                       !=NULL) {
-                        class_manual_cleanup(obd, NULL);
+                       != NULL) {
+                        class_manual_cleanup(obd);
                 }                       
                 class_del_profile(profilenm);
                 ll_free_sbi(sb);
@@ -545,20 +559,26 @@ void ll_put_super(struct super_block *sb)
         struct lustre_sb_info *lsi = s2sbi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         char *profilenm = get_profile_name(sb);
-        char flags[2] = "";
         int next = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
         obd = class_exp2obd(sbi->ll_mdc_exp);
-        if (obd && obd->obd_no_recov)
-                strcat(flags, "F");
-        obd = NULL;
+        if (obd) {
+                int next = 0;
+                int force = obd->obd_no_recov;
+                /* We need to set force before the lov_disconnect in 
+                lustre_common_put_super, since l_d cleans up osc's as well. */
+                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
+                       != NULL) {
+                        obd->obd_force = force;
+                }                       
+        }
 
         client_common_put_super(sb);
                 
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
-                class_manual_cleanup(obd, flags);
+                class_manual_cleanup(obd);
         }                       
         
         if (profilenm) 
@@ -645,11 +665,10 @@ void ll_clear_inode(struct inode *inode)
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
         mdc_change_cbdata(sbi->ll_mdc_exp, &fid, null_if_equal, inode);
 
-        if (lli->lli_smd)
+        if (lli->lli_smd) {
                 obd_change_cbdata(sbi->ll_osc_exp, lli->lli_smd,
                                   null_if_equal, inode);
 
-        if (lli->lli_smd) {
                 obd_free_memmd(sbi->ll_osc_exp, &lli->lli_smd);
                 lli->lli_smd = NULL;
         }
@@ -824,14 +843,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (rc != 0)
                         RETURN(rc);
 
-                down(&lli->lli_size_sem);
-                lli->lli_size_pid = current->pid;
+                /* Only ll_inode_size_lock is taken at this level.
+                 * lov_stripe_lock() is grabbed by ll_truncate() only over
+                 * call to obd_adjust_kms().  If vmtruncate returns 0, then
+                 * ll_truncate dropped ll_inode_size_lock() */
+                ll_inode_size_lock(inode, 0);
                 rc = vmtruncate(inode, attr->ia_size);
-                // if vmtruncate returned 0, then ll_truncate dropped _size_sem
                 if (rc != 0) {
                         LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
-                        lli->lli_size_pid = 0;
-                        up(&lli->lli_size_sem);
+                        ll_inode_size_unlock(inode, 0);
                 }
 
                 err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
@@ -942,6 +962,39 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
         return 0;
 }
 
+void ll_inode_size_lock(struct inode *inode, int lock_lsm)
+{
+        struct ll_inode_info *lli;
+        struct lov_stripe_md *lsm;
+
+        lli = ll_i2info(inode);
+        LASSERT(lli->lli_size_sem_owner != current);
+        down(&lli->lli_size_sem);
+        LASSERT(lli->lli_size_sem_owner == NULL);
+        lli->lli_size_sem_owner = current;
+        lsm = lli->lli_smd;
+        LASSERTF(lsm != NULL || lock_lsm == 0, "lsm %p, lock_lsm %d\n",
+                 lsm, lock_lsm);
+        if (lock_lsm)
+                lov_stripe_lock(lsm);
+}
+
+void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
+{
+        struct ll_inode_info *lli;
+        struct lov_stripe_md *lsm;
+
+        lli = ll_i2info(inode);
+        lsm = lli->lli_smd;
+        LASSERTF(lsm != NULL || unlock_lsm == 0, "lsm %p, lock_lsm %d\n",
+                 lsm, unlock_lsm);
+        if (unlock_lsm)
+                lov_stripe_unlock(lsm);
+        LASSERT(lli->lli_size_sem_owner == current);
+        lli->lli_size_sem_owner = NULL;
+        up(&lli->lli_size_sem);
+}
+
 void ll_update_inode(struct inode *inode, struct mds_body *body,
                      struct lov_stripe_md *lsm)
 {
@@ -956,12 +1009,15 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                         }
                         CDEBUG(D_INODE, "adding lsm %p to inode %lu/%u(%p)\n",
                                lsm, inode->i_ino, inode->i_generation, inode);
+                        /* ll_inode_size_lock() requires it is only called
+                         * with lli_smd != NULL or lock_lsm == 0 or we can
+                         * race between lock/unlock.  bug 9547 */
                         lli->lli_smd = lsm;
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        if (memcmp(lli->lli_smd, lsm, sizeof(*lsm))) {
+                        if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
                                 CERROR("lsm mismatch for inode %ld\n",
                                        inode->i_ino);
                                 CERROR("lli_smd:\n");
@@ -1026,7 +1082,11 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static struct backing_dev_info ll_backing_dev_info = {
         .ra_pages       = 0,    /* No readahead */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12))
+        .capabilities   = 0,    /* Does contribute to dirty memory */
+#else
         .memory_backed  = 0,    /* Does contribute to dirty memory */
+#endif
 };
 #endif
 

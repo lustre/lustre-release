@@ -19,6 +19,8 @@ CWD=`pwd`
 
 SYSIO=$1
 LIBS=$2
+LND_LIBS=$3
+PTHREAD_LIBS=$4
 
 if [ ! -f $SYSIO/lib/libsysio.a ]; then
   echo "ERROR: $SYSIO/lib/libsysio.a dosen't exist"
@@ -65,7 +67,13 @@ build_obj_list ../lvfs liblvfs.a
 
 # lnet components libs
 build_obj_list ../../lnet/utils libuptlctl.a
-build_obj_list ../../lnet/ulnds/socklnd libsocklnd.a
+build_obj_list ../../lnet/libcfs libcfs.a
+if $(echo "$LND_LIBS" | grep "socklnd" >/dev/null) ; then
+	build_obj_list ../../lnet/ulnds/socklnd libsocklnd.a
+fi
+if $(echo "$LND_LIBS" | grep "ptllnd" >/dev/null) ; then
+	build_obj_list ../../lnet/ulnds/ptllnd libptllnd.a
+fi
 build_obj_list ../../lnet/lnet liblnet.a
 
 # create static lib lsupport
@@ -85,7 +93,12 @@ $RANLIB $CWD/liblustre.a
 
 # create shared lib lustre
 rm -f $CWD/liblustre.so
+OS=`uname`
+if test x$OS = xAIX; then
+gcc -shared -o $CWD/liblustre.so  $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
+else
 $LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_cleanup_ \
-	$ALL_OBJS -lcap -lpthread
+	$ALL_OBJS -lcap $PTHREAD_LIBS
+fi
 
 rm -rf $sysio_tmp

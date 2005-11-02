@@ -378,9 +378,9 @@ create_config()
 		run_lmc --add mds \
 		    --node "$HOST_NAME" \
 		    --mds "$DEVICE_NAME" \
-		    --fstype "$DEFAULT_FSTYPE" \
 		    --dev "$DEVICE" \
 		    --size "$DEVICE_SIZE" \
+		    --fstype "$DEFAULT_FSTYPE" \
 		    $extraopt
 		if [ "$FAILOVER_HOST" != "" ] ; then 
 		    add_node "$FAILOVER_HOST"
@@ -388,6 +388,7 @@ create_config()
 			--node "$FAILOVER_HOST" \
 			--mds "$DEVICE_NAME" \
 			--dev "$FAILOVER_DEVICE" \
+		        --size "$DEVICE_SIZE" \
 			--fstype "$DEFAULT_FSTYPE" \
 			--failover \
 			--group "$HOST_NAME"
@@ -411,17 +412,18 @@ create_config()
 		    --node "$HOST_NAME" \
 		    --ost "$DEVICE_NAME" \
 		    --lov "$DEVICE_LOV" \
-		    --fstype "$DEFAULT_FSTYPE" \
 		    --dev "$DEVICE" \
 		    --size "$DEVICE_SIZE" \
+		    --fstype "$DEFAULT_FSTYPE" \
 		    $extraopt
 		if [ "$FAILOVER_HOST" != "" ] ; then
 		    add_node "$FAILOVER_HOST"
 		    run_lmc --add ost \
 			--node "$FAILOVER_HOST" \
 			--ost "$DEVICE_NAME" \
-			--dev "$FAILOVER_DEVICE" \
 			--lov "$DEVICE_LOV" \
+			--dev "$FAILOVER_DEVICE" \
+		        --size "$DEVICE_SIZE" \
 			--fstype "$DEFAULT_FSTYPE" \
 			--failover \
 			--group "$HOST_NAME"

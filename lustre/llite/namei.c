@@ -408,7 +408,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         it->it_create_mode &= ~current->fs->umask;
 
         rc = mdc_intent_lock(ll_i2mdcexp(parent), &op_data, NULL, 0, it,
-                             lookup_flags, &req, ll_mdc_blocking_ast);
+                             lookup_flags, &req, ll_mdc_blocking_ast, 0);
 
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
@@ -891,4 +891,8 @@ struct inode_operations ll_dir_inode_operations = {
         .create             = ll_create_nd,
         .getattr_it         = ll_getattr,
 #endif
+        .setxattr           = ll_setxattr,
+        .getxattr           = ll_getxattr,
+        .listxattr          = ll_listxattr,
+        .removexattr        = ll_removexattr,
 };

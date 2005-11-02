@@ -506,7 +506,6 @@ run_test 12 "lmc --batch, with single/double quote, backslash in batchfile"
 test_13() {
         OLDXMLCONFIG=$XMLCONFIG
         XMLCONFIG="conf13-1.xml"
-        SECONDXMLCONFIG="conf13-2.xml"
 
         # check long uuid will be truncated properly and uniquely
         echo "To generate XML configuration file(with long ost name): $XMLCONFIG"
@@ -532,27 +531,35 @@ test_13() {
                 echo "but:     found uuid for mds1 and mds2: $FOUNDMDS1UUID; $FOUNDMDS2UUID"
                 return 1
         fi
+        rm -f $XMLCONFIG
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 13 "check new_uuid of lmc operating correctly"
 
+test_13b() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="conf13-1.xml"
+        SECONDXMLCONFIG="conf13-2.xml"
         # check multiple invocations for lmc generate same XML configuration file
         rm -f $XMLCONFIG
         echo "Generate the first XML configuration file"
         gen_config
         echo "mv $XMLCONFIG to $SECONDXMLCONFIG"
-        mv $XMLCONFIG $SECONDXMLCONFIG || return $?
+        sed -e "s/mtime[^ ]*//" $XMLCONFIG > $SECONDXMLCONFIG || return $?
         echo "Generate the second XML configuration file"
         gen_config
-        if [ `diff $XMLCONFIG $SECONDXMLCONFIG | wc -l` -eq 0 ]; then
+	# don't compare .xml mtime, it will always be different
+        if [ `sed -e "s/mtime[^ ]*//" $XMLCONFIG | diff - $SECONDXMLCONFIG | wc -l` -eq 0 ]; then
                 echo "Success:multiple invocations for lmc generate same XML file"
         else
                 echo "Error: multiple invocations for lmc generate different XML file"
                 return 1
         fi
 
-        rm -f $XMLCONFIG
-        rm -f $SECONDXMLCONFIG
+        rm -f $XMLCONFIG $SECONDXMLCONFIG
         XMLCONFIG=$OLDXMLCONFIG
 }
-run_test 13 "check new_uuid of lmc operating correctly"
+run_test 13b "check lmc generates consistent .xml file"
 
 test_14() {
         rm -f $XMLCONFIG

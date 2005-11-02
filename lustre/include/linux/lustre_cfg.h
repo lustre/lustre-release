@@ -235,5 +235,4 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
         RETURN(0);
 }
 
-
 #endif // _LUSTRE_CFG_H

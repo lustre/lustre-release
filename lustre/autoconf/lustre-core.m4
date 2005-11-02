@@ -395,6 +395,41 @@ AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 ])
 
 #
+# LC_STRUCT_STATFS
+#
+# AIX does not have statfs.f_namelen
+#
+AC_DEFUN([LC_STRUCT_STATFS],
+[AC_MSG_CHECKING([if struct statfs has a f_namelen field])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/vfs.h>
+],[
+	struct statfs sfs;
+	sfs.f_namelen = 1;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_STATFS_NAMELEN, 1, [struct statfs has a namelen field])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_FUNC_PAGE_MAPPED],
+[AC_MSG_CHECKING([if kernel offers page_mapped])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/mm.h>
+],[
+	page_mapped(NULL);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_PAGE_MAPPED, 1, [page_mapped found])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -416,6 +451,8 @@ LC_FUNC_REGISTER_CACHE
 LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
 LC_FUNC_DEV_SET_RDONLY
 LC_FUNC_FILEMAP_FDATAWRITE
+LC_STRUCT_STATFS
+LC_FUNC_PAGE_MAPPED
 ])
 
 #
@@ -508,6 +545,19 @@ AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
 # liblustre/lutil.c
 AC_CHECK_HEADERS([netinet/in.h arpa/inet.h catamount/data.h])
 AC_CHECK_FUNCS([inet_ntoa])
+
+# llite/xattr.c
+AC_CHECK_HEADERS([linux/xattr_acl.h])
+
+# Super safe df
+AC_ARG_ENABLE([mindf],
+      AC_HELP_STRING([--enable-mindf],
+                      [Make statfs to report only minimal-available space on any simgle OST instead of sum of free spaces on all OSTs]),
+      [],[])
+if test "$enable_mindf" = "yes" ;  then
+      AC_DEFINE([MIN_DF], 1, [Report minimum OST free space])
+fi
+
 ])
 
 #

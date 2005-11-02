@@ -524,6 +524,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
                 obd->obd_recovery_start = CURRENT_SECONDS;
+                /* Only used for lprocfs_status */
+                obd->obd_recovery_end = obd->obd_recovery_start +
+                        OBD_RECOVERY_TIMEOUT / HZ;
         }
 
 out:
@@ -882,51 +885,6 @@ __u64 filter_last_id(struct filter_obd *filter, struct obdo *oa)
         return id;
 }
 
-/* direct cut-n-paste of mds_blocking_ast() */
-static int filter_blocking_ast(struct ldlm_lock *lock,
-                               struct ldlm_lock_desc *desc,
-                               void *data, int flag)
-{
-        int do_ast;
-        ENTRY;
-
-        if (flag == LDLM_CB_CANCELING) {
-                /* Don't need to do anything here. */
-                RETURN(0);
-        }
-
-        /* XXX layering violation!  -phil */
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        /* Get this: if filter_blocking_ast is racing with ldlm_intent_policy,
-         * such that filter_blocking_ast is called just before l_i_p takes the
-         * ns_lock, then by the time we get the lock, we might not be the
-         * correct blocking function anymore.  So check, and return early, if
-         * so. */
-        if (lock->l_blocking_ast != filter_blocking_ast) {
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                RETURN(0);
-        }
-
-        lock->l_flags |= LDLM_FL_CBPENDING;
-        do_ast = (!lock->l_readers && !lock->l_writers);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-
-        if (do_ast) {
-                struct lustre_handle lockh;
-                int rc;
-
-                LDLM_DEBUG(lock, "already unused, calling ldlm_cli_cancel");
-                ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
-                if (rc < 0)
-                        CERROR("ldlm_cli_cancel: %d\n", rc);
-        } else {
-                LDLM_DEBUG(lock, "Lock still has references, will be "
-                           "cancelled later");
-        }
-        RETURN(0);
-}
-
 static int filter_lock_dentry(struct obd_device *obd, struct dentry *dparent)
 {
         down(&dparent->d_inode->i_sem);
@@ -1042,7 +1000,7 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
          * throw away any cached pages. */
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
                               LDLM_EXTENT, &policy, LCK_PW,
-                              &flags, filter_blocking_ast, ldlm_completion_ast,
+                              &flags, ldlm_blocking_ast, ldlm_completion_ast,
                               NULL, NULL, NULL, 0, NULL, &lockh);
 
         /* We only care about the side-effects, just drop the lock. */
@@ -1116,7 +1074,8 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         lock->l_policy_data.l_extent.end = OBD_OBJECT_EOF;
         lock->l_req_mode = LCK_PR;
 
-        l_lock(&res->lr_namespace->ns_lock);
+        LASSERT(ns == res->lr_namespace);
+        l_lock(&ns->ns_lock);
 
         res->lr_tmp = &rpc_list;
         rc = policy(lock, &tmpflags, 0, &err);
@@ -1132,9 +1091,17 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 OBD_FREE(w, sizeof(*w));
         }
 
+        /* The lock met with no resistance; we're finished. */
         if (rc == LDLM_ITER_CONTINUE) {
-                /* The lock met with no resistance; we're finished. */
-                l_unlock(&res->lr_namespace->ns_lock);
+                l_unlock(&ns->ns_lock);
+                /*
+                 * do not grant locks to the liblustre clients: they cannot
+                 * handle ASTs robustly.
+                 */
+                if (lock->l_export->exp_libclient) {
+                        ldlm_resource_unlink_lock(lock);
+                        RETURN(ELDLM_LOCK_ABORTED);
+                }
                 RETURN(ELDLM_LOCK_REPLACED);
         }
 
@@ -1154,7 +1121,13 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
                 if (tmplock->l_granted_mode == LCK_PR)
                         continue;
-
+                /*
+                 * ->ns_lock guarantees that no new locks are granted, and,
+                 * therefore, that res->lr_lvb_data cannot increase beyond the
+                 * end of already granted lock. As a result, it is safe to
+                 * check against "stale" reply_lvb->lvb_size value without
+                 * res->lr_lvb_sem.
+                 */
                 if (tmplock->l_policy_data.l_extent.end <= reply_lvb->lvb_size)
                         continue;
 
@@ -1179,7 +1152,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 LDLM_LOCK_PUT(l);
                 l = LDLM_LOCK_GET(tmplock);
         }
-        l_unlock(&res->lr_namespace->ns_lock);
+        l_unlock(&ns->ns_lock);
 
         /* There were no PW locks beyond the size in the LVB; finished. */
         if (l == NULL) {
@@ -1194,15 +1167,19 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                          *
                          * Of course, this will all disappear when we switch to
                          * taking liblustre locks on the OST. */
-                        if (res->lr_namespace->ns_lvbo &&
-                            res->lr_namespace->ns_lvbo->lvbo_update) {
-                                res->lr_namespace->ns_lvbo->lvbo_update
-                                                             (res, NULL, 0, 1);
-                        }
+                        if (ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
+                                ns->ns_lvbo->lvbo_update(res, NULL, 0, 1);
                 }
                 RETURN(ELDLM_LOCK_ABORTED);
         }
-
+        /*
+         * This check is for lock taken in filter_prepare_destroy() that does
+         * not have l_glimpse_ast set. So the logic is: if there is a lock
+         * with no l_glimpse_ast set, this object is being destroyed already.
+         *
+         * Hence, if you are grabbing DLM locks on the server, always set
+         * non-NULL glimpse_ast (e.g., ldlm_request.c:ldlm_glimpse_ast()).
+         */
         if (l->l_glimpse_ast == NULL) {
                 /* We are racing with unlink(); just return -ENOENT */
                 rep->lock_policy_res1 = -ENOENT;
@@ -1212,10 +1189,12 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         LASSERTF(l->l_glimpse_ast != NULL, "l == %p", l);
         rc = l->l_glimpse_ast(l, NULL); /* this will update the LVB */
         /* Update the LVB from disk if the AST failed (this is a legal race) */
-        if (rc != 0 && res->lr_namespace->ns_lvbo &&
-            res->lr_namespace->ns_lvbo->lvbo_update) {
-                res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
-        }
+        /*
+         * XXX nikita: situation when ldlm_server_glimpse_ast() failed before
+         * sending ast is not handled. This can result in lost client writes.
+         */
+        if (rc != 0 && ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
+                ns->ns_lvbo->lvbo_update(res, NULL, 0, 1);
 
         down(&res->lr_lvb_sem);
         *reply_lvb = *res_lvb;
@@ -1650,7 +1629,9 @@ static int filter_cleanup(struct obd_device *obd)
         }
         
         if (must_put) 
+                /* In case we didn't mount with lustre_get_mount -- old method*/
                 mntput(filter->fo_vfsmnt);
+        
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;
 
@@ -2027,7 +2008,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
 
         oa->o_valid = OBD_MD_FLID;
         /* Quota release need uid/gid info */
-        obdo_from_inode(oa, dentry->d_inode, 
+        obdo_from_inode(oa, dentry->d_inode,
                         FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
 
 out_unlock:
@@ -2040,7 +2021,7 @@ out_unlock:
 
         /* trigger quota release */
         if (rc == 0 && iattr.ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
-                rc2 = qctxt_adjust_qunit(obd, &filter->fo_quota_ctxt, 
+                rc2 = qctxt_adjust_qunit(obd, &filter->fo_quota_ctxt,
                                          oa->o_uid, oa->o_gid, 1);
                 if (rc2)
                         CERROR("error filter adjust qunit! (rc:%d)\n", rc2);
@@ -2553,7 +2534,7 @@ cleanup:
 
         /* trigger quota release */
         if (rc == 0) {
-                rc2 = qctxt_adjust_qunit(obd, &filter->fo_quota_ctxt, 
+                rc2 = qctxt_adjust_qunit(obd, &filter->fo_quota_ctxt,
                                          oa->o_uid, oa->o_gid, 1);
                 if (rc2)
                         CERROR("error filter adjust qunit! (rc:%d)\n", rc2);
@@ -2774,7 +2755,7 @@ static int filter_health_check(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
         int rc = 0;
-       
+
         /*
          * health_check to return 0 on healthy
          * and 1 on unhealthy.

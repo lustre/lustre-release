@@ -45,6 +45,7 @@ static char *progname = NULL;
 
 void usage(FILE *out)
 {
+        fprintf(out, "%s v1.%d\n", progname, LMD_MAGIC & 0xFF);
         fprintf(out, "usage: %s <mdsnode>:/<mdsname>/<cfgname> <mountpt> "
                 "[-fhnv] [-o mntopt]\n", progname);
         fprintf(out, "\t<mdsnode>: nid of MDS (config) node\n"
@@ -57,7 +58,9 @@ void usage(FILE *out)
                 "\t-n|--nomtab: do not update /etc/mtab after mount\n"
                 "\t-v|--verbose: print verbose config settings\n"
                 "\t-o: filesystem mount options:\n"
-                "\t\tflock/noflock: enable/disable flock support\n");
+                "\t\tflock/noflock: enable/disable flock support\n"
+                "\t\tuser_xattr/nouser_xattr: enable/disable user extended attributes\n"
+                );
         exit(out != stdout);
 }
 
@@ -128,11 +131,12 @@ init_options(struct lustre_mount_data *lmd)
 }
 
 int
-print_options(struct lustre_mount_data *lmd)
+print_options(struct lustre_mount_data *lmd, const char *options)
 {
         printf("nid:             %s\n", libcfs_nid2str(lmd->lmd_nid));
         printf("mds:             %s\n", lmd->lmd_mds);
         printf("profile:         %s\n", lmd->lmd_profile);
+        printf("options:         %s\n", options);
 
         return 0;
 }
@@ -164,13 +168,16 @@ static const struct opt_map opt_map[] = {
   { "nodev",    0, 0, MS_NODEV,  0 },      /* don't interpret devices */
   { "async",    0, 1, MS_SYNCHRONOUS, 0},  /* asynchronous I/O */
   { "auto",     0, 0, 0, 0         },      /* Can be mounted using -a */
-  { "noauto",   0, 0, 0, 0         },      /* Can  only be mounted explicitly */
+  { "noauto",   0, 0, 0, 0         },      /* Can only be mounted explicitly */
   { "nousers",  0, 1, 0, 0         },      /* Forbid ordinary user to mount */
   { "nouser",   0, 1, 0, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  0, 1, 0, 0         },      /* Device owner has no special privs */
   { "_netdev",  0, 0, 0, 0         },      /* Device accessible only via network */
   { "flock",    0, 0, 0, LMD_FLG_FLOCK},   /* Enable flock support */
   { "noflock",  1, 1, 0, LMD_FLG_FLOCK},   /* Disable flock support */
+  { "user_xattr", 0, 0, 0, LMD_FLG_USER_XATTR}, /* Enable get/set user xattr */
+  { "nouser_xattr", 1, 1, 0, LMD_FLG_USER_XATTR}, /* Disable user xattr */
+  /* please add new mount options to usage message */
   { NULL,       0, 0, 0, 0         }
 };
 /****************************************************************************/
@@ -258,7 +265,7 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd,
                         profile = s + 1;
                 } else {
                         fprintf(stderr, "%s: directory to mount not in "
-                                "host:/mds/profile format\n",
+                                "nid:/mds/profile format\n",
                                 progname);
                         return(1);
                 }
@@ -279,27 +286,25 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd,
                 return 1;
         }
 
-        if (strlen(mds) > sizeof(lmd->lmd_mds) + 1) {
+        if (strlen(mds) + 1 > sizeof(lmd->lmd_mds)) {
                 fprintf(stderr, "%s: mds name too long\n", progname);
                 return(1);
         }
         strcpy(lmd->lmd_mds, mds);
 
-        if (strlen(profile) > sizeof(lmd->lmd_profile) + 1) {
+        if (strlen(profile) + 1 > sizeof(lmd->lmd_profile)) {
                 fprintf(stderr, "%s: profile name too long\n", progname);
                 return(1);
         }
         strcpy(lmd->lmd_profile, profile);
 
-        if (verbose)
-                print_options(lmd);
         return 0;
 }
 
 int main(int argc, char *const argv[])
 {
-        char *source, *target, *options = "";
-        int i, nargs = 3, opt, rc, flags;
+        char *source, *target, *options = "", optbuf[65536] = { '\0' };
+        int i, nargs = 3, opt, rc, flags, buflen = sizeof(optbuf) - 1;
         struct lustre_mount_data lmd;
         static struct option long_opt[] = {
                 {"fake", 0, 0, 'f'},
@@ -369,10 +374,21 @@ int main(int argc, char *const argv[])
                 exit(32);
 
         init_options(&lmd);
-        rc = build_data(source, options, &lmd, &flags);
+
+        /* need to copy options, as parse_options->strtok() clobbers it
+         * and we can't use it later to put in /etc/mtab. */
+        if (strlen(options) > buflen)
+                fprintf(stderr, "%s: options too long (%d > %d), ignore last\n",
+                        progname, strlen(options), buflen);
+        strncpy(optbuf, options, buflen);
+
+        rc = build_data(source, optbuf, &lmd, &flags);
         if (rc) {
                 exit(1);
         }
+
+        if (verbose)
+                print_options(&lmd, options);
 
         rc = access(target, F_OK);
         if (rc) {

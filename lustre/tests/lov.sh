@@ -27,6 +27,8 @@ ECHO_CLIENT=${ECHO_CLIENT:-}
 STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-$((OSTCOUNT -1))}
 
+CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
+
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}
 JARG=""
@@ -58,6 +60,7 @@ done
 
 if [ -z "$ECHO_CLIENT" ]; then
 	# create client config
+	[ "x$CLIENTOPT" != "x" ] && CLIENTOPT="--clientoptions $CLIENTOPT"
 	${LMC} --add mtpt --node $HOSTNAME --path $MOUNT \
 		--mds mds1 --lov lov1 $CLIENTOPT || exit 40
 	${LMC} --add mtpt --node client --path $MOUNT2 \

@@ -4,13 +4,13 @@ SUBDIRS = Lustre
 
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
-AM_LDFLAGS := -L$(top_builddir)/portals/utils
+AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
 sbin_scripts = lconf lmc llanalyze llstat.pl llobdstat.pl lactive	\
 	load_ldap.sh lrun lwizard
-bin_scripts = lfind lstripe llog_reader
+bin_scripts = lfind lstripe
 
 if UTILS
 rootsbin_SCRIPTS =
@@ -47,7 +47,9 @@ llog_reader_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 llog_reader_SOURCES = llog_reader.c
 
-mount_lustre_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
+# FIXME whats this GM stuff for??
+mount_lustre_CFLAGS = $(LLMOUNT_GM_CFLAGS)
+mount_lustre_LDADD := $(LIBREADLINE) $(LIBPTLCTL) $(LLMOUNT_GM_LDADD)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 mount_lustre_SOURCES = mount_lustre.c 
 

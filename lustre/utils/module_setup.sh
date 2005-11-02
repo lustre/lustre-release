@@ -52,12 +52,6 @@ if [ `egrep -c "lustre|lnet" $MODFILE` -eq 0 ]; then
     echo "# Lustre modules added by $0" >> $MODFILE
     echo "# Networking options, see /sys/module/lnet/parameters" >> $MODFILE
     echo "options lnet networks=tcp" >> $MODFILE
-    echo "# for zeroconf clients" >> $MODFILE
-    if [ $KVER -eq 24 ]; then
-        echo "add below llite lov osc" >> $MODFILE
-    else
-        echo "install llite $MP lov; $MP osc; $MPI llite" >> $MODFILE
-    fi
     echo "alias lustre llite" >> $MODFILE
     echo "# end Lustre modules" >> $MODFILE
 fi

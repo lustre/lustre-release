@@ -31,6 +31,35 @@
 
 #include "../lutil.h"
 
+
+#ifdef CRAY_XT3
+int _sysio_lustre_init(void)
+{
+        /*
+         * This is an aweful HACK.  Basically the problem is on
+         * Catamount, the build system links in liblustre.a to
+         * all the test executables, and at this point its not
+         * clear how to modify the build system to prevent this
+         * from happening.  So providing our own call to 
+         * _sysio_lustre_init() that does nothing, prevents
+         * liblustre.a from initializing.
+         *
+         * Why is liblustre.a initializing a problem anyway.  Well
+         * this main() in this module calls init_obdclass(), as 
+         * well as the llite_lib.c's _sysio_lustre_init().  Two
+         * calls to init_obdclass() cause an assertion.  Secondly
+         * it doesn't even logically make sense, this is module
+         * does not need lustre file system functionality, it's 
+         * just the echo_tester.
+         * 
+         */
+        /*lprintf("--> THIS OVERRIDES liblustre.a INITIALIZATION <--\n");*/
+        return 0;
+}
+#endif
+
+
+
 extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
 static int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)
@@ -60,7 +89,7 @@ static int connect_echo_client(void)
 {
 	struct lustre_cfg *lcfg;
         struct lustre_cfg_bufs bufs;
-	lnet_nid_t nid;
+        lnet_nid_t nid;
 	char *peer = "ECHO_PEER_NID";
 	class_uuid_t osc_uuid, echo_uuid;
 	struct obd_uuid osc_uuid_str, echo_uuid_str;
@@ -72,13 +101,13 @@ static int connect_echo_client(void)
         generate_random_uuid(echo_uuid);
         class_uuid_unparse(echo_uuid, &echo_uuid_str);
 
-	nid = libcfs_str2nid(echo_server_nid);
+        nid = libcfs_str2nid(echo_server_nid);
         if (nid == LNET_NID_ANY) {
                 CERROR("Can't parse NID %s\n", echo_server_nid);
                 RETURN(-EINVAL);
         }
 
-	/* add uuid */
+        /* add uuid */
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
@@ -90,7 +119,7 @@ static int connect_echo_client(void)
                 RETURN(-EINVAL);
 	}
 
-	/* attach osc */
+        /* attach osc */
         lustre_cfg_bufs_reset(&bufs, osc_dev_name);
         lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_OSC_NAME);
         lustre_cfg_bufs_set_string(&bufs, 2, osc_uuid_str.uuid);
@@ -191,9 +220,11 @@ static int disconnect_echo_client(void)
 
 static void usage(const char *s)
 {
-	printf("Usage: %s -s ost_host_name [-n ost_name]\n", s);
+	printf("Usage: %s -s ost_host_name [-n ost_name] [-x lctl_options ...]\n", s);
 	printf("    ost_host_name: the host name of echo server\n");
 	printf("    ost_name: ost name, default is \"obd1\"\n");
+        printf("    lctl_options: options to pass to lctl.\n");
+        printf("            (e.g. -x --device 1 test_getattr 10000 -5)\n");
 }
 
 extern int time_ptlwait1;
@@ -203,8 +234,13 @@ extern int time_ptlselect;
 int main(int argc, char **argv) 
 {
 	int c, rc;
+	int xindex  = -1;  /* index of -x option */
 
-	while ((c = getopt(argc, argv, "s:n:")) != -1) {
+        /* loop until all options are consumed or we hit
+         * a -x option 
+         */
+	while ((c = getopt(argc, argv, "s:n:x:")) != -1 && 
+               xindex == -1) {
 		switch (c) {
 		case 's':
 			echo_server_nid = optarg;
@@ -212,13 +248,20 @@ int main(int argc, char **argv)
 		case 'n':
 			echo_server_ostname = optarg;
 			break;
+		case 'x':
+			xindex = optind-1;
+			break;
 		default:
 			usage(argv[0]);
 			return 1;
 		}
 	}
 
-        if (optind != argc)
+        /*
+         * Only warn with usage() if the -x option isn't specificed
+         * because when using -x this check is not valid.
+         */
+        if (optind != argc && xindex == -1)
                 usage(argv[0]);
 
 	if (!echo_server_nid) {
@@ -226,12 +269,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	libcfs_debug = 0;
-	libcfs_subsystem_debug = 0;
+        libcfs_debug = 0;
+        libcfs_subsystem_debug = 0;
 
         liblustre_init_random();
 
-        if (liblustre_init_current(argv[0]) ||
+	if (liblustre_init_current(argv[0]) ||
 	    init_obdclass() || init_lib_portals() ||
 	    ptlrpc_init() ||
 	    mdc_init() ||
@@ -248,7 +291,21 @@ int main(int argc, char **argv)
 
 	set_ioc_handler(liblustre_ioctl);
 
-	rc = lctl_main(1, &argv[0]);
+
+        /*
+         * If the -x option is not specified pass no args to lctl
+         * otherwise pass all the options after the "-x" to lctl
+         *
+         * HACK: in the case when the -x option is specified
+         * lctl sees argv[0] == "-x" and not the real argv[0] seen
+         * in this function.  If that is a problem, a mapping will
+         * have to be done to fix that.  However for normal functioning
+         * it seems to be irrelavant
+         */
+	if( xindex == -1 )
+		rc = lctl_main(1, &argv[0]);
+	else
+		rc = lctl_main(argc-xindex+1, &argv[xindex-1]);
 
 	rc |= disconnect_echo_client();
 

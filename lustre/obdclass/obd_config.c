@@ -610,8 +610,6 @@ int class_process_config(struct lustre_cfg *lcfg)
                 obd_timeout = max(lcfg->lcfg_num, 1U);
                 if (ldlm_timeout >= obd_timeout)
                         ldlm_timeout = max(obd_timeout / 3, 1U);
-                else if (ldlm_timeout < 10 && obd_timeout >= ldlm_timeout * 4)
-                        ldlm_timeout = min(obd_timeout / 3, 30U);
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {
@@ -847,14 +845,27 @@ parse_out:
 }
 
 /* Cleanup and detach */
-void class_manual_cleanup(struct obd_device *obd, char *flags)
+void class_manual_cleanup(struct obd_device *obd)
 {
         struct lustre_cfg *lcfg;
         struct lustre_cfg_bufs bufs;
         int err;
+        char flags[3]="";
         ENTRY;
  
-        CERROR("Manual cleanup of %s (flags='%s')\n", obd->obd_name, flags);
+        if (!obd) {
+                CERROR("empty cleanup\n");
+                EXIT;
+                return;
+        }
+
+        if (obd->obd_force)
+                strcat(flags, "F");
+        if (obd->obd_fail)
+                strcat(flags, "A");
+
+        CDEBUG(D_CONFIG, "Manual cleanup of %s (flags='%s')\n", 
+               obd->obd_name, flags);
 
         lustre_cfg_bufs_reset(&bufs, obd->obd_name);
         lustre_cfg_bufs_set_string(&bufs, 1, flags);

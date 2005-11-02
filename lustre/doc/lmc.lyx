@@ -604,19 +604,6 @@ Node on which the echo-client resides.
 \end_deeper 
 \layout Description
 
---add\SpecialChar ~
-mgmt Management/monitoring service.
-\begin_deeper 
-\layout Description
-
---node\SpecialChar ~
-nodename
-\emph on 
- 
-\emph default 
-Node on which the mgmt service resides.
-\layout Description
-
 \end_deeper 
 \layout List
 \labelwidthstring 00.00.0000
