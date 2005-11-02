@@ -84,7 +84,7 @@ static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
         RETURN(rc);
 }
 
-static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
+int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
                                 struct llog_rec_hdr *rec, void *buf, loff_t off)
 {
         int rc;
@@ -149,7 +149,7 @@ static int llog_lvfs_read_blob(struct obd_device *obd, struct l_file *file,
         RETURN(0);
 }
 
-static int llog_lvfs_read_header(struct llog_handle *handle)
+int llog_lvfs_read_header(struct llog_handle *handle)
 {
         struct obd_device *obd;
         int rc;
@@ -201,7 +201,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
 
 /* returns negative in on error; 0 if success && reccookie == 0; 1 otherwise */
 /* appends if idx == -1, otherwise overwrites record idx. */
-static int llog_lvfs_write_rec(struct llog_handle *loghandle,
+int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                struct llog_rec_hdr *rec,
                                struct llog_cookie *reccookie, int cookiecount,
                                void *buf, int idx)
@@ -345,7 +345,7 @@ static void llog_skip_over(__u64 *off, int curr, int goal)
  *  - cur_idx to the log index preceeding cur_offset
  * returns -EIO/-EINVAL on error
  */
-static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
+int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                                 int next_idx, __u64 *cur_offset, void *buf,
                                 int len)
 {
@@ -454,7 +454,7 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
+int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
         struct llog_handle *handle;
@@ -559,7 +559,7 @@ cleanup:
         goto finish;
 }
 
-static int llog_lvfs_close(struct llog_handle *handle)
+int llog_lvfs_close(struct llog_handle *handle)
 {
         int rc;
         ENTRY;
@@ -570,7 +570,7 @@ static int llog_lvfs_close(struct llog_handle *handle)
         RETURN(rc);
 }
 
-static int llog_lvfs_destroy(struct llog_handle *handle)
+int llog_lvfs_destroy(struct llog_handle *handle)
 {
         struct dentry *fdentry;
         struct obdo *oa;
@@ -717,6 +717,12 @@ struct llog_operations llog_lvfs_ops = {
         //        lop_cancel: llog_lvfs_cancel,
 };
 
+EXPORT_SYMBOL(llog_lvfs_write_rec);
+EXPORT_SYMBOL(llog_lvfs_next_block);
+EXPORT_SYMBOL(llog_lvfs_read_header);
+EXPORT_SYMBOL(llog_lvfs_create);
+EXPORT_SYMBOL(llog_lvfs_destroy);
+EXPORT_SYMBOL(llog_lvfs_close);
 EXPORT_SYMBOL(llog_lvfs_ops);
 
 #else /* !__KERNEL__ */

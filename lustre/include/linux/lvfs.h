@@ -1,28 +1,28 @@
-        /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
-         * vim:expandtab:shiftwidth=8:tabstop=8:
-         *
-         *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
-         *
-         *   This file is part of Lustre, http://www.lustre.org.
-         *
-         *   Lustre is free software; you can redistribute it and/or
-         *   modify it under the terms of version 2 of the GNU General Public
-         *   License as published by the Free Software Foundation.
-         *
-         *   Lustre is distributed in the hope that it will be useful,
-         *   but WITHOUT ANY WARRANTY; without even the implied warranty of
-         *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-         *   GNU General Public License for more details.
-         *
-         *   You should have received a copy of the GNU General Public License
-         *   along with Lustre; if not, write to the Free Software
-         *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-         *
-         * lustre VFS/process permission interface
-         */
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * lustre VFS/process permission interface
+ */
 
-        #ifndef __LVFS_H__
-        #define __LVFS_H__
+#ifndef __LVFS_H__
+#define __LVFS_H__
 
 #include <libcfs/kp30.h>
 #include <linux/lustre_ucache.h>
@@ -135,6 +135,55 @@ static inline struct dentry *ll_lookup_one_len(const char *fid_name,
                 dchild = ERR_PTR(-ENOENT);
         }
         return dchild;
+}
+
+/* Look up an entry by inode number. */
+/* this function ONLY returns valid dget'd dentries with an initialized inode
+   or errors */
+static inline struct dentry * ll_fid2dentry(struct dentry *parent,
+                                            __u64 ino, __u32 generation)
+{
+        char fid_name[32];
+        struct inode *inode;
+        struct dentry *result;
+
+        if (ino == 0)
+                RETURN(ERR_PTR(-ESTALE));
+
+        snprintf(fid_name, sizeof(fid_name), "0x%lx", (unsigned long)ino);
+
+        /* under ext3 this is neither supposed to return bad inodes
+           nor NULL inodes. */
+        result = ll_lookup_one_len(fid_name, parent, strlen(fid_name));
+        if (IS_ERR(result))
+                RETURN(result);
+
+        inode = result->d_inode;
+        if (!inode)
+                RETURN(ERR_PTR(-ENOENT));
+
+        if (inode->i_generation == 0 || inode->i_nlink == 0) {
+                LCONSOLE_WARN("Found inode with zero generation or link -- this"
+                              " may indicate disk corruption (inode: %lu, link:"
+                              " %lu, count: %d)\n", inode->i_ino,
+                              (unsigned long)inode->i_nlink,
+                              atomic_read(&inode->i_count));
+                dput(result);
+                RETURN(ERR_PTR(-ENOENT));
+        }
+
+        if (generation && inode->i_generation != generation) {
+                /* we didn't find the right inode.. */
+                CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
+                       "count: %d, generation %u/%u\n", inode->i_ino,
+                       (unsigned long)inode->i_nlink,
+                       atomic_read(&inode->i_count), inode->i_generation,
+                       generation);
+                dput(result);
+                RETURN(ERR_PTR(-ENOENT));
+        }
+
+        RETURN(result);
 }
 
 static inline void ll_sleep(int t)

@@ -213,7 +213,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         INIT_LIST_HEAD(&mgs->mgs_open_llogs);
- //       INIT_LIST_HEAD(&mgs->mgs_update_llhs);
 
         rc = llog_start_commit_thread();
         if (rc < 0)
@@ -519,8 +518,7 @@ static int mgt_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_lprocfs, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obd, mgs->mgs_service, MGT_NUM_THREADS,
-                                    "ll_mgt");
+        rc = ptlrpc_start_threads(obd, mgs->mgs_service, "ll_mgt");
         if (rc)
                 GOTO(err_thread, rc);
 

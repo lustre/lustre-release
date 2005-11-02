@@ -189,6 +189,15 @@ struct llog_operations {
 
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
+int llog_lvfs_write_rec(struct llog_handle *loghandle,
+                        struct llog_rec_hdr *rec,
+                        struct llog_cookie *reccookie, int cookiecount,
+                        void *buf, int idx);
+int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
+                         int next_idx, __u64 *cur_offset, void *buf,
+                         int len);
+int llog_lvfs_close(struct llog_handle *loghandle);
+int llog_lvfs_destroy(struct llog_handle *loghandle);
 extern struct llog_operations mgs_llog_lvfs_ops;
 
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,

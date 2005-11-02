@@ -37,6 +37,7 @@
    Used before the setup llog can be read. */
 #define MOUNT_CONFIGS_DIR "CONFIGS"
 #define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"/mountdata"
+#define SYSTEM_DB_FILE "SYSTEM_DB"
 
 #define LDD_MAGIC 0xbabb0001
 
@@ -121,6 +122,7 @@ struct mkfs_opts {
         char  mo_loopdev[128];          /* in case a loop dev is needed */
         __u64 mo_device_sz;
         int   mo_flags; 
+
         /* Below here is required for writing mdt,ost,or client logs */
         int   mo_stripe_sz;
         int   mo_stripe_count;
