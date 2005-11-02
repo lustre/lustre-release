@@ -1,4 +1,4 @@
-#!/usr/bin/expect
+#!/usr/bin/expect -d
 
 log_user 0
 set spawnid [spawn make oldconfig]
