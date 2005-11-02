@@ -351,11 +351,18 @@ timed_run() {
     ("$@") &
     child_pid=$!
     
-    sleep $SLEEP_TIME
+    (sleep $SLEEP_TIME
     kill -TERM -$child_pid 2>/dev/null
     sleep 5
     kill -KILL -$child_pid 2>/dev/null
-    echo "$1 was killed due to timeout"
+    echo "$1 was killed due to timeout") &
+    dog_pid=$!
+
+    wait $child_pid
+    # status will be set to 143 if the process had to be killed due to timeout
+    status=$?
+    kill -KILL -$dog_pid
+    return $status
 }
 
 depend_kernel()
@@ -375,6 +382,9 @@ depend_kernel()
     # new items conservatively.  QA will get notified on anything newly added
     # for them to review and adjust accordingly.
     timed_run 300 $TOPDIR/build/update_oldconfig
+    if [ $? -eq 143 ]; then
+        fatal 1 "update_oldconfig timed out"
+    fi
     # now notify if resulting .config is different than $CONFIG_FILE
     local tmpfile=$(mktemp /tmp/XXXXXX)
     diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
