@@ -353,6 +353,50 @@ int jt_ptl_network(int argc, char **argv)
 }
 
 int 
+jt_ptl_get_nids(__u64 **nid_list)
+{
+        struct libcfs_ioctl_data data;
+        int i, count = 0, rc, arraysize = 0;
+        __u64 *nids = NULL;
+        
+        for (i = 0;; i++) {
+                LIBCFS_IOC_INIT (data);
+                data.ioc_count = i;
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
+
+                if (rc >= 0) {
+                        if (LNET_NETTYP(LNET_NIDNET(data.ioc_nid)) == LOLND) 
+                                continue;
+                        /* got one */
+                        //printf("%s\n", libcfs_nid2str(data.ioc_nid));
+                        if (count >= arraysize) {
+                                arraysize += 10;
+                                nids = realloc(nids, 
+                                               arraysize * sizeof(__u64));
+                                if (!nids) 
+                                        break;
+                        }
+                        nids[count++] = data.ioc_nid;
+                        continue;
+                }
+
+                /* last one */
+                if (errno == ENOENT)
+                        break;
+
+                if (nids)
+                        free(nids);
+                return -errno;
+        }
+        
+        if (nid_list) 
+                *nid_list = realloc(nids, count * sizeof(__u64));
+        else
+                free(nids);
+        return count;
+}
+
+int 
 jt_ptl_list_nids(int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
