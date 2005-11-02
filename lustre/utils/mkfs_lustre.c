@@ -71,8 +71,7 @@ void usage(FILE *out)
                 "\t\t--ost: object storage, mutually exclusive with mdt\n"
                 "\t\t--mdt: metadata storage, mutually exclusive with ost\n"
                 "\t\t--mgmt: configuration management service - one per site\n"
-                "\t\t--mgmtnode=<mgtnode>[,<failover-mgtnode>]:nid of a remote\n"
-                "\t\t\tmgmt node [and the failover mgmt node]\n"
+                "\t\t--mgmtnid=<nid>[,<...>]:nid(s) of a remote mgmt node\n"
                 "\t\t--fsname=<filesystem_name>\n"
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
                 "\t\t\tfor this device on an alternate device\n"
@@ -88,7 +87,7 @@ void usage(FILE *out)
                 "\t\t--startupwait=<secs>: time to wait for other servers to join\n"
                 "\t\t--reformat: overwrite an existing disk\n"
                 "\t\t--verbose\n");
-        exit(out != stdout);
+        return;
 }
 
 #define vprint if (verbose) printf
@@ -161,7 +160,7 @@ static int load_modules(struct mkfs_opts *mop)
         vprint("Loading modules...");
 
         /* portals, ksocknal, fsfilt, etc. in modules.conf */
-        rc = load_module("_lustre");
+        rc = load_module("lustre");
         if (rc) return rc;
 
         /* FIXME currently use the MDT to write llogs, should be a MGS */
@@ -214,6 +213,27 @@ static void run_command_out()
                 fprintf(stderr, cmd_out[i]);
         }
 }
+
+static int lnet_setup = 0;
+static void lnet_start()
+{
+        ptl_initialize(0, NULL);
+        if (access("/proc/sys/lnet", X_OK) != 0) 
+            load_module("lnet");
+        if (jt_ptl_get_nids(NULL) == -ENETDOWN) {
+                char *cmd[]={"network", "up"};
+                jt_ptl_network(2, cmd);
+                lnet_setup++;
+        }
+}
+
+static void lnet_stop()
+{
+        char *cmd[]={"network", "down"};
+        if (--lnet_setup == 0)
+                jt_ptl_network(2, cmd);
+}
+
 
 /*============ disk dev functions ===================*/
 
@@ -329,8 +349,10 @@ int loop_format(struct mkfs_opts *mop)
                 return EINVAL;
         }
 
+        ret = creat(mop->mo_device, S_IRUSR|S_IWUSR);
         ret = truncate(mop->mo_device, mop->mo_device_sz * 1024);
         if (ret != 0) {
+                ret = errno;
                 fprintf(stderr, "Unable to create backing store: %d\n", ret);
         }
 
@@ -479,12 +501,17 @@ out:
 void print_ldd(struct lustre_disk_data *ldd)
 {
         int count = 0;
-        printf("Permanent disk data:\n");
+        printf("\nPermanent disk data:\n");
         printf("Server:     %s\n", ldd->ldd_svname);
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
+        printf("Flags:      %s%s%s%s\n",
+               ldd->ldd_flags & LDD_F_SV_TYPE_MDT  ? "MDT ":"",
+               ldd->ldd_flags & LDD_F_SV_TYPE_OST  ? "OST ":"",
+               ldd->ldd_flags & LDD_F_SV_TYPE_MGMT ? "MGT ":"",
+               ldd->ldd_flags & LDD_F_NEED_INDEX   ? "needs_index ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
-        printf("MGS nids:");
+        printf("MGS nids: ");
         while (count < MAX_FAILOVER_NIDS) {
                 if (ldd->ldd_mgsnid[count] == LNET_NID_ANY)
                         break;
@@ -492,7 +519,7 @@ void print_ldd(struct lustre_disk_data *ldd)
                        libcfs_nid2str(ldd->ldd_mgsnid[count]));
                 count++;
         }
-        printf("\n");
+        printf("\n\n");
 }
 
 /* Write the server config files */
@@ -575,6 +602,7 @@ out_rmdir:
         return ret;
 }
 
+#if 0
 static int jt_setup()
 {
         int ret;
@@ -763,7 +791,6 @@ int write_llog_files(struct mkfs_opts *mop)
                               mop->mo_timeout, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
 
-#if 0
                 /* Write client startup logs */
                 numnids = jt_getnids(nidarray, 
                                      sizeof(nidarray) / sizeof(nidarray[0]));
@@ -821,7 +848,6 @@ int write_llog_files(struct mkfs_opts *mop)
                                 do_jt(jt_lcfg_set_timeout, "set_timeout", 
                                       mop->mo_timeout, 0);
                 }
-#endif
         }
 
 out_jt:        
@@ -836,6 +862,7 @@ out_jt:
         obd_finalize(1, (char **)&name /*dummy*/);
         return ret;
 }
+#endif
 
 /* Make the mdt/ost server obd name based on the filesystem name */
 static void make_sv_name(struct mkfs_opts *mop)
@@ -911,9 +938,11 @@ int main(int argc , char *const argv[])
         int  ret = 0;
 
         progname = argv[0];
-        if (argc < 3) 
+        if (argc < 3) {
                 usage(stderr);
-           
+                goto out;
+        }
+
         memset(&mop, 0, sizeof(mop));
         set_defaults(&mop);
 
@@ -959,7 +988,7 @@ int main(int argc , char *const argv[])
                         break;
                 case 'h':
                         usage(stdout);
-                        break;
+                        goto out;
                 case 'i':
                         if (IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd)) {
                                 mop.mo_index = atol(optarg);
@@ -973,18 +1002,18 @@ int main(int argc , char *const argv[])
                         char *s1 = optarg, *s2;
                         if (IS_MGMT(&mop.mo_ldd))
                                 badopt(opt, "non-MGMT MDT,OST");
-                        while ((s2 = strsep(&s1, ","))){
+                        while ((s2 = strsep(&s1, ","))) {
                                 mop.mo_ldd.ldd_mgsnid[count++] =
                                         libcfs_str2nid(s2);
                                 if (count >= MAX_FAILOVER_NIDS) {
                                         fprintf(stderr, "too many MGS nids, "
                                                 "ignoring %s\n", s1);
                                         break;
-                                } else {
-                                        mop.mo_ldd.ldd_mgsnid[count] = 
-                                                LNET_NID_ANY;
                                 }
                         }
+                        if (count < MAX_FAILOVER_NIDS) 
+                                mop.mo_ldd.ldd_mgsnid[count] = 
+                                LNET_NID_ANY;
                         break;
                 }
                 case 'M':
@@ -1029,13 +1058,14 @@ int main(int argc , char *const argv[])
                                 fprintf(stderr, "Unknown option '%c'\n", opt);
                         }
                         usage(stderr);
-                        break;
+                        goto out;
                 }
         }//while
         if (optind >= argc) {
                 fatal();
                 fprintf(stderr, "Bad arguments\n");
                 usage(stderr);
+                goto out;
         }
 
         if (!(IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd) || 
@@ -1043,23 +1073,30 @@ int main(int argc , char *const argv[])
                 fatal();
                 fprintf(stderr, "must set server type :{mdt,ost,mgmt}\n");
                 usage(stderr);
+                goto out;
         }
 
         if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd) && 
             mop.mo_ldd.ldd_mgsnid[0] == LNET_NID_ANY) {
                 int count;
                 __u64 *nids;
-                vprint("No MGS specified, adding to this MDT\n");
+                vprint("No MGS specified, adding MGS to this MDT\n");
                 mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
+                lnet_start();
                 count = jt_ptl_get_nids(&nids);
-                if (count > 0) {
-                        vprint("Adding %d local nids for MGS\n", count);
-                        memcpy(mop.mo_ldd.ldd_mgsnid, nids,
-                               sizeof(mop.mo_ldd.ldd_mgsnid));
-                        free(nids);
-                }
-                if (count < MAX_FAILOVER_NIDS) {
-                        mop.mo_ldd.ldd_mgsnid[count] = LNET_NID_ANY;
+                if (count < 0) {
+                        fprintf(stderr, "Can't find local nids "
+                                "(is the lnet module loaded?)\n");
+                } else {
+                        if (count > 0) {
+                                vprint("Adding %d local nids for MGS\n", count);
+                                memcpy(mop.mo_ldd.ldd_mgsnid, nids,
+                                       sizeof(mop.mo_ldd.ldd_mgsnid));
+                                free(nids);
+                        }
+                        if (count < MAX_FAILOVER_NIDS) {
+                                mop.mo_ldd.ldd_mgsnid[count] = LNET_NID_ANY;
+                        }
                 }
         }
 
@@ -1067,6 +1104,7 @@ int main(int argc , char *const argv[])
                 fatal();
                 fprintf(stderr, "Must specify either --mgmt or --mgmtnode\n");
                 usage(stderr);
+                goto out;
         }
 
         if (IS_MDT(&mop.mo_ldd) && (mop.mo_stripe_sz == 0))
@@ -1105,7 +1143,8 @@ int main(int argc , char *const argv[])
                 fprintf(stderr, "%s: unknown fs type %d '%s'\n",
                         progname, mop.mo_ldd.ldd_mount_type,
                         MT_STR(&mop.mo_ldd));
-                return EINVAL;
+                ret = EINVAL;
+                goto out;
         }
         }               
 
@@ -1129,8 +1168,9 @@ int main(int argc , char *const argv[])
                         ret = loop_setup(&mop);
                 if (ret) {
                         fatal();
-                        fprintf(stderr, "Loop device setup failed %d\n", ret);
-                        return ret;
+                        fprintf(stderr, "Loop device setup failed: %s\n", 
+                                strerror(ret));
+                        goto out;
                 }
         }
 
@@ -1141,24 +1181,31 @@ int main(int argc , char *const argv[])
         if (ret != 0) {
                 fatal();
                 fprintf(stderr, "mkfs failed %d\n", ret);
-                return ret;
+                goto out;
         }
         
         ret = write_local_files(&mop);
         if (ret != 0) {
                 fatal();
                 fprintf(stderr, "failed to write local files\n");
-                return ret;
+                goto out;
         }
 
+        /* We will not write startup logs here.  That is the domain of the 
+           mgc/mgs, and should probably be done at first mount. 
+           mgc might have to pass info from the mount_data_file to mgs. */
+#if 0
         ret = write_llog_files(&mop);
         if (ret != 0) {
                 fatal();
                 fprintf(stderr, "failed to write setup logs\n");
-                return ret;
+                goto out:
         }
-
+#endif
+             
+out:
         loop_cleanup(&mop);      
-        
+        lnet_stop();
+
         return ret;
 }
