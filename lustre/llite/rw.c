@@ -148,7 +148,7 @@ void ll_truncate(struct inode *inode)
                 /* If the truncate leaves behind a partial page, update its
                  * checksum. */
                 struct page *page = find_get_page(inode->i_mapping,
-                                             inode->i_size >> PAGE_CACHE_SHIFT);
+                                                  inode->i_size >> PAGE_CACHE_SHIFT);
                 if (page != NULL) {
                         struct ll_async_page *llap = llap_cast_private(page);
                         if (llap != NULL) {
@@ -177,15 +177,13 @@ void ll_truncate(struct inode *inode)
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else
-                obdo_to_inode(inode, &oa, OBD_MD_FLSIZE|OBD_MD_FLBLOCKS|
-                              OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                              OBD_MD_FLCTIME);
+                obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                              OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         EXIT;
         return;
 
  out_unlock:
         ll_inode_size_unlock(inode, 0);
-        EXIT;
 } /* ll_truncate */
 
 int ll_prepare_write(struct file *file, struct page *page, unsigned from,

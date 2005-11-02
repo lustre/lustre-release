@@ -296,12 +296,12 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         dentry = filter_oa2dentry(obd, oa);
         if (IS_ERR(dentry)) {
-                rc = PTR_ERR(dentry);
-                if (rc == -ENOENT) {
+                if (PTR_ERR(dentry) == -ENOENT) {
+                        dentry = NULL;
                         inode = NULL;
                 } else {
                         dentry = NULL;
-                        GOTO(cleanup, rc);
+                        GOTO(cleanup, rc = PTR_ERR(dentry));
                 }
         } else {
                 inode = dentry->d_inode;
@@ -347,8 +347,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(now, obd_timeout, "start_page_read");
 
         if (inode != NULL) {
-                rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
-                                      NULL, NULL, NULL);
+                rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf,
+                                      exp, NULL, NULL, NULL);
                 if (rc)
                         GOTO(cleanup, rc);
         }

@@ -124,9 +124,15 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
                 attr->ia_gid = oa->o_gid;
                 attr->ia_valid |= ATTR_GID;
         }
+
+        /* do not set CROW into flags, as it realy does not belong to attributes
+         * and only confuses filter_setattr_internal(). */
         if (valid & OBD_MD_FLFLAGS) {
-                attr->ia_attr_flags = oa->o_flags;
-                attr->ia_valid |= ATTR_ATTR_FLAG;
+                obd_flag o_flags = (oa->o_flags & ~OBD_FL_CREATE_CROW);
+                if (o_flags) {
+                        attr->ia_attr_flags = o_flags;
+                        attr->ia_valid |= ATTR_ATTR_FLAG;
+                }
         }
 }
 EXPORT_SYMBOL(iattr_from_obdo);

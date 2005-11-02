@@ -2666,11 +2666,10 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
 
 /* NB start and end are used for punch, but not truncate */
 static int filter_truncate(struct obd_export *exp, struct obdo *oa,
-                           struct lov_stripe_md *lsm,
-                           obd_off start, obd_off end,
-                           struct obd_trans_info *oti)
+                           struct lov_stripe_md *lsm, obd_off start,
+                           obd_off end, struct obd_trans_info *oti)
 {
-        int error;
+        int rc;
         ENTRY;
 
         if (end != OBD_OBJECT_EOF)
@@ -2679,9 +2678,10 @@ static int filter_truncate(struct obd_export *exp, struct obdo *oa,
 
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPX64
                ", o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
+        
         oa->o_size = start;
-        error = filter_setattr(exp, oa, NULL, oti);
-        RETURN(error);
+        rc = filter_setattr(exp, oa, NULL, oti);
+        RETURN(rc);
 }
 
 static int filter_sync(struct obd_export *exp, struct obdo *oa,

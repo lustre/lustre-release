@@ -441,6 +441,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
+        unsigned int ia_valid = rec->ur_iattr.ia_valid;
         struct mds_body *body;
         struct dentry *de;
         struct inode *inode = NULL;
@@ -588,12 +589,15 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 
-        /* Don't return OST-specific attributes if we didn't just set them */
-        if (rec->ur_iattr.ia_valid & ATTR_SIZE)
+        /* don't return OST-specific attributes if we didn't just set them. Use
+         * saved ->ia_valid here, as rec->ur_iattr.ia_valid gets rewritten by
+         * fsfilt_setattr() what breaks case of truncating file with no object
+         * on OST and no lsm (test_34c from sanity.sh). --umka */
+        if (ia_valid & ATTR_SIZE)
                 body->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-        if (rec->ur_iattr.ia_valid & (ATTR_MTIME | ATTR_MTIME_SET))
+        if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET))
                 body->valid |= OBD_MD_FLMTIME;
-        if (rec->ur_iattr.ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
+        if (ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 body->valid |= OBD_MD_FLATIME;
 
         if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_osc_obd)) {
@@ -653,7 +657,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         req->rq_status = rc;
 
         /* trigger dqrel/dqacq for original owner and new owner */
-        if (rec->ur_iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
+        if (ia_valid & (ATTR_UID | ATTR_GID)) {
                 mds_adjust_qunit(obd, rec->ur_iattr.ia_uid,
                                  rec->ur_iattr.ia_gid, 0, 0, rc);
                 mds_adjust_qunit(obd, child_uid, child_gid, 0, 0, rc);
