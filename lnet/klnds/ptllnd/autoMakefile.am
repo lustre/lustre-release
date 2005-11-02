@@ -4,5 +4,5 @@ modulenet_DATA = kptllnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
 DIST_SOURCES = $(kptllnd-objs:%.o=%.c) ptllnd.h

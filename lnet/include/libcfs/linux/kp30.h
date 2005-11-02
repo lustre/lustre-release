@@ -89,6 +89,7 @@ static inline void our_cond_resched(void)
 #else
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #endif
+#define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
 
 #ifdef __arch_um__
 #define LBUG_WITH_LOC(file, func, line)                                 \
@@ -322,6 +323,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 #endif
 
 #if (defined(__x86_64__) && defined(__KERNEL__))
+/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"

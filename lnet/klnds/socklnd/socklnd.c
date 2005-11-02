@@ -1204,7 +1204,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         write_unlock_irqrestore (global_lock, flags);
 
         if (rc != 0)
-                CERROR ("Closed %d stale conns to %s ip %d.%d.%d.%d\n",
+                CDEBUG(D_HA, "Closed %d stale conns to %s ip %d.%d.%d.%d\n",
                         rc, libcfs_id2str(conn->ksnc_peer->ksnp_id),
                         HIPQUAD(conn->ksnc_ipaddr));
 
@@ -2228,10 +2228,11 @@ ksocknal_enumerate_interfaces(ksock_net_t *net)
                 int        up;
                 __u32      ip;
                 __u32      mask;
-                
+
+#ifndef __arch_um__
                 if (!strcmp(names[i], "lo")) /* skip the loopback IF */
                         continue;
-                
+#endif
                 rc = libcfs_ipif_query(names[i], &up, &ip, &mask);
                 if (rc != 0) {
                         CWARN("Can't get interface %s info: %d\n",

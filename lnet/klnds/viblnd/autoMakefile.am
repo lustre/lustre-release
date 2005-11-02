@@ -9,5 +9,5 @@ modulenet_DATA = kviblnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
 DIST_SOURCES = $(kviblnd-objs:%.o=%.c) viblnd.h viblnd_wire.h

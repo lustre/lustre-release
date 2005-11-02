@@ -27,4 +27,4 @@ endif # DARWIN
 EXTRA_DIST := $(plist_DATA)
 install-data-hook: $(install_data_hook)
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c socklnd_lib.c
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ socklnd_lib.c

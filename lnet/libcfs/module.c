@@ -215,7 +215,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
 
         if (libcfs_ioctl_getdata(buf, buf + 800, (void *)arg)) {
                 CERROR("PORTALS ioctl: data error\n");
-                return (-EINVAL);
+                RETURN(-EINVAL);
         }
         data = (struct libcfs_ioctl_data *)buf;
 

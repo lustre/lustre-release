@@ -75,10 +75,16 @@ tcpnal_env_param (char *name, int *val)
 int
 tcpnal_set_global_params (void)
 {
-        return  tcpnal_env_param("TCPLND_PORT", 
+        return  tcpnal_env_param("TCPNAL_PORT",
                                 &tcpnal_acceptor_port) &&
-                tcpnal_env_param("TCPLND_BUFFER_SIZE",   
+                tcpnal_env_param("TCPLND_PORT",
+                                &tcpnal_acceptor_port) &&
+                tcpnal_env_param("TCPNAL_BUFFER_SIZE",
                                  &tcpnal_buffer_size) &&
+                tcpnal_env_param("TCPLND_BUFFER_SIZE",
+                                 &tcpnal_buffer_size) &&
+                tcpnal_env_param("TCPNAL_NAGLE",
+                                 &tcpnal_nagle) &&
                 tcpnal_env_param("TCPLND_NAGLE",
                                  &tcpnal_nagle);
 }

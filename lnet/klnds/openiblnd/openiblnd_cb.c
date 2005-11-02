@@ -1781,7 +1781,7 @@ kibnal_conn_callback (tTS_IB_CM_EVENT event,
                 break;
                 
         case TS_IB_CM_DISCONNECTED:
-                CDEBUG(D_WARNING, "Connection %p -> %s DISCONNECTED.\n",
+                CWARN("Connection %p -> %s DISCONNECTED.\n",
                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kibnal_close_conn (conn, 0);
                 break;
@@ -1917,7 +1917,7 @@ kibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
 
         case TS_IB_CM_ESTABLISHED:
                 LASSERT (conn != NULL);
-                CDEBUG(D_WARNING, "Connection %p -> %s ESTABLISHED.\n",
+                CWARN("Connection %p -> %s ESTABLISHED.\n",
                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
                 kibnal_connreq_done(conn, 0);
@@ -1989,7 +1989,7 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
         }
 
         case TS_IB_CM_ESTABLISHED:
-                CDEBUG(D_WARNING, "Connection %p -> %s ESTABLISHED\n",
+                CWARN("Connection %p -> %s ESTABLISHED\n",
                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
                 kibnal_connreq_done(conn, 0);

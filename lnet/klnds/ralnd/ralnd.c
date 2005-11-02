@@ -697,7 +697,7 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
                 CWARN("Closed %d stale conns to %s\n", nstale, 
                       libcfs_nid2str(peer_nid));
 
-        CDEBUG(D_WARNING, "New connection to %s on devid[%d] = %d\n",
+        CWARN("New connection to %s on devid[%d] = %d\n",
                libcfs_nid2str(peer_nid), 
                conn->rac_device->rad_idx, conn->rac_device->rad_id);
 

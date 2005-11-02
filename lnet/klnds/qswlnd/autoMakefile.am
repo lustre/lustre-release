@@ -9,5 +9,5 @@ modulenet_DATA = kqswlnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
 DIST_SOURCES = $(kqswlnd-objs:%.o=%.c) qswlnd.h
