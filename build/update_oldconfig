@@ -3,7 +3,7 @@
 log_user 0
 set spawnid [spawn make oldconfig]
 
-match_max 200
+#match_max 200
 
 # need to allow for the config tool to be built initially
 set timeout 30
