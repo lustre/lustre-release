@@ -341,6 +341,23 @@ set_make()
     MAKE_J="$MAKE -j $JOBS"
 }
 
+timed_run() {
+    SLEEP_TIME=$1
+    shift
+
+    set -o monitor
+
+    #bash -c "$@" &
+    ("$@") &
+    child_pid=$!
+    
+    sleep $SLEEP_TIME
+    kill -TERM -$child_pid 2>/dev/null
+    sleep 5
+    kill -KILL -$child_pid 2>/dev/null
+    echo "$1 was killed due to timeout"
+}
+
 depend_kernel()
 {
     (( $DEPEND_KERNEL )) || return 0
@@ -357,7 +374,7 @@ depend_kernel()
     # use the expect script to "make oldconfig" and answer the questions for
     # new items conservatively.  QA will get notified on anything newly added
     # for them to review and adjust accordingly.
-    $TOPDIR/build/update_oldconfig
+    timed_run 300 $TOPDIR/build/update_oldconfig
     # now notify if resulting .config is different than $CONFIG_FILE
     local tmpfile=$(mktemp /tmp/XXXXXX)
     diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
