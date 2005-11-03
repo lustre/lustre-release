@@ -517,8 +517,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                         GOTO(cleanup, rc = -ENOMEM);
 
                 oa->o_gr = FILTER_GROUP_LLOG;
-                oa->o_flags = OBD_FL_CREATE_URGENT;
-                oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP | OBD_MD_FLFLAGS;
+                oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
 
                 rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
                 if (rc)

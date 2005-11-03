@@ -288,7 +288,6 @@ typedef uint32_t        obd_count;
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
 #define OBD_FL_CREATE_CROW   (0x00000400) /* object should be created with crow */
-#define OBD_FL_CREATE_URGENT (0x00000800) /* object should be created asap (echo, llog) */
 
 /* this should be not smaller than sizeof(struct lustre_handle) + sizeof(struct
  * llog_cookie) + sizeof(ll_fid). Nevertheless struct ll_fid is not longer
@@ -328,6 +327,11 @@ struct obdo {
 #define o_undirty o_mode
 #define o_dropped o_misc
 #define o_cksum   o_nlink
+
+#define OBDO_URGENT_CREATE(oa)                      \
+        (!((oa)->o_valid & OBD_MD_FLFLAGS) ||       \
+         !((oa)->o_flags & OBD_FL_CREATE_CROW) ||   \
+         ((oa)->o_flags & OBD_FL_RECREATE_OBJS))
 
 extern void lustre_swab_obdo (struct obdo *o);
 

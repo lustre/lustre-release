@@ -109,6 +109,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
+        struct obd_connect_data *ocd;
         int try_again = 1, rc = 0;
         ENTRY;
 
@@ -116,8 +117,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         LASSERT(ea != NULL);
         
         /* this is the special case where create removes orphans */
-        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
-            oa->o_flags == OBD_FL_DELORPHAN) {
+        if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags == OBD_FL_DELORPHAN) {
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
                         spin_unlock(&oscc->oscc_lock);
@@ -157,30 +157,21 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(rc);
-        } else {
-                struct obd_connect_data *ocd;
-                int urgent;
+        }
 
-                ocd = &class_exp2cliimp(exp)->imp_connect_data;
-                
-                urgent = oa->o_valid & OBD_MD_FLFLAGS &&
-                        (oa->o_flags & OBD_FL_CREATE_URGENT ||
-                         oa->o_flags & OBD_FL_RECREATE_OBJS);
+        LASSERT(ergo(oa->o_valid & OBD_MD_FLFLAGS,
+                     !!(oa->o_flags & OBD_FL_CREATE_CROW) !=
+                     !!(oa->o_flags & OBD_FL_RECREATE_OBJS)));
 
-                /* perform urgent create if asked or import is not crow capable
-                 * or ENOSPC case if detected. */
-                if (urgent || !OCD_CROW_ABLE(ocd) || osc_check_nospc(exp)) {
-                        /* make sure that all needed flags are set in case of
-                         * real create on enospc case. This is needed to let
-                         * filter know that this is not recovery case.*/
-                        if (osc_check_nospc(exp)) {
-                                oa->o_valid |= OBD_MD_FLFLAGS;
-                                oa->o_flags |= OBD_FL_CREATE_URGENT;
-                        }
-                        CDEBUG(D_HA, "perform urgent create\n");
-                        rc = osc_real_create(exp, oa, ea, oti);
-                        RETURN(rc);
-                }
+        ocd = &class_exp2cliimp(exp)->imp_connect_data;
+
+        /* perform urgent create if asked or import is not crow capable or
+         * ENOSPC case if detected. */
+        if (OBDO_URGENT_CREATE(oa) || !OCD_CROW_ABLE(ocd) ||
+            osc_check_nospc(exp)) {
+                CDEBUG(D_HA, "perform urgent create\n");
+                rc = osc_real_create(exp, oa, ea, oti);
+                RETURN(rc);
         }
 
         /* check OST fs state. */

@@ -445,6 +445,12 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 oa->o_generation = body->fid1.generation;
                 oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
 
+                /* do not set CROW flag in setattr path as it is not needed
+                 * there and only confuses setattr code in filter. */
+                oa->o_flags &= ~OBD_FL_CREATE_CROW;
+                if (!oa->o_flags)
+                        oa->o_valid &= ~OBD_MD_FLFLAGS;
+                
                 rc = obd_setattr(mds->mds_osc_exp, oa, lsm, &oti);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",

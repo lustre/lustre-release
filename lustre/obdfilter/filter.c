@@ -1989,9 +1989,9 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         if (IS_ERR(handle))
                 GOTO(out_unlock, rc = PTR_ERR(handle));
 
-        if (iattr.ia_valid & ATTR_ATTR_FLAG) {
-                rc = fsfilt_iocontrol(exp->exp_obd, dentry->d_inode, NULL,
-                                      EXT3_IOC_SETFLAGS,
+        if (oa->o_valid & OBD_MD_FLFLAGS) {
+                rc = fsfilt_iocontrol(exp->exp_obd, dentry->d_inode,
+                                      NULL, EXT3_IOC_SETFLAGS,
                                       (long)&iattr.ia_attr_flags);
         } else {
                 rc = fsfilt_setattr(exp->exp_obd, dentry, handle, &iattr, 1);
@@ -2606,10 +2606,24 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         CDEBUG(D_INFO, "filter_create(od->o_gr="LPU64",od->o_id="LPU64")\n",
                group, oa->o_id);
 
+        if (oa->o_valid & OBD_MD_FLFLAGS && oa->o_flags == OBD_FL_DELORPHAN) {
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                rc = filter_clear_orphans(exp, oa);
+                if (rc) {
+                        CERROR("cannot clear orphans starting from "
+                               LPU64", err = %d\n", oa->o_id, rc);
+                }
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                RETURN(rc);
+        }
+
+        LASSERT(ergo(oa->o_valid & OBD_MD_FLFLAGS,
+                     !!(oa->o_flags & OBD_FL_CREATE_CROW) !=
+                     !!(oa->o_flags & OBD_FL_RECREATE_OBJS)));
+
         /* echo, llog and other "create asap" cases. */
-        if (oa->o_valid & OBD_MD_FLFLAGS &&
-            (oa->o_flags & OBD_FL_CREATE_URGENT ||
-             oa->o_flags & OBD_FL_RECREATE_OBJS)) {
+        if (OBDO_URGENT_CREATE(oa)) {
                 struct obd_statfs *osfs;
                 struct dentry *dentry;
                 
@@ -2645,22 +2659,11 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                                 rc = 0;
                         }
                 }
-
-                RETURN(rc);
+        } else {
+                CERROR("wrong @oa flags detected 0x%lx. Not an urgent "
+                       "create and not recovery\n", oa->o_flags);
+                LBUG();
         }
-
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        LASSERT(oa->o_valid & OBD_MD_FLFLAGS &&
-                oa->o_flags == OBD_FL_DELORPHAN);
-
-        rc = filter_clear_orphans(exp, oa);
-        if (rc) {
-                CERROR("cannot clear orphans starting from "
-                       LPU64", err = %d\n", oa->o_id, rc);
-        }
-
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
 }
 

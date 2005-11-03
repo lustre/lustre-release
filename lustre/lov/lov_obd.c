@@ -780,7 +780,7 @@ lov_create(struct obd_export *exp, struct obdo *src_oa,
 
         LASSERT(ergo(src_oa->o_valid & OBD_MD_FLFLAGS,
                      !!(src_oa->o_flags & OBD_FL_CREATE_CROW) !=
-                     !!(src_oa->o_flags & OBD_FL_CREATE_URGENT)));
+                     !!(src_oa->o_flags & OBD_FL_RECREATE_OBJS)));
         
         lov = &exp->exp_obd->u.lov;
         if (!lov->desc.ld_active_tgt_count)
