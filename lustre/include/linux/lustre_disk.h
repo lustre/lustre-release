@@ -206,9 +206,6 @@ struct lustre_mount_info {
         struct list_head    lmi_list_chain;
 };
 
-/****************** misc *********************/
-#define LUSTRE_MGC_NAME "mgc"
-
 /****************** prototypes *********************/
 
 #ifdef __KERNEL__

@@ -437,8 +437,8 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("invalid conn_uuid\n");
                 RETURN(-EINVAL);
         }
-        if (strcmp(obd->obd_type->typ_name, "mdc") &&
-            strcmp(obd->obd_type->typ_name, "osc")) {
+        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
+            strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 CERROR("can't add connection on non-client dev\n");
                 RETURN(-EINVAL);
         }

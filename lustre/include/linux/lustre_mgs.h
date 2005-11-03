@@ -22,10 +22,6 @@
 #include <linux/lustre_log.h>
 #include <linux/lustre_export.h>
 
-#define LUSTRE_MGS_NAME "mgs"
-#define LUSTRE_MGT_NAME "mgt"
-#define LUSTRE_MGC_NAME "mgc"
-
 #define MGS_LR_SERVER_SIZE    512
 
 #define MGS_LR_CLIENT_START  8192

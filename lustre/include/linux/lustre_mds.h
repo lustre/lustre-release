@@ -31,10 +31,6 @@ struct ptlrpc_request;
 struct obd_device;
 struct ll_file_data;
 
-#define LUSTRE_MDS_NAME "mds"
-#define LUSTRE_MDT_NAME "mdt"
-#define LUSTRE_MDC_NAME "mdc"
-
 struct lustre_md {
         struct mds_body *body;
         struct lov_stripe_md *lsm;

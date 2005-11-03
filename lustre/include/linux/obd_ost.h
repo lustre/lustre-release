@@ -13,8 +13,6 @@
 
 #include <linux/obd_class.h>
 
-#define LUSTRE_OST_NAME "ost"
-#define LUSTRE_OSC_NAME "osc"
 #define LUSTRE_SANOSC_NAME "sanosc"
 #define LUSTRE_SANOST_NAME "sanost"
 

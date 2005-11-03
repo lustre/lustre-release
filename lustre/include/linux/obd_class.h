@@ -49,6 +49,16 @@
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 extern spinlock_t obd_dev_lock;
 
+/* device types */
+#define LUSTRE_MDS_NAME "mds"
+#define LUSTRE_MDT_NAME "mdt"
+#define LUSTRE_MDC_NAME "mdc"
+#define LUSTRE_OST_NAME "ost"
+#define LUSTRE_OSC_NAME "osc"
+#define LUSTRE_MGS_NAME "mgs"
+#define LUSTRE_MGT_NAME "mgt"
+#define LUSTRE_MGC_NAME "mgc"
+
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
 extern struct obd_device *class_exp2obd(struct obd_export *);
