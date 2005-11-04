@@ -619,18 +619,22 @@ run_test 7 "Quota recovery (only block limit) ======"
 test_8() {
 	BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
 	FILE_LIMIT=1000000
+	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
+	
+	[ ! -d $DBENCH_LIB ] && echo "dbench not installed, skip this test" && return 0
 	
 	echo "  Set enough high limit for user: $TSTUSR"
 	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
 	echo "  Set enough high limit for group: $TSTUSR"
 	$LFS setquota -g $USER 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
 	
+
 	TGT=$TSTDIR/client.txt
-	SRC=${SRC:-/usr/lib/dbench/client.txt}
-	[ ! -e $TGT -a -e $SRC ] && echo "  copying $SRC to $TGT" && cp $SRC $TGT
-	SRC=/usr/lib/dbench/client_plain.txt
-	[ ! -e $TGT -a -e $SRC ] && echo "  copying $SRC to $TGT" && cp $SRC $TGT
-	
+	SRC=${SRC:-$DBENCH_LIB/client.txt}
+	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+	SRC=$DBENCH_LIB/client_plain.txt
+	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+
 	SAVE_PWD=$PWD
 	cd $TSTDIR
 	$RUNAS dbench -c client.txt 3
