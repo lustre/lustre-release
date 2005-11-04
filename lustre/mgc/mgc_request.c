@@ -181,8 +181,9 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                         RETURN(-ENOENT);
                 }
         }
+        else
+                CERROR("mgc does not have local disk (client only)\n");
 
-        CERROR("mgc does not have local disk (client only)\n");
         rc = mgc_obd_setup(obd, len, buf);
         if (rc) {
                 mgc_cleanup(obd);

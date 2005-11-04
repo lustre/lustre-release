@@ -303,81 +303,36 @@ out:
         return(err);
 }
 
-
 /* Get the log "profile" from a remote MGS and process it.
   FIXME  If remote doesn't exist, try local
   This func should work for both clients and servers */
-int lustre_get_process_log(struct super_block *sb, char * profile,
-                       struct config_llog_instance *cfg)
+int lustre_get_process_log(struct super_block *sb, char *profile,
+                           struct config_llog_instance *cfg)
 {
-#if 0
-FIXME
-        char  *peer = "MDS_PEER_UUID";
-        struct obd_device *obd;
-        struct lustre_handle mdc_conn = {0, };
+        struct lustre_sb_info *sbi = s2sbi(sb);
+        struct obd_device *mgc = sbi->lsi_mgc;
+        struct lustre_handle mgc_conn = {0, };
         struct obd_export *exp;
-        char  *mdcname = "mdc_dev";
-        char  *mdsname;
-        class_uuid_t uuid;
-        struct obd_uuid mdc_uuid;
         struct llog_ctxt *ctxt;
-        int allow_recov = (lmd->lmd_flags & LMD_FLG_RECOVER) > 0;
-        int err, rc = 0;
-        ENTRY;
+        int err, rc;
+        LASSERT(mgc);
 
-        LASSERT(lmd->lmd_mgmtnid.primary != PTL_NID_ANY);
-
-        //lustre_generate_random_uuid(uuid);
-        class_uuid_unparse(uuid, &mdc_uuid);
-        CDEBUG(D_HA, "generated uuid: %s\n", mdc_uuid.uuid);
-
-        err = do_lcfg(mdcname, lmd->lmd_mgmtnid.primary, LCFG_ADD_UUID, 
-                      peer, 0, 0, 0)
-        if (err < 0)
-                GOTO(out, err);
-
-        /* FIXME setup MGC, not MDC */
-        err = do_lcfg(mdcname, 0, LCFG_ATTACH, 
-                      LUSTRE_MDC_NAME, mdc_uuid.uuid, 0, 0)
-        if (err < 0)
-                GOTO(out_del_uuid, err);
-
-        /* FIXME get the mds name from the mgmt node */
-        sprintf(mdsname, "%s-mds0001", lmd->lmd_dev);
-        CERROR("MDS device: %s @ %s\n", mdsname, libcfs_nid2str(lcfg->lcfg_nid));
-        err = do_lcfg(mdcname, 0, LCFG_SETUP, 
-                      mdsname, peer, 0, 0)
-        if (err < 0)
-                GOTO(out_detach, err);
-
-        obd = class_name2obd(mdcname);
-        if (obd == NULL)
-                GOTO(out_cleanup, err = -EINVAL);
-
-        /* Disable initial recovery on this import */
-        err = obd_set_info(obd->obd_self_export,
-                           strlen("initial_recov"), "initial_recov",
-                           sizeof(allow_recov), &allow_recov);
-        if (err)
-                GOTO(out_cleanup, err);
-
-        err = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /* ocd */);
+        err = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
         if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", mdsname, err);
-                GOTO(out_cleanup, err);
+                CERROR("cannot connect to MGS: rc = %d\n", err);
+                return (err);
         }
-
-        exp = class_conn2export(&mdc_conn);
+        
+        exp = class_conn2export(&mgc_conn);
 
         ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
 #if 1
         rc = class_config_parse_llog(ctxt, profile, cfg);
 #else
-        /*
-         * For debugging, it's useful to just dump the log
-         */
+        /* For debugging, it's useful to just dump the log */
         rc = class_config_dump_llog(ctxt, profile, cfg);
 #endif
+
         switch (rc) {
         case 0:
                 break;
@@ -393,29 +348,13 @@ FIXME
                 break;
         }
 
+        /* We don't so much care about errors in cleaning up the config llog
+         * connection, as we have already read the config by this point. */
         err = obd_disconnect(exp);
-
-out_cleanup:
-        err = do_lcfg(mdcname, 0, LCFG_CLEANUP, 
-                      0, 0, 0, 0)
-        if (err < 0)
-                GOTO(out, err);
-
-out_detach:
-        err = do_lcfg(mdcname, 0, LCFG_DETACH, 
-                      0, 0, 0, 0)
-        if (err < 0)
-                GOTO(out, err);
-
-out_del_uuid:
-        err = do_lcfg(mdcname, 0, LCFG_DEL_UUID, 
-                      peer, 0, 0, 0)
-out:
-        if (rc == 0)
-                rc = err;
-
-        RETURN(rc);
-#endif
+        if (err)
+                CERROR("obd_disconnect failed: rc = %d\n", err);
+        
+        return (rc);
 }
 
 static int lustre_update_llog(struct obd_device *obd)
@@ -461,7 +400,7 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         return(err);
 }
 
-static int lustre_start_simple(char *obdname, char *type)
+static int lustre_start_simple(char *obdname, char *type, char *s1, char *s2)
 {
         int err;
         err = do_lcfg(obdname, 0, LCFG_ATTACH, type, obdname/*uuid*/, 0, 0);
@@ -469,7 +408,7 @@ static int lustre_start_simple(char *obdname, char *type)
                 CERROR("%s attach error %d\n", obdname, err);
                 return(err);
         }
-        err = do_lcfg(obdname, 0, LCFG_SETUP, 0, 0, 0, 0);
+        err = do_lcfg(obdname, 0, LCFG_SETUP, s1, s2, 0, 0);
         if (err) {
                 CERROR("%s setup error %d\n", obdname, err);
                 do_lcfg(obdname, 0, LCFG_DETACH, 0, 0, 0, 0);
@@ -494,7 +433,7 @@ static int lustre_start_mgs(struct super_block *sb, struct vfsmount *mnt)
         if (err)
                GOTO(out_free, err);
 
-        if ((err = lustre_start_simple(mgsname, /*LUSTRE_MGS_NAME*/ "mgs")))
+        if ((err = lustre_start_simple(mgsname, LUSTRE_MGS_NAME, 0, 0)))
                 GOTO(out_dereg, err);
 
 out_free:
@@ -528,7 +467,8 @@ static int lustre_start_mgc(struct super_block *sb, struct vfsmount *mnt)
         struct lustre_sb_info *sbi = s2sbi(sb);
         struct obd_device *obd;
         char*  mgcname;
-        int    mgcname_size, err = 0;
+        int    mgcname_size, err = 0, i;
+        lnet_nid_t nid;
 
         mgcname_size = 2 * sizeof(sb) + 5;
         OBD_ALLOC(mgcname, mgcname_size);
@@ -542,22 +482,49 @@ static int lustre_start_mgc(struct super_block *sb, struct vfsmount *mnt)
                 if (err) 
                         GOTO(out_free, err);
         }
-        
-        if ((err = lustre_start_simple(mgcname, LUSTRE_MGC_NAME)))
+
+        /* Add a uuid for the MGS */
+        nid = sbi->lsi_lmd->lmd_mgsnid[0];
+        err = do_lcfg(mgcname, nid, LCFG_ADD_UUID, libcfs_nid2str(nid), 0,0,0);
+        if (err < 0)
+                GOTO(out_free, err);
+
+        /* Start the MGC */
+        if ((err = lustre_start_simple(mgcname, LUSTRE_MGC_NAME, "MGS", 
+                                       libcfs_nid2str(nid))))
                 GOTO(out_dereg, err);
-
-        if (sbi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
-                // FIXME implement
-                CERROR("Need new server index from MGS!\n");
-                // rewrite last_rcvd, ldd (for new svname)
+        
+        /* Add the redundant MGS's */
+        for (i = i; i < sbi->lsi_lmd->lmd_mgsnid_count; i++) {
+                nid = sbi->lsi_lmd->lmd_mgsnid[i];
+                err = do_lcfg(mgcname, nid, LCFG_ADD_UUID, libcfs_nid2str(nid),
+                              0, 0, 0);
+                if (err) {
+                        CERROR("Add uuid for %s failed %d\n", 
+                               libcfs_nid2str(nid), err);
+                        continue;
+                }
+                err = do_lcfg(mgcname, 0, LCFG_ADD_CONN, libcfs_nid2str(nid),
+                              0, 0, 0);
+                if (err) 
+                        CERROR("Add conn for %s failed %d\n", 
+                               libcfs_nid2str(nid), err);
         }
-
+        
+        /* Keep the mgc info in the sb */
         obd = class_name2obd(mgcname);
         if (!obd) {
                 CERROR("Can't find mgcobd %s\n", mgcname);
                 GOTO(out_dereg, err = -ENOTCONN);
         }
         sbi->lsi_mgc = obd;
+
+        /* Get a new index if needed */
+        if (sbi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
+                // FIXME implement
+                CERROR("Need new server index from MGS!\n");
+                // rewrite last_rcvd, ldd (for new svname)
+        }
 
 out_free:
         OBD_FREE(mgcname, mgcname_size);
