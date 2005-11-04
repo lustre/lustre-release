@@ -36,7 +36,6 @@
 #include <linux/obd_ost.h>
 #include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
-#include <linux/lustre_quota.h>
 
 extern struct list_head obd_types;
 static spinlock_t obd_types_lock = SPIN_LOCK_UNLOCKED;
@@ -44,16 +43,6 @@ static spinlock_t obd_types_lock = SPIN_LOCK_UNLOCKED;
 kmem_cache_t *obdo_cachep = NULL;
 EXPORT_SYMBOL(obdo_cachep);
 kmem_cache_t *import_cachep = NULL;
-
-#ifdef HAVE_QUOTA_SUPPORT
-kmem_cache_t *qunit_cachep = NULL;
-struct list_head qunit_hash[NR_DQHASH];
-spinlock_t qunit_hash_lock = SPIN_LOCK_UNLOCKED;
-EXPORT_SYMBOL(qunit_cachep);
-EXPORT_SYMBOL(qunit_hash);
-EXPORT_SYMBOL(qunit_hash_lock);
-#endif
-
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
@@ -365,25 +354,6 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
         return NULL;
 }
 
-static void obd_cleanup_qunit_cache(void)
-{
-#ifdef HAVE_QUOTA_SUPPORT
-        int i;
-        ENTRY;
-
-        spin_lock(&qunit_hash_lock);
-        for (i = 0; i < NR_DQHASH; i++)
-                LASSERT(list_empty(qunit_hash + i));
-        spin_unlock(&qunit_hash_lock);
-
-        if (qunit_cachep) {
-                LASSERTF(kmem_cache_destroy(qunit_cachep) == 0,
-                         "Cannot destroy ll_qunit_cache\n");
-                qunit_cachep = NULL;
-        }
-        EXIT;
-#endif
-}
 
 void obd_cleanup_caches(void)
 {
@@ -398,35 +368,11 @@ void obd_cleanup_caches(void)
                          "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
-        obd_cleanup_qunit_cache();
         EXIT;
-}
-
-static int obd_init_qunit_cache(void)
-{
-
-#ifdef HAVE_QUOTA_SUPPORT
-        int i;
-        ENTRY;
-
-        LASSERT(qunit_cachep == NULL);
-        qunit_cachep = kmem_cache_create("ll_qunit_cache",
-                                         sizeof(struct lustre_qunit),
-                                         0, 0, NULL, NULL);
-        if (!qunit_cachep)
-                RETURN(-ENOMEM);
-
-        spin_lock(&qunit_hash_lock);
-        for (i = 0; i < NR_DQHASH; i++)
-                INIT_LIST_HEAD(qunit_hash + i);
-        spin_unlock(&qunit_hash_lock);
-#endif
-        RETURN(0);
 }
 
 int obd_init_caches(void)
 {
-        int rc = 0;
         ENTRY;
 
         LASSERT(obdo_cachep == NULL);
@@ -441,10 +387,6 @@ int obd_init_caches(void)
                                           0, 0, NULL, NULL);
         if (!import_cachep)
                 GOTO(out, -ENOMEM);
-
-        rc = obd_init_qunit_cache();
-        if (rc)
-                GOTO(out, rc);
 
         RETURN(0);
  out:

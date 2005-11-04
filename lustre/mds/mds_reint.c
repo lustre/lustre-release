@@ -452,8 +452,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         struct llog_cookie *logcookies = NULL;
         int lmm_size = 0, need_lock = 1;
         int rc = 0, cleanup_phase = 0, err, locked = 0;
-        uid_t child_uid = 0;
-        gid_t child_gid = 0;
+        unsigned int qcids[MAXQUOTAS] = {0, 0};
+        unsigned int qpids[MAXQUOTAS] = {rec->ur_iattr.ia_uid, 
+                                         rec->ur_iattr.ia_gid};
         ENTRY;
 
         LASSERT(offset == 0);
@@ -487,8 +488,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         LASSERT(inode);
 
         /* save uid/gid for quota acq/rel */
-        child_uid = inode->i_uid;
-        child_gid = inode->i_gid;
+        qcids[USRQUOTA] = inode->i_uid;
+        qcids[GRPQUOTA] = inode->i_gid;
 
         if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
             rec->ur_eadata != NULL) {
@@ -533,8 +534,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         } else if (rec->ur_iattr.ia_valid) {            /* setattr */
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
                 /* journal chown/chgrp in llog, just like unlink */
-                if (rc == 0 && S_ISREG(inode->i_mode) &&
-                    rec->ur_iattr.ia_valid & (ATTR_UID | ATTR_GID) && lmm_size){
+                if (rc == 0 && lmm_size){
                         OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
                         if (logcookies == NULL)
                                 GOTO(cleanup, rc = -ENOMEM);
@@ -657,11 +657,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         req->rq_status = rc;
 
         /* trigger dqrel/dqacq for original owner and new owner */
-        if (ia_valid & (ATTR_UID | ATTR_GID)) {
-                mds_adjust_qunit(obd, rec->ur_iattr.ia_uid,
-                                 rec->ur_iattr.ia_gid, 0, 0, rc);
-                mds_adjust_qunit(obd, child_uid, child_gid, 0, 0, rc);
-        }
+        if (ia_valid & (ATTR_UID | ATTR_GID))
+                lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_SETATTR);
+
         return 0;
 }
 
@@ -702,8 +700,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct lustre_handle lockh;
         int rc = 0, err, type = rec->ur_mode & S_IFMT, cleanup_phase = 0;
         int created = 0;
-        uid_t parent_uid = 0;
-        gid_t parent_gid = 0;
+        unsigned int qcids[MAXQUOTAS] = {current->fsuid, current->fsgid};
+        unsigned int qpids[MAXQUOTAS] = {0, 0};
         struct dentry_params dp;
         ENTRY;
 
@@ -901,8 +899,8 @@ cleanup:
                  * See bug 2029 for more detail.*/
                 mds_lock_new_child(obd, dchild->d_inode, NULL);
                 /* save uid/gid of create inode and parent */
-                parent_uid = dir->i_uid;
-                parent_gid = dir->i_gid;
+                qpids[USRQUOTA] = dir->i_uid;
+                qpids[GRPQUOTA] = dir->i_gid;
         } else {
                 rc = err;
         }
@@ -926,8 +924,7 @@ cleanup:
         req->rq_status = rc;
 
         /* trigger dqacq on the owner of child and parent */
-        mds_adjust_qunit(obd, current->fsuid, current->fsgid,
-                         parent_uid, parent_gid, rc);
+        lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_CREATE);
         return 0;
 }
 
@@ -1414,8 +1411,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct lustre_handle parent_lockh, child_lockh, child_reuse_lockh;
         void *handle = NULL;
         int rc = 0, cleanup_phase = 0;
-        uid_t child_uid = 0, parent_uid = 0;
-        gid_t child_gid = 0, parent_gid = 0;
+        unsigned int qcids [MAXQUOTAS] = {0, 0};
+        unsigned int qpids [MAXQUOTAS] = {0, 0};
         ENTRY;
 
         LASSERT(offset == 0 || offset == 2);
@@ -1448,10 +1445,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         /* save uid/gid for quota acquire/release */
-        child_uid = child_inode->i_uid;
-        child_gid = child_inode->i_gid;
-        parent_uid = dparent->d_inode->i_uid;
-        parent_gid = dparent->d_inode->i_gid;
+        qcids[USRQUOTA] = child_inode->i_uid;
+        qcids[GRPQUOTA] = child_inode->i_gid;
+        qpids[USRQUOTA] = dparent->d_inode->i_uid;
+        qpids[GRPQUOTA] = dparent->d_inode->i_gid;
 
         cleanup_phase = 2; /* dchild has a lock */
 
@@ -1625,7 +1622,7 @@ cleanup:
         req->rq_status = rc;
 
         /* trigger dqrel on the owner of child and parent */
-        mds_adjust_qunit(obd, child_uid, child_gid, parent_uid, parent_gid, rc);
+        lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_UNLINK);
         return 0;
 }
 
@@ -1983,6 +1980,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct lov_mds_md *lmm = NULL;
         int rc = 0, lock_count = 3, cleanup_phase = 0;
         void *handle = NULL;
+        unsigned int qcids[MAXQUOTAS] = {0, 0};
+        unsigned int qpids[4] = {0, 0, 0, 0};
         ENTRY;
 
         LASSERT(offset == 0);
@@ -2031,6 +2030,14 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         if (old_inode == new_inode)
                 GOTO(cleanup, rc = 0);
+
+        /* save uids/gids for qunit acquire/release */
+        qcids[USRQUOTA] = old_inode->i_uid;
+        qcids[GRPQUOTA] = old_inode->i_gid;
+        qpids[USRQUOTA] = de_tgtdir->d_inode->i_uid;
+        qpids[GRPQUOTA] = de_tgtdir->d_inode->i_gid;
+        qpids[2] = de_srcdir->d_inode->i_uid;
+        qpids[3] = de_srcdir->d_inode->i_gid;
 
         /* if we are about to remove the target at first, pass the EA of
          * that inode to client to perform and cleanup on OST */
@@ -2139,6 +2146,9 @@ cleanup:
                 LBUG();
         }
         req->rq_status = rc;
+
+        /* acquire/release qunit */
+        lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_RENAME);
         return 0;
 }
 

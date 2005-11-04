@@ -1075,6 +1075,50 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+static int ost_handle_quotactl(struct ptlrpc_request *req)
+{
+        struct obd_quotactl *oqctl, *repoqc;
+        int rc, size = sizeof(*repoqc);
+        ENTRY;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+        if (oqctl == NULL)
+                GOTO(out, rc = -EPROTO);
+
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc)
+                GOTO(out, rc);
+
+        repoqc = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repoqc));
+
+        req->rq_status = obd_quotactl(req->rq_export, oqctl);
+        *repoqc = *oqctl;
+out:
+        RETURN(rc);
+}
+
+static int ost_handle_quotacheck(struct ptlrpc_request *req)
+{
+        struct obd_quotactl *oqctl;
+        int rc;
+        ENTRY;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+        if (oqctl == NULL) 
+                RETURN(-EPROTO);
+
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
+        if (rc) {
+                CERROR("ost: out of memory while packing quotacheck reply\n");
+                RETURN(-ENOMEM);
+        }
+
+        req->rq_status = obd_quotacheck(req->rq_export, oqctl);
+        RETURN(0);
+}
+
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
 {
@@ -1242,12 +1286,12 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_QUOTACHECK:
                 CDEBUG(D_INODE, "quotacheck\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_QUOTACHECK_NET, 0);
-                rc = ost_quotacheck(req);
+                rc = ost_handle_quotacheck(req);
                 break;
         case OST_QUOTACTL:
                 CDEBUG(D_INODE, "quotactl\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_QUOTACTL_NET, 0);
-                rc = ost_quotactl(req);
+                rc = ost_handle_quotactl(req);
                 break;
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
@@ -1516,14 +1560,17 @@ static struct obd_ops ost_obd_ops = {
         .o_health_check = ost_health_check,
 };
 
+
 static int __init ost_init(void)
 {
         struct lprocfs_static_vars lvars;
+        int rc;
         ENTRY;
 
         lprocfs_init_vars(ost,&lvars);
-        RETURN(class_register_type(&ost_obd_ops, lvars.module_vars,
-                                   LUSTRE_OST_NAME));
+        rc = class_register_type(&ost_obd_ops, lvars.module_vars,
+                                 LUSTRE_OST_NAME);
+        RETURN(rc);
 }
 
 static void /*__exit*/ ost_exit(void)

@@ -157,7 +157,7 @@ int jt_lcfg_setup(int argc, char **argv)
 
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
-        if (argc > 5)
+        if (argc > 6)
                 return CMD_HELP;
 
         for (i = 1; i < argc; i++) {

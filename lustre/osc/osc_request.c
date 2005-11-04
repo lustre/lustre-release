@@ -938,8 +938,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         /* set/clear over quota flag for a uid/gid */
         if (req->rq_reqmsg->opc == OST_WRITE &&
             body->oa.o_valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA))
-                osc_set_quota_flag(cli, body->oa.o_uid, body->oa.o_gid,
-                                   body->oa.o_valid, body->oa.o_flags);
+                lquota_setdq(quota_interface, cli, body->oa.o_uid,
+                             body->oa.o_gid, body->oa.o_valid,
+                             body->oa.o_flags);
 
         if (rc < 0)
                 RETURN(rc);
@@ -2045,7 +2046,8 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 ops = oap->oap_caller_ops;
                 ops->ap_fill_obdo(oap->oap_caller_data, cmd, oa);
-                if (osc_get_quota_flag(cli, oa->o_uid, oa->o_gid) == NO_QUOTA)
+                if (lquota_chkdq(quota_interface, cli, oa->o_uid, oa->o_gid) ==
+                    NO_QUOTA)
                         rc = -EDQUOT;
 
                 obdo_free(oa);
@@ -2874,6 +2876,7 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
         RETURN(rc);
 }
 
+
 static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -2949,7 +2952,8 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                                data->ioc_offset);
                 GOTO(out, err);
         case OBD_IOC_POLL_QUOTACHECK:
-                err = osc_poll_quotacheck(exp, (struct if_quotacheck *)karg);
+                err = lquota_poll_check(quota_interface, exp,
+                                        (struct if_quotacheck *)karg);
                 GOTO(out, err);
         default:
                 CDEBUG(D_INODE, "unrecognised ioctl %#x by %s\n",
@@ -3264,7 +3268,7 @@ int osc_cleanup(struct obd_device *obd)
         spin_unlock(&oscc->oscc_lock);
 
         /* free memory of osc quota cache */
-        osc_qinfo_cleanup(cli);
+        lquota_cleanup(quota_interface, obd);
 
         ptlrpc_free_rq_pool(cli->cl_rq_pool);
 
@@ -3314,8 +3318,6 @@ struct obd_ops osc_obd_ops = {
         .o_import_event         = osc_import_event,
         .o_llog_init            = osc_llog_init,
         .o_llog_finish          = osc_llog_finish,
-        .o_quotacheck           = osc_quotacheck,
-        .o_quotactl             = osc_quotactl,
 };
 
 #if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -3351,6 +3353,9 @@ struct obd_ops sanosc_obd_ops = {
 };
 #endif
 
+static quota_interface_t *quota_interface = NULL;
+extern quota_interface_t osc_quota_interface;
+
 int __init osc_init(void)
 {
         struct lprocfs_static_vars lvars;
@@ -3365,19 +3370,28 @@ int __init osc_init(void)
         lprocfs_init_vars(osc, &sanlvars);
 #endif
 
+        quota_interface = PORTAL_SYMBOL_GET(osc_quota_interface);
+        lquota_init(quota_interface);
+        init_obd_quota_ops(quota_interface, &osc_obd_ops);
+
         rc = class_register_type(&osc_obd_ops, lvars.module_vars,
                                  LUSTRE_OSC_NAME);
-        if (rc)
+        if (rc) {
+                if (quota_interface)
+                        PORTAL_SYMBOL_PUT(osc_quota_interface);
                 RETURN(rc);
+        }
 
 #if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         rc = class_register_type(&sanosc_obd_ops, sanlvars.module_vars,
                                  LUSTRE_SANOSC_NAME);
-        if (rc)
+        if (rc) {
                 class_unregister_type(LUSTRE_OSC_NAME);
+                if (quota_interface)
+                        PORTAL_SYMBOL_PUT(osc_quota_interface);
+                RETURN(rc);
+        }
 #endif
-
-        rc = osc_qinfo_init();
 
         RETURN(rc);
 }
@@ -3385,7 +3399,10 @@ int __init osc_init(void)
 #ifdef __KERNEL__
 static void /*__exit*/ osc_exit(void)
 {
-        osc_qinfo_exit();
+        lquota_exit(quota_interface);
+        if (quota_interface)
+                PORTAL_SYMBOL_PUT(osc_quota_interface);
+
 #if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         class_unregister_type(LUSTRE_SANOSC_NAME);
 #endif

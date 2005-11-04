@@ -370,6 +370,7 @@ static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 
         llap = LLAP_FROM_COOKIE(data);
         ll_inode_fill_obdo(llap->llap_page->mapping->host, cmd, oa);
+
         EXIT;
 }
 
@@ -601,7 +602,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
         unsigned long size_index = inode->i_size >> PAGE_SHIFT;
         struct obd_io_group *oig;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        int rc, noquot = capable(CAP_SYS_RESOURCE) ? OBD_BRW_NOQUOTA : 0;
+        int rc, noquot = llap->llap_ignore_quota ? OBD_BRW_NOQUOTA : 0;
         ENTRY;
 
         /* _make_ready only sees llap once we've unlocked the page */
@@ -707,6 +708,8 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
                 RETURN(-EINVAL);
+
+        llap->llap_ignore_quota = capable(CAP_SYS_RESOURCE);
 
         /* queue a write for some time in the future the first time we
          * dirty the page */

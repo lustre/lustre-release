@@ -1134,6 +1134,7 @@ class MDSDEV(Module):
         self.nspath = self.db.get_val('nspath', '')
         self.mkfsoptions = '-i 4096 ' + self.db.get_val('mkfsoptions', '')
         self.mountfsoptions = self.db.get_val('mountfsoptions', '')
+        self.quota = self.db.get_val('quota', '')
         # overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
         target_uuid = self.db.get_first_ref('target')
         mds = self.db.lookup(target_uuid)
@@ -1189,6 +1190,8 @@ class MDSDEV(Module):
         self.uuid = target_uuid
 
         # loading modules
+        if self.quota:
+            self.add_lustre_module('quota', 'lquota')
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('osc', 'osc')
         self.add_lustre_module('lov', 'lov')
@@ -1238,7 +1241,8 @@ class MDSDEV(Module):
             print 'MDS mount options: ' + mountfsoptions
 
             lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s %s" %(blkdev, self.fstype, self.name, mountfsoptions))
+                        setup ="%s %s %s %s %s" %(blkdev, self.fstype, self.name, 
+                                                  mountfsoptions, self.quota))
             self.group_upcall = self.db.get_val('group_upcall','')
             sys_set_group_upcall(self.name, self.group_upcall)
 
@@ -1391,6 +1395,7 @@ class OSD(Module):
         if self.size > 1000000:
                 self.mkfsoptions = '-i 16384 ' + self.mkfsoptions
         self.mountfsoptions = self.db.get_val('mountfsoptions', '')
+        self.quota = self.db.get_val('quota', '')
 
         self.fstype = self.db.get_val('fstype', '')
         if sys_get_branch() == '2.4' and self.fstype == 'ldiskfs':
@@ -1421,6 +1426,8 @@ class OSD(Module):
         self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
         # modules
+        if self.quota:
+            self.add_lustre_module('quota', 'lquota')
         self.add_lustre_module('ost', 'ost')
         # FIXME: should we default to ext3 here?
         if self.fstype == 'ldiskfs':
@@ -1470,8 +1477,9 @@ class OSD(Module):
         print 'OST mount options: ' + mountfsoptions
 
         lctl.newdev(self.osdtype, self.name, self.uuid,
-                    setup ="%s %s %s %s" %(blkdev, self.fstype,
-                                           self.failover_ost, mountfsoptions))
+                    setup ="%s %s %s %s %s" %(blkdev, self.fstype,
+                                           self.failover_ost, mountfsoptions,
+                                           self.quota))
         if not is_prepared('OSS'):
             lctl.newdev("ost", 'OSS', 'OSS_UUID', setup ="")
 
@@ -1749,6 +1757,10 @@ class Mountpoint(Module):
         self.vosc = VOSC(obd, client_uuid, self.name)
         self.mdc = get_mdc(db, client_uuid, self.name, self.mds_uuid)
 
+        mds_db = self.db.lookup(self.mds_uuid)
+        quota = mds_db.get_val('quota', '')
+        if quota:
+                self.add_lustre_module('quota', 'lquota')
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('llite', 'llite')
 

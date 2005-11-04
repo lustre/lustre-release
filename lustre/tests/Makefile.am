@@ -18,7 +18,7 @@ if TESTS
 pkgexample_SCRIPTS = $(pkgexample_scripts)
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime
+noinst_PROGRAMS += stat createmany chownmany statmany multifstat createtest mlink utime
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod

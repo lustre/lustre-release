@@ -56,6 +56,7 @@
 #include <linux/lustre_lib.h>
 #include <lustre/liblustreapi.h>
 #include <linux/obd_lov.h>
+#include <lustre/liblustreapi.h>
 
 static void err_msg(char *fmt, ...)
 {
@@ -654,7 +655,7 @@ int llapi_ping(char *obd_type, char *obd_name)
         return rc;
 }
 
-int llapi_target_check(int type_num, char **obd_type, char *dir)
+int llapi_target_iterate(int type_num, char **obd_type, void *args, llapi_cb_t cb)
 {
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
@@ -669,6 +670,7 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
         while (fgets(buf, sizeof(buf), fp) != NULL) {
                 char *obd_type_name = NULL;
                 char *obd_name = NULL;
+                char *obd_uuid = NULL;
                 char rawbuf[OBD_MAX_IOCTL_BUFFER];
                 char *bufl = rawbuf;
                 char *bufp = buf;
@@ -682,6 +684,7 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                         obd_type_name = strsep(&bufp, " ");
                 }
                 obd_name = strsep(&bufp, " ");
+                obd_uuid = strsep(&bufp, " ");
 
                 memset(&osfs_buffer, 0, sizeof (osfs_buffer));
 
@@ -693,17 +696,30 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                         if (strcmp(obd_type_name, obd_type[i]) != 0)
                                 continue;
 
-                        rc = llapi_ping(obd_type_name, obd_name);
-                        if (rc) {
-                                fprintf(stderr, "error: check %s: %s\n",
-                                        obd_name, strerror(rc = errno));
-                        } else {
-                                printf("%s active.\n", obd_name);
-                        }
+                        cb(obd_type_name, obd_name, obd_uuid, args);
                 }
         }
         fclose(fp);
         return rc;
+}
+
+static void do_target_check(char *obd_type_name, char *obd_name,
+                            char *obd_uuid, void *args)
+{
+        int rc;
+
+        rc = llapi_ping(obd_type_name, obd_name);
+        if (rc) {
+                fprintf(stderr, "error: check %s: %s\n",
+                        obd_name, strerror(rc = errno));
+        } else {
+                printf("%s active.\n", obd_name);
+        }
+}
+
+int llapi_target_check(int type_num, char **obd_type, char *dir)
+{
+        return llapi_target_iterate(type_num, obd_type, NULL, do_target_check);
 }
 
 #undef MAX_STRING_SIZE
@@ -785,7 +801,7 @@ int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk)
 
         while (1) {
                 rc = ioctl(dirfd(root), LL_IOC_POLL_QUOTACHECK, qchk);
-                if (!rc || errno != ENODATA)
+                if (!rc)
                         break;
                 sleep(poll_intvl);
                 if (poll_intvl < 30)
@@ -813,7 +829,7 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
         return rc;
 }
 
-static int quotachog_process_file(DIR *dir, char *dname, char *fname,
+static int quotachown_process_file(DIR *dir, char *dname, char *fname,
                         struct find_param *param)
 {
         lstat_t *st;
@@ -839,6 +855,10 @@ static int quotachog_process_file(DIR *dir, char *dname, char *fname,
 
         st = &param->lmd->lmd_st;
         snprintf(pathname, sizeof(pathname), "%s/%s", dname, fname);
+
+        /* libc chown() will do extra check, and if the real owner is
+         * the same as the ones to set, it won't fall into kernel, so
+         * invoke syscall directly. */
         rc = syscall(SYS_chown, pathname, st->st_uid, st->st_gid);
         if (rc)
                 fprintf(stderr, "chown %s (%u,%u) fail: %s\n",
@@ -846,7 +866,7 @@ static int quotachog_process_file(DIR *dir, char *dname, char *fname,
         return rc;
 }
 
-int llapi_quotachog(char *path, int flag)
+int llapi_quotachown(char *path, int flag)
 {
         struct find_param param;
         int ret = 0;
@@ -855,7 +875,7 @@ int llapi_quotachog(char *path, int flag)
         param.recursive = 1;
         param.verbose = 0;
         param.quiet = 1;
-        param.process_file = quotachog_process_file;
+        param.process_file = quotachown_process_file;
 
         ret = prepare_find(&param);
         if (ret)

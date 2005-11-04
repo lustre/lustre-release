@@ -207,7 +207,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
 
         CDEBUG(D_DENTRY, "--> mds_fid2dentry: ino/gen %lu/%u, sb %p\n",
-               ino, generation, mds->mds_sb);
+               ino, generation, mds->mds_obt.obt_sb);
 
         /* under ext3 this is neither supposed to return bad inodes
            nor NULL inodes. */
@@ -941,7 +941,7 @@ static int mds_obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         int rc;
 
         spin_lock(&obd->obd_osfs_lock);
-        rc = fsfilt_statfs(obd, obd->u.mds.mds_sb, max_age);
+        rc = fsfilt_statfs(obd, obd->u.obt.obt_sb, max_age);
         if (rc == 0)
                 memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
         spin_unlock(&obd->obd_osfs_lock);
@@ -999,7 +999,7 @@ static int mds_sync(struct ptlrpc_request *req)
 
         if (body->fid1.id == 0) {
                 /* a fid of zero is taken to mean "sync whole filesystem" */
-                rc = fsfilt_sync(obd, mds->mds_sb);
+                rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
                 GOTO(out, rc);
         } else {
                 struct dentry *de;
@@ -1203,6 +1203,48 @@ static int mds_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static int mds_handle_quotacheck(struct ptlrpc_request *req)
+{
+        struct obd_quotactl *oqctl;
+        int rc;
+        ENTRY;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+        if (oqctl == NULL)
+                RETURN(-EPROTO);
+
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
+        if (rc) {
+                CERROR("mds: out of memory while packing quotacheck reply\n");
+                RETURN(rc);
+        }
+
+        req->rq_status = obd_quotacheck(req->rq_export, oqctl);
+        RETURN(0);
+}
+
+static int mds_handle_quotactl(struct ptlrpc_request *req)
+{
+        struct obd_quotactl *oqctl, *repoqc;
+        int rc, size = sizeof(*repoqc);
+        ENTRY;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+        if (oqctl == NULL)
+                RETURN(-EPROTO);
+
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc)
+                RETURN(rc);
+
+        repoqc = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repoqc));
+
+        req->rq_status = obd_quotactl(req->rq_export, oqctl);
+        *repoqc = *oqctl;
+        RETURN(0);
+}
 
 int mds_handle(struct ptlrpc_request *req)
 {
@@ -1411,13 +1453,13 @@ int mds_handle(struct ptlrpc_request *req)
         case MDS_QUOTACHECK:
                 DEBUG_REQ(D_INODE, req, "quotacheck");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_QUOTACHECK_NET, 0);
-                rc = mds_quotacheck(req);
+                rc = mds_handle_quotacheck(req);
                 break;
 
         case MDS_QUOTACTL:
                 DEBUG_REQ(D_INODE, req, "quotactl");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_QUOTACTL_NET, 0);
-                rc = mds_quotactl(req);
+                rc = mds_handle_quotactl(req);
                 break;
 
         case OBD_PING:
@@ -1576,6 +1618,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
+        CLASSERT(offsetof(struct obd_device, u.obt) ==
+                 offsetof(struct obd_device, u.mds.mds_obt));
+
         if (lcfg->lcfg_bufcount < 3)
                 RETURN(rc = -EINVAL);
 
@@ -1662,20 +1707,22 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                            "mds_ldlm_client", &obd->obd_ldlm_client);
         obd->obd_replayable = 1;
 
+        rc = lquota_setup(quota_interface, obd, lcfg);
+        if (rc)
+                GOTO(err_fs, rc);
+        
         mds->mds_group_hash = upcall_cache_init(obd->obd_name);
         if (IS_ERR(mds->mds_group_hash)) {
                 rc = PTR_ERR(mds->mds_group_hash);
                 mds->mds_group_hash = NULL;
-                GOTO(err_fs, rc);
+                GOTO(err_qctxt, rc);
         }
-
-        mds_quota_setup(mds);
 
         /* Wait for mds_postrecov trying to clear orphans until 9439 is fixed */
         obd->obd_async_recov = 0;
         rc = mds_postsetup(obd);
         if (rc)
-                GOTO(err_fs, rc);
+                GOTO(err_qctxt, rc);
         obd->obd_async_recov = 0;
 
         lprocfs_init_vars(mds, &lvars);
@@ -1708,6 +1755,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         RETURN(0);
 
+err_qctxt:
+        lquota_cleanup(quota_interface, obd);       
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mds_fs_cleanup(obd);
@@ -1719,7 +1768,7 @@ err_ns:
 err_put:
         unlock_kernel();
         mntput(mds->mds_vfsmnt);
-        mds->mds_sb = 0;
+        obd->u.obt.obt_sb = NULL;
         lock_kernel();
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
@@ -1806,6 +1855,9 @@ int mds_postrecov(struct obd_device *obd)
         /* Does anyone need this to be synchronous ever? */
         mds_lov_start_synchronize(obd, NULL, obd->obd_async_recov);
 
+        /* quota recovery */
+        lquota_recovery(quota_interface, obd);
+
 out:
         RETURN(rc < 0 ? rc : item);
 }
@@ -1868,9 +1920,9 @@ static int mds_cleanup(struct obd_device *obd)
 
         ping_evictor_stop();
 
-        if (mds->mds_sb == NULL)
+        if (obd->u.obt.obt_sb == NULL)
                 RETURN(0);
-        save_dev = lvfs_sbdev(mds->mds_sb);
+        save_dev = lvfs_sbdev(obd->u.obt.obt_sb);
 
         if (mds->mds_osc_exp)
                 /* lov export was disconnected by mds_lov_clean;
@@ -1879,7 +1931,7 @@ static int mds_cleanup(struct obd_device *obd)
 
         lprocfs_obd_cleanup(obd);
 
-        mds_quota_cleanup(mds);
+        lquota_cleanup(quota_interface, obd);
 
         mds_update_server_data(obd, 1);
         if (mds->mds_lov_objids != NULL) {
@@ -1905,7 +1957,7 @@ static int mds_cleanup(struct obd_device *obd)
         }
 
         mntput(mds->mds_vfsmnt);
-        mds->mds_sb = NULL;
+        obd->u.obt.obt_sb = NULL;
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
@@ -2307,15 +2359,23 @@ static struct obd_ops mdt_obd_ops = {
         .o_health_check    = mdt_health_check,
 };
 
+quota_interface_t *quota_interface = NULL;
+extern quota_interface_t mds_quota_interface;
+
 static int __init mds_init(void)
 {
         int rc;
         struct lprocfs_static_vars lvars;
 
-        rc = lustre_dquot_init();
-        if (rc)
+        quota_interface = PORTAL_SYMBOL_GET(mds_quota_interface);
+        rc = lquota_init(quota_interface);
+        if (rc) {
+                if (quota_interface)
+                        PORTAL_SYMBOL_PUT(mds_quota_interface);
                 return rc;
-
+        }
+        init_obd_quota_ops(quota_interface, &mds_obd_ops);
+        
         lprocfs_init_vars(mds, &lvars);
         class_register_type(&mds_obd_ops, lvars.module_vars, LUSTRE_MDS_NAME);
         lprocfs_init_vars(mdt, &lvars);
@@ -2326,7 +2386,9 @@ static int __init mds_init(void)
 
 static void /*__exit*/ mds_exit(void)
 {
-        lustre_dquot_exit();
+        lquota_exit(quota_interface);
+        if (quota_interface)
+                PORTAL_SYMBOL_PUT(mds_quota_interface);
 
         class_unregister_type(LUSTRE_MDS_NAME);
         class_unregister_type(LUSTRE_MDT_NAME);

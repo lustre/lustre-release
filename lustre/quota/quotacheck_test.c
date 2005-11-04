@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2003 Cluster File Systems, Inc.
+ *  Copyright (C) 2005 Cluster File Systems, Inc.
  *   Author: Lai Siyao <lsy@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org/
@@ -40,12 +40,12 @@ get_group_desc(struct super_block *sb, int group)
 {
         unsigned long desc_block, desc;
         struct ext3_group_desc *gdp;
-                                                                                                                 
+
         desc_block = group / EXT3_DESC_PER_BLOCK(sb);
         desc = group % EXT3_DESC_PER_BLOCK(sb);
         gdp = (struct ext3_group_desc *)
               EXT3_SB(sb)->s_group_desc[desc_block]->b_data;
-                                                                                                                 
+
         return gdp + desc;
 }
 
@@ -54,10 +54,10 @@ read_inode_bitmap(struct super_block *sb, unsigned long group)
 {
         struct ext3_group_desc *desc;
         struct buffer_head *bh;
-                                                                                                                 
+
         desc = get_group_desc(sb, group);
         bh = sb_bread(sb, le32_to_cpu(desc->bg_inode_bitmap));
-                                                                                                                 
+
         return bh;
 }
 
@@ -66,13 +66,13 @@ static inline struct inode *ext3_iget_inuse(struct super_block *sb,
                                      int index, unsigned long ino)
 {
         struct inode *inode = NULL;
-                                                                                                                 
+
         if (ext3_test_bit(index, bitmap_bh->b_data)) {
                 CERROR("i: %d, ino: %lu\n", index, ino);
                 ll_sleep(1);
                 inode = iget(sb, ino);
         }
-                                                                                                                 
+
         return inode;
 }
 
@@ -104,7 +104,7 @@ static int quotacheck_test_1(struct obd_device *obd, struct super_block *sb)
                 brelse(bitmap_bh);
                 bitmap_bh = read_inode_bitmap(sb, group);
 
-                if (group == 0) 
+                if (group == 0)
                         CERROR("groups_count: %lu, inodes_per_group: %lu, first_ino: %u, inodes_count: %u\n",
                                sbi->s_groups_count, sbi->s_inodes_per_group,
                                sbi->s_first_ino, le32_to_cpu(sbi->s_es->s_inodes_count));
@@ -133,20 +133,16 @@ static int quotacheck_test_1(struct obd_device *obd, struct super_block *sb)
  * ------------------------------------------------------------------------- */
 static int quotacheck_run_tests(struct obd_device *obd, struct obd_device *tgt)
 {
-        struct super_block *sb;
         int rc;
         ENTRY;
 
-        if (!strcmp(tgt->obd_type->typ_name, LUSTRE_MDS_NAME))
-                sb = tgt->u.mds.mds_sb;
-        else if (!strcmp(tgt->obd_type->typ_name, "obdfilter"))
-                sb = tgt->u.filter.fo_sb;
-        else {
+        if (strcmp(tgt->obd_type->typ_name, LUSTRE_MDS_NAME) &&
+            !strcmp(tgt->obd_type->typ_name, "obdfilter")) {
                 CERROR("TARGET OBD should be mds or ost\n");
                 RETURN(-EINVAL);
         }
 
-        rc = quotacheck_test_1(tgt, sb);
+        rc = quotacheck_test_1(tgt, tgt->u.obt.obt_sb);
 
         return rc;
 }

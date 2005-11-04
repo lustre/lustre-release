@@ -42,12 +42,15 @@ ${LMC} --add node --node $HOSTNAME || exit 10
 ${LMC} --add net --node $HOSTNAME --nid $HOSTNAME --nettype $NETTYPE || exit 11
 ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
+[ "x$QUOTA_OPTS" != "x" ] &&
+    QUOTA_OPTS="--quota $QUOTA_OPTS"
+
 # configure mds server
 [ "x$MDS_MOUNT_OPTS" != "x" ] &&
     MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
 
 ${LMC} --format --add mds --node $HOSTNAME --mds mds1 --fstype $FSTYPE \
-	--dev $MDSDEV $MDS_MOUNT_OPTS --size $MDSSIZE $MDSOPT || exit 20
+	--dev $MDSDEV $MDS_MOUNT_OPTS $QUOTA_OPTS --size $MDSSIZE $MDSOPT || exit 20
 
 # configure ost
 ${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
@@ -58,7 +61,7 @@ for num in `seq $OSTCOUNT`; do
     DEVPTR=OSTDEV$num
     eval $DEVPTR=${!DEVPTR:=$TMP/$OST-`hostname`}
     ${LMC} --add ost --node $HOSTNAME --lov lov1 --ost $OST --fstype $FSTYPE \
-    	--dev ${!DEVPTR} --size $OSTSIZE $JARG $OSTOPT || exit 30
+    	--dev ${!DEVPTR} --size $OSTSIZE $JARG $OSTOPT $QUOTA_OPTS|| exit 30
 done
 
 

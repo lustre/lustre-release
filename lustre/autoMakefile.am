@@ -12,6 +12,8 @@ SERVER_SUBDIRS := ldiskfs obdfilter ost mds
 
 CLIENT_SUBDIRS := mdc llite
 
+QUOTA_SUBDIRS := quota
+
 LIBLUSTRE_SUBDIRS := liblustre
 
 SUBDIRS := $(ALWAYS_SUBDIRS)
@@ -24,6 +26,10 @@ if CLIENT
 SUBDIRS += $(CLIENT_SUBDIRS)
 endif
 
+if QUOTA
+SUBDIRS += $(QUOTA_SUBDIRS)
+endif
+
 # this needs to be after the client subdirs
 if LIBLUSTRE
 if !CLIENT
@@ -33,7 +39,7 @@ SUBDIRS += $(LIBLUSTRE_SUBDIRS)
 endif
 
 DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)	\
-	$(LIBLUSTRE_SUBDIRS)
+	$(LIBLUSTRE_SUBDIRS) $(QUOTA_SUBDIRS)
 
 EXTRA_DIST = BUGS FDL kernel_patches
 

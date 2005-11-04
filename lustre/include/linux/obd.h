@@ -180,6 +180,13 @@ struct obd_histogram {
 
 struct ost_server_data;
 
+/* hold common fields for "target" device */
+struct obd_device_target {
+        struct super_block       *obt_sb;
+        atomic_t                  obt_quotachecking;
+        struct lustre_quota_ctxt  obt_qctxt;
+};
+
 #define FILTER_GROUP_LLOG 1
 #define FILTER_GROUP_ECHO 2
 
@@ -189,8 +196,9 @@ struct filter_ext {
 };
 
 struct filter_obd {
+        /* NB this field MUST be first */
+        struct obd_device_target fo_obt;
         const char          *fo_fstype;
-        struct super_block  *fo_sb;
         struct vfsmount     *fo_vfsmnt;
         struct dentry       *fo_dentry_O;
         struct dentry      **fo_dentry_O_groups;
@@ -284,11 +292,6 @@ struct mds_server_data;
 #define OSC_MAX_DIRTY_DEFAULT    32
 #define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
 
-enum {
-        CL_QUOTACHECKING = 1,
-        CL_NO_QUOTACHECK
-};
-
 struct mdc_rpc_lock;
 struct client_obd {
         struct obd_import       *cl_import;
@@ -343,16 +346,18 @@ struct client_obd {
         struct osc_async_rc      cl_ar;
 
         /* used by quotacheck */
-        spinlock_t               cl_qchk_lock;
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
         struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
 };
 
+#define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
+
 struct mds_obd {
+        /* NB this field MUST be first */
+        struct obd_device_target         mds_obt;
         struct ptlrpc_service           *mds_service;
         struct ptlrpc_service           *mds_setattr_service;
         struct ptlrpc_service           *mds_readpage_service;
-        struct super_block              *mds_sb;
         struct vfsmount                 *mds_vfsmnt;
         struct dentry                   *mds_fid_de;
         int                              mds_max_mdsize;
@@ -382,9 +387,9 @@ struct mds_obd {
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
         struct upcall_cache             *mds_group_hash;
+
         struct lustre_quota_info         mds_quota_info;
-        struct lustre_quota_ctxt         mds_quota_ctxt;
-        atomic_t                         mds_quotachecking;
+        struct semaphore                 mds_qonoff_sem;
         struct semaphore                 mds_health_sem;
         unsigned long                    mds_lov_objids_valid:1,
                                          mds_fl_user_xattr:1,
@@ -594,6 +599,7 @@ struct obd_device {
         time_t                           obd_recovery_end;
 
         union {
+                struct obd_device_target obt;
                 struct filter_obd filter;
                 struct mds_obd mds;
                 struct client_obd cli;
@@ -795,6 +801,17 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                 obd->obd_last_committed = transno;
                 ptlrpc_commit_replies (obd);
         }
+}
+
+static inline void init_obd_quota_ops(quota_interface_t *interface,
+                                      struct obd_ops *obd_ops)
+{
+        if (!interface)
+                return;
+
+        LASSERT(obd_ops);
+        obd_ops->o_quotacheck = QUOTA_OP(interface, check);
+        obd_ops->o_quotactl = QUOTA_OP(interface, ctl);
 }
 
 #endif /* __OBD_H */

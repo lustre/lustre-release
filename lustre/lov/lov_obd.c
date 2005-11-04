@@ -1292,6 +1292,7 @@ static int lov_ap_make_ready(void *data, int cmd)
 
         return lap->lap_caller_ops->ap_make_ready(lap->lap_caller_data, cmd);
 }
+
 static int lov_ap_refresh_count(void *data, int cmd)
 {
         struct lov_async_page *lap = LAP_FROM_COOKIE(data);
@@ -1299,6 +1300,7 @@ static int lov_ap_refresh_count(void *data, int cmd)
         return lap->lap_caller_ops->ap_refresh_count(lap->lap_caller_data,
                                                      cmd);
 }
+
 static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
         struct lov_async_page *lap = LAP_FROM_COOKIE(data);
@@ -1896,8 +1898,10 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 break;
         default: {
                 int set = 0;
+
                 if (count == 0)
                         RETURN(-ENOTTY);
+
                 rc = 0;
                 for (i = 0; i < count; i++) {
                         int err;
@@ -1908,7 +1912,9 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                         err = obd_iocontrol(cmd, lov->tgts[i].ltd_exp,
                                             len, karg, uarg);
-                        if (err) {
+                        if (err == -ENODATA && cmd == OBD_IOC_POLL_QUOTACHECK) {
+                                RETURN(err);
+                        } else if (err) {
                                 if (lov->tgts[i].active) {
                                         CERROR("error: iocontrol OSC %s on OST "
                                                "idx %d cmd %x: err = %d\n",
@@ -2175,7 +2181,6 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 #endif
 
-
 void lov_stripe_lock(struct lov_stripe_md *md)
 {
         LASSERT(md->lsm_lock_owner != current);
@@ -2233,11 +2238,10 @@ struct obd_ops lov_obd_ops = {
         .o_llog_init           = lov_llog_init,
         .o_llog_finish         = lov_llog_finish,
         .o_notify              = lov_notify,
-#ifdef HAVE_QUOTA_SUPPORT
-        .o_quotacheck          = lov_quotacheck,
-        .o_quotactl            = lov_quotactl,
-#endif
 };
+
+static quota_interface_t *quota_interface = NULL;
+extern quota_interface_t lov_quota_interface;
 
 int __init lov_init(void)
 {
@@ -2246,14 +2250,24 @@ int __init lov_init(void)
         ENTRY;
 
         lprocfs_init_vars(lov, &lvars);
+
+        quota_interface = PORTAL_SYMBOL_GET(lov_quota_interface);
+        init_obd_quota_ops(quota_interface, &lov_obd_ops);
+        
         rc = class_register_type(&lov_obd_ops, lvars.module_vars,
                                  OBD_LOV_DEVICENAME);
+        if (rc && quota_interface)
+                PORTAL_SYMBOL_PUT(osc_quota_interface);
+
         RETURN(rc);
 }
 
 #ifdef __KERNEL__
 static void /*__exit*/ lov_exit(void)
 {
+        if (quota_interface)
+                PORTAL_SYMBOL_PUT(lov_quota_interface);
+
         class_unregister_type(OBD_LOV_DEVICENAME);
 }
 

@@ -416,9 +416,9 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 RETURN(rc);
 
         mds->mds_vfsmnt = mnt;
-        mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
+        obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
 
-        fsfilt_setup(obd, mds->mds_sb);
+        fsfilt_setup(obd, obd->u.obt.obt_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;
@@ -577,12 +577,12 @@ int mds_fs_cleanup(struct obd_device *obd)
                 mds->mds_pending_dir = NULL;
         }
 
-        mds_fs_quota_cleanup(mds);
-        
+        lquota_fs_cleanup(quota_interface, obd);
+
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
-        LL_DQUOT_OFF(mds->mds_sb);
+        LL_DQUOT_OFF(obd->u.obt.obt_sb);
 
         return rc;
 }

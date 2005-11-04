@@ -307,7 +307,7 @@ cleanup_dentry:
 static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
-                              struct dentry *dchild, void **handle,
+                              struct dentry *dchild, void **handle, 
                               obd_id **ids)
 {
         struct inode *inode = dchild->d_inode;
@@ -668,7 +668,8 @@ static int accmode(struct inode *inode, int flags)
 /* Handles object creation, actual opening, and I/O epoch */
 static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                            struct mds_body *body, int flags, void **handle,
-                           struct mds_update_record *rec,struct ldlm_reply *rep)
+                           struct mds_update_record *rec,
+                           struct ldlm_reply *rep)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
@@ -861,10 +862,11 @@ int mds_open(struct mds_update_record *rec, int offset,
         int parent_mode = LCK_CR;
         void *handle = NULL;
         struct dentry_params dp;
-        uid_t parent_uid = 0;
-        gid_t parent_gid = 0;
+        unsigned int qcids[MAXQUOTAS] = {current->fsuid, current->fsgid};
+        unsigned int qpids[MAXQUOTAS] = {0, 0};
         ENTRY;
 
+        CLASSERT(MAXQUOTAS < 4);
         if (offset == 2) { /* intent */
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
                 body = lustre_msg_buf(req->rq_repmsg, 1, sizeof (*body));
@@ -1099,7 +1101,7 @@ int mds_open(struct mds_update_record *rec, int offset,
  cleanup:
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
-
+        
  cleanup_no_trans:
         switch (cleanup_phase) {
         case 2:
@@ -1113,9 +1115,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                 } else if (created) {
                         mds_lock_new_child(obd, dchild->d_inode, NULL);
                         /* save uid/gid for quota acquire/release */
-                        parent_uid = dparent->d_inode->i_uid;
-                        parent_gid = dparent->d_inode->i_gid;
-
+                        qpids[USRQUOTA] = dparent->d_inode->i_uid;
+                        qpids[GRPQUOTA] = dparent->d_inode->i_gid;
                 }
                 l_dput(dchild);
         case 1:
@@ -1130,8 +1131,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
  
         /* trigger dqacq on the owner of child and parent */
-        mds_adjust_qunit(obd, current->fsuid, current->fsgid, 
-                         parent_uid, parent_gid, rc);
+        lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_CREATE);
         RETURN(rc);
 }
 

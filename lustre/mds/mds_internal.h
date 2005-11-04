@@ -205,89 +205,11 @@ int mds_pack_acl(struct mds_export_data *med, struct inode *inode,
                  struct lustre_msg *repmsg, struct mds_body *repbody,
                  int repoff);
 
+/* quota stuff */
+extern quota_interface_t *quota_interface;
+
 /* mds/mds_xattr.c */
 int mds_setxattr(struct ptlrpc_request *req);
 int mds_getxattr(struct ptlrpc_request *req);
-
-/* mds/quota_master.c */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) && defined (HAVE_QUOTA_SUPPORT)
-int lustre_dquot_init(void);
-void lustre_dquot_exit(void);
-int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc);
-void mds_adjust_qunit(struct obd_device *obd, uid_t cuid, gid_t cgid,
-                      uid_t puid, gid_t pgid, int rc);
-int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
-int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
-int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);
-int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl);
-int mds_get_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl);
-int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl);
-int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl);
-#else
-static inline int lustre_dquot_init(void) { return 0; }
-static inline void lustre_dquot_exit(void) { return; }
-static inline int dqacq_handler(struct obd_device *obd,
-                                struct qunit_data *qdata, int opc) {return 0;}
-static inline void mds_adjust_qunit(struct obd_device *obd, uid_t cuid,
-                                    gid_t cgid, uid_t puid,
-                                    gid_t pgid, int rc) { return; }
-static inline int init_admin_quotafiles(struct obd_device *obd,
-                                        struct obd_quotactl *oqctl) {return 0;}
-static inline int mds_quota_on(struct obd_device *obd,
-                               struct obd_quotactl *oqctl) { return 0; }
-static inline int mds_quota_off(struct obd_device *obd,
-                                struct obd_quotactl *oqctl) { return 0; }
-static inline int mds_set_dqinfo(struct obd_device *obd,
-                                 struct obd_quotactl *oqctl) { return 0; }
-static inline int mds_get_dqinfo(struct obd_device *obd,
-                                 struct obd_quotactl *oqctl) { return 0; }
-static inline int mds_set_dqblk(struct obd_device *obd,
-                                struct obd_quotactl *oqctl) { return 0; }
-static inline int mds_get_dqblk(struct obd_device *obd,
-                                struct obd_quotactl *oqctl) { return 0; }
-#endif /* KERNEL_VERSION(2,5,0) && QUOTA */
-
-#ifdef HAVE_QUOTA_SUPPORT
-/* Internal quota stuff */
-int mds_quotacheck(struct ptlrpc_request *req);
-int mds_quotactl(struct ptlrpc_request *req);
-void mds_quota_setup(struct mds_obd *mds);
-void mds_quota_cleanup(struct mds_obd *mds);
-void mds_fs_quota_cleanup(struct mds_obd *mds);
-
-#ifdef LPROCFS
-int lprocfs_mds_rd_bunit(char *page, char **start, off_t off, int count,
-                                int *eof, void *data);
-int lprocfs_mds_rd_iunit(char *page, char **start, off_t off, int count,
-                                int *eof, void *data);
-int lprocfs_mds_wr_bunit(struct file *file, const char *buffer,
-                                unsigned long count, void *data);
-int lprocfs_mds_wr_iunit(struct file *file, const char *buffer,
-                                unsigned long count, void *data);
-int lprocfs_mds_rd_btune(char *page, char **start, off_t off, int count,
-                                int *eof, void *data);
-int lprocfs_mds_rd_itune(char *page, char **start, off_t off, int count,
-                                int *eof, void *data);
-int lprocfs_mds_wr_btune(struct file *file, const char *buffer,
-                                unsigned long count, void *data);
-int lprocfs_mds_wr_itune(struct file *file, const char *buffer,
-                                unsigned long count, void *data);
-#endif /* LPROCFS */
-#else /* QUOTA */
-static inline int mds_quotacheck(struct ptlrpc_request *req)
-{
-        req->rq_status = -EOPNOTSUPP;
-        return -EOPNOTSUPP;
-}
-static inline int mds_quotactl(struct ptlrpc_request *req)
-{
-        req->rq_status = -EOPNOTSUPP;
-        return -EOPNOTSUPP;
-}
-static inline void mds_quota_setup(struct mds_obd *mds) {}
-static inline void mds_quota_cleanup(struct mds_obd *mds) {}
-static inline void mds_fs_quota_cleanup(struct mds_obd *mds) {}
-#endif /* Quota */
-
 
 #endif /* _MDS_INTERNAL_H */

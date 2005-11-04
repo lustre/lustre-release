@@ -152,7 +152,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 obd_size filter_grant_space_left(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
-        int blockbits = obd->u.filter.fo_sb->s_blocksize_bits;
+        int blockbits = obd->u.obt.obt_sb->s_blocksize_bits;
         obd_size tot_granted = obd->u.filter.fo_tot_granted, avail, left = 0;
         int rc, statfs_done = 0;
 
@@ -160,7 +160,7 @@ obd_size filter_grant_space_left(struct obd_export *exp)
 
         if (time_before(obd->obd_osfs_age, jiffies - HZ)) {
 restat:
-                rc = fsfilt_statfs(obd, obd->u.filter.fo_sb, jiffies + 1);
+                rc = fsfilt_statfs(obd, obd->u.obt.obt_sb, jiffies + 1);
                 if (rc) /* N.B. statfs can't really fail */
                         RETURN(0);
                 statfs_done = 1;
@@ -209,7 +209,7 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
 {
         struct obd_device *obd = exp->exp_obd;
         struct filter_export_data *fed = &exp->exp_filter_data;
-        int blockbits = obd->u.filter.fo_sb->s_blocksize_bits;
+        int blockbits = obd->u.obt.obt_sb->s_blocksize_bits;
         __u64 grant = 0;
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
@@ -391,7 +391,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                               struct inode *inode)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
-        int blocksize = exp->exp_obd->u.filter.fo_sb->s_blocksize;
+        int blocksize = exp->exp_obd->u.obt.obt_sb->s_blocksize;
         unsigned long used = 0, ungranted = 0, using;
         int i, rc = -ENOSPC, obj, n = 0, mask = D_CACHE;
 
@@ -465,7 +465,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
 
         /* Rough calc in case we don't refresh cached statfs data */
         using = (used + ungranted + 1 ) >>
-                exp->exp_obd->u.filter.fo_sb->s_blocksize_bits;
+                exp->exp_obd->u.obt.obt_sb->s_blocksize_bits;
         if (exp->exp_obd->obd_osfs.os_bavail > using)
                 exp->exp_obd->obd_osfs.os_bavail -= using;
         else

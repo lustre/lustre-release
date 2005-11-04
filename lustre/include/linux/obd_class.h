@@ -1102,11 +1102,6 @@ static inline struct obdo *obdo_alloc(void)
         return oa;
 }
 
-/* qunit hash stuff */
-extern kmem_cache_t *qunit_cachep;
-extern struct list_head qunit_hash[];
-extern spinlock_t qunit_hash_lock;
-
 static inline void obdo_free(struct obdo *oa)
 {
         OBD_SLAB_FREE(oa, obdo_cachep, sizeof(*oa));

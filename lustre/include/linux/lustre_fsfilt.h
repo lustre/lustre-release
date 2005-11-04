@@ -94,7 +94,7 @@ struct fsfilt_operations {
         int     (* fs_quotactl)(struct super_block *sb,
                                 struct obd_quotactl *oqctl);
         int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
-                                 int cmd);
+                                 int cmd, struct list_head *list);
         int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
 };
 
@@ -327,10 +327,10 @@ static inline int fsfilt_quotactl(struct obd_device *obd,
 
 static inline int fsfilt_quotainfo(struct obd_device *obd,
                                    struct lustre_quota_info *lqi,
-                                   int type, int cmd)
+                                   int type, int cmd, struct list_head *list)
 {
         if (obd->obd_fsops->fs_quotainfo)
-                return obd->obd_fsops->fs_quotainfo(lqi, type, cmd);
+                return obd->obd_fsops->fs_quotainfo(lqi, type, cmd, list);
         return -ENOTSUPP;
 }
 

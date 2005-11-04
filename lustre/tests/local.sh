@@ -66,8 +66,12 @@ ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 [ "x$MDS_MOUNT_OPTS" != "x" ] &&
     MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
 
+[ "x$QUOTA_OPTS" != "x" ] &&
+    QUOTA_OPTS="--quota $QUOTA_OPTS"
+    
+# configure mds server
 ${LMC} --add mds --node $HOSTNAME --mds mds1 --fstype $FSTYPE \
-	--dev $MDSDEV $MDS_MOUNT_OPTS \
+	--dev $MDSDEV $MDS_MOUNT_OPTS $QUOTA_OPTS\
 	--size $MDSSIZE $JARG $IARG $MDSOPT || exit 20
 
 [ "x$OST_MOUNT_OPTS" != "x" ] &&
@@ -78,7 +82,7 @@ ${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 $LOVOPT || exit 20
 
 ${LMC} --add ost --node $HOSTNAME --lov lov1 --fstype $FSTYPE \
-	--dev $OSTDEV \
+	--dev $OSTDEV $QUOTA_OPTS\
 	$OST_MOUNT_OPTS --size $OSTSIZE $JARG $OSTOPT || exit 30
 
 # create client config

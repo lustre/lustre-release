@@ -53,6 +53,7 @@ struct dio_request {
         unsigned long    *dr_blocks;
         spinlock_t        dr_lock;
         unsigned long     dr_start_time; /* jiffies */
+        unsigned int      dr_ignore_quota:1;
         struct filter_obd *dr_filter;
 };
 
@@ -439,6 +440,8 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                 LASSERT(dreq->dr_npages > 0);
                 create = 1;
                 sem = &obd->u.filter.fo_alloc_lock;
+                
+                lquota_enforce(quota_interface, obd, dreq->dr_ignore_quota);
         }
 remap:
         rc = fsfilt_map_inode_pages(obd, inode, dreq->dr_pages,
@@ -453,7 +456,8 @@ remap:
                  * pre-dqacq in time or this user has exceeded quota limit, we
                  * have to wait for the completion of in flight dqacq/dqrel,
                  * then try again */
-                if (filter_quota_check_master(obd, inode))
+                if (lquota_acquire(quota_interface, obd, inode->i_uid,
+                                   inode->i_gid))
                         goto remap;
         }
 
@@ -528,10 +532,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         unsigned long now = jiffies;
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
-        struct filter_obd *filter = &obd->u.filter;
-        struct lvfs_ucred *uc = NULL;
         void *wait_handle;
         int   total_size = 0;
+        unsigned int qcids[MAXQUOTAS] = {0, 0};
         ENTRY;
 
         LASSERT(oti != NULL);
@@ -548,6 +551,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fso.fso_bufcnt = obj->ioo_bufcnt;
         inode = res->dentry->d_inode;
 
+        dreq->dr_ignore_quota = 0;
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
                 loff_t this_size;
 
@@ -571,16 +575,15 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 this_size = lnb->offset + lnb->len;
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
+                
+                /* if one page is a write-back page from client cache, or it's
+                 * written by root, then mark the whole io request as ignore 
+                 * quota request */
+                if (lnb->flags & (OBD_BRW_FROM_GRANT | OBD_BRW_NOQUOTA))
+                        dreq->dr_ignore_quota = 1;
         }
 
-        /* The client store the user credit information fsuid and fsgid
-         * in oa->o_uid and oa->o_gid. In case of quota enabled, we use 
-         * them to build the lvfs_ucred so as to enforce oss quota check */
-        rc = filter_quota_enforcement(obd, oa->o_uid, oa->o_gid, &uc);
-        if (rc)
-                GOTO(cleanup, rc);
-
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, uc);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
         down(&inode->i_sem);
@@ -609,7 +612,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         else
                 obdo_from_inode(oa, inode, OBD_MD_FLUID | OBD_MD_FLGID);
 
-        filter_get_quota_flag(obd, oa);
+        lquota_getflag(quota_interface, obd, oa);
 
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
@@ -629,9 +632,7 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, uc);
-                if (uc)
-                        OBD_FREE(uc, sizeof(*uc));
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
                 filter_iobuf_put(dreq);
@@ -644,11 +645,12 @@ cleanup:
         }
 
         /* trigger quota pre-acquire */
-        if (rc == 0) {
-                err = qctxt_adjust_qunit(obd, &filter->fo_quota_ctxt, 
-                                         oa->o_uid, oa->o_gid, 1);
-                if (err)
-                        CERROR("error filter ajust qunit! (rc:%d)\n", err);
-        }
+        qcids[USRQUOTA] = oa->o_uid;
+        qcids[GRPQUOTA] = oa->o_gid;
+        err = lquota_adjust(quota_interface, obd, qcids, NULL, rc,
+                            FSFILT_OP_CREATE); 
+        CDEBUG(err ? D_ERROR : D_QUOTA,
+               "error filter adjust qunit! (rc:%d)\n", err);
+
         RETURN(rc);
 }

@@ -45,21 +45,7 @@ struct ost_thread_local_cache {
 
 struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
 
-#ifdef HAVE_QUOTA_SUPPORT
 /* Quota stuff */
-int ost_quotacheck(struct ptlrpc_request *req);
-int ost_quotactl(struct ptlrpc_request *req);
-#else
-static inline int ost_quotacheck(struct ptlrpc_request *req)
-{
-        req->rq_status = -ENOTSUPP;
-        return -ENOTSUPP;
-}
-static inline int ost_quotactl(struct ptlrpc_request *req)
-{
-        req->rq_status = -ENOTSUPP;
-        return -ENOTSUPP;
-}
-#endif
+extern quota_interface_t *quota_interface;
 
 #endif /* OST_INTERNAL_H */

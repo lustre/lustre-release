@@ -807,6 +807,7 @@ int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
         return rc;
 }
 
+
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -849,7 +850,8 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 #endif
         case OBD_IOC_POLL_QUOTACHECK:
-                rc = mdc_poll_quotacheck(exp, (struct if_quotacheck *)karg);
+                rc = lquota_poll_check(quota_interface, exp,
+                                       (struct if_quotacheck *)karg);
                 GOTO(out, rc);
         default:
                 CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
@@ -1245,21 +1247,34 @@ struct obd_ops mdc_obd_ops = {
         .o_import_event = mdc_import_event,
         .o_llog_init    = mdc_llog_init,
         .o_llog_finish  = mdc_llog_finish,
-        .o_quotacheck   = mdc_quotacheck,
-        .o_quotactl     = mdc_quotactl,
 };
+
+static quota_interface_t *quota_interface = NULL;
+extern quota_interface_t mdc_quota_interface;
 
 int __init mdc_init(void)
 {
+        int rc;
         struct lprocfs_static_vars lvars;
         lprocfs_init_vars(mdc, &lvars);
-        return class_register_type(&mdc_obd_ops, lvars.module_vars,
-                                   LUSTRE_MDC_NAME);
+ 
+        quota_interface = PORTAL_SYMBOL_GET(mdc_quota_interface);
+        init_obd_quota_ops(quota_interface, &mdc_obd_ops);
+        
+        rc = class_register_type(&mdc_obd_ops, lvars.module_vars,
+                                 LUSTRE_MDC_NAME);
+        if (rc && quota_interface)
+                PORTAL_SYMBOL_PUT(osc_quota_interface);
+
+        RETURN(rc);
 }
 
 #ifdef __KERNEL__
 static void /*__exit*/ mdc_exit(void)
 {
+        if (quota_interface)
+                PORTAL_SYMBOL_PUT(mdc_quota_interface);
+
         class_unregister_type(LUSTRE_MDC_NAME);
 }
 

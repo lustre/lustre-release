@@ -41,34 +41,9 @@
 
 #include "mds_internal.h"
 
-/* callback function of lov to fill unlink log record */
-static int mds_log_fill_unlink_rec(struct llog_rec_hdr *rec, void *data)
-{
-        struct llog_fill_rec_data *lfd = (struct llog_fill_rec_data *)data;
-        struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
-
-        lur->lur_oid = lfd->lfd_id;
-        lur->lur_ogen = lfd->lfd_ogen;
-
-        RETURN(0);
-}
-
-/* callback function of lov to fill setattr log record */
-static int mds_log_fill_setattr_rec(struct llog_rec_hdr *rec, void *data)
-{
-        struct llog_fill_rec_data *lfd = (struct llog_fill_rec_data *)data;
-        struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
-
-        lsr->lsr_oid = lfd->lfd_id;
-        lsr->lsr_ogen = lfd->lfd_ogen;
-
-        RETURN(0);
-}
-
 static int mds_llog_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies,
-                        llog_fill_rec_cb_t fill_cb)
+                        struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -77,7 +52,7 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_add(lctxt, rec, lsm, logcookies, numcookies, fill_cb);
+        rc = llog_add(lctxt, rec, lsm, logcookies, numcookies);
         RETURN(rc);
 }
 
@@ -139,8 +114,7 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookies,
-                      cookies_size / sizeof(struct llog_cookie),
-                      mds_log_fill_unlink_rec);
+                      cookies_size / sizeof(struct llog_cookie));
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
         OBD_FREE(lur, sizeof(*lur));
@@ -179,8 +153,7 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
         /* write setattr log */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         rc = llog_add(ctxt, &lsr->lsr_hdr, lsm, logcookies,
-                      cookies_size / sizeof(struct llog_cookie),
-                      mds_log_fill_setattr_rec);
+                      cookies_size / sizeof(struct llog_cookie));
 
         OBD_FREE(lsr, sizeof(*lsr));
  out:

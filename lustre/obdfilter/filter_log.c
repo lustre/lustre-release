@@ -116,8 +116,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 }
 
 /* Callback for processing the unlink log record received from MDS by 
- * llog_client_api.
- */
+ * llog_client_api. */
 static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                                       struct llog_rec_hdr *rec,
                                       struct llog_cookie *cookie)
@@ -155,8 +154,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
 }
 
 /* Callback for processing the setattr log record received from MDS by
- * llog_client_api.
- */
+ * llog_client_api. */
 static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
                                        struct llog_rec_hdr *rec,
                                        struct llog_cookie *cookie)

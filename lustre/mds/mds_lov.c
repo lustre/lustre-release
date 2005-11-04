@@ -410,25 +410,25 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         case OBD_IOC_SYNC: {
                 CDEBUG(D_HA, "syncing mds %s\n", obd->obd_name);
-                rc = fsfilt_sync(obd, obd->u.mds.mds_sb);
+                rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
                 RETURN(rc);
         }
 
         case OBD_IOC_SET_READONLY: {
                 void *handle;
-                struct inode *inode = obd->u.mds.mds_sb->s_root->d_inode;
+                struct inode *inode = obd->u.obt.obt_sb->s_root->d_inode;
                 BDEVNAME_DECLARE_STORAGE(tmp);
                 CERROR("*** setting device %s read-only ***\n",
-                       ll_bdevname(obd->u.mds.mds_sb, tmp));
+                       ll_bdevname(obd->u.obt.obt_sb, tmp));
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 if (!IS_ERR(handle))
                         rc = fsfilt_commit(obd, inode, handle, 1);
 
                 CDEBUG(D_HA, "syncing mds %s\n", obd->obd_name);
-                rc = fsfilt_sync(obd, obd->u.mds.mds_sb);
+                rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
 
-                lvfs_set_rdonly(lvfs_sbdev(obd->u.mds.mds_sb));
+                lvfs_set_rdonly(lvfs_sbdev(obd->u.obt.obt_sb));
                 RETURN(0);
         }
 
@@ -604,7 +604,14 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
                       obd->obd_name, uuid->uuid);
         } else {
                 LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
+                
+                rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"),
+                                  "mds_conn", 0, uuid);
+                if (rc != 0)
+                        RETURN(rc);
+
                 rc = mds_lov_start_synchronize(obd, uuid, 1);
+                lquota_recovery(quota_interface, obd);
         }
         RETURN(rc);
 }

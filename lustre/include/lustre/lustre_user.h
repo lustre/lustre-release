@@ -139,14 +139,20 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
 
+#define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
+#define LUSTRE_Q_QUOTAOFF 0x800003     /* turn quotas off */
+#define LUSTRE_Q_GETINFO  0x800005     /* get information about quota files */
+#define LUSTRE_Q_SETINFO  0x800006     /* set information about quota files */
+#define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
+#define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
+
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
 
 #define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
 
 struct if_quotacheck {
-        char                    obd_type[10];
+        __u8                    obd_type[16];
         struct obd_uuid         obd_uuid;
-        int                     stat;
 };
 
 #define MDS_GRP_DOWNCALL_MAGIC 0x6d6dd620
@@ -170,8 +176,6 @@ struct mds_grp_downcall_data {
 # endif
 #endif
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 #ifdef NEED_QUOTA_DEFS
 #ifndef QUOTABLOCK_BITS
 #define QUOTABLOCK_BITS 10
@@ -183,30 +187,6 @@ struct mds_grp_downcall_data {
 
 #ifndef toqb
 #define toqb(x) (((x) + QUOTABLOCK_SIZE - 1) >> QUOTABLOCK_BITS)
-#endif
-
-/* XXX: these two structs should be in /usr/include/linux/quota.h */
-#ifndef HAVE_STRUCT_IF_DQINFO
-struct if_dqinfo {
-        __u64 dqi_bgrace;
-        __u64 dqi_igrace;
-        __u32 dqi_flags;
-        __u32 dqi_valid;
-};
-#endif
-
-#ifndef HAVE_STRUCT_IF_DQBLK
-struct if_dqblk {
-        __u64 dqb_bhardlimit;
-        __u64 dqb_bsoftlimit;
-        __u64 dqb_curspace;
-        __u64 dqb_ihardlimit;
-        __u64 dqb_isoftlimit;
-        __u64 dqb_curinodes;
-        __u64 dqb_btime;
-        __u64 dqb_itime;
-        __u32 dqb_valid;
-};
 #endif
 
 #ifndef QIF_BLIMITS
@@ -222,25 +202,40 @@ struct if_dqblk {
 #define QIF_ALL         (QIF_LIMITS | QIF_USAGE | QIF_TIMES)
 #endif
 
-#endif /* NEED_QUOTA_DEFS */
+#endif /* !__KERNEL__ */
+
+/* XXX: same as if_dqinfo struct in kernel */
+struct obd_dqinfo {
+        __u64 dqi_bgrace;
+        __u64 dqi_igrace;
+        __u32 dqi_flags;
+        __u32 dqi_valid;
+};
+
+/* XXX: same as if_dqblk struct in kernel, plus one padding */
+struct obd_dqblk {
+        __u64 dqb_bhardlimit;
+        __u64 dqb_bsoftlimit;
+        __u64 dqb_curspace;
+        __u64 dqb_ihardlimit;
+        __u64 dqb_isoftlimit;
+        __u64 dqb_curinodes;
+        __u64 dqb_btime;
+        __u64 dqb_itime;
+        __u32 dqb_valid;
+        __u32 padding;
+};
 
 struct if_quotactl {
-        int                     qc_cmd;
-        int                     qc_type;
-        int                     qc_id;
-        int                     qc_stat;
-        struct if_dqinfo        qc_dqinfo;
-        struct if_dqblk         qc_dqblk;
-        char                    obd_type[10];
+        __u32                   qc_cmd;
+        __u32                   qc_type;
+        __u32                   qc_id;
+        __u32                   qc_stat;
+        struct obd_dqinfo       qc_dqinfo;
+        struct obd_dqblk        qc_dqblk;
+        __u8                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
-
-#else
-
-struct if_quotactl {
-};
-
-#endif /* HAVE_QUOTA_SUPPORT */
 
 #ifndef LPU64
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */

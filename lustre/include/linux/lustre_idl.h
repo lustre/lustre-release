@@ -620,28 +620,6 @@ struct mds_body {
 
 extern void lustre_swab_mds_body (struct mds_body *b);
 
-/* XXX: same as if_dqinfo struct in kernel */
-struct obd_dqinfo {
-        __u64 dqi_bgrace;
-        __u64 dqi_igrace;
-        __u32 dqi_flags;
-        __u32 dqi_valid;
-};
-
-/* XXX: same as if_dqblk struct in kernel, plus one padding */
-struct obd_dqblk {
-        __u64 dqb_bhardlimit;
-        __u64 dqb_bsoftlimit;
-        __u64 dqb_curspace;
-        __u64 dqb_ihardlimit;
-        __u64 dqb_isoftlimit;
-        __u64 dqb_curinodes;
-        __u64 dqb_btime;
-        __u64 dqb_itime;
-        __u32 dqb_valid;
-        __u32 padding;
-};
-
 #define Q_QUOTACHECK    0x800100
 #define Q_INITQUOTA     0x800101        /* init slave limits */
 #define Q_GETOINFO      0x800102        /* get obd quota info */
@@ -1201,10 +1179,10 @@ extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 
 /* qutoa */
 struct qunit_data {
-        __u32 qd_id;
-        __u32 qd_type;
-        __u32 qd_count;
-        __u32 qd_isblk; /* indicating if it's block quota */
+        __u32 qd_id;    /* ID appiles to (uid, gid) */
+        __u32 qd_type;  /* Quota type (USRQUOTA, GRPQUOTA) */
+        __u32 qd_count; /* acquire/release count (bytes for block quota) */
+        __u32 qd_isblk; /* Block quota or file quota */
 };
 extern void lustre_swab_qdata(struct qunit_data *d);
 

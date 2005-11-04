@@ -439,6 +439,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	LC_CONFIG_BACKINGFS
 fi
 LC_CONFIG_PINGER
+LC_CONFIG_QUOTA
 
 LC_STRUCT_KIOBUF
 LC_FUNC_COND_RESCHED
@@ -512,6 +513,23 @@ ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"
 ])
 
 #
+# LC_CONFIG_QUOTA
+#
+# whether to enable quota support
+#
+AC_DEFUN([LC_CONFIG_QUOTA],
+[AC_MSG_CHECKING([whether to enable quota support])
+AC_ARG_ENABLE([quota], 
+	AC_HELP_STRING([--enable-quota],
+			[enable quota support]),
+	[],[enable_quota='yes'])
+AC_MSG_RESULT([$enable_quota])
+if test x$enable_quota != xno ; then
+   AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+fi
+])
+  
+#
 # LC_CONFIGURE
 #
 # other configure checks
@@ -525,16 +543,6 @@ AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
 # include/lustre/lustre_user.h
 # See note there re: __ASM_X86_64_PROCESSOR_H
 AC_CHECK_HEADERS([linux/quota.h])
-
-AC_CHECK_TYPES([struct if_dqinfo],[],[],[
-#define __ASM_X86_64_PROCESSOR_H
-#include <linux/quota.h>
-])
-
-AC_CHECK_TYPES([struct if_dqblk],[],[],[
-#define __ASM_X86_64_PROCESSOR_H
-#include <linux/quota.h>
-])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])
@@ -573,6 +581,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
+AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
 ])
 
 #
@@ -625,6 +634,8 @@ lustre/ost/Makefile
 lustre/ost/autoMakefile
 lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
+lustre/quota/Makefile
+lustre/quota/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
 lustre/tests/Makefile
