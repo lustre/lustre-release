@@ -521,9 +521,9 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
         if (request->rq_repmsg->last_committed < aa->pcaa_peer_committed) {
                 CERROR("%s went back in time (transno "LPD64
                        " was previously committed, server now claims "LPD64
-                       ")! is shared storage not coherent?\n",
-                       imp->imp_target_uuid.uuid,
-                       aa->pcaa_peer_committed,
+                       ")!  See https://bugzilla.clusterfs.com/"
+                       "long_list.cgi?buglist=9646\n",
+                       imp->imp_target_uuid.uuid, aa->pcaa_peer_committed,
                        request->rq_repmsg->last_committed);
         }
 
