@@ -841,7 +841,6 @@ struct ldlm_flock {
         __u32 pid;
 };
 
-
 /* it's important that the fields of the ldlm_extent structure match
  * the first fields of the ldlm_flock structure because there is only
  * one ldlm_swab routine to process the ldlm_policy_data_t union. if
@@ -1104,8 +1103,7 @@ struct llog_log_hdr {
         __u32                   llh_cat_idx;
         /* for a catalog the first plain slot is next to it */
         struct obd_uuid         llh_tgtuuid;
-        __u64                   llh_version;
-        __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 21];
+        __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 23];
         __u32                   llh_bitmap[LLOG_BITMAP_BYTES/sizeof(__u32)];
         struct llog_rec_tail    llh_tail;
 } __attribute__((packed));
@@ -1141,7 +1139,6 @@ struct llogd_body {
         __u32 lgd_saved_index;
         __u32 lgd_len;
         __u64 lgd_cur_offset;
-        __u64 lgd_local_version;
 } __attribute__((packed));
 
 struct llogd_conn_body {

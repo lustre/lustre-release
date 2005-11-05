@@ -53,6 +53,7 @@ extern spinlock_t obd_dev_lock;
 #define LUSTRE_MDS_NAME "mds"
 #define LUSTRE_MDT_NAME "mdt"
 #define LUSTRE_MDC_NAME "mdc"
+#define LUSTRE_OSS_NAME "oss"
 #define LUSTRE_OST_NAME "ost"
 #define LUSTRE_OSC_NAME "osc"
 #define LUSTRE_MGS_NAME "mgs"
@@ -161,6 +162,7 @@ void class_import_put(struct obd_import *);
 struct obd_import *class_new_import(void);
 void class_destroy_import(struct obd_import *exp);
 
+struct obd_type *class_search_type(char *name);
 struct obd_type *class_get_type(char *name);
 void class_put_type(struct obd_type *type);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,

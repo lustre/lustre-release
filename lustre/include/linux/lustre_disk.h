@@ -215,6 +215,8 @@ void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 void lustre_common_put_super(struct super_block *sb);
 struct lustre_mount_info *lustre_get_mount(char *name);
 int lustre_put_mount(char *name);
+int lustre_get_process_log(struct super_block *, char *, 
+                           struct config_llog_instance *);
 
 #endif
 

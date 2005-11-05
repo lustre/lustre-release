@@ -26,12 +26,13 @@
 
 #include <linux/obd.h>
 #include <linux/lvfs.h>
-#include <linux/lustre_disk.h>
 #include <linux/lustre_fsfilt.h>
 //#include <linux/lustre_mgs.h>
 #include <linux/obd_class.h>
 #include <lustre/lustre_user.h>
 #include <linux/version.h> 
+#include <linux/lustre_log.h>
+#include <linux/lustre_disk.h>
                       
 static int (*client_fill_super)(struct super_block *sb) = NULL;
 
@@ -179,42 +180,6 @@ int lustre_put_mount(char *name)
 
 /******* mount helper utilities *********/
 
-static int dentry_readdir(struct obd_device *obd, struct dentry *dir, 
-                          struct vfsmount *inmnt, struct list_head *dentry_list)
-{
-        /* see mds_cleanup_orphans */
-        struct lvfs_run_ctxt saved;
-        struct file *file;
-        struct dentry *dentry;
-        struct vfsmount *mnt;
-        int err = 0;
-        ENTRY;
-
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        dentry = dget(dir);
-        if (IS_ERR(dentry))
-                GOTO(out_pop, err = PTR_ERR(dentry));
-        mnt = mntget(inmnt);
-        if (IS_ERR(mnt)) { 
-                l_dput(dentry);
-                GOTO(out_pop, err = PTR_ERR(mnt));
-        }
-
-        file = dentry_open(dentry, mnt, O_RDONLY);
-        if (IS_ERR(file))
-                /* dentry_open_it() drops the dentry, mnt refs */
-                GOTO(out_pop, err = PTR_ERR(file));
-
-        INIT_LIST_HEAD(dentry_list);
-        err = l_readdir(file, dentry_list);
-        filp_close(file, 0);
-        /*  filp_close->fput() drops the dentry, mnt refs */
-
-out_pop:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        RETURN(err);
-}
-
 int parse_mount_data(struct lvfs_run_ctxt *mount_ctxt, 
                      struct lustre_disk_data *ldd)
 {
@@ -326,22 +291,21 @@ int lustre_get_process_log(struct super_block *sb, char *profile,
         exp = class_conn2export(&mgc_conn);
 
         ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
-#if 1
-        rc = class_config_parse_llog(ctxt, profile, cfg);
-#else
+#if 0
         /* For debugging, it's useful to just dump the log */
         rc = class_config_dump_llog(ctxt, profile, cfg);
 #endif
+        rc = class_config_parse_llog(ctxt, profile, cfg);
 
         switch (rc) {
         case 0:
                 break;
         case -EINVAL:
                 LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
-                               "from the MDS.  Make sure this client and the "
-                               "MDS are running compatible versions of "
+                               "from the MGS.  Make sure this client and the "
+                               "MGS are running compatible versions of "
                                "Lustre.\n",
-                               obd->obd_name, profile);
+                               mgc->obd_name, profile);
                 /* fall through */
         default:
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
@@ -419,7 +383,6 @@ static int lustre_start_simple(char *obdname, char *type, char *s1, char *s2)
 /* Set up a mgsobd to process startup logs */
 static int lustre_start_mgs(struct super_block *sb, struct vfsmount *mnt)
 {
-        struct config_llog_instance cfg;
         char*  mgsname;
         int    mgsname_size, err = 0;
 
@@ -567,16 +530,29 @@ static int server_start_targets(struct super_block *sb)
         if (err) {
                 CERROR("failed to start server %s: %d\n",
                        sbi->lsi_ldd->ldd_svname, err);
+                return (err);
         }
                                                                                        
         /* If we're an MDT, make sure the global MDS is running */
         if (sbi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) {
                 /* make sure (what will be called) the MDS is started */
                 obd = class_name2obd("MDS");
-                if (!obd) 
+                if (!obd) {
                         //FIXME pre-rename, should eventually be LUSTRE_MDS_NAME
-                        err = lustre_start_simple("MDS", LUSTRE_MDT_NAME);
+                        err = lustre_start_simple("MDS", LUSTRE_MDT_NAME, 0, 0);
+                        if (err) 
+                                CERROR("failed to start MDS: %d\n", err);
+                }
         }
+
+        /* If we're an OST, make sure the global OSS is running */
+        if (sbi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
+                /* make sure OSS is started */
+                obd = class_name2obd("OSS");
+                if (!obd) 
+                        err = lustre_start_simple("OSS", LUSTRE_OSS_NAME, 0, 0);
+        }
+
         return(err);
 }
 
@@ -731,7 +707,21 @@ static void server_put_super(struct super_block *sb)
                 //FIXME pre-rename, should eventually be LUSTRE_MDT_NAME
                 struct obd_type *type = class_search_type(LUSTRE_MDS_NAME);
                 if (!type || !type->typ_refcnt) {
-                        /* nobody is using the MDT type */
+                        /* nobody is using the MDT type, clean the MDS */
+                        if (sbi->lsi_flags & LSI_UMOUNT_FORCE)
+                                obd->obd_force = 1;
+                        if (sbi->lsi_flags & LSI_UMOUNT_FAILOVER)
+                                obd->obd_fail = 1;
+                        class_manual_cleanup(obd);
+                }
+        }
+
+        /* if this was an OST, and there are no more OST's, clean up the OSS */
+        if ((sbi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) &&
+            (obd = class_name2obd("OSS"))) {
+                struct obd_type *type = class_search_type(LUSTRE_OST_NAME);
+                if (!type || !type->typ_refcnt) {
+                        /* nobody is using the OST type, clean the OSS */
                         if (sbi->lsi_flags & LSI_UMOUNT_FORCE)
                                 obd->obd_force = 1;
                         if (sbi->lsi_flags & LSI_UMOUNT_FAILOVER)
@@ -752,10 +742,12 @@ static void server_put_super(struct super_block *sb)
 static void server_umount_begin(struct super_block *sb)
 {
         struct lustre_sb_info *sbi = s2sbi(sb);
-                                                                                       
-        CERROR("Umount -f\n");
-        // FIXME decide FORCE or FAILOVER based on mount option -o umount=failover
-        sbi->lsi_flags |= LSI_UMOUNT_FORCE;
+                                                                                     
+        CERROR("umount -f\n");
+        /* umount = normal
+           umount -f = failover
+           no third way to do LSI_UMOUNT_FORCE */
+        sbi->lsi_flags |= LSI_UMOUNT_FAILOVER;
 }
 
 #define log2(n) ffz(~(n))

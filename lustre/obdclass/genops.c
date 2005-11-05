@@ -62,7 +62,7 @@ void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
  * support functions: we could use inter-module communication, but this
  * is more portable to other OS's
  */
-static struct obd_type *class_search_type(char *name)
+struct obd_type *class_search_type(char *name)
 {
         struct list_head *tmp;
         struct obd_type *type;

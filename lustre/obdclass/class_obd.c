@@ -393,6 +393,7 @@ EXPORT_SYMBOL(proc_lustre_root);
 
 EXPORT_SYMBOL(class_register_type);
 EXPORT_SYMBOL(class_unregister_type);
+EXPORT_SYMBOL(class_search_type);
 EXPORT_SYMBOL(class_get_type);
 EXPORT_SYMBOL(class_put_type);
 EXPORT_SYMBOL(class_name2dev);
