@@ -2659,7 +2659,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                 }
         } else {
                 CERROR("wrong @oa flags detected 0x%lx. Not an urgent "
-                       "create and not recovery\n", oa->o_flags);
+                       "create and not recovery.\n", (unsigned long)oa->o_flags);
                 LBUG();
         }
         RETURN(rc);

@@ -109,7 +109,6 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
-        struct obd_connect_data *ocd;
         int try_again = 1, rc = 0;
         ENTRY;
 
@@ -163,13 +162,14 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                      !!(oa->o_flags & OBD_FL_CREATE_CROW) !=
                      !!(oa->o_flags & OBD_FL_RECREATE_OBJS)));
 
-        ocd = &class_exp2cliimp(exp)->imp_connect_data;
-
         /* perform urgent create if asked or import is not crow capable or
          * ENOSPC case if detected. */
-        if (OBDO_URGENT_CREATE(oa) || !OCD_CROW_ABLE(ocd) ||
+        if (OBDO_URGENT_CREATE(oa) || !IMP_CROW_ABLE(class_exp2cliimp(exp)) ||
             osc_check_nospc(exp)) {
                 CDEBUG(D_HA, "perform urgent create\n");
+                oa->o_flags &= ~OBD_FL_CREATE_CROW;
+                if (!oa->o_flags)
+                        oa->o_valid &= ~OBD_MD_FLFLAGS;
                 rc = osc_real_create(exp, oa, ea, oti);
                 RETURN(rc);
         }

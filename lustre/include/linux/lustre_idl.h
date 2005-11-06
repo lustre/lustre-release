@@ -229,9 +229,6 @@ struct obd_connect_data {
         __u64 padding[8];
 };
 
-#define OCD_CROW_ABLE(ocd) \
-        ((ocd)->ocd_connect_flags & OBD_CONNECT_CROW)
-
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
 
 /*

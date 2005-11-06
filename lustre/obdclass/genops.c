@@ -1054,12 +1054,13 @@ static int ping_evictor_main(void *arg)
                                 class_export_get(exp);
                                 spin_unlock(&obd->obd_dev_lock);
                                 LCONSOLE_WARN("%s: haven't heard from %s in %ld"
-                                              " seconds.  I think it's dead, "
-                                              "and I am evicting it.\n",
-                                              obd->obd_name,
+                                              " seconds. Last request was at %ld. "
+                                              "I think it's dead, and I am evicting "
+                                              "it.\n", obd->obd_name,
                                               obd_export_nid2str(exp),
                                               (long)(CURRENT_SECONDS -
-                                                   exp->exp_last_request_time));
+                                                     exp->exp_last_request_time),
+                                              exp->exp_last_request_time);
 
 
                                 class_fail_export(exp);
@@ -1166,15 +1167,21 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 
         /* Note - racing to start/reset the obd_eviction timer is safe */
         if (exp->exp_obd->obd_eviction_timer == 0) {
+                unsigned long interval = PING_INTERVAL;
+                
                 /* Check if the oldest entry is expired. */
                 if (CURRENT_SECONDS > (oldest_time +
                                        (3 * obd_timeout / 2) + extra_delay)) {
-                        /* We need a second timer, in case the net was
-                         * down and it just came back. Since the pinger
-                         * may skip every other PING_INTERVAL (see note in
+                        /* We need a second timer, in case the net was down and
+                         * it just came back. Since the pinger may skip every
+                         * other {PING|STATFS}_INTERVAL (see note in
                          * ptlrpc_pinger_main), we better wait for 3. */
+
+                        if (IMP_CROW_ABLE(class_exp2cliimp(exp)))
+                                interval = STATFS_INTERVAL;
+                        
                         exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
-                                3 * PING_INTERVAL;
+                                3 * interval;
                         CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
                                exp->exp_obd->obd_name, obd_export_nid2str(exp),
                                oldest_time);

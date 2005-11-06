@@ -557,11 +557,12 @@ finish:
                          imp->imp_connect_data.ocd_connect_flags) ==
                         ocd->ocd_connect_flags);
 
-                if (OCD_CROW_ABLE(ocd)) {
+                imp->imp_connect_data = *ocd;
+                
+                if (IMP_CROW_ABLE(imp)) {
                         CDEBUG(D_HA, "connected to CROW capable target: %s\n",
                                imp->imp_target_uuid.uuid);
                 }
-                imp->imp_connect_data = *ocd;
                 if (imp->imp_conn_current != NULL) {
                         list_del(&imp->imp_conn_current->oic_item);
                         list_add(&imp->imp_conn_current->oic_item,
