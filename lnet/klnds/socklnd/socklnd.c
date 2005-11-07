@@ -2229,10 +2229,9 @@ ksocknal_enumerate_interfaces(ksock_net_t *net)
                 __u32      ip;
                 __u32      mask;
 
-#ifndef __arch_um__
                 if (!strcmp(names[i], "lo")) /* skip the loopback IF */
                         continue;
-#endif
+
                 rc = libcfs_ipif_query(names[i], &up, &ip, &mask);
                 if (rc != 0) {
                         CWARN("Can't get interface %s info: %d\n",
