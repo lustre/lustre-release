@@ -35,8 +35,6 @@
 #include <getopt.h>
 #include <sys/utsname.h>
 
-#include <linux/lustre_disk.h>
-//#include <portals/ptlctl.h>
 #include "obdctl.h"
 
 int          verbose;
@@ -48,10 +46,10 @@ static char *progname = NULL;
 void usage(FILE *out)
 {
         fprintf(out, "%s v1.%d\n", progname, LMD_MAGIC & 0xFF);
-        fprintf(out, "usage: %s <mdsnode>:/<mdsname>/<cfgname> <mountpt> "
+        fprintf(out, "usage: %s <mgmtnid>[:<altmgtnid>...]:/<filesystem>[/<cfgname>] <mountpt> "
                 "[-fhnv] [-o mntopt]\n", progname);
         fprintf(out, "\t<mdsnode>: nid of MDS (config) node\n"
-                "\t<mdsname>: name of MDS service (e.g. mds1)\n"
+                "\t<filesystem>: name of the Lustre filesystem (e.g. lustre1)\n"
                 "\t<cfgname>: name of client config (e.g. client)\n"
                 "\t<mountpt>: filesystem mountpoint (e.g. /mnt/lustre)\n"
                 "\t-f|--fake: fake mount (updates /etc/mtab)\n"
@@ -60,33 +58,6 @@ void usage(FILE *out)
                 "\t-n|--nomtab: do not update /etc/mtab after mount\n"
                 "\t-v|--verbose: print verbose config settings\n");
         exit((out != stdout) ? EINVAL : 0);
-}
-
-static int load_module(char *module_name)
-{
-        char buf[256];
-        int rc;
-        
-        if (verbose)
-                printf("loading %s\n", module_name);
-        sprintf(buf, "/sbin/modprobe %s", module_name);
-        rc = system(buf);
-        if (rc) {
-                fprintf(stderr, "%s: failed to modprobe %s: %s\n", 
-                        progname, module_name, strerror(errno));
-                fprintf(stderr, "Check /etc/modules.conf\n");
-        }
-        return rc;
-}
-
-static int load_modules()
-{
-        int rc = 0;
-
-        rc = load_module("lustre");
-        rc = load_module("mds");
-        rc = load_module("ost");
-        return rc;
 }
 
 static int check_mtab_entry(char *spec, char *mtpt, char *type)
@@ -148,6 +119,42 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
         return rc;
 }
 
+/* Get rid of symbolic hostnames for tcp */
+#define MAXNIDSTR 256
+static char *convert_hostnames(char *s1)
+{
+        char *converted, *s2, *c;
+        int left = MAXNIDSTR;
+        lnet_nid_t nid;
+        
+        converted = malloc(left);
+        c = converted;
+        while ((left > 0) && ((s2 = strsep(&s1, ",:")))) {
+                nid = libcfs_str2nid(s2);
+                if (nid == LNET_NID_ANY) {
+                        if (*s2 == '/') 
+                                /* end of nids */
+                                break;
+                        fprintf(stderr, "%s: Can't parse NID '%s'\n", 
+                                progname, s2);
+                        free(converted);
+                        return NULL;
+                }
+                if (LNET_NETTYP(LNET_NIDNET(nid)) == SOCKLND) {
+                        __u32 addr = LNET_NIDADDR(nid);
+                        c += snprintf(c, left, "%u.%u.%u.%u@%s%u:",
+                                      (addr >> 24) & 0xff, (addr >> 16) & 0xff,
+                                      (addr >> 8) & 0xff, addr & 0xff,
+                                      libcfs_lnd2str(SOCKLND), 
+                                      LNET_NETNUM(LNET_NIDNET(nid)));
+                } else {
+                        c += snprintf(converted, left, "%s:", s2);
+                }
+                left = converted + MAXNIDSTR - c;
+        }
+        snprintf(c, left, "%s", s2);
+        return converted;
+}
 
 /*****************************************************************************
  *
@@ -248,8 +255,6 @@ int main(int argc, char *const argv[])
         progname = strrchr(argv[0], '/');
         progname = progname ? progname + 1 : argv[0];
 
-        printf("starting %s\n", progname);
-
         while ((opt = getopt_long(argc, argv, "fhno:v",
                                   long_opt, NULL)) != EOF){
                 switch (opt) {
@@ -293,8 +298,12 @@ int main(int argc, char *const argv[])
                 usage(stderr);
         }
 
-        source = argv[optind];
+        source = convert_hostnames(argv[optind]);
         target = argv[optind + 1];
+
+        if (!source) {
+                usage(stderr);
+        }
 
         if (verbose) {
                 for (i = 0; i < argc; i++)
@@ -320,14 +329,9 @@ int main(int argc, char *const argv[])
                 return rc;
         }
 
-        /* FIXME remove */
-        if ((rc = load_modules())) {
-                return rc;
-        }
-
         /* In Linux 2.4, the target device doesn't get passed to any of our
            functions.  So we'll stick it on the end of the options. */
-        optlen = strlen(options) + strlen(",device=") + strlen(target);
+        optlen = strlen(options) + strlen(",device=") + strlen(source);
         optcopy = malloc(optlen);
         strcpy(optcopy, options);
         strcat(optcopy, ",device=");
@@ -351,5 +355,6 @@ int main(int argc, char *const argv[])
         }
 
         free(optcopy);
+        free(source);
         return rc;
 }

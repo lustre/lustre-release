@@ -481,8 +481,8 @@ int ll_fill_super(struct super_block *sb)
         struct lustre_profile *lprof;
         struct lustre_sb_info *lsi = s2sbi(sb);
         struct ll_sb_info *sbi;
-        char  *osc;
-        char  *mdc;
+        char  *osc = NULL;
+        char  *mdc = NULL;
         char  *profilenm = get_profile_name(sb);
         struct config_llog_instance cfg;
         char   ll_instance[sizeof(sb) * 2 + 1];

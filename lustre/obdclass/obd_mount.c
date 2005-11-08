@@ -346,6 +346,8 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg    * lcfg = NULL;
         int err;
+               
+        CDEBUG(D_ERROR, "lcfg %s %#x %s %s %s %s\n", cfgname, cmd, s1, s2, s3, s4); 
 
         lustre_cfg_bufs_reset(&bufs, cfgname);
         if (s1) 
@@ -453,12 +455,12 @@ static int lustre_start_mgc(struct super_block *sb, struct vfsmount *mnt)
                 GOTO(out_free, err);
 
         /* Start the MGC */
-        if ((err = lustre_start_simple(mgcname, LUSTRE_MGC_NAME, "MGS", 
+        if ((err = lustre_start_simple(mgcname, LUSTRE_MDC_NAME/*LUSTRE_MGC_NAME*/, "MGS", 
                                        libcfs_nid2str(nid))))
                 GOTO(out_dereg, err);
         
         /* Add the redundant MGS's */
-        for (i = i; i < sbi->lsi_lmd->lmd_mgsnid_count; i++) {
+        for (i = 1; i < sbi->lsi_lmd->lmd_mgsnid_count; i++) {
                 nid = sbi->lsi_lmd->lmd_mgsnid[i];
                 err = do_lcfg(mgcname, nid, LCFG_ADD_UUID, libcfs_nid2str(nid),
                               0, 0, 0);
@@ -481,13 +483,6 @@ static int lustre_start_mgc(struct super_block *sb, struct vfsmount *mnt)
                 GOTO(out_dereg, err = -ENOTCONN);
         }
         sbi->lsi_mgc = obd;
-
-        /* Get a new index if needed */
-        if (sbi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
-                // FIXME implement
-                CERROR("Need new server index from MGS!\n");
-                // rewrite last_rcvd, ldd (for new svname)
-        }
 
 out_free:
         OBD_FREE(mgcname, mgcname_size);
@@ -520,6 +515,13 @@ static int server_start_targets(struct super_block *sb)
         LASSERT(obd);
                                         
         CERROR("starting target %s\n", sbi->lsi_ldd->ldd_svname);
+        
+        /* Get a new index if needed */
+        if (sbi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
+                // FIXME implement
+                CERROR("Need new target index from MGS!\n");
+                // FIXME rewrite last_rcvd, ldd (for new svname)
+        }
 
         /* The MGC starts targets using the svname llog */
         ioc_data.ioc_inllen1 = strlen(sbi->lsi_ldd->ldd_svname) + 1;
@@ -806,9 +808,10 @@ static int server_fill_super(struct super_block *sb)
         /* mount to read server info */
         mnt = lustre_kern_mount(sb);
         if (IS_ERR(mnt)) {
+                err = PTR_ERR(mnt);
                 CERROR("Unable to mount device %s: %d\n", 
                       sbi->lsi_lmd->lmd_dev, err);
-                GOTO(out, err = PTR_ERR(mnt));
+                GOTO(out, err);
         }
         LASSERT(sbi->lsi_ldd);
         CERROR("Found service %s for fs %s on device %s\n",
@@ -831,7 +834,7 @@ static int server_fill_super(struct super_block *sb)
         err = lustre_start_mgc(sb, mnt);
         if (err) 
                 GOTO(out_dereg, err);
-        
+
         /* Set up all obd devices for service */
         err = server_start_targets(sb);
         if (err < 0) {
@@ -964,7 +967,7 @@ static int parse_lmd(char *options, struct lustre_mount_data *lmd)
                         LCONSOLE_ERROR("Too many NIDs: '%s'\n", s1);
                         goto invalid;
                 }
-                lmd->lmd_mgsnid[lmd->lmd_mgsnid_count++] = libcfs_str2nid(s1);
+                lmd->lmd_mgsnid[lmd->lmd_mgsnid_count++] = nid;
                 s1 = s2 + 1;
         }
 
