@@ -1174,14 +1174,10 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
                                        (3 * obd_timeout / 2) + extra_delay)) {
                         /* We need a second timer, in case the net was down and
                          * it just came back. Since the pinger may skip every
-                         * other {PING|STATFS}_INTERVAL (see note in
-                         * ptlrpc_pinger_main), we better wait for 3. */
-
-                        if (IMP_CROW_ABLE(class_exp2cliimp(exp)))
-                                interval = STATFS_INTERVAL;
-                        
+                         * other PING_INTERVAL (see note in ptlrpc_pinger_main),
+                         * we better wait for 3. */
                         exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
-                                3 * interval;
+                                3 * PING_INTERVAL;
                         CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
                                exp->exp_obd->obd_name, obd_export_nid2str(exp),
                                oldest_time);
