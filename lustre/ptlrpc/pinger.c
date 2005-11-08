@@ -73,6 +73,9 @@ static int ptlrpc_statfs_interpret(struct ptlrpc_request *req,
         struct obd_device *obd;
         ENTRY;
 
+        if (rc)
+                RETURN(rc);
+        
         if (!req->rq_repmsg)
                 RETURN(-EPROTO);
         
@@ -85,6 +88,7 @@ static int ptlrpc_statfs_interpret(struct ptlrpc_request *req,
         
         spin_lock(&obd->obd_osfs_lock);
         obd->obd_osfs = *msfs;
+        obd->obd_osfs_age = jiffies;
         spin_unlock(&obd->obd_osfs_lock);
         
         RETURN(0);
@@ -96,8 +100,8 @@ int ptlrpc_statfs(struct obd_import *imp)
         struct ptlrpc_request *req;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, OST_STATFS, 0, NULL,
-                              NULL);
+        req = ptlrpc_prep_req(imp, OST_STATFS, 0,
+                              NULL, NULL);
         if (!req) {
                 CERROR("OOM trying to ping %s->%s\n",
                        imp->imp_obd->obd_uuid.uuid,
@@ -117,7 +121,7 @@ int ptlrpc_statfs(struct obd_import *imp)
         RETURN(0);
 }
 
-static inline void ptlrpc_update_next_ping(struct obd_import *imp)
+static void ptlrpc_update_next_ping(struct obd_import *imp)
 {
         __u32 interval;
 
@@ -162,6 +166,7 @@ static int ptlrpc_pinger_main(void *arg)
         /* And now, loop forever, pinging as needed. */
         while (1) {
                 unsigned long sleep_interval = PING_INTERVAL;
+                unsigned long update_interval = 0;
                 unsigned long this_ping = jiffies;
                 struct l_wait_info lwi;
                 long time_to_next_ping;
@@ -178,14 +183,12 @@ static int ptlrpc_pinger_main(void *arg)
                         if (IMP_CROW_ABLE(imp))
                                 sleep_interval = STATFS_INTERVAL;
                         
-                        lwi = LWI_TIMEOUT(sleep_interval * HZ,
-                                          NULL, NULL);
-                        
                         spin_lock_irqsave(&imp->imp_lock, flags);
                         level = imp->imp_state;
                         force = imp->imp_force_verify;
                         imp->imp_force_verify = 0;
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
+
                         CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
                                "level %s/%u force %u deactive %u pingable %u\n",
                                ptlrpc_import_state_name(level), level,
@@ -227,9 +230,15 @@ static int ptlrpc_pinger_main(void *arg)
                                        imp->imp_next_ping, this_ping);
                         }
 
+                        /* using here new calculated @update_interval, as
+                         * sleep_interval holds minimal of possible intervals
+                         * over pingable imports. */
+                        update_interval = IMP_CROW_ABLE(imp) ?
+                                STATFS_INTERVAL : PING_INTERVAL;
+                        
                         /* obd_timeout might have changed */
                         if (time_after(imp->imp_next_ping,
-                                       this_ping + sleep_interval * HZ))
+                                       this_ping + update_interval * HZ))
                                 ptlrpc_update_next_ping(imp);
                 }
                 up(&pinger_sem);
