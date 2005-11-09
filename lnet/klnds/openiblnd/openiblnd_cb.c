@@ -422,7 +422,7 @@ kibnal_kvaddr_to_phys (unsigned long vaddr, __u64 *physp)
             !VALID_PAGE (page))
                 return (-EFAULT);
 
-        *physp = kibnal_page2phys(page) + (vaddr & (PAGE_SIZE - 1));
+        *physp = lnet_page2phys(page) + (vaddr & (PAGE_SIZE - 1));
         return (0);
 }
 #endif
@@ -510,9 +510,9 @@ kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
 
         page_offset = kiov->kiov_offset + offset;
 #if IBNAL_FMR
-        phys[0] = kibnal_page2phys(kiov->kiov_page);
+        phys[0] = lnet_page2phys(kiov->kiov_page);
 #else
-        phys[0].address = kibnal_page2phys(kiov->kiov_page);
+        phys[0].address = lnet_page2phys(kiov->kiov_page);
         phys[0].size = PAGE_SIZE;
 #endif
         nphys = 1;
@@ -550,9 +550,9 @@ kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
 
                 LASSERT (nphys * sizeof (*phys) < phys_size);
 #if IBNAL_FMR
-                phys[nphys] = kibnal_page2phys(kiov->kiov_page);
+                phys[nphys] = lnet_page2phys(kiov->kiov_page);
 #else
-                phys[nphys].address = kibnal_page2phys(kiov->kiov_page);
+                phys[nphys].address = lnet_page2phys(kiov->kiov_page);
                 phys[nphys].size = PAGE_SIZE;
 #endif
                 nphys++;

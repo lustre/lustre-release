@@ -71,8 +71,6 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         lnet_hdr_t       *hdr= &lntmsg->msg_hdr;
         int               type = lntmsg->msg_type;
         lnet_process_id_t target = lntmsg->msg_target;
-        int               target_is_router = lntmsg->msg_target_is_router;
-        int               routing = lntmsg->msg_routing;
         unsigned int      niov = lntmsg->msg_niov;
         struct iovec     *iov = lntmsg->msg_iov;
         lnet_kiov_t      *kiov = lntmsg->msg_kiov;

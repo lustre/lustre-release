@@ -149,7 +149,6 @@ gmnal_tx_done(gmnal_tx_t *tx, int rc)
 {
 	gmnal_ni_t *gmni = tx->tx_gmni;
         int         wake_sched = 0;
-        int         wake_idle = 0;
         
         LASSERT(tx->tx_lntmsg == NULL);
 

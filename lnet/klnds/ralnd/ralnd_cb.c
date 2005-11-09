@@ -212,7 +212,7 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
         tx->tx_nob = nob;
         tx->tx_buffer = (void *)((unsigned long)(kiov->kiov_offset + offset));
 
-        phys->Address = kranal_page2phys(kiov->kiov_page);
+        phys->Address = lnet_page2phys(kiov->kiov_page);
         phys++;
 
         resid = nob - (kiov->kiov_len - offset);
@@ -237,7 +237,7 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
                         return -EMSGSIZE;
                 }
 
-                phys->Address = kranal_page2phys(kiov->kiov_page);
+                phys->Address = lnet_page2phys(kiov->kiov_page);
                 phys++;
 
                 resid -= PAGE_SIZE;

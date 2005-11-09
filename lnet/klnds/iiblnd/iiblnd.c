@@ -1089,7 +1089,7 @@ kibnal_create_conn (lnet_nid_t nid)
                              page_offset);
 
                 rx->rx_hca_msg = kibnal_data.kib_whole_mem.md_addr +
-                                 kibnal_page2phys(page) + page_offset;
+                                 lnet_page2phys(page) + page_offset;
                 
                 page_offset += IBNAL_MSG_SIZE;
                 LASSERT (page_offset <= PAGE_SIZE);
@@ -1529,7 +1529,7 @@ kibnal_setup_tx_descs (void)
                                             page_offset);
 
                 tx->tx_hca_msg = kibnal_data.kib_whole_mem.md_addr +
-                                 kibnal_page2phys(page) + page_offset;
+                                 lnet_page2phys(page) + page_offset;
 
                 CDEBUG(D_NET, "Tx[%d] %p->%p - "LPX64"\n", 
                        i, tx, tx->tx_msg, tx->tx_hca_msg);

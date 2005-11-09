@@ -426,7 +426,7 @@ connection force_tcp_connection(manager    m,
     }
 
     sz = sizeof(locaddr);
-    rc = getsockname(fd, &locaddr, &sz);
+    rc = getsockname(fd, (struct sockaddr *)&locaddr, &sz);
     if (rc != 0) {
             perror ("Error on getsockname");
             close(fd);

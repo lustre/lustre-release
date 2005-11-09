@@ -536,7 +536,7 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
 
         frag->rf_nob  = len;
         frag->rf_addr = kibnal_data.kib_whole_mem.md_addr +
-                        kibnal_page2phys(page) + page_offset;
+                        lnet_page2phys(page) + page_offset;
 
         CDEBUG(D_NET,"map key %x frag [%d]["LPX64" for %d]\n", 
                rd->rd_key, rd->rd_nfrag, frag->rf_addr, frag->rf_nob);
@@ -717,7 +717,7 @@ kibnal_setup_rd_iov (kib_tx_t *tx, kib_rdma_desc_t *rd, int active,
                         return -EFAULT;
                 }
 
-                tx->tx_pages[npages++] = kibnal_page2phys(page);
+                tx->tx_pages[npages++] = lnet_page2phys(page);
 
                 fragnob = PAGE_SIZE - (vaddr & (PAGE_SIZE - 1));
                 vaddr += fragnob;
@@ -771,7 +771,7 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd, int active,
                         return -EINVAL;
                 }
 
-                tx->tx_pages[npages++] = kibnal_page2phys(kiov->kiov_page);
+                tx->tx_pages[npages++] = lnet_page2phys(kiov->kiov_page);
                 resid -= kiov->kiov_len;
                 kiov++;
                 nkiov--;
@@ -837,7 +837,7 @@ kibnal_check_sends (kib_conn_t *conn)
                 if (conn->ibc_state != IBNAL_CONN_ESTABLISHED) {
                         list_del (&tx->tx_list);
                         tx->tx_queued = 0;
-                        tx->tx_status -ECONNABORTED;
+                        tx->tx_status = -ECONNABORTED;
                         tx->tx_waiting = 0;
                         done = (tx->tx_sending == 0);
                         if (!done)
