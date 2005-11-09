@@ -35,6 +35,7 @@
 #include <linux/obd.h>
 #include <linux/obd_ost.h> /* for LUSTRE_OSC_NAME */
 #include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
+#include <linux/lustre_mgs.h> /* for LUSTRE_MGC_NAME */
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_net.h>
 
@@ -194,7 +195,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_uuid server_uuid;
         int rq_portal, rp_portal, connect_op;
         char *name = obddev->obd_type->typ_name;
-        int rc;
+        int is_mgc = 0, rc;
         ENTRY;
 
         /* In a more perfect world, we would hang a ptlrpc_client off of
@@ -207,6 +208,11 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
                 connect_op = MDS_CONNECT;
+        } else if (!strcmp(name, LUSTRE_MGC_NAME)) {
+                rq_portal = MGC_REQUEST_PORTAL;
+                rp_portal = MGC_REPLY_PORTAL;
+                connect_op = MGS_CONNECT;
+                is_mgc++;
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);
@@ -239,34 +245,39 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),
                      sizeof(server_uuid)));
 
-        cli->cl_dirty = 0;
-        cli->cl_avail_grant = 0;
-        /* FIXME: should limit this for the sum of all cl_dirty_max */
-        cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
-        if (cli->cl_dirty_max >> PAGE_SHIFT > num_physpages / 8)
-                cli->cl_dirty_max = num_physpages << (PAGE_SHIFT - 3);
-        INIT_LIST_HEAD(&cli->cl_cache_waiters);
-        INIT_LIST_HEAD(&cli->cl_loi_ready_list);
-        INIT_LIST_HEAD(&cli->cl_loi_write_list);
-        INIT_LIST_HEAD(&cli->cl_loi_read_list);
-        spin_lock_init(&cli->cl_loi_list_lock);
-        cli->cl_r_in_flight = 0;
-        cli->cl_w_in_flight = 0;
-        spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
-        spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
-        spin_lock_init(&cli->cl_read_page_hist.oh_lock);
-        spin_lock_init(&cli->cl_write_page_hist.oh_lock);
-        spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
-        spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
-        if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
-                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
-                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
-        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 512) { /* <= 512 MB */
-                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 2;
-                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 2;
-        } else {
-                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
-                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
+        /* Only need by osc/mdc */
+        if (!is_mgc) {
+                cli->cl_dirty = 0;
+                cli->cl_avail_grant = 0;
+                /* FIXME: should limit this for the sum of all cl_dirty_max */
+                cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
+                if (cli->cl_dirty_max >> PAGE_SHIFT > num_physpages / 8)
+                        cli->cl_dirty_max = num_physpages << (PAGE_SHIFT - 3);
+                INIT_LIST_HEAD(&cli->cl_cache_waiters);
+                INIT_LIST_HEAD(&cli->cl_loi_ready_list);
+                INIT_LIST_HEAD(&cli->cl_loi_write_list);
+                INIT_LIST_HEAD(&cli->cl_loi_read_list);
+                spin_lock_init(&cli->cl_loi_list_lock);
+                cli->cl_r_in_flight = 0;
+                cli->cl_w_in_flight = 0;
+                spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
+                spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
+                spin_lock_init(&cli->cl_read_page_hist.oh_lock);
+                spin_lock_init(&cli->cl_write_page_hist.oh_lock);
+                spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
+                spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
+                if (num_physpages >> (20 - PAGE_SHIFT) <= 128) {
+                      /* <= 128 MB */
+                        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
+                        cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
+                } else if (num_physpages >> (20 - PAGE_SHIFT) <= 512) {
+                      /* <= 512 MB */
+                        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 2;
+                        cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 2;
+                } else {
+                        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
+                        cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
+                }
         }
 
         rc = ldlm_get_ref();
@@ -298,10 +309,13 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         }
 
         cli->cl_import = imp;
+
         /* cli->cl_max_mds_{easize,cookiesize} updated by mdc_init_ea_size() */
-        cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
-        cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
-        cli->cl_sandev = to_kdev_t(0);
+        if (!is_mgc) {
+                cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
+                cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
+                cli->cl_sandev = to_kdev_t(0);
+        }
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 if (!strcmp(lustre_cfg_string(lcfg, 3), "inactive")) {
@@ -312,8 +326,10 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 }
         }
 
-        spin_lock_init(&cli->cl_qchk_lock);
-        cli->cl_qchk_stat = CL_NO_QUOTACHECK;
+        if (!is_mgc) {
+                spin_lock_init(&cli->cl_qchk_lock);
+                cli->cl_qchk_stat = CL_NO_QUOTACHECK;
+        }
 
         RETURN(rc);
 
@@ -340,7 +356,7 @@ int client_obd_cleanup(struct obd_device *obddev)
         RETURN(0);
 }
 
-/* ->o_connect() method for client side (OSC and MDC) */
+/* ->o_connect() method for client side (OSC and MDC and MGC) */
 int client_connect_import(struct lustre_handle *dlm_handle,
                           struct obd_device *obd, struct obd_uuid *cluuid,
                           struct obd_connect_data *data)

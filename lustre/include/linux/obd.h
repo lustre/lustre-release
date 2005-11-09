@@ -319,6 +319,12 @@ struct client_obd {
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
         struct osc_creator       cl_oscc;
+        /* mgc datastruct */
+        struct mgc_rpc_lock     *cl_mgc_rpc_lock;
+        struct vfsmount         *cl_mgc_vfsmnt;
+        struct super_block      *cl_mgc_sb;
+        struct dentry           *cl_mgc_configs_dir;
+        struct list_head         cl_mgc_open_llogs;
 
         /* Flags section */
         unsigned int             cl_checksum:1; /* debug checksums */
@@ -330,18 +336,6 @@ struct client_obd {
         spinlock_t               cl_qchk_lock;
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
         struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
-};
-
-/* a light client obd for mountconf */
-struct mgc_obd {
-        struct obd_import       *mgc_import;
-        struct semaphore         mgc_sem;
-        int                      mgc_conn_count;
-        struct mgc_rpc_lock     *mgc_rpc_lock;
-        struct vfsmount         *mgc_vfsmnt;     /* for local config dirs */
-        struct super_block      *mgc_sb;
-        struct dentry           *mgc_configs_dir;
-        struct list_head         mgc_open_llogs;
 };
 
 struct mgs_obd {
@@ -609,7 +603,6 @@ struct obd_device {
                 struct lov_obd lov;
                 struct cache_obd cobd;
                 struct ptlbd_obd ptlbd;
-                struct mgc_obd mgc;
                 struct mgs_obd mgs;
         } u;
        /* Fields used by LProcFS */

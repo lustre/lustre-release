@@ -53,7 +53,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
 {
         struct lvfs_run_ctxt saved;
         struct lustre_sb_info *lsi = s2lsi(sb);
-        struct mgc_obd *mgcobd = &obd->u.mgc;
+        struct client_obd *cli = &obd->u.cli;
         struct dentry *dentry;
         int err = 0;
 
@@ -66,11 +66,11 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
                return(PTR_ERR(obd->obd_fsops));
         }
 
-        mgcobd->mgc_vfsmnt = mnt;
-        mgcobd->mgc_sb = mnt->mnt_root->d_inode->i_sb;
+        cli->cl_mgc_vfsmnt = mnt;
+        cli->cl_mgc_sb = mnt->mnt_root->d_inode->i_sb;
         // FIXME which one? - filter_common_setup also 
         CERROR("SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb, mnt->mnt_root->d_inode->i_sb);
-        fsfilt_setup(obd, mgcobd->mgc_sb);
+        fsfilt_setup(obd, cli->cl_mgc_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;
@@ -88,32 +88,30 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
                        MOUNT_CONFIGS_DIR, err);
                 goto err_ops;
         }
-        mgcobd->mgc_configs_dir = dentry;
+        cli->cl_mgc_configs_dir = dentry;
         return (0);
 
 err_ops:        
         fsfilt_put_ops(obd->obd_fsops);
         obd->obd_fsops = NULL;
-        mgcobd->mgc_sb = NULL;
+        cli->cl_mgc_sb = NULL;
         return(err);
 }
 
 static int mgc_fs_cleanup(struct obd_device *obd)
 {
-        struct mgc_obd *mgc = &obd->u.mgc;
+        struct client_obd *cli = &obd->u.cli;
 
-       // in mgc_cleanup: llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
-        
-        if (mgc->mgc_configs_dir != NULL) {
+        if (cli->cl_mgc_configs_dir != NULL) {
                 struct lvfs_run_ctxt saved;
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                l_dput(mgc->mgc_configs_dir);
-                mgc->mgc_configs_dir = NULL; 
+                l_dput(cli->cl_mgc_configs_dir);
+                cli->cl_mgc_configs_dir = NULL; 
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         }
 
-        mgc->mgc_vfsmnt = NULL;
-        mgc->mgc_sb = NULL;
+        cli->cl_mgc_vfsmnt = NULL;
+        cli->cl_mgc_sb = NULL;
         
         if (obd->obd_fsops) 
                 fsfilt_put_ops(obd->obd_fsops);
@@ -122,15 +120,12 @@ static int mgc_fs_cleanup(struct obd_device *obd)
 
 static int mgc_cleanup(struct obd_device *obd)
 {
-        struct mgc_obd *mgc = &obd->u.mgc;
+        struct client_obd *cli = &obd->u.cli;
         int rc;
 
-
         //lprocfs_obd_cleanup(obd);
-        
-        rc = mgc_obd_cleanup(obd);
 
-        if (mgc->mgc_vfsmnt) {
+        if (cli->cl_mgc_vfsmnt) {
                 /* if we're a server, eg. something's mounted */
                 mgc_fs_cleanup(obd);
                 if ((rc = lustre_put_mount(obd->obd_name)))
@@ -143,26 +138,30 @@ static int mgc_cleanup(struct obd_device *obd)
 
         ptlrpcd_decref();
         
-        OBD_FREE(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
-        
+        OBD_FREE(cli->cl_mgc_rpc_lock, sizeof (*cli->cl_mgc_rpc_lock));
 
-        return(rc);
+        return client_obd_cleanup(obd);
 }
 
+/* the same as mdc_setup */
 static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct client_obd *cli = &obd->u.cli;
         struct lustre_mount_info *lmi;
-        struct mgc_obd *mgc = &obd->u.mgc;
         //struct lprocfs_static_vars lvars;
         int rc;
         ENTRY;
 
-        OBD_ALLOC(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
-        if (!mgc->mgc_rpc_lock)
+        OBD_ALLOC(cli->cl_mgc_rpc_lock, sizeof (*cli->cl_mgc_rpc_lock));
+        if (!cli->cl_mgc_rpc_lock)
                 RETURN(-ENOMEM);
-        mgc_init_rpc_lock(mgc->mgc_rpc_lock);
+        mgc_init_rpc_lock(cli->cl_mgc_rpc_lock);
 
         ptlrpcd_addref();
+
+        rc = client_obd_setup(obd, len, buf);
+        if (rc)
+                GOTO(err_rpc_lock, rc);
 
         rc = obd_llog_init(obd, obd, 0, NULL);
         if (rc) {
@@ -184,18 +183,13 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         else
                 CERROR("mgc does not have local disk (client only)\n");
 
-        rc = mgc_obd_setup(obd, len, buf);
-        if (rc) {
-                mgc_cleanup(obd);
-                RETURN(-ENOENT);
-        }
-        INIT_LIST_HEAD(&mgc->mgc_open_llogs);
+        INIT_LIST_HEAD(&cli->cl_mgc_open_llogs);
 
         RETURN(rc);
 
 err_rpc_lock:
         ptlrpcd_decref();
-        OBD_FREE(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
+        OBD_FREE(cli->cl_mgc_rpc_lock, sizeof (*cli->cl_mgc_rpc_lock));
         RETURN(rc);
 }
 
@@ -295,14 +289,17 @@ static int mgc_import_event(struct obd_device *obd,
         case IMP_EVENT_DISCON: {
                 break;
         }
+        case IMP_EVENT_INVALIDATE: {
+                struct ldlm_namespace *ns = obd->obd_namespace;
+
+                ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
+
+                break;
+        }
         case IMP_EVENT_INACTIVE: {
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 0);
                 break;
         }
         case IMP_EVENT_ACTIVE: {
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 1);
                 break;
         }
         default:
@@ -326,9 +323,9 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
         rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
-        if (!rc) {
+        if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = obd->u.mgc.mgc_import;
+                ctxt->loc_imp = obd->u.cli.cl_import;
         }
 
         RETURN(rc);
@@ -345,203 +342,6 @@ static int mgc_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
-/* create a mgs client */
-int mgc_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
-{
-        struct lustre_cfg* lcfg = buf;
-        struct mgc_obd *mgc = &obddev->u.mgc;
-        struct obd_import *imp;
-        struct obd_uuid server_uuid;
-        int rq_portal, rp_portal, connect_op;
-        char *name = obddev->obd_type->typ_name;
-        int rc;
-        ENTRY;
-
-        LASSERT(!strcmp(name, LUSTRE_MGC_NAME)); 
-                
-        rq_portal = MGS_REQUEST_PORTAL;
-        rp_portal = MGC_REPLY_PORTAL;
-        connect_op = MGS_CONNECT;
-
-        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
-                CERROR("requires a TARGET UUID\n");
-                RETURN(-EINVAL);
-        }
-
-        if (LUSTRE_CFG_BUFLEN(lcfg, 1) > 37) {
-                CERROR("client UUID must be less than 38 characters\n");
-                RETURN(-EINVAL);
-        }
-
-        if (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1) {
-                CERROR("setup requires a SERVER UUID\n");
-                RETURN(-EINVAL);
-        }
-
-        if (LUSTRE_CFG_BUFLEN(lcfg, 2) > 37) {
-                CERROR("target UUID must be less than 38 characters\n");
-                RETURN(-EINVAL);
-        }
-
-        sema_init(&mgc->mgc_sem, 1);
-        mgc->mgc_conn_count = 0;
-        memcpy(server_uuid.uuid, lustre_cfg_buf(lcfg, 2),
-               min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),
-                     sizeof(server_uuid)));
-
-        rc = ldlm_get_ref();
-        if (rc) {
-                CERROR("ldlm_get_ref failed: %d\n", rc);
-                GOTO(err, rc);
-        }
-
-        ptlrpc_init_client(rq_portal, rp_portal, name,
-                           &obddev->obd_ldlm_client);
-
-        imp = class_new_import();
-        if (imp == NULL)
-                GOTO(err_ldlm, rc = -ENOENT);
-        imp->imp_client = &obddev->obd_ldlm_client;
-        imp->imp_obd = obddev;
-        imp->imp_connect_op = connect_op;
-        imp->imp_generation = 0;
-        imp->imp_initial_recov = 1;
-        INIT_LIST_HEAD(&imp->imp_pinger_chain);
-        memcpy(imp->imp_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
-               LUSTRE_CFG_BUFLEN(lcfg, 1));
-        class_import_put(imp);
-
-        rc = client_import_add_conn(imp, &server_uuid, 1);
-        if (rc) {
-                CERROR("can't add initial connection\n");
-                GOTO(err_import, rc);
-        }
-
-        mgc->mgc_import = imp;
-
-        RETURN(rc);
-
-err_import:
-        class_destroy_import(imp);
-err_ldlm:
-        ldlm_put_ref(0);
-err:
-        RETURN(rc);
-}
-
-/*mgc_obd_cleaup for mount-conf*/
-int mgc_obd_cleanup(struct obd_device *obddev)
-{
-        struct mgc_obd *mgc = &obddev->u.mgc;
-
-        if (!mgc->mgc_import)
-                RETURN(-EINVAL);
-
-        class_destroy_import(mgc->mgc_import);
-        mgc->mgc_import = NULL;
-
-        ldlm_put_ref(obddev->obd_force);
-
-        RETURN(0);
-}
-
-/* mgc_connect_import for mount-conf*/
-int mgc_connect_import(struct lustre_handle *dlm_handle,
-                       struct obd_device *obd, struct obd_uuid *cluuid,
-                       struct obd_connect_data *data)
-{
-        struct mgc_obd *mgc = &obd->u.mgc;
-        struct obd_import *imp = mgc->mgc_import;
-        struct obd_export *exp;
-        int rc;
-        ENTRY;
-
-        down(&mgc->mgc_sem);
-        rc = class_connect(dlm_handle, obd, cluuid);
-        if (rc)
-                GOTO(out_sem, rc);
-
-        mgc->mgc_conn_count++;
-        if (mgc->mgc_conn_count > 1)
-                GOTO(out_sem, rc);
-        exp = class_conn2export(dlm_handle);
-
-        imp->imp_dlm_handle = *dlm_handle;
-        rc = ptlrpc_init_import(imp);
-        if (rc != 0) 
-                GOTO(out_disco, rc);
-
-        if (data)
-                memcpy(&imp->imp_connect_data, data, sizeof(*data));
-        rc = ptlrpc_connect_import(imp, NULL);
-        if (rc != 0) {
-                LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
-                GOTO(out_disco, rc);
-        }
-        LASSERT(exp->exp_connection);
-
-        ptlrpc_pinger_add_import(imp);
-        EXIT;
-
-        if (rc) {
-out_disco:
-                mgc->mgc_conn_count--;
-                class_disconnect(exp);
-        } else {
-                class_export_put(exp);
-        }
-out_sem:
-        up(&mgc->mgc_sem);
-        return rc;
-}
-
-/* mgc_disconnect_export for mount-conf*/
-int mgc_disconnect_export(struct obd_export *exp)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-        struct mgc_obd *mgc = &obd->u.mgc;
-        struct obd_import *imp = mgc->mgc_import;
-        int rc = 0, err;
-        ENTRY;
-
-        if (!obd) {
-                CERROR("invalid export for disconnect: exp %p cookie "LPX64"\n",
-                       exp, exp ? exp->exp_handle.h_cookie : -1);
-                RETURN(-EINVAL);
-        }
-
-        down(&mgc->mgc_sem);
-        if (!mgc->mgc_conn_count) {
-                CERROR("disconnecting disconnected device (%s)\n",
-                       obd->obd_name);
-                GOTO(out_sem, rc = -EINVAL);
-        }
-
-        mgc->mgc_conn_count--;
-        if (mgc->mgc_conn_count)
-                GOTO(out_no_disconnect, rc = 0);
-
-        /* Some non-replayable imports (MDS's OSCs) are pinged, so just
-         * delete it regardless.  (It's safe to delete an import that was
-         * never added.) */
-        (void)ptlrpc_pinger_del_import(imp);
-
-        /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
-        if (obd->obd_no_recov)
-                ptlrpc_invalidate_import(imp);
-        else
-                rc = ptlrpc_disconnect_import(imp);
-
-        EXIT;
- out_no_disconnect:
-        err = class_disconnect(exp);
-        if (!rc && err)
-                rc = err;
- out_sem:
-        up(&mgc->mgc_sem);
-        RETURN(rc);
-}
-
 /* reuse the client_import_[add/del]_conn*/
 struct obd_ops mgc_obd_ops = {
         .o_owner        = THIS_MODULE,
@@ -549,8 +349,8 @@ struct obd_ops mgc_obd_ops = {
         .o_cleanup      = mgc_cleanup,
         .o_add_conn     = client_import_add_conn,
         .o_del_conn     = client_import_del_conn,
-        .o_connect      = mgc_connect_import,
-        .o_disconnect   = mgc_disconnect_export,
+        .o_connect      = client_connect_import,
+        .o_disconnect   = client_disconnect_export,
         .o_iocontrol    = mgc_iocontrol,
         .o_import_event = mgc_import_event,
         .o_llog_init    = mgc_llog_init,
