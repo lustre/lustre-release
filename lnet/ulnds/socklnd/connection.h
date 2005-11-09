@@ -12,13 +12,13 @@
 typedef struct manager {
     table           connections;
     pthread_mutex_t conn_lock; /* protect connections table */
-#if 0                                           /* we don't accept connections */
+#if 0                          /* we don't accept connections */
     int             bound;
     io_handler      bound_handler;
 #endif
     int           (*handler)(void *, void *);
     void           *handler_arg;
-    unsigned short  port;
+    int             port;
 } *manager;
 
 

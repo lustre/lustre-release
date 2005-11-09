@@ -164,7 +164,9 @@ int ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
                 unsigned int offset, unsigned int mlen, unsigned int rlen);
 int ptllnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
                       void **new_privatep);
+
 ptllnd_tx_t *ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob);
+void ptllnd_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive);
 void ptllnd_wait(lnet_ni_t *ni, int milliseconds);
 void ptllnd_check_sends(ptllnd_peer_t *peer);
 void ptllnd_destroy_peer(ptllnd_peer_t *peer);

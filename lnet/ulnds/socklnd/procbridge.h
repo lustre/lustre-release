@@ -43,6 +43,8 @@ extern void procbridge_wakeup_nal(procbridge p);
 extern int procbridge_startup (lnet_ni_t *);
 extern void procbridge_shutdown (lnet_ni_t *);
 
+extern void tcpnal_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive);
+
 extern int tcpnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
 int tcpnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *cookie,
                 int delayed, unsigned int niov,

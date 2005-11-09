@@ -170,7 +170,7 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
                 /* userland notified me: notify LND? */
                 ni = lp->lp_ni;
                 if (ni->ni_lnd->lnd_notify != NULL) {
-                        ni->ni_lnd->lnd_notify(ni, gateway_nid, alive);
+                        (ni->ni_lnd->lnd_notify)(ni, gateway_nid, alive);
                 }
         } else {
                 /* LND notified me: */
@@ -224,6 +224,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 	lnet_remotenet_t    *rnet2;
 	lnet_route_t        *route;
 	lnet_route_t        *route2;
+        lnet_ni_t           *ni;
         int                  add_route;
         int                  rc;
 
@@ -312,10 +313,19 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         }
         
         if (add_route) {
+                ni = route->lr_gateway->lp_ni;
+                lnet_ni_addref_locked(ni);
+                
                 LASSERT (rc == 0);
                 list_add_tail(&route->lr_list, &rnet2->lrn_routes);
                 the_lnet.ln_remote_nets_version++;
                 LNET_UNLOCK();
+
+                /* XXX Assume alive */
+                if (ni->ni_lnd->lnd_notify != NULL)
+                        (ni->ni_lnd->lnd_notify)(ni, gateway, 1);
+
+                lnet_ni_decref(ni);
         } else {
                 lnet_peer_decref_locked(route->lr_gateway);
                 LNET_UNLOCK();

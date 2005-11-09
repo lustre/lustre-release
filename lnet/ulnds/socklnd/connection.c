@@ -373,6 +373,7 @@ connection force_tcp_connection(manager    m,
     int                fd;
     int                option;
     int                rc;
+    int                sz;
 
     pthread_mutex_lock(&m->conn_lock);
 
@@ -388,6 +389,7 @@ connection force_tcp_connection(manager    m,
     memset(&locaddr, 0, sizeof(locaddr)); 
     locaddr.sin_family = AF_INET; 
     locaddr.sin_addr.s_addr = INADDR_ANY;
+    locaddr.sin_port = htons(m->port);
 
 #if 1 /* tcpnal connects from a non-privileged port */
     fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -405,6 +407,16 @@ connection force_tcp_connection(manager    m,
             goto out;
     } 
 
+    if (m->port != 0) {
+            /* Bind all subsequent connections to the same port */
+            rc = bind(fd, (struct sockaddr *)&locaddr, sizeof(locaddr));
+            if (rc != 0) {
+                    perror("Error binding port");
+                    close(fd);
+                    goto out;
+            }
+    }
+    
     rc = connect(fd, (struct sockaddr *)&addr,
                  sizeof(struct sockaddr_in));
     if (rc != 0) {
@@ -412,6 +424,18 @@ connection force_tcp_connection(manager    m,
             close(fd);
             goto out;
     }
+
+    sz = sizeof(locaddr);
+    rc = getsockname(fd, &locaddr, &sz);
+    if (rc != 0) {
+            perror ("Error on getsockname");
+            close(fd);
+            goto out;
+    }
+
+    if (m->port == 0)
+            m->port = ntohs(locaddr.sin_port);
+    
 #else
     for (rport = IPPORT_RESERVED - 1; rport > IPPORT_RESERVED / 2; --rport) {
             fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -571,6 +595,7 @@ manager init_connections(int (*input)(void *, void *), void *a)
     m->connections = hash_create_table(compare_connection,connection_key);
     m->handler = input;
     m->handler_arg = a;
+    m->port = 0;                                /* set on first connection */
     pthread_mutex_init(&m->conn_lock, 0);
 
     return m;

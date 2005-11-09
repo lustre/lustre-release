@@ -74,6 +74,7 @@ lnd_t the_tcplnd = {
         .lnd_shutdown  = procbridge_shutdown,
         .lnd_send      = tcpnal_send,
         .lnd_recv      = tcpnal_recv,
+        .lnd_notify    = tcpnal_notify,
 };
 int       tcpnal_running;
 

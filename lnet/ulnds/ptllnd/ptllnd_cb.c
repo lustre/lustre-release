@@ -147,6 +147,28 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
         return plp;
 }
 
+void
+ptllnd_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive)
+{
+        ptllnd_peer_t *peer;
+
+        /* This is only actually used to connect to routers at startup! */
+        if (!alive) {
+                LBUG();
+                return;
+        }
+        
+        peer = ptllnd_find_peer(ni, nid, 1);
+        if (peer == NULL)
+                return;
+
+        /* wait for the peer to reply */
+        while (!peer->plp_recvd_hello)
+                ptllnd_wait(ni, -1);
+
+        ptllnd_peer_decref(peer);
+}
+
 ptllnd_tx_t *
 ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
 {
