@@ -100,7 +100,7 @@ struct llog_verion_desc{
 
 struct mgc_open_llog {
         struct list_head   mol_list;
-        __u64              mol_version;
+        __u64              mol_step;
         llogid_t           mol_id;
         char               mol_fsname[40];
 };

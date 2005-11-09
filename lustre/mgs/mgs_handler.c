@@ -274,7 +274,7 @@ static int mgs_postsetup(struct obd_device *obd)
         ENTRY;
 
         rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
-                        &mgs_llog_lvfs_ops);
+                        &llog_lvfs_ops);
         RETURN(rc);
 }
 
@@ -301,9 +301,9 @@ static int mgs_cleanup(struct obd_device *obd)
                 RETURN(0);
         save_dev = lvfs_sbdev(mgs->mgs_sb);
 
-        lprocfs_obd_cleanup(obd);
+//       lprocfs_obd_cleanup(obd);
 
-        mgs_update_server_data(obd, 1);
+ //       mgs_update_server_data(obd, 1);
 
         mgs_fs_cleanup(obd);
 
@@ -503,8 +503,8 @@ static int mgt_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
-        lprocfs_init_vars(mgt, &lvars);
-        lprocfs_obd_setup(obd, lvars.obd_vars);
+       lprocfs_init_vars(mgt, &lvars);
+       lprocfs_obd_setup(obd, lvars.obd_vars);
 
         mgs->mgs_service =
                 ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
