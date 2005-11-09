@@ -524,7 +524,10 @@ AC_ARG_ENABLE([quota],
 			[enable quota support]),
 	[],[enable_quota='yes'])
 AC_MSG_RESULT([$enable_quota])
-if test x$enable_quota != xno -a x$linux25 != xno; then
+if test x$linux25 != xyes; then
+   enable_quota='no'
+fi
+if test x$enable_quota != xno; then
    AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
 fi
 ])
