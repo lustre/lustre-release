@@ -929,6 +929,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         if (rc < 0 && rc != -EDQUOT)
                 RETURN(rc);
 
+        LASSERTF(!rc || rc == -EDQUOT, "rc = %d\n", rc);
         body = lustre_swab_repbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
         if (body == NULL) {
                 CERROR ("Can't unpack body\n");
