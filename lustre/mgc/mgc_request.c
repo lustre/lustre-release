@@ -52,16 +52,16 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
                         struct vfsmount *mnt)
 {
         struct lvfs_run_ctxt saved;
-        struct lustre_sb_info *sbi = s2sbi(sb);
+        struct lustre_sb_info *lsi = s2lsi(sb);
         struct mgc_obd *mgcobd = &obd->u.mgc;
         struct dentry *dentry;
         int err = 0;
 
-        LASSERT(sbi);
+        LASSERT(lsi);
 
-        obd->obd_fsops = fsfilt_get_ops(MT_STR(sbi->lsi_ldd));
+        obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops)) {
-               CERROR("No fstype %s rc=%ld\n", MT_STR(sbi->lsi_ldd), 
+               CERROR("No fstype %s rc=%ld\n", MT_STR(lsi->lsi_ldd), 
                       PTR_ERR(obd->obd_fsops));
                return(PTR_ERR(obd->obd_fsops));
         }

@@ -97,9 +97,7 @@ struct lustre_mount_data {
                                          _device_ mount options) */
 };
 
-#define LMD_FLG_FLOCK        0x0001  /* Enable flock */
-#define LMD_FLG_USER_XATTR   0x0002  /* Enable extended attributes */
-#define LMD_FLG_RECOVER      0x0004  /* Allow recovery */
+#define LMD_FLG_RECOVER      0x0001  /* Allow recovery */
 #define LMD_FLG_MNTCNF       0x1000  /* MountConf compat */
 #define LMD_FLG_CLIENT       0x2000  /* Mounting a client only; no real device */
 
@@ -186,14 +184,14 @@ struct lustre_sb_info {
 #define LSI_UMOUNT_FAILOVER              0x00000020
 
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-# define    s2sbi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
-# define    s2sbi_nocast(sb) ((sb)->s_fs_info)
+# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
+# define    s2lsi_nocast(sb) ((sb)->s_fs_info)
 #else  /* 2.4 here */
-# define    s2sbi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
-# define    s2sbi_nocast(sb) ((sb)->u.generic_sbp)
+# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
+# define    s2lsi_nocast(sb) ((sb)->u.generic_sbp)
 #endif
 
-#define     get_profile_name(sb)   (s2sbi(sb)->lsi_lmd->lmd_dev)
+#define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_dev)
 
 #endif /* __KERNEL__ */
 

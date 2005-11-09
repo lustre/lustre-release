@@ -1341,6 +1341,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                 /* FIXME did we mount with the flags below?*/
                 mnt = lmi->lmi_mnt;
         } else {
+                /* old path - used by lctl */
+                CERROR("Using old MDS mount method\n");
                 mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),
                                     MS_NOATIME|MS_NODIRATIME,
                                     lustre_cfg_string(lcfg, 1), option);       

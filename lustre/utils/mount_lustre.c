@@ -188,6 +188,10 @@ static const struct opt_map opt_map[] = {
   { "nouser",   0, 1, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  0, 1, 0         },      /* Device owner has no special privs */
   { "_netdev",  0, 0, 0         },      /* Device accessible only via network */
+  { "flock",    0, 0, 0         },      /* Enable flock support */
+  { "noflock",  1, 1, 0         },      /* Disable flock support */
+  { "user_xattr",   0, 0, 0     },      /* Enable get/set user xattr */
+  { "nouser_xattr", 1, 1, 0     },      /* Disable user xattr */
   { NULL,       0, 0, 0         }
 };
 /****************************************************************************/
@@ -198,6 +202,8 @@ static int parse_one_option(const char *check, int *flagp)
 
         for (opt = &opt_map[0]; opt->opt != NULL; opt++) {
                 if (strncmp(check, opt->opt, strlen(opt->opt)) == 0) {
+                        if (!opt->mask) 
+                                return -1;
                         if (opt->inv)
                                 *flagp &= ~(opt->mask);
                         else
@@ -205,34 +211,29 @@ static int parse_one_option(const char *check, int *flagp)
                         return 1;
                 }
         }
+        fprintf(stderr, "%s: unknown option '%s', continuing\n", progname,
+                check);
         return 0;
 }
 
 int parse_options(char *orig_options, int *flagp)
 {
         int val;
-        char *options, *opt, *opteq;
+        char *options, *opt, *nextopt;
 
-        options = malloc(strlen(orig_options) + 1);
-        strcpy(options, orig_options);
+        options = calloc(strlen(orig_options) + 1, 1);
 
         *flagp = 0;
-        /* parsing ideas here taken from util-linux/mount/nfsmount.c */
-        for (opt = strtok(options, ","); opt; opt = strtok(NULL, ",")) {
-                if ((opteq = strchr(opt, '='))) {
-                        val = atoi(opteq + 1);
-                        *opteq = '\0';
-                        /* All the network options have gone :)) */
-                        fprintf(stderr, "%s: unknown option '%s'. "
-                                "Ignoring.\n", progname, opt);
-                } else {
-                        if (parse_one_option(opt, flagp))
-                                continue;
-
-                        fprintf(stderr, "%s: unknown option '%s'\n",
-                                progname, opt);
-                }
+        nextopt = orig_options;
+        while ((opt = strsep(&nextopt, ","))) {
+                if (parse_one_option(opt, flagp) > 0)
+                        continue;
+                /* no mount flags set, so pass this on as an option */
+                if (*options)
+                        strcat(options, ",");
+                strcat(options, opt);
         }
+        strcpy(orig_options, options);
         free(options);
         return 0;
 }
@@ -334,9 +335,15 @@ int main(int argc, char *const argv[])
         optlen = strlen(options) + strlen(",device=") + strlen(source);
         optcopy = malloc(optlen);
         strcpy(optcopy, options);
-        strcat(optcopy, ",device=");
+        if (*optcopy)
+                strcat(optcopy, ",");
+        strcat(optcopy, "device=");
         strcat(optcopy, source);
 
+        if (verbose) 
+                printf("mounting devce %s at %s, flags=%#x options=%s\n",
+                       source, target, flags, optcopy);
+        
         if (!fake)
                 /* flags and target get to lustre_get_sb, but not 
                    lustre_fill_super.  Lustre ignores the flags, but mount 

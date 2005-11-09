@@ -423,6 +423,7 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
                 return;
         }
 
+        CERROR("Parsing opts %s\n", options);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         for (this_char = strtok (options, ",");
              this_char != NULL;
@@ -462,6 +463,8 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
                         continue;
                 }
         }
+        CERROR("flags %#x\n", *flags);
+
         EXIT;
 }
                 
@@ -479,7 +482,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 int ll_fill_super(struct super_block *sb)
 {
         struct lustre_profile *lprof;
-        struct lustre_sb_info *lsi = s2sbi(sb);
+        struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi;
         char  *osc = NULL;
         char  *mdc = NULL;
@@ -493,9 +496,8 @@ int ll_fill_super(struct super_block *sb)
 
         /* client additional sb info */
         lsi->lsi_llsbi = sbi = ll_init_sbi();
-        if (!sbi) {
+        if (!sbi) 
                 RETURN(-ENOMEM);
-        }
 
         ll_options(lsi->lsi_lmd->lmd_opts, &osc, &mdc, &sbi->ll_flags);
 
@@ -556,7 +558,7 @@ out_free:
 void ll_put_super(struct super_block *sb)
 {
         struct obd_device *obd;
-        struct lustre_sb_info *lsi = s2sbi(sb);
+        struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         char *profilenm = get_profile_name(sb);
         int next = 0;

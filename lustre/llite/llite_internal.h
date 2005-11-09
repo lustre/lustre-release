@@ -470,7 +470,7 @@ int ll_tree_unlock(struct ll_lock_tree *tree);
 
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 
-#define    ll_s2sbi(sb)        (s2sbi(sb)->lsi_llsbi)
+#define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
 
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 void __d_rehash(struct dentry * entry, int lock);

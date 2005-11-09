@@ -1319,7 +1319,7 @@ class MDSDEV(Module):
             Module.cleanup(self)
         clean_loop(self.devpath)
 
-        #change the mtime of LLOG to match the XML creation time
+        #change the mtime of CONFIGS to match the XML creation time
         if toplustreDB.get_mtime():
             mtime = string.atof(toplustreDB.get_mtime())
             runcmd("mkdir /tmp/lustre-XXXX/")
@@ -1329,7 +1329,13 @@ class MDSDEV(Module):
                 ret, out = runcmd("mount -o loop %s /tmp/lustre-XXXX/" %self.devpath)
             if ret:
                 print out[0]
-            os.utime("/tmp/lustre-XXXX/LOGS", (mtime, mtime))
+
+            try:
+                # MOUNT_CONFIGS_DIR     
+                os.utime("/tmp/lustre-XXXX/CONFIGS", (mtime, mtime))
+            except OSError:
+                runcmd("umount -f /tmp/lustre-XXXX/")
+                panic("Can't adjust config creation time!")
             runcmd("umount -f /tmp/lustre-XXXX/")
         else:
             print "XML file does not contain mtime, skip mtime checking."
@@ -2034,7 +2040,7 @@ def doMakeServiceScript(services):
                 extra_error = ""
             panic("Error creating " + target_symlink + ": " + e[1] + extra_error)
 
-# Check mtime of LLOG
+# Check mtime of CONFIGS
 def doCheckMtime(lustreDB, hosts):
     for h in hosts:
         node_db = lustreDB.lookup_name(h, 'node')
@@ -2069,7 +2075,7 @@ def doCheckMtime(lustreDB, hosts):
                 print out[0]
             else:
                 try:
-                    out = os.stat("/tmp/lustre-XXXX/LOGS")
+                    out = os.stat("/tmp/lustre-XXXX/CONFIGS")
                 except OSError:
                     runcmd("umount -f /tmp/lustre-XXXX")
                     panic("Warning: Can't read Lustre logs." 
