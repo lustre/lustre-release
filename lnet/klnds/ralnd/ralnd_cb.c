@@ -430,7 +430,6 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
         unsigned long    flags;
         kra_peer_t      *peer;
         kra_conn_t      *conn;
-        unsigned long    now;
         int              rc;
         int              retry;
         rwlock_t        *g_lock = &kranal_data.kra_global_lock;

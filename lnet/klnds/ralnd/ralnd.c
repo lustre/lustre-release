@@ -861,8 +861,6 @@ kranal_create_peer (kra_peer_t **peerp, lnet_nid_t nid)
 void
 kranal_destroy_peer (kra_peer_t *peer)
 {
-        unsigned long flags;
-
         CDEBUG(D_NET, "peer %s %p deleted\n", 
                libcfs_nid2str(peer->rap_nid), peer);
 
@@ -1060,7 +1058,7 @@ kranal_del_peer (lnet_nid_t nid)
                         rc = 0;         /* matched something */
                 }
         }
- out:
+
         write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         return rc;
