@@ -1,4 +1,4 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+12-31-2005  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
 	 INTEROPERATE with older versions automatically.  Please read the 
