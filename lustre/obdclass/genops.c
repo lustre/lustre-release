@@ -1167,8 +1167,6 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 
         /* Note - racing to start/reset the obd_eviction timer is safe */
         if (exp->exp_obd->obd_eviction_timer == 0) {
-                unsigned long interval = PING_INTERVAL;
-                
                 /* Check if the oldest entry is expired. */
                 if (CURRENT_SECONDS > (oldest_time +
                                        (3 * obd_timeout / 2) + extra_delay)) {

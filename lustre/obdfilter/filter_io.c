@@ -294,7 +294,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         iobuf = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
 
-        dentry = filter_oa2dentry(obd, oa);
+        dentry = filter_oa2dentry_quiet(obd, oa);
         if (IS_ERR(dentry)) {
                 if (PTR_ERR(dentry) == -ENOENT) {
                         dentry = NULL;

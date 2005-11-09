@@ -102,6 +102,7 @@ struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
 struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
                                   const char *what, int quiet);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 0)
+#define filter_oa2dentry_quiet(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 1)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_last_id(struct filter_obd *, int group);
