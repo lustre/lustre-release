@@ -28,6 +28,7 @@
 #define _LUSTRE_DISK_H
 
 #include <linux/types.h>
+
 #include <lnet/types.h>
 
 
@@ -176,7 +177,8 @@ struct lustre_sb_info {
         struct lustre_disk_data  *lsi_ldd;     /* mount info on-disk */
         //struct fsfilt_operations *lsi_fsops;
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
-        atomic_t                  lsi_mounts;  /* mount references to this sb */
+        struct vfsmount          *lsi_srv_mnt; /* the one server mount */
+        atomic_t                  lsi_mounts;  /* references to the srv_mnt */
 };
 
 #define LSI_SERVER                       0x00000001
@@ -212,7 +214,7 @@ struct lustre_mount_info {
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 void lustre_common_put_super(struct super_block *sb);
 struct lustre_mount_info *lustre_get_mount(char *name);
-int lustre_put_mount(char *name);
+int lustre_put_mount(char *name, struct vfsmount *mnt);
 int lustre_get_process_log(struct super_block *, char *, 
                            struct config_llog_instance *);
 

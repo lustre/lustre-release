@@ -136,39 +136,6 @@ int get_os_version()
         return version;
 }
 
-static int load_module(char *module_name)
-{
-        char buf[256];
-        int rc;
-        
-        vprint("loading %s\n", module_name);
-        sprintf(buf, "/sbin/modprobe %s", module_name);
-        rc = system(buf);
-        if (rc) {
-                fprintf(stderr, "%s: failed to modprobe %s (%d)\n", 
-                        progname, module_name, rc);
-                fprintf(stderr, "Check /etc/modules.conf\n");
-        }
-        return rc;
-}
-
-static int load_modules(struct mkfs_opts *mop)
-{
-        int rc = 0;
-
-        //client: rc = load_module("lustre");
-        vprint("Loading modules...");
-
-        /* portals, ksocknal, fsfilt, etc. in modules.conf */
-        rc = load_module("lustre");
-        if (rc) return rc;
-
-        /* FIXME currently use the MDT to write llogs, should be a MGS */
-        rc = load_module("mds");
-        vprint("done\n");
-        return rc;
-}
-
 //Ugly implement. FIXME 
 int run_command(char *cmd)
 {
@@ -672,8 +639,6 @@ int write_llog_files(struct mkfs_opts *mop)
         char name[128];
         char *dev;
         int  ret = 0;
-
-        load_modules(mop);
 
         vprint("Creating Lustre logs\n"); 
         if ((ret = jt_setup()))

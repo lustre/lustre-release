@@ -1338,7 +1338,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         lmi = lustre_get_mount(obd->obd_name);
         if (lmi) {
                 /* We already mounted in lustre_fill_super */
-                /* FIXME did we mount with the flags below?*/
                 mnt = lmi->lmi_mnt;
         } else {
                 /* old path - used by lctl */
@@ -1457,7 +1456,7 @@ err_post:
         filter_post(obd);
 err_mntput:
         if (lmi) {
-                lustre_put_mount(obd->obd_name);
+                lustre_put_mount(obd->obd_name, mnt);
         } else {
                 /* old method */
                 unlock_kernel();
@@ -1621,7 +1620,8 @@ static int filter_cleanup(struct obd_device *obd)
                        obd->obd_name, filter->fo_vfsmnt,
                        atomic_read(&filter->fo_vfsmnt->mnt_count));
 
-        must_put = lustre_put_mount(obd->obd_name);
+        must_put = lustre_put_mount(obd->obd_name, filter->fo_vfsmnt);
+        /* must_put is for old method (l_p_m returns non-0 on err) */
 
         /* We can only unlock kernel if we are in the context of sys_ioctl,
            otherwise we never called lock_kernel */

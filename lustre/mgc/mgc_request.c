@@ -128,7 +128,7 @@ static int mgc_cleanup(struct obd_device *obd)
         if (cli->cl_mgc_vfsmnt) {
                 /* if we're a server, eg. something's mounted */
                 mgc_fs_cleanup(obd);
-                if ((rc = lustre_put_mount(obd->obd_name)))
+                if ((rc = lustre_put_mount(obd->obd_name, cli->cl_mgc_vfsmnt)))
                      CERROR("mount_put failed %d\n", rc);
         }
 
@@ -240,26 +240,16 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
         }
         case OBD_IOC_START: {
-                char *conf_prof;
                 char *name = data->ioc_inlbuf1;
-                int len = strlen(name) + sizeof("-conf");
-
-                OBD_ALLOC(conf_prof, len);
-                if (!conf_prof) {
-                        CERROR("no memory\n");
-                        RETURN(-ENOMEM);
-                }
-                sprintf(conf_prof, "%s-conf", name);
+                CERROR("MGS starting config log %s\n", name);
+                /* FIXME Get llog from MGS */
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
                 ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-                rc = class_config_parse_llog(ctxt, conf_prof, NULL);
+                rc = class_config_parse_llog(ctxt, name, NULL);
                 if (rc < 0)
-                        CERROR("Unable to process log: %s\n", conf_prof);
-
+                        CERROR("Unable to process log: %s\n", name);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                OBD_FREE(conf_prof, len);
 
                 RETURN(rc);
         }

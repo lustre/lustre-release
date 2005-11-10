@@ -58,7 +58,9 @@ static struct lustre_mount_info *lustre_find_mount(char *name)
         return(NULL);
 }
 
-/* obd's using a mount must be preregistered so they can find it. */
+/* obd's using a mount must register for it before they call
+   their setup routine.  They call lustre_get_mount to get the mnt struct
+   by name, since we can't pass the pointer to setup. */
 int lustre_register_mount(char *name, struct super_block *sb,
                           struct vfsmount *mnt)
 {
@@ -78,6 +80,7 @@ int lustre_register_mount(char *name, struct super_block *sb,
         strcpy(name_cp, name);
 
         down(&lustre_mount_info_lock);
+        
         if (lustre_find_mount(name)) {
                 up(&lustre_mount_info_lock);
                 OBD_FREE(lmi, sizeof(*lmi));
@@ -89,6 +92,7 @@ int lustre_register_mount(char *name, struct super_block *sb,
         lmi->lmi_sb = sb;
         lmi->lmi_mnt = mnt;
         list_add(&lmi->lmi_list_chain, &lustre_mount_info_list);
+         
         up(&lustre_mount_info_lock);
         return 0;
 }
@@ -115,13 +119,15 @@ static int lustre_deregister_mount(char *name)
 }
 
 /* obd's look up a registered mount using their name. This is just
-   for initial setup; should not be called every time you want to mntget */
+   for initial obd setup to find the mount struct.  It should not be
+   called every time you want to mntget. */
 struct lustre_mount_info *lustre_get_mount(char *name)
 {
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
 
         down(&lustre_mount_info_lock);
+
         lmi = lustre_find_mount(name);
         if (!lmi) {
                 up(&lustre_mount_info_lock);
@@ -131,6 +137,7 @@ struct lustre_mount_info *lustre_get_mount(char *name)
         lsi = s2lsi(lmi->lmi_sb);
         mntget(lmi->lmi_mnt);
         atomic_inc(&lsi->lsi_mounts);
+        
         up(&lustre_mount_info_lock);
         CERROR("got mount for %s\n", name);
         return lmi;
@@ -148,7 +155,7 @@ static void unlock_mntput(struct vfsmount *mnt)
 }
 
 /* to be called from obd_cleanup methods */
-int lustre_put_mount(char *name)
+int lustre_put_mount(char *name, struct vfsmount *mnt)
 {
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
@@ -160,11 +167,12 @@ int lustre_put_mount(char *name)
                 CERROR("Can't find mount for %s\n", name);
                 return -ENOENT;
         }
+
+        CERROR("put mount for %s, #%d\n", name, atomic_read(&lsi->lsi_mounts));
         lsi = s2lsi(lmi->lmi_sb);
+        LASSERT(lmi->lmi_mnt == mnt);
         unlock_mntput(lmi->lmi_mnt);
         if (atomic_dec_and_test(&lsi->lsi_mounts)) {
-                /* The mntput from lustre_kern_mount */
-                unlock_mntput(lmi->lmi_mnt);
                 CERROR("Last put of mnt %p from %s, mount count %d\n", 
                        lmi->lmi_mnt, name, 
                        atomic_read(&lmi->lmi_mnt->mnt_count));
@@ -369,6 +377,8 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 static int lustre_start_simple(char *obdname, char *type, char *s1, char *s2)
 {
         int err;
+        CERROR("Starting %s\n", obdname);
+
         err = do_lcfg(obdname, 0, LCFG_ATTACH, type, obdname/*uuid*/, 0, 0);
         if (err) {
                 CERROR("%s attach error %d\n", obdname, err);
@@ -395,19 +405,17 @@ static int lustre_start_mgs(struct super_block *sb, struct vfsmount *mnt)
         sprintf(mgsname, "MGS_%p", sb);
 
         err = lustre_register_mount(mgsname, sb, mnt);
-        if (err)
-               GOTO(out_free, err);
 
-        if ((err = lustre_start_simple(mgsname, LUSTRE_MGS_NAME, 0, 0)))
-                GOTO(out_dereg, err);
-
-out_free:
+        if (!err &&
+            ((err = lustre_start_simple(mgsname, LUSTRE_MGS_NAME, 0, 0)))) 
+                lustre_deregister_mount(mgsname);
+        
         OBD_FREE(mgsname, mgsname_size);
 out:
+        if (err)                                
+                LCONSOLE_ERROR("Failed to start the MGS (%d).  Is the 'mgs' "
+                               "module loaded?\n", err);
         return err;
-out_dereg:
-        lustre_deregister_mount(mgsname);
-        goto out_free;
 }
 
 static void lustre_stop_mgs(struct super_block *sb)
@@ -452,7 +460,7 @@ static int lustre_start_mgc(struct super_block *sb, struct vfsmount *mnt)
         nid = lsi->lsi_lmd->lmd_mgsnid[0];
         err = do_lcfg(mgcname, nid, LCFG_ADD_UUID, libcfs_nid2str(nid), 0,0,0);
         if (err < 0)
-                GOTO(out_free, err);
+                GOTO(out_dereg, err);
 
         /* Start the MGC */
         if ((err = lustre_start_simple(mgcname, LUSTRE_MDC_NAME/*LUSTRE_MGC_NAME*/, "MGS", 
@@ -504,37 +512,16 @@ static void lustre_stop_mgc(struct super_block *sb)
 }
           
 /* Start targets */
-static int server_start_targets(struct super_block *sb)
+static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 {
         struct obd_ioctl_data ioc_data = { 0 };
         struct obd_device *obd;
         struct lustre_sb_info *lsi = s2lsi(sb);
         int err;
                                                                                        
-        obd = lsi->lsi_mgc;
-        LASSERT(obd);
                                         
         CERROR("starting target %s\n", lsi->lsi_ldd->ldd_svname);
         
-        /* Get a new index if needed */
-        if (lsi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
-                // FIXME implement
-                CERROR("Need new target index from MGS!\n");
-                // FIXME rewrite last_rcvd, ldd (for new svname)
-        }
-
-        /* The MGC starts targets using the svname llog */
-        ioc_data.ioc_inllen1 = strlen(lsi->lsi_ldd->ldd_svname) + 1;
-        ioc_data.ioc_inlbuf1 = lsi->lsi_ldd->ldd_svname;
-        
-        err = obd_iocontrol(OBD_IOC_START, obd->obd_self_export,
-                            sizeof ioc_data, &ioc_data, NULL);
-        if (err) {
-                CERROR("failed to start server %s: %d\n",
-                       lsi->lsi_ldd->ldd_svname, err);
-                return (err);
-        }
-                                                                                       
         /* If we're an MDT, make sure the global MDS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) {
                 /* make sure (what will be called) the MDS is started */
@@ -553,6 +540,33 @@ static int server_start_targets(struct super_block *sb)
                 obd = class_name2obd("OSS");
                 if (!obd) 
                         err = lustre_start_simple("OSS", LUSTRE_OSS_NAME, 0, 0);
+        }
+
+        /* Get a new index if needed */
+        if (lsi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
+                // FIXME implement
+                CERROR("Need new target index from MGS!\n");
+                // FIXME rewrite last_rcvd, ldd (for new svname)
+        }
+
+        /* The MGC starts targets using the svname llog */
+        obd = lsi->lsi_mgc;
+        LASSERT(obd);
+
+        err = lustre_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
+        if (err) 
+                return (err);
+
+        ioc_data.ioc_inllen1 = strlen(lsi->lsi_ldd->ldd_svname) + 1;
+        ioc_data.ioc_inlbuf1 = lsi->lsi_ldd->ldd_svname;
+        
+        err = obd_iocontrol(OBD_IOC_START, obd->obd_self_export,
+                            sizeof ioc_data, &ioc_data, NULL);
+        if (err) {
+                CERROR("failed to start server %s: %d\n",
+                       lsi->lsi_ldd->ldd_svname, err);
+                lustre_deregister_mount(lsi->lsi_ldd->ldd_svname);
+                return (err);
         }
 
         return(err);
@@ -614,16 +628,20 @@ static struct vfsmount *lustre_kern_mount(struct super_block *sb)
         struct lustre_mount_data *lmd = lsi->lsi_lmd;
         struct vfsmount *mnt;
         char *options = NULL;
-        unsigned long page;
+        unsigned long page, s_flags;
         int err;
 
         OBD_ALLOC(ldd, sizeof(*ldd));
         if (!ldd)
                 return(ERR_PTR(-ENOMEM));
 
+        /* In the past, we have always used flags = 0.
+           Note ext3/ldiskfs can't be mounted ro. */
+        s_flags = sb->s_flags;
+
         /* Pre-mount ext3 to read the MOUNT_DATA_FILE */
         CERROR("Pre-mount ext3 %s\n", lmd->lmd_dev);
-        mnt = do_kern_mount("ext3", sb->s_flags, lmd->lmd_dev, 0);
+        mnt = do_kern_mount("ext3", s_flags, lmd->lmd_dev, 0);
         if (IS_ERR(mnt)) {
                 err = PTR_ERR(mnt);
                 CERROR("premount failed: err = %d\n", err);
@@ -661,9 +679,12 @@ static struct vfsmount *lustre_kern_mount(struct super_block *sb)
                 strcat(options, lmd->lmd_opts);
         }
 
-        CERROR("kern_mount: %s %s %s\n", MT_STR(ldd), lmd->lmd_dev, options);
+        /* Special permanent mount flags */
+        if (IS_OST(ldd)) 
+            s_flags |= MS_NOATIME | MS_NODIRATIME;
 
-        mnt = do_kern_mount(MT_STR(ldd), sb->s_flags, lmd->lmd_dev, 
+        CERROR("kern_mount: %s %s %s\n", MT_STR(ldd), lmd->lmd_dev, options);
+        mnt = do_kern_mount(MT_STR(ldd), s_flags, lmd->lmd_dev, 
                             (void *)options);
         free_page(page);
         if (IS_ERR(mnt)) {
@@ -671,7 +692,7 @@ static struct vfsmount *lustre_kern_mount(struct super_block *sb)
                 CERROR("do_kern_mount failed: err = %d\n", err);
                 goto out_free;
         }
-        
+
         lsi->lsi_ldd = ldd;   /* freed at lsi cleanup */
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lmd->lmd_dev, mnt);
         return(mnt);
@@ -702,7 +723,8 @@ static void server_put_super(struct super_block *sb)
         } else {
                 CERROR("no obd %s\n", lsi->lsi_ldd->ldd_svname);
         }
-        class_del_profile(lsi->lsi_ldd->ldd_svname); /* if it exists */
+
+        //class_del_profile(lsi->lsi_ldd->ldd_svname); /* if it exists */
                                                                                        
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */
         if ((lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) &&
@@ -737,9 +759,12 @@ static void server_put_super(struct super_block *sb)
            should have put it on a different device. */ 
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MGMT) 
                 lustre_stop_mgs(sb);
-        
+
         /* clean the mgc and sb */
         lustre_common_put_super(sb);
+        
+        /* drop the kernel mount from server_fill_super */
+        unlock_mntput(lsi->lsi_srv_mnt);
 }
 
 static void server_umount_begin(struct super_block *sb)
@@ -806,7 +831,7 @@ static int server_fill_super(struct super_block *sb)
         int mgs_service = 0, err;
         ENTRY;
 
-        /* mount to read server info */
+        /* the One True Mount */
         mnt = lustre_kern_mount(sb);
         if (IS_ERR(mnt)) {
                 err = PTR_ERR(mnt);
@@ -819,50 +844,49 @@ static int server_fill_super(struct super_block *sb)
                lsi->lsi_ldd->ldd_svname, lsi->lsi_ldd->ldd_fsname, 
                lsi->lsi_lmd->lmd_dev);
 
-        err = lustre_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
-        if (err) 
-                GOTO(out, err);
-
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MGMT) {
                 CERROR("Found MGS service for fs %s on device %s\n",
                        lsi->lsi_ldd->ldd_fsname, lsi->lsi_lmd->lmd_dev);
-                mgs_service++;
                 err = lustre_start_mgs(sb, mnt);
-                if (err) 
-                       GOTO(out_dereg, err);
+                if (err) {
+                        CERROR("Ignoring failed MGS start!!\n");
+                        //GOTO(out_mnt, err);
+                } else {
+                        mgs_service++;
+                }
         }
 
         err = lustre_start_mgc(sb, mnt);
         if (err) 
-                GOTO(out_dereg, err);
+                GOTO(out_mnt, err);
 
         /* Set up all obd devices for service */
-        err = server_start_targets(sb);
+        err = server_start_targets(sb, mnt);
         if (err < 0) {
                 CERROR("Unable to process logs: %d\n", err);
-                GOTO(out_dereg, err);
+                GOTO(out_mnt, err);
         }
         
-        CERROR("Mounting server\n");
-        err = server_fill_super_common(sb);
-        if (err) 
-                GOTO(out_dereg, err);
-
         /* FIXME overmount client here,
            or can we just start a client log and client_fill_super on this sb? 
            have to fix up the s_ops after! */
-out:
-        //FIXME mntput
-        if (lsi->lsi_ldd)
-                // FIXME ??
-                class_del_profile(lsi->lsi_ldd->ldd_svname);
-        RETURN(err);
+        err = server_fill_super_common(sb);
+        if (err) 
+                GOTO(out_mnt, err);
 
-out_dereg:
+        lsi->lsi_srv_mnt = mnt;
+
+        RETURN(0);
+
+out_mnt:
         if (mgs_service)
                 lustre_stop_mgs(sb);
-        lustre_deregister_mount(lsi->lsi_ldd->ldd_svname);
-        goto out;     
+        if (lsi->lsi_mgc)
+                lustre_stop_mgc(sb);
+        unlock_mntput(mnt);
+out:
+        //if (lsi->lsi_ldd) class_del_profile(lsi->lsi_ldd->ldd_svname);
+        RETURN(err);
 }
 
 
@@ -1057,7 +1081,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         } else {
                 CERROR("Mounting server\n");
                 err = server_fill_super(sb);
-                /* calls lustre_start_mgc */
+                /* calls lustre_start_mgc after the mount */
         }
                                                                                 
         if (err){
