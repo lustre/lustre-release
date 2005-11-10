@@ -556,6 +556,18 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->padding_4);
 }
 
+void lustre_swab_ost_info(struct ost_info *oinfo)
+{
+        __swab64s(&oinfo->osi_nid);
+        __swab32s(&oinfo->osi_nal);
+        __swab32s(&oinfo->osi_stripe_index);
+}
+
+void lustre_swab_mds_info(struct mds_info *minfo)
+{
+        __swab64s(&minfo->mds_nid);
+}
+
 static void lustre_swab_obd_dqinfo (struct obd_dqinfo *i)
 {
         __swab64s (&i->dqi_bgrace);

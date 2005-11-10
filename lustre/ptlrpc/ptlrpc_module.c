@@ -186,6 +186,8 @@ EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
 EXPORT_SYMBOL(lustre_swab_qdata);
+EXPORT_SYMBOL(lustre_swab_ost_info);
+EXPORT_SYMBOL(lustre_swab_mds_info);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);
