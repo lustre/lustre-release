@@ -185,8 +185,10 @@ static int lnet_setup = 0;
 static void lnet_start()
 {
         ptl_initialize(0, NULL);
-        if (access("/proc/sys/lnet", X_OK) != 0) 
-            load_module("lnet");
+        if (access("/proc/sys/lnet", X_OK) != 0) {
+                fprintf(stderr, "Need the LNET module to determine self NIDs\n");
+                exit(1);
+        }
         if (jt_ptl_get_nids(NULL) == -ENETDOWN) {
                 char *cmd[]={"network", "up"};
                 jt_ptl_network(2, cmd);
