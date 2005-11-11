@@ -317,7 +317,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (rc)
                         RETURN(rc);
 
-                RETURN(rc);
+                GOTO(out, rc);
         }
         case OBD_IOC_START: {
                 char *name = data->ioc_inlbuf1;
@@ -331,7 +331,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         CERROR("Unable to process log: %s\n", name);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-                RETURN(rc);
+                GOTO(out, rc);
         }
         default:
                 CERROR("mgc_ioctl(): unrecognised ioctl %#x\n", cmd);
