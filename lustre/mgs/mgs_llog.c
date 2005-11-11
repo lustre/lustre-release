@@ -391,14 +391,15 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* name)
                 char   osc_name[64];
                 char   index[16];
                 char   *setup_argv[2];
-                struct ost_info *oinfo = list_entry(tmp, struct ost_info,
-                                                    osi_list);
+                struct mgmt_ost_info *oinfo;
 
-                sprintf(ost_node_uuid, "%s_UUID", oinfo->osi_nodename);
+                oinfo = list_entry(tmp, struct mgmt_ost_info, moi_list);
+
+                sprintf(ost_node_uuid, "%s_UUID", oinfo->moi_nodename);
                 sprintf(osc_name,"OSC_%s_%s_%s",
-                        db->mds_nodename, oinfo->osi_ostname, db->mds_name);
+                        db->mds_nodename, oinfo->moi_ostname, db->mds_name);
 
-                rc = record_add_uuid(obd, llh, oinfo->osi_nid, ost_node_uuid);
+                rc = record_add_uuid(obd, llh, oinfo->moi_nid, ost_node_uuid);
                 if (rc) {
                         CERROR("failed to record log(add_uuid) %s: %d\n",
                                name, rc);
@@ -412,7 +413,7 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* name)
                         RETURN(rc);
                 }
 
-                setup_argv[0] = oinfo->osi_ostuuid;
+                setup_argv[0] = oinfo->moi_ostuuid;
                 setup_argv[1] = ost_node_uuid;
                 rc = record_setup(obd, llh, osc_name, 2, setup_argv);
                 if (rc) {
@@ -421,9 +422,9 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* name)
                         RETURN(rc);
                 }
 
-                sprintf(index, "%d", oinfo->osi_stripe_index);
+                sprintf(index, "%d", oinfo->moi_stripe_index);
                 rc = record_lov_modify_tgts(obd, llh, lov_name, "add",
-                                            oinfo->osi_ostuuid, index, "1");
+                                            oinfo->moi_ostuuid, index, "1");
                 if (rc) {
                         CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
                                name, rc);
@@ -505,14 +506,15 @@ static int mgs_write_client_llog(struct obd_device *obd, char* name)
                 char   ost_node_uuid[64];
                 char   osc_name[64];
                 char   index[16];
-                struct ost_info *oinfo = list_entry(tmp, struct ost_info,
-                                                    osi_list);
+                struct mgmt_ost_info *oinfo;
 
-                sprintf(ost_node_uuid, "%s_UUID", oinfo->osi_nodename);
+                oinfo = list_entry(tmp, struct mgmt_ost_info, moi_list);
+
+                sprintf(ost_node_uuid, "%s_UUID", oinfo->moi_nodename);
                 sprintf(osc_name, "OSC_%s_%s_MNT_client",
-                        db->mds_nodename, oinfo->osi_ostname);
+                        db->mds_nodename, oinfo->moi_ostname);
 
-                rc = record_add_uuid(obd, llh, oinfo->osi_nid, ost_node_uuid);
+                rc = record_add_uuid(obd, llh, oinfo->moi_nid, ost_node_uuid);
                 if (rc) {
                         CERROR("failed to record log(add_uuid) %s: %d\n",
                                name, rc);
@@ -526,7 +528,7 @@ static int mgs_write_client_llog(struct obd_device *obd, char* name)
                         RETURN(rc);
                 }
 
-                setup_argv[0] = oinfo->osi_ostuuid;
+                setup_argv[0] = oinfo->moi_ostuuid;
                 setup_argv[1] = ost_node_uuid;
                 rc = record_setup(obd, llh, osc_name, 2, setup_argv);
                 if (rc) {
@@ -535,9 +537,9 @@ static int mgs_write_client_llog(struct obd_device *obd, char* name)
                         RETURN(rc);
                 }
 
-                sprintf(index, "%d", oinfo->osi_stripe_index);
+                sprintf(index, "%d", oinfo->moi_stripe_index);
                 rc = record_lov_modify_tgts(obd, llh, lov_name, "add",
-                                            oinfo->osi_ostuuid, index, "1");
+                                            oinfo->moi_ostuuid, index, "1");
                 if (rc) {
                         CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
                                name, rc);

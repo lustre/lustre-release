@@ -120,7 +120,7 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 }
 
 /* Get rid of symbolic hostnames for tcp */
-#define MAXNIDSTR 256
+#define MAXNIDSTR 1024
 static char *convert_hostnames(char *s1)
 {
         char *converted, *s2, *c;

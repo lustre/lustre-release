@@ -69,16 +69,6 @@ struct mgc_op_data {
         __u64      obj_version;
 };
 
-struct ost_info {
-        struct list_head osi_list;
-        char             osi_ostname[64];
-        char             osi_nodename[64];
-        char             osi_ostuuid[64];
-        lnet_nid_t       osi_nid;
-        __u32            osi_nal;
-        __u32            osi_stripe_index;
-};
-
 struct system_db {
         __u64             version;
         char              fsname[64];

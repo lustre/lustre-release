@@ -211,7 +211,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         } else if (!strcmp(name, LUSTRE_MGC_NAME)) {
                 rq_portal = MGC_REQUEST_PORTAL;
                 rp_portal = MGC_REPLY_PORTAL;
-                connect_op = MGS_CONNECT;
+                connect_op = MGMT_CONNECT;
                 is_mgc++;
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",

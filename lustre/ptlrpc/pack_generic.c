@@ -556,16 +556,15 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->padding_4);
 }
 
-void lustre_swab_ost_info(struct ost_info *oinfo)
+void lustre_swab_mgmt_ost_info(struct mgmt_ost_info *oinfo)
 {
-        __swab64s(&oinfo->osi_nid);
-        __swab32s(&oinfo->osi_nal);
-        __swab32s(&oinfo->osi_stripe_index);
+        __swab64s(&oinfo->moi_nid);
+        __swab32s(&oinfo->moi_stripe_index);
 }
 
-void lustre_swab_mds_info(struct mds_info *minfo)
+void lustre_swab_mgmt_mds_info(struct mgmt_mds_info *minfo)
 {
-        __swab64s(&minfo->mds_nid);
+        __swab64s(&minfo->mmi_nid);
 }
 
 static void lustre_swab_obd_dqinfo (struct obd_dqinfo *i)
@@ -1041,6 +1040,10 @@ void lustre_assert_wire_constants(void)
                  (long long)MGMT_DISCONNECT);
         LASSERTF(MGMT_EXCEPTION == 252, " found %lld\n",
                  (long long)MGMT_EXCEPTION);
+        LASSERTF(MGMT_OST_ADD == 253, " found %lld\n",
+                 (long long)MGMT_OST_ADD);
+        LASSERTF(MGMT_OST_DEL == 254, " found %lld\n",
+                 (long long)MGMT_OST_DEL);
         LASSERTF(OBD_PING == 400, " found %lld\n",
                  (long long)OBD_PING);
         LASSERTF(OBD_LOG_CANCEL == 401, " found %lld\n",

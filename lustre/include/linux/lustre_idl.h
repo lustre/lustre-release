@@ -215,10 +215,10 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_RDONLY       0x1ULL
 #define OBD_CONNECT_SRVLOCK     0x10ULL /* server takes locks for client */
 
-#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK)
 #define ECHO_CONNECT_SUPPORTED (0)
+#define MGMT_CONNECT_SUPPORTED  (0)
 
 /* This structure is used for both request and reply.
  *
@@ -938,16 +938,36 @@ struct ptlbd_rsp {
 
 extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
 
+
 /*
- * Opcodes for management/monitoring node.
+ * Opcodes for mountconf (mgs and mgc)
  */
 typedef enum {
         MGMT_CONNECT = 250,
         MGMT_DISCONNECT,
         MGMT_EXCEPTION,         /* node died, etc. */
+        MGMT_OST_ADD,
+        MGMT_OST_DEL,
         MGMT_LAST_OPC
-} mgmt_cmd_t;
-#define MGMT_FIRST_OPC MGMT_CONNECT
+} mgs_cmd_t;
+
+struct mgmt_ost_info {
+        struct list_head moi_list;
+        char             moi_ostname[64];
+        char             moi_nodename[64];
+        char             moi_ostuuid[64];
+        __u64            moi_nid;            /* lnet_nid_t */
+        __u32            moi_stripe_index;
+};
+
+extern void lustre_swab_mgmt_ost_info(struct mgmt_ost_info *oinfo);
+
+struct mgmt_mds_info {
+        __u64            mmi_nid;
+};
+
+extern void lustre_swab_mgmt_mds_info(struct mgmt_mds_info *oinfo);
+
 
 /*
  * Opcodes for multiple servers.
@@ -1179,17 +1199,5 @@ typedef enum {
         QUOTA_DQACQ     = 601,
         QUOTA_DQREL     = 602,
 } quota_cmd_t;
-
-/*mount-conf*/
-
-/*
- * Opcodes for management/monitoring node.
- */
-typedef enum {
-        MGS_CONNECT = 700,
-        MGS_DISCONNECT,
-        MGS_LAST_OPC
-} mgs_cmd_t;
-#define MGS_FIRSTOPC MGS_CONNECT,
 
 #endif

@@ -76,7 +76,7 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
         med = &exp->exp_mgs_data;
 
         if (data != NULL) {
-                data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
+                data->ocd_connect_flags &= MGMT_CONNECT_SUPPORTED;
                 exp->exp_connect_flags = data->ocd_connect_flags;
         }
 
@@ -354,7 +354,7 @@ int mgs_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
         /* XXX identical to MDS */
-        if (req->rq_reqmsg->opc != MGS_CONNECT) {
+        if (req->rq_reqmsg->opc != MGMT_CONNECT) {
                 struct mgs_export_data *med;
                 int abort_recovery;
 
@@ -394,7 +394,7 @@ int mgs_handle(struct ptlrpc_request *req)
         }
 
         switch (req->rq_reqmsg->opc) {
-        case MGS_CONNECT:
+        case MGMT_CONNECT:
                 DEBUG_REQ(D_INODE, req, "connect");
                 OBD_FAIL_RETURN(OBD_FAIL_MGS_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mgs_handle);
@@ -405,7 +405,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 }
                 break;
 
-        case MGS_DISCONNECT:
+        case MGMT_DISCONNECT:
                 DEBUG_REQ(D_INODE, req, "disconnect");
                 OBD_FAIL_RETURN(OBD_FAIL_MGS_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
@@ -472,7 +472,7 @@ int mgs_handle(struct ptlrpc_request *req)
         LASSERT(current->journal_info == NULL);
 
         /* If we're DISCONNECTing, the mgs_export_data is already freed */
-        if (!rc && req->rq_reqmsg->opc != MGS_DISCONNECT) {
+        if (!rc && req->rq_reqmsg->opc != MGMT_DISCONNECT) {
                 struct mgs_export_data *med = &req->rq_export->exp_mgs_data;
                 req->rq_repmsg->last_xid =
                         le64_to_cpu(med->med_mcd->mcd_last_xid);
