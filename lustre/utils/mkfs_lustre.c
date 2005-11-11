@@ -186,7 +186,8 @@ static void lnet_start()
 {
         ptl_initialize(0, NULL);
         if (access("/proc/sys/lnet", X_OK) != 0) {
-                fprintf(stderr, "Need the LNET module to determine self NIDs\n");
+                fprintf(stderr, "The LNET module must be loaded to determine "
+                        "local NIDs\n");
                 exit(1);
         }
         if (jt_ptl_get_nids(NULL) == -ENETDOWN) {
@@ -907,7 +908,7 @@ int main(int argc , char *const argv[])
         progname = argv[0];
         if (argc < 3) {
                 usage(stderr);
-                goto out;
+                exit(0);
         }
 
         memset(&mop, 0, sizeof(mop));
@@ -955,7 +956,7 @@ int main(int argc , char *const argv[])
                         break;
                 case 'h':
                         usage(stdout);
-                        goto out;
+                        exit(0);
                 case 'i':
                         if (IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd)) {
                                 mop.mo_index = atol(optarg);
@@ -1025,14 +1026,14 @@ int main(int argc , char *const argv[])
                                 fprintf(stderr, "Unknown option '%c'\n", opt);
                         }
                         usage(stderr);
-                        goto out;
+                        exit(1);
                 }
         }//while
         if (optind >= argc) {
                 fatal();
                 fprintf(stderr, "Bad arguments\n");
                 usage(stderr);
-                goto out;
+                exit(1);
         }
 
         if (!(IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd) || 
@@ -1040,15 +1041,20 @@ int main(int argc , char *const argv[])
                 fatal();
                 fprintf(stderr, "must set server type :{mdt,ost,mgmt}\n");
                 usage(stderr);
-                goto out;
+                exit(1);
         }
 
-        if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd) && 
-            mop.mo_ldd.ldd_mgsnid[0] == LNET_NID_ANY) {
+        if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd)) {
+                vprint("No management node specified, adding MGS to this MDT\n");
+                mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
+        }
+
+        if (IS_MGMT(&mop.mo_ldd) && 
+            (mop.mo_ldd.ldd_mgsnid[0] == LNET_NID_ANY)) {
                 int count;
                 __u64 *nids;
-                vprint("No MGS specified, adding MGS to this MDT\n");
-                mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
+                
+                vprint("No mgmt nids specified, using all local nids\n");
                 lnet_start();
                 count = jt_ptl_get_nids(&nids);
                 if (count < 0) {
