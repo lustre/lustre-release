@@ -85,6 +85,8 @@ struct obd_type *class_get_type(char *name)
 
 #ifdef CONFIG_KMOD
         if (!type) {
+                if (strcmp(name, LUSTRE_MDT_NAME) == 0) 
+                        name = LUSTRE_MDS_NAME;
                 if (!request_module(name)) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", name);
                         type = class_search_type(name);

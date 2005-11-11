@@ -70,6 +70,8 @@ int lustre_register_mount(char *name, struct super_block *sb,
 {
         struct lustre_mount_info *lmi;
         char *name_cp;
+        LASSERT(mnt);
+        LASSERT(sb);
 
         CDEBUG(D_MOUNT, "register %s\n", name);
 
@@ -505,7 +507,7 @@ static int lustre_start_mgc(struct super_block *sb, struct vfsmount *mnt)
                 GOTO(out_dereg, err);
 
         /* Start the MGC */
-        if ((err = lustre_start_simple(mgcname, LUSTRE_MDC_NAME/*LUSTRE_MGC_NAME*/, "MGS", 
+        if ((err = lustre_start_simple(mgcname, LUSTRE_MGC_NAME, "MGS", 
                                        libcfs_nid2str(nid))))
                 GOTO(out_dereg, err);
         
@@ -611,6 +613,13 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 lustre_deregister_mount(lsi->lsi_ldd->ldd_svname);
         }
 
+        if (!class_name2obd(lsi->lsi_ldd->ldd_svname)) {
+                CERROR("no server named %s was started\n",
+                       lsi->lsi_ldd->ldd_svname);
+                lustre_deregister_mount(lsi->lsi_ldd->ldd_svname);
+                err = -ENXIO;
+        }
+        
         // FIXME stop MDS, OSS on err?
         return(err);
 }
@@ -842,7 +851,6 @@ static struct super_operations server_ops =
 static int server_fill_super_common(struct super_block *sb)
 {
         struct inode *root = 0;
-        //struct ll_sb_info *lsi = ll_s2lsi(sb);
         ENTRY;
                                                                                  
         CDEBUG(D_MOUNT, "Server sb, dev=%d\n", (int)sb->s_dev);
@@ -949,7 +957,7 @@ out:
 /* Common umount */
 void lustre_common_put_super(struct super_block *sb)
 {
-        CDEBUG(D_MOUNT, "common put super %p\n", sb);
+        CDEBUG(D_MOUNT, "dropping sb %p\n", sb);
         
         lustre_stop_mgc(sb);
         lustre_free_lsi(sb);
@@ -1142,10 +1150,12 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 CERROR("Unable to mount %s\n", lmd->lmd_dev);
                 lustre_stop_mgc(sb);
                 lustre_free_lsi(sb);
+        } else {
+                CDEBUG(D_MOUNT, "Successfully mounted %s\n", lmd->lmd_dev);
         }
         RETURN(err);
 } 
-                                                                                
+                                                                               
 
 /* We can't call ll_fill_super by name because it lives in a module that
    must be loaded after this one. */

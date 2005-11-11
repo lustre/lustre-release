@@ -1418,14 +1418,13 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) == 0 || LUSTRE_CFG_BUFLEN(lcfg, 2) == 0)
                 RETURN(rc = -EINVAL);
 
-        obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
-        if (IS_ERR(obd->obd_fsops))
-                RETURN(rc = PTR_ERR(obd->obd_fsops));
-
         lmi = lustre_get_mount(obd->obd_name);
         if (lmi) {
-                /* We already mounted in lustre_fill_super */
+                /* We already mounted in lustre_fill_super.
+                   lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
+                struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
                 mnt = lmi->lmi_mnt;
+                obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         } else {
                 /* old path - used by lctl */
                 CERROR("Using old MDS mount method\n");
@@ -1453,9 +1452,13 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                         rc = PTR_ERR(mnt);
                         LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
                                        lustre_cfg_string(lcfg, 1), rc);
-                        GOTO(err_ops, rc);
+                        RETURN(rc);
                 }
+
+                obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         }
+        if (IS_ERR(obd->obd_fsops))
+                RETURN(rc = PTR_ERR(obd->obd_fsops));
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
@@ -1569,7 +1572,6 @@ err_put:
                 lock_kernel();
         }               
         mds->mds_sb = 0;
-err_ops:
         fsfilt_put_ops(obd->obd_fsops);
         return rc;
 }
@@ -1593,6 +1595,13 @@ static int mds_postsetup(struct obd_device *obd)
                 cfg.cfg_instance = NULL;
                 cfg.cfg_uuid = mds->mds_lov_uuid;
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                /* This will no longer be used.  mgc should have already
+                   parsed the mds setup log.  The last steps in the log must be
+                        attach mds mdsA mdsA_UUID
+                        setup /dev/loop2 ldiskfs mdsA errors=remount-ro,user_xattr
+                   or, better,
+                        setup mountconf mountconf mdsA
+                   then we can decide if we're using old or new methods. */
                 rc = class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                                              mds->mds_profile, &cfg);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -1613,6 +1622,10 @@ static int mds_postsetup(struct obd_device *obd)
                         break;
                 }
 
+                /* The profile defines which osc and mdc to connect to, for a 
+                   client.  We reuse that here, ignoring lprof->lp_mdc.
+                   The profile is set in the config log with 
+                   LCFG_MOUNTOPT profilenm oscnm mdcnm */
                 lprof = class_get_profile(mds->mds_profile);
                 if (lprof == NULL) {
                         CERROR("No profile found: %s\n", mds->mds_profile);

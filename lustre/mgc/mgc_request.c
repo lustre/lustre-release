@@ -145,7 +145,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
 
         cli->cl_mgc_vfsmnt = mnt;
         cli->cl_mgc_sb = mnt->mnt_root->d_inode->i_sb;
-        // FIXME which one? - filter_common_setup also 
+        // FIXME which is the right SB? - filter_common_setup also 
         CERROR("SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb, mnt->mnt_root->d_inode->i_sb);
         fsfilt_setup(obd, cli->cl_mgc_sb);
 
@@ -178,6 +178,7 @@ err_ops:
 static int mgc_fs_cleanup(struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
+        int rc;
 
         if (cli->cl_mgc_configs_dir != NULL) {
                 struct lvfs_run_ctxt saved;
@@ -187,12 +188,16 @@ static int mgc_fs_cleanup(struct obd_device *obd)
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         }
 
+        rc = lustre_put_mount(obd->obd_name, cli->cl_mgc_vfsmnt);
+        if (rc)
+             CERROR("mount_put failed %d\n", rc);
+
         cli->cl_mgc_vfsmnt = NULL;
         cli->cl_mgc_sb = NULL;
         
         if (obd->obd_fsops) 
                 fsfilt_put_ops(obd->obd_fsops);
-        return(0);
+        return(rc);
 }
 
 static int mgc_cleanup(struct obd_device *obd)
@@ -205,8 +210,6 @@ static int mgc_cleanup(struct obd_device *obd)
         if (cli->cl_mgc_vfsmnt) {
                 /* if we're a server, eg. something's mounted */
                 mgc_fs_cleanup(obd);
-                if ((rc = lustre_put_mount(obd->obd_name, cli->cl_mgc_vfsmnt)))
-                     CERROR("mount_put failed %d\n", rc);
         }
 
         rc = obd_llog_finish(obd, 0);
@@ -318,7 +321,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
         case OBD_IOC_START: {
                 char *name = data->ioc_inlbuf1;
-                CERROR("MGS starting config log %s\n", name);
+                CERROR("getting config log %s\n", name);
                 /* FIXME Get llog from MGS */
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
