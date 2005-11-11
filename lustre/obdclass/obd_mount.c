@@ -51,8 +51,6 @@ static struct lustre_mount_info *lustre_find_mount(char *name)
         list_for_each(tmp, &lustre_mount_info_list) {
                 lmi = list_entry(tmp, struct lustre_mount_info, lmi_list_chain);
                 if (strcmp(name, lmi->lmi_name) == 0) {
-                        CDEBUG(D_MOUNT, "Match %s with mnt=%p\n", 
-                               name, lmi->lmi_mnt);
                         found++;
                         break;
                 }
@@ -72,8 +70,6 @@ int lustre_register_mount(char *name, struct super_block *sb,
         char *name_cp;
         LASSERT(mnt);
         LASSERT(sb);
-
-        CDEBUG(D_MOUNT, "register %s\n", name);
 
         OBD_ALLOC(lmi, sizeof(*lmi));
         if (!lmi) 
@@ -108,8 +104,6 @@ static int lustre_deregister_mount(char *name)
 {
         struct lustre_mount_info *lmi;
         
-        CDEBUG(D_MOUNT, "deregister %s\n", name);
-
         down(&lustre_mount_info_lock);
         lmi = lustre_find_mount(name);
         if (!lmi) {
@@ -168,7 +162,6 @@ struct lustre_mount_info *lustre_get_mount(char *name)
         atomic_inc(&lsi->lsi_mounts);
         
         up(&lustre_mount_info_lock);
-        CDEBUG(D_MOUNT, "got mount for %s\n", name);
         return lmi;
 }
 
@@ -197,8 +190,6 @@ int lustre_put_mount(char *name, struct vfsmount *mnt)
                 return -ENOENT;
         }
 
-        CDEBUG(D_MOUNT, "put mount for %s, #%d\n", name, 
-               atomic_read(&lsi->lsi_mounts));
         lsi = s2lsi(lmi->lmi_sb);
         LASSERT(lmi->lmi_mnt == mnt);
         unlock_mntput(lmi->lmi_mnt);
@@ -556,13 +547,49 @@ static void lustre_stop_mgc(struct super_block *sb)
         lsi->lsi_mgc = NULL;
 }
           
+/* Stop MDS/OSS if nobody is using them */
+static void server_stop_servers(struct super_block *sb)
+{
+        struct lustre_sb_info *lsi = s2lsi(sb);
+        struct obd_device *obd;
+
+        /* if this was an MDT, and there are no more MDT's, clean up the MDS */
+        if ((lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) &&
+            (obd = class_name2obd("MDS"))) {
+                //FIXME pre-rename, should eventually be LUSTRE_MDT_NAME
+                struct obd_type *type = class_search_type(LUSTRE_MDS_NAME);
+                if (!type || !type->typ_refcnt) {
+                        /* nobody is using the MDT type, clean the MDS */
+                        if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
+                                obd->obd_force = 1;
+                        if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
+                                obd->obd_fail = 1;
+                        class_manual_cleanup(obd);
+                }
+        }
+
+        /* if this was an OST, and there are no more OST's, clean up the OSS */
+        if ((lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) &&
+            (obd = class_name2obd("OSS"))) {
+                struct obd_type *type = class_search_type(LUSTRE_OST_NAME);
+                if (!type || !type->typ_refcnt) {
+                        /* nobody is using the OST type, clean the OSS */
+                        if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
+                                obd->obd_force = 1;
+                        if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
+                                obd->obd_fail = 1;
+                        class_manual_cleanup(obd);
+                }
+        }
+}
+
 /* Start targets */
 static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 {
         struct obd_ioctl_data ioc_data = { 0 };
         struct obd_device *obd;
         struct lustre_sb_info *lsi = s2lsi(sb);
-        int err;
+        int err, mdsstart=0, oststart=0;
                                                                                        
                                         
         CDEBUG(D_MOUNT, "starting target %s\n", lsi->lsi_ldd->ldd_svname);
@@ -600,7 +627,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         err = lustre_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
         if (err) 
-                return (err);
+                goto out;
 
         ioc_data.ioc_inllen1 = strlen(lsi->lsi_ldd->ldd_svname) + 1;
         ioc_data.ioc_inlbuf1 = lsi->lsi_ldd->ldd_svname;
@@ -611,6 +638,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 CERROR("failed to start server %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, err);
                 lustre_deregister_mount(lsi->lsi_ldd->ldd_svname);
+                goto out;
         }
 
         if (!class_name2obd(lsi->lsi_ldd->ldd_svname)) {
@@ -620,7 +648,9 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 err = -ENXIO;
         }
         
-        // FIXME stop MDS, OSS on err?
+out:
+        if (err)
+                server_stop_servers(sb);
         return(err);
 }
 
@@ -786,34 +816,7 @@ static void server_put_super(struct super_block *sb)
 
         //class_del_profile(lsi->lsi_ldd->ldd_svname); /* if it exists */
                                                                                        
-        /* if this was an MDT, and there are no more MDT's, clean up the MDS */
-        if ((lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) &&
-            (obd = class_name2obd("MDS"))) {
-                //FIXME pre-rename, should eventually be LUSTRE_MDT_NAME
-                struct obd_type *type = class_search_type(LUSTRE_MDS_NAME);
-                if (!type || !type->typ_refcnt) {
-                        /* nobody is using the MDT type, clean the MDS */
-                        if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
-                                obd->obd_force = 1;
-                        if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
-                                obd->obd_fail = 1;
-                        class_manual_cleanup(obd);
-                }
-        }
-
-        /* if this was an OST, and there are no more OST's, clean up the OSS */
-        if ((lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) &&
-            (obd = class_name2obd("OSS"))) {
-                struct obd_type *type = class_search_type(LUSTRE_OST_NAME);
-                if (!type || !type->typ_refcnt) {
-                        /* nobody is using the OST type, clean the OSS */
-                        if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
-                                obd->obd_force = 1;
-                        if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
-                                obd->obd_fail = 1;
-                        class_manual_cleanup(obd);
-                }
-        }
+       server_stop_servers(sb);
 
         /* If they wanted the mgs to stop separately from the mdt, they
            should have put it on a different device. */ 
