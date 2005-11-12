@@ -1458,7 +1458,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         }
         if (IS_ERR(obd->obd_fsops))
-                RETURN(rc = PTR_ERR(obd->obd_fsops));
+                GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
@@ -1474,7 +1474,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL) {
                 mds_cleanup(obd);
-                GOTO(err_put, rc = -ENOMEM);
+                GOTO(err_ops, rc = -ENOMEM);
         }
         ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
 
@@ -1501,7 +1501,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
                 strncpy(mds->mds_profile, lustre_cfg_string(lcfg, 3),
                         LUSTRE_CFG_BUFLEN(lcfg, 3));
-
         }
 
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
@@ -1562,6 +1561,8 @@ err_fs:
 err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
+err_ops:
+        fsfilt_put_ops(obd->obd_fsops);
 err_put:
         if (lmi) {
                 lustre_put_mount(obd->obd_name, mds->mds_vfsmnt);
@@ -1572,7 +1573,6 @@ err_put:
                 lock_kernel();
         }               
         mds->mds_sb = 0;
-        fsfilt_put_ops(obd->obd_fsops);
         return rc;
 }
 
@@ -1758,12 +1758,6 @@ static int mds_cleanup(struct obd_device *obd)
 
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
-
-        /* 2 seems normal on mds, (may_umount() also expects 2
-          fwiw), but we only see 1 at this point in obdfilter. */
-        if (atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count) > 2)
-                CERROR("%s: mount busy, mnt_count %d != 2\n", obd->obd_name,
-                       atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count));
 
         must_put = lustre_put_mount(obd->obd_name, mds->mds_vfsmnt);
         /* must_put is for old method (l_p_m returns non-0 on err) */

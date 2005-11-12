@@ -25,7 +25,7 @@
 
 
 #define DEBUG_SUBSYSTEM S_MGMT
-#define D_MOUNT D_ERROR
+#define D_MOUNT D_SUPER|D_CONFIG|D_ERROR
 
 #include <linux/obd.h>
 #include <linux/lvfs.h>
@@ -197,6 +197,11 @@ int lustre_put_mount(char *name, struct vfsmount *mnt)
                 CDEBUG(D_MOUNT, "Last put of mnt %p from %s, mount count %d\n", 
                        lmi->lmi_mnt, name, 
                        atomic_read(&lmi->lmi_mnt->mnt_count));
+                /* 2 seems normal on mds, (may_umount() also expects 2
+                  fwiw), but we only see 1 at this point in obdfilter. */
+                if (atomic_read(&lmi->lmi_mnt->mnt_count) > 2)
+                        CERROR("%s: mount busy, mnt_count %d != 2\n", name,
+                               atomic_read(&lmi->lmi_mnt->mnt_count));
         }
         up(&lustre_mount_info_lock);
 
@@ -377,7 +382,8 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         struct lustre_cfg    * lcfg = NULL;
         int err;
                
-        CDEBUG(D_ERROR, "lcfg %s %#x %s %s %s %s\n", cfgname, cmd, s1, s2, s3, s4); 
+        CDEBUG(D_TRACE, "lcfg %s %#x %s %s %s %s\n", cfgname,
+               cmd, s1, s2, s3, s4); 
 
         lustre_cfg_bufs_reset(&bufs, cfgname);
         if (s1) 
@@ -426,7 +432,7 @@ static int lustre_start_mgs(struct super_block *sb, struct vfsmount *mnt)
                 return (-ENOMEM);
         sprintf(mgsname, "MGS_%p", sb);
 
-        CDEBUG(D_MOUNT, "Start MGS service %s\n", mgsname);
+        CDEBUG(D_CONFIG, "Start MGS service %s\n", mgsname);
 
         err = lustre_register_mount(mgsname, sb, mnt);
 
@@ -589,8 +595,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         struct obd_ioctl_data ioc_data = { 0 };
         struct obd_device *obd;
         struct lustre_sb_info *lsi = s2lsi(sb);
-        int err, mdsstart=0, oststart=0;
-                                                                                       
+        int err;
                                         
         CDEBUG(D_MOUNT, "starting target %s\n", lsi->lsi_ldd->ldd_svname);
         

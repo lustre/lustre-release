@@ -43,6 +43,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_commit_confd.h>
+#include <linux/lustre_disk.h>
 #include "mgs_internal.h"
 
 static int mgs_postsetup(struct obd_device *obd);
@@ -148,59 +149,35 @@ static int mgs_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
-/* mount the file system (secretly) */
+/* Start the MGS obd */
 static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg* lcfg = buf;
-        char *options = NULL;
         char *ns_name = "MGS";
         struct mgs_obd *mgs = &obd->u.mgs;
+        struct lustre_mount_info *lmi;
+        struct lustre_sb_info *lsi;
         struct vfsmount *mnt;
-        unsigned long page;
         int rc = 0;
         ENTRY;
 
-        /* setup 1:/dev/loop/0 2:ext3 3:mgs 4:errors=remount-ro,iopen_nopriv*/
+        CDEBUG(D_CONFIG, "Starting MGS\n");
 
-        if (lcfg->lcfg_bufcount < 3)
+        lmi = lustre_get_mount(obd->obd_name);
+        if (!lmi) 
                 RETURN(rc = -EINVAL);
 
-        if (LUSTRE_CFG_BUFLEN(lcfg, 1) == 0 || LUSTRE_CFG_BUFLEN(lcfg, 2) == 0)
-                RETURN(rc = -EINVAL);
-
-        obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
+        mnt = lmi->lmi_mnt;
+        lsi = s2lsi(lmi->lmi_sb);
+        obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops))
-                RETURN(rc = PTR_ERR(obd->obd_fsops));
+                GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 
-        page = __get_free_page(GFP_KERNEL);
-        if (!page)
-                RETURN(-ENOMEM);
-
-        options = (char *)page;
-        memset(options, 0, PAGE_SIZE);
-
-        if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4))
-                sprintf(options , ",%s", lustre_cfg_string(lcfg, 4));
-
-        //FIXME mount was already done in lustre_fill_super,
-        //we just need to access it
-        mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
-                            lustre_cfg_string(lcfg, 1), (void *)options);
-        free_page(page);
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                CERROR("do_kern_mount failed: rc = %d\n", rc);
-                GOTO(err_ops, rc);
-        }
-
-        CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
-
-        /*namespace for mgs llog */
+        /* namespace for mgs llog */
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL) {
                 mgs_cleanup(obd);
-                GOTO(err_put, rc = -ENOMEM);
+                GOTO(err_ops, rc = -ENOMEM);
         }
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
@@ -225,27 +202,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_init_vars(mgs, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
-        if (obd->obd_recovering) {
-                LCONSOLE_WARN("MGT %s now serving %s, but will be in recovery "
-                              "until %d %s reconnect, or if no clients "
-                              "reconnect for %d:%.02d; during that time new "
-                              "clients will not be allowed to connect. "
-                              "Recovery progress can be monitored by watching "
-                              "/proc/fs/lustre/mgs/%s/recovery_status.\n",
-                              obd->obd_name,
-                              lustre_cfg_string(lcfg, 1),
-                              obd->obd_recoverable_clients,
-                              (obd->obd_recoverable_clients == 1) 
-                              ? "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
-                              obd->obd_name);
-        } else {
-                LCONSOLE_INFO("MGT %s now serving %s with recovery %s.\n",
-                              obd->obd_name,
-                              lustre_cfg_string(lcfg, 1),
-                              obd->obd_replayable ? "enabled" : "disabled");
-        }
+        LCONSOLE_INFO("MGS %s started\n", obd->obd_name);
 
         ldlm_timeout = 6;
         ping_evictor_start();
@@ -258,13 +215,11 @@ err_fs:
 err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
-err_put:
-        unlock_kernel();
-        mntput(mgs->mgs_vfsmnt);
-        mgs->mgs_sb = 0;
-        lock_kernel();
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
+err_put:
+        lustre_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
+        mgs->mgs_sb = 0;
         return rc;
 }
 
@@ -292,7 +247,6 @@ static int mgs_cleanup(struct obd_device *obd)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         lvfs_sbdev_type save_dev;
-        int must_relock = 0;
         ENTRY;
 
         ping_evictor_stop();
@@ -307,18 +261,7 @@ static int mgs_cleanup(struct obd_device *obd)
 
         mgs_fs_cleanup(obd);
 
-        if (atomic_read(&obd->u.mgs.mgs_vfsmnt->mnt_count) > 2)
-                CERROR("%s: mount busy, mnt_count %d != 2\n", obd->obd_name,
-                       atomic_read(&obd->u.mgs.mgs_vfsmnt->mnt_count));
-
-        /* We can only unlock kernel if we are in the context of sys_ioctl,
-           otherwise we never called lock_kernel */
-        if (kernel_locked()) {
-                unlock_kernel();
-                must_relock++;
-        }
-
-        mntput(mgs->mgs_vfsmnt);
+        lustre_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
         mgs->mgs_sb = NULL;
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
@@ -332,12 +275,9 @@ static int mgs_cleanup(struct obd_device *obd)
 
         lvfs_clear_rdonly(save_dev);
 
-        if (must_relock)
-                lock_kernel();
-
         fsfilt_put_ops(obd->obd_fsops);
 
-        LCONSOLE_INFO("MGT %s has stopped.\n", obd->obd_name);
+        LCONSOLE_INFO("MGS %s has stopped.\n", obd->obd_name);
 
         RETURN(0);
 }

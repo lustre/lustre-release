@@ -1327,32 +1327,34 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
             LUSTRE_CFG_BUFLEN(lcfg, 2) < 1)
                 RETURN(-EINVAL);
 
-        obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
-        if (IS_ERR(obd->obd_fsops))
-                RETURN(PTR_ERR(obd->obd_fsops));
-
-        rc = filter_iobuf_pool_init(filter, OST_NUM_THREADS);
-        if (rc != 0)
-                GOTO(err_ops, rc);
-
         lmi = lustre_get_mount(obd->obd_name);
         if (lmi) {
-                /* We already mounted in lustre_fill_super */
+                /* We already mounted in lustre_fill_super.
+                   lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
+                struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
                 mnt = lmi->lmi_mnt;
+                obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         } else {
                 /* old path - used by lctl */
                 CERROR("Using old MDS mount method\n");
                 mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),
                                     MS_NOATIME|MS_NODIRATIME,
-                                    lustre_cfg_string(lcfg, 1), option);       
-        }
+                                    lustre_cfg_string(lcfg, 1), option);    
+                if (IS_ERR(mnt)) {
+                        rc = PTR_ERR(mnt);
+                        LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
+                                       lustre_cfg_string(lcfg, 1), rc);
+                        RETURN(rc);
+                }
 
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
-                               lustre_cfg_string(lcfg, 1), rc);
-                GOTO(err_ops, rc);
+                obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         }
+        if (IS_ERR(obd->obd_fsops))
+                GOTO(err_mntput, rc = PTR_ERR(obd->obd_fsops));
+
+        rc = filter_iobuf_pool_init(filter, OST_NUM_THREADS);
+        if (rc != 0)
+                GOTO(err_ops, rc);
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
@@ -1382,7 +1384,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
         rc = filter_prep(obd);
         if (rc)
-                GOTO(err_mntput, rc);
+                GOTO(err_ops, rc);
 
         filter->fo_destroy_in_progress = 0;
         sema_init(&filter->fo_create_lock, 1);
@@ -1454,6 +1456,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
 err_post:
         filter_post(obd);
+err_ops:
+        fsfilt_put_ops(obd->obd_fsops);
+        filter_iobuf_pool_done(filter);
 err_mntput:
         if (lmi) {
                 lustre_put_mount(obd->obd_name, mnt);
@@ -1464,9 +1469,6 @@ err_mntput:
                 lock_kernel();
         }
         filter->fo_sb = 0;
-err_ops:
-        fsfilt_put_ops(obd->obd_fsops);
-        filter_iobuf_pool_done(filter);
         return rc;
 }
 
