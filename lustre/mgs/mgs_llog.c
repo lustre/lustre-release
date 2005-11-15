@@ -48,7 +48,18 @@
 static struct lustre_cfg_bufs llog_bufs;
 
 static int mgs_do_record(struct obd_device *obd, struct llog_handle *llh,
-                         void *cfg_buf);
+                         void *cfg_buf)
+{
+        struct lvfs_run_ctxt saved;
+        struct llog_rec_hdr rec;
+        int rc = 0;
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = llog_write_rec(llh, &rec, NULL, 0, cfg_buf, -1);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        RETURN(rc);
+}
 
 static int record_attach(struct obd_device *obd, struct llog_handle *llh,
                          char* name, char *type, char *uuid)
@@ -175,92 +186,6 @@ static int record_mount_point(struct obd_device *obd, struct llog_handle *llh,
         return rc;
 }                                  
 
-struct mgs_open_llog* find_mgs_open_llog(struct obd_device *obd, char *name)
-{
-        struct mgs_obd *mgs = &obd->u.mgs;
-        struct list_head *tmp;
-        struct mgs_open_llog *mol;
-        char fsname[64];
-        char *p;
-
-        p = strrchr(name, '/');
-        if (p != NULL)
-                strncpy(fsname, name, p - name);
-        else
-                return NULL;
-
-        list_for_each(tmp, &mgs->mgs_open_llogs) {
-                mol = list_entry(tmp, struct mgs_open_llog, mol_list);
-                if (!strcmp(mol->mol_fsname, fsname))
-                        return mol;
-        }
-        return NULL;
-}
-
-struct mgs_open_llog* create_mgs_open_llog(struct obd_device *obd, char *name)
-{
-        struct mgs_obd *mgs = &obd->u.mgs;
-        struct mgs_open_llog *mol, *tmp;
-        char *p;
-
-        OBD_ALLOC(mol, sizeof(*mol));
-        if (!mol) {
-                CERROR("can not allocate memory for mgs_open_llog.\n");
-                return NULL;
-        }
-
-        p = strrchr(name, '/');
-        if (p != NULL)
-                strncpy(mol->mol_fsname, name, p - name);
-        else {
-                CERROR("logname need to include fsname.\n");
-                goto cleanup;
-        }
-#if 0
-        rc = mgs_load_system_db(obd, name, &mol->mol_system_db);
-        if (rc) 
-                goto cleanup;
-#endif
-        mol->mol_refs = 1;
-
-        spin_lock_init(&mol->mol_lock);
-
-        spin_lock(&mgs->mgs_open_llogs_lock);
-
-        tmp = find_mgs_open_llog(obd, name);
-        if(tmp) {
-               OBD_FREE(mol->mol_system_db, sizeof(struct system_db));
-               OBD_FREE(mol, sizeof(*mol));
-               mol = tmp;
-        } else 
-               list_add(&mol->mol_list, &mgs->mgs_open_llogs);
-
-        spin_unlock(&mgs->mgs_open_llogs_lock);
-
-        return mol;
-        
-cleanup:
-        OBD_FREE(mol, sizeof(*mol));
-        return NULL;
-}
-
-struct mgs_open_llog* open_mgs_open_llog(struct obd_device *obd, char *name)
-{
-        struct mgs_open_llog *mol;
-
-        mol = find_mgs_open_llog(obd, name);
-        if (!mol) {
-                mol = create_mgs_open_llog(obd, name);
-                return mol;
-        }
-
-        spin_lock(&mol->mol_lock);
-        mol->mol_refs++;
-        spin_unlock(&mol->mol_lock);
-
-        return mol;
-}
-
 static int mgs_start_record(struct obd_device *obd, 
                             struct llog_handle *llh, char *name)
 {
@@ -323,68 +248,64 @@ static int mgs_clear_record(struct obd_device *obd,
         RETURN(rc);
 }
 
-static int mgs_do_record(struct obd_device *obd, struct llog_handle *llh,
-                         void *cfg_buf)
+static int mgs_write_basic_llog(struct obd_device *obd, 
+                                struct mgmt_mds_info *mmi)
 {
-        struct lvfs_run_ctxt saved;
-        struct llog_rec_hdr rec;
         int rc = 0;
-
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = llog_write_rec(llh, &rec, NULL, 0, cfg_buf, -1);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        RETURN(rc);
+        CERROR("New basic LLOG.\n"); /*FIXME: add soon*/
+        return rc;
 }
-
-static int mgs_write_mds_llog(struct obd_device *obd, char* name)
+static int mgs_write_mds_llog(struct obd_device *obd, struct mgmt_mds_info *mmi)
 {
         struct mgs_open_llog *mol;
         struct llog_handle *llh;
-        struct system_db *db;
         struct list_head *tmp;
+        char *name = mmi->mmi_fullfsname;
+        struct lov_desc *lovdesc;
         char lov_name[64];
         char uuid[64];
         int i, rc = 0;
 
-        mol = find_mgs_open_llog(obd, name);
-        if (!mol)
-                RETURN(-EINVAL);
+        llh = llog_alloc_handle();
+        if (llh == NULL)
+                RETURN(-ENOMEM);
 
-        db = mol->mol_system_db;
-        if(!db)
-                RETURN(-EINVAL);
-
-        llh = mol->mol_cfg_llh;
+        OBD_ALLOC(lovdesc, sizeof(*lovdesc));
+        if (lovdesc == NULL)
+                GOTO(cleanup, rc = -ENOMEM);
+        lovdesc->ld_pattern = mmi->mmi_pattern;
+        lovdesc->ld_default_stripe_size = mmi->mmi_stripe_size;
+        lovdesc->ld_default_stripe_offset = mmi->mmi_stripe_offset;
 
         rc = mgs_clear_record(obd, llh, name);
         if (rc) {
                 CERROR("failed to clear log %s: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(cleanup, rc);
         }
 
         rc = mgs_start_record(obd, llh, name);
         if (rc) {
                 CERROR("failed to record log %s: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(cleanup, rc);
         }
 
         /* the same uuid for lov and osc */
-        sprintf(uuid, "%s_lov_UUID", db->mds_name);
-        sprintf(lov_name, "lov_%s", db->mds_name);
+        sprintf(uuid, "%s_lov_UUID", mmi->mmi_mds_name);
+        sprintf(lov_name, "lov_%s", mmi->mmi_mds_name);
+        sprintf((char*)lovdesc->ld_uuid.uuid, "%s_UUID", lov_name);
 
         rc = record_attach(obd, llh, lov_name, "lov", uuid);
         if (rc) {
                 CERROR("failed to record log(attach lov) %s: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(cleanup, rc);
         }
 
-        rc = record_lov_setup(obd, llh, lov_name, &db->lovdesc);
+        rc = record_lov_setup(obd, llh, lov_name, lovdesc);
         if (rc) {
                 CERROR("failed to record log(setup) %s: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(cleanup, rc);
         }
-
+#if 0
         i = 0;
         list_for_each(tmp, &db->ost_infos) {
                 char   ost_node_uuid[64];
@@ -431,21 +352,23 @@ static int mgs_write_mds_llog(struct obd_device *obd, char* name)
                         RETURN(rc);
                 }
         }
-        
-        rc = record_mount_point(obd, llh, db->mds_name, lov_name, NULL);
+#endif        
+        rc = record_mount_point(obd, llh, mmi->mmi_mds_name, lov_name, NULL);
         if (rc) {
                 CERROR("failed to record log(lov_modify_tgts) %s: %d\n",
                        name, rc);
-                RETURN(rc);
+                GOTO(cleanup, rc);
         }
 
         rc = mgs_end_record(obd, llh, name);
         if (rc) {
                 CERROR("failed to record log %s: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(cleanup, rc);
         }
-
+out:
         RETURN(rc);
+cleanup:
+        llog_free_handle(llh);
 }
 
 static int mgs_write_client_llog(struct obd_device *obd, char* name)
@@ -462,6 +385,7 @@ static int mgs_write_client_llog(struct obd_device *obd, char* name)
         char   *setup_argv[2];
         int i, rc = 0;
 
+#if 0
         mol = find_mgs_open_llog(obd, name);
         if (!mol)
                 RETURN(-EINVAL);
@@ -587,9 +511,10 @@ static int mgs_write_client_llog(struct obd_device *obd, char* name)
                 CERROR("failed to record log %s: %d\n", name, rc);
                 RETURN(rc);
         }
+#endif
         RETURN(rc);
 }
-
+#if 0
 int mgs_update_llog(struct obd_device *obd, char *name)
 {       
         char logname[64];
@@ -615,6 +540,89 @@ int mgs_update_llog(struct obd_device *obd, char *name)
                 RETURN(rc);
         }
 
+        return rc;
+}
+#endif
+int decompose_fullfsname(char *fullfsname, char *fsname, char *poolname)
+{
+        char *p = NULL;
+        
+        OBD_ALLOC(fsname, sizeof(*fullfsname));
+        if (!fsname) {
+                CERROR("Can't not copy fsname from request.\n");
+                return -ENOMEM;
+        }
+
+        p = strchr(fsname, '/');
+        if (p) {
+                p = '\0';
+                poolname = p++;
+        }
+        return 0;       
+}
+
+int mgs_mds_register(struct ptlrpc_request *req)
+{
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct mgmt_mds_info *mmi, *rep_mmi;
+        struct lvfs_run_ctxt saved;
+        struct dentry *fs_dentry, *pool_dentry;
+        char *fsname = NULL, *poolname = NULL;
+        int rep_size = sizeof(*rep_mmi);
+        int index, rc;
+
+        mmi = lustre_swab_reqbuf(req, 0, sizeof(*mmi),
+                                 lustre_swab_mgmt_mds_info);
+        if (mmi == NULL) {
+                CERROR("Can't unpack mgmt_mds_info\n");
+                GOTO(out, rc=-EFAULT);
+        }
+
+        CDEBUG(D_INODE, "New mds belong to FS/POOL %s\n", mmi->mmi_fullfsname);
+
+        rc = decompose_fullfsname(mmi->mmi_fullfsname, fsname, poolname);
+        if (rc)
+                GOTO(out, rc);
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        fs_dentry = simple_mkdir(mgs->mgs_configs_dir, fsname, 0777, 1);
+        if (IS_ERR(fs_dentry)) {
+                rc = PTR_ERR(fs_dentry);
+                CERROR("cannot create %s dir : rc = %d\n", fsname, rc);
+                GOTO(cleanup_pop, rc);
+        }
+
+        pool_dentry = simple_mkdir(fs_dentry, poolname, 0777, 1);
+        if (IS_ERR(pool_dentry)) {
+                rc = PTR_ERR(pool_dentry);
+                CERROR("cannot create %s dir : rc = %d\n", poolname, rc);
+                GOTO(cleanup_dput, rc);
+        }
+        dput(pool_dentry);
+
+        /*FIXME : change when we can use several mds */
+        mmi->mmi_index = 1;
+
+        rc = mgs_write_basic_llog(obd, mmi);
+cleanup_dput:
+        dput(fs_dentry);
+cleanup_pop:
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        OBD_FREE(fsname, sizeof(mmi->mmi_fullfsname));
+out:
+        if (rc) 
+                mmi->mmi_index = rc;
+        rc = lustre_pack_reply(req, 1, &rep_size, NULL);
+        if (!rc) {
+                rep_mmi = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_mmi));
+                memcpy(rep_mmi, mmi, sizeof(*mmi));
+        } else {
+                CERROR("lustre_pack_reply failed: rc %d\n", rc);
+                req->rq_status = rc;
+        }
         return rc;
 }
 
@@ -798,4 +806,3 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
         RETURN(0);
 }
-

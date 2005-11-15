@@ -169,11 +169,12 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 
 
-#define OBD_FAIL_MGS                     0x900
-#define OBD_FAIL_MGS_CONNECT_NET         0x117
-#define OBD_FAIL_MGS_DISCONNECT_NET      0x11a
-#define OBD_FAIL_MGS_ALL_REPLY_NET       0x122
-#define OBD_FAIL_MGS_ALL_REQUEST_NET     0x123
+#define OBD_FAIL_MGMT                     0x900
+#define OBD_FAIL_MGMT_REGISTER            0x901
+#define OBD_FAIL_MGMT_CONNECT_NET         0x117
+#define OBD_FAIL_MGMT_DISCONNECT_NET      0x11a
+#define OBD_FAIL_MGMT_ALL_REPLY_NET       0x122
+#define OBD_FAIL_MGMT_ALL_REQUEST_NET     0x123
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

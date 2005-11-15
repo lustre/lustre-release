@@ -946,6 +946,7 @@ typedef enum {
         MGMT_CONNECT = 250,
         MGMT_DISCONNECT,
         MGMT_EXCEPTION,         /* node died, etc. */
+        MGMT_REGISTER,          /* first connect. */
         MGMT_OST_ADD,
         MGMT_OST_DEL,
         MGMT_LAST_OPC
@@ -963,7 +964,14 @@ struct mgmt_ost_info {
 extern void lustre_swab_mgmt_ost_info(struct mgmt_ost_info *oinfo);
 
 struct mgmt_mds_info {
+        char             mmi_fullfsname[64];
+        char             mmi_mds_name[64];
+        char             mmi_mds_nodename[64];
         __u64            mmi_nid;
+        __u32            mmi_index;
+        __u32            mmi_pattern;      /* PATTERN_RAID0, PATTERN_RAID1 */
+        __u64            mmi_stripe_size;      /* in bytes */
+        __u64            mmi_stripe_offset;    /* in bytes */
 };
 
 extern void lustre_swab_mgmt_mds_info(struct mgmt_mds_info *oinfo);

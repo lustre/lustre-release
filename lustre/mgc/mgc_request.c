@@ -48,6 +48,44 @@
 
 #include "mgc_internal.h"
 
+int mgc_mds_add(struct obd_export *exp, struct mgmt_mds_info *minfo)
+{
+        struct ptlrpc_request *req;
+        struct mgmt_mds_info *req_minfo, *rep_minfo;
+        int size = sizeof(*req_minfo);
+        int rep_size = sizeof(rep_minfo);
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_REGISTER,
+                              1, &size, NULL);
+        if (!req)
+                RETURN(rc = -ENOMEM);
+
+        req_minfo = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_minfo));
+        memcpy(req_minfo, minfo, sizeof(*req_minfo));
+
+        req->rq_replen = lustre_msg_size(1, &rep_size);
+
+        rc = ptlrpc_queue_wait(req);
+        if (!rc) {
+                int index;
+                rep_minfo = lustre_swab_repbuf(req, 0, sizeof(*rep_minfo),
+                                               lustre_swab_mgmt_mds_info);
+                index = rep_minfo->mmi_index;
+                if (index < 0) {
+                        CERROR("Register failed. rc = %d\n", index);
+                        GOTO(out, rc = index);
+                } else 
+                        CERROR("Register OK. (index = %d)\n", index);
+        }
+out:
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mgc_mds_add);
+
 int mgc_ost_add(struct obd_export *exp, struct mgmt_ost_info *oinfo,
                 struct mgmt_mds_info *minfo)
 {

@@ -284,13 +284,13 @@ static int mgs_cleanup(struct obd_device *obd)
 
 int mgs_handle(struct ptlrpc_request *req)
 {
-        int fail = OBD_FAIL_MGS_ALL_REPLY_NET;
+        int fail = OBD_FAIL_MGMT_ALL_REPLY_NET;
         int rc = 0;
         struct mgs_obd *mgs = NULL; /* quell gcc overwarning */
         struct obd_device *obd = NULL;
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MGS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
+        OBD_FAIL_RETURN(OBD_FAIL_MGMT_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
         LASSERT(current->journal_info == NULL);
         /* XXX identical to MDS */
@@ -336,7 +336,7 @@ int mgs_handle(struct ptlrpc_request *req)
         switch (req->rq_reqmsg->opc) {
         case MGMT_CONNECT:
                 DEBUG_REQ(D_INODE, req, "connect");
-                OBD_FAIL_RETURN(OBD_FAIL_MGS_CONNECT_NET, 0);
+                OBD_FAIL_RETURN(OBD_FAIL_MGMT_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mgs_handle);
                 if (!rc) {
                         /* Now that we have an export, set mgs. */
@@ -347,7 +347,7 @@ int mgs_handle(struct ptlrpc_request *req)
 
         case MGMT_DISCONNECT:
                 DEBUG_REQ(D_INODE, req, "disconnect");
-                OBD_FAIL_RETURN(OBD_FAIL_MGS_DISCONNECT_NET, 0);
+                OBD_FAIL_RETURN(OBD_FAIL_MGMT_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
@@ -377,7 +377,14 @@ int mgs_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = -ENOTSUPP; /* la la la */
                 break;
-
+        case MGMT_REGISTER:
+                CDEBUG(D_INODE, "mds/(maybe new filesystem) register\n");
+                OBD_FAIL_RETURN(OBD_FAIL_MGMT_REGISTER, 0);
+                rc = mgs_mds_register(req);
+        case MGMT_OST_ADD:
+                CDEBUG(D_INODE, "ost add\n");
+        case MGMT_OST_DEL:
+                CDEBUG(D_INODE, "ost del\n");
         case LLOG_ORIGIN_HANDLE_CREATE:
                 DEBUG_REQ(D_INODE, req, "llog_init");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);

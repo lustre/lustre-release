@@ -70,7 +70,6 @@ struct mgc_op_data {
 };
 
 struct system_db {
-        __u64             version;
         char              fsname[64];
         char              mds_name[64];
         char              mds_uuid[64];
@@ -111,6 +110,5 @@ int mgs_fs_cleanup(struct obd_device *obddev);
 extern int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, 
                          int len, void *karg, void *uarg);
 
-extern struct mgc_open_llog* 
-       mgc_find_open_llog(struct obd_device *obd, char *name);
+extern int mgs_mds_register(struct ptlrpc_request*);
 #endif

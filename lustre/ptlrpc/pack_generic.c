@@ -565,6 +565,10 @@ void lustre_swab_mgmt_ost_info(struct mgmt_ost_info *oinfo)
 void lustre_swab_mgmt_mds_info(struct mgmt_mds_info *minfo)
 {
         __swab64s(&minfo->mmi_nid);
+        __swab32s(&minfo->mmi_index);
+        __swab32s(&minfo->mmi_pattern);
+        __swab64s(&minfo->mmi_stripe_size);
+        __swab64s(&minfo->mmi_stripe_offset);
 }
 
 static void lustre_swab_obd_dqinfo (struct obd_dqinfo *i)
