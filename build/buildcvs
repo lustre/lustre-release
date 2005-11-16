@@ -35,6 +35,11 @@ case "$lustretag" in
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
         ;;
+    b1_4_join)
+        snmptag="HEAD"
+        portalstag="b_hd_newconfig"
+        lnettag="b_hd_newconfig"
+        ;;
 
     b_cmd*)
         portalstag="$lustretag"
