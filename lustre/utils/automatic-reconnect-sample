@@ -1,0 +1,34 @@
+#!/bin/sh
+
+if [ -z "$1" ]; then
+  echo "No UUID given to Lustre upcall!" | wall
+  exit 1
+fi
+
+# FIXME: OSTHOST can't be hard-coded!
+OST=$1
+OSTHOST=dev7
+LUSTRE=/home/pschwan/lustre/lustre
+
+while ( ! ping -c 1 -w 3 $OSTHOST ) ; do
+  sleep 2
+done;
+
+echo -n "OST $OSTHOST UUID $OST responding to pings : "
+date
+
+$LUSTRE/utils/lctl <<EOF
+network tcp
+close_uuid $OST
+del_uuid $OST
+connect $OSTHOST 988
+add_uuid $OST $OSTHOST
+quit
+EOF
+
+$LUSTRE/utils/lctl <<EOF
+device \$RPCDEV
+probe
+newconn $OST
+quit
+EOF

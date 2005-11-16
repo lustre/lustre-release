@@ -1,0 +1,37 @@
+ include/linux/mm.h |    1 +
+ mm/filemap.c       |    3 ++-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+Index: linux-ion/include/linux/mm.h
+===================================================================
+--- linux-ion.orig/include/linux/mm.h	2004-07-28 14:34:57.000000000 -0700
++++ linux-ion/include/linux/mm.h	2004-09-27 15:07:50.000000000 -0700
+@@ -593,6 +593,7 @@
+ /* filemap.c */
+ extern void remove_inode_page(struct page *);
+ extern unsigned long page_unuse(struct page *);
++extern void truncate_complete_page(struct page *);
+ extern void truncate_inode_pages(struct address_space *, loff_t);
+ 
+ /* generic vm_area_ops exported for stackable file systems */
+Index: linux-ion/mm/filemap.c
+===================================================================
+--- linux-ion.orig/mm/filemap.c	2004-07-28 14:34:57.000000000 -0700
++++ linux-ion/mm/filemap.c	2004-09-27 15:08:13.000000000 -0700
+@@ -231,7 +231,7 @@
+ 		do_flushpage(page, partial);
+ }
+ 
+-static void truncate_complete_page(struct page *page)
++void truncate_complete_page(struct page *page)
+ {
+ 	/* Leave it on the LRU if it gets converted into anonymous buffers */
+ 	if (!page->buffers || do_flushpage(page, 0))
+@@ -249,6 +249,7 @@
+ 	remove_inode_page(page);
+ 	page_cache_release(page);
+ }
++EXPORT_SYMBOL(truncate_complete_page);
+ 
+ static int FASTCALL(truncate_list_pages(struct list_head *, unsigned long, unsigned *));
+ static int truncate_list_pages(struct list_head *head, unsigned long start, unsigned *partial)

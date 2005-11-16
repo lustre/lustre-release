@@ -1,0 +1,43 @@
+#!/bin/sh
+
+#
+# Make superpatch from current series using combinediff.
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: combine-series output-file"
+	exit 1
+}
+
+if [ $# -ne 1 ] 
+then
+	usage
+fi
+
+need_file_there series
+CURRENT=$(mktemp /tmp/cmbd-XXXXXXXX)
+for FILE in $(cat series)
+do
+	NEXT=$(mktemp /tmp/cmbd-XXXXXXXX)
+	if [ -f $P/patches/$FILE ] 
+	then
+		combinediff $CURRENT $P/patches/$FILE > $NEXT
+	elif [ -f $P/patches/$FILE.patch ]
+	then
+		combinediff $CURRENT $P/patches/$FILE.patch > $NEXT
+	elif [ -f $FILE ]
+	then
+		combinediff $CURRENT $FILE > $NEXT
+	fi
+	rm $CURRENT
+	CURRENT=$NEXT
+done
+
+mv $NEXT "$1"

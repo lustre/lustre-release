@@ -1,0 +1,30 @@
+ include/linux/fs.h |    1 +
+ mm/filemap.c       |    3 +++
+ 2 files changed, 4 insertions(+)
+
+Index: linux-2.4.19.SuSE/include/linux/fs.h
+===================================================================
+--- linux-2.4.19.SuSE.orig/include/linux/fs.h	Sun Nov 16 00:40:59 2003
++++ linux-2.4.19.SuSE/include/linux/fs.h	Sun Nov 16 01:38:06 2003
+@@ -428,6 +428,7 @@
+ 	int (*releasepage) (struct page *, int);
+ #define KERNEL_HAS_O_DIRECT /* this is for modules out of the kernel */
+ 	int (*direct_IO)(int, struct file *, struct kiobuf *, unsigned long, int);
++	void (*removepage)(struct page *); /* called when page gets removed from the inode */
+ };
+ 
+ struct address_space {
+Index: linux-2.4.19.SuSE/mm/filemap.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/mm/filemap.c	Sat Nov 15 18:02:15 2003
++++ linux-2.4.19.SuSE/mm/filemap.c	Sun Nov 16 01:37:11 2003
+@@ -97,6 +97,9 @@
+ {
+ 	struct address_space * mapping = page->mapping;
+ 
++	if (mapping->a_ops->removepage)
++		mapping->a_ops->removepage(page);
++	
+ 	mapping->nrpages--;
+ 	list_del(&page->list);
+ 	page->mapping = NULL;

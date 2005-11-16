@@ -1,0 +1,10 @@
+.deps
+Makefile
+autoMakefile.in
+autoMakefile
+*.ko
+*.mod.c
+.*.flags
+.*.cmd
+.tmp_versions
+.depend

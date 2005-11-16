@@ -1,0 +1,107 @@
+# This file is sourced by lustre/lustrecvs
+
+portalstag="HEAD"
+lnettag="HEAD"
+libsysiotag="HEAD"
+snmptag=""
+
+export LC_COLLATE=C
+
+case "$lustretag" in
+    '')
+	warn "a lustretag is required."
+	usage >&2
+	exit 1
+	;;
+    --help | -h)
+	usage
+	exit 0
+	;;
+
+    # this is the branch table
+    # keep this list sorted alphabetically!
+    b1_2)
+	portalstag="b1_2"
+	;;
+
+    b1_4 | b1_4_*)
+	snmptag="HEAD"
+        portalstag="b_hd_newconfig"
+        lnettag="b_hd_newconfig"
+	;;
+
+    b_cmd*)
+    	portalstag="$lustretag"
+	;;
+
+    b_ioprovement)
+	portalstag=b_ioprovement
+	;;
+
+    b_newconfig_rdmarouting)
+        portalstag="b_hd_newconfig"
+        lnettag="b_newconfig_rdmarouting"
+        lustretag="b1_4"
+        ;;
+
+    b_port_ahead)
+	portalstag="b_port_ahead"
+	;;
+
+    b_port_netid)
+	portalstag="b_port_netid"
+	;;
+
+    # b_port_step is only for portals
+    b_port_step)
+	portalstag="b_port_step"
+	lustretag="HEAD"
+	;;
+
+    b_port_test)
+	portalstag="b_port_test"
+	;;
+
+    b_ptl_smallfix)
+	portalstag="b_ptl_smallfix"
+	lustretag="b1_4"
+	;;
+
+    b_ptlrpc_cleanup)
+	portalstag="b_ptlrpc_cleanup"
+	;;
+
+    # starting with 1_4_6, we have a tagged lnet too
+    b_release_1_4_[6-9]*)
+        portalstag=$lustretag
+        lnettag=$lustretag
+        ;;
+    
+    b_release_*)
+	portalstag=$lustretag
+	;;
+
+    # v1.0-v1.3, v1.4.0-v1.4.2
+    v1_[0-3]_*|v1_4_[0-2]*)
+	portalstag="$lustretag"
+	;;
+
+    # v1.4.3-v1.4.5, v1.4.5.1 - v1.4.5.9
+    v1_4_[3-5]|v1_4_[3-4]_*|v1_4_5_[1-9]|cray_2005*)
+	portalstag="$lustretag"
+	libsysiotag="$lustretag"
+	;;
+
+    # all later v* tags
+    v[1-9]*)
+	portalstag="$lustretag"
+	lnettag="$lustretag"
+	libsysiotag="$lustretag"
+	;;
+esac
+
+cvs_cmd libsysio libsysio "$libsysiotag"
+cvs_cmd portals portals "$portalstag"
+cvs_cmd lnet lnet "$lnettag"
+cvs_cmd snmp lustre-snmp "$snmptag"
+cvs_cmd lustre lustre-core "$lustretag"

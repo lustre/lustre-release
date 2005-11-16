@@ -1,0 +1,82 @@
+#!/bin/sh
+
+usage()
+{
+	echo "Usage: new-kernel linux-2.4.2-pre2 linux-2.4.3-pre3 linux-2.4.3 patch.gz cvs-dir"
+	exit 1
+}
+
+wantdir()
+{
+	if [ x$1 = x ]
+	then
+		usage
+	fi
+	if [ ! -d $1 ]
+	then
+		echo "directory $1 does not exist"
+		usage
+	fi
+}
+
+wantfile()
+{
+	if [ x$1 = x ]
+	then
+		usage
+	fi
+	if [ ! -f $1 ]
+	then
+		echo "file $1 does not exist"
+		usage
+	fi
+}
+
+doit()
+{
+	echo $* 1>&2
+	$* || {
+		echo oops
+		exit 1 
+	}
+}
+
+
+CURRENT_KERNEL=$1
+NEXT_KERNEL=$2
+BASE_KERNEL=$3
+PATCH_FILE=$4
+CVS_DIR=$5
+
+TEMP_PATCH=$(mktemp /tmp/patch-XXXXXX)
+MY_DIFF="$CURRENT_KERNEL"--"$NEXT_KERNEL"
+
+wantdir $CURRENT_KERNEL
+wantdir $BASE_KERNEL
+wantdir $CVS_DIR
+wantfile $PATCH_FILE
+
+doit rm -rf $NEXT_KERNEL
+doit cp -a $BASE_KERNEL $NEXT_KERNEL
+doit rm -f $TEMP_PATCH
+doit gunzip < $PATCH_FILE > $TEMP_PATCH
+cd $NEXT_KERNEL
+doit patch -p1 --dry-run -i $TEMP_PATCH
+doit patch -p1 -s -i $TEMP_PATCH
+echo cd ..
+cd ..
+
+echo diff -uNrp $CURRENT_KERNEL $NEXT_KERNEL
+diff -uNrp $CURRENT_KERNEL $NEXT_KERNEL > $MY_DIFF
+
+echo cd $CVS_DIR
+cd $CVS_DIR
+doit patch -p1 --dry-run -s -i ../$MY_DIFF
+doit patch -p1 -s -i ../$MY_DIFF
+cvs-take-patch ../$MY_DIFF
+cvs commit -m "'doing $NEXT_KERNEL'"
+cvs update -ko -d -P
+
+TAG=$(echo $NEXT_KERNEL | sed -e 's@\.@_@g')
+cvs tag $TAG
+rm -f $TEMP_PATCH

@@ -1,0 +1,35 @@
+Index: linux-2.4.19.SuSE/fs/jbd/transaction.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/jbd/transaction.c	Sun Nov 16 01:38:25 2003
++++ linux-2.4.19.SuSE/fs/jbd/transaction.c	Sun Nov 16 01:44:26 2003
+@@ -1094,7 +1094,6 @@
+ 	
+ 	spin_lock(&journal_datalist_lock);
+ 	set_bit(BH_JBDDirty, &bh->b_state);
+-	set_buffer_flushtime(bh);
+ 
+ 	J_ASSERT_JH(jh, jh->b_transaction != NULL);
+ 	
+@@ -1995,6 +1994,13 @@
+ 	spin_unlock(&journal_datalist_lock);
+ }
+ 
++static void jbd_refile_buffer(struct buffer_head *bh)
++{
++	if (buffer_dirty(bh) && (bh->b_list != BUF_DIRTY))
++		set_buffer_flushtime(bh);
++	refile_buffer(bh);
++}
++
+ /* 
+  * Remove a buffer from its current buffer list in preparation for
+  * dropping it from its current transaction entirely.  If the buffer has
+@@ -2022,7 +2028,7 @@
+ 		J_ASSERT_JH(jh, jh->b_transaction->t_state == T_RUNNING);
+ 	} else {
+ 		/* Onto BUF_DIRTY for writeback */
+-		refile_buffer(jh2bh(jh));
++		jbd_refile_buffer(jh2bh(jh));
+ 	}
+ }
+ 

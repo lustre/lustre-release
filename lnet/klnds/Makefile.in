@@ -1,0 +1,10 @@
+@BUILD_GMLND_TRUE@subdir-m += gmlnd
+@BUILD_RALND_TRUE@subdir-m += ralnd
+@BUILD_OPENIBLND_TRUE@subdir-m += openiblnd
+@BUILD_IIBLND_TRUE@subdir-m += iiblnd
+@BUILD_VIBLND_TRUE@subdir-m += viblnd
+@BUILD_QSWLND_TRUE@subdir-m += qswlnd
+@BUILD_PTLLND_TRUE@subdir-m += ptllnd
+subdir-m += socklnd
+
+@INCLUDE_RULES@

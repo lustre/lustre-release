@@ -1,0 +1,3043 @@
+#!/usr/bin/perl -w
+
+#      tex2pdf - script for translating latex docs to pdf
+#
+#      Copyright (C) 2000-2002 by Steffen Evers and others
+#
+#      This program is free software; you can redistribute it and/or modify
+#      it under the terms of the GNU General Public License version 2 as 
+#      published by the Free Software Foundation.
+#
+#      This program is distributed in the hope that it will be useful,
+#      but WITHOUT ANY WARRANTY; without even the implied warranty of
+#      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#      GNU General Public License for more details.
+#
+#      You should have received a copy of the GNU General Public License
+#      along with this program; if not, write to the Free Software
+#      Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#      The GNU General Public License is also available online:
+#      http://www.gnu.org/licenses/gpl.html
+#
+# Thanks a lot to all the people that have already contributed to this project!
+#
+# The changelog including the credits has become too long. So, I have removed it
+# from the script, but it is still available online (see below). 
+#
+# Special thanks to the following people for their contribution
+# (see the changelog for details):
+# Matej Cepl, Herbert Voss, Nicolas Marsgui, Bruce Foster, Mark van Rossum,
+# Matt Bandy, Garrick Chien Welsh, Stacy J. Prowell, Pavel Sedivy,
+# Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke,
+# Rainer Dorsch & friends, Jean-Pierre Chretien, Fernando Perez,
+# Ha Duong Minh, Oscar Lopez
+#
+# Project Homepage: http://tex2pdf.berlios.de
+# Developer Homepage: http://developer.berlios.de/projects/tex2pdf
+# Mailing lists: http://developer.berlios.de/mail/?group_id=57
+# Changelog: http://tex2pdf.berlios.de/changelog.html
+#
+# Anyone is invited to help to improve tex2pdf. Therefore any kind of feedback
+# is welcome. Maybe you even would like to hack the code and send us your
+# changes. This would help a lot and is highly appreciated. Think about it :-)
+# Subscribing to the developer mailing list might be a first step (see above).
+#
+# Send feedback to: tex2pdf-devel@lists.berlios.de
+#
+
+######## Imports
+
+use File::Basename;
+use File::Copy;
+use Getopt::Long;
+use Sys::Hostname;
+use Cwd;
+use strict;
+
+####### global variables
+
+my $MYRELEASE="3.0.21";
+my $MYHOSTNAME=hostname;
+my $MYNAME=basename $0;
+my $MYUSER=$ENV{'USER'};
+my $USER_HOME=$ENV{'HOME'};
+if (not $MYUSER) { $MYUSER = 'nobody'; }
+if (not $USER_HOME) { $USER_HOME = '/tmp'; }
+
+my @TMPFILES=();
+my @TMP_TEX_FILES=(); 
+my $NUM_PARAM_MIN=0;
+my $NUM_PARAM_MAX=9;  
+my @REF_DOCS;
+my $MTP_PREAMBLE_FILENAME="preamble.cfg";
+my $MTP_TMP_BASESUFFIX="-mp";
+my @EPS_SUFFIXES=('eps','ps','ps.gz','eps.gz' );
+my $PDF_ORIG_SUFFIX='pdf.orig';
+my @BITMAP_SUFFIXES=( 'jpg', 'png', 'tif' );
+
+# (initial) log file of this script
+# this log file will be moved to the specified log_dir after configuration
+# and the variable will be updated to the new name
+my $MYLOGFILE="$USER_HOME/tex2pdf-$$.log";  
+my $LOGFILE_VERBOSITY=9;
+
+### text token for no value
+my $NIL="NOVALUE";
+my $UNDEF="undefined";
+
+### token for boolean 'false', 'no' 
+my $NO="no";
+my $FALSE=0;
+
+### token for boolean 'true', 'yes' 
+my $YES="yes";
+my $TRUE=1;
+
+### file to store private parameters
+# If you only want to change your private parameters change them there
+# default: $HOME/.tex2pdf3rc
+my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
+my $MYRCFILE_VERSION=7;
+my $RCVERSION_STRING="rcfile_version";
+
+## set global variable configured to prevent access to configuration
+#  parameters before configuration process is finished
+my $CONFIGURED=$FALSE;
+my $PRE_CONFIG_VERBOSITY=4;
+
+########################## NEW PERL CONFIGURATON
+
+my %CONFIGURATION = ();
+my %PARAMETER_LIST = ();
+my @PARAMETER_ORDER = ();
+my %PARAMETER_TYPES = ();
+ 
+## Array index for the various information in each parameter specifcation
+## referenced by %PARAMETER_LIST
+my $TYPE=0;
+my $OPT_ALIAS=1;
+my $OPT_SPEC=2;
+my $DEF_VALUE=3;
+my $DESCRIPTION=4;
+my $QUESTION=5;
+my $EXPLANATION=6;
+
+&add_param_type('paper',
+   [ ['a4paper' , 'a4 paper' ],
+     [ 'letterpaper', 'letter paper' ],
+     [ 'legalpaper', 'legal paper' ],
+     [ 'executivepaper', 'executive paper' ],
+     [ $NIL, 'do not set value - leave it to hyperref' ]
+   ] );
+		  
+&add_param_type('color', 
+   [ [ 'yellow', 'LaTeX color yellow' ],
+     [ 'red', 'LaTeX color red' ],
+     [ 'green', 'LaTeX color green' ],
+     [ 'cyan', 'LaTeX color cyan' ],
+     [ 'blue', 'LaTeX color blue' ],
+     [ 'magenta', 'LaTeX color magenta' ],
+     [ 'black', 'LaTeX color black' ],
+     [ $NIL , 'do not set this value - leave it to hyperref' ]
+   ] );
+
+&add_param_type('destination',
+   [ [ 'source', 'directory of the LaTeX source document' ] ,
+     [ 'input', 'root directory of referenced material' ],
+     [ 'custom', 'custom directory as specified' ]
+   ] );
+
+### Option parameters: these parameters have no default value and can not
+# be configured interactively, but only as a command line option
+# an option parameter is not allowed to have a default value, question or
+# explanation
+# and all parameter of type action are treated as option parameters
+# $key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation
+
+&add_param('help', 'action', undef, '|h', '',
+   'print a short help text and exit');
+
+&add_param('version', 'action', undef, '|v', '',
+   'print the version of this script and exit');
+
+&add_param('print_config', 'action', undef, '|o', '',
+   'print the current configuration and exit');
+
+&add_param('configure', 'action', undef, '|c', '',
+   'configure all parameters interactivly, store them and exit');
+
+&add_param('title', 'text', undef, '|t', '=s',
+   'set PDF info title for specified document');
+
+&add_param('author', 'text', undef, '|a', '=s',
+   'set PDF info author for specified document');
+
+&add_param('input_path', 'directory', undef, '', '=s',
+   'set path for referenced material in main document');
+
+### Full parameters
+# parameter type action is not allowed
+# $key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation
+
+&add_param('logdir', 'directory',"$USER_HOME/tex2pdf-log/", '', '=s',
+   'set directory for saving log files',
+   'What log directory should be used?',
+   "The log directory is used to store information about the generation\n"
+   ."process for later review, e.g. for debugging.");
+
+&add_param('lyxrc_path', 'directory', "$USER_HOME/.lyx/", '', '=s',
+   'set the configuration directory of LyX',
+   'What is the directory for your LyX configuration data?',
+   "If I have to generate a LateX file from a LyX file I need to clear two "
+   ."temporary\nfiles in your LyX configuration directory. They will "
+   ."be backuped and normally\ndo not contain any valuable data anyway. If "
+   ."you do not use LyX, simply leave\nthe default.");
+
+&add_param('lyx_exec', 'text', "lyx", '', '=s',
+   'specify the LyX executable for converting lyx to latex',
+   'Which executable should I use for converting LyX docs to LaTeX?',
+   "I use LyX to generate a LateX file from a LyX file. As you might use\n"
+   ."several versions of LyX at the same time or do not have it in your path"
+   ."\nyou can give me the apropriate executable here (e.g. '/usr/bin/lyx')."
+   ."\nIn most cases the default 'lyx' should be fine.");
+
+&add_param('debug', 'bool', $NO, '', '!',
+'do not delete temporary files after execution and be as verbose as possible',
+   'Do you want to debug this script?',
+   "I will not remove any temporary files. This could cause problems on a "
+   ."second\nexecution as I might refuse to overwrite these files for security "
+   ."reasons.\nYou have to remove them manually in this case. Additionally, I "
+   ."will provide\nas much information during execution as possible.");
+
+&add_param('delete_pdf_images', 'bool', $NO, '', '!',
+   'delete generated PDF image files after execution',
+   'Should generated PDF image files be deleted after execution?',
+   "Pdflatex cannot handle EPS images. Therefore all such images need to be\n"
+   ."translated to PDF in advance. After a successful generation of the final "
+   ."PDF \ndocument or after encountering an error I could leave this PDF "
+   ."images for\n later executions or simply delete them.");
+
+&add_param('clean_on_abort', 'bool', $YES, '', '!',
+   'also delete temporary files after abort',
+   'Should temporary files be deleted when aborting?',
+   "When the generation of the PDF file fails for some reason you might still "
+   ."want\nto keep already generated temporary files for some reason, e.g. "
+   ."debugging.\nIf you do not want to keep them set this parameter to 'yes'.");
+
+&add_param('tmp_base_suffix', 'text', '-pdf', '', '=s',
+   'specify the extension of the basename for temporary TeX files',
+   'What string should be used as basename suffix for temporary files?',
+   "I have to find names for my temporary files. Therefore I construct a new "
+   ."name\nfrom the original filename and this string. Me and various called "
+   ."applications\nwill then create several files with this constructed "
+   ."basename and different\nextensions. When cleaning up I will simple "
+   ."delete all files with the\nconstructed basenames I have used.");
+
+&add_param('overwrite', 'bool', $NO, '', '!',
+   'ignore existence of files with same basename as temporary TeX files',
+   'Should I overwrite existing (temporary) files?',
+   "In spite of the precaution with the appended base suffix, there still "
+   ."might\nexist files with an identical basename. If you set this option I "
+   ."will consider\nsuch files as old temporary files and overwrite them "
+   ."during generation.\nHowever, I will not remove any files with this "
+   ."constructed basename on the\nclean up. You have to remove them manually.");
+
+&add_param('clean_logs', 'bool', $YES, '|l', '!',
+   'delete all log files in log directory before execution',
+   'Should the old log files be removed before execution?',
+   "I can remove old log files prior to execution. However, you might "
+   ."experience\nproblems if you run the script on several documents at the "
+   ."same time. If you\nwant to be on the safe side, answer '$NO'. Than you "
+   ."have to remove the logs\nmanually from time to time.");
+
+&add_param('check_commands', 'bool', $YES, '', '!',
+   'make sure that required shell commands does exist before start',
+   'Should I look for required executables?',
+   "As I use several different applications for PDF generation you might want "
+   ."to \nmake sure that they are available before the real work starts.");
+
+&add_param('destination', 'destination', 'source', '', '=s',
+   'specifiy final location of generated PDF document',
+   'Where should I store the resulting PDF document?',
+   "Depending on the application that starts this script (or you if you call "
+   ."it\ndirectly) you might want to have the resulting PDF document located "
+   ."at\ndifferent places.");
+
+&add_param('custom_path', 'directory', $USER_HOME.'/', '|d', '=s',
+   "specify custom path for 'destination' parameter",
+   'What custom directory should be used?',
+   "When ever you specifiy to store the generated PDF document (command line "
+   ."or\nconfiguration) in a custom directory I will put it here.");
+
+&add_param('colorlinks', 'three', $YES, '', '!',
+   'activate colored links in PDF doc (hyperref)',
+   'Should colors be used for links?',
+   "I can use different colors for links inside the PDF document.\nYou can "
+   ."use '$UNDEF' to tell me that you would like to leave this up to\n"
+   ."independent hyperref configuration.");
+
+&add_param('paper', 'paper', 'a4paper', '|p', '=s',
+   'specify papersize of the PDF doc (hyperref)',
+   'What papersize should be used?',
+   "I can set the papersize of the resulting PDF document");
+
+&add_param('citecolor', 'color', 'blue', '', '=s',
+   'specify color of citations in PDF doc (hyperref)',
+   'What color should be used for citation?', "");
+
+&add_param('urlcolor', 'color', 'blue', '', '=s',
+   'specify color of URLs in PDF doc (hyperref)',
+   'What color should be used for URLs?', "");
+
+&add_param('linkcolor', 'color', 'blue', '', '=s',
+   'specify color of internal links in PDF doc (hyperref)',
+   'What color should be used for normal internal links?', "");
+
+&add_param('pagecolor', 'color', 'blue', '', '=s',
+   'specify color of links to other pages in PDF doc (hyperref)',
+   'What color should be used for page links?', "");
+
+&add_param('link_toc_page', 'bool', $YES, '', '!',
+   'link table of contents to pages instead of sections (hyperref)',
+   'Should TOC be linked to pages?',
+   "The table of contents of the resulting PDF document is normally linked to "
+   ."the\ncorresponding section. However, you can also link it to the "
+   ."corresponding page\ninstead.");
+
+&add_param('default_title', 'text', $NIL, '', '=s',
+   'set default PDF info title',
+   'What is the default title?',
+   "A PDF document contains meta data about itself: the document info.\nOne "
+   ."of the info fields is the document title. You can set a default value\n"
+   ."which will be used in the case the script cannot determine a proper "
+   ."title from\nthe LaTeX document and you have not set one on the command "
+   ."line.\nYou can use '$NIL' to tell me that you would like to leave this "
+   ."up to\nindependent hyperref configuration.");
+
+&add_param('default_author', 'text', $NIL, '', '=s',
+   'set default PDF info author',
+   'What is the default author?',
+   "A PDF document contains meta data about itself: the document info.\nOne "
+   ."of the info fields is the document author. You can set a default value\n"
+   ."which will be used in the case the script cannot determine a proper "
+   ."author\nfrom the LaTeX document and you have not set one on the command "
+   ."line.\nYou can use '$NIL' to tell me that you would like to leave this "
+   ."up to\nindependent hyperref configuration.");
+
+&add_param('force_index', 'bool', $NO, '|i', '!',
+   'force explicit inclusion of (existing) index in PDF doc',
+   'Should the call of makeindex be forced?',
+   "Older versions of pdflatex have not included the index of a document\n"
+   ."automatically. If you are missing the index in your document you can "
+   ."force the\ncall of makeindex on the condition that an index file was "
+   ."generated.");
+
+&add_param('makeindex_opts', 'text', '', '', '=s',
+   'specify extra options for shell execution of makeindex',
+   'What additional options for makeindex should be used?',
+   "Sometimes, people would like to pass some extra options over to makeindex. "
+   ."This\nis the right place to do that. Everyone else can leave this empty.");
+
+&add_param('bibtex', 'three', $NIL, '|b', '!',
+   'set bibtex behavior',
+   'How should bibtex be used?',
+   "The bibtex usage can be specified.\nPossible values are: '$YES' (always "
+   ."run bibtex), '$NO' (never run bibtex)\nand '$UNDEF' (scan tex file for "
+   ."a bibtex entry and run it if required).");
+
+&add_param('gloss', 'three', $NIL, '', '!',
+   'set gloss behavior',
+   'How should gloss be used?',
+   "The gloss usage can be specified.\nPossible values are: '$YES' (always "
+   ."run bibtex on file.gls), '$NO' (never run bibtex on file.gls)\nand '$UNDEF' (scan tex file for "
+   ."a gloss entry and run it if required).");
+
+&add_param('thumbpdf', 'bool', $NO, '|n', '!',
+   'generate thumbnails for PDF document',
+   'Should PNG thumbnails be created?',
+   "I can use thumbpdf to include thumbnails of the document pages in the PDF "
+   ."file.\nThis requires Ghostscript 5.50 or higher.");
+
+&add_param('ppower', 'bool', $NO, '|w', '!',
+   'postprocess PDF document with ppower',
+   'Should ppower postprocess the PDF document?',
+   "I can use ppower to postprocess the PDF "
+   ."file.\nThis requires ppower 4.0 or higher.");
+
+&add_param('authorindex', 'bool', $NO, '', '!',
+   'generate author index for PDF document',
+   'Should authorindex process the PDF document?',
+   "I can use authorindex to process to include an author index in the PDF "
+   ."file.\nThis requires authorindex.");
+
+
+&add_param('mtp_preamble', 'bool', $NO, '|r', '!',
+   "add the file $MTP_PREAMBLE_FILENAME at the current dir to metapost files",
+   "Should the $MTP_PREAMBLE_FILENAME file be added to the metapost files?",
+   "I can add $MTP_PREAMBLE_FILENAME to metapost "
+   ."files.\nThis requires an existing $MTP_PREAMBLE_FILENAME file.");
+
+&add_param('maxrun', 'integer', 6, '', '=i',
+   'specify maximal number of pdflatex runs if problems are detected',
+   'What should be the maximum number of runs for pdflatex (1-6)?', "");
+
+&add_param('minrun', 'integer', 2, '', '=i',
+   'specify minimal number of pdflatex runs if no problems are detected',
+   'What should be the minimum number of runs for pdflatex (1-6)?', "");
+
+&add_param('verbosity', 'integer', 5, '', '=i',
+   'set the level of verbosity',
+   'Which level of verbosity do you want (0-9)',
+   "Different people want different amounts of information about what the "
+   ."script\nactually does. Therefore you can adjust the verbosity to your "
+   ."personal needs\nby setting this parameter to a value from 0 to 9. 0 "
+   ."means no output at all\nand 9 means maximal output.");
+
+&add_param('pdftex_opts', 'text', '', '', '=s',
+   'specify extra options for shell execution of pdflatex',
+   'What additional options for pdflatex should be used?',
+   "Sometimes, people would like to pass some extra options over to pdflatex. "
+   ."This\nis the right place to do that. Everyone else can leave this empty.");
+
+&add_param('hyperref_args', 'text', '', '', '=s',
+   'specify extra arguments for the hyperref package',
+   'What additional arguments should be passed to the hyperref package?',
+   "Sometimes, people would like to pass some extra options over to hyperref. "
+   ."This\nis the right place to do that. Everyone else can leave this empty.");
+
+# the following parameter types should be set now:
+#  'color'       => \@VALUES,
+#  'destination' => \@VALUES,
+#  'paper'       => \@VALUES,
+#  'action'      => undef,
+#  'three'       => undef,
+#  'bool'        => undef,
+#  'integer'     => undef,
+#  'text'        => undef,
+#  'directory'   => undef
+
+##### Functions ###########################################
+
+### handle a status report with a given priority level
+# write it to the log file if log file if configuration is done
+# write it to stdout if verbosity is set lower or equal
+#
+# The following priority levels exist:
+# 1: minimal fatal error messages
+# 2: additional information about fatal error
+# 3: non-fatal error message 
+# 4: warning
+# 5: major step of the process
+# 6: minor step of the process
+# 7: progress report of minor step
+# 8: long status report from called applications
+# 9: debug info
+#
+# parameter 1: priority level
+# parameter 2: list of output strings
+# return value: none
+
+sub report {
+   my $level;
+   my $verbosity;
+   my $log_verbosity;
+   my @output;
+
+   if (@_ < 2 ) {
+      @output = ( "Oppss! Report function got only 1 argument!" );
+      $level  = 9;
+   } else {
+      ($level, @output) = @_;
+   }
+
+   if($CONFIGURED) {
+      if( &param_value('debug') eq $NO ) {
+         $verbosity = &param_value('verbosity');
+         $log_verbosity = $LOGFILE_VERBOSITY;
+      } else {
+         $verbosity = 9;
+         $log_verbosity = 9;
+      } 
+   } else {
+      $verbosity = $PRE_CONFIG_VERBOSITY;
+      $log_verbosity = $LOGFILE_VERBOSITY;
+   }
+
+   if ( $level <= $log_verbosity ) {
+      open LOGFILE, ">> $MYLOGFILE";
+      print LOGFILE @output,"\n";
+      close LOGFILE;
+   }
+
+   if( $level <= $verbosity ) {
+      print @output,"\n";
+   }
+}
+
+### process system command and do the appropriate reports
+# parameter 1: the system command to process
+# parameter 2: flag - TRUE: abort on failure, FALSE: continue on failures
+# parameter 3: priority level for output of system command
+# parameter 4: specific failure message
+# return value: TRUE - success, FALSE - failure 
+
+sub system_command {
+   my $command = $_[0];
+   my $fatal_failure= $_[1];
+   my $output_priority = $_[2];
+   my $fail_message = $_[3];
+   my $system_out;
+
+   $system_out = `$command 2>&1`;
+
+   if ($?) {
+      if ($fatal_failure) {
+         &report(2, $system_out) if ($system_out);
+         &abort($fail_message.": $!");
+      } else {
+         &report($output_priority, $system_out) if ($system_out);
+         &report(3, $fail_message.": $!");
+      }
+      return $FALSE;
+   }
+
+   return $TRUE;
+}
+
+### Index of the first occurence of a string in an array
+# parameter 1: text
+# parameter 2: list
+# return value: index or -1 if not element of the array 
+
+sub array_index {
+   my ($text, @list) = @_;
+
+   if(!defined($text)) {
+      &report(9, "Oppss! Cannot compare nothing.");
+      return -1;
+   }
+
+   foreach (0..$#list) {
+      if ( $list[$_] eq $text ) { return $_; }
+   }
+   
+   return -1;
+}
+
+### extract the last N lines of a text file
+# abort on failures
+# parameter 1: file to read
+# parameter 2: N - number of lines to print (undef/0: all lines)
+# return value: last N lines 
+
+sub file_tail {
+   my $file_name = $_[0];
+   my $no_of_lines = defined($_[1]) ? $_[1] : 0;
+   my @cache=();
+
+   &check_file($file_name);
+   open(TAIL_SOURCE, "<$file_name")
+      or &abort("Could not read file $file_name: $!");
+
+   if($no_of_lines == 0) {
+      # use entire file
+      while(<TAIL_SOURCE>) {
+         if(!$_) { $_="\n"; }
+         push(@cache, $_);
+      }
+   } else {
+      # only last N lines
+   
+      # fill up cache
+      while(@cache < $no_of_lines and <TAIL_SOURCE>) {
+         if(!$_) { $_="\n"; }
+         push(@cache, $_);
+      }
+   
+      # always cache the last N lines up to the end of the file
+      while(<TAIL_SOURCE>) {
+         if(!$_) { $_="\n"; }
+         shift(@cache);
+         push(@cache, $_);
+      }
+   }
+   
+   close TAIL_SOURCE;
+
+   return @cache;
+}
+
+### return all lines of FILE which match match regexp EXPR 
+# parameter 1: FILE - file to read
+# parameter 2: EXPR - regular expression to match
+# parameter 3: true: exit on first occurence, otherwise get all (default: false)
+# return value: array of matching lines
+
+sub grep_file {
+   my $file_name = $_[0];
+   my $regexp = $_[1];
+   my $first_only = $_[2] ? $TRUE : $FALSE;
+   my @result=();
+
+   ### open file and abort if not possible
+   &check_file($file_name);
+   open(GREP_SOURCE, "<$file_name")
+      or &abort("Could not read file $file_name: $!");
+
+   while(<GREP_SOURCE>) {
+      if(m#$regexp#) {
+         push(@result, $_);
+         if($first_only) { last; }
+      }
+   }
+
+   close GREP_SOURCE;
+   return @result;
+}
+   
+### Removing all temporary files
+
+sub clean_up {
+   &report(6, "Removing temporary files ...");
+   foreach (@TMPFILES) {
+      unlink($_) if(-f $_); 
+   }
+
+   foreach (@TMP_TEX_FILES) {
+      # make sure that we have a good tex file name in order
+      # to avoid unintended removals
+      if( $_ ne "" and -f $_.'.tex' ) {
+         unlink glob($_.".???"); 
+      } else {
+         &report(3, "Bad file in temp tex files list: $_");
+      }
+   }
+}
+
+### Output of all temp files
+
+sub print_temp_files {
+   if (scalar @TMPFILES > 0) {
+      print "Stored the following explicit temporary files:\n";
+      foreach (@TMPFILES) {
+         if (-f $_) {
+            print "> ".$_."\n";
+         } else {
+	    print "> ".$_." (does not exist)\n";
+         }
+      }
+      print "\n";
+   }
+   
+   if (scalar @TMP_TEX_FILES > 0) {
+      print "Stored the following temporary TeX base names:\n";
+      foreach (@TMP_TEX_FILES) {
+         if( $_ ne "" and -f $_.'.tex' ) {
+            print "> ".$_.": "; 
+            foreach my $file (glob($_.".???")) {
+	       print basename($file)." ";
+	    }
+            print "\n"; 
+         } else {
+            print "> ".$_.": bad file for temp TeX file\n";
+         }
+      }
+      print "\n";
+   }
+}
+
+###  exit with an error message
+
+sub abort {
+   &report(1, @_);
+   if ( $CONFIGURED and &param_value('clean_on_abort') eq $YES 
+       and &param_value('debug') eq $NO) {
+      &clean_up;
+   } else {
+      &print_temp_files;
+   }
+   &report(2, "Aborting ...");
+   exit 1;
+}
+
+### Check for required command with 'which'; abort if not found
+# parameter $1: command to check
+# parameter $2: remark if specified command is not found
+
+sub checkCommand {
+   my $command = $_[0];
+   my $message = $_[1];
+   my $which_output;
+
+   $which_output = `which $command 2>&1`; 
+   chomp $which_output;
+   $_ = $which_output;
+   s|^(.*/)?([^/]+)$|$2|;
+
+   if ( $_ ne $command ) {
+      &report(2, "\n$which_output");
+      &report(1, "\nRequired command '$command' seems not to be in your path.");
+      if ( defined($message) ) {
+         &report(2, "$message");
+      }
+      &report(2, "Aborting ...");
+      exit 1;
+   }
+}
+
+###################### Generic configuration functions
+
+### interactively answer a question with yes or no
+# parameter 1: question
+# parameter 2: default value (not set means $NIL)
+# parameter 3: yes: allow undefined as third value
+#              no : only yes/no allowed (default)
+# return value: the given answer
+
+sub question_ynu {
+   my $user_input;
+   my $question = $_[0];
+   my $default = defined($_[1]) ? $_[1] : $NIL;
+   my $undef_allowed = $_[2];
+   my $response = undef;
+
+   if (defined($undef_allowed) and $undef_allowed eq $YES) {
+      $undef_allowed = $TRUE;
+   } else {
+      $undef_allowed = $FALSE;
+   }
+
+   if( $default =~ /^y(es)?/i ) {
+      $question .= ' [y]: ';
+      $default = $YES;
+   } elsif ( $default eq $NIL and $undef_allowed ) {
+      $question .= ' [u]: ';
+      $default = $NIL;
+   } else {
+      $question .= ' [n]: ';
+      $default = $NO;
+   }
+   while (! defined($response)) {
+      print $question;
+      $user_input = <STDIN>;
+      chomp($user_input);
+      
+      if( $user_input =~ /^y(es)?/i ) {
+         $response=$YES;
+      } elsif ( $user_input =~ /^no?/i ) {
+         $response=$NO;
+      } elsif ( $user_input =~ /^u(ndef(ined)?)?/i and $undef_allowed ) {
+         $response=$NIL;
+      } elsif ( $user_input eq "" ) {
+         $response=$default;
+      } else {
+         print "Please respond with y(es)";
+         print ", u(ndefined)" if($undef_allowed);
+         print " or n(o).\n";
+      }
+   }
+   return $response;
+}
+
+### interactively input a positive integer number
+# parameter 1: question
+# parameter 2: default value
+# parameter 3: min value
+# parameter 4: max value
+# return value: the input number
+
+sub input_number {
+   my $question = $_[0];
+   my $default = $_[1];
+   my $min_limit = $_[2];
+   my $max_limit = $_[3];
+   my $response= undef;
+
+   while (! defined($response)) {
+      print "$question [$default]: ";
+      my $user_input = <STDIN>;
+      chomp($user_input);
+      
+      if ($user_input eq "") {
+         $response=$default;
+      } else {
+         $_ = $user_input;
+         if (s/^([0-9]+)$/$1/ and $_ >= $min_limit and $_ <= $max_limit ) {
+            $response = $_;
+	 } else {
+            print "Invalid input. Please enter a positve integer from $min_limit to $max_limit.\n";
+         }
+      }
+   }
+   return $response;
+}
+
+### interactively choose between several given values
+# parameter 1: question
+# parameter 2: default value
+# parameter 3: reference to an array of possible values arrays
+# return value: the chosen value
+
+sub choose_value {
+   my ($question, $default, $enum_array_ref)=@_;
+   my $default_no=1;
+   my $chosen_no;
+   my @possible_values = @$enum_array_ref;
+   my @value_array;
+   my $value_key;
+   my $value_output;
+
+   print "$question\n";
+   foreach (0..$#possible_values) {
+      my $no     = $_ + 1;
+      @value_array  = @{$possible_values[$_]};
+      $value_key    = $value_array[0];
+      $value_output = $value_array[1];
+
+      print "$no) " . $value_output . "\n";
+      if ( $default eq $value_key ) { $default_no=$no; }
+   }
+
+   $chosen_no=&input_number("Please enter the corresponding number", $default_no, 1, $#possible_values);
+
+   @value_array  = @{$possible_values[$chosen_no - 1]};
+   $value_key    = $value_array[0];
+   return $value_key;
+}
+
+### interactively answer a question
+# parameter 1: question
+# parameter 2: current value
+# return value: the new value
+
+sub input_text {
+   my $question=$_[0];
+   my $default=$_[1];
+   my $response= undef;
+
+   print "Suggested value: $default\n";
+   if ( &question_ynu("Do you want to keep this value?", $YES) eq $YES ) {
+      $response= $default;
+   } else {
+      print "$question ";
+      my $user_input = <STDIN>;
+      chomp($user_input);
+      
+      $response = $user_input;
+   }
+   return $response;
+}
+
+##### Make sure that specified file exists and is readable; abort if missing
+# parameter 1: file to check
+# parameter 2: remark if check fails on specified file
+
+sub check_file {
+   my $file = $_[0];
+   my $message = defined($_[1]) ? $_[1] : "Required file cannot be accessed!";
+
+   if ( ! -f $file ) {
+      &report(2, "\nSorry. I cannot find '$file'.");
+      &abort($message);
+   } elsif ( ! -r $file ) {
+      &report(2, "\nSorry. File '$file' exists, but is not readable.");
+      &abort($message);
+   }
+}
+
+##### Make sure that specified directory exists and is writable
+# parameter 1: directory to check
+# parameter 2: remark if check fails on specified directory
+# parameter 3: if yes, creation is allowed
+# return value: $TRUE - ok; $FALSE - error
+
+sub check_dir {
+   my $directory = $_[0];
+   my $message = defined($_[1]) ? $_[1] : "Not a valid path!";
+   my $allow_creation = defined($_[2]) ? $_[2] : $NO;
+
+   if ( index($directory, "/") != 0 ) {
+      &report(3, "\nSorry. '$directory' is not an absolute path.");
+      &report(3, $message);
+      return $FALSE;
+   } elsif ( ! -d $directory ) {
+      # dir does not exist
+      if ( $allow_creation eq $YES ) {
+         # creation allowed
+         &report(4, "\nI cannot find '$directory'. Try to create it.");
+         if ( mkdir($directory, 0755) ) {
+            &report(7, "Creation of '$directory' was successful.");
+            return $TRUE;
+         } else {
+            &report(3, "Creation of '$directory' failed.");
+            &report(3, $message);
+            return $FALSE;
+	      }
+      } else {
+         # creation not allowed
+         &report(3, "\nSorry. Directory '$directory' does not exist.");
+         &report(3, $message);
+         return $FALSE;
+      }
+   } elsif ( ! -w $directory ) {
+      # dir not writable
+      &report(3, "\nSorry. Directory '$directory' exists, but is not writable.");
+      &report(3, $message);
+      return $FALSE;
+   }
+   return $TRUE;
+}
+
+### interactively input a directory for data storage (absolute path)
+# parameter 1: question
+# parameter 2: default dir
+# parameter 3: if 'yes' allow creation of directory
+# return value: the specified directory
+
+sub input_dir {
+   my $question = $_[0];
+   my $default_dir = $_[1];
+   my $allow_creation = defined($_[2]) ? $_[2] : $NO;
+   my $user_input;
+   my $response = undef;
+
+   if ( defined($default_dir) and index($default_dir, "/") == 0 
+        and ( (! -d $default_dir and $allow_creation eq $YES) 
+        or (-d $default_dir and -w $default_dir) ) ) {
+      $question .= " [$default_dir]: ";
+   } else {
+      $default_dir = undef;
+      $question .= ": ";
+   }
+
+   while (! defined($response)) {
+      print "$question";
+      $user_input = <STDIN>;
+      chomp($user_input);
+      
+      if( $user_input eq "" and defined($default_dir) ) {
+         # user has only pressed <ENTER> and thereby confirmed default value
+	 if( ! &check_dir($default_dir,"Default value was not valid. Please, give different directory.", $allow_creation ) ) {
+	    # default dir does not exist and cannot be created
+	    $default_dir = undef;
+	    $question = "$_[0]: ";
+	 } else {
+	    # valid default dir has already existed or has been created
+            $response = $default_dir;
+	 }
+      } else {
+         # user has given a directory
+         if( &check_dir($user_input,"This is not a valid directory!", $allow_creation) ) {
+	    $response = $user_input;
+         }
+      }
+   }
+   return $response;
+}
+
+#### add a new parameter type with corresponding additional data argument
+#### parameters types
+# parameter 1: type key
+# parameter 2: additonal data for the type
+#              e.g. for enum type: reference to list of arrays
+# return value: none
+
+sub add_param_type {
+ 
+   my ($type, $scalar_argument) = @_;
+ 
+   $PARAMETER_TYPES{$type} = $scalar_argument;
+}
+
+#### add a new parameter to the adminstrated parameters
+####
+# parameter 1: key
+# parameter 2: type
+# parameter 3: default value
+# parameter 4: alias for command line options
+# parameter 5: specification for command line options
+# parameter 6: short description for help
+# parameter 7: question
+# parameter 8: explanation
+# return value: none
+
+sub add_param {
+ 
+   my ($key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation) = @_;
+ 
+   $CONFIGURATION{$key} = $def_value;
+
+   $PARAMETER_LIST{$key} = [ $type, $opt_alias, $opt_spec, $def_value, $description, $question, $explanation ];
+   
+   push(@PARAMETER_ORDER, $key);
+
+   if (! exists $PARAMETER_TYPES{$type}) {
+      $PARAMETER_TYPES{$type} = undef;
+   }
+}
+
+### get the value of an existing parameter
+# parameter 1: a parameter key
+# return value: reference to the array of possible value entries 
+#               (undef if not valid)
+
+sub type_enum_array {
+   my $key = $_[0];
+   my $values_ref;
+
+   if(! exists($PARAMETER_TYPES{$key})) {
+      &abort("unknown type: $key");
+   }
+
+   $values_ref = $PARAMETER_TYPES{$key};
+
+   if(ref $values_ref ne 'ARRAY') {
+      $values_ref = undef;
+   }
+
+   return $values_ref;
+}
+
+### get the value of an existing parameter
+# parameter 1: a parameter key
+# return value: parameter value
+
+sub param_value {
+   my $key = $_[0];
+   my $current_value;
+
+   exists($CONFIGURATION{$key})
+      or &abort("unknown parameter: $key");
+   $current_value = $CONFIGURATION{$key};
+
+   return $current_value;
+}
+
+### get the type of an existing parameter
+# parameter 1: a parameter key
+# return value: parameter value
+
+sub param_type {
+   my $key = $_[0];
+   my $def_ref;
+   my $type;
+
+   exists($PARAMETER_LIST{$key})
+      or &abort("unknown parameter: $key");
+   $def_ref = $PARAMETER_LIST{$key};
+   $type = @{$def_ref}[$TYPE];
+
+   exists($PARAMETER_TYPES{$type})
+      or &abort("parameter has unknown type: $key (type: $type)");
+
+   return $type;
+}
+
+### determine if the given parameter is a full one (instead of option only)
+# parameter 1: a parameter key
+# return value: $TRUE - full parameter; $FALSE otherwise
+
+sub full_param {
+   my $key = $_[0];
+   my @param_def;
+
+   exists($PARAMETER_LIST{$key})
+      or &abort("unknown parameter: $key");
+   @param_def = @{$PARAMETER_LIST{$key}};
+
+   if ($param_def[$TYPE] ne 'action' and defined ($param_def[$QUESTION])) {
+      return $TRUE;
+   } else {
+      return $FALSE;
+   }
+}
+
+### get the output needed for configuration of this parameter 
+# parameter 1: a parameter key
+# return value: array - (description, explanation, question) 
+
+sub param_config_output {
+   my $key = $_[0];
+   my @param_def;
+   my $description; 
+   my $explanation; 
+   my $question; 
+
+   exists($PARAMETER_LIST{$key})
+      or &abort("unknown parameter: $key");
+   @param_def = @{$PARAMETER_LIST{$key}};
+   $description = $param_def[$DESCRIPTION];
+   $explanation = $param_def[$EXPLANATION];
+   $question = $param_def[$QUESTION];
+   
+   return ($description, $explanation, $question);
+}
+
+### set the value of an existing parameter
+# parameter 1: a parameter key
+# parameter 2: the new value
+# return value: none
+
+sub set_param_value {
+   my $key = $_[0];
+   my $new_value = $_[1];
+
+   exists($CONFIGURATION{$key})
+      or &abort("unknown parameter: $key");
+   $CONFIGURATION{$key}=$new_value;
+}
+
+### get option specifier for getopts
+# parameter 1: option key
+# return value: string - option specifier
+
+sub option_specifier {
+   my $key = $_[0];
+   my $spec;
+   my $def_ref;
+ 
+   exists($PARAMETER_LIST{$key})
+      or &abort("unknown parameter: $key");
+   $def_ref = $PARAMETER_LIST{$key};
+   $spec = $key . ${$def_ref}[$OPT_ALIAS] . ${$def_ref}[$OPT_SPEC];
+ 
+   return $spec;
+}
+
+### handle an option
+# parameter 1: a parameter/option key
+# parameter 2: the option value
+# return value: none
+
+sub handle_option {
+   my $key = $_[0];
+   my $value = $_[1];
+   my $type;
+   
+   $type = &param_type($key);
+
+   if ($type eq 'action') {
+      &handle_action_opt($key, $value);
+   } elsif ( $type eq 'bool' or $type eq 'three') {
+      my $bool_value = $value ? $YES : $NO;
+      &set_param_value($key, $bool_value);
+   } elsif ( $type eq 'directory') {
+      if (! &check_dir($value)) {
+         &report(2, "$key requires an existing writable directory as an absolute path.");
+         &abort("Illegal value: $value");
+      }
+      &set_param_value($key, $value);
+   } elsif (defined(&type_enum_array($type))){
+      &set_enum_param($key, $value);
+   } else {
+      &set_param_value($key, $value);
+   }
+}
+
+### handle all action options 
+# parameter 1: a option key
+# parameter 2: the option value
+# return value: none
+
+sub handle_action_opt {
+   my $key = $_[0];
+   my $value = $_[1];
+
+   if ($key eq 'help') {
+      &print_help;
+      
+   } elsif ($key eq 'version') {
+      &print_version;
+      
+   } elsif ($key eq 'configure') {
+      if ( -f $RC_FILENAME ) {
+         &read_configuration($RC_FILENAME);
+      }
+      &configure;
+      &write_configuration($RC_FILENAME);
+      &print_configuration;
+      
+   } elsif ($key eq 'print_config') {
+      if ( -f $RC_FILENAME ) {
+         &read_configuration($RC_FILENAME);
+      }
+      &print_configuration;
+
+   } else {
+      &print_usage; 
+      exit 1;
+   }
+   exit 0;
+}
+
+### set a variable by a command line option to a possible values; abort on error
+# parameter 1: parameter key
+# parameter 2: value
+
+sub set_enum_value {
+   my ($key, $value) = @_;
+   my $type;
+   my $enum_array_ref;
+   my @allowed_values=();
+
+   $type = &param_type($key);
+   $enum_array_ref = &type_enum_array($type);
+   &abort("Internal error: No value array for parameter $key.")
+      if(!defined($enum_array_ref));
+
+   ### find out if the given value is allowed  
+   foreach my $value_array_ref (${$enum_array_ref}) {
+      if(${$value_array_ref}[0] eq $value) {
+         ### found it, so it is okay!
+         &set_param_value($key, $value);
+	 return;
+      }
+   }
+
+   ### value is not listed, so not allowed
+   ### make a list of all allowed values
+   foreach my $value_array_ref (${$enum_array_ref}) {
+      push(@allowed_values, ${$value_array_ref}[0]);
+   }
+
+   &report(2, "\n$key allows: " . @allowed_values . ".\n");
+   &abort("Illegal value: $value");
+}
+
+### configure an existing parameter interactively
+# parameter 1: a parameter key
+# return value: none
+
+sub config_param {
+   my $key = $_[0];
+   my $type; 
+   my $new_value;
+   my $current_value;
+   my $description;
+   my $explanation;
+   my $question;
+
+   ### get required information about this parameter
+   $type = &param_type($key); 
+   $current_value = &param_value($key);
+   ($description, $explanation, $question) = &param_config_output($key);
+
+   ### tell the user the facts
+   print "\n\n--------------------------------------------\n";
+   print "Parameter: ".$key."\n";
+   print $description."\n\n";
+   print $explanation."\n\n" if($explanation ne "");
+   
+   ### ask him what he wants
+   if ($type eq 'bool') {
+      $new_value=&question_ynu($question, $current_value, $NO);
+   } elsif ($type eq 'three') {
+      $new_value=&question_ynu($question, $current_value, $YES);
+   } elsif ($type eq 'directory') {
+      $new_value=&input_dir($question, $current_value, $YES);  
+   } elsif ($type eq 'text') {
+      $new_value=&input_text($question, $current_value);  
+   } elsif ($type eq 'integer') {
+      $new_value=&input_number($question, $current_value,
+      $NUM_PARAM_MIN, $NUM_PARAM_MAX);  
+   } else {
+      my $enum_array_ref; 
+
+      $enum_array_ref=&type_enum_array($type); 
+      if (! defined($enum_array_ref)) {
+         &abort("Do not know how to configure this parameter: $key (type: $type)");
+      }
+
+      $new_value=&choose_value($question,$current_value,$enum_array_ref);
+   } 
+
+   ### store his choice
+   &set_param_value($key, $new_value);
+}
+
+### save configuration in rc file
+# parameter 1: file name
+# return value: none
+
+sub write_configuration {
+   my $file_name = $_[0];
+   my $date;
+
+   open(RCFILE, ">$file_name") or
+      &abort("Could not open configuration file for writing ($file_name)");
+   select RCFILE;
+
+   $date = `date`;
+   chomp($date);
+   
+   print "# Configuration file for $MYNAME V$MYRELEASE\n";
+   print "# Generated $date by $MYUSER on $MYHOSTNAME\n";
+   print "$RCVERSION_STRING=$MYRCFILE_VERSION\n";
+   
+   foreach my $key (@PARAMETER_ORDER) {
+      my $value = $CONFIGURATION{$key};
+      if(&full_param($key)) {
+         print $key.'='.$value."\n";
+      }
+   }
+   
+   print "# EOF\n";
+   select STDOUT;
+   close RCFILE;
+}
+
+### print the configuration parameters
+
+sub print_configuration {
+   print "\nConfiguration for $MYNAME V$MYRELEASE\n";
+   
+   foreach my $key (@PARAMETER_ORDER) {
+      my $value = $CONFIGURATION{$key};
+      if(&full_param($key)) {
+         print $key.'='.$value."\n";
+      }
+   }
+   
+   print "\n";
+}
+
+### load parameters from rc file
+# parameter 1: file name
+# return value: version of read rc file or 0 if no version given
+
+sub read_configuration {
+   my $file_name = $_[0];
+   my $file_version= 0;
+
+   &check_file($file_name, "Could not access configuration file");
+   open(RCFILE, "<$file_name") or
+      &abort("Could not open configuration file for reading ($file_name)");
+
+   while (<RCFILE>) {
+      chomp;
+      if( /^([^#=]+)=(.*)$/ ) {
+         if( exists $CONFIGURATION{$1} ) {
+            $CONFIGURATION{$1} = $2;
+         } elsif ( $1 eq $RCVERSION_STRING ) {
+            $file_version = $2; 
+         } else {
+            print "Ignoring unknown parameter in RC file: $1=$2\n";
+         }
+      }
+   }
+   close RCFILE;
+
+   return $file_version;
+}
+
+### print script version
+
+sub print_version {
+   print "\n$MYNAME Version $MYRELEASE\n";
+}
+
+###################### Specific functions (for use with this script only)
+
+### print usage of command
+
+sub print_usage {
+   print "\nUsage: $MYNAME [OPTIONS] DOCUMENT.lyx\n";
+   print "       $MYNAME [OPTIONS] DOCUMENT[.tex]\n\n";
+   print "       $MYNAME -c | --configure     modify/set up configuration\n";
+   print "       $MYNAME -h | --help          give a short help\n";
+   print "       $MYNAME -o | --print_config  print current configuration\n";
+   print "       $MYNAME -v | --version       print my version\n\n";
+}
+
+### print command help
+
+sub print_help {
+   &print_version;
+   &print_usage;
+
+   foreach my $key (@PARAMETER_ORDER) {
+      my @param_def = @{$PARAMETER_LIST{$key}};
+      my $description = $param_def[$DESCRIPTION];
+      my $takes_value = $param_def[$OPT_SPEC] =~ /[=:]/ ? $TRUE : $FALSE;
+      my $negation = $param_def[$OPT_SPEC] eq '!' ? $TRUE : $FALSE;
+      my $alias = $param_def[$OPT_ALIAS];
+      
+      $alias =~ s/\|(([a-zA-Z])(\||$))/ | -$1/g;
+      $alias =~ s/\|(([a-zA-Z][a-zA-Z0-9_]+)(\||$))/ | --$1/g;
+
+      print "--";
+      print "[no]" if($negation);
+      print $key.$alias;
+      print " VALUE" if ($takes_value);
+      print ":\n   ".$description."\n\n";
+   }
+   print "\n";
+}
+
+### configure all tex2pdf parameters interactively
+# parameters: none
+# return value: none
+
+sub configure {
+
+   print "\n--------------------------------------------------------\n";
+   print "\n***** Configuration for $MYNAME *****\n\n";
+   print "The following answers are considered as defaults in later ";
+   print "executions\n";
+   print "of $MYNAME. You can change these values by using the option ";
+   print "--configure \nagain.";
+   print "Additionally, all command-line options override these settings.\n";
+   print "Many parameters can be set to '$NIL' or '$UNDEF'. This means that NO";
+   print "\nvalue at all (not even an empty value) is passed over to the ";
+   print "called\napplication (e.g. latex package hyperref).\n";
+
+   $NUM_PARAM_MIN=1;
+   $NUM_PARAM_MAX=9;  
+
+   foreach my $key (@PARAMETER_ORDER) {
+      if(&full_param($key)) {
+         &config_param($key);
+      }
+   }
+
+   print "\nConfiguration for $MYNAME finished.\n\n";
+}
+
+### check if the most important executables are installed on the system
+# parameters: none
+
+sub check_commands {
+   my $exec_epstopdf;
+   ### check for which command
+   &checkCommand("which","You can switch off all command checks to fix this.");
+
+   ### pdftex executables
+   # Homepage: http://tug.org/applications/pdftex
+   &checkCommand("pdflatex","See pdftex homepage for details: http://tug.org/applications/pdftex");
+   &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
+   $exec_epstopdf = `which epstopdf`;
+   chomp $exec_epstopdf;
+   my $compat = "-dCompatibilityLevel=1\\.1";
+   if (defined($ENV{'GS_OPTIONS'}) && $ENV{'GS_OPTIONS'} =~ /$compat/o) {
+      &report(9, "Good: ghostscript option '-dCompatibilityLevel=1.1' detected "
+         ."in\n'\$GS_OPTIONS'.");
+   } elsif (&grep_file($exec_epstopdf, $compat, $TRUE) > 0) {
+      &report(9, "Good: ghostscript option '-dCompatibilityLevel=1.1' detected "
+         ."in\n'$exec_epstopdf'.");
+   } else {
+      &report(4, "\nWARNING: no ghostscript option '-dCompatibilityLevel=1.1' "
+         ."in\n'$exec_epstopdf'.\n"
+         ."You might run into trouble with the conversions of bitmaps.\n"
+         ."Adjusting epstopdf or setting the environment variable GS_OPTIONS "
+         ."to \n".'"$GS_OPTIONS -dCompatibilityLevel=1.1" before calling this '
+         ."script\nmight help in this case.\n");
+   }
+
+   if ( &param_value('thumbpdf') eq $YES ) {
+      &checkCommand("thumbpdf","You can switch off thumbpdf support to fix this.");
+   }
+
+   if ( &param_value('ppower') eq $YES ) {
+      &checkCommand("ppower","You can switch off ppower support to fix this.");
+   }
+
+   ### authorindex perl script
+   if ( &param_value('authorindex') eq $YES ) {
+      &checkCommand("authorindex","You can switch off authorindex support to fix this.");
+   }
+
+   ### bibtex executable
+   if ( &param_value('bibtex') ne $NO or &param_value('gloss') ne $NO) {
+   &checkCommand("bibtex","You can switch off BibTeX support to fix this.");
+   }
+}
+
+#### generate the tmp file name from the original tex filename
+#### and make sure that they are not the same
+# parameter 1: orignal filename (with or without a path or .tex)
+# parameter 2: path for the tmp file (default: doc path)
+# return value: tmp name
+
+sub reserve_tmp_texname {
+   my $original_name = $_[0];
+   my $tmp_path = $_[1];
+   my $tmp_base_suffix = &param_value('tmp_base_suffix');
+   my $overwrite = &param_value('overwrite');
+   my $original_path;
+   my $original_base;
+   my $suffix;
+   my $pathed_tmp_base;
+   my @existing_files;
+
+   # separate path, base and suffix
+   ($original_base,$original_path,$suffix) = fileparse($original_name, '\.tex');
+   
+   # set the path of the tmp file
+   if(!$tmp_path) {
+      $tmp_path=$original_path;
+   } else {
+      $tmp_path .= '/' if( $tmp_path ne "" and ! ($tmp_path =~ m#/$#) );
+   }
+   
+   # abort if no absolute path is given 
+   if( index($tmp_path, "/") != 0 ) {
+      &abort("Internal error: Illegal argument for reserve_tmp_texname:".
+         "Given file has no absolute path: $original_name");
+   } 
+
+   # make sure that tmp_base_suffix is set correctly
+   if($tmp_base_suffix eq "") {
+      &abort("Temporary filename base suffix is empty.");
+   }
+
+   $pathed_tmp_base = $tmp_path.$original_base.$tmp_base_suffix;
+
+   # make sure no file with this base exists in this directory
+   @existing_files = glob "$pathed_tmp_base.*";
+   if (@existing_files != 0) {
+      &report(3, "Problems detected while reserving temporay file name!\n",
+         "In this directory are already files with this basename.\n",
+         "A list of the conflicting, existing files:\n",
+         join("\n", @existing_files), "\n");
+      if ($overwrite eq $YES) {
+         &report(4, "As you have activated the parameter 'overwrite' I will "
+	         ."continue.\n",
+	         "However, in order to protect the existing files I will not\n",
+	         "delete any files with this basename at the final clean-up.");
+      } else {
+         &report(2, "You could activate the parameter 'overwrite' or remove ",
+         "the\n corresponding files in order to avoid these problems."); 
+         &abort("No temporary name found for $original_name.");
+      }
+   } else {
+      push(@TMP_TEX_FILES, $pathed_tmp_base); 
+   }
+
+   return $pathed_tmp_base.$suffix;
+}
+
+### generate LaTeX file from LyX document with LyX itself
+# parameter ($1): Lyx document
+# parameter ($2): Latex document
+
+sub generate_tex_file {
+   my $lyx_doc = $_[0];
+   my $tex_doc = $_[1];
+   my $lyx_dir;
+   my $lyx_output;
+   my $lyx_exec=&param_value('lyx_exec');
+   
+   $lyx_dir = &param_value('lyxrc_path');
+   $lyx_dir .= '/' if( ! ($lyx_dir =~ m#/$#) );
+   $lyx_dir .= '/' if( ! ($lyx_dir =~ m#/$#) );
+
+   ### Check if LyX file can be accessed
+   &check_file($lyx_doc,"Cannot read the specified LyX document!");
+
+   ### Check if LaTeX file exists and is newer than the LyX file
+   if ( -f $tex_doc and -M $tex_doc < -M $lyx_doc ) {
+      &report(4, "\nLaTeX file is newer than LyX document ($lyx_doc).\n",
+      "Using existing TeX file: $tex_doc\n",
+      "Remove it to force its new generation.");
+   } else {
+      ### export LaTeX file with LyX (needs a display!)
+      &checkCommand($lyx_exec, "Cannot generate LaTeX document without LyX!");
+      &report(6, "\nExporting LaTeX file");
+      
+      ### move some files out of the way that stop LyX from exporting
+      foreach my $file ($lyx_dir."lyxpipe.out",$lyx_dir."lyxpipe.in",$tex_doc) {
+         if ( -f $file ) { rename($file, $file.'~'); }
+      }
+
+      $lyx_output = `$lyx_exec --export latex $lyx_doc 2>&1`;
+
+      ### check if LaTeX file now really exists
+      if ( ! -f $tex_doc ) {
+         &report(2, "Lyx Output:\n$lyx_output");
+         &report(2, "\nSorry. I cannot find '$tex_doc'.");
+         &abort("The LaTeX document was not generated by LyX!");
+      } else {
+         &report(8, "Lyx Output:\n$lyx_output");
+      }
+   }
+}
+
+#### search TeX document for a certain text tag (e.g. author, title)
+# parameter 1: file to parse
+# parameter 2: full TeX tag name
+# return value: list of the contents strings of all matching tags
+
+sub extract_tag_contents {
+   my $source=$_[0];
+   my $tag_name=$_[1];
+   my $contents;
+   my @results=();
+   my $error_message="Could not read TeX document to extract $tag_name";
+
+   &check_file($source, $error_message.'.');
+   open(EXTRACT_SOURCE, "<$source") or
+      &abort($error_message." ($source).");
+
+
+   while(<EXTRACT_SOURCE>) {
+      ### ignore comments
+      s/(^|[^\\])%.*/$1/;
+      # ignore \thanks{}
+      s/\\thanks\{.*?\}//g;
+      # change \and to and
+      s/\\and/ and/g;
+
+      $contents .= $_;
+   }
+
+   close EXTRACT_SOURCE;
+
+   $_ = $contents;
+
+   # add contents of all occurences of this tag in a line to result list
+   while ( /\\($tag_name)(\[[^]]*?\])*?{+([^{}]*?)}/s ) {
+      my $text = $3;
+      $_ = $';
+      # remove newlines
+      $text =~ s/\n//g;
+      $text="" if (!defined($text));
+      push(@results, $text);
+   }
+
+   return @results;
+}
+
+#### search for filenames in given TeX Tag in entire document
+### skip all comments and duplicates while parsing
+# parameter 1: file to parse
+# parameter 2: full TeX tag name
+# parameter 3: reference to a list of possible filename suffixes (without '.')
+# parameter 4: regexp for suffix to ignore when specified in TeX file
+#              (undef if not used)
+# return value: list of identified files
+
+sub identify_files {
+   my $source=$_[0];
+   my $tag_name=$_[1];
+   my @suffixes=@{$_[2]};
+   my $ignore_suffix=$_[3];
+   my @matched_tags;
+   my @found_files=();
+   my $regexp_suffixes;
+
+   # create one large regexp from given suffixes and escape dots in them
+   $regexp_suffixes= '.('.join('|', @suffixes).')';
+   $regexp_suffixes =~ s/\./\\./g;
+
+   @matched_tags = &extract_tag_contents($source, $tag_name);
+
+   foreach my $tag_contents (@matched_tags) {
+      my $path;
+      my $base;
+      my $suffix;
+      my $kpse_result;
+      my $working_dir = cwd."/";
+
+      ($base,$path,$suffix) = fileparse($tag_contents, $regexp_suffixes);
+
+      # if a suffix is specified in the tag_contents handle it as requested
+      # 
+      # 1. $suffix: TRUE if $suffix is defined and not of zero length
+      #    means: a valid suffix has been found in the filename
+      # 2. defined($ignore_suffix): TRUE if $ignore_suffix is defined
+      #    means: a regexp for suffixes to be ignored has been specified as
+      #          parameter4
+      # 3. $suffix =~ /$ignore_suffix/: TRUE if $suffix matches the regexp
+      #    means: the suffix in the filename is wanted to be ignored
+      #
+      # The IF statement will be executed when:
+      #   a valid suffix has been found in the filename (1)
+      #   AND regexp for suffixes to be ignored has NOT been specified (not 2)
+      # OR
+      #   a valid suffix has been found in the filename (1)
+      #   AND regexp for suffixes to be ignored has been specified (2)
+      #   AND the suffix in the filename is NOT wanted to be ignored (not 3)
+      #
+      # The stuff that is executed if the entire IF statement is TRUE does the
+      # following: accept the found suffix and consider it as the only possible
+      # file name.
+      if($suffix and not (defined($ignore_suffix) and $suffix =~ /$ignore_suffix/)){
+         $kpse_result=`kpsewhich $tag_contents`;
+         # print warning and skip this tag if kpsewhich could not find it  
+         if (!$kpse_result) {
+            &report(4, "WARNING - Could not identify referenced file:\n",
+            " Ignoring '$tag_contents'.");
+            next;
+         }
+      } else {
+         # if there is a '.' in the basename assume that this is a reference
+         # to a file of another type and skip it
+         if( $base =~ /\./ ) {
+            &report(9, "Found an unknown extension. Ignoring '$tag_contents'.");
+            next;
+         }
+
+         # search for all possible files with allowed suffixes
+         foreach my $allowed_suffix (@suffixes) {
+            if (not $allowed_suffix =~ /[\]\)\(\|\[\\]/ ) {
+               # suffix is not a regexp, but a real extension
+               my $possible_file= $path.$base.'.'.$allowed_suffix;
+               $kpse_result=`kpsewhich $possible_file`;
+               if ($kpse_result) {
+                  last;
+               }
+            }
+         }
+      } 
+      
+      # if kpsewhich could not find any file with an allowed suffix
+      # assume that this reference is of a different type and skip it
+      # quietly   
+      if (!$kpse_result) {
+         &report(9, "No suitable file found. Ignoring '$tag_contents'.");
+         next;
+      }
+
+      # expand '.' in kpsewhich output to the current path
+      $kpse_result =~ s#^\./#$working_dir#;
+      
+      # remove trailing newline
+      chomp($kpse_result);
+
+      # add file to the found file list if it is not already on it
+      if( &array_index($kpse_result, @found_files) < 0 ) {
+         push(@found_files, $kpse_result);
+      }
+   }
+
+   return @found_files;
+}
+
+### Build a list of all files which are included from the root file.
+# This function recurses, and is maybe smart enough to detect cycles.
+# Be sure to set REF_DOCS to the empty string prior to calling this.
+# parameter 1: tex file to start with
+# no return value
+# result is appended to global variable @REF_DOCS
+
+sub get_file_list {
+   my $source = $_[0];
+   my @imports = ();
+
+   # This is the cycle avoidance logic.
+   if ( &array_index($source, @REF_DOCS) < 0 ) {
+      # Make sure the file can be accessed
+      &check_file($source, "Included TeX file seems not to be available. Path problem?");
+
+      # Save the argument in the list of files.
+      push(@REF_DOCS, $source);
+
+      # Get the list of files included by the argument.
+      @imports=&identify_files($source, 'include|input', ['tex']);
+
+      # Recurse.
+      foreach my $file (@imports) {
+         if( ! ($file =~ /\.tex$/) ) { $file .= '.tex'; }
+         &get_file_list($file);
+      }
+   }
+}
+
+### do the required modifications in the LaTeX preamble 
+# parameter 1: original preamble from the source file
+#              lines before \begin{document} tag (without this tag)
+# parameter 2: reference to hyperref parameter list
+# return value: adjusted preamble
+
+sub adjust_preamble {
+   my $preamble = $_[0];
+   my $hyperref_params_ref = $_[1];
+   my $extra_code;
+   my $result;
+   
+   $_ = $preamble;
+
+   # protect pdflatex execution mode
+   s/^(\\batchmode)$/% $1/m;
+
+   # insert a4paper in the documentclass when a4wide is used 
+   # fixes problem that hyperref defaults to letter otherwise
+   if ( /^[^%]*\\usepackage(\[widemargins\])?\{(a4|a4wide)\}/m ) {
+      # check if package parameters with [] brackets are present
+      if ( not s/^(\\documentclass\[.*?)\]/$1,a4paper]/m ) {
+         s/^\\documentclass/$&\[a4paper\]/m;
+      }
+   }
+
+   ### collect additional LaTeX code
+   
+   $extra_code = "\n" . '\usepackage{pslatex}' . "\n";
+
+   if ( &param_value('thumbpdf') eq $YES ) {
+      $extra_code .= '\usepackage{thumbpdf}' . "\n";
+   } else {
+      $extra_code .= "% no thumbpdf support\n";
+   }
+ 
+#   if ( &param_value('ppower') eq $YES ) {
+#      $extra_code .= '\usepackage{mpmulti}' . "\n";
+#   } else {
+#      $extra_code .= "% no ppower support\n";
+#   }
+
+   if ( &param_value('authorindex') eq $YES ) {
+      $extra_code .= '\usepackage[pages]{authorindex}' . "\n";
+      $extra_code .= '\let\cite=\aicite' . "\n";
+   } else {
+      $extra_code .= "% no authorindex support\n";
+   }
+
+   $extra_code .= '\makeatletter' . "\n";
+   $extra_code .= '\usepackage[' . join(',', @$hyperref_params_ref)
+                  . ']{hyperref}' . "\n";
+   $extra_code .= '\makeatother' . "\n";
+   
+   ### insert the extra LaTeX code directly after documentclass
+   m/^(\\documentclass)(\[[^]]*\])?(\{.*\})/m;
+   return $` . $& . $extra_code . $';
+}
+
+### adjust all filenames in the LaTeX code to the tmp files
+# parameter 1: original LaTeX code from the source file
+# return value: adjusted code
+
+sub adjust_filenames {
+   my $code = $_[0];
+   my $tmp_suffix = &param_value('tmp_base_suffix');
+   my $result;
+   
+   $_ = $code;
+
+   # cut off the suffix of eps, ps, *.gz and pstex graphics
+   s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)\n?\}/$1}/sg;
+
+   # replace the suffix 'pstex_t' with 'pdf_t'
+   s/(\\input\{[^}]+?\.)pstex_t\n?\}/$1pdf_t}/sg;
+
+   if ( &param_value('mtp_preamble') eq $NO ) {
+      # cut off the suffix of mmp graphics
+      s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)\.mmp\n?\}/$1}/sg;
+   } else {
+      # replace the suffix '.#' with '-mp.#'
+      s/(\\includegraphics(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1$MTP_TMP_BASESUFFIX\.$3}/sg;
+
+      # replace the suffix '.#' with '-mp.#'
+      s/(\\convertMPtoPDF(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1$MTP_TMP_BASESUFFIX\.$3}/sg;
+
+      # cut off optional suffix '.mmp' and append '-mp' in any case
+      s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)(\.mmp)?\n?\}/$1$MTP_TMP_BASESUFFIX}/sg;
+   }
+
+   # insert the tmp_suffix in tex filenames
+   # I assume that files with no extension are TeX files as well; correct?
+   s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#$1$tmp_suffix$4#sg;
+
+   return $_;
+}
+
+### Convert given tex file to the temp tex file we need for pdftex
+### major task is to change the reference in the tex files to the
+### corresponding tmp files
+# parameter 1: tex source file
+# parameter 2: tex tmp file
+# parameter 3: reference to hyperref parameter list or
+#              'undef' if preamble should not be changed
+
+sub convert_tex2tmp {
+   my $source = $_[0];
+   my $target = $_[1];
+   my $hyperref_params_ref = $_[2];
+   my $contents;
+   my $preamble;
+   my $body;
+   my $adjust_preamble = defined($hyperref_params_ref) ? $YES : $NO;
+   my $read_err_msg = "Could not read original TeX document to generate temporary document";
+   
+   ### open source and target file
+   &check_file($source, $read_err_msg . '.');
+   open(SOURCE_FILE, "<$source") or
+      &abort($read_err_msg . " ($source).");
+
+   ### read in the LaTeX source file
+   $contents = "";
+   while(<SOURCE_FILE>) {
+      $contents .= $_;
+   }
+
+   close SOURCE_FILE;
+
+   ### prepare the LaTeX code for PDF generation 
+   if ( $adjust_preamble eq $YES ) {
+      $contents =~ m/^ *\\begin\{document\} *$/m;
+      $preamble = $`;
+      $body = $&.$';
+      $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
+      $preamble = &adjust_filenames($preamble);
+   } else {
+      $preamble = "";
+      $body = $contents;
+   }
+   
+   $body = &adjust_filenames($body);
+      
+   ### write the new LaTeX target file
+   open(TARGET_FILE, ">$target") or
+      &abort("Could not open file to write temporary TeX document ($target).");
+
+   print TARGET_FILE $preamble.$body;
+   
+   close TARGET_FILE;
+}
+
+### Convert the given EPS image to PDF
+# parameters $1: EPS image filename with absolute path
+# return value: none
+
+sub convert_eps2pdf {
+   my $image = $_[0];
+   my $image_path;
+   my $image_base;
+   my $image_name;
+   my $suffix;
+   my $image_target;
+   my $zipped = 0;
+   my $dummy;
+
+   ($image_base,$image_path,$suffix) = fileparse($image, '\.eps', '\.ps', '\.pstex', '\.gz');
+   if ($suffix eq "\.gz") {
+	$zipped = 1;
+	($image_base,$dummy,$suffix) = fileparse($image_base, '\.eps', '\.ps', '\.pstex');
+   }
+   $image_name = $image_base . $suffix;
+   $image_target = $image_path . $image_base . '.pdf';
+   
+   #### check if image file really exists
+   #&check_file($image, "Could not convert referenced image.");
+
+   ### return if image directory is not writeable
+   if (! -w $image_path) {
+      &report(4, "WARNING - Image directory not writable: $image_path\n",
+      " Skipping '$image_name', assume you have converted it manually.");
+      return;
+   }
+
+   if ( ! -f $image_target or -M $image_target > -M $image ) {
+      &report(7, "Converting image $image_name to $image_target ...\n");
+      if ($zipped > 0) {
+         &system_command("gunzip -c $image | epstopdf -f -outfile=$image_target",
+         $TRUE, 8, "epstopdf failed on $image_name");
+      } else {
+         &system_command("epstopdf -outfile=$image_target $image",
+         $TRUE, 8, "epstopdf failed on $image_name");
+      }
+      if (&param_value('delete_pdf_images') eq $YES) {
+         push(@TMPFILES, $image_target);
+      }
+   } else {
+      &report(7, "$image_base.pdf newer than $image_name, conversion skipped...");
+   }
+}
+
+### Convert the given PSTEX_T file to PDF_T
+# parameters 1: PSTEX_T filename with absolute path
+# return value: none
+
+sub convert_pstex2pdf {
+   my $pstex_file = $_[0];
+   my $pstex_path;
+   my $pstex_base;
+   my $pstex_name;
+   my $suffix;
+   my $pstex_target;
+   my @eps_images;
+
+   ($pstex_base,$pstex_path,$suffix) = fileparse($pstex_file, ('\.pstex_t'));
+   $pstex_name = $pstex_base . $suffix;
+   $pstex_target = $pstex_path . $pstex_base . '.pdf_t';
+   
+   #### check if image file really exists
+   #&check_file($pstex_file, "Could not convert referenced file.");
+
+   ### return if directory is not writeable
+   if (! -w $pstex_path) {
+      &report(4, "WARNING - Directory not writable: $pstex_path\n",
+      " Skipping '$pstex_name', assume you have converted it manually.");
+      return;
+   }
+
+   # descend into file
+   &report(7, "Converting file $pstex_name ...\n");
+
+   # find included EPS image(s)
+   @eps_images=&identify_files($pstex_file, 'includegraphics',
+      ['pstex', 'pstex\.gz']);
+
+   # create .pdf_t file
+   &convert_tex2tmp($pstex_file, $pstex_target, undef); 
+
+   # put tmp file in the tmp file list
+   push(@TMPFILES, $pstex_target);
+
+   # convert image(s) to pdf
+   foreach my $image (@eps_images) {
+      &convert_eps2pdf($image);
+   }
+}
+
+### Convert the given MP image to PDF
+# parameters $1: MP image filename with absolute path
+# return value: none
+
+sub convert_mp2pdf {
+   my $image = $_[0];
+   my $image_path;
+   my $image_base;
+   my $image_name;
+   my $suffix;
+   my $image_target;
+   my $image_src;
+   my @mps_fig=();
+   my $mp_fig;
+
+   ($image_base,$image_path,$suffix) = fileparse($image, '\.mp|\.mmp');
+   $image_name = $image_base . $suffix;
+   $image_src=$image_path . $image_base . $suffix;
+
+   @mps_fig= &grep_file($image_path.$image_name,'beginfig',$TRUE);
+   $_=$mps_fig[0];
+   /(\d)/;
+   $mp_fig=$1;
+   if (&param_value('mtp_preamble') eq $YES) {
+     $image_target = $image_path . $image_base . $MTP_TMP_BASESUFFIX . '.' . $mp_fig;
+     $image_name=$image_base.$MTP_TMP_BASESUFFIX.$suffix;
+   } else {
+     $image_target = $image_path . $image_base . '.' . $mp_fig;
+   }
+
+   #### check if image file really exists
+   #&check_file($image, "Could not convert referenced image.");
+
+   ### return if image directory is not writeable
+   if (! -w $image_path) {
+      &report(4, "$MYNAME: WARNING - Image directory not writable: $image_path\n",
+         " Skipping '$image_name', assume you have converted it manually.");
+      return;
+   }
+
+   if ( ! -f $image_target 
+      or  (-M $image_target > -M $image_src)
+      or  ( ( &param_value('mtp_preamble') eq $YES)
+      and (-M $image_target > -M $image_path.$MTP_PREAMBLE_FILENAME) ) ) {
+      &report(7, "Converting image $image_name ...\n");
+      my $working_dir = cwd."/";
+      chdir("$image_path") or &abort("cannot cd to $image_path($!)");
+      if ( &param_value('mtp_preamble') eq $YES ) {
+         &modify_mp_file($image_base,$suffix);
+      }
+      &system_command("mpost $image_name",
+         $TRUE, 8, "mpost failed on $image_name");
+      chdir("$working_dir") or &abort("cannot cd to $working_dir($!)");
+      if (&param_value('delete_pdf_images') eq $YES) {
+         push(@TMPFILES, $image_target);
+      }
+   } else {
+      if ( &param_value('mtp_preamble') eq $YES ) {
+        &report(7, "$image_base$MTP_TMP_BASESUFFIX.$mp_fig newer than $image_base$suffix, conversion skipped...");
+      } else {
+        &report(7, "$image_base.$mp_fig newer than $image_base$suffix, conversion skipped...");
+      }
+   }
+}
+
+### Convert the given MP image to PDF
+# parameters $1: MP image filename with absolute path
+# return value: none
+
+sub modify_mp_file {
+   my $base=$_[0];
+   my $suffix=$_[1];
+   my $preamble_file=$MTP_PREAMBLE_FILENAME;
+
+   my $mp_source=$base.$suffix;
+   my $mp_target=$base.$MTP_TMP_BASESUFFIX.$suffix;
+
+   ### open source and target file
+   open(SOURCE_FILE, "<$mp_source") or
+      &abort("Could not open $mp_source to add $preamble_file ($mp_source).");
+
+   open(TARGET_FILE, ">$mp_target") or
+      &abort("Could not open $mp_target to add $preamble_file ($mp_source).");
+
+   open(PREAMBLE_FILE, "<$preamble_file") or
+      &abort("Could not open $preamble_file to be added to metapost files ($mp_source).");
+
+   ### set target file as stdout
+   select TARGET_FILE;
+   print  'verbatimtex' . "\n";
+   print  '%&latex' . "\n"; # This forces metapost to use latex in the compilation
+   print  '\documentclass[english]{article}' . "\n"; # we have to decide if this sentence goes in preamble.cfg or here
+                                                     # english must be added
+                                                     # to preamble in order to
+                                                     # make work mpost, why ???
+   while(<PREAMBLE_FILE>) {
+      print $_
+   }
+   print  '\begin{document}' . "\n"; # we have to decide if this sentence goes in preamble.cfg or here
+   print  'etex' . "\n";
+   while(<SOURCE_FILE>) {
+      print $_
+   }
+   print  'verbatimtex' . "\n";
+   print  '\end{document}' . "\n";
+   print  'etex' . "\n";
+
+   ### set STDOUT as stdout again
+   select STDOUT;
+
+   ### close files
+   close SOURCE_FILE;
+   close TARGET_FILE;
+   close PREAMBLE_FILE;
+
+}
+
+
+### Convert included images to pdf
+# parameter 1: tex source file
+# no return value
+
+sub convert_images {
+   my $tex_source=$_[0];
+   my @pstex_file_list;
+   my @image_list;
+   my @mp_image_list;
+   my @mmp_image_list;
+   my @major_suffixes;
+   my $ignore_regexp;
+
+   &report(6, "\nConverting images referenced in $tex_source.");
+
+   ##### Get images of major type from the source file
+   @major_suffixes = (@BITMAP_SUFFIXES, $PDF_ORIG_SUFFIX, @EPS_SUFFIXES);
+   $ignore_regexp = '.('.join('|',@EPS_SUFFIXES).')';
+   $ignore_regexp =~ s/\./\\./g;
+
+   &report(6, "\nScanning for major image types (".join(', ',@major_suffixes)."):");
+   @image_list = &identify_files($tex_source,'includegraphics',
+      \@major_suffixes, $ignore_regexp );
+
+   if ( @image_list > 0 ) {
+      &report(7, join("\n", @image_list));
+   } else {
+      &report(7, "None.");
+   }
+
+   ##### Get PSTEX_T files from the source file
+   &report(6, "\nScanning for PSTEX_T files (.pstex_t):");
+   @pstex_file_list=&identify_files($tex_source, 'input', ['pstex_t']);
+   if ( @pstex_file_list > 0 ) {
+      &report(7, join("\n", @pstex_file_list));
+   } else {
+      &report(7, "None.");
+   }
+
+   ##### Get MP images from the source file
+   &report(6, "\nScanning for MP images (.mp):");
+   @mp_image_list=&identify_files($tex_source,
+      'convertMPtoPDF|includegraphics',['mp','(\d+)'],'\.(\d+)');
+   # FIXME
+   # fixed for now by ignoring strange extension in identify_files
+   #
+   # the above could cause problems as identify_files is expecting a list of
+   # real extensions and not of regexps
+   # maybe the only way to fix this is to adjust identify_files to ignore
+   # invalid extension when testing them with kpsewhich
+   # ALTERNATIVE: design identify_files to use preffered_suffixes instead
+   # of ignore_suffixes
+ 
+   if ( @mp_image_list > 0 ) {
+      &report(7, join("\n", @mp_image_list));
+   } else {
+      &report(7, "None.");
+   }
+
+   ##### Get MMP images from the source file
+   &report(6, "\nScanning for MMP images (.mmp):");
+   @mmp_image_list=&identify_files($tex_source,'multiinclude',['mmp']);
+   if ( @mmp_image_list > 0 ) {
+      &report(7, join("\n", @mmp_image_list));
+   } else {
+      &report(7, "None.");
+   }
+
+   ### Convert EPS images to PDF, copy pdf.orig image files to pdf,
+   ### and simply ignore all other
+   if ( @image_list > 0) {
+      my $handled_suffixes;
+
+      &report(6, "\nProcessing images of major types:");
+   
+      # create one large regexp from suffixes and escape dots in them
+      $handled_suffixes = '.('.join('|',(@EPS_SUFFIXES, $PDF_ORIG_SUFFIX)).')';
+      $handled_suffixes =~ s/\./\\./g;
+
+      foreach my $image (@image_list) {
+         my $path;
+         my $base;
+         my $suffix;
+         ($base,$path,$suffix) = fileparse($image, $handled_suffixes);
+         if (not $suffix) {
+            &report(7, "No special handling required for image: $base$suffix");
+         } elsif ($suffix eq ('.'.$PDF_ORIG_SUFFIX) ) {
+            my $image_target = $path.$base.'.pdf';
+               
+            if ( ! -f $image_target or -M $image_target > -M $image ) {
+               &report(7, "Create temporary PDF file from original: $base$suffix");
+               copy($image, $image_target)
+                  or &abort("Could not create tmp file: $!");
+               if (&param_value('delete_pdf_images') eq $YES) {
+                  push(@TMPFILES, $image_target);
+               }
+            } else {
+               &report(7, "$base.pdf newer than $base$suffix, copy skipped ...");
+            }
+         } else {
+            &convert_eps2pdf($image);
+         }
+      }
+   }
+
+   ### Convert all PSTEX_T files to PDF_T
+   if ( @pstex_file_list > 0 ) { 
+      &report(6, "\nConverting pstex_t docs to pdf_t docs");
+      foreach my $image (@pstex_file_list) {
+         &convert_pstex2pdf($image);
+      }
+   }
+
+   ### Convert all MP images to PDF
+   if ( @mp_image_list > 0) {
+      &report(6, "\nConverting MP images to PDF");
+      foreach my $image (@mp_image_list) {
+         &convert_mp2pdf($image);
+      }
+   }
+
+   ### Convert all MMP images to PDF
+   if ( @mmp_image_list > 0) {
+      &report(6, "\nConverting MMP images to PDF");
+      foreach my $image (@mmp_image_list) {
+         &convert_mp2pdf($image);
+      }
+   }
+
+   &report(6, "\nFinished converting for ${tex_source}.");
+}
+
+### run pdflatex
+# parameter 1: LaTeX file without extension
+# parameter 2: log-file where the full out put is stored
+# return value: 0 - no errors (no rerun); 1 - errors (rerun required)
+
+sub run_pdflatex {
+   my $texfile=$_[0];
+   my $logfile=$_[1];
+   my @errors=();
+   my $exit_status=0;
+   my $extra_options=&param_value('pdftex_opts');
+
+   if( !defined($extra_options) or $extra_options eq $NIL ) {
+      $extra_options = "";
+   }
+   
+   &report(7, "Running pdflatex. This may take a while.\n");
+   system("pdflatex --interaction nonstopmode $extra_options $texfile > $logfile 2>&1");
+   $exit_status=$?;
+   &report(7, "Pdflatex finished. Errors:");
+
+   ### extract all errors and warnings from the log file
+   @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
+
+   ### make sure thumbpdf package does not spoil rerun detection
+   ### as it will be processed very last
+   if(grep(/Package thumbpdf/, @errors) == @errors) { @errors=(); }
+   
+   if ( @errors != 0 or $exit_status != 0 ) {
+      if ( grep(/Emergency stop/, @errors) != 0 ) {
+         &report(2, &file_tail($logfile,10));
+         &report(2, "\nSee $logfile for details.");
+         &abort("Fatal error occured. I am lost.");
+      }
+      if( @errors != 0 ) {
+         &report(8, @errors);
+      } else {
+         &report(8, &file_tail($logfile,10));
+      }
+      &report(7, "\nSee $logfile for details.");
+      return $FALSE;
+   } else {
+      &report(7, "None detected (log file: $logfile).");
+      return $TRUE;
+   }
+}
+
+#### run bibtex if BIBTEX=$YES or a bibliography tag is found
+# included tex files are not parsed for a bibliography
+# parameter 1: filename of the aux file without .aux suffix
+# parameter 2: log-file where the full out put is stored
+
+sub handle_bibtex {
+   my $auxfile=$_[0];
+   my $logfile=$_[1];
+   my $run_bibtex=$FALSE;
+   my $bibtex_param=&param_value('bibtex');
+   
+   if ( $bibtex_param eq $YES ) {
+      $run_bibtex=$TRUE;
+      &report(7, "BibTeX parameter set to '$YES':");
+   } else {
+      &report(7, "Checking for BibTeX bibliography in main document: ");
+      if( &grep_file($auxfile.'.tex', '^[^%]*\\\\bibliography{') != 0) {
+         $run_bibtex=$TRUE;
+         &report(7, "Bibliography detected.");
+      } else {
+         if ( @REF_DOCS > 0 ) {
+            &report(7, "Checking for BibTeX bibliography in included documents:");
+            foreach my $file (@REF_DOCS) {
+               if( &grep_file($file, '^[^%]*\\\\bibliography{') != 0) {
+                   $run_bibtex=$TRUE;
+                   &report(7, "Bibliography detected.");
+               } else {
+                 &report(7, "No bibliography detected in $file.");
+               }
+            }
+         } else {
+           &report(7, "No bibliography detected.");
+        }
+      }
+   }
+
+   if ( $run_bibtex ) {
+      my @errors=();
+      my $exit_status=0;
+
+      &report(7, "Running bibtex. This may take a while.\n");
+      system "bibtex $auxfile > $logfile";
+      $exit_status=$?;
+      &report(7, "Bibtex finished. Errors:");
+
+      ### extract all errors and warnings from the log file
+      @errors=&grep_file($logfile, 'error message');
+
+      if ( @errors != 0 or $exit_status != 0 ) {
+         &report(4, &file_tail($logfile));
+         &report(4, "\nYou can switch off BibTeX support by setting the bibtex parameter accordingly.");
+      } else {
+         &report(7, "None detected (log file: $logfile).");
+      }
+   }
+}
+
+#### run bibtex on file.gls if BIBTEX=$YES or a bibliography tag is found
+# included tex files are not parsed for a bibliography
+# parameter 1: filename of the aux file without .aux suffix
+# parameter 2: log-file where the full out put is stored
+
+sub handle_gloss {
+   my $auxfile=$_[0];
+   my $logfile=$_[1];
+   my $run_gloss=$FALSE;
+   my $gloss_param=&param_value('gloss');
+   my $glsfile=$auxfile.'.gls';
+   
+   if ( $gloss_param eq $YES ) {
+      $run_gloss=$TRUE;
+      &report(7, "Gloss parameter set to '$YES':");
+   } else {
+      &report(7, "Checking for Gloss bibliography in main document: ");
+      if( &grep_file($auxfile.'.tex', '^[^%]*\\\\printgloss{') != 0) {
+         $run_gloss=$TRUE;
+         &report(7, "Gloss bibliography detected.");
+      } else {
+        if ( @REF_DOCS > 0 ) {
+           &report(7, "Checking for Gloss bibliography in included documents:");
+           foreach my $file (@REF_DOCS) {
+              if( &grep_file($file, '^[^%]*\\\\printgloss') != 0) {
+                  $run_gloss=$TRUE;
+                  &report(7, "Gloss bibliography detected.");
+              } else {
+                &report(7, "No gloss database detected in $file.");
+              }
+           }
+        } else {
+          &report(7, "No gloss database detected.");
+	}
+      }
+   }
+   if ( $run_gloss ) {
+      my @errors=();
+      my $exit_status=0;
+
+      &report(7, "Running bibtex on $glsfile. This may take a while.\n");
+      system "bibtex $glsfile > $logfile 2>&1";
+      $exit_status=$?;
+      &report(7, "Bibtex finished. Errors:");
+
+      ### extract all errors and warnings from the log file
+      @errors=&grep_file($logfile, 'error message');
+
+      if ( @errors != 0 or $exit_status != 0 ) {
+         &report(4, &file_tail($logfile));
+         &report(4, "\nYou can switch off Gloss support by setting the gloss parameter accordingly.");
+      } else {
+         &report(7, "None detected (log file: $logfile).");
+      }
+   }
+}
+
+#### run thumbpdf command to make thumbnails
+# more informations: /usr/share/texmf/doc/pdftex/thumbpdf/readme.txt
+# parameter 1: LaTeX file without extension
+# parameter 2: log-file where the full out put is stored
+
+sub run_thumbpdf {
+   my $texfile=$_[0];
+   my $logfile=$_[1];
+   my $exit_status=0;
+
+   &report(7, "\nCreating thumbnails with 'thumbpdf'\n");
+   &system_command("thumbpdf $texfile", $FALSE, 8,
+      "thumbpdf failed.\n"
+      ."I will continue, but maybe there will not be thumbs in the PDF doc.");
+
+   if ( -f 'thumbpdf.log' ) {
+      move('thumbpdf.log', $logfile);
+      &report(7, "\nSee $logfile for details.");
+   }
+
+   ### store possible tmp files
+   push(@TMPFILES, glob 'thumb???.png');
+   push(@TMPFILES, 'thumbpdf.pdf');
+   push(@TMPFILES, 'thumbdta.tex'); 
+   push(@TMPFILES, $texfile.'.tpt');
+}
+
+
+#### run ppower command to make presentations
+# more informations: 
+# parameter 1: LaTeX file without extension
+# parameter 2: log-file where the full out put is stored
+
+sub run_ppower {
+   my $texfile=$_[0];
+   my $logfile=$_[1];
+   my $exit_status=0;
+   my $infile;
+   my $outfile;
+   my $texfile_base;
+   my $texfile_path;
+   my $texfile_suffix;
+
+   ##### Getting document name, suffix and path
+   ($texfile_base,$texfile_path,$texfile_suffix) = fileparse($texfile,&param_value('tmp_base_suffix'));
+
+   $infile=$texfile_base.'.pdf';
+   $outfile=$texfile_base.'_p4.pdf';
+
+   &report(7, "\nPostprocessing PDF file with 'ppower'\n");
+   if(&system_command("ppower $infile $outfile", $FALSE, 8,
+      "ppower failed.\nI will continue, "
+      ."but maybe there will not be pause effects in the PDF doc.")) {
+      &report(7, "\nThe postprocessed pdf file is: $outfile\n");
+   }
+
+   if ( -f 'ppower.log' ) {
+      move('ppower.log', $logfile);
+      &report(7, "See $logfile for details.");
+   }
+}
+
+#### run authorindex command to obtain an author index
+# more informations: 
+# parameter 1: LaTeX file without extension
+# parameter 2: log-file where the full out put is stored
+
+sub run_authorindex {
+   my $texfile=$_[0];
+   my $logfile=$_[1];
+   my $exit_status=0;
+
+   &report(7, "\nProcessing file with 'authorindex'\n");
+   &system_command("authorindex $texfile", $FALSE, 8,
+      "authorindex failed.\nI will continue, "
+      ."but maybe there will not be an author index in the PDF doc.");
+
+   if ( -f 'authorindex.log' ) {
+      move('authorindex.log', $logfile);
+      &report(7, "\nSee $logfile for details.");
+   }
+
+}
+
+
+##### read and analyse configuration and options and adjust basic variables
+##### accordingly
+#### The following sources are considered (last value overrides previous)
+##   1. general configuration (global variables in the script)
+##   2. private configuration (in user's RC file)
+##   3. command line options
+# parameters: none 
+# return value: given document argument
+
+sub adjust_configuration {
+   my $valid_rcfile = $FALSE;
+   my %opt_specs =();
+   
+   ### Check number of arguments
+   if ( @ARGV == 0 ) {
+      &report(1, "\nI need at least one argument!");
+      &print_usage;
+      exit 1;
+   }
+   
+   ##### command line options and private configuration files handling
+   
+   ### set parameters from rc file
+   if ( -f $RC_FILENAME ) {
+      my $rcfile_version;
+      $rcfile_version = &read_configuration($RC_FILENAME);
+      if( $rcfile_version == $MYRCFILE_VERSION ) {
+         $valid_rcfile = $TRUE;
+      } elsif ( $rcfile_version == 0 ) {
+         &report(4, "Could not determine version of read RC file.");
+      } else {
+         &report(4, "Version of read RC file ($rcfile_version) and ",
+            "this script ($MYRCFILE_VERSION) differs.");
+      }
+   }
+   
+   ### scan parameters 
+   foreach (keys %PARAMETER_LIST) {
+      $opt_specs{&option_specifier($_)} = \&handle_option;
+   }
+   if(! GetOptions(%opt_specs)) {
+      &print_usage;
+      &abort("An error occured while processing command line options");
+   }
+
+   if( ! $valid_rcfile ) {
+      &report(3,"No valid configuration file found. Please run '$MYNAME "
+         ."--configure'.\nUsing default values for missing parameters in this "
+         ."session.");
+   }
+
+   ### As the configuration process is done now, it is time to set the
+   #   global configuration flag
+   $CONFIGURED = $TRUE;
+   
+   #### do some test in order to secure as good as possible that we will
+   #### succeed before to much work was done and maybe some data as damaged
+
+   ### make sure that tmp_base_suffix is not empty
+   if ( &param_value('tmp_base_suffix') eq "" ) {
+      &report(2, "\nCAUTION: Empty tmp_base_suffix would destroy the original files!");
+      &abort("Parameter tmp_base_suffix is not set.");
+   }
+   
+   ##### check for required commands
+   if (&param_value('check_commands') ne $NO ) {
+      &check_commands;
+   }
+
+   ### Check number of arguments
+   if ( @ARGV != 1 ) {
+      &report(1, "\nWrong number of arguments. I need exactly one file.");
+      &print_usage;
+      exit 1;
+   }
+   
+   return $ARGV[0];
+}
+
+#### prepare the logdir for the log files of the various called appplications
+
+sub prepare_logdir {
+   my $log_dir= &param_value('logdir');
+   my $my_new_log;
+
+   ##### Preparing the LOGDIR
+   if (! &check_dir($log_dir, "Could not create log directory", $YES)) {
+      &abort("Please, set a different path and restart");
+   }
+
+   # make sure there is a slash at the end of the path
+   $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
+   
+   if( <$log_dir/*.log> and &param_value('clean_logs') eq $YES ) { 
+      &report(6, "\nRemoving old log files ($log_dir).");
+      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>,
+         <$log_dir/gloss-*.log>, <$log_dir/thumbpdf-*.log>,
+         <$log_dir/ppower-*.log>, <$log_dir/authorindex-*.log>,
+         <$log_dir/tex2pdf-*.log>);
+   } else {
+      &report(6, "\nAll log files will be stored in ($log_dir).");
+   }
+
+   ### move my pre-configuration log file to specified log directory
+   $my_new_log = "$log_dir/tex2pdf-$$.log";
+   if ( move($MYLOGFILE, $my_new_log) ) {
+      $MYLOGFILE = $my_new_log;
+   } else {
+      &report(3, "Could not move '$MYLOGFILE' to logdir: $!");
+   }
+}
+
+##### analyse document argument
+#### process the one and only argument (besides the options) which specifies
+#### which LaTeX document the user wants to translate to PDF
+#### a lyx file will be translated to LaTeX first
+# parameter 1: argument
+
+sub process_doc_argument {
+   my $argument = $_[0];
+   my $doc_base;
+   my $doc_path;
+   my $arg_suffix;
+   
+   ##### Getting document name, suffix and path
+   ($doc_base,$doc_path,$arg_suffix) = fileparse($argument, ('\.tex', '\.lyx'));
+
+   if (! defined($arg_suffix) or $arg_suffix eq "") {
+      $arg_suffix = '.tex';
+   }
+   
+   ###### change working directory to document directory
+   if ( $doc_path ne "" ) {
+      chdir $doc_path;
+   }
+   
+   ###### make DOCPATH an absolute path
+   $doc_path = cwd.'/';
+   
+   ###### Cut off suffix and do lyx or tex specific stuff
+   if ( $arg_suffix eq '.lyx' ) {
+      # Lyx document argument: generate Latex document if required
+      &generate_tex_file($doc_base.'.lyx', $doc_base.'.tex');
+   } else {
+      # LaTeX document argument: check access to given LaTeX document
+      &check_file($doc_base.'.tex', "Cannot read the specified LaTeX document!");
+   }
+   
+   return $doc_path.$doc_base.'.tex';
+}
+
+#### handle the dir of the input path if the document has one and
+# parameter 1: main tex doc
+# return value: absolute input path
+
+sub process_inputpath {
+   my $texdoc = $_[0];
+   my $doc_base;
+   my $doc_path;
+   my $doc_suffix;
+   my $input_path;
+   my @matches;
+   
+   ### Maybe the user has given us a different inputpath
+   $input_path = &param_value('input_path');
+   if(defined($input_path) and $input_path ne "") {
+      &report(6, "Setting input path to specified directory: $input_path");
+      
+      &report(7, "Change working directory to input path.");
+      chdir $input_path;
+      
+      return $input_path;
+   }
+
+   ##### Getting document name, suffix and path
+   ($doc_base,$doc_path,$doc_suffix) = fileparse($texdoc, ('\.tex'));
+
+   ###### change working directory to input_path if set
+   # When the files' path (images, included documents, etc.) in your document is
+   # relative to another directory than the PASSED document's directory.
+   # This is useful when the calling application (e.g. LyX) generates a
+   # temporary
+   # TeX file and calls the tex2pdf with it instead of the original file.
+   
+   @matches=&extract_tag_contents($texdoc, 'def\\\\input@path');
+   $input_path=$matches[0];
+   
+   ## check if input_path is ok
+   if ($input_path) {
+      &report(7, "Found an input path in the latex document: $input_path");
+      if( &check_dir($input_path, 'The retrieved input@path seems not to be valid.', $NO)) {
+         &set_param_value('input_path', $input_path);
+         &report(7, "Change working directory to input path.");
+         chdir $input_path;
+      } else {
+         &abort ('I am lost.');
+      }
+   } else {
+      &report(4, "No input path in the latex document found.");
+      &report(7, "Resources are expected to be relative to document's location: $doc_path");
+         $input_path=$doc_path;
+   }
+   
+   return $input_path;
+}
+
+#### set the working dir to the input path if the document has one and
+#### and determine the path for the result
+# parameter 1: main tex doc
+# parameter 2: absolute input path
+# return value: absolute path were the resulting pdf doc should be stored
+
+sub get_target_name {
+   my $texdoc = $_[0];
+   my $input_path=$_[1];
+
+   my $doc_base;
+   my $doc_path;
+   my $doc_suffix;
+   my $destination;
+   my $pdf_path;
+   
+   ##### Getting document name, suffix and path
+   ($doc_base,$doc_path,$doc_suffix) = fileparse($texdoc, ('\.tex'));
+ 
+   ##### set the directory where the final pdf will be stored
+   $destination=&param_value('destination');
+   $pdf_path=undef;
+   
+   if ($destination eq 'custom' ) {
+      $pdf_path=&param_value('custom_path');
+   } elsif ($destination eq 'input') {
+      $pdf_path=$input_path;
+   } else {
+      $pdf_path=$doc_path;
+   }
+
+   if( ! defined($pdf_path) or $pdf_path eq "" or ! &check_dir($pdf_path,
+      'The specified destination directory for the final PDF documents is not valid.', $NO)) {
+      &report(7, "Using document's instead of destination path: $doc_path");
+      $pdf_path=$doc_path;
+   }
+
+   # make sure there is a slash at the end of the path
+   $pdf_path .= '/' if( ! ($pdf_path =~ m#/$#) );
+   
+   return $pdf_path.$doc_base.'.pdf';
+}
+
+### generate hyperref parameters from given settings
+# parameter 1: main tex doc
+# return_value: result
+
+sub generate_hyperref_params {
+   my $texdoc = $_[0];
+   my $para;
+   my @params = ('pdftex');
+
+   ##### Set title and author from main LaTeX document or parameters
+   foreach my $info (('title', 'author')) {
+      my $value;
+
+      $value=&param_value("$info");
+      if (! defined($value) ) {
+         my @matches=&extract_tag_contents($texdoc, $info);
+         $value= $matches[0];
+         if (! defined($value) ) {
+            &report(4, "\nWARNING: Could not identify document's $info correctly.");
+            &report(7, "Maybe you have used a LaTeX tag inside the $info which confuses me.\n",
+               "Adjust the $info of the LaTeX file in order to avoid the problem or\n",
+               "you could set the $info parameter manually.");
+            $value= &param_value("default_$info");
+            &report(7, "Using default-$info: $value");
+         }
+      }
+      if (! defined($value) or $value eq $NIL ) {
+         &report(7, "$info field set to $NIL - no value will be passed.");
+      } else {
+         &report(7, "Document's $info: $value");
+         push(@params, "pdf$info={$value}");
+      }
+   }
+   
+   $para=&param_value('paper');
+   if ( $para ne $NIL ) { push(@params, $para); }
+
+   $para=&param_value('link_toc_page'); 
+   if ( $para eq $YES ) { push(@params, 'linktocpage'); }
+
+   $para=&param_value('colorlinks');
+   if ( $para ne $NIL ) {
+      $para= $para eq $YES ? 'true' : 'false';
+      push(@params, "colorlinks=$para");
+   }
+
+   if ( $para ne 'false' ) {
+      foreach (('linkcolor', 'pagecolor', 'urlcolor', 'citecolor')) {
+         $para=&param_value($_);
+         if ( $para ne $NIL ) { push(@params, "$_={$para}"); }
+      }
+   }
+
+   $para=&param_value('hyperref_args');
+   if(defined($para) and $para ne "" and $para ne $NIL) {
+      push(@params, $para);
+   }
+   
+   return @params;
+}
+
+#### Prepare the main document and all referenced ones for the generation
+#### of the PDF document (including referenced images)
+# parameter 1: top level tex document
+# parameter 2: parameter list of hyperref parameters
+
+sub prepare_documents {
+   my ($main_tex_doc, $input_path, @hyperref_params) = @_;
+   @REF_DOCS=();
+
+   ## get a name for the tmp tex file
+   my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc, $input_path);
+
+   ## Get the list of imported files from the tex file
+   &get_file_list($main_tex_doc);
+   
+   ## remove main file from list (first element; needs special handling)
+   shift @REF_DOCS;
+   
+   ## tell user about the identified refereneced docs
+   if ( @REF_DOCS > 0 ) {
+      &report(7, "\nFound the following referenced TeX files:");
+      foreach my $file (@REF_DOCS) {
+         &report(7, ">>>>> $file");
+      }
+   } else {
+      &report(7, "\nFound no referenced TeX files.");
+   }
+   
+   ##### Generate adjusted temp tex files and convert all their images
+   ## main doc
+   &report(6, "\nGenerating main temporary LaTeX document: $main_tmp_doc");
+   &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params);
+   &convert_images($main_tex_doc);
+   
+   ## referenced docs
+   foreach my $file (@REF_DOCS) {
+      my $tmp_file = &reserve_tmp_texname($file);
+   
+      ### Insert pdf conversation tags in tex file and write it to tmp_file
+      &report(7, "\nGenerating temporary LaTeX document: $tmp_file");
+      &convert_tex2tmp($file, $tmp_file, undef);
+      &convert_images($file);
+   }
+
+   return $main_tmp_doc;
+}
+
+##### Generate the final PDF document
+# parameter 1: filename of the source LaTeX document (with extension)
+
+sub generate_pdf_doc {
+   my $source = $_[0];
+   my $runno=1;
+   my $rerun=$TRUE;
+   my $doc;
+   my $pdf_doc;
+   my $base;
+   my $path;
+   my $suffix;
+
+   my $max_run_no= &param_value('maxrun');
+   my $min_run_no= &param_value('minrun');
+   my $log_dir= &param_value('logdir');
+   $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
+   my $makeindex_options=&param_value('makeindex_opts');
+   
+   # setting the log files for the output of pdflatex, bibtex, gloss,
+   # thumbpdf, ppower and authorindex
+   my $pdflog_base = $log_dir."pdflatex-$$-";
+   my $bibtex_log = $log_dir."bibtex-$$.log";
+   my $gloss_log = $log_dir."gloss-$$.log";
+   my $thumbpdf_log = $log_dir."thumbpdf-$$.log";
+   my $ppower_log = $log_dir."ppower-$$.log";
+   my $authorindex_log = $log_dir."authorindex-$$.log";
+
+   ##### Getting document name, suffix and path
+   ($base,$path,$suffix) = fileparse($source, ('\.tex'));
+   $doc = $path.$base;
+   $pdf_doc = $base.'.pdf';
+
+   ### run pdflatex until no more errors are reported (max MAXRUNNO)
+   while ( $rerun and $runno <= $max_run_no )
+   {
+      &report(6, "\n************ Pdflatex run no. $runno *************");
+      if ( &run_pdflatex($doc, $pdflog_base.$runno.'.log') == $TRUE 
+         and ( $min_run_no <= $runno )) {
+         # no errors detected and min. no. of runs are done
+         $rerun=$FALSE;
+      } else {
+         # errors appeared or max run no. has not been reached
+         $rerun=$TRUE;
+      }
+   
+      ### Execute BibTeX after first run if set (and required)
+      if ( $runno == 1 and &param_value('bibtex') ne $NO ) {
+         &report(6, "\n****************** BibTeX handling ***********************");
+         &handle_bibtex($doc, $bibtex_log);
+      }
+
+      ### Execute BibTeX on file.gls after first run if set (and required)
+      if ( $runno == 1 and &param_value('gloss') ne $NO ) {
+         &report(6, "\n****************** Gloss handling ***********************");
+         &handle_gloss($doc, $gloss_log);
+      }
+
+      ### generated index file exists
+      if ( $runno == 1 and -f $doc.'.idx' and &param_value('force_index') ne $NO ) {
+         if( !defined($makeindex_options) or $makeindex_options eq $NIL ) {
+            $makeindex_options = "";
+         }
+         &report(6, "\n****************** Extra index generation ***************");
+         &report(7, "Document seems to have an index. Generating ...\n");
+         &system_command("makeindex $makeindex_options $doc.idx", $FALSE, 8,
+            "makeindex failed.\nI will continue, "
+            ."but maybe there will not be an index in the PDF doc.");
+      }
+
+      $runno += 1;
+   }
+
+   $rerun = $FALSE;
+
+   ### if the authorindex option is switched on then run authorindex
+   if ( &param_value('authorindex') eq $YES ) {
+      &report(6, "\n****************** authorindex generation *****************");
+      &run_authorindex($doc, $authorindex_log);
+   }
+   
+   ### generated index file exists
+   if ( -f $doc.'.idx' and &param_value('force_index') ne $NO ) {
+      if( !defined($makeindex_options) or $makeindex_options eq $NIL ) {
+         $makeindex_options = "";
+      }
+      &report(6, "\n****************** Extra index generation ***************");
+      &report(7, "Document seems to have an index. Generating ...\n");
+      &system_command("makeindex $makeindex_options $doc.idx", $FALSE, 8,
+         "makeindex failed.\nI will continue, "
+         ."but maybe there will not be an index in the PDF doc.");
+      $rerun=$TRUE;
+   }
+   
+   ### if the thumbpdf option is switched on then make thumbnails
+   if ( &param_value('thumbpdf') eq $YES ) {
+         &report(6, "\n****************** Thumbnail generation *****************");
+      &run_thumbpdf($doc, $thumbpdf_log);
+      $rerun=$TRUE;
+   }
+
+   ### One final pdflatex run if requested
+   if ( $rerun ) {
+      &report(6, "\n************ One final pdflatex run no. $runno *************");
+      &run_pdflatex($doc, $pdflog_base.$runno.'.log');
+   }
+
+   ### if the ppower option is switched on then run ppower
+   if ( &param_value('ppower') eq $YES ) {
+      &report(6, "\n****************** ppower postprocess *****************");
+      &run_ppower($doc, $ppower_log);
+   }
+
+   if ( ! -f $pdf_doc ) {
+      &abort("\nThe new PDF file could not be generated: ".$pdf_doc);
+   }
+
+   return $pdf_doc;
+}
+   
+################## Lift off !!!! (main part) ##################
+
+my $texdoc;
+my $doc_argument;
+my $input_path;
+my $target_name;
+my @hyperref_params;
+my $new_pdf_doc;
+my $tmp_tex_doc;
+
+&report(5, "\nScript starts ($MYRELEASE)");
+
+##### read and analyse configuration and options and adjust basic variables
+##### accordingly
+##### write RC file on config request
+#### use the finished configuration to get all further settings before we
+#### actually start doing something
+
+&report(5, "\nProcessing given parameters and arguments.");
+$doc_argument = &adjust_configuration;
+
+#### prepare the script to write some information to specified log files
+
+&report(5, "\nPreparing directory for log files.");
+&prepare_logdir;
+
+#### process the one and only argument (besides the options) which specifies
+#### which LaTeX document the user wants to translate to PDF
+#### a lyx file will be translated to LaTeX first
+
+&report(5, "\nAnalysing your document argument.");
+$texdoc = &process_doc_argument($doc_argument);
+
+#### we would like to get some more information from the actual
+#### main LaTeX document before we really start
+#### parse the document and try to get the info
+
+## translate hyperref settings to the actual package parameters 
+   
+&report(5, "\nSetting up parameters for hyperref.");
+@hyperref_params = &generate_hyperref_params($texdoc);
+
+## set the working dir to the input path if the document has one and
+
+&report(5, "\nProcessing input path for main tex document.");
+$input_path = &process_inputpath($texdoc);
+
+## determine the name for the result
+
+&report(5, "\nSetting the correct name for the result.");
+$target_name = &get_target_name($texdoc, $input_path);
+
+## as much as possible is prepared in advance at this point
+## so hopefully we will succeed in generating the PDF document
+
+##### real work starts NOW
+
+##### Generate adjusted temp tex files and convert all their images
+
+&report(5, "\nPreparing all documents and images.");
+$tmp_tex_doc = &prepare_documents($texdoc, $input_path, @hyperref_params);
+
+##### Generate the final PDF document
+
+&report(5, "\nProcessing the actual generation of the PDF document.");
+$new_pdf_doc = &generate_pdf_doc($tmp_tex_doc);
+
+##### Finalize
+move($new_pdf_doc, $target_name) or &abort("Could not move PDF file to final destination: $!");
+
+if ( &param_value('debug') eq $NO ) {
+   &clean_up;
+} else {
+   &print_temp_files;
+}
+
+&report(5, "\nThe new pdf file is: $target_name\n");
+

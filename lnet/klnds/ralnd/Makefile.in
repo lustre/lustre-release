@@ -1,0 +1,6 @@
+MODULES := kralnd
+kralnd-objs := ralnd.o ralnd_cb.o ralnd_modparams.o
+
+EXTRA_POST_CFLAGS := @RACPPFLAGS@
+
+@INCLUDE_RULES@

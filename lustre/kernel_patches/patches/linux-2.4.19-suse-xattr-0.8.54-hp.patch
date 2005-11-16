@@ -1,0 +1,346 @@
+ Documentation/Configure.help  |   66 ++
+ arch/ia64/defconfig           |    7 
+ fs/Config.in                  |   14 
+ fs/Makefile                   |    3 
+ fs/ext2/Makefile              |    4 
+ fs/ext2/file.c                |    5 
+ fs/ext2/ialloc.c              |    2 
+ fs/ext2/inode.c               |   34 -
+ fs/ext2/namei.c               |   14 
+ fs/ext2/super.c               |   29 
+ fs/ext2/symlink.c             |   14 
+ fs/ext2/xattr.c               | 1212 +++++++++++++++++++++++++++++++++++++++++
+ fs/ext2/xattr_user.c          |  103 +++
+ fs/ext3/Makefile              |    9 
+ fs/ext3/ext3-exports.c        |   13 
+ fs/ext3/file.c                |    5 
+ fs/ext3/ialloc.c              |    2 
+ fs/ext3/inode.c               |   35 -
+ fs/ext3/namei.c               |   21 
+ fs/ext3/super.c               |   36 +
+ fs/ext3/symlink.c             |   14 
+ fs/ext3/xattr.c               | 1225 ++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/xattr_user.c          |  111 +++
+ fs/jfs/jfs_xattr.h            |    6 
+ fs/jfs/xattr.c                |    6 
+ fs/mbcache.c                  |  648 ++++++++++++++++++++++
+ include/linux/cache_def.h     |   15 
+ include/linux/errno.h         |    4 
+ include/linux/ext2_fs.h       |   31 -
+ include/linux/ext2_xattr.h    |  157 +++++
+ include/linux/ext3_fs.h       |   31 -
+ include/linux/ext3_jbd.h      |    8 
+ include/linux/ext3_xattr.h    |  157 +++++
+ include/linux/fs.h            |    2 
+ include/linux/mbcache.h       |   69 ++
+ kernel/ksyms.c                |    4 
+ mm/vmscan.c                   |   35 +
+ 62 files changed, 4343 insertions(+), 182 deletions(-)
+
+Index: linux-2.4.19.SuSE/Documentation/Configure.help
+===================================================================
+--- linux-2.4.19.SuSE.orig/Documentation/Configure.help	2004-05-03 11:20:17.000000000 -0700
++++ linux-2.4.19.SuSE/Documentation/Configure.help	2004-05-03 11:50:22.000000000 -0700
+@@ -15296,6 +15296,39 @@
+ 
+   If unsure, say N.
+ 
++Ext2 extended attributes
++CONFIG_EXT2_FS_XATTR
++  Extended attributes are name:value pairs associated with inodes by
++  the kernel or by users (see the attr(5) manual page, or visit
++  <http://acl.bestbits.at/> for details).
++
++  If unsure, say N.
++
++Ext2 extended attribute block sharing
++CONFIG_EXT2_FS_XATTR_SHARING
++  This options enables code for sharing identical extended attribute
++  blocks among multiple inodes.
++
++  Usually, say Y.
++
++Ext2 extended user attributes
++CONFIG_EXT2_FS_XATTR_USER
++  This option enables extended user attributes on ext2. Processes can
++  associate extended user attributes with inodes to store additional
++  information such as the character encoding of files, etc. (see the
++  attr(5) manual page, or visit <http://acl.bestbits.at/> for details).
++
++  If unsure, say N.
++
++Ext2 trusted extended attributes
++CONFIG_EXT2_FS_XATTR_TRUSTED
++  This option enables extended attributes on ext2 that are accessible
++  (and visible) only to users capable of CAP_SYS_ADMIN. Usually this
++  is only the super user. Trusted extended attributes are meant for
++  implementing system/security services.
++
++  If unsure, say N.
++
+ Ext3 journalling file system support (EXPERIMENTAL)
+ CONFIG_EXT3_FS
+   This is the journalling version of the Second extended file system
+@@ -15354,6 +15387,39 @@
+ 
+   If unsure, say N.
+ 
++Ext3 extended attributes
++CONFIG_EXT3_FS_XATTR
++  Extended attributes are name:value pairs associated with inodes by
++  the kernel or by users (see the attr(5) manual page, or visit
++  <http://acl.bestbits.at/> for details).
++
++  If unsure, say N.
++
++Ext3 extended attribute block sharing
++CONFIG_EXT3_FS_XATTR_SHARING
++  This options enables code for sharing identical extended attribute
++  blocks among multiple inodes.
++
++  Usually, say Y.
++
++Ext3 extended user attributes
++CONFIG_EXT3_FS_XATTR_USER
++  This option enables extended user attributes on ext3. Processes can
++  associate extended user attributes with inodes to store additional
++  information such as the character encoding of files, etc. (see the
++  attr(5) manual page, or visit <http://acl.bestbits.at/> for details).
++
++  If unsure, say N.
++
++Ext3 trusted extended attributes
++CONFIG_EXT3_FS_XATTR_TRUSTED
++  This option enables extended attributes on ext3 that are accessible
++  (and visible) only to users capable of CAP_SYS_ADMIN. Usually this
++  is only the super user. Trusted extended attributes are meant for
++  implementing system/security services.
++
++  If unsure, say N.
++
+ Journal Block Device support (JBD for ext3) (EXPERIMENTAL)
+ CONFIG_JBD
+   This is a generic journalling layer for block devices.  It is
+Index: linux-2.4.19.SuSE/arch/ia64/defconfig
+===================================================================
+--- linux-2.4.19.SuSE.orig/arch/ia64/defconfig	2004-05-03 11:19:10.000000000 -0700
++++ linux-2.4.19.SuSE/arch/ia64/defconfig	2004-05-03 11:50:22.000000000 -0700
+@@ -1,6 +1,13 @@
+ #
+ # Automatically generated make config: don't edit
+ #
++CONFIG_EXT3_FS_XATTR=y
++# CONFIG_EXT3_FS_XATTR_SHARING is not set
++# CONFIG_EXT3_FS_XATTR_USER is not set
++# CONFIG_EXT2_FS_XATTR is not set
++# CONFIG_EXT2_FS_XATTR_SHARING is not set
++# CONFIG_EXT2_FS_XATTR_USER is not set
++# CONFIG_FS_MBCACHE is not set
+ 
+ #
+ # Code maturity level options
+Index: linux-2.4.19.SuSE/fs/Config.in
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/Config.in	2004-05-03 11:18:52.000000000 -0700
++++ linux-2.4.19.SuSE/fs/Config.in	2004-05-03 11:50:22.000000000 -0700
+@@ -203,6 +203,10 @@
+ #tristate 'Meta block cache' CONFIG_FS_MBCACHE
+ define_tristate CONFIG_FS_MBCACHE y
+ 
++# Meta block cache for Extended Attributes (ext2/ext3)
++#tristate 'Meta block cache' CONFIG_FS_MBCACHE
++define_tristate CONFIG_FS_MBCACHE y
++
+ mainmenu_option next_comment
+ comment 'Partition Types'
+ source fs/partitions/Config.in
+Index: linux-2.4.19.SuSE/fs/Makefile
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/Makefile	2004-05-03 11:22:49.000000000 -0700
++++ linux-2.4.19.SuSE/fs/Makefile	2004-05-03 11:50:22.000000000 -0700
+@@ -104,6 +104,9 @@
+ obj-$(CONFIG_FS_MBCACHE)	+= mbcache.o
+ obj-$(CONFIG_FS_POSIX_ACL)	+= posix_acl.o xattr_acl.o
+ 
++export-objs += mbcache.o
++obj-$(CONFIG_FS_MBCACHE)	+= mbcache.o
++
+ # persistent filesystems
+ obj-y += $(join $(subdir-y),$(subdir-y:%=/%.o))
+ 
+Index: linux-2.4.19.SuSE/fs/ext2/Makefile
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/ext2/Makefile	2004-05-03 11:18:46.000000000 -0700
++++ linux-2.4.19.SuSE/fs/ext2/Makefile	2004-05-03 11:50:22.000000000 -0700
+@@ -18,4 +18,8 @@
+ obj-$(CONFIG_EXT2_FS_XATTR_USER) += xattr_user.o
+ obj-$(CONFIG_EXT2_FS_POSIX_ACL) += acl.o
+ 
++export-objs += xattr.o
++obj-$(CONFIG_EXT2_FS_XATTR) += xattr.o
++obj-$(CONFIG_EXT2_FS_XATTR_USER) += xattr_user.o
++
+ include $(TOPDIR)/Rules.make
+Index: linux-2.4.19.SuSE/fs/ext2/inode.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/ext2/inode.c	2004-05-03 11:18:47.000000000 -0700
++++ linux-2.4.19.SuSE/fs/ext2/inode.c	2004-05-03 11:50:22.000000000 -0700
+@@ -52,6 +52,18 @@
+ }
+ 
+ /*
++ * Test whether an inode is a fast symlink.
++ */
++static inline int ext2_inode_is_fast_symlink(struct inode *inode)
++{
++	int ea_blocks = inode->u.ext2_i.i_file_acl ?
++		(inode->i_sb->s_blocksize >> 9) : 0;
++
++	return (S_ISLNK(inode->i_mode) &&
++		inode->i_blocks - ea_blocks == 0);
++}
++
++/*
+  * Called at each iput()
+  */
+ void ext2_put_inode (struct inode * inode)
+@@ -806,6 +818,8 @@
+ 		return;
+ 	if (ext2_inode_is_fast_symlink(inode))
+ 		return;
++	if (ext2_inode_is_fast_symlink(inode))
++		return;
+ 	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+ 		return;
+ 
+Index: linux-2.4.19.SuSE/fs/ext2/super.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/ext2/super.c	2004-05-03 11:18:47.000000000 -0700
++++ linux-2.4.19.SuSE/fs/ext2/super.c	2004-05-03 11:50:22.000000000 -0700
+@@ -70,6 +70,7 @@
+ {
+ 	va_list args;
+ 
++	ext2_xattr_put_super(sb);
+ 	if (!(sb->s_flags & MS_RDONLY)) {
+ 		sb->u.ext2_sb.s_mount_state |= EXT2_ERROR_FS;
+ 		sb->u.ext2_sb.s_es->s_state =
+Index: linux-2.4.19.SuSE/fs/ext3/inode.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/ext3/inode.c	2004-05-03 11:18:47.000000000 -0700
++++ linux-2.4.19.SuSE/fs/ext3/inode.c	2004-05-03 11:50:22.000000000 -0700
+@@ -54,6 +54,18 @@
+ 		inode->i_blocks - ea_blocks == 0);
+ }
+ 
++/*
++ * Test whether an inode is a fast symlink.
++ */
++static inline int ext3_inode_is_fast_symlink(struct inode *inode)
++{
++	int ea_blocks = inode->u.ext3_i.i_file_acl ?
++		(inode->i_sb->s_blocksize >> 9) : 0;
++
++	return (S_ISLNK(inode->i_mode) &&
++		inode->i_blocks - ea_blocks == 0);
++}
++
+ /* The ext3 forget function must perform a revoke if we are freeing data
+  * which has been journaled.  Metadata (eg. indirect blocks) must be
+  * revoked in all cases. 
+@@ -1968,6 +1980,8 @@
+ 		return;
+ 	if (ext3_inode_is_fast_symlink(inode))
+ 		return;
++	if (ext3_inode_is_fast_symlink(inode))
++		return;
+ 	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+ 		return;
+ 
+Index: linux-2.4.19.SuSE/fs/ext3/ext3-exports.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/ext3/ext3-exports.c	2004-02-18 07:26:44.000000000 -0800
++++ linux-2.4.19.SuSE/fs/ext3/ext3-exports.c	2004-05-03 11:50:22.000000000 -0700
+@@ -0,0 +1,13 @@
++#include <linux/config.h>
++#include <linux/module.h>
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++#include <linux/ext3_xattr.h>
++
++EXPORT_SYMBOL(ext3_force_commit);
++EXPORT_SYMBOL(ext3_bread);
++EXPORT_SYMBOL(ext3_xattr_register);
++EXPORT_SYMBOL(ext3_xattr_unregister);
++EXPORT_SYMBOL(ext3_xattr_get);
++EXPORT_SYMBOL(ext3_xattr_list);
++EXPORT_SYMBOL(ext3_xattr_set);
+Index: linux-2.4.19.SuSE/include/linux/errno.h
+===================================================================
+--- linux-2.4.19.SuSE.orig/include/linux/errno.h	2004-05-03 11:20:21.000000000 -0700
++++ linux-2.4.19.SuSE/include/linux/errno.h	2004-05-03 11:50:22.000000000 -0700
+@@ -30,4 +30,8 @@
+ 
+ #endif
+ 
++/* Defined for extended attributes */
++#define ENOATTR ENODATA		/* No such attribute */
++#define ENOTSUP EOPNOTSUPP	/* Operation not supported */
++
+ #endif
+Index: linux-2.4.19.SuSE/kernel/ksyms.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/kernel/ksyms.c	2004-05-03 11:22:48.000000000 -0700
++++ linux-2.4.19.SuSE/kernel/ksyms.c	2004-05-03 11:50:22.000000000 -0700
+@@ -12,6 +12,7 @@
+ #define __KERNEL_SYSCALLS__
+ #include <linux/config.h>
+ #include <linux/slab.h>
++#include <linux/cache_def.h>
+ #include <linux/module.h>
+ #include <linux/blkdev.h>
+ #include <linux/cdrom.h>
+Index: linux-2.4.19.SuSE/mm/vmscan.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/mm/vmscan.c	2004-05-03 11:18:53.000000000 -0700
++++ linux-2.4.19.SuSE/mm/vmscan.c	2004-05-03 11:50:22.000000000 -0700
+@@ -32,6 +32,39 @@
+  */
+ int vm_passes = 60;
+ 
++static DECLARE_MUTEX(other_caches_sem);
++static LIST_HEAD(cache_definitions);
++
++void register_cache(struct cache_definition *cache)
++{
++	down(&other_caches_sem);
++	list_add(&cache->link, &cache_definitions);
++	up(&other_caches_sem);
++}
++
++void unregister_cache(struct cache_definition *cache)
++{
++	down(&other_caches_sem);
++	list_del(&cache->link);
++	up(&other_caches_sem);
++}
++
++static void shrink_other_caches(unsigned int priority, int gfp_mask)
++{
++	struct list_head *p;
++
++	if (down_trylock(&other_caches_sem))
++		return;
++
++	list_for_each_prev(p, &cache_definitions) {
++		struct cache_definition *cache =
++			list_entry(p, struct cache_definition, link);
++
++		cache->shrink(priority, gfp_mask);
++	}
++	up(&other_caches_sem);
++}
++
+ /*
+  * "vm_cache_scan_ratio" is how much of the inactive LRU queue we will scan
+  * in one go. A value of 6 for vm_cache_scan_ratio implies that we'll

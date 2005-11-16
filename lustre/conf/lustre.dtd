@@ -1,0 +1,145 @@
+<!-- Lustre Management DTD -->
+
+<!-- basic entities -->
+<!ENTITY % object.content "(#PCDATA)">
+<!ENTITY % object.attr "
+             name CDATA #REQUIRED
+             uuid CDATA #REQUIRED">
+
+<!ENTITY % objref.content "(#PCDATA)">
+<!ENTITY % objref.attr    "uuidref CDATA #REQUIRED">
+
+<!-- main elements -->
+<!ELEMENT lustre (node | profile | mountpoint | ldlm | ptlrpc |echoclient |
+                  mds | mdsdev| ost | osd | lov | lovconfig)*>
+<!ATTLIST lustre version CDATA #REQUIRED>
+
+<!ELEMENT node (network | routetbl | profile_ref | timeout | 
+                lustreUpcall | portalsUpcall | ptldebug | subsystem)*>
+<!ATTLIST node %object.attr;
+               router CDATA #IMPLIED>
+               
+<!ELEMENT network (nid | port | route_tbl | sendmem | recvmem)*>
+<!ATTLIST network %object.attr;
+                  nettype (tcp | elan | gm) 'tcp'>
+
+<!ELEMENT routetbl (route)*>
+<!ATTLIST routetbl %object.attr;>
+<!ELEMENT route %object.content;>
+<!ATTLIST route type (elan | tcp | gm) #REQUIRED
+                gw CDATA #REQUIRED
+                lo CDATA #REQUIRED
+                hi CDATA #IMPLIED >
+
+<!ELEMENT profile (ldlm_ref | ptlrpc_ref | network_ref | routetbl_ref |
+                   osd_ref | mdsdev_ref | lovconfig_ref|
+                   echoclient_ref | mountpoint_ref)*>
+<!ATTLIST profile %object.attr;>
+
+<!ELEMENT mountpoint path #REQUIRED
+                     clientoptions #REQUIRED >
+                     filesystem_ref #REQUIRED >
+<!ATTLIST mountpoint %object.attr;>
+
+<!ELEMENT echoclient (obd_ref)>
+<!ATTLIST echoclient %object.attr;>
+
+<!ELEMENT ldlm EMPTY>
+<!ATTLIST ldlm %object.attr;>
+
+<!ELEMENT ptlrpc EMPTY>
+<!ATTLIST ptlrpc %object.attr;>
+
+<!ELEMENT osd (fstype | devpath | devsize | autoformat | 
+               target_ref | node_ref | journalsize | mkfsoptions | mountfsoptions)*>
+<!ATTLIST osd %object.attr; 
+              osdtype (obdfilter | obdecho) 'obdfilter'>
+
+<!ELEMENT ost (active_ref | group)*>
+<!ATTLIST ost %object.attr;
+              failover ( 1 | 0 ) #IMPLIED>
+
+<!ELEMENT filesystem mds_ref #REQUIRED
+                     obd_ref #REQUIRED>
+<!ATTLIST filesystem %object.attr;>
+
+<!ELEMENT mds (active_ref | lovconfig_ref | group)*>
+<!ATTLIST mds %object.attr;
+              failover ( 1 | 0 ) #IMPLIED>
+
+<!ELEMENT mdsdev (fstype | devpath | devsize | autoformat | 
+                  target_ref | node_ref | journalsize | mkfsoptions | mountfsoptions)*>
+<!ATTLIST mdsdev %object.attr;>
+
+<!ELEMENT lov (mds_ref |(obd_ref)+)*>
+<!ATTLIST lov %object.attr;
+               stripesize    CDATA #REQUIRED
+               stripecount   CDATA #REQUIRED
+               stripeoffset  CDATA #IMPLIED
+               stripepattern CDATA #REQUIRED>
+
+<!ELEMENT lovconfig (lov_ref)>
+<!ATTLIST lovconfig %object.attr;>
+
+<!-- basic elements -->
+<!ELEMENT recoveryUpcall %object.content;>
+<!ELEMENT timeout       %object.content;>
+<!ELEMENT ptldebug      %object.content;>
+<!ELEMENT subsystem     %object.content;>
+<!ELEMENT journalsize   %object.content;>
+<!ELEMENT mkfsoptions   %object.content;>
+<!ELEMENT mountfsoptions %object.content;>
+<!ELEMENT clientoptions %object.content;>
+<!ELEMENT fstype        %object.content;>
+<!ELEMENT nid           %object.content;>
+<!ELEMENT port          %object.content;>
+<!ELEMENT sendmem       %object.content;>
+<!ELEMENT recvmem       %object.content;>
+<!ELEMENT autoformat    %object.content;>
+<!ELEMENT activetarget  %object.content;>
+<!ELEMENT devpath       %object.content;>
+<!ELEMENT devsize       %object.content;>
+<!ELEMENT path          %object.content;>
+<!ELEMENT fileset       %object.content;>
+
+<!-- object reference tag elements -->
+<!ELEMENT network_ref     %objref.content;>
+<!ATTLIST network_ref     %objref.attr;>
+<!ELEMENT routetbl_ref    %objref.content;>
+<!ATTLIST routetbl_ref    %objref.attr;>
+<!ELEMENT node_ref        %objref.content;>
+<!ATTLIST node_ref        %objref.attr;>
+<!ELEMENT profile_ref     %objref.content;>
+<!ATTLIST profile_ref     %objref.attr;>
+<!ELEMENT osd_ref         %objref.content;>
+<!ATTLIST osd_ref         %objref.attr;>
+<!ELEMENT mds_ref         %objref.content;>
+<!ATTLIST mds_ref         %objref.attr;>
+<!ELEMENT mdsdev_ref      %objref.content;>
+<!ATTLIST mdsdev_ref      %objref.attr;>
+<!ELEMENT obd_ref         %objref.content;>
+<!ATTLIST obd_ref         %objref.attr;>
+<!ELEMENT ost_ref         %objref.content;>
+<!ATTLIST ost_ref         %objref.attr;>
+<!ELEMENT active_ref      %objref.content;>
+<!ATTLIST active_ref      %objref.attr;>
+<!ELEMENT target_ref      %objref.content;>
+<!ATTLIST target_ref      %objref.attr;>
+<!ELEMENT lov_ref         %objref.content;>
+<!ATTLIST lov_ref         %objref.attr;>
+<!ELEMENT lovconfig_ref   %objref.content;>
+<!ATTLIST lovconfig_ref   %objref.attr;>
+<!ELEMENT mountpoint_ref  %objref.content;>
+<!ATTLIST mountpoint_ref  %objref.attr;>
+<!ELEMENT filesystem_ref  %objref.content;>
+<!ATTLIST filesystem_ref  %objref.attr;>
+<!ELEMENT echoclient_ref  %objref.content;>
+<!ATTLIST echoclient_ref  %objref.attr;>
+<!ELEMENT failover_ref    %objref.content;>
+<!ATTLIST failover_ref    %objref.attr;>
+<!ELEMENT ldlm_ref        %objref.content;>
+<!ATTLIST ldlm_ref        %objref.attr;>
+<!ELEMENT ptlrpc_ref      %objref.content;>
+<!ATTLIST ptlrpc_ref      %objref.attr;>
+
+

@@ -1,0 +1,17 @@
+#!/bin/sh
+[ -z "$SIZE" ] && SIZE=5g
+[ -z "$COUNT" ] && COUNT=100
+[ -z "$VERIFY" ] && VERIFY="-+d"
+#[ -z "$ODIR" ] && ODIR="-I"
+[ -z "$REC" ] && REC=64
+[ -z "$FILE" ] && FILE=/mnt/lustre/iozone.$$
+[ $1 ] && SIZE=$1
+LOOP=0
+rm -f endiozone
+echo 0 > /proc/sys/lnet/debug
+while date; do
+	LOOP=`expr $LOOP + 1`
+	echo "Test #$LOOP"
+	iozone $VERIFY $ODIR -r $REC -i 0 -i 1 -f $FILE -s $SIZE 2>&1 || exit $?
+	[ -f endiozone -o $LOOP -ge $COUNT ] && rm -f endiozone && exit 0
+done | tee /tmp/iozone.log

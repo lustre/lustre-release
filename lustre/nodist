@@ -1,0 +1,9 @@
+obd-*/obd-*
+CVS
+*~
+make.rules
+config.*
+*.o
+*.orig
+*.backup
+.depfiles

@@ -1,0 +1,46 @@
+my_sources =    api-errno.c api-ni.c config.c \
+		lib-me.c lib-msg.c lib-eq.c \
+		lib-md.c lib-move.c lo.c \
+	        router.c router_proc.c \
+		acceptor.c peer.c
+
+
+if LIBLUSTRE
+noinst_LIBRARIES= liblnet.a
+liblnet_a_SOURCES= $(my_sources)
+liblnet_a_CPPFLAGS = $(LLCPPFLAGS)
+liblnet_a_CFLAGS = $(LLCFLAGS)
+endif
+
+if MODULES
+
+if LINUX
+modulenet_DATA = lnet$(KMODEXT)
+endif # LINUX
+
+if DARWIN
+macos_PROGRAMS := portals
+
+portals_SOURCES := api-errno.c api-ni.c config.c
+portals_SOURCES += lib-me.c lib-msg.c lib-eq.c lib-md.c
+portals_SOURCES += lib-move.c module.c lo.c
+portals_SOURCES += router.c acceptor.c
+
+portals_CFLAGS := $(EXTRA_KCFLAGS)
+portals_LDFLAGS := $(EXTRA_KLDFLAGS)
+portals_LDADD := $(EXTRA_KLIBS)
+
+plist_DATA := Info.plist
+
+install_data_hook := fix-kext-ownership
+
+endif # DARWIN
+
+endif # MODULES
+
+install-data-hook: $(install_data_hook)
+
+EXTRA_DIST := Info.plist
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c lnet
+DIST_SOURCES = $(lnet-objs:%.o=%.c)

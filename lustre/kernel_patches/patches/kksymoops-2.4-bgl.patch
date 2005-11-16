@@ -1,0 +1,678 @@
+Index: linux-bgl/arch/i386/kernel/traps.c
+===================================================================
+--- linux-bgl.orig/arch/i386/kernel/traps.c	2003-07-02 08:43:23.000000000 -0700
++++ linux-bgl/arch/i386/kernel/traps.c	2004-10-26 23:25:17.950442396 -0700
+@@ -24,6 +24,7 @@
+ #include <linux/spinlock.h>
+ #include <linux/interrupt.h>
+ #include <linux/highmem.h>
++#include <linux/version.h>
+ 
+ #ifdef CONFIG_MCA
+ #include <linux/mca.h>
+@@ -135,6 +136,8 @@
+ {
+ 	int i;
+ 	unsigned long addr;
++	/* static to not take up stackspace; if we race here too bad */
++	static char buffer[512];
+ 
+ 	if (!stack)
+ 		stack = (unsigned long*)&stack;
+@@ -144,9 +147,8 @@
+ 	while (((long) stack & (THREAD_SIZE-1)) != 0) {
+ 		addr = *stack++;
+ 		if (kernel_text_address(addr)) {
+-			if (i && ((i % 6) == 0))
+-				printk("\n ");
+-			printk(" [<%08lx>]", addr);
++			lookup_symbol(addr, buffer, 512);
++			printk("[<%08lx>] %s (0x%p)\n", addr,buffer,stack-1);
+ 			i++;
+ 		}
+ 	}
+@@ -186,12 +188,19 @@
+ 	show_trace(esp);
+ }
+ 
++#ifdef CONFIG_MK7
++#define ARCHIT "/athlon"
++#else
++#define ARCHIT "/i686"
++#endif
++
+ void show_registers(struct pt_regs *regs)
+ {
+ 	int i;
+ 	int in_kernel = 1;
+ 	unsigned long esp;
+ 	unsigned short ss;
++	static char buffer[512];
+ 
+ 	esp = (unsigned long) (&regs->esp);
+ 	ss = __KERNEL_DS;
+@@ -200,8 +209,12 @@
+ 		esp = regs->esp;
+ 		ss = regs->xss & 0xffff;
+ 	}
++
++	print_modules();
++	lookup_symbol(regs->eip, buffer, 512);
+ 	printk("CPU:    %d\nEIP:    %04x:[<%08lx>]    %s\nEFLAGS: %08lx\n",
+ 		smp_processor_id(), 0xffff & regs->xcs, regs->eip, print_tainted(), regs->eflags);
++	printk("\nEIP is at %s (" UTS_RELEASE ARCHIT ")\n",buffer);
+ 	printk("eax: %08lx   ebx: %08lx   ecx: %08lx   edx: %08lx\n",
+ 		regs->eax, regs->ebx, regs->ecx, regs->edx);
+ 	printk("esi: %08lx   edi: %08lx   ebp: %08lx   esp: %08lx\n",
+@@ -261,7 +274,7 @@
+ 	if (__get_user(file, (char **)(eip + 4)) ||
+ 		(unsigned long)file < PAGE_OFFSET || __get_user(c, file))
+ 		file = "<bad filename>";
+-
++	printk("------------[ cut here ]------------\n");
+ 	printk("kernel BUG at %s:%d!\n", file, line);
+ 
+ no_bug:
+Index: linux-bgl/arch/i386/kernel/process.c
+===================================================================
+--- linux-bgl.orig/arch/i386/kernel/process.c	2003-07-02 08:44:07.000000000 -0700
++++ linux-bgl/arch/i386/kernel/process.c	2004-10-26 23:28:53.017015082 -0700
+@@ -33,6 +33,7 @@
+ #include <linux/reboot.h>
+ #include <linux/init.h>
+ #include <linux/mc146818rtc.h>
++#include <linux/version.h>
+ 
+ #include <asm/uaccess.h>
+ #include <asm/pgtable.h>
+@@ -437,10 +438,14 @@
+ void show_regs(struct pt_regs * regs)
+ {
+ 	unsigned long cr0 = 0L, cr2 = 0L, cr3 = 0L, cr4 = 0L;
++	static char buffer[512];
++
++	lookup_symbol(regs->eip, buffer, 512);
+ 
+ 	printk("\n");
+ 	printk("Pid: %d, comm: %20s\n", current->pid, current->comm);
+ 	printk("EIP: %04x:[<%08lx>] CPU: %d",0xffff & regs->xcs,regs->eip, smp_processor_id());
++	printk("\nEIP is at %s (" UTS_RELEASE ")\n", buffer);
+ 	if (regs->xcs & 3)
+ 		printk(" ESP: %04x:%08lx",0xffff & regs->xss,regs->esp);
+ 	printk(" EFLAGS: %08lx    %s\n",regs->eflags, print_tainted());
+Index: linux-bgl/arch/ia64/kernel/process.c
+===================================================================
+--- linux-bgl.orig/arch/ia64/kernel/process.c	2003-07-02 08:43:26.000000000 -0700
++++ linux-bgl/arch/ia64/kernel/process.c	2004-10-26 23:29:56.340005959 -0700
+@@ -18,6 +18,7 @@
+ #include <linux/smp_lock.h>
+ #include <linux/stddef.h>
+ #include <linux/unistd.h>
++#include <linux/version.h>
+ 
+ #include <asm/delay.h>
+ #include <asm/efi.h>
+@@ -33,9 +34,10 @@
+ #include <asm/sn/idle.h>
+ #endif
+ 
+-static void
+-do_show_stack (struct unw_frame_info *info, void *arg)
++void
++ia64_do_show_stack (struct unw_frame_info *info, void *arg)
+ {
++	static char buffer[512];
+ 	unsigned long ip, sp, bsp;
+ 
+ 	printk("\nCall Trace: ");
+@@ -46,7 +48,8 @@
+ 
+ 		unw_get_sp(info, &sp);
+ 		unw_get_bsp(info, &bsp);
+-		printk("[<%016lx>] sp=0x%016lx bsp=0x%016lx\n", ip, sp, bsp);
++		lookup_symbol(ip, buffer, 512);
++		printk("[<%016lx>] sp=0x%016lx bsp=0x%016lx %s\n", ip, sp, bsp, buffer);
+ 	} while (unw_unwind(info) >= 0);
+ }
+ 
+@@ -56,19 +59,19 @@
+ 	struct unw_frame_info info;
+ 
+ 	unw_init_from_blocked_task(&info, task);
+-	do_show_stack(&info, 0);
++	ia64_do_show_stack(&info, 0);
+ }
+ 
+ void
+ show_stack (struct task_struct *task)
+ {
+ 	if (!task)
+-		unw_init_running(do_show_stack, 0);
++		unw_init_running(ia64_do_show_stack, 0);
+ 	else {
+ 		struct unw_frame_info info;
+ 
+ 		unw_init_from_blocked_task(&info, task);
+-		do_show_stack(&info, 0);
++		ia64_do_show_stack(&info, 0);
+ 	}
+ }
+ 
+@@ -76,8 +79,11 @@
+ show_regs (struct pt_regs *regs)
+ {
+ 	unsigned long ip = regs->cr_iip + ia64_psr(regs)->ri;
++	static char buffer[512];
+ 
+ 	printk("\nPid: %d, comm: %20s\n", current->pid, current->comm);
++	lookup_symbol(ip, buffer, 512);
++	printk("EIP is at %s (" UTS_RELEASE ")\n", buffer);
+ 	printk("psr : %016lx ifs : %016lx ip  : [<%016lx>]    %s\n",
+ 	       regs->cr_ipsr, regs->cr_ifs, ip, print_tainted());
+ 	printk("unat: %016lx pfs : %016lx rsc : %016lx\n",
+Index: linux-bgl/arch/s390/config.in
+===================================================================
+--- linux-bgl.orig/arch/s390/config.in	2003-07-02 08:43:27.000000000 -0700
++++ linux-bgl/arch/s390/config.in	2004-10-26 23:25:17.961440685 -0700
+@@ -73,5 +73,6 @@
+ #  bool 'Remote GDB kernel debugging' CONFIG_REMOTE_DEBUG
+ #fi
+ bool 'Magic SysRq key' CONFIG_MAGIC_SYSRQ
++bool 'Load all symbols for debugging/kksymoops' CONFIG_KALLSYMS
+ endmenu
+ 
+Index: linux-bgl/arch/s390/kernel/traps.c
+===================================================================
+--- linux-bgl.orig/arch/s390/kernel/traps.c	2003-07-02 08:44:02.000000000 -0700
++++ linux-bgl/arch/s390/kernel/traps.c	2004-10-26 23:25:17.964440218 -0700
+@@ -27,6 +27,7 @@
+ #include <linux/init.h>
+ #include <linux/delay.h>
+ #include <linux/module.h>
++#include <linux/version.h>
+ 
+ #include <asm/system.h>
+ #include <asm/uaccess.h>
+@@ -108,27 +109,26 @@
+ 
+ void show_trace(unsigned long * stack)
+ {
++	static char buffer[512];
+ 	unsigned long backchain, low_addr, high_addr, ret_addr;
+ 	int i;
+ 
+ 	if (!stack)
+ 		stack = (unsigned long*)&stack;
+ 
+-	printk("Call Trace: ");
+ 	low_addr = ((unsigned long) stack) & PSW_ADDR_MASK;
+ 	high_addr = (low_addr & (-THREAD_SIZE)) + THREAD_SIZE;
+ 	/* Skip the first frame (biased stack) */
+ 	backchain = *((unsigned long *) low_addr) & PSW_ADDR_MASK;
+-	/* Print up to 8 lines */
+-	for (i = 0; i < 8; i++) {
++	/* Print up to 20 lines */
++	for (i = 0; i < 20; i++) {
+ 		if (backchain < low_addr || backchain >= high_addr)
+ 			break;
+ 		ret_addr = *((unsigned long *) (backchain+56)) & PSW_ADDR_MASK;
+ 		if (!kernel_text_address(ret_addr))
+ 			break;
+-		if (i && ((i % 6) == 0))
+-			printk("\n   ");
+-		printk("[<%08lx>] ", ret_addr);
++		lookup_symbol(ret_addr, buffer, 512);
++		printk("[<%08lx>] %s (0x%lx)\n", ret_addr,buffer,backchain+56);
+ 		low_addr = backchain;
+ 		backchain = *((unsigned long *) backchain) & PSW_ADDR_MASK;
+ 	}
+@@ -171,6 +171,7 @@
+ 
+ void show_registers(struct pt_regs *regs)
+ {
++	static char buffer[512];
+ 	mm_segment_t old_fs;
+ 	char *mode;
+ 	int i;
+@@ -179,6 +180,10 @@
+ 	printk("%s PSW : %08lx %08lx\n",
+ 	       mode, (unsigned long) regs->psw.mask,
+ 	       (unsigned long) regs->psw.addr);
++	if (!(regs->psw.mask & PSW_PROBLEM_STATE)) {
++		lookup_symbol(regs->psw.addr & 0x7FFFFFFF, buffer, 512);
++		printk("           %s (" UTS_RELEASE ")\n", buffer);
++	}
+ 	printk("%s GPRS: %08x %08x %08x %08x\n", mode,
+ 	       regs->gprs[0], regs->gprs[1], regs->gprs[2], regs->gprs[3]);
+ 	printk("           %08x %08x %08x %08x\n",
+Index: linux-bgl/arch/s390x/config.in
+===================================================================
+--- linux-bgl.orig/arch/s390x/config.in	2003-07-02 08:43:07.000000000 -0700
++++ linux-bgl/arch/s390x/config.in	2004-10-26 23:25:17.964440218 -0700
+@@ -75,5 +75,6 @@
+ #  bool 'Remote GDB kernel debugging' CONFIG_REMOTE_DEBUG
+ #fi
+ bool 'Magic SysRq key' CONFIG_MAGIC_SYSRQ
++bool 'Load all symbols for debugging/kksymoops' CONFIG_KALLSYMS
+ endmenu
+ 
+Index: linux-bgl/arch/s390x/kernel/traps.c
+===================================================================
+--- linux-bgl.orig/arch/s390x/kernel/traps.c	2003-07-02 08:43:25.000000000 -0700
++++ linux-bgl/arch/s390x/kernel/traps.c	2004-10-26 23:25:17.966439907 -0700
+@@ -27,6 +27,7 @@
+ #include <linux/init.h>
+ #include <linux/delay.h>
+ #include <linux/module.h>
++#include <linux/version.h>
+ 
+ #include <asm/system.h>
+ #include <asm/uaccess.h>
+@@ -112,25 +113,25 @@
+ {
+ 	unsigned long backchain, low_addr, high_addr, ret_addr;
+ 	int i;
++	/* static to not take up stackspace; if we race here too bad */
++	static char buffer[512];
+ 
+ 	if (!stack)
+ 		stack = (unsigned long*)&stack;
+ 
+-	printk("Call Trace: ");
+ 	low_addr = ((unsigned long) stack) & PSW_ADDR_MASK;
+ 	high_addr = (low_addr & (-THREAD_SIZE)) + THREAD_SIZE;
+ 	/* Skip the first frame (biased stack) */
+ 	backchain = *((unsigned long *) low_addr) & PSW_ADDR_MASK;
+-	/* Print up to 8 lines */
+-	for (i = 0; i < 8; i++) {
++	/* Print up to 20 lines */
++	for (i = 0; i < 20; i++) {
+ 		if (backchain < low_addr || backchain >= high_addr)
+ 			break;
+ 		ret_addr = *((unsigned long *) (backchain+112)) & PSW_ADDR_MASK;
+ 		if (!kernel_text_address(ret_addr))
+ 			break;
+-		if (i && ((i % 3) == 0))
+-			printk("\n   ");
+-		printk("[<%016lx>] ", ret_addr);
++		lookup_symbol(ret_addr, buffer, 512);
++		printk("[<%016lx>] %s (0x%lx)\n", ret_addr, buffer, backchain+112);
+ 		low_addr = backchain;
+ 		backchain = *((unsigned long *) backchain) & PSW_ADDR_MASK;
+ 	}
+@@ -173,6 +174,7 @@
+ 
+ void show_registers(struct pt_regs *regs)
+ {
++	static char buffer[512];
+ 	mm_segment_t old_fs;
+ 	char *mode;
+ 	int i;
+@@ -181,6 +183,10 @@
+ 	printk("%s PSW : %016lx %016lx\n",
+ 	       mode, (unsigned long) regs->psw.mask,
+ 	       (unsigned long) regs->psw.addr);
++	if (!(regs->psw.mask & PSW_PROBLEM_STATE)) {
++		lookup_symbol(regs->psw.addr, buffer, 512);
++		printk("           %s (" UTS_RELEASE ")\n", buffer);
++	}
+ 	printk("%s GPRS: %016lx %016lx %016lx %016lx\n", mode,
+ 	       regs->gprs[0], regs->gprs[1], regs->gprs[2], regs->gprs[3]);
+ 	printk("           %016lx %016lx %016lx %016lx\n",
+Index: linux-bgl/arch/ppc64/mm/fault.c
+===================================================================
+--- linux-bgl.orig/arch/ppc64/mm/fault.c	2003-07-02 08:43:12.000000000 -0700
++++ linux-bgl/arch/ppc64/mm/fault.c	2004-10-26 23:30:24.467942247 -0700
+@@ -224,7 +224,6 @@
+ 	if (debugger_kernel_faults)
+ 		debugger(regs);
+ #endif
+-	print_backtrace( (unsigned long *)regs->gpr[1] );
+ 	panic("kernel access of bad area pc %lx lr %lx address %lX tsk %s/%d",
+ 	      regs->nip,regs->link,address,current->comm,current->pid);
+ }
+Index: linux-bgl/arch/ppc64/kernel/traps.c
+===================================================================
+--- linux-bgl.orig/arch/ppc64/kernel/traps.c	2003-07-02 08:44:03.000000000 -0700
++++ linux-bgl/arch/ppc64/kernel/traps.c	2004-10-26 23:33:45.297572484 -0700
+@@ -89,7 +89,6 @@
+ #if defined(CONFIG_KDB)
+ 		kdb(KDB_REASON_OOPS, 0, (kdb_eframe_t) regs);
+ #endif
+-		print_backtrace((unsigned long *)regs->gpr[1]);
+ 		panic("Exception in kernel pc %lx signal %d",regs->nip,signr);
+ #if defined(CONFIG_PPCDBG) && (defined(CONFIG_XMON) || defined(CONFIG_KGDB))
+ 	/* Allow us to catch SIGILLs for 64-bit app/glibc debugging. -Peter */
+@@ -187,7 +186,6 @@
+ 		if (kdb(KDB_REASON_FAULT, 0, regs))
+ 			return ;
+ #endif
+-		print_backtrace((unsigned long *)regs->gpr[1]);
+ 		panic("machine check");
+ 	}
+ 	_exception(SIGSEGV, regs);	
+@@ -209,7 +207,6 @@
+ 	}
+ #endif
+ 	show_regs(regs);
+-	print_backtrace((unsigned long *)regs->gpr[1]);
+ 	panic("System Management Interrupt");
+ }
+ 
+Index: linux-bgl/arch/ppc64/kernel/process.c
+===================================================================
+--- linux-bgl.orig/arch/ppc64/kernel/process.c	2003-07-02 08:44:31.000000000 -0700
++++ linux-bgl/arch/ppc64/kernel/process.c	2004-10-26 23:33:01.060713583 -0700
+@@ -30,6 +30,8 @@
+ #include <linux/user.h>
+ #include <linux/elf.h>
+ #include <linux/init.h>
++#include <linux/version.h>
++#include <linux/module.h>
+ 
+ #include <asm/pgtable.h>
+ #include <asm/uaccess.h>
+@@ -130,12 +132,61 @@
+ 	__restore_flags(s);
+ }
+ 
++/*
++ * If the address is either in the .text section of the
++ * kernel, or in the vmalloc'ed module regions, it *may* 
++ * be the address of a calling routine
++ */
++
++#ifdef CONFIG_MODULES
++
++extern struct module *module_list;
++extern struct module kernel_module;
++extern char _stext[], _etext[];
++
++static inline int kernel_text_address(unsigned long addr)
++{
++	int retval = 0;
++	struct module *mod;
++
++	if (addr >= (unsigned long) &_stext &&
++	    addr <= (unsigned long) &_etext)
++		return 1;
++
++	for (mod = module_list; mod != &kernel_module; mod = mod->next) {
++		/* mod_bound tests for addr being inside the vmalloc'ed
++		 * module area. Of course it'd be better to test only
++		 * for the .text subset... */
++		if (mod_bound(addr, 0, mod)) {
++			retval = 1;
++			break;
++		}
++	}
++
++	return retval;
++}
++
++#else
++
++static inline int kernel_text_address(unsigned long addr)
++{
++	return (addr >= (unsigned long) &_stext &&
++		addr <= (unsigned long) &_etext);
++}
++
++#endif
++
++
+ void show_regs(struct pt_regs * regs)
+ {
+ 	int i;
++	static char buffer[512];
+ 
+-	printk("NIP: %016lX XER: %016lX LR: %016lX REGS: %p TRAP: %04lx    %s\n",
++	print_modules();
++	printk("NIP: %016lx XER: %016lx LR: %016lx REGS: %p TRAP: %04lx    %s\n",
+ 	       regs->nip, regs->xer, regs->link, regs,regs->trap, print_tainted());
++	lookup_symbol(regs->nip, buffer, 512);
++	printk("NIP is at %s (" UTS_RELEASE ")\n", buffer);
+ 	printk("MSR: %016lx EE: %01x PR: %01x FP: %01x ME: %01x IR/DR: %01x%01x\n",
+ 	       regs->msr, regs->msr&MSR_EE ? 1 : 0, regs->msr&MSR_PR ? 1 : 0,
+ 	       regs->msr & MSR_FP ? 1 : 0,regs->msr&MSR_ME ? 1 : 0,
+@@ -147,27 +198,22 @@
+ 	printk("\nlast math %p ", last_task_used_math);
+ 	
+ #ifdef CONFIG_SMP
+-	/* printk(" CPU: %d last CPU: %d", current->processor,current->last_processor); */
++	printk("CPU: %d", smp_processor_id());
+ #endif /* CONFIG_SMP */
+ 	
+-	printk("\n");
+ 	for (i = 0;  i < 32;  i++)
+ 	{
+ 		long r;
+ 		if ((i % 4) == 0)
+-		{
+-			printk("GPR%02d: ", i);
+-		}
++			printk("\nGPR%02d: ", i);
+ 
+ 		if ( __get_user(r, &(regs->gpr[i])) )
+ 		    return;
+ 
+-		printk("%016lX ", r);
+-		if ((i % 4) == 3)
+-		{
+-			printk("\n");
+-		}
++		printk("%016lx ", r);
+ 	}
++	printk("\n");
++	print_backtrace((unsigned long *)regs->gpr[1]);
+ }
+ 
+ void exit_thread(void)
+@@ -415,67 +461,24 @@
+ 	}
+ }
+ 
+-extern char _stext[], _etext[];
+-
+-char * ppc_find_proc_name( unsigned * p, char * buf, unsigned buflen )
+-{
+-	unsigned long tb_flags;
+-	unsigned short name_len;
+-	unsigned long tb_start, code_start, code_ptr, code_offset;
+-	unsigned code_len;
+-	strcpy( buf, "Unknown" );
+-	code_ptr = (unsigned long)p;
+-	code_offset = 0;
+-	if ( ( (unsigned long)p >= (unsigned long)_stext ) && ( (unsigned long)p <= (unsigned long)_etext ) ) {
+-		while ( (unsigned long)p <= (unsigned long)_etext ) {
+-			if ( *p == 0 ) {
+-				tb_start = (unsigned long)p;
+-				++p;	/* Point to traceback flags */
+-				tb_flags = *((unsigned long *)p);
+-				p += 2;	/* Skip over traceback flags */
+-				if ( tb_flags & TB_NAME_PRESENT ) {
+-					if ( tb_flags & TB_PARMINFO )
+-						++p;	/* skip over parminfo data */
+-					if ( tb_flags & TB_HAS_TBOFF ) {
+-						code_len = *p;	/* get code length */
+-						code_start = tb_start - code_len;
+-						code_offset = code_ptr - code_start + 1;
+-						if ( code_offset > 0x100000 )
+-							break;
+-						++p;		/* skip over code size */
+-					}
+-					name_len = *((unsigned short *)p);
+-					if ( name_len > (buflen-20) )
+-						name_len = buflen-20;
+-					memcpy( buf, ((char *)p)+2, name_len );
+-					buf[name_len] = 0;
+-					if ( code_offset )
+-						sprintf( buf+name_len, "+0x%lx", code_offset-1 ); 
+-				}
+-				break;
+-			}
+-			++p;
+-		}
+-	}
+-	return buf;
+-}
+-
+ void
+ print_backtrace(unsigned long *sp)
+ {
+ 	int cnt = 0;
+ 	unsigned long i;
+-	char name_buf[256];
++	char buffer[512];
+ 
+-	printk("Call backtrace: \n");
++	printk("Call Trace: \n");
+ 	while (sp) {
+ 		if (__get_user( i, &sp[2] ))
+ 			break;
+-		printk("%016lX ", i);
+-		printk("%s\n", ppc_find_proc_name( (unsigned *)i, name_buf, 256 ));
++		if (kernel_text_address(i)) {
++			if (__get_user(sp, (unsigned long **)sp))
++				break;
++			lookup_symbol(i, buffer, 512);
++			printk("[<%016lx>] %s\n", i, buffer);
++		}
+ 		if (cnt > 32) break;
+-		if (__get_user(sp, (unsigned long **)sp))
+-			break;
+ 	}
+ 	printk("\n");
+ }
+@@ -515,6 +518,7 @@
+ 	unsigned long ip, sp;
+ 	unsigned long stack_page = (unsigned long)p;
+ 	int count = 0;
++	static char buffer[512];
+ 
+ 	if (!p)
+ 		return;
+@@ -528,7 +532,8 @@
+ 			break;
+ 		if (count > 0) {
+ 			ip = *(unsigned long *)(sp + 16);
+-			printk("[%016lx] ", ip);
++			lookup_symbol(ip, buffer, 512);
++			printk("[<%016lx>] %s\n", ip, buffer);
+ 		}
+ 	} while (count++ < 16);
+ 	printk("\n");
+Index: linux-bgl/kernel/Makefile
+===================================================================
+--- linux-bgl.orig/kernel/Makefile	2004-10-26 23:23:00.516655289 -0700
++++ linux-bgl/kernel/Makefile	2004-10-26 23:35:04.930451186 -0700
+@@ -14,7 +14,7 @@
+ obj-y     = sched.o dma.o fork.o exec_domain.o panic.o printk.o \
+ 	    module.o exit.o itimer.o info.o time.o softirq.o resource.o \
+ 	    sysctl.o acct.o capability.o ptrace.o timer.o user.o \
+-	    signal.o sys.o kmod.o context.o
++	    signal.o sys.o kmod.o context.o kksymoops.o
+ 
+ obj-$(CONFIG_UID16) += uid16.o
+ obj-$(CONFIG_MODULES) += ksyms.o
+Index: linux-bgl/kernel/kksymoops.c
+===================================================================
+--- linux-bgl.orig/kernel/kksymoops.c	2004-10-26 17:10:51.404753448 -0700
++++ linux-bgl/kernel/kksymoops.c	2004-10-26 23:25:17.971439129 -0700
+@@ -0,0 +1,82 @@
++#include <linux/module.h>
++#include <linux/string.h>
++#include <linux/errno.h>
++#include <linux/kernel.h>
++#include <linux/config.h>
++#ifdef CONFIG_KALLSYMS
++#include <linux/kallsyms.h>
++#endif
++
++
++
++int lookup_symbol(unsigned long address, char *buffer, int buflen)
++{
++	struct module *this_mod;
++	unsigned long bestsofar;
++
++	const char *mod_name = NULL, *sec_name = NULL, *sym_name = NULL;
++	unsigned long mod_start,mod_end,sec_start,sec_end,sym_start,sym_end;
++	
++	if (!buffer)
++		return -EFAULT;
++	
++	if (buflen<256)
++		return -ENOMEM;
++	
++	memset(buffer,0,buflen);
++
++#ifdef CONFIG_KALLSYMS
++	if (!kallsyms_address_to_symbol(address,&mod_name,&mod_start,&mod_end,&sec_name,
++		&sec_start, &sec_end, &sym_name, &sym_start, &sym_end)) {
++		/* kallsyms doesn't have a clue; lets try harder */
++		bestsofar = 0;
++		snprintf(buffer,buflen-1,"[unresolved]");
++		
++		this_mod = module_list;
++
++		while (this_mod != NULL) {
++			int i;
++			/* walk the symbol list of this module. Only symbols
++			   who's address is smaller than the searched for address
++			   are relevant; and only if it's better than the best so far */
++			for (i=0; i< this_mod->nsyms; i++)
++				if ((this_mod->syms[i].value<=address) &&
++					(bestsofar<this_mod->syms[i].value)) {
++					snprintf(buffer,buflen-1,"%s [%s] 0x%x",
++						this_mod->syms[i].name,
++						this_mod->name,
++						(unsigned int)(address - this_mod->syms[i].value));
++					bestsofar = this_mod->syms[i].value;
++				}
++			this_mod = this_mod->next;
++		}
++
++	} else { /* kallsyms success */
++		snprintf(buffer,buflen-1,"%s [%s] 0x%x",sym_name,mod_name,(unsigned int)(address-sym_start));
++	}
++#endif
++	return strlen(buffer);
++}
++
++static char modlist[4096];
++/* this function isn't smp safe but that's not really a problem; it's called from
++ * oops context only and any locking could actually prevent the oops from going out;
++ * the line that is generated is informational only and should NEVER prevent the real oops
++ * from going out. 
++ */
++void print_modules(void)
++{
++	struct module *this_mod;
++	int pos = 0, i;
++	memset(modlist,0,4096);
++
++#ifdef CONFIG_KALLSYMS
++	this_mod = module_list;
++	while (this_mod != NULL) {
++		if (this_mod->name != NULL)
++			pos +=snprintf(modlist+pos,160-pos-1,"%s ",this_mod->name);
++		this_mod = this_mod->next;
++	}
++	printk("%s\n",modlist);
++#endif
++}
+Index: linux-bgl/include/linux/kernel.h
+===================================================================
+--- linux-bgl.orig/include/linux/kernel.h	2003-07-02 08:44:16.000000000 -0700
++++ linux-bgl/include/linux/kernel.h	2004-10-26 23:25:17.968439596 -0700
+@@ -107,6 +107,9 @@
+ extern int tainted;
+ extern const char *print_tainted(void);
+ 
++extern int lookup_symbol(unsigned long address, char *buffer, int buflen);
++extern void print_modules(void);
++
+ #if DEBUG
+ #define pr_debug(fmt,arg...) \
+ 	printk(KERN_DEBUG fmt,##arg)

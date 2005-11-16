@@ -1,0 +1,10 @@
+Makefile
+Makefile.in
+acceptor
+debugctl
+ptlctl
+.deps
+routerstat
+wirecheck
+gmlndnid
+.*.cmd

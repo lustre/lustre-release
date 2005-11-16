@@ -1,0 +1,67 @@
+#!/bin/sh
+
+date=`date +%Y%m%d_%H%M`
+
+backpath=/System/LustreBackup
+if ! [ -d $backpath ]; then
+	mkdir -p $backpath
+fi
+
+backdir=${backpath}/SystemBackup
+
+# If system has been backed up, just exit
+if [ -d ${backdir} ]; then
+	exit 0
+fi
+
+mkdir $backdir
+chmod 700 $backdir
+
+# create backup directory
+mkdir -p $backdir/System/Library/Frameworks
+mkdir -p $backdir/System/Library/Extensions
+mkdir -p $backdir/usr/lib
+mkdir -p $backdir/usr/include
+mkdir -p $backdir/private/etc
+
+# backup the old system
+cp /mach_kernel $backdir/
+cp -rf /System/Library/Frameworks/IOKit.framework $backdir/System/Library/Frameworks/
+cp -rf /System/Library/Frameworks/Kernel.framework $backdir/System/Library/Frameworks/
+cp -rf /System/Library/Frameworks/System.framework $backdir/System/Library/Frameworks/
+cp -rf /System/Library/Extensions/System.kext $backdir/System/Library/Extensions/
+cp -rf /usr/include/bsm $backdir/usr/include/bsm
+cp -rf /usr/include/default_pager $backdir/usr/include/default_pager
+cp -rf /usr/include/dev $backdir/usr/include/dev
+cp -rf /usr/include/device $backdir/usr/include/device
+cp -rf /usr/include/drivers $backdir/usr/include/drivers
+cp -rf /usr/include/hfs $backdir/usr/include/hfs
+cp -rf /usr/include/isofs $backdir/usr/include/isofs
+cp -rf /usr/include/libkern $backdir/usr/include/libkern
+cp -rf /usr/include/mach $backdir/usr/include/mach
+cp -rf /usr/include/mach_debug $backdir/usr/include/mach_debug
+cp -rf /usr/include/machine $backdir/usr/include/machine
+cp -rf /usr/include/miscfs $backdir/usr/include/miscfs
+cp -rf /usr/include/net $backdir/usr/include/net
+cp -rf /usr/include/netat $backdir/usr/include/netat
+cp -rf /usr/include/netinet $backdir/usr/include/netinet
+cp -rf /usr/include/netinet6 $backdir/usr/include/netinet6
+cp -rf /usr/include/netkey $backdir/usr/include/netkey
+cp -rf /usr/include/nfs $backdir/usr/include/nfs
+cp -rf /usr/include/pexpert $backdir/usr/include/pexpert
+cp -rf /usr/include/ppc $backdir/usr/include/ppc
+cp -rf /usr/include/profile $backdir/usr/include/profile
+cp -rf /usr/include/sys $backdir/usr/include/sys
+cp -rf /usr/include/ufs $backdir/usr/include/ufs
+cp -rf /usr/include/vfs $backdir/usr/include/vfs
+cp -f /usr/lib/libIOKit.A.dylib $backdir/usr/lib/libIOKit.A.dylib
+cp -f /usr/lib/libIOKit.dylib $backdir/usr/lib/libIOKit.dylib
+cp -f /usr/lib/libkmod.a $backdir/usr/lib/libkmod.a
+cp -f /usr/lib/libkmodc++.a $backdir/usr/lib/libkmodc++.a
+if [ -f /private/etc/sysctl.conf ]; then
+	cp -f /private/etc/sysctl.conf $backdir/private/etc/sysctl.conf
+fi
+
+# record sysctem backup path of current installation 
+# echo $backdir >> $backpath/lustre-current
+# echo $date > $backdir/install_date
