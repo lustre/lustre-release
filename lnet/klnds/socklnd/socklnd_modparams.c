@@ -77,8 +77,8 @@ CFS_MODULE_PARM(keepalive_intvl, "i", int, 0644,
                 "seconds between probes");
 
 #if CPU_AFFINITY
-static int ksnd_irq_affinity = SOCKNAL_IRQ_AFFINITY;
-CFS_MODULE_PARM(ksnd_irq_affinity, "i", int, 0644,
+static int enable_irq_affinity = SOCKNAL_IRQ_AFFINITY;
+CFS_MODULE_PARM(enable_irq_affinity, "i", int, 0644,
                 "enable IRQ affinity");
 #endif
 
@@ -107,7 +107,7 @@ ksock_tunables_t ksocknal_tunables = {
         .ksnd_zc_min_frag     = &zc_min_frag,
 #endif
 #if CPU_AFFINITY
-        .ksnd_irq_affinity    = &ksnd_irq_affinity,
+        .ksnd_irq_affinity    = &enable_irq_affinity,
 #endif
 };
 
