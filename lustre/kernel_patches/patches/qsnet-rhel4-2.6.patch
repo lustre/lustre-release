@@ -96982,9 +96982,9 @@ diff -urN clean/ipc/shm.c linux-2.6.9/ipc/shm.c
  #include <linux/shmem_fs.h>
  #include <linux/security.h>
 +#include <linux/module.h>
+ #include <linux/audit.h>
  #include <asm/uaccess.h>
  
- #include "util.h"
 @@ -850,6 +851,44 @@
  	return retval;
  }
@@ -97514,22 +97514,22 @@ diff -urN clean/mm/memory.c linux-2.6.9/mm/memory.c
  	spin_unlock(&mm->page_table_lock);
  out:
  	return ret;
-@@ -1552,6 +1562,7 @@
+@@ -1555,6 +1565,7 @@
  
  	/* No need to invalidate - it was non-present before */
  	update_mmu_cache(vma, addr, entry);
 +	ioproc_update_page(vma, addr);
+	lazy_mmu_prot_update(entry);
  	spin_unlock(&mm->page_table_lock);
  out:
- 	return VM_FAULT_MINOR;
-@@ -1669,6 +1680,7 @@
+@@ -1673,6 +1684,7 @@
  
  	/* no need to invalidate: a not-present page shouldn't be cached */
  	update_mmu_cache(vma, address, entry);
 +	ioproc_update_page(vma, address);
+	lazy_mmu_prot_update(entry);
  	spin_unlock(&mm->page_table_lock);
  out:
- 	return ret;
 @@ -1853,6 +1865,7 @@
  		return ret;
  	return ret == len ? 0 : -1;
