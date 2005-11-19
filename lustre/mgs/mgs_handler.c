@@ -259,7 +259,7 @@ static int mgs_cleanup(struct obd_device *obd)
 
  //       mgs_update_server_data(obd, 1);
 
-        mgs_fs_cleanup(obd);
+        //mgs_fs_cleanup(obd);
 
         lustre_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
         mgs->mgs_sb = NULL;

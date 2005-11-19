@@ -470,7 +470,7 @@ out:
 
 void print_ldd(struct lustre_disk_data *ldd)
 {
-        int count = 0;
+        int i = 0;
         printf("\nPermanent disk data:\n");
         printf("Server:     %s\n", ldd->ldd_svname);
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
@@ -482,12 +482,9 @@ void print_ldd(struct lustre_disk_data *ldd)
                ldd->ldd_flags & LDD_F_NEED_INDEX   ? "needs_index ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
         printf("MGS nids: ");
-        while (count < MAX_FAILOVER_NIDS) {
-                if (ldd->ldd_mgsnid[count] == LNET_NID_ANY)
-                        break;
-                printf("%c %s", (count == 0) ? ' ' : ',',
-                       libcfs_nid2str(ldd->ldd_mgsnid[count]));
-                count++;
+        for (i = 0; i < ldd->ldd_mgsnid_count; i++) {
+                printf("%c %s", (i == 0) ? ' ' : ',',
+                       libcfs_nid2str(ldd->ldd_mgsnid[i]));
         }
         printf("\n\n");
 }
@@ -854,8 +851,9 @@ static void make_sv_name(struct mkfs_opts *mop)
 void set_defaults(struct mkfs_opts *mop)
 {
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
+        mop->mo_ldd.ldd_config_ver = 0;
         mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX;
-        mop->mo_ldd.ldd_mgsnid[0] = LNET_NID_ANY;
+        mop->mo_ldd.ldd_mgsnid_count = 0;
         strcpy(mop->mo_ldd.ldd_fsname, "lustre");
         if (get_os_version() == 24) 
                 mop->mo_ldd.ldd_mount_type = LDD_MT_EXT3;
@@ -966,22 +964,20 @@ int main(int argc , char *const argv[])
                         }
                         break;
                 case 'm': {
-                        int count = 0;
+                        int i = 0;
                         char *s1 = optarg, *s2;
                         if (IS_MGMT(&mop.mo_ldd))
                                 badopt(opt, "non-MGMT MDT,OST");
                         while ((s2 = strsep(&s1, ","))) {
-                                mop.mo_ldd.ldd_mgsnid[count++] =
+                                mop.mo_ldd.ldd_mgsnid[i++] =
                                         libcfs_str2nid(s2);
-                                if (count >= MAX_FAILOVER_NIDS) {
+                                if (i >= MAX_FAILOVER_NIDS) {
                                         fprintf(stderr, "too many MGS nids, "
                                                 "ignoring %s\n", s1);
                                         break;
                                 }
                         }
-                        if (count < MAX_FAILOVER_NIDS) 
-                                mop.mo_ldd.ldd_mgsnid[count] = 
-                                LNET_NID_ANY;
+                        mop.mo_ldd.ldd_mgsnid_count = i;
                         break;
                 }
                 case 'M':
@@ -1049,31 +1045,30 @@ int main(int argc , char *const argv[])
                 mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
         }
 
-        if (IS_MGMT(&mop.mo_ldd) && 
-            (mop.mo_ldd.ldd_mgsnid[0] == LNET_NID_ANY)) {
-                int count;
+        if (IS_MGMT(&mop.mo_ldd) && (mop.mo_ldd.ldd_mgsnid_count == 0)) {
+                int i;
                 __u64 *nids;
                 
                 vprint("No mgmt nids specified, using all local nids\n");
                 lnet_start();
-                count = jt_ptl_get_nids(&nids);
-                if (count < 0) {
+                i = jt_ptl_get_nids(&nids);
+                if (i < 0) {
                         fprintf(stderr, "Can't find local nids "
                                 "(is the lnet module loaded?)\n");
                 } else {
-                        if (count > 0) {
-                                vprint("Adding %d local nids for MGS\n", count);
+                        if (i > 0) {
+                                if (i > MAX_FAILOVER_NIDS) 
+                                        i = MAX_FAILOVER_NIDS;
+                                vprint("Adding %d local nids for MGS\n", i);
                                 memcpy(mop.mo_ldd.ldd_mgsnid, nids,
                                        sizeof(mop.mo_ldd.ldd_mgsnid));
                                 free(nids);
                         }
-                        if (count < MAX_FAILOVER_NIDS) {
-                                mop.mo_ldd.ldd_mgsnid[count] = LNET_NID_ANY;
-                        }
+                        mop.mo_ldd.ldd_mgsnid_count = i;
                 }
         }
 
-        if (mop.mo_ldd.ldd_mgsnid[0] == LNET_NID_ANY) {
+        if (mop.mo_ldd.ldd_mgsnid_count == 0) {
                 fatal();
                 fprintf(stderr, "Must specify either --mgmt or --mgmtnode\n");
                 usage(stderr);

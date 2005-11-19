@@ -501,8 +501,9 @@ int ll_fill_super(struct super_block *sb)
 
         ll_options(lsi->lsi_lmd->lmd_opts, &osc, &mdc, &sbi->ll_flags);
 
-        /* generate a string unique to this super, let's try
-           the address of the super itself.*/
+        /* Generate a string unique to this super, in case some joker tries
+           to mount the same fs at two mount points. 
+           Use the address of the super itself.*/
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
         cfg.cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;

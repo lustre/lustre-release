@@ -703,6 +703,8 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                 lustre_cfg_string(lcfg, 0),
                                 cfg->cfg_instance);
                         lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
+                        CERROR("cmd %x, instance name: %s\n", 
+                               lcfg->lcfg_command, inst_name);
                 }
 
                 if (cfg && lcfg->lcfg_command == LCFG_ATTACH) {

@@ -265,8 +265,6 @@ static int mgc_cleanup(struct obd_device *obd)
 static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct client_obd *cli = &obd->u.cli;
-        struct lustre_mount_info *lmi;
-        //struct lprocfs_static_vars lvars;
         int rc;
         ENTRY;
 
@@ -287,6 +285,12 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_rpc_lock, rc);
         }
 
+#if 0
+        struct lustre_mount_info *lmi;
+        /* FIXME There's only one mgc for all local servers.  Must mgc_fs_setup 
+           on demand only when reading a local log file, then cleanup.
+           Make sure there's a lock so nobody else can mgc_fs_setup in the 
+           meantime */
         lmi = lustre_get_mount(obd->obd_name);
         if (lmi) {
                 CERROR("mgc has local disk\n");
@@ -300,6 +304,7 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         else
                 CERROR("mgc does not have local disk (client only)\n");
+#endif
 
         INIT_LIST_HEAD(&cli->cl_mgc_open_llogs);
 

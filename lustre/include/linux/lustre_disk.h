@@ -71,13 +71,16 @@ static inline char *mt_str(enum ldd_mount_type mt)
 
 struct lustre_disk_data {
         __u32      ldd_magic;
+        __u32      ldd_config_ver;      /* we have integrated all llog steps
+                                           through this llog ver. */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
         char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001) */
-        char       ldd_mount_opts[128]; /* target fs mount opts */
+        __u16      ldd_mgsnid_count;    /* how many failover nids we have for the MGS */
         lnet_nid_t ldd_mgsnid[MAX_FAILOVER_NIDS]; /* mgmt nid list; lmd can override */
         enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
-        //server failover list - must pass to mgs when we first register
+        char       ldd_mount_opts[1024]; /* target fs mount opts */
+        char       ldd_pad[1024];
 };
         
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
@@ -215,8 +218,8 @@ void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 void lustre_common_put_super(struct super_block *sb);
 struct lustre_mount_info *lustre_get_mount(char *name);
 int lustre_put_mount(char *name, struct vfsmount *mnt);
-int lustre_get_process_log(struct super_block *, char *, 
-                           struct config_llog_instance *);
+int lustre_get_process_log(struct super_block *, char *,
+                           struct config_llog_instance *cfg);
 
 #endif
 
