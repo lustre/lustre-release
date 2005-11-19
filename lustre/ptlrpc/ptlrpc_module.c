@@ -147,6 +147,7 @@ EXPORT_SYMBOL(ptlrpc_service_health_check);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_swabbed);
+EXPORT_SYMBOL(lustre_msg_check_version);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
 EXPORT_SYMBOL(lustre_shrink_reply);
@@ -215,6 +216,7 @@ EXPORT_SYMBOL(ptlrpcd_wake);
 /* llogd.c */
 EXPORT_SYMBOL(llog_origin_handle_create);
 EXPORT_SYMBOL(llog_origin_handle_next_block);
+EXPORT_SYMBOL(llog_origin_handle_prev_block);
 EXPORT_SYMBOL(llog_origin_handle_read_header);
 EXPORT_SYMBOL(llog_origin_handle_close);
 EXPORT_SYMBOL(llog_client_ops);

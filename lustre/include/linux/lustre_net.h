@@ -654,11 +654,10 @@ void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool);
 void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq);
 struct ptlrpc_request_pool *ptlrpc_init_rq_pool(int, int,
                                                 void (*populate_pool)(struct ptlrpc_request_pool *, int));
-struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
+struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode,
                                        int count, int *lengths, char **bufs);
-struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, int opcode,
-                                            int count, int *lengths,
-                                            char **bufs,
+struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
+                                            int count, int *lengths, char **bufs,
                                             struct ptlrpc_request_pool *pool);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
@@ -716,6 +715,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 
 /* ptlrpc/pack_generic.c */
 int lustre_msg_swabbed(struct lustre_msg *msg);
+int lustre_msg_check_version(struct lustre_msg *msg, __u32 version);
 int lustre_pack_request(struct ptlrpc_request *, int count, int *lens,
                         char **bufs);
 int lustre_pack_reply(struct ptlrpc_request *, int count, int *lens,
@@ -781,6 +781,7 @@ static inline void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd) {}
 
 /* ptlrpc/llog_server.c */
 int llog_origin_handle_create(struct ptlrpc_request *req);
+int llog_origin_handle_prev_block(struct ptlrpc_request *req);
 int llog_origin_handle_next_block(struct ptlrpc_request *req);
 int llog_origin_handle_read_header(struct ptlrpc_request *req);
 int llog_origin_handle_close(struct ptlrpc_request *req);

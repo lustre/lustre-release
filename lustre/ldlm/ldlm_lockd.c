@@ -463,7 +463,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 instant_cancel = 1;
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
-                              LDLM_BL_CALLBACK, 1, &size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_BL_CALLBACK,
+                              1, &size, NULL);
         if (req == NULL) {
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 RETURN(-ENOMEM);
@@ -533,7 +534,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         up(&lock->l_resource->lr_lvb_sem);
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
-                              LDLM_CP_CALLBACK, buffers, size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_CP_CALLBACK,
+                              buffers, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -590,7 +592,8 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         LASSERT(lock != NULL);
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
-                              LDLM_GL_CALLBACK, 1, &size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_GL_CALLBACK,
+                              1, &size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -657,7 +660,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
 
-        dlm_req = lustre_swab_reqbuf (req, 0, sizeof (*dlm_req),
+        dlm_req = lustre_swab_reqbuf (req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                                      sizeof (*dlm_req),
                                       lustre_swab_ldlm_request);
         if (dlm_req == NULL) {
                 CERROR ("Can't unpack dlm_req\n");

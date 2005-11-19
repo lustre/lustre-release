@@ -202,8 +202,11 @@ int ptlrpcd_check_async_rpcs(void *arg)
         /* single threaded!! */
         pc->pc_recurred++;
 
-        if (pc->pc_recurred == 1)
+        if (pc->pc_recurred == 1) {
                 rc = ptlrpcd_check(pc);
+                if (!rc)
+                        ptlrpc_expired_set(pc->pc_set);
+        }
 
         pc->pc_recurred--;
         return rc;

@@ -1149,6 +1149,66 @@ static int ost_filter_recovery_request(struct ptlrpc_request *req,
         }
 }
 
+int ost_msg_check_version(struct lustre_msg *msg)
+{
+        int rc;
+
+        /* TODO: enable the below check while really introducing msg version.
+         * it's disabled because it will break compatibility with b1_4.
+         */
+        return (0);
+        switch(msg->opc) {
+        case OST_CONNECT:
+        case OST_DISCONNECT:
+        case OBD_PING:
+                rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_OBD_VERSION);
+                break;
+        case OST_CREATE:
+        case OST_DESTROY:
+        case OST_GETATTR:
+        case OST_SETATTR:
+        case OST_WRITE:
+        case OST_READ:
+        case OST_SAN_READ:
+        case OST_SAN_WRITE:
+        case OST_PUNCH:
+        case OST_STATFS:
+        case OST_SYNC:
+        case OST_SET_INFO:
+        case OST_GET_INFO:
+        case OST_QUOTACHECK:
+        case OST_QUOTACTL:
+                rc = lustre_msg_check_version(msg, LUSTRE_OST_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_OST_VERSION);
+                break;
+        case LDLM_ENQUEUE:
+        case LDLM_CONVERT:
+        case LDLM_CANCEL:
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
+                rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_DLM_VERSION);
+                break;
+        case LLOG_ORIGIN_CONNECT:
+        case OBD_LOG_CANCEL:
+                rc = lustre_msg_check_version(msg, LUSTRE_LOG_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_LOG_VERSION);
+        default:
+                CERROR("Unexpected opcode %d\n", msg->opc);
+                rc = -ENOTSUPP;
+        }
+        return rc;
+}
+
 static int ost_handle(struct ptlrpc_request *req)
 {
         struct obd_trans_info trans_info = { 0, };
@@ -1187,6 +1247,9 @@ static int ost_handle(struct ptlrpc_request *req)
         }
 
         oti_init(oti, req);
+        rc = ost_msg_check_version(req->rq_reqmsg);
+        if (rc)
+                RETURN(rc);
 
         switch (req->rq_reqmsg->opc) {
         case OST_CONNECT: {

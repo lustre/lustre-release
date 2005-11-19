@@ -46,6 +46,14 @@ int lustre_msg_swabbed(struct lustre_msg *msg)
         return (msg->magic == __swab32(PTLRPC_MSG_MAGIC));
 }
 
+int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
+{
+        if (lustre_msg_swabbed(msg))
+                 return (__swab32(msg->version) & LUSTRE_VERSION_MASK) != version;
+
+        return (msg->version & LUSTRE_VERSION_MASK) != version;
+}
+
 static void
 lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
 {
@@ -321,7 +329,7 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
                 RETURN (-EINVAL);
         }
 
-        if (m->version != PTLRPC_MSG_VERSION) {
+        if ((m->version & ~LUSTRE_VERSION_MASK) != PTLRPC_MSG_VERSION) {
                 CERROR("wrong lustre_msg version %#08x\n", m->version);
                 RETURN (-EINVAL);
         }

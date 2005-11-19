@@ -113,6 +113,7 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 #define FSFILT_OP_SETATTR        8
 #define FSFILT_OP_LINK           9
 #define FSFILT_OP_CANCEL_UNLINK 10
+#define FSFILT_OP_NOOP          15
 
 #define fsfilt_check_slow(start, timeout, msg)                          \
 do {                                                                    \

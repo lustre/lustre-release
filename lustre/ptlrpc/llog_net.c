@@ -82,7 +82,8 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         LASSERT(ctxt->loc_imp);
         imp = ctxt->loc_imp;
 
-        request = ptlrpc_prep_req(imp, LLOG_ORIGIN_CONNECT, 1, &size, NULL);
+        request = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
+                                  LLOG_ORIGIN_CONNECT, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 

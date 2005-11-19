@@ -47,8 +47,7 @@ int ptlrpc_ping(struct obd_import *imp)
         int rc = 0;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
-                              NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 0, NULL, NULL);
         if (req) {
                 DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
@@ -100,7 +99,7 @@ int ptlrpc_statfs(struct obd_import *imp)
         struct ptlrpc_request *req;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, OST_STATFS, 0,
+        req = ptlrpc_prep_req(imp, LUSTRE_OST_VERSION, OST_STATFS, 0,
                               NULL, NULL);
         if (!req) {
                 CERROR("OOM trying to ping %s->%s\n",
@@ -461,8 +460,8 @@ static int pinger_check_rpcs(void *arg)
                                 continue;
                         }
 
-                        req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
-                                              NULL);
+                        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING,
+                                              0, NULL, NULL);
                         if (!req) {
                                 CERROR("out of memory\n");
                                 break;

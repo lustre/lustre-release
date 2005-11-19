@@ -184,8 +184,8 @@ static int osc_getattr_async(struct obd_export *exp, struct obdo *oa,
         struct osc_getattr_async_args *aa;
         ENTRY;
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_GETATTR, 1,
-                                  &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_GETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -211,8 +211,8 @@ static int osc_getattr(struct obd_export *exp, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_GETATTR, 1,
-                                  &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_GETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -255,8 +255,8 @@ static int osc_setattr(struct obd_export *exp, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SETATTR, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_SETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -293,8 +293,8 @@ static int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 
         LASSERT(oti);
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SETATTR, 1,
-                                  &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_SETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -332,8 +332,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                         RETURN(rc);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_CREATE,
-                                  1, &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_CREATE, 1, &size, NULL);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
@@ -419,8 +419,8 @@ static int osc_punch(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_PUNCH, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_PUNCH, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -466,8 +466,8 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SYNC, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_SYNC, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -513,8 +513,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_DESTROY, 1,
-                                  &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_DESTROY, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -789,7 +789,8 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         size[2] = niocount * sizeof(*niobuf);
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM);
-        req = ptlrpc_prep_req_pool(imp, opc, 3, size, NULL, pool);
+        req = ptlrpc_prep_req_pool(imp, LUSTRE_OST_VERSION, opc, 3,
+                                   size, NULL, pool);
         if (req == NULL)
                 return (-ENOMEM);
 
@@ -2318,8 +2319,8 @@ static int sanosc_brw_read(struct obd_export *exp, struct obdo *oa,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*nioptr);
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SAN_READ, 3,
-                                  size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_SAN_READ, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -2447,7 +2448,8 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*nioptr);
 
-        request = ptlrpc_prep_req_pool(class_exp2cliimp(exp), OST_SAN_WRITE,
+        request = ptlrpc_prep_req_pool(class_exp2cliimp(exp),
+                                       LUSTRE_OST_VERSION, OST_SAN_WRITE,
                                        3, size, NULL, cli->cl_rq_pool);
         if (!request)
                 RETURN(-ENOMEM);
@@ -2681,7 +2683,8 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (*flags & LDLM_FL_HAS_INTENT) {
                 int size[2] = {sizeof(struct ldlm_request), sizeof(lvb)};
 
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
+                req = ptlrpc_prep_req(class_exp2cliimp(exp),
+                                      LUSTRE_DLM_VERSION, LDLM_ENQUEUE, 1,
                                       size, NULL);
                 if (req == NULL)
                         RETURN(-ENOMEM);
@@ -2805,8 +2808,8 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
          * during mount that would help a bit).  Having relative timestamps
          * is not so great if request processing is slow, while absolute
          * timestamps are not ideal because they need time synchronization. */
-        request = ptlrpc_prep_req(obd->u.cli.cl_import, OST_STATFS, 0,
-                                  NULL, NULL);
+        request = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OST_VERSION,
+                                  OST_STATFS,0,NULL,NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -2988,8 +2991,8 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 obd_id *reply;
                 char *bufs[1] = {key};
                 int rc;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), OST_GET_INFO, 1,
-                                      &keylen, bufs);
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                      OST_GET_INFO, 1, &keylen, bufs);
                 if (req == NULL)
                         RETURN(-ENOMEM);
 
@@ -3056,7 +3059,8 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-EINVAL);
 
 
-        req = ptlrpc_prep_req(imp, OST_SET_INFO, 2, size, bufs);
+        req = ptlrpc_prep_req(imp, LUSTRE_OST_VERSION, OST_SET_INFO,
+                              2, size, bufs);
         if (req == NULL)
                 RETURN(-ENOMEM);
 

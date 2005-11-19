@@ -379,7 +379,7 @@ static int mds_destroy_export(struct obd_export *export)
                 /* child orphan sem protects orphan_dec_test and
                  * is_orphan race, mds_mfd_close drops it */
                 MDS_DOWN_WRITE_ORPHAN_SEM(dentry->d_inode);
-                rc = mds_mfd_close(NULL, obd, mfd,
+                rc = mds_mfd_close(NULL, MDS_REQ_REC_OFF, obd, mfd,
                                    !(export->exp_flags & OBD_OPT_FAILOVER));
 
                 if (rc)
@@ -763,9 +763,9 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         if (rc)
                 GOTO(cleanup, rc);
 
-        LASSERT (offset == 0 || offset == 2);
+        LASSERT (offset == MDS_REQ_REC_OFF || offset == MDS_REQ_INTENT_REC_OFF);
         /* if requests were at offset 2, the getattr reply goes back at 1 */
-        if (offset) {
+        if (offset == MDS_REQ_INTENT_REC_OFF) {
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
                 offset = 1;
         }
@@ -886,7 +886,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         return rc;
 }
 
-static int mds_getattr(int offset, struct ptlrpc_request *req)
+static int mds_getattr(struct ptlrpc_request *req, int offset)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
@@ -979,7 +979,7 @@ out:
         return 0;
 }
 
-static int mds_sync(struct ptlrpc_request *req)
+static int mds_sync(struct ptlrpc_request *req, int offset)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
@@ -1030,7 +1030,7 @@ out:
  *
  * If we were to take another one here, a deadlock will result, if another
  * thread is already waiting for a PW lock. */
-static int mds_readpage(struct ptlrpc_request *req)
+static int mds_readpage(struct ptlrpc_request *req, int offset)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
@@ -1052,7 +1052,8 @@ static int mds_readpage(struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
+        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
+                                  lustre_swab_mds_body);
         if (body == NULL)
                 GOTO (out, rc = -EFAULT);
 
@@ -1246,6 +1247,74 @@ static int mds_handle_quotactl(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static int mds_msg_check_version(struct lustre_msg *msg)
+{
+        int rc;
+
+        /* TODO: enable the below check while really introducing msg version.
+         * it's disabled because it will break compatibility with b1_4.
+         */
+        return (0);
+
+        switch (msg->opc) {
+        case MDS_CONNECT:
+        case MDS_DISCONNECT:
+        case OBD_PING:
+                rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_OBD_VERSION);
+                break;
+        case MDS_GETSTATUS:
+        case MDS_GETATTR:
+        case MDS_GETATTR_NAME:
+        case MDS_STATFS:
+        case MDS_READPAGE:
+        case MDS_REINT:
+        case MDS_CLOSE:
+        case MDS_DONE_WRITING:
+        case MDS_PIN:
+        case MDS_SYNC:
+        case MDS_GETXATTR:
+        case MDS_SETXATTR:
+        case MDS_SET_INFO:
+        case MDS_QUOTACHECK:
+        case MDS_QUOTACTL:
+        case QUOTA_DQACQ:
+        case QUOTA_DQREL:
+                rc = lustre_msg_check_version(msg, LUSTRE_MDS_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_MDS_VERSION);
+                break;
+        case LDLM_ENQUEUE:
+        case LDLM_CONVERT:
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
+                rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_DLM_VERSION);
+                break;
+        case OBD_LOG_CANCEL:
+        case LLOG_ORIGIN_HANDLE_CREATE:
+        case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
+        case LLOG_ORIGIN_HANDLE_PREV_BLOCK:
+        case LLOG_ORIGIN_HANDLE_READ_HEADER:
+        case LLOG_ORIGIN_HANDLE_CLOSE:
+        case LLOG_CATINFO:
+                rc = lustre_msg_check_version(msg, LUSTRE_LOG_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_LOG_VERSION);
+                break;
+        default:
+                CERROR("MDS unknown opcode %d\n", msg->opc);
+                rc = -ENOTSUPP;
+        }
+        return rc;
+}
+
 int mds_handle(struct ptlrpc_request *req)
 {
         int should_process, fail = OBD_FAIL_MDS_ALL_REPLY_NET;
@@ -1257,6 +1326,13 @@ int mds_handle(struct ptlrpc_request *req)
         OBD_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
         LASSERT(current->journal_info == NULL);
+
+        rc = mds_msg_check_version(req->rq_reqmsg);
+        if (rc) {
+                CERROR("MDS drop mal-formed request\n");
+                RETURN(rc);
+        }
+
         /* XXX identical to OST */
         if (req->rq_reqmsg->opc != MDS_CONNECT) {
                 struct mds_export_data *med;
@@ -1332,7 +1408,7 @@ int mds_handle(struct ptlrpc_request *req)
         case MDS_GETATTR:
                 DEBUG_REQ(D_INODE, req, "getattr");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
-                rc = mds_getattr(0, req);
+                rc = mds_getattr(req, MDS_REQ_REC_OFF);
                 break;
 
         case MDS_SETXATTR:
@@ -1357,7 +1433,8 @@ int mds_handle(struct ptlrpc_request *req)
                  * want to cancel.
                  */
                 lockh.cookie = 0;
-                rc = mds_getattr_name(0, req, MDS_INODELOCK_UPDATE, &lockh);
+                rc = mds_getattr_name(MDS_REQ_REC_OFF, req,
+                                      MDS_INODELOCK_UPDATE, &lockh);
                 /* this non-intent call (from an ioctl) is special */
                 req->rq_status = rc;
                 if (rc == 0 && lockh.cookie)
@@ -1373,7 +1450,7 @@ int mds_handle(struct ptlrpc_request *req)
         case MDS_READPAGE:
                 DEBUG_REQ(D_INODE, req, "readpage");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_NET, 0);
-                rc = mds_readpage(req);
+                rc = mds_readpage(req, MDS_REQ_REC_OFF);
 
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_SENDPAGE)) {
                         RETURN(0);
@@ -1382,9 +1459,10 @@ int mds_handle(struct ptlrpc_request *req)
                 break;
 
         case MDS_REINT: {
-                __u32 *opcp = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*opcp));
+                __u32 *opcp = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF,
+                                             sizeof (*opcp));
                 __u32  opc;
-                int size[3] = {sizeof(struct mds_body), mds->mds_max_mdsize,
+                int size[] = { sizeof(struct mds_body), mds->mds_max_mdsize,
                                mds->mds_max_cookiesize};
                 int bufcount;
 
@@ -1416,7 +1494,7 @@ int mds_handle(struct ptlrpc_request *req)
                 if (rc)
                         break;
 
-                rc = mds_reint(req, 0, NULL);
+                rc = mds_reint(req, MDS_REQ_REC_OFF, NULL);
                 fail = OBD_FAIL_MDS_REINT_NET_REP;
                 break;
         }
@@ -1424,25 +1502,25 @@ int mds_handle(struct ptlrpc_request *req)
         case MDS_CLOSE:
                 DEBUG_REQ(D_INODE, req, "close");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CLOSE_NET, 0);
-                rc = mds_close(req);
+                rc = mds_close(req, MDS_REQ_REC_OFF);
                 break;
 
         case MDS_DONE_WRITING:
                 DEBUG_REQ(D_INODE, req, "done_writing");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_DONE_WRITING_NET, 0);
-                rc = mds_done_writing(req);
+                rc = mds_done_writing(req, MDS_REQ_REC_OFF);
                 break;
 
         case MDS_PIN:
                 DEBUG_REQ(D_INODE, req, "pin");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_PIN_NET, 0);
-                rc = mds_pin(req);
+                rc = mds_pin(req, MDS_REQ_REC_OFF);
                 break;
 
         case MDS_SYNC:
                 DEBUG_REQ(D_INODE, req, "sync");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_SYNC_NET, 0);
-                rc = mds_sync(req);
+                rc = mds_sync(req, MDS_REQ_REC_OFF);
                 break;
 
         case MDS_SET_INFO:
@@ -1501,6 +1579,11 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "llog next block");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_next_block(req);
+                break;
+        case LLOG_ORIGIN_HANDLE_PREV_BLOCK:
+                DEBUG_REQ(D_INODE, req, "llog prev block");
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                rc = llog_origin_handle_prev_block(req);
                 break;
         case LLOG_ORIGIN_HANDLE_READ_HEADER:
                 DEBUG_REQ(D_INODE, req, "llog read header");
@@ -1980,7 +2063,7 @@ static int mds_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
+static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
                                         struct ldlm_lock *new_lock,
                                         struct ldlm_lock **old_lock,
                                         struct lustre_handle *lockh)
@@ -1988,7 +2071,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
         struct ldlm_request *dlmreq =
-                lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*dlmreq));
+                lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*dlmreq));
         struct lustre_handle remote_hdl = dlmreq->lock_handle1;
         struct list_head *iter;
 
@@ -2057,15 +2140,16 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         struct lustre_handle lockh = { 0 };
         struct ldlm_lock *new_lock = NULL;
         int getattr_part = MDS_INODELOCK_UPDATE;
-        int rc, offset = 2;
-        int repbufcnt = 3, repsize[4] = {sizeof(struct ldlm_reply),
-                                         sizeof(struct mds_body),
-                                         mds->mds_max_mdsize};
+        int repsize[4] = {sizeof(*rep),
+                          sizeof(struct mds_body),
+                          mds->mds_max_mdsize};
+        int repbufcnt = 3, offset = MDS_REQ_INTENT_REC_OFF;
+        int rc;
         ENTRY;
 
         LASSERT(req != NULL);
 
-        if (req->rq_reqmsg->bufcount <= 1) {
+        if (req->rq_reqmsg->bufcount <= MDS_REQ_INTENT_IT_OFF) {
                 /* No intent was provided */
                 int size = sizeof(struct ldlm_reply);
                 rc = lustre_pack_reply(req, 1, &size, NULL);
@@ -2073,7 +2157,8 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                 RETURN(0);
         }
 
-        it = lustre_swab_reqbuf(req, 1, sizeof(*it), lustre_swab_ldlm_intent);
+        it = lustre_swab_reqbuf(req, MDS_REQ_INTENT_IT_OFF, sizeof(*it),
+                                lustre_swab_ldlm_intent);
         if (it == NULL) {
                 CERROR("Intent missing\n");
                 RETURN(req->rq_status = -EFAULT);
@@ -2099,7 +2184,8 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         switch ((long)it->opc) {
         case IT_OPEN:
         case IT_CREAT|IT_OPEN:
-                fixup_handle_for_resent_req(req, lock, NULL, &lockh);
+                fixup_handle_for_resent_req(req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                                            lock, NULL, &lockh);
                 /* XXX swab here to assert that an mds_open reint
                  * packet is following */
                 rep->lock_policy_res2 = mds_reint(req, offset, &lockh);
@@ -2118,7 +2204,8 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         case IT_GETATTR:
                         getattr_part |= MDS_INODELOCK_LOOKUP;
         case IT_READDIR:
-                fixup_handle_for_resent_req(req, lock, &new_lock, &lockh);
+                fixup_handle_for_resent_req(req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                                            lock, &new_lock, &lockh);
                 rep->lock_policy_res2 = mds_getattr_name(offset, req,
                                                          getattr_part, &lockh);
 

@@ -168,18 +168,22 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct ptlrpc_request *req;
         struct obd_quotactl *oqc;
-        int size = sizeof(*oqctl), opc;
+        int size = sizeof(*oqctl), opc, version;
         int rc;
         ENTRY;
 
-        if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME))
+        if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
                 opc = MDS_QUOTACTL;
-        else if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME))
+                version = LUSTRE_MDS_VERSION;
+        } else if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 opc = OST_QUOTACTL;
-        else
+                version = LUSTRE_OST_VERSION;
+        } else {
                 RETURN(-EINVAL);
+        }
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), opc, 1, &size, NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), version, opc, 1, &size,
+                              NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 

@@ -514,7 +514,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
         if (rc)
                 RETURN(rc);
 
-        mdc_store_inode_generation(request, 2, 1);
+        mdc_store_inode_generation(request, MDS_REQ_INTENT_REC_OFF, 1);
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, mode, 0, it);
         if (IS_ERR(inode)) {

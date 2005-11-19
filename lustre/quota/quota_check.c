@@ -52,8 +52,8 @@ static int target_quotacheck_callback(struct obd_export *exp,
         int rc, size = sizeof(*oqctl);
         ENTRY;
 
-        req = ptlrpc_prep_req(exp->exp_imp_reverse, OBD_QC_CALLBACK,
-                              1, &size, NULL);
+        req = ptlrpc_prep_req(exp->exp_imp_reverse, LUSTRE_OBD_VERSION,
+                              OBD_QC_CALLBACK, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -164,18 +164,21 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
         struct obd_quotactl *body;
-        int size = sizeof(*body), opc;
+        int size = sizeof(*body), opc, version;
         int rc;
         ENTRY;
 
-        if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME))
+        if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
+                version = LUSTRE_MDS_VERSION;
                 opc = MDS_QUOTACHECK;
-        else if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME))
+        } else if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+                version = LUSTRE_OST_VERSION;
                 opc = OST_QUOTACHECK;
-        else
+        } else {
                 RETURN(-EINVAL);
+        }
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), opc, 1, &size,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), version, opc, 1, &size,
                               NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);

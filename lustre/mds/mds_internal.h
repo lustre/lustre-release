@@ -170,12 +170,12 @@ void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
 int mds_query_write_access(struct inode *inode);
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *);
-int mds_pin(struct ptlrpc_request *req);
+int mds_pin(struct ptlrpc_request *req, int offset);
 void mds_mfd_unlink(struct mds_file_data *mfd, int decref);
-int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
+int mds_mfd_close(struct ptlrpc_request *req, int offset, struct obd_device *obd,
                   struct mds_file_data *mfd, int unlink_orphan);
-int mds_close(struct ptlrpc_request *req);
-int mds_done_writing(struct ptlrpc_request *req);
+int mds_close(struct ptlrpc_request *req, int offset);
+int mds_done_writing(struct ptlrpc_request *req, int offset);
 
 
 /* mds/mds_fs.c */

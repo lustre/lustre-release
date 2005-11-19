@@ -189,7 +189,7 @@ int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 obd_valid valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
 int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
-                     char *filename, int namelen, unsigned long valid,
+                     const char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,

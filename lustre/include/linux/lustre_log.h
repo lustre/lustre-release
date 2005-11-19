@@ -77,6 +77,8 @@ int llog_init_handle(struct llog_handle *handle, int flags,
 extern void llog_free_handle(struct llog_handle *handle);
 int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                  void *data, void *catdata);
+int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
+                         void *data, void *catdata);
 extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
 extern int llog_close(struct llog_handle *cathandle);
 
@@ -98,6 +100,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
 int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
+int llog_cat_reverse_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 
 /* llog_obd.c */
@@ -155,6 +158,8 @@ struct llog_operations {
         int (*lop_destroy)(struct llog_handle *handle);
         int (*lop_next_block)(struct llog_handle *h, int *curr_idx,
                               int next_idx, __u64 *offset, void *buf, int len);
+        int (*lop_prev_block)(struct llog_handle *h,
+                              int prev_idx, void *buf, int len);
         int (*lop_create)(struct llog_ctxt *ctxt, struct llog_handle **,
                           struct llog_logid *logid, char *name);
         int (*lop_close)(struct llog_handle *handle);
@@ -349,6 +354,23 @@ static inline int llog_next_block(struct llog_handle *loghandle, int *cur_idx,
 
         rc = lop->lop_next_block(loghandle, cur_idx, next_idx, cur_offset, buf,
                                  len);
+        RETURN(rc);
+}
+
+static inline int llog_prev_block(struct llog_handle *loghandle,
+                                  int prev_idx, void *buf, int len)
+{
+        struct llog_operations *lop;
+        int rc;
+        ENTRY;
+
+        rc = llog_handle2ops(loghandle, &lop);
+        if (rc)
+                RETURN(rc);
+        if (lop->lop_prev_block == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        rc = lop->lop_prev_block(loghandle, prev_idx, buf, len);
         RETURN(rc);
 }
 

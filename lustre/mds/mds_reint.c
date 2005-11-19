@@ -457,7 +457,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                          rec->ur_iattr.ia_gid};
         ENTRY;
 
-        LASSERT(offset == 0);
+        LASSERT(offset == MDS_REQ_REC_OFF);
 
         DEBUG_REQ(D_INODE, req, "setattr "LPU64"/%u %x", rec->ur_fid1->id,
                   rec->ur_fid1->generation, rec->ur_iattr.ia_valid);
@@ -705,7 +705,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct dentry_params dp;
         ENTRY;
 
-        LASSERT(offset == 0);
+        LASSERT(offset == MDS_REQ_REC_OFF);
         LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds"));
 
         DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %s mode %o",
@@ -1415,7 +1415,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         unsigned int qpids [MAXQUOTAS] = {0, 0};
         ENTRY;
 
-        LASSERT(offset == 0 || offset == 2);
+        LASSERT(offset == MDS_REQ_REC_OFF || offset == 2);
 
         DEBUG_REQ(D_INODE, req, "parent ino "LPU64"/%u, child %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name);
@@ -1644,7 +1644,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         int rc = 0, cleanup_phase = 0;
         ENTRY;
 
-        LASSERT(offset == 0);
+        LASSERT(offset == MDS_REQ_REC_OFF);
 
         DEBUG_REQ(D_INODE, req, "original "LPU64"/%u to "LPU64"/%u %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation,
@@ -1984,7 +1984,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         unsigned int qpids[4] = {0, 0, 0, 0};
         ENTRY;
 
-        LASSERT(offset == 0);
+        LASSERT(offset == MDS_REQ_REC_OFF);
 
         DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u %s to "LPU64"/%u %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name,

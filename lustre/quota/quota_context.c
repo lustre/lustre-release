@@ -512,7 +512,8 @@ schedule_dqacq(struct obd_device *obd,
 
         /* build dqacq/dqrel request */
         LASSERT(qctxt->lqc_import);
-        req = ptlrpc_prep_req(qctxt->lqc_import, opc, 1, &size, NULL);
+        req = ptlrpc_prep_req(qctxt->lqc_import, LUSTRE_MDS_VERSION, opc, 1,
+                              &size, NULL);
         if (!req) {
                 dqacq_completion(obd, qctxt, qdata, -ENOMEM, opc);
                 RETURN(-ENOMEM);

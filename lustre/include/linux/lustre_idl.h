@@ -503,6 +503,14 @@ extern void lustre_swab_ost_lvb(struct ost_lvb *);
  *   MDS REQ RECORDS
  */
 
+/* FIXME: this is different from HEAD, adjust it
+ * while merge GSS */
+#define MDS_REQ_REC_OFF                 0
+
+#define MDS_REQ_INTENT_LOCKREQ_OFF      0
+#define MDS_REQ_INTENT_IT_OFF           1
+#define MDS_REQ_INTENT_REC_OFF          2
+
 /* opcodes */
 typedef enum {
         MDS_GETATTR      = 33,
@@ -1143,6 +1151,7 @@ enum llogd_rpc_ops {
         LLOG_ORIGIN_HANDLE_CLOSE        = 505,
         LLOG_ORIGIN_CONNECT             = 506,
         LLOG_CATINFO                    = 507,  /* for lfs catinfo */
+        LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
 };
 
 struct llogd_body {

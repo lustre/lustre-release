@@ -643,7 +643,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         bufs[1] = NULL;
                 }
                 size = data->ioc_plen1;
-                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import, LLOG_CATINFO,
+                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import,
+                                      LUSTRE_LOG_VERSION, LLOG_CATINFO,
                                       2, lens, bufs);
                 if (!req)
                         GOTO(out_catinfo, rc = -ENOMEM);
