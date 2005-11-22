@@ -108,7 +108,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
                 GOTO(out, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);//FIXME connect to mgc
         lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         rc = class_process_config(lcfg);
