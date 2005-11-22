@@ -408,6 +408,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         }
 
         ptlrpc_pinger_add_import(imp);
+        EXIT;
 
         if (rc) {
 out_ldlm:
@@ -421,21 +422,7 @@ out_disco:
         }
 out_sem:
         up(&cli->cl_sem);
-
-        if (!rc && (ocd->ocd_connect_flags & OBD_CONNECT_BLOCK)) {
-                rc = ptlrpc_wait_for_connect(imp);
-                if (rc) {
-                        CERROR("Blocking connect failed %d, disconnecting\n",
-                               rc);
-                        /* connection was fully set up; do the full 
-                           disconnect.  We already dropped our ref above 
-                           though, so take another. */
-                        exp = class_conn2export(dlm_handle);
-                        client_disconnect_export(exp);
-                }
-        }
-
-        RETURN(rc);
+        return rc;
 }
 
 int client_disconnect_export(struct obd_export *exp)
@@ -482,6 +469,7 @@ int client_disconnect_export(struct obd_export *exp)
         else
                 rc = ptlrpc_disconnect_import(imp);
 
+        EXIT;
  out_no_disconnect:
         err = class_disconnect(exp);
         if (!rc && err)

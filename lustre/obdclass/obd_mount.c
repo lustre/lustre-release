@@ -261,7 +261,7 @@ static int parse_disk_data(struct lvfs_run_ctxt *mount_ctxt,
         len = file->f_dentry->d_inode->i_size;
         CDEBUG(D_MOUNT, "Have %s, size %lu\n", MOUNT_DATA_FILE, len);
         if (len != sizeof(*ldd)) {
-                CERROR("disk data size does not match: see %lu expect %u\n", 
+                CERROR("disk data size does not match: see %lu expect %lu\n", 
                        len, sizeof(*ldd));
                 GOTO(out_close, err = -EINVAL);
         }
@@ -345,20 +345,14 @@ int lustre_get_process_log(struct super_block *sb, char *profile,
         struct lustre_handle mgc_conn = {0, };
         struct obd_export *exp = NULL;
         struct llog_ctxt *ctxt;
-        struct obd_connect_data ocd;
-        struct obd_import *imp = mgc->u.cli.cl_import;
-
         int err, rc;
         LASSERT(mgc);
 
         CDEBUG(D_MOUNT, "parsing config log %s\n", profile);
 
-        ocd.ocd_connect_flags = OBD_CONNECT_BLOCK;
-        err = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), &ocd);
+        err = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
         if (!err) {
-                /* Take a reference */
                 exp = class_conn2export(&mgc_conn);
-                LASSERT(exp->exp_obd == mgc);
                 ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
         } else {
                 /* If we couldn't connect to the MGS, try reading a copy

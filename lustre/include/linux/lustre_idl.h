@@ -212,8 +212,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 
 /* Connect flags */
 
-#define OBD_CONNECT_RDONLY      0x01ULL
-#define OBD_CONNECT_BLOCK       0x02ULL /* block until connect completes */
+#define OBD_CONNECT_RDONLY       0x1ULL
 #define OBD_CONNECT_SRVLOCK     0x10ULL /* server takes locks for client */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)

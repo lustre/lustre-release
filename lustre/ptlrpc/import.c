@@ -248,35 +248,6 @@ void ptlrpc_fail_import(struct obd_import *imp, int generation)
         EXIT;
 }
 
-/* still trying to connect */
-static int ptlrpc_import_in_connect(struct obd_import *imp)
-{
-        unsigned long flags;
-        int in_connect = 0;
-        spin_lock_irqsave(&imp->imp_lock, flags);
-        if (!imp->imp_invalid && 
-            (imp->imp_state == LUSTRE_IMP_CONNECTING ||
-             imp->imp_state == LUSTRE_IMP_DISCON))
-                in_connect = 1;
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
-        return in_connect;
-}
-
-int ptlrpc_wait_for_connect(struct obd_import *imp)
-{
-        struct l_wait_info lwi;
-        int err;
-
-        lwi = LWI_INTR(NULL, NULL);
-        err = l_wait_event(imp->imp_recovery_waitq,
-                           !ptlrpc_import_in_connect(imp), &lwi);
-        CERROR("wait got %d (%s, %d)\n", err,
-               ptlrpc_import_state_name(imp->imp_state),
-               imp->imp_invalid);
-        return (imp->imp_invalid ? -ETIMEDOUT : 0);
-}
-EXPORT_SYMBOL(ptlrpc_wait_for_connect);
-
 static int import_select_connection(struct obd_import *imp)
 {
         struct obd_import_conn *imp_conn;
@@ -328,7 +299,7 @@ static int import_select_connection(struct obd_import *imp)
 int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 {
         struct obd_device *obd = imp->imp_obd;
-        int initial_connect = 0, first_try;
+        int initial_connect = 0;
         int rc;
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
@@ -380,27 +351,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                         GOTO(out, rc);
         }
 
-        first_try = (imp->imp_conn_current == NULL);
         rc = import_select_connection(imp);
         if (rc)
                 GOTO(out, rc);
-
-        if ((imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_BLOCK) &&
-            initial_connect && !first_try &&  
-            (imp->imp_conn_current == list_entry(imp->imp_conn_list.next,
-                                                 struct obd_import_conn,
-                                                 oic_item))) {
-                /* Never connected, tried everyone, and nobody answered. 
-                   Give up; in-progress ops will fail (probably EIO) */
-                LCONSOLE_ERROR("All %d connections for %s failed; I am "
-                               "deactivating the import.\n",
-                               imp->imp_conn_cnt - 1,
-                               imp->imp_target_uuid.uuid);
-                ptlrpc_deactivate_import(imp);
-                /* for ptlrpc_wait_for_connect */
-                wake_up(&imp->imp_recovery_waitq);
-                GOTO(out, rc = -ETIMEDOUT);
-        }
 
         request = ptlrpc_prep_req(imp, imp->imp_connect_op, 4, size, tmp);
         if (!request)
