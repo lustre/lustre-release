@@ -335,8 +335,8 @@ out:
         return(err);
 }
 
-/* Get the log "profile" from a MGS and process it.  MGS might be remote
-   or local. This func should work for both clients and servers */
+/* Get the log "profile" from a MGS and process it.
+   This func should work for both clients and servers */
 int lustre_get_process_log(struct super_block *sb, char *profile, 
                        struct config_llog_instance *cfg)
 {
@@ -344,65 +344,61 @@ int lustre_get_process_log(struct super_block *sb, char *profile,
         struct obd_device *mgc = lsi->lsi_mgc;
         struct lustre_handle mgc_conn = {0, };
         struct obd_export *exp = NULL;
-        struct llog_ctxt *ctxt;
-        int err, rc;
+        struct llog_ctxt *rctxt, *lctxt;
+        int allow_recov = 0;
+        int rc;
         LASSERT(mgc);
 
         CDEBUG(D_MOUNT, "parsing config log %s\n", profile);
 
-        err = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
-        if (!err) {
-                exp = class_conn2export(&mgc_conn);
-                ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
-        } else {
-                /* If we couldn't connect to the MGS, try reading a copy
-                   of the config log stored locally on disk */
-                CERROR("cannot connect to MGS: rc = %d\n"
-                       "Will try local log\n", err);
-                /* FIXME set up local originator with mgc_fs_setup
-                   could use ioctl (can't call directly because of layering)
-                */
-                ctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
-                /* FIXME set this up anyhow, and copy the mgs remote log 
-                   to the local disk */
+        rctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
+        lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
+        if (!lctxt || !rctxt) {
+                CERROR("missing llog context\n");
+                return(-EINVAL);
         }
+
+        /* FIXME set up local llog originator with mgc_fs_setup
+           could use ioctl (can't call directly because of layering). */
         
-        if (!ctxt) {
-                CERROR("no config llog context\n");
-                GOTO(out, rc = -EINVAL);
+        /* Don't retry if connect fails */
+        rc = obd_set_info(mgc->obd_self_export,
+                          strlen("initial_recov"), "initial_recov",
+                          sizeof(allow_recov), &allow_recov);
+        if (rc)
+                goto out;
+
+        rc = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
+        if (rc) {
+                CERROR("connect failed %d\n", rc);
+                goto out;
         }
+        exp = class_conn2export(&mgc_conn);
+        LASSERT(exp->exp_obd == mgc);
+
+        //FIXME Copy the mgs remote log to the local disk
 
 #if 0
         /* For debugging, it's useful to just dump the log */
-        rc = class_config_dump_llog(ctxt, profile, cfg);
+        class_config_dump_llog(rctxt, profile, cfg);
 #endif
-        rc = class_config_parse_llog(ctxt, profile, cfg);
-
-        //FIXME cleanup local originator with mgc_fs_cleanup (if necessary)
-
-        switch (rc) {
-        case 0:
-                break;
-        case -EINVAL:
+        rc = class_config_parse_llog(rctxt, profile, cfg);
+        obd_disconnect(exp);
+        if (rc) {
                 LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
-                               "from the MGS.  Make sure this node and the "
-                               "MGS are running compatible versions of "
-                               "Lustre.\n",
-                               mgc->obd_name, profile);
-                /* fall through */
-        default:
-                CERROR("class_config_parse_llog failed: rc = %d\n", rc);
-                break;
+                               "from the MGS (%d).  Trying local log.\n",
+                               mgc->obd_name, profile, rc);
+                /* If we couldn't connect to the MGS, try reading a copy
+                   of the config log stored locally on disk */
+                rc = class_config_parse_llog(lctxt, profile, cfg);
+                if (rc) {
+                        LCONSOLE_ERROR("%s: Can't read the local config (%d)\n",
+                                       mgc->obd_name, rc);
+                }
         }
 
 out:
-        /* We don't so much care about errors in cleaning up the config llog
-         * connection, as we have already read the config by this point. */
-        if (exp) {
-                err = obd_disconnect(exp);
-                if (err)
-                        CERROR("disconnect failed: rc = %d\n", err);
-        }
+        //FIXME cleanup local originator with mgc_fs_cleanup
         return (rc);
 }
 

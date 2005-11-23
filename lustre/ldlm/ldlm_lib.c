@@ -290,6 +290,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_connect_op = connect_op;
         imp->imp_generation = 0;
         imp->imp_initial_recov = 1;
+        imp->imp_initial_recov_bk = 0;
         INIT_LIST_HEAD(&imp->imp_pinger_chain);
         memcpy(imp->imp_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
                LUSTRE_CFG_BUFLEN(lcfg, 1));

@@ -390,6 +390,36 @@ out:
         return rc;
 }
 
+#define INIT_RECOV_BACKUP "init_recov_bk"
+int mgc_set_info(struct obd_export *exp, obd_count keylen,
+                 void *key, obd_count vallen, void *val)
+{
+        struct obd_import *imp = class_exp2cliimp(exp);
+        int rc = -EINVAL;
+
+        /* Try to "recover" the initial connection; i.e. retry */
+        if (keylen == strlen("initial_recov") &&
+            memcmp(key, "initial_recov", strlen("initial_recov")) == 0) {
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                imp->imp_initial_recov = *(int *)val;
+                CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
+                       exp->exp_obd->obd_name, imp->imp_initial_recov);
+                RETURN(0);
+        }
+        /* Turn off initial_recov after we try all backup servers once */
+        if (keylen == strlen(INIT_RECOV_BACKUP) &&
+            memcmp(key, INIT_RECOV_BACKUP, strlen(INIT_RECOV_BACKUP)) == 0) {
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                imp->imp_initial_recov_bk = *(int *)val;
+                CDEBUG(D_HA, "%s: set imp_initial_recov_bk = %d\n",
+                       exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
+                RETURN(0);
+        }
+        return(rc);
+}               
+
 static int mgc_import_event(struct obd_device *obd,
                             struct obd_import *imp,
                             enum obd_import_event event)
@@ -465,6 +495,7 @@ struct obd_ops mgc_obd_ops = {
         .o_connect      = client_connect_import,
         .o_disconnect   = client_disconnect_export,
         .o_iocontrol    = mgc_iocontrol,
+        .o_set_info     = mgc_set_info,
         .o_import_event = mgc_import_event,
         .o_llog_init    = mgc_llog_init,
         .o_llog_finish  = mgc_llog_finish,

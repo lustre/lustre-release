@@ -123,7 +123,7 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 #define MAXNIDSTR 1024
 static char *convert_hostnames(char *s1)
 {
-        char *converted, *s2, *c;
+        char *converted, *s2 = 0, *c;
         int left = MAXNIDSTR;
         lnet_nid_t nid;
         
@@ -218,11 +218,9 @@ static int parse_one_option(const char *check, int *flagp)
 
 int parse_options(char *orig_options, int *flagp)
 {
-        int val;
         char *options, *opt, *nextopt;
 
         options = calloc(strlen(orig_options) + 1, 1);
-
         *flagp = 0;
         nextopt = orig_options;
         while ((opt = strsep(&nextopt, ","))) {
