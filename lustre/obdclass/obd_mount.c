@@ -345,7 +345,7 @@ int lustre_get_process_log(struct super_block *sb, char *profile,
         struct lustre_handle mgc_conn = {0, };
         struct obd_export *exp = NULL;
         struct llog_ctxt *rctxt, *lctxt;
-        int allow_recov = 0;
+        int recov_bk = 1;
         int rc;
         LASSERT(mgc);
 
@@ -363,10 +363,12 @@ int lustre_get_process_log(struct super_block *sb, char *profile,
         
         /* Don't retry if connect fails */
         rc = obd_set_info(mgc->obd_self_export,
-                          strlen("initial_recov"), "initial_recov",
-                          sizeof(allow_recov), &allow_recov);
-        if (rc)
+                          strlen("init_recov_bk"), "init_recov_bk",
+                          sizeof(recov_bk), &recov_bk);
+        if (rc) {
+                CERROR("can't set init_recov_bk %d\n", rc);
                 goto out;
+        }
 
         rc = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
         if (rc) {

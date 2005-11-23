@@ -355,6 +355,18 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         if (rc)
                 GOTO(out, rc);
 
+        if (imp->imp_initial_recov_bk && initial_connect &&
+            /* last in list */
+            (imp->imp_conn_current->oic_item.next == &imp->imp_conn_list)) {
+                CERROR("Last connection (%d) for %s, turning off init_recov\n",
+                       imp->imp_conn_cnt, imp->imp_target_uuid.uuid);
+                /* Don't retry if connect fails */
+                rc = 0;
+                obd_set_info(obd->obd_self_export,
+                             strlen("initial_recov"), "initial_recov",
+                             sizeof(rc), &rc);
+        }
+
         rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
                            &obd->obd_uuid, &imp->imp_connect_data);
         if (rc)
