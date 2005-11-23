@@ -30,6 +30,7 @@
 
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
+#include <linux/lustre_ver.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_disk.h>
@@ -84,6 +85,7 @@ struct ll_sb_info *ll_init_sbi(void)
                 RETURN(NULL);
 
         spin_lock_init(&sbi->ll_lock);
+        spin_lock_init(&sbi->ll_lco.lco_lock);
         INIT_LIST_HEAD(&sbi->ll_pglist);
         sbi->ll_pglist_gen = 0;
         if (num_physpages >> (20 - PAGE_SHIFT) < 512)
@@ -161,6 +163,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 sbi->ll_fop = &ll_file_operations;
         }
 
+        data->ocd_connect_flags |= OBD_CONNECT_VERSION;
+        data->ocd_version = LUSTRE_VERSION_CODE;
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An MDT (mdc %s) is performing recovery, of which this"
@@ -200,6 +204,16 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
 
+        data->ocd_connect_flags =
+                OBD_CONNECT_GRANT|OBD_CONNECT_VERSION|OBD_CONNECT_REQPORTAL;
+
+        CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
+               "ocd_grant: %d\n", data->ocd_connect_flags,
+               data->ocd_version, data->ocd_grant);
+
+        obd->obd_upcall.onu_owner = &sbi->ll_lco;
+        obd->obd_upcall.onu_upcall = ll_ocd_update;
+
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An OST (osc %s) is performing recovery, of which this"
@@ -211,7 +225,9 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
-        sbi->ll_connect_flags = data->ocd_connect_flags;
+        spin_lock(&sbi->ll_lco.lco_lock);
+        sbi->ll_lco.lco_flags = data->ocd_connect_flags;
+        spin_unlock(&sbi->ll_lco.lco_lock);
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
@@ -433,9 +449,9 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
 #endif
         {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
-                if (!*ost && (*ost = ll_read_opt("osc", this_char)))
+                if (!*ost && (*ost = ll_read_opt(LUSTRE_OSC_NAME, this_char)))
                         continue;
-                if (!*mdc && (*mdc = ll_read_opt("mdc", this_char)))
+                if (!*mdc && (*mdc = ll_read_opt(LUSTRE_MDC_NAME, this_char)))
                         continue;
                 tmp = ll_set_opt("nolock", this_char, LL_SBI_NOLCK);
                 if (tmp) {

@@ -624,6 +624,17 @@ void osc_wake_cache_waiters(struct client_obd *cli)
         EXIT;
 }
 
+static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
+{
+        spin_lock(&cli->cl_loi_list_lock);
+        cli->cl_avail_grant = ocd->ocd_grant;
+        spin_unlock(&cli->cl_loi_list_lock);
+
+        CDEBUG(D_CACHE, "setting cl_avail_grant: %ld cl_lost_grant: %ld\n",
+               cli->cl_avail_grant, cli->cl_lost_grant);
+        LASSERT(cli->cl_avail_grant >= 0);
+}
+
 static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 {
         spin_lock(&cli->cl_loi_list_lock);
@@ -781,6 +792,10 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         req = ptlrpc_prep_req_pool(imp, opc, 3, size, NULL, pool);
         if (req == NULL)
                 return (-ENOMEM);
+
+        /* FIXME bug 249. Also see bug 7198 */
+        if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_REQPORTAL)
+                req->rq_request_portal = OST_IO_PORTAL;
 
         if (opc == OST_WRITE)
                 desc = ptlrpc_prep_bulk_imp (req, page_count,
@@ -1126,24 +1141,24 @@ static obd_count max_unfragmented_pages(struct brw_page *pg, obd_count pages)
         int count = 1;
         int offset;
 
-	LASSERT (pages > 0);
+        LASSERT (pages > 0);
         offset = pg->off & (PAGE_SIZE - 1);
 
-	for (;;) {
-		pages--;
-		if (pages == 0)         /* that's all */
+        for (;;) {
+                pages--;
+                if (pages == 0)         /* that's all */
                         return count;
 
                 if (offset + pg->count < PAGE_SIZE)
-			return count;   /* doesn't end on page boundary */
+                        return count;   /* doesn't end on page boundary */
 
-		pg++;
+                pg++;
                 offset = pg->off & (PAGE_SIZE - 1);
-		if (offset != 0)        /* doesn't start on page boundary */
-			return count;
+                if (offset != 0)        /* doesn't start on page boundary */
+                        return count;
 
-		count++;
-	}
+                count++;
+        }
 }
 
 static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -2026,7 +2041,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
 #ifdef HAVE_QUOTA_SUPPORT
         if ((cmd & OBD_BRW_WRITE) && !(cmd & OBD_BRW_NOQUOTA)){
                 struct obd_async_page_ops *ops;
-                struct obdo *oa = NULL;
+                struct obdo *oa;
 
                 oa = obdo_alloc();
                 if (oa == NULL)
@@ -2296,6 +2311,7 @@ static int sanosc_brw_read(struct obd_export *exp, struct obdo *oa,
         struct niobuf_remote *nioptr;
         struct obd_ioobj *iooptr;
         int rc, size[3] = {sizeof(*body)}, mapped = 0;
+        struct obd_import *imp = class_exp2cliimp(exp);
         int swab;
         ENTRY;
 
@@ -2304,10 +2320,14 @@ static int sanosc_brw_read(struct obd_export *exp, struct obdo *oa,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*nioptr);
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SAN_READ, 3,
-                                  size, NULL);
+        request = ptlrpc_prep_req(imp, OST_SAN_READ, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
+
+        /* FIXME bug 249 */
+        /* See bug 7198 */
+        if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_REQPORTAL)
+                request->rq_request_portal = OST_IO_PORTAL;
 
         body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*body));
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1, sizeof(*iooptr));
@@ -2426,6 +2446,7 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
         struct ost_body *body;
         struct niobuf_remote *nioptr;
         struct obd_ioobj *iooptr;
+        struct obd_import *imp = class_exp2cliimp(exp);
         int rc, size[3] = {sizeof(*body)}, mapped = 0;
         int swab;
         ENTRY;
@@ -2433,10 +2454,15 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*nioptr);
 
-        request = ptlrpc_prep_req_pool(class_exp2cliimp(exp), OST_SAN_WRITE,
+        request = ptlrpc_prep_req_pool(imp, OST_SAN_WRITE,
                                        3, size, NULL, cli->cl_rq_pool);
         if (!request)
                 RETURN(-ENOMEM);
+
+        /* FIXME bug 249 */
+        /* See bug 7198 */
+        if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_REQPORTAL)
+                request->rq_request_portal = OST_IO_PORTAL;
 
         body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof (*body));
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1, sizeof (*iooptr));
@@ -3121,6 +3147,33 @@ static int osc_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
+static int osc_reconnect(struct obd_export *exp, struct obd_device *obd,
+                         struct obd_uuid *cluuid,
+                         struct obd_connect_data *data)
+{
+        struct client_obd *cli = &obd->u.cli;
+
+        if (data != NULL && (data->ocd_connect_flags & OBD_CONNECT_GRANT)) {
+                long lost_grant;
+
+                spin_lock(&cli->cl_loi_list_lock);
+                data->ocd_grant = cli->cl_avail_grant ?:
+                                2 * cli->cl_max_pages_per_rpc << PAGE_SHIFT;
+                lost_grant = cli->cl_lost_grant;
+                cli->cl_lost_grant = 0;
+                spin_unlock(&cli->cl_loi_list_lock);
+
+                CDEBUG(D_CACHE, "request ocd_grant: %d cl_avail_grant: %ld "
+                       "cl_lost_grant: %ld\n", data->ocd_grant,
+                       cli->cl_avail_grant, lost_grant);
+                CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d"
+                       " ocd_grant: %d\n", data->ocd_connect_flags,
+                       data->ocd_version, data->ocd_grant);
+        }
+
+        RETURN(0);
+}
+
 static int osc_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -3158,8 +3211,7 @@ static int osc_import_event(struct obd_device *obd,
                 break;
         }
         case IMP_EVENT_INACTIVE: {
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 0);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE);
                 break;
         }
         case IMP_EVENT_INVALIDATE: {
@@ -3187,8 +3239,20 @@ static int osc_import_event(struct obd_device *obd,
                         oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
                         spin_unlock(&oscc->oscc_lock);
                 }
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 1);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE);
+                break;
+        }
+        case IMP_EVENT_OCD: {
+                struct obd_connect_data *ocd = &imp->imp_connect_data;
+
+                if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT)
+                        osc_init_grant(&obd->u.cli, ocd);
+
+                /* See bug 7198 */
+                if (ocd->ocd_connect_flags & OBD_CONNECT_REQPORTAL)
+                        imp->imp_client->cli_request_portal =OST_REQUEST_PORTAL;
+
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD);
                 break;
         }
         default:
@@ -3238,13 +3302,20 @@ static int osc_precleanup(struct obd_device *obd, int stage)
         int rc = 0;
         ENTRY;
 
-        if (stage < 2)
-                RETURN(0);
-
-        rc = obd_llog_finish(obd, 0);
-        if (rc != 0)
-                CERROR("failed to cleanup llogging subsystems\n");
-
+        switch (stage) {
+        case OBD_CLEANUP_EARLY: {
+                struct obd_import *imp;
+                imp = obd->u.cli.cl_import;
+                CDEBUG(D_HA, "Deactivating import %s\n", obd->obd_name);
+                /* ptlrpc_abort_inflight to stop an mds_lov_synchronize */
+                ptlrpc_deactivate_import(imp);
+                break;
+        }
+        case OBD_CLEANUP_SELF_EXP:
+                rc = obd_llog_finish(obd, 0);
+                if (rc != 0)
+                        CERROR("failed to cleanup llogging subsystems\n");
+        }
         RETURN(rc);
 }
 
@@ -3281,6 +3352,7 @@ struct obd_ops osc_obd_ops = {
         .o_add_conn             = client_import_add_conn,
         .o_del_conn             = client_import_del_conn,
         .o_connect              = client_connect_import,
+        .o_reconnect            = osc_reconnect,
         .o_disconnect           = osc_disconnect,
         .o_statfs               = osc_statfs,
         .o_packmd               = osc_packmd,
@@ -3324,6 +3396,7 @@ struct obd_ops sanosc_obd_ops = {
         .o_add_conn             = client_import_add_conn,
         .o_del_conn             = client_import_del_conn,
         .o_connect              = client_connect_import,
+        .o_reconnect            = osc_reconnect,
         .o_disconnect           = client_disconnect_export,
         .o_statfs               = osc_statfs,
         .o_packmd               = osc_packmd,

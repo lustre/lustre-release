@@ -38,6 +38,7 @@ enum obd_import_event {
         IMP_EVENT_INACTIVE   = 0x808002,
         IMP_EVENT_INVALIDATE = 0x808003,
         IMP_EVENT_ACTIVE     = 0x808004,
+        IMP_EVENT_OCD        = 0x808005,
 };
 
 struct obd_import_conn {

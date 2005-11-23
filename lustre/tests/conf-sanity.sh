@@ -746,4 +746,15 @@ test_18() {
 }
 run_test 18 "check lconf creates large journals"
 
+test_19() {
+        # first format the ost/mdt
+        start_ost
+	start_mds
+	stop_mds
+	stop_ost
+	start mds $MDSLCONFARGS || return 1
+	stop mds --force || return 2
+}
+run_test 19 "start/stop MDS without OSTs"
+
 equals_msg "Done"

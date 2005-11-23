@@ -469,6 +469,26 @@ EXPORT_SYMBOL(lvfs_set_rdonly);
 EXPORT_SYMBOL(lvfs_check_rdonly);
 EXPORT_SYMBOL(lvfs_clear_rdonly);
 
+int lvfs_check_io_health(struct obd_device *obd, struct file *file)
+{
+        char *write_page = NULL;
+        loff_t offset = 0;
+        int rc = 0;
+        ENTRY;
+
+        OBD_ALLOC(write_page, PAGE_SIZE);
+        if (!write_page)
+                RETURN(-ENOMEM);
+        
+        rc = fsfilt_write_record(obd, file, write_page, PAGE_SIZE, &offset, 1);
+       
+        OBD_FREE(write_page, PAGE_SIZE);
+
+        CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
+        RETURN(rc); 
+}
+EXPORT_SYMBOL(lvfs_check_io_health);
+
 static int __init lvfs_linux_init(void)
 {
         RETURN(0);

@@ -787,7 +787,7 @@ static inline char *type2name(int check_type)
 static void grace2str(time_t seconds,char *buf)
 {
         uint minutes, hours, days;
-         
+
         minutes = (seconds + 30) / 60;
         hours = minutes / 60;
         minutes %= 60;

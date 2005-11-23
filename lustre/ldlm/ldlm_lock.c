@@ -513,7 +513,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
 {
         struct ldlm_lock *lock = __ldlm_handle2lock(lockh, 0);
-        LASSERT(lock != NULL);
+        LASSERTF(lock != NULL, "Non-existing lock: "LPX64"\n", lockh->cookie);
         ldlm_lock_decref_internal(lock, mode);
         LDLM_LOCK_PUT(lock);
 }
@@ -801,6 +801,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         ldlm_error_t rc = ELDLM_OK;
         ENTRY;
 
+        do_gettimeofday(&lock->l_enqueued_time);
         /* policies are not executed on the client or during replay */
         if ((*flags & (LDLM_FL_HAS_INTENT|LDLM_FL_REPLAY)) == LDLM_FL_HAS_INTENT
             && !local && ns->ns_policy) {
@@ -836,7 +837,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
 
         /* Some flags from the enqueue want to make it into the AST, via the
          * lock's l_flags. */
-        lock->l_flags |= (*flags & (LDLM_AST_DISCARD_DATA|LDLM_INHERIT_FLAGS));
+        lock->l_flags |= *flags & LDLM_AST_DISCARD_DATA;
 
         /* This distinction between local lock trees is very important; a client
          * namespace only has information about locks taken by that client, and

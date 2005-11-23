@@ -213,11 +213,15 @@ void print_llog_header(struct llog_log_hdr* llog_buf)
 static void print_1_cfg(struct lustre_cfg *lcfg)
 {
         int i;
+        if (lcfg->lcfg_nid)
+                printf("nid=%s("LPX64")  ", libcfs_nid2str(lcfg->lcfg_nid),
+                       lcfg->lcfg_nid);
         for (i = 0; i <  lcfg->lcfg_bufcount; i++)
                 printf("%d:%.*s  ", i, lcfg->lcfg_buflens[i], 
                        (char*)lustre_cfg_buf(lcfg, i));
         return;
 }
+
 
 static void print_setup_cfg(struct lustre_cfg *lcfg)
 {
@@ -226,16 +230,16 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
         if ((lcfg->lcfg_bufcount == 2) && 
             (lcfg->lcfg_buflens[1] == sizeof(*desc))) {
                 printf("lov_setup ");
-                printf("0:%s ", lustre_cfg_string(lcfg, 0));
+                printf("0:%s  ", lustre_cfg_string(lcfg, 0));
                 printf("1:(struct lov_desc)\n");
                 desc = (struct lov_desc*)(lustre_cfg_string(lcfg, 1));
-                printf("      uuid=%s, ", (char*)desc->ld_uuid.uuid);
-                printf("stripe count=%d, ", desc->ld_default_stripe_count);
-                printf("size=%lld, ", desc->ld_default_stripe_size);
-                printf("offset=%lld, ", desc->ld_default_stripe_offset);
+                printf("\t\tuuid=%s  ", (char*)desc->ld_uuid.uuid);
+                printf("stripe:cnt=%d ", desc->ld_default_stripe_count);
+                printf("size=%lld ", desc->ld_default_stripe_size);
+                printf("offset=%lld ", desc->ld_default_stripe_offset);
                 printf("pattern=%d", desc->ld_pattern);
         } else {
-                printf("setup    ");
+                printf("setup     ");
                 print_1_cfg(lcfg);
         }
         return;
@@ -247,7 +251,7 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
         
         switch(cmd){
         case(LCFG_ATTACH):{
-                printf("attach   ");
+                printf("attach    ");
                 print_1_cfg(lcfg);
                 break;
         }
@@ -256,37 +260,32 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
                 break;
         }
         case(LCFG_DETACH):{
-                printf("detach   ");
+                printf("detach    ");
                 print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_CLEANUP):{
-                printf("cleanup  ");
+                printf("cleanup   ");
                 print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_ADD_UUID):{
-                printf("add_uuid ");
-                printf("nid=%s("LPX64") ",  
-                       libcfs_nid2str(lcfg->lcfg_nid), lcfg->lcfg_nid);
-                /* obsolete */
-                if (lcfg->lcfg_nal) 
-                        printf("nal=%d ", lcfg->lcfg_nal);
+                printf("add_uuid  ");
                 print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_DEL_UUID):{
-                printf("del_uuid ");
+                printf("del_uuid  ");
                 print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_ADD_CONN):{
-                printf("add_conn ");
+                printf("add_conn  ");
                 print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_DEL_CONN):{
-                printf("del_conn ");
+                printf("del_conn  ");
                 print_1_cfg(lcfg);
                 break;
         }
@@ -317,6 +316,16 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
         }
         case(LCFG_SET_UPCALL):{
                 printf("set_lustre_upcall ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_PARAM):{
+                printf("param ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_MARKER):{
+                printf("marker ");
                 print_1_cfg(lcfg);
                 break;
         }

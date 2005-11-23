@@ -73,6 +73,26 @@ int class_attach(struct lustre_cfg *lcfg)
 
         CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
                MKSTR(typename), MKSTR(name), MKSTR(uuid));
+        
+        /* Mountconf transitional hack, should go away after 1.6.
+           1.4.7 uses the old names, so translate back if the 
+           mountconf flag is set. 
+           1.6 should set this flag, and translate the other way here
+           if not set. */
+        if (lcfg->lcfg_flags & LCFG_FLG_MOUNTCONF){
+                char *tmp = NULL;
+                if (strcmp(typename, "mds") == 0)
+                        tmp = "mdt";
+                if (strcmp(typename, "mdt") == 0)
+                        tmp = "mds";
+                if (strcmp(typename, "osd") == 0)
+                        tmp = "obdfilter";
+                if (tmp) {
+                        LCONSOLE_WARN("Using type %s for %s %s\n", tmp,
+                                      MKSTR(typename), MKSTR(name));
+                        typename = tmp;
+                }
+        }
 
         /* find the type */
         type = class_get_type(typename);
@@ -361,7 +381,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* Precleanup stage 1, we must make sure all exports (other than the
            self-export) get destroyed. */
-        err = obd_precleanup(obd, 1);
+        err = obd_precleanup(obd, OBD_CLEANUP_EXPORTS);
         if (err)
                 CERROR("Precleanup %s returned %d\n",
                        obd->obd_name, err);
@@ -396,7 +416,7 @@ void class_decref(struct obd_device *obd)
                 /* if we're not stopping, we didn't finish setup */
                 /* Precleanup stage 2,  do other type-specific
                    cleanup requiring the self-export. */
-                err = obd_precleanup(obd, 2);
+                err = obd_precleanup(obd, OBD_CLEANUP_SELF_EXP);
                 if (err)
                         CERROR("Precleanup %s returned %d\n",
                                obd->obd_name, err);
@@ -468,8 +488,8 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("invalid conn_uuid\n");
                 RETURN(-EINVAL);
         }
-        if (strcmp(obd->obd_type->typ_name, "mdc") &&
-            strcmp(obd->obd_type->typ_name, "osc")) {
+        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
+            strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 CERROR("can't del connection on non-client dev\n");
                 RETURN(-EINVAL);
         }
@@ -620,6 +640,11 @@ int class_process_config(struct lustre_cfg *lcfg)
                         GOTO(out, err = -EINVAL);
                 strncpy(obd_lustre_upcall, lustre_cfg_string(lcfg, 1),
                         sizeof (obd_lustre_upcall));
+                GOTO(out, err = 0);
+        }
+        case LCFG_PARAM: 
+        case LCFG_MARKER: {
+                LCONSOLE_WARN("LCFG_MARKER not yet implemented.\n");
                 GOTO(out, err = 0);
         }
         }
@@ -855,7 +880,7 @@ void class_manual_cleanup(struct obd_device *obd)
         int err;
         char flags[3]="";
         ENTRY;
- 
+
         if (!obd) {
                 CERROR("empty cleanup\n");
                 EXIT;
@@ -867,22 +892,22 @@ void class_manual_cleanup(struct obd_device *obd)
         if (obd->obd_fail)
                 strcat(flags, "A");
 
-        CDEBUG(D_CONFIG, "Manual cleanup of %s (flags='%s')\n", 
+        CDEBUG(D_CONFIG, "Manual cleanup of %s (flags='%s')\n",
                obd->obd_name, flags);
 
         lustre_cfg_bufs_reset(&bufs, obd->obd_name);
         lustre_cfg_bufs_set_string(&bufs, 1, flags);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-        
+
         err = class_process_config(lcfg);
-        if (err) 
+        if (err)
                 CERROR("cleanup failed %d: %s\n", err, obd->obd_name);
-        
+
         /* the lcfg is almost the same for both ops */
         lcfg->lcfg_command = LCFG_DETACH;
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err) 
+        if (err)
                 CERROR("detach failed %d: %s\n", err, obd->obd_name);
         EXIT;
 }

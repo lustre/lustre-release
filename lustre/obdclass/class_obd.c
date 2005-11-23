@@ -419,6 +419,7 @@ EXPORT_SYMBOL(class_handle_unhash);
 EXPORT_SYMBOL(class_handle2object);
 
 /* config.c */
+EXPORT_SYMBOL(class_decref);
 EXPORT_SYMBOL(class_get_profile);
 EXPORT_SYMBOL(class_del_profile);
 EXPORT_SYMBOL(class_process_config);

@@ -418,7 +418,7 @@ _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off)
 /* this isn't where truncate starts.  roughly:
  * llu_iop_{open,setattr}->llu_setattr_raw->llu_vmtruncate->llu_truncate
  * we grab the lock back in setattr_raw to avoid races. */
-static void llu_truncate(struct inode *inode)
+static void llu_truncate(struct inode *inode, obd_flag flags)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
@@ -439,8 +439,11 @@ static void llu_truncate(struct inode *inode)
 
         oa.o_id = lsm->lsm_object_id;
         oa.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE|OBD_MD_FLMODE|OBD_MD_FLATIME|
-                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        obdo_from_inode(&oa, inode,
+                        OBD_MD_FLTYPE|OBD_MD_FLMODE|OBD_MD_FLATIME|
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLFLAGS);
+
+        oa.o_flags |= flags; /* OBD_MD_FLFLAGS is already set at this point */
 
         obd_adjust_kms(llu_i2obdexp(inode), lsm, st->st_size, 1);
 
@@ -462,11 +465,17 @@ static void llu_truncate(struct inode *inode)
         return;
 } /* llu_truncate */
 
-int llu_vmtruncate(struct inode * inode, loff_t offset)
+int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag flags)
 {
         llu_i2stat(inode)->st_size = offset;
 
-        llu_truncate(inode);
+        /*
+         * llu_truncate() is only called from this
+         * point. llu_vmtruncate/llu_truncate split exists to mimic the
+         * structure of Linux VFS truncate code path.
+         */
+
+        llu_truncate(inode, flags);
 
         return 0;
 }

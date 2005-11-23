@@ -244,6 +244,27 @@ err_discon:
         RETURN(rc);
 }
 
+int mds_lov_disconnect(struct obd_device *obd)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        int rc = 0;
+        ENTRY;
+
+        if (!IS_ERR(mds->mds_osc_obd) && mds->mds_osc_exp != NULL) {
+                obd_register_observer(mds->mds_osc_obd, NULL);
+
+                /* The actual disconnect of the mds_lov will be called from
+                 * class_disconnect_exports from mds_lov_clean. So we have to
+                 * ensure that class_cleanup doesn't fail due to the extra ref
+                 * we're holding now. The mechanism to do that already exists -
+                 * the obd_force flag. We'll drop the final ref to the
+                 * mds_osc_exp in mds_cleanup. */
+                mds->mds_osc_obd->obd_force = 1;
+        }
+
+        RETURN(rc);
+}
+
 int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                   void *karg, void *uarg)
 {
@@ -475,7 +496,10 @@ static int __mds_lov_syncronize(void *data)
 
         CWARN("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, uuid ? (char *)uuid->uuid : "All OSC's");
-        
+
+        if (obd->obd_stopping)
+                GOTO(out, rc = -ENODEV);
+
         rc = mds_lov_clearorphans(&obd->u.mds, uuid);
         if (rc != 0) {
                 CERROR("%s: failed at mds_lov_clearorphans: %d\n",
@@ -484,7 +508,7 @@ static int __mds_lov_syncronize(void *data)
         }
 
 out:
-        class_export_put(obd->obd_self_export);
+        class_decref(obd);
         RETURN(rc);
 }
 
@@ -518,9 +542,16 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
 
         mlsi->mlsi_obd = obd;
         mlsi->mlsi_uuid = uuid;
-        
-        /* We need to lock the mds in place for our new thread context. */
-        class_export_get(obd->obd_self_export);
+
+        /* Although class_export_get(obd->obd_self_export) would lock
+           the MDS in place, since it's only a self-export
+           it doesn't lock the LOV in place.  The LOV can be disconnected
+           during MDS precleanup, leaving nothing for __mds_lov_syncronize.
+           Simply taking an export ref on the LOV doesn't help, because it's
+           still disconnected. Taking an obd reference insures that we don't
+           disconnect the LOV.  This of course means a cleanup won't
+           finish for as long as the sync is blocking. */
+        atomic_inc(&obd->obd_refcount);
 
         if (nonblock) {
                 /* Syncronize in the background */
@@ -541,16 +572,17 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
         RETURN(rc);
 }
 
-int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
+int mds_notify(struct obd_device *obd, struct obd_device *watched,
+               enum obd_notify_event ev)
 {
         struct obd_uuid *uuid;
         int rc = 0;
         ENTRY;
 
-        if (!active)
+        if (ev != OBD_NOTIFY_ACTIVE)
                 RETURN(0);
 
-        if (strcmp(watched->obd_type->typ_name, "osc")) {
+        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name, watched->obd_name);
                 RETURN(-EINVAL);

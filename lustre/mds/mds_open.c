@@ -1008,10 +1008,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                     (acc_mode & MAY_WRITE))
                         GOTO(cleanup, rc = -EROFS);
 
-                /* Can't write to a read-only file */
-                if (IS_RDONLY(dchild->d_inode) && (acc_mode & MAY_WRITE) != 0)
-                        GOTO(cleanup, rc = -EPERM);
-
                 /* An append-only file must be opened in append mode for
                  * writing */
                 if (IS_APPEND(dchild->d_inode) && (acc_mode & MAY_WRITE) != 0 &&
@@ -1087,9 +1083,9 @@ int mds_open(struct mds_update_record *rec, int offset,
                 else
                         ptlrpc_save_lock (req, &parent_lockh, parent_mode);
         }
- 
+
         /* trigger dqacq on the owner of child and parent */
-        mds_adjust_qunit(obd, current->fsuid, current->fsgid, 
+        mds_adjust_qunit(obd, current->fsuid, current->fsgid,
                          parent_uid, parent_gid, rc);
         RETURN(rc);
 }

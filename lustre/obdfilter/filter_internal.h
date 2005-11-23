@@ -23,6 +23,7 @@
 #endif
 
 #define LAST_RCVD "last_rcvd"
+#define HEALTH_CHECK "health_check"
 #define FILTER_INIT_OBJID 0
 
 #define FILTER_LR_SERVER_SIZE    512
@@ -44,6 +45,7 @@
 #define FILTER_INCOMPAT_SUPP   (FILTER_INCOMPAT_GROUPS)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
+#define GRANT_FOR_LLOG(obd) 16
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct filter_client_data {

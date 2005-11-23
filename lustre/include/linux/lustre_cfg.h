@@ -48,7 +48,9 @@ enum lcfg_command_type {
         LCFG_ADD_CONN       = 0x00cf00b,
         LCFG_DEL_CONN       = 0x00cf00c,
         LCFG_LOV_ADD_OBD    = 0x00cf00d,
-        LCFG_LOV_DEL_OBD    = 0x00cf00e
+        LCFG_LOV_DEL_OBD    = 0x00cf00e,
+        LCFG_PARAM          = 0x00cf00f,
+        LCFG_MARKER         = 0x00cf010
 };
 
 struct lustre_cfg_bufs {
@@ -56,6 +58,9 @@ struct lustre_cfg_bufs {
         uint32_t lcfg_buflen[LUSTRE_CFG_MAX_BUFCOUNT];
         uint32_t lcfg_bufcount;
 };
+
+/* Mountconf transitional hack, should go away after 1.6 */
+#define LCFG_FLG_MOUNTCONF 0x400
 
 struct lustre_cfg {
         uint32_t lcfg_magic;

@@ -47,9 +47,7 @@ llog_reader_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 llog_reader_SOURCES = llog_reader.c
 
-# FIXME whats this GM stuff for??
-mount_lustre_CFLAGS = $(LLMOUNT_GM_CFLAGS)
-mount_lustre_LDADD := $(LIBREADLINE) $(LIBPTLCTL) $(LLMOUNT_GM_LDADD)
+mount_lustre_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 mount_lustre_SOURCES = mount_lustre.c 
 

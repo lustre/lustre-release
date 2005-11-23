@@ -366,6 +366,8 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
 
 #if CRAY_XT3
         ucred->luc_fsuid = req->rq_uid;
+        if (req->rq_uid == 0)  /* allow root to keep capabilities, bug 7305 */
+                ucred->luc_cap = body->capability;
 #else
         ucred->luc_fsuid = body->fsuid;
         ucred->luc_fsgid = body->fsgid;

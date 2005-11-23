@@ -167,18 +167,91 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
         RETURN(0);
 }
 
+/*
+ * Helper function for ost_punch(): if asked by client, acquire [size, EOF]
+ * lock on the file being truncated.
+ */
+static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
+                              struct lustre_handle *lh)
+{
+        int flags;
+        struct ldlm_res_id res_id = { .name = { oa->o_id } };
+        ldlm_policy_data_t policy;
+        __u64 start;
+        __u64 finis;
+
+        ENTRY;
+
+        LASSERT(!lustre_handle_is_used(lh));
+
+        if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
+            !(oa->o_flags & OBD_FL_TRUNCLOCK))
+                RETURN(0);
+
+        CDEBUG(D_INODE, "OST-side truncate lock.\n");
+
+        start = oa->o_size;
+        finis = start + oa->o_blocks;
+
+        /*
+         * standard truncate optimization: if file body is completely
+         * destroyed, don't send data back to the server.
+         */
+        flags = (start == 0) ? LDLM_AST_DISCARD_DATA : 0;
+
+        policy.l_extent.start = start & CFS_PAGE_MASK;
+
+        /*
+         * If ->o_blocks is EOF it means "lock till the end of the
+         * file". Otherwise, it's size of a hole being punched (in bytes)
+         */
+        if (oa->o_blocks == OBD_OBJECT_EOF || finis < start)
+                policy.l_extent.end = OBD_OBJECT_EOF;
+        else
+                policy.l_extent.end = finis | ~CFS_PAGE_MASK;
+
+        RETURN(ldlm_cli_enqueue(NULL, NULL, exp->exp_obd->obd_namespace,
+                                res_id, LDLM_EXTENT, &policy, LCK_PW, &flags,
+                                ldlm_blocking_ast, ldlm_completion_ast,
+                                ldlm_glimpse_ast,
+                                NULL, NULL, 0, NULL, lh));
+}
+
+/*
+ * Helper function for ost_punch(): release lock acquired by
+ * ost_punch_lock_get(), if any.
+ */
+static void ost_punch_lock_put(struct obd_export *exp, struct obdo *oa,
+                               struct lustre_handle *lh)
+{
+        ENTRY;
+        if (lustre_handle_is_used(lh))
+                ldlm_lock_decref(lh, LCK_PW);
+        EXIT;
+}
+
 static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
+        struct obdo     *oa;
         struct ost_body *body, *repbody;
+        struct lustre_handle lh = {0,};
+
         int rc, size = sizeof(*repbody);
+
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
+        /*
+         * check that we do support OBD_CONNECT_TRUNCLOCK.
+         */
+        CLASSERT(OST_CONNECT_SUPPORTED & OBD_CONNECT_TRUNCLOCK);
+
+        body = lustre_swab_reqbuf(req, 0, sizeof *body, lustre_swab_ost_body);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        if ((body->oa.o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
+        oa = &body->oa;
+        if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
                 RETURN(-EINVAL);
 
@@ -187,10 +260,23 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                 RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
-        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_punch(exp, &repbody->oa, NULL, repbody->oa.o_size,
-                                   repbody->oa.o_blocks, oti);
-        RETURN(0);
+        repbody->oa = *oa;
+        rc = ost_punch_lock_get(exp, oa, &lh);
+        if (rc == 0) {
+                if (oa->o_valid & OBD_MD_FLFLAGS &&
+                    oa->o_flags == OBD_FL_TRUNCLOCK)
+                        /*
+                         * If OBD_FL_TRUNCLOCK is the only bit set in
+                         * ->o_flags, clear OBD_MD_FLFLAGS to avoid falling
+                         * through filter_setattr() to filter_iocontrol().
+                         */
+                        oa->o_valid &= ~OBD_MD_FLFLAGS;
+
+                req->rq_status = obd_punch(exp, oa, NULL,
+                                           oa->o_size, oa->o_blocks, oti);
+                ost_punch_lock_put(exp, oa, &lh);
+        }
+        RETURN(rc);
 }
 
 static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
@@ -461,6 +547,7 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         ENTRY;
 
         LASSERT(mode == LCK_PR || mode == LCK_PW);
+        LASSERT(!lustre_handle_is_used(lh));
 
         /* EXPENSIVE ASSERTION */
         for (i = 1; i < nrbufs; i ++)
@@ -487,7 +574,9 @@ static void ost_brw_lock_put(int mode,
 {
         ENTRY;
         LASSERT(mode == LCK_PR || mode == LCK_PW);
-        if (obj->ioo_bufcnt > 0 && niob[0].flags & OBD_BRW_SRVLOCK)
+        LASSERT((obj->ioo_bufcnt > 0 && (niob[0].flags & OBD_BRW_SRVLOCK)) ==
+                lustre_handle_is_used(lh));
+        if (lustre_handle_is_used(lh))
                 ldlm_lock_decref(lh, mode);
         EXIT;
 }
@@ -501,7 +590,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct obd_ioobj        *ioo;
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
-        struct lustre_handle     lockh;
+        struct lustre_handle     lockh = {0};
         int                      size[1] = { sizeof(*body) };
         int                      comms_error = 0;
         int                      niocount;
@@ -707,7 +796,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct obd_ioobj        *ioo;
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
-        struct lustre_handle     lockh;
+        struct lustre_handle     lockh = {0};
         __u32                   *rcs;
         int                      size[2] = { sizeof(*body) };
         int                      objcount, niocount, npages;
@@ -858,7 +947,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         repbody->oa.o_valid |= OBD_MD_FLCKSUM;
                 } else if ((cksum_counter & (-cksum_counter)) ==
                            cksum_counter) {
-                        CWARN("Checksum %u from %s: %x OK\n", cksum_counter, 
+                        CWARN("Checksum %u from %s: %x OK\n", cksum_counter,
                               libcfs_id2str(req->rq_peer), cksum);
                 } else {
                         cksum_counter++;
@@ -1414,7 +1503,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_REQUEST_PORTAL,
                                 OSC_REPLY_PORTAL,
-                                obd_timeout * 1000, ost_handle, "ost",
+                                obd_timeout * 1000, ost_handle, LUSTRE_OST_NAME,
                                 obd->obd_proc_entry, ost_print_req,
                                 OST_NUM_THREADS);
         if (ost->ost_service == NULL) {
@@ -1422,9 +1511,6 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(out_lprocfs, rc = -ENOMEM);
         }
 
-        ost->ost_service->srv_init = ost_thread_init;
-        ost->ost_service->srv_done = ost_thread_done;
-        ost->ost_service->srv_cpu_affinity = 1;
         rc = ptlrpc_start_threads(obd, ost->ost_service, "ll_ost");
         if (rc)
                 GOTO(out_service, rc = -EINVAL);
@@ -1445,8 +1531,31 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(out_create, rc = -EINVAL);
 
+        ost->ost_io_service =
+                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
+                                OST_MAXREPSIZE, OST_IO_PORTAL,
+                                OSC_REPLY_PORTAL,
+                                obd_timeout * 1000, ost_handle, "ost_io",
+                                obd->obd_proc_entry, ost_print_req,
+                                OST_NUM_THREADS);
+        if (ost->ost_io_service == NULL) {
+                CERROR("failed to start OST I/O service\n");
+                GOTO(out_create, rc = -ENOMEM);
+        }
+
+        ost->ost_io_service->srv_init = ost_thread_init;
+        ost->ost_io_service->srv_done = ost_thread_done;
+        ost->ost_io_service->srv_cpu_affinity = 1;
+        rc = ptlrpc_start_threads(obd, ost->ost_io_service,
+                                  "ll_ost_io");
+        if (rc)
+                GOTO(out_io, rc = -EINVAL);
+
         RETURN(0);
 
+out_io:
+        ptlrpc_unregister_service(ost->ost_io_service);
+        ost->ost_io_service = NULL;
 out_create:
         ptlrpc_unregister_service(ost->ost_create_service);
         ost->ost_create_service = NULL;
@@ -1474,6 +1583,7 @@ static int ost_cleanup(struct obd_device *obd)
         down(&ost->ost_health_sem);
         ptlrpc_unregister_service(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_create_service);
+        ptlrpc_unregister_service(ost->ost_io_service);
         ost->ost_service = NULL;
         ost->ost_create_service = NULL;
         up(&ost->ost_health_sem);
@@ -1491,6 +1601,7 @@ static int ost_health_check(struct obd_device *obd)
         down(&ost->ost_health_sem);
         rc |= ptlrpc_service_health_check(ost->ost_service);
         rc |= ptlrpc_service_health_check(ost->ost_create_service);
+        rc |= ptlrpc_service_health_check(ost->ost_io_service);
         up(&ost->ost_health_sem);
 
         /*

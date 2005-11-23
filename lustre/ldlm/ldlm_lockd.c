@@ -263,6 +263,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         unsigned long timeout_rounded;
 
         l_check_ns_lock(lock->l_resource->lr_namespace);
+        LASSERT(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK));
 
         spin_lock_bh(&waiting_locks_spinlock);
         if (lock->l_destroyed) {
@@ -348,6 +349,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
+        LASSERT(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK));
         RETURN(1);
 }
 
@@ -477,12 +479,11 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         LDLM_DEBUG(lock, "server preparing blocking AST");
         req->rq_replen = lustre_msg_size(0, NULL);
-        if (instant_cancel) {
+        if (instant_cancel)
                 ldlm_lock_cancel(lock);
-//                ldlm_reprocess_all(lock->l_resource);
-        } else if (lock->l_granted_mode == lock->l_req_mode) {
+        else if (lock->l_granted_mode == lock->l_req_mode)
                 ldlm_add_waiting_lock(lock);
-        }
+
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
@@ -565,8 +566,18 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 body->lock_flags |= LDLM_FL_AST_SENT;
-                body->lock_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
-                ldlm_add_waiting_lock(lock); /* start the lock-timeout clock */
+
+                /* We might get here prior to ldlm_handle_enqueue setting
+                   LDLM_FL_CANCEL_ON_BLOCK flag. Then we will put this lock into
+                   waiting list, but this is safe and similar code in
+                   ldlm_handle_enqueue will call ldlm_lock_cancel() still, that
+                   would not only cancel the loc, but will also remove it from
+                   waiting list */
+                if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK)
+                        ldlm_lock_cancel(lock);
+                else
+                        ldlm_add_waiting_lock(lock); /* start the lock-timeout
+                                                         clock */
         }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
@@ -766,6 +777,12 @@ existing_lock:
         /* We never send a blocking AST until the lock is granted, but
          * we can tell it right now */
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
+
+        /* Now take into account flags to be inherited from original lock
+           request both in reply to client and in our own lock flags. */
+        dlm_rep->lock_flags |= dlm_req->lock_flags & LDLM_INHERIT_FLAGS;
+        lock->l_flags |= dlm_req->lock_flags & LDLM_INHERIT_FLAGS;
+
         /* Don't move a pending lock onto the export if it has already
          * been evicted.  Cancel it now instead. (bug 5683) */
         if (req->rq_export->exp_failed ||
@@ -774,10 +791,33 @@ existing_lock:
                 rc = -ENOTCONN;
         } else if (lock->l_flags & LDLM_FL_AST_SENT) {
                 dlm_rep->lock_flags |= LDLM_FL_AST_SENT;
-                dlm_rep->lock_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
-                if (lock->l_granted_mode == lock->l_req_mode)
+                if (dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK)
+                        ldlm_lock_cancel(lock);
+                else if (lock->l_granted_mode == lock->l_req_mode)
                         ldlm_add_waiting_lock(lock);
         }
+        if ((dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN) &&
+             req->rq_export->exp_libclient) {
+                if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) ||
+                    !(dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK)) {
+                        CERROR("Granting sync lock to libclient. "
+                               "req fl %d, rep fl %d, lock fl %d\n",
+                               dlm_req->lock_flags, dlm_rep->lock_flags,
+                               lock->l_flags);
+                        LDLM_ERROR(lock, "sync lock");
+                        if (dlm_req->lock_flags & LDLM_FL_HAS_INTENT) {
+                                struct ldlm_intent *it;
+                                it = lustre_msg_buf(req->rq_reqmsg, 1,
+                                                    sizeof(*it));
+                                if (it != NULL) {
+                                        CERROR("This is intent %s ("
+                                               LPU64 ")\n",
+                                               ldlm_it2str(it->opc), it->opc);
+                                }
+                        }
+                }
+        }
+
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         EXIT;
@@ -818,8 +858,10 @@ existing_lock:
 
                 if (!err && dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
                         ldlm_reprocess_all(lock->l_resource);
+
                 LDLM_LOCK_PUT(lock);
         }
+
         LDLM_DEBUG_NOLOCK("server-side enqueue handler END (lock %p, rc %d)",
                           lock, rc);
 

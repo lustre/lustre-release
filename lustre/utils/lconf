@@ -1319,7 +1319,7 @@ class MDSDEV(Module):
             Module.cleanup(self)
         clean_loop(self.devpath)
 
-        #change the mtime of CONFIGS to match the XML creation time
+        #change the mtime of LLOG to match the XML creation time
         if toplustreDB.get_mtime():
             mtime = string.atof(toplustreDB.get_mtime())
             runcmd("mkdir /tmp/lustre-XXXX/")
@@ -1329,9 +1329,8 @@ class MDSDEV(Module):
                 ret, out = runcmd("mount -o loop %s /tmp/lustre-XXXX/" %self.devpath)
             if ret:
                 print out[0]
-
             try:
-                # MOUNT_CONFIGS_DIR     
+                # MOUNT_CONFIGS_DIR 
                 os.utime("/tmp/lustre-XXXX/CONFIGS", (mtime, mtime))
             except OSError:
                 runcmd("umount -f /tmp/lustre-XXXX/")

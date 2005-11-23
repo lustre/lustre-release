@@ -142,8 +142,6 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         EXIT;
 }
 
-#define GRANT_FOR_LLOG(obd) 16
-
 /* Figure out how much space is available between what we've granted
  * and what remains in the filesystem.  Compensate for ext3 indirect
  * block overhead when computing how much free space is left ungranted.
@@ -182,7 +180,7 @@ restat:
         if (left >= tot_granted) {
                 left -= tot_granted;
         } else {
-                if (left < tot_granted - obd->u.filter.fo_tot_pending + 65536) {
+                if (left < tot_granted - obd->u.filter.fo_tot_pending) {
                         CERROR("%s: cli %s/%p grant "LPU64" > available "
                                LPU64" and pending "LPU64"\n", obd->obd_name,
                                exp->exp_client_uuid.uuid, exp, tot_granted,
@@ -228,12 +226,16 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                        obd->obd_name, exp->exp_client_uuid.uuid, exp, want);
         } else if (current_grant < want &&
                    current_grant < fed->fed_grant + FILTER_GRANT_CHUNK) {
-                grant = min((want >> blockbits) / 2,
+                grant = min((want >> blockbits),
                             (fs_space_left >> blockbits) / 8);
                 grant <<= blockbits;
 
                 if (grant) {
-                        if (grant > FILTER_GRANT_CHUNK)
+                        /* Allow >FILTER_GRANT_CHUNK size when clients
+                         * reconnect due to a server reboot.
+                         */
+                        if ((grant > FILTER_GRANT_CHUNK) &&
+                            (!obd->obd_recovering))
                                 grant = FILTER_GRANT_CHUNK;
 
                         obd->u.filter.fo_tot_granted += grant;
@@ -435,7 +437,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                          * marked BRW_GRANTED are already mapped and we can
                          * ignore this error. */
                         lnb[n].rc = -ENOSPC;
-                        rnb[n].flags &= OBD_BRW_GRANTED;
+                        rnb[n].flags &= ~OBD_BRW_GRANTED;
                         CDEBUG(D_CACHE,"%s: cli %s/%p idx %d no space for %d\n",
                                exp->exp_obd->obd_name,
                                exp->exp_client_uuid.uuid, exp, n, bytes);

@@ -441,6 +441,16 @@ void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
 void lustre_swab_connect(struct obd_connect_data *ocd)
 {
         __swab64s (&ocd->ocd_connect_flags);
+        __swab32s (&ocd->ocd_version);
+        __swab32s (&ocd->ocd_grant);
+        __swab32s (&ocd->ocd_index);
+        __swab32s (&ocd->ocd_unused);
+        CLASSERT(offsetof(typeof(*ocd), padding1) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding2) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding3) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding4) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding5) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding6) != 0);
 }
 
 void lustre_swab_obdo (struct obdo  *o)
@@ -465,8 +475,8 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab32s (&o->o_misc);
         __swab32s (&o->o_easize);
         __swab32s (&o->o_mds);
-        __swab32s (&o->o_padding_1);
-        __swab32s (&o->o_padding_2);
+        CLASSERT(offsetof(typeof(*o), o_padding_1) != 0);
+        CLASSERT(offsetof(typeof(*o), o_padding_2) != 0);
         /* o_inline is opaque */
 }
 
@@ -478,11 +488,11 @@ void lustre_swab_obd_statfs (struct obd_statfs *os)
         __swab64s (&os->os_bavail);
         __swab64s (&os->os_files);
         __swab64s (&os->os_ffree);
-        /* no need to swap os_fsid */
+        /* no need to swab os_fsid */
         __swab32s (&os->os_bsize);
         __swab32s (&os->os_namelen);
         __swab64s (&os->os_maxbytes);
-        /* no need to swap os_spare */
+        CLASSERT(offsetof(typeof(*os), os_spare) != 0);
 }
 
 void lustre_swab_obd_ioobj (struct obd_ioobj *ioo)
@@ -550,10 +560,10 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->generation);
         __swab32s (&b->suppgid);
         __swab32s (&b->eadatasize);
-        __swab32s (&b->padding_1);
-        __swab32s (&b->padding_2);
-        __swab32s (&b->padding_3);
-        __swab32s (&b->padding_4);
+        CLASSERT(offsetof(typeof(*b), padding_1) != 0);
+        CLASSERT(offsetof(typeof(*b), padding_2) != 0);
+        CLASSERT(offsetof(typeof(*b), padding_3) != 0);
+        CLASSERT(offsetof(typeof(*b), padding_4) != 0);
 }
 
 void lustre_swab_mgmt_ost_info(struct mgmt_ost_info *oinfo)
@@ -590,7 +600,7 @@ static void lustre_swab_obd_dqblk (struct obd_dqblk *b)
         __swab64s (&b->dqb_btime);
         __swab64s (&b->dqb_itime);
         __swab32s (&b->dqb_valid);
-        __swab32s (&b->padding);
+        CLASSERT(offsetof(typeof(*b), padding) != 0);
 }
 
 void lustre_swab_obd_quotactl (struct obd_quotactl *q)
@@ -620,7 +630,7 @@ void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
         __swab32s (&sa->sa_uid);
         __swab32s (&sa->sa_gid);
         __swab32s (&sa->sa_attr_flags);
-        __swab32s (&sa->sa_padding);
+        CLASSERT(offsetof(typeof(*sa), sa_padding) != 0);
 }
 
 void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
@@ -636,11 +646,11 @@ void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
         __swab64s (&cr->cr_time);
         __swab64s (&cr->cr_rdev);
         __swab32s (&cr->cr_suppgid);
-        __swab32s (&cr->cr_padding_1);
-        __swab32s (&cr->cr_padding_2);
-        __swab32s (&cr->cr_padding_3);
-        __swab32s (&cr->cr_padding_4);
-        __swab32s (&cr->cr_padding_5);
+        CLASSERT(offsetof(typeof(*cr), cr_padding_1) != 0);
+        CLASSERT(offsetof(typeof(*cr), cr_padding_2) != 0);
+        CLASSERT(offsetof(typeof(*cr), cr_padding_3) != 0);
+        CLASSERT(offsetof(typeof(*cr), cr_padding_4) != 0);
+        CLASSERT(offsetof(typeof(*cr), cr_padding_5) != 0);
 }
 
 void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
@@ -654,10 +664,10 @@ void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
         lustre_swab_ll_fid (&lk->lk_fid1);
         lustre_swab_ll_fid (&lk->lk_fid2);
         __swab64s (&lk->lk_time);
-        __swab32s (&lk->lk_padding_1);
-        __swab32s (&lk->lk_padding_2);
-        __swab32s (&lk->lk_padding_3);
-        __swab32s (&lk->lk_padding_4);
+        CLASSERT(offsetof(typeof(*lk), lk_padding_1) != 0);
+        CLASSERT(offsetof(typeof(*lk), lk_padding_2) != 0);
+        CLASSERT(offsetof(typeof(*lk), lk_padding_3) != 0);
+        CLASSERT(offsetof(typeof(*lk), lk_padding_4) != 0);
 }
 
 void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
@@ -671,10 +681,10 @@ void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
         lustre_swab_ll_fid (&ul->ul_fid1);
         lustre_swab_ll_fid (&ul->ul_fid2);
         __swab64s (&ul->ul_time);
-        __swab32s (&ul->ul_padding_1);
-        __swab32s (&ul->ul_padding_2);
-        __swab32s (&ul->ul_padding_3);
-        __swab32s (&ul->ul_padding_4);
+        CLASSERT(offsetof(typeof(*ul), ul_padding_1) != 0);
+        CLASSERT(offsetof(typeof(*ul), ul_padding_2) != 0);
+        CLASSERT(offsetof(typeof(*ul), ul_padding_3) != 0);
+        CLASSERT(offsetof(typeof(*ul), ul_padding_4) != 0);
 }
 
 void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
@@ -688,10 +698,10 @@ void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
         lustre_swab_ll_fid (&rn->rn_fid1);
         lustre_swab_ll_fid (&rn->rn_fid2);
         __swab64s (&rn->rn_time);
-        __swab32s (&rn->rn_padding_1);
-        __swab32s (&rn->rn_padding_2);
-        __swab32s (&rn->rn_padding_3);
-        __swab32s (&rn->rn_padding_4);
+        CLASSERT(offsetof(typeof(*rn), rn_padding_1) != 0);
+        CLASSERT(offsetof(typeof(*rn), rn_padding_2) != 0);
+        CLASSERT(offsetof(typeof(*rn), rn_padding_3) != 0);
+        CLASSERT(offsetof(typeof(*rn), rn_padding_4) != 0);
 }
 
 void lustre_swab_lov_desc (struct lov_desc *ld)
@@ -793,6 +803,7 @@ void lustre_swab_ldlm_intent (struct ldlm_intent *i)
 void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r)
 {
         __swab32s (&r->lr_type);
+        CLASSERT(offsetof(typeof(*r), lr_padding) != 0);
         lustre_swab_ldlm_res_id (&r->lr_name);
 }
 
@@ -807,6 +818,7 @@ void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l)
 void lustre_swab_ldlm_request (struct ldlm_request *rq)
 {
         __swab32s (&rq->lock_flags);
+        CLASSERT(offsetof(typeof(*rq), lock_padding) != 0);
         lustre_swab_ldlm_lock_desc (&rq->lock_desc);
         /* lock_handle1 opaque */
         /* lock_handle2 opaque */
@@ -815,33 +827,11 @@ void lustre_swab_ldlm_request (struct ldlm_request *rq)
 void lustre_swab_ldlm_reply (struct ldlm_reply *r)
 {
         __swab32s (&r->lock_flags);
+        CLASSERT(offsetof(typeof(*r), lock_padding) != 0);
         lustre_swab_ldlm_lock_desc (&r->lock_desc);
         /* lock_handle opaque */
         __swab64s (&r->lock_policy_res1);
         __swab64s (&r->lock_policy_res2);
-}
-
-void lustre_swab_ptlbd_op (struct ptlbd_op *op)
-{
-        __swab16s (&op->op_cmd);
-        __swab16s (&op->op_lun);
-        __swab16s (&op->op_niob_cnt);
-        /* ignore op__padding */
-        __swab32s (&op->op_block_cnt);
-}
-
-void lustre_swab_ptlbd_niob (struct ptlbd_niob *n)
-{
-        __swab64s (&n->n_xid);
-        __swab64s (&n->n_block_nr);
-        __swab32s (&n->n_offset);
-        __swab32s (&n->n_length);
-}
-
-void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r)
-{
-        __swab16s (&r->r_status);
-        __swab16s (&r->r_error_cnt);
 }
 
 /* no one calls this */
@@ -865,8 +855,8 @@ void lustre_swab_qdata(struct qunit_data *d)
 void lustre_assert_wire_constants(void)
 {
         /* Wire protocol assertions generated by 'wirecheck'
-         * running on Linux mustang 2.6.12-1.1456_FC4smp #1 SMP Thu Sep 22 02:22:14 EDT 2005 i686 i68
-         * with gcc version 4.0.1 20050727 (Red Hat 4.0.1-5) */
+         * running on Linux schatzie.adilger.int 2.6.12-1.1378_FC3 #1 Wed Sep 14 04:24:31 EDT 2005 i6
+         * with gcc version 3.3.4 20040817 (Red Hat Linux 3.3.4-2) */
 
 
         /* Constants... */
@@ -1010,6 +1000,8 @@ void lustre_assert_wire_constants(void)
                  (long long)LDLM_BL_CALLBACK);
         LASSERTF(LDLM_CP_CALLBACK == 105, " found %lld\n",
                  (long long)LDLM_CP_CALLBACK);
+        LASSERTF(LDLM_GL_CALLBACK == 106, " found %lld\n",
+                 (long long)LDLM_GL_CALLBACK);
         LASSERTF(LDLM_LAST_OPC == 107, " found %lld\n",
                  (long long)LDLM_LAST_OPC);
         LASSERTF(LCK_EX == 1, " found %lld\n",
@@ -1024,20 +1016,10 @@ void lustre_assert_wire_constants(void)
                  (long long)LCK_CR);
         LASSERTF(LCK_NL == 32, " found %lld\n",
                  (long long)LCK_NL);
-        LASSERTF(PTLBD_QUERY == 200, " found %lld\n",
-                 (long long)PTLBD_QUERY);
-        LASSERTF(PTLBD_READ == 201, " found %lld\n",
-                 (long long)PTLBD_READ);
-        LASSERTF(PTLBD_WRITE == 202, " found %lld\n",
-                 (long long)PTLBD_WRITE);
-        LASSERTF(PTLBD_FLUSH == 203, " found %lld\n",
-                 (long long)PTLBD_FLUSH);
-        LASSERTF(PTLBD_CONNECT == 204, " found %lld\n",
-                 (long long)PTLBD_CONNECT);
-        LASSERTF(PTLBD_DISCONNECT == 205, " found %lld\n",
-                 (long long)PTLBD_DISCONNECT);
-        LASSERTF(PTLBD_LAST_OPC == 206, " found %lld\n",
-                 (long long)PTLBD_LAST_OPC);
+        LASSERTF(LCK_GROUP == 64, " found %lld\n",
+                 (long long)LCK_GROUP);
+        LASSERTF(LCK_MAXMODE == 65, " found %lld\n",
+                 (long long)LCK_MAXMODE);
         LASSERTF(MGMT_CONNECT == 250, " found %lld\n",
                  (long long)MGMT_CONNECT);
         LASSERTF(MGMT_DISCONNECT == 251, " found %lld\n",
@@ -1062,6 +1044,20 @@ void lustre_assert_wire_constants(void)
                  (long long)QUOTA_DQACQ);
         LASSERTF(QUOTA_DQREL == 602, " found %lld\n",
                  (long long)QUOTA_DQREL);
+        LASSERTF(OBD_CONNECT_RDONLY == 1, " found %lld\n",
+                 (long long)OBD_CONNECT_RDONLY);
+        LASSERTF(OBD_CONNECT_INDEX == 2, " found %lld\n",
+                 (long long)OBD_CONNECT_INDEX);
+        LASSERTF(OBD_CONNECT_GRANT == 8, " found %lld\n",
+                 (long long)OBD_CONNECT_GRANT);
+        LASSERTF(OBD_CONNECT_SRVLOCK == 16, " found %lld\n",
+                 (long long)OBD_CONNECT_SRVLOCK);
+        LASSERTF(OBD_CONNECT_ACL == 128, " found %lld\n",
+                 (long long)OBD_CONNECT_ACL);
+        LASSERTF(OBD_CONNECT_XATTR == 256, " found %lld\n",
+                 (long long)OBD_CONNECT_XATTR);
+        LASSERTF(OBD_CONNECT_CROW == 512, " found %lld\n",
+                 (long long)OBD_CONNECT_CROW);
         /* Sizes and Offsets */
 
 
@@ -1208,6 +1204,14 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obdo, o_mds));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_mds) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obdo *)0)->o_mds));
+        LASSERTF((int)offsetof(struct obdo, o_padding_1) == 120, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_padding_1));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_1) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_1));
+        LASSERTF((int)offsetof(struct obdo, o_padding_2) == 124, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_padding_2));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_2) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_2));
         LASSERTF((int)offsetof(struct obdo, o_inline) == 128, " found %lld\n",
                  (long long)(int)offsetof(struct obdo, o_inline));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_inline) == 80, " found %lld\n",
@@ -1500,6 +1504,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obd_dqblk, dqb_valid));
         LASSERTF((int)sizeof(((struct obd_dqblk *)0)->dqb_valid) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_dqblk *)0)->dqb_valid));
+        LASSERTF((int)offsetof(struct obd_dqblk, padding) == 68, " found %lld\n",
+                 (long long)(int)offsetof(struct obd_dqblk, padding));
+        LASSERTF((int)sizeof(((struct obd_dqblk *)0)->padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct obd_dqblk *)0)->padding));
 
         /* Checks for struct niobuf_remote */
         LASSERTF((int)sizeof(struct niobuf_remote) == 16, " found %lld\n",
@@ -1658,6 +1666,22 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_body, eadatasize));
         LASSERTF((int)sizeof(((struct mds_body *)0)->eadatasize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->eadatasize));
+        LASSERTF((int)offsetof(struct mds_body, padding_1) == 152, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, padding_1));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_1) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->padding_1));
+        LASSERTF((int)offsetof(struct mds_body, padding_2) == 156, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, padding_2));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_2) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->padding_2));
+        LASSERTF((int)offsetof(struct mds_body, padding_3) == 160, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, padding_3));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_3) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->padding_3));
+        LASSERTF((int)offsetof(struct mds_body, padding_4) == 164, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, padding_4));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_4) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->padding_4));
         LASSERTF(FMODE_READ == 1, " found %lld\n",
                  (long long)FMODE_READ);
         LASSERTF(FMODE_WRITE == 2, " found %lld\n",
@@ -1940,6 +1964,26 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct lov_desc, ld_default_stripe_offset));
         LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_default_stripe_offset) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct lov_desc *)0)->ld_default_stripe_offset));
+        LASSERTF((int)offsetof(struct lov_desc, ld_default_stripe_offset) == 24, " found %lld\n",
+                 (long long)(int)offsetof(struct lov_desc, ld_default_stripe_offset));
+        LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_default_stripe_offset) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct lov_desc *)0)->ld_default_stripe_offset));
+        LASSERTF((int)offsetof(struct lov_desc, ld_padding_1) == 32, " found %lld\n",
+                 (long long)(int)offsetof(struct lov_desc, ld_padding_1));
+        LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_padding_1) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lov_desc *)0)->ld_padding_1));
+        LASSERTF((int)offsetof(struct lov_desc, ld_padding_2) == 36, " found %lld\n",
+                 (long long)(int)offsetof(struct lov_desc, ld_padding_2));
+        LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_padding_2) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lov_desc *)0)->ld_padding_2));
+        LASSERTF((int)offsetof(struct lov_desc, ld_padding_3) == 40, " found %lld\n",
+                 (long long)(int)offsetof(struct lov_desc, ld_padding_3));
+        LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_padding_3) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lov_desc *)0)->ld_padding_3));
+        LASSERTF((int)offsetof(struct lov_desc, ld_padding_4) == 44, " found %lld\n",
+                 (long long)(int)offsetof(struct lov_desc, ld_padding_4));
+        LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_padding_4) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lov_desc *)0)->ld_padding_4));
         LASSERTF((int)offsetof(struct lov_desc, ld_uuid) == 48, " found %lld\n",
                  (long long)(int)offsetof(struct lov_desc, ld_uuid));
         LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_uuid) == 40, " found %lld\n",
@@ -2004,6 +2048,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ldlm_resource_desc, lr_type));
         LASSERTF((int)sizeof(((struct ldlm_resource_desc *)0)->lr_type) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_resource_desc *)0)->lr_type));
+        LASSERTF((int)offsetof(struct ldlm_resource_desc, lr_padding) == 4, " found %lld\n",
+                 (long long)(int)offsetof(struct ldlm_resource_desc, lr_padding));
+        LASSERTF((int)sizeof(((struct ldlm_resource_desc *)0)->lr_padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct ldlm_resource_desc *)0)->lr_padding));
         LASSERTF((int)offsetof(struct ldlm_resource_desc, lr_name) == 8, " found %lld\n",
                  (long long)(int)offsetof(struct ldlm_resource_desc, lr_name));
         LASSERTF((int)sizeof(((struct ldlm_resource_desc *)0)->lr_name) == 32, " found %lld\n",
@@ -2036,6 +2084,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ldlm_request, lock_flags));
         LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_flags) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_request *)0)->lock_flags));
+        LASSERTF((int)offsetof(struct ldlm_request, lock_padding) == 4, " found %lld\n",
+                 (long long)(int)offsetof(struct ldlm_request, lock_padding));
+        LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct ldlm_request *)0)->lock_padding));
         LASSERTF((int)offsetof(struct ldlm_request, lock_desc) == 8, " found %lld\n",
                  (long long)(int)offsetof(struct ldlm_request, lock_desc));
         LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_desc) == 80, " found %lld\n",
@@ -2056,6 +2108,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ldlm_reply, lock_flags));
         LASSERTF((int)sizeof(((struct ldlm_reply *)0)->lock_flags) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_reply *)0)->lock_flags));
+        LASSERTF((int)offsetof(struct ldlm_request, lock_padding) == 4, " found %lld\n",
+                 (long long)(int)offsetof(struct ldlm_request, lock_padding));
+        LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct ldlm_request *)0)->lock_padding));
         LASSERTF((int)offsetof(struct ldlm_request, lock_desc) == 8, " found %lld\n",
                  (long long)(int)offsetof(struct ldlm_request, lock_desc));
         LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_desc) == 80, " found %lld\n",
@@ -2097,62 +2153,6 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_blocks) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_blocks));
 
-        /* Checks for struct ptlbd_op */
-        LASSERTF((int)sizeof(struct ptlbd_op) == 12, " found %lld\n",
-                 (long long)(int)sizeof(struct ptlbd_op));
-        LASSERTF((int)offsetof(struct ptlbd_op, op_cmd) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_op, op_cmd));
-        LASSERTF((int)sizeof(((struct ptlbd_op *)0)->op_cmd) == 2, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_op *)0)->op_cmd));
-        LASSERTF((int)offsetof(struct ptlbd_op, op_lun) == 2, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_op, op_lun));
-        LASSERTF((int)sizeof(((struct ptlbd_op *)0)->op_lun) == 2, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_op *)0)->op_lun));
-        LASSERTF((int)offsetof(struct ptlbd_op, op_niob_cnt) == 4, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_op, op_niob_cnt));
-        LASSERTF((int)sizeof(((struct ptlbd_op *)0)->op_niob_cnt) == 2, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_op *)0)->op_niob_cnt));
-        LASSERTF((int)offsetof(struct ptlbd_op, op__padding) == 6, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_op, op__padding));
-        LASSERTF((int)sizeof(((struct ptlbd_op *)0)->op__padding) == 2, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_op *)0)->op__padding));
-        LASSERTF((int)offsetof(struct ptlbd_op, op_block_cnt) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_op, op_block_cnt));
-        LASSERTF((int)sizeof(((struct ptlbd_op *)0)->op_block_cnt) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_op *)0)->op_block_cnt));
-
-        /* Checks for struct ptlbd_niob */
-        LASSERTF((int)sizeof(struct ptlbd_niob) == 24, " found %lld\n",
-                 (long long)(int)sizeof(struct ptlbd_niob));
-        LASSERTF((int)offsetof(struct ptlbd_niob, n_xid) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_niob, n_xid));
-        LASSERTF((int)sizeof(((struct ptlbd_niob *)0)->n_xid) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_niob *)0)->n_xid));
-        LASSERTF((int)offsetof(struct ptlbd_niob, n_block_nr) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_niob, n_block_nr));
-        LASSERTF((int)sizeof(((struct ptlbd_niob *)0)->n_block_nr) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_niob *)0)->n_block_nr));
-        LASSERTF((int)offsetof(struct ptlbd_niob, n_offset) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_niob, n_offset));
-        LASSERTF((int)sizeof(((struct ptlbd_niob *)0)->n_offset) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_niob *)0)->n_offset));
-        LASSERTF((int)offsetof(struct ptlbd_niob, n_length) == 20, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_niob, n_length));
-        LASSERTF((int)sizeof(((struct ptlbd_niob *)0)->n_length) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_niob *)0)->n_length));
-
-        /* Checks for struct ptlbd_rsp */
-        LASSERTF((int)sizeof(struct ptlbd_rsp) == 4, " found %lld\n",
-                 (long long)(int)sizeof(struct ptlbd_rsp));
-        LASSERTF((int)offsetof(struct ptlbd_rsp, r_status) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_rsp, r_status));
-        LASSERTF((int)sizeof(((struct ptlbd_rsp *)0)->r_status) == 2, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_rsp *)0)->r_status));
-        LASSERTF((int)offsetof(struct ptlbd_rsp, r_error_cnt) == 2, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlbd_rsp, r_error_cnt));
-        LASSERTF((int)sizeof(((struct ptlbd_rsp *)0)->r_error_cnt) == 2, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlbd_rsp *)0)->r_error_cnt));
-
         /* Checks for struct llog_logid */
         LASSERTF((int)sizeof(struct llog_logid) == 20, " found %lld\n",
                  (long long)(int)sizeof(struct llog_logid));
@@ -2178,6 +2178,8 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_SETATTR_REC);
         LASSERTF(OBD_CFG_REC == 274857984, " found %lld\n",
                  (long long)OBD_CFG_REC);
+        LASSERTF(PTL_CFG_REC == 274923520, " found %lld\n",
+                 (long long)PTL_CFG_REC);
         LASSERTF(LLOG_GEN_REC == 274989056, " found %lld\n",
                  (long long)LLOG_GEN_REC);
         LASSERTF(LLOG_HDR_MAGIC == 275010873, " found %lld\n",
@@ -2192,6 +2194,18 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llog_catid, lci_logid));
         LASSERTF((int)sizeof(((struct llog_catid *)0)->lci_logid) == 20, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_catid *)0)->lci_logid));
+        LASSERTF((int)offsetof(struct llog_catid, lci_padding1) == 20, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_catid, lci_padding1));
+        LASSERTF((int)sizeof(((struct llog_catid *)0)->lci_padding1) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_catid *)0)->lci_padding1));
+        LASSERTF((int)offsetof(struct llog_catid, lci_padding2) == 24, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_catid, lci_padding2));
+        LASSERTF((int)sizeof(((struct llog_catid *)0)->lci_padding2) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_catid *)0)->lci_padding2));
+        LASSERTF((int)offsetof(struct llog_catid, lci_padding3) == 28, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_catid, lci_padding3));
+        LASSERTF((int)sizeof(((struct llog_catid *)0)->lci_padding3) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_catid *)0)->lci_padding3));
 
         /* Checks for struct llog_rec_hdr */
         LASSERTF((int)sizeof(struct llog_rec_hdr) == 16, " found %lld\n",
@@ -2208,6 +2222,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llog_rec_hdr, lrh_type));
         LASSERTF((int)sizeof(((struct llog_rec_hdr *)0)->lrh_type) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_rec_hdr *)0)->lrh_type));
+        LASSERTF((int)offsetof(struct llog_rec_hdr, padding) == 12, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_rec_hdr, padding));
+        LASSERTF((int)sizeof(((struct llog_rec_hdr *)0)->padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_rec_hdr *)0)->padding));
 
         /* Checks for struct llog_rec_tail */
         LASSERTF((int)sizeof(struct llog_rec_tail) == 8, " found %lld\n",
@@ -2232,6 +2250,26 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llog_logid_rec, lid_id));
         LASSERTF((int)sizeof(((struct llog_logid_rec *)0)->lid_id) == 20, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_logid_rec *)0)->lid_id));
+        LASSERTF((int)offsetof(struct llog_logid_rec, padding1) == 36, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_logid_rec, padding1));
+        LASSERTF((int)sizeof(((struct llog_logid_rec *)0)->padding1) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_logid_rec *)0)->padding1));
+        LASSERTF((int)offsetof(struct llog_logid_rec, padding2) == 40, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_logid_rec, padding2));
+        LASSERTF((int)sizeof(((struct llog_logid_rec *)0)->padding2) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_logid_rec *)0)->padding2));
+        LASSERTF((int)offsetof(struct llog_logid_rec, padding3) == 44, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_logid_rec, padding3));
+        LASSERTF((int)sizeof(((struct llog_logid_rec *)0)->padding3) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_logid_rec *)0)->padding3));
+        LASSERTF((int)offsetof(struct llog_logid_rec, padding4) == 48, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_logid_rec, padding4));
+        LASSERTF((int)sizeof(((struct llog_logid_rec *)0)->padding4) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_logid_rec *)0)->padding4));
+        LASSERTF((int)offsetof(struct llog_logid_rec, padding5) == 52, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_logid_rec, padding5));
+        LASSERTF((int)sizeof(((struct llog_logid_rec *)0)->padding5) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_logid_rec *)0)->padding5));
         LASSERTF((int)offsetof(struct llog_logid_rec, lid_tail) == 56, " found %lld\n",
                  (long long)(int)offsetof(struct llog_logid_rec, lid_tail));
         LASSERTF((int)sizeof(((struct llog_logid_rec *)0)->lid_tail) == 8, " found %lld\n",
@@ -2256,6 +2294,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llog_create_rec, lcr_ogen));
         LASSERTF((int)sizeof(((struct llog_create_rec *)0)->lcr_ogen) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_create_rec *)0)->lcr_ogen));
+        LASSERTF((int)offsetof(struct llog_create_rec, padding) == 44, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_create_rec, padding));
+        LASSERTF((int)sizeof(((struct llog_create_rec *)0)->padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_create_rec *)0)->padding));
 
         /* Checks for struct llog_orphan_rec */
         LASSERTF((int)sizeof(struct llog_orphan_rec) == 40, " found %lld\n",
@@ -2272,6 +2314,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llog_orphan_rec, lor_ogen));
         LASSERTF((int)sizeof(((struct llog_orphan_rec *)0)->lor_ogen) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_orphan_rec *)0)->lor_ogen));
+        LASSERTF((int)offsetof(struct llog_orphan_rec, padding) == 28, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_orphan_rec, padding));
+        LASSERTF((int)sizeof(((struct llog_orphan_rec *)0)->padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_orphan_rec *)0)->padding));
         LASSERTF((int)offsetof(struct llog_orphan_rec, lor_tail) == 32, " found %lld\n",
                  (long long)(int)offsetof(struct llog_orphan_rec, lor_tail));
         LASSERTF((int)sizeof(((struct llog_orphan_rec *)0)->lor_tail) == 8, " found %lld\n",
@@ -2292,10 +2338,46 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llog_unlink_rec, lur_ogen));
         LASSERTF((int)sizeof(((struct llog_unlink_rec *)0)->lur_ogen) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_unlink_rec *)0)->lur_ogen));
+        LASSERTF((int)offsetof(struct llog_unlink_rec, padding) == 28, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_unlink_rec, padding));
+        LASSERTF((int)sizeof(((struct llog_unlink_rec *)0)->padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_unlink_rec *)0)->padding));
         LASSERTF((int)offsetof(struct llog_unlink_rec, lur_tail) == 32, " found %lld\n",
                  (long long)(int)offsetof(struct llog_unlink_rec, lur_tail));
         LASSERTF((int)sizeof(((struct llog_unlink_rec *)0)->lur_tail) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_unlink_rec *)0)->lur_tail));
+
+        /* Checks for struct llog_setattr_rec */
+        LASSERTF((int)sizeof(struct llog_setattr_rec) == 48, " found %lld\n",
+                 (long long)(int)sizeof(struct llog_setattr_rec));
+        LASSERTF((int)offsetof(struct llog_setattr_rec, lsr_hdr) == 0, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_setattr_rec, lsr_hdr));
+        LASSERTF((int)sizeof(((struct llog_setattr_rec *)0)->lsr_hdr) == 16, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_setattr_rec *)0)->lsr_hdr));
+        LASSERTF((int)offsetof(struct llog_setattr_rec, lsr_oid) == 16, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_setattr_rec, lsr_oid));
+        LASSERTF((int)sizeof(((struct llog_setattr_rec *)0)->lsr_oid) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_setattr_rec *)0)->lsr_oid));
+        LASSERTF((int)offsetof(struct llog_setattr_rec, lsr_ogen) == 24, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_setattr_rec, lsr_ogen));
+        LASSERTF((int)sizeof(((struct llog_setattr_rec *)0)->lsr_ogen) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_setattr_rec *)0)->lsr_ogen));
+        LASSERTF((int)offsetof(struct llog_setattr_rec, lsr_uid) == 28, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_setattr_rec, lsr_uid));
+        LASSERTF((int)sizeof(((struct llog_setattr_rec *)0)->lsr_uid) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_setattr_rec *)0)->lsr_uid));
+        LASSERTF((int)offsetof(struct llog_setattr_rec, lsr_gid) == 32, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_setattr_rec, lsr_gid));
+        LASSERTF((int)sizeof(((struct llog_setattr_rec *)0)->lsr_gid) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_setattr_rec *)0)->lsr_gid));
+        LASSERTF((int)offsetof(struct llog_setattr_rec, padding) == 36, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_setattr_rec, padding));
+        LASSERTF((int)sizeof(((struct llog_setattr_rec *)0)->padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_setattr_rec *)0)->padding));
+        LASSERTF((int)offsetof(struct llog_setattr_rec, lsr_tail) == 40, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_setattr_rec, lsr_tail));
+        LASSERTF((int)sizeof(((struct llog_setattr_rec *)0)->lsr_tail) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_setattr_rec *)0)->lsr_tail));
 
         /* Checks for struct llog_size_change_rec */
         LASSERTF((int)sizeof(struct llog_size_change_rec) == 48, " found %lld\n",
@@ -2312,6 +2394,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llog_size_change_rec, lsc_io_epoch));
         LASSERTF((int)sizeof(((struct llog_size_change_rec *)0)->lsc_io_epoch) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_size_change_rec *)0)->lsc_io_epoch));
+        LASSERTF((int)offsetof(struct llog_size_change_rec, padding) == 36, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_size_change_rec, padding));
+        LASSERTF((int)sizeof(((struct llog_size_change_rec *)0)->padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_size_change_rec *)0)->padding));
         LASSERTF((int)offsetof(struct llog_size_change_rec, lsc_tail) == 40, " found %lld\n",
                  (long long)(int)offsetof(struct llog_size_change_rec, lsc_tail));
         LASSERTF((int)sizeof(((struct llog_size_change_rec *)0)->lsc_tail) == 8, " found %lld\n",
@@ -2408,6 +2494,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llog_cookie, lgc_index));
         LASSERTF((int)sizeof(((struct llog_cookie *)0)->lgc_index) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_cookie *)0)->lgc_index));
+        LASSERTF((int)offsetof(struct llog_cookie, lgc_padding) == 28, " found %lld\n",
+                 (long long)(int)offsetof(struct llog_cookie, lgc_padding));
+        LASSERTF((int)sizeof(((struct llog_cookie *)0)->lgc_padding) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct llog_cookie *)0)->lgc_padding));
 
         /* Checks for struct llogd_body */
         LASSERTF((int)sizeof(struct llogd_body) == 48, " found %lld\n",

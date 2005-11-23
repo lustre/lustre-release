@@ -261,7 +261,7 @@ static int parse_disk_data(struct lvfs_run_ctxt *mount_ctxt,
         len = file->f_dentry->d_inode->i_size;
         CDEBUG(D_MOUNT, "Have %s, size %lu\n", MOUNT_DATA_FILE, len);
         if (len != sizeof(*ldd)) {
-                CERROR("disk data size does not match: see %lu expect %lu\n", 
+                CERROR("disk data size does not match: see %lu expect %u\n", 
                        len, sizeof(*ldd));
                 GOTO(out_close, err = -EINVAL);
         }

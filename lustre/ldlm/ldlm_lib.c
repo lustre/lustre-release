@@ -33,10 +33,9 @@
 # include <liblustre.h>
 #endif
 #include <linux/obd.h>
-#include <linux/obd_ost.h> /* for LUSTRE_OSC_NAME */
-#include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
-#include <linux/lustre_mgs.h> /* for LUSTRE_MGC_NAME */
+#include <linux/obd_class.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_ver.h>
 #include <linux/lustre_net.h>
 
 /* @priority: if non-zero, move the selected to the list head
@@ -195,13 +194,13 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_uuid server_uuid;
         int rq_portal, rp_portal, connect_op;
         char *name = obddev->obd_type->typ_name;
-        int is_mgc = 0, rc;
+        int rc;
         ENTRY;
 
         /* In a more perfect world, we would hang a ptlrpc_client off of
          * obd_type and just use the values from there. */
         if (!strcmp(name, LUSTRE_OSC_NAME)) {
-                rq_portal = OST_REQUEST_PORTAL;
+                rq_portal = OST_IO_PORTAL;
                 rp_portal = OSC_REPLY_PORTAL;
                 connect_op = OST_CONNECT;
         } else if (!strcmp(name, LUSTRE_MDC_NAME)) {
@@ -212,7 +211,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rq_portal = MGC_REQUEST_PORTAL;
                 rp_portal = MGC_REPLY_PORTAL;
                 connect_op = MGMT_CONNECT;
-                is_mgc++;
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);
@@ -245,39 +243,34 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),
                      sizeof(server_uuid)));
 
-        /* Only need by osc/mdc */
-        if (!is_mgc) {
-                cli->cl_dirty = 0;
-                cli->cl_avail_grant = 0;
-                /* FIXME: should limit this for the sum of all cl_dirty_max */
-                cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
-                if (cli->cl_dirty_max >> PAGE_SHIFT > num_physpages / 8)
-                        cli->cl_dirty_max = num_physpages << (PAGE_SHIFT - 3);
-                INIT_LIST_HEAD(&cli->cl_cache_waiters);
-                INIT_LIST_HEAD(&cli->cl_loi_ready_list);
-                INIT_LIST_HEAD(&cli->cl_loi_write_list);
-                INIT_LIST_HEAD(&cli->cl_loi_read_list);
-                spin_lock_init(&cli->cl_loi_list_lock);
-                cli->cl_r_in_flight = 0;
-                cli->cl_w_in_flight = 0;
-                spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
-                spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
-                spin_lock_init(&cli->cl_read_page_hist.oh_lock);
-                spin_lock_init(&cli->cl_write_page_hist.oh_lock);
-                spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
-                spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
-                if (num_physpages >> (20 - PAGE_SHIFT) <= 128) {
-                      /* <= 128 MB */
-                        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
-                        cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
-                } else if (num_physpages >> (20 - PAGE_SHIFT) <= 512) {
-                      /* <= 512 MB */
-                        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 2;
-                        cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 2;
-                } else {
-                        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
-                        cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
-                }
+        cli->cl_dirty = 0;
+        cli->cl_avail_grant = 0;
+        /* FIXME: should limit this for the sum of all cl_dirty_max */
+        cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
+        if (cli->cl_dirty_max >> PAGE_SHIFT > num_physpages / 8)
+                cli->cl_dirty_max = num_physpages << (PAGE_SHIFT - 3);
+        INIT_LIST_HEAD(&cli->cl_cache_waiters);
+        INIT_LIST_HEAD(&cli->cl_loi_ready_list);
+        INIT_LIST_HEAD(&cli->cl_loi_write_list);
+        INIT_LIST_HEAD(&cli->cl_loi_read_list);
+        spin_lock_init(&cli->cl_loi_list_lock);
+        cli->cl_r_in_flight = 0;
+        cli->cl_w_in_flight = 0;
+        spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
+        spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
+        spin_lock_init(&cli->cl_read_page_hist.oh_lock);
+        spin_lock_init(&cli->cl_write_page_hist.oh_lock);
+        spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
+        spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
+        if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
+                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
+                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
+        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 256) { /* <= 256 MB */
+                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 2;
+                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 2;
+        } else {
+                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
+                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
         }
 
         rc = ldlm_get_ref();
@@ -309,13 +302,10 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         }
 
         cli->cl_import = imp;
-
         /* cli->cl_max_mds_{easize,cookiesize} updated by mdc_init_ea_size() */
-        if (!is_mgc) {
-                cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
-                cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
-                cli->cl_sandev = to_kdev_t(0);
-        }
+        cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
+        cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
+        cli->cl_sandev = to_kdev_t(0);
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 if (!strcmp(lustre_cfg_string(lcfg, 3), "inactive")) {
@@ -326,10 +316,8 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 }
         }
 
-        if (!is_mgc) {
-                spin_lock_init(&cli->cl_qchk_lock);
-                cli->cl_qchk_stat = CL_NO_QUOTACHECK;
-        }
+        spin_lock_init(&cli->cl_qchk_lock);
+        cli->cl_qchk_stat = CL_NO_QUOTACHECK;
 
         RETURN(rc);
 
@@ -494,7 +482,8 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                         CWARN("%s reconnecting\n", cluuid->uuid);
                         conn->cookie = exp->exp_handle.h_cookie;
                         /* target_handle_connect() treats EALREADY and
-                         * -EALREADY differently */
+                         * -EALREADY differently.  EALREADY means we are
+                         * doing a valid reconnect from the same client. */
                         RETURN(EALREADY);
                 } else {
                         CERROR("%s reconnecting from %s, "
@@ -504,7 +493,8 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                                hdl->cookie, conn->cookie);
                         memset(conn, 0, sizeof *conn);
                         /* target_handle_connect() treats EALREADY and
-                         * -EALREADY differently */
+                         * -EALREADY differently.  -EALREADY is an error
+                         * (same UUID, different handle). */
                         RETURN(-EALREADY);
                 }
         }
@@ -597,6 +587,22 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (rc)
                 GOTO(out, rc);
 
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
+                if (!data || (data->ocd_version < LUSTRE_VERSION_CODE -
+                               LUSTRE_VERSION_ALLOWED_OFFSET)) {
+                        DEBUG_REQ(D_INFO, req, "Refusing old (%d.%d.%d.%d) "
+                                  "libclient connection attempt\n",
+                                  OBD_OCD_VERSION_MAJOR(data->ocd_version),
+                                  OBD_OCD_VERSION_MINOR(data->ocd_version),
+                                  OBD_OCD_VERSION_PATCH(data->ocd_version),
+                                  OBD_OCD_VERSION_FIX(data->ocd_version));
+                        data = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data));
+                        data->ocd_connect_flags = OBD_CONNECT_VERSION;
+                        data->ocd_version = LUSTRE_VERSION_CODE;
+                        GOTO(out, rc = -EPROTO);
+                }
+        }
+
         /* lctl gets a backstage, all-access pass. */
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
                 goto dont_check_exports;
@@ -622,6 +628,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 GOTO(out, rc = -EALREADY);
         }
 
+        /* We indicate the reconnection in a flag, not an error code. */
+        if (rc == EALREADY) {
+                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
+                rc = 0;
+        }
+
         /* Tell the client if we're in recovery. */
         /* If this is the first client, start the recovery timer */
         if (target->obd_recovering) {
@@ -645,7 +657,14 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
  dont_check_exports:
                         rc = obd_connect(&conn, target, &cluuid, data);
                 }
+        } else {
+                rc = obd_reconnect(export, target, &cluuid, data);
         }
+
+        /* we want to handle EALREADY but *not* -EALREADY from
+         * target_handle_reconnect() */
+        if (rc && rc != EALREADY)
+                GOTO(out, rc);
 
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
@@ -655,11 +674,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;
-
-        /* we want to handle EALREADY but *not* -EALREADY from
-         * target_handle_reconnect() */
-        if (rc && rc != EALREADY)
-                GOTO(out, rc);
 
         req->rq_repmsg->handle = conn;
 
@@ -701,11 +715,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export->exp_connection = ptlrpc_get_connection(req->rq_peer,
                                                        req->rq_self,
                                                        &remote_uuid);
-        if (rc == EALREADY) {
-                /* We indicate the reconnection in a flag, not an error code. */
-                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
+
+        if (lustre_msg_get_op_flags(req->rq_repmsg) & MSG_CONNECT_RECONNECT)
                 GOTO(out, rc = 0);
-        }
 
         if (target->obd_recovering)
                 target->obd_connected_clients++;

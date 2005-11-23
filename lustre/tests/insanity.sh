@@ -152,7 +152,7 @@ cleanup() {
 
     stop mds ${FORCE} $MDSLCONFARGS || :
     for i in `seq $NUMOST`; do
-	stop ost$i ${REFORMAT} ${FORCE} $OSTLCONFARGS  || :
+        stop ost$i ${FORCE} $OSTLCONFARGS  || :
     done
 }
 
