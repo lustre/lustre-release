@@ -21,7 +21,7 @@ ext3-error-export.patch
 iopen-2.4.21-chaos.patch 
 tcp-zero-copy-2.4.21-chaos.patch
 jbd-dont-account-blocks-twice.patch
-jbd-commit-tricks.patch
+jbd-commit-tricks-rhel3.patch
 ext3-o_direct-2.4.21-chaos.patch 
 ext3-no-write-super-chaos.patch
 add_page_private.patch 
@@ -50,4 +50,4 @@ nfs_statfs-toomanyfiles-rhel-2.4.patch
 statfs64-cast-unsigned-2.4-rhel.patch
 fsprivate-2.4.patch
 nfsd_iallocsem.patch
-linux-2.4.24-jbd-handle-EIO.patch
+linux-2.4.24-jbd-handle-EIO-rhel3.patch

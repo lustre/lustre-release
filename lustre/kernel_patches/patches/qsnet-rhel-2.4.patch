@@ -20,9 +20,9 @@ Index: linux-2.4.21/arch/ia64/kernel/ia64_ksyms.c
 --- linux-2.4.21.orig/arch/ia64/kernel/ia64_ksyms.c	2005-06-01 22:51:59.000000000 -0400
 +++ linux-2.4.21/arch/ia64/kernel/ia64_ksyms.c	2005-06-01 23:14:43.773842072 -0400
 @@ -207,3 +207,13 @@
- EXPORT_SYMBOL_GPL(show_mem);
  EXPORT_SYMBOL_GPL(show_state);
  EXPORT_SYMBOL_GPL(show_regs);
+ EXPORT_SYMBOL(pm_power_off);
 +
 +#define __KERNEL_SYSCALLS__ 1
 +#include <asm/unistd.h>

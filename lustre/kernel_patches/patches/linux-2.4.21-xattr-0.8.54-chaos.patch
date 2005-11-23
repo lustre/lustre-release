@@ -247,25 +247,6 @@ Index: linux-2.4.21-chaos/fs/ext2/inode.c
 ===================================================================
 --- linux-2.4.21-chaos.orig/fs/ext2/inode.c	2003-07-15 04:41:01.000000000 +0400
 +++ linux-2.4.21-chaos/fs/ext2/inode.c	2003-12-14 15:11:46.000000000 +0300
-@@ -39,6 +39,18 @@
- static int ext2_update_inode(struct inode * inode, int do_sync);
- 
- /*
-+ * Test whether an inode is a fast symlink.
-+ */
-+static inline int ext2_inode_is_fast_symlink(struct inode *inode)
-+{
-+	int ea_blocks = inode->u.ext2_i.i_file_acl ?
-+		(inode->i_sb->s_blocksize >> 9) : 0;
-+
-+	return (S_ISLNK(inode->i_mode) &&
-+		inode->i_blocks - ea_blocks == 0);
-+}
-+
-+/*
-  * Called at each iput()
-  */
- void ext2_put_inode (struct inode * inode)
 @@ -53,9 +65,7 @@
  {
  	lock_kernel();
@@ -308,12 +289,8 @@ Index: linux-2.4.21-chaos/fs/ext2/inode.c
  		inode->i_op = &ext2_file_inode_operations;
  		inode->i_fop = &ext2_file_operations;
  		inode->i_mapping->a_ops = &ext2_aops;
-@@ -1002,15 +1010,17 @@
- 		inode->i_fop = &ext2_dir_operations;
- 		inode->i_mapping->a_ops = &ext2_aops;
- 	} else if (S_ISLNK(inode->i_mode)) {
--		if (!inode->i_blocks)
-+		if (ext2_inode_is_fast_symlink(inode))
+@@ -1002,12 +1010,14 @@
+		if (ext2_inode_is_fast_symlink(inode))
  			inode->i_op = &ext2_fast_symlink_inode_operations;
  		else {
 -			inode->i_op = &page_symlink_inode_operations;
