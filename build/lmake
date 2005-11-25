@@ -563,7 +563,7 @@ build_kms()
     mkdir -p "${TOPDIR}/modules-${FULL_VERSION}"
     for dir in /usr/src/kernel-modules/* ; do
 	# we are replacing lustre-lite, so don't include it
-	if [ ${dir##*/} != "lustre-lite" -a -e $dir/Makefile ]; then
+	if [ "${dir##*/}" != "lustre-lite" -a -e $dir/Makefile ]; then
 	    build_dir="${TOPDIR}/modules-${FULL_VERSION}/${dir##*/}"
 	    cp -a $dir $build_dir
 	    # these modules are terrible, and don't all build
