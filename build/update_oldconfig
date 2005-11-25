@@ -1,0 +1,36 @@
+#!/usr/bin/expect
+
+log_user 0
+set spawnid [spawn make oldconfig]
+
+#match_max 200
+
+# need to allow for the config tool to be built initially
+set timeout 30
+
+expect {
+    timeout {
+        puts "timeout"
+        exit 1
+    }
+    -re "\n  *(\[^\n]* \\\[N\/y\/\\?] \\(NEW\\)) " {
+         puts "$expect_out(1,string) n"
+         send "n\r"
+         exp_continue
+    }
+    -re "\n  *(\[^\n]* \\\[N\/m\/y\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n*(\[^\n]* \\\[N\/y\/m\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n  *(\[^\n]* \\\[N\/m\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+}
