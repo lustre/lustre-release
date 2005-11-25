@@ -1,8 +1,8 @@
-Index: linux-2.6.9-5.0.3.EL/fs/namei.c
+Index: linux-2.6.12.2/fs/namei.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/namei.c	2005-02-26 13:29:11.948782168 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/namei.c	2005-02-26 13:29:13.355568304 +0200
-@@ -1380,7 +1380,7 @@
+--- linux-2.6.12.2.orig/fs/namei.c	2005-07-23 12:25:12.241868120 +0200
++++ linux-2.6.12.2/fs/namei.c	2005-07-23 12:25:14.440533872 +0200
+@@ -1466,7 +1466,7 @@
  		if (!error) {
  			DQUOT_INIT(inode);
  			
@@ -11,7 +11,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  		}
  		put_write_access(inode);
  		if (error)
-@@ -1638,6 +1638,7 @@
+@@ -1719,6 +1719,7 @@
  	char * tmp;
  	struct dentry * dentry;
  	struct nameidata nd;
@@ -19,7 +19,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  
  	if (S_ISDIR(mode))
  		return -EPERM;
-@@ -1648,6 +1649,15 @@
+@@ -1729,6 +1730,15 @@
  	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  	if (error)
  		goto out;
@@ -35,7 +35,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	dentry = lookup_create(&nd, 0);
  	error = PTR_ERR(dentry);
  
-@@ -1674,6 +1684,7 @@
+@@ -1755,6 +1765,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
@@ -43,7 +43,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	path_release(&nd);
  out:
  	putname(tmp);
-@@ -1715,10 +1726,18 @@
+@@ -1796,10 +1807,18 @@
  	if (!IS_ERR(tmp)) {
  		struct dentry *dentry;
  		struct nameidata nd;
@@ -62,7 +62,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  		dentry = lookup_create(&nd, 1);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
-@@ -1728,6 +1747,7 @@
+@@ -1809,6 +1828,7 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -70,7 +70,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  		path_release(&nd);
  out:
  		putname(tmp);
-@@ -1808,6 +1828,7 @@
+@@ -1885,6 +1905,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -78,7 +78,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1828,6 +1849,16 @@
+@@ -1905,6 +1926,16 @@
  			error = -EBUSY;
  			goto exit1;
  	}
@@ -95,7 +95,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	down(&nd.dentry->d_inode->i_sem);
  	dentry = lookup_hash(&nd.last, nd.dentry);
  	error = PTR_ERR(dentry);
-@@ -1886,6 +1917,7 @@
+@@ -1963,6 +1994,7 @@
  	struct dentry *dentry;
  	struct nameidata nd;
  	struct inode *inode = NULL;
@@ -103,7 +103,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1897,6 +1929,13 @@
+@@ -1974,6 +2006,13 @@
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
@@ -117,7 +117,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	down(&nd.dentry->d_inode->i_sem);
  	dentry = lookup_hash(&nd.last, nd.dentry);
  	error = PTR_ERR(dentry);
-@@ -1963,10 +2002,18 @@
+@@ -2040,10 +2079,18 @@
  	if (!IS_ERR(to)) {
  		struct dentry *dentry;
  		struct nameidata nd;
@@ -136,7 +136,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  		dentry = lookup_create(&nd, 0);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
-@@ -1974,6 +2021,7 @@
+@@ -2051,6 +2098,7 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -144,7 +144,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  		path_release(&nd);
  out:
  		putname(to);
-@@ -2037,6 +2085,8 @@
+@@ -2114,6 +2162,8 @@
  	struct nameidata nd, old_nd;
  	int error;
  	char * to;
@@ -153,7 +153,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  
  	to = getname(newname);
  	if (IS_ERR(to))
-@@ -2051,6 +2101,13 @@
+@@ -2128,6 +2178,13 @@
  	error = -EXDEV;
  	if (old_nd.mnt != nd.mnt)
  		goto out_release;
@@ -167,7 +167,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	new_dentry = lookup_create(&nd, 0);
  	error = PTR_ERR(new_dentry);
  	if (!IS_ERR(new_dentry)) {
-@@ -2223,6 +2280,8 @@
+@@ -2300,6 +2357,8 @@
  	struct dentry * old_dentry, *new_dentry;
  	struct dentry * trap;
  	struct nameidata oldnd, newnd;
@@ -176,7 +176,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  
  	error = path_lookup(oldname, LOOKUP_PARENT, &oldnd);
  	if (error)
-@@ -2245,6 +2304,13 @@
+@@ -2322,6 +2381,13 @@
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
@@ -190,7 +190,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	trap = lock_rename(new_dir, old_dir);
  
  	old_dentry = lookup_hash(&oldnd.last, old_dir);
-@@ -2276,8 +2342,7 @@
+@@ -2353,8 +2419,7 @@
  	if (new_dentry == trap)
  		goto exit5;
  
@@ -200,11 +200,11 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  exit5:
  	dput(new_dentry);
  exit4:
-Index: linux-2.6.9-5.0.3.EL/fs/open.c
+Index: linux-2.6.12.2/fs/open.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/open.c	2005-02-26 13:29:11.962780040 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/open.c	2005-02-26 13:29:13.359567696 +0200
-@@ -191,9 +191,10 @@
+--- linux-2.6.12.2.orig/fs/open.c	2005-07-23 12:25:12.248867056 +0200
++++ linux-2.6.12.2/fs/open.c	2005-07-23 12:28:13.221355056 +0200
+@@ -192,9 +192,10 @@
  	return error;
  }
  
@@ -216,23 +216,25 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	struct iattr newattrs;
  
  	/* Not pretty: "inode->i_size" shouldn't really be signed. But it is. */
-@@ -204,7 +205,14 @@
+@@ -205,7 +206,16 @@
  	newattrs.ia_valid = ATTR_SIZE | ATTR_CTIME;
+ 
  	down(&dentry->d_inode->i_sem);
- 	down_write(&dentry->d_inode->i_alloc_sem);
 -	err = notify_change(dentry, &newattrs);
 +	if (called_from_open)
 +		newattrs.ia_valid |= ATTR_FROM_OPEN;
 +	if (op->setattr_raw) {
 +		newattrs.ia_valid |= ATTR_RAW;
 +		newattrs.ia_ctime = CURRENT_TIME;
++		down_write(&dentry->d_inode->i_alloc_sem);
 +		err = op->setattr_raw(dentry->d_inode, &newattrs);
++		up_write(&dentry->d_inode->i_alloc_sem);
 +	} else
 +		err = notify_change(dentry, &newattrs);
- 	up_write(&dentry->d_inode->i_alloc_sem);
  	up(&dentry->d_inode->i_sem);
  	return err;
-@@ -260,7 +268,7 @@
+ }
+@@ -260,7 +270,7 @@
  	error = locks_verify_truncate(inode, NULL, length);
  	if (!error) {
  		DQUOT_INIT(inode);
@@ -241,7 +243,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	}
  	put_write_access(inode);
  
-@@ -312,7 +320,7 @@
+@@ -312,7 +322,7 @@
  
  	error = locks_verify_truncate(inode, file, length);
  	if (!error)
@@ -250,7 +252,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  out_putf:
  	fput(file);
  out:
-@@ -391,9 +399,19 @@
+@@ -391,9 +401,19 @@
  		    (error = permission(inode,MAY_WRITE,&nd)) != 0)
  			goto dput_and_out;
  	}
@@ -273,7 +275,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  dput_and_out:
  	path_release(&nd);
  out:
-@@ -444,9 +462,19 @@
+@@ -444,9 +464,19 @@
  		    (error = permission(inode,MAY_WRITE,&nd)) != 0)
  			goto dput_and_out;
  	}
@@ -296,9 +298,9 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  dput_and_out:
  	path_release(&nd);
  out:
-@@ -600,36 +628,52 @@
- 
- EXPORT_SYMBOL_GPL(sys_chroot);
+@@ -596,36 +626,52 @@
+ 	return error;
+ }
  
 -asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
 +int chmod_common(struct dentry *dentry, mode_t mode)
@@ -318,9 +320,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
 +	
 +	if (inode->i_op->setattr_raw) {
 +		struct inode_operations *op = dentry->d_inode->i_op;
- 
--	dentry = file->f_dentry;
--	inode = dentry->d_inode;
++
 +		newattrs.ia_mode = mode;
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
@@ -330,6 +330,9 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
 +			goto out;
 +	}
  
+-	dentry = file->f_dentry;
+-	inode = dentry->d_inode;
+-
 -	err = -EROFS;
 -	if (IS_RDONLY(inode))
 -		goto out_putf;
@@ -365,7 +368,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	fput(file);
  out:
  	return err;
-@@ -638,32 +682,13 @@
+@@ -634,32 +680,13 @@
  asmlinkage long sys_chmod(const char __user * filename, mode_t mode)
  {
  	struct nameidata nd;
@@ -399,7 +402,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -684,6 +709,18 @@
+@@ -680,6 +707,18 @@
  	if (IS_RDONLY(inode))
  		goto out;
  	error = -EPERM;
@@ -418,7 +421,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
  	newattrs.ia_valid =  ATTR_CTIME;
-@@ -697,6 +734,7 @@
+@@ -693,6 +732,7 @@
  	}
  	if (!S_ISDIR(inode->i_mode))
  		newattrs.ia_valid |= ATTR_KILL_SUID|ATTR_KILL_SGID;
@@ -426,11 +429,11 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	down(&inode->i_sem);
  	error = notify_change(dentry, &newattrs);
  	up(&inode->i_sem);
-Index: linux-2.6.9-5.0.3.EL/fs/exec.c
+Index: linux-2.6.12.2/fs/exec.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/exec.c	2005-02-26 13:29:11.936783992 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/exec.c	2005-02-26 13:29:13.362567240 +0200
-@@ -1451,7 +1451,7 @@
+--- linux-2.6.12.2.orig/fs/exec.c	2005-07-23 12:25:12.229869944 +0200
++++ linux-2.6.12.2/fs/exec.c	2005-07-23 12:25:14.442533568 +0200
+@@ -1488,7 +1488,7 @@
  		goto close_fail;
  	if (!file->f_op->write)
  		goto close_fail;
@@ -439,11 +442,11 @@ Index: linux-2.6.9-5.0.3.EL/fs/exec.c
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
-Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
+Index: linux-2.6.12.2/include/linux/fs.h
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/include/linux/fs.h	2005-02-26 13:29:11.987776240 +0200
-+++ linux-2.6.9-5.0.3.EL/include/linux/fs.h	2005-02-26 13:29:13.365566784 +0200
-@@ -926,13 +926,20 @@
+--- linux-2.6.12.2.orig/include/linux/fs.h	2005-07-23 12:25:12.279862344 +0200
++++ linux-2.6.12.2/include/linux/fs.h	2005-07-23 12:25:14.443533416 +0200
+@@ -960,13 +960,20 @@
  	int (*create) (struct inode *,struct dentry *,int, struct nameidata *);
  	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
@@ -464,7 +467,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  	int (*readlink) (struct dentry *, char __user *,int);
  	int (*follow_link) (struct dentry *, struct nameidata *);
  	void (*put_link) (struct dentry *, struct nameidata *);
-@@ -1234,7 +1241,7 @@
+@@ -1268,7 +1275,7 @@
  
  /* fs/open.c */
  
@@ -473,11 +476,11 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
  extern struct file * dentry_open_it(struct dentry *, struct vfsmount *, int, struct lookup_intent *);
-Index: linux-2.6.9-5.0.3.EL/net/unix/af_unix.c
+Index: linux-2.6.12.2/net/unix/af_unix.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/net/unix/af_unix.c	2005-02-25 10:25:31.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/net/unix/af_unix.c	2005-02-26 13:29:13.387563440 +0200
-@@ -676,6 +676,7 @@
+--- linux-2.6.12.2.orig/net/unix/af_unix.c	2005-06-30 01:00:53.000000000 +0200
++++ linux-2.6.12.2/net/unix/af_unix.c	2005-07-23 12:25:14.445533112 +0200
+@@ -673,6 +673,7 @@
  	int err = 0;
  	
  	if (sunname->sun_path[0]) {

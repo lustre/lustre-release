@@ -9,7 +9,7 @@ diff -Nur orig/fs/ext3/namei.c patch/fs/ext3/namei.c
 +		/* limit is 16-bit i_links_count */
 +		if (inode->i_nlink >= EXT3_LINK_MAX || inode->i_nlink == 2)
 +			inode->i_nlink = 1;
-+        }
++	}
  }
  
  static inline void ext3_dec_count(handle_t *handle, struct inode *inode)
@@ -105,7 +105,7 @@ diff -Nur orig/fs/ext3/namei.c patch/fs/ext3/namei.c
  
  	if (new_inode) {
 -		new_inode->i_nlink--;
-+                ext3_dec_count(handle, new_inode);
++		ext3_dec_count(handle, new_inode);
  		new_inode->i_ctime = CURRENT_TIME_SEC;
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME_SEC;

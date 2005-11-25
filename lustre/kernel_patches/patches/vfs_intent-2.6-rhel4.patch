@@ -306,9 +306,9 @@ Index: linux-2.6.9-5.0.3.EL/fs/namespace.c
  {
  	struct super_block *sb = mnt->mnt_sb;
  	dput(mnt->mnt_root);
-+        spin_lock(&dcache_lock);
-+        list_del(&mnt->mnt_lustre_list);
-+        spin_unlock(&dcache_lock);
++	spin_lock(&dcache_lock);
++	list_del(&mnt->mnt_lustre_list);
++	spin_unlock(&dcache_lock);
  	free_vfsmnt(mnt);
  	deactivate_super(sb);
  }
@@ -317,7 +317,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namespace.c
  
  	lock_kernel();
 +	if (sb->s_op->umount_lustre)
-+              sb->s_op->umount_lustre(sb);
++		sb->s_op->umount_lustre(sb);
  	if( (flags&MNT_FORCE) && sb->s_op->umount_begin)
  		sb->s_op->umount_begin(sb);
  	unlock_kernel();
@@ -772,8 +772,8 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/namei.h
  #define LOOKUP_NOALT		32
  #define LOOKUP_ATOMIC		64
  #define LOOKUP_REVAL		128
-+#define LOOKUP_LAST            (0x1000)
-+#define LOOKUP_LINK_NOTLAST    (0x2000)
++#define LOOKUP_LAST		(0x1000)
++#define LOOKUP_LINK_NOTLAST	(0x2000)
  
  /*
   * Intent data
@@ -811,25 +811,3 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/mount.h
  };
  
  static inline struct vfsmount *mntget(struct vfsmount *mnt)
-Index: linux-2.6.9-5.0.3.EL/kernel/exit.c
-===================================================================
---- linux-2.6.9-5.0.3.EL.orig/kernel/exit.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/kernel/exit.c	2005-02-26 23:29:02.000000000 +0200
-@@ -244,6 +244,8 @@
- 	write_unlock_irq(&tasklist_lock);
- }
- 
-+EXPORT_SYMBOL(reparent_to_init);
-+
- void __set_special_pids(pid_t session, pid_t pgrp)
- {
- 	struct task_struct *curr = current;
-@@ -428,6 +430,8 @@
- 	__exit_files(tsk);
- }
- 
-+EXPORT_SYMBOL(exit_files);
-+
- static inline void __put_fs_struct(struct fs_struct *fs)
- {
- 	/* No need to hold fs->lock if we are killing it */
