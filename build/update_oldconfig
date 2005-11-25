@@ -1,4 +1,4 @@
-#!/usr/bin/expect -d
+#!/usr/bin/expect
 
 log_user 0
 set spawnid [spawn make oldconfig]
@@ -19,6 +19,11 @@ expect {
          exp_continue
     }
     -re "\n  *(\[^\n]* \\\[N\/m\/y\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n*(\[^\n]* \\\[N\/y\/m\/\\?] \\(NEW\\)) " {
         puts "$expect_out(1,string) m"
         send "m\r"
         exp_continue
