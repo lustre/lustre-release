@@ -170,7 +170,7 @@ extern wait_queue_head_t obd_race_waitq;
 
 
 #define OBD_FAIL_MGMT                     0x900
-#define OBD_FAIL_MGMT_REGISTER            0x901
+#define OBD_FAIL_MGMT_FIRST_CONNECT       0x901
 #define OBD_FAIL_MGMT_CONNECT_NET         0x117
 #define OBD_FAIL_MGMT_DISCONNECT_NET      0x11a
 #define OBD_FAIL_MGMT_ALL_REPLY_NET       0x122

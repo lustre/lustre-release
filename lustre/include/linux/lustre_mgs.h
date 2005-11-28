@@ -71,20 +71,9 @@ struct mgc_op_data {
 
 struct system_db {
         char              fsname[64];
-        char              mds_name[64];
-        char              mds_uuid[64];
-        char              mds_nodename[64];
-        lnet_nid_t        mds_nid;
-        struct lov_desc   lovdesc;
-        int               ost_number;
+        struct list_head  db_list;
+        void*             index_map;
         struct list_head  ost_infos;
-};
-
-struct llog_verion_desc{
-        struct list_head      lvd_list;
-        __u64                 lvd_version;
-        int                   lvd_ref;
-        struct llog_log_hdr  *lvd_log_hdr;
 };
 
 struct mgc_open_llog {
@@ -92,16 +81,6 @@ struct mgc_open_llog {
         __u64              mol_step;
         llogid_t           mol_id;
         char               mol_fsname[40];
-};
-
-struct mgs_open_llog {
-        struct list_head     mol_list;
-        char                 mol_fsname[40];
-        struct llog_handle  *mol_cfg_llh;
-        struct dentry       *mol_dentry;
-        spinlock_t           mol_lock;
-        int                  mol_refs;
-        struct system_db    *mol_system_db;
 };
 
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);

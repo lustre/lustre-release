@@ -934,17 +934,20 @@ typedef enum {
         MGMT_CONNECT = 250,
         MGMT_DISCONNECT,
         MGMT_EXCEPTION,         /* node died, etc. */
-        MGMT_REGISTER,          /* first connect. */
+        MGMT_FIRST_CONNECT,     /* first connect. */
+        MGMT_MDS_ADD,
         MGMT_OST_ADD,
         MGMT_OST_DEL,
         MGMT_LAST_OPC
 } mgs_cmd_t;
 
+#define NAME_MAXLEN 64
+#define UUID_MAXLEN NAME_MAXLEN + 5
 struct mgmt_ost_info {
         struct list_head moi_list;
-        char             moi_ostname[64];
-        char             moi_nodename[64];
-        char             moi_ostuuid[64];
+        char             moi_ostname[NAME_MAXLEN];
+        char             moi_nodename[NAME_MAXLEN];
+        char             moi_ostuuid[UUID_MAXLEN];
         __u64            moi_nid;            /* lnet_nid_t */
         __u32            moi_stripe_index;
 };

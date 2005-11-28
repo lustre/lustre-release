@@ -38,7 +38,7 @@
    Used before the setup llog can be read. */
 #define MOUNT_CONFIGS_DIR "CONFIGS"
 #define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"/mountdata"
-#define SYSTEM_DB_FILE "SYSTEM_DB"
+#define INDEX_BITMAP_FILE "IB"
 
 #define LDD_MAGIC 0xbabb0001
 

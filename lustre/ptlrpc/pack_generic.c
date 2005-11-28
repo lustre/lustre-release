@@ -1026,8 +1026,8 @@ void lustre_assert_wire_constants(void)
                  (long long)MGMT_DISCONNECT);
         LASSERTF(MGMT_EXCEPTION == 252, " found %lld\n",
                  (long long)MGMT_EXCEPTION);
-        LASSERTF(MGMT_REGISTER == 253, " found %lld\n",
-                 (long long)MGMT_REGISTER);
+        LASSERTF(MGMT_FIRST_CONNECT == 253, " found %lld\n",
+                 (long long)MGMT_FIRST_CONNECT);
         LASSERTF(MGMT_OST_ADD == 254, " found %lld\n",
                  (long long)MGMT_OST_ADD);
         LASSERTF(MGMT_OST_DEL == 255, " found %lld\n",

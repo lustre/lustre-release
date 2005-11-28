@@ -189,8 +189,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_ns, rc);
         }
 
-        INIT_LIST_HEAD(&mgs->mgs_open_llogs);
-
         rc = llog_start_commit_thread();
         if (rc < 0)
                 GOTO(err_fs, rc);
@@ -377,14 +375,23 @@ int mgs_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = -ENOTSUPP; /* la la la */
                 break;
-        case MGMT_REGISTER:
-                CDEBUG(D_INODE, "mds/(maybe new filesystem) register\n");
-                OBD_FAIL_RETURN(OBD_FAIL_MGMT_REGISTER, 0);
-                rc = mgs_mds_register(req);
+        case MGMT_FIRST_CONNECT:
+                CDEBUG(D_INODE, "server connect at first time\n");
+                OBD_FAIL_RETURN(OBD_FAIL_MGMT_FIRST_CONNECT, 0);
+                rc = mgmt_handle_first_connect(req);
+                break;
         case MGMT_OST_ADD:
                 CDEBUG(D_INODE, "ost add\n");
+                rc = mgmt_handle_ost_add(req);
+                break;
         case MGMT_OST_DEL:
                 CDEBUG(D_INODE, "ost del\n");
+                rc = mgmt_handle_ost_del(req);
+                break;
+        case MGMT_MDS_ADD:
+                CDEBUG(D_INODE, "mds add\n");
+                rc = mgmt_handle_mds_add(req);
+                break;
         case LLOG_ORIGIN_HANDLE_CREATE:
                 DEBUG_REQ(D_INODE, req, "llog_init");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
