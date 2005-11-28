@@ -341,6 +341,30 @@ set_make()
     MAKE_J="$MAKE -j $JOBS"
 }
 
+timed_run() {
+    SLEEP_TIME=$1
+    shift
+
+    set -o monitor
+
+    #bash -c "$@" &
+    ("$@") &
+    child_pid=$!
+    
+    (sleep $SLEEP_TIME
+    kill -TERM -$child_pid 2>/dev/null
+    sleep 5
+    kill -KILL -$child_pid 2>/dev/null
+    echo "$1 was killed due to timeout") &
+    dog_pid=$!
+
+    wait $child_pid
+    # status will be set to 143 if the process had to be killed due to timeout
+    status=$?
+    kill -KILL -$dog_pid
+    return $status
+}
+
 depend_kernel()
 {
     (( $DEPEND_KERNEL )) || return 0
@@ -354,12 +378,30 @@ depend_kernel()
     $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
     rm -f rpm-release
     cp "$CONFIG_FILE" .config
-    for oc in oldconfig_nonint silentoldconfig oldconfig ; do
-	if grep -q "$oc" Makefile ; then
-	    $MAKE "$MAKE_CC" $oc || fatal 1 "Error running make oldconfig"
-	    break
-	fi
-    done
+    # use the expect script to "make oldconfig" and answer the questions for
+    # new items conservatively.  QA will get notified on anything newly added
+    # for them to review and adjust accordingly.
+    timed_run 300 $TOPDIR/build/update_oldconfig
+    if [ $? -eq 143 ]; then
+        fatal 1 "update_oldconfig timed out"
+    fi
+    # now notify if resulting .config is different than $CONFIG_FILE
+    local tmpfile=$(mktemp /tmp/XXXXXX)
+    diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
+    if [ -s $tmpfile ]; then
+        { cat <<EOF
+The result of a make oldconfig on file $CONFIG_FILE resulted in a
+difference when compared to .config in the following way:
+
+EOF
+        cat $tmpfile
+        echo -e "\n\nPlease consider updating $CONFIG_FILE."
+	# not sure these are entirely useful.  the above and "patch" are good
+	#echo -e "\nThe entire new .config file:\n"
+        #cat .config
+        } | mail -s "kernel_config change" qa@lists.clusterfs.com
+    fi
+    rm -f $tmpfile
     case "$VERSION" in
 	2.6*)
             $MAKE "$MAKE_CC" include/asm
@@ -521,7 +563,7 @@ build_kms()
     mkdir -p "${TOPDIR}/modules-${FULL_VERSION}"
     for dir in /usr/src/kernel-modules/* ; do
 	# we are replacing lustre-lite, so don't include it
-	if [ ${dir##*/} != "lustre-lite" -a -e $dir/Makefile ]; then
+	if [ "${dir##*/}" != "lustre-lite" -a -e $dir/Makefile ]; then
 	    build_dir="${TOPDIR}/modules-${FULL_VERSION}/${dir##*/}"
 	    cp -a $dir $build_dir
 	    # these modules are terrible, and don't all build
