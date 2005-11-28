@@ -827,7 +827,6 @@ out_ucred:
         return rc;
 }
 
-
 static int mds_obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                           unsigned long max_age)
 {

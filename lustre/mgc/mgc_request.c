@@ -48,36 +48,80 @@
 
 #include "mgc_internal.h"
 
-int mgc_mds_add(struct obd_export *exp, struct mgmt_mds_info *minfo)
+int mgc_first_connect(struct obd_export *exp, int disk_type,
+                      char *full_fsname, char *node_name,
+                      int *index)
 {
         struct ptlrpc_request *req;
-        struct mgmt_mds_info *req_minfo, *rep_minfo;
-        int size = sizeof(*req_minfo);
-        int rep_size = sizeof(rep_minfo);
+        int size[3] = {sizeof(disk_type), NAME_MAXLEN, NAME_MAXLEN};
+        int *type;
+        char *fsname, *nodename;
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_REGISTER,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_FIRST_CONNECT,
+                              3, size, NULL);
+        if (!req)
+                RETURN(rc = -ENOMEM);
+
+        type = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*type));
+        *type = disk_type;
+
+        fsname = lustre_msg_buf(req->rq_reqmsg, 1, NAME_MAXLEN);
+        memcpy(fsname, full_fsname, strlen(full_fsname));
+
+        nodename = lustre_msg_buf(req->rq_reqmsg, 2, NAME_MAXLEN);
+        memcpy(nodename, node_name, strlen(node_name));
+        
+        rc = ptlrpc_queue_wait(req);
+        if (!rc) {
+               int *rep_index;
+               rep_index = lustre_swab_repbuf(req, 0, sizeof(int),
+                                              __swab32s);
+               if (*rep_index >= 0){
+                       CDEBUG(D_INODE, "Get index: %d from mgs.", *rep_index);
+                       *index = *rep_index;
+               }
+               else
+                       CERROR("Can not get index from mgs. rc:%d", *rep_index);
+        }
+
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mgc_first_connect);
+
+int mgc_mds_add(struct obd_export *exp, struct mgmt_mds_info *mmi)
+{
+        struct ptlrpc_request *req;
+        struct mgmt_mds_info *req_mmi, *rep_mmi;
+        int size = sizeof(*req_mmi);
+        int rep_size = sizeof(rep_mmi);
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_MDS_ADD,
                               1, &size, NULL);
         if (!req)
                 RETURN(rc = -ENOMEM);
 
-        req_minfo = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_minfo));
-        memcpy(req_minfo, minfo, sizeof(*req_minfo));
+        req_mmi = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mmi));
+        memcpy(req_mmi, mmi, sizeof(*req_mmi));
 
         req->rq_replen = lustre_msg_size(1, &rep_size);
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 int index;
-                rep_minfo = lustre_swab_repbuf(req, 0, sizeof(*rep_minfo),
-                                               lustre_swab_mgmt_mds_info);
-                index = rep_minfo->mmi_index;
-                if (index < 0) {
-                        CERROR("Register failed. rc = %d\n", index);
+                rep_mmi = lustre_swab_repbuf(req, 0, sizeof(*rep_mmi),
+                                             lustre_swab_mgmt_mds_info);
+                index = rep_mmi->mmi_index;
+                if (index != mmi->mmi_index) {
+                        CERROR("MDS ADD failed. rc = %d\n", index);
                         GOTO(out, rc = index);
                 } else 
-                        CERROR("Register OK. (index = %d)\n", index);
+                        CERROR("MDS ADD OK. (index = %d)\n", index);
         }
 out:
         ptlrpc_req_finished(req);
@@ -86,14 +130,12 @@ out:
 }
 EXPORT_SYMBOL(mgc_mds_add);
 
-int mgc_ost_add(struct obd_export *exp, struct mgmt_ost_info *oinfo,
-                struct mgmt_mds_info *minfo)
+int mgc_ost_add(struct obd_export *exp, struct mgmt_ost_info *moi)
 {
         struct ptlrpc_request *req;
-        struct mgmt_ost_info *req_oinfo;
-        int size = sizeof(*req_oinfo);
-        int rep_size[2] = { sizeof(*oinfo),
-                            sizeof(*minfo)};
+        struct mgmt_ost_info *req_moi, *rep_moi;
+        int size = sizeof(*req_moi);
+        int rep_size = sizeof(*moi);
         int rc;
         ENTRY;
 
@@ -102,29 +144,23 @@ int mgc_ost_add(struct obd_export *exp, struct mgmt_ost_info *oinfo,
         if (!req)
                 RETURN(rc = -ENOMEM);
 
-        req_oinfo = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_oinfo));
-        memcpy(req_oinfo, oinfo, sizeof(*req_oinfo));
+        req_moi = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_moi));
+        memcpy(req_moi, moi, sizeof(*req_moi));
 
-        req->rq_replen = lustre_msg_size(2, rep_size);
+        req->rq_replen = lustre_msg_size(1, &rep_size);
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
-                struct mgmt_ost_info *rep_oinfo;
-                struct mgmt_mds_info *rep_minfo;
-                rep_oinfo = lustre_swab_repbuf(req, 0, sizeof(*rep_oinfo),
-                                               lustre_swab_mgmt_ost_info);
-                rep_minfo = lustre_swab_repbuf(req, 1, sizeof(*rep_minfo),
-                                               lustre_swab_mgmt_mds_info);
-                if (rep_oinfo->moi_stripe_index == -1) {
-                        CERROR ("Register failed\n");
+                int index;
+                rep_moi = lustre_swab_repbuf(req, 0, sizeof(*rep_moi),
+                                             lustre_swab_mgmt_ost_info);
+                index = rep_moi->moi_stripe_index;
+                if (index != moi->moi_stripe_index) {
+                        CERROR ("OST ADD failed. rc=%d\n", index);
                         GOTO (out, rc = -EINVAL);
                 }
-                CERROR("register OK.(index = %d)\n",
-                        rep_oinfo->moi_stripe_index);
-                memcpy(oinfo, rep_oinfo, sizeof(*oinfo));
-                memcpy(minfo, rep_minfo, sizeof(*minfo));
+                CERROR("OST ADD OK.(index = %d)\n", index);
         }
-
 out:
         ptlrpc_req_finished(req);
 
@@ -132,11 +168,11 @@ out:
 }
 EXPORT_SYMBOL(mgc_ost_add);
 
-int mgc_ost_del(struct obd_export *exp, struct mgmt_ost_info *oinfo)
+int mgc_ost_del(struct obd_export *exp, struct mgmt_ost_info *moi)
 {
         struct ptlrpc_request *req;
-        struct mgmt_ost_info *req_oinfo;
-        int size = sizeof(*req_oinfo);
+        struct mgmt_ost_info *req_moi, *rep_moi;
+        int size = sizeof(*req_moi);
         int rc;
         ENTRY;
 
@@ -145,16 +181,20 @@ int mgc_ost_del(struct obd_export *exp, struct mgmt_ost_info *oinfo)
         if (!req)
                 RETURN(rc = -ENOMEM);
 
-        req_oinfo = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_oinfo));
-        memcpy(req_oinfo, oinfo, sizeof(*req_oinfo));
+        req_moi = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_moi));
+        memcpy(req_moi, moi, sizeof(*req_moi));
 
         rc = ptlrpc_queue_wait(req);
-        if (!rc)
-                CERROR("unregister OK.(old index = %d)\n", 
-                        oinfo->moi_stripe_index);
-        else {
-                CERROR ("Unregister failed\n");
-                GOTO (out, rc = -EINVAL);
+        if (!rc) {
+                int index;
+                rep_moi = lustre_swab_repbuf(req, 0, sizeof(*rep_moi),
+                                             lustre_swab_mgmt_ost_info);
+                index = rep_moi->moi_stripe_index;
+                if (index != moi->moi_stripe_index) {
+                        CERROR ("OST DEL failed. rc=%d\n", index);
+                        GOTO (out, rc = -EINVAL);
+                }
+                CERROR("OST DEL OK.(old index = %d)\n", index);
         }
 out:
         ptlrpc_req_finished(req);

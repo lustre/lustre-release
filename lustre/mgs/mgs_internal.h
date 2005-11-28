@@ -16,4 +16,8 @@ static inline struct mgs_obd *mgs_req2mgs(struct ptlrpc_request *req)
         return &req->rq_export->exp_obd->u.mgs;
 }
 
+extern int mgmt_handle_first_connect(struct ptlrpc_request *req);
+extern int mgmt_handle_mds_add(struct ptlrpc_request *req);
+extern int mgmt_handle_ost_add(struct ptlrpc_request *req);
+extern int mgmt_handle_ost_del(struct ptlrpc_request *req);
 #endif
