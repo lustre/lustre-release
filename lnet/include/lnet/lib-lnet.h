@@ -174,6 +174,9 @@ lnet_msg_alloc (void)
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
                 memset (msg, 0, sizeof (*msg));
+#if CRAY_XT3
+                msg->msg_ev.uid = LNET_UID_ANY;
+#endif
         }
         return(msg);
 }
@@ -275,6 +278,9 @@ lnet_msg_alloc(void)
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
                 memset (msg, 0, sizeof (*msg));
+#if CRAY_XT3
+                msg->msg_ev.uid = LNET_UID_ANY;
+#endif
         }
         return (msg);
 }

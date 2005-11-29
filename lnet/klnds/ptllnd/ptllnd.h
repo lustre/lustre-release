@@ -138,7 +138,10 @@ typedef struct kptl_rx                          /* receive message */
         kptl_rx_buffer_t       *rx_rxb;         /* the rx buffer pointer */
         kptl_msg_t             *rx_msg;
         int                     rx_nob;         /* the number of bytes rcvd */
-        ptl_process_id_t        rx_initiator;   /* who send the packet */
+        ptl_process_id_t        rx_initiator;   /* sender's address */
+#if CRAY_XT3
+        ptl_uid_t               rx_uid;         /* sender's uid */
+#endif
         kptl_peer_t            *rx_peer;        /* pointer to peer */
         size_t                  rx_payload[0];  /* payload */
 } kptl_rx_t;

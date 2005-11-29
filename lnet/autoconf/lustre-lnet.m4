@@ -834,7 +834,9 @@ if test x$enable_liblustre = xyes ; then
 			CAP_LIBS="-lcap"
 			AC_DEFINE([HAVE_LIBCAP], 1, [use libcap])
 		],
-		[AC_MSG_ERROR([Need libcap for liblustre])])
+		[
+			CAP_LIBS=""
+		])
 	AC_SUBST(CAP_LIBS)
 
 	if test "$ENABLE_LIBPTHREAD" = "yes" ; then

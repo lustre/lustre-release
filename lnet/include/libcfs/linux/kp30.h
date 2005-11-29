@@ -173,7 +173,7 @@ do {                                                                    \
 #else  /* !__KERNEL__ */
 # include <stdio.h>
 # include <stdlib.h>
-#ifdef CRAY_XT3
+#if CRAY_XT3
 # include <ioctl.h>
 #elif defined(__CYGWIN__)
 # include <cygwin-ioctl.h>
