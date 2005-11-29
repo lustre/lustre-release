@@ -319,6 +319,8 @@ static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
         ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
 
+#define simple_strtol strtol
+
 /* registering symbols */
 #ifndef ERESTARTSYS
 #define ERESTARTSYS ERESTART

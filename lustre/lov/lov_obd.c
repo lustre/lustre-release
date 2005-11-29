@@ -599,6 +599,31 @@ static void __lov_del_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         }
 }
 
+static void lov_fix_desc(struct lov_desc *desc)
+{
+        if (desc->ld_default_stripe_size < PTLRPC_MAX_BRW_SIZE) {
+                CWARN("Increasing default_stripe_size "LPU64" to %u\n",
+                      desc->ld_default_stripe_size, PTLRPC_MAX_BRW_SIZE);
+                desc->ld_default_stripe_size = PTLRPC_MAX_BRW_SIZE;
+        } else if (desc->ld_default_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
+                CWARN("default_stripe_size "LPU64" isn't a multiple of %u\n",
+                      desc->ld_default_stripe_size, LOV_MIN_STRIPE_SIZE);
+                desc->ld_default_stripe_size &= ~(LOV_MIN_STRIPE_SIZE - 1);
+                CWARN("changing to "LPU64"\n", desc->ld_default_stripe_size);
+       }
+
+        if (desc->ld_default_stripe_count == 0)
+                desc->ld_default_stripe_count = 1;
+
+        /* from lov_setstripe */
+        if ((desc->ld_pattern != 0) && 
+            (desc->ld_pattern != LOV_PATTERN_RAID0)) {
+                CDEBUG(D_IOCTL, "bad userland stripe pattern: %#x\n",
+                       desc->ld_pattern);
+                desc->ld_pattern = 0;
+        }
+}
+
 static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
@@ -633,22 +658,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 }
         }
 
-        if (desc->ld_default_stripe_size < PTLRPC_MAX_BRW_SIZE) {
-                CWARN("Increasing default_stripe_size "LPU64" to %u\n",
-                      desc->ld_default_stripe_size, PTLRPC_MAX_BRW_SIZE);
-                CWARN("Please update config and run --write-conf on MDS\n");
-
-                desc->ld_default_stripe_size = PTLRPC_MAX_BRW_SIZE;
-        } else if (desc->ld_default_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
-                CWARN("default_stripe_size "LPU64" isn't a multiple of %u\n",
-                      desc->ld_default_stripe_size, LOV_MIN_STRIPE_SIZE);
-                CWARN("Please update config and run --write-conf on MDS\n");
-
-                desc->ld_default_stripe_size &= ~(LOV_MIN_STRIPE_SIZE - 1);
-       }
-
-        if (desc->ld_default_stripe_count == 0)
-                desc->ld_default_stripe_count = 1;
+        lov_fix_desc(desc);
 
         /* Because of 64-bit divide/mod operations only work with a 32-bit
          * divisor in a 32-bit kernel, we cannot support a stripe width
@@ -755,6 +765,7 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
         switch(cmd = lcfg->lcfg_command) {
         case LCFG_LOV_ADD_OBD:
         case LCFG_LOV_DEL_OBD: {
+                /* lov_modify_tgts add  0:lov_mdsA  1:ost1_UUID  2:0  3:1 */
                 if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(obd_uuid.uuid))
                         GOTO(out, rc = -EINVAL);
 
@@ -768,6 +779,47 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                         rc = lov_add_obd(obd, &obd_uuid, index, gen);
                 else
                         rc = lov_del_obd(obd, &obd_uuid, index, gen);
+                GOTO(out, rc);
+        }
+        case LCFG_PARAM: {
+                int i;
+                struct lov_obd *lov = &obd->u.lov;
+                struct lov_desc *desc = &(lov->desc);
+                if (!desc)
+                        GOTO(out, rc = -EINVAL);
+                /* see jt_obd_lov_getconfig for variable names */
+                /* setparam 0:lov_mdsA 1:default_stripe_size=1048576 
+                   2:default_stripe_pattern=0 3:default_stripe_offset=0 */
+                for (i = 1; i < lcfg->lcfg_bufcount; i++) {
+                        char *key, *sval;
+                        long val;
+                        key = lustre_cfg_buf(lcfg, i);
+                        sval = strchr(key, '=');
+                        if (!sval || (*(sval + 1) == 0)) {
+                                CERROR("Can't parse param %s\n", key);
+                                rc = -EINVAL;
+                                /* continue parsing other params */
+                                continue;
+                        }
+                        *sval = 0;
+                        val = simple_strtol(sval + 1, NULL, 0);
+                        if (strcmp(key, "default_stripe_size") == 0)
+                                desc->ld_default_stripe_size = val;
+                        else if (strcmp(key, "default_stripe_count") == 0)
+                                desc->ld_default_stripe_count = val;
+                        else if (strcmp(key, "default_stripe_offset") == 0)
+                                desc->ld_default_stripe_offset = val;
+                        else if (strcmp(key, "default_stripe_pattern") == 0)
+                                desc->ld_pattern = val;
+                        else {
+                                CERROR("Unknown param %s\n", key);
+                                rc = -EINVAL;
+                                /* continue parsing other params */
+                                continue;
+                        }
+                        LCONSOLE_INFO("set %s to %ld\n", key, val);
+                }
+                lov_fix_desc(desc);
                 GOTO(out, rc);
         }
         default: {

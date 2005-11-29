@@ -1659,13 +1659,8 @@ static int mds_postsetup(struct obd_device *obd)
                 RETURN(rc);
 
         if (mds->mds_profile) {
-                struct lvfs_run_ctxt saved;
                 struct lustre_profile *lprof;
-                struct config_llog_instance cfg;
-
-                cfg.cfg_instance = NULL;
-                cfg.cfg_uuid = mds->mds_lov_uuid;
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+#if 0
                 /* This will no longer be used.  mgc should have already
                    parsed the mds setup log.  The last steps in the log must be
                         attach mds mdsA mdsA_UUID
@@ -1673,6 +1668,11 @@ static int mds_postsetup(struct obd_device *obd)
                    or, better,
                         setup mountconf mountconf mdsA
                    then we can decide if we're using old or new methods. */
+                struct lvfs_run_ctxt saved;
+                struct config_llog_instance cfg;
+                cfg.cfg_instance = NULL;
+                cfg.cfg_uuid = mds->mds_lov_uuid;
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                                              mds->mds_profile, &cfg);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -1692,6 +1692,7 @@ static int mds_postsetup(struct obd_device *obd)
                         GOTO(err_llog, rc);
                         break;
                 }
+#endif
 
                 /* The profile defines which osc and mdc to connect to, for a 
                    client.  We reuse that here, ignoring lprof->lp_mdc.
@@ -1711,7 +1712,7 @@ static int mds_postsetup(struct obd_device *obd)
 
 err_cleanup:
         mds_lov_clean(obd);
-err_llog:
+//err_llog:
         llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
         RETURN(rc);
 }

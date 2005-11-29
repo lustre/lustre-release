@@ -935,9 +935,9 @@ typedef enum {
         MGMT_DISCONNECT,
         MGMT_EXCEPTION,         /* node died, etc. */
         MGMT_FIRST_CONNECT,     /* first connect. */
-        MGMT_MDS_ADD,
         MGMT_OST_ADD,
         MGMT_OST_DEL,
+        MGMT_MDS_ADD,
         MGMT_LAST_OPC
 } mgs_cmd_t;
 

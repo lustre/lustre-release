@@ -642,7 +642,6 @@ int class_process_config(struct lustre_cfg *lcfg)
                         sizeof (obd_lustre_upcall));
                 GOTO(out, err = 0);
         }
-        case LCFG_PARAM: 
         case LCFG_MARKER: {
                 LCONSOLE_WARN("LCFG_MARKER not yet implemented.\n");
                 GOTO(out, err = 0);

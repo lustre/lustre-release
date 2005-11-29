@@ -96,7 +96,7 @@ command_t cmdlist[] = {
          "setup for elan/myrinet networks.\n"
          "usage: mynid [<nid>]"},
         {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
-         "usage: add_uuid <uuid> <nid> <net_type>"},
+         "usage: add_uuid <uuid> <nid>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
          "usage: close_uuid <uuid> <net_type>"},
         {"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
@@ -142,8 +142,8 @@ command_t cmdlist[] = {
         /* Device configuration commands */
         {"==== device config =====", jt_noop, 0, "device config"},
         {"attach", jt_lcfg_attach, 0,
-         "set the type of the current device (with <name> and <uuid>)\n"
-         "usage: attach type [name [uuid]]"},
+         "set the type, name, and uuid of the current device\n"
+         "usage: attach type name uuid"},
         {"setup", jt_lcfg_setup, 0,
          "type specific device configuration information\n"
          "usage: setup <args...>"},
@@ -236,6 +236,8 @@ command_t cmdlist[] = {
          "usage: add_conn <conn_uuid> [priority]\n"},
         {"del_conn ", jt_lcfg_del_conn, 0,
          "usage: del_conn <conn_uuid> \n"},
+        {"param", jt_lcfg_param, 0,
+         "usage: param <keyword=val> ...\n"},
        
         /* Llog operations */ 
         {"llog_catlist", jt_llog_catlist, 0, 

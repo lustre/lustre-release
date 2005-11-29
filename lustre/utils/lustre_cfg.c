@@ -97,23 +97,14 @@ int jt_lcfg_attach(int argc, char **argv)
         struct lustre_cfg *lcfg;
         int rc;
 
-        if (argc != 2 && argc != 3 && argc != 4)
+        if (argc != 4)
                 return CMD_HELP;
 
         lustre_cfg_bufs_reset(&bufs, NULL);
 
         lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
-        if (argc >= 3) {
-                lustre_cfg_bufs_set_string(&bufs, 0, argv[2]);
-        } else {
-                fprintf(stderr, "error: %s: LCFG_ATTACH requires a name\n",
-                        jt_cmdname(argv[0])); 
-                return -EINVAL;
-        }
-
-        if (argc == 4) {
-                lustre_cfg_bufs_set_string(&bufs, 2, argv[3]);
-        }
+        lustre_cfg_bufs_set_string(&bufs, 0, argv[2]);
+        lustre_cfg_bufs_set_string(&bufs, 2, argv[3]);
 
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
@@ -653,3 +644,30 @@ int jt_lcfg_del_conn(int argc, char **argv)
 
         return rc;
 }
+
+int jt_lcfg_param(int argc, char **argv)
+{
+        int i, rc;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+
+        if (argc >= LUSTRE_CFG_MAX_BUFCOUNT)
+                return CMD_HELP;
+
+        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+
+        for (i = 1; i < argc; i++) {
+                lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
+        }
+
+        lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+        
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        lustre_cfg_free(lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+        return rc;
+}
+
