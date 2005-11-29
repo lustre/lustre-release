@@ -1712,7 +1712,7 @@ ksocknal_connect (ksock_route_t *route)
                                            route->ksnr_retry_interval);
 
         if (!list_empty(&peer->ksnp_tx_queue) &&
-            peer->ksnp_accepting != 0 &&
+            peer->ksnp_accepting == 0 &&
             ksocknal_find_connecting_route_locked(peer) == NULL) {
                 /* ksnp_tx_queue is queued on a conn on successful
                  * connection */
