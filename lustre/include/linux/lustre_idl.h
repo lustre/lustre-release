@@ -945,6 +945,7 @@ typedef enum {
 #define UUID_MAXLEN NAME_MAXLEN + 5
 struct mgmt_ost_info {
         struct list_head moi_list;
+        char             moi_fullfsname[NAME_MAXLEN];
         char             moi_ostname[NAME_MAXLEN];
         char             moi_nodename[NAME_MAXLEN];
         char             moi_ostuuid[UUID_MAXLEN];
