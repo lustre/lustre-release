@@ -993,7 +993,7 @@ out:
         rep_moi = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_moi));
         memcpy(rep_moi, moi, sizeof(*rep_moi));
         if (rc)
-                rep_moi->moi_index = rc;
+                rep_moi->moi_stripe_index = rc;
         return rc;
 }
 EXPORT_SYMBOL(mgmt_handle_ost_add);
