@@ -335,9 +335,9 @@ out:
         return(err);
 }
 
-/* Get the log "profile" from a MGS and process it.
-   This func should work for both clients and servers */
-int lustre_get_process_log(struct super_block *sb, char *profile, 
+/* Get a config log from the MGS and process it.
+   This func is called for both clients and servers. */
+int lustre_get_process_log(struct super_block *sb, char *logname, 
                        struct config_llog_instance *cfg)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
@@ -349,7 +349,7 @@ int lustre_get_process_log(struct super_block *sb, char *profile,
         int rc;
         LASSERT(mgc);
 
-        CDEBUG(D_MOUNT, "parsing config log %s\n", profile);
+        CDEBUG(D_MOUNT, "parsing config log %s\n", logname);
 
         rctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
@@ -382,17 +382,17 @@ int lustre_get_process_log(struct super_block *sb, char *profile,
 
 #if 0
         /* For debugging, it's useful to just dump the log */
-        class_config_dump_llog(rctxt, profile, cfg);
+        class_config_dump_llog(rctxt, logname, cfg);
 #endif
-        rc = class_config_parse_llog(rctxt, profile, cfg);
+        rc = class_config_parse_llog(rctxt, logname, cfg);
         obd_disconnect(exp);
         if (rc) {
                 LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
                                "from the MGS (%d).  Trying local log.\n",
-                               mgc->obd_name, profile, rc);
+                               mgc->obd_name, logname, rc);
                 /* If we couldn't connect to the MGS, try reading a copy
                    of the config log stored locally on disk */
-                rc = class_config_parse_llog(lctxt, profile, cfg);
+                rc = class_config_parse_llog(lctxt, logname, cfg);
                 if (rc) {
                         LCONSOLE_ERROR("%s: Can't read the local config (%d)\n",
                                        mgc->obd_name, rc);
@@ -511,8 +511,15 @@ static int lustre_start_mgc(struct super_block *sb)
         LASSERT(lsi->lsi_lmd);
         
         obd = class_name2obd(mgcname);
-        if (obd) /* mgc already running */
+        if (obd) {
+                atomic_inc(&obd->u.cli.cl_mgc_refcount);
+                /* FIXME But now do we add uuids or not?  If there's truly
+                   one MGC per site, should all be the same...  
+                   Maybe check here?
+                */
                 goto out;
+        }
+        atomic_set(&obd->u.cli.cl_mgc_refcount, 1);
 
         if (lsi->lsi_lmd->lmd_mgsnid_count == 0) {
                 LCONSOLE_ERROR("No NIDs for the MGS were given.\n");
@@ -565,12 +572,33 @@ static void lustre_stop_mgc(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
+        lnet_nid_t nid;
+        int i, err;
 
-        // FIXME cleanup on refcount = 0 
         obd = lsi->lsi_mgc;
-        if (obd) 
-                class_manual_cleanup(obd);
+        if (!obd)
+                return;
+
         lsi->lsi_mgc = NULL;
+        if (!atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
+                CDEBUG(D_MOUNT, "mgc still has %d references.\n", 
+                       atomic_read(&obd->u.cli.cl_mgc_refcount));
+                return; 
+        }
+
+        class_manual_cleanup(obd);
+        
+        /* class_add_uuid adds a nid even if the same uuid exists; we might
+           delete any copy here.  So they all better match. */
+        for (i = 0; i < lsi->lsi_lmd->lmd_mgsnid_count; i++) {
+                nid = lsi->lsi_lmd->lmd_mgsnid[i];
+                err = do_lcfg(obd->obd_name, nid, LCFG_DEL_UUID, 
+                              libcfs_nid2str(nid), 0, 0, 0);
+                if (err)
+                        CERROR("del MDC UUID %s failed: rc = %d\n", 
+                               libcfs_nid2str(nid), err);
+        }
+        /* class_import_put will get rid of the additional connections */
 }
           
 /* Stop MDS/OSS if nobody is using them */

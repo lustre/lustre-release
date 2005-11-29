@@ -326,6 +326,7 @@ struct client_obd {
         struct super_block      *cl_mgc_sb;
         struct dentry           *cl_mgc_configs_dir;
         struct list_head         cl_mgc_open_llogs;
+        atomic_t                 cl_mgc_refcount;
 
         /* Flags section */
         unsigned int             cl_checksum:1; /* debug checksums */
