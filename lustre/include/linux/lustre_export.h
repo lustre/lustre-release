@@ -74,7 +74,6 @@ struct obd_export {
                                   exp_replay_needed:1,
                                   exp_libclient:1; /* liblustre client? */
         union {
-                struct mgs_export_data    eu_mgs_data;
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;

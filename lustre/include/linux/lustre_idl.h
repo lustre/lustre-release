@@ -942,6 +942,7 @@ typedef enum {
 #define NAME_MAXLEN 64
 #define UUID_MAXLEN NAME_MAXLEN + 5
 
+
 struct mgmt_ost_info {
         struct list_head moi_list;
         char             moi_fullfsname[NAME_MAXLEN];
@@ -969,6 +970,13 @@ struct mgmt_mds_info {
 extern void lustre_swab_mgmt_mds_info(struct mgmt_mds_info *oinfo);
 
 
+struct mgmt_target_info{
+        __u32 mti_flags;
+        union {
+                struct mgmt_ost_info moi;
+                struct mgmt_mds_info mmi;
+        } u;
+};
 /*
  * Opcodes for multiple servers.
  */

@@ -86,7 +86,7 @@ out:
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(mgc_ost_add);
+EXPORT_SYMBOL(mgc_target_add); 
 
 /* Remove from config llog */
 int mgc_target_del(struct obd_export *exp, struct mgmt_ost_info *moi)
@@ -122,7 +122,7 @@ out:
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(mgc_ost_del);
+EXPORT_SYMBOL(mgc_target_del);
 
 static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb, 
                         struct vfsmount *mnt)
@@ -383,7 +383,7 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
         if (keylen == strlen("register") &&
             memcmp(key, "register", keylen) == 0) {
                 struct mgmt_ost_info *moi;
-                if (vallen != sizeof(mgmt_ost_info))
+                if (vallen != sizeof(struct mgmt_ost_info))
                         RETURN(-EINVAL);
                 moi = (struct mgmt_ost_info *)val;
                 CERROR("register %s %#x\n", moi->moi_ostname, moi->moi_flags);

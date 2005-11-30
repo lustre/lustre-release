@@ -46,7 +46,7 @@
 #define LDD_F_SV_TYPE_OST   0x0002
 #define LDD_F_SV_TYPE_MGMT  0x0004
 #define LDD_F_NEED_INDEX    0x0010
-#define LDD_F_FIRST_START   0x0020
+#define LDD_F_NEED_REGISTER 0x0020
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0, 

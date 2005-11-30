@@ -350,23 +350,23 @@ int mgs_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = -ENOTSUPP; /* la la la */
                 break;
-        case MGMT_FIRST_CONNECT:
-                CDEBUG(D_INODE, "server connect at first time\n");
-                OBD_FAIL_RETURN(OBD_FAIL_MGMT_FIRST_CONNECT, 0);
-                rc = mgmt_handle_first_connect(req);
-                break;
+ //       case MGMT_FIRST_CONNECT:
+ //               CDEBUG(D_INODE, "server connect at first time\n");
+ //               OBD_FAIL_RETURN(OBD_FAIL_MGMT_FIRST_CONNECT, 0);
+ //               rc = mgmt_handle_first_connect(req);
+//                break;
         case MGMT_TARGET_ADD:
                 CDEBUG(D_INODE, "target add\n");
                 rc = mgmt_handle_target_add(req);
                 break;
         case MGMT_TARGET_DEL:
                 CDEBUG(D_INODE, "target del\n");
-                rc = mgmt_handle_target_del(req);
+//                rc = mgmt_handle_target_del(req);
                 break;
-        case MGMT_MDS_ADD:
-                CDEBUG(D_INODE, "mds add\n");
-                rc = mgmt_handle_mds_add(req);
-                break;
+//        case MGMT_MDS_ADD:
+//                CDEBUG(D_INODE, "mds add\n");
+//                rc = mgmt_handle_mds_add(req);
+//                break;
         case LLOG_ORIGIN_HANDLE_CREATE:
                 DEBUG_REQ(D_INODE, req, "llog_init");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);

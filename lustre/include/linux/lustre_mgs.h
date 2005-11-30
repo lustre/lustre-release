@@ -55,5 +55,5 @@ int mgs_fs_cleanup(struct obd_device *obddev);
 extern int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, 
                          int len, void *karg, void *uarg);
 
-extern int mgs_mds_register(struct ptlrpc_request*);
+extern int mgs_mds_register(struct ptlrpc_request *req);
 #endif
