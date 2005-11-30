@@ -87,12 +87,15 @@ static int osc_check_state(struct obd_export *exp)
 static int osc_check_nospc(struct obd_export *exp)
 {
         __u64 blocks, bavail;
+        __u64 inodes, iavail;
         int rc = 0;
         ENTRY;
 
         spin_lock(&exp->exp_obd->obd_osfs_lock);
         blocks = exp->exp_obd->obd_osfs.os_blocks;
         bavail = exp->exp_obd->obd_osfs.os_bavail;
+        inodes = exp->exp_obd->obd_osfs.os_files;
+        iavail = exp->exp_obd->obd_osfs.os_ffree;
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
         
         /* return 1 if available space smaller then (blocks >> 10) of all space
@@ -100,6 +103,9 @@ static int osc_check_nospc(struct obd_export *exp)
          * some point, to let all created and opened files finish possible
          * writes. */
         if (blocks > 0 && bavail < (blocks >> 10))
+                rc = 1;
+
+        if (inodes > 0 && iavail < 128)
                 rc = 1;
 
         RETURN(rc);

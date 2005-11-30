@@ -11,6 +11,7 @@
 #include <linux/lustre_handles.h>
 #include <linux/lustre_debug.h>
 #include <linux/obd.h>
+#include <linux/lustre_disk.h>
 
 #define FILTER_LAYOUT_VERSION "2"
 
@@ -22,26 +23,16 @@
 # define OBD_FILTER_SAN_DEVICENAME "sanobdfilter"
 #endif
 
-#define LAST_RCVD "last_rcvd"
 #define FILTER_INIT_OBJID 0
-
-#define FILTER_LR_SERVER_SIZE    512
-
-#define FILTER_LR_CLIENT_START   8192
-#define FILTER_LR_CLIENT_SIZE    128
-
-/* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
-#define FILTER_LR_MAX_CLIENTS (PAGE_SIZE * 8)
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 #define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
-#define FILTER_ROCOMPAT_SUPP   (0)
+#define FILTER_ROCOMPAT_SUPP   (OBD_ROCOMPAT_CROW)
 
-#define FILTER_INCOMPAT_GROUPS 0x00000001
-#define FILTER_INCOMPAT_SUPP   (FILTER_INCOMPAT_GROUPS)
+#define FILTER_INCOMPAT_SUPP   (OBD_INCOMPAT_GROUPS)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
 
@@ -49,7 +40,7 @@
  * Try to keep this the same as mds_server_data so we might one day merge. */
 struct filter_server_data {
         __u8  fsd_uuid[40];        /* server UUID */
-        __u64 fsd_unused;          /* was fsd_last_objid - don't use for now */
+        __u64 fsd_last_transno_new;/* future last completed transaction ID */
         __u64 fsd_last_transno;    /* last completed transaction ID */
         __u64 fsd_mount_count;     /* FILTER incarnation number */
         __u32 fsd_feature_compat;  /* compatible feature flags */
@@ -62,7 +53,9 @@ struct filter_server_data {
         __u64 fsd_catalog_oid;     /* recovery catalog object id */
         __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
         __u8  fsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
+        __u32 fsd_ost_index;       /* index number of OST in LOV */
+        __u32 fsd_mds_index;       /* index number of MDS in LMV */
+        __u8  fsd_padding[LR_SERVER_SIZE - 148];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -70,7 +63,7 @@ struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 56];
+        __u8  fcd_padding[LR_CLIENT_SIZE - 56];
 };
 
 #define FILTER_DENTRY_MAGIC 0x9efba101
@@ -80,6 +73,12 @@ struct filter_client_data {
 #define FILTER_VALID_FLAGS (OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLGENER  |\
                             OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ|\
                             OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
+
+struct filter_fid {
+        struct ll_fid   ff_fid;
+        __u64           ff_objid;
+        __u64           ff_group;
+};
 
 enum {
         LPROC_FILTER_READ_BYTES = 0,

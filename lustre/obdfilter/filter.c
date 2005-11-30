@@ -160,15 +160,14 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
          * there's no need for extra complication here
          */
         if (new_client) {
-                cl_idx = find_first_zero_bit(bitmap, FILTER_LR_MAX_CLIENTS);
+                cl_idx = find_first_zero_bit(bitmap, LR_MAX_CLIENTS);
         repeat:
-                if (cl_idx >= FILTER_LR_MAX_CLIENTS) {
-                        CERROR("no client slots - fix FILTER_LR_MAX_CLIENTS\n");
+                if (cl_idx >= LR_MAX_CLIENTS) {
+                        CERROR("no client slots - fix LR_MAX_CLIENTS\n");
                         RETURN(-EOVERFLOW);
                 }
                 if (test_and_set_bit(cl_idx, bitmap)) {
-                        cl_idx = find_next_zero_bit(bitmap,
-                                                    FILTER_LR_MAX_CLIENTS,
+                        cl_idx = find_next_zero_bit(bitmap, LR_MAX_CLIENTS,
                                                     cl_idx);
                         goto repeat;
                 }
@@ -302,7 +301,7 @@ static int filter_free_server_data(struct filter_obd *filter)
 {
         OBD_FREE(filter->fo_fsd, sizeof(*filter->fo_fsd));
         filter->fo_fsd = NULL;
-        OBD_FREE(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS / 8);
+        OBD_FREE(filter->fo_last_rcvd_slots, LR_MAX_CLIENTS / 8);
         filter->fo_last_rcvd_slots = NULL;
         return 0;
 }
@@ -370,16 +369,16 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 
         /* ensure padding in the struct is the correct size */
         LASSERT (offsetof(struct filter_server_data, fsd_padding) +
-                 sizeof(fsd->fsd_padding) == FILTER_LR_SERVER_SIZE);
+                 sizeof(fsd->fsd_padding) == LR_SERVER_SIZE);
         LASSERT (offsetof(struct filter_client_data, fcd_padding) +
-                 sizeof(fcd->fcd_padding) == FILTER_LR_CLIENT_SIZE);
+                 sizeof(fcd->fcd_padding) == LR_CLIENT_SIZE);
 
         OBD_ALLOC(fsd, sizeof(*fsd));
         if (!fsd)
                 RETURN(-ENOMEM);
         filter->fo_fsd = fsd;
 
-        OBD_ALLOC(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS / 8);
+        OBD_ALLOC(filter->fo_last_rcvd_slots, LR_MAX_CLIENTS / 8);
         if (filter->fo_last_rcvd_slots == NULL) {
                 OBD_FREE(fsd, sizeof(*fsd));
                 RETURN(-ENOMEM);
@@ -391,9 +390,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 memcpy(fsd->fsd_uuid, obd->obd_uuid.uuid,sizeof(fsd->fsd_uuid));
                 fsd->fsd_last_transno = 0;
                 mount_count = fsd->fsd_mount_count = 0;
-                fsd->fsd_server_size = cpu_to_le32(FILTER_LR_SERVER_SIZE);
-                fsd->fsd_client_start = cpu_to_le32(FILTER_LR_CLIENT_START);
-                fsd->fsd_client_size = cpu_to_le16(FILTER_LR_CLIENT_SIZE);
+                fsd->fsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
+                fsd->fsd_client_start = cpu_to_le32(LR_CLIENT_START);
+                fsd->fsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
                 fsd->fsd_subdir_count = cpu_to_le16(FILTER_SUBDIR_COUNT);
                 filter->fo_subdir_count = FILTER_SUBDIR_COUNT;
         } else {
@@ -413,14 +412,14 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         }
 
         if (fsd->fsd_feature_incompat & ~cpu_to_le32(FILTER_INCOMPAT_SUPP)) {
-                CERROR("unsupported feature %x\n",
-                       le32_to_cpu(fsd->fsd_feature_incompat) &
+                CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
+                       obd->obd_name, le32_to_cpu(fsd->fsd_feature_incompat) &
                        ~FILTER_INCOMPAT_SUPP);
                 GOTO(err_fsd, rc = -EINVAL);
         }
         if (fsd->fsd_feature_rocompat & ~cpu_to_le32(FILTER_ROCOMPAT_SUPP)) {
-                CERROR("read-only feature %x\n",
-                       le32_to_cpu(fsd->fsd_feature_rocompat) &
+                CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
+                       obd->obd_name, le32_to_cpu(fsd->fsd_feature_rocompat) &
                        ~FILTER_ROCOMPAT_SUPP);
                 /* Do something like remount filesystem read-only */
                 GOTO(err_fsd, rc = -EINVAL);
@@ -664,7 +663,7 @@ static int filter_prep_groups(struct obd_device *obd)
                         GOTO(cleanup_O0, rc);
                 }
                 filter->fo_fsd->fsd_feature_incompat |=
-                        cpu_to_le32(FILTER_INCOMPAT_GROUPS);
+                        cpu_to_le32(OBD_INCOMPAT_GROUPS);
                 rc = filter_update_server_data(obd, filter->fo_rcvd_filp,
                                                filter->fo_fsd, 1);
                 GOTO(cleanup_O0, rc);
@@ -716,15 +715,7 @@ static int filter_prep_groups(struct obd_device *obd)
                 filter->fo_last_objid_files[i] = filp;
 
                 if (filp->f_dentry->d_inode->i_size == 0) {
-                        if (i == 0 && filter->fo_fsd->fsd_unused != 0) {
-                                /* OST conversion, remove sometime post 1.0 */
-                                filter->fo_last_objids[0] =
-                                        le64_to_cpu(filter->fo_fsd->fsd_unused);
-                                CWARN("saving old objid "LPU64" to LAST_ID\n",
-                                      filter->fo_last_objids[0]);
-                        } else {
-                                filter->fo_last_objids[i] = FILTER_INIT_OBJID;
-                        }
+                        filter->fo_last_objids[i] = FILTER_INIT_OBJID;
                         rc = filter_update_last_objid(obd, i, 1);
                         if (rc)
                                 GOTO(cleanup, rc);
@@ -1703,6 +1694,15 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (data != NULL) {
                 data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
                 exp->exp_connect_flags = data->ocd_connect_flags;
+
+                if (!(filter->fo_fsd->fsd_feature_rocompat &
+                      cpu_to_le32(OBD_ROCOMPAT_CROW)) &&
+                    data->ocd_connect_flags & OBD_CONNECT_CROW) {
+                        filter->fo_fsd->fsd_feature_rocompat |=
+                                cpu_to_le32(OBD_ROCOMPAT_CROW);
+                        filter_update_server_data(obd, filter->fo_rcvd_filp,
+                                                  filter->fo_fsd, 1);
+                }
         }
 
         spin_lock_init(&fed->fed_lock);
@@ -2206,13 +2206,19 @@ filter_create_object(struct obd_device *obd, struct obdo *oa)
         spin_unlock(&filter->fo_blacklist_lock);
 
         /* check if object is already allocated */
-        dchild = filter_fid2dentry(obd, dparent, 
-				   group, oa->o_id);
+        dchild = filter_fid2dentry(obd, dparent, group, oa->o_id);
         if (IS_ERR(dchild))
                 GOTO(cleanup, dchild);
 
-        if (dchild->d_inode)
+        /* Files that already exist should only be below or at last_id */
+        if (dchild->d_inode) {
+                __u64 last_id = filter_last_id(filter, group);
+
+                LASSERTF(oa->o_id <= last_id,
+                         "existing objid "LPU64" larger than last_id "LPU64"\n",
+                         oa->o_id, last_id);
                 GOTO(cleanup, dchild);
+        }
 
         /* create new object */
         handle = fsfilt_start_log(obd, dparent->d_inode,
@@ -2251,20 +2257,21 @@ filter_create_object(struct obd_device *obd, struct obdo *oa)
 
         /* nobody else is touching this newly created object */
         LASSERT(dchild->d_inode);
-        
+
         if (oa->o_valid & OBD_MD_FLFID) {
-                struct ll_fid fid;
+                struct filter_fid ff;
 
                 /* packing fid and converting it to LE for storing into EA. Here
                  * oa->o_stripe_idx should be filled by LOV and rest of fields -
                  * by client. */
-                fid.id = cpu_to_le64(oa->o_fid);
-                fid.f_type = cpu_to_le32(oa->o_stripe_idx);
-                fid.generation = cpu_to_le32(oa->o_generation);
+                ff.ff_fid.id = cpu_to_le64(oa->o_fid);
+                ff.ff_fid.f_type = cpu_to_le32(oa->o_stripe_idx);
+                ff.ff_fid.generation = cpu_to_le32(oa->o_generation);
+                ff.ff_objid = cpu_to_le64(oa->o_id);
+                ff.ff_group = cpu_to_le64(group);
 
                 down(&dchild->d_inode->i_sem);
-                rc = fsfilt_set_md(obd, dchild->d_inode, handle,
-                                   &fid, sizeof(struct ll_fid));
+                rc = fsfilt_set_md(obd, dchild->d_inode, handle,&ff,sizeof(ff));
                 up(&dchild->d_inode->i_sem);
                 if (rc) {
                         CERROR("store fid in object failed! rc:%d\n", rc);
@@ -2620,7 +2627,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                      !!(oa->o_flags & OBD_FL_CREATE_CROW) !=
                      !!(oa->o_flags & OBD_FL_RECREATE_OBJS)));
 
-        /* echo, llog and other "create asap" cases. */
+        /* all non-CROW creates should end up here */
         if (OBDO_URGENT_CREATE(oa)) {
                 struct obd_statfs *osfs;
                 struct dentry *dentry;
@@ -2659,7 +2666,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                 }
         } else {
                 CERROR("wrong @oa flags detected 0x%lx. Not an urgent "
-                       "create and not recovery.\n", (unsigned long)oa->o_flags);
+                       "create and not recovery.\n",(unsigned long)oa->o_flags);
                 LBUG();
         }
         RETURN(rc);
@@ -2951,7 +2958,7 @@ static struct obd_ops filter_sanobd_ops = {
         .o_iocontrol      = filter_iocontrol,
 };
 
-quota_interface_t *quota_interface = NULL;
+quota_interface_t *quota_interface;
 extern quota_interface_t filter_quota_interface;
 
 static int __init obdfilter_init(void)
