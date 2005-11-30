@@ -294,25 +294,25 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (data != NULL) {
                 data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
 
+                if (!obd->u.mds.mds_fl_acl)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_ACL;
+
                 if (!obd->u.mds.mds_fl_user_xattr)
                         data->ocd_connect_flags &= ~OBD_CONNECT_USER_XATTR;
 
                 exp->exp_connect_flags = data->ocd_connect_flags;
         }
 
-        if ((obd->u.mds.mds_fl_acl == 0) !=
+        if (obd->u.mds.mds_fl_acl &&
             ((exp->exp_connect_flags & OBD_CONNECT_ACL) == 0)) {
-                CWARN("%s require ACL support but %s doesn't\n",
-                      obd->u.mds.mds_fl_acl ? "MDS" : "client",
-                      obd->u.mds.mds_fl_acl ? "client" : "MDS");
+                CWARN("%s: MDS requires ACL support but client does not\n",
+                      obd->obd_name);
                 GOTO(out, rc = -EBADE);
         }
 
         OBD_ALLOC(mcd, sizeof(*mcd));
-        if (!mcd) {
-                CERROR("mds: out of memory for client data\n");
+        if (!mcd)
                 GOTO(out, rc = -ENOMEM);
-        }
 
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
@@ -524,6 +524,7 @@ int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
         RETURN(rc);
 }
 
+#ifdef CONFIG_FS_POSIX_ACL
 static
 int mds_pack_posix_acl(struct inode *inode, struct lustre_msg *repmsg,
                        struct mds_body *repbody, int repoff)
@@ -559,6 +560,9 @@ out:
         repbody->valid |= OBD_MD_FLACL;
         return 0;
 }
+#else
+#define mds_pack_posix_acl(inode, repmsg, repbody, repoff) 0
+#endif
 
 int mds_pack_acl(struct mds_export_data *med, struct inode *inode,
                  struct lustre_msg *repmsg, struct mds_body *repbody,
@@ -628,6 +632,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         if (rc)
                 RETURN(rc);
 
+#ifdef CONFIG_FS_POSIX_ACL
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (reqbody->valid & OBD_MD_FLACL)) {
                 rc = mds_pack_acl(&req->rq_export->exp_mds_data,
@@ -638,6 +643,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                 if (body->aclsize)
                         reply_off++;
         }
+#endif
 
         RETURN(rc);
 }
@@ -686,6 +692,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                        inode->i_size + 1, body->eadatasize);
         }
 
+#ifdef CONFIG_FS_POSIX_ACL
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (body->valid & OBD_MD_FLACL)) {
                 struct dentry de = { .d_inode = inode };
@@ -707,6 +714,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                 }
                 bufcount++;
         }
+#endif
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR("failed MDS_GETATTR_PACK test\n");
@@ -1664,20 +1672,29 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
 }
 
 static
-void fsoptions_to_mds_flags(struct mds_obd *mds, const char *options)
+void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
 {
-        const char *p = options;
+        char *p = options;
 
         while (*options) {
+                int len;
+
                 while (*p && *p != ',')
                         p++;
 
-                if ((p - options == sizeof("user_xattr") - 1) &&
-                    !memcmp(options, "user_xattr", sizeof("user_xattr") - 1))
+                len = p - options;
+                if (len == sizeof("user_xattr") - 1 &&
+                    memcmp(options, "user_xattr", len) == 0) {
                         mds->mds_fl_user_xattr = 1;
-                else if ((p - options == sizeof("acl") - 1) &&
-                    !memcmp(options, "acl", sizeof("acl") - 1))
+                } else if (len == sizeof("acl") - 1 &&
+                         memcmp(options, "acl", len) == 0) {
+#ifdef CONFIG_FS_POSIX_ACL
                         mds->mds_fl_acl = 1;
+#else
+                        CWARN("ignoring unsupported acl mount option\n");
+                        memmove(options, p, strlen(p) + 1);
+#endif
+                }
 
                 options = ++p;
         }
@@ -1724,7 +1741,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         /* here we use "iopen_nopriv" hardcoded, because it affects MDS utility
          * and the rest of options are passed by mount options. Probably this
          * should be moved to somewhere else like startup scripts or lconf. */
-        sprintf(options, "iopen_nopriv");
+        strcpy(options, "iopen_nopriv");
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4)) {
                 sprintf(options + strlen(options), ",%s",
@@ -2168,6 +2185,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (it->opc & (IT_OPEN | IT_GETATTR | IT_LOOKUP)))
+                /* we should never allow OBD_CONNECT_ACL if not configured */
                 repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
         else if (it->opc & IT_UNLINK)
                 repsize[repbufcnt++] = mds->mds_max_cookiesize;
@@ -2445,9 +2463,6 @@ static struct obd_ops mdt_obd_ops = {
         .o_cleanup         = mdt_cleanup,
         .o_health_check    = mdt_health_check,
 };
-
-quota_interface_t *quota_interface = NULL;
-extern quota_interface_t mds_quota_interface;
 
 static int __init mds_init(void)
 {

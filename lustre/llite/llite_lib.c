@@ -157,8 +157,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
         if (sbi->ll_flags & LL_SBI_USER_XATTR)
                 data->ocd_connect_flags |= OBD_CONNECT_USER_XATTR;
-        if (sbi->ll_flags & LL_SBI_ACL)
-                data->ocd_connect_flags |= OBD_CONNECT_ACL;
+        data->ocd_connect_flags |= OBD_CONNECT_ACL;
 
         if (sbi->ll_flags & LL_SBI_FLOCK) {
                 sbi->ll_fop = &ll_file_operations_flock;
@@ -199,11 +198,10 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 sbi->ll_flags &= ~LL_SBI_USER_XATTR;
         }
 
-        if (((sbi->ll_flags & LL_SBI_ACL) == 0) !=
-            ((data->ocd_connect_flags & OBD_CONNECT_ACL) == 0)) {
-                CERROR("Server return unexpected ACL flags\n");
-                GOTO(out_mdc, err = -EBADE);
-        }
+        if (data->ocd_connect_flags & OBD_CONNECT_ACL)
+                sbi->ll_flags |= LL_SBI_ACL;
+        else
+                sbi->ll_flags &= ~LL_SBI_ACL;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* We set sb->s_dev equal on all lustre clients in order to support
@@ -261,7 +259,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         /* make root inode
          * XXX: move this to after cbd setup? */
         err = mdc_getattr(sbi->ll_mdc_exp, &rootfid,
-                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLACL,
+                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS |
+                          (sbi->ll_flags & LL_SBI_ACL ? OBD_MD_FLACL : 0),
                           0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
@@ -484,12 +483,13 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
                 }
                 tmp = ll_set_opt("acl", this_char, LL_SBI_ACL);
                 if (tmp) {
-                        *flags |= tmp;
+                        /* Ignore deprecated mount option.  The client will
+                         * always try to mount with ACL support, whether this
+                         * is used depends on whether server supports it. */
                         continue;
                 }
                 tmp = ll_set_opt("noacl", this_char, LL_SBI_ACL);
                 if (tmp) {
-                        *flags &= ~tmp;
                         continue;
                 }
         }
@@ -617,12 +617,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         if (rc)
                 GOTO(out_cleanup, rc);
 
-        if (lmd->lmd_flags & LMD_FLG_ACL) {
-                OBD_ALLOC(ocd, sizeof(*ocd));
-                if (ocd == NULL)
-                        GOTO(out_cleanup, rc = -ENOMEM);
-                ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
-        }
+        ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
 
         rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
         if (rc) {
@@ -741,8 +736,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                         sbi->ll_flags |= LL_SBI_FLOCK;
                 if (lmd->lmd_flags & LMD_FLG_USER_XATTR)
                         sbi->ll_flags |= LL_SBI_USER_XATTR;
-                if (lmd->lmd_flags & LMD_FLG_ACL)
-                        sbi->ll_flags |= LL_SBI_ACL;
 
                 /* generate a string unique to this super, let's try
                  the address of the super itself.*/
@@ -926,11 +919,13 @@ void ll_clear_inode(struct inode *inode)
                 lli->lli_symlink_name = NULL;
         }
 
+#ifdef CONFIG_FS_POSIX_ACL
         if (lli->lli_posix_acl) {
                 LASSERT(atomic_read(&lli->lli_posix_acl->a_refcount) == 1);
                 posix_acl_release(lli->lli_posix_acl);
                 lli->lli_posix_acl = NULL;
         }
+#endif
 
         lli->lli_inode_magic = LLI_INODE_DEAD;
 
@@ -1298,6 +1293,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                        inode->i_sb->s_blocksize);
         }
 
+#ifdef CONFIG_FS_POSIX_ACL
         LASSERT(!md->posix_acl || (body->valid & OBD_MD_FLACL));
         if (body->valid & OBD_MD_FLACL) {
                 spin_lock(&lli->lli_lock);
@@ -1306,6 +1302,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 lli->lli_posix_acl = md->posix_acl;
                 spin_unlock(&lli->lli_lock);
         }
+#endif
 
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;

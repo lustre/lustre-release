@@ -40,6 +40,7 @@ struct fsfilt_objinfo {
 
 #define XATTR_LUSTRE_MDS_LOV_EA         "lov"
 
+struct lustre_dquot;
 struct fsfilt_operations {
         struct list_head fs_list;
         struct module *fs_owner;

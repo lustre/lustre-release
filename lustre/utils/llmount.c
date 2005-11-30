@@ -60,7 +60,6 @@ void usage(FILE *out)
                 "\t-o: filesystem mount options:\n"
                 "\t\tflock/noflock: enable/disable flock support\n"
                 "\t\tuser_xattr/nouser_xattr: enable/disable user extended attributes\n"
-                "\t\t{no}acl: enable/disable ACL support\n"
                 );
         exit(out != stdout);
 }

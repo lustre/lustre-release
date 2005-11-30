@@ -338,6 +338,7 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
                   rec->cr_replayfid.generation, rec->cr_replayfid.id);
 }
 
+#ifdef CONFIG_FS_POSIX_ACL
 static
 int mdc_unpack_acl(struct obd_export *exp, struct ptlrpc_request *req,
                    struct lustre_md *md, unsigned int offset)
@@ -376,6 +377,9 @@ int mdc_unpack_acl(struct obd_export *exp, struct ptlrpc_request *req,
         md->posix_acl = acl;
         return 0;
 }
+#else
+#define mdc_unpack_acl(exp, req, md, offset) 0
+#endif
 
 int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                       struct obd_export *exp,
@@ -441,10 +445,12 @@ void mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
         if (md->lsm)
                 obd_free_memmd(exp, &md->lsm);
 
+#ifdef CONFIG_FS_POSIX_ACL
         if (md->posix_acl) {
                 posix_acl_release(md->posix_acl);
                 md->posix_acl = NULL;
         }
+#endif
 }
 
 static void mdc_commit_open(struct ptlrpc_request *req)
@@ -1241,7 +1247,7 @@ struct obd_ops mdc_obd_ops = {
         .o_llog_finish  = mdc_llog_finish,
 };
 
-static quota_interface_t *quota_interface = NULL;
+static quota_interface_t *quota_interface;
 extern quota_interface_t mdc_quota_interface;
 
 int __init mdc_init(void)
@@ -1249,10 +1255,10 @@ int __init mdc_init(void)
         int rc;
         struct lprocfs_static_vars lvars;
         lprocfs_init_vars(mdc, &lvars);
- 
+
         quota_interface = PORTAL_SYMBOL_GET(mdc_quota_interface);
         init_obd_quota_ops(quota_interface, &mdc_obd_ops);
-        
+
         rc = class_register_type(&mdc_obd_ops, lvars.module_vars,
                                  LUSTRE_MDC_NAME);
         if (rc && quota_interface)

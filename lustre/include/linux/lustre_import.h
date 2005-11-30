@@ -92,6 +92,7 @@ struct obd_import {
                                   imp_deactive:1;
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
+        __u64                     imp_connect_flags_orig;
 };
 
 #define IMP_CROW_ABLE(imp) \

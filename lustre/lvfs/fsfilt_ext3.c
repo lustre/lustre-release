@@ -53,6 +53,7 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
 #endif
+#include <linux/lustre_compat25.h>
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #include <linux/ext3_extents.h>
@@ -414,13 +415,15 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                 /* make sure _something_ gets set - so new inode
                  * goes to disk (probably won't work over XFS */
                 if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
-                        iattr->ia_valid |= ATTR_MODE;
-                        iattr->ia_mode = inode->i_mode;
+                        iattr->ia_valid |= ATTR_MTIME;
+                        iattr->ia_mtime = inode->i_mtime;
                 }
         }
 
         /* Don't allow setattr to change file type */
-        iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
+        if (iattr->ia_valid & ATTR_MODE)
+                iattr->ia_mode = (inode->i_mode & S_IFMT) |
+                                 (iattr->ia_mode & ~S_IFMT);
 
         /* We set these flags on the client, but have already checked perms
          * so don't confuse inode_change_ok. */

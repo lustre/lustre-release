@@ -1594,6 +1594,7 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
 static
 int lustre_check_acl(struct inode *inode, int mask)
 {
+#ifdef CONFIG_FS_POSIX_ACL
         struct ll_inode_info *lli = ll_i2info(inode);
         struct posix_acl *acl;
         int rc;
@@ -1610,6 +1611,9 @@ int lustre_check_acl(struct inode *inode, int mask)
         posix_acl_release(acl);
 
         RETURN(rc);
+#else
+        return 0;
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))

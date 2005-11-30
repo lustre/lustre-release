@@ -3358,7 +3358,7 @@ struct obd_ops sanosc_obd_ops = {
 };
 #endif
 
-static quota_interface_t *quota_interface = NULL;
+static quota_interface_t *quota_interface;
 extern quota_interface_t osc_quota_interface;
 
 int __init osc_init(void)

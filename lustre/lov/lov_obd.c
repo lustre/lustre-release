@@ -2240,7 +2240,7 @@ struct obd_ops lov_obd_ops = {
         .o_notify              = lov_notify,
 };
 
-static quota_interface_t *quota_interface = NULL;
+static quota_interface_t *quota_interface;
 extern quota_interface_t lov_quota_interface;
 
 int __init lov_init(void)
@@ -2253,7 +2253,7 @@ int __init lov_init(void)
 
         quota_interface = PORTAL_SYMBOL_GET(lov_quota_interface);
         init_obd_quota_ops(quota_interface, &lov_obd_ops);
-        
+
         rc = class_register_type(&lov_obd_ops, lvars.module_vars,
                                  OBD_LOV_DEVICENAME);
         if (rc && quota_interface)

@@ -289,6 +289,10 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 dst->o_generation = lli->lli_st_generation;
                 newvalid |= OBD_MD_FLGENER;
         }
+        if (valid & OBD_MD_FLFID) {
+                dst->o_fid = st->st_ino;
+                newvalid |= OBD_MD_FLFID;
+        }
 
         dst->o_valid |= newvalid;
 }
@@ -343,14 +347,14 @@ static struct inode* llu_new_inode(struct filesys *fs,
 	struct inode *inode;
         struct llu_inode_info *lli;
         struct intnl_stat st = {
-                st_dev:         0,
+                .st_dev  = 0,
 #ifndef AUTOMOUNT_FILE_NAME
-                st_mode:        fid->f_type & S_IFMT,
+                .st_mode = fid->f_type & S_IFMT,
 #else
-                st_mode:        fid->f_type /* all of the bits! */
+                .st_mode = fid->f_type /* all of the bits! */
 #endif
-                st_uid:         geteuid(),
-                st_gid:         getegid(),
+                .st_uid  = geteuid(),
+                .st_gid  = getegid(),
         };
 
         OBD_ALLOC(lli, sizeof(*lli));
@@ -367,8 +371,7 @@ static struct inode* llu_new_inode(struct filesys *fs,
 
         lli->lli_sysio_fid.fid_data = &lli->lli_fid;
         lli->lli_sysio_fid.fid_len = sizeof(lli->lli_fid);
-
-        memcpy(&lli->lli_fid, fid, sizeof(*fid));
+        lli->lli_fid = *fid;
 
         /* file identifier is needed by functions like _sysio_i_find() */
 	inode = _sysio_i_new(fs, &lli->lli_sysio_fid,

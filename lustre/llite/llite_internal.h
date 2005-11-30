@@ -240,10 +240,6 @@ extern spinlock_t inode_lock;
 
 extern struct proc_dir_entry *proc_lustre_fs_root;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# define hlist_del_init list_del_init
-#endif
-
 static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))

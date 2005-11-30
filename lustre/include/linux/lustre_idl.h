@@ -428,7 +428,7 @@ struct obd_statfs {
         __u32           os_bsize;
         __u32           os_namelen;
         __u64           os_maxbytes;
-        __u32           os_state;
+        __u32           os_state;       /* positive error code on server */
         __u32           os_spare1;
         __u32           os_spare2;
         __u32           os_spare3;

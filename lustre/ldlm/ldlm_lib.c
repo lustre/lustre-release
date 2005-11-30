@@ -374,8 +374,10 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 GOTO(out_ldlm, rc);
 
         ocd = &imp->imp_connect_data;
-        if (data)
+        if (data) {
                 *ocd = *data;
+                imp->imp_connect_flags_orig = data->ocd_connect_flags;
+        }
 
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {

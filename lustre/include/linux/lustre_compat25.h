@@ -172,10 +172,16 @@ static inline int cleanup_group_info(void)
 #define hlist_node                      list_head
 #define HLIST_HEAD                      LIST_HEAD
 #define INIT_HLIST_HEAD                 INIT_LIST_HEAD
-#define INIT_HLIST_NODE(p)              (p)                 
 #define hlist_del_init                  list_del_init
 #define hlist_add_head                  list_add
+#endif
+#ifndef INIT_HLIST_NODE
+#define INIT_HLIST_NODE(p)              ((p)->next = NULL, (p)->prev = NULL)
+#endif
+#ifndef hlist_for_each
 #define hlist_for_each                  list_for_each
+#endif
+#ifndef hlist_for_each_safe
 #define hlist_for_each_safe             list_for_each_safe
 #endif
 #define KDEVT_INIT(val)                 (val)
