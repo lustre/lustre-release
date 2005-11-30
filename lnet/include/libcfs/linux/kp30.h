@@ -119,7 +119,7 @@ do {                                                                    \
 #define PORTAL_SYMBOL_REGISTER(x) inter_module_register(#x, THIS_MODULE, &x)
 #define PORTAL_SYMBOL_UNREGISTER(x) inter_module_unregister(#x)
 
-#define PORTAL_SYMBOL_GET(x) inter_module_get(#x)
+#define PORTAL_SYMBOL_GET(x) (void *)inter_module_get(#x)
 #define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
 
 #define PORTAL_MODULE_USE       MOD_INC_USE_COUNT
