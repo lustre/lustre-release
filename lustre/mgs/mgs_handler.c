@@ -54,41 +54,23 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct obd_export *exp;
-        struct mgs_export_data *med;
-        struct mgs_client_data *mcd;
         int rc, abort_recovery;
         ENTRY;
 
         if (!conn || !obd || !cluuid)
                 RETURN(-EINVAL);
 
-        /* Check for aborted recovery. */
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        abort_recovery = obd->obd_abort_recovery;
-        spin_unlock_bh(&obd->obd_processing_task_lock);
-        if (abort_recovery)
-                target_abort_recovery(obd);
-
         rc = class_connect(conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
         exp = class_conn2export(conn);
         LASSERT(exp);
-        med = &exp->exp_mgs_data;
 
         if (data != NULL) {
                 data->ocd_connect_flags &= MGMT_CONNECT_SUPPORTED;
                 exp->exp_connect_flags = data->ocd_connect_flags;
         }
 
-        OBD_ALLOC(mcd, sizeof(*mcd));
-        if (!mcd) {
-                CERROR("mgs: out of memory for client data\n");
-                GOTO(out, rc = -ENOMEM);
-        }
-
-        memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
-        med->med_mcd = mcd;
 #if 0
         /* FIXME: recovery of connection*/
         rc = mgs_client_add(obd, &obd->u.mgs, med, -1);
@@ -96,25 +78,12 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
 #endif 
 out:
         if (rc) {
-                if (mcd) {
-                        OBD_FREE(mcd, sizeof(*mcd));
-                        med->med_mcd = NULL;
-                }
                 class_disconnect(exp);
         } else {
                 class_export_put(exp);
         }
 
         RETURN(rc);
-}
-
-static int mgs_init_export(struct obd_export *exp)
-{
-        struct mgs_export_data *med = &exp->exp_mgs_data;
-
-        INIT_LIST_HEAD(&med->med_open_head);
-        spin_lock_init(&med->med_open_lock);
-        RETURN(0);
 }
 
 static int mgs_disconnect(struct obd_export *exp)
@@ -280,12 +249,46 @@ static int mgs_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
+static int mgmt_handle_target_add(struct ptlrpc_request *req)
+{    
+        struct obd_device *obd = &req->rq_export->exp_obd;
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct mgmt_ost_info *req_moi, *moi, *rep_moi;
+        int rep_size = sizeof(*moi);
+        int index, rc;
+
+        OBD_ALLOC(moi, sizeof(*moi));
+        if (!moi)
+                GOTO(out, rc = -ENOMEM);
+        req_moi = lustre_swab_reqbuf(req, 0, sizeof(*moi),
+                                     lustre_swab_mgmt_ost_info);
+        memcpy(moi, req_moi, sizeof(*moi));
+        
+        /* NEED_INDEX implies FIRST_START, but not vice-versa */
+        if (moi->moi_flags & LDD_F_NEED_INDEX) {
+                rc = mgs_get_index(moi);
+               // rc = mgmt_handle_first_connect(req);
+        }
+
+        if (moi->moi_flags & LDD_F_SV_TYPE_MDT) {
+                rc = llog_add_mds(obd, moi);
+        }
+
+out:
+        lustre_pack_reply(req, 1, &rep_size, NULL); 
+        rep_moi = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_moi));
+        memcpy(rep_moi, moi, sizeof(*rep_moi));
+        if (rc)
+                rep_moi->moi_stripe_index = rc;
+        return rc;
+}
+
 int mgs_handle(struct ptlrpc_request *req)
 {
-        int fail = OBD_FAIL_MGMT_ALL_REPLY_NET;
-        int rc = 0;
         struct mgs_obd *mgs = NULL; /* quell gcc overwarning */
         struct obd_device *obd = NULL;
+        int fail = OBD_FAIL_MGMT_ALL_REPLY_NET;
+        int rc = 0;
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_MGMT_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
@@ -293,42 +296,14 @@ int mgs_handle(struct ptlrpc_request *req)
         LASSERT(current->journal_info == NULL);
         /* XXX identical to MDS */
         if (req->rq_reqmsg->opc != MGMT_CONNECT) {
-                struct mgs_export_data *med;
-                int abort_recovery;
-
                 if (req->rq_export == NULL) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
                                req->rq_reqmsg->opc);
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }
-
-                med = &req->rq_export->exp_mgs_data;
                 obd = req->rq_export->exp_obd;
                 mgs = &obd->u.mgs;
-
-                /* sanity check: if the xid matches, the request must
-                 * be marked as a resent or replayed */
-                if (req->rq_xid == med->med_mcd->mcd_last_xid)
-                        LASSERTF(lustre_msg_get_flags(req->rq_reqmsg) &
-                                 (MSG_RESENT | MSG_REPLAY),
-                                 "rq_xid "LPU64" matches last_xid, "
-                                 "expected RESENT flag\n",
-                                 req->rq_xid);
-                /* else: note the opposite is not always true; a
-                 * RESENT req after a failover will usually not match
-                 * the last_xid, since it was likely never
-                 * committed. A REPLAYed request will almost never
-                 * match the last xid, however it could for a
-                 * committed, but still retained, open. */
-
-                /* Check for aborted recovery. */
-                spin_lock_bh(&obd->obd_processing_task_lock);
-                abort_recovery = obd->obd_abort_recovery;
-                spin_unlock_bh(&obd->obd_processing_task_lock);
-                if (abort_recovery) {
-                        target_abort_recovery(obd);
-                } 
         }
 
         switch (req->rq_reqmsg->opc) {
@@ -380,13 +355,13 @@ int mgs_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MGMT_FIRST_CONNECT, 0);
                 rc = mgmt_handle_first_connect(req);
                 break;
-        case MGMT_OST_ADD:
-                CDEBUG(D_INODE, "ost add\n");
-                rc = mgmt_handle_ost_add(req);
+        case MGMT_TARGET_ADD:
+                CDEBUG(D_INODE, "target add\n");
+                rc = mgmt_handle_target_add(req);
                 break;
-        case MGMT_OST_DEL:
-                CDEBUG(D_INODE, "ost del\n");
-                rc = mgmt_handle_ost_del(req);
+        case MGMT_TARGET_DEL:
+                CDEBUG(D_INODE, "target del\n");
+                rc = mgmt_handle_target_del(req);
                 break;
         case MGMT_MDS_ADD:
                 CDEBUG(D_INODE, "mds add\n");
@@ -425,29 +400,9 @@ int mgs_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
 
-        /* If we're DISCONNECTing, the mgs_export_data is already freed */
-        if (!rc && req->rq_reqmsg->opc != MGMT_DISCONNECT) {
-                struct mgs_export_data *med = &req->rq_export->exp_mgs_data;
-                req->rq_repmsg->last_xid =
-                        le64_to_cpu(med->med_mcd->mcd_last_xid);
-
-                target_committed_to_req(req);
-        }
-
-        EXIT;
  out:
-
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
-                if (obd && obd->obd_recovering) {
-                        DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        return target_queue_final_reply(req, rc);
-                }
-                /* Lost a race with recovery; let the error path DTRT. */
-                rc = req->rq_status = -ENOTCONN;
-        }
-
         target_send_reply(req, rc, fail);
-        return 0;
+        RETURN(0);
 }
 
 static int mgt_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -507,7 +462,6 @@ struct lvfs_callback_ops mgs_lvfs_ops = {
 static struct obd_ops mgs_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_connect         = mgs_connect,
-        .o_init_export     = mgs_init_export,
         .o_disconnect      = mgs_disconnect,
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,

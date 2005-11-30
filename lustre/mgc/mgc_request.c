@@ -48,89 +48,9 @@
 
 #include "mgc_internal.h"
 
-int mgc_first_connect(struct obd_export *exp, int disk_type,
-                      char *full_fsname, char *node_name,
-                      int *index)
-{
-        struct ptlrpc_request *req;
-        int size[3] = {sizeof(disk_type), NAME_MAXLEN, NAME_MAXLEN};
-        int *type;
-        char *fsname, *nodename;
-        int rc;
-        ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_FIRST_CONNECT,
-                              3, size, NULL);
-        if (!req)
-                RETURN(rc = -ENOMEM);
-
-        type = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*type));
-        *type = disk_type;
-
-        fsname = lustre_msg_buf(req->rq_reqmsg, 1, NAME_MAXLEN);
-        memcpy(fsname, full_fsname, strlen(full_fsname));
-
-        nodename = lustre_msg_buf(req->rq_reqmsg, 2, NAME_MAXLEN);
-        memcpy(nodename, node_name, strlen(node_name));
-        
-        rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-               int *rep_index;
-               rep_index = lustre_swab_repbuf(req, 0, sizeof(int),
-                                              __swab32s);
-               if (*rep_index >= 0){
-                       CDEBUG(D_INODE, "Get index: %d from mgs.", *rep_index);
-                       *index = *rep_index;
-               }
-               else
-                       CERROR("Can not get index from mgs. rc:%d", *rep_index);
-        }
-
-        ptlrpc_req_finished(req);
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(mgc_first_connect);
-
-int mgc_mds_add(struct obd_export *exp, struct mgmt_mds_info *mmi)
-{
-        struct ptlrpc_request *req;
-        struct mgmt_mds_info *req_mmi, *rep_mmi;
-        int size = sizeof(*req_mmi);
-        int rep_size = sizeof(rep_mmi);
-        int rc;
-        ENTRY;
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_MDS_ADD,
-                              1, &size, NULL);
-        if (!req)
-                RETURN(rc = -ENOMEM);
-
-        req_mmi = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mmi));
-        memcpy(req_mmi, mmi, sizeof(*req_mmi));
-
-        req->rq_replen = lustre_msg_size(1, &rep_size);
-
-        rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                int index;
-                rep_mmi = lustre_swab_repbuf(req, 0, sizeof(*rep_mmi),
-                                             lustre_swab_mgmt_mds_info);
-                index = rep_mmi->mmi_index;
-                if (index != mmi->mmi_index) {
-                        CERROR("MDS ADD failed. rc = %d\n", index);
-                        GOTO(out, rc = index);
-                } else 
-                        CERROR("MDS ADD OK. (index = %d)\n", index);
-        }
-out:
-        ptlrpc_req_finished(req);
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(mgc_mds_add);
-
-int mgc_ost_add(struct obd_export *exp, struct mgmt_ost_info *moi)
+/* Get index and add to config llog, depending on flags */
+int mgc_target_add(struct obd_export *exp, struct mgmt_ost_info *moi)
 {
         struct ptlrpc_request *req;
         struct mgmt_ost_info *req_moi, *rep_moi;
@@ -139,7 +59,7 @@ int mgc_ost_add(struct obd_export *exp, struct mgmt_ost_info *moi)
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_OST_ADD, 
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_TARGET_ADD, 
                               1, &size, NULL);
         if (!req)
                 RETURN(rc = -ENOMEM);
@@ -168,7 +88,8 @@ out:
 }
 EXPORT_SYMBOL(mgc_ost_add);
 
-int mgc_ost_del(struct obd_export *exp, struct mgmt_ost_info *moi)
+/* Remove from config llog */
+int mgc_target_del(struct obd_export *exp, struct mgmt_ost_info *moi)
 {
         struct ptlrpc_request *req;
         struct mgmt_ost_info *req_moi, *rep_moi;
@@ -176,7 +97,7 @@ int mgc_ost_del(struct obd_export *exp, struct mgmt_ost_info *moi)
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_OST_DEL,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_TARGET_DEL,
                               1, &size, NULL);
         if (!req)
                 RETURN(rc = -ENOMEM);
@@ -436,10 +357,11 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
 {
         struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
+        ENTRY;
 
         /* Try to "recover" the initial connection; i.e. retry */
         if (keylen == strlen("initial_recov") &&
-            memcmp(key, "initial_recov", strlen("initial_recov")) == 0) {
+            memcmp(key, "initial_recov", keylen) == 0) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
@@ -449,7 +371,7 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
         }
         /* Turn off initial_recov after we try all backup servers once */
         if (keylen == strlen(INIT_RECOV_BACKUP) &&
-            memcmp(key, INIT_RECOV_BACKUP, strlen(INIT_RECOV_BACKUP)) == 0) {
+            memcmp(key, INIT_RECOV_BACKUP, keylen) == 0) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov_bk = *(int *)val;
@@ -457,7 +379,18 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
                 RETURN(0);
         }
-        return(rc);
+        /* Hack alert */
+        if (keylen == strlen("register") &&
+            memcmp(key, "register", keylen) == 0) {
+                struct mgmt_ost_info *moi;
+                if (vallen != sizeof(mgmt_ost_info))
+                        RETURN(-EINVAL);
+                moi = (struct mgmt_ost_info *)val;
+                CERROR("register %s %#x\n", moi->moi_ostname, moi->moi_flags);
+                rc =  mgc_target_add(exp, moi);
+                RETURN(rc);
+        }
+        RETURN(rc);
 }               
 
 static int mgc_import_event(struct obd_device *obd,

@@ -42,10 +42,11 @@
 
 #define LDD_MAGIC 0xbabb0001
 
-#define LDD_F_SV_TYPE_MDT  0x0001
-#define LDD_F_SV_TYPE_OST  0x0002
-#define LDD_F_SV_TYPE_MGMT 0x0004
-#define LDD_F_NEED_INDEX   0x0010
+#define LDD_F_SV_TYPE_MDT   0x0001
+#define LDD_F_SV_TYPE_OST   0x0002
+#define LDD_F_SV_TYPE_MGMT  0x0004
+#define LDD_F_NEED_INDEX    0x0010
+#define LDD_F_FIRST_START   0x0020
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0, 
@@ -74,6 +75,7 @@ struct lustre_disk_data {
         __u32      ldd_config_ver;      /* we have integrated all llog steps
                                            through this llog ver. */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
+        __u32      ldd_svindex;         /* server index (0001), must match svname */
         char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001) */
         __u16      ldd_mgsnid_count;    /* how many failover nids we have for the MGS */

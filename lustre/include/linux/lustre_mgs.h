@@ -22,42 +22,8 @@
 #include <linux/lustre_log.h>
 #include <linux/lustre_export.h>
 
-#define MGS_LR_SERVER_SIZE    512
-
-#define MGS_LR_CLIENT_START  8192
-#define MGS_LR_CLIENT_SIZE    128
-
 #define MGS_ROCOMPAT_SUPP       0x00000001
 #define MGS_INCOMPAT_SUPP       (0)
-
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mgs_client_data {
-        __u8 mcd_uuid[40];      /* client UUID */
-        __u64 mcd_last_transno; /* last completed transaction ID */
-        __u64 mcd_last_xid;     /* xid for the last transaction */
-        __u32 mcd_last_result;  /* result from last RPC */
-        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[MGS_LR_CLIENT_SIZE - 64];
-};
-
-/* Data stored per server at the head of the last_rcvd file.  In le32 order.*/
-struct mgs_server_data {
-        __u8  msd_uuid[40];        /* server UUID */
-        __u64 msd_last_transno;    /* last completed transaction ID */
-        __u64 msd_mount_count;     /* MDS incarnation number */
-        __u64 msd_unused;
-        __u32 msd_feature_compat;  /* compatible feature flags */
-        __u32 msd_feature_rocompat;/* read-only compatible feature flags */
-        __u32 msd_feature_incompat;/* incompatible feature flags */
-        __u32 msd_server_size;     /* size of server data area */
-        __u32 msd_client_start;    /* start of per-client data area */
-        __u16 msd_client_size;     /* size of per-client data area */
-        __u16 msd_subdir_count;    /* number of subdirectories for objects */
-        __u64 msd_catalog_oid;     /* recovery catalog object id */
-        __u32 msd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  msd_peeruuid[40];    /* UUID of LOV/OSC associated with MDS */
-        __u8  msd_padding[MGS_LR_SERVER_SIZE - 140];
-};
 
 typedef enum {
         MCID = 1,

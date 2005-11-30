@@ -196,12 +196,10 @@ void lustre_assert_wire_constants(void)
                  (long long)MGMT_DISCONNECT);
         LASSERTF(MGMT_EXCEPTION == 252, " found %lld\n",
                  (long long)MGMT_EXCEPTION);
-        LASSERTF(MGMT_FIRST_CONNECT == 253, " found %lld\n",
-                 (long long)MGMT_FIRST_CONNECT);
-        LASSERTF(MGMT_OST_ADD == 254, " found %lld\n",
-                 (long long)MGMT_OST_ADD);
-        LASSERTF(MGMT_OST_DEL == 255, " found %lld\n",
-                 (long long)MGMT_OST_DEL);
+        LASSERTF(MGMT_TARGET_ADD == 253, " found %lld\n",
+                 (long long)MGMT_TARGET_ADD);
+        LASSERTF(MGMT_TARGET_DEL == 254, " found %lld\n",
+                 (long long)MGMT_TARGET_DEL);
         LASSERTF(OBD_PING == 400, " found %lld\n",
                  (long long)OBD_PING);
         LASSERTF(OBD_LOG_CANCEL == 401, " found %lld\n",

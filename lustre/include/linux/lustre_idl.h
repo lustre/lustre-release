@@ -934,15 +934,14 @@ typedef enum {
         MGMT_CONNECT = 250,
         MGMT_DISCONNECT,
         MGMT_EXCEPTION,         /* node died, etc. */
-        MGMT_FIRST_CONNECT,     /* first connect. */
-        MGMT_OST_ADD,
-        MGMT_OST_DEL,
-        MGMT_MDS_ADD,
+        MGMT_TARGET_ADD,
+        MGMT_TARGET_DEL,
         MGMT_LAST_OPC
 } mgs_cmd_t;
 
 #define NAME_MAXLEN 64
 #define UUID_MAXLEN NAME_MAXLEN + 5
+
 struct mgmt_ost_info {
         struct list_head moi_list;
         char             moi_fullfsname[NAME_MAXLEN];
@@ -951,6 +950,7 @@ struct mgmt_ost_info {
         char             moi_ostuuid[UUID_MAXLEN];
         __u64            moi_nid;            /* lnet_nid_t */
         __u32            moi_stripe_index;
+        __u32            moi_flags;
 };
 
 extern void lustre_swab_mgmt_ost_info(struct mgmt_ost_info *oinfo);

@@ -637,6 +637,67 @@ static void server_stop_servers(struct super_block *sb)
         }
 }
 
+static int server_initial_connect(struct super_block *sb, struct vfsmount *mnt)
+{       
+        struct lustre_sb_info *lsi = s2lsi(sb);
+        struct obd_device *mgc = lsi->lsi_mgc;
+        struct lustre_handle mgc_conn = {0, };
+        struct obd_export *exp = NULL;
+        struct mgmt_ost_info *moi = NULL;
+        int rc;
+        LASSERT(mgc);
+
+        /* send TARGET_INITIAL_CONNECT, MGS should reply with index number. 
+                   In any case, T_I_C should send current index (usually FFFF)
+                   and MGS can reply with actual index. */ 
+        
+        OBD_ALLOC(moi, sizeof(*moi));
+        if (!moi) {
+                return -ENOMEM;
+        }
+        strncpy(moi->moi_ostname, lsi->lsi_ldd->ldd_svname,
+                sizeof(moi->moi_ostname));
+        strncpy(moi->moi_fullfsname, lsi->lsi_ldd->ldd_fsname,
+                sizeof(moi->moi_fullfsname));
+        moi->moi_flags = lsi->lsi_ldd->ldd_flags;
+        moi->moi_stripe_index = lsi->lsi_ldd->ldd_svindex;
+
+        rc = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
+        if (rc) {
+                CERROR("connect failed %d\n", rc);
+                goto out;
+        }
+        exp = class_conn2export(&mgc_conn);
+        LASSERT(exp->exp_obd == mgc);
+        
+        /* FIXME use ioctl instead? eg 
+        struct obd_ioctl_data ioc_data = { 0 };
+        ioc_data.ioc_inllen1 = strlen(lsi->lsi_ldd->ldd_svname) + 1;
+        ioc_data.ioc_inlbuf1 = lsi->lsi_ldd->ldd_svname;
+        
+        err = obd_iocontrol(OBD_IOC_START, obd->obd_self_export,
+                            sizeof ioc_data, &ioc_data, NULL);
+        */
+        rc = obd_set_info(exp,
+                          strlen("add_target"), "add_target",
+                          sizeof(*moi), moi);
+        obd_disconnect(exp);
+        if (rc) {
+                CERROR("add_target failed %d\n", rc);
+                goto out;
+        }
+
+        
+        /* FIXME rewrite last_rcvd, ldd (for new svname), drop
+           NEED_REGISTER|INDEX flags, change disk label */
+
+
+out:
+        if (moi)        
+                OBD_FREE(moi, sizeof(*moi));
+        return rc;
+}
+
 /* Start targets */
 static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 {
@@ -654,8 +715,10 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 if (!obd) {
                         //FIXME pre-rename, should eventually be LUSTRE_MDS_NAME
                         err = lustre_start_simple("MDS", LUSTRE_MDT_NAME, 0, 0);
-                        if (err) 
+                        if (err) {
                                 CERROR("failed to start MDS: %d\n", err);
+                                goto out;
+                        }
                 }
         }
 
@@ -663,42 +726,37 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
                 /* make sure OSS is started */
                 obd = class_name2obd("OSS");
-                if (!obd) 
+                if (!obd) {
                         err = lustre_start_simple("OSS", LUSTRE_OSS_NAME, 0, 0);
+                        if (err) {
+                                CERROR("failed to start OSS: %d\n", err);
+                                goto out;
+                        }
+                }
         }
 
         /* Get a new index if needed */
-        if (lsi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
-                // FIXME implement
+        if (lsi->lsi_ldd->ldd_flags & (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER)) {
+                /* FIXME Maybe need to change NEED_INDEX to NEVER_CONNECTED,
+                   in case index number was given but llog still is needed.*/
                 CERROR("Need new target index from MGS!\n");
-                /* send TARGET_INITIAL_CONNECT, MGS should reply with index
-                   number. Maybe need to change NEED_INDEX to NEVER_CONNECTED,
-                   in case index number was given but llog still is needed.
-                   In any case, T_I_C should send current index (usually FFFF)
-                   and MGS can reply with actual index. */ 
-                /* FIXME rewrite last_rcvd, ldd (for new svname), drop
-                   NEVER_CONNECTED flag, change disk label? */
+                err = server_initial_connect(sb, mnt);
+                if (err) {
+                        CERROR("Initial connect failed for %s: %d\n", 
+                               lsi->lsi_ldd->ldd_svname, err);
+                        goto out;
+                }
         }
 
-        /* The MGC starts targets using the svname llog */
-        obd = lsi->lsi_mgc;
-        LASSERT(obd);
 
         /* Register the mount for the target */
         err = lustre_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
         if (err) 
                 goto out;
 
-        /* FIXME replace ioctl with lustre_get_process_log 
-        struct obd_ioctl_data ioc_data = { 0 };
-        ioc_data.ioc_inllen1 = strlen(lsi->lsi_ldd->ldd_svname) + 1;
-        ioc_data.ioc_inlbuf1 = lsi->lsi_ldd->ldd_svname;
-        
-        err = obd_iocontrol(OBD_IOC_START, obd->obd_self_export,
-                            sizeof ioc_data, &ioc_data, NULL);
-        */
+        /* The MGC starts targets using the svname llog */
         cfg.cfg_instance = NULL;
-        cfg.cfg_uuid = obd->obd_uuid;
+        cfg.cfg_uuid = lsi->lsi_mgc->obd_uuid;
         lustre_get_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
         if (err) {
                 CERROR("failed to start server %s: %d\n",

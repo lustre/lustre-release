@@ -845,6 +845,7 @@ static void make_sv_name(struct mkfs_opts *mop)
         } else {
                 sprintf(mop->mo_ldd.ldd_svname, "MGMT");
         }
+        mop->mo_ldd.ldd_svindex = mop->mo_index;
         vprint("Server name: %s\n", mop->mo_ldd.ldd_svname);
 }
 
@@ -852,7 +853,7 @@ void set_defaults(struct mkfs_opts *mop)
 {
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
         mop->mo_ldd.ldd_config_ver = 0;
-        mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX;
+        mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER;
         mop->mo_ldd.ldd_mgsnid_count = 0;
         strcpy(mop->mo_ldd.ldd_fsname, "lustre");
         if (get_os_version() == 24) 

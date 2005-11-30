@@ -972,31 +972,6 @@ out:
 }
 EXPORT_SYMBOL(mgmt_handle_mds_add);
 
-int mgmt_handle_ost_add(struct ptlrpc_request *req)
-{    
-        struct obd_device *obd = &req->rq_export->exp_obd;
-        struct mgs_obd *mgs = &obd->u.mgs;
-        struct mgmt_ost_info *req_moi, *moi, *rep_moi;
-        int rep_size = sizeof(*moi);
-        int index, rc;
-
-        OBD_ALLOC(moi, sizeof(*moi));
-        if (!moi)
-                GOTO(out, rc = -ENOMEM);
-        req_moi = lustre_swab_reqbuf(req, 0, sizeof(*moi),
-                                     lustre_swab_mgmt_ost_info);
-        memcpy(moi, req_moi, sizeof(*moi));
-        
-        rc = llog_add_ost(obd, moi);
-out:
-        lustre_pack_reply(req, 1, &rep_size, NULL); 
-        rep_moi = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_moi));
-        memcpy(rep_moi, moi, sizeof(*rep_moi));
-        if (rc)
-                rep_moi->moi_stripe_index = rc;
-        return rc;
-}
-EXPORT_SYMBOL(mgmt_handle_ost_add);
 
 int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                   void *karg, void *uarg)

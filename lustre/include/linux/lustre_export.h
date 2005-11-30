@@ -8,19 +8,7 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 
-/*export struct for mount-conf */
-/*FIXME: some attributes Mixed now*/
 /* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mgs_client_data; 
-
-struct mgs_export_data {
-        struct list_head        med_open_head;
-        spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
-        struct mgs_client_data *med_mcd;
-        loff_t                  med_lr_off;
-        int                     med_lr_idx;
-};
-
 struct mds_client_data;
 
 struct mds_export_data {
