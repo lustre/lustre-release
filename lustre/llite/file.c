@@ -1612,7 +1612,7 @@ int lustre_check_acl(struct inode *inode, int mask)
 
         RETURN(rc);
 #else
-        return 0;
+        return -EAGAIN;
 #endif
 }
 

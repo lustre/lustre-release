@@ -198,9 +198,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 sbi->ll_flags &= ~LL_SBI_USER_XATTR;
         }
 
-        if (data->ocd_connect_flags & OBD_CONNECT_ACL)
+        if (data->ocd_connect_flags & OBD_CONNECT_ACL) {
+#ifdef MS_POSIXACL
+                sb->s_flags |= MS_POSIXACL;
+#endif
                 sbi->ll_flags |= LL_SBI_ACL;
-        else
+        } else
                 sbi->ll_flags &= ~LL_SBI_ACL;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
