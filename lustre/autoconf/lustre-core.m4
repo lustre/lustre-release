@@ -348,11 +348,15 @@ case $BACKINGFS in
 		])
 		;;
 	ldiskfs)
-		LC_FSHOOKS([
-			LDISKFS_SERIES="2.6-suse.series"
-		],[
-			LDISKFS_SERIES="2.6-rhel4.series"
-		])
+		AC_MSG_CHECKING([which ldiskfs series to use])
+		case $LINUXRELEASE in
+		2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
+		2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
+		2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
+		2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
+		*) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix lustre/autoconf/lustre-core.m4])
+		esac
+		AC_MSG_RESULT([$LDISKFS_SERIES])
 		AC_SUBST(LDISKFS_SERIES)
 		;;
 esac # $BACKINGFS
