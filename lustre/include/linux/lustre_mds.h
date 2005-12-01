@@ -13,7 +13,7 @@
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/dcache.h>
-# ifdef HAVE_LINUX_XATTR_ACL_H
+# ifdef CONFIG_FS_POSIX_ACL
 # include <linux/xattr_acl.h>
 # endif
 #endif

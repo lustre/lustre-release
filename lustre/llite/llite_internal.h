@@ -5,6 +5,11 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+#ifdef CONFIG_FS_POSIX_ACL
+# include <linux/fs.h>
+# include <linux/xattr_acl.h>
+#endif
+
 #include <linux/lustre_debug.h>
 #include <linux/lustre_version.h>
 
