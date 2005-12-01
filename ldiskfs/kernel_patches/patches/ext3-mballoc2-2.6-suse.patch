@@ -2196,7 +2196,7 @@ Index: linux-2.6.5-7.201/fs/ext3/proc.c
 +
 +	if (count >= sizeof(str)) {
 +		printk(KERN_ERR "EXT3: %s string to long, max %u bytes\n",
-+		       EXT3_MB_AGGRESSIVE_NAME, sizeof(str));
++		       EXT3_MB_AGGRESSIVE_NAME, (int)sizeof(str));
 +		return -EOVERFLOW;
 +	}
 +
@@ -2229,7 +2229,7 @@ Index: linux-2.6.5-7.201/fs/ext3/proc.c
 +
 +	if (count >= sizeof(str)) {
 +		printk(KERN_ERR "EXT3: %s string to long, max %u bytes\n",
-+		       EXT3_MB_STATS_NAME, sizeof(str));
++		       EXT3_MB_STATS_NAME, (int)sizeof(str));
 +		return -EOVERFLOW;
 +	}
 +
@@ -2263,7 +2263,7 @@ Index: linux-2.6.5-7.201/fs/ext3/proc.c
 +
 +	if (count >= sizeof(str)) {
 +		printk(KERN_ERR "EXT3: %s string to long, max %u bytes\n",
-+		       EXT3_MB_MAX_TO_SCAN_NAME, sizeof(str));
++		       EXT3_MB_MAX_TO_SCAN_NAME, (int)sizeof(str));
 +		return -EOVERFLOW;
 +	}
 +

@@ -214,7 +214,7 @@ Index: linux-stage/fs/ext3/iopen.c
 +		goto do_instantiate;
 +
 +	/* Move the goal to the de hash queue */
-+	goal->d_flags &= ~ DCACHE_DISCONNECTED;
++	goal->d_flags &= ~DCACHE_DISCONNECTED;
 +	security_d_instantiate(goal, inode);
 +	__d_rehash(dentry, 0);
 +	__d_move(goal, dentry);
