@@ -90,6 +90,20 @@ struct lustre_disk_data {
 #define IS_MGMT(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGMT)
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
+/* Make the mdt/ost server obd name based on the filesystem name */
+static inline void ldd_make_sv_name(struct lustre_disk_data *ldd)
+{
+        if (IS_MDT(ldd) || IS_OST(ldd)) {
+                sprintf(ldd->ldd_svname, "%.8s-%s%04x",
+                        ldd->ldd_fsname,
+                        IS_MDT(ldd) ? "MDT" : "OST",  
+                        ldd->ldd_svindex);
+        } else {
+                sprintf(ldd->ldd_svname, "MGMT");
+        }
+}
+
+
 /****************** mount command *********************/
 
 /* gleaned from the mount command - no persistent info here */
@@ -131,9 +145,6 @@ struct mkfs_opts {
         int   mo_stripe_sz;
         int   mo_stripe_count;
         int   mo_stripe_pattern;
-        __u16 mo_index;                 /* stripe index for osts, pool index
-                                           for pooled mdts.  index will be put
-                                           in lr_server_data */
         int   mo_timeout;               /* obd timeout */
 };
 
@@ -218,8 +229,8 @@ struct lustre_mount_info {
 /* obd_mount.c */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 void lustre_common_put_super(struct super_block *sb);
-struct lustre_mount_info *lustre_get_mount(char *name);
-int lustre_put_mount(char *name, struct vfsmount *mnt);
+struct lustre_mount_info *server_get_mount(char *name);
+int server_put_mount(char *name, struct vfsmount *mnt);
 int lustre_get_process_log(struct super_block *, char *,
                            struct config_llog_instance *cfg);
 

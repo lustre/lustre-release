@@ -550,7 +550,8 @@ int write_local_files(struct mkfs_opts *mop)
         }
         memset(&lsd, 0, sizeof(lsd));
         strncpy(lsd.lsd_uuid, mop->mo_ldd.ldd_svname, sizeof(lsd.lsd_uuid));
-        lsd.lsd_index = mop->mo_index;
+        // FIXME any need for the lsd_index? 
+        lsd.lsd_index = mop->mo_ldd.ldd_svindex;
         lsd.lsd_feature_compat |= cpu_to_le32(LR_COMPAT_COMMON_LR);
         lsd.lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
         lsd.lsd_client_start = cpu_to_le32(LR_CLIENT_START);
@@ -829,26 +830,6 @@ out_jt:
 }
 #endif
 
-/* Make the mdt/ost server obd name based on the filesystem name */
-static void make_sv_name(struct mkfs_opts *mop)
-{
-        /* FIXME if we're not given an index, we have to change our name
-           later -- can't have two servers with the same name. 
-           So rewrite ost log, last_rcvd, and disk label, or we need to talk
-           to MGMT now to get index # */
-
-        if (IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd)) {
-                sprintf(mop->mo_ldd.ldd_svname, "%.8s-%s%04x",
-                        mop->mo_ldd.ldd_fsname,
-                        IS_MDT(&mop->mo_ldd) ? "MDT" : "OST",  
-                        mop->mo_index);
-        } else {
-                sprintf(mop->mo_ldd.ldd_svname, "MGMT");
-        }
-        mop->mo_ldd.ldd_svindex = mop->mo_index;
-        vprint("Server name: %s\n", mop->mo_ldd.ldd_svname);
-}
-
 void set_defaults(struct mkfs_opts *mop)
 {
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
@@ -861,8 +842,8 @@ void set_defaults(struct mkfs_opts *mop)
         else 
                 mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
         
+        mop->mo_ldd.ldd_svindex = -1;
         mop->mo_stripe_count = 1;
-        mop->mo_index = -1;
 }
 
 static inline void badopt(char opt, char *type)
@@ -958,7 +939,7 @@ int main(int argc , char *const argv[])
                         exit(0);
                 case 'i':
                         if (IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd)) {
-                                mop.mo_index = atol(optarg);
+                                mop.mo_ldd.ldd_svindex = atol(optarg);
                                 mop.mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
                         } else {
                                 badopt(opt, "MDT,OST");
@@ -1128,7 +1109,7 @@ int main(int argc , char *const argv[])
             (mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS))
                 mop.mo_flags |= MO_IS_LOOP;
                 
-        make_sv_name(&mop);
+        ldd_make_sv_name(&(mop.mo_ldd));
 
         /* Create the loopback file */
         if (mop.mo_flags & MO_IS_LOOP) {

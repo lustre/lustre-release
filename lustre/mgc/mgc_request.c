@@ -50,10 +50,10 @@
 
 
 /* Get index and add to config llog, depending on flags */
-int mgc_target_add(struct obd_export *exp, struct mgmt_ost_info *moi)
+int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *moi)
 {
         struct ptlrpc_request *req;
-        struct mgmt_ost_info *req_moi, *rep_moi;
+        struct mgmt_target_info *req_moi, *rep_moi;
         int size = sizeof(*req_moi);
         int rep_size = sizeof(*moi);
         int rc;
@@ -73,7 +73,7 @@ int mgc_target_add(struct obd_export *exp, struct mgmt_ost_info *moi)
         if (!rc) {
                 int index;
                 rep_moi = lustre_swab_repbuf(req, 0, sizeof(*rep_moi),
-                                             lustre_swab_mgmt_ost_info);
+                                             lustre_swab_mgmt_target_info);
                 index = rep_moi->moi_stripe_index;
                 if (index != moi->moi_stripe_index) {
                         CERROR ("OST ADD failed. rc=%d\n", index);
@@ -89,10 +89,10 @@ out:
 EXPORT_SYMBOL(mgc_target_add); 
 
 /* Remove from config llog */
-int mgc_target_del(struct obd_export *exp, struct mgmt_ost_info *moi)
+int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *moi)
 {
         struct ptlrpc_request *req;
-        struct mgmt_ost_info *req_moi, *rep_moi;
+        struct mgmt_target_info *req_moi, *rep_moi;
         int size = sizeof(*req_moi);
         int rc;
         ENTRY;
@@ -109,7 +109,7 @@ int mgc_target_del(struct obd_export *exp, struct mgmt_ost_info *moi)
         if (!rc) {
                 int index;
                 rep_moi = lustre_swab_repbuf(req, 0, sizeof(*rep_moi),
-                                             lustre_swab_mgmt_ost_info);
+                                             lustre_swab_mgmt_target_info);
                 index = rep_moi->moi_stripe_index;
                 if (index != moi->moi_stripe_index) {
                         CERROR ("OST DEL failed. rc=%d\n", index);
@@ -134,6 +134,11 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         int err = 0;
 
         LASSERT(lsi);
+        LASSERT(lsi->lsi_srv_mnt == mnt);
+
+        /* The mgc fs exclusion sem. Only one fs can be setup at a time.
+           Maybe just overload the cl_sem? */
+        down(&cli->cl_mgc_sem);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops)) {
@@ -187,15 +192,20 @@ static int mgc_fs_cleanup(struct obd_device *obd)
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         }
 
-        rc = lustre_put_mount(obd->obd_name, cli->cl_mgc_vfsmnt);
+        /* never got mount
+        rc = server_put_mount(obd->obd_name, cli->cl_mgc_vfsmnt);
         if (rc)
              CERROR("mount_put failed %d\n", rc);
+        */
 
         cli->cl_mgc_vfsmnt = NULL;
         cli->cl_mgc_sb = NULL;
         
         if (obd->obd_fsops) 
                 fsfilt_put_ops(obd->obd_fsops);
+        
+        up(&cli->cl_mgc_sem);
+        
         return(rc);
 }
 
@@ -206,10 +216,7 @@ static int mgc_cleanup(struct obd_device *obd)
 
         //lprocfs_obd_cleanup(obd);
 
-        if (cli->cl_mgc_vfsmnt) {
-                /* if we're a server, eg. something's mounted */
-                mgc_fs_cleanup(obd);
-        }
+        LASSERT(cli->cl_mgc_vfsmnt == NULL);
 
         rc = obd_llog_finish(obd, 0);
         if (rc != 0)
@@ -382,14 +389,38 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
         /* Hack alert */
         if (keylen == strlen("register") &&
             memcmp(key, "register", keylen) == 0) {
-                struct mgmt_ost_info *moi;
-                if (vallen != sizeof(struct mgmt_ost_info))
+                struct mgmt_target_info *moi;
+                if (vallen != sizeof(struct mgmt_target_info))
                         RETURN(-EINVAL);
-                moi = (struct mgmt_ost_info *)val;
+                moi = (struct mgmt_target_info *)val;
                 CERROR("register %s %#x\n", moi->moi_ostname, moi->moi_flags);
                 rc =  mgc_target_add(exp, moi);
                 RETURN(rc);
         }
+        if (keylen == strlen("set_fs") &&
+            memcmp(key, "set_fs", keylen) == 0) {
+                struct super_block *sb = (struct super_block *)val;
+                struct lustre_sb_info *lsi;
+                if (vallen != sizeof(struct super_block))
+                        RETURN(-EINVAL);
+                lsi = s2lsi(sb);
+                rc = mgc_fs_setup(exp->exp_obd, sb, lsi->lsi_srv_mnt);
+                if (rc) {
+                        CERROR("set_fs got %d\n", rc);
+                }
+                RETURN(rc);
+        }
+        if (keylen == strlen("clear_fs") &&
+            memcmp(key, "clear_fs", keylen) == 0) {
+                if (vallen != 0)
+                        RETURN(-EINVAL);
+                rc = mgc_fs_cleanup(exp->exp_obd);
+                if (rc) {
+                        CERROR("clear_fs got %d\n", rc);
+                }
+                RETURN(rc);
+        }
+
         RETURN(rc);
 }               
 

@@ -132,7 +132,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
         CDEBUG(D_CONFIG, "Starting MGS\n");
 
-        lmi = lustre_get_mount(obd->obd_name);
+        lmi = server_get_mount(obd->obd_name);
         if (!lmi) 
                 RETURN(rc = -EINVAL);
 
@@ -185,7 +185,7 @@ err_ns:
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
 err_put:
-        lustre_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
+        server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
         mgs->mgs_sb = 0;
         return rc;
 }
@@ -228,7 +228,7 @@ static int mgs_cleanup(struct obd_device *obd)
 
         //mgs_fs_cleanup(obd);
 
-        lustre_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
+        server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
         mgs->mgs_sb = NULL;
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
@@ -249,44 +249,42 @@ static int mgs_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static int mgmt_handle_target_add(struct ptlrpc_request *req)
+static int mgs_handle_target_add(struct ptlrpc_request *req)
 {    
         struct obd_device *obd = &req->rq_export->exp_obd;
         struct mgs_obd *mgs = &obd->u.mgs;
-        struct mgmt_ost_info *req_moi, *moi, *rep_moi;
-        int rep_size = sizeof(*moi);
+        struct mgmt_target_info *req_mti, *mti, *rep_mti;
+        int rep_size = sizeof(*mti);
         int index, rc;
 
-        OBD_ALLOC(moi, sizeof(*moi));
-        if (!moi)
+        OBD_ALLOC(mti, sizeof(*mti));
+        if (!mti)
                 GOTO(out, rc = -ENOMEM);
-        req_moi = lustre_swab_reqbuf(req, 0, sizeof(*moi),
-                                     lustre_swab_mgmt_ost_info);
-        memcpy(moi, req_moi, sizeof(*moi));
+        req_mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
+                                     lustre_swab_mgmt_target_info);
+        memcpy(mti, req_mti, sizeof(*mti));
         
-        /* NEED_INDEX implies FIRST_START, but not vice-versa */
-        if (moi->moi_flags & LDD_F_NEED_INDEX) {
-                rc = mgs_get_index(moi);
+        /* NEED_INDEX implies NEED_REGISTER, but not vice-versa */
+        if (mti->mti_flags & LDD_F_NEED_INDEX) {
+                rc = mgs_get_index(mti);
                // rc = mgmt_handle_first_connect(req);
         }
 
-        if (moi->moi_flags & LDD_F_SV_TYPE_MDT) {
-                rc = llog_add_mds(obd, moi);
+        if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+                rc = llog_add_mds(obd, mti);
         }
 
 out:
         lustre_pack_reply(req, 1, &rep_size, NULL); 
-        rep_moi = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_moi));
-        memcpy(rep_moi, moi, sizeof(*rep_moi));
+        rep_mti = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_mti));
+        memcpy(rep_mti, mti, sizeof(*rep_mti));
         if (rc)
-                rep_moi->moi_stripe_index = rc;
+                rep_mti->mti_stripe_index = rc;
         return rc;
 }
 
 int mgs_handle(struct ptlrpc_request *req)
 {
-        struct mgs_obd *mgs = NULL; /* quell gcc overwarning */
-        struct obd_device *obd = NULL;
         int fail = OBD_FAIL_MGMT_ALL_REPLY_NET;
         int rc = 0;
         ENTRY;
@@ -294,7 +292,6 @@ int mgs_handle(struct ptlrpc_request *req)
         OBD_FAIL_RETURN(OBD_FAIL_MGMT_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
         LASSERT(current->journal_info == NULL);
-        /* XXX identical to MDS */
         if (req->rq_reqmsg->opc != MGMT_CONNECT) {
                 if (req->rq_export == NULL) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
@@ -302,8 +299,6 @@ int mgs_handle(struct ptlrpc_request *req)
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }
-                obd = req->rq_export->exp_obd;
-                mgs = &obd->u.mgs;
         }
 
         switch (req->rq_reqmsg->opc) {
@@ -311,18 +306,21 @@ int mgs_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "connect");
                 OBD_FAIL_RETURN(OBD_FAIL_MGMT_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mgs_handle);
-                if (!rc) {
-                        /* Now that we have an export, set mgs. */
-                        obd = req->rq_export->exp_obd;
-                        mgs = mgs_req2mgs(req);
-                }
                 break;
-
         case MGMT_DISCONNECT:
                 DEBUG_REQ(D_INODE, req, "disconnect");
                 OBD_FAIL_RETURN(OBD_FAIL_MGMT_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
+                break;
+
+        case MGMT_TARGET_ADD:
+                CDEBUG(D_INODE, "target add\n");
+                rc = mgs_handle_target_add(req);
+                break;
+        case MGMT_TARGET_DEL:
+                CDEBUG(D_INODE, "target del\n");
+                //rc = mgs_handle_target_del(req);
                 break;
 
         case LDLM_ENQUEUE:
@@ -350,23 +348,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = -ENOTSUPP; /* la la la */
                 break;
- //       case MGMT_FIRST_CONNECT:
- //               CDEBUG(D_INODE, "server connect at first time\n");
- //               OBD_FAIL_RETURN(OBD_FAIL_MGMT_FIRST_CONNECT, 0);
- //               rc = mgmt_handle_first_connect(req);
-//                break;
-        case MGMT_TARGET_ADD:
-                CDEBUG(D_INODE, "target add\n");
-                rc = mgmt_handle_target_add(req);
-                break;
-        case MGMT_TARGET_DEL:
-                CDEBUG(D_INODE, "target del\n");
-//                rc = mgmt_handle_target_del(req);
-                break;
-//        case MGMT_MDS_ADD:
-//                CDEBUG(D_INODE, "mds add\n");
-//                rc = mgmt_handle_mds_add(req);
-//                break;
+
         case LLOG_ORIGIN_HANDLE_CREATE:
                 DEBUG_REQ(D_INODE, req, "llog_init");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);

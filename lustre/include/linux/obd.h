@@ -321,6 +321,7 @@ struct client_obd {
         struct mdc_rpc_lock     *cl_setattr_lock;
         struct osc_creator       cl_oscc;
         /* mgc datastruct */
+        struct semaphore         cl_mgc_sem;
         struct mgc_rpc_lock     *cl_mgc_rpc_lock;
         struct vfsmount         *cl_mgc_vfsmnt;
         struct super_block      *cl_mgc_sb;

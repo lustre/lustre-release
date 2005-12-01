@@ -1458,7 +1458,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) == 0 || LUSTRE_CFG_BUFLEN(lcfg, 2) == 0)
                 RETURN(rc = -EINVAL);
 
-        lmi = lustre_get_mount(obd->obd_name);
+        lmi = server_get_mount(obd->obd_name);
         if (lmi) {
                 /* We already mounted in lustre_fill_super.
                    lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
@@ -1606,7 +1606,7 @@ err_ops:
         fsfilt_put_ops(obd->obd_fsops);
 err_put:
         if (lmi) {
-                lustre_put_mount(obd->obd_name, mds->mds_vfsmnt);
+                server_put_mount(obd->obd_name, mds->mds_vfsmnt);
         } else {
                 /* old method */
                 unlock_kernel();
@@ -1816,7 +1816,7 @@ static int mds_cleanup(struct obd_device *obd)
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
 
-        must_put = lustre_put_mount(obd->obd_name, mds->mds_vfsmnt);
+        must_put = server_put_mount(obd->obd_name, mds->mds_vfsmnt);
         /* must_put is for old method (l_p_m returns non-0 on err) */
 
         /* We can only unlock kernel if we are in the context of sys_ioctl,

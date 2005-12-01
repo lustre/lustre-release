@@ -238,6 +238,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         }
 
         sema_init(&cli->cl_sem, 1);
+        sema_init(&cli->cl_mgc_sem, 1);
         cli->cl_conn_count = 0;
         memcpy(server_uuid.uuid, lustre_cfg_buf(lcfg, 2),
                min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),

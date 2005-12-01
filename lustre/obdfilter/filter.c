@@ -1352,7 +1352,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
             LUSTRE_CFG_BUFLEN(lcfg, 2) < 1)
                 RETURN(-EINVAL);
 
-        lmi = lustre_get_mount(obd->obd_name);
+        lmi = server_get_mount(obd->obd_name);
         if (lmi) {
                 /* We already mounted in lustre_fill_super.
                    lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
@@ -1486,7 +1486,7 @@ err_ops:
         filter_iobuf_pool_done(filter);
 err_mntput:
         if (lmi) {
-                lustre_put_mount(obd->obd_name, mnt);
+                server_put_mount(obd->obd_name, mnt);
         } else {
                 /* old method */
                 unlock_kernel();
@@ -1647,7 +1647,7 @@ static int filter_cleanup(struct obd_device *obd)
                        obd->obd_name, filter->fo_vfsmnt,
                        atomic_read(&filter->fo_vfsmnt->mnt_count));
 
-        must_put = lustre_put_mount(obd->obd_name, filter->fo_vfsmnt);
+        must_put = server_put_mount(obd->obd_name, filter->fo_vfsmnt);
         /* must_put is for old method (l_p_m returns non-0 on err) */
 
         /* We can only unlock kernel if we are in the context of sys_ioctl,
