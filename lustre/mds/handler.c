@@ -2464,6 +2464,9 @@ static struct obd_ops mdt_obd_ops = {
         .o_health_check    = mdt_health_check,
 };
 
+quota_interface_t *quota_interface;
+quota_interface_t mds_quota_interface;
+
 static int __init mds_init(void)
 {
         int rc;
