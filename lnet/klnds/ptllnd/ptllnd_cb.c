@@ -733,15 +733,18 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 STAT_UPDATE(kps_recv_delayed);
 
 #if CRAY_XT3
-        LASSERT (lntmsg->msg_ev.uid == LNET_UID_ANY);
+        if (lntmsg != NULL) {
+                LASSERT (lntmsg->msg_ev.uid == LNET_UID_ANY);
 
-        /* Set the UID if the sender's uid isn't 0; i.e. non-root running in
-         * userspace (e.g. a catamount node; linux kernel senders, including
-         * routers have uid 0).  If this is a lustre RPC request, this tells
-         * lustre not to trust the creds in the RPC message body. */
+                /* Set the UID if the sender's uid isn't 0; i.e. non-root
+                 * running in userspace (e.g. a catamount node; linux kernel
+                 * senders, including routers have uid 0).  If this is a lustre
+                 * RPC request, this tells lustre not to trust the creds in the
+                 * RPC message body. */
 
-        if (rx->rx_uid != 0)
-                lntmsg->msg_ev.uid = rx->rx_uid;
+                if (rx->rx_uid != 0)
+                        lntmsg->msg_ev.uid = rx->rx_uid;
+        }
 #endif
         switch(rxmsg->ptlm_type)
         {
