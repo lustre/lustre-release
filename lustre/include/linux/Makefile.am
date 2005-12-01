@@ -10,7 +10,7 @@ linux_HEADERS = lustre_idl.h
 endif
 
 EXTRA_DIST = lprocfs_status.h lustre_debug.h lustre_ha.h lustre_lib.h \
-  obd_cache.h obd_lov.h lustre_dlm.h lustre_handles.h \
+  obd_cache.h obd_lov.h lustre_dlm.h lustre_handles.h lustre_disk.h \
   lustre_net.h obd_class.h obd_ost.h obd_support.h lustre_commit_confd.h \
   lustre_export.h lustre_log.h obd_echo.h \
   lustre_compat25.h lustre_fsfilt.h lustre_import.h lustre_mds.h obd.h \
