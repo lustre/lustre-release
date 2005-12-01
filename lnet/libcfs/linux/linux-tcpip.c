@@ -562,6 +562,23 @@ libcfs_sock_listen (struct socket **sockp,
 
 EXPORT_SYMBOL(libcfs_sock_listen);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
+int sock_create_lite(int family, int type, int protocol, struct socket **res)
+{
+        struct socket *sock;
+
+        sock = sock_alloc();
+        if (!sock) {
+                err = -ENOMEM;
+                goto out;
+        }
+        sock->type = type;
+out:
+        *res = sock;
+        return err;
+}
+#endif
+
 int
 libcfs_sock_accept (struct socket **newsockp, struct socket *sock)
 {
@@ -571,15 +588,14 @@ libcfs_sock_accept (struct socket **newsockp, struct socket *sock)
 
 	init_waitqueue_entry(&wait, current);
 
-	newsock = sock_alloc();
-	if (newsock == NULL) {
-		CERROR("Can't allocate socket\n");
-		return -ENOMEM;
-	}
-
 	/* XXX this should add a ref to sock->ops->owner, if
 	 * TCP could be a module */
-	newsock->type = sock->type;
+        rc = sock_create_lite(PF_PACKET, sock->type, IPPROTO_TCP, &newsock);
+        if (rc) {
+                CERROR("Can't allocate socket\n");
+                return rc;
+        }
+
 	newsock->ops = sock->ops;
 
 	set_current_state(TASK_INTERRUPTIBLE);
