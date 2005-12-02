@@ -46,7 +46,6 @@
 #include <linux/lustre_disk.h>
 #include "mgs_internal.h"
 
-static int mgs_postsetup(struct obd_device *obd);
 static int mgs_cleanup(struct obd_device *obd);
 
 /* Establish a connection to the MGS.*/
@@ -162,9 +161,12 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc < 0)
                 GOTO(err_fs, rc);
 
-        rc = mgs_postsetup(obd);
+        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
+                        &llog_lvfs_ops);
         if (rc)
                 GOTO(err_fs, rc);
+
+        mgs_init_db_list(obd);
 
         lprocfs_init_vars(mgs, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -190,23 +192,17 @@ err_put:
         return rc;
 }
 
-static int mgs_postsetup(struct obd_device *obd)
-{
-        int rc = 0;
-        ENTRY;
-
-        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
-                        &llog_lvfs_ops);
-        RETURN(rc);
-}
-
 static int mgs_precleanup(struct obd_device *obd, int stage)
 {
         int rc = 0;
         ENTRY;
 
-        llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
-        rc = obd_llog_finish(obd, 0);
+        switch (stage) {
+        case OBD_CLEANUP_SELF_EXP:
+                mgs_cleanup_db_list(obd);
+                llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
+                rc = obd_llog_finish(obd, 0);
+        }
         RETURN(rc);
 }
 
@@ -256,6 +252,7 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         struct mgmt_target_info *req_mti, *mti, *rep_mti;
         int rep_size = sizeof(*mti);
         int index, rc;
+        ENTER;
 
         OBD_ALLOC(mti, sizeof(*mti));
         if (!mti)
@@ -264,23 +261,38 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                                      lustre_swab_mgmt_target_info);
         memcpy(mti, req_mti, sizeof(*mti));
         
-        /* NEED_INDEX implies NEED_REGISTER, but not vice-versa */
+        /* set the new target index if needed */
         if (mti->mti_flags & LDD_F_NEED_INDEX) {
-                rc = mgs_get_index(mti);
-               // rc = mgmt_handle_first_connect(req);
+                rc = mgs_set_next_index(mti);
+                if (rc) {
+                        CERROR("Can't get index (%d)\n", rc);
+                        GOTO(out, rc);
+                }
         }
 
-        if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
-                rc = llog_add_mds(obd, mti);
+        /* create the log for the new target */
+        rc = mgs_write_log_target(mti);
+        if (rc) {
+                CERROR("Failed to write %s log (%d)\n", 
+                       mti->mti_svname, rc);
+                GOTO(out, rc);
+        }
+
+        /* update the other logs that depend on new targets */
+        rc = mgs_write_log_add(mti);
+        if (rc) {
+                CERROR("Failed to add %s to lov's (%d)\n", 
+                       mti->mti_svname, rc);
+                GOTO(out, rc);
         }
 
 out:
         lustre_pack_reply(req, 1, &rep_size, NULL); 
+        /* send back the whole mti in the reply */
         rep_mti = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_mti));
         memcpy(rep_mti, mti, sizeof(*rep_mti));
-        if (rc)
-                rep_mti->mti_stripe_index = rc;
-        return rc;
+        rep_mti->mti_rc = rc;
+        RETURN(rc);
 }
 
 int mgs_handle(struct ptlrpc_request *req)
@@ -288,6 +300,8 @@ int mgs_handle(struct ptlrpc_request *req)
         int fail = OBD_FAIL_MGMT_ALL_REPLY_NET;
         int rc = 0;
         ENTRY;
+        
+        CERROR("MGS handle\n");
 
         OBD_FAIL_RETURN(OBD_FAIL_MGMT_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 

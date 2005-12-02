@@ -944,16 +944,17 @@ typedef enum {
 
 struct mgmt_target_info {
         char             mti_fsname[NAME_MAXLEN];
-        char             mti_targetname[NAME_MAXLEN];
+        char             mti_svname[NAME_MAXLEN];
         char             mti_nodename[NAME_MAXLEN];
         char             mti_uuid[UUID_MAXLEN];
         __u64            mti_nid;            /* lnet_nid_t */ //nid list?
         __u32            mti_config_ver;
         __u32            mti_flags;
         __u32            mti_stripe_index;
-        __u32            mti_stripe_pattern;      /* PATTERN_RAID0, PATTERN_RAID1 */
-        __u64            mti_stripe_size;      /* in bytes */
-        __u64            mti_stripe_offset;    /* in bytes */
+        __u32            mti_stripe_pattern;   /* PATTERN_RAID0, PATTERN_RAID1 */
+        __u64            mti_stripe_size;      
+        __u64            mti_stripe_offset;    
+        __u32            mti_rc;               /* return code from MGS */
 };
 
 extern void lustre_swab_mgmt_target_info(struct mgmt_target_info *oinfo);

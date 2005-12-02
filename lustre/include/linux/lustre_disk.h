@@ -91,16 +91,20 @@ struct lustre_disk_data {
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
+static inline void make_sv_name(__u32 flags, __u32 index, char *fs, char *name)
+{
+        if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
+                sprintf(name, "%.8s-%s%04x", fs,
+                        (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",  
+                        index);
+        } else {
+                sprintf(name, "MGMT");
+        }
+}
 static inline void ldd_make_sv_name(struct lustre_disk_data *ldd)
 {
-        if (IS_MDT(ldd) || IS_OST(ldd)) {
-                sprintf(ldd->ldd_svname, "%.8s-%s%04x",
-                        ldd->ldd_fsname,
-                        IS_MDT(ldd) ? "MDT" : "OST",  
-                        ldd->ldd_svindex);
-        } else {
-                sprintf(ldd->ldd_svname, "MGMT");
-        }
+        make_sv_name(ldd->ldd_flags, ldd->ldd_svindex,
+                     ldd->ldd_fsname, ldd->ldd_svname);
 }
 
 

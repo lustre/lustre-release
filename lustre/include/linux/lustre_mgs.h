@@ -35,12 +35,16 @@ struct mgc_op_data {
         __u64      obj_version;
 };
 
+
 struct system_db {
         char              fsname[64];
         struct list_head  db_list;
         void*             index_map;
         struct list_head  ost_infos;
+        int               sdb_flags;
 };
+#define SDB_NO_LLOG 0x01
+#define LOG_IS_EMPTY(db) ((db)->sdb_flags & SDB_NO_LLOG)
 
 struct mgc_open_llog {
         struct list_head   mol_list;
