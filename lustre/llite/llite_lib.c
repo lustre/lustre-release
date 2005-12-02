@@ -562,7 +562,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         class_uuid_t uuid;
         struct obd_uuid mdc_uuid;
         struct llog_ctxt *ctxt;
-        struct obd_connect_data *ocd = NULL;
+        struct obd_connect_data ocd = { 0 };
         int rc = 0;
         int err;
         ENTRY;
@@ -620,9 +620,9 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         if (rc)
                 GOTO(out_cleanup, rc);
 
-        ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
+        ocd.ocd_connect_flags = OBD_CONNECT_ACL;
 
-        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, &ocd);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, rc);
                 GOTO(out_cleanup, rc);
@@ -686,8 +686,6 @@ out_del_uuid:
                 CERROR("del MDC UUID failed: rc = %d\n", err);
 
 out:
-        if (ocd)
-                OBD_FREE(ocd, sizeof(*ocd));
         RETURN(rc);
 }
 
