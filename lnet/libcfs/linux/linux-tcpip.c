@@ -565,6 +565,7 @@ EXPORT_SYMBOL(libcfs_sock_listen);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
 int sock_create_lite(int family, int type, int protocol, struct socket **res)
 {
+        int err = 0;
         struct socket *sock;
 
         sock = sock_alloc();
