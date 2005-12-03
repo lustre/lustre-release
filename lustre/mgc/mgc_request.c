@@ -50,12 +50,12 @@
 
 
 /* Get index and add to config llog, depending on flags */
-int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *moi)
+int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
 {
         struct ptlrpc_request *req;
-        struct mgmt_target_info *req_moi, *rep_moi;
-        int size = sizeof(*req_moi);
-        int rep_size = sizeof(*moi);
+        struct mgmt_target_info *req_mti, *rep_mti;
+        int size = sizeof(*req_mti);
+        int rep_size = sizeof(*mti);
         int rc;
         ENTRY;
 
@@ -64,36 +64,34 @@ int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *moi)
         if (!req)
                 RETURN(rc = -ENOMEM);
 
-        req_moi = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_moi));
-        memcpy(req_moi, moi, sizeof(*req_moi));
+        req_mti = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mti));
+        memcpy(req_mti, mti, sizeof(*req_mti));
 
         req->rq_replen = lustre_msg_size(1, &rep_size);
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
-                int index;
-                rep_moi = lustre_swab_repbuf(req, 0, sizeof(*rep_moi),
+                rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
                                              lustre_swab_mgmt_target_info);
-                index = rep_moi->moi_stripe_index;
-                if (index != moi->moi_stripe_index) {
-                        CERROR ("OST ADD failed. rc=%d\n", index);
-                        GOTO (out, rc = -EINVAL);
+                if (mti->mti_rc) {
+                        CERROR ("OST ADD failed. rc=%d\n", mti->mti_rc);
+                        GOTO (out, rc = mti->mti_rc);
                 }
-                CERROR("OST ADD OK.(index = %d)\n", index);
+                CERROR("OST ADD %s OK (index = %d)\n",
+                       mti->mti_svname, mti->mti_stripe_index);
         }
 out:
         ptlrpc_req_finished(req);
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(mgc_target_add); 
 
 /* Remove from config llog */
-int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *moi)
+int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *mti)
 {
         struct ptlrpc_request *req;
-        struct mgmt_target_info *req_moi, *rep_moi;
-        int size = sizeof(*req_moi);
+        struct mgmt_target_info *req_mti, *rep_mti;
+        int size = sizeof(*req_mti);
         int rc;
         ENTRY;
 
@@ -102,16 +100,16 @@ int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *moi)
         if (!req)
                 RETURN(rc = -ENOMEM);
 
-        req_moi = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_moi));
-        memcpy(req_moi, moi, sizeof(*req_moi));
+        req_mti = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mti));
+        memcpy(req_mti, mti, sizeof(*req_mti));
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 int index;
-                rep_moi = lustre_swab_repbuf(req, 0, sizeof(*rep_moi),
+                rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
                                              lustre_swab_mgmt_target_info);
-                index = rep_moi->moi_stripe_index;
-                if (index != moi->moi_stripe_index) {
+                index = rep_mti->mti_stripe_index;
+                if (index != mti->mti_stripe_index) {
                         CERROR ("OST DEL failed. rc=%d\n", index);
                         GOTO (out, rc = -EINVAL);
                 }
@@ -122,7 +120,6 @@ out:
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(mgc_target_del);
 
 static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb, 
                         struct vfsmount *mnt)
@@ -389,12 +386,12 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
         /* Hack alert */
         if (keylen == strlen("register") &&
             memcmp(key, "register", keylen) == 0) {
-                struct mgmt_target_info *moi;
+                struct mgmt_target_info *mti;
                 if (vallen != sizeof(struct mgmt_target_info))
                         RETURN(-EINVAL);
-                moi = (struct mgmt_target_info *)val;
-                CERROR("register %s %#x\n", moi->moi_ostname, moi->moi_flags);
-                rc =  mgc_target_add(exp, moi);
+                mti = (struct mgmt_target_info *)val;
+                CERROR("register %s %#x\n", mti->mti_svname, mti->mti_flags);
+                rc =  mgc_target_add(exp, mti);
                 RETURN(rc);
         }
         if (keylen == strlen("set_fs") &&

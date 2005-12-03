@@ -453,6 +453,7 @@ struct niobuf_local {
 #define LUSTRE_OSS_NAME "oss"
 #define LUSTRE_OST_NAME "ost"
 #define LUSTRE_OSC_NAME "osc"
+# define OBD_FILTER_DEVICENAME "obdfilter"
 #define LUSTRE_FILTER_NAME "filter"
 #define LUSTRE_SANOSC_NAME "sanosc"
 #define LUSTRE_SANOST_NAME "sanost"

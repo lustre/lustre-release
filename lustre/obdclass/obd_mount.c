@@ -419,7 +419,7 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
 
         //FIXME Copy the mgs remote log to the local disk
 
-#if 0
+#if 1
         /* For debugging, it's useful to just dump the log */
         class_config_dump_llog(rctxt, logname, cfg);
 #endif
@@ -701,6 +701,7 @@ static void server_stop_servers(struct super_block *sb)
         }
 }
 
+/* Add this target to the fs, get a new index if needed */
 static int server_initial_connect(struct super_block *sb, struct vfsmount *mnt)
 {       
         struct lustre_sb_info *lsi = s2lsi(sb);
@@ -719,12 +720,19 @@ static int server_initial_connect(struct super_block *sb, struct vfsmount *mnt)
         if (!mti) {
                 return -ENOMEM;
         }
-        strncpy(mti->mti_ostname, ldd->ldd_svname,
-                sizeof(mti->mti_ostname));
         strncpy(mti->mti_fsname, ldd->ldd_fsname,
-                sizeof(mti->mti_fullfsname));
+                sizeof(mti->mti_fsname));
+        strncpy(mti->mti_svname, ldd->ldd_svname,
+                sizeof(mti->mti_svname));
+        // char             mti_nodename[NAME_MAXLEN];
+        // char             mti_uuid[UUID_MAXLEN];
+        mti->mti_nid = 0; //FIXME local nid IOC_LIBCFS_GET_NI?
+        mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;
+        mti->mti_stripe_pattern = 0; //FIXME
+        mti->mti_stripe_size = 1024*1024;  //FIXME    
+        mti->mti_stripe_offset = 0; //FIXME    
 
         rc = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
         if (rc) {
@@ -754,12 +762,13 @@ static int server_initial_connect(struct super_block *sb, struct vfsmount *mnt)
         /* If this flag is still set, it means we need to change our on-disk
            index to what the mgs assigned us. */
         if (mti->mti_flags & LDD_F_NEED_INDEX) {
-                CERROR("Must change on-disk index from %#x to %#x\n",
-                       ldd->ldd_svindex, mti->mti_stripe_index);
-                ldd->ldd_flags &= ~(LDD_F_NEED_INDEX | LDD_F_FIRST_START);
+                CERROR("Must change on-disk index from %#x to %#x for %s\n",
+                       ldd->ldd_svindex, mti->mti_stripe_index, 
+                       mti->mti_svname);
+                ldd->ldd_flags &= ~(LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER);
                 ldd->ldd_config_ver = 666; // FIXME
                 ldd->ldd_svindex = mti->mti_stripe_index;
-                ldd_make_sv_name(ldd);
+                //ldd_make_sv_name(ldd);
                 ldd_write(&mgc->obd_lvfs_ctxt, ldd);
                 /* FIXME write last_rcvd?, disk label? */
         }
@@ -812,8 +821,6 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         /* Get a new index if needed */
         if (lsi->lsi_ldd->ldd_flags & (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER)) {
-                /* FIXME Maybe need to change NEED_INDEX to NEVER_CONNECTED,
-                   in case index number was given but llog still is needed.*/
                 CERROR("Need new target index from MGS!\n");
                 err = server_initial_connect(sb, mnt);
                 if (err) {

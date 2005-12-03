@@ -803,6 +803,7 @@ parse_out:
         RETURN(rc);
 }
 
+#define D_DUMP D_INFO|D_WARNING
 int class_config_dump_handler(struct llog_handle * handle,
                               struct llog_rec_hdr *rec, void *data)
 {
@@ -819,25 +820,25 @@ int class_config_dump_handler(struct llog_handle * handle,
                         GOTO(out, rc);
                 lcfg = (struct lustre_cfg *)cfg_buf;
 
-                CDEBUG(D_INFO, "lcfg command: %x\n", lcfg->lcfg_command);
+                CDEBUG(D_DUMP, "lcfg command: %x\n", lcfg->lcfg_command);
                 if (LUSTRE_CFG_BUFLEN(lcfg, 0) > 0)
-                        CDEBUG(D_INFO, "     devname: %s\n",
+                        CDEBUG(D_DUMP, "     devname: %s\n",
                                lustre_cfg_string(lcfg, 0));
                 if (lcfg->lcfg_flags)
-                        CDEBUG(D_INFO, "       flags: %x\n", lcfg->lcfg_flags);
+                        CDEBUG(D_DUMP, "       flags: %x\n", lcfg->lcfg_flags);
                 if (lcfg->lcfg_nid)
-                        CDEBUG(D_INFO, "         nid: %s\n",
+                        CDEBUG(D_DUMP, "         nid: %s\n",
                                libcfs_nid2str(lcfg->lcfg_nid));
                 if (lcfg->lcfg_nal)
-                        CDEBUG(D_INFO, "         nal: %x (obsolete)\n", lcfg->lcfg_nal);
+                        CDEBUG(D_DUMP, "         nal: %x (obsolete)\n", lcfg->lcfg_nal);
                 if (lcfg->lcfg_num)
-                        CDEBUG(D_INFO, "         num: %x\n", lcfg->lcfg_num);
+                        CDEBUG(D_DUMP, "         num: %x\n", lcfg->lcfg_num);
                 for (i = 1; i < lcfg->lcfg_bufcount; i++)
                         if (LUSTRE_CFG_BUFLEN(lcfg, i) > 0)
-                                CDEBUG(D_INFO, "     inlbuf%d: %s\n", i,
+                                CDEBUG(D_DUMP, "     inlbuf%d: %s\n", i,
                                        lustre_cfg_string(lcfg, i));
         } else if (rec->lrh_type == PTL_CFG_REC) {
-                CDEBUG(D_INFO, "Obsolete pcfg command\n");
+                CDEBUG(D_DUMP, "Obsolete pcfg command\n");
         } else {
                 CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);
                 rc = -EINVAL;

@@ -53,7 +53,7 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct obd_export *exp;
-        int rc, abort_recovery;
+        int rc;
         ENTRY;
 
         if (!conn || !obd || !cluuid)
@@ -70,12 +70,6 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
                 exp->exp_connect_flags = data->ocd_connect_flags;
         }
 
-#if 0
-        /* FIXME: recovery of connection*/
-        rc = mgs_client_add(obd, &obd->u.mgs, med, -1);
-        GOTO(out, rc);
-#endif 
-out:
         if (rc) {
                 class_disconnect(exp);
         } else {
@@ -247,12 +241,11 @@ static int mgs_cleanup(struct obd_device *obd)
 
 static int mgs_handle_target_add(struct ptlrpc_request *req)
 {    
-        struct obd_device *obd = &req->rq_export->exp_obd;
-        struct mgs_obd *mgs = &obd->u.mgs;
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct mgmt_target_info *req_mti, *mti, *rep_mti;
         int rep_size = sizeof(*mti);
-        int index, rc;
-        ENTER;
+        int rc;
+        ENTRY;
 
         OBD_ALLOC(mti, sizeof(*mti));
         if (!mti)
@@ -263,25 +256,18 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         
         /* set the new target index if needed */
         if (mti->mti_flags & LDD_F_NEED_INDEX) {
-                rc = mgs_set_next_index(mti);
+                rc = mgs_set_next_index(obd, mti);
                 if (rc) {
                         CERROR("Can't get index (%d)\n", rc);
                         GOTO(out, rc);
                 }
         }
 
-        /* create the log for the new target */
-        rc = mgs_write_log_target(mti);
+        /* create the log for the new target 
+           and update the client/mdt logs */
+        rc = mgs_write_log_target(obd, mti);
         if (rc) {
                 CERROR("Failed to write %s log (%d)\n", 
-                       mti->mti_svname, rc);
-                GOTO(out, rc);
-        }
-
-        /* update the other logs that depend on new targets */
-        rc = mgs_write_log_add(mti);
-        if (rc) {
-                CERROR("Failed to add %s to lov's (%d)\n", 
                        mti->mti_svname, rc);
                 GOTO(out, rc);
         }
