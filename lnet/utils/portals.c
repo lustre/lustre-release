@@ -352,8 +352,8 @@ int jt_ptl_network(int argc, char **argv)
         return -1;
 }
 
-int 
-jt_ptl_get_nids(__u64 **nid_list)
+/* Warning - this allocates memory that user must free (if nid_list != NULL) */
+int jt_ptl_get_nids(__u64 **nid_list)
 {
         struct libcfs_ioctl_data data;
         int i, count = 0, rc, arraysize = 0;
