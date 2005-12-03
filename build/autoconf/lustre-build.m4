@@ -261,6 +261,22 @@ if test x$enable_cray_xt3 != xno; then
 fi
 ])
 
+#
+# LB_CONFIG_BGL
+#
+# Enable BGL features
+#
+AC_DEFUN([LB_CONFIG_BGL],
+[AC_MSG_CHECKING([whether to build BGL features])
+AC_ARG_ENABLE([bgl],
+	AC_HELP_STRING([--enable-bgl],
+			[enable building of BGL features]),
+	[enable_bgl='yes'],[enable_bgl='no'])
+AC_MSG_RESULT([$enable_bgl])
+if test x$enable_bgl != xno; then
+        AC_DEFINE(BGL_SUPPORT, 1, Enable BGL Features)
+fi
+])
 
 #
 # LB_PATH_SNMP
@@ -474,6 +490,7 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
         AC_MSG_ERROR([** we assume that sizeof(long long) == 8.  Tell phil@clusterfs.com])
 fi
 
+if test x$enable_bgl != xyes; then
 AC_MSG_CHECKING([if $CC accepts -m64])
 CC_save="$CC"
 CC="$CC -m64"
@@ -483,6 +500,7 @@ AC_TRY_COMPILE([],[],[
 	AC_MSG_RESULT([no])
 	CC="$CC_save"
 ])
+fi
 
 CPPFLAGS="-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
@@ -549,6 +567,7 @@ if ! test "$PORTALS" ; then
 	LB_CONFIG_LUSTRE_PORTALS
 fi
 LB_CONFIG_CRAY_XT3
+LB_CONFIG_BGL
 LB_PATH_DEFAULTS
 
 LB_PROG_CC
