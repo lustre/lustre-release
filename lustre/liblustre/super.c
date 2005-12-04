@@ -1744,8 +1744,11 @@ llu_fsswop_mount(const char *source,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
+        ocd.ocd_connect_flags = OBD_CONNECT_IBITS;
+        ocd.ocd_ibits_known = MDS_INODELOCK_FULL;
+
         /* setup mdc */
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, NULL /* ocd */);
+        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, err);
@@ -1769,7 +1772,7 @@ llu_fsswop_mount(const char *source,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
-        ocd.ocd_connect_flags |= OBD_CONNECT_SRVLOCK;
+        ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK;
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);

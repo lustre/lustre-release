@@ -153,6 +153,10 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                         CERROR("could not register mount in /proc/lustre");
         }
 
+        /* indicate that inodebits locking is supported by this client */
+        data->ocd_connect_flags |= OBD_CONNECT_IBITS;
+        data->ocd_ibits_known = MDS_INODELOCK_FULL;
+
         if (sb->s_flags & MS_RDONLY)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
         if (sbi->ll_flags & LL_SBI_USER_XATTR)

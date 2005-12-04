@@ -382,11 +382,48 @@ struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *ns,
 
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
 {
-        ldlm_res2desc(lock->l_resource, &desc->l_resource);
-        desc->l_req_mode = lock->l_req_mode;
-        desc->l_granted_mode = lock->l_granted_mode;
-        memcpy(&desc->l_policy_data, &lock->l_policy_data,
-               sizeof(desc->l_policy_data));
+        struct obd_export *exp = lock->l_export?:lock->l_conn_export;
+        /* INODEBITS_INTEROP: If the other side does not support
+         * inodebits, reply with a plain lock descriptor.
+         */
+        if ((lock->l_resource->lr_type == LDLM_IBITS) &&
+            (exp && !(exp->exp_connect_flags & OBD_CONNECT_IBITS))) {
+                struct ldlm_resource res = *lock->l_resource;
+
+                /* Make sure all the right bits are set in this lock we
+                   are going to pass to client */
+                LASSERTF(lock->l_policy_data.l_inodebits.bits ==
+                         (MDS_INODELOCK_LOOKUP|MDS_INODELOCK_UPDATE),
+                         "Inappropriate inode lock bits during "
+                         "conversion " LPU64 "\n",
+                         lock->l_policy_data.l_inodebits.bits);
+                res.lr_type = LDLM_PLAIN;
+                ldlm_res2desc(&res, &desc->l_resource);
+                /* Convert "new" lock mode to something old client can
+                   understand */
+                if ((lock->l_req_mode == LCK_CR) ||
+                    (lock->l_req_mode == LCK_CW))
+                        desc->l_req_mode = LCK_PR;
+                else
+                        desc->l_req_mode = lock->l_req_mode;
+                if ((lock->l_granted_mode == LCK_CR) ||
+                    (lock->l_granted_mode == LCK_CW)) {
+                        desc->l_granted_mode = LCK_PR;
+                } else {
+                        /* We never grant PW/EX locks to clients */
+                        LASSERT((lock->l_granted_mode != LCK_PW) &&
+                                (lock->l_granted_mode != LCK_EX));
+                        desc->l_granted_mode = lock->l_granted_mode;
+                }
+
+                /* We do not copy policy here, because there is no
+                   policy for plain locks */
+        } else {
+                ldlm_res2desc(lock->l_resource, &desc->l_resource);
+                desc->l_req_mode = lock->l_req_mode;
+                desc->l_granted_mode = lock->l_granted_mode;
+                desc->l_policy_data = lock->l_policy_data;
+        }
 }
 
 void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,

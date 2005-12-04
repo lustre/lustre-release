@@ -353,8 +353,21 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 ldlm_lock_addref_internal(lock, mode);
                 ldlm_lock2handle(lock, lockh);
                 lock->l_lvb_swabber = lvb_swabber;
-                if (policy != NULL)
-                        memcpy(&lock->l_policy_data, policy, sizeof(*policy));
+                if (policy != NULL) {
+                        /* INODEBITS_INTEROP: If the server does not support
+                         * inodebits, we will request a plain lock in the
+                         * descriptor (ldlm_lock2desc() below) but use an
+                         * inodebits lock internally with both bits set.
+                         */
+                        if (type == LDLM_IBITS && !(exp->exp_connect_flags &
+                                                    OBD_CONNECT_IBITS))
+                                lock->l_policy_data.l_inodebits.bits =
+                                        MDS_INODELOCK_LOOKUP |
+                                        MDS_INODELOCK_UPDATE;
+                        else
+                                lock->l_policy_data = *policy;
+                }
+
                 if (type == LDLM_EXTENT)
                         memcpy(&lock->l_req_extent, &policy->l_extent,
                                sizeof(policy->l_extent));
@@ -378,6 +391,10 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                          sizeof(*body));
         }
 
+        lock->l_conn_export = exp;
+        lock->l_export = NULL;
+        lock->l_blocking_ast = blocking;
+
         /* Dump lock data into the request buffer */
         body = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_INTENT_LOCKREQ_OFF,
                               sizeof(*body));
@@ -391,10 +408,6 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 size[0] = sizeof(*reply);
                 req->rq_replen = lustre_msg_size(1 + (lvb_len > 0), size);
         }
-        lock->l_conn_export = exp;
-        lock->l_export = NULL;
-        lock->l_blocking_ast = blocking;
-
         LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
 
@@ -477,9 +490,10 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         LDLM_DEBUG(lock, "client-side enqueue, new resource");
                 }
                 if (policy != NULL)
-                        memcpy(&lock->l_policy_data,
-                               &reply->lock_desc.l_policy_data,
-                               sizeof(reply->lock_desc.l_policy_data));
+                        if (!(type == LDLM_IBITS && !(exp->exp_connect_flags &
+                                                    OBD_CONNECT_IBITS)))
+                                lock->l_policy_data =
+                                                 reply->lock_desc.l_policy_data;
                 if (type != LDLM_PLAIN)
                         LDLM_DEBUG(lock,"client-side enqueue, new policy data");
         }

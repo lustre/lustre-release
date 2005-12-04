@@ -541,6 +541,7 @@ finish:
                 }
         } else {
                 struct obd_connect_data *ocd;
+                struct obd_export *exp;
 
                 ocd = lustre_swab_repbuf(request, 0,
                                          sizeof *ocd, lustre_swab_connect);
@@ -559,6 +560,10 @@ finish:
                         ocd->ocd_connect_flags);
 
                 imp->imp_connect_data = *ocd;
+                exp = class_conn2export(&imp->imp_dlm_handle);
+                LASSERT(exp);
+                exp->exp_connect_flags = ocd->ocd_connect_flags;
+                class_export_put(exp);
                 
                 if (IMP_CROW_ABLE(imp)) {
                         CDEBUG(D_HA, "connected to CROW capable target: %s\n",

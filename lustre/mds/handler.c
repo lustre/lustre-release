@@ -293,6 +293,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         if (data != NULL) {
                 data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
+                data->ocd_ibits_known &= MDS_INODELOCK_FULL;
 
                 if (!obd->u.mds.mds_fl_acl)
                         data->ocd_connect_flags &= ~OBD_CONNECT_ACL;
@@ -301,6 +302,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
                         data->ocd_connect_flags &= ~OBD_CONNECT_USER_XATTR;
 
                 exp->exp_connect_flags = data->ocd_connect_flags;
+                exp->exp_mds_data.med_ibits_known = data->ocd_ibits_known;
         }
 
         if (obd->u.mds.mds_fl_acl &&
@@ -2224,6 +2226,16 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         case IT_READDIR:
                 fixup_handle_for_resent_req(req, MDS_REQ_INTENT_LOCKREQ_OFF,
                                             lock, &new_lock, &lockh);
+
+                /* INODEBITS_INTEROP: if this lock was converted from a
+                 * plain lock (client does not support inodebits), then
+                 * child lock must be taken with both lookup and update
+                 * bits set for all operations.
+                 */
+                if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS))
+                        getattr_part = MDS_INODELOCK_LOOKUP |
+                                       MDS_INODELOCK_UPDATE;
+
                 rep->lock_policy_res2 = mds_getattr_name(offset, req,
                                                          getattr_part, &lockh);
 

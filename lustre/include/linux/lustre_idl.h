@@ -211,10 +211,12 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_ACL         0x0080ULL
 #define OBD_CONNECT_USER_XATTR  0x0100ULL
 #define OBD_CONNECT_CROW        0x0200ULL /* OST is CROW able */
+#define OBD_CONNECT_IBITS       0x1000ULL /* support for inodebits locks */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY |            \
                                 OBD_CONNECT_ACL |               \
-                                OBD_CONNECT_USER_XATTR)
+                                OBD_CONNECT_USER_XATTR |        \
+                                OBD_CONNECT_IBITS)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_CROW)
 #define ECHO_CONNECT_SUPPORTED (0)
 
@@ -223,10 +225,17 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
  * If we eventually have separate connect data for different types, which we
  * almost certainly will, then perhaps we stick a union in here. */
 struct obd_connect_data {
-        __u64 ocd_connect_flags;    /* connection flags, server should return
-                                     * subset of what is asked for. */
-        
-        __u64 padding[8];
+        __u64 ocd_connect_flags;        /* OBD_CONNECT_* per above */
+        __u32 ocd_version;              /* lustre release version number */
+        __u32 ocd_grant;                /* initial cache grant amount (bytes) */
+        __u32 ocd_index;                /* LOV index to connect to */
+        __u32 ocd_unused;
+        __u64 ocd_ibits_known;          /* inode bits this client understands */
+        __u64 padding2;                 /* also fix lustre_swab_connect */
+        __u64 padding3;                 /* also fix lustre_swab_connect */
+        __u64 padding4;                 /* also fix lustre_swab_connect */
+        __u64 padding5;                 /* also fix lustre_swab_connect */
+        __u64 padding6;                 /* also fix lustre_swab_connect */
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
