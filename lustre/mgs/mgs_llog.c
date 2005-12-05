@@ -169,7 +169,7 @@ static struct system_db *mgs_new_db(struct obd_device *obd, char *fsname)
                 return NULL;
         }
         strncpy(db->fsname, fsname, sizeof(db->fsname));
-        INIT_LIST_HEAD(&db->ost_infos);
+        //INIT_LIST_HEAD(&db->ost_infos);
         db->sdb_flags |= SDB_NO_LLOG;
 
         spin_lock(&mgs->mgs_system_db_lock);
@@ -276,7 +276,8 @@ int mgs_set_next_index(struct obd_device *obd, struct mgmt_target_info *mti)
         make_sv_name(mti->mti_flags, mti->mti_stripe_index,
                      mti->mti_fsname, mti->mti_svname);
 
-        CDEBUG(D_MGS, "Set new index for %s\n", mti->mti_svname);
+        CDEBUG(D_MGS, "Set new index for %s to %d\n", mti->mti_svname, 
+               mti->mti_stripe_index);
 
         return rc;
 }

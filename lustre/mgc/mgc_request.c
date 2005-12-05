@@ -29,6 +29,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGC
+#define D_MGC D_CONFIG|D_ERROR
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -69,15 +70,17 @@ int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
 
         req->rq_replen = lustre_msg_size(1, &rep_size);
 
+        CDEBUG(D_MGC, "requesting add for %s\n", mti->mti_svname);
+        
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
                                              lustre_swab_mgmt_target_info);
                 if (mti->mti_rc) {
-                        CERROR ("OST ADD failed. rc=%d\n", mti->mti_rc);
+                        CERROR ("target_add failed. rc=%d\n", mti->mti_rc);
                         GOTO (out, rc = mti->mti_rc);
                 }
-                CERROR("OST ADD %s OK (index = %d)\n",
+                CDEBUG(D_MGC, "target_add %s got index = %d\n",
                        mti->mti_svname, mti->mti_stripe_index);
         }
 out:
@@ -173,13 +176,17 @@ err_ops:
         fsfilt_put_ops(obd->obd_fsops);
         obd->obd_fsops = NULL;
         cli->cl_mgc_sb = NULL;
+        up(&cli->cl_mgc_sem);
         return(err);
 }
 
 static int mgc_fs_cleanup(struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
-        int rc;
+        int rc = 0;
+
+        LASSERT(cli->cl_mgc_vfsmnt != NULL);
+        LASSERT(cli->cl_mgc_sb != NULL);
 
         if (cli->cl_mgc_configs_dir != NULL) {
                 struct lvfs_run_ctxt saved;
@@ -384,13 +391,14 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         /* Hack alert */
-        if (keylen == strlen("register") &&
-            memcmp(key, "register", keylen) == 0) {
+        if (keylen == strlen("add_target") &&
+            memcmp(key, "add_target", keylen) == 0) {
                 struct mgmt_target_info *mti;
                 if (vallen != sizeof(struct mgmt_target_info))
                         RETURN(-EINVAL);
                 mti = (struct mgmt_target_info *)val;
-                CERROR("register %s %#x\n", mti->mti_svname, mti->mti_flags);
+                CDEBUG(D_MGC, "add_target %s %#x\n",
+                       mti->mti_svname, mti->mti_flags);
                 rc =  mgc_target_add(exp, mti);
                 RETURN(rc);
         }

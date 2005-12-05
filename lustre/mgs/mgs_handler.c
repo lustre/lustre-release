@@ -28,6 +28,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGS
+#define D_MGS D_INFO|D_ERROR
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -191,6 +192,8 @@ static int mgs_precleanup(struct obd_device *obd, int stage)
         int rc = 0;
         ENTRY;
 
+        CDEBUG(D_MGS, "precleanup %d\n", stage);
+
         switch (stage) {
         case OBD_CLEANUP_SELF_EXP:
                 mgs_cleanup_db_list(obd);
@@ -216,7 +219,7 @@ static int mgs_cleanup(struct obd_device *obd)
 
  //       mgs_update_server_data(obd, 1);
 
-        //mgs_fs_cleanup(obd);
+        mgs_fs_cleanup(obd);
 
         server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
         mgs->mgs_sb = NULL;
@@ -254,6 +257,9 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                                      lustre_swab_mgmt_target_info);
         memcpy(mti, req_mti, sizeof(*mti));
         
+        CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 
+               mti->mti_stripe_index);
+
         /* set the new target index if needed */
         if (mti->mti_flags & LDD_F_NEED_INDEX) {
                 rc = mgs_set_next_index(obd, mti);
@@ -287,7 +293,7 @@ int mgs_handle(struct ptlrpc_request *req)
         int rc = 0;
         ENTRY;
         
-        CERROR("MGS handle\n");
+        CDEBUG(D_MGS, "MGS handle\n");
 
         OBD_FAIL_RETURN(OBD_FAIL_MGMT_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
@@ -303,28 +309,28 @@ int mgs_handle(struct ptlrpc_request *req)
 
         switch (req->rq_reqmsg->opc) {
         case MGMT_CONNECT:
-                DEBUG_REQ(D_INODE, req, "connect");
+                DEBUG_REQ(D_MGS, req, "connect");
                 OBD_FAIL_RETURN(OBD_FAIL_MGMT_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mgs_handle);
                 break;
         case MGMT_DISCONNECT:
-                DEBUG_REQ(D_INODE, req, "disconnect");
+                DEBUG_REQ(D_MGS, req, "disconnect");
                 OBD_FAIL_RETURN(OBD_FAIL_MGMT_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
 
         case MGMT_TARGET_ADD:
-                CDEBUG(D_INODE, "target add\n");
+                CDEBUG(D_MGS, "target add\n");
                 rc = mgs_handle_target_add(req);
                 break;
         case MGMT_TARGET_DEL:
-                CDEBUG(D_INODE, "target del\n");
+                CDEBUG(D_MGS, "target del\n");
                 //rc = mgs_handle_target_del(req);
                 break;
 
         case LDLM_ENQUEUE:
-                DEBUG_REQ(D_INODE, req, "enqueue");
+                DEBUG_REQ(D_MGS, req, "enqueue");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
                                          ldlm_server_blocking_ast, NULL);
@@ -332,45 +338,45 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
         case LDLM_BL_CALLBACK:
         case LDLM_CP_CALLBACK:
-                DEBUG_REQ(D_INODE, req, "callback");
+                DEBUG_REQ(D_MGS, req, "callback");
                 CERROR("callbacks should not happen on MDS\n");
                 LBUG();
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
                 break;
 
         case OBD_PING:
-                DEBUG_REQ(D_INODE, req, "ping");
+                DEBUG_REQ(D_MGS, req, "ping");
                 rc = target_handle_ping(req);
                 break;
 
         case OBD_LOG_CANCEL:
-                CDEBUG(D_INODE, "log cancel\n");
+                CDEBUG(D_MGS, "log cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = -ENOTSUPP; /* la la la */
                 break;
 
         case LLOG_ORIGIN_HANDLE_CREATE:
-                DEBUG_REQ(D_INODE, req, "llog_init");
+                DEBUG_REQ(D_MGS, req, "llog_init");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_create(req);
                 break;
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
-                DEBUG_REQ(D_INODE, req, "llog next block");
+                DEBUG_REQ(D_MGS, req, "llog next block");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_next_block(req);
                 break;
         case LLOG_ORIGIN_HANDLE_READ_HEADER:
-                DEBUG_REQ(D_INODE, req, "llog read header");
+                DEBUG_REQ(D_MGS, req, "llog read header");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_read_header(req);
                 break;
         case LLOG_ORIGIN_HANDLE_CLOSE:
-                DEBUG_REQ(D_INODE, req, "llog close");
+                DEBUG_REQ(D_MGS, req, "llog close");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_close(req);
                 break;
         case LLOG_CATINFO:
-                DEBUG_REQ(D_INODE, req, "llog catinfo");
+                DEBUG_REQ(D_MGS, req, "llog catinfo");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_catinfo(req);
                 break;

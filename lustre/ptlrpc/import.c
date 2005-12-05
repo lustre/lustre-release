@@ -843,6 +843,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         switch (imp->imp_connect_op) {
         case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
         case MDS_CONNECT: rq_opc = MDS_DISCONNECT; break;
+        case MGMT_CONNECT: rq_opc = MGMT_DISCONNECT; break;
         default:
                 CERROR("don't know how to disconnect from %s (connect_op %d)\n",
                        imp->imp_target_uuid.uuid, imp->imp_connect_op);

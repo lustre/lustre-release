@@ -75,9 +75,9 @@ struct lustre_disk_data {
         __u32      ldd_config_ver;      /* we have integrated all llog steps
                                            through this llog ver. */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
-        __u32      ldd_svindex;         /* server index (0001), must match svname */
         char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001) */
+        __u16      ldd_svindex;         /* server index (0001), must match svname */
         __u16      ldd_mgsnid_count;    /* how many failover nids we have for the MGS */
         lnet_nid_t ldd_mgsnid[MAX_FAILOVER_NIDS]; /* mgmt nid list; lmd can override */
         enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
@@ -91,7 +91,7 @@ struct lustre_disk_data {
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
-static inline void make_sv_name(__u32 flags, __u32 index, char *fs, char *name)
+static inline void make_sv_name(__u32 flags, __u16 index, char *fs, char *name)
 {
         if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
                 sprintf(name, "%.8s-%s%04x", fs,
