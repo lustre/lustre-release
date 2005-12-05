@@ -36,7 +36,7 @@
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
 #include <libcfs/portals_utils.h>
-#include <linux/kdev_t.h>  /* for MKDEV */
+
 
 static ioc_handler_t  do_ioctl;                 /* forward ref */
 static ioc_handler_t *current_ioc_handler = &do_ioctl;
@@ -66,6 +66,11 @@ set_ioc_handler (ioc_handler_t *handler)
         else
                 current_ioc_handler = handler;
 }
+
+/* Catamount has no <linux/kdev_t.h>, so just define it here */
+#ifndef MKDEV
+# define MKDEV(a,b) (((a) << 8) | (b))
+#endif
 
 static int
 open_ioc_dev(int dev_id) 

@@ -9,5 +9,5 @@ modulenet_DATA = kralnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
 DIST_SOURCES = $(kralnd-objs:%.o=%.c) ralnd.h

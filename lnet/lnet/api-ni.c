@@ -1217,6 +1217,9 @@ LNetNIFini()
 
         the_lnet.ln_refcount--;
         if (the_lnet.ln_refcount == 0) {
+
+                LASSERT (!the_lnet.ln_niinit_self);
+
                 lnet_proc_fini();
                 lnet_acceptor_stop();
                 lnet_destroy_routes();

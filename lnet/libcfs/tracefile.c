@@ -82,12 +82,14 @@ static void tage_to_tail(struct trace_page *tage, struct list_head *queue)
         list_move_tail(&tage->linkage, queue);
 }
 
-static int tage_invariant(struct trace_page *tage)
+static void LASSERT_TAGE_INVARIANT(struct trace_page *tage)
 {
-        return (tage != NULL &&
-                tage->page != NULL &&
-                tage->used <= CFS_PAGE_SIZE &&
-                cfs_page_count(tage->page) > 0);
+        LASSERT(tage != NULL);
+        LASSERT(tage->page != NULL);
+        LASSERTF(tage->used <= CFS_PAGE_SIZE, "used = %u, PAGE_SIZE %lu\n",
+                 tage->used, CFS_PAGE_SIZE);
+        LASSERTF(cfs_page_count(tage->page) > 0, "count = %d\n",
+                 cfs_page_count(tage->page));
 }
 
 /* return a page that has 'len' bytes left at the end */
@@ -201,7 +203,13 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
         debug_buf = cfs_page_address(tage->page) + tage->used + known_size;
 
         max_nob = CFS_PAGE_SIZE - tage->used - known_size;
-        LASSERT(max_nob > 0);
+        if (max_nob <= 0) {
+                printk(KERN_EMERG "negative max_nob: %i\n", max_nob);
+                debug_buf = format;
+                needed = strlen(format);
+                mask |= D_ERROR;
+                goto out;
+        }
         va_start(ap, format);
         needed = vsnprintf(debug_buf, max_nob, format, ap);
         va_end(ap);
@@ -261,7 +269,7 @@ static void collect_pages_on_cpu(void *info)
         tcd->tcd_cur_pages = 0;
         if (pc->pc_want_daemon_pages) {
                 list_splice(&tcd->tcd_daemon_pages, &pc->pc_pages);
-                CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
+                CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
                 tcd->tcd_cur_daemon_pages = 0;
         }
         spin_unlock(&pc->pc_lock);
@@ -293,7 +301,7 @@ static void put_pages_back_on_cpu(void *info)
         spin_lock(&pc->pc_lock);
         list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
 
-                LASSERT(tage_invariant(tage));
+                LASSERT_TAGE_INVARIANT(tage);
 
                 if (tage->cpu != smp_processor_id())
                         continue;
@@ -330,7 +338,7 @@ static void put_pages_on_daemon_list_on_cpu(void *info)
         spin_lock(&pc->pc_lock);
         list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
 
-                LASSERT(tage_invariant(tage));
+                LASSERT_TAGE_INVARIANT(tage);
 
                 if (tage->cpu != smp_processor_id())
                         continue;
@@ -344,7 +352,7 @@ static void put_pages_on_daemon_list_on_cpu(void *info)
                         LASSERT(!list_empty(&tcd->tcd_daemon_pages));
                         victim = tage_from_list(tcd->tcd_daemon_pages.next);
 
-                        LASSERT(tage_invariant(victim));
+                        LASSERT_TAGE_INVARIANT(victim);
 
                         list_del(&victim->linkage);
                         tage_free(victim);
@@ -375,7 +383,7 @@ void trace_debug_print(void)
                 char *p, *file, *fn;
                 cfs_page_t *page;
 
-                LASSERT(tage_invariant(tage));
+                LASSERT_TAGE_INVARIANT(tage);
 
                 page = tage->page;
                 p = cfs_page_address(page);
@@ -430,7 +438,7 @@ int tracefile_dump_all_pages(char *filename)
         CFS_MMSPACE_OPEN;
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 
-                LASSERT(tage_invariant(tage));
+                LASSERT_TAGE_INVARIANT(tage);
 
                 rc = cfs_filp_write(filp, cfs_page_address(tage->page),
                                     tage->used, cfs_filp_poff(filp));
@@ -465,7 +473,7 @@ void trace_flush_pages(void)
         collect_pages(&pc);
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 
-                LASSERT(tage_invariant(tage));
+                LASSERT_TAGE_INVARIANT(tage);
 
                 list_del(&tage->linkage);
                 tage_free(tage);
@@ -560,7 +568,7 @@ static int tracefiled(void *arg)
 
                 /* mark the first header, so we can sort in chunks */
                 tage = tage_from_list(pc.pc_pages.next);
-                LASSERT(tage_invariant(tage));
+                LASSERT_TAGE_INVARIANT(tage);
 
                 hdr = cfs_page_address(tage->page);
                 hdr->ph_flags |= PH_FLAG_FIRST_RECORD;
@@ -568,7 +576,7 @@ static int tracefiled(void *arg)
                 list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
                         static loff_t f_pos;
 
-                        LASSERT(tage_invariant(tage));
+                        LASSERT_TAGE_INVARIANT(tage);
 
                         if (f_pos >= tracefile_size)
                                 f_pos = 0;
@@ -661,7 +669,7 @@ static void trace_cleanup_on_cpu(void *info)
         tcd->tcd_shutting_down = 1;
 
         list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
-                LASSERT(tage_invariant(tage));
+                LASSERT_TAGE_INVARIANT(tage);
 
                 list_del(&tage->linkage);
                 tage_free(tage);

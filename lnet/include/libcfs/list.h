@@ -221,6 +221,9 @@ static inline void list_splice_init(struct list_head *list,
 	for (pos = (head)->next, n = pos->next; pos != (head); \
 		pos = n, n = pos->next)
 
+#define hlist_head	list_head
+#define hlist_node	list_head
+
 #endif /* __linux__*/
 
 #ifndef list_for_each_prev

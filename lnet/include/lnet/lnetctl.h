@@ -40,6 +40,7 @@
 
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
+int jt_ptl_get_nids(__u64 **nid_list);
 int jt_ptl_list_nids(int argc, char **argv);
 int jt_ptl_which_nid(int argc, char **argv);
 int jt_ptl_print_interfaces(int argc, char **argv);

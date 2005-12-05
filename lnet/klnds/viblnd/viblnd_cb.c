@@ -521,7 +521,7 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
 
         /* Try to create an address that adaptor-tavor will munge into a valid
          * network address, given how it maps all phys mem into 1 region */
-        addr = kibnal_page2phys(page) + page_offset + PAGE_OFFSET;
+        addr = lnet_page2phys(page) + page_offset + PAGE_OFFSET;
 
         /* NB this relies entirely on there being a single region for the whole
          * of memory, since "high" memory will wrap in the (void *) cast! */
@@ -749,7 +749,7 @@ kibnal_setup_rd_iov (kib_tx_t *tx, kib_rdma_desc_t *rd,
                         return -EFAULT;
                 }
 
-                tx->tx_pages[npages++] = kibnal_page2phys(page);
+                tx->tx_pages[npages++] = lnet_page2phys(page);
 
                 fragnob = PAGE_SIZE - (vaddr & (PAGE_SIZE - 1));
                 vaddr += fragnob;
@@ -806,7 +806,7 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
                         return -EINVAL;
                 }
 
-                tx->tx_pages[npages++] = kibnal_page2phys(kiov->kiov_page);
+                tx->tx_pages[npages++] = lnet_page2phys(kiov->kiov_page);
                 resid -= kiov->kiov_len;
                 kiov++;
                 nkiov--;

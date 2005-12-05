@@ -589,7 +589,9 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         rx->rx_rxb = rxb;
         rx->rx_nob = nob;
         rx->rx_initiator = ev->initiator;
-
+#if CRAY_XT3
+        rx->rx_uid = ev->uid;
+#endif
         kptllnd_rx_schedule(rx);
 
         if(!rxbp->rxbp_shutdown){

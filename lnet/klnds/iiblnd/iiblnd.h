@@ -600,13 +600,6 @@ kibnal_show_rdma_attr (kib_conn_t *conn)
 }
 #endif
 
-static inline __u64
-kibnal_page2phys (struct page *p)
-{
-        return page_to_phys(p);
-}
-
-
 /* CAVEAT EMPTOR: We rely on tx/rx descriptor alignment to allow us to use the
  * lowest 2 bits of the work request id to stash the work item type (the op
  * field is not valid when the wc completes in error). */

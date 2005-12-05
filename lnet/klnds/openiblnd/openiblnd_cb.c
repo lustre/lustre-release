@@ -50,6 +50,12 @@ kibnal_tx_done (kib_tx_t *tx)
         LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting callback */
         LASSERT (!tx->tx_passive_rdma_wait);    /* mustn't be awaiting RDMA */
 
+        if (in_interrupt()) {
+                /* can't deregister memory/flush FMAs/finalize in IRQ context... */
+                kibnal_schedule_tx_done(tx);
+                return;
+        }
+
         switch (tx->tx_mapped) {
         default:
                 LBUG();
@@ -58,11 +64,6 @@ kibnal_tx_done (kib_tx_t *tx)
                 break;
                 
         case KIB_TX_MAPPED:
-                if (in_interrupt()) {
-                        /* can't deregister memory in IRQ context... */
-                        kibnal_schedule_tx_done(tx);
-                        return;
-                }
                 rc = ib_memory_deregister(tx->tx_md.md_handle.mr);
                 LASSERT (rc == 0);
                 tx->tx_mapped = KIB_TX_UNMAPPED;
@@ -70,12 +71,6 @@ kibnal_tx_done (kib_tx_t *tx)
 
 #if IBNAL_FMR
         case KIB_TX_MAPPED_FMR:
-                if (in_interrupt() && tx->tx_status != 0) {
-                        /* can't flush FMRs in IRQ context... */
-                        kibnal_schedule_tx_done(tx);
-                        return;
-                }              
-
                 rc = ib_fmr_deregister(tx->tx_md.md_handle.fmr);
                 LASSERT (rc == 0);
 
@@ -422,7 +417,7 @@ kibnal_kvaddr_to_phys (unsigned long vaddr, __u64 *physp)
             !VALID_PAGE (page))
                 return (-EFAULT);
 
-        *physp = kibnal_page2phys(page) + (vaddr & (PAGE_SIZE - 1));
+        *physp = lnet_page2phys(page) + (vaddr & (PAGE_SIZE - 1));
         return (0);
 }
 #endif
@@ -510,9 +505,9 @@ kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
 
         page_offset = kiov->kiov_offset + offset;
 #if IBNAL_FMR
-        phys[0] = kibnal_page2phys(kiov->kiov_page);
+        phys[0] = lnet_page2phys(kiov->kiov_page);
 #else
-        phys[0].address = kibnal_page2phys(kiov->kiov_page);
+        phys[0].address = lnet_page2phys(kiov->kiov_page);
         phys[0].size = PAGE_SIZE;
 #endif
         nphys = 1;
@@ -550,9 +545,9 @@ kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
 
                 LASSERT (nphys * sizeof (*phys) < phys_size);
 #if IBNAL_FMR
-                phys[nphys] = kibnal_page2phys(kiov->kiov_page);
+                phys[nphys] = lnet_page2phys(kiov->kiov_page);
 #else
-                phys[nphys].address = kibnal_page2phys(kiov->kiov_page);
+                phys[nphys].address = lnet_page2phys(kiov->kiov_page);
                 phys[nphys].size = PAGE_SIZE;
 #endif
                 nphys++;
@@ -978,10 +973,11 @@ kibnal_launch_tx (kib_tx_t *tx, lnet_nid_t nid)
 }
 
 int
-kibnal_start_passive_rdma (int type, lnet_msg_t *lntmsg)
+kibnal_start_passive_rdma (int type, lnet_msg_t *lntmsg,
+                           int niov, struct iovec *iov, lnet_kiov_t *kiov,
+                           int nob)
 {
         lnet_nid_t  nid = lntmsg->msg_target.nid;
-        int         nob = lntmsg->msg_md->md_length;
         kib_tx_t   *tx;
         kib_msg_t  *ibmsg;
         int         rc;
@@ -1007,16 +1003,11 @@ kibnal_start_passive_rdma (int type, lnet_msg_t *lntmsg)
                 return -ENOMEM;
         }
 
-        if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) == 0) 
-                rc = kibnal_map_iov (tx, access,
-                                     lntmsg->msg_md->md_niov,
-                                     lntmsg->msg_md->md_iov.iov,
-                                     0, nob);
+        
+        if (iov != NULL) 
+                rc = kibnal_map_iov (tx, access, niov, iov, 0, nob);
         else
-                rc = kibnal_map_kiov (tx, access,
-                                      lntmsg->msg_md->md_niov, 
-                                      lntmsg->msg_md->md_iov.kiov,
-                                      0, nob);
+                rc = kibnal_map_kiov (tx, access, niov, kiov, 0, nob);
 
         if (rc != 0) {
                 CERROR ("Can't map RDMA for %s: %d\n", 
@@ -1244,7 +1235,16 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if (nob <= IBNAL_MSG_SIZE)
                         break;                  /* send IMMEDIATE */
 
-                return kibnal_start_passive_rdma(IBNAL_MSG_GET_RDMA, lntmsg);
+                if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) == 0)
+                        return kibnal_start_passive_rdma(IBNAL_MSG_GET_RDMA, lntmsg, 
+                                                         lntmsg->msg_md->md_niov, 
+                                                         lntmsg->msg_md->md_iov.iov, NULL,
+                                                         lntmsg->msg_md->md_length);
+
+                return kibnal_start_passive_rdma(IBNAL_MSG_GET_RDMA, lntmsg, 
+                                                 lntmsg->msg_md->md_niov, 
+                                                 NULL, lntmsg->msg_md->md_iov.kiov,
+                                                 lntmsg->msg_md->md_length);
 
         case LNET_MSG_REPLY: {
                 /* reply's 'private' is the incoming receive */
@@ -1277,7 +1277,10 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if (nob <= IBNAL_MSG_SIZE)
                         break;                  /* send IMMEDIATE */
                 
-                return kibnal_start_passive_rdma(IBNAL_MSG_PUT_RDMA, lntmsg);
+                return kibnal_start_passive_rdma(IBNAL_MSG_PUT_RDMA, lntmsg,
+                                                 payload_niov,
+                                                 payload_iov, payload_kiov,
+                                                 payload_nob);
         }
 
         /* Send IMMEDIATE */
@@ -1781,7 +1784,7 @@ kibnal_conn_callback (tTS_IB_CM_EVENT event,
                 break;
                 
         case TS_IB_CM_DISCONNECTED:
-                CDEBUG(D_WARNING, "Connection %p -> %s DISCONNECTED.\n",
+                CWARN("Connection %p -> %s DISCONNECTED.\n",
                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kibnal_close_conn (conn, 0);
                 break;
@@ -1917,7 +1920,7 @@ kibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
 
         case TS_IB_CM_ESTABLISHED:
                 LASSERT (conn != NULL);
-                CDEBUG(D_WARNING, "Connection %p -> %s ESTABLISHED.\n",
+                CWARN("Connection %p -> %s ESTABLISHED.\n",
                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
                 kibnal_connreq_done(conn, 0);
@@ -1989,7 +1992,7 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
         }
 
         case TS_IB_CM_ESTABLISHED:
-                CDEBUG(D_WARNING, "Connection %p -> %s ESTABLISHED\n",
+                CWARN("Connection %p -> %s ESTABLISHED\n",
                        conn, libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
                 kibnal_connreq_done(conn, 0);

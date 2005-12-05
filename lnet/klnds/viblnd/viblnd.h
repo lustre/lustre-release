@@ -521,23 +521,6 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
         list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
 }
 
-static inline __u64
-kibnal_page2phys (struct page *p)
-{
-#if IBNAL_32BIT_PAGE2PHYS
-        CLASSERT (sizeof(typeof(page_to_phys(p))) == 4);
-        CLASSERT (sizeof(unsigned long) == 4);
-        /* page_to_phys returns a 32 bit physical address.  This must be a 32
-         * bit machine with <= 4G memory and we must ensure we don't sign
-         * extend when converting to 64 bits. */
-        return (unsigned long)page_to_phys(p);
-#else
-        CLASSERT (sizeof(typeof(page_to_phys(p))) == 8);
-        /* page_to_phys returns a 64 bit physical address :) */
-        return page_to_phys(p);
-#endif
-}
-
 #if IBNAL_VOIDSTAR_SGADDR
 # if CONFIG_HIGHMEM
 #  if CONFIG_X86 && CONFIG_HIGHMEM4G

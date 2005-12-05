@@ -300,7 +300,6 @@ kibnal_handle_svcqry (struct socket *sock)
         __u32                peer_ip;
         unsigned int         peer_port;
         kib_msg_t           *msg;
-        __u32                magic;
         __u64                srcnid;
         __u64                srcstamp;
         int                  rc;
@@ -406,7 +405,6 @@ int
 kibnal_accept(lnet_ni_t *ni, struct socket *sock)
 {
         kib_acceptsock_t  *as;
-        int                rc;
         unsigned long      flags;
 
         LIBCFS_ALLOC(as, sizeof(*as));
@@ -539,8 +537,6 @@ kibnal_create_peer (kib_peer_t **peerp, lnet_nid_t nid)
 void
 kibnal_destroy_peer (kib_peer_t *peer)
 {
-        unsigned long flags;
-
         CDEBUG (D_NET, "peer %s %p deleted\n", 
                 libcfs_nid2str(peer->ibp_nid), peer);
 
@@ -760,7 +756,7 @@ kibnal_del_peer (lnet_nid_t nid)
                         rc = 0;         /* matched something */
                 }
         }
- out:
+
         write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
 
         return (rc);
@@ -1213,7 +1209,7 @@ kibnal_alloc_pages (kib_pages_t **pp, int npages, int access)
         for (i = 0; i < npages; i++) {
                 phys_pages[i].size = PAGE_SIZE;
                 phys_pages[i].address =
-                        kibnal_page2phys(p->ibp_pages[i]);
+                        lnet_page2phys(p->ibp_pages[i]);
         }
 
         p->ibp_vaddr = 0;

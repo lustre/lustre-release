@@ -62,11 +62,11 @@ else
 		#include <linux/sched.h>
 	],[
 		struct task_struct t;
-		#ifdef CPU_ARRAY_SIZE
-		cpumask_t m;
-		#else
-		unsigned long m;
-		#endif
+		#if HAVE_CPUMASK_T
+		cpumask_t     m;
+	        #else
+	        unsigned long m;
+	 	#endif
 		set_cpus_allowed(&t, m);
 	],[
 		AC_DEFINE(CPU_AFFINITY, 1, [kernel has cpu affinity support])
@@ -534,27 +534,6 @@ if test -n "$VIBLND"; then
 	],[
 	        AC_MSG_RESULT([no])
 	])
-	AC_MSG_CHECKING([if page_to_phys() must avoid sign extension])
-	LB_LINUX_TRY_COMPILE([
-		#include <linux/kernel.h>
-		#include <linux/mm.h>
-		#include <linux/unistd.h>
-		#include <asm/system.h>
-		#include <asm/io.h>
-	],[
-	        struct page p;
-
-		switch (42) {
-		case 0:
-		case (sizeof(typeof(page_to_phys(&p))) < 8):
-			break;
-		}
-	],[
-		AC_MSG_RESULT([yes])
-		VIBCPPFLAGS="$VIBCPPFLAGS -DIBNAL_32BIT_PAGE2PHYS=1"
-	],[
-		AC_MSG_RESULT([no])
-	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(VIBCPPFLAGS)
@@ -704,6 +683,8 @@ fi
 #
 AC_DEFUN([LN_PROG_LINUX],
 [LN_CONFIG_ZEROCOPY
+LN_FUNC_CPU_ONLINE
+LN_TYPE_CPUMASK_T
 LN_CONFIG_AFFINITY
 LN_CONFIG_QUADRICS
 LN_CONFIG_GM
@@ -715,8 +696,6 @@ LN_CONFIG_PTLLND
 
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
-LN_FUNC_CPU_ONLINE
-LN_TYPE_CPUMASK_T
 LN_FUNC_SHOW_TASK
 ])
 
@@ -815,9 +794,9 @@ if test "$enable_libpthread" = "yes" ; then
 		[ENABLE_LIBPTHREAD="yes"],
 		[ENABLE_LIBPTHREAD="no"])
 	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
-		AC_MSG_RESULT([no libpthread is found])
-	else
 		AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
+	else
+		AC_MSG_RESULT([no libpthread is found])
 	fi
 else
 	AC_MSG_RESULT([no (disabled explicitly)])
@@ -855,7 +834,9 @@ if test x$enable_liblustre = xyes ; then
 			CAP_LIBS="-lcap"
 			AC_DEFINE([HAVE_LIBCAP], 1, [use libcap])
 		],
-		[CAP_LIBS=""])
+		[
+			CAP_LIBS=""
+		])
 	AC_SUBST(CAP_LIBS)
 
 	if test "$ENABLE_LIBPTHREAD" = "yes" ; then

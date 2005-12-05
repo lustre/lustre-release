@@ -13,7 +13,7 @@ endif
 
 libuptlctl_a_SOURCES = portals.c nidstrings.c debug.c l_ioctl.c
 libuptlctl_a_CPPFLAGS = $(LLCPPFLAGS)
-libuptlctl_a_CFLAGS = $(LLCFLAGS)
+libuptlctl_a_CFLAGS = $(LLCFLAGS) -DLUSTRE_UTILS=1
 
 sbin_PROGRAMS = debugctl
 

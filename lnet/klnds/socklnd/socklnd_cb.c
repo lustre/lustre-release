@@ -481,7 +481,7 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                                       HIPQUAD(conn->ksnc_ipaddr), rc);
                         break;
                 }
-                CERROR("[%p] Error %d on write to %s"
+                CDEBUG(D_HA, "[%p] Error %d on write to %s"
                        " ip %d.%d.%d.%d:%d\n", conn, rc,
                        libcfs_id2str(conn->ksnc_peer->ksnp_id),
                        HIPQUAD(conn->ksnc_ipaddr),
@@ -1564,12 +1564,6 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                                libcfs_id2str(*peerid),
                                HIPQUAD(conn->ksnc_ipaddr),
                                libcfs_id2str(recv_id));
-                               
-                CERROR ("Connected to %s ip %u.%u.%u.%u "
-                        "but expecting %s\n",
-                        libcfs_id2str(recv_id),
-                        HIPQUAD(conn->ksnc_ipaddr),
-                        libcfs_id2str(*peerid));
                 return (-EPROTO);
         }
 
@@ -1718,7 +1712,7 @@ ksocknal_connect (ksock_route_t *route)
                                            route->ksnr_retry_interval);
 
         if (!list_empty(&peer->ksnp_tx_queue) &&
-            peer->ksnp_accepting != 0 &&
+            peer->ksnp_accepting == 0 &&
             ksocknal_find_connecting_route_locked(peer) == NULL) {
                 /* ksnp_tx_queue is queued on a conn on successful
                  * connection */
@@ -1850,14 +1844,14 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                                 break;
                         default:
                                 LCONSOLE_WARN("An unexpected network error "
-                                              "occurred with %u.%u.%u.%u: %d.\n",
+                                              "occurred with %u.%u.%u.%u: %d\n",
                                               HIPQUAD(conn->ksnc_ipaddr),
                                               SOCK_ERROR(conn->ksnc_sock));
                                 break;
                         }
 
                         /* Something (e.g. failed keepalive) set the socket error */
-                        CERROR ("Socket error %d: %s %p %d.%d.%d.%d\n",
+                        CDEBUG(D_HA, "Socket error %d: %s %p %d.%d.%d.%d\n",
                                 SOCK_ERROR(conn->ksnc_sock), 
                                 libcfs_id2str(peer->ksnp_id),
                                 conn, HIPQUAD(conn->ksnc_ipaddr));

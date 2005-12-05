@@ -52,14 +52,16 @@ gmnal_alloc_netbuf_pages (gmnal_ni_t *gmni, gmnal_netbuf_t *nb, int npages)
 
                 CDEBUG(D_NET,"[%3d] page %p, phys "LPX64", @ "LPX64"\n",
                        i, nb->nb_kiov[i].kiov_page, 
-                       (__u64)page_to_phys(nb->nb_kiov[i].kiov_page),
+                       lnet_page2phys(nb->nb_kiov[i].kiov_page),
                        gmni->gmni_netaddr_base);
 
-                gmrc = gm_register_memory_ex_phys(gmni->gmni_port,
-                                                  page_to_phys(nb->nb_kiov[i].kiov_page),
-                                                  PAGE_SIZE,
-                                                  gmni->gmni_netaddr_base);
-                CDEBUG(D_NET,"[%3d] page %p: %d\n", i, nb->nb_kiov[i].kiov_page, gmrc);
+                gmrc = gm_register_memory_ex_phys(
+                        gmni->gmni_port,
+                        lnet_page2phys(nb->nb_kiov[i].kiov_page),
+                        PAGE_SIZE,
+                        gmni->gmni_netaddr_base);
+                CDEBUG(D_NET,"[%3d] page %p: %d\n", 
+                       i, nb->nb_kiov[i].kiov_page, gmrc);
 
                 if (gmrc != GM_SUCCESS) {
                         CERROR("Can't map page: %d(%s)\n", gmrc,

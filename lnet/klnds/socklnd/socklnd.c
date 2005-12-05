@@ -972,7 +972,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         int                rc;
         char              *warn = NULL;
 
-        LASSERT (route == NULL == (type == SOCKLND_CONN_NONE));
+        LASSERT ((route == NULL) == (type == SOCKLND_CONN_NONE));
 
         rc = ksocknal_lib_setup_sock (sock);
         if (rc != 0)
@@ -1204,7 +1204,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         write_unlock_irqrestore (global_lock, flags);
 
         if (rc != 0)
-                CERROR ("Closed %d stale conns to %s ip %d.%d.%d.%d\n",
+                CDEBUG(D_HA, "Closed %d stale conns to %s ip %d.%d.%d.%d\n",
                         rc, libcfs_id2str(conn->ksnc_peer->ksnp_id),
                         HIPQUAD(conn->ksnc_ipaddr));
 
@@ -1329,12 +1329,13 @@ ksocknal_peer_failed (ksock_peer_t *peer)
         int       notify = 0;
 
         /* There has been a connection failure or comms error; but I'll only
-         * tell LNET I think the peer is dead if there are no connections or
-         * connection attempts in existance. */
+         * tell LNET I think the peer is dead if it's to another kernel and
+         * there are no connections or connection attempts in existance. */
         
         read_lock (&ksocknal_data.ksnd_global_lock);
 
-        if (list_empty(&peer->ksnp_conns) &&
+        if ((peer->ksnp_id.pid & LNET_PID_USERFLAG) == 0 &&
+            list_empty(&peer->ksnp_conns) &&
             peer->ksnp_accepting == 0 &&
             ksocknal_find_connecting_route_locked(peer) == NULL) {
                 notify = 1;

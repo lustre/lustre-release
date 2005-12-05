@@ -87,7 +87,7 @@ static struct ctl_table lnet_table[] = {
          sizeof(lnet_upcall), 0644, NULL, &proc_dostring,
          &sysctl_string},
         {PSDEV_LNET_MEMUSED, "memused", (int *)&libcfs_kmemory.counter,
-         sizeof(int), 0644, NULL, &proc_dointvec},
+         sizeof(int), 0444, NULL, &proc_dointvec},
         {PSDEV_LNET_CATASTROPHE, "catastrophe", &libcfs_catastrophe,
          sizeof(int), 0444, NULL, &proc_dointvec},
         {0}
@@ -282,7 +282,7 @@ int insert_proc(void)
         ent->write_proc = trace_write_debug_mb;
         ent->read_proc = trace_read_debug_mb;
 
-        proc_symlink("sys/portals", NULL, "/proc/sys/lnet");
+        proc_symlink("sys/portals", NULL, "lnet");
 
         return 0;
 }

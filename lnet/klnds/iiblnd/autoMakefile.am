@@ -9,5 +9,5 @@ modulenet_DATA = kiiblnd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
 DIST_SOURCES = $(kiiblnd-objs:%.o=%.c) iiblnd.h

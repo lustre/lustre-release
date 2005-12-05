@@ -40,6 +40,22 @@
 #include <syscall.h>
 #endif
 
+void
+tcpnal_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive)
+{
+        bridge     b = (bridge)ni->ni_data;
+        connection c;
+
+        if (!alive) {
+                LBUG();
+        }
+
+        c = force_tcp_connection((manager)b->lower, nid, b->local);
+        if (c == NULL)
+                CERROR("Can't create connection to %s\n",
+                       libcfs_nid2str(nid));
+}
+
 /*
  * sends a packet to the peer, after insuring that a connection exists
  */

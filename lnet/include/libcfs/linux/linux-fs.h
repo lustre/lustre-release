@@ -66,7 +66,6 @@ typedef struct file_lock cfs_flock_t;
 #define CFS_FLOCK_SET_END(fl, end)          do { (fl)->fl_end = (end); } while(0)
 
 ssize_t cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset);
-
 #endif
 
 #endif

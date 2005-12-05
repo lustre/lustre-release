@@ -212,7 +212,7 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
         tx->tx_nob = nob;
         tx->tx_buffer = (void *)((unsigned long)(kiov->kiov_offset + offset));
 
-        phys->Address = kranal_page2phys(kiov->kiov_page);
+        phys->Address = lnet_page2phys(kiov->kiov_page);
         phys++;
 
         resid = nob - (kiov->kiov_len - offset);
@@ -237,7 +237,7 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
                         return -EMSGSIZE;
                 }
 
-                phys->Address = kranal_page2phys(kiov->kiov_page);
+                phys->Address = lnet_page2phys(kiov->kiov_page);
                 phys++;
 
                 resid -= PAGE_SIZE;
@@ -430,7 +430,6 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
         unsigned long    flags;
         kra_peer_t      *peer;
         kra_conn_t      *conn;
-        unsigned long    now;
         int              rc;
         int              retry;
         rwlock_t        *g_lock = &kranal_data.kra_global_lock;
@@ -1396,7 +1395,7 @@ kranal_sendmsg(kra_conn_t *conn, kra_msg_t *msg,
         case RAP_NOT_DONE:
                 if (time_after_eq(jiffies,
                                   conn->rac_last_tx + conn->rac_keepalive*HZ))
-                        CDEBUG(D_WARNING, "EAGAIN sending %02x (idle %lu secs)\n",
+                        CWARN("EAGAIN sending %02x (idle %lu secs)\n",
                                msg->ram_type, (jiffies - conn->rac_last_tx)/HZ);
                 return -EAGAIN;
         }
@@ -1864,7 +1863,7 @@ kranal_complete_closed_conn (kra_conn_t *conn)
                 kranal_tx_done(tx, -ECONNABORTED);
         }
 
-        CDEBUG(D_WARNING, "Closed conn %p -> %s: nmsg %d nreplies %d\n",
+        CWARN("Closed conn %p -> %s: nmsg %d nreplies %d\n",
                conn, libcfs_nid2str(conn->rac_peer->rap_nid), nfma, nreplies);
 }
 

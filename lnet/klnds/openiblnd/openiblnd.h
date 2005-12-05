@@ -455,12 +455,6 @@ kibnal_show_rdma_attr (kib_conn_t *conn)
 }
 #endif
 
-static inline __u64
-kibnal_page2phys (struct page *p)
-{
-        return page_to_phys(p);
-}
-
 /* CAVEAT EMPTOR:
  * We rely on tx/rx descriptor alignment to allow us to use the lowest bit
  * of the work request id as a flag to determine if the completion is for a

@@ -443,12 +443,6 @@ kranal_tx_mapped (kra_tx_t *tx)
                 tx->tx_buftype == RANAL_BUF_PHYS_MAPPED);
 }
 
-static inline __u64
-kranal_page2phys (struct page *p)
-{
-        return page_to_phys(p);
-}
-
 int kranal_startup (lnet_ni_t *ni);
 void kranal_shutdown (lnet_ni_t *ni);
 int kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
