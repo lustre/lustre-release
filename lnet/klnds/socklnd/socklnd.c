@@ -972,7 +972,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         int                rc;
         char              *warn = NULL;
 
-        LASSERT (route == NULL == (type == SOCKLND_CONN_NONE));
+        LASSERT ((route == NULL) == (type == SOCKLND_CONN_NONE));
 
         rc = ksocknal_lib_setup_sock (sock);
         if (rc != 0)
