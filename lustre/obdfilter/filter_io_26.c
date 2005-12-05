@@ -452,7 +452,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 create = 1;
                 sem = &obd->u.filter.fo_alloc_lock;
                 
-                lquota_enforce(quota_interface, obd, dreq->dr_ignore_quota);
+                lquota_enforce(quota_interface, obd, iobuf->dr_ignore_quota);
         }
 remap:
         rc = fsfilt_map_inode_pages(obd, inode, iobuf->dr_pages,
@@ -562,7 +562,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fso.fso_bufcnt = obj->ioo_bufcnt;
         inode = res->dentry->d_inode;
 
-        dreq->dr_ignore_quota = 0;
+        iobuf->dr_ignore_quota = 0;
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
                 loff_t this_size;
 
@@ -591,7 +591,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                  * written by root, then mark the whole io request as ignore 
                  * quota request */
                 if (lnb->flags & (OBD_BRW_FROM_GRANT | OBD_BRW_NOQUOTA))
-                        dreq->dr_ignore_quota = 1;
+                        iobuf->dr_ignore_quota = 1;
         }
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
