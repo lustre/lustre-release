@@ -56,6 +56,7 @@
 
 #include "lutil.h"
 #include "llite_lib.h"
+#include <linux/lustre_ver.h>
 
 static int lllib_init(void)
 {
@@ -87,6 +88,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         struct llog_ctxt *ctxt;
         lnet_nid_t nid = 0;
         int err, rc = 0;
+        struct obd_connect_data *ocd = NULL;
         ENTRY;
 
         generate_random_uuid(uuid);
@@ -129,12 +131,18 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         if (obd == NULL)
                 GOTO(out_cleanup, rc = -EINVAL);
 
+        OBD_ALLOC(ocd, sizeof(*ocd));
+        if (ocd == NULL)
+                GOTO(out_cleanup, rc = -ENOMEM);
+
+        ocd->ocd_version = LUSTRE_VERSION_CODE;
+
         /* Disable initial recovery on this import */
         rc = obd_set_info(obd->obd_self_export,
                           strlen("initial_recov"), "initial_recov",
                           sizeof(allow_recov), &allow_recov);
 
-        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /*connect_flags*/);
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", mdsname, rc);
                 GOTO(out_cleanup, rc);
@@ -155,6 +163,9 @@ int liblustre_process_log(struct config_llog_instance *cfg,
                 CERROR("obd_disconnect failed: rc = %d\n", err);
 
 out_cleanup:
+        if (ocd)
+                OBD_FREE(ocd, sizeof(*ocd));
+
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
         err = class_process_config(lcfg);

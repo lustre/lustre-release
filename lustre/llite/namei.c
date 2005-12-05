@@ -37,6 +37,7 @@
 
 /* methods */
 
+/* called from iget{4,5_locked}->find_inode() under inode_lock spinlock */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static int ll_test_inode(struct inode *inode, unsigned long ino, void *opaque)
 #else
@@ -759,8 +760,6 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         struct obdo *oa;
         int rc;
         ENTRY;
-
-        oti.oti_thread = request->rq_svc_thread;
 
         /* req is swabbed so this is safe */
         body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));

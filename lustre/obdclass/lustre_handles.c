@@ -27,9 +27,9 @@
 #ifdef __KERNEL__
 # include <linux/types.h>
 # include <linux/random.h>
-#else 
+#else
 # include <liblustre.h>
-#endif 
+#endif
 
 #include <linux/obd_support.h>
 #include <linux/lustre_handles.h>
@@ -43,6 +43,10 @@ static int handle_count = 0;
 #define HANDLE_HASH_SIZE (1 << 14)
 #define HANDLE_HASH_MASK (HANDLE_HASH_SIZE - 1)
 
+/*
+ * Generate a unique 64bit cookie (hash) for a handle and insert it into
+ * global (per-node) hash-table.
+ */
 void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
 {
         struct list_head *bucket;
@@ -52,19 +56,33 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
         LASSERT(list_empty(&h->h_link));
 
         spin_lock(&handle_lock);
+
+        /*
+         * This is fast, but simplistic cookie generation algorithm, it will
+         * need a re-do at some point in the future for security.
+         */
         h->h_cookie = handle_base;
         handle_base += HANDLE_INCR;
+
+        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
+        list_add(&h->h_link, bucket);
+        handle_count++;
+
+        if (unlikely(handle_base == 0)) {
+                /*
+                 * Cookie of zero is "dangerous", because in many places it's
+                 * assumed that 0 means "unassigned" handle, not bound to any
+                 * object.
+                 */
+                CWARN("The universe has been exhausted: cookie wrap-around.\n");
+                handle_base += HANDLE_INCR;
+        }
+
         spin_unlock(&handle_lock);
 
         h->h_addref = cb;
-        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
-        CDEBUG(D_INFO, "adding object %p with handle "LPX64" to hash\n",
+        CDEBUG(D_INFO, "added object %p with handle "LPX64" to hash\n",
                h, h->h_cookie);
-
-        spin_lock(&handle_lock);
-        list_add(&h->h_link, bucket);
-        handle_count++;
-        spin_unlock(&handle_lock);
         EXIT;
 }
 

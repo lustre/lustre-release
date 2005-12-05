@@ -31,7 +31,7 @@ init_test_env() {
     export XMLCONFIG=${XMLCONFIG:-${TESTSUITE}.xml}
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
-    [ -d /r ] && export ROOT=/r
+    [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
@@ -549,7 +549,7 @@ build_test_filter() {
             eval ONLY_${O}=true
         done
         [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-		log "skipping test `echo $EXCEPT $ALWAYS_EXCEPT`"
+		log "skipping tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
         for E in $EXCEPT $ALWAYS_EXCEPT; do
             eval EXCEPT_${E}=true
         done

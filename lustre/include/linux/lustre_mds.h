@@ -34,10 +34,6 @@ struct ptlrpc_request;
 struct obd_device;
 struct ll_file_data;
 
-#define LUSTRE_MDS_NAME "mds"
-#define LUSTRE_MDT_NAME "mdt"
-#define LUSTRE_MDC_NAME "mdc"
-
 struct lustre_md {
         struct mds_body         *body;
         struct lov_stripe_md    *lsm;
@@ -122,7 +118,7 @@ int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
 void mdc_set_lock_data(__u64 *lockh, void *data);
-int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
                       ldlm_iterator_t it, void *data);
 int mdc_intent_lock(struct obd_export *exp,
                     struct mdc_op_data *,

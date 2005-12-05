@@ -446,31 +446,31 @@ Index: linux-2.6.5-7.201/fs/ext3/mballoc.c
 +static inline int mb_test_bit(int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
-+	return ext2_test_bit(bit, addr);
++	return ext3_test_bit(bit, addr);
 +}
 +
 +static inline void mb_set_bit(int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
-+	ext2_set_bit(bit, addr);
++	ext3_set_bit(bit, addr);
 +}
 +
 +static inline void mb_set_bit_atomic(int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
-+	ext2_set_bit_atomic(NULL, bit, addr);
++	ext3_set_bit_atomic(NULL, bit, addr);
 +}
 +
 +static inline void mb_clear_bit(int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
-+	ext2_clear_bit(bit, addr);
++	ext3_clear_bit(bit, addr);
 +}
 +
 +static inline void mb_clear_bit_atomic(int bit, void *addr)
 +{
 +	mb_correct_addr_and_bit(bit,addr);
-+	ext2_clear_bit_atomic(NULL, bit, addr);
++	ext3_clear_bit_atomic(NULL, bit, addr);
 +}
 +
 +static inline void *mb_find_buddy(struct ext3_buddy *e3b, int order, int *max)
@@ -1015,7 +1015,7 @@ Index: linux-2.6.5-7.201/fs/ext3/mballoc.c
 +	i = e3b->bd_bd->bb_first_free;
 +
 +	while (free && ac->ac_status != AC_STATUS_FOUND) {
-+		i = ext2_find_next_zero_bit(bitmap, sb->s_blocksize * 8, i);
++		i = ext3_find_next_zero_bit(bitmap, sb->s_blocksize * 8, i);
 +		if (i >= sb->s_blocksize * 8) {
 +			J_ASSERT(free == 0);
 +			break;
@@ -1205,13 +1205,13 @@ Index: linux-2.6.5-7.201/fs/ext3/mballoc.c
 +
 +	if (ac.ac_status == AC_STATUS_BREAK &&
 +			!(ac.ac_flags & EXT3_MB_HINT_FIRST)) {
-+		/*
-+		 * We've been searching too long. Let's try to allocate
-+		 * the best chunk we've found so far
-+		 */
-+		ext3_warning(inode->i_sb, __FUNCTION__,
-+			     "too long searching: got %d want %d\n",
-+			     ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);
++		/* We've been searching too long. Let's try to allocate
++		 * the best chunk we've found so far. */
++		if (ac.ac_g_ex.fe_len >= 128 &&
++		    ac.ac_b_ex.fe_len < ac.ac_g_ex.fe_len / 4)
++			ext3_warning(inode->i_sb, __FUNCTION__,
++				     "too long searching: got %d want %d\n",
++				     ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);
 +		ext3_mb_try_best_found(&ac, &e3b);
 +		if (ac.ac_status != AC_STATUS_FOUND) {
 +			/*
@@ -1219,7 +1219,7 @@ Index: linux-2.6.5-7.201/fs/ext3/mballoc.c
 +			 * The only thing we can do is just take first
 +			 * found block(s)
 +			 */
-+			printk(KERN_ERR "EXT3-fs: and someone won our chunk\n");
++			mb_debug(KERN_ERR "EXT3-fs: and someone won our chunk\n");
 +			ac.ac_b_ex.fe_group = 0;
 +			ac.ac_b_ex.fe_start = 0;
 +			ac.ac_b_ex.fe_len = 0;
@@ -2413,7 +2413,7 @@ Index: linux-2.6.5-7.201/fs/ext3/super.c
  	{Opt_extents, "extents"},
  	{Opt_extdebug, "extdebug"},
 +	{Opt_mballoc, "mballoc"},
-+	{Opt_mballoc, "mbfactor=%u"},
++	{Opt_mbfactor, "mbfactor=%u"},
  	{Opt_err, NULL}
  };
  

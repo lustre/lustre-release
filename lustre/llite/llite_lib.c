@@ -30,6 +30,7 @@
 
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
+#include <linux/lustre_ver.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
@@ -83,6 +84,7 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
                 RETURN(NULL);
 
         spin_lock_init(&sbi->ll_lock);
+        spin_lock_init(&sbi->ll_lco.lco_lock);
         INIT_LIST_HEAD(&sbi->ll_pglist);
         sbi->ll_pglist_gen = 0;
         if (num_physpages >> (20 - PAGE_SHIFT) < 512)
@@ -160,7 +162,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if (sb->s_flags & MS_RDONLY)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
         if (sbi->ll_flags & LL_SBI_USER_XATTR)
-                data->ocd_connect_flags |= OBD_CONNECT_USER_XATTR;
+                data->ocd_connect_flags |= OBD_CONNECT_XATTR;
         data->ocd_connect_flags |= OBD_CONNECT_ACL;
 
         if (sbi->ll_flags & LL_SBI_FLOCK) {
@@ -169,6 +171,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 sbi->ll_fop = &ll_file_operations;
         }
 
+        data->ocd_connect_flags |= OBD_CONNECT_VERSION;
+        data->ocd_version = LUSTRE_VERSION_CODE;
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An MDS (mdc %s) is performing recovery, of which this"
@@ -196,7 +200,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sbi->ll_namelen = osfs.os_namelen;
 
         if ((sbi->ll_flags & LL_SBI_USER_XATTR) &&
-            !(data->ocd_connect_flags & OBD_CONNECT_USER_XATTR)) {
+            !(data->ocd_connect_flags & OBD_CONNECT_XATTR)) {
                 LCONSOLE_INFO("Disabling user_xattr feature because "
                               "it is not supported on the server\n"); 
                 sbi->ll_flags &= ~LL_SBI_USER_XATTR;
@@ -226,6 +230,16 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
 
+        data->ocd_connect_flags =
+                OBD_CONNECT_GRANT|OBD_CONNECT_VERSION|OBD_CONNECT_REQPORTAL;
+
+        CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
+               "ocd_grant: %d\n", data->ocd_connect_flags,
+               data->ocd_version, data->ocd_grant);
+
+        obd->obd_upcall.onu_owner = &sbi->ll_lco;
+        obd->obd_upcall.onu_upcall = ll_ocd_update;
+
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An OST (osc %s) is performing recovery, of which this"
@@ -237,7 +251,9 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
-        sbi->ll_connect_flags = data->ocd_connect_flags;
+        spin_lock(&sbi->ll_lco.lco_lock);
+        sbi->ll_lco.lco_flags = data->ocd_connect_flags;
+        spin_unlock(&sbi->ll_lco.lco_lock);
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
@@ -459,9 +475,9 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
 #endif
         {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
-                if (!*ost && (*ost = ll_read_opt("osc", this_char)))
+                if (!*ost && (*ost = ll_read_opt(LUSTRE_OSC_NAME, this_char)))
                         continue;
-                if (!*mdc && (*mdc = ll_read_opt("mdc", this_char)))
+                if (!*mdc && (*mdc = ll_read_opt(LUSTRE_MDC_NAME, this_char)))
                         continue;
                 tmp = ll_set_opt("nolock", this_char, LL_SBI_NOLCK);
                 if (tmp) {
@@ -553,12 +569,31 @@ out:
         RETURN(err);
 } /* ll_read_super */
 
-int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
-                       struct config_llog_instance *cfg, int allow_recov)
+static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
+                   char *s1, char *s2)
 {
-        struct lustre_cfg *lcfg = NULL;
         struct lustre_cfg_bufs bufs;
-        char * peer = "MDS_PEER_UUID";
+        struct lustre_cfg    * lcfg = NULL;
+        int err;
+               
+        CDEBUG(D_TRACE, "lcfg %s %#x %s %s\n", cfgname, cmd, s1, s2); 
+
+        lustre_cfg_bufs_reset(&bufs, cfgname);
+        if (s1) 
+                lustre_cfg_bufs_set_string(&bufs, 1, s1);
+        if (s2) 
+                lustre_cfg_bufs_set_string(&bufs, 2, s2);
+
+        lcfg = lustre_cfg_new(cmd, &bufs);
+        lcfg->lcfg_nid = nid;
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
+        return(err);
+}
+
+static int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
+                       struct config_llog_instance *cfg)
+{
         struct obd_device *obd;
         struct lustre_handle mdc_conn = {0, };
         struct obd_export *exp;
@@ -567,7 +602,8 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         struct obd_uuid mdc_uuid;
         struct llog_ctxt *ctxt;
         struct obd_connect_data ocd = { 0 };
-        int rc = 0;
+        lnet_nid_t nid;
+        int i, rc = 0, recov_bk = 1;
         int err;
         ENTRY;
 
@@ -577,35 +613,18 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         lustre_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mdc_uuid);
         CDEBUG(D_HA, "generated uuid: %s\n", mdc_uuid.uuid);
-
-        lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, peer);
-
-        lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
-        lcfg->lcfg_nid = lmd->lmd_nid;
-        LASSERT(lcfg->lcfg_nid != LNET_NID_ANY);
-        rc = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
+        
+        nid = lmd->lmd_nid[0];
+        LASSERT(nid != LNET_NID_ANY);
+        rc = do_lcfg(name, nid, LCFG_ADD_UUID, libcfs_nid2str(nid), 0);
         if (rc < 0)
                 GOTO(out, rc);
 
-        lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
-        lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
-
-        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
-        rc = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
+        rc = do_lcfg(name, 0, LCFG_ATTACH, LUSTRE_MDC_NAME, mdc_uuid.uuid);
         if (rc < 0)
                 GOTO(out_del_uuid, rc);
 
-        lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, lmd->lmd_mds);
-        lustre_cfg_bufs_set_string(&bufs, 2, peer);
-
-        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
-        rc = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
+        rc = do_lcfg(name, 0, LCFG_SETUP, lmd->lmd_mds, libcfs_nid2str(nid));
         if (rc < 0) {
                 LCONSOLE_ERROR("I couldn't establish a connection with the MDS."
                                " Check that the MDS host NID is correct and the"
@@ -617,10 +636,25 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         if (obd == NULL)
                 GOTO(out_cleanup, rc = -EINVAL);
 
-        /* Disable initial recovery on this import */
+        /* Add the redundant MDS nids */
+        for (i = 1; i < lmd->lmd_nid_count; i++) {
+                nid = lmd->lmd_nid[i];
+                rc = do_lcfg(name, nid, LCFG_ADD_UUID, libcfs_nid2str(nid), 0);
+                if (rc) {
+                        CERROR("Add uuid for %s failed %d\n", 
+                               libcfs_nid2str(nid), rc);
+                        continue;
+                }
+                rc = do_lcfg(name, 0, LCFG_ADD_CONN, libcfs_nid2str(nid), 0);
+                if (rc) 
+                        CERROR("Add conn for %s failed %d\n", 
+                               libcfs_nid2str(nid), rc);
+        }
+
+        /* Try all connections, but only once. */
         rc = obd_set_info(obd->obd_self_export,
-                          strlen("initial_recov"), "initial_recov",
-                          sizeof(allow_recov), &allow_recov);
+                          strlen("init_recov_bk"), "init_recov_bk",
+                          sizeof(recov_bk), &recov_bk);
         if (rc)
                 GOTO(out_cleanup, rc);
 
@@ -665,30 +699,26 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 CERROR("obd_disconnect failed: rc = %d\n", err);
 
 out_cleanup:
-        lustre_cfg_bufs_reset(&bufs, name);
-        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
+        err = do_lcfg(name, 0, LCFG_CLEANUP, 0, 0);
         if (err)
                 CERROR("mdc_cleanup failed: rc = %d\n", err);
 
 out_detach:
-        lustre_cfg_bufs_reset(&bufs, name);
-        lcfg = lustre_cfg_new(LCFG_DETACH, &bufs);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
+        err = do_lcfg(name, 0, LCFG_DETACH, 0, 0);
         if (err)
                 CERROR("mdc_detach failed: rc = %d\n", err);
 
 out_del_uuid:
-        lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, peer);
-        lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
-        if (err)
-                CERROR("del MDC UUID failed: rc = %d\n", err);
-
+        /* class_add_uuid adds a nid even if the same uuid exists; we might
+           delete any copy here.  So they all better match. */
+        for (i = 0; i < lmd->lmd_nid_count; i++) {
+                nid = lmd->lmd_nid[i];
+                err = do_lcfg(name, nid, LCFG_DEL_UUID, libcfs_nid2str(nid), 0);
+                if (err)
+                        CERROR("del MDC UUID %s failed: rc = %d\n", 
+                               libcfs_nid2str(nid), err);
+        }
+        /* class_import_put will get rid of the additional connections */
 out:
         RETURN(rc);
 }
@@ -700,7 +730,7 @@ static void lustre_manual_cleanup(struct ll_sb_info *sbi)
 
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
                 class_manual_cleanup(obd);
-        }                       
+        }
 
         if (sbi->ll_lmd != NULL)
                 class_del_profile(sbi->ll_lmd->lmd_profile);
@@ -748,7 +778,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
                 cfg.cfg_instance = ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
-                err = lustre_process_log(lmd, lmd->lmd_profile, &cfg, 0);
+                err = lustre_process_log(lmd, lmd->lmd_profile, &cfg);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", lmd->lmd_profile);
                         GOTO(out_free, err);
@@ -816,13 +846,13 @@ void lustre_put_super(struct super_block *sb)
         obd = class_exp2obd(sbi->ll_mdc_exp);
         if (obd) {
                 int next = 0;
-                /* We need to set force before the lov_disconnect in 
+                /* We need to set force before the lov_disconnect in
                 lustre_common_put_super, since l_d cleans up osc's as well. */
                 force = obd->obd_no_recov;
-                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
+                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next))
                        !=NULL) {
                         obd->obd_force = force;
-                }                       
+                }
         }
 
         lustre_common_put_super(sb);
@@ -1034,14 +1064,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * above to avoid invoking vmtruncate, otherwise it is important
                  * to call vmtruncate in inode_setattr to update inode->i_size
                  * (bug 6196) */
-                inode_setattr(inode, attr);
+                rc = inode_setattr(inode, attr);
 
                 ll_update_inode(inode, &md);
                 ptlrpc_req_finished(request);
 
                 if (!lsm || !S_ISREG(inode->i_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
-                        RETURN(0);
+                        RETURN(rc);
                 }
         } else {
                 /* The OST doesn't check permissions, but the alternative is
@@ -1063,7 +1093,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
 
                 /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
-                inode_setattr(inode, attr);
+                rc = inode_setattr(inode, attr);
         }
 
         /* We really need to get our PW lock before we change inode->i_size.

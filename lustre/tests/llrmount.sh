@@ -27,10 +27,11 @@ else
 fi    
 
 [ "$NODE" ] && node_opt="--node $NODE"
+[ "$DEBUG" ] && portals_opt="$portals_opt --ptldebug=$DEBUG"
+[ "$PTLDEBUG" ] && portals_opt="$portals_opt --ptldebug=$PTLDEBUG"
 
 ${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt $@ $conf_opt || exit 2
 
-[ $DEBUG ] && sysctl -w lnet.debug=$DEBUG
 
 if [ "$MOUNT2" ]; then
 	$LLMOUNT -v -o user_xattr,acl `hostname`:/mds1/client $MOUNT2 || exit 3

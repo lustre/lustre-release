@@ -546,6 +546,26 @@ static inline int obd_connect(struct lustre_handle *conn, struct obd_device *obd
         RETURN(rc);
 }
 
+static inline int obd_reconnect(struct obd_export *exp,
+                                struct obd_device *obd,
+                                struct obd_uuid *cluuid,
+                                struct obd_connect_data *d)
+{
+        int rc;
+        __u64 ocf = d ? d->ocd_connect_flags : 0; /* for post-condition check */
+        ENTRY;
+
+        OBD_CHECK_DEV_ACTIVE(obd);
+        OBD_CHECK_OP(obd, reconnect, 0);
+        OBD_COUNTER_INCREMENT(obd, reconnect);
+
+        rc = OBP(obd, reconnect)(exp, obd, cluuid, d);
+        /* check that only subset is granted */
+        LASSERT(ergo(d != NULL,
+                     (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
+        RETURN(rc);
+}
+
 static inline int obd_disconnect(struct obd_export *exp)
 {
         int rc;
@@ -1006,7 +1026,7 @@ static inline void obd_import_event(struct obd_device *obd,
 
 static inline int obd_notify(struct obd_device *obd,
                              struct obd_device *watched,
-                             int active)
+                             enum obd_notify_event ev)
 {
         OBD_CHECK_DEV(obd);
         if (!obd->obd_set_up) {
@@ -1020,7 +1040,32 @@ static inline int obd_notify(struct obd_device *obd,
         }
 
         OBD_COUNTER_INCREMENT(obd, notify);
-        return OBP(obd, notify)(obd, watched, active);
+        return OBP(obd, notify)(obd, watched, ev);
+}
+
+static inline int obd_notify_observer(struct obd_device *observer,
+                                      struct obd_device *observed,
+                                      enum obd_notify_event ev)
+{
+        int rc1;
+        int rc2;
+
+        struct obd_notify_upcall *onu;
+
+        if (observer->obd_observer)
+                rc1 = obd_notify(observer->obd_observer, observed, ev);
+        else
+                rc1 = 0;
+        /*
+         * Also, call non-obd listener, if any
+         */
+        onu = &observer->obd_upcall;
+        if (onu->onu_upcall != NULL)
+                rc2 = onu->onu_upcall(observer, observed, ev, onu->onu_owner);
+        else
+                rc2 = 0;
+
+        return rc1 ?: rc2;
 }
 
 static inline int obd_quotacheck(struct obd_export *exp,

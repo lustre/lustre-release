@@ -320,22 +320,22 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         void *lmm_buf;
         ENTRY;
 
+        if (!S_ISREG(inode->i_mode))
+                RETURN(0);
         if (rec->ur_flags & MDS_OPEN_DELAY_CREATE ||
             !(rec->ur_flags & FMODE_WRITE))
                 RETURN(0);
 
         body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body));
 
-        if (!S_ISREG(inode->i_mode))
-                RETURN(0);
         if (body->valid & OBD_MD_FLEASIZE)
                 RETURN(0);
 
         OBD_ALLOC(*ids, mds->mds_lov_desc.ld_tgt_count * sizeof(**ids));
         if (*ids == NULL)
                 RETURN(-ENOMEM);
+        oti_init(&oti, req);
         oti.oti_objid = *ids;
-        oti.oti_thread = req->rq_svc_thread;
 
         /* replay case */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
@@ -1052,10 +1052,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                     (acc_mode & MAY_WRITE))
                         GOTO(cleanup, rc = -EROFS);
 
-                /* Can't write to a read-only file */
-                if (IS_RDONLY(dchild->d_inode) && (acc_mode & MAY_WRITE) != 0)
-                        GOTO(cleanup, rc = -EPERM);
-
                 /* An append-only file must be opened in append mode for
                  * writing */
                 if (IS_APPEND(dchild->d_inode) && (acc_mode & MAY_WRITE) != 0 &&
@@ -1130,7 +1126,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 else
                         ptlrpc_save_lock (req, &parent_lockh, parent_mode);
         }
- 
+
         /* trigger dqacq on the owner of child and parent */
         lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_CREATE);
         RETURN(rc);
@@ -1343,7 +1339,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
         if (rc) {
                 CERROR("lustre_pack_reply: rc = %d\n", rc);
                 req->rq_status = rc;
-                /* Continue on to drop local open count even if we can't send the reply */
+                /* continue on to drop local open even if we can't send reply */
         } else {
                 MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
         }

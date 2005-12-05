@@ -3,8 +3,7 @@
 set -e
 
 #         bug  2986 5494 7288
-ALWAYS_EXCEPT="20b  24   27"
-
+ALWAYS_EXCEPT="20b  24   27 $RECOVERY_SMALL_EXCEPT"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 

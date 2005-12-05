@@ -532,7 +532,7 @@ static int check_file_size(char *file, off_t size)
 {
         struct stat statbuf;
 
-        if(stat(file, &statbuf) != 0) {
+        if (stat(file, &statbuf) != 0) {
                 printf("Error stat(%s)\n", file);
                 return(1);
         }
@@ -948,6 +948,7 @@ int t50(char *name)
         ENTRY("4k aligned i/o sanity");
         while (np <= _npages) {
                 printf("%3d per xfer(total %d)...\t", np, _npages);
+                fflush(stdout);
                 pages_io(np, offset);
                 np += np;
         }
@@ -990,12 +991,12 @@ int t51(char *name)
         int result;
 
         ENTRY("truncate() should truncate file to proper length");
-        snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t51_file", lustre_path);
 
         for (size = 0; size < T51_NR * T51_STEP; size += T51_STEP) {
                 t_echo_create(file, "");
                 if (truncate(file, size) != 0) {
-                        printf("error truncating file: %s\n", strerror(errno));
+                        printf("\nerror truncating file: %s\n",strerror(errno));
                         return(-1);
                 }
                 result = check_file_size(file, size);
@@ -1006,11 +1007,11 @@ int t51(char *name)
                 t_echo_create(file, "");
                 fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
                 if (fd < 0) {
-                        printf("error open file: %s\n", strerror(errno));
+                        printf("\nerror open file: %s\n", strerror(errno));
                         return(-1);
                 }
                 if (ftruncate(fd, size) != 0) {
-                        printf("error ftruncating file: %s\n", strerror(errno));
+                        printf("\nerror ftruncating file:%s\n",strerror(errno));
                         return(-1);
                 }
                 close(fd);
@@ -1018,7 +1019,12 @@ int t51(char *name)
                 if (result != 0)
                         return result;
                 t_unlink(file);
+                if (size % (T51_STEP * (T51_NR / 75)) == 0) {
+                        printf(".");
+                        fflush(stdout);
+                }
         }
+        printf("\n");
         LEAVE();
 }
 
@@ -1112,7 +1118,11 @@ int main(int argc, char * const argv[])
         __liblustre_setup_();
 
         buf_size = _npages * PAGE_SIZE;
-        buf_alloc = malloc(buf_size);
+        buf_alloc = calloc(1, buf_size);
+        if (buf_alloc == NULL) {
+                fprintf(stderr, "error allocating %d\n", buf_size);
+                exit(-ENOMEM);
+        }
 
         for (test = testlist; test->test != NULL; test++) {
                 int run = 1, i;

@@ -261,7 +261,7 @@ class LCTLInterface:
         if config.noexec: return (0, [])
 
         child = popen2.Popen3(cmd_line, 1) # Capture stdout and stderr from command
-        child.tochild.write(cmds + "\n")
+        child.tochild.write(cmds + "\nq\n")
         child.tochild.close()
 
         # From "Python Cookbook" from O'Reilly
@@ -1336,7 +1336,11 @@ class MDSDEV(Module):
                 ret, out = runcmd("mount -o loop %s /tmp/lustre-XXXX/" %self.devpath)
             if ret:
                 print out[0]
-            os.utime("/tmp/lustre-XXXX/LOGS", (mtime, mtime))
+            try:
+                os.utime("/tmp/lustre-XXXX/LOGS", (mtime, mtime))
+            except OSError:
+                runcmd("umount -f /tmp/lustre-XXXX/")
+                panic("Can't adjust config creation time!")
             runcmd("umount -f /tmp/lustre-XXXX/")
         else:
             print "XML file does not contain mtime, skip mtime checking."

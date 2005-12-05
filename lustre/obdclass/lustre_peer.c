@@ -155,6 +155,7 @@ int class_del_uuid (char *uuid)
                 data = list_entry(deathrow.next, struct uuid_nid_data, un_list);
 
                 list_del (&data->un_list);
+                CDEBUG(D_INFO, "del uuid %s\n", data->un_uuid);
 
                 OBD_FREE(data->un_uuid, strlen(data->un_uuid) + 1);
                 OBD_FREE(data, sizeof(*data));

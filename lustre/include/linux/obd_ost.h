@@ -4,7 +4,7 @@
  *   This file is part of Lustre, http://www.lustre.org
  *
  * Data structures for object storage targets and client: OST & OSC's
- * 
+ *
  * See also lustre_idl.h for wire formats of requests.
  */
 
@@ -12,12 +12,6 @@
 #define _LUSTRE_OST_H
 
 #include <linux/obd_class.h>
-
-#define LUSTRE_FILTER_NAME "obdfilter"
-#define LUSTRE_OST_NAME "ost"
-#define LUSTRE_OSC_NAME "osc"
-#define LUSTRE_SANOSC_NAME "sanosc"
-#define LUSTRE_SANOST_NAME "sanost"
 
 struct osc_brw_async_args {
         struct obdo     *aa_oa;

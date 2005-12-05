@@ -42,7 +42,7 @@
 
 /* 512byte block min */
 #define MAX_BLOCKS_PER_PAGE (PAGE_SIZE / 512)
-struct dio_request {
+struct filter_iobuf {
         atomic_t          dr_numreqs;  /* number of reqs being processed */
         struct bio       *dr_bios;     /* list of completed bios */
         wait_queue_head_t dr_wait;
@@ -57,12 +57,12 @@ struct dio_request {
         struct filter_obd *dr_filter;
 };
 
-static void record_start_io(struct dio_request *dreq, int rw, int size)
+static void record_start_io(struct filter_iobuf *iobuf, int rw, int size)
 {
-        struct filter_obd *filter = dreq->dr_filter;
+        struct filter_obd *filter = iobuf->dr_filter;
         unsigned long flags;
 
-        atomic_inc(&dreq->dr_numreqs);
+        atomic_inc(&iobuf->dr_numreqs);
 
         if (rw == OBD_BRW_READ) {
                 lprocfs_oh_tally(&filter->fo_read_rpc_hist,
@@ -79,12 +79,12 @@ static void record_start_io(struct dio_request *dreq, int rw, int size)
         else
                 filter->fo_w_in_flight++;
         spin_unlock_irqrestore(&filter->fo_stats_lock, flags);
-        dreq->dr_start_time = jiffies;
+        iobuf->dr_start_time = jiffies;
 }
 
-static void record_finish_io(struct dio_request *dreq, int rw, int rc)
+static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 {
-        struct filter_obd *filter = dreq->dr_filter;
+        struct filter_obd *filter = iobuf->dr_filter;
         unsigned long flags, stop_time = jiffies;
 
         spin_lock_irqsave(&filter->fo_stats_lock, flags);
@@ -94,24 +94,24 @@ static void record_finish_io(struct dio_request *dreq, int rw, int rc)
                 filter->fo_w_in_flight--;
         spin_unlock_irqrestore(&filter->fo_stats_lock, flags);
 
-        if (atomic_dec_and_test(&dreq->dr_numreqs))
-                wake_up(&dreq->dr_wait);
+        if (atomic_dec_and_test(&iobuf->dr_numreqs))
+                wake_up(&iobuf->dr_wait);
 
         if (rc != 0)
                 return;
 
         if (rw == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&filter->fo_r_io_time,
-                                      stop_time - dreq->dr_start_time);
+                                      stop_time - iobuf->dr_start_time);
         } else {
                 lprocfs_oh_tally_log2(&filter->fo_w_io_time,
-                                      stop_time - dreq->dr_start_time);
+                                      stop_time - iobuf->dr_start_time);
         }
 }
 
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 {
-        struct dio_request *dreq = bio->bi_private;
+        struct filter_iobuf *iobuf = bio->bi_private;
         unsigned long flags;
 
         if (bio->bi_size) {
@@ -120,7 +120,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                 return 1;
         }
 
-        if (dreq == NULL) {
+        if (iobuf == NULL) {
                 CERROR("***** bio->bi_private is NULL!  This should never "
                        "happen.  Normally, I would crash here, but instead I "
                        "will dump the bio contents to the console.  Please "
@@ -138,14 +138,14 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                 return 0;
         }
 
-        spin_lock_irqsave(&dreq->dr_lock, flags);
-        bio->bi_private = dreq->dr_bios;
-        dreq->dr_bios = bio;
-        if (dreq->dr_error == 0)
-                dreq->dr_error = error;
-        spin_unlock_irqrestore(&dreq->dr_lock, flags);
+        spin_lock_irqsave(&iobuf->dr_lock, flags);
+        bio->bi_private = iobuf->dr_bios;
+        iobuf->dr_bios = bio;
+        if (iobuf->dr_error == 0)
+                iobuf->dr_error = error;
+        spin_unlock_irqrestore(&iobuf->dr_lock, flags);
 
-        record_finish_io(dreq, test_bit(BIO_RW, &bio->bi_rw) ?
+        record_finish_io(iobuf, test_bit(BIO_RW, &bio->bi_rw) ?
                          OBD_BRW_WRITE : OBD_BRW_READ, error);
 
         return 0;
@@ -163,91 +163,103 @@ static int can_be_merged(struct bio *bio, sector_t sector)
 }
 
 int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
-                       void **ret)
+                       struct filter_iobuf **ret)
 {
-        struct dio_request *dreq;
+        struct filter_iobuf *iobuf;
 
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
 
-        OBD_ALLOC(dreq, sizeof(*dreq));
-        if (dreq == NULL)
+        *ret = NULL;
+        OBD_ALLOC(iobuf, sizeof(*iobuf));
+        if (iobuf == NULL)
                 goto failed_0;
 
-        OBD_ALLOC(dreq->dr_pages, num_pages * sizeof(*dreq->dr_pages));
-        if (dreq->dr_pages == NULL)
+        OBD_ALLOC(iobuf->dr_pages, num_pages * sizeof(*iobuf->dr_pages));
+        if (iobuf->dr_pages == NULL)
                 goto failed_1;
 
-        OBD_ALLOC(dreq->dr_blocks,
-                  MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*dreq->dr_blocks));
-        if (dreq->dr_blocks == NULL)
+        OBD_ALLOC(iobuf->dr_blocks,
+                  MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*iobuf->dr_blocks));
+        if (iobuf->dr_blocks == NULL)
                 goto failed_2;
 
-        dreq->dr_filter = filter;
-        dreq->dr_bios = NULL;
-        init_waitqueue_head(&dreq->dr_wait);
-        atomic_set(&dreq->dr_numreqs, 0);
-        spin_lock_init(&dreq->dr_lock);
-        dreq->dr_max_pages = num_pages;
-        dreq->dr_npages = 0;
+        iobuf->dr_filter = filter;
+        iobuf->dr_bios = NULL;
+        init_waitqueue_head(&iobuf->dr_wait);
+        atomic_set(&iobuf->dr_numreqs, 0);
+        spin_lock_init(&iobuf->dr_lock);
+        iobuf->dr_max_pages = num_pages;
+        iobuf->dr_npages = 0;
 
-        *ret = dreq;
+        *ret = iobuf;
         RETURN(0);
-        
+
  failed_2:
-        OBD_FREE(dreq->dr_pages,
-                 num_pages * sizeof(*dreq->dr_pages));
+        OBD_FREE(iobuf->dr_pages,
+                 num_pages * sizeof(*iobuf->dr_pages));
  failed_1:
-        OBD_FREE(dreq, sizeof(*dreq));
+        OBD_FREE(iobuf, sizeof(*iobuf));
  failed_0:
         RETURN(-ENOMEM);
 }
 
-void filter_iobuf_put(void *iobuf)
+static void filter_clear_iobuf(struct filter_iobuf *iobuf)
 {
-        struct dio_request *dreq = iobuf;
-
         /* free all bios */
-        while (dreq->dr_bios) {
-                struct bio *bio = dreq->dr_bios;
-                dreq->dr_bios = bio->bi_private;
+        while (iobuf->dr_bios) {
+                struct bio *bio = iobuf->dr_bios;
+                iobuf->dr_bios = bio->bi_private;
                 bio_put(bio);
         }
-        dreq->dr_npages = 0;
-        atomic_set(&dreq->dr_numreqs, 0);
+        iobuf->dr_npages = 0;
+        atomic_set(&iobuf->dr_numreqs, 0);
 }
 
-void filter_free_iobuf(void *iobuf)
+void filter_free_iobuf(struct filter_iobuf *iobuf)
 {
-        struct dio_request *dreq = iobuf;
-        int                 num_pages = dreq->dr_max_pages;
+        int num_pages = iobuf->dr_max_pages;
 
-        filter_iobuf_put(dreq);
+        filter_clear_iobuf(iobuf);
 
-        OBD_FREE(dreq->dr_blocks,
-                 MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*dreq->dr_blocks));
-        OBD_FREE(dreq->dr_pages,
-                 num_pages * sizeof(*dreq->dr_pages));
-        OBD_FREE_PTR(dreq);
+        OBD_FREE(iobuf->dr_blocks,
+                 MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*iobuf->dr_blocks));
+        OBD_FREE(iobuf->dr_pages,
+                 num_pages * sizeof(*iobuf->dr_pages));
+        OBD_FREE_PTR(iobuf);
 }
 
-int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
+void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
+                      struct obd_trans_info *oti)
+{
+        int thread_id = oti ? oti->oti_thread_id : -1;
+
+        if (unlikely(thread_id < 0)) {
+                filter_free_iobuf(iobuf);
+                return;
+        }
+
+        LASSERTF(filter->fo_iobuf_pool[thread_id] == iobuf,
+                 "iobuf mismatch for thread %d: pool %p iobuf %p\n",
+                 thread_id, filter->fo_iobuf_pool[thread_id], iobuf);
+        filter_clear_iobuf(iobuf);
+}
+
+int filter_iobuf_add_page(struct obd_device *obd, struct filter_iobuf *iobuf,
                           struct inode *inode, struct page *page)
 {
-        struct dio_request *dreq = iobuf;
-
-        LASSERT (dreq->dr_npages < dreq->dr_max_pages);
-        dreq->dr_pages[dreq->dr_npages++] = page;
+        LASSERT(iobuf->dr_npages < iobuf->dr_max_pages);
+        iobuf->dr_pages[iobuf->dr_npages++] = page;
 
         return 0;
 }
 
 int filter_do_bio(struct obd_device *obd, struct inode *inode,
-                  struct dio_request *dreq, int rw)
+                  struct filter_iobuf *iobuf, int rw)
 {
         int            blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-        struct page  **pages = dreq->dr_pages;
-        int            npages = dreq->dr_npages;
-        unsigned long *blocks = dreq->dr_blocks;
+        struct page  **pages = iobuf->dr_pages;
+        int            npages = iobuf->dr_npages;
+        unsigned long *blocks = iobuf->dr_blocks;
         int            total_blocks = npages * blocks_per_page;
         int            sector_bits = inode->i_sb->s_blocksize_bits - 9;
         unsigned int   blocksize = inode->i_sb->s_blocksize;
@@ -262,17 +274,17 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
         int            rc = 0;
         ENTRY;
 
-        LASSERT(dreq->dr_npages == npages);
+        LASSERT(iobuf->dr_npages == npages);
         LASSERT(total_blocks <= OBDFILTER_CREATED_SCRATCHPAD_ENTRIES);
 
-        for (page_idx = 0, block_idx = 0; 
-             page_idx < npages; 
+        for (page_idx = 0, block_idx = 0;
+             page_idx < npages;
              page_idx++, block_idx += blocks_per_page) {
-                        
+
                 page = pages[page_idx];
                 LASSERT (block_idx + blocks_per_page <= total_blocks);
 
-                for (i = 0, page_offset = 0; 
+                for (i = 0, page_offset = 0;
                      i < blocks_per_page;
                      i += nblocks, page_offset += blocksize * nblocks) {
 
@@ -295,7 +307,7 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
 
                         if (bio != NULL &&
                             can_be_merged(bio, sector) &&
-                            bio_add_page(bio, page, 
+                            bio_add_page(bio, page,
                                          blocksize * nblocks, page_offset) != 0)
                                 continue;       /* added this frag OK */
 
@@ -306,25 +318,25 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                                 /* Dang! I have to fragment this I/O */
                                 CDEBUG(D_INODE, "bio++ sz %d vcnt %d(%d) "
                                        "sectors %d(%d) psg %d(%d) hsg %d(%d)\n",
-                                       bio->bi_size, 
+                                       bio->bi_size,
                                        bio->bi_vcnt, bio->bi_max_vecs,
                                        bio->bi_size >> 9, q->max_sectors,
-                                       bio_phys_segments(q, bio), 
+                                       bio_phys_segments(q, bio),
                                        q->max_phys_segments,
-                                       bio_hw_segments(q, bio), 
+                                       bio_hw_segments(q, bio),
                                        q->max_hw_segments);
 
-                                record_start_io(dreq, rw, bio->bi_size);
+                                record_start_io(iobuf, rw, bio->bi_size);
                                 rc = fsfilt_send_bio(rw, obd, inode, bio);
                                 if (rc < 0) {
                                         CERROR("Can't send bio: %d\n", rc);
-                                        record_finish_io(dreq, rw, rc);
+                                        record_finish_io(iobuf, rw, rc);
                                         goto out;
                                 }
                         }
 
                         /* allocate new bio */
-                        bio = bio_alloc(GFP_NOIO, 
+                        bio = bio_alloc(GFP_NOIO,
                                         (npages - page_idx) * blocks_per_page);
                         if (bio == NULL) {
                                 CERROR ("Can't allocate bio\n");
@@ -335,30 +347,30 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                         bio->bi_bdev = inode->i_sb->s_bdev;
                         bio->bi_sector = sector;
                         bio->bi_end_io = dio_complete_routine;
-                        bio->bi_private = dreq;
+                        bio->bi_private = iobuf;
 
-                        rc = bio_add_page(bio, page, 
+                        rc = bio_add_page(bio, page,
                                           blocksize * nblocks, page_offset);
                         LASSERT (rc != 0);
                 }
         }
 
         if (bio != NULL) {
-                record_start_io(dreq, rw, bio->bi_size);
+                record_start_io(iobuf, rw, bio->bi_size);
                 rc = fsfilt_send_bio(rw, obd, inode, bio);
                 if (rc >= 0) {
                         rc = 0;
                 } else {
                         CERROR("Can't send bio: %d\n", rc);
-                        record_finish_io(dreq, rw, rc);
+                        record_finish_io(iobuf, rw, rc);
                 }
         }
 
  out:
-        wait_event(dreq->dr_wait, atomic_read(&dreq->dr_numreqs) == 0);
+        wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
 
         if (rc == 0)
-                rc = dreq->dr_error;
+                rc = iobuf->dr_error;
         RETURN(rc);
 }
 
@@ -375,7 +387,7 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
  * not be dirty, because we already called fdatasync/fdatawait on them.
  */
 static int filter_clear_page_cache(struct inode *inode,
-                                    struct dio_request *iobuf)
+                                    struct filter_iobuf *iobuf)
 {
         struct page *page;
         int i, rc, rc2;
@@ -414,38 +426,37 @@ static int filter_clear_page_cache(struct inode *inode,
 }
 
 /* Must be called with i_sem taken for writes; this will drop it */
-int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
+int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct dio_request *dreq = iobuf;
         struct inode *inode = dchild->d_inode;
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
         int rc, rc2, create;
         struct semaphore *sem;
         ENTRY;
 
-        LASSERTF(dreq->dr_npages <= dreq->dr_max_pages, "%d,%d\n",
-                 dreq->dr_npages, dreq->dr_max_pages);
-        LASSERT(dreq->dr_npages <= OBDFILTER_CREATED_SCRATCHPAD_ENTRIES);
+        LASSERTF(iobuf->dr_npages <= iobuf->dr_max_pages, "%d,%d\n",
+                 iobuf->dr_npages, iobuf->dr_max_pages);
+        LASSERT(iobuf->dr_npages <= OBDFILTER_CREATED_SCRATCHPAD_ENTRIES);
 
         if (rw == OBD_BRW_READ) {
-                if (dreq->dr_npages == 0)
+                if (iobuf->dr_npages == 0)
                         RETURN(0);
                 create = 0;
                 sem = NULL;
         } else {
                 LASSERTF(rw == OBD_BRW_WRITE, "%x\n", rw);
-                LASSERT(dreq->dr_npages > 0);
+                LASSERT(iobuf->dr_npages > 0);
                 create = 1;
                 sem = &obd->u.filter.fo_alloc_lock;
                 
                 lquota_enforce(quota_interface, obd, dreq->dr_ignore_quota);
         }
 remap:
-        rc = fsfilt_map_inode_pages(obd, inode, dreq->dr_pages,
-                                    dreq->dr_npages, dreq->dr_blocks,
+        rc = fsfilt_map_inode_pages(obd, inode, iobuf->dr_pages,
+                                    iobuf->dr_npages, iobuf->dr_blocks,
                                     obdfilter_created_scratchpad, create, sem);
 
         if (rc == -EDQUOT) {
@@ -464,9 +475,9 @@ remap:
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
                         filter_tally_write(&obd->u.filter,
-                                           dreq->dr_pages,
-                                           dreq->dr_npages,
-                                           dreq->dr_blocks,
+                                           iobuf->dr_pages,
+                                           iobuf->dr_npages,
+                                           iobuf->dr_blocks,
                                            blocks_per_page);
                         if (attr->ia_size > inode->i_size)
                                 attr->ia_valid |= ATTR_SIZE;
@@ -490,11 +501,11 @@ remap:
                         RETURN(rc);
         }
 
-        rc = filter_clear_page_cache(inode, dreq);
+        rc = filter_clear_page_cache(inode, iobuf);
         if (rc != 0)
                 RETURN(rc);
 
-        RETURN(filter_do_bio(obd, inode, dreq, rw));
+        RETURN(filter_do_bio(obd, inode, iobuf, rw));
 }
 
 /* See if there are unallocated parts in given file region */
@@ -524,7 +535,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                           int rc)
 {
         struct niobuf_local *lnb;
-        struct dio_request *dreq = NULL;
+        struct filter_iobuf *iobuf = NULL;
         struct lvfs_run_ctxt saved;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { 0 };
@@ -544,7 +555,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        dreq = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
+        iobuf = filter_iobuf_get(&obd->u.filter, oti);
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -565,7 +576,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                         continue;
                 }
 
-                err = filter_iobuf_add_page(obd, dreq, inode, lnb->page);
+                err = filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
                 LASSERT (err == 0);
 
                 total_size += lnb->len;
@@ -604,7 +615,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         /* filter_direct_io drops i_sem */
-        rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, dreq, exp, &iattr,
+        rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
         if (rc == 0)
                 obdo_from_inode(oa, inode,
@@ -635,7 +646,7 @@ cleanup:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
-                filter_iobuf_put(dreq);
+                filter_iobuf_put(&obd->u.filter, iobuf, oti);
         case 0:
                 /*
                  * lnb->page automatically returns back into per-thread page

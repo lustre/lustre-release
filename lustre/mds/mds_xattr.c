@@ -62,8 +62,7 @@ static int mds_getxattr_pack_msg(struct ptlrpc_request *req,
                         return -EFAULT;
                 }
 
-                if (!(req->rq_export->exp_connect_flags &
-                      OBD_CONNECT_USER_XATTR) &&
+                if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
                     (strncmp(xattr_name, "user.", 5) == 0))
                         return -EOPNOTSUPP;
 
@@ -255,7 +254,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                         GOTO(out_dput, rc = -EACCES);
         }
 
-        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_USER_XATTR) &&
+        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
             (strncmp(xattr_name, "user.", 5) == 0)) {
                 GOTO(out_dput, rc = -EOPNOTSUPP);
         }

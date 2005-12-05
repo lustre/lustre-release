@@ -189,7 +189,6 @@ int mds_llog_finish(struct obd_device *obd, int count);
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd, char * lov_name);
 int mds_lov_disconnect(struct obd_device *obd);
-void mds_lov_set_cleanup_flags(struct obd_device *);
 int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
@@ -197,7 +196,8 @@ int mds_lov_set_nextid(struct obd_device *obd);
 int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
                               int nonblock);
 int mds_post_mds_lovconf(struct obd_device *obd);
-int mds_notify(struct obd_device *obd, struct obd_device *watched, int active);
+int mds_notify(struct obd_device *obd, struct obd_device *watched,
+               enum obd_notify_event ev);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
 void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
@@ -226,7 +226,6 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 
 /* mds/handler.c */
 extern struct lvfs_callback_ops mds_lvfs_ops;
-int mds_lov_clean(struct obd_device *obd);
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 int mds_postrecov(struct obd_device *obd);

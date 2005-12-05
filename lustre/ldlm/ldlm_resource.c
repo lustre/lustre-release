@@ -479,7 +479,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 RETURN(NULL);
 
         l_lock(&ns->ns_lock);
-        memcpy(&res->lr_name, &name, sizeof(res->lr_name));
+        res->lr_name = name;
         res->lr_namespace = ns;
         atomic_inc(&ns->ns_refcount);
 
@@ -688,7 +688,7 @@ EXPORT_SYMBOL(ldlm_resource_unlink_lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 {
         desc->lr_type = res->lr_type;
-        memcpy(&desc->lr_name, &res->lr_name, sizeof(desc->lr_name));
+        desc->lr_name = res->lr_name;
 }
 
 void ldlm_dump_all_namespaces(int level)

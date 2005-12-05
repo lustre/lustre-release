@@ -474,7 +474,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
         struct mdc_open_data *mod = req->rq_cb_data;
         struct obd_client_handle *och;
         struct ptlrpc_request *close_req;
-        struct lustre_handle old; 
+        struct lustre_handle old;
         struct mds_body *body;
         ENTRY;
 
@@ -490,14 +490,14 @@ static void mdc_replay_open(struct ptlrpc_request *req)
 
         och = mod->mod_och;
         if (och != NULL) {
-                struct lustre_handle *file_fh; 
+                struct lustre_handle *file_fh;
                 LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
                 file_fh = &och->och_fh;
                 CDEBUG(D_HA, "updating handle from "LPX64" to "LPX64"\n",
                        file_fh->cookie, body->handle.cookie);
                 memcpy(&old, file_fh, sizeof(old));
                 memcpy(file_fh, &body->handle, sizeof(*file_fh));
-        } 
+        }
 
         close_req = mod->mod_close_req;
         if (close_req != NULL) {
@@ -662,7 +662,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                 mod->mod_close_req = req;
                 if (mod->mod_open_req->rq_type == LI_POISON) {
                         /* FIXME This should be an ASSERT, but until we
-                           figure out why it can be poisoned here, give 
+                           figure out why it can be poisoned here, give
                            a reasonable return. bug 6155 */
                         CERROR("LBUG POISONED open %p!\n", mod->mod_open_req);
                         ptlrpc_req_finished(req);
@@ -866,12 +866,14 @@ out:
         return rc;
 }
 
+#define INIT_RECOV_BACKUP "init_recov_bk"
 int mdc_set_info(struct obd_export *exp, obd_count keylen,
                  void *key, obd_count vallen, void *val)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
 
+        /* Try to "recover" the initial connection; i.e. retry */
         if (keylen == strlen("initial_recov") &&
             memcmp(key, "initial_recov", strlen("initial_recov")) == 0) {
                 if (vallen != sizeof(int))
@@ -879,6 +881,18 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 imp->imp_initial_recov = *(int *)val;
                 CDEBUG(D_HA, "%s: set imp_no_init_recov = %d\n",
                        exp->exp_obd->obd_name, imp->imp_initial_recov);
+                RETURN(0);
+        }
+        /* Turn off initial_recov after we try all backup servers once */
+        if (keylen == strlen(INIT_RECOV_BACKUP) &&
+            memcmp(key, INIT_RECOV_BACKUP, strlen(INIT_RECOV_BACKUP)) == 0) {
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                imp->imp_initial_recov_bk = *(int *)val;
+                if (imp->imp_initial_recov_bk)
+                        imp->imp_initial_recov = 1;
+                CDEBUG(D_HA, "%s: set imp_initial_recov_bk = %d\n",
+                       exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
                 RETURN(0);
         }
         if (keylen == strlen("read-only") &&
@@ -908,7 +922,7 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
-        
+
         RETURN(rc);
 }
 
@@ -1060,8 +1074,7 @@ int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
         RETURN(rc);
 }
 
-static int mdc_import_event(struct obd_device *obd,
-                            struct obd_import *imp, 
+static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                             enum obd_import_event event)
 {
         int rc = 0;
@@ -1073,8 +1086,7 @@ static int mdc_import_event(struct obd_device *obd,
                 break;
         }
         case IMP_EVENT_INACTIVE: {
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 0);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE);
                 break;
         }
         case IMP_EVENT_INVALIDATE: {
@@ -1085,12 +1097,14 @@ static int mdc_import_event(struct obd_device *obd,
                 break;
         }
         case IMP_EVENT_ACTIVE: {
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 1);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE);
                 break;
         }
+        case IMP_EVENT_OCD:
+                break;
+
         default:
-                CERROR("Unknown import event %d\n", event);
+                CERROR("Unknown import event %x\n", event);
                 LBUG();
         }
         RETURN(rc);
@@ -1177,8 +1191,8 @@ static int mdc_precleanup(struct obd_device *obd, int stage)
 {
         int rc = 0;
         ENTRY;
-        
-        if (stage < 2) 
+
+        if (stage < OBD_CLEANUP_SELF_EXP)
                 RETURN(0);
 
         rc = obd_llog_finish(obd, 0);

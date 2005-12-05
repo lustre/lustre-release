@@ -103,7 +103,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
 
 /* this isn't where truncate starts.   roughly:
  * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate. setattr_raw grabs
- * DLM lock on [0, EOF], i_sem, ->lli_size_sem, and WRITE_I_ALLOC_SEM to
+ * DLM lock on [size, EOF], i_sem, ->lli_size_sem, and WRITE_I_ALLOC_SEM to
  * avoid races.
  *
  * must be called under ->lli_size_sem */

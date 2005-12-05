@@ -392,7 +392,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
                 }
         }
 
-        CDEBUG(D_WARNING,"%s->%s\n", uuid->uuid, libcfs_id2str(*peer));
+        CDEBUG(D_NET,"%s->%s\n", uuid->uuid, libcfs_id2str(*peer));
         if (rc != 0) 
                 CERROR("No NID found for %s\n", uuid->uuid);
         return rc;

@@ -75,16 +75,9 @@ static inline int opcode_offset(__u32 opc) {
                 return (opc - LDLM_FIRST_OPC +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < PTLBD_LAST_OPC) {
-                /* Portals Block Device */
-                return (opc - PTLBD_FIRST_OPC +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else if (opc < OBD_LAST_OPC) {
                 /* OBD Ping */
                 return (opc - OBD_FIRST_OPC +
-                        (PTLBD_LAST_OPC - PTLBD_FIRST_OPC) +
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
@@ -94,8 +87,7 @@ static inline int opcode_offset(__u32 opc) {
         }
 }
 
-#define LUSTRE_MAX_OPCODES ((PTLBD_LAST_OPC - PTLBD_FIRST_OPC) + \
-                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+#define LUSTRE_MAX_OPCODES ((LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
                             (OST_LAST_OPC - OST_FIRST_OPC)     + \
                             (OBD_LAST_OPC - OBD_FIRST_OPC))

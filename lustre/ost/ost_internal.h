@@ -14,16 +14,8 @@ extern void ost_print_req(void *seq_file, struct ptlrpc_request *req);
 /*
  * tunables for per-thread page pool (bug 5137)
  */
-enum {
-        /*
-         * pool size in pages
-         */
-        OST_THREAD_POOL_SIZE = PTLRPC_MAX_BRW_PAGES,
-        /*
-         * GFP mask used to allocate pages for pool
-         */
-        OST_THREAD_POOL_GFP  = GFP_HIGHUSER
-};
+#define OST_THREAD_POOL_SIZE PTLRPC_MAX_BRW_PAGES  /* pool size in pages */
+#define OST_THREAD_POOL_GFP  GFP_HIGHUSER          /* GFP mask for pool pages */
 
 struct page;
 struct niobuf_local;

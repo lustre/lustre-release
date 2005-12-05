@@ -254,22 +254,20 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
         lock->l_flags |= LDLM_FL_LOCAL;
-        lock->l_flags |= *flags & LDLM_INHERIT_FLAGS;
         lock->l_lvb_swabber = lvb_swabber;
         if (policy != NULL)
-                memcpy(&lock->l_policy_data, policy, sizeof(*policy));
+                lock->l_policy_data = *policy;
         if (type == LDLM_EXTENT)
-                memcpy(&lock->l_req_extent, &policy->l_extent,
-                       sizeof(policy->l_extent));
+                lock->l_req_extent = policy->l_extent;
 
         err = ldlm_lock_enqueue(ns, &lock, policy, flags);
         if (err != ELDLM_OK)
                 GOTO(out, err);
 
         if (policy != NULL)
-                memcpy(policy, &lock->l_policy_data, sizeof(*policy));
+                *policy = lock->l_policy_data;
         if ((*flags) & LDLM_FL_LOCK_CHANGED)
-                memcpy(&res_id, &lock->l_resource->lr_name, sizeof(res_id));
+                res_id = lock->l_resource->lr_name;
 
         LDLM_DEBUG_NOLOCK("client-side local enqueue handler END (lock %p)",
                           lock);
@@ -369,8 +367,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 }
 
                 if (type == LDLM_EXTENT)
-                        memcpy(&lock->l_req_extent, &policy->l_extent,
-                               sizeof(policy->l_extent));
+                        lock->l_req_extent = policy->l_extent;
                 LDLM_DEBUG(lock, "client-side enqueue START");
         }
 
@@ -401,7 +398,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         ldlm_lock2desc(lock, &body->lock_desc);
         body->lock_flags = *flags;
 
-        memcpy(&body->lock_handle1, lockh, sizeof(*lockh));
+        body->lock_handle1 = *lockh;
 
         /* Continue as normal. */
         if (!req_passed_in) {
@@ -454,8 +451,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         /* lock enqueued on the server */
         cleanup_phase = 1;
 
-        memcpy(&lock->l_remote_handle, &reply->lock_handle,
-               sizeof(lock->l_remote_handle));
+        lock->l_remote_handle = reply->lock_handle;
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
 
@@ -608,8 +604,7 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
                 GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
-        memcpy(&body->lock_handle1, &lock->l_remote_handle,
-               sizeof(body->lock_handle1));
+        body->lock_handle1 = lock->l_remote_handle;
 
         body->lock_desc.l_req_mode = new_mode;
         body->lock_flags = *flags;
@@ -703,8 +698,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
                 body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
-                memcpy(&body->lock_handle1, &lock->l_remote_handle,
-                       sizeof(body->lock_handle1));
+                body->lock_handle1 = lock->l_remote_handle;
 
                 req->rq_replen = lustre_msg_size(0, NULL);
 
@@ -1114,8 +1108,7 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
                 GOTO (out, rc = -EPROTO);
         }
 
-        memcpy(&lock->l_remote_handle, &reply->lock_handle,
-               sizeof(lock->l_remote_handle));
+        lock->l_remote_handle = reply->lock_handle;
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);
  out:

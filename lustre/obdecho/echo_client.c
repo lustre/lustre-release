@@ -938,9 +938,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                         rnb[i].len = PAGE_SIZE;
                 }
 
-                /* XXX this can't be the best.. */
-                memset(oti, 0, sizeof(*oti));
                 ioo.ioo_bufcnt = npages;
+                oti->oti_transno = 0;
 
                 ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti);
                 if (ret != 0)
@@ -988,7 +987,7 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_trans_info dummy_oti;
+        struct obd_trans_info dummy_oti = { .oti_thread_id = -1 };
         struct ec_object *eco;
         int rc;
         ENTRY;
@@ -996,8 +995,6 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
         rc = echo_get_object(&eco, obd, &data->ioc_obdo1);
         if (rc)
                 RETURN(rc);
-
-        memset(&dummy_oti, 0, sizeof(dummy_oti));
 
         data->ioc_obdo1.o_valid &= ~OBD_MD_FLHANDLE;
         data->ioc_obdo1.o_valid |= OBD_MD_FLGROUP;

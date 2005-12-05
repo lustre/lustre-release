@@ -3,7 +3,7 @@
 set -e
 
 #         bug 6088
-ALWAYS_EXCEPT="8"
+ALWAYS_EXCEPT="8 $REPLAY_DUAL_EXCEPT"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
@@ -253,9 +253,9 @@ test_12() {
     sysctl -w lustre.fail_loc=0
 
     ls $DIR/$tfile
-    $CHECKSTAT -t file $DIR/$tfile || return 2
     kill -USR1 $MULTIPID || return 3
     wait $MULTIPID || return 4
+    $CHECKSTAT -t file $DIR/$tfile || return 2
     rm $DIR/$tfile
 
     return 0

@@ -51,6 +51,7 @@
 #undef LIST_HEAD
 
 #include "llite_lib.h"
+#include <linux/lustre_ver.h>
 
 #ifndef MAY_EXEC
 #define MAY_EXEC        1
@@ -583,12 +584,14 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
         struct intnl_stat *st = llu_i2stat(inode);
         int error = 0;
 
-        if (ia_valid & ATTR_SIZE) {
-                error = llu_vmtruncate(inode, attr->ia_size);
-                if (error)
-                        goto out;
-        }
+        /*
+         * inode_setattr() is only ever invoked with ATTR_SIZE (by
+         * llu_setattr_raw()) when file has no bodies. Check this.
+         */
+        LASSERT(ergo(ia_valid & ATTR_SIZE, llu_i2info(inode)->lli_smd == NULL));
 
+        if (ia_valid & ATTR_SIZE)
+                st->st_size = attr->ia_size;
         if (ia_valid & ATTR_UID)
                 st->st_uid = attr->ia_uid;
         if (ia_valid & ATTR_GID)
@@ -605,7 +608,6 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
                         st->st_mode &= ~S_ISGID;
         }
         /* mark_inode_dirty(inode); */
-out:
         return error;
 }
 
@@ -730,27 +732,46 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         if (ia_valid & ATTR_SIZE) {
                 ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
                                                            OBD_OBJECT_EOF} };
-                struct lustre_handle lockh = { 0 };
-                int err, ast_flags = 0;
+                struct lustre_handle lockh = { 0, };
+                struct lustre_handle match_lockh = { 0, };
+
+                int err;
+                int flags = LDLM_FL_TEST_LOCK; /* for assertion check below */
+                int lock_mode;
+                obd_flag obd_flags;
+
+                /* check that there are no matching locks */
+                LASSERT(obd_match(sbi->ll_osc_exp, lsm, LDLM_EXTENT, &policy,
+                                  LCK_PW, &flags, inode, &match_lockh) <= 0);
+
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
                  * XXX here. */
-                if (attr->ia_size == 0)
-                        ast_flags = LDLM_AST_DISCARD_DATA;
+                flags = (attr->ia_size == 0) ? LDLM_AST_DISCARD_DATA : 0;
 
-                rc = llu_extent_lock(NULL, inode, lsm, LCK_PW, &policy,
-                                     &lockh, ast_flags);
+                if (sbi->ll_lco.lco_flags & OBD_CONNECT_TRUNCLOCK) {
+                        lock_mode = LCK_NL;
+                        obd_flags = OBD_FL_TRUNCLOCK;
+                        CDEBUG(D_INODE, "delegating locking to the OST");
+                } else {
+                        lock_mode = LCK_PW;
+                        obd_flags = 0;
+                }
+
+                /* with lock_mode == LK_NL no lock is taken. */
+                rc = llu_extent_lock(NULL, inode, lsm, lock_mode, &policy,
+                                     &lockh, flags);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
                                 RETURN(-ENOLCK);
                         RETURN(rc);
                 }
 
-                rc = llu_vmtruncate(inode, attr->ia_size);
+                rc = llu_vmtruncate(inode, attr->ia_size, obd_flags);
 
                 /* unlock now as we don't mind others file lockers racing with
                  * the mds updates below? */
-                err = llu_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
+                err = llu_extent_unlock(NULL, inode, lsm, lock_mode, &lockh);
                 if (err) {
                         CERROR("llu_extent_unlock failed: %d\n", err);
                         if (!rc)
@@ -1744,8 +1765,9 @@ llu_fsswop_mount(const char *source,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
-        ocd.ocd_connect_flags = OBD_CONNECT_IBITS;
+        ocd.ocd_connect_flags = OBD_CONNECT_IBITS|OBD_CONNECT_VERSION;
         ocd.ocd_ibits_known = MDS_INODELOCK_FULL;
+        ocd.ocd_version = LUSTRE_VERSION_CODE;
 
         /* setup mdc */
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, &ocd);
@@ -1772,14 +1794,19 @@ llu_fsswop_mount(const char *source,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
-        ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK;
+        obd->obd_upcall.onu_owner = &sbi->ll_lco;
+        obd->obd_upcall.onu_upcall = ll_ocd_update;
+
+        ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK|OBD_CONNECT_REQPORTAL|
+                                OBD_CONNECT_VERSION|OBD_CONNECT_TRUNCLOCK;
+        ocd.ocd_version = LUSTRE_VERSION_CODE;
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
-        sbi->ll_connect_flags = ocd.ocd_connect_flags;
+        sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 

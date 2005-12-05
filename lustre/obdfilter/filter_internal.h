@@ -23,6 +23,7 @@
 # define OBD_FILTER_SAN_DEVICENAME "sanobdfilter"
 #endif
 
+#define HEALTH_CHECK "health_check"
 #define FILTER_INIT_OBJID 0
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
@@ -35,6 +36,7 @@
 #define FILTER_INCOMPAT_SUPP   (OBD_INCOMPAT_GROUPS)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
+#define GRANT_FOR_LLOG(obd) 16
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as mds_server_data so we might one day merge. */
@@ -138,6 +140,7 @@ int filter_brw(int cmd, struct obd_export *, struct obdo *,
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
 
 /* filter_io_*.c */
+struct filter_iobuf;
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
                           struct niobuf_local *res, struct obd_trans_info *oti,
@@ -147,13 +150,15 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                   obd_size want, obd_size fs_space_left);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
-int filter_alloc_iobuf(struct filter_obd *, int rw, int num_pages, void **ret);
-void filter_free_iobuf(void *iobuf);
-int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
+int filter_alloc_iobuf(struct filter_obd *, int rw, int num_pages,
+                       struct filter_iobuf **ret);
+void filter_free_iobuf(struct filter_iobuf *iobuf);
+int filter_iobuf_add_page(struct obd_device *obd, struct filter_iobuf *iobuf,
                           struct inode *inode, struct page *page);
-void *filter_iobuf_get(struct ptlrpc_thread *thread, struct filter_obd *filter);
-void filter_iobuf_put(void *iobuf);
-int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
+void *filter_iobuf_get(struct filter_obd *filter, struct obd_trans_info *oti);
+void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
+                      struct obd_trans_info *oti);
+int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle);
 

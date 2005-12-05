@@ -75,8 +75,8 @@ command_t cmdlist[] = {
          "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
          "       or \n"
          "       setstripe -d <dirname>   (to delete default striping)\n"
-         "\tstripe size:  Number of bytes in each stripe (0 default)\n"
-         "\tstripe start: OST index of first stripe (-1 default)\n"
+         "\tstripe size:  Number of bytes on each OST (0 filesystem default)\n"
+         "\tstripe start: OST index of first stripe (-1 filesystem default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default, -1 all)"},
         {"find", lfs_find, 0,
          "To list the extended attributes for a given filename or files in a\n"
@@ -779,7 +779,7 @@ static inline char *type2name(int check_type)
 static void grace2str(time_t seconds,char *buf)
 {
         uint minutes, hours, days;
-         
+
         minutes = (seconds + 30) / 60;
         hours = minutes / 60;
         minutes %= 60;

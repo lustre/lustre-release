@@ -36,6 +36,7 @@
 #include <linux/obd_ost.h> /* for LUSTRE_OSC_NAME */
 #include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_ver.h>
 #include <linux/lustre_net.h>
 
 /* @priority: if non-zero, move the selected to the list head
@@ -200,7 +201,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         /* In a more perfect world, we would hang a ptlrpc_client off of
          * obd_type and just use the values from there. */
         if (!strcmp(name, LUSTRE_OSC_NAME)) {
-                rq_portal = OST_REQUEST_PORTAL;
+                rq_portal = OST_IO_PORTAL;
                 rp_portal = OSC_REPLY_PORTAL;
                 connect_op = OST_CONNECT;
         } else if (!strcmp(name, LUSTRE_MDC_NAME)) {
@@ -261,7 +262,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
                 cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
                 cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
-        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 512) { /* <= 512 MB */
+        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 256) { /* <= 256 MB */
                 cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 2;
                 cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 2;
         } else {
@@ -479,7 +480,8 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                         CWARN("%s reconnecting\n", cluuid->uuid);
                         conn->cookie = exp->exp_handle.h_cookie;
                         /* target_handle_connect() treats EALREADY and
-                         * -EALREADY differently */
+                         * -EALREADY differently.  EALREADY means we are
+                         * doing a valid reconnect from the same client. */
                         RETURN(EALREADY);
                 } else {
                         CERROR("%s reconnecting from %s, "
@@ -489,7 +491,8 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                                hdl->cookie, conn->cookie);
                         memset(conn, 0, sizeof *conn);
                         /* target_handle_connect() treats EALREADY and
-                         * -EALREADY differently */
+                         * -EALREADY differently.  -EALREADY is an error
+                         * (same UUID, different handle). */
                         RETURN(-EALREADY);
                 }
         }
@@ -582,6 +585,22 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (rc)
                 GOTO(out, rc);
 
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
+                if (!data || (data->ocd_version < LUSTRE_VERSION_CODE -
+                               LUSTRE_VERSION_ALLOWED_OFFSET)) {
+                        DEBUG_REQ(D_INFO, req, "Refusing old (%d.%d.%d.%d) "
+                                  "libclient connection attempt\n",
+                                  OBD_OCD_VERSION_MAJOR(data->ocd_version),
+                                  OBD_OCD_VERSION_MINOR(data->ocd_version),
+                                  OBD_OCD_VERSION_PATCH(data->ocd_version),
+                                  OBD_OCD_VERSION_FIX(data->ocd_version));
+                        data = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data));
+                        data->ocd_connect_flags = OBD_CONNECT_VERSION;
+                        data->ocd_version = LUSTRE_VERSION_CODE;
+                        GOTO(out, rc = -EPROTO);
+                }
+        }
+
         /* lctl gets a backstage, all-access pass. */
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
                 goto dont_check_exports;
@@ -607,6 +626,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 GOTO(out, rc = -EALREADY);
         }
 
+        /* We indicate the reconnection in a flag, not an error code. */
+        if (rc == EALREADY) {
+                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
+                rc = 0;
+        }
+
         /* Tell the client if we're in recovery. */
         /* If this is the first client, start the recovery timer */
         if (target->obd_recovering) {
@@ -630,7 +655,14 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
  dont_check_exports:
                         rc = obd_connect(&conn, target, &cluuid, data);
                 }
+        } else {
+                rc = obd_reconnect(export, target, &cluuid, data);
         }
+
+        /* we want to handle EALREADY but *not* -EALREADY from
+         * target_handle_reconnect() */
+        if (rc && rc != EALREADY)
+                GOTO(out, rc);
 
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
@@ -641,12 +673,13 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;
 
-        /* we want to handle EALREADY but *not* -EALREADY from
-         * target_handle_reconnect() */
-        if (rc && rc != EALREADY)
-                GOTO(out, rc);
-
         req->rq_repmsg->handle = conn;
+
+        /* ownership of this export ref transfers to the request AFTER we
+         * drop any previous reference the request had, but we don't want
+         * that to go to zero before we get our new export reference. */
+        export = class_conn2export(&conn);
+        LASSERT(export != NULL);
 
         /* If the client and the server are the same node, we will already
          * have an export that really points to the client's DLM export,
@@ -658,9 +691,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (req->rq_export != NULL)
                 class_export_put(req->rq_export);
 
-        /* ownership of this export ref transfers to the request */
-        export = req->rq_export = class_conn2export(&conn);
-        LASSERT(export != NULL);
+        req->rq_export = export;
 
         spin_lock_irqsave(&export->exp_lock, flags);
         if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
@@ -686,11 +717,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export->exp_connection = ptlrpc_get_connection(req->rq_peer,
                                                        req->rq_self,
                                                        &remote_uuid);
-        if (rc == EALREADY) {
-                /* We indicate the reconnection in a flag, not an error code. */
-                lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
+
+        if (lustre_msg_get_op_flags(req->rq_repmsg) & MSG_CONNECT_RECONNECT)
                 GOTO(out, rc = 0);
-        }
 
         if (target->obd_recovering)
                 target->obd_connected_clients++;
@@ -1169,7 +1198,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         OBD_ALLOC(reqmsg, req->rq_reqlen);
         if (!reqmsg)
                 LBUG();
-        memcpy(saved_req, req, sizeof *saved_req);
+        *saved_req = *req;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
         /* Don't race cleanup */
@@ -1402,3 +1431,13 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
 #endif /* !__KERNEL__ */
 }
 #endif /* HAVE_QUOTA_SUPPORT */
+
+ldlm_mode_t lck_compat_array[] = {
+        [LCK_EX] LCK_COMPAT_EX,
+        [LCK_PW] LCK_COMPAT_PW,
+        [LCK_PR] LCK_COMPAT_PR,
+        [LCK_CW] LCK_COMPAT_CW,
+        [LCK_CR] LCK_COMPAT_CR,
+        [LCK_NL] LCK_COMPAT_NL,
+        [LCK_GROUP] LCK_COMPAT_GROUP
+};

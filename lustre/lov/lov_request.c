@@ -202,7 +202,7 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
 
                 lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
                 LASSERT(lov_lockhp);
-                if (lov_lockhp->cookie == 0)
+                if (!lustre_handle_is_used(lov_lockhp))
                         continue;
 
                 rc = obd_cancel(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,
@@ -458,7 +458,7 @@ int lov_prep_cancel_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                 struct lustre_handle *lov_lockhp;
 
                 lov_lockhp = set->set_lockh->llh_handles + i;
-                if (lov_lockhp->cookie == 0) {
+                if (!lustre_handle_is_used(lov_lockhp)) {
                         CDEBUG(D_HA, "lov idx %d subobj "LPX64" no lock?\n",
                                loi->loi_ost_idx, loi->loi_id);
                         continue;

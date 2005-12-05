@@ -184,9 +184,6 @@ EXPORT_SYMBOL(lustre_swab_ldlm_resource_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_request);
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
-EXPORT_SYMBOL(lustre_swab_ptlbd_op);
-EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
-EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
 EXPORT_SYMBOL(lustre_swab_qdata);
 
 /* recover.c */

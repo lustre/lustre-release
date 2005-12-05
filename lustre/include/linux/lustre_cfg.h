@@ -47,7 +47,9 @@ enum lcfg_command_type {
         LCFG_ADD_CONN       = 0x00cf00b,
         LCFG_DEL_CONN       = 0x00cf00c,
         LCFG_LOV_ADD_OBD    = 0x00cf00d,
-        LCFG_LOV_DEL_OBD    = 0x00cf00e
+        LCFG_LOV_DEL_OBD    = 0x00cf00e,
+        LCFG_PARAM          = 0x00cf00f,
+        LCFG_MARKER         = 0x00cf010
 };
 
 struct lustre_cfg_bufs {
@@ -55,6 +57,9 @@ struct lustre_cfg_bufs {
         uint32_t lcfg_buflen[LUSTRE_CFG_MAX_BUFCOUNT];
         uint32_t lcfg_bufcount;
 };
+
+/* Mountconf transitional hack, should go away after 1.6 */
+#define LCFG_FLG_MOUNTCONF 0x400
 
 struct lustre_cfg {
         uint32_t lcfg_version;
@@ -232,13 +237,46 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
         RETURN(0);
 }
 
+
+#define LMD_MAGIC       0xbdacbd03
+#define LMD_MAGIC_MASK (0xffffff00 & LMD_MAGIC)
+
+#define lmd_bad_magic(LMDP)                                             \
+({                                                                      \
+        struct lustre_mount_data *_lmd__ = (LMDP);                      \
+        int _ret__ = 0;                                                 \
+        if (!_lmd__) {                                                  \
+                LCONSOLE_ERROR("Missing mount data: "                   \
+                       "check that /sbin/mount.lustre is installed.\n");\
+                _ret__ = 1;                                             \
+        } else if (_lmd__->lmd_magic == LMD_MAGIC) {                    \
+                _ret__ = 0;                                             \
+        } else if ((_lmd__->lmd_magic & LMD_MAGIC_MASK) == LMD_MAGIC_MASK) { \
+                LCONSOLE_ERROR("You're using an old version of "        \
+                       "/sbin/mount.lustre.  Please install version "   \
+                       "1.%d\n", LMD_MAGIC & 0xFF);                     \
+                _ret__ = 1;                                             \
+        } else {                                                        \
+                LCONSOLE_ERROR("Invalid mount data (%#x != %#x): "      \
+                       "check that /sbin/mount.lustre is installed\n",  \
+                       _lmd__->lmd_magic, LMD_MAGIC);                   \
+                _ret__ = 1;                                             \
+        }                                                               \
+        _ret__;                                                         \
+})
+
+#define MAX_FAILOVER_NIDS 10
+
 /* Passed by mount */
+/* Any changes in the alignment of elements in this stuct require a change to
+   LMD_MAGIC */
 struct lustre_mount_data {
-        uint32_t lmd_magic;
-        uint32_t lmd_flags;
-        uint64_t lmd_nid;
-        char     lmd_mds[64];
-        char     lmd_profile[64];
+        uint32_t   lmd_magic;
+        uint32_t   lmd_flags;
+        uint16_t   lmd_nid_count; /* how many failover nids we have for the MDS */
+        lnet_nid_t lmd_nid[MAX_FAILOVER_NIDS];
+        char       lmd_mds[64];
+        char       lmd_profile[64];
 };
 
 #define LMD_FLG_FLOCK           0x0001

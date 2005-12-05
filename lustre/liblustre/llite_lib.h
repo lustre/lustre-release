@@ -25,17 +25,17 @@ struct ll_file_data {
 
 struct llu_sb_info
 {
-        struct obd_uuid         ll_sb_uuid;
-        struct obd_export      *ll_mdc_exp;
-        struct obd_export      *ll_osc_exp;
-        obd_id                  ll_rootino;
-        int                     ll_flags;
-        __u64                   ll_connect_flags;
-        struct list_head        ll_conn_chain;
+        struct obd_uuid          ll_sb_uuid;
+        struct obd_export       *ll_mdc_exp;
+        struct obd_export       *ll_osc_exp;
+        obd_id                   ll_rootino;
+        int                      ll_flags;
+        struct lustre_client_ocd ll_lco;
+        struct list_head         ll_conn_chain;
 
-        struct obd_uuid         ll_mds_uuid;
-        struct obd_uuid         ll_mds_peer_uuid;
-        char                   *ll_instance;
+        struct obd_uuid          ll_mds_uuid;
+        struct obd_uuid          ll_mds_peer_uuid;
+        char                    *ll_instance;
 };
 
 #define LL_SBI_NOLCK            0x1
@@ -202,7 +202,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
 int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode);
 int llu_iop_close(struct inode *inode);
 _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
-int llu_vmtruncate(struct inode * inode, loff_t offset);
+int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag obd_flags);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 

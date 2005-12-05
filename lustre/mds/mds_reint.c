@@ -706,7 +706,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         ENTRY;
 
         LASSERT(offset == MDS_REQ_REC_OFF);
-        LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds"));
+        LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name,
+                        LUSTRE_MDS_NAME));
 
         DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %s mode %o",
                   rec->ur_fid1->id, rec->ur_fid1->generation,
@@ -2174,7 +2175,13 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         ENTRY;
 
 #if CRAY_XT3
-        rec->ur_uc.luc_fsuid = req->rq_uid;
+        if (req->rq_uid != LNET_UID_ANY) {
+                /* non-root local cluster client 
+                 * NB root's creds are believed... */
+                LASSERT (req->rq_uid != 0);
+                rec->ur_uc.luc_fsuid = req->rq_uid;
+                rec->ur_uc.luc_cap = 0;
+        }
 #endif
 
         /* get group info of this user */

@@ -204,9 +204,9 @@ static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
         struct obd_device *obd = ctxt->loc_exp->exp_obd;
 
-        if (!strcmp(obd->obd_type->typ_name, "mds"))
+        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
                 ctxt->loc_gen.mnt_cnt = obd->u.mds.mds_mount_count;
-        else if (!strstr(obd->obd_type->typ_name, "filter"))
+        else if (!strstr(obd->obd_type->typ_name, LUSTRE_FILTER_NAME))
                 ctxt->loc_gen.mnt_cnt = obd->u.filter.fo_mount_count;
         else
                 ctxt->loc_gen.mnt_cnt = 0;
@@ -221,7 +221,7 @@ static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
         return(a.conn_cnt < b.conn_cnt ? 1 : 0);
 }
 
-#define LLOG_GEN_INC(gen)  ((gen).conn_cnt) ++
+#define LLOG_GEN_INC(gen)  ((gen).conn_cnt ++)
 #define LLOG_PROC_BREAK 0x0001
 
 static inline int llog_obd2ops(struct llog_ctxt *ctxt,

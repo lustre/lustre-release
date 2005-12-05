@@ -149,13 +149,13 @@ static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
 }
 
 /* Must be called with i_sem taken for writes; this will drop it */
-int filter_direct_io(int rw, struct dentry *dchild, void *buf,
+int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *buf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle)
 {
         struct obd_device *obd = exp->exp_obd;
         struct inode *inode = dchild->d_inode;
-        struct kiobuf *iobuf = buf;
+        struct kiobuf *iobuf = (void *)buf;
         int rc, create = (rw == OBD_BRW_WRITE), committed = 0;
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits, cleanup_phase = 0;
         struct semaphore *sem = NULL;
@@ -296,13 +296,8 @@ static void clear_kiobuf(struct kiobuf *iobuf)
         iobuf->length = 0;
 }
 
-void filter_iobuf_put(void *iobuf)
-{
-        clear_kiobuf(iobuf);
-}
-
 int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
-                       void **ret)
+                       struct filter_iobuf **ret)
 {
         int rc;
         struct kiobuf *iobuf;
@@ -310,6 +305,7 @@ int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
 
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
 
+        *ret = NULL;
         rc = alloc_kiovec(1, &iobuf);
         if (rc)
                 RETURN(rc);
@@ -324,22 +320,38 @@ int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
         iobuf->dovary = 0; /* this prevents corruption, not present in 2.4.20 */
 #endif
         clear_kiobuf(iobuf);
-        *ret = iobuf;
+        *ret = (void *)iobuf;
         RETURN(0);
 }
 
-void filter_free_iobuf(void *buf)
+void filter_free_iobuf(struct filter_iobuf *buf)
 {
-        struct kiobuf *iobuf = buf;
+        struct kiobuf *iobuf = (void *)buf;
 
         clear_kiobuf(iobuf);
         free_kiovec(1, &iobuf);
 }
 
-int filter_iobuf_add_page(struct obd_device *obd, void *buf,
+void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
+                      struct obd_trans_info *oti)
+{
+        int thread_id = oti ? oti->oti_thread_id : -1;
+
+        if (unlikely(thread_id < 0)) {
+                filter_free_iobuf(iobuf);
+                return;
+        }
+
+        LASSERTF(filter->fo_iobuf_pool[thread_id] == iobuf,
+                 "iobuf mismatch for thread %d: pool %p iobuf %p\n",
+                 thread_id, filter->fo_iobuf_pool[thread_id], iobuf);
+        clear_kiobuf((void *)iobuf);
+}
+
+int filter_iobuf_add_page(struct obd_device *obd, struct filter_iobuf *buf,
                            struct inode *inode, struct page *page)
 {
-        struct kiobuf *iobuf = buf;
+        struct kiobuf *iobuf = (void *)buf;
 
         iobuf->maplist[iobuf->nr_pages++] = page;
         iobuf->length += PAGE_SIZE;
@@ -370,7 +382,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        iobuf = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
+        iobuf = filter_iobuf_get(&obd->u.filter, oti);
+        if (iobuf == NULL)
+                GOTO(cleanup, rc = -ENOMEM);
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -442,7 +456,7 @@ cleanup:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
-                filter_iobuf_put(iobuf);
+                filter_iobuf_put(&obd->u.filter, iobuf, oti);
         case 0:
                 /*
                  * lnb->page automatically returns back into per-thread page

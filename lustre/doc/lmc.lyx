@@ -454,7 +454,7 @@ UUID Specify the UUID of the OST device.
 \layout Description
 
 --fstype\SpecialChar ~
-extN|ext3 Optional arguement used to specify the file system type.
+ldiskfs|ext3 Optional arguement used to specify the file system type.
  Default is ext3.
 \layout Description
 

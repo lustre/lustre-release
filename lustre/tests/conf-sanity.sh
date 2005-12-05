@@ -11,10 +11,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
@@ -745,5 +743,16 @@ test_18() {
         gen_config
 }
 run_test 18 "check lconf creates large journals"
+
+test_19() {
+        # first format the ost/mdt
+        start_ost
+	start_mds
+	stop_mds
+	stop_ost
+	start mds $MDSLCONFARGS || return 1
+	stop mds --force || return 2
+}
+run_test 19 "start/stop MDS without OSTs"
 
 equals_msg "Done"

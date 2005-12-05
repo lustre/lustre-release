@@ -122,15 +122,7 @@ typedef enum {
 #define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX)
 #define LCK_COMPAT_GROUP  (LCK_GROUP | LCK_NL)
 
-static ldlm_mode_t lck_compat_array[] = {
-        [LCK_EX] LCK_COMPAT_EX,
-        [LCK_PW] LCK_COMPAT_PW,
-        [LCK_PR] LCK_COMPAT_PR,
-        [LCK_CW] LCK_COMPAT_CW,
-        [LCK_CR] LCK_COMPAT_CR,
-        [LCK_NL] LCK_COMPAT_NL,
-        [LCK_GROUP] LCK_COMPAT_GROUP
-};
+extern ldlm_mode_t lck_compat_array[];
 
 static inline void lockmode_verify(ldlm_mode_t mode)
 {

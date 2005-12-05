@@ -1805,7 +1805,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
         }
 
         /* Last chance to free reqs left on the replay list, but we
-         * will still leak reqs that haven't comitted.  */
+         * will still leak reqs that haven't committed.  */
         if (imp->imp_replayable)
                 ptlrpc_free_committed(imp);
 

@@ -728,7 +728,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         int rc;
         ENTRY;
 
-        LASSERT(lockh->cookie == 0);
+        LASSERT(!lustre_handle_is_used(lockh));
         LASSERT(lsm != NULL);
 
         /* don't drop the mmapped file to LRU */

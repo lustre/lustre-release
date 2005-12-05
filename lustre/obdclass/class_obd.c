@@ -321,9 +321,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                         CERROR("Device %d not attached\n", obd->obd_minor);
                         GOTO(out, err = -ENODEV);
                 }
-                CDEBUG(D_IOCTL,
-                       "disabling committed-transno notifications on %d\n",
-                       obd->obd_minor);
+                CDEBUG(D_HA, "%s: disabling committed-transno notification\n",
+                       obd->obd_name);
                 obd->obd_no_transno = 1;
                 GOTO(out, err = 0);
         }
@@ -418,6 +417,7 @@ EXPORT_SYMBOL(class_handle_unhash);
 EXPORT_SYMBOL(class_handle2object);
 
 /* config.c */
+EXPORT_SYMBOL(class_decref);
 EXPORT_SYMBOL(class_get_profile);
 EXPORT_SYMBOL(class_del_profile);
 EXPORT_SYMBOL(class_process_config);

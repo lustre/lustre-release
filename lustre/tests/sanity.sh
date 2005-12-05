@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71 101"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 64b 71 101"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
@@ -19,8 +19,8 @@ case `uname -r` in
 *) error "unsupported kernel" ;;
 esac
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && \
-	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT`"
+[ "$ALWAYS_EXCEPT$EXCEPT$SANITY_EXCEPT" ] && \
+	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITY_EXCEPT`"
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
@@ -123,7 +123,7 @@ build_test_filter() {
         for O in $ONLY; do
             eval ONLY_${O}=true
         done
-        for E in $EXCEPT $ALWAYS_EXCEPT; do
+        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_EXCEPT; do
             eval EXCEPT_${E}=true
         done
 }
@@ -1412,8 +1412,9 @@ test_33a() {
         rm -fr $DIR/d33
         mkdir -p $DIR/d33
         chown $RUNAS_ID $DIR/d33
-        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 || error
-        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 && error || true
+        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33|| error "create"
+        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 && \
+		error "open RDWR" || true
 }
 run_test 33a "test open file(mode=0444) with O_RDWR (should return error)"
 
@@ -2002,17 +2003,17 @@ test_52a() {
 	[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 	mkdir -p $DIR/d52a
 	touch $DIR/d52a/foo
-	chattr =a $DIR/d52a/foo || error
-	echo bar >> $DIR/d52a/foo || error
-	cp /etc/hosts $DIR/d52a/foo && error
-	rm -f $DIR/d52a/foo 2>/dev/null && error
-	link $DIR/d52a/foo $DIR/d52a/foo_link 2>/dev/null && error
-	echo foo >> $DIR/d52a/foo || error
-	mrename $DIR/d52a/foo $DIR/d52a/foo_ren && error
-	lsattr $DIR/d52a/foo | egrep -q "^-+a-+ $DIR/d52a/foo" || error
-	chattr -a $DIR/d52a/foo || error
+	chattr =a $DIR/d52a/foo || error "chattr =a failed"
+	echo bar >> $DIR/d52a/foo || error "append bar failed"
+	cp /etc/hosts $DIR/d52a/foo && error "cp worked"
+	rm -f $DIR/d52a/foo 2>/dev/null && error "rm worked"
+	link $DIR/d52a/foo $DIR/d52a/foo_link 2>/dev/null && error "link worked"
+	echo foo >> $DIR/d52a/foo || error "append foo failed"
+	mrename $DIR/d52a/foo $DIR/d52a/foo_ren && error "rename worked"
+	lsattr $DIR/d52a/foo | egrep -q "^-+a-+ $DIR/d52a/foo" || error "lsattr"
+	chattr -a $DIR/d52a/foo || error "chattr -a failed"
 
-	rm -fr $DIR/d52a || error
+	rm -fr $DIR/d52a || error "cleanup rm failed"
 }
 run_test 52a "append-only flag test (should return errors) ====="
 
@@ -2054,7 +2055,7 @@ test_54a() {
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
 }
-run_test 54a "unix damain socket test =========================="
+run_test 54a "unix domain socket test =========================="
 
 test_54b() {
 	f="$DIR/f54b"
@@ -2310,7 +2311,7 @@ test_63() {
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
 		echo $MAX_DIRTY_MB > $i
 	done
-	true
+	rm -f $DIR/f63 || true
 }
 run_test 63 "Verify oig_wait interruption does not crash ======="
 
@@ -2714,6 +2715,7 @@ test_101() {
 		cat $LPROC/llite/*/read_ahead_stats
 		error "too many ($discard) discarded pages" 
 	fi
+	rm -f $DIR/f101 || true
 }
 run_test 101 "check read-ahead for random reads ==========="
 

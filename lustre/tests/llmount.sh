@@ -27,6 +27,7 @@ fi
 
 [ "$NODE" ] && node_opt="--node $NODE"
 [ "$DEBUG" ] && debug_opt="--ptldebug=$DEBUG"
+[ "$PTLDEBUG" ] && debug_opt="--ptldebug=$PTLDEBUG"
 
 ${LCONF} $NOMOD $portals_opt $lustre_opt $debug_opt $node_opt ${REFORMAT:---reformat} $@ \
 	$conf_opt  || exit 2

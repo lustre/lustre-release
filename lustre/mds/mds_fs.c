@@ -48,6 +48,8 @@
 
 #include "mds_internal.h"
 
+#define HEALTH_CHECK "health_check"
+
 /* Add client data to the MDS.  We use a bitmap to locate a free space
  * in the last_rcvd file if cl_off is -1 (i.e. a new client).
  * Otherwise, we have just read the data from the last_rcvd file and
@@ -506,11 +508,32 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                        file->f_dentry->d_inode->i_mode);
                 GOTO(err_lov_objid, rc = -ENOENT);
         }
+
+        /* open and test the check io file junk */
+        file = filp_open(HEALTH_CHECK, O_RDWR | O_CREAT, 0644);
+        if (IS_ERR(file)) {
+                rc = PTR_ERR(file);
+                CERROR("cannot open/create %s file: rc = %d\n", HEALTH_CHECK, rc);
+                GOTO(err_lov_objid, rc = PTR_ERR(file));
+        }
+        mds->mds_health_check_filp = file;
+        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n", HEALTH_CHECK,
+                       file->f_dentry->d_inode->i_mode);
+                GOTO(err_health_check, rc = -ENOENT);
+        }
+        rc = lvfs_check_io_health(obd, file);
+        if (rc)
+                GOTO(err_health_check, rc);
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         return rc;
 
+err_health_check:
+        if (mds->mds_health_check_filp && 
+            filp_close(mds->mds_health_check_filp, 0))
+                CERROR("can't close %s after error\n", HEALTH_CHECK);
 err_lov_objid:
         if (mds->mds_lov_objid_filp && filp_close(mds->mds_lov_objid_filp, 0))
                 CERROR("can't close %s after error\n", LOV_OBJID);
@@ -538,8 +561,8 @@ int mds_fs_cleanup(struct obd_device *obd)
         int rc = 0;
 
         if (obd->obd_fail)
-                CERROR("%s: shutting down for failover; client state will"
-                       " be preserved.\n", obd->obd_name);
+                CWARN("%s: shutting down for failover; client state will "
+                      "be preserved.\n", obd->obd_name);
 
         class_disconnect_exports(obd); /* cleans up client info too */
         mds_server_free_data(mds);
@@ -556,6 +579,12 @@ int mds_fs_cleanup(struct obd_device *obd)
                 mds->mds_lov_objid_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
+        }
+        if (mds->mds_health_check_filp) {
+                rc = filp_close(mds->mds_health_check_filp, 0);
+                mds->mds_health_check_filp = NULL;
+                if (rc)
+                        CERROR("%s file won't close, rc=%d\n", HEALTH_CHECK, rc);
         }
         if (mds->mds_objects_dir != NULL) {
                 l_dput(mds->mds_objects_dir);

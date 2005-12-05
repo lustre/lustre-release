@@ -7,7 +7,8 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+[ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
+	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITYN_EXCEPT`"
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
@@ -86,7 +87,7 @@ run_test() {
 			echo -n "."
 		fi
 	done
-	for X in $EXCEPT $ALWAYS_EXCEPT; do
+	for X in $EXCEPT $ALWAYS_EXCEPT $SANITYN_EXCEPT; do
 		if [ "`echo $1 | grep '\<'$X'[a-z]*\>'`" ]; then
 			echo "skipping excluded test $1"
 			return 0
@@ -421,22 +422,23 @@ test_20() {
 	[ $CNTD -gt 0 ] && \
 	    error $CNTD" page left in cache after lock cancel" || true
 }
-
 run_test 20 "test extra readahead page left in cache ===="
+
+cleanup_21() {
+	umount $DIR1/d21
+}
 
 test_21() { # Bug 5907
 	mkdir $DIR1/d21
-	mount /etc $DIR1/d21 --bind # Poor man's mount.
-	rmdir $DIR1/d21 && error "Removed mounted directory"
-	rmdir $DIR2/d21 && echo "Removed mounted directory from another mountpoint, needs to be fixed"
-	test -d $DIR1/d21 || error "Monted directory disappeared"
-	umount $DIR1/d21
+	mount /etc $DIR1/d21 --bind || error "mount failed" # Poor man's mount.
+	trap cleanup_21 EXIT
+	rmdir -v $DIR1/d21 && error "Removed mounted directory"
+	rmdir -v $DIR2/d21 && echo "Removed mounted directory from another mountpoint, needs to be fixed"
+	test -d $DIR1/d21 || error "Mounted directory disappeared"
 	test -d $DIR2/d21 || test -d $DIR1/d21 && error "Removed dir still visible after umount"
 	true
 }
-
 run_test 21 " Try to remove mountpoint on another dir ===="
-
 
 
 log "cleanup: ======================================================"
