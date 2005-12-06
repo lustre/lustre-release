@@ -249,9 +249,10 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         RETURN(result);
 }
 
-static int mds_connect_internal(struct obd_export *exp, struct obd_device *obd,
+static int mds_connect_internal(struct obd_export *exp, 
                                 struct obd_connect_data *data)
 {
+        struct obd_device *obd = exp->exp_obd;
         if (data != NULL) {
                 data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
                 data->ocd_ibits_known &= MDS_INODELOCK_FULL;
@@ -293,7 +294,7 @@ static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
         if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
                         
-        rc = mds_connect_internal(exp, obd, data);
+        rc = mds_connect_internal(exp, data);
                         
         RETURN(rc);            
 } 
@@ -340,7 +341,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(exp);
         med = &exp->exp_mds_data;
 
-        rc = mds_connect_internal(exp, obd, data);
+        rc = mds_connect_internal(exp, data);
         if (rc)
                 GOTO(out, rc);
 
