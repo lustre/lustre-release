@@ -1685,6 +1685,7 @@ static int filter_cleanup(struct obd_device *obd)
 static int filter_connect_internal(struct obd_export *exp,
                                    struct obd_connect_data *data)
 {
+        struct filter_obd *filter = &exp->exp_obd->u.filter;
         if (data != NULL) {
                 CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
                        " ocd_version: %x ocd_grant: %d\n",
@@ -1695,6 +1696,16 @@ static int filter_connect_internal(struct obd_export *exp,
                 data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 data->ocd_version = LUSTRE_VERSION_CODE;
+
+                if (!(filter->fo_fsd->fsd_feature_rocompat &
+                      cpu_to_le32(OBD_ROCOMPAT_CROW)) &&
+                    data->ocd_connect_flags & OBD_CONNECT_CROW) {
+                        filter->fo_fsd->fsd_feature_rocompat |=
+                                cpu_to_le32(OBD_ROCOMPAT_CROW);
+                        filter_update_server_data(exp->exp_obd,
+                                                  filter->fo_rcvd_filp,
+                                                  filter->fo_fsd, 1);
+                }
 
                 if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
                         obd_size left, want;
@@ -1752,21 +1763,11 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         fed = &exp->exp_filter_data;
 
-        if (data != NULL) {
-                data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
-                exp->exp_connect_flags = data->ocd_connect_flags;
-
-                if (!(filter->fo_fsd->fsd_feature_rocompat &
-                      cpu_to_le32(OBD_ROCOMPAT_CROW)) &&
-                    data->ocd_connect_flags & OBD_CONNECT_CROW) {
-                        filter->fo_fsd->fsd_feature_rocompat |=
-                                cpu_to_le32(OBD_ROCOMPAT_CROW);
-                        filter_update_server_data(obd, filter->fo_rcvd_filp,
-                                                  filter->fo_fsd, 1);
-                }
-        }
-
         spin_lock_init(&fed->fed_lock);
+
+        rc = filter_connect_internal(exp, data);
+        if (rc)
+                GOTO(cleanup, rc);
 
         if (!obd->obd_replayable)
                 GOTO(cleanup, rc = 0);
@@ -1781,8 +1782,6 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         fed->fed_fcd = fcd;
 
         rc = filter_client_add(obd, filter, fed, -1);
-        if (!rc)
-                filter_connect_internal(exp, data);
 
         GOTO(cleanup, rc);
 
