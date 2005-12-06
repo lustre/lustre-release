@@ -249,6 +249,47 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         RETURN(result);
 }
 
+static int mds_connect_internal(struct obd_export *exp, struct obd_device *obd,
+                                struct obd_connect_data *data)
+{
+        if (data != NULL) {
+                data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
+                data->ocd_ibits_known &= MDS_INODELOCK_FULL;
+
+                if (!obd->u.mds.mds_fl_acl)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_ACL;
+
+                if (!obd->u.mds.mds_fl_user_xattr)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
+
+                exp->exp_connect_flags = data->ocd_connect_flags;
+                data->ocd_version = LUSTRE_VERSION_CODE;
+                exp->exp_mds_data.med_ibits_known = data->ocd_ibits_known;
+        }
+
+        if (obd->u.mds.mds_fl_acl &&
+            ((exp->exp_connect_flags & OBD_CONNECT_ACL) == 0)) {
+                CWARN("%s: MDS requires ACL support but client does not\n",
+                      obd->obd_name);
+                return -EBADE;
+        }
+        return 0;
+}
+
+static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
+                         struct obd_uuid *cluuid,
+                         struct obd_connect_data *data)
+{                       
+        int rc;
+        ENTRY;          
+                        
+        if (exp == NULL || obd == NULL || cluuid == NULL)
+                RETURN(-EINVAL);
+                        
+        rc = mds_connect_internal(exp, obd, data);
+                        
+        RETURN(rc);            
+} 
 
 /* Establish a connection to the MDS.
  *
@@ -292,27 +333,9 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(exp);
         med = &exp->exp_mds_data;
 
-        if (data != NULL) {
-                data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
-                data->ocd_ibits_known &= MDS_INODELOCK_FULL;
-
-                if (!obd->u.mds.mds_fl_acl)
-                        data->ocd_connect_flags &= ~OBD_CONNECT_ACL;
-
-                if (!obd->u.mds.mds_fl_user_xattr)
-                        data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
-
-                exp->exp_connect_flags = data->ocd_connect_flags;
-                data->ocd_version = LUSTRE_VERSION_CODE;
-                exp->exp_mds_data.med_ibits_known = data->ocd_ibits_known;
-        }
-
-        if (obd->u.mds.mds_fl_acl &&
-            ((exp->exp_connect_flags & OBD_CONNECT_ACL) == 0)) {
-                CWARN("%s: MDS requires ACL support but client does not\n",
-                      obd->obd_name);
-                GOTO(out, rc = -EBADE);
-        }
+        rc = mds_connect_internal(exp, obd, data);
+        if (rc)
+                GOTO(out, rc);
 
         OBD_ALLOC(mcd, sizeof(*mcd));
         if (!mcd)
@@ -2480,6 +2503,7 @@ struct lvfs_callback_ops mds_lvfs_ops = {
 static struct obd_ops mds_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_connect         = mds_connect,
+        .o_reconnect       = mds_reconnect,
         .o_init_export     = mds_init_export,
         .o_destroy_export  = mds_destroy_export,
         .o_disconnect      = mds_disconnect,
