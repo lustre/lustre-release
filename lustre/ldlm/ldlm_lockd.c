@@ -709,6 +709,13 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 GOTO(out, rc = -EFAULT);
         }
 
+        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS) &&
+            dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS) {
+                DEBUG_REQ(D_ERROR, req, "Ibits lock request from unaware "
+                          "client?\n");
+                GOTO(out, rc = -EPROTO);
+        }
+
         /* INODEBITS_INTEROP: Perform conversion from plain lock to
          * inodebits lock if client does not support them.
          */
