@@ -122,6 +122,7 @@ struct lustre_mount_data {
 };
 
 #define LMD_FLG_RECOVER      0x0001  /* Allow recovery */
+#define LMD_FLG_NOSVC        0x0002  /* Only start MGS/MGC for servers, no other services */
 #define LMD_FLG_MNTCNF       0x1000  /* MountConf compat */
 #define LMD_FLG_CLIENT       0x2000  /* Mounting a client only; no real device */
 

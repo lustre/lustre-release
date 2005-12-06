@@ -192,6 +192,7 @@ static const struct opt_map opt_map[] = {
   { "noflock",  1, 1, 0         },      /* Disable flock support */
   { "user_xattr",   0, 0, 0     },      /* Enable get/set user xattr */
   { "nouser_xattr", 1, 1, 0     },      /* Disable user xattr */
+  { "nosvc",    0, 0, 0         },      /* Only start MGS/MGC, no other services */
   { NULL,       0, 0, 0         }
 };
 /****************************************************************************/

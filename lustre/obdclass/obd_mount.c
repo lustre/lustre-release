@@ -1152,6 +1152,11 @@ static int server_fill_super(struct super_block *sb)
         if (rc) 
                 GOTO(out_mnt, rc);
 
+        /*Only start MGS/MGC on servers, no other services, even not
+         *actually mount the filesystem. */
+        if (lmd->lmd_flags & LMD_FLG_NOSVC)
+                RETURN(0);
+
         /* Set up all obd devices for service */
         if (IS_OST(lsi->lsi_ldd) || IS_MDT(lsi->lsi_ldd)) {
                 rc = server_start_targets(sb, mnt);
@@ -1249,6 +1254,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         lmd->lmd_flags |= LMD_FLG_RECOVER;
                 if (strncmp(s1, "norecov", 7) == 0)
                         lmd->lmd_flags &= ~LMD_FLG_RECOVER;
+                if (strncmp(s1, "nosvc", 5) == 0)
+                        lmd->lmd_flags |= LMD_FLG_NOSVC;
+
                 /* Linux 2.4 doesn't pass the device, so we stuck it at the 
                    end of the options. */
                 if (strncmp(s1, "device=", 7) == 0) {
