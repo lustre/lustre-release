@@ -1154,7 +1154,7 @@ static int server_fill_super(struct super_block *sb)
 
         /*Only start MGS/MGC on servers, no other services, even not
          *actually mount the filesystem. */
-        if (lmd->lmd_flags & LMD_FLG_NOSVC)
+        if (lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC)
                 RETURN(0);
 
         /* Set up all obd devices for service */
