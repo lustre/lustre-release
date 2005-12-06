@@ -256,6 +256,13 @@ static int mds_connect_internal(struct obd_export *exp, struct obd_device *obd,
                 data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
                 data->ocd_ibits_known &= MDS_INODELOCK_FULL;
 
+                /* If no known bits (which should not happen, probably,
+                   as everybody should support LOOKUP and UPDATE bits at least)
+                   revert to compat mode with plain locks. */
+                if (!data->ocd_ibits_known &&
+                    data->ocd_connect_flags & OBD_CONNECT_IBITS)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_IBITS;
+
                 if (!obd->u.mds.mds_fl_acl)
                         data->ocd_connect_flags &= ~OBD_CONNECT_ACL;
 

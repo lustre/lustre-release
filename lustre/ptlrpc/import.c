@@ -577,6 +577,11 @@ finish:
                         ocd->ocd_connect_flags);
 
                 imp->imp_connect_data = *ocd;
+                if (!ocd->ocd_ibits_known &&
+                    ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
+                        CERROR("Inodebits aware server returned zero compatible"
+                               " bits?\n");
+
                 exp = class_conn2export(&imp->imp_dlm_handle);
                 LASSERT(exp);
                 exp->exp_connect_flags = ocd->ocd_connect_flags;

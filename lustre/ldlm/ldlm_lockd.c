@@ -715,6 +715,13 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                           "client?\n");
                 GOTO(out, rc = -EPROTO);
         }
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS &&
+            dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN) {
+                DEBUG_REQ(D_ERROR, req, "Plain lock request from ibita-aware "
+                          "client?\n");
+                GOTO(out, rc = -EPROTO);
+        }
+
 
         /* INODEBITS_INTEROP: Perform conversion from plain lock to
          * inodebits lock if client does not support them.
@@ -817,7 +824,8 @@ existing_lock:
                 else if (lock->l_granted_mode == lock->l_req_mode)
                         ldlm_add_waiting_lock(lock);
         }
-        if ((dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN) &&
+        if ((dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN ||
+            dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS) &&
              req->rq_export->exp_libclient) {
                 if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) ||
                     !(dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK)) {
