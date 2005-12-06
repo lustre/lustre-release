@@ -131,7 +131,7 @@ static int next_ost_index(void *index_map, int map_len)
 
 static int count_osts(void *index_map, int map_len)
 {
-       int i,num;
+       int i, num;
        for (i = 0, num = 0; i < map_len * 8; i++)
                if (test_bit(i, index_map))
                         num++;
@@ -146,9 +146,8 @@ static struct system_db *mgs_find_db(struct obd_device *obd, char *fsname)
 
         list_for_each(tmp, &mgs->mgs_system_db_list) {
                 db = list_entry(tmp, struct system_db, db_list);
-                if (strcmp(db->fsname, fsname) == 0) {
+                if (strcmp(db->fsname, fsname) == 0)
                         return db;
-                }
         }
         return NULL;
 }
@@ -161,10 +160,13 @@ static struct system_db *mgs_new_db(struct obd_device *obd, char *fsname)
         struct system_db *db;
         
         OBD_ALLOC(db, sizeof(*db));
-        if (!db)
-               return NULL;
+        if (!db) {
+                CERROR("No memory for system_db.\n");
+                return NULL;
+        }
         OBD_ALLOC(db->index_map, INDEX_MAP_SIZE);
         if (!db->index_map) {
+                CERROR("No memory for index_map.\n");
                 OBD_FREE(db, sizeof(*db));
                 return NULL;
         }
@@ -208,7 +210,8 @@ int mgs_cleanup_db_list(struct obd_device *obd)
         return 0;
 }
 
-static inline int name_create(char *prefix, char *suffix, char **newname){  
+static inline int name_create(char *prefix, char *suffix, char **newname)
+{
         LASSERT(newname);
         OBD_ALLOC(*newname, strlen(prefix) + strlen(suffix) + 1);
         if (!*newname) 
@@ -217,7 +220,8 @@ static inline int name_create(char *prefix, char *suffix, char **newname){
         return 0;
 }
 
-static inline void name_destroy(char *newname){        
+static inline void name_destroy(char *newname)
+{        
         if (newname)
                 OBD_FREE(newname, strlen(newname) + 1);
 }
@@ -268,8 +272,8 @@ int mgs_set_next_index(struct obd_device *obd, struct mgmt_target_info *mti)
         rc = mgs_find_or_make_db(obd, mti->mti_fsname, &db); 
 
         if (mti->mti_flags & LDD_F_SV_TYPE_OST)
-                mti->mti_stripe_index = next_ost_index(db->index_map, 
-                                                       INDEX_MAP_SIZE);
+                mti->mti_stripe_index = 
+                        next_ost_index(db->index_map, INDEX_MAP_SIZE);
         else
                 mti->mti_stripe_index = 1; /*FIXME*/
 
@@ -279,6 +283,63 @@ int mgs_set_next_index(struct obd_device *obd, struct mgmt_target_info *mti)
         CDEBUG(D_MGS, "Set new index for %s to %d\n", mti->mti_svname, 
                mti->mti_stripe_index);
 
+        return rc;
+}
+
+static int mgs_backup_llog(struct obd_device *obd, char* fsname)
+{
+        struct file *filp, *bak_filp;
+        struct lvfs_run_ctxt saved;
+        char *logname, *buf;
+        loff_t soff = 0 , doff = 0;
+        int count = 4096, len;
+        int rc = 0;
+
+        OBD_ALLOC(logname, PATH_MAX);
+        if (logname == NULL)
+                return -ENOMEM;
+
+        OBD_ALLOC(buf, count);
+        if (!buf)
+                GOTO(out , rc = -ENOMEM);
+
+        len = snprintf(logname, PATH_MAX, "%s/%s.bak",
+                       MOUNT_CONFIGS_DIR, fsname);
+
+        if (len >= PATH_MAX - 1) {
+                GOTO(out, -ENAMETOOLONG);
+        } 
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                
+        bak_filp = l_filp_open(logname, O_RDWR|O_CREAT|O_TRUNC, 0660);
+        if (IS_ERR(bak_filp)) {
+                rc = PTR_ERR(bak_filp);
+                CERROR("backup logfile open %s: %d\n", logname, rc);
+                GOTO(pop, rc);
+        }
+        sprintf(logname, "%s/%s", MOUNT_CONFIGS_DIR, fsname);
+        filp = l_filp_open(logname, O_RDONLY, 0);
+        if (IS_ERR(filp)) {
+                rc = PTR_ERR(filp);
+                CERROR("logfile open %s: %d\n", logname, rc);
+                GOTO(close1f, rc);
+        }
+
+        while ((rc = lustre_fread(filp, buf, count, &soff)) > 0) {
+                rc = lustre_fwrite(bak_filp, buf, count, &doff);
+                break;
+        }
+
+        filp_close(filp, 0);
+close1f:
+        filp_close(bak_filp, 0);
+pop:
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+out:
+        if (buf)
+                OBD_FREE(buf, count);
+        OBD_FREE(logname, PATH_MAX);
         return rc;
 }
 
@@ -502,12 +563,13 @@ static int mgs_write_log_mdt(struct obd_device *obd,
                 rc = mgs_clear_log(obd, mti->mti_svname);
                 rc = mgs_write_log_lov(obd, mti->mti_fsname, mti->mti_svname,
                                        lovname);
-        } 
-        /* FIXME
-           else just copy client llog - change lovname?
-           how do you copy an llog?
-        */ 
-          
+        } else {
+                rc = mgs_backup_llog(obd, mti->mti_fsname);
+                if (rc) {
+                        CERROR("Can not backup llog, abort updating llog.\n");
+                        return rc;
+                }
+        }
         name_create(mti->mti_svname, "_UUID", &mdsuuid);
         
         /* We added the lov+mount opt, maybe some osc's, now for the mds.
