@@ -208,7 +208,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rp_portal = MDC_REPLY_PORTAL;
                 connect_op = MDS_CONNECT;
         } else if (!strcmp(name, LUSTRE_MGC_NAME)) {
-                rq_portal = MGC_REQUEST_PORTAL;
+                rq_portal = MGS_REQUEST_PORTAL;
                 rp_portal = MGC_REPLY_PORTAL;
                 connect_op = MGMT_CONNECT;
         } else {

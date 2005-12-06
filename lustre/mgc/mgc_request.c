@@ -438,9 +438,6 @@ static int mgc_import_event(struct obd_device *obd,
         LASSERT(imp->imp_obd == obd);
 
         switch (event) {
-        case IMP_EVENT_DISCON: {
-                break;
-        }
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
 
@@ -448,14 +445,13 @@ static int mgc_import_event(struct obd_device *obd,
 
                 break;
         }
-        case IMP_EVENT_INACTIVE: {
+        case IMP_EVENT_DISCON: 
+        case IMP_EVENT_INACTIVE: 
+        case IMP_EVENT_ACTIVE: 
+        case IMP_EVENT_OCD:
                 break;
-        }
-        case IMP_EVENT_ACTIVE: {
-                break;
-        }
         default:
-                CERROR("Unknown import event %d\n", event);
+                CERROR("Unknown import event %#x\n", event);
                 LBUG();
         }
         RETURN(rc);

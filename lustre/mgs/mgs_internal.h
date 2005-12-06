@@ -7,7 +7,8 @@
 
 #include <linux/lustre_mgs.h>
 
-#define MGS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
+/* MDS has o_t * 1000 */
+#define MGS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 10)
 
 extern struct lvfs_callback_ops mgs_lvfs_ops;
 

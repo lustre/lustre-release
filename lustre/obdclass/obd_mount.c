@@ -680,8 +680,7 @@ static void server_stop_servers(struct super_block *sb)
         struct obd_device *obd;
 
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */
-        if ((lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) &&
-            (obd = class_name2obd("MDS"))) {
+        if (IS_MDT(lsi->lsi_ldd) && (obd = class_name2obd("MDS"))) {
                 //FIXME pre-rename, should eventually be LUSTRE_MDT_NAME
                 struct obd_type *type = class_search_type(LUSTRE_MDS_NAME);
                 if (!type || !type->typ_refcnt) {
@@ -695,8 +694,7 @@ static void server_stop_servers(struct super_block *sb)
         }
 
         /* if this was an OST, and there are no more OST's, clean up the OSS */
-        if ((lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) &&
-            (obd = class_name2obd("OSS"))) {
+        if (IS_OST(lsi->lsi_ldd) && (obd = class_name2obd("OSS"))) {
                 struct obd_type *type = class_search_type(LUSTRE_OST_NAME);
                 if (!type || !type->typ_refcnt) {
                         /* nobody is using the OST type, clean the OSS */
@@ -838,7 +836,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         /* Get a new index if needed */
         if (lsi->lsi_ldd->ldd_flags & (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER)) {
-                CERROR("Need new target index from MGS!\n");
+                CDEBUG(D_MOUNT, "Need new target index from MGS\n");
                 rc = server_initial_connect(sb, mnt);
                 if (rc) {
                         CERROR("Initial connect failed for %s: %d\n", 
@@ -1044,7 +1042,7 @@ static void server_put_super(struct super_block *sb)
 
         /* If they wanted the mgs to stop separately from the mdt, they
            should have put it on a different device. */ 
-        if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MGMT) 
+        if (IS_MGMT(lsi->lsi_ldd)) 
                 server_stop_mgs(sb);
 
         /* clean the mgc and sb */
@@ -1140,7 +1138,7 @@ static int server_fill_super(struct super_block *sb)
         }
 
         /* start MGS before MGC */
-        if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MGMT) {
+        if (IS_MGMT(lsi->lsi_ldd)) {
                 rc = server_start_mgs(sb);
                 if (rc) {
                         CERROR("ignoring Failed MGS start!!\n");
@@ -1155,12 +1153,12 @@ static int server_fill_super(struct super_block *sb)
                 GOTO(out_mnt, rc);
 
         /* Set up all obd devices for service */
-        rc = server_start_targets(sb, mnt);
-        if (rc < 0) {
-                CERROR("Unable to start targets: %d\n", rc);
-                GOTO(out_mnt, rc);
-        }
-        
+        if (IS_OST(lsi->lsi_ldd) || IS_MDT(lsi->lsi_ldd)) {
+                rc = server_start_targets(sb, mnt);
+                if (rc < 0) {
+                        CERROR("Unable to start targets: %d\n", rc);
+                        GOTO(out_mnt, rc);
+                }
         /* FIXME overmount client here,
            or can we just start a client log and client_fill_super on this sb? 
            We need to make sure server_put_super gets called too - ll_put_super
@@ -1168,6 +1166,8 @@ static int server_fill_super(struct super_block *sb)
            call s_p_s if so. 
            Probably should start client from new thread so we can return.
            Client will not finish until all servers are connected. */
+        }
+
         rc = server_fill_super_common(sb);
         if (rc) 
                 GOTO(out_mnt, rc);

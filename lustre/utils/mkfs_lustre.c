@@ -476,9 +476,8 @@ void print_ldd(struct lustre_disk_data *ldd)
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
         printf("Flags:      %s%s%s%s\n",
-               ldd->ldd_flags & LDD_F_SV_TYPE_MDT  ? "MDT ":"",
-               ldd->ldd_flags & LDD_F_SV_TYPE_OST  ? "OST ":"",
-               ldd->ldd_flags & LDD_F_SV_TYPE_MGMT ? "MGT ":"",
+               IS_MDT(ldd) ? "MDT ":"", IS_OST(ldd) ? "OST ":"",
+               IS_MGMT(ldd) ? "MGMT ":"",
                ldd->ldd_flags & LDD_F_NEED_INDEX   ? "needs_index ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
         printf("MGS nids: ");
@@ -606,7 +605,7 @@ int main(int argc , char *const argv[])
                 {"help", 0, 0, 'h'},
                 {"mdt", 0, 0, 'M'},
                 {"mgmt", 0, 0, 'G'},
-                {"mgmtnode", 1, 0, 'm'},
+                {"mgmtnid", 1, 0, 'm'},
                 {"mkfsoptions", 1, 0, 'k'},
                 {"mountfsoptions", 1, 0, 'o'},
                 {"ost", 0, 0, 'O'},
@@ -762,7 +761,8 @@ int main(int argc , char *const argv[])
                 exit(1);
         }
 
-        if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd)) {
+        if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd) && 
+            mop.mo_ldd.ldd_mgsnid_count == 0) {
                 vprint("No management node specified, adding MGS to this MDT\n");
                 mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
         }

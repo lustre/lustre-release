@@ -112,6 +112,8 @@ static int mgs_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+int mgs_handle(struct ptlrpc_request *req);
+
 /* Start the MGS obd */
 static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 {
@@ -126,6 +128,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
         CDEBUG(D_CONFIG, "Starting MGS\n");
 
+        /* Find our disk */
         lmi = server_get_mount(obd->obd_name);
         if (!lmi) 
                 RETURN(rc = -EINVAL);
@@ -161,18 +164,39 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_fs, rc);
 
+        /* Internal mgs setup */
         mgs_init_db_list(obd);
 
+        /* Start the service threads */
+        mgs->mgs_service =
+                ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
+                                MGS_MAXREPSIZE, MGS_REQUEST_PORTAL, 
+                                MGC_REPLY_PORTAL, MGS_SERVICE_WATCHDOG_TIMEOUT,
+                                mgs_handle, LUSTRE_MGS_NAME, 
+                                obd->obd_proc_entry, NULL, MGS_NUM_THREADS);
+
+        if (!mgs->mgs_service) {
+                CERROR("failed to start service\n");
+                GOTO(err_fs, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_threads(obd, mgs->mgs_service, "lustre_mgs");
+        if (rc)
+                GOTO(err_thread, rc);
+
+        /* Setup proc */
         lprocfs_init_vars(mgs, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
-
-        LCONSOLE_INFO("MGS %s started\n", obd->obd_name);
 
         ldlm_timeout = 6;
         ping_evictor_start();
 
+        LCONSOLE_INFO("MGS %s started\n", obd->obd_name);
+
         RETURN(0);
 
+err_thread:
+        ptlrpc_unregister_service(mgs->mgs_service);
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mgs_fs_cleanup(obd);
@@ -191,8 +215,6 @@ static int mgs_precleanup(struct obd_device *obd, int stage)
 {
         int rc = 0;
         ENTRY;
-
-        CDEBUG(D_MGS, "precleanup %d\n", stage);
 
         switch (stage) {
         case OBD_CLEANUP_SELF_EXP:
@@ -214,10 +236,10 @@ static int mgs_cleanup(struct obd_device *obd)
         if (mgs->mgs_sb == NULL)
                 RETURN(0);
         save_dev = lvfs_sbdev(mgs->mgs_sb);
+        
+        lprocfs_obd_cleanup(obd);
 
-//       lprocfs_obd_cleanup(obd);
-
- //       mgs_update_server_data(obd, 1);
+        ptlrpc_unregister_service(mgs->mgs_service);
 
         mgs_fs_cleanup(obd);
 
@@ -393,57 +415,15 @@ int mgs_handle(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int mgt_setup(struct obd_device *obd, obd_count len, void *buf)
+static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
+                                             void *data)
 {
-        struct mgs_obd *mgs = &obd->u.mgs;
-        struct lprocfs_static_vars lvars;
-        int rc = 0;
-        ENTRY;
-
-       lprocfs_init_vars(mgt, &lvars);
-       lprocfs_obd_setup(obd, lvars.obd_vars);
-
-        mgs->mgs_service =
-                ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
-                                MGS_MAXREPSIZE, MGS_REQUEST_PORTAL, 
-                                MGC_REPLY_PORTAL, MGS_SERVICE_WATCHDOG_TIMEOUT,
-                                mgs_handle, "mgs", obd->obd_proc_entry, NULL,
-                                MGT_NUM_THREADS);
-
-        if (!mgs->mgs_service) {
-                CERROR("failed to start service\n");
-                GOTO(err_lprocfs, rc = -ENOMEM);
-        }
-
-        rc = ptlrpc_start_threads(obd, mgs->mgs_service, "ll_mgt");
-        if (rc)
-                GOTO(err_thread, rc);
-
-        RETURN(0);
-
-err_thread:
-        ptlrpc_unregister_service(mgs->mgs_service);
-err_lprocfs:
-        lprocfs_obd_cleanup(obd);
-        return rc;
-}
-
-
-static int mgt_cleanup(struct obd_device *obd)
-{
-        struct mgs_obd *mgs = &obd->u.mgs;
-        ENTRY;
-
-        ptlrpc_unregister_service(mgs->mgs_service);
-
-        lprocfs_obd_cleanup(obd);
-
-        RETURN(0);
+        CERROR("Help!\n");
+        return NULL;
 }
 
 struct lvfs_callback_ops mgs_lvfs_ops = {
-     //     l_fid2dentry:     mgs_lvfs_fid2dentry,
-    //    l_open_llog:      mgs_lvfs_open_llog,
+        l_fid2dentry:     mgs_lvfs_fid2dentry,
 };
 
 /* use obd ops to offer management infrastructure */
@@ -457,20 +437,12 @@ static struct obd_ops mgs_obd_ops = {
         .o_iocontrol       = mgs_iocontrol,
 };
 
-static struct obd_ops mgt_obd_ops = {
-        .o_owner           = THIS_MODULE,
-        .o_setup           = mgt_setup,
-        .o_cleanup         = mgt_cleanup,
-};
-
 static int __init mgs_init(void)
 {
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(mgs, &lvars);
         class_register_type(&mgs_obd_ops, lvars.module_vars, LUSTRE_MGS_NAME);
-        lprocfs_init_vars(mgt, &lvars);
-        class_register_type(&mgt_obd_ops, lvars.module_vars, LUSTRE_MGT_NAME);
 
         return 0;
 }
@@ -478,7 +450,6 @@ static int __init mgs_init(void)
 static void /*__exit*/ mgs_exit(void)
 {
         class_unregister_type(LUSTRE_MGS_NAME);
-        class_unregister_type(LUSTRE_MGT_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

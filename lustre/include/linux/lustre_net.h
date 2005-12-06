@@ -111,9 +111,9 @@
 #define MDS_MAXREQSIZE  (5 * 1024)
 #define MDS_MAXREPSIZE  (9 * 1024)
 
-#define MGT_MAX_THREADS 32UL
-#define MGT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
-                                  MGT_MAX_THREADS), 2UL)
+#define MGS_MAX_THREADS 32UL
+#define MGS_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
+                                  MGS_MAX_THREADS), 2UL)
 #define MGS_NBUFS       (64 * smp_num_cpus)
 #define MGS_BUFSIZE     (8 * 1024)
 
