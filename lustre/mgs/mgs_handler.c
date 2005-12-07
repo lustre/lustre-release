@@ -301,6 +301,8 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         }
 
 out:
+        CDEBUG(D_MGS, "replying with %s, index=%d\n", mti->mti_svname, 
+               mti->mti_stripe_index);
         lustre_pack_reply(req, 1, &rep_size, NULL); 
         /* send back the whole mti in the reply */
         rep_mti = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_mti));
@@ -344,11 +346,11 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
 
         case MGMT_TARGET_ADD:
-                CDEBUG(D_MGS, "target add\n");
+                DEBUG_REQ(D_MGS, req, "target add\n");
                 rc = mgs_handle_target_add(req);
                 break;
         case MGMT_TARGET_DEL:
-                CDEBUG(D_MGS, "target del\n");
+                DEBUG_REQ(D_MGS, req, "target del\n");
                 //rc = mgs_handle_target_del(req);
                 break;
 

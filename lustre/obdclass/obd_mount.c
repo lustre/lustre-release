@@ -297,7 +297,7 @@ static int ldd_write(struct lvfs_run_ctxt *mount_ctxt,
         unsigned long len = sizeof(struct lustre_disk_data);
         int rc = 0;
 
-        LASSERT(ldd->ldd_magic != LDD_MAGIC);
+        LASSERT(ldd->ldd_magic == LDD_MAGIC);
 
         push_ctxt(&saved, mount_ctxt, NULL);
         

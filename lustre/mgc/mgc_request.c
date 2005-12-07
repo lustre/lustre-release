@@ -80,6 +80,7 @@ int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
                         CERROR ("target_add failed. rc=%d\n", mti->mti_rc);
                         GOTO (out, rc = mti->mti_rc);
                 }
+                memcpy(mti, rep_mti, sizeof(*rep_mti));
                 CDEBUG(D_MGC, "target_add %s got index = %d\n",
                        mti->mti_svname, mti->mti_stripe_index);
         }
