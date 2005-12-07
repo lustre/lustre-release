@@ -1155,11 +1155,10 @@ static int server_fill_super(struct super_block *sb)
 
         /*Only start MGS/MGC on servers, no other services, even not
          *actually mount the filesystem. */
-        if (lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC)
-                RETURN(0);
 
         /* Set up all obd devices for service */
-        if (IS_OST(lsi->lsi_ldd) || IS_MDT(lsi->lsi_ldd)) {
+        if (!(lmd->lmd_flags & LMD_FLG_NOSVC) && 
+                (IS_OST(lsi->lsi_ldd) || IS_MDT(lsi->lsi_ldd))) {
                 rc = server_start_targets(sb, mnt);
                 if (rc < 0) {
                         CERROR("Unable to start targets: %d\n", rc);
