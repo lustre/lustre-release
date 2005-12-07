@@ -496,7 +496,7 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
 int ldlm_lock_match(struct ldlm_namespace *ns, int flags, struct ldlm_res_id *,
-                    __u32 type, ldlm_policy_data_t *, ldlm_mode_t mode,
+                    ldlm_type_t type, ldlm_policy_data_t *, ldlm_mode_t mode,
                     struct lustre_handle *);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
@@ -521,7 +521,7 @@ static inline void ldlm_proc_cleanup(void) {}
 /* resource.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
-                                        struct ldlm_res_id, __u32 type,
+                                        struct ldlm_res_id, ldlm_type_t type,
                                         int create);
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res);
 int ldlm_resource_putref(struct ldlm_resource *res);
@@ -545,7 +545,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
                      struct ldlm_res_id,
-                     __u32 type,
+                     ldlm_type_t type,
                      ldlm_policy_data_t *,
                      ldlm_mode_t mode,
                      int *flags,
