@@ -1157,7 +1157,7 @@ static int server_fill_super(struct super_block *sb)
          *actually mount the filesystem. */
 
         /* Set up all obd devices for service */
-        if (!(lmd->lmd_flags & LMD_FLG_NOSVC) && 
+        if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) && 
                 (IS_OST(lsi->lsi_ldd) || IS_MDT(lsi->lsi_ldd))) {
                 rc = server_start_targets(sb, mnt);
                 if (rc < 0) {
