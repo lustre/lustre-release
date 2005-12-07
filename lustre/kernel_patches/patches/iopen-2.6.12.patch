@@ -36,7 +36,7 @@ Index: linux-2.6.12-rc6/fs/ext3/iopen.c
 ===================================================================
 --- linux-2.6.12-rc6.orig/fs/ext3/iopen.c	2005-06-14 16:14:33.530929595 +0200
 +++ linux-2.6.12-rc6/fs/ext3/iopen.c	2005-06-14 16:14:33.626632719 +0200
-@@ -0,0 +1,277 @@
+@@ -0,0 +1,278 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -216,6 +216,7 @@ Index: linux-2.6.12-rc6/fs/ext3/iopen.c
 +	/* Move the goal to the de hash queue */
 +	goal->d_flags &= ~DCACHE_DISCONNECTED;
 +	security_d_instantiate(goal, inode);
++	__d_drop(dentry);
 +	d_rehash_cond(dentry, 0);
 +	__d_move(goal, dentry);
 +	spin_unlock(&dcache_lock);

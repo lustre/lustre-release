@@ -45,7 +45,7 @@ Index: linux-2.6.5-sles9/fs/ext3/iopen.c
 ===================================================================
 --- linux-2.6.5-sles9.orig/fs/ext3/iopen.c	2003-01-30 13:24:37.000000000 +0300
 +++ linux-2.6.5-sles9/fs/ext3/iopen.c	2004-11-09 02:18:27.611913312 +0300
-@@ -0,0 +1,275 @@
+@@ -0,0 +1,278 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -146,7 +146,9 @@ Index: linux-2.6.5-sles9/fs/ext3/iopen.c
 +		alternate = list_entry(inode->i_dentry.next,
 +				       struct dentry, d_alias);
 +		dget_locked(alternate);
++		spin_lock(&alternate->d_lock);
 +		alternate->d_vfs_flags |= DCACHE_REFERENCED;
++		spin_unlock(&alternate->d_lock);
 +		iput(inode);
 +		spin_unlock(&dcache_lock);
 +		return alternate;
@@ -223,6 +225,7 @@ Index: linux-2.6.5-sles9/fs/ext3/iopen.c
 +	/* Move the goal to the de hash queue */
 +	goal->d_flags &= ~DCACHE_DISCONNECTED;
 +	security_d_instantiate(goal, inode);
++	__d_drop(dentry);
 +	__d_rehash(dentry, 0);
 +	__d_move(goal, dentry);
 +	spin_unlock(&dcache_lock);
