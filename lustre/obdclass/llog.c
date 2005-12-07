@@ -142,6 +142,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         /* first assign flags to use llog_client_ops */
         llh->llh_flags = flags;
         rc = llog_read_header(handle);
+        CDEBUG(D_ERROR, "read header rc=%d fl=%d\n", rc, flags);
         if (rc == 0) {
                 flags = llh->llh_flags;
                 if (uuid)
@@ -213,6 +214,8 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         int rc = 0, index = 1, last_index;
         int saved_index = 0;
         ENTRY;
+
+        LASSERT(llh);
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
         if (!buf)

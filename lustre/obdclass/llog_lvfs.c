@@ -84,7 +84,7 @@ static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
         RETURN(rc);
 }
 
-int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
+static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
                                 struct llog_rec_hdr *rec, void *buf, loff_t off)
 {
         int rc;
@@ -149,7 +149,7 @@ static int llog_lvfs_read_blob(struct obd_device *obd, struct l_file *file,
         RETURN(0);
 }
 
-int llog_lvfs_read_header(struct llog_handle *handle)
+static int llog_lvfs_read_header(struct llog_handle *handle)
 {
         struct obd_device *obd;
         int rc;
@@ -201,7 +201,7 @@ int llog_lvfs_read_header(struct llog_handle *handle)
 
 /* returns negative in on error; 0 if success && reccookie == 0; 1 otherwise */
 /* appends if idx == -1, otherwise overwrites record idx. */
-int llog_lvfs_write_rec(struct llog_handle *loghandle,
+static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                struct llog_rec_hdr *rec,
                                struct llog_cookie *reccookie, int cookiecount,
                                void *buf, int idx)
@@ -345,7 +345,7 @@ static void llog_skip_over(__u64 *off, int curr, int goal)
  *  - cur_idx to the log index preceeding cur_offset
  * returns -EIO/-EINVAL on error
  */
-int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
+static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                                 int next_idx, __u64 *cur_offset, void *buf,
                                 int len)
 {
@@ -433,15 +433,13 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
 
         OBD_ALLOC(logname, PATH_MAX);
         if (logname == NULL)
-                return ERR_PTR(-ENOMEM); 
+                return ERR_PTR(-ENOMEM);
 
         len = snprintf(logname, PATH_MAX, "%s/%s", 
                        MOUNT_CONFIGS_DIR, name);
-
         if (len >= PATH_MAX - 1) {
                 filp = ERR_PTR(-ENAMETOOLONG);
         } else {
-                CERROR("logname = %s\n", logname);
                 filp = l_filp_open(logname, flags, mode);
                 if (IS_ERR(filp))
                         CERROR("logfile creation %s: %ld\n", logname,
@@ -454,7 +452,7 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
+static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
         struct llog_handle *handle;
@@ -507,7 +505,6 @@ int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
 
         } else if (name) {
                 handle->lgh_file = llog_filp_open(name, open_flags, 0644);
-
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
 
@@ -516,7 +513,6 @@ int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                         handle->lgh_file->f_dentry->d_inode->i_ino;
                 handle->lgh_id.lgl_ogen =
                         handle->lgh_file->f_dentry->d_inode->i_generation;
-                
         } else {
                 oa = obdo_alloc();
                 if (oa == NULL)
@@ -559,7 +555,7 @@ cleanup:
         goto finish;
 }
 
-int llog_lvfs_close(struct llog_handle *handle)
+static int llog_lvfs_close(struct llog_handle *handle)
 {
         int rc;
         ENTRY;
@@ -570,7 +566,7 @@ int llog_lvfs_close(struct llog_handle *handle)
         RETURN(rc);
 }
 
-int llog_lvfs_destroy(struct llog_handle *handle)
+static int llog_lvfs_destroy(struct llog_handle *handle)
 {
         struct dentry *fdentry;
         struct obdo *oa;
@@ -579,7 +575,6 @@ int llog_lvfs_destroy(struct llog_handle *handle)
 
         fdentry = handle->lgh_file->f_dentry;
         if (strcmp(fdentry->d_parent->d_name.name, MOUNT_CONFIGS_DIR) == 0) {
-                /* CONFIGS files aren't really "lustre" objects - special case*/
                 struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
                 struct inode *inode = fdentry->d_parent->d_inode;
                 struct lvfs_run_ctxt saved;
@@ -628,10 +623,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
 
-        if (!count) {
-                CERROR("Empty catalog?\n");
-                RETURN(0);
-        }
+        LASSERT(count);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
@@ -673,11 +665,8 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
 
-        if (!count) {
-                CERROR("Empty catalog?\n");
-                RETURN(0);
-        }
-        
+        LASSERT(count);
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
@@ -717,12 +706,6 @@ struct llog_operations llog_lvfs_ops = {
         //        lop_cancel: llog_lvfs_cancel,
 };
 
-EXPORT_SYMBOL(llog_lvfs_write_rec);
-EXPORT_SYMBOL(llog_lvfs_next_block);
-EXPORT_SYMBOL(llog_lvfs_read_header);
-EXPORT_SYMBOL(llog_lvfs_create);
-EXPORT_SYMBOL(llog_lvfs_destroy);
-EXPORT_SYMBOL(llog_lvfs_close);
 EXPORT_SYMBOL(llog_lvfs_ops);
 
 #else /* !__KERNEL__ */
@@ -751,7 +734,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 }
 
 static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *fsname, char *name)
+                            struct llog_logid *logid, char *name)
 {
         LBUG();
         return 0;

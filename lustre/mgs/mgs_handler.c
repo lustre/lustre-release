@@ -305,6 +305,7 @@ out:
         /* send back the whole mti in the reply */
         rep_mti = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_mti));
         memcpy(rep_mti, mti, sizeof(*rep_mti));
+        // FIXME rc is redundant, part of the req (target_send_reply)
         rep_mti->mti_rc = rc;
         RETURN(rc);
 }

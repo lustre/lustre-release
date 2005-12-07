@@ -54,7 +54,6 @@ struct lvfs_ucred {
 
 struct lvfs_callback_ops {
         struct dentry *(*l_fid2dentry)(__u64 id_ino, __u32 gen, __u64 gr, void *data);
-        int (*l_open_llog) (__u64 id_ino, struct dentry *dentry, void *data);
 };
 
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
@@ -87,15 +86,13 @@ struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *, __u64, __u32, __u64 ,void
 
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
                struct lvfs_ucred *cred);
-void pop_ctxt(struct lvfs_run_ctxt *saveu, struct lvfs_run_ctxt *new_ctx,
+void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
               struct lvfs_ucred *cred);
 
 #ifdef __KERNEL__
-struct obd_device;
 
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix);
 struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix);
-
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
@@ -135,55 +132,6 @@ static inline struct dentry *ll_lookup_one_len(const char *fid_name,
                 dchild = ERR_PTR(-ENOENT);
         }
         return dchild;
-}
-
-/* Look up an entry by inode number. */
-/* this function ONLY returns valid dget'd dentries with an initialized inode
-   or errors */
-static inline struct dentry * ll_fid2dentry(struct dentry *parent,
-                                            __u64 ino, __u32 generation)
-{
-        char fid_name[32];
-        struct inode *inode;
-        struct dentry *result;
-
-        if (ino == 0)
-                RETURN(ERR_PTR(-ESTALE));
-
-        snprintf(fid_name, sizeof(fid_name), "0x%lx", (unsigned long)ino);
-
-        /* under ext3 this is neither supposed to return bad inodes
-           nor NULL inodes. */
-        result = ll_lookup_one_len(fid_name, parent, strlen(fid_name));
-        if (IS_ERR(result))
-                RETURN(result);
-
-        inode = result->d_inode;
-        if (!inode)
-                RETURN(ERR_PTR(-ENOENT));
-
-        if (inode->i_generation == 0 || inode->i_nlink == 0) {
-                LCONSOLE_WARN("Found inode with zero generation or link -- this"
-                              " may indicate disk corruption (inode: %lu, link:"
-                              " %lu, count: %d)\n", inode->i_ino,
-                              (unsigned long)inode->i_nlink,
-                              atomic_read(&inode->i_count));
-                dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        if (generation && inode->i_generation != generation) {
-                /* we didn't find the right inode.. */
-                CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
-                       "count: %d, generation %u/%u\n", inode->i_ino,
-                       (unsigned long)inode->i_nlink,
-                       atomic_read(&inode->i_count), inode->i_generation,
-                       generation);
-                dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        RETURN(result);
 }
 
 static inline void ll_sleep(int t)

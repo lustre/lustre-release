@@ -38,7 +38,6 @@
 #include <linux/obd.h>
 #include <linux/lustre_idl.h>
 
-#define LOG_NAME_MAX 256 /* 2.4 limit */
 #define LOG_NAME_LIMIT(logname, name)                   \
         snprintf(logname, sizeof(logname), "LOGS/%s", name)
 #define LLOG_EEMPTY 4711
@@ -58,11 +57,9 @@ struct cat_handle_data {
 /* In-memory descriptor for a log object or log catalog */
 struct llog_handle {
         struct rw_semaphore     lgh_lock;
-        struct llog_logid       lgh_id;             /* id of this log */
+        struct llog_logid       lgh_id;              /* id of this log */
         struct llog_log_hdr    *lgh_hdr;
-        struct mgc_open_llog   *lgh_mol;
         struct file            *lgh_file;
-        char                   *lgh_fsname;
         int                     lgh_last_idx;
         struct llog_ctxt       *lgh_ctxt;
         union {
@@ -183,23 +180,11 @@ struct llog_operations {
         int (*lop_connect)(struct llog_ctxt *ctxt, int count,
                            struct llog_logid *logid, struct llog_gen *gen,
                            struct obd_uuid *uuid);
-        int (*lop_update)(struct llog_ctxt *ctxt, struct llog_handle **,
-                           struct llog_logid *logid, void *data);
+        /* XXX add 2 more: commit callbacks and llog recovery functions */
 };
 
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
-int llog_lvfs_write_rec(struct llog_handle *loghandle,
-                        struct llog_rec_hdr *rec,
-                        struct llog_cookie *reccookie, int cookiecount,
-                        void *buf, int idx);
-int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
-                         int next_idx, __u64 *cur_offset, void *buf,
-                         int len);
-int llog_lvfs_close(struct llog_handle *loghandle);
-int llog_lvfs_destroy(struct llog_handle *loghandle);
-extern struct llog_operations mgs_llog_lvfs_ops;
-
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int count, struct llog_catid *idarray);
 
@@ -238,7 +223,7 @@ static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
         return(a.conn_cnt < b.conn_cnt ? 1 : 0);
 }
 
-#define LLOG_GEN_INC(gen)  ((gen).conn_cnt) ++
+#define LLOG_GEN_INC(gen)  ((gen).conn_cnt ++)
 #define LLOG_PROC_BREAK 0x0001
 
 static inline int llog_obd2ops(struct llog_ctxt *ctxt,

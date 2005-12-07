@@ -458,7 +458,6 @@ struct niobuf_local {
 #define LUSTRE_SANOSC_NAME "sanosc"
 #define LUSTRE_SANOST_NAME "sanost"
 #define LUSTRE_MGS_NAME "mgs"
-#define LUSTRE_MGT_NAME "mgt"
 #define LUSTRE_MGC_NAME "mgc"
 
 

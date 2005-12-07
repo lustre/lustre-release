@@ -220,6 +220,8 @@ static int mgc_cleanup(struct obd_device *obd)
 
         //lprocfs_obd_cleanup(obd);
 
+        /* FIXME calls to mgc_fs_setup must take an obd ref to insure there's
+           no fs by the time we get here. */
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
 
         rc = obd_llog_finish(obd, 0);

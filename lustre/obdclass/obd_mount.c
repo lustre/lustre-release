@@ -708,7 +708,7 @@ static void server_stop_servers(struct super_block *sb)
 }
 
 /* Add this target to the fs, get a new index if needed */
-static int server_initial_connect(struct super_block *sb, struct vfsmount *mnt)
+static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
 {       
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
@@ -733,7 +733,8 @@ static int server_initial_connect(struct super_block *sb, struct vfsmount *mnt)
                 sizeof(mti->mti_svname));
         // char             mti_nodename[NAME_MAXLEN];
         // char             mti_uuid[UUID_MAXLEN];
-        rc = LNetGetId(1, &id);
+        /* FIXME nid 0 is lo generally, need to send all non-lo nids */
+        rc = LNetGetId(1, &id);  
         mti->mti_nid = id.nid;
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
@@ -742,7 +743,7 @@ static int server_initial_connect(struct super_block *sb, struct vfsmount *mnt)
         mti->mti_stripe_size = 1024*1024;  //FIXME    
         mti->mti_stripe_offset = 0; //FIXME    
 
-        CDEBUG(D_MOUNT, "Initial connect %s, fs=%s, %s, index=%d\n",
+        CDEBUG(D_MOUNT, "Initial connect %s, fs=%s, %s, index=%04x\n",
                mti->mti_svname, mti->mti_fsname,
                libcfs_nid2str(mti->mti_nid), mti->mti_stripe_index);
 
@@ -767,6 +768,7 @@ static int server_initial_connect(struct super_block *sb, struct vfsmount *mnt)
         rc = obd_set_info(exp,
                           strlen("add_target"), "add_target",
                           sizeof(*mti), mti);
+        CDEBUG(D_MOUNT, "disconnect");
         obd_disconnect(exp);
         if (rc) {
                 CERROR("add_target failed %d\n", rc);
@@ -837,7 +839,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         /* Get a new index if needed */
         if (lsi->lsi_ldd->ldd_flags & (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER)) {
                 CDEBUG(D_MOUNT, "Need new target index from MGS\n");
-                rc = server_initial_connect(sb, mnt);
+                rc = server_add_target(sb, mnt);
                 if (rc) {
                         CERROR("Initial connect failed for %s: %d\n", 
                                lsi->lsi_ldd->ldd_svname, rc);
@@ -1020,7 +1022,8 @@ out_free:
 static void server_put_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
-        struct obd_device *obd;
+        struct obd_device     *obd;
+        struct vfsmount       *mnt = lsi->lsi_srv_mnt;
                                                                                        
         CDEBUG(D_MOUNT, "server put_super %s\n", lsi->lsi_ldd->ldd_svname);
                                                                                        
@@ -1036,8 +1039,6 @@ static void server_put_super(struct super_block *sb)
                 CERROR("no obd %s\n", lsi->lsi_ldd->ldd_svname);
         }
 
-        //class_del_profile(lsi->lsi_ldd->ldd_svname); /* if it exists */
-                                                                                       
        server_stop_servers(sb);
 
         /* If they wanted the mgs to stop separately from the mdt, they
@@ -1048,8 +1049,8 @@ static void server_put_super(struct super_block *sb)
         /* clean the mgc and sb */
         lustre_common_put_super(sb);
         
-        /* drop the kernel mount from server_fill_super */
-        unlock_mntput(lsi->lsi_srv_mnt);
+        /* drop the One True Mount */
+        unlock_mntput(mnt);
 }
 
 static void server_umount_begin(struct super_block *sb)
