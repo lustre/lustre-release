@@ -397,6 +397,15 @@ Description: Allow multiple MDS hostnames in the mount command
 Details    : Try to read the configuration from all specified MDS
 	     hostnames during a client mount in case the "primary"
 	     MDS is down.
+
+Severity   : enhancement
+Bugzilla   : 9297
+Description: Stop sending data to evicted clients as soon as possible.
+Details    : Check if the client we are about to send or are sending data to
+             was evicted already. (Check is done every second of waiting,
+	     for which l_wait_event interface was extended to allow checking
+	     of exit condition at specified intervals).
+
 	
 
 ------------------------------------------------------------------------------
