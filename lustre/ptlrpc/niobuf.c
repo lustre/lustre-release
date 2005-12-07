@@ -163,6 +163,10 @@ void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
         if (!ptlrpc_bulk_active(desc))          /* completed or */
                 return;                         /* never started */
         
+        /* Do not send any meaningful data over the wire for evicted clients */
+        if (desc->bd_export && desc->bd_export->exp_failed)
+                ptl_rpc_wipe_bulk_pages(desc);
+
         /* The unlink ensures the callback happens ASAP and is the last
          * one.  If it fails, it must be because completion just happened,
          * but we must still l_wait_event() in this case, to give liblustre

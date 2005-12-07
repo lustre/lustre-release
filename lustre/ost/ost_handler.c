@@ -697,16 +697,26 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
         }
 
+        /* Check if client was evicted while we were doing i/o before touching
+           network */
         if (rc == 0) {
-                rc = ptlrpc_start_bulk_transfer(desc);
+                if (desc->bd_export->exp_failed)
+                        rc = -ENOTCONN;
+                else
+                        rc = ptlrpc_start_bulk_transfer(desc);
                 if (rc == 0) {
-                        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
-                                          ost_bulk_timeout, desc);
+                        lwi = LWI_TIMEOUT_INTERVAL(obd_timeout * HZ / 4, HZ,
+                                                   ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
-                                          !ptlrpc_bulk_active(desc), &lwi);
+                                          !ptlrpc_bulk_active(desc) ||
+                                          desc->bd_export->exp_failed, &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
                                 DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT");
+                                ptlrpc_abort_bulk(desc);
+                        } else if (desc->bd_export->exp_failed) {
+                                DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
+                                rc = -ENOTCONN;
                                 ptlrpc_abort_bulk(desc);
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
@@ -900,15 +910,24 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                       pp_rnb[i].offset & (PAGE_SIZE - 1),
                                       pp_rnb[i].len);
 
-        rc = ptlrpc_start_bulk_transfer (desc);
+        /* Check if client was evicted while we were doing i/o before touching
+           network */
+        if (desc->bd_export->exp_failed)
+                rc = -ENOTCONN;
+        else
+                rc = ptlrpc_start_bulk_transfer (desc);
         if (rc == 0) {
-                lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
-                                  ost_bulk_timeout, desc);
-                rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc),
-                                  &lwi);
+                lwi = LWI_TIMEOUT_INTERVAL(obd_timeout * HZ / 4, HZ,
+                                           ost_bulk_timeout, desc);
+                rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc) ||
+                                  desc->bd_export->exp_failed, &lwi);
                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                 if (rc == -ETIMEDOUT) {
                         DEBUG_REQ(D_ERROR, req, "timeout on bulk GET");
+                        ptlrpc_abort_bulk(desc);
+                } else if (desc->bd_export->exp_failed) {
+                        DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
+                        rc = -ENOTCONN;
                         ptlrpc_abort_bulk(desc);
                 } else if (!desc->bd_success ||
                            desc->bd_nob_transferred != desc->bd_nob) {
