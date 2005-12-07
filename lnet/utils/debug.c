@@ -709,12 +709,11 @@ static struct mod_paths {
         {"mds_ext3", "lustre/mds"},
         {"mds_extN", "lustre/mds"},
         {"ptlbd", "lustre/ptlbd"},
-        {"mgmt_svc", "lustre/mgmt"},
-        {"mgmt_cli", "lustre/mgmt"},
         {"cobd", "lustre/cobd"},
         {"cmobd", "lustre/cmobd"},
-        {"confobd", "lustre/obdclass"},
         {"lquota", "lustre/quota"},
+        {"mgs", "lustre/mgs"},
+        {"mgc", "lustre/mgc"},
         {NULL, NULL}
 };
 
