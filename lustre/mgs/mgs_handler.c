@@ -317,8 +317,6 @@ int mgs_handle(struct ptlrpc_request *req)
         int fail = OBD_FAIL_MGMT_ALL_REPLY_NET;
         int rc = 0;
         ENTRY;
-        
-        CDEBUG(D_MGS, "MGS handle\n");
 
         OBD_FAIL_RETURN(OBD_FAIL_MGMT_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
@@ -375,7 +373,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
 
         case OBD_LOG_CANCEL:
-                CDEBUG(D_MGS, "log cancel\n");
+                DEBUG_REQ(D_MGS, req, "log cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = -ENOTSUPP; /* la la la */
                 break;
@@ -412,17 +410,76 @@ int mgs_handle(struct ptlrpc_request *req)
         }
 
         LASSERT(current->journal_info == NULL);
+        
+        CDEBUG(D_MGS, "MGS handle cmd=%d rc=%d\n", req->rq_reqmsg->opc, rc);
 
  out:
         target_send_reply(req, rc, fail);
         RETURN(0);
 }
 
-static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
-                                             void *data)
+/* Same as mds_fid2dentry */
+/* Look up an entry by inode number. */
+/* this function ONLY returns valid dget'd dentries with an initialized inode
+   or errors */
+struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct ll_fid *fid)
 {
-        CERROR("Help!\n");
-        return NULL;
+        char fid_name[32];
+        unsigned long ino = fid->id;
+        __u32 generation = fid->generation;
+        struct inode *inode;
+        struct dentry *result;
+
+        CDEBUG(D_DENTRY|D_ERROR, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
+               ino, generation, mgs->mgs_sb);
+
+        if (ino == 0)
+                RETURN(ERR_PTR(-ESTALE));
+        
+        snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
+        
+        /* under ext3 this is neither supposed to return bad inodes
+           nor NULL inodes. */
+        result = ll_lookup_one_len(fid_name, mgs->mgs_fid_de, strlen(fid_name));
+        if (IS_ERR(result))
+                RETURN(result);
+
+        inode = result->d_inode;
+        if (!inode)
+                RETURN(ERR_PTR(-ENOENT));
+
+        if (inode->i_generation == 0 || inode->i_nlink == 0) {
+                LCONSOLE_WARN("Found inode with zero generation or link -- this"
+                              " may indicate disk corruption (inode: %lu, link:"
+                              " %lu, count: %d)\n", inode->i_ino,
+                              (unsigned long)inode->i_nlink,
+                              atomic_read(&inode->i_count));
+                l_dput(result);
+                RETURN(ERR_PTR(-ENOENT));
+        }
+
+        if (generation && inode->i_generation != generation) {
+                /* we didn't find the right inode.. */
+                CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
+                       "count: %d, generation %u/%u\n", inode->i_ino,
+                       (unsigned long)inode->i_nlink,
+                       atomic_read(&inode->i_count), inode->i_generation,
+                       generation);
+                l_dput(result);
+                RETURN(ERR_PTR(-ENOENT));
+        }
+
+        RETURN(result);
+}
+
+static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
+                                          void *data)
+{
+        struct obd_device *obd = data;
+        struct ll_fid fid;
+        fid.id = id;
+        fid.generation = gen;
+        return mgs_fid2dentry(&obd->u.mgs, &fid);
 }
 
 struct lvfs_callback_ops mgs_lvfs_ops = {

@@ -160,7 +160,7 @@ int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 void class_disconnect_stale_exports(struct obd_device *obddev);
-void class_manual_cleanup(struct obd_device *obd);
+int class_manual_cleanup(struct obd_device *obd);
 
 /* obdo.c */
 #ifdef __KERNEL__

@@ -538,6 +538,8 @@ int write_local_files(struct mkfs_opts *mop)
         fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         fclose(filep);
         
+#if 0
+        /* servers create their own last_rcvd if nonexistent - why do it here?*/
         /* Create the inital last_rcvd file */
         vprint("Writing %s\n", LAST_RCVD);
         sprintf(filepnm, "%s/%s", mntpt, LAST_RCVD);
@@ -561,6 +563,8 @@ int write_local_files(struct mkfs_opts *mop)
         fwrite(&lsd, sizeof(lsd), 1, filep);
         ret = 0;
         fclose(filep);
+#endif
+
 out_umnt:
         vprint("unmounting backing device\n");
         umount(mntpt);    
@@ -807,7 +811,7 @@ int main(int argc , char *const argv[])
         case LDD_MT_EXT3:
         case LDD_MT_LDISKFS: {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
-                if (IS_MDT(&mop.mo_ldd))
+                if (IS_MDT(&mop.mo_ldd) || IS_MGMT(&mop.mo_ldd))
                         strcat(mop.mo_ldd.ldd_mount_opts,
                                ",iopen_nopriv,user_xattr");
                 if ((get_os_version() == 24) && IS_OST(&mop.mo_ldd))

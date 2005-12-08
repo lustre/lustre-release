@@ -233,7 +233,9 @@ out:
 static int llog_client_close(struct llog_handle *handle)
 {
         int rc = 0;
-
+        /* this doesn't call LLOG_ORIGIN_HANDLE_CLOSE because
+           the servers all close the file at the end of every
+           other LLOG_ RPC. */
         RETURN(rc);
 }
 

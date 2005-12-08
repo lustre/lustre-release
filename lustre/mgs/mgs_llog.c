@@ -552,7 +552,10 @@ static int mgs_write_log_lov(struct obd_device *obd, char *fsname,
         if (lovdesc == NULL)
                 RETURN(-ENOMEM);
         /* Use defaults here, will fix them later with LCFG_PARAM */
+        lovdesc->ld_magic = LOV_DESC_MAGIC;
+        lovdesc->ld_tgt_count = 0;
         lovdesc->ld_pattern = 0;
+        lovdesc->ld_default_stripe_count = 1;
         lovdesc->ld_default_stripe_size = 1024*1024;
         lovdesc->ld_default_stripe_offset = 0;
         sprintf((char*)lovdesc->ld_uuid.uuid, "%s_UUID", lovname);

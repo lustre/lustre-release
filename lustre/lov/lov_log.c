@@ -182,6 +182,8 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc)
                 RETURN(rc);
 
+        //FIXME remove D_ERROR
+        CDEBUG(D_CONFIG | D_ERROR, "llog init with %d targets\n", count);
         LASSERT(lov->desc.ld_tgt_count == count);
         for (i = 0, ctgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, ctgt++) {
                 struct obd_device *child;

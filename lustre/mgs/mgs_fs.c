@@ -50,7 +50,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct lvfs_run_ctxt saved;
-        struct dentry *logs_dentry;
+        struct dentry *dentry;
         int rc;
         ENTRY;
 
@@ -69,22 +69,42 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         obd->obd_lvfs_ctxt.fs = get_ds();
         obd->obd_lvfs_ctxt.cb_ops = mgs_lvfs_ops;
 
-        /* setup the directory tree */
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        logs_dentry = simple_mkdir(current->fs->pwd, MOUNT_CONFIGS_DIR, 0777, 1);
-        if (IS_ERR(logs_dentry)) {
-                rc = PTR_ERR(logs_dentry);
+        /* Setup the configs dir */
+        dentry = simple_mkdir(current->fs->pwd, MOUNT_CONFIGS_DIR, 0777, 1);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n", 
                        MOUNT_CONFIGS_DIR, rc);
                 GOTO(err_pop, rc);
         }
+        mgs->mgs_configs_dir = dentry;
 
-        mgs->mgs_configs_dir = logs_dentry;
+        /* Need the iopen dir for fid2dentry, required by
+           LLOG_ORIGIN_HANDLE_READ_HEADER */
+        dentry = lookup_one_len("__iopen__", current->fs->pwd,
+                                strlen("__iopen__"));
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
+                GOTO(err_configs, rc);
+        }
+        mgs->mgs_fid_de = dentry;
+        if (!dentry->d_inode || is_bad_inode(dentry->d_inode)) {
+                rc = -ENOENT;
+                CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
+                GOTO(err_fid, rc);
+        }
 
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         return rc;
+err_fid:
+        dput(mgs->mgs_fid_de);
+err_configs:
+        dput(mgs->mgs_configs_dir);
+        goto err_pop;
 }
 
 int mgs_fs_cleanup(struct obd_device *obd)
@@ -93,18 +113,21 @@ int mgs_fs_cleanup(struct obd_device *obd)
         struct lvfs_run_ctxt saved;
         int rc = 0;
 
-        if (obd->obd_fail)
-                CERROR("%s: shutting down for failover; client state will"
-                       " be preserved.\n", obd->obd_name);
-
         class_disconnect_exports(obd); /* cleans up client info too */
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if (mgs->mgs_configs_dir) {
+                CERROR("configs dir dcount=%d\n",
+                       atomic_read(&mgs->mgs_configs_dir->d_count));
                 l_dput(mgs->mgs_configs_dir);
                 mgs->mgs_configs_dir = NULL;
         }
+
+        shrink_dcache_parent(mgs->mgs_fid_de);
+        CERROR("fid dir dcount=%d\n",
+               atomic_read(&mgs->mgs_fid_de->d_count));
+        dput(mgs->mgs_fid_de);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 

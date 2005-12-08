@@ -201,12 +201,12 @@ int server_put_mount(char *name, struct vfsmount *mnt)
         LASSERT(lmi->lmi_mnt == mnt);
         unlock_mntput(lmi->lmi_mnt);
         if (atomic_dec_and_test(&lsi->lsi_mounts)) {
-                CDEBUG(D_MOUNT, "Last put of mnt %p from %s, mount count %d\n", 
+                CDEBUG(D_MOUNT, "Last put of mnt %p from %s, vfscount=%d\n", 
                        lmi->lmi_mnt, name, 
                        atomic_read(&lmi->lmi_mnt->mnt_count));
                 /* last mount is the One True Mount */
                 if (atomic_read(&lmi->lmi_mnt->mnt_count) > 1)
-                        CERROR("%s: mount busy, mnt_count %d\n", name,
+                        CERROR("%s: mount busy, vfscount=%d\n", name,
                                atomic_read(&lmi->lmi_mnt->mnt_count));
         }
         up(&lustre_mount_info_lock);
@@ -228,6 +228,7 @@ static void ldd_print(struct lustre_disk_data *ldd)
         CDEBUG(D_MOUNT, "config:  %d\n", ldd->ldd_config_ver);
         CDEBUG(D_MOUNT, "fs:      %s\n", ldd->ldd_fsname);
         CDEBUG(D_MOUNT, "server:  %s\n", ldd->ldd_svname);
+        CDEBUG(D_MOUNT, "index:   %04x\n", ldd->ldd_svindex);
         CDEBUG(D_MOUNT, "flags:   %#x\n", ldd->ldd_flags);
         CDEBUG(D_MOUNT, "diskfs:  %s\n", MT_STR(ldd));
         CDEBUG(D_MOUNT, "options: %s\n", ldd->ldd_mount_opts);
@@ -395,9 +396,6 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
                 return(-EINVAL);
         }
 
-        /* FIXME set up local llog originator with mgc_fs_setup
-           could use ioctl (can't call directly because of layering). */
-        
         rc = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
         if (rc) {
                 CERROR("connect failed %d\n", rc);
@@ -415,20 +413,22 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
         rc = class_config_parse_llog(rctxt, logname, cfg);
         obd_disconnect(exp);
         if (rc) {
+                int rc2;
                 LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
                                "from the MGS (%d).  Trying local log.\n",
                                mgc->obd_name, logname, rc);
                 /* If we couldn't connect to the MGS, try reading a copy
                    of the config log stored locally on disk */
-                rc = class_config_parse_llog(lctxt, logname, cfg);
-                if (rc) {
+                rc2 = class_config_parse_llog(lctxt, logname, cfg);
+                if (rc2) {
                         LCONSOLE_ERROR("%s: Can't read the local config (%d)\n",
-                                       mgc->obd_name, rc);
+                                       mgc->obd_name, rc2);
+                } else {
+                        rc = 0;
                 }
         }
 
 out:
-        //FIXME cleanup local originator with mgc_fs_cleanup
         return (rc);
 }
 
@@ -516,15 +516,19 @@ static void server_stop_mgs(struct super_block *sb)
 {
         struct obd_device *obd;
         char mgsname[] = "MGS";
+        int rc;
 
         CDEBUG(D_MOUNT, "Stop MGS service %s\n", mgsname);
 
+        /* There better be only one MGS */
         obd = class_name2obd(mgsname);
         if (!obd) {
                 CDEBUG(D_CONFIG, "mgs %s not running\n", mgsname);
                 return;
         }
 
+        /* The MGS should always stop when we say so */
+        obd->obd_force = 1;
         class_manual_cleanup(obd);
 }
 
@@ -609,7 +613,7 @@ out:
         return rc;
 }
 
-static void lustre_stop_mgc(struct super_block *sb)
+static int lustre_stop_mgc(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
@@ -618,16 +622,18 @@ static void lustre_stop_mgc(struct super_block *sb)
 
         obd = lsi->lsi_mgc;
         if (!obd)
-                return;
+                return -ENOENT;
 
         lsi->lsi_mgc = NULL;
         if (!atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
                 CDEBUG(D_MOUNT, "mgc still has %d references.\n", 
                        atomic_read(&obd->u.cli.cl_mgc_refcount));
-                return; 
+                return -EBUSY; 
         }
 
-        class_manual_cleanup(obd);
+        rc = class_manual_cleanup(obd);
+        if (rc)
+                return(rc);
         
         /* class_add_uuid adds a nid even if the same uuid exists; we might
            delete any copy here.  So they all better match. */
@@ -640,6 +646,7 @@ static void lustre_stop_mgc(struct super_block *sb)
                                libcfs_nid2str(nid), rc);
         }
         /* class_import_put will get rid of the additional connections */
+        return 0;
 }
           
 /* Since there's only one mgc per node, we have to change it's fs to get
@@ -783,9 +790,12 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
                        ldd->ldd_svindex, mti->mti_stripe_index, 
                        mti->mti_svname);
                 ldd->ldd_flags &= ~(LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER);
-                ldd->ldd_config_ver = 666; // FIXME
+                /* This server has never been started, so has no config */
+                ldd->ldd_config_ver = 0;  
                 ldd->ldd_svindex = mti->mti_stripe_index;
-                //ldd_make_sv_name(ldd);
+                strncpy(ldd->ldd_svname, mti->mti_svname, 
+                        sizeof(ldd->ldd_svname));
+                /* or ldd_make_sv_name(ldd); */
                 ldd_write(&mgc->obd_lvfs_ctxt, ldd);
                 /* FIXME write last_rcvd?, disk label? */
         }
@@ -856,7 +866,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         /* The MGC starts targets using the svname llog */
         cfg.cfg_instance = NULL;
         cfg.cfg_uuid = lsi->lsi_mgc->obd_uuid;
-        lustre_get_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
+        rc = lustre_get_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
         if (rc) {
                 CERROR("failed to start server %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, rc);
@@ -900,12 +910,18 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
         return(lsi);
 }
 
-void lustre_free_lsi(struct super_block *sb)
+static int lustre_free_lsi(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         ENTRY;
 
         if (lsi != NULL) {
+                if (atomic_read(&lsi->lsi_mounts) > 0) {
+                        /* someone didn't call server_put_mount */
+                        /* FIXME this should assert */
+                        CERROR("There are still mounts on this sb!\n");
+                        RETURN(-EBUSY);
+                }
                 if (lsi->lsi_ldd != NULL) 
                         OBD_FREE(lsi->lsi_ldd, sizeof(*lsi->lsi_ldd));
 
@@ -927,7 +943,7 @@ void lustre_free_lsi(struct super_block *sb)
                 s2lsi_nocast(sb) = NULL;
         }
         
-        EXIT;
+        RETURN(0);
 }
            
 
@@ -1024,6 +1040,7 @@ static void server_put_super(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device     *obd;
         struct vfsmount       *mnt = lsi->lsi_srv_mnt;
+        int rc;
                                                                                        
         CDEBUG(D_MOUNT, "server put_super %s\n", lsi->lsi_ldd->ldd_svname);
                                                                                        
@@ -1047,8 +1064,9 @@ static void server_put_super(struct super_block *sb)
                 server_stop_mgs(sb);
 
         /* clean the mgc and sb */
-        lustre_common_put_super(sb);
-        
+        rc = lustre_common_put_super(sb);
+        // FIXME how do I return a failure? 
+
         /* drop the One True Mount */
         unlock_mntput(mnt);
 }
@@ -1170,7 +1188,9 @@ static int server_fill_super(struct super_block *sb)
            calls lustre_common_put_super; check there for LSI_SERVER flag, 
            call s_p_s if so. 
            Probably should start client from new thread so we can return.
-           Client will not finish until all servers are connected. */
+           Client will not finish until all servers are connected.
+           Note - MGMT-only server does NOT get a client, since there is no
+           lustre fs associated - the MGMT is for all lustre fs's */
         }
 
         rc = server_fill_super_common(sb);
@@ -1193,12 +1213,14 @@ out:
 /*************** mount common betweeen server and client ***************/
 
 /* Common umount */
-void lustre_common_put_super(struct super_block *sb)
+int lustre_common_put_super(struct super_block *sb)
 {
+        int rc;
         CDEBUG(D_MOUNT, "dropping sb %p\n", sb);
         
-        lustre_stop_mgc(sb);
-        lustre_free_lsi(sb);
+        rc = lustre_stop_mgc(sb);
+        rc = lustre_free_lsi(sb);
+        return rc;
 }      
 
 static void lmd_print(struct lustre_mount_data *lmd)

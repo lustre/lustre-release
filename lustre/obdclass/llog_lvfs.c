@@ -560,6 +560,8 @@ static int llog_lvfs_close(struct llog_handle *handle)
         int rc;
         ENTRY;
 
+        // FIXME remove
+        CDEBUG(D_ERROR, "Closing file=%p\n", handle->lgh_file);
         rc = filp_close(handle->lgh_file, 0);
         if (rc)
                 CERROR("error closing log: rc %d\n", rc);
@@ -623,7 +625,8 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
 
-        LASSERT(count);
+        if (!count) 
+                return (0);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
@@ -665,7 +668,8 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
 
-        LASSERT(count);
+        if (!count) 
+                return (0);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);

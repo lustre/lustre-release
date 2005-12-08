@@ -809,8 +809,16 @@ int class_config_dump_handler(struct llog_handle * handle,
 {
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
+        char *outstr, *ptr, *end;
         int rc = 0;
         ENTRY;
+
+        OBD_ALLOC(outstr, 256);
+        end = outstr + 256;
+        ptr = outstr;
+        if (!outstr) {
+                RETURN(-ENOMEM);
+        }
         if (rec->lrh_type == OBD_CFG_REC) {
                 struct lustre_cfg *lcfg;
                 int i;
@@ -820,23 +828,26 @@ int class_config_dump_handler(struct llog_handle * handle,
                         GOTO(out, rc);
                 lcfg = (struct lustre_cfg *)cfg_buf;
 
-                CDEBUG(D_DUMP, "lcfg command: %x\n", lcfg->lcfg_command);
-                if (LUSTRE_CFG_BUFLEN(lcfg, 0) > 0)
-                        CDEBUG(D_DUMP, "     devname: %s\n",
-                               lustre_cfg_string(lcfg, 0));
-                if (lcfg->lcfg_flags)
-                        CDEBUG(D_DUMP, "       flags: %x\n", lcfg->lcfg_flags);
-                if (lcfg->lcfg_nid)
-                        CDEBUG(D_DUMP, "         nid: %s\n",
-                               libcfs_nid2str(lcfg->lcfg_nid));
-                if (lcfg->lcfg_nal)
-                        CDEBUG(D_DUMP, "         nal: %x (obsolete)\n", lcfg->lcfg_nal);
-                if (lcfg->lcfg_num)
-                        CDEBUG(D_DUMP, "         num: %x\n", lcfg->lcfg_num);
-                for (i = 1; i < lcfg->lcfg_bufcount; i++)
-                        if (LUSTRE_CFG_BUFLEN(lcfg, i) > 0)
-                                CDEBUG(D_DUMP, "     inlbuf%d: %s\n", i,
-                                       lustre_cfg_string(lcfg, i));
+                ptr += snprintf(ptr, end-ptr, "\n   cmd=%05x ",
+                                lcfg->lcfg_command);
+                if (lcfg->lcfg_flags) {
+                        ptr += snprintf(ptr, end-ptr, "flags=%#08x ",
+                                        lcfg->lcfg_flags);
+                }
+                if (lcfg->lcfg_num) {
+                        ptr += snprintf(ptr, end-ptr, "num=%#08x ",
+                                        lcfg->lcfg_num);
+                }
+                if (lcfg->lcfg_nid) {
+                        ptr += snprintf(ptr, end-ptr, "nid=%s("LPX64")\n",
+                                        libcfs_nid2str(lcfg->lcfg_nid),
+                                        lcfg->lcfg_nid);
+                }
+                for (i = 0; i <  lcfg->lcfg_bufcount; i++) {
+                        ptr += snprintf(ptr, end-ptr, "%d:%s  ", i,
+                                        lustre_cfg_string(lcfg, i));
+                }
+                CDEBUG(D_DUMP, "%s\n", outstr);
         } else if (rec->lrh_type == PTL_CFG_REC) {
                 CDEBUG(D_DUMP, "Obsolete pcfg command\n");
         } else {
@@ -844,6 +855,7 @@ int class_config_dump_handler(struct llog_handle * handle,
                 rc = -EINVAL;
         }
 out:
+        OBD_FREE(outstr, end - outstr);
         RETURN(rc);
 }
 
@@ -853,6 +865,8 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
         struct llog_handle *llh;
         int rc, rc2;
         ENTRY;
+
+        CDEBUG(D_DUMP, "Dumping config log %s\n", name);
 
         rc = llog_create(ctxt, &llh, NULL, name);
         if (rc)
@@ -868,23 +882,23 @@ parse_out:
         if (rc == 0)
                 rc = rc2;
 
+        CDEBUG(D_DUMP, "End config log %s\n", name);
         RETURN(rc);
 
 }
 
 /* Cleanup and detach */
-void class_manual_cleanup(struct obd_device *obd)
+int class_manual_cleanup(struct obd_device *obd)
 {
         struct lustre_cfg *lcfg;
         struct lustre_cfg_bufs bufs;
-        int err;
+        int rc;
         char flags[3]="";
         ENTRY;
 
         if (!obd) {
                 CERROR("empty cleanup\n");
-                EXIT;
-                return;
+                RETURN(-EALREADY);
         }
 
         if (obd->obd_force)
@@ -899,16 +913,19 @@ void class_manual_cleanup(struct obd_device *obd)
         lustre_cfg_bufs_set_string(&bufs, 1, flags);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
 
-        err = class_process_config(lcfg);
-        if (err)
-                CERROR("cleanup failed %d: %s\n", err, obd->obd_name);
+        rc = class_process_config(lcfg);
+        if (rc) {
+                CERROR("cleanup failed %d: %s\n", rc, obd->obd_name);
+                GOTO(out, rc);
+        }
 
         /* the lcfg is almost the same for both ops */
         lcfg->lcfg_command = LCFG_DETACH;
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
+        if (rc)
+                CERROR("detach failed %d: %s\n", rc, obd->obd_name);
+out:
         lustre_cfg_free(lcfg);
-        if (err)
-                CERROR("detach failed %d: %s\n", err, obd->obd_name);
-        EXIT;
+        RETURN(rc);
 }
 

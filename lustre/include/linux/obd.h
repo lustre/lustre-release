@@ -346,6 +346,7 @@ struct mgs_obd {
         struct vfsmount                 *mgs_vfsmnt;
         struct super_block              *mgs_sb;
         struct dentry                   *mgs_configs_dir;
+        struct dentry                   *mgs_fid_de;
         struct llog_handle              *mgs_cfg_llh;
         spinlock_t                       mgs_system_db_lock;
         struct list_head                 mgs_system_db_list;

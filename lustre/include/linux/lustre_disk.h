@@ -233,7 +233,7 @@ struct lustre_mount_info {
 
 /* obd_mount.c */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
-void lustre_common_put_super(struct super_block *sb);
+int lustre_common_put_super(struct super_block *sb);
 struct lustre_mount_info *server_get_mount(char *name);
 int server_put_mount(char *name, struct vfsmount *mnt);
 int lustre_get_process_log(struct super_block *, char *,
