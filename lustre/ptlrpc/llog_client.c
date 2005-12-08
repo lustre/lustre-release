@@ -115,6 +115,32 @@ err_free:
         goto out;
 }
 
+static int llog_client_destroy(struct llog_handle *loghandle)
+{
+        struct obd_import *imp = loghandle->lgh_ctxt->loc_imp;
+        struct ptlrpc_request *req = NULL;
+        struct llogd_body *body;
+        int size = sizeof(*body);
+        int repsize[2] = {sizeof (*body)};
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION, 
+                              LLOG_ORIGIN_HANDLE_DESTROY, 1, &size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body->lgd_logid = loghandle->lgh_id;
+        body->lgd_llh_flags = loghandle->lgh_hdr->llh_flags;
+
+        req->rq_replen = lustre_msg_size(1, repsize);
+        rc = ptlrpc_queue_wait(req);
+        
+        ptlrpc_req_finished(req);
+        RETURN(rc);
+}
+
 
 static int llog_client_next_block(struct llog_handle *loghandle,
                                   int *cur_idx, int next_idx,
@@ -294,5 +320,6 @@ struct llog_operations llog_client_ops = {
         lop_prev_block:  llog_client_prev_block,
         lop_read_header: llog_client_read_header,
         lop_create:      llog_client_create,
+        lop_destroy:     llog_client_destroy,
         lop_close:       llog_client_close,
 };

@@ -94,7 +94,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                 oti->oti_logcookies = obdo_logcookie(&body->oa);
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_destroy(exp, &body->oa, NULL, oti);
+        req->rq_status = obd_destroy(exp, &body->oa, NULL, oti, NULL);
         RETURN(0);
 }
 

@@ -888,15 +888,17 @@ lov_create(struct obd_export *exp, struct obdo *src_oa,
         RETURN(rc);
 }
 
-#define ASSERT_LSM_MAGIC(lsmp)                                          \
-do {                                                                    \
-        LASSERT((lsmp) != NULL);                                        \
-        LASSERTF((lsmp)->lsm_magic == LOV_MAGIC, "%p->lsm_magic=%x\n",  \
-                 (lsmp), (lsmp)->lsm_magic);                            \
+#define ASSERT_LSM_MAGIC(lsmp)                                                  \
+do {                                                                            \
+        LASSERT((lsmp) != NULL);                                                \
+        LASSERTF(((lsmp)->lsm_magic == LOV_MAGIC ||                             \
+                 (lsmp)->lsm_magic == LOV_MAGIC_JOIN), "%p->lsm_magic=%x\n",    \
+                 (lsmp), (lsmp)->lsm_magic);                                    \
 } while (0)
 
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *lsm, struct obd_trans_info *oti)
+                       struct lov_stripe_md *lsm, struct obd_trans_info *oti,
+                       struct obd_export *md_exp)
 {
         struct lov_request_set *set;
         struct lov_request *req;
@@ -922,7 +924,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 /* XXX update the cookie position */
                 oti->oti_logcookies = set->set_cookies + req->rq_stripe;
                 rc = obd_destroy(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
-                                 NULL, oti);
+                                 NULL, oti, NULL);
                 err = lov_update_common_set(set, req, rc);
                 if (rc) {
                         CERROR("error: destroying objid "LPX64" subobj "
@@ -934,6 +936,10 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 }
         }
         lov_fini_destroy_set(set);
+        if (rc == 0) {
+                LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
+                rc = lsm_op_find(lsm->lsm_magic)->lsm_destroy(lsm, oa, md_exp);
+        }
         RETURN(rc);
 }
 
@@ -2039,6 +2045,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                         struct ldlm_lock *lock;
                         struct lov_stripe_md *lsm;
                 } *data = key;
+                 struct ldlm_res_id *res_id = &data->lock->l_resource->lr_name;
                 struct lov_oinfo *loi;
                 __u32 *stripe = val;
 
@@ -2055,8 +2062,10 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 for (i = 0, loi = data->lsm->lsm_oinfo;
                      i < data->lsm->lsm_stripe_count;
                      i++, loi++) {
-                        if (lov->tgts[loi->loi_ost_idx].ltd_exp ==
-                            data->lock->l_conn_export) {
+                         if (lov->tgts[loi->loi_ost_idx].ltd_exp ==
+                                        data->lock->l_conn_export &&
+                            loi->loi_id == res_id->name[0] &&
+                            loi->loi_gr == res_id->name[2]) {
                                 *stripe = i;
                                 GOTO(out, rc = 0);
                         }
@@ -2159,6 +2168,21 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         }
 out:
         lov_putref(obddev);
+        RETURN(rc);
+}
+
+static int lov_checkmd(struct obd_export *exp, struct obd_export *md_exp,
+                       struct lov_stripe_md *lsm)
+{
+        int rc;
+        ENTRY;
+
+        if (!lsm)
+                RETURN(0);
+        LASSERT(md_exp);
+        LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
+        rc = lsm_op_find(lsm->lsm_magic)->lsm_revalidate(lsm, md_exp->exp_obd);
+ 
         RETURN(rc);
 }
 
@@ -2295,6 +2319,7 @@ struct obd_ops lov_obd_ops = {
         .o_statfs              = lov_statfs,
         .o_packmd              = lov_packmd,
         .o_unpackmd            = lov_unpackmd,
+        .o_checkmd             = lov_checkmd,
         .o_create              = lov_create,
         .o_destroy             = lov_destroy,
         .o_getattr             = lov_getattr,

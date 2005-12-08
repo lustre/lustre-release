@@ -81,6 +81,20 @@ static inline void loi_init(struct lov_oinfo *loi)
         INIT_LIST_HEAD(&loi->loi_write_item);
         INIT_LIST_HEAD(&loi->loi_read_item);
 }
+/*extent array item for describing the joined file extent info*/
+struct lov_extent {
+        __u64 le_start;            /* extent start */
+        __u64 le_len;              /* extent length */
+        int   le_loi_idx;          /* extent #1 loi's index in lsm loi array */
+        int   le_stripe_count;     /* extent stripe count*/
+};
+
+/*Lov array info for describing joined file array EA info*/
+struct lov_array_info {
+        struct llog_logid    lai_array_id;    /* MDS med llog object id */
+        unsigned             lai_ext_count; /* number of extent count */
+        struct lov_extent    *lai_ext_array; /* extent desc array */
+};
 
 struct lov_stripe_md {
         spinlock_t       lsm_lock;
@@ -99,6 +113,8 @@ struct lov_stripe_md {
                 __u32 lw_pattern;          /* striping pattern (RAID0, RAID1) */
                 unsigned lw_stripe_count;  /* number of objects being striped over */
         } lsm_wire;
+
+        struct lov_array_info *lsm_array; /*Only for joined file array info*/
         struct lov_oinfo lsm_oinfo[0];
 };
 
@@ -552,6 +568,8 @@ enum llog_ctxt_id {
         LLOG_RD1_REPL_CTXT     =  9,
         LLOG_TEST_ORIG_CTXT    = 10,
         LLOG_TEST_REPL_CTXT    = 11,
+        LLOG_LOVEA_ORIG_CTXT  = 12,
+        LLOG_LOVEA_REPL_CTXT  = 13,
         LLOG_MAX_CTXTS
 };
 
@@ -704,13 +722,16 @@ struct obd_ops {
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
-                          struct lov_mds_md *disk_src, int disk_len);
+                          struct lov_mds_md *disk_src, int disk_len); 
+        int (*o_checkmd)(struct obd_export *exp, struct obd_export *md_exp, 
+                         struct lov_stripe_md *mem_tgt);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *ea, struct obd_trans_info *oti);
+                         struct lov_stripe_md *ea, struct obd_trans_info *oti, 
+                         struct obd_export *md_exp);
         int (*o_setattr)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti);
         int (*o_setattr_async)(struct obd_export *exp, struct obdo *oa,
@@ -834,6 +855,38 @@ struct obd_ops {
          *
          */
 };
+
+struct lsm_operations {
+        void (*lsm_free)(struct lov_stripe_md *);
+        int (*lsm_destroy)(struct lov_stripe_md *, struct obdo *oa, 
+                           struct obd_export *md_exp);
+        void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, obd_off *,
+                                     unsigned long *);
+        void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
+                                     unsigned long *);
+        obd_off (*lsm_stripe_offset_by_index)(struct lov_stripe_md *, int);
+        int (*lsm_stripe_index_by_offset)(struct lov_stripe_md *, obd_off);
+        int (*lsm_revalidate) (struct lov_stripe_md *, struct obd_device *obd);
+        int (*lsm_lmm_verify) (struct lov_mds_md *lmm, int lmm_bytes,
+                               int *stripe_count);
+        int (*lsm_unpackmd) (struct lov_obd *lov, struct lov_stripe_md *lsm,
+                             struct lov_mds_md *lmm);
+};
+
+extern struct lsm_operations lsm_plain_ops;
+extern struct lsm_operations lsm_join_ops;
+static inline struct lsm_operations *lsm_op_find(int magic)
+{
+        switch(magic) {
+        case LOV_MAGIC:
+               return &lsm_plain_ops;
+        case LOV_MAGIC_JOIN:
+               return &lsm_join_ops;
+        default:
+               CERROR("Cannot recognize lsm_magic %d", magic);
+               return NULL;
+        }
+}
 
 int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 

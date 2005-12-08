@@ -237,10 +237,11 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_TRUNCLOCK  0x400ULL /* server gets extent lock on punch */
 #define OBD_CONNECT_TRANSNO    0x800ULL /* replay is sending initial transno */
 #define OBD_CONNECT_IBITS     0x1000ULL /* support for inodebits locks */
+#define OBD_CONNECT_JOIN      0x2000ULL 
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY|OBD_CONNECT_VERSION| \
                                 OBD_CONNECT_ACL|OBD_CONNECT_XATTR| \
-                                OBD_CONNECT_IBITS)
+                                OBD_CONNECT_IBITS | OBD_CONNECT_JOIN)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_CROW)
@@ -380,8 +381,10 @@ struct obdo {
 
 extern void lustre_swab_obdo (struct obdo *o);
 
+
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
+#define LOV_MAGIC_JOIN    0x0BD20BD0
 
 #define LOV_PATTERN_RAID0 0x001   /* stripes are used round-robin */
 #define LOV_PATTERN_RAID1 0x002   /* stripes are mirrors of each other */
@@ -406,6 +409,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         __u32 lmm_stripe_count;   /* num stripes in use for this object */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
+
 
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
@@ -437,6 +441,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLDIREA     (0x10000000ULL) /* dir's extended attribute data */
 #define OBD_MD_FLUSRQUOTA  (0x20000000ULL) /* over quota flags sent from ost */
 #define OBD_MD_FLGRPQUOTA  (0x40000000ULL) /* over quota flags sent from ost */
+#define OBD_MD_FLMODEASIZE (0x80000000ULL) /* EA size will be changed */
 
 #define OBD_MD_MDS         (0x0000000100000000ULL) /* where an inode lives on */
 #define OBD_MD_REINT       (0x0000000200000000ULL) /* reintegrate oa */
@@ -655,7 +660,7 @@ struct mds_body {
         __u64          ino;
         __u32          fsuid;
         __u32          fsgid;
-        __u32          capability;
+        __u32          capability; /*return max cookie size, in case of join*/
         __u32          mode;
         __u32          uid;
         __u32          gid;
@@ -735,6 +740,7 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 #define MDS_OPEN_SYNC            00010000
 #define MDS_OPEN_DIRECTORY       00200000
 
+#define MDS_OPEN_JOIN_FILE     0040000000 /* open for join file*/
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
@@ -760,6 +766,13 @@ struct mds_rec_create {
 };
 
 extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
+
+struct mds_rec_join {
+        struct ll_fid  jr_fid;
+        __u64          jr_headsize;
+};
+
+extern void lustre_swab_mds_rec_join (struct mds_rec_join *jr);
 
 struct mds_rec_link {
         __u32           lk_opcode;
@@ -982,13 +995,6 @@ typedef enum {
 
 /* catalog of log objects */
 
-/* Identifier for a single log object */
-struct llog_logid {
-        __u64                   lgl_oid;
-        __u64                   lgl_ogr;
-        __u32                   lgl_ogen;
-} __attribute__((packed));
-
 /* Records written to the CATALOGS list */
 #define CATLIST "CATALOGS"
 struct llog_catid {
@@ -997,6 +1003,15 @@ struct llog_catid {
         __u32                   lci_padding2;
         __u32                   lci_padding3;
 } __attribute__((packed));
+
+
+/*join file lov mds md*/
+struct lov_mds_md_join {
+        struct lov_mds_md lmmj_md;
+        /*join private info*/
+        struct llog_logid lmmj_array_id; /*array object id*/
+        __u32  lmmj_extent_count;        /*array extent count*/
+};
 
 /* Log data record types - there is no specific reason that these need to
  * be related to the RPC opcodes, but no reason not to (may be handy later?)
@@ -1013,6 +1028,7 @@ typedef enum {
         OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
         PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000, /* obsolete */
         LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
+        LLOG_JOIN_REC    = LLOG_OP_MAGIC | 0x50000, 
         LLOG_HDR_MAGIC   = LLOG_OP_MAGIC | 0x45539,
         LLOG_LOGID_MAGIC = LLOG_OP_MAGIC | 0x4553b,
 } llog_op_type;
@@ -1052,6 +1068,22 @@ struct llog_logid_rec {
         __u32                   padding5;
         struct llog_rec_tail    lid_tail;
 } __attribute__((packed));
+
+/* MDS extent description
+ * It is for joined file extent info, each extent info for joined file
+ * just like (start, end, lmm).
+ */
+struct mds_extent_desc {
+        __u64                   med_start; /* extent start */
+        __u64                   med_len;   /* extent length */
+        struct lov_mds_md       med_lmm;   /* extent's lmm  */
+};
+/*Joined file array extent log record*/
+struct llog_array_rec {
+        struct llog_rec_hdr     lmr_hdr;
+        struct mds_extent_desc  lmr_med;
+        struct llog_rec_tail    lmr_tail;
+};
 
 struct llog_create_rec {
         struct llog_rec_hdr     lcr_hdr;
@@ -1155,6 +1187,7 @@ enum llogd_rpc_ops {
         LLOG_ORIGIN_CONNECT             = 506,
         LLOG_CATINFO                    = 507,  /* for lfs catinfo */
         LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
+        LLOG_ORIGIN_HANDLE_DESTROY      = 509,  /* for destroy llog object*/
 };
 
 struct llogd_body {
@@ -1175,6 +1208,7 @@ struct llogd_conn_body {
 
 extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);
+extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);
 
 /* llog_swab.c */
 extern void lustre_swab_llogd_body (struct llogd_body *d);
@@ -1200,4 +1234,5 @@ typedef enum {
         QUOTA_DQREL     = 602,
 } quota_cmd_t;
 
+#define JOIN_FILE_ALIGN 4096
 #endif

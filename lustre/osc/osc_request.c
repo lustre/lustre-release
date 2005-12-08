@@ -501,7 +501,8 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
 }
 
 static int osc_destroy(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *ea, struct obd_trans_info *oti)
+                       struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                       struct obd_export *md_export)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;

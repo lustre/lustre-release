@@ -2599,6 +2599,65 @@ test_74() { # bug 6149, 6184
 }
 run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
 
+JOIN=${JOIN:-"lfs join"}
+test_75() {
+	rm -rf $DIR/f75*
+	dd if=/dev/urandom of=$DIR/f75_128k bs=1024 count=128
+	chmod 777 $DIR/f75_128k
+	cp -p $DIR/f75_128k $DIR/f75_head
+	cp -p $DIR/f75_128k $DIR/f75_tail
+	cat $DIR/f75_128k >> $DIR/f75_sim_sim
+	cat $DIR/f75_128k >> $DIR/f75_sim_sim
+
+	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
+	diff $DIR/f75_head $DIR/f75_sim_sim 
+	diff -u $DIR/f75_head $DIR/f75_sim_sim || error "files are different"
+	ls $DIR/f75_tail && error "tail file still exist after join"
+	
+	cp -p $DIR/f75_128k $DIR/f75_tail
+	cat $DIR/f75_sim_sim >> $DIR/f75_join_sim
+	cat $DIR/f75_128k >> $DIR/f75_join_sim
+	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
+	diff -u $DIR/f75_head $DIR/f75_join_sim
+	diff -u $DIR/f75_head $DIR/f75_join_sim || error "files are different"
+	ls $DIR/f75_tail && error "tail file still exist after join"
+		
+
+	cp -p $DIR/f75_128k $DIR/f75_tail	
+	cat $DIR/f75_128k >> $DIR/f75_sim_join
+	cat $DIR/f75_join_sim >> $DIR/f75_sim_join
+	$JOIN $DIR/f75_tail $DIR/f75_head || error "join error"
+	diff -u $DIR/f75_tail $DIR/f75_sim_join || error "files are different" 
+	ls $DIR/f75_head && error "tail file still exist after join"
+
+
+	cp -p $DIR/f75_128k $DIR/f75_head
+	cp -p $DIR/f75_128k $DIR/f75_head_tmp
+	cat $DIR/f75_sim_sim >> $DIR/f75_join_join
+	cat $DIR/f75_sim_join >> $DIR/f75_join_join
+	$JOIN $DIR/f75_head $DIR/f75_head_tmp || error "join error"
+	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
+	diff -u $DIR/f75_head $DIR/f75_join_join || error "files are different"
+	ls $DIR/f75_head_tmp && error "tail file still exist after join"		
+	ls $DIR/f75_tail && error "tail file still exist after join"		
+
+	rm -rf $DIR/f75_head || "delete join file error"
+	cp -p $DIR/f75_128k $DIR/f75_join_10_compare	
+	cp -p $DIR/f75_128k $DIR/f75_join_10	
+	for ((i=0;i<10;i++)); do
+		cat $DIR/f75_128k >> $DIR/f75_join_10_compare
+		cp -p $DIR/f75_128k $DIR/f75_tail
+		$JOIN $DIR/f75_join_10 $DIR/f75_tail || error "join error"
+		ls $DIR/f75_tail && error "tail file exist after join" 	
+	done	
+	diff -u $DIR/f75_join_10 $DIR/f75_join_10_compare || error "files are different"
+	$LFS getstripe $DIR/f75_join_10
+	$OPENUNLINK $DIR/f75_join_10 $DIR/f75_join_10 || error "files unlink open" 
+}
+
+run_test 75 "TEST join file"
+
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.

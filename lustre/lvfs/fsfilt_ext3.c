@@ -154,6 +154,19 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
                         EXT3_DELETE_TRANS_BLOCKS * logs;
                 break;
+        case FSFILT_OP_JOIN:
+                /* delete 2 file(file + array id) + create 1 file (array id) 
+                 * create/update logs for each stripe */
+                nblocks += 2 * EXT3_DELETE_TRANS_BLOCKS;
+               
+                /*create array log for head file*/ 
+                nblocks += 3;
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS);
+                /*update head file array */
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                        EXT3_DATA_TRANS_BLOCKS;
+                break;
         default: CERROR("unknown transaction start op %d\n", op);
                 LBUG();
         }

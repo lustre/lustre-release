@@ -17,6 +17,8 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *data, int datalen);
+void mdc_join_pack(struct ptlrpc_request *req, int offset, 
+                   struct mdc_op_data *op_data, __u64 head_size);
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *data);
 void mdc_link_pack(struct ptlrpc_request *req, int offset,

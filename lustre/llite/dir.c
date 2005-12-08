@@ -488,9 +488,13 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 int rc, lmmsize;
 
                 ll_inode2fid(&fid, inode);
+                
+                rc = ll_get_max_mdsize(sbi, &lmmsize);
+                if (rc) 
+                        RETURN(rc); 
+                
                 rc = mdc_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_FLDIREA,
-                                 obd_size_diskmd(sbi->ll_osc_exp, NULL),
-                                 &request);
+                                 lmmsize, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr failed: rc = %d\n", rc);
                         RETURN(rc);
@@ -542,10 +546,14 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(PTR_ERR(filename));
 
                 ll_inode2fid(&fid, inode);
+                
+                rc = ll_get_max_mdsize(sbi, &lmmsize);
+                if (rc) 
+                        RETURN(rc);
+
                 rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, filename,
                                       strlen(filename) + 1, OBD_MD_FLEASIZE,
-                                      obd_size_diskmd(sbi->ll_osc_exp, NULL),
-                                      &request);
+                                      lmmsize, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr_name failed on %s: rc %d\n",
                                filename, rc);
@@ -576,8 +584,65 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (lmm->lmm_magic == __swab32(LOV_MAGIC)) {
                         lustre_swab_lov_user_md((struct lov_user_md *)lmm);
                         lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
+                } else if (lmm->lmm_magic == __swab32(LOV_MAGIC_JOIN)) {
+                        lustre_swab_lov_user_md_join((struct lov_user_md_join *)lmm);
                 }
-
+                if (lmm->lmm_magic == LOV_MAGIC_JOIN) {
+                        struct lov_stripe_md *lsm;
+                        struct lov_user_md_join *lmj;
+                        int lmj_size, i, aindex = 0, rc;
+ 
+                        rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
+                        if (rc < 0) 
+                                GOTO(out_req, rc = -ENOMEM);
+                        rc = obd_checkmd(sbi->ll_osc_exp, sbi->ll_mdc_exp, lsm);
+                        if (rc) 
+                                GOTO(out_free_memmd, rc); 
+                        
+                        lmj_size = sizeof(struct lov_user_md_join) +
+                                   lsm->lsm_stripe_count *
+                                   sizeof(struct lov_user_ost_data_join);
+                        OBD_ALLOC(lmj, lmj_size);
+                        if (!lmj) 
+                                GOTO(out_free_memmd, rc = -ENOMEM);
+                        
+                        memcpy(lmj, lmm, sizeof(struct lov_user_md_join));
+                        for(i = 0; i < lsm->lsm_stripe_count; i++) {
+                                struct lov_array_info *lai = lsm->lsm_array;
+                                if ((lai->lai_ext_array[aindex].le_loi_idx +
+                                     lai->lai_ext_array[aindex].le_stripe_count)<=i){
+                                        aindex ++;
+                                }
+                                CDEBUG(D_INFO, "aindex %d i %d l_extent_start"LPU64""
+                                               "len %d \n", aindex, i, 
+                                               lai->lai_ext_array[aindex].le_start,
+                                               (int)lai->lai_ext_array[aindex].le_len);
+                                lmj->lmm_objects[i].l_extent_start =
+                                        lai->lai_ext_array[aindex].le_start;
+ 
+                                if ((int)lai->lai_ext_array[aindex].le_len == -1) {
+                                        lmj->lmm_objects[i].l_extent_end = -1;
+                                } else {
+                                        lmj->lmm_objects[i].l_extent_end =  
+                                        lai->lai_ext_array[aindex].le_start + 
+                                        lai->lai_ext_array[aindex].le_len;
+                                }
+                                lmj->lmm_objects[i].l_object_id =
+                                        lsm->lsm_oinfo[i].loi_id;
+                                lmj->lmm_objects[i].l_object_gr =
+                                        lsm->lsm_oinfo[i].loi_gr;
+                                lmj->lmm_objects[i].l_ost_gen =
+                                        lsm->lsm_oinfo[i].loi_ost_gen;
+                                lmj->lmm_objects[i].l_ost_idx =
+                                        lsm->lsm_oinfo[i].loi_ost_idx;
+                        }
+                        lmm = (struct lov_mds_md *)lmj;
+                        lmmsize = lmj_size;
+out_free_memmd:
+                        obd_free_memmd(sbi->ll_osc_exp, &lsm);
+                        if (rc)
+                                GOTO(out_req, rc);
+                }
                 if (cmd == IOC_MDC_GETFILEINFO) {
                         struct lov_user_mds_data *lmdp;
                         lstat_t st = { 0 };
@@ -606,6 +671,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 }
 
                 rc = copy_to_user(lump, lmm, lmmsize);
+                if (lmm->lmm_magic == LOV_MAGIC_JOIN)
+                        OBD_FREE(lmm, lmmsize); 
                 if (rc)
                         GOTO(out_req, rc = -EFAULT);
 

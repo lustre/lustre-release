@@ -164,6 +164,19 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                           struct lov_mds_md *lmm, int lmm_size,
                           struct llog_cookie *logcookies, struct ll_fid *fid);
 
+int mds_get_parents_children_locked(struct obd_device *obd,
+                                    struct mds_obd *mds,
+                                    struct ll_fid *p1_fid,
+                                    struct dentry **de_srcdirp,
+                                    struct ll_fid *p2_fid,
+                                    struct dentry **de_tgtdirp,
+                                    int parent_mode,
+                                    const char *old_name, int old_len,
+                                    struct dentry **de_oldp,
+                                    const char *new_name, int new_len,
+                                    struct dentry **de_newp,
+                                    struct lustre_handle *dlm_handles,
+                                    int child_mode);
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
@@ -214,7 +227,9 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset, struct obd_device *obd
 int mds_close(struct ptlrpc_request *req, int offset);
 int mds_done_writing(struct ptlrpc_request *req, int offset);
 
-
+/*mds/mds_join.c*/
+int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req, 
+                  struct dentry *dchild, struct lustre_handle *lockh);
 /* mds/mds_fs.c */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                    struct mds_export_data *med, int cl_off);
@@ -222,7 +237,8 @@ int mds_client_free(struct obd_export *exp);
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *ea, struct obd_trans_info *oti);
+                    struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                    struct obd_export *md_exp);
 
 /* mds/handler.c */
 extern struct lvfs_callback_ops mds_lvfs_ops;

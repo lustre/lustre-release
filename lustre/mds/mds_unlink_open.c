@@ -43,13 +43,14 @@
 
 #include "mds_internal.h"
 
-static int mds_osc_destroy_orphan(struct mds_obd *mds,
+static int mds_osc_destroy_orphan(struct obd_device *obd,
                                   struct inode *inode,
                                   struct lov_mds_md *lmm,
                                   int lmm_size,
                                   struct llog_cookie *logcookies,
                                   int log_unlink)
 {
+        struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa;
@@ -68,6 +69,10 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                 rc = 0;
         }
 
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                GOTO(out_free_memmd, rc);
+
         oa = obdo_alloc();
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
@@ -79,8 +84,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
         }
-
-        rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
+        rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export);
         obdo_free(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
@@ -150,7 +154,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 if (!rc)
                         rc = err;
         } else if (!rc) {
-                rc = mds_osc_destroy_orphan(mds, inode, lmm, lmm_size,
+                rc = mds_osc_destroy_orphan(obd, inode, lmm, lmm_size,
                                             logcookies, log_unlink);
         }
 

@@ -69,7 +69,9 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         if (inode)
                 return inode;
         if (S_ISREG(mode)) {
-                eadatalen = obd_size_diskmd(sbi->ll_osc_exp, NULL);
+                rc = ll_get_max_mdsize(sbi, &eadatalen);
+                if (rc) 
+                        return ERR_PTR(rc); 
                 valid |= OBD_MD_FLEASIZE;
         }
         fid.id = (__u64)ino;

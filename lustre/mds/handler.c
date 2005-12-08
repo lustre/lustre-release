@@ -1617,6 +1617,11 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_create(req);
                 break;
+        case LLOG_ORIGIN_HANDLE_DESTROY:
+                DEBUG_REQ(D_INODE, req, "llog_init");
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                rc = llog_origin_handle_destroy(req);
+                break;
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
                 DEBUG_REQ(D_INODE, req, "llog next block");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
@@ -1950,6 +1955,11 @@ static int mds_postsetup(struct obd_device *obd)
         if (rc)
                 RETURN(rc);
 
+        rc = llog_setup(obd, LLOG_LOVEA_ORIG_CTXT, obd, 0, NULL,
+                        &llog_lvfs_ops);
+        if (rc)
+                RETURN(rc);
+
         if (mds->mds_profile) {
                 struct lvfs_run_ctxt saved;
                 struct lustre_profile *lprof;
@@ -1994,6 +2004,7 @@ err_cleanup:
         mds_lov_clean(obd);
 err_llog:
         llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
+        llog_cleanup(llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT));
         RETURN(rc);
 }
 
@@ -2053,6 +2064,7 @@ static int mds_precleanup(struct obd_device *obd, int stage)
                 mds_lov_disconnect(obd);
                 mds_lov_clean(obd);
                 llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
+                llog_cleanup(llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT));
                 rc = obd_llog_finish(obd, 0);
         }
         RETURN(rc);

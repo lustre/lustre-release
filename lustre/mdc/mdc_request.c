@@ -926,6 +926,27 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
         RETURN(rc);
 }
 
+int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
+                 __u32 *vallen, void *val)
+{
+        int rc = -EINVAL;
+
+        if (keylen == strlen("max_easize") &&
+            memcmp(key, "max_easize", strlen("max_easize")) == 0) {
+                int mdsize, *max_easize;
+                
+                if (*vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                mdsize = *(int*)val;
+                if (mdsize > exp->exp_obd->u.cli.cl_max_mds_easize)
+                        exp->exp_obd->u.cli.cl_max_mds_easize = mdsize;
+                max_easize = val;
+                *max_easize = exp->exp_obd->u.cli.cl_max_mds_easize;
+                RETURN(0);
+        }
+        RETURN(rc);
+}
+
 static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                       unsigned long max_age)
 {
@@ -1230,6 +1251,13 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 ctxt->loc_imp = obd->u.cli.cl_import;
         }
 
+        rc = llog_setup(obd, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
+                       &llog_client_ops);
+        if (rc == 0) {
+                ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
+                ctxt->loc_imp = obd->u.cli.cl_import;
+        }
+
         RETURN(rc);
 }
 
@@ -1238,6 +1266,10 @@ static int mdc_llog_finish(struct obd_device *obd, int count)
         int rc;
         ENTRY;
 
+        rc = llog_cleanup(llog_get_context(obd, LLOG_LOVEA_REPL_CTXT));
+        if (rc) {
+                CERROR("can not cleanup LLOG_CONFIG_REPL_CTXT rc %d\n", rc);
+        }
         rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_REPL_CTXT));
         RETURN(rc);
 }
@@ -1253,6 +1285,7 @@ struct obd_ops mdc_obd_ops = {
         .o_disconnect   = client_disconnect_export,
         .o_iocontrol    = mdc_iocontrol,
         .o_set_info     = mdc_set_info,
+        .o_get_info     = mdc_get_info,
         .o_statfs       = mdc_statfs,
         .o_pin          = mdc_pin,
         .o_unpin        = mdc_unpin,

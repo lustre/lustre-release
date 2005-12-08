@@ -2105,7 +2105,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         int rc;
         ENTRY;
 
-        LASSERT(oti != NULL);
+        //LASSERT(oti != NULL);
 
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
@@ -2540,7 +2540,8 @@ cleanup:
 
 /* destroy oject with taking lock on parent first. */
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *oti)
+                   struct lov_stripe_md *md, struct obd_trans_info *oti,
+                   struct obd_export *md_exp)
 {
         int rc;
 

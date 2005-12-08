@@ -57,12 +57,15 @@
 #define LL_IOC_QUOTACHECK               _IOW ('f', 160, int)
 #define LL_IOC_POLL_QUOTACHECK          _IOR ('f', 161, struct if_quotacheck *)
 #define LL_IOC_QUOTACTL                 _IOWR('f', 162, struct if_quotactl *)
+#define LL_IOC_JOIN                     _IOW ('f', 163, long)
+
 
 #define IOC_MDC_TYPE            'i'
 #define IOC_MDC_GETSTRIPE       _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
 #define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_mds_data *)
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
+#define O_JOIN_FILE        0200000000   /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002
@@ -70,6 +73,8 @@
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
+
+#define LOV_USER_MAGIC_JOIN 0x0BD20BD0
 
 #define LOV_PATTERN_RAID0 0x001
 #define LOV_PATTERN_RAID1 0x002
@@ -114,6 +119,37 @@ struct lov_user_mds_data_v1 {
         struct lov_user_md_v1 lmd_lmm;  /* LOV EA user data */
 } __attribute__((packed));
 #endif
+
+struct lov_user_ost_data_join {   /* per-stripe data structure */
+        __u64 l_extent_start;     /* extent start*/
+        __u64 l_extent_end;       /* extent end*/
+        __u64 l_object_id;        /* OST object ID */
+        __u64 l_object_gr;        /* OST object group (creating MDS number) */
+        __u32 l_ost_gen;          /* generation of this OST index */
+        __u32 l_ost_idx;          /* OST index in LOV */
+} __attribute__((packed));
+
+/* Identifier for a single log object */
+struct llog_logid {
+        __u64                   lgl_oid;
+        __u64                   lgl_ogr;
+        __u32                   lgl_ogen;
+} __attribute__((packed));
+
+struct lov_user_md_join {         /* LOV EA user data (host-endian) */
+        __u32 lmm_magic;          /* magic number = LOV_MAGIC_JOIN */
+        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
+        __u64 lmm_object_id;      /* LOV object ID */
+        __u64 lmm_object_gr;      /* LOV object group */
+        __u32 lmm_stripe_size;    /* size of stripe in bytes */
+        __u32 lmm_stripe_count;   /* num stripes in use for this object */
+        __u32 lmm_extent_count;   /* extent count of lmm*/
+        __u64 lmm_tree_id;        /* mds tree object id */
+        __u64 lmm_tree_gen;       /* mds tree object gen */
+        struct llog_logid lmm_array_id; /* mds extent desc llog object id */
+        struct lov_user_ost_data_join lmm_objects[0]; /* per-stripe data */
+} __attribute__((packed));
+
 
 struct ll_recreate_obj {
         __u64 lrc_id;

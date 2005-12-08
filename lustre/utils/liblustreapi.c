@@ -363,13 +363,79 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
         }
 }
 
+void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname, 
+                            char *fname, int obdindex, int quiet, 
+                            int header, int body)
+{
+        struct lov_user_md_join *lumj = (struct lov_user_md_join *)lum;
+        int i, obdstripe = 0;
+
+        if (obdindex != OBD_NOT_FOUND) {
+                for (i = 0; i < lumj->lmm_stripe_count; i++) {
+                        if (obdindex == lumj->lmm_objects[i].l_ost_idx) {
+                                printf("%s/%s\n", dname, fname);
+                                obdstripe = 1;
+                                break;
+                        }
+                }
+        } else if (!quiet) {
+                printf("%s/%s  (joined_file)\n", dname, fname);
+                obdstripe = 1;
+        }
+
+        if (header && obdstripe == 1) {
+                printf("lmm_magic:          0x%08X\n",  lumj->lmm_magic);
+                printf("lmm_object_gr:      "LPX64"\n", lumj->lmm_object_gr);
+                printf("lmm_object_id:      "LPX64"\n", lumj->lmm_object_id);
+                printf("lmm_stripe_count:   %u\n", (int)lumj->lmm_stripe_count);
+                printf("lmm_stripe_size:    %u\n",      lumj->lmm_stripe_size);
+                printf("lmm_stripe_pattern: %x\n",      lumj->lmm_pattern);
+                printf("lmm_extent_count:   %x\n",      lumj->lmm_extent_count);
+        }
+
+        if (body) {
+                unsigned long long start = -1, end = 0;
+                if (!quiet && obdstripe == 1)
+                        printf("\tobdidx\t\t objid\t\tobjid\t\t group\t\tstart\t\tend\n");
+                for (i = 0; i < lumj->lmm_stripe_count; i++) {
+                        int idx = lumj->lmm_objects[i].l_ost_idx;
+                        long long oid = lumj->lmm_objects[i].l_object_id;
+                        long long gr = lumj->lmm_objects[i].l_object_gr;
+                        if (obdindex == OBD_NOT_FOUND || obdindex == idx)
+                                printf("\t%6u\t%14llu\t%#13llx\t%14llu%s",
+                                       idx, oid, oid, gr,
+                                       obdindex == idx ? " *" : "");
+                        if (start != lumj->lmm_objects[i].l_extent_start || 
+                            end != lumj->lmm_objects[i].l_extent_end) {
+                                start = lumj->lmm_objects[i].l_extent_start;
+                                printf("\t%14llu", start);
+                                end = lumj->lmm_objects[i].l_extent_end;
+                                if (end == (unsigned long long)-1)
+                                        printf("\t\tEOF\n");
+                                else
+                                        printf("\t\t%llu\n", end);
+                        } else {
+                                printf("\t\t\t\t\n");
+                        }
+                }
+                printf("\n");
+        }
+}
+
 void llapi_lov_dump_user_lmm(struct find_param *param, char *dname, char *fname)
 {
         switch(*(__u32 *)&param->lmd->lmd_lmm) { /* lum->lmm_magic */
         case LOV_USER_MAGIC_V1:
-                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, dname, fname, param->obdindex,
-                                     param->quiet, param->verbose,
-                                     (param->verbose || !param->obduuid));
+                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, dname, fname, 
+                                      param->obdindex, param->quiet, 
+                                      param->verbose,
+                                      (param->verbose || !param->obduuid));
+                break;
+        case LOV_USER_MAGIC_JOIN:
+                lov_dump_user_lmm_join(&param->lmd->lmd_lmm, dname, fname, 
+                                       param->obdindex, param->quiet, 
+                                       param->verbose,
+                                       (param->verbose || !param->obduuid));
                 break;
         default:
                 printf("unknown lmm_magic:  %#x (expecting %#x)\n",

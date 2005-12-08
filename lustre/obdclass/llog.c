@@ -293,6 +293,9 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                                               loghandle->lgh_id.lgl_oid,
                                               loghandle->lgh_id.lgl_ogen);
                                         GOTO(out, rc);
+                                } else if (rc == LLOG_DEL_RECORD) {
+                                        llog_cancel_rec(loghandle, rec->lrh_index);
+                                        rc = 0;
                                 }
                                 if (rc)
                                         GOTO(out, rc);

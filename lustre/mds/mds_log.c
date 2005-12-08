@@ -92,23 +92,24 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
-        struct llog_ctxt *ctxt;
         struct llog_unlink_rec *lur;
+        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
         if (IS_ERR(mds->mds_osc_obd))
                 RETURN(PTR_ERR(mds->mds_osc_obd));
 
-        rc = obd_unpackmd(mds->mds_osc_exp, &lsm,
-                          lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_osc_exp,  &lsm, lmm, lmm_size);
         if (rc < 0)
                 RETURN(rc);
-
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                GOTO(out, rc);
         /* first prepare unlink log record */
         OBD_ALLOC(lur, sizeof(*lur));
         if (!lur)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
         lur->lur_hdr.lrh_len = lur->lur_tail.lrt_len = sizeof(*lur);
         lur->lur_hdr.lrh_type = MDS_UNLINK_REC;
 
@@ -116,9 +117,9 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
         rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookies,
                       cookies_size / sizeof(struct llog_cookie));
 
-        obd_free_memmd(mds->mds_osc_exp, &lsm);
         OBD_FREE(lur, sizeof(*lur));
-
+out:
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
         RETURN(rc);
 }
 
@@ -128,8 +129,8 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
-        struct llog_ctxt *ctxt;
         struct llog_setattr_rec *lsr;
+        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
@@ -139,6 +140,10 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 RETURN(rc);
+
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                GOTO(out, rc);
 
         OBD_ALLOC(lsr, sizeof(*lsr));
         if (!lsr)

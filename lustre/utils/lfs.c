@@ -65,6 +65,7 @@ static int lfs_quotaoff(int argc, char **argv);
 static int lfs_setquota(int argc, char **argv);
 static int lfs_quota(int argc, char **argv);
 #endif
+static int lfs_join(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -94,6 +95,9 @@ command_t cmdlist[] = {
          "usage: catinfo {keyword} [node name]\n"
          "\tkeywords are one of followings: config, deletions.\n"
          "\tnode name must be provided when use keyword config."},
+        {"join", lfs_join, 0,
+         "join two lustre files into one - join A, B, will be like cat B >> A & del B\n"
+         "usage: join <filename_A> <filename_B>\n"},
         {"osts", lfs_osts, 0, "osts"},
 #ifdef HAVE_QUOTA_SUPPORT
         {"quotachown",lfs_quotachown, 0,
@@ -418,6 +422,39 @@ static int lfs_catinfo(int argc, char **argv)
                 rc = -1;
         }
 
+        return rc;
+}
+
+int lfs_join(int argc, char **argv)
+{
+        char *name_head, *name_tail;
+        int fd, rc;
+        off_t size;
+
+        if (argc != 3)
+                return CMD_HELP;
+        name_head = argv[1];
+        fd = open(name_head, O_WRONLY);
+        if (fd < 0) {
+                fprintf(stderr, "Can not open name_head %s rc=%d\n",
+                        name_head, fd);
+                return fd;
+        }
+        size = lseek(fd, 0, SEEK_END);
+        if (size % JOIN_FILE_ALIGN) {
+                fprintf(stderr, "head file %s size %llu must be mutiple of 4k\n",
+                        name_head, size);
+                rc = -EINVAL;
+                goto out;
+        }
+        name_tail = argv[2];
+        rc = ioctl(fd, LL_IOC_JOIN, name_tail);
+out:
+        close(fd);
+        if (rc) {
+                fprintf(stderr, "Lustre joining files: %s, %s, failed\n",
+                        argv[1], argv[2]);
+        }
         return rc;
 }
 

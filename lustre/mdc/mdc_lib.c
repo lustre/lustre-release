@@ -117,10 +117,22 @@ static __u32 mds_pack_open_flags(__u32 flags)
                 ((flags & O_APPEND) ? MDS_OPEN_APPEND : 0) |
                 ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
                 ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
+                ((flags & O_JOIN_FILE) ? MDS_OPEN_JOIN_FILE : 0) |
                 0;
 }
 
 /* packing of MDS records */
+void mdc_join_pack(struct ptlrpc_request *req, int offset, 
+                   struct mdc_op_data *op_data, __u64 head_size)
+{
+        struct mds_rec_join *rec;
+ 
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
+        LASSERT(rec != NULL);
+        rec->jr_fid = op_data->fid2;
+        rec->jr_headsize = head_size;
+}
+
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *lmm, int lmmlen)

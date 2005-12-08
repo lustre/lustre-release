@@ -113,7 +113,8 @@ int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *);
+                   struct lov_stripe_md *md, struct obd_trans_info *, 
+                   struct obd_export *md_exp);
 struct dentry *filter_crow_object(struct obd_device *obd, struct obdo *oa);
 
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,

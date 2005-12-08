@@ -223,6 +223,7 @@ static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
 
 #define LLOG_GEN_INC(gen)  ((gen).conn_cnt ++)
 #define LLOG_PROC_BREAK 0x0001
+#define LLOG_DEL_RECORD 0x0002
 
 static inline int llog_obd2ops(struct llog_ctxt *ctxt,
                                struct llog_operations **lop)

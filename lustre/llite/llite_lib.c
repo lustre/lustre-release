@@ -163,7 +163,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
         if (sbi->ll_flags & LL_SBI_USER_XATTR)
                 data->ocd_connect_flags |= OBD_CONNECT_XATTR;
-        data->ocd_connect_flags |= OBD_CONNECT_ACL;
+        data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_JOIN;
 
         if (sbi->ll_flags & LL_SBI_FLOCK) {
                 sbi->ll_fop = &ll_file_operations_flock;
@@ -173,6 +173,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         data->ocd_connect_flags |= OBD_CONNECT_VERSION;
         data->ocd_version = LUSTRE_VERSION_CODE;
+
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An MDS (mdc %s) is performing recovery, of which this"
@@ -213,6 +214,9 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 sbi->ll_flags |= LL_SBI_ACL;
         } else
                 sbi->ll_flags &= ~LL_SBI_ACL;
+
+        if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
+                sbi->ll_flags |= LL_SBI_JOIN;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* We set sb->s_dev equal on all lustre clients in order to support
@@ -340,6 +344,20 @@ out:
                 OBD_FREE(data, sizeof(*data));
         lprocfs_unregister_mountpoint(sbi);
         RETURN(err);
+}
+
+int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
+{
+        int size, rc;
+
+        *lmmsize = obd_size_diskmd(sbi->ll_osc_exp, NULL);
+        size = sizeof(int);
+        rc = obd_get_info(sbi->ll_mdc_exp, strlen("max_easize"), "max_easize", 
+                          &size, lmmsize);
+        if (rc) 
+                CERROR("Get max mdsize error rc %d \n", rc);
+        
+        RETURN(rc);
 }
 
 void ll_dump_inode(struct inode *inode)
@@ -1285,6 +1303,23 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
         up(&lli->lli_size_sem);
 }
 
+static void ll_replace_lsm(struct inode *inode, struct lov_stripe_md *lsm)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+ 
+        dump_lsm(D_INODE, lsm);
+        dump_lsm(D_INODE, lli->lli_smd); 
+        LASSERTF(lsm->lsm_magic == LOV_MAGIC_JOIN, 
+                 "lsm must be joined lsm %p\n", lsm);
+        obd_free_memmd(ll_i2obdexp(inode), &lli->lli_smd);
+        CDEBUG(D_INODE, "replace lsm %p to lli_smd %p for inode %lu%u(%p)\n",
+               lsm, lli->lli_smd, inode->i_ino, inode->i_generation, inode);
+        lli->lli_smd = lsm;
+        lli->lli_maxbytes = lsm->lsm_maxbytes;
+        if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
+                lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+}
+
 void ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -1294,7 +1329,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
-                        if (lsm->lsm_magic != LOV_MAGIC) {
+                        if (lsm->lsm_magic != LOV_MAGIC && 
+                            lsm->lsm_magic != LOV_MAGIC_JOIN) {
                                 dump_lsm(D_ERROR, lsm);
                                 LBUG();
                         }
@@ -1308,15 +1344,20 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
-                                CERROR("lsm mismatch for inode %ld\n",
-                                       inode->i_ino);
-                                CERROR("lli_smd:\n");
-                                dump_lsm(D_ERROR, lli->lli_smd);
-                                CERROR("lsm:\n");
-                                dump_lsm(D_ERROR, lsm);
-                                LBUG();
-                        }
+                        if (lli->lli_smd->lsm_magic == lsm->lsm_magic &&
+                             lli->lli_smd->lsm_stripe_count == 
+                                        lsm->lsm_stripe_count) {
+                                if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
+                                        CERROR("lsm mismatch for inode %ld\n",
+                                                inode->i_ino);
+                                        CERROR("lli_smd:\n");
+                                        dump_lsm(D_ERROR, lli->lli_smd);
+                                        CERROR("lsm:\n");
+                                        dump_lsm(D_ERROR, lsm);
+                                        LBUG();
+                                }
+                        } else 
+                                ll_replace_lsm(inode, lsm);
                 }
                 /* bug 2844 - limit i_blksize for broken user-space apps */
                 LASSERTF(lsm->lsm_xfersize != 0, "%lu\n", lsm->lsm_xfersize);
@@ -1639,9 +1680,13 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                         mdc_free_lustre_md(exp, &md);
                         rc = -ENOMEM;
                         CERROR("new_inode -fatal: rc %d\n", rc);
+                        GOTO(out, rc);
                 }
         }
 
+        rc = obd_checkmd(exp, ll_i2mdcexp(*inode),
+                         ll_i2info(*inode)->lli_smd);
+out:
         RETURN(rc);
 }
 

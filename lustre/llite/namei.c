@@ -626,7 +626,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
 
                 ll_update_times(request, 0, dir);
 
-                err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0,
+                err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0, 
                                     dchild->d_sb);
                 if (err)
                         GOTO(out_err, err);
@@ -790,6 +790,10 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         }
         LASSERT(rc >= sizeof(*lsm));
 
+        rc = obd_checkmd(ll_i2obdexp(dir), ll_i2mdcexp(dir), lsm);
+        if (rc)
+                GOTO(out_free_memmd, rc);
+
         oa = obdo_alloc();
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
@@ -810,7 +814,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(ll_i2obdexp(dir), oa, lsm, &oti);
+        rc = obd_destroy(ll_i2obdexp(dir), oa, lsm, &oti, ll_i2mdcexp(dir));
         obdo_free(oa);
         if (rc)
                 CERROR("obd destroy objid "LPX64" error %d\n",

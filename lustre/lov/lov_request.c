@@ -567,7 +567,7 @@ cleanup:
                         continue;
 
                 sub_exp = lov->tgts[req->rq_idx].ltd_exp;
-                err = obd_destroy(sub_exp, req->rq_oa, NULL, oti);
+                err = obd_destroy(sub_exp, req->rq_oa, NULL, oti, NULL);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
@@ -690,7 +690,8 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
                 rc = lov_alloc_memmd(&set->set_md, stripes,
                                      lov->desc.ld_pattern ?
-                                     lov->desc.ld_pattern : LOV_PATTERN_RAID0);
+                                     lov->desc.ld_pattern : LOV_PATTERN_RAID0, 
+                                     LOV_MAGIC);
                 if (rc < 0)
                         goto out_set;
                 newea = 1;

@@ -74,7 +74,7 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         CDEBUG(D_HA, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
-        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm,
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm, 
                           mlcd->mlcd_eadatalen);
         if (rc < 0) {
                 CERROR("bad LSM cancelling %d log cookies: rc %d\n",
@@ -82,6 +82,11 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                        rc);
         } else {
                 ///* XXX 0 normally, SENDNOW for debug */);
+                rc = obd_checkmd(obd->u.mds.mds_osc_exp, obd->obd_self_export,
+                                 lsm);
+                if (rc)
+                        CERROR("Can not revalidate lsm %p \n", lsm);
+
                 ctxt = llog_get_context(obd,mlcd->mlcd_cookies[0].lgc_subsys+1);
                 rc = llog_cancel(ctxt, lsm, mlcd->mlcd_cookielen /
                                                 sizeof(*mlcd->mlcd_cookies),
@@ -403,6 +408,12 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                 GOTO(out, rc);
         }
 
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc) {
+                CERROR("Error revalidate lsm %p \n", lsm);
+                GOTO(out, rc);
+        }        
+
         /* then fill oa */
         oa->o_id = lsm->lsm_object_id;
         oa->o_uid = inode->i_uid;
@@ -423,9 +434,9 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         if (rc)
                 CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
                        " on ost error %d\n", lsm->lsm_object_id, rc);
-
-        obd_free_memmd(mds->mds_osc_exp, &lsm);
 out:
+        if (lsm)
+                obd_free_memmd(mds->mds_osc_exp, &lsm);
         obdo_free(oa);
         RETURN(rc);
 }
@@ -1783,19 +1794,19 @@ cleanup:
  * lock on the parent after the lookup is done, so dentry->d_inode may change
  * at any time, and igrab() itself doesn't like getting passed a NULL argument.
  */
-static int mds_get_parents_children_locked(struct obd_device *obd,
-                                           struct mds_obd *mds,
-                                           struct ll_fid *p1_fid,
-                                           struct dentry **de_srcdirp,
-                                           struct ll_fid *p2_fid,
-                                           struct dentry **de_tgtdirp,
-                                           int parent_mode,
-                                           const char *old_name, int old_len,
-                                           struct dentry **de_oldp,
-                                           const char *new_name, int new_len,
-                                           struct dentry **de_newp,
-                                           struct lustre_handle *dlm_handles,
-                                           int child_mode)
+int mds_get_parents_children_locked(struct obd_device *obd,
+                                    struct mds_obd *mds,
+                                    struct ll_fid *p1_fid,
+                                    struct dentry **de_srcdirp,
+                                    struct ll_fid *p2_fid,
+                                    struct dentry **de_tgtdirp,
+                                    int parent_mode,
+                                    const char *old_name, int old_len,
+                                    struct dentry **de_oldp,
+                                    const char *new_name, int new_len,
+                                    struct dentry **de_newp,
+                                    struct lustre_handle *dlm_handles,
+                                    int child_mode)
 {
         struct ldlm_res_id p1_res_id = { .name = {0} };
         struct ldlm_res_id p2_res_id = { .name = {0} };
@@ -1862,6 +1873,8 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         iput(inode);
 
         /* Step 4: Lookup the target child entry */
+        if (!new_name)
+                GOTO(retry_locks, rc);
         *de_newp = ll_lookup_one_len(new_name, *de_tgtdirp, new_len - 1);
         if (IS_ERR(*de_newp)) {
                 rc = PTR_ERR(*de_newp);
@@ -1925,6 +1938,8 @@ retry_locks:
         if ((*de_oldp)->d_inode == NULL)
                 GOTO(cleanup, rc = -ENOENT);
 
+        if (!new_name)
+                GOTO(cleanup, rc);
         /* Step 6b: Re-lookup target child to verify it hasn't changed */
         rc = mds_verify_child(obd, &p2_res_id, &dlm_handles[1], *de_tgtdirp,
                               parent_mode, &c2_res_id, &dlm_handles[3], de_newp,

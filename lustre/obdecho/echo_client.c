@@ -247,7 +247,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                         oa->o_id, on_target ? " (undoing create)" : "");
 
                 if (on_target)
-                        obd_destroy(ec->ec_exp, oa, lsm, oti);
+                        obd_destroy(ec->ec_exp, oa, lsm, oti, NULL);
 
                 rc = -EEXIST;
                 goto failed;
@@ -1222,7 +1222,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                         oa->o_gr = FILTER_GROUP_ECHO;
                         oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eco_lsm, 
-                                         &dummy_oti);
+                                         &dummy_oti, NULL);
                         if (rc == 0)
                                 eco->eco_deleted = 1;
                         echo_put_object(eco);

@@ -107,6 +107,65 @@ out:
         RETURN(rc);
 }
 
+int llog_origin_handle_destroy(struct ptlrpc_request *req)
+{
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        struct obd_device *disk_obd;
+        struct llog_handle  *loghandle;
+        struct llogd_body *body;
+        struct lvfs_run_ctxt saved;
+        struct llog_logid *logid = NULL;
+        struct llog_ctxt *ctxt;
+        int size = sizeof (*body);
+        int rc;
+        __u32 flags;
+        ENTRY;
+
+        body = lustre_swab_reqbuf(req, 0, sizeof(*body),
+                                 lustre_swab_llogd_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack llogd_body\n");
+                GOTO(out, rc =-EFAULT);
+        }
+
+        if (body->lgd_logid.lgl_oid > 0)
+                logid = &body->lgd_logid;
+
+        ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
+        if (ctxt == NULL)
+                GOTO(out, rc = -EINVAL);
+        disk_obd = ctxt->loc_exp->exp_obd;
+        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+
+        rc = llog_create(ctxt, &loghandle, logid, NULL);
+        if (rc)
+                GOTO(out_pop, rc);
+
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc)
+                GOTO(out_close, rc = -ENOMEM);
+
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        body->lgd_logid = loghandle->lgh_id;
+        flags = body->lgd_llh_flags;
+        rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
+        if (rc)
+                GOTO(out_close, rc);
+        rc = llog_destroy(loghandle);
+        if (rc)
+                GOTO(out_close, rc);
+        llog_free_handle(loghandle);
+
+out_close:
+        if (rc)
+                llog_close(loghandle);
+out_pop:
+        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+out:
+        RETURN(rc);
+}
+
 int llog_origin_handle_next_block(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
@@ -611,6 +670,13 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         LBUG();
         return 0;
 }
+
+int llog_origin_handle_destroy(struct ptlrpc_request *req)
+{
+        LBUG();
+        return 0;
+}
+
 int llog_origin_handle_next_block(struct ptlrpc_request *req)
 {
         LBUG();

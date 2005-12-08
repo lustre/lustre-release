@@ -141,6 +141,7 @@ struct ll_ra_info {
 #define LL_SBI_FLOCK            0x04
 #define LL_SBI_USER_XATTR       0x08 /* support user xattr */
 #define LL_SBI_ACL              0x10 /* support ACL */
+#define LL_SBI_JOIN             0x20 /* support JOIN */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -421,6 +422,7 @@ void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);
 struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
                                              struct list_head *list);
+int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 
 /* llite/llite_nfs.c */
 __u32 get_uuid2int(const char *name, int len);

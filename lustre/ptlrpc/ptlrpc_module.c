@@ -171,12 +171,14 @@ EXPORT_SYMBOL(lustre_swab_mds_body);
 EXPORT_SYMBOL(lustre_swab_obd_quotactl);
 EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);
+EXPORT_SYMBOL(lustre_swab_mds_rec_join);
 EXPORT_SYMBOL(lustre_swab_mds_rec_link);
 EXPORT_SYMBOL(lustre_swab_mds_rec_unlink);
 EXPORT_SYMBOL(lustre_swab_mds_rec_rename);
 EXPORT_SYMBOL(lustre_swab_lov_desc);
 EXPORT_SYMBOL(lustre_swab_lov_user_md);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_objects);
+EXPORT_SYMBOL(lustre_swab_lov_user_md_join);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
 EXPORT_SYMBOL(lustre_swab_ldlm_policy_data);
 EXPORT_SYMBOL(lustre_swab_ldlm_intent);
@@ -212,6 +214,7 @@ EXPORT_SYMBOL(ptlrpcd_wake);
 
 /* llogd.c */
 EXPORT_SYMBOL(llog_origin_handle_create);
+EXPORT_SYMBOL(llog_origin_handle_destroy);
 EXPORT_SYMBOL(llog_origin_handle_next_block);
 EXPORT_SYMBOL(llog_origin_handle_prev_block);
 EXPORT_SYMBOL(llog_origin_handle_read_header);

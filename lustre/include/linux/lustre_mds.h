@@ -140,9 +140,11 @@ int mdc_enqueue(struct obd_export *exp,
 
 /* mdc/mdc_request.c */
 int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp);
-int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
+
+int mdc_req2lustre_md(struct ptlrpc_request *req, int offset, 
                       struct obd_export *exp, struct lustre_md *md);
 void mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
+
 int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
 int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 obd_valid valid, unsigned int ea_size,

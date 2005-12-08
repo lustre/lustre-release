@@ -259,7 +259,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 GOTO(out, rc = -EPROTO);
         }
 
-        rc = obd_unpackmd(llu_i2obdexp(dir), &lsm, eadata, body->eadatasize);
+        rc = obd_unpackmd(llu_i2obdexp(dir), &lsm, eadata,body->eadatasize);
         if (rc < 0) {
                 CERROR("obd_unpackmd: %d\n", rc);
                 GOTO(out, rc);
@@ -286,7 +286,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti);
+        rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti, NULL);
         obdo_free(oa);
         if (rc)
                 CERROR("obd destroy objid 0x"LPX64" error %d\n",

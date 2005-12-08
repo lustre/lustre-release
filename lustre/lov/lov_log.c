@@ -69,7 +69,9 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
         int i, rc = 0;
         ENTRY;
 
-        LASSERT(logcookies && numcookies >= lsm->lsm_stripe_count);
+        LASSERTF(logcookies && numcookies >= lsm->lsm_stripe_count, 
+                 "logcookies %p, numcookies %d lsm->lsm_stripe_count %d \n",
+                 logcookies, numcookies, lsm->lsm_stripe_count);
 
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
