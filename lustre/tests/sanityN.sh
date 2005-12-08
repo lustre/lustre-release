@@ -425,7 +425,7 @@ test_20() {
 run_test 20 "test extra readahead page left in cache ===="
 
 cleanup_21() {
-	umount $DIR1/d21
+	umount $DIR1/d21 >/dev/null 2>&1
 }
 
 test_21() { # Bug 5907
@@ -435,6 +435,7 @@ test_21() { # Bug 5907
 	rmdir -v $DIR1/d21 && error "Removed mounted directory"
 	rmdir -v $DIR2/d21 && echo "Removed mounted directory from another mountpoint, needs to be fixed"
 	test -d $DIR1/d21 || error "Mounted directory disappeared"
+	umount $DIR1/d21
 	test -d $DIR2/d21 || test -d $DIR1/d21 && error "Removed dir still visible after umount"
 	true
 }
