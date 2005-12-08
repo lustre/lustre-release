@@ -406,7 +406,12 @@ Details    : Check if the client we are about to send or are sending data to
 	     for which l_wait_event interface was extended to allow checking
 	     of exit condition at specified intervals).
 
-	
+Severity   : minor
+Frequency  : rare
+Description: 'bad disk LOV MAGIC: 0x00000000' error when chown'ing files without
+             objects
+Details    : Make mds_get_md to recognise empty md case and set lmm size to 0.
+
 
 ------------------------------------------------------------------------------
 

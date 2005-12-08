@@ -507,6 +507,8 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                 } else if (rc > 0) {
                         *size = rc;
                 }
+        } else {
+                *size = 0;
         }
         if (lock)
                 up(&inode->i_sem);
