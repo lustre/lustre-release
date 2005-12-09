@@ -42,6 +42,15 @@ init_test_env() {
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
 
+    if [ "$ACCEPTOR_PORT" ]; then
+        if [ -z "$MOUNTOPT" ]; then
+            export MOUNTOPT="port=$ACCEPTOR_PORT"
+        else
+            export MOUNTOPT="$MOUNTOPT,port=$ACCEPTOR_PORT"
+        fi
+        export PORT_OPT="--port $ACCEPTOR_PORT"
+    fi
+
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
@@ -343,7 +352,8 @@ add_facet() {
     echo "add facet $facet: `facet_host $facet`"
     do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
         --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
-    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` --nettype lnet
+    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
+        --nettype lnet $PORT_OPT
 }
 
 add_mds() {

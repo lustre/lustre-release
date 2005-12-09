@@ -27,6 +27,7 @@ CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
 
 NETTYPE=${NETTYPE:-tcp}
 NIDTYPE=${NIDTYPE:-$NETTYPE}
+[ "$ACCEPTOR_PORT" ] && PORT_OPT="--port $ACCEPTOR_PORT"
 
 # NOTE - You can't have different MDS/OST nodes and also have clients on the
 #        MDS/OST nodes without using --endlevel and --startlevel during lconf.
@@ -87,7 +88,8 @@ h2iib () {
 echo -n "adding NET for:"
 for NODE in `echo $MDSNODE $OSTNODES $CLIENTS | tr -s " " "\n" | sort -u`; do
 	echo -n " $NODE"
-	${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` --nettype $NETTYPE || exit 1
+	${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` \
+    --nettype $NETTYPE $PORT_OPT || exit 1
 done
 
 # configure mds server

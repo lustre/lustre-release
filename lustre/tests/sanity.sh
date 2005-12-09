@@ -47,6 +47,7 @@ IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
 MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
+ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
 
 if [ $UID -ne 0 ]; then
     echo "Warning: running as non-root uid $UID"
@@ -2723,7 +2724,7 @@ test_100() {
 	netstat -tna | while read PROT SND RCV LOCAL REMOTE STAT; do
 		[ "$PROT" != "tcp" ] && continue
 		RPORT=`echo $REMOTE | cut -d: -f2`
-		[ "$RPORT" != "988" ] && continue
+		[ "$RPORT" != "$ACCEPTOR_PORT" ] && continue
 		LPORT=`echo $LOCAL | cut -d: -f2`
 		[ $LPORT -ge 1024 ] && error "local port: $LPORT > 1024" || true
 	done

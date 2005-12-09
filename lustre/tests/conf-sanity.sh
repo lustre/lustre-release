@@ -618,7 +618,7 @@ test_15() {
 	do_node `hostname` mkdir -p $MOUNT 2> /dev/null
 	# load llite module on the client if it isn't in /lib/modules
 	do_node `hostname` lconf --nosetup --node client_facet $XMLCONFIG
-	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
+	do_node `hostname` mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
 		`facet_active_host mds`:/mds_svc/client_facet $MOUNT ||return $?
 	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
 	[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -627,7 +627,7 @@ test_15() {
 
 	[ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
 	echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
-	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
+	do_node `hostname` mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
 		`facet_active_host mds`:/mds_svc/client_facet $MOUNT &&return $?
 	echo "mount lustre on $MOUNT without $MOUNTLUSTRE failed as expected"
 	cleanup || return $?
