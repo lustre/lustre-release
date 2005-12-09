@@ -319,9 +319,9 @@ struct filter_obd {
 struct mds_server_data;
 
 #define OSC_MAX_RIF_DEFAULT       8
-#define OSC_MAX_RIF_MAX          64
-#define OSC_MAX_DIRTY_DEFAULT    32
-#define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
+#define OSC_MAX_RIF_MAX         256
+#define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
+#define OSC_MAX_DIRTY_MB_MAX   2048     /* totally arbitrary */
 
 struct mdc_rpc_lock;
 struct client_obd {
