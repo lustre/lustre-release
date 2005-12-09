@@ -223,6 +223,7 @@ static inline void list_splice_init(struct list_head *list,
 
 #define hlist_head	list_head
 #define hlist_node	list_head
+#define hlist_del_init	list_del_init
 
 #endif /* __linux__*/
 
