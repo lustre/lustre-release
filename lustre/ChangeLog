@@ -412,6 +412,13 @@ Description: 'bad disk LOV MAGIC: 0x00000000' error when chown'ing files without
              objects
 Details    : Make mds_get_md to recognise empty md case and set lmm size to 0.
 
+Severity   : minor
+Bugzilla   : 9794
+Description: Liblustre uses system PRNG disturbing its usage by user application
+Details    : Introduce internal to lustre fast and high-quality PRNG for
+             lustre usage and make liblustre and some other places in generic
+             lustre code to use it.
+
 
 ------------------------------------------------------------------------------
 

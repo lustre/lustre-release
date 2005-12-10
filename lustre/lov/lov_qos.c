@@ -131,7 +131,7 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
 
         if (newea || lsm->lsm_oinfo[0].loi_ost_idx >= ost_count) {
                 if (--ost_start_count <= 0) {
-                        ost_start_idx = ll_insecure_random_int();
+                        ost_start_idx = ll_rand();
                         ost_start_count =
                           (LOV_CREATE_RESEED_MIN / max(ost_active_count, 1U) +
                            LOV_CREATE_RESEED_MULT) * max(ost_active_count, 1U);

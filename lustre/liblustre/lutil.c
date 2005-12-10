@@ -77,9 +77,6 @@ void *inter_module_get(char *arg)
 /*
  * random number generator stuff
  */
-#ifdef LIBLUSTRE_USE_URANDOM
-static int _rand_dev_fd = -1;
-#endif
 
 #ifdef HAVE_GETHOSTBYNAME
 static int get_ipv4_addr()
@@ -107,49 +104,57 @@ static int get_ipv4_addr()
 
 void liblustre_init_random()
 {
-        int seed;
+        int _rand_dev_fd;
+        int seed[2];
         struct timeval tv;
 
 #ifdef LIBLUSTRE_USE_URANDOM
         _rand_dev_fd = syscall(SYS_open, "/dev/urandom", O_RDONLY);
         if (_rand_dev_fd >= 0) {
                 if (syscall(SYS_read, _rand_dev_fd,
-                            &seed, sizeof(int)) == sizeof(int)) {
-                        srand(seed);
+                            &seed, sizeof(seed)) == sizeof(seed)) {
+                        ll_srand(seed[0], seed[1]);
                         return;
                 }
                 syscall(SYS_close, _rand_dev_fd);
-                _rand_dev_fd = -1;
         }
 #endif /* LIBLUSTRE_USE_URANDOM */
 
 #ifdef HAVE_GETHOSTBYNAME
-        seed = get_ipv4_addr();
+        seed[0] = get_ipv4_addr();
 #else
-        seed = _my_pnid;
+        seed[0] = _my_pnid;
 #endif
         gettimeofday(&tv, NULL);
-        srand(tv.tv_sec + tv.tv_usec + getpid() + __swab32(seed));
+        ll_srand(tv.tv_usec | __swab32(getpid()), tv.tv_sec|__swab32(seed[0]));
 }
 
 void get_random_bytes(void *buf, int size)
 {
-        char *p = buf;
+        int *p = buf;
+        int rem;
         LASSERT(size >= 0);
 
-#ifdef LIBLUSTRE_USE_URANDOM
-        if (_rand_dev_fd >= 0) {
-                if (syscall(SYS_read, _rand_dev_fd, buf, size) == size)
-                        return;
-                syscall(SYS_close, _rand_dev_fd);
-                _rand_dev_fd = -1;
+        rem = min((unsigned long)buf & (sizeof(int) - 1), size);
+        if (rem) {
+                int val = ll_rand();
+                memcpy(buf, &val, rem);
+                p = buf + rem;
+                size -= rem;
         }
-#endif
 
-        while (size--) 
-                *p++ = rand();
+        while (size >= sizeof(int)) {
+                *p = ll_rand();
+                size -= sizeof(int);
+                p++;
+        }
+        buf = p;
+        if (size) {
+                int val = ll_rand();
+                memcpy(buf, &val, size);
+        }
 }
-
+ 
 static void init_capability(int *res)
 {
 #ifdef HAVE_LIBCAP

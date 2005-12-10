@@ -51,6 +51,10 @@
 #endif
 #endif
 
+/* prng.c */
+unsigned int ll_rand(void);        /* returns a random 32-bit integer */
+void ll_srand(unsigned int, unsigned int);     /* seed the generator */
+
 /* target.c */
 struct ptlrpc_request;
 struct recovd_data;
@@ -472,13 +476,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define LUSTRE_STRIPE_MAXBYTES 0x1fffffff000ULL
 
 #define POISON_BULK 0
-
-static inline int ll_insecure_random_int(void)
-{
-        struct timeval t;
-        do_gettimeofday(&t);
-        return (int)(t.tv_usec);
-}
 
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller
