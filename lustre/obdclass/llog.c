@@ -316,3 +316,12 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_process);
+
+int llog_get_size(struct llog_handle *loghandle)
+{
+        if (loghandle && loghandle->lgh_hdr)
+                return loghandle->lgh_hdr->llh_count;
+        return 0;
+}
+EXPORT_SYMBOL(llog_get_size);
+

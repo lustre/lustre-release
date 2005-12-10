@@ -43,15 +43,6 @@ struct system_db {
         struct list_head  ost_infos;
         int               sdb_flags;
 };
-#define SDB_NO_LLOG 0x01
-#define LOG_IS_EMPTY(db) ((db)->sdb_flags & SDB_NO_LLOG)
-
-struct mgc_open_llog {
-        struct list_head   mol_list;
-        __u64              mol_step;
-        llogid_t           mol_id;
-        char               mol_fsname[40];
-};
 
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
 int mgs_fs_cleanup(struct obd_device *obddev);

@@ -14,14 +14,6 @@
 
 #define FILTER_LAYOUT_VERSION "2"
 
-#ifndef OBD_FILTER_DEVICENAME
-# define OBD_FILTER_DEVICENAME "obdfilter"
-#endif
-
-#ifndef OBD_FILTER_SAN_DEVICENAME
-# define OBD_FILTER_SAN_DEVICENAME "sanobdfilter"
-#endif
-
 #define LAST_RCVD "last_rcvd"
 #define HEALTH_CHECK "health_check"
 #define FILTER_INIT_OBJID 0

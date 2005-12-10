@@ -406,7 +406,7 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
 
         //FIXME Copy the mgs remote log to the local disk
 
-#if 1
+#if 0
         /* For debugging, it's useful to just dump the log */
         class_config_dump_llog(rctxt, logname, cfg);
 #endif
@@ -512,7 +512,7 @@ static int server_start_mgs(struct super_block *sb)
         return rc;
 }
 
-static void server_stop_mgs(struct super_block *sb)
+static int server_stop_mgs(struct super_block *sb)
 {
         struct obd_device *obd;
         char mgsname[] = "MGS";
@@ -524,12 +524,13 @@ static void server_stop_mgs(struct super_block *sb)
         obd = class_name2obd(mgsname);
         if (!obd) {
                 CDEBUG(D_CONFIG, "mgs %s not running\n", mgsname);
-                return;
+                return -EALREADY;
         }
 
         /* The MGS should always stop when we say so */
         obd->obd_force = 1;
-        class_manual_cleanup(obd);
+        rc = class_manual_cleanup(obd);
+        return rc;
 }
 
 /* Set up a mgcobd to process startup logs */
@@ -609,6 +610,7 @@ static int lustre_start_mgc(struct super_block *sb)
         
         atomic_set(&obd->u.cli.cl_mgc_refcount, 1);
 out:
+        /* note that many lsi's can point to the same mgc.*/
         lsi->lsi_mgc = obd;
         return rc;
 }
@@ -626,6 +628,8 @@ static int lustre_stop_mgc(struct super_block *sb)
 
         lsi->lsi_mgc = NULL;
         if (!atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
+                /* This is not fatal, every client that stops 
+                   will call in here. */
                 CDEBUG(D_MOUNT, "mgc still has %d references.\n", 
                        atomic_read(&obd->u.cli.cl_mgc_refcount));
                 return -EBUSY; 
@@ -681,10 +685,11 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
 }
 
 /* Stop MDS/OSS if nobody is using them */
-static void server_stop_servers(struct super_block *sb)
+static int server_stop_servers(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
+        int rc;
 
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */
         if (IS_MDT(lsi->lsi_ldd) && (obd = class_name2obd("MDS"))) {
@@ -696,7 +701,7 @@ static void server_stop_servers(struct super_block *sb)
                                 obd->obd_force = 1;
                         if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
                                 obd->obd_fail = 1;
-                        class_manual_cleanup(obd);
+                        rc = class_manual_cleanup(obd);
                 }
         }
 
@@ -704,14 +709,18 @@ static void server_stop_servers(struct super_block *sb)
         if (IS_OST(lsi->lsi_ldd) && (obd = class_name2obd("OSS"))) {
                 struct obd_type *type = class_search_type(LUSTRE_OST_NAME);
                 if (!type || !type->typ_refcnt) {
+                        int err;
                         /* nobody is using the OST type, clean the OSS */
                         if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
                                 obd->obd_force = 1;
                         if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
                                 obd->obd_fail = 1;
-                        class_manual_cleanup(obd);
+                        err = class_manual_cleanup(obd);
+                        if (!rc) 
+                                rc = err;
                 }
         }
+        return rc;
 }
 
 /* Add this target to the fs, get a new index if needed */
@@ -825,7 +834,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                         rc = lustre_start_simple("MDS", LUSTRE_MDT_NAME, 0, 0);
                         if (rc) {
                                 CERROR("failed to start MDS: %d\n", rc);
-                                goto out;
+                                goto out_servers;
                         }
                 }
         }
@@ -838,7 +847,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                         rc = lustre_start_simple("OSS", LUSTRE_OSS_NAME, 0, 0);
                         if (rc) {
                                 CERROR("failed to start OSS: %d\n", rc);
-                                goto out;
+                                goto out_servers;
                         }
                 }
         }
@@ -885,6 +894,7 @@ out:
         /* Release the mgc fs for others to use */
         server_mgc_clear_fs(lsi->lsi_mgc);
 
+out_servers:
         if (rc)
                 server_stop_servers(sb);
         return(rc);
@@ -1219,6 +1229,15 @@ int lustre_common_put_super(struct super_block *sb)
         CDEBUG(D_MOUNT, "dropping sb %p\n", sb);
         
         rc = lustre_stop_mgc(sb);
+        if (rc) {
+                CDEBUG(D_MOUNT, "Can't stop MGC - busy? %d\n", rc);
+                if (rc != -EBUSY) {
+                        CERROR("Can't stop MGC: %d\n", rc);
+                        return rc;
+                }
+                /* BUSY just means that there's some other obd that
+                   needs the mgc.  Let him clean it up. */
+        }
         rc = lustre_free_lsi(sb);
         return rc;
 }      

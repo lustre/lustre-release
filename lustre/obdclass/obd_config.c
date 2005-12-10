@@ -691,6 +691,9 @@ out:
         return err;
 }
 
+int class_config_dump_handler(struct llog_handle * handle,
+                              struct llog_rec_hdr *rec, void *data);
+
 static int class_config_llog_handler(struct llog_handle * handle,
                                      struct llog_rec_hdr *rec, void *data)
 {
@@ -699,6 +702,10 @@ static int class_config_llog_handler(struct llog_handle * handle,
         char *cfg_buf = (char*) (rec + 1);
         int rc = 0;
         ENTRY;
+        
+        // FIXME remove
+        class_config_dump_handler(handle, rec, data);
+
         switch (rec->lrh_type) {
         case OBD_CFG_REC: {
                 struct lustre_cfg *lcfg, *lcfg_new;

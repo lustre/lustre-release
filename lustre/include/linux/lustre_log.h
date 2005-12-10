@@ -84,6 +84,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                  void *data, void *catdata);
 extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
 extern int llog_close(struct llog_handle *cathandle);
+extern int llog_get_size(struct llog_handle *loghandle);
 
 /* llog_cat.c   -  catalog api */
 struct llog_process_data {

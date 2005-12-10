@@ -1642,11 +1642,6 @@ static int filter_cleanup(struct obd_device *obd)
 
         LL_DQUOT_OFF(filter->fo_sb);
 
-        if (atomic_read(&filter->fo_vfsmnt->mnt_count) > 1)
-                CERROR("%s: mount point %p busy, mnt_count: %d\n",
-                       obd->obd_name, filter->fo_vfsmnt,
-                       atomic_read(&filter->fo_vfsmnt->mnt_count));
-
         must_put = server_put_mount(obd->obd_name, filter->fo_vfsmnt);
         /* must_put is for old method (l_p_m returns non-0 on err) */
 
@@ -2927,14 +2922,14 @@ static int __init obdfilter_init(void)
                 return -ENOMEM;
 
         rc = class_register_type(&filter_obd_ops, lvars.module_vars,
-                                 OBD_FILTER_DEVICENAME);
+                                 LUSTRE_OST_NAME);
         if (rc)
                 GOTO(out, rc);
 
         rc = class_register_type(&filter_sanobd_ops, lvars.module_vars,
-                                 OBD_FILTER_SAN_DEVICENAME);
+                                 LUSTRE_OSTSAN_NAME);
         if (rc) {
-                class_unregister_type(OBD_FILTER_DEVICENAME);
+                class_unregister_type(LUSTRE_OST_NAME);
 out:
                 OBD_FREE(obdfilter_created_scratchpad,
                          OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
@@ -2945,8 +2940,8 @@ out:
 
 static void __exit obdfilter_exit(void)
 {
-        class_unregister_type(OBD_FILTER_SAN_DEVICENAME);
-        class_unregister_type(OBD_FILTER_DEVICENAME);
+        class_unregister_type(LUSTRE_OSTSAN_NAME);
+        class_unregister_type(LUSTRE_OST_NAME);
         OBD_FREE(obdfilter_created_scratchpad,
                  OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                  sizeof(*obdfilter_created_scratchpad));

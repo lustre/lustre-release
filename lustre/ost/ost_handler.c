@@ -1503,7 +1503,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_REQUEST_PORTAL,
                                 OSC_REPLY_PORTAL,
-                                obd_timeout * 1000, ost_handle, LUSTRE_OST_NAME,
+                                obd_timeout * 1000, ost_handle, LUSTRE_OSS_NAME,
                                 obd->obd_proc_entry, ost_print_req,
                                 OST_NUM_THREADS);
         if (ost->ost_service == NULL) {
@@ -1634,12 +1634,12 @@ static int __init ost_init(void)
 
         lprocfs_init_vars(ost,&lvars);
         RETURN(class_register_type(&ost_obd_ops, lvars.module_vars,
-                                   LUSTRE_OST_NAME));
+                                   LUSTRE_OSS_NAME));
 }
 
 static void /*__exit*/ ost_exit(void)
 {
-        class_unregister_type(LUSTRE_OST_NAME);
+        class_unregister_type(LUSTRE_OSS_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

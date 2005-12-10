@@ -447,14 +447,20 @@ struct niobuf_local {
         int rc;
 };
 
+
 /* device types */
+/* FIXME all the references to these defines need to be updated */
 #define LUSTRE_MDS_NAME "mds"
 #define LUSTRE_MDT_NAME "mdt"
+
 #define LUSTRE_MDC_NAME "mdc"
-#define LUSTRE_OSS_NAME "oss"
-#define LUSTRE_OST_NAME "ost"
+
+/* FIXME just the names need to be changed */
+#define LUSTRE_OSS_NAME "ost" /*FIXME oss*/
+#define LUSTRE_OST_NAME "obdfilter" /* FIXME ost*/
+#define LUSTRE_OSTSAN_NAME "sanobdfilter"
+
 #define LUSTRE_OSC_NAME "osc"
-# define OBD_FILTER_DEVICENAME "obdfilter"
 #define LUSTRE_FILTER_NAME "filter"
 #define LUSTRE_SANOSC_NAME "sanosc"
 #define LUSTRE_SANOST_NAME "sanost"

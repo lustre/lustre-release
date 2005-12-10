@@ -445,7 +445,6 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
                         CERROR("logfile creation %s: %ld\n", logname,
                                PTR_ERR(filp));
         }
-
         OBD_FREE(logname, PATH_MAX);
         return filp;
 }
@@ -544,6 +543,8 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
  finish:
         if (oa)
                 obdo_free(oa);
+        // FIXME remove
+        CDEBUG(D_ERROR, "opened %s fp=%p\n", name?name:"by id", handle->lgh_file);
         RETURN(rc);
 cleanup:
         switch (cleanup_phase) {
