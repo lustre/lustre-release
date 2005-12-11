@@ -608,15 +608,15 @@ do {                                                                           \
                 if (condition)                                                 \
                         break;                                                 \
                                                                                \
-                if (__timeout) {                                               \
+                if (__timeout == 0) {                                          \
                         schedule();                                            \
                 } else {                                                       \
                         unsigned long interval = info->lwi_interval?           \
                                              min_t(unsigned long,              \
                                                  info->lwi_interval,__timeout):\
                                              __timeout;                        \
-                        __timeout -= interval + schedule_timeout(interval);    \
-                        if (__timeout) {                                       \
+                        __timeout -= interval - schedule_timeout(interval);    \
+                        if (__timeout == 0) {                                  \
                                 if (info->lwi_on_timeout == NULL ||            \
                                     info->lwi_on_timeout(info->lwi_cb_data)) { \
                                         ret = -ETIMEDOUT;                      \
