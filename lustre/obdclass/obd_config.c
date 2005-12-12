@@ -528,7 +528,7 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
 
         OBD_ALLOC(lprof, sizeof(*lprof));
         if (lprof == NULL)
-                GOTO(out, err = -ENOMEM);
+                RETURN(-ENOMEM);
         INIT_LIST_HEAD(&lprof->lp_list);
 
         LASSERT(proflen == (strlen(prof) + 1));
@@ -539,7 +539,7 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
 
         LASSERT(osclen == (strlen(osc) + 1));
         OBD_ALLOC(lprof->lp_osc, osclen);
-        if (lprof->lp_profile == NULL)
+        if (lprof->lp_osc == NULL)
                 GOTO(out, err = -ENOMEM);
         memcpy(lprof->lp_osc, osc, osclen);
 
@@ -552,9 +552,17 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
         }
 
         list_add(&lprof->lp_list, &lustre_profile_list);
+        RETURN(err);
 
 out:
-        RETURN(err);
+        if (lprof->lp_mdc)
+                OBD_FREE(lprof->lp_mdc, mdclen);
+        if (lprof->lp_osc)
+                OBD_FREE(lprof->lp_osc, osclen);
+        if (lprof->lp_profile)
+                OBD_FREE(lprof->lp_profile, proflen);
+        OBD_FREE(lprof, sizeof(*lprof));        
+        RETURN(err);                             
 }
 
 void class_del_profile(char *prof)

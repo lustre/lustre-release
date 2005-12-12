@@ -225,6 +225,9 @@ int parse_options(char *orig_options, int *flagp)
         *flagp = 0;
         nextopt = orig_options;
         while ((opt = strsep(&nextopt, ","))) {
+                if (!*opt) 
+                        /* empty option */
+                        continue;
                 if (parse_one_option(opt, flagp) > 0)
                         continue;
                 /* no mount flags set, so pass this on as an option */
@@ -232,6 +235,7 @@ int parse_options(char *orig_options, int *flagp)
                         strcat(options, ",");
                 strcat(options, opt);
         }
+        /* options will always be <= orig_options */
         strcpy(orig_options, options);
         free(options);
         return 0;
@@ -240,7 +244,8 @@ int parse_options(char *orig_options, int *flagp)
 
 int main(int argc, char *const argv[])
 {
-        char *source, *target, *options = "", *optcopy;
+        char default_options[] = "";
+        char *source, *target, *options = default_options, *optcopy;
         int i, nargs = 3, opt, rc, flags, optlen;
         static struct option long_opt[] = {
                 {"fake", 0, 0, 'f'},
@@ -331,7 +336,7 @@ int main(int argc, char *const argv[])
 
         /* In Linux 2.4, the target device doesn't get passed to any of our
            functions.  So we'll stick it on the end of the options. */
-        optlen = strlen(options) + strlen(",device=") + strlen(source);
+        optlen = strlen(options) + strlen(",device=") + strlen(source) + 1;
         optcopy = malloc(optlen);
         strcpy(optcopy, options);
         if (*optcopy)

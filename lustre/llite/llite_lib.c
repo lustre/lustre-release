@@ -425,7 +425,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
                 RETURN(fl);
 }
 
-void ll_options(char *options, char **ost, char **mdc, int *flags)
+void ll_options(char *options, int *flags)
 {
         int tmp;
         char *this_char;
@@ -449,10 +449,6 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
 #endif
         {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
-                if (!*ost && (*ost = ll_read_opt(LUSTRE_OSC_NAME, this_char)))
-                        continue;
-                if (!*mdc && (*mdc = ll_read_opt(LUSTRE_MDC_NAME, this_char)))
-                        continue;
                 tmp = ll_set_opt("nolock", this_char, LL_SBI_NOLCK);
                 if (tmp) {
                         *flags |= tmp;
@@ -515,7 +511,7 @@ int ll_fill_super(struct super_block *sb)
         if (!sbi) 
                 RETURN(-ENOMEM);
 
-        ll_options(lsi->lsi_lmd->lmd_opts, &osc, &mdc, &sbi->ll_flags);
+        ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
 
         /* Generate a string unique to this super, in case some joker tries
            to mount the same fs at two mount points. 
@@ -538,14 +534,17 @@ int ll_fill_super(struct super_block *sb)
         }
         CERROR("Found profile %s: mdc=%s osc=%s\n", profilenm, 
                lprof->lp_mdc, lprof->lp_osc);
+
         OBD_ALLOC(osc, strlen(lprof->lp_osc) +
                   strlen(ll_instance) + 2);
+        if (!osc) 
+                GOTO(out_free, err = -ENOMEM);
+        sprintf(osc, "%s-%s", lprof->lp_osc, ll_instance);
+
         OBD_ALLOC(mdc, strlen(lprof->lp_mdc) +
                   strlen(ll_instance) + 2);
-        if (!osc || !mdc) 
+        if (!mdc) 
                 GOTO(out_free, err = -ENOMEM);
-
-        sprintf(osc, "%s-%s", lprof->lp_osc, ll_instance);
         sprintf(mdc, "%s-%s", lprof->lp_mdc, ll_instance);
   
         /* connections, registrations, sb setup */
