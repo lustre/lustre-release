@@ -402,23 +402,44 @@ Severity   : enhancement
 Bugzilla   : 9297
 Description: Stop sending data to evicted clients as soon as possible.
 Details    : Check if the client we are about to send or are sending data to
-             was evicted already. (Check is done every second of waiting,
+	     was evicted already. (Check is done every second of waiting,
 	     for which l_wait_event interface was extended to allow checking
 	     of exit condition at specified intervals).
 
 Severity   : minor
+Bugzilla   : 9301
 Frequency  : rare
 Description: 'bad disk LOV MAGIC: 0x00000000' error when chown'ing files without
-             objects
+	     objects
 Details    : Make mds_get_md to recognise empty md case and set lmm size to 0.
 
 Severity   : minor
 Bugzilla   : 9794
 Description: Liblustre uses system PRNG disturbing its usage by user application
 Details    : Introduce internal to lustre fast and high-quality PRNG for
-             lustre usage and make liblustre and some other places in generic
-             lustre code to use it.
+	     lustre usage and make liblustre and some other places in generic
+	     lustre code to use it.
 
+Severity   : enhancement
+Bugzilla   : 9477, 9557, 9870
+Description: Verify that the MDS configuration logs are updated when xml is
+Details    : Check if the .xml configuration logs are newer than the config
+	     logs stored on the MDS and report an error if this is the case.
+	     Request --write-conf, or allow starting with --old_conf.
+
+Severity   : enhancement
+Bugzilla   : 6034
+Description: Handle symlinks in the path when checking if Lustre is mounted.
+Details    : Resolve intermediate symlinks when checking if a client has
+	     mounted a filesystem to avoid duplicate client mounts.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9309
+Description: lconf can hit an error exception but still return success.
+Details    : The lconf command catches the Command error exception at the top
+	     level script context and will exit with the associated exit
+	     status, but doesn't ensure that this exit status is non-zero.
 
 ------------------------------------------------------------------------------
 
