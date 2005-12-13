@@ -833,9 +833,10 @@ int mds_pin(struct ptlrpc_request *req, int offset)
         RETURN(rc);
 }
 
-/*  Get a lock on the ino to sync with creation WRT inode reuse (bug 2029).
- *  If child_lockh is NULL we just get the lock as a barrier to wait for
- *  other holders of this lock, and drop it right away again. */
+/*  Get an internal lock on the inode number (but not generation) to sync
+ *  new inode creation with inode unlink (bug 2029).  If child_lockh is NULL
+ *  we just get the lock as a barrier to wait for other holders of this lock,
+ *  and drop it right away again. */
 int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
                        struct lustre_handle *child_lockh)
 {

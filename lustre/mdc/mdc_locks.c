@@ -256,6 +256,7 @@ int mdc_enqueue(struct obd_export *exp,
         int rc, flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
         ENTRY;
 
+        LASSERTF(lock_type == LDLM_IBITS
 //        LDLM_DEBUG_NOLOCK("mdsintent=%s,name=%s,dir=%lu",
 //                          ldlm_it2str(it->it_op), it_name, it_inode->i_ino);
 

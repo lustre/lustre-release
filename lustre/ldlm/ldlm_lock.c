@@ -763,19 +763,19 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         if (rc) {
                 l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "matched ("LPU64" "LPU64")",
-                           type == LDLM_PLAIN ? res_id->name[2] :
-                                policy->l_extent.start,
-                           type == LDLM_PLAIN ? res_id->name[3] :
-                                policy->l_extent.end);
+                           (type == LDLM_PLAIN || type = LDLM_IBITS) ?
+                                res_id->name[2] : policy->l_extent.start,
+                           (type == LDLM_PLAIN || type = LDLM_IBITS) ?
+                                res_id->name[3] : policy->l_extent.end);
                 l_unlock(&ns->ns_lock);
         } else if (!(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
                                   LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
                                   type, mode, res_id->name[0], res_id->name[1],
-                                  type == LDLM_PLAIN ? res_id->name[2] :
-                                        policy->l_extent.start,
-                                  type == LDLM_PLAIN ? res_id->name[3] :
-                                        policy->l_extent.end);
+                                  (type == LDLM_PLAIN || type = LDLM_IBITS) ?
+                                        res_id->name[2] :policy->l_extent.start,
+                                (type == LDLM_PLAIN || type = LDLM_IBITS) ?
+                                        res_id->name[3] : policy->l_extent.end);
         }
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);

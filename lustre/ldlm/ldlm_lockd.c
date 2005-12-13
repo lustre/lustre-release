@@ -684,16 +684,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         LASSERT(req->rq_export);
 
-        if (flags & LDLM_FL_REPLAY) {
-                lock = find_existing_lock(req->rq_export,
-                                          &dlm_req->lock_handle1);
-                if (lock != NULL) {
-                        DEBUG_REQ(D_HA, req, "found existing lock cookie "LPX64,
-                                  lock->l_handle.h_cookie);
-                        GOTO(existing_lock, rc = 0);
-                }
-        }
-
         if (dlm_req->lock_desc.l_resource.lr_type < LDLM_MIN_TYPE ||
             dlm_req->lock_desc.l_resource.lr_type >= LDLM_MAX_TYPE) {
                 DEBUG_REQ(D_ERROR, req, "invalid lock request type %d\n",
@@ -709,23 +699,20 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 GOTO(out, rc = -EFAULT);
         }
 
-        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS) &&
-            dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS) {
-                DEBUG_REQ(D_ERROR, req, "Ibits lock request from unaware "
-                          "client?\n");
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS) {
+                if (dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN) {
+                        DEBUG_REQ(D_ERROR, req,
+                                  "PLAIN lock request from IBITS client?\n");
+                        GOTO(out, rc = -EPROTO);
+                }
+        } else if (dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS) {
+                DEBUG_REQ(D_ERROR, req,
+                          "IBITS lock request from unaware client?\n");
                 GOTO(out, rc = -EPROTO);
         }
-        if (req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS &&
-            dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN) {
-                DEBUG_REQ(D_ERROR, req, "Plain lock request from ibita-aware "
-                          "client?\n");
-                GOTO(out, rc = -EPROTO);
-        }
-
 
         /* INODEBITS_INTEROP: Perform conversion from plain lock to
-         * inodebits lock if client does not support them.
-         */
+         * inodebits lock if client does not support them. */
         if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS) &&
             (dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN)) {
                 dlm_req->lock_desc.l_resource.lr_type = LDLM_IBITS;
@@ -733,6 +720,16 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                         MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE;
                 if (dlm_req->lock_desc.l_req_mode == LCK_PR)
                         dlm_req->lock_desc.l_req_mode = LCK_CR;
+        }
+
+        if (flags & LDLM_FL_REPLAY) {
+                lock = find_existing_lock(req->rq_export,
+                                          &dlm_req->lock_handle1);
+                if (lock != NULL) {
+                        DEBUG_REQ(D_HA, req, "found existing lock cookie "LPX64,
+                                  lock->l_handle.h_cookie);
+                        GOTO(existing_lock, rc = 0);
+                }
         }
 
         /* The lock's callback data might be set in the policy function */
