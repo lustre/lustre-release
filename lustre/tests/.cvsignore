@@ -71,3 +71,4 @@ rmdirmany
 flock_test
 writemany
 random-reads
+chownmany
