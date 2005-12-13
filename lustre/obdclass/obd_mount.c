@@ -412,20 +412,26 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
 #endif
         rc = class_config_parse_llog(rctxt, logname, cfg);
         obd_disconnect(exp);
-        if (rc) {
+
+        if (rc && lmd_is_client(lsi->lsi_lmd)) {
                 int rc2;
-                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
+                LCONSOLE_INFO("%s: The configuration '%s' could not be read "
                                "from the MGS (%d).  Trying local log.\n",
                                mgc->obd_name, logname, rc);
                 /* If we couldn't connect to the MGS, try reading a copy
                    of the config log stored locally on disk */
                 rc2 = class_config_parse_llog(lctxt, logname, cfg);
                 if (rc2) {
-                        LCONSOLE_ERROR("%s: Can't read the local config (%d)\n",
+                        CERROR("%s: Can't read the local config (%d)\n",
                                        mgc->obd_name, rc2);
                 } else {
                         rc = 0;
                 }
+        }
+        if (rc) {
+                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
+                               "(%d), mount will fail.\n",
+                               mgc->obd_name, logname, rc);
         }
 
         CDEBUG(D_MOUNT, "after lustre_get_process_log %s\n", logname);
@@ -1063,12 +1069,16 @@ static void server_put_super(struct super_block *sb)
                         obd->obd_force = 1;
                 if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
                         obd->obd_fail = 1;
+                /* We can't seem to give an error return code
+                   to .put_super, so we better make sure we clean up!
+                   FIXME is there a way to get around this? */
+                obd->obd_force = 1;
                 class_manual_cleanup(obd);
         } else {
                 CERROR("no obd %s\n", lsi->lsi_ldd->ldd_svname);
         }
 
-       server_stop_servers(sb);
+        server_stop_servers(sb);
 
         /* If they wanted the mgs to stop separately from the mdt, they
            should have put it on a different device. */ 
@@ -1232,13 +1242,13 @@ int lustre_common_put_super(struct super_block *sb)
         
         rc = lustre_stop_mgc(sb);
         if (rc) {
-                CDEBUG(D_MOUNT, "Can't stop MGC - busy? %d\n", rc);
                 if (rc != -EBUSY) {
                         CERROR("Can't stop MGC: %d\n", rc);
                         return rc;
                 }
                 /* BUSY just means that there's some other obd that
                    needs the mgc.  Let him clean it up. */
+                CDEBUG(D_MOUNT, "MGC busy, not stopping\n");
         }
         rc = lustre_free_lsi(sb);
         return rc;

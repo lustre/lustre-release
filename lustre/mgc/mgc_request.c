@@ -76,15 +76,12 @@ int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
         if (!rc) {
                 rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
                                              lustre_swab_mgmt_target_info);
-                if (mti->mti_rc) {
-                        CERROR ("target_add failed. rc=%d\n", mti->mti_rc);
-                        GOTO (out, rc = mti->mti_rc);
-                }
                 memcpy(mti, rep_mti, sizeof(*rep_mti));
                 CDEBUG(D_MGC, "target_add %s got index = %d\n",
                        mti->mti_svname, mti->mti_stripe_index);
+        } else {
+                CERROR("target_add failed. rc=%d\n", rc);
         }
-out:
         ptlrpc_req_finished(req);
 
         RETURN(rc);
@@ -219,8 +216,6 @@ static int mgc_cleanup(struct obd_device *obd)
         struct client_obd *cli = &obd->u.cli;
         int rc;
 
-        //lprocfs_obd_cleanup(obd);
-
         /* FIXME calls to mgc_fs_setup must take an obd ref to insure there's
            no fs by the time we get here. */
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
@@ -231,63 +226,32 @@ static int mgc_cleanup(struct obd_device *obd)
 
         ptlrpcd_decref();
         
-        OBD_FREE(cli->cl_mgc_rpc_lock, sizeof (*cli->cl_mgc_rpc_lock));
-
         return client_obd_cleanup(obd);
 }
 
-/* the same as mdc_setup */
 static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct client_obd *cli = &obd->u.cli;
         int rc;
         ENTRY;
-
-        OBD_ALLOC(cli->cl_mgc_rpc_lock, sizeof (*cli->cl_mgc_rpc_lock));
-        if (!cli->cl_mgc_rpc_lock)
-                RETURN(-ENOMEM);
-        mgc_init_rpc_lock(cli->cl_mgc_rpc_lock);
 
         ptlrpcd_addref();
 
         rc = client_obd_setup(obd, len, buf);
         if (rc)
-                GOTO(err_rpc_lock, rc);
+                GOTO(err_decref, rc);
 
         rc = obd_llog_init(obd, obd, 0, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
-                GOTO(err_rpc_lock, rc);
+                GOTO(err_cleanup, rc);
         }
-
-#if 0
-        struct lustre_mount_info *lmi;
-        /* FIXME There's only one mgc for all local servers.  Must mgc_fs_setup 
-           on demand only when reading a local log file, then cleanup.
-           Make sure there's a lock so nobody else can mgc_fs_setup in the 
-           meantime */
-        lmi = lustre_get_mount(obd->obd_name);
-        if (lmi) {
-                CERROR("mgc has local disk\n");
-                /* there's a local disk, we must get access */
-                rc = mgc_fs_setup(obd, lmi->lmi_sb, lmi->lmi_mnt);
-                if (rc) {
-                        CERROR("fs setup failed %d\n", rc);
-                        mgc_cleanup(obd);
-                        RETURN(-ENOENT);
-                }
-        }
-        else
-                CERROR("mgc does not have local disk (client only)\n");
-#endif
-
-        INIT_LIST_HEAD(&cli->cl_mgc_open_llogs);
 
         RETURN(rc);
 
-err_rpc_lock:
+err_cleanup:
+        client_obd_cleanup(obd);
+err_decref:
         ptlrpcd_decref();
-        OBD_FREE(cli->cl_mgc_rpc_lock, sizeof (*cli->cl_mgc_rpc_lock));
         RETURN(rc);
 }
 

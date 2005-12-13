@@ -953,7 +953,6 @@ struct mgmt_target_info {
         __u32            mti_stripe_pattern;   /* PATTERN_RAID0, PATTERN_RAID1 */
         __u64            mti_stripe_size;      
         __u64            mti_stripe_offset;    
-        __u32            mti_rc;               /* return code from MGS */
 };
 
 extern void lustre_swab_mgmt_target_info(struct mgmt_target_info *oinfo);

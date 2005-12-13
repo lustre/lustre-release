@@ -235,6 +235,7 @@ static int mgs_cleanup(struct obd_device *obd)
 
         if (mgs->mgs_sb == NULL)
                 RETURN(0);
+
         save_dev = lvfs_sbdev(mgs->mgs_sb);
         
         lprocfs_obd_cleanup(obd);
@@ -248,18 +249,13 @@ static int mgs_cleanup(struct obd_device *obd)
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        if (obd->obd_recovering) {
-                target_cancel_recovery_timer(obd);
-                obd->obd_recovering = 0;
-        }
-        spin_unlock_bh(&obd->obd_processing_task_lock);
+        LASSERT(!obd->obd_recovering);
 
         lvfs_clear_rdonly(save_dev);
 
         fsfilt_put_ops(obd->obd_fsops);
 
-        LCONSOLE_INFO("MGS %s has stopped.\n", obd->obd_name);
+        LCONSOLE_INFO("%s has stopped.\n", obd->obd_name);
 
         RETURN(0);
 }
@@ -267,17 +263,13 @@ static int mgs_cleanup(struct obd_device *obd)
 static int mgs_handle_target_add(struct ptlrpc_request *req)
 {    
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct mgmt_target_info *req_mti, *mti, *rep_mti;
+        struct mgmt_target_info *mti, *rep_mti;
         int rep_size = sizeof(*mti);
         int rc;
         ENTRY;
 
-        OBD_ALLOC(mti, sizeof(*mti));
-        if (!mti)
-                GOTO(out, rc = -ENOMEM);
-        req_mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
-                                     lustre_swab_mgmt_target_info);
-        memcpy(mti, req_mti, sizeof(*mti));
+        mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
+                                 lustre_swab_mgmt_target_info);
         
         CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 
                mti->mti_stripe_index);
@@ -301,14 +293,12 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         }
 
 out:
-        CDEBUG(D_MGS, "replying with %s, index=%d\n", mti->mti_svname, 
-               mti->mti_stripe_index);
+        CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname, 
+               mti->mti_stripe_index, rc);
         lustre_pack_reply(req, 1, &rep_size, NULL); 
         /* send back the whole mti in the reply */
         rep_mti = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_mti));
         memcpy(rep_mti, mti, sizeof(*rep_mti));
-        // FIXME rc is redundant, part of the req (target_send_reply)
-        rep_mti->mti_rc = rc;
         RETURN(rc);
 }
 
@@ -494,6 +484,7 @@ static struct obd_ops mgs_obd_ops = {
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,
         .o_cleanup         = mgs_cleanup,
+        .o_destroy_export  = target_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
 };
 

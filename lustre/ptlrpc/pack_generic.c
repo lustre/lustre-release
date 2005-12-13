@@ -575,7 +575,6 @@ void lustre_swab_mgmt_target_info(struct mgmt_target_info *mti)
         __swab32s(&mti->mti_stripe_pattern);
         __swab64s(&mti->mti_stripe_size);
         __swab64s(&mti->mti_stripe_offset);
-        __swab32s(&mti->mti_rc);
 }
 
 static void lustre_swab_obd_dqinfo (struct obd_dqinfo *i)

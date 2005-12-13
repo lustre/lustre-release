@@ -581,6 +581,8 @@ static int mgs_write_log_lov(struct obd_device *obd, char *fsname,
         /* can these be the same? */
         uuid = (char *)lovdesc->ld_uuid.uuid;
 
+        /* This should always be the first entry in a log.
+        rc = mgs_clear_log(obd, logname); */
         rc = record_start_log(obd, &llh, logname);
         rc = record_attach(obd, llh, lovname, "lov", uuid);
         rc = record_lov_setup(obd, llh, lovname, lovdesc);
