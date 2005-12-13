@@ -122,12 +122,12 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
 #ifdef LPROCFS
         type->typ_procroot = lprocfs_register(type->typ_name, proc_lustre_root,
                                               vars, type);
-#endif
         if (IS_ERR(type->typ_procroot)) {
                 rc = PTR_ERR(type->typ_procroot);
                 type->typ_procroot = NULL;
                 GOTO (failed, rc);
         }
+#endif
 
         spin_lock(&obd_types_lock);
         list_add(&type->typ_chain, &obd_types);
