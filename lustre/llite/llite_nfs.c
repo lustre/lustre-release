@@ -127,13 +127,16 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         spin_lock(&dcache_lock);
         for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
                 result = list_entry(lp,struct dentry, d_alias);
+                lock_dentry(result);
                 if (!(result->d_flags & DCACHE_DISCONNECTED)) {
                         dget_locked(result);
                         ll_set_dflags(result, DCACHE_REFERENCED);
+                        unlock_dentry(result);
                         spin_unlock(&dcache_lock);
                         iput(inode);
                         return result;
                 }
+                unlock_dentry(result);
         }
         spin_unlock(&dcache_lock);
         result = d_alloc_root(inode);

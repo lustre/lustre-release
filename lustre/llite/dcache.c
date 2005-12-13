@@ -179,6 +179,7 @@ restart:
                         continue;
                 }
 
+                lock_dentry(dentry);
                 if (atomic_read(&dentry->d_count) == 0) {
                         CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
                                "inode %p\n", dentry->d_name.len,
@@ -186,9 +187,7 @@ restart:
                                dentry->d_inode);
                         dget_locked(dentry);
                         __d_drop(dentry);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                        INIT_HLIST_NODE(&dentry->d_hash);
-#endif
+                        unlock_dentry(dentry);
                         spin_unlock(&dcache_lock);
                         dput(dentry);
                         goto restart;
@@ -197,11 +196,14 @@ restart:
                                "inode %p refc %d\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
                                dentry->d_inode, atomic_read(&dentry->d_count));
-                        hlist_del_init(&dentry->d_hash);
+                        __d_drop(dentry);
                         dentry->d_flags |= DCACHE_LUSTRE_INVALID;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                         hlist_add_head(&dentry->d_hash,
                                        &sbi->ll_orphan_dentry_list);
+#endif
                 }
+                unlock_dentry(dentry);
         }
         spin_unlock(&dcache_lock);
         EXIT;
@@ -327,7 +329,9 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         /* unfortunately ll_intent_lock may cause a callback and revoke our
          * dentry */
         spin_lock(&dcache_lock);
-        hlist_del_init(&de->d_hash);
+        lock_dentry(de);
+        __d_drop(de);
+        unlock_dentry(de);
         __d_rehash(de, 0);
         spin_unlock(&dcache_lock);
 
@@ -348,7 +352,9 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                                de->d_name.name, de, de->d_parent, de->d_inode,
                                atomic_read(&de->d_count));
                 ll_lookup_finish_locks(it, de);
+                lock_dentry(de);
                 de->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                unlock_dentry(de);
         }
         RETURN(rc);
 }

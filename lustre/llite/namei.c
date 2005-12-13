@@ -312,13 +312,12 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                            de->d_name.len) != 0)
                         continue;
 
-                if (!list_empty(&dentry->d_lru))
-                        list_del_init(&dentry->d_lru);
-
-                hlist_del_init(&dentry->d_hash);
-                __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
+                dget_locked(dentry);
+                lock_dentry(dentry);
+                __d_drop(dentry);
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-                atomic_inc(&dentry->d_count);
+                unlock_dentry(dentry);
+                __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
                 iput(inode);
                 CDEBUG(D_DENTRY, "alias dentry %.*s (%p) parent %p inode %p "

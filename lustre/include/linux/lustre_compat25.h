@@ -56,6 +56,9 @@ void groups_free(struct group_info *ginfo);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
+#define lock_dentry(___dentry)          spin_lock(&(___dentry)->d_lock)
+#define unlock_dentry(___dentry)        spin_unlock(&(___dentry)->d_lock)
+
 #define lock_24kernel()         do {} while (0)
 #define unlock_24kernel()       do {} while (0)
 
@@ -146,6 +149,9 @@ static inline int cleanup_group_info(void)
 #endif
 
 #else /* 2.4.. */
+
+#define lock_dentry(___dentry)
+#define unlock_dentry(___dentry)
 
 #define lock_24kernel()         lock_kernel()
 #define unlock_24kernel()       unlock_kernel()
