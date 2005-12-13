@@ -237,8 +237,8 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_IBITS     0x1000ULL /* support for inodebits locks */
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
 
-#define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY|OBD_CONNECT_VERSION| \
-                                OBD_CONNECT_ACL|OBD_CONNECT_XATTR| \
+#define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
+                                OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
@@ -325,7 +325,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
-#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be created with crow */
+#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be create on write */
 
 /*
  * set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
@@ -351,7 +351,7 @@ struct obdo {
         obd_time                o_ctime;
         obd_blocks              o_blocks;       /* brw: cli sent cached bytes */
         obd_size                o_grant;
-        
+
         /* 32-bit fields start here: keep an even number of them via padding */
         obd_blksize             o_blksize;      /* optimal IO blocksize */
         obd_mode                o_mode;         /* brw: cli sent cache remain */
@@ -621,7 +621,7 @@ typedef enum {
 struct ll_fid {
         __u64 id;         /* holds object id */
         __u32 generation; /* holds object generation */
-        
+
         __u32 f_type;     /* holds object type or stripe idx when passing it to
                            * OST for saving into EA. */
 };
@@ -734,9 +734,9 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 #define MDS_OPEN_SYNC            00010000
 #define MDS_OPEN_DIRECTORY       00200000
 
-#define MDS_OPEN_JOIN_FILE     0040000000 /* open for join file*/
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
+#define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file*/
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
 
@@ -1022,7 +1022,7 @@ typedef enum {
         OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
         PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000, /* obsolete */
         LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
-        LLOG_JOIN_REC    = LLOG_OP_MAGIC | 0x50000, 
+        LLOG_JOIN_REC    = LLOG_OP_MAGIC | 0x50000,
         LLOG_HDR_MAGIC   = LLOG_OP_MAGIC | 0x45539,
         LLOG_LOGID_MAGIC = LLOG_OP_MAGIC | 0x4553b,
 } llog_op_type;

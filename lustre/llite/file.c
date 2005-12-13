@@ -1228,7 +1228,7 @@ static int join_sanity_check(struct inode *head, struct inode *tail)
         if ((ll_i2sbi(head)->ll_flags & LL_SBI_JOIN) == 0) {
                 CERROR("server do not support join \n");
                 RETURN(-EINVAL);
-        } 
+        }
         if (!S_ISREG(tail->i_mode) || !S_ISREG(head->i_mode)) {
                 CERROR("tail ino %lu and ino head %lu must be regular\n",
                        head->i_ino, tail->i_ino);
@@ -1246,12 +1246,12 @@ static int join_sanity_check(struct inode *head, struct inode *tail)
         RETURN(0);
 }
 
-static int join_file(struct inode *head_inode, struct file *head_filp, 
+static int join_file(struct inode *head_inode, struct file *head_filp,
                      struct file *tail_filp)
-{ 
+{
         struct inode *tail_inode, *tail_parent;
         struct dentry *tail_dentry = tail_filp->f_dentry;
-        struct lookup_intent oit = {.it_op = IT_OPEN, 
+        struct lookup_intent oit = {.it_op = IT_OPEN,
                                    .it_flags = head_filp->f_flags|O_JOIN_FILE};
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
@@ -1261,9 +1261,9 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         __u32  tsize = head_inode->i_size;
         struct file *f;
         int    rc;
-        ENTRY; 
+        ENTRY;
 
-        tail_dentry = tail_filp->f_dentry; 
+        tail_dentry = tail_filp->f_dentry;
         tail_inode = tail_dentry->d_inode;
         tail_parent = tail_dentry->d_parent->d_inode;
 
@@ -1278,31 +1278,31 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         }
 
         f = get_empty_filp();
-        if (!f) {
-                ll_file_data_put(fd);
+        if (f == NULL)
                 GOTO(out, rc = -ENOMEM);
-        }
+
         f->f_dentry = head_filp->f_dentry;
         f->f_vfsmnt = head_filp->f_vfsmnt;
 
         ll_prepare_mdc_op_data(op_data, head_inode, tail_parent,
                                tail_dentry->d_name.name,
                                tail_dentry->d_name.len, 0);
-        rc = mdc_enqueue(ll_i2mdcexp(head_inode), LDLM_PLAIN, &oit, LCK_PW,
+        rc = mdc_enqueue(ll_i2mdcexp(head_inode), LDLM_IBITS, &oit, LCK_PW,
                          op_data, &lockh, &tsize, 0, ldlm_completion_ast,
                          ll_mdc_blocking_ast, &hsize, 0);
+
+        if (rc < 0)
+                GOTO(out, rc);
 
         req = oit.d.lustre.it_data;
         rc = oit.d.lustre.it_status;
 
-        if (rc < 0) {
-                ll_file_data_put(fd);
+        if (rc < 0)
                 GOTO(out, rc);
-        }
 
         rc = ll_local_open(f, &oit, fd);
         LASSERTF(rc == 0, "rc = %d\n", rc);
-        
+
         fd = NULL;
         ll_intent_release(&oit);
 
@@ -1317,7 +1317,7 @@ out:
         RETURN(rc);
 }
 
-static int ll_file_join(struct inode *head, struct file *filp, 
+static int ll_file_join(struct inode *head, struct file *filp,
                         char *filename_tail)
 {
         struct inode *tail = NULL, *first, *second;
@@ -1329,9 +1329,9 @@ static int ll_file_join(struct inode *head, struct file *filp,
         int rc = 0, cleanup_phase = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:head=%lu/%u(%p) tail %s\n", 
+        CDEBUG(D_VFSTRACE, "VFS Op:head=%lu/%u(%p) tail %s\n",
                head->i_ino, head->i_generation, head, filename_tail);
-        
+
         tail_filp = filp_open(filename_tail, O_WRONLY, 0644);
         if (IS_ERR(tail_filp)) {
                 CERROR("Can not open tail file %s", filename_tail);
@@ -1386,12 +1386,12 @@ cleanup:
         switch (cleanup_phase) {
         case 3:
                 ll_tree_unlock(&second_tree);
-                obd_cancel_unused(ll_i2obdexp(second), 
+                obd_cancel_unused(ll_i2obdexp(second),
                                   ll_i2info(second)->lli_smd, 0, NULL);
         case 2:
                 ll_tree_unlock(&first_tree);
-                obd_cancel_unused(ll_i2obdexp(first), 
-                                  ll_i2info(first)->lli_smd, 0, NULL); 
+                obd_cancel_unused(ll_i2obdexp(first),
+                                  ll_i2info(first)->lli_smd, 0, NULL);
         case 1:
                 filp_close(tail_filp, 0);
                 if (tail)
@@ -1459,7 +1459,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case LL_IOC_JOIN: {
                 char *ftail;
                 int rc;
-                
+
                 ftail = getname((const char *)arg);
                 if (IS_ERR(ftail))
                         RETURN(PTR_ERR(ftail));

@@ -638,7 +638,7 @@ cleanup:
                 filter_iobuf_put(&exp->exp_obd->u.filter, iobuf, oti);
         case 2:
                 pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-                if (rc && dentry && !IS_ERR(dentry))
+                if (rc)
                         f_dput(dentry);
                 break;
         case 1:

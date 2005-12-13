@@ -280,19 +280,24 @@ int mdc_enqueue(struct obd_export *exp,
 
                 if (it->it_flags & O_JOIN_FILE) {
                         __u64 head_size = *(__u32*)cb_data;
-                        __u32 tsize = *(__u32*)lmm; 
-                        size[req_buffers++] = sizeof(struct mds_rec_join); 
-                        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION, 
-                                              LDLM_ENQUEUE, req_buffers, size, NULL);
-                        /*when joining file, cb_data and lmm args together 
-                         *indicate the head file size*/
-                        mdc_join_pack(req, req_buffers - 1, data, 
-                                      head_size << 32 | tsize);
+                        __u32 tsize = *(__u32*)lmm;
+
+                        /* join is like an unlink of the tail */
+                        policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+                        size[req_buffers++] = sizeof(struct mds_rec_join);
+                        req = ptlrpc_prep_req(class_exp2cliimp(exp),
+                                              LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
+                                              req_buffers, size, NULL);
+                        /* when joining file, cb_data and lmm args together
+                         * indicate the head file size*/
+                        mdc_join_pack(req, req_buffers - 1, data,
+                                      (head_size << 32) | tsize);
                         cb_data = NULL;
                         lmm = NULL;
                 } else
-                        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                              LDLM_ENQUEUE, req_buffers, size, NULL);
+                        req = ptlrpc_prep_req(class_exp2cliimp(exp),
+                                              LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
+                                              req_buffers, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -441,15 +446,15 @@ int mdc_enqueue(struct obd_export *exp,
                         RETURN (-EPROTO);
                 }
                 if (body->valid & OBD_MD_FLMODEASIZE) {
-                        LASSERTF(it->it_flags & O_JOIN_FILE, 
-                               "flags %#x should include join\n", it->it_flags);
+                        LASSERTF(it->it_flags & O_JOIN_FILE,
+                                "flags %#x should include join\n",it->it_flags);
                         if (obddev->u.cli.cl_max_mds_easize < body->eadatasize){
                            obddev->u.cli.cl_max_mds_easize = body->eadatasize;
                                 CDEBUG(D_INFO, "change maxeasize to %d,\n",
                                        body->eadatasize);
                         }
-                        if (obddev->u.cli.cl_max_mds_cookiesize < 
-                                body->capability) {
+                        if (obddev->u.cli.cl_max_mds_cookiesize <
+                            body->capability) {
                           obddev->u.cli.cl_max_mds_cookiesize =body->capability;
                                 CDEBUG(D_INFO, "change maxcookiesize to %d,\n",
                                        body->capability);

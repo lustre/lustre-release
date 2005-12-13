@@ -954,14 +954,14 @@ int mds_open(struct mds_update_record *rec, int offset,
         LASSERT(dparent->d_inode != NULL);
 
         cleanup_phase = 1; /* parent dentry and lock */
-       
+
         if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
                 dchild = dget(dparent);
                 cleanup_phase = 2; /* child dentry */
                 acc_mode = accmode(dchild->d_inode, rec->ur_flags);
                 GOTO(found_child, rc);
         }
-        
+
         /* Step 2: Lookup the child */
         dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
@@ -1052,7 +1052,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                 acc_mode = accmode(dchild->d_inode, rec->ur_flags);
         }
 
-
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
                  "dchild %.*s (%p) inode %p/%lu/%u\n", dchild->d_name.len,
                  dchild->d_name.name, dchild, dchild->d_inode,
@@ -1118,7 +1117,7 @@ found_child:
  cleanup:
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
-        
+
  cleanup_no_trans:
         switch (cleanup_phase) {
         case 2:

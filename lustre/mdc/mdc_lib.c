@@ -122,11 +122,11 @@ static __u32 mds_pack_open_flags(__u32 flags)
 }
 
 /* packing of MDS records */
-void mdc_join_pack(struct ptlrpc_request *req, int offset, 
+void mdc_join_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data, __u64 head_size)
 {
         struct mds_rec_join *rec;
- 
+
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
         LASSERT(rec != NULL);
         rec->jr_fid = op_data->fid2;

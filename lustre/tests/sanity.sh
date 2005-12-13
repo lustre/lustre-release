@@ -869,7 +869,7 @@ test_27d() {
 	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
-	#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
+	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
 run_test 27d "create file with default settings ================"
 
@@ -1010,6 +1010,7 @@ test_27o() {
 	reset_enospc
 	rm -f $DIR/d27/f27o
 	exhaust_all_precreations 0x215
+	sleep 5
 
 	touch $DIR/d27/f27o && error
 
@@ -2083,11 +2084,11 @@ test_54c() {
 	tfile="$DIR/f54c"
 	tdir="$DIR/d54c"
 	loopdev="$DIR/loop54c"
-	
+
 	find_loop_dev 
 	[ -z "$LOOPNUM" ] && echo "couldn't find empty loop device" && return
 	mknod $loopdev b 7 $LOOPNUM
-	echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."	
+	echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."
 	dd if=/dev/zero of=$tfile bs=`page_size` seek=1024 count=1 > /dev/null
 	losetup $loopdev $tfile || error "can't set up $loopdev for $tfile"
 	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
@@ -2409,7 +2410,7 @@ test_65g() {
         $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
         $LSTRIPE -d $DIR/d65 || error "setstripe"
         $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || \
-		error "delete default stripe failed"	
+		error "delete default stripe failed"
 }
 run_test 65g "directory setstripe -d ==========================="
 
@@ -2556,7 +2557,7 @@ test_71() {
 	mkdir $DIR$LIB71 || error "can't create $DIR$LIB71"
 	cp $LIB71/libc* $DIR$LIB71 || error "can't copy $LIB71/libc*"
 	cp $LIB71/ld-* $DIR$LIB71 || error "can't create $LIB71/ld-*"
-	
+
 	echo "chroot $DIR /dbench -c client.txt 2"
 	chroot $DIR /dbench -c client.txt 2
 	RC=$?
@@ -2603,6 +2604,7 @@ run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
 JOIN=${JOIN:-"lfs join"}
 test_75() {
 	rm -rf $DIR/f75*
+
 	dd if=/dev/urandom of=$DIR/f75_128k bs=1024 count=128
 	chmod 777 $DIR/f75_128k
 	cp -p $DIR/f75_128k $DIR/f75_head
@@ -2611,26 +2613,24 @@ test_75() {
 	cat $DIR/f75_128k >> $DIR/f75_sim_sim
 
 	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
-	diff $DIR/f75_head $DIR/f75_sim_sim 
+	diff $DIR/f75_head $DIR/f75_sim_sim
 	diff -u $DIR/f75_head $DIR/f75_sim_sim || error "files are different"
-	ls $DIR/f75_tail && error "tail file still exist after join"
-	
+	$CHECKSTAT -a $DIR/f75_tail || error "tail file still exist after join"
+
 	cp -p $DIR/f75_128k $DIR/f75_tail
 	cat $DIR/f75_sim_sim >> $DIR/f75_join_sim
 	cat $DIR/f75_128k >> $DIR/f75_join_sim
 	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
 	diff -u $DIR/f75_head $DIR/f75_join_sim
 	diff -u $DIR/f75_head $DIR/f75_join_sim || error "files are different"
-	ls $DIR/f75_tail && error "tail file still exist after join"
-		
+	$CHECKSTAT -a $DIR/f75_tail || error "tail file still exist after join"
 
-	cp -p $DIR/f75_128k $DIR/f75_tail	
+	cp -p $DIR/f75_128k $DIR/f75_tail
 	cat $DIR/f75_128k >> $DIR/f75_sim_join
 	cat $DIR/f75_join_sim >> $DIR/f75_sim_join
 	$JOIN $DIR/f75_tail $DIR/f75_head || error "join error"
-	diff -u $DIR/f75_tail $DIR/f75_sim_join || error "files are different" 
-	ls $DIR/f75_head && error "tail file still exist after join"
-
+	diff -u $DIR/f75_tail $DIR/f75_sim_join || error "files are different"
+	$CHECKSTAT -a $DIR/f75_head || error "tail file still exist after join"
 
 	cp -p $DIR/f75_128k $DIR/f75_head
 	cp -p $DIR/f75_128k $DIR/f75_head_tmp
@@ -2639,21 +2639,24 @@ test_75() {
 	$JOIN $DIR/f75_head $DIR/f75_head_tmp || error "join error"
 	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
 	diff -u $DIR/f75_head $DIR/f75_join_join || error "files are different"
-	ls $DIR/f75_head_tmp && error "tail file still exist after join"		
-	ls $DIR/f75_tail && error "tail file still exist after join"		
+	$CHECKSTAT -a $DIR/f75_head_tmp || error "tail file exist after join"
+	$CHECKSTAT -a $DIR/f75_tail || error "tail file still exist after join"
 
 	rm -rf $DIR/f75_head || "delete join file error"
-	cp -p $DIR/f75_128k $DIR/f75_join_10_compare	
-	cp -p $DIR/f75_128k $DIR/f75_join_10	
+	cp -p $DIR/f75_128k $DIR/f75_join_10_compare
+	cp -p $DIR/f75_128k $DIR/f75_join_10
 	for ((i=0;i<10;i++)); do
 		cat $DIR/f75_128k >> $DIR/f75_join_10_compare
 		cp -p $DIR/f75_128k $DIR/f75_tail
 		$JOIN $DIR/f75_join_10 $DIR/f75_tail || error "join error"
-		ls $DIR/f75_tail && error "tail file exist after join" 	
-	done	
-	diff -u $DIR/f75_join_10 $DIR/f75_join_10_compare || error "files are different"
+		$CHECKSTAT -a $DIR/f75_tail ||error "tail file exist after join"
+	done
+	diff -u $DIR/f75_join_10 $DIR/f75_join_10_compare || \
+		error "files are different"
 	$LFS getstripe $DIR/f75_join_10
-	$OPENUNLINK $DIR/f75_join_10 $DIR/f75_join_10 || error "files unlink open" 
+	$OPENUNLINK $DIR/f75_join_10 $DIR/f75_join_10||error "files unlink open"
+
+	rm -rf $DIR/f75*
 }
 
 run_test 75 "TEST join file"

@@ -65,7 +65,7 @@
 #define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_mds_data *)
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
-#define O_JOIN_FILE        0200000000   /* hopefully this does not conflict */
+#define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002

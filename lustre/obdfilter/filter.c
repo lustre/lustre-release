@@ -1958,15 +1958,15 @@ static int filter_getattr(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-/* this should be enabled/disabled in condition to enabled/disabled large inodes
- * in backing store FS. */
+/* this should be enabled/disabled in condition to enabled/disabled large
+ * inodes (fast EAs) in backing store FS. */
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                         void *handle, struct obdo *oa)
 {
         struct obd_device *obd = exp->exp_obd;
         int rc = 0;
         ENTRY;
-        
+
         if (oa->o_valid & OBD_MD_FLFID) {
                 struct filter_fid ff;
                 obd_gr group = 0;
@@ -1974,9 +1974,9 @@ int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                 if (oa->o_valid & OBD_MD_FLGROUP)
                         group = oa->o_gr;
 
-                /* packing fid and converting it to LE for storing into EA. Here
-                 * ->o_stripe_idx should be filled by LOV and rest of fields -
-                 * by client. */
+                /* packing fid and converting it to LE for storing into EA.
+                 * Here ->o_stripe_idx should be filled by LOV and rest of
+                 * fields - by client. */
                 ff.ff_fid.id = cpu_to_le64(oa->o_fid);
                 ff.ff_fid.f_type = cpu_to_le32(oa->o_stripe_idx);
                 ff.ff_fid.generation = cpu_to_le32(oa->o_generation);
@@ -1986,7 +1986,7 @@ int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                 CDEBUG(D_INODE, "storing filter fid EA ("LPU64"/%u/%u"
                        LPU64"/"LPU64")\n", oa->o_fid, oa->o_stripe_idx,
                        oa->o_generation, oa->o_id, group);
-                        
+
                 rc = fsfilt_set_md(obd, inode, handle, &ff, sizeof(ff));
                 if (rc)
                         CERROR("store fid in object failed! rc: %d\n", rc);
@@ -2902,7 +2902,7 @@ static int filter_health_check(struct obd_device *obd)
          * health_check to return 0 on healthy
          * and 1 on unhealthy.
          */
-        if(obd->u.obt.obt_sb->s_flags & MS_RDONLY)
+        if (obd->u.obt.obt_sb->s_flags & MS_RDONLY)
                 rc = 1;
 
         LASSERT(filter->fo_health_check_filp != NULL);

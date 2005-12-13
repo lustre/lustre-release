@@ -429,7 +429,7 @@ int lfs_join(int argc, char **argv)
 {
         char *name_head, *name_tail;
         int fd, rc;
-        off_t size;
+        loff_t size;
 
         if (argc != 3)
                 return CMD_HELP;
@@ -442,8 +442,8 @@ int lfs_join(int argc, char **argv)
         }
         size = lseek(fd, 0, SEEK_END);
         if (size % JOIN_FILE_ALIGN) {
-                fprintf(stderr, "head file %s size %llu must be mutiple of 4k\n",
-                        name_head, size);
+                fprintf(stderr,"head file %s size %llu must be mutiple of %d\n",
+                        name_head, size, JOIN_FILE_ALIGN);
                 rc = -EINVAL;
                 goto out;
         }

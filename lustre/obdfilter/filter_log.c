@@ -206,12 +206,6 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
-        if (rec->lrh_type != MDS_UNLINK_REC &&
-            rec->lrh_type != MDS_SETATTR_REC &&
-            rec->lrh_type != LLOG_GEN_REC) {
-                CERROR("log record type error\n");
-                RETURN(-EINVAL);
-        }
 
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
@@ -234,7 +228,10 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                 llog_cancel(ctxt, NULL, 1, &cookie, 0);
                 RETURN(rc);
                 }
+                break;
         default:
+                CERROR("log record type %08x unknown\n", rec->lrh_type);
+                RETURN(-EINVAL);
                 break;
         }
 

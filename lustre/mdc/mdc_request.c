@@ -866,16 +866,13 @@ out:
         return rc;
 }
 
-#define INIT_RECOV_BACKUP "init_recov_bk"
 int mdc_set_info(struct obd_export *exp, obd_count keylen,
                  void *key, obd_count vallen, void *val)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
 
-        /* Try to "recover" the initial connection; i.e. retry */
-        if (keylen == strlen("initial_recov") &&
-            memcmp(key, "initial_recov", strlen("initial_recov")) == 0) {
+        if (KEY_IS("initial_recov")) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
@@ -884,8 +881,7 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         /* Turn off initial_recov after we try all backup servers once */
-        if (keylen == strlen(INIT_RECOV_BACKUP) &&
-            memcmp(key, INIT_RECOV_BACKUP, strlen(INIT_RECOV_BACKUP)) == 0) {
+        if (KEY_IS("init_recov_bk")) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov_bk = *(int *)val;
@@ -895,8 +891,7 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
                 RETURN(0);
         }
-        if (keylen == strlen("read-only") &&
-            memcmp(key, "read-only", strlen("read-only")) == 0) {
+        if (KEY_IS("read-only")) {
                 struct ptlrpc_request *req;
                 int size[2] = {keylen, vallen};
                 char *bufs[2] = {key, val};

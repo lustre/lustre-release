@@ -20,13 +20,13 @@ do {                                                            \
 
 #define STRINGIFY(a) #a
 
-#if 0
-#define CHECK_DEFINE(a)                                         \
-        printf("        CLASSERT("#a" == "STRINGIFY(a) ");\n", (long long)a)
 
-#define CHECK_VALUE(a)                                          \
+#define CHECK_CDEFINE(a)                                        \
+        printf("        CLASSERT("#a" == "STRINGIFY(a) ");\n")
+
+#define CHECK_CVALUE(a)                                         \
         printf("        CLASSERT("#a" == %lld);\n", (long long)a)
-#else
+
 #define CHECK_DEFINE(a)                                         \
 do {                                                            \
         printf("        LASSERTF("#a" == "STRINGIFY(a)          \
@@ -47,7 +47,6 @@ do {                                                            \
                " == %lldULL, \" found %%lld\\n\",\n                 "\
                "(long long)"#a");\n", (long long)a);            \
 } while(0)
-#endif
 
 #define CHECK_MEMBER_OFFSET(s,m)                                \
 do {                                                            \
@@ -350,7 +349,10 @@ check_mds_body(void)
         CHECK_VALUE(MDS_OPEN_SYNC);
         CHECK_VALUE(MDS_OPEN_DIRECTORY);
         CHECK_VALUE(MDS_OPEN_DELAY_CREATE);
-        CHECK_VALUE(MDS_OPEN_HAS_EA);
+        CHECK_CDEFINE(MDS_OPEN_OWNEROVERRIDE);
+        CHECK_CDEFINE(MDS_OPEN_JOIN_FILE);
+        CHECK_CDEFINE(MDS_OPEN_HAS_EA);
+        CHECK_CDEFINE(MDS_OPEN_HAS_OBJS);
 }
 
 static void

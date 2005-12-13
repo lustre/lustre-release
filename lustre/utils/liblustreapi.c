@@ -363,8 +363,8 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
         }
 }
 
-void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname, 
-                            char *fname, int obdindex, int quiet, 
+void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname,
+                            char *fname, int obdindex, int quiet,
                             int header, int body)
 {
         struct lov_user_md_join *lumj = (struct lov_user_md_join *)lum;
@@ -379,7 +379,7 @@ void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname,
                         }
                 }
         } else if (!quiet) {
-                printf("%s/%s  (joined_file)\n", dname, fname);
+                printf("%s/%s\n", dname, fname);
                 obdstripe = 1;
         }
 
@@ -396,7 +396,8 @@ void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname,
         if (body) {
                 unsigned long long start = -1, end = 0;
                 if (!quiet && obdstripe == 1)
-                        printf("\tobdidx\t\t objid\t\tobjid\t\t group\t\tstart\t\tend\n");
+                        printf("joined\tobdidx\t\t objid\t\tobjid\t\t group"
+                               "\t\tstart\t\tend\n");
                 for (i = 0; i < lumj->lmm_stripe_count; i++) {
                         int idx = lumj->lmm_objects[i].l_ost_idx;
                         long long oid = lumj->lmm_objects[i].l_object_id;
@@ -405,7 +406,7 @@ void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname,
                                 printf("\t%6u\t%14llu\t%#13llx\t%14llu%s",
                                        idx, oid, oid, gr,
                                        obdindex == idx ? " *" : "");
-                        if (start != lumj->lmm_objects[i].l_extent_start || 
+                        if (start != lumj->lmm_objects[i].l_extent_start ||
                             end != lumj->lmm_objects[i].l_extent_end) {
                                 start = lumj->lmm_objects[i].l_extent_start;
                                 printf("\t%14llu", start);
@@ -426,14 +427,14 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *dname, char *fname)
 {
         switch(*(__u32 *)&param->lmd->lmd_lmm) { /* lum->lmm_magic */
         case LOV_USER_MAGIC_V1:
-                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, dname, fname, 
-                                      param->obdindex, param->quiet, 
+                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, dname, fname,
+                                      param->obdindex, param->quiet,
                                       param->verbose,
                                       (param->verbose || !param->obduuid));
                 break;
         case LOV_USER_MAGIC_JOIN:
-                lov_dump_user_lmm_join(&param->lmd->lmd_lmm, dname, fname, 
-                                       param->obdindex, param->quiet, 
+                lov_dump_user_lmm_join(&param->lmd->lmd_lmm, dname, fname,
+                                       param->obdindex, param->quiet,
                                        param->verbose,
                                        (param->verbose || !param->obduuid));
                 break;

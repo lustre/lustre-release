@@ -277,7 +277,7 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
         }
 
         if (!S_ISREG(tail_inode->i_mode)) {
-                CERROR("tail file is not a regular file (dir %lu, name %s) !\n",
+                CERROR("tail file is not a regular file (dir %lu, name %s)!\n",
                        de_tailparent? de_tailparent->d_inode->i_ino : 0,
                        rec->ur_name);
                 GOTO(cleanup, rc = -EINVAL);
@@ -397,7 +397,8 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                 cleanup_phase = 3;
                 llog_array = &llh_head->lgh_id;
                 CDEBUG(D_INFO,"create arrary for %lu with id "LPU64":"LPU64"\n",
-                       head_inode->i_ino, llog_array->lgl_oid, llog_array->lgl_ogr);
+                       head_inode->i_ino, llog_array->lgl_oid,
+                       llog_array->lgl_ogr);
                 rc = llog_init_handle(llh_head, LLOG_F_IS_PLAIN, NULL);
                 if (rc)
                         GOTO(cleanup, rc);
@@ -405,7 +406,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                 if (head_lmmj == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
                 mds_init_stripe_join(head_lmmj, head_lmm, llog_array);
-                mds_insert_join_lmm(llh_head, head_lmm, 0, join_rec->jr_headsize,
+                mds_insert_join_lmm(llh_head, head_lmm, 0,join_rec->jr_headsize,
                                     head_lmmj);
         } else { /*head lmm is join file */
                 head_lmmj = (struct lov_mds_md_join *)head_lmm;
@@ -422,7 +423,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                         GOTO(cleanup, rc);
                 rc = mds_adjust_last_extent(llh_head, join_rec->jr_headsize);
                 if (rc) {
-                        CERROR("can not adjust last extent of the obj rc=%d\n", rc);
+                        CERROR("can't adjust last extent of obj rc=%d\n", rc);
                         GOTO(cleanup, rc);
                 }
         }
@@ -434,7 +435,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                 struct mdsea_cb_data cbdata;
                 tail_lmmj = (struct lov_mds_md_join *)tail_lmm;
 
-                rc = llog_create(ctxt, &llh_tail, &tail_lmmj->lmmj_array_id, NULL);
+                rc = llog_create(ctxt,&llh_tail,&tail_lmmj->lmmj_array_id,NULL);
                 if (rc) {
                         CERROR("cannot open existing log, error = %d\n", rc);
                         GOTO(cleanup, rc);

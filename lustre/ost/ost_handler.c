@@ -132,7 +132,7 @@ static int ost_statfs(struct ptlrpc_request *req)
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs, jiffies-HZ);
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
-                osfs->os_bfree = 64;
+                osfs->os_bfree = osfs->os_bavail = 64;
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 

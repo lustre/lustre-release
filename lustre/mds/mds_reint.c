@@ -412,7 +412,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         if (rc) {
                 CERROR("Error revalidate lsm %p \n", lsm);
                 GOTO(out, rc);
-        }        
+        }
 
         /* then fill oa */
         oa->o_id = lsm->lsm_object_id;
@@ -424,10 +424,10 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                 oti.oti_logcookies = logcookies;
         }
 
-	LASSERT(fid != NULL);
+        LASSERT(fid != NULL);
         oa->o_fid = fid->id;
         oa->o_generation = fid->generation;
-	oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+        oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
 
         /* do setattr from mds to ost asynchronously */
         rc = obd_setattr_async(mds->mds_osc_exp, oa, lsm, &oti);
@@ -464,7 +464,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         int lmm_size = 0, need_lock = 1;
         int rc = 0, cleanup_phase = 0, err, locked = 0;
         unsigned int qcids[MAXQUOTAS] = {0, 0};
-        unsigned int qpids[MAXQUOTAS] = {rec->ur_iattr.ia_uid, 
+        unsigned int qpids[MAXQUOTAS] = {rec->ur_iattr.ia_uid,
                                          rec->ur_iattr.ia_gid};
         ENTRY;
 
@@ -483,8 +483,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(cleanup, rc = -EROFS);
         } else {
-              __u64 lockpart = MDS_INODELOCK_UPDATE;
-              if (rec->ur_iattr.ia_valid & (ATTR_MODE|ATTR_UID|ATTR_GID) )
+                __u64 lockpart = MDS_INODELOCK_UPDATE;
+                if (rec->ur_iattr.ia_valid & (ATTR_MODE|ATTR_UID|ATTR_GID))
                         lockpart |= MDS_INODELOCK_LOOKUP;
 
                 de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_EX,
@@ -634,8 +634,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         err = mds_finish_transno(mds, inode, handle, req, rc, 0);
         /* do mds to ost setattr if needed */
         if (!rc && !err && lmm_size)
-                mds_osc_setattr_async(obd, inode, lmm, lmm_size, 
-				      logcookies, rec->ur_fid1);
+                mds_osc_setattr_async(obd, inode, lmm, lmm_size,
+                                      logcookies, rec->ur_fid1);
 
         switch (cleanup_phase) {
         case 2:
@@ -1010,7 +1010,7 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                 RETURN(-EIO);
         ldlm_lock_dump_handle(D_OTHER, handles[0]);
 
-        if (!memcmp(res_id[0], res_id[1], sizeof(*res_id[0])) && 
+        if (memcmp(res_id[0], res_id[1], sizeof(*res_id[0])) == 0 &&
             (policies[0]->l_inodebits.bits & policies[1]->l_inodebits.bits)) {
                 memcpy(handles[1], handles[0], sizeof(*(handles[1])));
                 ldlm_lock_addref(handles[1], lock_modes[1]);
@@ -1097,7 +1097,7 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                 if (res_id[i]->name[0] == 0)
                         break;
                 if (i != 0 &&
-                    !memcmp(res_id[i], res_id[i-1], sizeof(*res_id[i])) &&
+                    memcmp(res_id[i], res_id[i-1], sizeof(*res_id[i])) == 0 &&
                     (policies[i]->l_inodebits.bits &
                      policies[i-1]->l_inodebits.bits)) {
                         memcpy(dlm_handles[i], dlm_handles[i-1],
@@ -2188,7 +2188,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
 
 #if CRAY_XT3
         if (req->rq_uid != LNET_UID_ANY) {
-                /* non-root local cluster client 
+                /* non-root local cluster client
                  * NB root's creds are believed... */
                 LASSERT (req->rq_uid != 0);
                 rec->ur_uc.luc_fsuid = req->rq_uid;

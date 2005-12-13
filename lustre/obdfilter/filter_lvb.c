@@ -43,7 +43,6 @@
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
         struct ost_lvb *lvb = NULL;
-        struct filter_obd *filter;
         struct obd_device *obd;
         struct dentry *dentry;
         int rc = 0;
@@ -68,7 +67,6 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         res->lr_lvb_len = sizeof(*lvb);
 
         obd = res->lr_namespace->ns_lvbp;
-        filter = &obd->u.filter;
         LASSERT(obd != NULL);
 
         dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
