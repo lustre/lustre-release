@@ -2063,7 +2063,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                                           FSFILT_OP_SETATTR, oti, 1);
 
                 /* update inode EA only once */
-                if (inode->i_mode & S_ISUID || inode->i_mode & S_ISGID)
+                if (inode->i_mode & (S_ISUID | S_ISGID))
                         filter_update_fidea(exp, inode, handle, oa);
         } else {
                 handle = fsfilt_start(exp->exp_obd, inode,
