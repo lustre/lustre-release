@@ -450,9 +450,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                              struct ptlrpc_request *req,
                              struct lustre_handle *lh)
 {
+        unsigned int ia_valid = rec->ur_iattr.ia_valid;
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
-        unsigned int ia_valid = rec->ur_iattr.ia_valid;
         struct mds_body *body;
         struct dentry *de;
         struct inode *inode = NULL;
@@ -600,10 +600,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 
-        /* don't return OST-specific attributes if we didn't just set them. Use
-         * saved ->ia_valid here, as rec->ur_iattr.ia_valid gets rewritten by
-         * fsfilt_setattr() what breaks case of truncating file with no object
-         * on OST and no lsm (test_34c from sanity.sh). --umka */
+        /* don't return OST-specific attributes if we didn't just set them. */
         if (ia_valid & ATTR_SIZE)
                 body->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
         if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET))

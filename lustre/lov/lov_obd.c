@@ -823,8 +823,6 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
                         continue;
 
                 memcpy(tmp_oa, src_oa, sizeof(*tmp_oa));
-                tmp_oa->o_valid |= OBD_MD_FLID;
-                tmp_oa->o_id = oti->oti_objid[i];
 
                 LASSERT(lov->tgts[i].ltd_exp);
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
@@ -842,14 +840,52 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
         RETURN(rc);
 }
 
+static int lov_recreate(struct obd_export *exp, struct obdo *src_oa,
+                        struct lov_stripe_md **ea, struct obd_trans_info *oti)
+{
+        struct lov_stripe_md *obj_mdp, *lsm;
+        struct lov_obd *lov = &exp->exp_obd->u.lov;
+        unsigned ost_idx;
+        int rc, i;
+        ENTRY;
+
+        LASSERT(src_oa->o_valid & OBD_MD_FLFLAGS &&
+                src_oa->o_flags & OBD_FL_RECREATE_OBJS);
+
+        OBD_ALLOC(obj_mdp, sizeof(*obj_mdp));
+        if (obj_mdp == NULL)
+                RETURN(-ENOMEM);
+
+        ost_idx = src_oa->o_nlink;
+        lsm = *ea;
+        if (lsm == NULL)
+                GOTO(out, rc = -EINVAL);
+        if (ost_idx >= lov->desc.ld_tgt_count)
+                GOTO(out, rc = -EINVAL);
+
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                if (lsm->lsm_oinfo[i].loi_ost_idx == ost_idx) {
+                        if (lsm->lsm_oinfo[i].loi_id != src_oa->o_id)
+                                GOTO(out, rc = -EINVAL);
+                        break;
+                }
+        }
+        if (i == lsm->lsm_stripe_count)
+                GOTO(out, rc = -EINVAL);
+
+        rc = obd_create(lov->tgts[ost_idx].ltd_exp, src_oa, &obj_mdp, oti);
+out:
+        OBD_FREE(obj_mdp, sizeof(*obj_mdp));
+        RETURN(rc);
+}
+
 /* the LOV expects oa->o_id to be set to the LOV object id */
-static int
-lov_create(struct obd_export *exp, struct obdo *src_oa,
+static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                       struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
+        struct lov_obd *lov;
         struct lov_request_set *set = NULL;
         struct list_head *pos;
-        struct lov_obd *lov;
         int rc = 0;
         ENTRY;
 
@@ -863,13 +899,16 @@ lov_create(struct obd_export *exp, struct obdo *src_oa,
                 RETURN(rc);
         }
 
-        LASSERT(ergo(src_oa->o_valid & OBD_MD_FLFLAGS,
-                     !!(src_oa->o_flags & OBD_FL_CREATE_CROW) !=
-                     !!(src_oa->o_flags & OBD_FL_RECREATE_OBJS)));
-        
         lov = &exp->exp_obd->u.lov;
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
+
+        /* Recreate a specific object id at the given OST index */
+        if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
+            (src_oa->o_flags & OBD_FL_RECREATE_OBJS)) {
+                 rc = lov_recreate(exp, src_oa, ea, oti);
+                 RETURN(rc);
+        }
 
         rc = lov_prep_create_set(exp, ea, src_oa, oti, &set);
         if (rc)

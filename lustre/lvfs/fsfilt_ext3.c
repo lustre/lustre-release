@@ -451,7 +451,6 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         }
 
         unlock_kernel();
-
         return rc;
 }
 

@@ -587,11 +587,6 @@ finish:
                 exp->exp_connect_flags = ocd->ocd_connect_flags;
                 class_export_put(exp);
 
-                if (IMP_CROW_ABLE(imp)) {
-                        CDEBUG(D_HA, "connected to CROW capable target: %s\n",
-                               imp->imp_target_uuid.uuid);
-                }
-
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
 
                 if ((ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&

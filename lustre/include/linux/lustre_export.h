@@ -21,10 +21,14 @@ struct mds_export_data {
 
 struct osc_creator {
         spinlock_t              oscc_lock;
+        struct list_head        oscc_list;
         struct obd_device       *oscc_obd;
+        obd_id                  oscc_last_id;//last available pre-created object
+        obd_id                  oscc_next_id;// what object id to give out next
+        int                     oscc_grow_count;
+        struct obdo             oscc_oa;
         int                     oscc_flags;
-        obd_id                  oscc_next_id;
-        wait_queue_head_t       oscc_waitq;
+        wait_queue_head_t       oscc_waitq; /* creating procs wait on this */
 };
 
 struct ldlm_export_data {

@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug 6088
-ALWAYS_EXCEPT="8 $REPLAY_DUAL_EXCEPT"
+# bug 6088 9761 (CROW related)
+ALWAYS_EXCEPT="8 15a 15b 15c $REPLAY_DUAL_EXCEPT"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh

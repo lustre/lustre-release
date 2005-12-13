@@ -246,6 +246,7 @@ struct filter_obd {
         __u64                fo_mount_count;
 
         int                  fo_destroy_in_progress;
+        struct semaphore     fo_create_lock;
 
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
@@ -309,11 +310,6 @@ struct filter_obd {
         struct lustre_quota_ctxt fo_quota_ctxt;
         spinlock_t               fo_quotacheck_lock;
         atomic_t                 fo_quotachecking;
-
-        /* objids black list stuff. See for detailed comment in
-         * filter_clear_orphans() */
-        struct filter_ext       *fo_blacklist;
-        spinlock_t               fo_blacklist_lock;
 };
 
 struct mds_server_data;

@@ -14,8 +14,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-# bug number: 2766 4176
-ALWAYS_EXCEPT="0b  39 48 $REPLAY_SINGLE_EXCEPT"
+# bug number: 2766 4176 9761 (CROW related)
+ALWAYS_EXCEPT="0b 1a 39 $REPLAY_SINGLE_EXCEPT"
 
 gen_config() {
     rm -f $XMLCONFIG

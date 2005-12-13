@@ -96,9 +96,6 @@ struct obd_import {
         __u64                     imp_connect_flags_orig;
 };
 
-#define IMP_CROW_ABLE(imp) \
-        ((imp)->imp_connect_data.ocd_connect_flags & OBD_CONNECT_CROW)
-
 typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,
                                     int event, void *event_arg, void *cb_data);
 

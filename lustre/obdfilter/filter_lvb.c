@@ -75,28 +75,24 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
-        if (dentry->d_inode == NULL) {
-                lvb->lvb_size = 0;
-                lvb->lvb_blocks = 0;
+        if (dentry->d_inode == NULL)
+                GOTO(out_dentry, rc = -ENOENT);
 
-                /* making client use MDS mtime as this one is zero, bigger one
-                 * will be taken and this does not break POSIX */
-                lvb->lvb_mtime = 0;
-        } else {
-                lvb->lvb_size = dentry->d_inode->i_size;
-                lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
-                lvb->lvb_blocks = dentry->d_inode->i_blocks;
-        }
+        lvb->lvb_size = dentry->d_inode->i_size;
+        lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
+        lvb->lvb_blocks = dentry->d_inode->i_blocks;
 
         CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
                "mtime: "LPU64", blocks: "LPU64"\n",
                res->lr_name.name[0], lvb->lvb_size,
                lvb->lvb_mtime, lvb->lvb_blocks);
 
+        EXIT;
+out_dentry:
         f_dput(dentry);
 
         /* Don't free lvb data on lookup error */
-        RETURN(rc);
+        return rc;
 }
 
 /* This will be called in two ways:

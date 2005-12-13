@@ -229,6 +229,8 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_REQPORTAL   0x40ULL /* Separate portal for non-IO reqs */
 #define OBD_CONNECT_ACL         0x80ULL /* client using access control lists */
 #define OBD_CONNECT_XATTR      0x100ULL /* client using extended attributes*/
+
+
 #define OBD_CONNECT_CROW       0x200ULL /* MDS+OST do object create-on-write */
 #define OBD_CONNECT_TRUNCLOCK  0x400ULL /* server gets locks for punch b=9528 */
 #define OBD_CONNECT_TRANSNO    0x800ULL /* replay is sending initial transno */
@@ -240,7 +242,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
-                                OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_CROW)
+                                OBD_CONNECT_TRUNCLOCK)
 #define ECHO_CONNECT_SUPPORTED (0)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
@@ -323,7 +325,8 @@ typedef uint32_t        obd_count;
 #define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
-#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be created with crow */
+#define OBD_FL_CREATE_CROW   (0x00000400) /* object swhould be created with crow */
+
 /*
  * set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
  * that declared OBD_CONNECT_TRUNCLOCK in their connect flags support this
@@ -369,11 +372,6 @@ struct obdo {
 #define o_undirty o_mode
 #define o_dropped o_misc
 #define o_cksum   o_nlink
-
-#define OBDO_URGENT_CREATE(oa)                      \
-        (!((oa)->o_valid & OBD_MD_FLFLAGS) ||       \
-         !((oa)->o_flags & OBD_FL_CREATE_CROW) ||   \
-         ((oa)->o_flags & OBD_FL_RECREATE_OBJS))
 
 extern void lustre_swab_obdo (struct obdo *o);
 

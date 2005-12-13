@@ -315,7 +315,6 @@ static int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
-        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         struct ptlrpc_request *request;
         struct ost_body *body;
         struct lov_stripe_md *lsm;
@@ -361,16 +360,6 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                 GOTO (out_req, rc = -EPROTO);
         }
 
-        if ((oa->o_valid & OBD_MD_FLFLAGS) && oa->o_flags == OBD_FL_DELORPHAN) {
-                struct obd_import *imp = class_exp2cliimp(exp);
-                /* MDS declares last known object, OSS responses
-                 * with next possible object -bzzz */
-                spin_lock(&oscc->oscc_lock);
-                oscc->oscc_next_id = body->oa.o_id;
-                spin_unlock(&oscc->oscc_lock);
-                CDEBUG(D_HA, "%s: set nextid "LPD64" after recovery\n",
-                       imp->imp_target_uuid.uuid, oa->o_id);
-        }
         memcpy(oa, &body->oa, sizeof(*oa));
 
         /* This should really be sent by the OST */
@@ -3061,6 +3050,17 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
 
+        if (KEY_IS("next_id")) {
+                if (vallen != sizeof(obd_id))
+                        RETURN(-EINVAL);
+                obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
+                CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
+                       exp->exp_obd->obd_name,
+                       obd->u.cli.cl_oscc.oscc_next_id);
+
+                RETURN(0);
+        }
+        
         if (KEY_IS("unlinked")) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
@@ -3068,7 +3068,6 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(0);
         }
-
 
         if (KEY_IS("initial_recov")) {
                 struct obd_import *imp = exp->exp_obd->u.cli.cl_import;

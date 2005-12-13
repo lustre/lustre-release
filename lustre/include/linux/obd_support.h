@@ -39,7 +39,6 @@ extern unsigned int obd_fail_loc;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;          /* seconds */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
-#define STATFS_INTERVAL max(obd_timeout / 20, 1U)
 extern unsigned int ldlm_timeout;
 extern unsigned int obd_health_check_timeout;
 extern char obd_lustre_upcall[128];
@@ -169,9 +168,6 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_TGT_CONN_RACE           0x701
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
-
-#define OBD_FAIL_OST_CROW_EIO            0x801
-#define OBD_FAIL_OST_CLEAR_ORPHANS_RACE  0x802
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

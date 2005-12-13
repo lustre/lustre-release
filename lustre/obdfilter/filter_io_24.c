@@ -428,7 +428,34 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
 
         fsfilt_check_slow(now, obd_timeout, "brw_start");
 
-        iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
+        i = OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+
+        /* If the inode still has SUID+SGID bits set (see filter_precreate())
+         * then we will accept the UID+GID if sent by the client for
+         * initializing the ownership of this inode.  We only allow this to
+         * happen once (so clear these bits) and later only allow setattr. */
+        if (inode->i_mode & S_ISUID)
+                i |= OBD_MD_FLUID;
+        if (inode->i_mode & S_ISGID)
+                i |= OBD_MD_FLGID;
+
+        iattr_from_obdo(&iattr, oa, i);
+        if (iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
+                CDEBUG(D_INODE, "update UID/GID to %lu/%lu\n",
+                       (unsigned long)oa->o_uid, (unsigned long)oa->o_gid);
+
+                cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+
+                iattr.ia_valid |= ATTR_MODE;
+                iattr.ia_mode = inode->i_mode;
+                if (iattr.ia_valid & ATTR_UID)
+                        iattr.ia_mode &= ~S_ISUID;
+                if (iattr.ia_valid & ATTR_GID)
+                        iattr.ia_mode &= ~S_ISGID;
+
+                rc = filter_update_fidea(exp, inode, oti->oti_handle, oa);
+        }
+
         /* filter_direct_io drops i_sem */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
