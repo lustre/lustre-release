@@ -325,7 +325,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
-#define OBD_FL_CREATE_CROW   (0x00000400) /* object swhould be created with crow */
+#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be created with crow */
 
 /*
  * set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
