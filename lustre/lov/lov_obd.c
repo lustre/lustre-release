@@ -109,6 +109,8 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         int rc;
         ENTRY;
 
+        class_obd_list();
+
         tgt_obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME,
                                         &obd->obd_uuid);
 

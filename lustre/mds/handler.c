@@ -1632,6 +1632,8 @@ static int mds_lov_clean(struct obd_device *obd)
         /* There better be a lov */
         if (!osc)
                 RETURN(0);
+        if (IS_ERR(osc))
+                RETURN(PTR_ERR(osc));
 
         obd_register_observer(osc, NULL);
 

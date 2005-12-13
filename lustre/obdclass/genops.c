@@ -292,6 +292,33 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
         return &obd_dev[dev];
 }
 
+void class_obd_list(void)
+{
+        char *status;
+        int i;
+
+        spin_lock(&obd_dev_lock);
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if (obd->obd_type == NULL)
+                        continue;
+                if (obd->obd_stopping)
+                        status = "ST";
+                else if (obd->obd_set_up)
+                        status = "UP";
+                else if (obd->obd_attached)
+                        status = "AT";
+                else
+                        status = "--";
+                CDEBUG(D_WARNING, "%3d %s %s %s %s %d\n",
+                       i, status, obd->obd_type->typ_name,
+                       obd->obd_name, obd->obd_uuid.uuid,
+                       atomic_read(&obd->obd_refcount));
+        }
+        spin_unlock(&obd_dev_lock);
+        return;
+}
+
 /* Search for a client OBD connected to tgt_uuid.  If grp_uuid is
    specified, then only the client with that uuid is returned,
    otherwise any client connected to the tgt is returned. */

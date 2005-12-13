@@ -428,6 +428,9 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
                 }
         }
 
+        CDEBUG(D_MOUNT, "after lustre_get_process_log %s\n", logname);
+        class_obd_list();
+
 out:
         return (rc);
 }
@@ -874,7 +877,6 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         /* The MGC starts targets using the svname llog */
         cfg.cfg_instance = NULL;
-        cfg.cfg_uuid = lsi->lsi_mgc->obd_uuid;
         rc = lustre_get_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
         if (rc) {
                 CERROR("failed to start server %s: %d\n",

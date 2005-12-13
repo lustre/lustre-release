@@ -675,7 +675,7 @@ static int mgs_write_log_osc(struct obd_device *obd,
                              char *logname, char *lovname, char *ostuuid)
 {
         struct llog_handle *llh = NULL;
-        char *nodeuuid, *oscname, *oscuuid;
+        char *nodeuuid, *oscname, *oscuuid, *lovuuid;
         char index[5];
         int rc;
 
@@ -688,6 +688,7 @@ static int mgs_write_log_osc(struct obd_device *obd,
         name_create(libcfs_nid2str(mti->mti_nid), "_UUID", &nodeuuid);
         name_create(mti->mti_svname, "-osc", &oscname);
         name_create(oscname, "_UUID", &oscuuid);
+        name_create(lovname, "_UUID", &lovuuid);
 
         /*
         #03 L add_uuid nid=uml1@tcp(0x20000c0a80201) 0:  1:uml1_UUID
@@ -699,13 +700,14 @@ static int mgs_write_log_osc(struct obd_device *obd,
         */
         rc = record_start_log(obd, &llh, logname);
         rc = record_add_uuid(obd, llh, mti->mti_nid, nodeuuid);
-        rc = record_attach(obd, llh, oscname, LUSTRE_OSC_NAME, oscuuid);
+        rc = record_attach(obd, llh, oscname, LUSTRE_OSC_NAME, lovuuid);
         rc = record_setup(obd, llh, oscname, ostuuid, nodeuuid, 0, 0);
         /* FIXME add uuid, add_conn for failover ost's */
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
         rc = record_lov_add(obd,llh, lovname, ostuuid, index,"1"/*generation*/);
         rc = record_end_log(obd, &llh);
         
+        name_destroy(lovuuid);
         name_destroy(oscuuid);
         name_destroy(oscname);
         name_destroy(nodeuuid);

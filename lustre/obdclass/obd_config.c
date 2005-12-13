@@ -747,7 +747,10 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                lcfg->lcfg_command, inst_name);
                 }
 
-                if (cfg && lcfg->lcfg_command == LCFG_ATTACH) {
+                /* we override the llog's uuid for clients, to insure they
+                are unique */
+                if (cfg && cfg->cfg_instance && 
+                    lcfg->lcfg_command == LCFG_ATTACH) {
                         lustre_cfg_bufs_set_string(&bufs, 2, cfg->cfg_uuid.uuid);
                 }
 
