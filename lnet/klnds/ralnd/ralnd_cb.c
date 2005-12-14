@@ -1701,7 +1701,11 @@ kranal_check_fma_rx (kra_conn_t *conn)
         if ((msg->ram_type & RANAL_MSG_FENCE) != 0) {
                 /* This message signals RDMA completion... */
                 rrc = RapkFmaSyncWait(conn->rac_rihandle);
-                LASSERT (rrc == RAP_SUCCESS);
+                if (rrc != RAP_SUCCESS) {
+                        CERROR("RapkFmaSyncWait failed: %d\n", rrc);
+                        rc = -ENETDOWN;
+                        goto out;
+                }
         }
 
         if (conn->rac_close_recvd) {
@@ -1825,10 +1829,10 @@ kranal_check_fma_rx (kra_conn_t *conn)
                 break;
         }
 
-        if (rc < 0)        /* lnet_parse() detected an error */
+ out:
+        if (rc < 0)                             /* protocol/comms error */
                 kranal_close_conn (conn, rc);
 
- out:
         if (repost && conn->rac_rxmsg != NULL)
                 kranal_consume_rxmsg(conn, NULL, 0);
 
