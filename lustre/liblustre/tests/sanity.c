@@ -366,7 +366,7 @@ int t14(char *name)
         snprintf(dir, MAX_PATH_LENGTH, "%s/test_t14_dir/", lustre_path);
 
         rc = mkdir(dir, 0755);
-        if (rc < 0 && errno != ENOENT) {
+        if (rc < 0 && errno != EEXIST) {
                 printf("mkdir(%s) error: %s\n", dir, strerror(errno));
                 exit(1);
         }
