@@ -365,7 +365,11 @@ int t14(char *name)
         ENTRY(">1 block(4k) directory readdir");
         snprintf(dir, MAX_PATH_LENGTH, "%s/test_t14_dir/", lustre_path);
 
-        t_mkdir(dir);
+        rc = mkdir(dir, 0755);
+        if (rc < 0 && errno != ENOENT) {
+                printf("mkdir(%s) error: %s\n", dir, strerror(errno));
+                exit(1);
+        }
         printf("Creating %d files...\n", nfiles);
         for (i = 0; i < nfiles; i++) {
                 sprintf(path, "%s%s%05d", dir, prefix, i);
