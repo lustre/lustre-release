@@ -43,11 +43,6 @@ init_test_env() {
     export FSYTPE=${FSTYPE:-"ext3"}
 
     if [ "$ACCEPTOR_PORT" ]; then
-        if [ -z "$MOUNTOPT" ]; then
-            export MOUNTOPT="port=$ACCEPTOR_PORT"
-        else
-            export MOUNTOPT="$MOUNTOPT,port=$ACCEPTOR_PORT"
-        fi
         export PORT_OPT="--port $ACCEPTOR_PORT"
     fi
 
