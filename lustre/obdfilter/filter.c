@@ -2005,6 +2005,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         struct llog_cookie *fcc = NULL;
         struct filter_obd *filter;
         int rc, err, locked = 0;
+        unsigned int ia_valid;
         struct inode *inode;
         struct iattr iattr;
         void *handle;
@@ -2018,6 +2019,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
 
         filter = &exp->exp_obd->u.filter;
         iattr_from_obdo(&iattr, oa, oa->o_valid);
+        ia_valid = iattr.ia_valid;
 
         if (oa->o_valid & OBD_MD_FLCOOKIE) {
                 OBD_ALLOC(fcc, sizeof(*fcc));
@@ -2025,7 +2027,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                         memcpy(fcc, obdo_logcookie(oa), sizeof(*fcc));
         }
 
-        if (iattr.ia_valid & ATTR_SIZE || iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
+        if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
                 down(&inode->i_sem);
                 locked = 1;
         }
@@ -2036,20 +2038,18 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
          * happen once so clear these bits in setattr. In 2.6 kernels it is
          * possible to get ATTR_UID and ATTR_GID separately, so we only clear
          * the flags that are actually being set. */
-        if (iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
+        if (ia_valid & (ATTR_UID | ATTR_GID)) {
                 CDEBUG(D_INODE, "update UID/GID to %lu/%lu\n",
                        (unsigned long)oa->o_uid, (unsigned long)oa->o_gid);
 
-                if ((inode->i_mode & S_ISUID) &&
-                    (iattr.ia_valid & ATTR_UID)) {
-                        if (!(iattr.ia_valid & ATTR_MODE)) {
+                if ((inode->i_mode & S_ISUID) && (ia_valid & ATTR_UID)) {
+                        if (!(ia_valid & ATTR_MODE)) {
                                 iattr.ia_mode = inode->i_mode;
                                 iattr.ia_valid |= ATTR_MODE;
                         }
                         iattr.ia_mode &= ~S_ISUID;
                 }
-                if ((inode->i_mode & S_ISGID) &&
-                    (iattr.ia_valid & ATTR_GID)) {
+                if ((inode->i_mode & S_ISGID) && (ia_valid & ATTR_GID)) {
                         if (!(iattr.ia_valid & ATTR_MODE)) {
                                 iattr.ia_mode = inode->i_mode;
                                 iattr.ia_valid |= ATTR_MODE;
@@ -2062,8 +2062,10 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 handle = fsfilt_start_log(exp->exp_obd, inode,
                                           FSFILT_OP_SETATTR, oti, 1);
 
-                /* update inode EA only once */
-                if (inode->i_mode & (S_ISUID | S_ISGID))
+                /* update inode EA only once when inode is suid bit marked. As
+                 * on 2.6.x UID and GID may be set separately, we check here
+                 * only one of them to avoid double setting. */
+                if (inode->i_mode & S_ISUID)
                         filter_update_fidea(exp, inode, handle, oa);
         } else {
                 handle = fsfilt_start(exp->exp_obd, inode,
@@ -2105,10 +2107,10 @@ out_unlock:
                 up(&inode->i_sem);
 
         /* trigger quota release */
-        if (iattr.ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
+        if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
                 unsigned int cur_ids[MAXQUOTAS] = {oa->o_uid, oa->o_gid};
-                int rc2= lquota_adjust(quota_interface, exp->exp_obd, cur_ids,
-                                       orig_ids, rc, FSFILT_OP_SETATTR);
+                int rc2 = lquota_adjust(quota_interface, exp->exp_obd, cur_ids,
+                                        orig_ids, rc, FSFILT_OP_SETATTR);
                 CDEBUG(rc2 ? D_ERROR : D_QUOTA, 
                        "filter adjust qunit. (rc:%d)\n", rc2);
         }

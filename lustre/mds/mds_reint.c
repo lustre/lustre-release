@@ -666,7 +666,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         /* trigger dqrel/dqacq for original owner and new owner */
         if (ia_valid & (ATTR_UID | ATTR_GID))
-                lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_SETATTR);
+                lquota_adjust(quota_interface, obd, qcids, qpids, rc,
+                              FSFILT_OP_SETATTR);
 
         return 0;
 }
