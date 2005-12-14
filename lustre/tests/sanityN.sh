@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768 3192 4035
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b  14c"}
+# bug number for skipped test:  3192 4035
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
@@ -425,7 +425,8 @@ test_20() {
 run_test 20 "test extra readahead page left in cache ===="
 
 cleanup_21() {
-	umount $DIR1/d21 >/dev/null 2>&1
+	trap 0
+	umount $DIR1/d21
 }
 
 test_21() { # Bug 5907
@@ -435,7 +436,7 @@ test_21() { # Bug 5907
 	rmdir -v $DIR1/d21 && error "Removed mounted directory"
 	rmdir -v $DIR2/d21 && echo "Removed mounted directory from another mountpoint, needs to be fixed"
 	test -d $DIR1/d21 || error "Mounted directory disappeared"
-	umount $DIR1/d21
+	cleanup_21
 	test -d $DIR2/d21 || test -d $DIR1/d21 && error "Removed dir still visible after umount"
 	true
 }
