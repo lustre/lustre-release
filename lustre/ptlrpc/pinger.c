@@ -105,7 +105,7 @@ static int ptlrpc_pinger_main(void *arg)
         /* And now, loop forever, pinging as needed. */
         while (1) {
                 unsigned long this_ping = jiffies;
-                long time_to_next_ping;
+                long time_to_next_ping = 0;
                 struct l_wait_info lwi;
                 struct list_head *iter;
 
@@ -173,7 +173,7 @@ static int ptlrpc_pinger_main(void *arg)
                 
                 /* The ping sent by ptlrpc_send_rpc may get sent out
                    say .01 second after this.
-                   ptlrpc_pinger_sending_on_import will then set the
+                   ptlrpc_pinger_eending_on_import will then set the
                    next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
@@ -232,12 +232,13 @@ int ptlrpc_start_pinger(void)
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
                 OBD_FREE(pinger_thread, sizeof(*pinger_thread));
+                pinger_thread = NULL;
                 RETURN(rc);
         }
         l_wait_event(pinger_thread->t_ctl_waitq,
                      pinger_thread->t_flags & SVC_RUNNING, &lwi);
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 int ptlrpc_stop_pinger(void)

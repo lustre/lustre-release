@@ -333,11 +333,10 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         imp->imp_conn_cnt++;
         imp->imp_resend_replay = 0;
 
-        if (!lustre_handle_is_used(&imp->imp_remote_handle)) {
+        if (!lustre_handle_is_used(&imp->imp_remote_handle))
                 initial_connect = 1;
-        } else {
+        else
                 committed_before_reconnect = imp->imp_peer_committed_transno;
-        }
 
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
@@ -599,7 +598,7 @@ finish:
 #else
                         char *action = "recompiling this application";
 #endif
-                        
+
                         CWARN("Server %s version (%d.%d.%d.%d) is much newer. "
                               "Consider %s (%s).\n",
                               imp->imp_target_uuid.uuid,
@@ -628,27 +627,25 @@ finish:
 
  out:
         if (rc != 0) {
-
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                if (aa->pcaa_initial_connect && !imp->imp_initial_recov) {
+                if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
                         ptlrpc_deactivate_import(imp);
-                }
 
                 if (rc == -EPROTO) {
                         struct obd_connect_data *ocd;
                         ocd = lustre_swab_repbuf(request, 0,
                                                  sizeof *ocd,
                                                  lustre_swab_connect);
-                        if (ocd && 
-                            (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) && 
+                        if (ocd &&
+                            (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
                             (ocd->ocd_version != LUSTRE_VERSION_CODE)) {
                            /* Actually servers are only supposed to refuse
                               connection from liblustre clients, so we should
                               never see this from VFS context */
-                                CERROR("Server %s version (%d.%d.%d.%d) refused"
-                                      " connection from this client as too old "
-                                      "version (%s). Client must be "
-                                      "recompiled\n",
+                                CERROR("Server %s version (%d.%d.%d.%d) "
+                                       "refused connection from this client "
+                                       "as too old version (%s).  Client must "
+                                       "be recompiled\n",
                                       imp->imp_target_uuid.uuid,
                                       OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
                                       OBD_OCD_VERSION_MINOR(ocd->ocd_version),
@@ -656,10 +653,10 @@ finish:
                                       OBD_OCD_VERSION_FIX(ocd->ocd_version),
                                       LUSTRE_VERSION_STRING);
                                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CLOSED);
-                                RETURN(-EPROTO);
                         }
+                        RETURN(-EPROTO);
                 }
-                        
+
                 ptlrpc_maybe_ping_import_soon(imp);
 
                 CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",

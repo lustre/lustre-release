@@ -722,6 +722,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+/* this sends any unsent RPCs in @set and returns TRUE if all are sent */
 int ptlrpc_check_set(struct ptlrpc_request_set *set)
 {
         unsigned long flags;

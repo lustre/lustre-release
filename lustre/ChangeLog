@@ -432,6 +432,14 @@ Details    : The lconf command catches the Command error exception at the top
 	     level script context and will exit with the associated exit
 	     status, but doesn't ensure that this exit status is non-zero.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9493
+Description: failure of ptlrpc thread startup can cause oops
+Details    : Starting a ptlrpc service thread can fail if there are a large
+	     number of threads or the server memory is very fragmented.
+	     Handle this without oopsing.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

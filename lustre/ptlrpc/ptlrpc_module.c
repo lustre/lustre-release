@@ -46,7 +46,7 @@ extern void ptlrpc_exit_portals(void);
 
 __init int ptlrpc_init(void)
 {
-        int rc;
+        int rc, cleanup_phase = 0;
         ENTRY;
 
         lustre_assert_wire_constants();
@@ -54,16 +54,40 @@ __init int ptlrpc_init(void)
         rc = ptlrpc_init_portals();
         if (rc)
                 RETURN(rc);
+        cleanup_phase = 1;
 
         ptlrpc_init_connection();
-        llog_init_commit_master();
+        rc = llog_init_commit_master();
+        if (rc)
+                GOTO(cleanup, rc);
+        cleanup_phase = 2;
 
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
         ptlrpc_abort_inflight_superhack = ptlrpc_abort_inflight;
 
-        ptlrpc_start_pinger();
-        ldlm_init();
+        rc = ptlrpc_start_pinger();
+        if (rc)
+                GOTO(cleanup, rc);
+        cleanup_phase = 3;
+
+        rc = ldlm_init();
+        if (rc)
+                GOTO(cleanup, rc);
         RETURN(0);
+
+cleanup:
+        switch(cleanup_phase) {
+        case 3:
+                ptlrpc_stop_pinger();
+        case 2:
+                llog_cleanup_commit_master(1);
+                ptlrpc_cleanup_connection();
+        case 1:
+                ptlrpc_exit_portals();
+        default: ;
+        }
+
+        return rc;
 }
 
 #ifdef __KERNEL__
