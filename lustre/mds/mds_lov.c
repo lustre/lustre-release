@@ -556,7 +556,7 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
                 if (rc < 0) {
                         CERROR("%s: error starting mds_lov_synchronize: %d\n",
                                obd->obd_name, rc);
-                        class_export_put(obd->obd_self_export);
+                        class_decref(obd);
                 } else {
                         CDEBUG(D_HA, "%s: mds_lov_synchronize thread: %d\n",
                                obd->obd_name, rc);
