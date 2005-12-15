@@ -28,7 +28,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGS
-#define D_MGS D_INFO|D_ERROR
+#define D_MGS D_CONFIG|D_ERROR
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -112,7 +112,7 @@ static int mgs_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
-int mgs_handle(struct ptlrpc_request *req);
+static int mgs_handle(struct ptlrpc_request *req);
 
 /* Start the MGS obd */
 static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -260,12 +260,31 @@ static int mgs_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
+static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
+                            struct lustre_handle *lockh)
+{
+        /* FIXME resource should be based on fsname, 
+           one lock per fs.  One lock per config log? */
+        struct ldlm_res_id res_id = {.name = {12321}};
+        int rc, flags = 0;
+
+        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
+                              LDLM_PLAIN, NULL, LCK_PW, &flags,
+                              NULL, ldlm_completion_ast, NULL, NULL,
+                              NULL, 0, NULL, lockh);
+        if (rc) {
+                CERROR("can't take cfg lock %d\n", rc);
+        }
+        return rc;
+}
+
 static int mgs_handle_target_add(struct ptlrpc_request *req)
 {    
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct lustre_handle lockh;
         struct mgmt_target_info *mti, *rep_mti;
         int rep_size = sizeof(*mti);
-        int rc;
+        int rc, lockrc;
         ENTRY;
 
         mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
@@ -283,6 +302,16 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                 }
         }
 
+        /* revoke the config lock so everyone will update */
+        lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
+        if (lockrc) {
+                LCONSOLE_ERROR("Can't signal other nodes to update their "
+                               "configuration (%d). Updating local logs "
+                               "anyhow; you might have to manually restart "
+                               "other servers to get the latest configuration."
+                               "\n", lockrc);
+        }
+
         /* create the log for the new target 
            and update the client/mdt logs */
         rc = mgs_write_log_target(obd, mti);
@@ -291,6 +320,10 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                        mti->mti_svname, rc);
                 GOTO(out, rc);
         }
+
+        /* done with log update */
+        if (!lockrc)
+                ldlm_lock_decref(&lockh, LCK_PW);
 
 out:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname, 
@@ -358,7 +391,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
 
         case OBD_PING:
-                DEBUG_REQ(D_MGS, req, "ping");
+                DEBUG_REQ(D_INFO, req, "ping");
                 rc = target_handle_ping(req);
                 break;
 
@@ -401,80 +434,23 @@ int mgs_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
         
-        CDEBUG(D_MGS, "MGS handle cmd=%d rc=%d\n", req->rq_reqmsg->opc, rc);
+        CDEBUG(D_CONFIG | (rc?D_ERROR:0), "MGS handle cmd=%d rc=%d\n",
+               req->rq_reqmsg->opc, rc);
 
  out:
         target_send_reply(req, rc, fail);
         RETURN(0);
 }
 
-/* Same as mds_fid2dentry */
-/* Look up an entry by inode number. */
-/* this function ONLY returns valid dget'd dentries with an initialized inode
-   or errors */
-struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct ll_fid *fid)
+static inline int mgs_destroy_export(struct obd_export *exp)
 {
-        char fid_name[32];
-        unsigned long ino = fid->id;
-        __u32 generation = fid->generation;
-        struct inode *inode;
-        struct dentry *result;
+        ENTRY;
 
-        CDEBUG(D_DENTRY|D_ERROR, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
-               ino, generation, mgs->mgs_sb);
+        target_destroy_export(exp);
 
-        if (ino == 0)
-                RETURN(ERR_PTR(-ESTALE));
-        
-        snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
-        
-        /* under ext3 this is neither supposed to return bad inodes
-           nor NULL inodes. */
-        result = ll_lookup_one_len(fid_name, mgs->mgs_fid_de, strlen(fid_name));
-        if (IS_ERR(result))
-                RETURN(result);
-
-        inode = result->d_inode;
-        if (!inode)
-                RETURN(ERR_PTR(-ENOENT));
-
-        if (inode->i_generation == 0 || inode->i_nlink == 0) {
-                LCONSOLE_WARN("Found inode with zero generation or link -- this"
-                              " may indicate disk corruption (inode: %lu, link:"
-                              " %lu, count: %d)\n", inode->i_ino,
-                              (unsigned long)inode->i_nlink,
-                              atomic_read(&inode->i_count));
-                l_dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        if (generation && inode->i_generation != generation) {
-                /* we didn't find the right inode.. */
-                CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
-                       "count: %d, generation %u/%u\n", inode->i_ino,
-                       (unsigned long)inode->i_nlink,
-                       atomic_read(&inode->i_count), inode->i_generation,
-                       generation);
-                l_dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        RETURN(result);
+        RETURN(0);
 }
 
-static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
-                                          void *data)
-{
-        struct obd_device *obd = data;
-        struct ll_fid fid;
-        fid.id = id;
-        fid.generation = gen;
-        return mgs_fid2dentry(&obd->u.mgs, &fid);
-}
-
-struct lvfs_callback_ops mgs_lvfs_ops = {
-        l_fid2dentry:     mgs_lvfs_fid2dentry,
-};
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mgs_obd_ops = {
@@ -484,7 +460,7 @@ static struct obd_ops mgs_obd_ops = {
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,
         .o_cleanup         = mgs_cleanup,
-        .o_destroy_export  = target_destroy_export,
+        .o_destroy_export  = mgs_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
 };
 

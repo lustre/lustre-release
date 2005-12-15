@@ -323,9 +323,7 @@ struct client_obd {
         /* mgc datastruct */
         struct semaphore         cl_mgc_sem;
         struct vfsmount         *cl_mgc_vfsmnt;
-        struct super_block      *cl_mgc_sb;
         struct dentry           *cl_mgc_configs_dir;
-        struct list_head         cl_mgc_open_llogs;
         atomic_t                 cl_mgc_refcount;
 
         /* Flags section */
@@ -349,6 +347,7 @@ struct mgs_obd {
         struct llog_handle              *mgs_cfg_llh;
         spinlock_t                       mgs_system_db_lock;
         struct list_head                 mgs_system_db_list;
+        struct lustre_handle             mgs_pw_lock;  /* config update lock */
 };
 
 struct mds_obd {

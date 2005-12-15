@@ -381,8 +381,6 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
-        struct lustre_handle mgc_conn = {0, };
-        struct obd_export *exp = NULL;
         struct llog_ctxt *rctxt, *lctxt;
         int rc;
         LASSERT(mgc);
@@ -396,14 +394,6 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
                 return(-EINVAL);
         }
 
-        rc = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
-        if (rc) {
-                CERROR("connect failed %d\n", rc);
-                goto out;
-        }
-        exp = class_conn2export(&mgc_conn);
-        LASSERT(exp->exp_obd == mgc);
-
         //FIXME Copy the mgs remote log to the local disk
 
 #if 0
@@ -411,7 +401,6 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
         class_config_dump_llog(rctxt, logname, cfg);
 #endif
         rc = class_config_parse_llog(rctxt, logname, cfg);
-        obd_disconnect(exp);
 
         if (rc && lmd_is_client(lsi->lsi_lmd)) {
                 int rc2;
@@ -437,7 +426,6 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
         CDEBUG(D_MOUNT, "after lustre_get_process_log %s\n", logname);
         class_obd_list();
 
-out:
         return (rc);
 }
 
@@ -468,12 +456,13 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         return(rc);
 }
 
-static int lustre_start_simple(char *obdname, char *type, char *s1, char *s2)
+static int lustre_start_simple(char *obdname, char *type, char *uuid, 
+                               char *s1, char *s2)
 {
         int rc;
         CDEBUG(D_MOUNT, "Starting obd %s\n", obdname);
 
-        rc = do_lcfg(obdname, 0, LCFG_ATTACH, type, obdname/*uuid*/, 0, 0);
+        rc = do_lcfg(obdname, 0, LCFG_ATTACH, type, uuid, 0, 0);
         if (rc) {
                 CERROR("%s attach error %d\n", obdname, rc);
                 return(rc);
@@ -511,7 +500,7 @@ static int server_start_mgs(struct super_block *sb)
         rc = server_register_mount(mgsname, sb, mnt);
 
         if (!rc &&
-            ((rc = lustre_start_simple(mgsname, LUSTRE_MGS_NAME, 0, 0)))) 
+            ((rc = lustre_start_simple(mgsname, LUSTRE_MGS_NAME, mgsname, 0, 0)))) 
                 server_deregister_mount(mgsname);
         
         if (rc)                                
@@ -542,13 +531,39 @@ static int server_stop_mgs(struct super_block *sb)
         return rc;
 }
 
+static struct obd_export *get_mgs_export(struct obd_device *mgc)
+{
+        struct obd_export *exp, *n;
+
+        /* FIXME is this a Bad Idea?  Should I just store this export 
+           somewhere in the u.cli? */
+
+        /* There should be exactly 2 exports in the mgc, the mgs export and 
+           the mgc self-export, in that order. So just return the list head. */
+        LASSERT(!list_empty(&mgc->obd_exports));
+        LASSERT(mgc->obd_num_exports == 2);
+        list_for_each_entry_safe(exp, n, &mgc->obd_exports, exp_obd_chain) {
+                LASSERT(exp != mgc->obd_self_export);
+                break;
+        }
+        /*FIXME there's clearly a better way, but I'm too confused to sort it 
+          out now...
+        exp = &list_entry(&mgc->obd_exports->head, export_obd, exp_obd_chain);
+        */
+        return exp;
+}
+
 /* Set up a mgcobd to process startup logs */
 static int lustre_start_mgc(struct super_block *sb)
 {
+        struct lustre_handle mgc_conn = {0, };
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
+        struct obd_export *exp;
+        char *uuid;
         char mgcname[] = "MGC";
         lnet_nid_t nid;
+        lnet_process_id_t id;
         int recov_bk;
         int rc = 0, i;
         
@@ -578,9 +593,16 @@ static int lustre_start_mgc(struct super_block *sb)
         if (rc < 0)
                 return rc;
 
+        /* Generate a unique uuid for each MGC - use the 1st non-loopback nid */
+        /* FIXME if no loopback? Use lustre_generate_random_uuid? */
+        rc = LNetGetId(1, &id);  
+        OBD_ALLOC(uuid, sizeof(struct obd_uuid));
+        sprintf(uuid, "mgc_"LPX64, id.nid);
         /* Start the MGC */
-        if ((rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME, "MGS", 
-                                       libcfs_nid2str(nid))))
+        rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME, uuid, "MGS", 
+                                 libcfs_nid2str(nid));
+        OBD_FREE(uuid, sizeof(struct obd_uuid));
+        if (rc) 
                 return rc;
         
         /* Add the redundant MGS nids */
@@ -600,7 +622,6 @@ static int lustre_start_mgc(struct super_block *sb)
                                libcfs_nid2str(nid), rc);
         }
         
-        /* Keep the mgc info in the sb */
         obd = class_name2obd(mgcname);
         if (!obd) {
                 CERROR("Can't find mgcobd %s\n", mgcname);
@@ -616,10 +637,23 @@ static int lustre_start_mgc(struct super_block *sb)
                 CERROR("can't set init_recov_bk %d\n", rc);
                 goto out;
         }
-        
+
+        /* We connect to the MGS at setup, and don't disconnect until cleanup */
+        rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), NULL);
+        if (rc) {
+                CERROR("connect failed %d\n", rc);
+                goto out;
+        }
+        exp = class_conn2export(&mgc_conn);
+        LASSERT(exp == get_mgs_export(obd));
+
+        /* And keep a refcount of servers/clients who started with "mount",
+           so we know when we can get rid of the mgc. */
         atomic_set(&obd->u.cli.cl_mgc_refcount, 1);
+
 out:
-        /* note that many lsi's can point to the same mgc.*/
+        /* Keep the mgc info in the sb. Note that many lsi's can point
+           to the same mgc.*/
         lsi->lsi_mgc = obd;
         return rc;
 }
@@ -643,6 +677,8 @@ static int lustre_stop_mgc(struct super_block *sb)
                        atomic_read(&obd->u.cli.cl_mgc_refcount));
                 return -EBUSY; 
         }
+
+        obd_disconnect(get_mgs_export(obd));
 
         rc = class_manual_cleanup(obd);
         if (rc)
@@ -738,8 +774,6 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
         struct lustre_disk_data *ldd = lsi->lsi_ldd;
-        struct lustre_handle mgc_conn = {0, };
-        struct obd_export *exp = NULL;
         struct mgmt_target_info *mti = NULL;
         lnet_process_id_t         id;
         int rc;
@@ -768,19 +802,10 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
         mti->mti_stripe_size = 1024*1024;  //FIXME    
         mti->mti_stripe_offset = 0; //FIXME    
 
-        CDEBUG(D_MOUNT, "Initial connect %s, fs=%s, %s, index=%04x\n",
+        CDEBUG(D_MOUNT, "Initial registration %s, fs=%s, %s, index=%04x\n",
                mti->mti_svname, mti->mti_fsname,
                libcfs_nid2str(mti->mti_nid), mti->mti_stripe_index);
 
-        /* Connect to the MGS */
-        rc = obd_connect(&mgc_conn, mgc, &(mgc->obd_uuid), NULL);
-        if (rc) {
-                CERROR("connect failed %d\n", rc);
-                goto out;
-        }
-        exp = class_conn2export(&mgc_conn);
-        LASSERT(exp->exp_obd == mgc);
-        
         /* Register the target */
         /* FIXME use ioctl instead? eg 
         struct obd_ioctl_data ioc_data = { 0 };
@@ -790,11 +815,10 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
         rc = obd_iocontrol(OBD_IOC_START, obd->obd_self_export,
                             sizeof ioc_data, &ioc_data, NULL);
         */
-        rc = obd_set_info(exp,
+        rc = obd_set_info(get_mgs_export(mgc),
                           strlen("add_target"), "add_target",
                           sizeof(*mti), mti);
         CDEBUG(D_MOUNT, "disconnect");
-        obd_disconnect(exp);
         if (rc) {
                 CERROR("add_target failed %d\n", rc);
                 goto out;
@@ -840,7 +864,8 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 obd = class_name2obd("MDS");
                 if (!obd) {
                         //FIXME pre-rename, should eventually be LUSTRE_MDS_NAME
-                        rc = lustre_start_simple("MDS", LUSTRE_MDT_NAME, 0, 0);
+                        rc = lustre_start_simple("MDS", LUSTRE_MDT_NAME, 
+                                                 "MDS_uuid", 0, 0);
                         if (rc) {
                                 CERROR("failed to start MDS: %d\n", rc);
                                 goto out_servers;
@@ -853,7 +878,8 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 /* make sure OSS is started */
                 obd = class_name2obd("OSS");
                 if (!obd) {
-                        rc = lustre_start_simple("OSS", LUSTRE_OSS_NAME, 0, 0);
+                        rc = lustre_start_simple("OSS", LUSTRE_OSS_NAME,
+                                                 "OSS_uuid", 0, 0);
                         if (rc) {
                                 CERROR("failed to start OSS: %d\n", rc);
                                 goto out_servers;
@@ -1082,8 +1108,12 @@ static void server_put_super(struct super_block *sb)
 
         /* If they wanted the mgs to stop separately from the mdt, they
            should have put it on a different device. */ 
-        if (IS_MGMT(lsi->lsi_ldd)) 
+        if (IS_MGMT(lsi->lsi_ldd)) {
+                /* stop the mgc before the mgs so the connection gets cleaned
+                   up */
+                lustre_stop_mgc(sb);
                 server_stop_mgs(sb);
+        }
 
         /* clean the mgc and sb */
         rc = lustre_common_put_super(sb);
@@ -1241,14 +1271,14 @@ int lustre_common_put_super(struct super_block *sb)
         CDEBUG(D_MOUNT, "dropping sb %p\n", sb);
         
         rc = lustre_stop_mgc(sb);
-        if (rc) {
+        if (rc && (rc != -ENOENT)) {
                 if (rc != -EBUSY) {
                         CERROR("Can't stop MGC: %d\n", rc);
                         return rc;
                 }
                 /* BUSY just means that there's some other obd that
                    needs the mgc.  Let him clean it up. */
-                CDEBUG(D_MOUNT, "MGC busy, not stopping\n");
+                CDEBUG(D_MOUNT, "MGC busy, will stop later\n");
         }
         rc = lustre_free_lsi(sb);
         return rc;

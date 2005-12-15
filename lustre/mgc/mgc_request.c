@@ -50,77 +50,6 @@
 #include "mgc_internal.h"
 
 
-/* Get index and add to config llog, depending on flags */
-int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
-{
-        struct ptlrpc_request *req;
-        struct mgmt_target_info *req_mti, *rep_mti;
-        int size = sizeof(*req_mti);
-        int rep_size = sizeof(*mti);
-        int rc;
-        ENTRY;
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_TARGET_ADD, 
-                              1, &size, NULL);
-        if (!req)
-                RETURN(rc = -ENOMEM);
-
-        req_mti = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mti));
-        memcpy(req_mti, mti, sizeof(*req_mti));
-
-        req->rq_replen = lustre_msg_size(1, &rep_size);
-
-        CDEBUG(D_MGC, "requesting add for %s\n", mti->mti_svname);
-        
-        rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
-                                             lustre_swab_mgmt_target_info);
-                memcpy(mti, rep_mti, sizeof(*rep_mti));
-                CDEBUG(D_MGC, "target_add %s got index = %d\n",
-                       mti->mti_svname, mti->mti_stripe_index);
-        } else {
-                CERROR("target_add failed. rc=%d\n", rc);
-        }
-        ptlrpc_req_finished(req);
-
-        RETURN(rc);
-}
-
-/* Remove from config llog */
-int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *mti)
-{
-        struct ptlrpc_request *req;
-        struct mgmt_target_info *req_mti, *rep_mti;
-        int size = sizeof(*req_mti);
-        int rc;
-        ENTRY;
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_TARGET_DEL,
-                              1, &size, NULL);
-        if (!req)
-                RETURN(rc = -ENOMEM);
-
-        req_mti = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mti));
-        memcpy(req_mti, mti, sizeof(*req_mti));
-
-        rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                int index;
-                rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
-                                             lustre_swab_mgmt_target_info);
-                index = rep_mti->mti_stripe_index;
-                if (index != mti->mti_stripe_index) {
-                        CERROR ("OST DEL failed. rc=%d\n", index);
-                        GOTO (out, rc = -EINVAL);
-                }
-                CERROR("OST DEL OK.(old index = %d)\n", index);
-        }
-out:
-        ptlrpc_req_finished(req);
-
-        RETURN(rc);
-}
 
 static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb, 
                         struct vfsmount *mnt)
@@ -146,10 +75,9 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         }
 
         cli->cl_mgc_vfsmnt = mnt;
-        cli->cl_mgc_sb = mnt->mnt_root->d_inode->i_sb;
         // FIXME which is the right SB? - filter_common_setup also 
         CERROR("SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb, mnt->mnt_root->d_inode->i_sb);
-        fsfilt_setup(obd, cli->cl_mgc_sb);
+        fsfilt_setup(obd, mnt->mnt_root->d_inode->i_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;
@@ -168,12 +96,14 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
                 goto err_ops;
         }
         cli->cl_mgc_configs_dir = dentry;
+
+        /* We keep the cl_mgc_sem until mgc_fs_cleanup */
         return (0);
 
 err_ops:        
         fsfilt_put_ops(obd->obd_fsops);
         obd->obd_fsops = NULL;
-        cli->cl_mgc_sb = NULL;
+        cli->cl_mgc_vfsmnt = NULL;
         up(&cli->cl_mgc_sem);
         return(err);
 }
@@ -184,7 +114,6 @@ static int mgc_fs_cleanup(struct obd_device *obd)
         int rc = 0;
 
         LASSERT(cli->cl_mgc_vfsmnt != NULL);
-        LASSERT(cli->cl_mgc_sb != NULL);
 
         if (cli->cl_mgc_configs_dir != NULL) {
                 struct lvfs_run_ctxt saved;
@@ -201,7 +130,6 @@ static int mgc_fs_cleanup(struct obd_device *obd)
         */
 
         cli->cl_mgc_vfsmnt = NULL;
-        cli->cl_mgc_sb = NULL;
         
         if (obd->obd_fsops) 
                 fsfilt_put_ops(obd->obd_fsops);
@@ -219,7 +147,7 @@ static int mgc_cleanup(struct obd_device *obd)
         /* FIXME calls to mgc_fs_setup must take an obd ref to insure there's
            no fs by the time we get here. */
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
-
+        
         rc = obd_llog_finish(obd, 0);
         if (rc != 0)
                 CERROR("failed to cleanup llogging subsystems\n");
@@ -252,6 +180,81 @@ err_cleanup:
         client_obd_cleanup(obd);
 err_decref:
         ptlrpcd_decref();
+        RETURN(rc);
+}
+
+/* see ll_mdc_blocking_ast */
+static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                            void *data, int flag)
+{
+        int rc;
+        struct lustre_handle lockh;
+        ENTRY;
+
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                /* mgs wants the lock, give it up... */
+                LDLM_ERROR(lock, "MGC blocking CB");
+
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0) {
+                        CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
+                        RETURN(rc);
+                }
+                break;
+        case LDLM_CB_CANCELING: {
+                /* We've given up the lock, prepare ourselves to update.
+                   FIXME */
+                LDLM_ERROR(lock, "MGC cancel CB");
+                
+                //struct inode *inode = ll_inode_from_lock(lock);
+                /* <adilger> in the MGC case I suspect this callback will 
+                   trigger a new enqueue for the same lock (in a separate
+                   thread likely, which won't match the just-being-cancelled
+                   lock due to CBPENDING flag) + config llog processing */
+                break;
+        }
+        default:
+                LBUG();
+        }
+
+        RETURN(0);
+}
+
+/* see ll_get_dir_page */
+static int mgc_get_cfg_lock(struct obd_export *exp, char *fsname)
+{                       
+        struct lustre_handle lockh;
+        struct obd_device *obd = class_exp2obd(exp);
+        /* FIXME use fsname, vers and separate locks? see mgs_get_cfg_lock */
+        struct ldlm_res_id res_id = { .name = { 12321 } };
+        int rc = 0, flags = 0;
+        ENTRY;
+
+        /* Search for already existing locks.*/
+        rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, LDLM_PLAIN, 
+                             NULL, LCK_CR, &lockh);
+        if (rc == 1) 
+                RETURN(ELDLM_OK);
+
+        CDEBUG(D_MGC, "Taking a cfg reader lock\n");
+
+        /* see filter_prepare_destroy
+        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
+                              LDLM_EXTENT, &policy, LCK_PW,
+                              &flags, ldlm_blocking_ast, ldlm_completion_ast,
+                              NULL, NULL, NULL, 0, NULL, &lockh);
+        */
+        
+        rc = ldlm_cli_enqueue(exp, NULL, obd->obd_namespace, res_id,
+                              LDLM_PLAIN, NULL, LCK_CR, &flags, 
+                              mgc_blocking_ast, ldlm_completion_ast, NULL,
+                              NULL/*cb_data*/, NULL, 0, NULL, &lockh);
+
+        /* now drop the lock so MGS can revoke it */ 
+        ldlm_lock_decref(&lockh, LCK_PR);
+
         RETURN(rc);
 }
 
@@ -327,6 +330,78 @@ out:
 #endif
 
         return rc;
+}
+
+/* Get index and add to config llog, depending on flags */
+int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
+{
+        struct ptlrpc_request *req;
+        struct mgmt_target_info *req_mti, *rep_mti;
+        int size = sizeof(*req_mti);
+        int rep_size = sizeof(*mti);
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_TARGET_ADD, 
+                              1, &size, NULL);
+        if (!req)
+                RETURN(rc = -ENOMEM);
+
+        req_mti = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mti));
+        memcpy(req_mti, mti, sizeof(*req_mti));
+
+        req->rq_replen = lustre_msg_size(1, &rep_size);
+
+        CDEBUG(D_MGC, "requesting add for %s\n", mti->mti_svname);
+        
+        rc = ptlrpc_queue_wait(req);
+        if (!rc) {
+                rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
+                                             lustre_swab_mgmt_target_info);
+                memcpy(mti, rep_mti, sizeof(*rep_mti));
+                CDEBUG(D_MGC, "target_add %s got index = %d\n",
+                       mti->mti_svname, mti->mti_stripe_index);
+        } else {
+                CERROR("target_add failed. rc=%d\n", rc);
+        }
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+
+/* Remove from config llog */
+int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *mti)
+{
+        struct ptlrpc_request *req;
+        struct mgmt_target_info *req_mti, *rep_mti;
+        int size = sizeof(*req_mti);
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_TARGET_DEL,
+                              1, &size, NULL);
+        if (!req)
+                RETURN(rc = -ENOMEM);
+
+        req_mti = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mti));
+        memcpy(req_mti, mti, sizeof(*req_mti));
+
+        rc = ptlrpc_queue_wait(req);
+        if (!rc) {
+                int index;
+                rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
+                                             lustre_swab_mgmt_target_info);
+                index = rep_mti->mti_stripe_index;
+                if (index != mti->mti_stripe_index) {
+                        CERROR ("OST DEL failed. rc=%d\n", index);
+                        GOTO (out, rc = -EINVAL);
+                }
+                CERROR("OST DEL OK.(old index = %d)\n", index);
+        }
+out:
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
 }
 
 #define INIT_RECOV_BACKUP "init_recov_bk"

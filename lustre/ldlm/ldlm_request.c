@@ -89,6 +89,9 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         int rc = 0;
         ENTRY;
 
+        //FIXME remove
+        LDLM_ERROR(lock, "ldlm completion ast");
+
         if (flags == LDLM_FL_WAIT_NOREPROC) {
                 LDLM_DEBUG(lock, "client-side enqueue waiting on pending lock");
                 goto noreproc;

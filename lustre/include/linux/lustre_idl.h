@@ -848,7 +848,6 @@ typedef enum {
         LDLM_EXTENT    = 11,
         LDLM_FLOCK     = 12,
 //      LDLM_IBITS     = 13,
-        LDLM_LLOG      = 14,
         LDLM_MAX_TYPE
 } ldlm_type_t;
 
