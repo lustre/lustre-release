@@ -173,21 +173,26 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
-for ext in .local "" ; do
-	f=/etc/modprobe.conf$ext
-	if [ -f $f ] && ! grep llite $f >/dev/null 2>/dev/null ; then
-		cat >> $f <<EOF
+
+# for update from < v1.4.6
+
+for f in /etc/modules.conf /etc/modprobe.conf /etc/modprobe.conf.local ; 
+do
+	if [ -f $f ]; then
+		if ! grep 'lustre llite' $f >/dev/null 2>/dev/null ; then
+			cat >> $f <<-EOF
 alias lustre llite
 EOF
-		break
+		fi
+		if egrep "^[^#]*(add below|install) ptlrpc" $f ; then
+			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
+			TMPFILE=`mktemp $f.XXXXXX` && \
+			sed -e "s/^[^#]*\(add below\|install\) ptlrpc.*/#&/" $f > $TMPFILE && \
+			mv $TMPFILE $f
+		fi
 	fi
 done
-f=/etc/modules.conf
-if [ -f $f ] && ! grep llite $f >/dev/null 2>/dev/null ; then
-	cat >> $f <<EOF
-alias lustre llite
-EOF
-fi
+
 
 %postun modules
 if [ -f /boot/System.map-%{kversion} ]; then
