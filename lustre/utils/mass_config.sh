@@ -6,12 +6,22 @@
 
 # Usage
 usage() {
-	echo >&2 $"Usage: `basename $0` <csv file>"
+	echo -e >&2 $"\nUsage: `basename $0` <csv file>"
 	cat >&2 <<EOF
 
 Each line in the csv file represents one Lustre target.
 The format of it is:
-hostname,networks,device name,device type,fsname/poolname,mgmtnid,index,format options,mount options,failovers,device size
+hostname,networks,device name,device type,fsname/poolname,mgmtnid,index,format options,mkfs options,mount options,failovers
+
+Sample 1 for csv file:
+lustre-mgs,options lnet networks=tcp,/r/tmp/mgmt,mgs,,,,--device_size 10240,-J size=4,,lustre-mgs@tcp0
+lustre-ost,options lnet networks=tcp,/r/tmp/ost1,ost,lustre1,lustre-mgs@tcp0,0001,--device_size 10240,-J size=4,"extents,mballoc",lustre-mgs@tcp0
+lustre-mdt,options lnet networks=tcp,/r/tmp/mdt1,mdt,lustre1,lustre-mgs@tcp0,0001,--device_size 10240,-J size=4,,lustre-mgs@tcp0
+
+Sample 2 for csv file:
+lustre-mgs,options lnet 'networks="tcp,elan"' \n options ost 'numthreads=23',/dev/sda,mgs,,,,,,,
+lustre-ost,options lnet networks=tcp,/dev/sda,ost,,lustre-mgs@tcp0,,,,,
+lustre-mdt,options lnet networks=tcp,/dev/sda,mdt,,lustre-mgs@tcp0,,,,,
 
 EOF
 	exit 1
@@ -92,9 +102,12 @@ parse_line() {
                        	else
                                	d_quote_flag=0
                        	fi
-                	CONFIG_ITEM[i]=${CONFIG_ITEM[i]}$"\\"${TMP_LETTER}
-                	idx=${idx}+1
-			continue
+
+                       	if [ ${i} -eq 1 ]; then
+                		CONFIG_ITEM[i]=${CONFIG_ITEM[i]}$"\\"${TMP_LETTER}
+                		idx=${idx}+1
+				continue
+			fi
 			;;
 		"")
                		idx=${idx}+1
@@ -199,19 +212,21 @@ construct_mkfs_cmdline() {
 	fi
 
 	if [ -n "${FORMAT_OPTIONS}" ]; then
-		MKFS_CMD=${MKFS_CMD}$"--mkfsoptions="${FORMAT_OPTIONS}$" "
+		MKFS_CMD=${MKFS_CMD}${FORMAT_OPTIONS}$" "
+	fi
+
+	if [ -n "${MKFS_OPTIONS}" ]; then
+		MKFS_OPTIONS=`echo "${MKFS_OPTIONS}" | sed 's/^"//' | sed 's/"$//'`
+		MKFS_CMD=${MKFS_CMD}$"--mkfsoptions="$"\""${MKFS_OPTIONS}$"\""$" "
 	fi
 
 	if [ -n "${MOUNT_OPTIONS}" ]; then
-		MKFS_CMD=${MKFS_CMD}$"--mountfsoptions="${MOUNT_OPTIONS}$" "
+		MOUNT_OPTIONS=`echo "${MOUNT_OPTIONS}" | sed 's/^"//' | sed 's/"$//'`
+		MKFS_CMD=${MKFS_CMD}$"--mountfsoptions="$"\""${MOUNT_OPTIONS}$"\""$" "
 	fi
 
 	if [ -n "${FAILOVERS}" ]; then
 		MKFS_CMD=${MKFS_CMD}$"--failover="${FAILOVERS}$" "
-	fi
-
-	if [ -n "${DEVICE_SIZE}" ]; then
-		MKFS_CMD=${MKFS_CMD}$"--device_size="${DEVICE_SIZE}$" "
 	fi
 
 	MKFS_CMD=${MKFS_CMD}${DEVICE_NAME}
@@ -259,9 +274,9 @@ mass_config() {
 		MGMT_NID=${CONFIG_ITEM[5]}
 		INDEX=${CONFIG_ITEM[6]}
 		FORMAT_OPTIONS=${CONFIG_ITEM[7]}
-		MOUNT_OPTIONS=${CONFIG_ITEM[8]}
-		FAILOVERS=${CONFIG_ITEM[9]}
-		DEVICE_SIZE=${CONFIG_ITEM[10]}
+		MKFS_OPTIONS=${CONFIG_ITEM[8]}
+		MOUNT_OPTIONS=${CONFIG_ITEM[9]}
+		FAILOVERS=${CONFIG_ITEM[10]}
 
 		# Check some required elements
 		if ! check_element; then
