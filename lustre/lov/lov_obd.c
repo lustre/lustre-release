@@ -420,9 +420,15 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                         RETURN(-ENOMEM);
                 }
 
-                memset(tgt, 0, bufsize);
                 if (lov->tgts) {
+                        int i;
                         memcpy(tgt, lov->tgts, lov->bufsize);
+                        LASSERT(index == lov->desc.ld_tgt_count);
+                        for (i = 0; i < index; i++) {
+                                INIT_LIST_HEAD(&tgt[i].qos_bavail_list);
+                                list_splice(&lov->tgts[i].qos_bavail_list, 
+                                            &tgt[i].qos_bavail_list);
+                        }
                         OBD_FREE(lov->tgts, lov->bufsize);
                 }
 
@@ -442,6 +448,8 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         tgt->uuid = *uuidp;
         /* XXX - add a sanity check on the generation number. */
         tgt->ltd_gen = gen;
+        tgt->index = index;
+        INIT_LIST_HEAD(&tgt->qos_bavail_list);
 
         old_count = lov->desc.ld_tgt_count;
         if (index >= lov->desc.ld_tgt_count)
@@ -533,7 +541,8 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lustre_cfg *lcfg = buf;
         struct lov_desc *desc;
         struct lov_obd *lov = &obd->u.lov;
-        int count;
+        struct lov_tgt_desc *tgts;
+        int count, i;
         ENTRY;
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
@@ -598,11 +607,15 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 CERROR("Out of memory\n");
                 RETURN(-EINVAL);
         }
-        memset(lov->tgts, 0, lov->bufsize);
+        for (i = 0, tgts = lov->tgts; i < max(count, 1); i++, tgts++) {
+                tgts->index = i;
+                INIT_LIST_HEAD(&tgts->qos_bavail_list);
+        }
 
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
         spin_lock_init(&lov->lov_lock);
+        INIT_LIST_HEAD(&lov->qos_bavail_list);
 
         lprocfs_init_vars(lov, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -760,11 +773,13 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
 /* the LOV expects oa->o_id to be set to the LOV object id */
 static int
 lov_create(struct obd_export *exp, struct obdo *src_oa,
-                      struct lov_stripe_md **ea, struct obd_trans_info *oti)
+           struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_request_set *set = NULL;
-        struct list_head *pos;
         struct lov_obd *lov;
+        struct obd_statfs osfs;
+        unsigned long maxage;
+        struct lov_request *req;
         int rc = 0;
         ENTRY;
 
@@ -785,15 +800,15 @@ lov_create(struct obd_export *exp, struct obdo *src_oa,
         lov = &exp->exp_obd->u.lov;
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
+        
+        maxage = jiffies - lov->desc.ld_qos_maxage * HZ;
+        obd_statfs(exp->exp_obd, &osfs, maxage);                
 
         rc = lov_prep_create_set(exp, ea, src_oa, oti, &set);
         if (rc)
                 RETURN(rc);
 
-        list_for_each (pos, &set->set_list) {
-                struct lov_request *req =
-                        list_entry(pos, struct lov_request, rq_link);
-
+        list_for_each_entry(req, &set->set_list, rq_link) {
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
                 rc = obd_create(lov->tgts[req->rq_idx].ltd_exp,
                                 req->rq_oa, &req->rq_md, oti);
@@ -1780,6 +1795,7 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                                 rc = err;
                         continue;
                 }
+                qos_update(lov, i, &lov_sfs);
 
                 if (!set) {
                         memcpy(osfs, &lov_sfs, sizeof(lov_sfs));

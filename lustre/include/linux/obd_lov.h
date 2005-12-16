@@ -24,4 +24,7 @@ static inline int lov_mds_md_v1_size(int stripes)
 #define IOC_LOV_SET_OSC_ACTIVE         _IOWR('g', 50, long)
 #define IOC_LOV_MAX_NR                 50
 
+#define QOS_DEFAULT_THRESHOLD           10 /* MB */
+#define QOS_DEFAULT_MAXAGE              5  /* Seconds */ 
+
 #endif

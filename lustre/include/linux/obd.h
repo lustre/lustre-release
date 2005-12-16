@@ -456,6 +456,8 @@ struct lov_tgt_desc {
         __u32                    ltd_gen;
         struct obd_export       *ltd_exp;
         int                      active; /* is this target up for requests */
+        int                      index;  /* index of target array in lov_obd */
+        struct list_head         qos_bavail_list; /* link entry to lov_obd */
 };
 
 struct lov_obd {
@@ -464,6 +466,7 @@ struct lov_obd {
         int bufsize;
         int refcount;
         unsigned int lo_catalog_loaded:1;
+        struct list_head qos_bavail_list; /* tgts list, sorted by available space, protected by lov_lock */
         struct lov_tgt_desc *tgts;
 };
 

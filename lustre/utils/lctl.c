@@ -236,7 +236,7 @@ command_t cmdlist[] = {
          "usage: add_conn <conn_uuid> [priority]\n"},
         {"del_conn ", jt_lcfg_del_conn, 0,
          "usage: del_conn <conn_uuid> \n"},
-       
+
         /* Llog operations */ 
         {"llog_catlist", jt_llog_catlist, 0, 
          "list all catalog logs on current device.\n"

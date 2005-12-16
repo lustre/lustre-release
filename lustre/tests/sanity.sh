@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71 101"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71 75 101"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
@@ -2597,6 +2597,11 @@ test_74() { # bug 6149, 6184
 	true
 }
 run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
+
+test_75() {
+	sh qos.sh
+}
+run_test 75 "qos test ============================================"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

@@ -741,6 +741,8 @@ void lustre_swab_lov_desc (struct lov_desc *ld)
         __swab64s (&ld->ld_default_stripe_size);
         __swab64s (&ld->ld_default_stripe_offset);
         __swab32s (&ld->ld_pattern);
+        __swab32s (&ld->ld_qos_threshold);
+        __swab32s (&ld->ld_qos_maxage);
         /* uuid endian insensitive */
 }
 
@@ -1695,6 +1697,18 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_body, aclsize));
         LASSERTF((int)sizeof(((struct mds_body *)0)->aclsize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->aclsize));
+        LASSERTF((int)offsetof(struct mds_body, padding_2) == 156, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, padding_2));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_2) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->padding_2));
+        LASSERTF((int)offsetof(struct mds_body, padding_3) == 160, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, padding_3));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_3) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->padding_3));
+        LASSERTF((int)offsetof(struct mds_body, padding_4) == 164, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, padding_4));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_4) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->padding_4));
         LASSERTF(FMODE_READ == 1, " found %lld\n",
                  (long long)FMODE_READ);
         LASSERTF(FMODE_WRITE == 2, " found %lld\n",
@@ -1977,6 +1991,14 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct lov_desc, ld_default_stripe_offset));
         LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_default_stripe_offset) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct lov_desc *)0)->ld_default_stripe_offset));
+        LASSERTF((int)offsetof(struct lov_desc, ld_qos_threshold) == 32, " found %lld\n",
+                 (long long)(int)offsetof(struct lov_desc, ld_qos_threshold));
+        LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_qos_threshold) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lov_desc *)0)->ld_qos_threshold));
+        LASSERTF((int)offsetof(struct lov_desc, ld_qos_maxage) == 36, " found %lld\n",
+                 (long long)(int)offsetof(struct lov_desc, ld_qos_maxage));
+        LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_qos_maxage) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lov_desc *)0)->ld_qos_maxage));
         LASSERTF((int)offsetof(struct lov_desc, ld_uuid) == 48, " found %lld\n",
                  (long long)(int)offsetof(struct lov_desc, ld_uuid));
         LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_uuid) == 40, " found %lld\n",
