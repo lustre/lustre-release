@@ -258,11 +258,11 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
                         spin_unlock(&oscc->oscc_lock);
-                        return -EBUSY;
+                        RETURN(-EBUSY);
                 }
                 if (!(oscc->oscc_flags & OSCC_FLAG_RECOVERING)) {
                         spin_unlock(&oscc->oscc_lock);
-                        return 0;
+                        RETURN(0);
                 }
                 oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
                 spin_unlock(&oscc->oscc_lock);
@@ -285,8 +285,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
                         oscc->oscc_last_id = oa->o_id;
-                        CDEBUG(D_HA, "%s: oscc recovery finished: %d\n",
-                               oscc->oscc_obd->obd_name, rc);
+                        CDEBUG(D_HA, "%s: oscc recovery finished, last_id: "
+                               LPU64", rc: %d\n", oscc->oscc_obd->obd_name,
+                               oscc->oscc_last_id, rc);
                         wake_up(&oscc->oscc_waitq);
                 } else {
                         CDEBUG(D_ERROR, "%s: oscc recovery failed: %d\n",
@@ -340,6 +341,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         *ea = lsm;
                         oscc->oscc_next_id++;
                         try_again = 0;
+
+                        CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
+                               exp->exp_obd->obd_name, oscc->oscc_next_id);
                 } else if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
                         rc = -ENOSPC;
                         spin_unlock(&oscc->oscc_lock);

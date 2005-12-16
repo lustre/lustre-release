@@ -504,9 +504,10 @@ static int __mds_lov_syncronize(void *data)
                 GOTO(out, rc);
         }
 
+        EXIT;
 out:
         class_decref(obd);
-        RETURN(rc);
+        return rc;
 }
 
 int mds_lov_synchronize(void *data)
