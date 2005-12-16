@@ -64,8 +64,10 @@ tcpnal_env_param (char *name, int *val)
 
         n = strlen(env);                        /* scanf may not assign on EOS */
         if (sscanf(env, "%i%n", val, &n) >= 1 &&
-            n == strlen(env))
+            n == strlen(env)) {
+                CDEBUG(D_INFO, "Environment variable %s set to %d\n", name, val);
                 return 1;
+        }
         
         CERROR("Can't parse environment variable '%s=%s'\n",
                name, env);

@@ -440,6 +440,13 @@ Details    : Starting a ptlrpc service thread can fail if there are a large
 	     number of threads or the server memory is very fragmented.
 	     Handle this without oopsing.
 
+Severity   : minor
+Frequency  : always, but only if liblustre and non default acceptor port was used
+Bugzilla   : 9933
+Description: liblustre count not connect to servers with non default acceptor port
+Details    : tcpnal_set_default_params() was not called and therefore ignoring the
+		environment varaible TCPNAL_PORT, as well as other TCPNAL_ environment variables
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
