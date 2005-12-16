@@ -9,36 +9,70 @@
 # ...or...
 # echo_client instances (set 'client_names')
 # ... use 'host:name' for obd instances on other nodes.
-ost_names=(ost{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16})
+
+# allow these to be passed in via string...
+ost_names_str=${ost_names_str:-""}
+if [ -n "$ost_names_str" ]; then
+    declare -a ost_names
+    count=0
+    for name in $ost_names_str; do
+        ost_names[$count]=$name
+        count=$((count+1))
+    done
+else
+    ost_names=(ost{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16})
+fi
+
 #client_names=(ns8:ECHO_ns8 ns9:ECHO_ns9)
+client_names_str=${client_names_str:-""}
+if [ -n "$client_names_str" ]; then
+    # make sure we unset ost_names so that our client_names get noticed... 
+    unset ost_names
+    declare -a client_names
+    count=0
+    for name in $client_names_str; do
+        client_names[$count]=$name
+        count=$((count+1))
+    done
+fi
 
 # result file prefix (date/time + hostname makes unique)
 # NB ensure path to it exists
-rslt=/home_nfs/eeb/obdfilter_survey_`date +%F@%R`_`uname -n`
+rslt=${rslt:-"/home_nfs/eeb/obdfilter_survey_`date +%F@%R`_`uname -n`"}
 
 # lustre root (if running with own source tree)
-lustre_root=/home_nfs/eeb/lustre
+lustre_root=${lustre_root:-"/home_nfs/eeb/lustre"}
 
 # what tests to run (first must be write)
-#tests=(write rewrite read reread rewrite_again)
-tests=(write rewrite read)
+tests_str=${tests_str:-""}
+if [ -n "$tests_str" ]; then
+    declare -a tests
+    count=0
+    for name in $tests_str; do
+        tests[$count]=$name
+        count=$((count+1))
+    done
+else
+    #tests=(write rewrite read reread rewrite_again)
+    tests=(write rewrite read)
+fi
 
 # total size (MBytes) per obd instance
 # large enough to avoid cache effects 
 # and to make test startup/shutdown overhead insignificant
-size=16384
+size=${size:-16384}
 
 # record size (KBytes)
-rszlo=1024
-rszhi=1024
+rszlo=${rszlo:-1024}
+rszhi=${rszhi:-1024}
 
 # number of objects per OST
-nobjlo=1
-nobjhi=512
+nobjlo=${nobjlo:-1}
+nobjhi=${nobjhi:-512}
 
 # threads per OST (1024 max)
-thrlo=1
-thrhi=64
+thrlo=${thrlo:-1}
+thrhi=${thrhi:-64}
 
 # restart from here iff all are defined
 restart_rsz=
@@ -46,7 +80,7 @@ restart_thr=1
 restart_nobj=1
 
 # machine's page size (K)
-PAGE_SIZE=64
+PAGE_SIZE=${PAGE_SIZE:-16}
 
 # max buffer_mem (total_threads * buffer size)
 # (to avoid lctl ENOMEM problems)
@@ -62,10 +96,10 @@ custom_remote_shell () {
     here=`pwd`
     # Hop on to the remote node, chdir to 'here' and run the given
     # commands. One of the following will probably work.
-    ssh $host "cd $here; $cmds"
+    #ssh $host "cd $here; $cmds"
     #rsh $host "cd $here; $cmds"
     # we have to remove the leading `uname -n`: from pdsh output lines
-    #pdsh -w $host "cd $here; $cmds" | sed 's/^[^:]*://'
+    pdsh -w $host "cd $here; $cmds" | sed 's/^[^:]*://'
 }
 
 #####################################################################
@@ -83,6 +117,7 @@ snap=1
 verify=1
 
 if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
+    echo "tests: ${tests[@]}"
     echo "First test must be 'write'" 1>&2
     exit 1
 fi
@@ -93,8 +128,14 @@ cmdsf="${rslt}.script"
 echo -n > $rsltf
 echo -n > $workf
 
+
+# hide a little trick to unset this from the command line
+if [ "$lustre_root" == " " ]; then
+    unset lustre_root
+fi
+
 if [ -z "$lustre_root" ]; then
-    lctl=lctl
+    lctl=$(which lctl)
 else
     lctl=${lustre_root}/utils/lctl
 fi
