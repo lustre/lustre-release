@@ -390,14 +390,15 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                       enum obd_notify_event ev)
 {
-        int rc;
         struct obd_uuid *uuid;
+        int rc;
+        ENTRY;
 
         if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name,
                        watched->obd_name);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
 
@@ -520,7 +521,7 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         if (rc)
                 GOTO(out, rc);
 
-        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, 1);
+        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, OBD_NOTIFY_ACTIVE);
         GOTO(out, rc);
  out:
         if (rc && tgt->ltd_exp != NULL)
