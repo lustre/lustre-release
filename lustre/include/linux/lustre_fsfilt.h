@@ -45,6 +45,8 @@ struct fsfilt_operations {
         struct list_head fs_list;
         struct module *fs_owner;
         char   *fs_type;
+        char   *(* fs_label)(struct super_block *sb);
+        char   *(* fs_uuid)(struct super_block *sb);
         void   *(* fs_start)(struct inode *inode, int op, void *desc_private,
                              int logs);
         void   *(* fs_brw_start)(int objcount, struct fsfilt_objinfo *fso,
@@ -103,6 +105,24 @@ extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
 extern void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops);
 extern struct fsfilt_operations *fsfilt_get_ops(const char *type);
 extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
+
+static inline char *fsfilt_label(struct obd_device *obd, struct super_block *sb)
+{
+        if (obd->obd_fsops->fs_label == NULL)
+                return NULL;
+        if (obd->obd_fsops->fs_label(sb)[0] == '\0')
+                return NULL;
+
+        return obd->obd_fsops->fs_label(sb);
+}
+
+static inline __u8 *fsfilt_uuid(struct obd_device *obd, struct super_block *sb)
+{
+        if (obd->obd_fsops->fs_uuid == NULL)
+                return NULL;
+
+        return obd->obd_fsops->fs_uuid(sb);
+}
 
 #define FSFILT_OP_UNLINK         1
 #define FSFILT_OP_RMDIR          2

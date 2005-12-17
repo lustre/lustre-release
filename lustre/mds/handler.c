@@ -287,17 +287,17 @@ static int mds_connect_internal(struct obd_export *exp,
 static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
                          struct obd_uuid *cluuid,
                          struct obd_connect_data *data)
-{                       
+{
         int rc;
-        ENTRY;          
-                        
+        ENTRY;
+
         if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
-                        
+
         rc = mds_connect_internal(exp, data);
-                        
-        RETURN(rc);            
-} 
+
+        RETURN(rc);
+}
 
 /* Establish a connection to the MDS.
  *
@@ -1751,9 +1751,11 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
-        char *options = NULL;
         struct mds_obd *mds = &obd->u.mds;
         struct vfsmount *mnt;
+        struct obd_uuid uuid;
+        __u8 *uuid_ptr;
+        char *options, *str, *label;
         char ns_name[48];
         unsigned long page;
         int rc = 0;
@@ -1851,7 +1853,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = lquota_setup(quota_interface, obd, lcfg);
         if (rc)
                 GOTO(err_fs, rc);
-        
+
         mds->mds_group_hash = upcall_cache_init(obd->obd_name);
         if (IS_ERR(mds->mds_group_hash)) {
                 rc = PTR_ERR(mds->mds_group_hash);
@@ -1869,15 +1871,24 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_init_vars(mds, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
+        uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
+        if (uuid_ptr != NULL) {
+                class_uuid_unparse(uuid_ptr, &uuid);
+                str = uuid.uuid;
+        } else {
+                str = "no UUID";
+        }
+
+        label = fsfilt_label(obd, obd->u.obt.obt_sb);
         if (obd->obd_recovering) {
-                LCONSOLE_WARN("MDT %s now serving %s, but will be in recovery "
-                              "until %d %s reconnect, or if no clients "
-                              "reconnect for %d:%.02d; during that time new "
+                LCONSOLE_WARN("MDT %s now serving %s (%s%s%s), but will be in "
+                              "recovery until %d %s reconnect, or if no clients"
+                              " reconnect for %d:%.02d; during that time new "
                               "clients will not be allowed to connect. "
                               "Recovery progress can be monitored by watching "
                               "/proc/fs/lustre/mds/%s/recovery_status.\n",
-                              obd->obd_name,
-                              lustre_cfg_string(lcfg, 1),
+                              obd->obd_name, lustre_cfg_string(lcfg, 1),
+                              label ?: "", label ? "/" : "", str,
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1)
                               ? "client" : "clients",
@@ -1885,9 +1896,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
                               obd->obd_name);
         } else {
-                LCONSOLE_INFO("MDT %s now serving %s with recovery %s.\n",
-                              obd->obd_name,
-                              lustre_cfg_string(lcfg, 1),
+                LCONSOLE_INFO("MDT %s now serving %s (%s%s%s) with recovery "
+                              "%s\n", obd->obd_name, lustre_cfg_string(lcfg, 1),
+                              label ?: "", label ? "/" : "", str,
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
@@ -1897,7 +1908,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(0);
 
 err_qctxt:
-        lquota_cleanup(quota_interface, obd);       
+        lquota_cleanup(quota_interface, obd);
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mds_fs_cleanup(obd);

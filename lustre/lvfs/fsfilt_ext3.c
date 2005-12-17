@@ -73,6 +73,16 @@ struct fsfilt_cb_data {
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
 
+static char *fsfilt_ext3_label(struct super_block *sb)
+{
+        return EXT3_SB(sb)->s_es->s_volume_name;
+}
+
+static char *fsfilt_ext3_uuid(struct super_block *sb)
+{
+        return EXT3_SB(sb)->s_es->s_uuid;
+}
+
 /*
  * We don't currently need any additional blocks for rmdir and
  * unlink transactions because we are storing the OST oa_id inside
@@ -1879,6 +1889,8 @@ static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
 static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_type                = "ext3",
         .fs_owner               = THIS_MODULE,
+        .fs_label               = fsfilt_ext3_label,
+        .fs_uuid                = fsfilt_ext3_uuid,
         .fs_start               = fsfilt_ext3_start,
         .fs_brw_start           = fsfilt_ext3_brw_start,
         .fs_commit              = fsfilt_ext3_commit,

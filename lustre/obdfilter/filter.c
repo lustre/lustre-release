@@ -1323,7 +1323,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         struct lustre_cfg* lcfg = buf;
         struct filter_obd *filter = &obd->u.filter;
         struct vfsmount *mnt;
-        char *str;
+        struct obd_uuid uuid;
+        __u8 *uuid_ptr;
+        char *str, *label;
         char ns_name[48];
         int rc;
         ENTRY;
@@ -1381,7 +1383,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
         filter->fo_destroy_in_progress = 0;
         sema_init(&filter->fo_create_lock, 1);
-        
         spin_lock_init(&filter->fo_translock);
         spin_lock_init(&filter->fo_objidlock);
         spin_lock_init(&filter->fo_stats_lock);
@@ -1422,15 +1423,24 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         if (rc)
                 GOTO(err_post, rc);
 
+        uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
+        if (uuid_ptr != NULL) {
+                class_uuid_unparse(uuid_ptr, &uuid);
+                str = uuid.uuid;
+        } else {
+                str = "no UUID";
+        }
+        label = fsfilt_label(obd, obd->u.obt.obt_sb);
+
         if (obd->obd_recovering) {
-                LCONSOLE_WARN("OST %s now serving %s, but will be in recovery "
-                              "until %d %s reconnect, or if no clients "
-                              "reconnect for %d:%.02d; during that time new "
+                LCONSOLE_WARN("OST %s now serving %s (%s%s%s), but will be in"
+                              "recovery until %d %s reconnect, or if no clients"
+                              " reconnect for %d:%.02d; during that time new "
                               "clients will not be allowed to connect. "
                               "Recovery progress can be monitored by watching "
                               "/proc/fs/lustre/obdfilter/%s/recovery_status.\n",
-                              obd->obd_name,
-                              lustre_cfg_string(lcfg, 1),
+                              obd->obd_name, lustre_cfg_string(lcfg, 1),
+                              label ?: "", label ? "/" : "", str,
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1)
                               ? "client" : "clients",
@@ -1438,9 +1448,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
                               obd->obd_name);
         } else {
-                LCONSOLE_INFO("OST %s now serving %s with recovery %s.\n",
-                              obd->obd_name,
-                              lustre_cfg_string(lcfg, 1),
+                LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "
+                              "%s\n", obd->obd_name, lustre_cfg_string(lcfg, 1),
+                              label ?: "", label ? "/" : "", str,
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
