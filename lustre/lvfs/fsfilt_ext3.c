@@ -1731,6 +1731,8 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
         struct ext3_sb_info *sbi = EXT3_SB(sb);
         int i, group;
         struct qchk_ctxt *qctxt;
+        struct lustre_quota_info *dummy = NULL;
+        struct quota_info *dqopt = sb_dqopt(sb);
         struct buffer_head *bitmap_bh = NULL;
         unsigned long ino;
         struct inode *inode;
@@ -1789,6 +1791,42 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                 brelse(bitmap_bh);
         }
 
+        /* read old quota limits from old quota file. (only for the user
+         * has limits but hasn't file) */
+#ifdef HAVE_QUOTA_SUPPORT
+        OBD_ALLOC_PTR(dummy);
+        if (!dummy) {
+                CERROR("Not enough memory\n");
+                GOTO(out, rc = -ENOMEM);
+        }
+        for (i = 0; i < MAXQUOTAS; i++) {
+                struct list_head id_list;
+                struct dquot_id *dqid, *tmp;
+                
+                if (!Q_TYPESET(oqc, i))
+                        continue;
+                
+                if (qctxt->qckt_first_check[i])
+                        continue;
+                
+                dummy->qi_files[i] = dqopt->files[i];
+                LASSERT(dummy->qi_files[i] != NULL);
+                INIT_LIST_HEAD(&id_list);
+                
+                rc = lustre_get_qids(dummy, i, &id_list);
+                if (rc) {
+                        CERROR("read old limits failed. (rc:%d)\n", rc);
+                        break;
+                }
+                list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
+                        list_del_init(&dqid->di_link);
+                        
+                        cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list, 
+                              dqid->di_id, i, qctxt->qckt_first_check[i]);
+                        kfree(dqid);
+                }
+        }
+#endif
         /* turn off quota cause we are to dump chk_dqblk to files */
         quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
 
@@ -1802,6 +1840,8 @@ out:
         /* dump and free chk_dqblk */
         rc = prune_chkquots(sb, qctxt, rc);
         OBD_FREE_PTR(qctxt);
+        if (dummy)
+                OBD_FREE_PTR(dummy);
 
         /* turn off quota, `lfs quotacheck` will turn on when all
          * nodes quotacheck finish. */
