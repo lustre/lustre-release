@@ -215,6 +215,7 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
 void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
                          struct lov_desc *desc);
+int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp);
 
 /* mds/mds_open.c */
 int mds_query_write_access(struct inode *inode);

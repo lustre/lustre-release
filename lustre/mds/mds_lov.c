@@ -145,12 +145,39 @@ int mds_lov_set_nextid(struct obd_device *obd)
         RETURN(rc);
 }
 
+int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        int valsize, rc;
+        ENTRY;
+
+        valsize = sizeof(mds->mds_lov_desc);
+        rc = obd_get_info(mds->mds_osc_exp, strlen("lovdesc") + 1,
+                          "lovdesc", &valsize, &mds->mds_lov_desc);
+        if (rc)
+                CERROR("can't get lov_desc, rc %d\n", rc);
+        
+        mds->mds_has_lov_desc = rc ? 0 : 1;
+
+        if (mds->mds_has_lov_desc) {
+                CDEBUG(D_HA, "updating lov_desc, tgt_count: %d\n",
+                       mds->mds_lov_desc.ld_tgt_count);
+
+                mds->mds_max_mdsize = lov_mds_md_size(mds->mds_lov_desc.ld_tgt_count);
+                mds->mds_max_cookiesize = mds->mds_lov_desc.ld_tgt_count *
+                        sizeof(struct llog_cookie);
+
+                CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
+                       mds->mds_max_mdsize, mds->mds_max_cookiesize);
+        }
+        RETURN(rc);
+}
+
 /* update the LOV-OSC knowledge of the last used object id's */
 int mds_lov_connect(struct obd_device *obd, char * lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0,};
-        int valsize;
         int rc, i;
         ENTRY;
 
@@ -183,16 +210,11 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(err_discon, rc);
         }
 
-        valsize = sizeof(mds->mds_lov_desc);
-        rc = obd_get_info(mds->mds_osc_exp, strlen("lovdesc") + 1, "lovdesc",
-                          &valsize, &mds->mds_lov_desc);
+        /* init lov_desc + easize */
+        rc = mds_init_lov_desc(obd, mds->mds_osc_exp);
         if (rc)
                 GOTO(err_reg, rc);
 
-        mds->mds_max_mdsize = lov_mds_md_size(mds->mds_lov_desc.ld_tgt_count);
-        mds->mds_max_cookiesize = mds->mds_lov_desc.ld_tgt_count*
-                sizeof(struct llog_cookie);
-        mds->mds_has_lov_desc = 1;
         rc = mds_lov_read_objids(obd);
         if (rc) {
                 CERROR("cannot read %s: rc = %d\n", "lov_objids", rc);
@@ -573,6 +595,7 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
 int mds_notify(struct obd_device *obd, struct obd_device *watched,
                enum obd_notify_event ev)
 {
+        struct mds_obd *mds = &obd->u.mds;
         struct obd_uuid *uuid;
         int rc = 0;
         ENTRY;
@@ -588,12 +611,22 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
 
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
         if (obd->obd_recovering) {
+                /* in the case OBD is in recovery we do not reinit desc and
+                 * easize, as that will be done in mds_lov_connect() after
+                 * recovery is finished. */
                 CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
                       obd->obd_name, uuid->uuid);
         } else {
                 LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
-                
-                rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"),
+
+                /* this may be called also in case of adding new OST, thus, we
+                 * have to update MDS lov_desc and re-init MDS easize. The same
+                 * should be done on clients. */
+                rc = mds_init_lov_desc(obd, mds->mds_osc_exp);
+                if (rc)
+                        RETURN(rc);
+
+                rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"),
                                   "mds_conn", 0, uuid);
                 if (rc != 0)
                         RETURN(rc);

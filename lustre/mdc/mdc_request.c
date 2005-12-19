@@ -680,6 +680,11 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         LASSERT(req->rq_cb_data == NULL);
         req->rq_cb_data = mod;
 
+        CDEBUG(D_HA, "close req->rep_len: %d\n", req->rq_replen);
+
+        CDEBUG(D_HA, "close max_mdsize/max_cookiesize: %d/%d\n",
+               obd->u.cli.cl_max_mds_easize, obd->u.cli.cl_max_mds_cookiesize);
+
         /* We hand a ref to the rpcd here, so we need another one of our own. */
         ptlrpc_request_addref(req);
 
@@ -1200,6 +1205,9 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         if (cli->cl_max_mds_cookiesize < size)
                 cli->cl_max_mds_cookiesize = size;
 
+        CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
+               cli->cl_max_mds_easize, cli->cl_max_mds_cookiesize);
+        
         RETURN(0);
 }
 
