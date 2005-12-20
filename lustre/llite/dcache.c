@@ -199,6 +199,7 @@ restart:
                         __d_drop(dentry);
                         dentry->d_flags |= DCACHE_LUSTRE_INVALID;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                        __d_drop(dentry);
                         hlist_add_head(&dentry->d_hash,
                                        &sbi->ll_orphan_dentry_list);
 #endif
