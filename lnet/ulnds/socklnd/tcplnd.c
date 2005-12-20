@@ -61,83 +61,83 @@ tcpnal_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive)
  */
 int tcpnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 {
-    lnet_hdr_t        *hdr = &lntmsg->msg_hdr;
-    lnet_process_id_t  target = lntmsg->msg_target;
-    unsigned int       niov = lntmsg->msg_niov;
-    struct iovec      *iov = lntmsg->msg_iov;
-    unsigned int       offset = lntmsg->msg_offset;
-    unsigned int       len = lntmsg->msg_len;
+        lnet_hdr_t        *hdr = &lntmsg->msg_hdr;
+        lnet_process_id_t  target = lntmsg->msg_target;
+        unsigned int       niov = lntmsg->msg_niov;
+        struct iovec      *iov = lntmsg->msg_iov;
+        unsigned int       offset = lntmsg->msg_offset;
+        unsigned int       len = lntmsg->msg_len;
 
-    connection c;
-    bridge b=(bridge)ni->ni_data;
-    struct iovec tiov[257];
-    static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
-    int rc = 0;
-    int   sysrc;
-    int   total;
-    int   ntiov;
-    int i;
+        connection c;
+        bridge b = (bridge)ni->ni_data;
+        struct iovec tiov[257];
+        static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
+        int rc = 0;
+        int   sysrc;
+        int   total;
+        int   ntiov;
+        int i;
 
-    if (!(c=force_tcp_connection((manager)b->lower, target.nid,
-                                 b->local)))
-        return(-EIO);
+        if (!(c = force_tcp_connection((manager)b->lower, target.nid,
+                                       b->local)))
+                return(-EIO);
 
-    /* TODO: these results should be checked. furthermore, provision
-       must be made for the SIGPIPE which is delivered when
-       writing on a tcp socket which has closed underneath
-       the application. there is a linux flag in the sendmsg
-       call which turns off the signally behaviour, but its
-       nonstandard */
+        /* TODO: these results should be checked. furthermore, provision
+           must be made for the SIGPIPE which is delivered when
+           writing on a tcp socket which has closed underneath
+           the application. there is a linux flag in the sendmsg
+           call which turns off the signally behaviour, but its
+           nonstandard */
 
-    LASSERT (niov <= 256);
-    LASSERT (len == 0 || iov != NULL);          /* I don't understand kiovs */
+        LASSERT (niov <= 256);
+        LASSERT (len == 0 || iov != NULL);      /* I don't understand kiovs */
 
-    tiov[0].iov_base = hdr;
-    tiov[0].iov_len = sizeof(lnet_hdr_t);
-    ntiov = 1 + lnet_extract_iov(256, &tiov[1], niov, iov, offset, len);
+        tiov[0].iov_base = hdr;
+        tiov[0].iov_len = sizeof(lnet_hdr_t);
+        ntiov = 1 + lnet_extract_iov(256, &tiov[1], niov, iov, offset, len);
 
-    pthread_mutex_lock(&send_lock);
+        pthread_mutex_lock(&send_lock);
 #if 1
-    for (i = total = 0; i < ntiov; i++)
-            total += tiov[i].iov_len;
-    
-    sysrc = syscall(SYS_writev, c->fd, tiov, ntiov);
-    if (sysrc != total) {
-            fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
-                     rc, total, errno);
-            rc = -errno;
-    }
+        for (i = total = 0; i < ntiov; i++)
+                total += tiov[i].iov_len;
+
+        sysrc = syscall(SYS_writev, c->fd, tiov, ntiov);
+        if (sysrc != total) {
+                fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
+                         rc, total, errno);
+                rc = -errno;
+        }
 #else
-    for (i = total = 0; i <= ntiov; i++) {
-            rc = send(c->fd, tiov[i].iov_base, tiov[i].iov_len, 0);
-            
-            if (rc != tiov[i].iov_len) {
-                    fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
-                             rc, tiov[i].iov_len, errno);
-                    rc = -errno;
-                    break;
-            }
-            total += rc;
-    }
+        for (i = total = 0; i <= ntiov; i++) {
+                rc = send(c->fd, tiov[i].iov_base, tiov[i].iov_len, 0);
+
+                if (rc != tiov[i].iov_len) {
+                        fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
+                                 rc, tiov[i].iov_len, errno);
+                        rc = -errno;
+                        break;
+                }
+                total += rc;
+        }
 #endif
 #if 0
-    fprintf (stderr, "sent %s total %d in %d frags\n", 
-             hdr->type == LNET_MSG_ACK ? "ACK" :
-             hdr->type == LNET_MSG_PUT ? "PUT" :
-             hdr->type == LNET_MSG_GET ? "GET" :
-             hdr->type == LNET_MSG_REPLY ? "REPLY" :
-             hdr->type == LNET_MSG_HELLO ? "HELLO" : "UNKNOWN",
-             total, niov + 1);
+        fprintf (stderr, "sent %s total %d in %d frags\n",
+                 hdr->type == LNET_MSG_ACK ? "ACK" :
+                 hdr->type == LNET_MSG_PUT ? "PUT" :
+                 hdr->type == LNET_MSG_GET ? "GET" :
+                 hdr->type == LNET_MSG_REPLY ? "REPLY" :
+                 hdr->type == LNET_MSG_HELLO ? "HELLO" : "UNKNOWN",
+                 total, niov + 1);
 #endif
-    pthread_mutex_unlock(&send_lock);
+        pthread_mutex_unlock(&send_lock);
 
-    if (rc == 0) {
-            /* NB the NAL only calls lnet_finalize() if it returns 0
-             * from cb_send() */
-            lnet_finalize(ni, lntmsg, 0);
-    }
+        if (rc == 0) {
+                /* NB the NAL only calls lnet_finalize() if it returns 0
+                 * from cb_send() */
+                lnet_finalize(ni, lntmsg, 0);
+        }
 
-    return(rc);
+        return(rc);
 }
 
 
@@ -152,79 +152,79 @@ int tcpnal_recv(lnet_ni_t     *ni,
                 unsigned int  mlen,
                 unsigned int  rlen)
 {
-    struct iovec tiov[256];
-    int ntiov;
-    int i;
+        struct iovec tiov[256];
+        int ntiov;
+        int i;
 
-    if (mlen == 0)
-            goto finalize;
+        if (mlen == 0)
+                goto finalize;
 
-    LASSERT(iov != NULL);                       /* I don't understand kiovs */
+        LASSERT(iov != NULL);           /* I don't understand kiovs */
 
-    ntiov = lnet_extract_iov(256, tiov, niov, iov, offset, mlen);
-    
-    /* FIXME
-     * 1. Is this effecient enough? change to use readv() directly?
-     * 2. need check return from read_connection()
-     * - MeiJia
-     */
-    for (i = 0; i < ntiov; i++)
-        read_connection(private, tiov[i].iov_base, tiov[i].iov_len);
+        ntiov = lnet_extract_iov(256, tiov, niov, iov, offset, mlen);
+
+        /* FIXME
+         * 1. Is this effecient enough? change to use readv() directly?
+         * 2. need check return from read_connection()
+         * - MeiJia
+         */
+        for (i = 0; i < ntiov; i++)
+                read_connection(private, tiov[i].iov_base, tiov[i].iov_len);
 
 finalize:
-    /* FIXME; we always assume success here... */
-    lnet_finalize(ni, cookie, 0);
+        /* FIXME; we always assume success here... */
+        lnet_finalize(ni, cookie, 0);
 
-    LASSERT(rlen >= mlen);
+        LASSERT(rlen >= mlen);
 
-    if (mlen!=rlen){
-        char *trash=malloc(rlen-mlen);
-        
-        /*TODO: check error status*/
-        read_connection(private,trash,rlen-mlen);
-        free(trash);
-    }
+        if (mlen != rlen){
+                char *trash=malloc(rlen - mlen);
 
-    return(0);
+                /*TODO: check error status*/
+                read_connection(private, trash, rlen - mlen);
+                free(trash);
+        }
+
+        return(0);
 }
 
 
-/* Function:  from_connection: 
- * Arguments: c: the connection to read from 
+/* Function:  from_connection:
+ * Arguments: c: the connection to read from
  * Returns: whether or not to continue reading from this connection,
  *          expressed as a 1 to continue, and a 0 to not
  *
- *  from_connection() is called from the select loop when i/o is 
- *  available. It attempts to read the portals header and 
+ *  from_connection() is called from the select loop when i/o is
+ *  available. It attempts to read the portals header and
  *  pass it to the generic library for processing.
  */
 static int from_connection(void *a, void *d)
 {
-    connection c = d;
-    bridge     b = a;
-    lnet_hdr_t hdr;
-    int  rc;
+        connection c = d;
+        bridge     b = a;
+        lnet_hdr_t hdr;
+        int  rc;
 
-    if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
-            /* replace dest_nid,pid (socknal sets its own) */
-            hdr.dest_nid = cpu_to_le64(b->b_ni->ni_nid);
-            hdr.dest_pid = cpu_to_le32(the_lnet.ln_pid);
-            
-            rc = lnet_parse(b->b_ni, &hdr, c->peer_nid, c);
-            if (rc < 0) {
-                    CERROR("Error %d from lnet_parse\n", rc);
-                    return 0;
-            }
+        if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))) {
+                /* replace dest_nid,pid (socknal sets its own) */
+                hdr.dest_nid = cpu_to_le64(b->b_ni->ni_nid);
+                hdr.dest_pid = cpu_to_le32(the_lnet.ln_pid);
 
-            return(1);
-    }
-    return(0);
+                rc = lnet_parse(b->b_ni, &hdr, c->peer_nid, c);
+                if (rc < 0) {
+                        CERROR("Error %d from lnet_parse\n", rc);
+                        return 0;
+                }
+
+                return(1);
+        }
+        return(0);
 }
 
 
 void tcpnal_shutdown(bridge b)
 {
-    shutdown_connections(b->lower);
+        shutdown_connections(b->lower);
 }
 
 /* Function:  PTL_IFACE_TCP
@@ -235,15 +235,14 @@ void tcpnal_shutdown(bridge b)
  */
 int tcpnal_init(bridge b)
 {
-    manager m;
-        
-    tcpnal_set_global_params();
-        
-    if (!(m=init_connections(from_connection,b))){
-        /* TODO: this needs to shut down the
-           newly created junk */
-        return(-ENXIO);
-    }
-    b->lower=m;
-    return(0);
+        manager m;
+
+        tcpnal_set_global_params();
+
+        if (!(m = init_connections(from_connection, b))) {
+                /* TODO: this needs to shut down the newly created junk */
+                return(-ENXIO);
+        }
+        b->lower = m;
+        return(0);
 }

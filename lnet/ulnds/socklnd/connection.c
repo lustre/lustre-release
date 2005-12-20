@@ -54,21 +54,21 @@ int tcpnal_buffer_size   = 2 * (LNET_MTU + sizeof(lnet_hdr_t));
 int tcpnal_nagle         = 0;
 
 int
-tcpnal_env_param (char *name, int *val) 
+tcpnal_env_param (char *name, int *val)
 {
         char   *env = getenv(name);
         int     n;
-        
+
         if (env == NULL)
                 return 1;
 
-        n = strlen(env);                        /* scanf may not assign on EOS */
-        if (sscanf(env, "%i%n", val, &n) >= 1 &&
-            n == strlen(env)) {
-                CDEBUG(D_INFO, "Environment variable %s set to %d\n", name, val);
+        n = strlen(env);                /* scanf may not assign on EOS */
+        if (sscanf(env, "%i%n", val, &n) >= 1 && n == strlen(env)) {
+                CDEBUG(D_INFO, "Environment variable %s set to %d\n",
+                       name, *val);
                 return 1;
         }
-        
+
         CERROR("Can't parse environment variable '%s=%s'\n",
                name, env);
         return 0;
