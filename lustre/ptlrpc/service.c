@@ -576,6 +576,7 @@ put_conn:
                        libcfs_id2str(request->rq_peer),
                        timeval_sub(&work_end,
                                    &request->rq_arrival_time) / 1000000,
+                       request->rq_repmsg ? request->rq_repmsg->transno :
                        request->rq_transno, request->rq_status,
                        request->rq_repmsg ? request->rq_repmsg->status : -999);
         else

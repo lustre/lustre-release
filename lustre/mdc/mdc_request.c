@@ -680,9 +680,8 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         LASSERT(req->rq_cb_data == NULL);
         req->rq_cb_data = mod;
 
-        CDEBUG(D_HA, "close req->rep_len: %d\n", req->rq_replen);
-
-        CDEBUG(D_HA, "close max_mdsize/max_cookiesize: %d/%d\n",
+        CDEBUG(D_HA, "close req->rep_len %d mdsize %d cookiesize %d\n",
+               req->rq_replen,
                obd->u.cli.cl_max_mds_easize, obd->u.cli.cl_max_mds_cookiesize);
 
         /* We hand a ref to the rpcd here, so we need another one of our own. */

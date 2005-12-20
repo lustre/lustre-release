@@ -1802,17 +1802,17 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
         for (i = 0; i < MAXQUOTAS; i++) {
                 struct list_head id_list;
                 struct dquot_id *dqid, *tmp;
-                
+
                 if (!Q_TYPESET(oqc, i))
                         continue;
-                
+
                 if (qctxt->qckt_first_check[i])
                         continue;
-                
+
                 dummy->qi_files[i] = dqopt->files[i];
                 LASSERT(dummy->qi_files[i] != NULL);
                 INIT_LIST_HEAD(&id_list);
-                
+
                 rc = lustre_get_qids(dummy, i, &id_list);
                 if (rc) {
                         CERROR("read old limits failed. (rc:%d)\n", rc);
@@ -1820,7 +1820,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                 }
                 list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
                         list_del_init(&dqid->di_link);
-                        
+
                         cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list, 
                               dqid->di_id, i, qctxt->qckt_first_check[i]);
                         kfree(dqid);

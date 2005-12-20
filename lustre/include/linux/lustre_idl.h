@@ -229,13 +229,12 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_REQPORTAL   0x40ULL /* Separate portal for non-IO reqs */
 #define OBD_CONNECT_ACL         0x80ULL /* client using access control lists */
 #define OBD_CONNECT_XATTR      0x100ULL /* client using extended attributes*/
-
-
 #define OBD_CONNECT_CROW       0x200ULL /* MDS+OST do object create-on-write */
 #define OBD_CONNECT_TRUNCLOCK  0x400ULL /* server gets locks for punch b=9528 */
 #define OBD_CONNECT_TRANSNO    0x800ULL /* replay is sending initial transno */
 #define OBD_CONNECT_IBITS     0x1000ULL /* support for inodebits locks */
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
+/* also update obd_connect_names[] for lprocfs_rd_connect_flags() */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \

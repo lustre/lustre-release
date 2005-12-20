@@ -113,6 +113,8 @@ run_one() {
 	BEFORE=`date +%s`
 	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
+	export tfile=f${testnum}
+	export tdir=d${base}
 	test_$1 || error "exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
@@ -700,7 +702,11 @@ run_test 24l "Renaming a file to itself ========================"
 
 test_24m() {
 	f="$DIR/f24m"
-	multiop $f OcLN ${f}2 ${f}2 || error
+	multiop $f OcLN ${f}2 ${f}2 || error "link ${f}2 ${f}2 failed"
+	# on ext3 this does not remove either the source or target files
+	# though the "expected" operation would be to remove the source
+	$CHECKSTAT -t file ${f} || error "${f} missing"
+	$CHECKSTAT -t file ${f}2 || error "${f}2 missing"
 }
 run_test 24m "Renaming a file to a hard link to itself ========="
 
@@ -2789,7 +2795,7 @@ test_102() {
         touch $testfile
 
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ -z "`mount | grep " $DIR .*\<user_xattr\>"`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	[ -z "grep \<xattr\> /proc/fs/lustre/mdc/MDC*MNT*/connect_flags" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
@@ -2840,6 +2846,7 @@ test_103 () {
 
     [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
     [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
+    [ -z "grep \<acl\> /proc/fs/lustre/osc/OSC*MNT*/connect_flags" ] && echo "skipping $TESTNAME (must have acl)" && return
 
     echo "performing cp ..."
     run_acl_subtest cp || error

@@ -366,8 +366,8 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
                              lprocfs_wr_group_acquire_expire, 0},
         { "group_upcall",    lprocfs_rd_group_upcall,
                              lprocfs_wr_group_upcall, 0},
-        { "group_flush", 0,  lprocfs_wr_group_flush, 0},
-        { "group_info", 0,   lprocfs_wr_group_info, 0 },
+        { "group_flush",     0, lprocfs_wr_group_flush, 0},
+        { "group_info",      0, lprocfs_wr_group_info, 0 },
         { 0 }
 };
 

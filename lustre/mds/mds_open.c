@@ -1364,11 +1364,10 @@ int mds_close(struct ptlrpc_request *req, int offset)
                 MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
         }
 
-        CDEBUG(D_HA, "close req->rep_len: %d\n", req->rq_replen);
-
-        CDEBUG(D_HA, "close max_mdsize/max_cookiesize: %d/%d\n",
+        CDEBUG(D_HA, "close req->rep_len %d mdsize %d cookiesize %d\n",
+               req->rq_replen,
                obd->u.mds.mds_max_mdsize, obd->u.mds.mds_max_cookiesize);
-        
+
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
         if (body == NULL) {

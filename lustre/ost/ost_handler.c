@@ -65,6 +65,7 @@ void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
 
         if (req->rq_repmsg)
                 req->rq_repmsg->transno = oti->oti_transno;
+        req->rq_transno = oti->oti_transno;
 
         /* XXX 4 == entries in oti_ack_locks??? */
         for (ack_lock = oti->oti_ack_locks, i = 0; i < 4; i++, ack_lock++) {

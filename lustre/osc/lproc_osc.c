@@ -261,6 +261,7 @@ static int osc_wr_checksum(struct file *file, const char *buffer,
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,        0 },
+        { "connect_flags",   lprocfs_rd_connect_flags, 0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
         { "kbytestotal",     lprocfs_rd_kbytestotal, 0, 0 },
         { "kbytesfree",      lprocfs_rd_kbytesfree,  0, 0 },
@@ -274,13 +275,13 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
                                osc_wr_max_pages_per_rpc, 0 },
         { "max_rpcs_in_flight", osc_rd_max_rpcs_in_flight,
                                 osc_wr_max_rpcs_in_flight, 0 },
-        { "max_dirty_mb", osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
+        { "max_dirty_mb",    osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         { "cur_grant_bytes", osc_rd_cur_grant_bytes, 0, 0 },
-        { "create_count", osc_rd_create_count, osc_wr_create_count, 0 },
+        { "create_count",    osc_rd_create_count, osc_wr_create_count, 0 },
         { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
         { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },
-        { "checksums", osc_rd_checksum, osc_wr_checksum, 0 },
+        { "checksums",       osc_rd_checksum, osc_wr_checksum, 0 },
         { 0 }
 };
 
