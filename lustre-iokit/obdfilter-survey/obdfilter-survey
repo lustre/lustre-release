@@ -125,9 +125,11 @@ fi
 rsltf="${rslt}.summary"
 workf="${rslt}.detail"
 cmdsf="${rslt}.script"
+vmstatf="${rslt}.vmstat"
 echo -n > $rsltf
 echo -n > $workf
 
+declare -a vmstatpids
 
 # hide a little trick to unset this from the command line
 if [ "$lustre_root" == " " ]; then
@@ -145,9 +147,9 @@ remote_shell () {
     shift
     cmds="$*"
     if [ "$host" = "localhost" -o "$host" = `uname -n` ]; then
-	eval "$cmds"
+        eval "$cmds"
     else
-	custom_remote_shell $host "$cmds"
+        custom_remote_shell $host "$cmds"
     fi
 }
 
@@ -159,11 +161,11 @@ obdecho_loaded() {
 load_obdecho () {
     local host=$1
     if [ -z "$lustre_root" ]; then
-	remote_shell $host $modprobe obdecho
+        remote_shell $host $modprobe obdecho
     elif [ -f ${lustre_root}/obdecho/obdecho.ko ]; then
-	remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.ko
+        remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.ko
     else
-	remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.o
+        remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.o
     fi
 }
 
@@ -177,8 +179,8 @@ get_devno () {
     local type=$2
     local name=$3
     remote_shell $host $lctl device_list | \
-	awk "{if (\$2 == \"UP\" && \$3 == \"$type\" && \$4 == \"$name\") {\
-	          print \$1; exit}}"
+        awk "{if (\$2 == \"UP\" && \$3 == \"$type\" && \$4 == \"$name\") {\
+                  print \$1; exit}}"
 }
 
 get_ec_devno () {
@@ -186,34 +188,34 @@ get_ec_devno () {
     local client_name="$2"
     local ost_name="$3"
     if [ -z "$client_name" ]; then
-	if [ -z "$ost_name" ]; then
-	    echo "client and ost name both null" 1>&2
-	    return
-	fi
-	client_name=${ost_name}_echo_client
+        if [ -z "$ost_name" ]; then
+            echo "client and ost name both null" 1>&2
+            return
+        fi
+        client_name=${ost_name}_echo_client
     fi
     ec=`get_devno $host echo_client $client_name`
     if [ -n "$ec" ]; then
-	echo $ec $client_name 0
-	return
+        echo $ec $client_name 0
+        return
     fi
     if [ -z "$ost_name" ]; then
-	echo "no echo client and ost_name not set" 1>&2
-	return
+        echo "no echo client and ost_name not set" 1>&2
+        return
     fi
     ost=`get_devno $host obdfilter $ost_name`
     if [ -z "$ost" ]; then
-	echo "OST $ost_name not setup" 1>&2
-	return
+        echo "OST $ost_name not setup" 1>&2
+        return
     fi
     remote_shell $host "$lctl <<EOF
         attach echo_client $client_name ${client_name}_UUID
-	setup $ost_name
+setup $ost_name
 EOF"
     ec=`get_devno $host echo_client $client_name`
     if [ -z "$ec" ]; then
-	echo "Can't setup echo client" 1>&2
-	return
+        echo "Can't setup echo client" 1>&2
+        return
     fi
     echo $ec $client_name 1
 }
@@ -222,9 +224,9 @@ teardown_ec_devno () {
     local host=$1
     local client_name=$2
     remote_shell $host "$lctl <<EOF
-	cfg $client_name
-	cleanup
-	detach
+cfg $client_name
+cleanup
+detach
 EOF"
 }
 
@@ -309,13 +311,13 @@ get_global_stats () {
 testname2type () {
     # 'x' disables data check
     if ((verify)); then
-	x=""
+        x=""
     else
-	x="x"
+        x="x"
     fi
     case $1 in
-	*write*)  echo "w$x";;
-	*)        echo "r$x";;
+        *write*)  echo "w$x";;
+        *)        echo "r$x";;
     esac
 }
 
@@ -370,19 +372,27 @@ else
     done
 fi
 
+# get vmstat started
 # disable portals debug and get obdecho loaded on all relevant hosts
 unique_hosts=(`unique ${host_names[@]}`)
+pidcount=0
 for host in ${unique_hosts[@]}; do
     remote_shell $host "echo 0 > /proc/sys/portals/debug"
+    host_vmstatf=${vmstatf}_${host}
+    echo -n > $host_vmstatf
+    remote_shell $host "vmstat 5 >> $host_vmstatf" &
+    pid=$!
+    vmstatpids[$pidcount]=$pid
+    pidcount=$((pidcount+1))
     do_unload_obdecho[$host]=0
     if obdecho_loaded $host; then
-	continue
+        continue
     fi
     load_obdecho $host
     if obdecho_loaded $host; then
-	do_unload_obdecho[$host]=1
-	continue
-    fi
+        do_unload_obdecho[$host]=1
+        continue
+        fi
     echo "Can't load obdecho on $host" 1>&2
     exit 1
 done
@@ -401,131 +411,147 @@ done
 
 for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
     for ((nobj=$nobjlo;nobj<=$nobjhi;nobj*=2)); do 
-	for ((thr=$thrlo;thr<=$thrhi;thr*=2)); do
-	    if ((thr < nobj)); then
-		continue
-	    fi
-	    # restart?
-	    if [ -n "$restart_rsz" -a\
-		 -n "$restart_nobj" -a\
-		 -n "$restart_thr" ]; then
-		if ((rsz < restart_rsz ||\
-		     (rsz == restart_rsz &&\
-		      (nobj < restart_nobj ||\
-		       (nobj == restart_nobj &&\
-			thr < restart_thr))))); then
-		    continue;
-		fi
-	    fi
-	    # compute parameters
-	    total_thr=$((ndevs*thr))
-	    total_nobj=$((ndevs*nobj))
-	    pages=$((rsz/PAGE_SIZE))
-	    actual_rsz=$((pages*PAGE_SIZE))
-	    count=$((size*1024/(actual_rsz*thr)))
-	    actual_size=$((actual_rsz*count*thr))
-            total_size=$((actual_size*ndevs))
-	    # show computed parameters
-	    str=`printf 'ost %2d sz %8dK rsz %4d obj %4d thr %4d ' \
-		     $ndevs $total_size $actual_rsz $total_nobj $total_thr`
-	    echo "=======================> $str" >> $workf
-	    print_summary -n "$str"
-	    if ((total_thr * actual_rsz > max_buffer_mem)); then
-		print_summary "Too much buffer space"
-		continue
-	    fi
-	    # create the objects
-	    tmpf="${workf}_tmp"
-	    for ((idx=0; idx < ndevs; idx++)); do
-		host=${host_names[$idx]}
-		devno=${devnos[$idx]}
-		client_name="${host}:${client_names[$idx]}"
-		echo "=============> Create $nobj on $client_name" >> $workf
-		first_obj=`create_objects $host $devno $nobj $tmpf`
-		cat $tmpf >> $workf
-		rm $tmpf
-		if [ $first_obj = "ERROR" ]; then
-		    print_summary "created object #s on $client_name not contiguous"
-		    exit 1
-		fi
-		first_objs[$idx]=$first_obj
-	    done
-	    # run tests
-	    for test in ${tests[@]}; do
-		print_summary -n "$test "
-		# create per-host script files
-		for host in ${unique_hosts[@]}; do
-		    echo -n > ${cmdsf}_${host}
-		done
-		for ((idx=0; idx < ndevs; idx++)); do
-		    host=${host_names[$idx]}
-		    devno=${devnos[$idx]}
-		    tmpfi="${tmpf}_$idx"
-		    first_obj=${first_objs[$idx]}
-		    echo >> ${cmdsf}_${host} \
-		        "$lctl > $tmpfi 2>&1 \\
-                         --threads $thr -$snap $devno \\
-			 test_brw $count `testname2type $test` q $pages ${thr}t${first_obj} &"
-		done
-		for host in ${unique_hosts[@]}; do
-		    echo "wait" >> ${cmdsf}_${host}
-		done
-		# timed run of all the per-host script files
-		t0=`date +%s.%N`
-		for host in ${unique_hosts[@]}; do
-		    remote_shell $host bash ${cmdsf}_${host}&
-		done
-		wait
-		t1=`date +%s.%N`
-		# clean up per-host script files
-		for host in ${unique_hosts[@]}; do
-		    rm ${cmdsf}_${host}
-		done
-		# compute bandwidth from total data / elapsed time
-		str=`awk "BEGIN {printf \"%7.2f \",\
-		         $total_size / (( $t1 - $t0 ) * 1024)}"`
-		print_summary -n "$str"
-		# collect/check individual OST stats
-		echo -n > $tmpf
-		for ((idx=0; idx < ndevs; idx++)); do
-		    client_name="${host_names[$idx]}:${client_names[$idx]}"
-		    tmpfi="${tmpf}_$idx"
-		    echo "=============> $test $client_name" >> $workf
-		    cat $tmpfi >> $workf
-		    get_stats $tmpfi >> $tmpf
-		    rm $tmpfi
-		done
-		# compute/display global min/max stats
-		echo "=============> $test global" >> $workf
-		cat $tmpf >> $workf
-		stats=(`get_global_stats $tmpf`)
-		rm $tmpf
-		if ((stats[0] <= 0)); then
-		    if ((stats[0] < 0)); then
-			str=`printf "%17s " ERROR`
-		    else
-			str=`printf "%17s " SHORT`
-		    fi
-		else
-		    str=`awk "BEGIN {printf \"[%7.2f,%7.2f] \",\
-			     (${stats[1]} * $actual_rsz)/1024,\
-			     (${stats[2]} * $actual_rsz)/1024; exit}"`
-		fi
-		print_summary -n "$str"
-	    done
-	    print_summary ""
-	    # destroy objects we created
-	    for ((idx=0; idx < ndevs; idx++)); do
-		host=${host_names[$idx]}
-		devno=${devnos[$idx]}
-		client_name="${host}:${client_names[$idx]}"
-		first_obj=${first_objs[$idx]}
-		echo "=============> Destroy $nobj on $client_name" >> $workf
-		destroy_objects $host $devno $first_obj $nobj $tmpf
-		cat $tmpf >> $workf
-		rm $tmpf
-	    done
-	done
+        for ((thr=$thrlo;thr<=$thrhi;thr*=2)); do
+            if ((thr < nobj)); then
+                continue
+            fi
+            # restart?
+            if [ -n "$restart_rsz" -a\
+             -n "$restart_nobj" -a\
+             -n "$restart_thr" ]; then
+                if ((rsz < restart_rsz ||\
+                     (rsz == restart_rsz &&\
+                      (nobj < restart_nobj ||\
+                       (nobj == restart_nobj &&\
+                    thr < restart_thr))))); then
+                    continue;
+                fi
+            fi
+            # compute parameters
+            total_thr=$((ndevs*thr))
+            total_nobj=$((ndevs*nobj))
+            pages=$((rsz/PAGE_SIZE))
+            actual_rsz=$((pages*PAGE_SIZE))
+            count=$((size*1024/(actual_rsz*thr)))
+            actual_size=$((actual_rsz*count*thr))
+                total_size=$((actual_size*ndevs))
+            # show computed parameters
+            str=`printf 'ost %2d sz %8dK rsz %4d obj %4d thr %4d ' \
+                 $ndevs $total_size $actual_rsz $total_nobj $total_thr`
+            echo "=======================> $str" >> $workf
+            print_summary -n "$str"
+            if ((total_thr * actual_rsz > max_buffer_mem)); then
+                print_summary "Too much buffer space"
+                continue
+            fi
+            # create the objects
+            tmpf="${workf}_tmp"
+            for ((idx=0; idx < ndevs; idx++)); do
+                host=${host_names[$idx]}
+                devno=${devnos[$idx]}
+                client_name="${host}:${client_names[$idx]}"
+                echo "=============> Create $nobj on $client_name" >> $workf
+                first_obj=`create_objects $host $devno $nobj $tmpf`
+                cat $tmpf >> $workf
+                rm $tmpf
+                if [ $first_obj = "ERROR" ]; then
+                    print_summary "created object #s on $client_name not contiguous"
+                    exit 1
+                fi
+                first_objs[$idx]=$first_obj
+            done
+            # run tests
+            for test in ${tests[@]}; do
+                declare -a pidarray
+                for host in ${unique_hosts[@]}; do
+                    echo "starting run for test: $test rsz: $rsz threads: $thr objects: $nobj" >> ${vmstatf}_${host}
+                done
+                print_summary -n "$test "
+                # create per-host script files
+                for host in ${unique_hosts[@]}; do
+                    echo -n > ${cmdsf}_${host}
+                done
+                for ((idx=0; idx < ndevs; idx++)); do
+                    host=${host_names[$idx]}
+                    devno=${devnos[$idx]}
+                    tmpfi="${tmpf}_$idx"
+                    first_obj=${first_objs[$idx]}
+                    echo >> ${cmdsf}_${host} \
+                        "$lctl > $tmpfi 2>&1 \\
+                                 --threads $thr -$snap $devno \\
+                     test_brw $count `testname2type $test` q $pages ${thr}t${first_obj} &"
+                    
+                done
+                pidcount=0
+                for host in ${unique_hosts[@]}; do
+                    echo "wait" >> ${cmdsf}_${host}
+                    pidarray[$pidcount]=0
+                    pidcount=$((pidcount+1))
+                done
+                # timed run of all the per-host script files
+                t0=`date +%s.%N`
+                pidcount=0
+                for host in ${unique_hosts[@]}; do
+                    remote_shell $host bash ${cmdsf}_${host} &
+                    pidarray[$pidcount]=$!
+                    pidcount=$((pidcount+1))
+                done
+                pidcount=0
+                for host in ${unique_hosts[@]}; do
+                    wait ${pidarray[$pidcount]}
+                    pidcount=$((pidcount+1))
+                done
+                #wait
+                t1=`date +%s.%N`
+                # clean up per-host script files
+                for host in ${unique_hosts[@]}; do
+                    rm ${cmdsf}_${host}
+                done
+                # compute bandwidth from total data / elapsed time
+                str=`awk "BEGIN {printf \"%7.2f \",\
+                         $total_size / (( $t1 - $t0 ) * 1024)}"`
+                print_summary -n "$str"
+                # collect/check individual OST stats
+                echo -n > $tmpf
+                for ((idx=0; idx < ndevs; idx++)); do
+                    client_name="${host_names[$idx]}:${client_names[$idx]}"
+                    tmpfi="${tmpf}_$idx"
+                    echo "=============> $test $client_name" >> $workf
+                    cat $tmpfi >> $workf
+                    get_stats $tmpfi >> $tmpf
+                    rm $tmpfi
+                done
+                # compute/display global min/max stats
+                echo "=============> $test global" >> $workf
+                cat $tmpf >> $workf
+                stats=(`get_global_stats $tmpf`)
+                rm $tmpf
+                if ((stats[0] <= 0)); then
+                    if ((stats[0] < 0)); then
+                    str=`printf "%17s " ERROR`
+                    else
+                    str=`printf "%17s " SHORT`
+                    fi
+                else
+                    str=`awk "BEGIN {printf \"[%7.2f,%7.2f] \",\
+                         (${stats[1]} * $actual_rsz)/1024,\
+                         (${stats[2]} * $actual_rsz)/1024; exit}"`
+                fi
+                print_summary -n "$str"
+            done
+            print_summary ""
+            # destroy objects we created
+            for ((idx=0; idx < ndevs; idx++)); do
+                host=${host_names[$idx]}
+                devno=${devnos[$idx]}
+                client_name="${host}:${client_names[$idx]}"
+                first_obj=${first_objs[$idx]}
+                echo "=============> Destroy $nobj on $client_name" >> $workf
+                destroy_objects $host $devno $first_obj $nobj $tmpf
+                cat $tmpf >> $workf
+                rm $tmpf
+            done
+        done
     done
 done
 
@@ -533,13 +559,22 @@ done
 for ((i=0; i<ndevs; i++)); do
     host=${host_names[$i]}
     if ((${do_teardown_ec[$i]})); then
-	teardown_ec_devno $host ${client_names[$i]}
+        teardown_ec_devno $host ${client_names[$i]}
     fi
 done
 
 # unload any obdecho modules we loaded
+pidcount=0
 for host in ${unique_hosts[@]}; do
+    remote_shell $host "killall vmstat" &
+    pid=$!
+    kill -term ${vmstatpids[$pidcount]}
+    kill -kill ${vmstatpids[$pidcount]} 2>/dev/null
+    wait $pid
+    pidcount=$((pidcount+1))
     if ((${do_unload_obdecho[$host]})); then
-	unload_obdecho $host
+        unload_obdecho $host
     fi
 done
+
+exit 0
