@@ -151,13 +151,16 @@ int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp)
         int valsize, rc;
         ENTRY;
 
+        mds->mds_has_lov_desc = 0;
         valsize = sizeof(mds->mds_lov_desc);
         rc = obd_get_info(mds->mds_osc_exp, strlen("lovdesc") + 1,
                           "lovdesc", &valsize, &mds->mds_lov_desc);
-        if (rc)
+        if (rc) {
                 CERROR("can't get lov_desc, rc %d\n", rc);
+                RETURN(rc);
+        }
         
-        mds->mds_has_lov_desc = rc ? 0 : 1;
+        mds->mds_has_lov_desc = 1;
 
         if (mds->mds_has_lov_desc) {
                 CDEBUG(D_HA, "updating lov_desc, tgt_count: %d\n",
@@ -170,7 +173,7 @@ int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp)
                 CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
                        mds->mds_max_mdsize, mds->mds_max_cookiesize);
         }
-        RETURN(rc);
+        RETURN(0);
 }
 
 /* update the LOV-OSC knowledge of the last used object id's */
@@ -624,11 +627,6 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                  * should be done on clients. */
                 rc = mds_init_lov_desc(obd, mds->mds_osc_exp);
                 if (rc)
-                        RETURN(rc);
-
-                rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"),
-                                  "mds_conn", 0, uuid);
-                if (rc != 0)
                         RETURN(rc);
 
                 rc = mds_lov_start_synchronize(obd, uuid, 1);

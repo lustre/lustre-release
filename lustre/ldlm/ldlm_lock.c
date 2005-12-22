@@ -131,7 +131,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 struct obd_export *export = NULL;
 
                 l_lock(&ns->ns_lock);
-                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
+                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing it.");
                 LASSERT(lock->l_destroyed);
                 LASSERT(list_empty(&lock->l_res_link));
 

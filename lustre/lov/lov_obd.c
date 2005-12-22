@@ -2202,7 +2202,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         continue;
 
                 err = obd_set_info(lov->tgts[i].ltd_exp,
-                                  keylen, key, vallen, val);
+                                   keylen, key, vallen, val);
                 if (!rc)
                         rc = err;
         }
