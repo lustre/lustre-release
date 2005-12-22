@@ -2820,7 +2820,8 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
                 RETURN(-EINVAL);
         }
 
-        if (!IS_KEY("mds_conn"))
+        if (keylen < strlen("mds_conn") ||
+            memcmp(key, "mds_conn", keylen) != 0)
                 RETURN(-EINVAL);
 
         CWARN("%s: received MDS connection from %s\n", obd->obd_name,
