@@ -320,8 +320,19 @@ AC_MSG_RESULT([$enable_ldiskfs])
 if test x$enable_ldiskfs = xyes ; then
 	BACKINGFS="ldiskfs"
 
+	AC_MSG_CHECKING([whether to enable quilt for making ldiskfs])
+	AC_ARG_ENABLE([quilt],
+			AC_HELP_STRING([--disable-quilt],[disable use of quilt for ldiskfs]),
+			[],[enable_quilt='yes'])
+	AC_MSG_RESULT([$enable_quilt])
+
 	AC_PATH_PROG(PATCH, patch, [no])
-	AC_PATH_PROG(QUILT, quilt, [no])
+
+	if test x$enable_quilt = xno ; then
+	    QUILT="no"
+	else
+	    AC_PATH_PROG(QUILT, quilt, [no])
+	fi
 
 	if test x$enable_ldiskfs$PATCH$QUILT = xyesnono ; then
 		AC_MSG_ERROR([Quilt or patch are needed to build the ldiskfs module (for Linux 2.6)])
