@@ -430,8 +430,8 @@ int main(int argc, char *const argv[])
         if (!fake)
                 rc = mount(source, target, "lustre", flags, (void *)&lmd);
         if (rc) {
-                fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", source,
-                        target, progname, strerror(errno));
+                fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname,
+                        source, target, strerror(errno));
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");
