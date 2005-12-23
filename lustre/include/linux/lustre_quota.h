@@ -71,9 +71,8 @@ struct dquot_id {
 #define QFILE_RD_INFO           2
 #define QFILE_WR_INFO           3
 #define QFILE_INIT_INFO         4
-#define QFILE_GET_QIDS          5
-#define QFILE_RD_DQUOT          6
-#define QFILE_WR_DQUOT          7
+#define QFILE_RD_DQUOT          5
+#define QFILE_WR_DQUOT          6
 
 /* admin quotafile operations */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
@@ -83,7 +82,7 @@ int lustre_write_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_read_dquot(struct lustre_dquot *dquot);
 int lustre_commit_dquot(struct lustre_dquot *dquot);
 int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
-int lustre_get_qids(struct lustre_quota_info *lqi, int type, 
+int lustre_get_qids(struct file *file, struct inode *inode, int type, 
                     struct list_head *list);
 #else
 

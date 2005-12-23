@@ -344,6 +344,7 @@ static int quotfmt_test_4(struct lustre_quota_info *lqi)
 
 static int quotfmt_test_5(struct lustre_quota_info *lqi)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)        
         int i, rc = 0;
 
         for (i = USRQUOTA; i < MAXQUOTAS && !rc; i++) {
@@ -351,7 +352,7 @@ static int quotfmt_test_5(struct lustre_quota_info *lqi)
                 struct dquot_id *dqid, *tmp;
 
                 INIT_LIST_HEAD(&list);
-                rc = lustre_get_qids(lqi, i, &list);
+                rc = lustre_get_qids(lqi->qi_files[i], NULL, i, &list);
                 if (rc) {
                         CERROR("%s get all %ss (rc:%d):\n",
                                rc ? "error" : "success",
@@ -366,6 +367,10 @@ static int quotfmt_test_5(struct lustre_quota_info *lqi)
                 printk("\n");
         }
         return rc;
+#else
+        CWARN("kernel version >= 2.6.12, test skipped\n");
+        return 0;
+#endif
 }
 
 static int quotfmt_run_tests(struct obd_device *obd, struct obd_device *tgt)
@@ -420,6 +425,7 @@ static int quotfmt_run_tests(struct obd_device *obd, struct obd_device *tgt)
                 CERROR("walk through quota file failed\n");
                 GOTO(out, rc);
         }
+
       out:
         CWARN("=== Finalize quotafile test\n");
         rc = quotfmt_finalize(lqi, tgt, &saved);

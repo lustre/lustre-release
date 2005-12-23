@@ -1731,7 +1731,6 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
         struct ext3_sb_info *sbi = EXT3_SB(sb);
         int i, group;
         struct qchk_ctxt *qctxt;
-        struct lustre_quota_info *dummy = NULL;
         struct quota_info *dqopt = sb_dqopt(sb);
         struct buffer_head *bitmap_bh = NULL;
         unsigned long ino;
@@ -1794,11 +1793,6 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
         /* read old quota limits from old quota file. (only for the user
          * has limits but hasn't file) */
 #ifdef HAVE_QUOTA_SUPPORT
-        OBD_ALLOC_PTR(dummy);
-        if (!dummy) {
-                CERROR("Not enough memory\n");
-                GOTO(out, rc = -ENOMEM);
-        }
         for (i = 0; i < MAXQUOTAS; i++) {
                 struct list_head id_list;
                 struct dquot_id *dqid, *tmp;
@@ -1808,21 +1802,24 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
                 if (qctxt->qckt_first_check[i])
                         continue;
-
-                dummy->qi_files[i] = dqopt->files[i];
-                LASSERT(dummy->qi_files[i] != NULL);
+                
+                LASSERT(dqopt->files[i] != NULL);
                 INIT_LIST_HEAD(&id_list);
-
-                rc = lustre_get_qids(dummy, i, &id_list);
-                if (rc) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)                
+                rc = lustre_get_qids(dqopt->files[i], NULL, i, &id_list);
+#else
+                rc = lustre_get_qids(NULL, dqopt->files[i], i, &id_list);
+#endif
+                if (rc)
                         CERROR("read old limits failed. (rc:%d)\n", rc);
-                        break;
-                }
+                        
                 list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
                         list_del_init(&dqid->di_link);
-
-                        cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list, 
-                              dqid->di_id, i, qctxt->qckt_first_check[i]);
+                        
+                        if (!rc)
+                                cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list, 
+                                      dqid->di_id, i, 
+                                      qctxt->qckt_first_check[i]);
                         kfree(dqid);
                 }
         }
@@ -1840,8 +1837,6 @@ out:
         /* dump and free chk_dqblk */
         rc = prune_chkquots(sb, qctxt, rc);
         OBD_FREE_PTR(qctxt);
-        if (dummy)
-                OBD_FREE_PTR(dummy);
 
         /* turn off quota, `lfs quotacheck` will turn on when all
          * nodes quotacheck finish. */
@@ -1856,7 +1851,7 @@ out:
 
 #ifdef HAVE_QUOTA_SUPPORT
 static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type, 
-                                 int cmd, struct list_head *list)
+                                 int cmd)
 {
         int rc = 0;
         ENTRY;
@@ -1879,15 +1874,18 @@ static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
         case QFILE_INIT_INFO:
                 rc = lustre_init_quota_info(lqi, type);
                 break;
-        case QFILE_GET_QIDS:
-                rc = lustre_get_qids(lqi, type, list);
-                break;
         default:
                 CERROR("Unsupported admin quota file cmd %d\n", cmd);
                 LBUG();
                 break;
         }
         RETURN(rc);
+}
+
+static int fsfilt_ext3_qids(struct file *file, struct inode *inode, int type,
+                            struct list_head *list)
+{
+        return lustre_get_qids(file, inode, type, list);
 }
 
 static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
@@ -1955,6 +1953,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_quotacheck          = fsfilt_ext3_quotacheck,
 #ifdef HAVE_QUOTA_SUPPORT
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
+        .fs_qids                = fsfilt_ext3_qids,
         .fs_dquot               = fsfilt_ext3_dquot,
 #endif
 };

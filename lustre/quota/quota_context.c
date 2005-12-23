@@ -709,32 +709,24 @@ static int qslave_recovery_main(void *arg)
         for (type = USRQUOTA; type < MAXQUOTAS; type++) {
                 struct qunit_data qdata;
                 struct quota_info *dqopt = sb_dqopt(qctxt->lqc_sb);
-                struct lustre_quota_info *dummy;
                 struct list_head id_list;
                 struct dquot_id *dqid, *tmp;
                 int ret;
 
-                OBD_ALLOC_PTR(dummy);
-                if (!dummy) {
-                        CERROR("Not enough memory\n");
-                        rc = -ENOMEM;
-                        break;
-                }
-
                 down(&dqopt->dqonoff_sem);
                 if (!sb_has_quota_enabled(qctxt->lqc_sb, type)) {
                         up(&dqopt->dqonoff_sem);
-                        OBD_FREE_PTR(dummy);
                         break;
                 }
-                dummy->qi_files[type] = dqopt->files[type];
-                LASSERT(dummy->qi_files[type] != NULL);
+
+                LASSERT(dqopt->files[type] != NULL);
                 INIT_LIST_HEAD(&id_list);
-
-                rc = fsfilt_quotainfo(obd, dummy, type, QFILE_GET_QIDS, &id_list);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
+                rc = fsfilt_qids(obd, dqopt->files[type], NULL, type, &id_list);
+#else
+                rc = fsfilt_qids(obd, NULL, dqopt->files[type], type, &id_list);
+#endif
                 up(&dqopt->dqonoff_sem);
-
-                OBD_FREE_PTR(dummy);
                 if (rc)
                         CERROR("Get ids from quota file failed. (rc:%d)\n", rc);
 

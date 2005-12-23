@@ -430,7 +430,7 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
                 }
 
                 qinfo->qi_files[i] = fp;
-                rc = fsfilt_quotainfo(obd, qinfo, i, QFILE_INIT_INFO, NULL);
+                rc = fsfilt_quotainfo(obd, qinfo, i, QFILE_INIT_INFO);
                 filp_close(fp, 0);
                 qinfo->qi_files[i] = NULL;
 
@@ -500,7 +500,7 @@ int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 }
                 qinfo->qi_files[i] = fp;
 
-                rc = fsfilt_quotainfo(obd, qinfo, i, QFILE_RD_INFO, NULL);
+                rc = fsfilt_quotainfo(obd, qinfo, i, QFILE_RD_INFO);
                 if (rc) {
                         CERROR("error read quotainfo of %s! (rc:%d)\n",
                                name, rc);
@@ -589,7 +589,7 @@ int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl)
         qinfo->qi_info[oqctl->qc_type].dqi_igrace = dqinfo->dqi_igrace;
         qinfo->qi_info[oqctl->qc_type].dqi_flags = dqinfo->dqi_flags;
 
-        rc = fsfilt_quotainfo(obd, qinfo, oqctl->qc_type, QFILE_WR_INFO, NULL);
+        rc = fsfilt_quotainfo(obd, qinfo, oqctl->qc_type, QFILE_WR_INFO);
 
 out:
         up(&mds->mds_qonoff_sem);
@@ -1042,8 +1042,8 @@ static int qmaster_recovery_main(void *arg)
                         continue;
                 }
                 INIT_LIST_HEAD(&id_list);
-                rc = fsfilt_quotainfo(obd, qinfo, type, QFILE_GET_QIDS, 
-                                      &id_list);
+                rc = fsfilt_qids(obd, qinfo->qi_files[type], NULL, type, 
+                                 &id_list);
                 up(&mds->mds_qonoff_sem);
 
                 if (rc)
