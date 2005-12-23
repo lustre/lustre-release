@@ -1013,7 +1013,15 @@ static int ping_evictor_main(void *arg)
         ENTRY;
 
         lock_kernel();
-        libcfs_daemonize("ping_evictor");
+
+        /* ptlrpc_daemonize() */
+        exit_mm(current);
+        lustre_daemonize_helper();
+        set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
+        exit_files(current);
+        reparent_to_init();
+        THREAD_NAME(current->comm, sizeof(current->comm), "ping_evictor");
+
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
