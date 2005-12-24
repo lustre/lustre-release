@@ -115,7 +115,7 @@ run_one() {
 	export TESTNAME=test_$1
 	export tfile=f${testnum}
 	export tdir=d${base}
-	test_$1 || error "exit with rc=$?"
+	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
@@ -2846,7 +2846,7 @@ test_103 () {
 
     [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
     [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
-    [ -z "grep \<acl\> /proc/fs/lustre/osc/OSC*MNT*/connect_flags" ] && echo "skipping $TESTNAME (must have acl)" && return
+    [ -z "`grep acl /proc/fs/lustre/mdc/MDC*MNT*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
 
     echo "performing cp ..."
     run_acl_subtest cp || error
