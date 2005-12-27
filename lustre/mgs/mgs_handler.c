@@ -118,7 +118,6 @@ static int mgs_handle(struct ptlrpc_request *req);
 static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
-        char *ns_name = "MGS";
         struct mgs_obd *mgs = &obd->u.mgs;
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
@@ -140,11 +139,15 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 
         /* namespace for mgs llog */
-        obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
+        obd->obd_namespace = ldlm_namespace_new("MGS", LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL) {
                 mgs_cleanup(obd);
                 GOTO(err_ops, rc = -ENOMEM);
         }
+
+        /* ldlm setup */
+        ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
+                           "mgs_ldlm_client", &obd->obd_ldlm_client);
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
@@ -260,6 +263,7 @@ static int mgs_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
+/* similar to filter_prepare_destroy */
 static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
                             struct lustre_handle *lockh)
 {
@@ -268,14 +272,25 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
         struct ldlm_res_id res_id = {.name = {12321}};
         int rc, flags = 0;
 
+        CERROR("mgs_lock %s\n", fsname);
+
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_PLAIN, NULL, LCK_PW, &flags,
-                              NULL, ldlm_completion_ast, NULL, NULL,
-                              NULL, 0, NULL, lockh);
+                              LDLM_PLAIN, NULL, LCK_EX, &flags,
+                              ldlm_blocking_ast, ldlm_completion_ast, 
+                              NULL, NULL, NULL, 0, NULL, lockh);
         if (rc) {
                 CERROR("can't take cfg lock %d\n", rc);
         }
+
         return rc;
+}
+
+static int mgs_put_cfg_lock(struct lustre_handle *lockh)
+{
+        CERROR("mgs_unlock\n");
+        
+        ldlm_lock_decref(lockh, LCK_EX);
+        return 0;
 }
 
 static int mgs_handle_target_add(struct ptlrpc_request *req)
@@ -304,7 +319,7 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
 
         /* revoke the config lock so everyone will update */
         lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
-        if (lockrc) {
+        if (lockrc != ELDLM_OK) {
                 LCONSOLE_ERROR("Can't signal other nodes to update their "
                                "configuration (%d). Updating local logs "
                                "anyhow; you might have to manually restart "
@@ -315,15 +330,16 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         /* create the log for the new target 
            and update the client/mdt logs */
         rc = mgs_write_log_target(obd, mti);
+        
+        /* done with log update */
+        if (lockrc == ELDLM_OK)
+                mgs_put_cfg_lock(&lockh);
+
         if (rc) {
                 CERROR("Failed to write %s log (%d)\n", 
                        mti->mti_svname, rc);
                 GOTO(out, rc);
         }
-
-        /* done with log update */
-        if (!lockrc)
-                ldlm_lock_decref(&lockh, LCK_PW);
 
 out:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname, 
@@ -385,7 +401,7 @@ int mgs_handle(struct ptlrpc_request *req)
         case LDLM_BL_CALLBACK:
         case LDLM_CP_CALLBACK:
                 DEBUG_REQ(D_MGS, req, "callback");
-                CERROR("callbacks should not happen on MDS\n");
+                CERROR("callbacks should not happen on MGS\n");
                 LBUG();
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
                 break;

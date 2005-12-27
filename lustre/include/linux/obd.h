@@ -262,8 +262,6 @@ struct filter_obd {
         atomic_t                 fo_quotachecking;
 };
 
-struct mds_server_data;
-
 #define OSC_MAX_RIF_DEFAULT       8
 #define OSC_MAX_RIF_MAX          64
 #define OSC_MAX_DIRTY_DEFAULT    32
@@ -345,9 +343,8 @@ struct mgs_obd {
         struct dentry                   *mgs_configs_dir;
         struct dentry                   *mgs_fid_de;
         struct llog_handle              *mgs_cfg_llh;
-        spinlock_t                       mgs_system_db_lock;
-        struct list_head                 mgs_system_db_list;
-        struct lustre_handle             mgs_pw_lock;  /* config update lock */
+        spinlock_t                       mgs_fs_db_lock;
+        struct list_head                 mgs_fs_db_list;
 };
 
 struct mds_obd {

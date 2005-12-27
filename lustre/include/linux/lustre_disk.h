@@ -166,7 +166,7 @@ struct lr_server_data {
         __u8  lsd_uuid[40];        /* server UUID */
         __u64 lsd_unused;          /* was lsd_last_objid - don't use for now */
         __u64 lsd_last_transno;    /* last completed transaction ID */
-        __u64 lsd_mount_count;     /* FILTER incarnation number */
+        __u64 lsd_mount_count;     /* incarnation number */
         __u32 lsd_feature_compat;  /* compatible feature flags */
         __u32 lsd_feature_rocompat;/* read-only compatible feature flags */
         __u32 lsd_feature_incompat;/* incompatible feature flags */

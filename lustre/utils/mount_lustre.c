@@ -345,7 +345,7 @@ int main(int argc, char *const argv[])
         strcat(optcopy, source);
 
         if (verbose) 
-                printf("mounting devce %s at %s, flags=%#x options=%s\n",
+                printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
         
         if (!fake)

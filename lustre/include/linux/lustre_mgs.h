@@ -22,33 +22,18 @@
 #include <linux/lustre_log.h>
 #include <linux/lustre_export.h>
 
-#define MGS_ROCOMPAT_SUPP       0x00000001
-#define MGS_INCOMPAT_SUPP       (0)
-
-typedef enum {
-        MCID = 1,
-        OTID = 2,
-} llogid_t;
-
-struct mgc_op_data {
-        llogid_t   obj_id;
-        __u64      obj_version;
-};
-
-
-struct system_db {
-        char              fsname[64];
-        struct list_head  db_list;
-        void*             index_map;
-        struct list_head  ost_infos;
-        int               sdb_flags;
+struct fs_db {
+        char              fd_name[8];
+        struct list_head  fd_list;
+        void*             fd_index_map;
+        __u32             fd_flags;
+        __u32             fd_last_step;
+        //FIXME add a semaphore for locking the fs_db (and logs)
 };
 
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
 int mgs_fs_cleanup(struct obd_device *obddev);
+int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, 
+                  int len, void *karg, void *uarg);
 
-extern int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, 
-                         int len, void *karg, void *uarg);
-
-extern int mgs_mds_register(struct ptlrpc_request *req);
 #endif

@@ -937,14 +937,14 @@ typedef enum {
         MGMT_LAST_OPC
 } mgs_cmd_t;
 
-#define NAME_MAXLEN 64
-#define UUID_MAXLEN NAME_MAXLEN + 5
+#define MTI_NAME_MAXLEN 64
+#define MTI_UUID_MAXLEN MTI_NAME_MAXLEN + 5
 
 struct mgmt_target_info {
-        char             mti_fsname[NAME_MAXLEN];
-        char             mti_svname[NAME_MAXLEN];
-        char             mti_nodename[NAME_MAXLEN];
-        char             mti_uuid[UUID_MAXLEN];
+        char             mti_fsname[MTI_NAME_MAXLEN];
+        char             mti_svname[MTI_NAME_MAXLEN];
+        char             mti_nodename[MTI_NAME_MAXLEN];
+        char             mti_uuid[MTI_UUID_MAXLEN];
         __u64            mti_nid;            /* lnet_nid_t */ //nid list?
         __u32            mti_config_ver;
         __u32            mti_flags;
@@ -956,6 +956,16 @@ struct mgmt_target_info {
 
 extern void lustre_swab_mgmt_target_info(struct mgmt_target_info *oinfo);
 
+#define CM_START 0x01
+#define CM_END   0x02
+#define CM_SKIP  0x04
+
+struct cfg_marker {
+        __u32             cm_step;  /* aka config version */
+        __u32             cm_flags;
+        __u32             cm_timestamp;
+        char              cm_comment[40];
+};
 
 /*
  * Opcodes for multiple servers.

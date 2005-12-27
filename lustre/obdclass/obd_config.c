@@ -651,7 +651,11 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         case LCFG_MARKER: {
+                struct cfg_marker *marker;
                 LCONSOLE_WARN("LCFG_MARKER not yet implemented.\n");
+                marker = lustre_cfg_buf(lcfg, 1);
+                CDEBUG(D_WARNING, "%d (%x) %s\n", marker->cm_step,
+                       marker->cm_flags, marker->cm_comment);
                 GOTO(out, err = 0);
         }
         }

@@ -142,7 +142,6 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         /* first assign flags to use llog_client_ops */
         llh->llh_flags = flags;
         rc = llog_read_header(handle);
-        CDEBUG(D_ERROR, "read header rc=%d fl=%d\n", rc, flags);
         if (rc == 0) {
                 flags = llh->llh_flags;
                 if (uuid)

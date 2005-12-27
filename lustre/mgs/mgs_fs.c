@@ -58,7 +58,7 @@ static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct ll_fid *fid)
         struct inode *inode;
         struct dentry *result;
 
-        CDEBUG(D_DENTRY|D_ERROR, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
+        CDEBUG(D_DENTRY, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
                ino, generation, mgs->mgs_sb);
 
         if (ino == 0)

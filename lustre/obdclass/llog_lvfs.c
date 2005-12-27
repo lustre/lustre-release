@@ -543,8 +543,6 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
  finish:
         if (oa)
                 obdo_free(oa);
-        // FIXME remove
-        CDEBUG(D_ERROR, "opened %s fp=%p\n", name?name:"by id", handle->lgh_file);
         RETURN(rc);
 cleanup:
         switch (cleanup_phase) {
@@ -561,8 +559,6 @@ static int llog_lvfs_close(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        // FIXME remove
-        CDEBUG(D_ERROR, "Closing file=%p\n", handle->lgh_file);
         rc = filp_close(handle->lgh_file, 0);
         if (rc)
                 CERROR("error closing log: rc %d\n", rc);

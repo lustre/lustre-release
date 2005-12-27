@@ -374,15 +374,43 @@ out:
 }
 #endif
 
+/**************** config llog ********************/
+
+/* Get the client export to the MGS */
+static struct obd_export *get_mgs_export(struct obd_device *mgc)
+{
+        struct obd_export *exp, *n;
+
+        /* FIXME is this a Bad Idea?  Should I just store this export 
+           somewhere in the u.cli? Slightly annoying because of layering */
+
+        /* There should be exactly 2 exports in the mgc, the mgs export and 
+           the mgc self-export, in that order. So just return the list head. */
+        LASSERT(!list_empty(&mgc->obd_exports));
+        LASSERT(mgc->obd_num_exports == 2);
+        list_for_each_entry_safe(exp, n, &mgc->obd_exports, exp_obd_chain) {
+                LASSERT(exp != mgc->obd_self_export);
+                break;
+        }
+        /*FIXME there's clearly a better way, but I'm too confused to sort it 
+          out now...
+        exp = &list_entry(&mgc->obd_exports->head, export_obd, exp_obd_chain);
+        */
+        return exp;
+}
+
 /* Get a config log from the MGS and process it.
    This func is called for both clients and servers. */
+/* FIXME maybe it makes more sense for this to be a mgc func, not
+   a mount func.  We could make this mgc_process_config */ 
 int lustre_get_process_log(struct super_block *sb, char *logname, 
-                       struct config_llog_instance *cfg)
+                           struct config_llog_instance *cfg)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
         struct llog_ctxt *rctxt, *lctxt;
-        int rc;
+        struct lustre_handle lockh;
+        int rc, rcl, flags = 0;
         LASSERT(mgc);
 
         CDEBUG(D_MOUNT, "parsing config log %s\n", logname);
@@ -394,6 +422,15 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
                 return(-EINVAL);
         }
 
+        /* Get the cfg lock */
+        rcl = obd_enqueue(get_mgs_export(mgc), NULL, LDLM_PLAIN, NULL, 
+                          LCK_CR, &flags, NULL, NULL, NULL, 
+                          logname, 0, NULL, &lockh);
+        if (rcl) {
+                CERROR("Can't get cfg lock: %d\n", rcl);
+                return (rcl);
+        }
+        
         //FIXME Copy the mgs remote log to the local disk
 
 #if 0
@@ -401,8 +438,14 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
         class_config_dump_llog(rctxt, logname, cfg);
 #endif
         rc = class_config_parse_llog(rctxt, logname, cfg);
-
-        if (rc && lmd_is_client(lsi->lsi_lmd)) {
+        
+        /* Now drop the lock so MGS can revoke it */ 
+        rcl = obd_cancel(get_mgs_export(mgc), NULL, LCK_CR, &lockh);
+        if (rcl) {
+                CERROR("Can't drop cfg lock: %d\n", rcl);
+        }
+        
+        if (rc && !lmd_is_client(lsi->lsi_lmd)) {
                 int rc2;
                 LCONSOLE_INFO("%s: The configuration '%s' could not be read "
                                "from the MGS (%d).  Trying local log.\n",
@@ -428,6 +471,8 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
 
         return (rc);
 }
+
+/**************** obd start *******************/
 
 static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
                    char *s1, char *s2, char *s3, char *s4)
@@ -529,28 +574,6 @@ static int server_stop_mgs(struct super_block *sb)
         obd->obd_force = 1;
         rc = class_manual_cleanup(obd);
         return rc;
-}
-
-static struct obd_export *get_mgs_export(struct obd_device *mgc)
-{
-        struct obd_export *exp, *n;
-
-        /* FIXME is this a Bad Idea?  Should I just store this export 
-           somewhere in the u.cli? */
-
-        /* There should be exactly 2 exports in the mgc, the mgs export and 
-           the mgc self-export, in that order. So just return the list head. */
-        LASSERT(!list_empty(&mgc->obd_exports));
-        LASSERT(mgc->obd_num_exports == 2);
-        list_for_each_entry_safe(exp, n, &mgc->obd_exports, exp_obd_chain) {
-                LASSERT(exp != mgc->obd_self_export);
-                break;
-        }
-        /*FIXME there's clearly a better way, but I'm too confused to sort it 
-          out now...
-        exp = &list_entry(&mgc->obd_exports->head, export_obd, exp_obd_chain);
-        */
-        return exp;
 }
 
 /* Set up a mgcobd to process startup logs */
@@ -776,6 +799,7 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
         struct lustre_disk_data *ldd = lsi->lsi_ldd;
         struct mgmt_target_info *mti = NULL;
         lnet_process_id_t         id;
+        int i = 0;
         int rc;
         LASSERT(mgc);
 
@@ -793,7 +817,12 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
         // char             mti_nodename[NAME_MAXLEN];
         // char             mti_uuid[UUID_MAXLEN];
         /* FIXME nid 0 is lo generally, need to send all non-lo nids */
-        rc = LNetGetId(1, &id);  
+        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+                if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND) 
+                        continue;
+                /* FIXME use all non-lo nids, not just first */
+                break;
+        }       
         mti->mti_nid = id.nid;
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
@@ -887,7 +916,8 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 }
         }
 
-        /* Set the mgc fs to our server disk */
+        /* Set the mgc fs to our server disk.  This allows the MGC
+           to read and write configs locally. */
         server_mgc_set_fs(lsi->lsi_mgc, sb);
 
         /* Get a new index if needed */
@@ -901,13 +931,12 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 }
         }
 
-
-        /* Register the mount for the target */
+        /* Let the target look up the mount using the target's name. */
         rc = server_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
         if (rc) 
                 goto out;
 
-        /* The MGC starts targets using the svname llog */
+        /* The MGC starts targets using the llog named with the target name */
         cfg.cfg_instance = NULL;
         rc = lustre_get_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
         if (rc) {

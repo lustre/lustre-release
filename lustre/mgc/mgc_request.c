@@ -183,7 +183,7 @@ err_decref:
         RETURN(rc);
 }
 
-/* see ll_mdc_blocking_ast */
+/* based on ll_mdc_blocking_ast */
 static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, int flag)
 {
@@ -213,6 +213,15 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                    trigger a new enqueue for the same lock (in a separate
                    thread likely, which won't match the just-being-cancelled
                    lock due to CBPENDING flag) + config llog processing */
+                /* FIXME make sure not to re-enqueue when the mgc is stopping
+                   (we get called from client_disconnect_export) */
+                
+                CERROR("Lock res "LPU64"\n", lock->l_resource->lr_name.name[0]);
+                /* FIXME should pass logname,sb as part of lock->l_ast_data,
+                   lustre_get_process_log that.  Or based on resource.
+                   Either way, must have one lock per llog. */
+                //update_llog();
+
                 break;
         }
         default:
@@ -222,40 +231,48 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
-/* see ll_get_dir_page */
-static int mgc_get_cfg_lock(struct obd_export *exp, char *fsname)
+/* based on ll_get_dir_page and osc_enqueue. */
+static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
+                       __u32 type, ldlm_policy_data_t *policy, __u32 mode,
+                       int *flags, void *bl_cb, void *cp_cb, void *gl_cb,
+                       void *data, __u32 lvb_len, void *lvb_swabber,
+                       struct lustre_handle *lockh)
 {                       
-        struct lustre_handle lockh;
         struct obd_device *obd = class_exp2obd(exp);
         /* FIXME use fsname, vers and separate locks? see mgs_get_cfg_lock */
         struct ldlm_res_id res_id = { .name = { 12321 } };
-        int rc = 0, flags = 0;
+        int rc;
         ENTRY;
 
+        /* We're only called from obd_mount */
+        //LASSERT(mode == LCK_CR);
+        LASSERT(type == LDLM_PLAIN);
+
+        CDEBUG(D_MGC, "Enqueue for %s\n", (char *)data);
+
         /* Search for already existing locks.*/
-        rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, LDLM_PLAIN, 
-                             NULL, LCK_CR, &lockh);
+        rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type, 
+                             NULL, mode, lockh);
         if (rc == 1) 
                 RETURN(ELDLM_OK);
 
-        CDEBUG(D_MGC, "Taking a cfg reader lock\n");
 
-        /* see filter_prepare_destroy
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_EXTENT, &policy, LCK_PW,
-                              &flags, ldlm_blocking_ast, ldlm_completion_ast,
-                              NULL, NULL, NULL, 0, NULL, &lockh);
-        */
-        
         rc = ldlm_cli_enqueue(exp, NULL, obd->obd_namespace, res_id,
-                              LDLM_PLAIN, NULL, LCK_CR, &flags, 
+                              type, NULL, mode, flags, 
                               mgc_blocking_ast, ldlm_completion_ast, NULL,
-                              NULL/*cb_data*/, NULL, 0, NULL, &lockh);
-
-        /* now drop the lock so MGS can revoke it */ 
-        ldlm_lock_decref(&lockh, LCK_PR);
+                              data, NULL, 0, NULL, lockh);
 
         RETURN(rc);
+}
+
+static int mgc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
+                      __u32 mode, struct lustre_handle *lockh)
+{
+        ENTRY;
+
+        ldlm_lock_decref(lockh, mode);
+
+        RETURN(0);
 }
 
 static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
@@ -541,6 +558,8 @@ struct obd_ops mgc_obd_ops = {
         .o_del_conn     = client_import_del_conn,
         .o_connect      = client_connect_import,
         .o_disconnect   = client_disconnect_export,
+        .o_enqueue      = mgc_enqueue,
+        .o_cancel       = mgc_cancel,
         .o_iocontrol    = mgc_iocontrol,
         .o_set_info     = mgc_set_info,
         .o_import_event = mgc_import_event,

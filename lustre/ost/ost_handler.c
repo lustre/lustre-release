@@ -490,6 +490,8 @@ static void ost_nio_pages_put(struct ptlrpc_request *req,
         EXIT;
 }
 
+#if 0
+/* see ldlm_blocking_ast */
 /* cut-n-paste of mds_blocking_ast() */
 static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, int flag)
@@ -533,7 +535,8 @@ static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         }
         RETURN(0);
 }
-
+#endif
+                           
 static int ost_brw_lock_get(int mode, struct obd_export *exp,
                             struct obd_ioobj *obj, struct niobuf_remote *nb,
                             struct lustre_handle *lh)

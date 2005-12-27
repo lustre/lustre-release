@@ -491,7 +491,6 @@ void print_ldd(struct lustre_disk_data *ldd)
 /* Write the server config files */
 int write_local_files(struct mkfs_opts *mop)
 {
-        struct lr_server_data lsd;
         char mntpt[] = "/tmp/mntXXXXXX";
         char filepnm[128];
         char *dev;
@@ -539,6 +538,7 @@ int write_local_files(struct mkfs_opts *mop)
         fclose(filep);
         
 #if 0
+        struct lr_server_data lsd;
         /* servers create their own last_rcvd if nonexistent - why do it here?*/
         /* Create the inital last_rcvd file */
         vprint("Writing %s\n", LAST_RCVD);
@@ -884,19 +884,7 @@ int main(int argc , char *const argv[])
                 fprintf(stderr, "failed to write local files\n");
                 goto out;
         }
-
-        /* We will not write startup logs here.  That is the domain of the 
-           mgc/mgs, and should probably be done at first mount. 
-           mgc might have to pass info from the mount_data_file to mgs. */
-#if 0
-        ret = write_llog_files(&mop);
-        if (ret != 0) {
-                fatal();
-                fprintf(stderr, "failed to write setup logs\n");
-                goto out:
-        }
-#endif
-             
+            
 out:
         loop_cleanup(&mop);      
         lnet_stop();
