@@ -310,8 +310,8 @@ lnet_copy_iov2iov (unsigned int ndiov, struct iovec *diov, unsigned int doffset,
                                siov->iov_len - soffset);
                 this_nob = MIN(this_nob, nob);
 
-                memcpy (diov->iov_base + doffset,
-                        siov->iov_base + soffset, this_nob);
+                memcpy ((char *)diov->iov_base + doffset,
+                        (char *)siov->iov_base + soffset, this_nob);
                 nob -= this_nob;
 
                 if (diov->iov_len > doffset + this_nob) {
@@ -553,7 +553,7 @@ lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, unsigned int iovoffset
                         addr = ((char *)cfs_kmap(kiov->kiov_page)) + 
                                 kiov->kiov_offset + kiovoffset;
 
-                memcpy (iov->iov_base + iovoffset, addr, this_nob);
+                memcpy ((char *)iov->iov_base + iovoffset, addr, this_nob);
                 nob -= this_nob;
 
                 if (iov->iov_len > iovoffset + this_nob) {
@@ -622,7 +622,7 @@ lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffs
                         addr = ((char *)cfs_kmap(kiov->kiov_page)) + 
                                 kiov->kiov_offset + kiovoffset;
 
-                memcpy (addr, iov->iov_base + iovoffset, this_nob);
+                memcpy (addr, (char *)iov->iov_base + iovoffset, this_nob);
                 nob -= this_nob;
 
                 if (kiov->kiov_len > kiovoffset + this_nob) {
@@ -1366,8 +1366,8 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
         unsigned int      rlength = hdr->payload_length;
         unsigned int      mlength = 0;
         unsigned int      offset = 0;
-        lnet_process_id_t src = {.nid = hdr->src_nid,
-                                 .pid = hdr->src_pid};
+        lnet_process_id_t src = {/* .nid = */ hdr->src_nid,
+                                 /* .pid = */ hdr->src_pid};
         lnet_libmd_t     *md;
 
         /* Convert put fields to host byte order */
@@ -1414,8 +1414,8 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg)
         lnet_hdr_t        *hdr = &msg->msg_hdr;
         unsigned int       mlength = 0;
         unsigned int       offset = 0;
-        lnet_process_id_t  src = {.nid = hdr->src_nid,
-                                  .pid = hdr->src_pid};
+        lnet_process_id_t  src = {/* .nid = */ hdr->src_nid,
+                                  /* .pid = */ hdr->src_pid};
         lnet_handle_wire_t reply_wmd;
         lnet_libmd_t      *md;
         int                rc;
@@ -1482,8 +1482,8 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
 {
         void             *private = msg->msg_private;
         lnet_hdr_t       *hdr = &msg->msg_hdr;
-        lnet_process_id_t src = {.nid = hdr->src_nid,
-                                 .pid = hdr->src_pid};
+        lnet_process_id_t src = {/* .nid = */ hdr->src_nid,
+                                 /* .pid = */ hdr->src_pid};
         lnet_libmd_t     *md;
         int               rlength;
         int               mlength;
@@ -1553,8 +1553,8 @@ static int
 lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
 {
         lnet_hdr_t       *hdr = &msg->msg_hdr;
-        lnet_process_id_t src = {.nid = hdr->src_nid,
-                                 .pid = hdr->src_pid};
+        lnet_process_id_t src = {/* .nid = */ hdr->src_nid,
+                                 /* .pid = */ hdr->src_pid};
         lnet_libmd_t    *md;
 
         /* Convert ack fields to host byte order */
@@ -1624,10 +1624,10 @@ lnet_msgtyp2str (int type)
 void
 lnet_print_hdr(lnet_hdr_t * hdr)
 {
-        lnet_process_id_t src = {.nid = hdr->src_nid,
-                                 .pid = hdr->src_pid};
-        lnet_process_id_t dst = {.nid = hdr->dest_nid,
-                                 .pid = hdr->dest_pid};
+        lnet_process_id_t src = {/* .nid = */ hdr->src_nid,
+                                 /* .pid = */ hdr->src_pid};
+        lnet_process_id_t dst = {/* .nid = */ hdr->dest_nid,
+                                 /* .pid = */ hdr->dest_pid};
         char *type_str = lnet_msgtyp2str (hdr->type);
 
         CWARN("P3 Header at %p of type %s\n", hdr, type_str);

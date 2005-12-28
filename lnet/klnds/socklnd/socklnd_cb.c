@@ -2057,7 +2057,7 @@ ksocknal_reaper (void *arg)
                 if (!ksocknal_data.ksnd_shuttingdown &&
                     list_empty (&ksocknal_data.ksnd_deathrow_conns) &&
                     list_empty (&ksocknal_data.ksnd_zombie_conns))
-                        cfs_waitq_timedwait (&wait, timeout);
+                        cfs_waitq_timedwait (&wait, CFS_TASK_INTERRUPTIBLE, timeout);
 
                 set_current_state (TASK_RUNNING);
                 cfs_waitq_del (&ksocknal_data.ksnd_reaper_waitq, &wait);

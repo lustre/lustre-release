@@ -26,19 +26,9 @@
 
 # define DEBUG_SUBSYSTEM S_LNET
 
-#ifdef __KERNEL__
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
-#else
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <stdarg.h>
-#include <sys/time.h>
-#include <libcfs/libcfs.h>
-#endif
 
 #ifdef __KERNEL__
 unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
@@ -105,11 +95,12 @@ void libcfs_debug_dumplog(void)
         rc = cfs_kernel_thread(libcfs_debug_dumplog_thread,
                                (void *)(long)cfs_curproc_pid(),
                                CLONE_VM | CLONE_FS | CLONE_FILES);
-        if (rc < 0)
+        if (rc < 0) {
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "
                        "%d\n", rc);
-        else
-                schedule();
+        } else {
+                cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
+        }
 
         /* be sure to teardown if kernel_thread() failed */
         cfs_waitq_del(&debug_ctlwq, &wait);

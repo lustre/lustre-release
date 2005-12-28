@@ -8,6 +8,7 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
+#include <stdarg.h>
 #include <libcfs/linux/linux-mem.h>
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-prim.h>

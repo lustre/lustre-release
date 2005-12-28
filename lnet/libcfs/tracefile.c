@@ -32,9 +32,8 @@
 /* XXX move things up to the top, comment */
 union trace_data_union trace_data[NR_CPUS] __cacheline_aligned;
 
-struct rw_semaphore tracefile_sem;
 char *tracefile = NULL;
-long long tracefile_size = TRACEFILE_SIZE;
+int64_t tracefile_size = TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
 struct semaphore trace_thread_sem;
 static int thread_running = 0;
@@ -218,7 +217,7 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
                 goto retry;
 
         header.ph_len = known_size + needed;
-        debug_buf = cfs_page_address(tage->page) + tage->used;
+        debug_buf = (char *)cfs_page_address(tage->page) + tage->used;
 
         memcpy(debug_buf, &header, sizeof(header));
         tage->used += sizeof(header);
@@ -412,10 +411,11 @@ int tracefile_dump_all_pages(char *filename)
         cfs_file_t *filp;
         struct trace_page *tage;
         struct trace_page *tmp;
-        CFS_DECL_MMSPACE;
         int rc;
 
-        down_write(&tracefile_sem);
+        CFS_DECL_MMSPACE;
+
+        tracefile_write_lock();
 
         filp = cfs_filp_open(filename,
                              O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0600, &rc);
@@ -442,10 +442,11 @@ int tracefile_dump_all_pages(char *filename)
 
                 rc = cfs_filp_write(filp, cfs_page_address(tage->page),
                                     tage->used, cfs_filp_poff(filp));
-                if (rc != tage->used) {
+                if (rc != (int)tage->used) {
                         printk(KERN_WARNING "wanted to write %u but wrote "
                                "%d\n", tage->used, rc);
                         put_pages_back(&pc);
+                        LASSERT(list_empty(&pc.pc_pages));
                         break;
                 }
                 list_del(&tage->linkage);
@@ -458,7 +459,7 @@ int tracefile_dump_all_pages(char *filename)
  close:
         cfs_filp_close(filp);
  out:
-        up_write(&tracefile_sem);
+        tracefile_write_unlock();
         return rc;
 }
 
@@ -491,7 +492,7 @@ int trace_dk(struct file *file, const char *buffer, unsigned long count,
         if (name == NULL)
                 return -ENOMEM;
 
-        if (copy_from_user(name, buffer, count)) {
+        if (copy_from_user((void *)name, (void *)buffer, count)) {
                 rc = -EFAULT;
                 goto out;
         }
@@ -522,8 +523,9 @@ static int tracefiled(void *arg)
         struct trace_page *tmp;
         struct ptldebug_header *hdr;
         cfs_file_t *filp;
-        CFS_DECL_MMSPACE;
         int rc;
+
+        CFS_DECL_MMSPACE;
 
         /* we're started late enough that we pick up init's fs context */
         /* this is so broken in uml?  what on earth is going on? */
@@ -539,7 +541,7 @@ static int tracefiled(void *arg)
                 cfs_waitlink_init(&__wait);
                 cfs_waitq_add(&tctl->tctl_waitq, &__wait);
                 set_current_state(TASK_INTERRUPTIBLE);
-                cfs_waitq_timedwait(&__wait, cfs_time_seconds(1));
+                cfs_waitq_timedwait(&__wait, CFS_TASK_INTERRUPTIBLE, cfs_time_seconds(1));
                 cfs_waitq_del(&tctl->tctl_waitq, &__wait);
 
                 if (atomic_read(&tctl->tctl_shutdown))
@@ -551,16 +553,17 @@ static int tracefiled(void *arg)
                         continue;
 
                 filp = NULL;
-                down_read(&tracefile_sem);
+                tracefile_read_lock();
                 if (tracefile != NULL) {
                         filp = cfs_filp_open(tracefile, O_CREAT|O_RDWR|O_LARGEFILE,
                                         0600, &rc);
                         if (!(filp))
                                 printk("couldn't open %s: %d\n", tracefile, rc);
                 }
-                up_read(&tracefile_sem);
+                tracefile_read_unlock();
                 if (filp == NULL) {
                         put_pages_on_daemon_list(&pc);
+                        LASSERT(list_empty(&pc.pc_pages));
                         continue;
                 }
 
@@ -578,23 +581,25 @@ static int tracefiled(void *arg)
 
                         LASSERT_TAGE_INVARIANT(tage);
 
-                        if (f_pos >= tracefile_size)
+                        if (f_pos >= (off_t)tracefile_size)
                                 f_pos = 0;
                         else if (f_pos > cfs_filp_size(filp))
                                 f_pos = cfs_filp_size(filp);
 
                         rc = cfs_filp_write(filp, cfs_page_address(tage->page),
                                             tage->used, &f_pos);
-                        if (rc != tage->used) {
+                        if (rc != (int)tage->used) {
                                 printk(KERN_WARNING "wanted to write %u but "
                                        "wrote %d\n", tage->used, rc);
                                 put_pages_back(&pc);
+                                LASSERT(list_empty(&pc.pc_pages));
                         }
                 }
                 CFS_MMSPACE_CLOSE;
 
                 cfs_filp_close(filp);
                 put_pages_on_daemon_list(&pc);
+                LASSERT(list_empty(&pc.pc_pages));
         }
         complete(&tctl->tctl_stop);
         return 0;
@@ -645,14 +650,18 @@ int tracefile_init(void)
         struct trace_cpu_data *tcd;
         int i;
 
+        tracefile_lock_init();
         for (i = 0; i < NR_CPUS; i++) {
                 tcd = &trace_data[i].tcd;
                 CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
+                CFS_INIT_LIST_HEAD(&tcd->tcd_stock_pages);
                 CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
                 tcd->tcd_cur_pages = 0;
+                tcd->tcd_cur_stock_pages = 0;
                 tcd->tcd_cur_daemon_pages = 0;
                 tcd->tcd_max_pages = TCD_MAX_PAGES;
                 tcd->tcd_shutting_down = 0;
+                tcd->tcd_cpu = i;
         }
         return 0;
 }

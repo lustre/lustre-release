@@ -95,10 +95,17 @@ lolnd_startup (lnet_ni_t *ni)
 }
 
 lnd_t the_lolnd = {
-        .lnd_type       = LOLND,
-        .lnd_startup    = lolnd_startup,
-        .lnd_shutdown   = lolnd_shutdown,
-        .lnd_send       = lolnd_send,
-        .lnd_recv       = lolnd_recv,
+        /* .lnd_list       = */ {&the_lolnd.lnd_list, &the_lolnd.lnd_list},
+        /* .lnd_refcount   = */ 0,
+        /* .lnd_type       = */ LOLND,
+        /* .lnd_startup    = */ lolnd_startup,
+        /* .lnd_shutdown   = */ lolnd_shutdown,
+        /* .lnt_ctl        = */ NULL, 
+        /* .lnd_send       = */ lolnd_send,
+        /* .lnd_recv       = */ lolnd_recv,
+        /* .lnd_eager_recv = */ NULL,
+        /* .lnd_notify     = */ NULL,
+        /* .lnd_accept
+           .lnd_wait       = */ NULL
 };
 

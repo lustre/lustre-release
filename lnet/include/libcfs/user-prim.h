@@ -44,8 +44,8 @@
  * Wait Queue. No-op implementation.
  */
 
-typedef struct cfs_waitlink {} cfs_waitlink_t;
-typedef struct cfs_waitq {} cfs_waitq_t;
+typedef struct cfs_waitlink {int foo;} cfs_waitlink_t;
+typedef struct cfs_waitq {int foo;} cfs_waitq_t;
 
 void cfs_waitq_init(struct cfs_waitq *waitq);
 void cfs_waitlink_init(struct cfs_waitlink *link);
@@ -60,6 +60,15 @@ void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr);
 void cfs_waitq_broadcast(struct cfs_waitq *waitq);
 void cfs_waitq_wait(struct cfs_waitlink *link);
 int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int64_t timeout);
+
+
+enum {
+        CFS_STACK_TRACE_DEPTH = 16
+};
+
+struct cfs_stack_trace {
+        void *frame[CFS_STACK_TRACE_DEPTH];
+};
 
 /*
  * Allocator
@@ -141,7 +150,7 @@ typedef int (cfs_write_proc_t)(struct file *file, const char *buffer,
  * Timer
  */
 
-typedef struct cfs_timer {} cfs_timer_t;
+typedef struct cfs_timer {int foo;} cfs_timer_t;
 
 #if 0
 #define cfs_init_timer(t)	do {} while(0)

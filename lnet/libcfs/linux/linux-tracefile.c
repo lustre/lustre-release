@@ -13,7 +13,31 @@
 extern union trace_data_union trace_data[NR_CPUS];
 extern char *tracefile;
 extern long long tracefile_size;
-extern struct rw_semaphore tracefile_sem;
+struct rw_semaphore tracefile_sem;
+
+inline void tracefile_lock_init()
+{
+}
+
+inline void tracefile_read_lock()
+{
+    down_read(&tracefile_sem);
+}
+
+inline void tracefile_read_unlock()
+{
+    up_read(&tracefile_sem);
+}
+
+inline void tracefile_write_lock()
+{
+    down_write(&tracefile_sem);
+}
+
+inline void tracefile_write_unlock()
+{
+    up_write(&tracefile_sem);
+}
 
 inline struct trace_cpu_data *
 __trace_get_tcd(unsigned long *flags) 

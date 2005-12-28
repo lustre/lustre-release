@@ -11,6 +11,8 @@
 #include <libcfs/linux/lltrace.h>
 #elif defined(__APPLE__)
 #include <libcfs/darwin/lltrace.h>
+#elif defined(__WINNT__)
+#include <libcfs/winnt/lltrace.h>
 #else
 #error Unsupported Operating System
 #endif

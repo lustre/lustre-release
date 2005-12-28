@@ -55,7 +55,7 @@
  *
  * No-op implementation.
  */
-struct spin_lock {};
+struct spin_lock {int foo;};
 
 typedef struct spin_lock spinlock_t;
 
@@ -67,10 +67,8 @@ void spin_lock_bh_init(spinlock_t *lock);
 void spin_lock_bh(spinlock_t *lock);
 void spin_unlock_bh(spinlock_t *lock);
 
-static inline void 
-spin_lock_irqsave(spinlock_t *l, unsigned long f) { spin_lock(l); }
-static inline void 
-spin_unlock_irqrestore(spinlock_t *l, unsigned long f) { spin_unlock(l); }
+#define spin_lock_irqsave(l, flags) do { spin_lock(l); (void)flags; } while (0)
+#define spin_unlock_irqrestore(l, flags)  do { spin_unlock(l); (void)flags; } while(0)
 
 /*
  * Semaphore
@@ -79,7 +77,9 @@ spin_unlock_irqrestore(spinlock_t *l, unsigned long f) { spin_unlock(l); }
  * - __down(x)
  * - __up(x)
  */
-struct semaphore {};
+typedef struct semaphore {
+    int foo;
+} mutex_t;
 
 void sema_init(struct semaphore *s, int val);
 void __down(struct semaphore *s);

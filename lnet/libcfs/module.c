@@ -27,6 +27,7 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
+#include "tracefile.h"
 
 void
 kportal_memhog_free (struct libcfs_device_userstate *ldu)

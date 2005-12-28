@@ -39,6 +39,34 @@ typedef struct file cfs_file_t;
 typedef struct dentry cfs_dentry_t;
 
 #ifdef __KERNEL__
+
+/*
+ * Platform defines
+ *
+ * cfs_rdev_t
+ */
+
+typedef dev_t cfs_rdev_t;
+typedef unsigned int cfs_major_nr_t;
+typedef unsigned int cfs_minor_nr_t;
+
+/*
+ * Defined by platform.
+ */
+cfs_rdev_t     cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor);
+cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev);
+cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev);
+
+/*
+ * Generic on-wire rdev format.
+ */
+
+typedef __u32 cfs_wire_rdev_t;
+
+cfs_wire_rdev_t cfs_wire_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor);
+cfs_major_nr_t  cfs_wire_rdev_major(cfs_wire_rdev_t rdev);
+cfs_minor_nr_t  cfs_wire_rdev_minor(cfs_wire_rdev_t rdev);
+
 #define cfs_filp_size(f)               ((f)->f_dentry->d_inode->i_size)
 #define cfs_filp_poff(f)                (&(f)->f_pos)
 

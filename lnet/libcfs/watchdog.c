@@ -24,18 +24,17 @@
 
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
-#include <libcfs/linux/portals_compat25.h>
 
 
 
 struct lc_watchdog {
-        struct timer_list lcw_timer; /* kernel timer */
+        cfs_timer_t       lcw_timer; /* kernel timer */
         struct list_head  lcw_list;
         struct timeval    lcw_last_touched;
-        struct task_struct *lcw_task;
+        cfs_task_t       *lcw_task;
 
         void (*lcw_callback)(struct lc_watchdog *,
-			     struct task_struct *,
+			     cfs_task_t *,
 			     void *data);
         void *lcw_data;
 
@@ -48,6 +47,8 @@ struct lc_watchdog {
                 LC_WATCHDOG_EXPIRED
         } lcw_state;
 };
+
+#ifdef WITH_WATCHDOG
 
 /*
  * The dispatcher will complete lcw_start_completion when it starts,
@@ -271,7 +272,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
 
         lcw->lcw_task = cfs_current();
         lcw->lcw_pid = cfs_curproc_pid();
-        lcw->lcw_time = (timeout_ms * HZ) / 1000;
+        lcw->lcw_time = cfs_time_seconds(timeout_ms / 1000);
         lcw->lcw_callback = callback ? callback : lc_watchdog_dumplog;
         lcw->lcw_data = data;
         lcw->lcw_state = LC_WATCHDOG_DISABLED;
@@ -298,26 +299,19 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
 }
 EXPORT_SYMBOL(lc_watchdog_add);
 
-static long
-timeval_sub(struct timeval *large, struct timeval *small)
-{
-        return (large->tv_sec - small->tv_sec) * 1000000 +
-                (large->tv_usec - small->tv_usec);
-}
-
 static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
 {
         struct timeval newtime;
-        unsigned long timediff;
+        struct timeval timediff;
 
         do_gettimeofday(&newtime);
         if (lcw->lcw_state == LC_WATCHDOG_EXPIRED) {
-                timediff = timeval_sub(&newtime, &lcw->lcw_last_touched);
+                cfs_timeval_sub(&newtime, &lcw->lcw_last_touched, &timediff);
                 CWARN("Expired watchdog for pid %d %s after %lu.%.4lus\n",
                       lcw->lcw_pid,
                       message,
-                      timediff / 1000000,
-                      (timediff % 1000000) / 100);
+                      timediff.tv_sec,
+                      timediff.tv_usec / 100);
         }
         lcw->lcw_last_touched = newtime;
 }
@@ -400,3 +394,39 @@ void lc_watchdog_dumplog(struct lc_watchdog *lcw,
         libcfs_debug_dumplog_internal((void *)(long)tsk->pid);
 }
 EXPORT_SYMBOL(lc_watchdog_dumplog);
+
+#else   /* !defined(WITH_WATCHDOG) */
+
+struct lc_watchdog *lc_watchdog_add(int timeout_ms,
+                                    void (*callback)(struct lc_watchdog *,
+                                                     cfs_task_t *,
+                                                     void *),
+                                    void *data)
+{
+        static struct lc_watchdog      watchdog;
+        return &watchdog;
+}
+EXPORT_SYMBOL(lc_watchdog_add);
+
+void lc_watchdog_touch(struct lc_watchdog *lcw)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_touch);
+
+void lc_watchdog_disable(struct lc_watchdog *lcw)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_disable);
+
+void lc_watchdog_delete(struct lc_watchdog *lcw)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_delete);
+void lc_watchdog_dumplog(struct lc_watchdog *lcw,
+                         struct task_struct *tsk,
+                         void               *data)
+{
+}
+EXPORT_SYMBOL(lc_watchdog_dumplog);
+
+#endif

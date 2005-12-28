@@ -55,6 +55,9 @@ void
 kpr_do_upcall (void *arg)
 {
         kpr_upcall_t *u = (kpr_upcall_t *)arg;
+
+#ifndef __WINNT__
+
         char          nidstr[36];
         char          whenstr[36];
         char         *argv[] = {
@@ -69,6 +72,10 @@ kpr_do_upcall (void *arg)
         snprintf (whenstr, sizeof(whenstr), "%ld", u->kpru_when);
 
         libcfs_run_upcall (argv);
+
+        libcfs_run_upcall (argv);
+
+#endif /* __WINNT__ */
 
         LIBCFS_FREE(u, sizeof(*u));
 }
@@ -488,7 +495,7 @@ lnet_destroy_rtrbuf(lnet_rtrbuf_t *rb, int npages)
         int sz = offsetof(lnet_rtrbuf_t, rb_kiov[npages]);
 
         while (--npages >= 0)
-                __free_page(rb->rb_kiov[npages].kiov_page);
+                cfs_free_page(rb->rb_kiov[npages].kiov_page);
 
         LIBCFS_FREE(rb, sz);
 }
@@ -507,10 +514,10 @@ lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp)
         rb->rb_pool = rbp;
 
         for (i = 0; i < npages; i++) {
-                page = alloc_page(GFP_KERNEL); /* HIGH? */
+                page = cfs_alloc_page(CFS_ALLOC_ZERO /*GFP_KERNEL*/); /* HIGH? */
                 if (page == NULL) {
                         while (--i >= 0)
-                                __free_page(rb->rb_kiov[i].kiov_page);
+                                cfs_free_page(rb->rb_kiov[i].kiov_page);
 
                         LIBCFS_FREE(rb, sz);
                         return NULL;

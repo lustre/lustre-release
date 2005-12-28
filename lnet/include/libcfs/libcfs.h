@@ -12,6 +12,8 @@
 #include <libcfs/linux/libcfs.h>
 #elif defined(__APPLE__)
 #include <libcfs/darwin/libcfs.h>
+#elif defined(__WINNT__)
+#include <libcfs/winnt/libcfs.h>
 #else
 #error Unsupported operating system.
 #endif
@@ -266,8 +268,8 @@ struct libcfs_ioctl_handler {
 
 #define DECLARE_IOCTL_HANDLER(ident, func)              \
         struct libcfs_ioctl_handler ident = {           \
-                .item = CFS_LIST_HEAD_INIT(ident.item), \
-                .handle_ioctl = func                    \
+                /* .item = */ CFS_LIST_HEAD_INIT(ident.item),     \
+                /* .handle_ioctl = */ func                    \
         }
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
@@ -303,7 +305,7 @@ struct lc_watchdog;
  * touch it once to enable it. */
 struct lc_watchdog *lc_watchdog_add(int time,
                                     void (*cb)(struct lc_watchdog *,
-                                               struct task_struct *,
+                                               cfs_task_t *,
                                                void *),
                                     void *data);
 
@@ -372,7 +374,7 @@ static inline time_t cfs_unix_seconds(void)
         cfs_fs_time_t t;
 
         cfs_fs_time_current(&t);
-        return cfs_fs_time_sec(&t);
+        return (time_t)cfs_fs_time_sec(&t);
 }
 
 #define CFS_RATELIMIT(seconds)                                  \
@@ -458,14 +460,81 @@ enum cfs_alloc_flags {
 #define CFS_SLAB_STD            CFS_ALLOC_STD
 #define CFS_SLAB_USER           CFS_ALLOC_USER
 
-/* flags for cfs_page_alloc() in addition to enum cfs_alloc_flags */
-enum cfs_page_alloc_flags {
+/* flags for cfs_alloc_page() in addition to enum cfs_alloc_flags */
+enum cfs_alloc_page_flags {
         /* allow to return page beyond KVM. It has to be mapped into KVM by
          * cfs_page_map(); */
         CFS_ALLOC_HIGH   = (1 << 5),
         CFS_ALLOC_HIGHUSER = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO | CFS_ALLOC_HIGH,
 };
 
+/*
+ * portable UNIX device file identification. (This is not _very_
+ * portable. Probably makes no sense for Windows.)
+ */
+
+/*
+ * Drop into debugger, if possible. Implementation is provided by platform.
+ */
+
+void cfs_enter_debugger(void);
+
+/*
+ * Defined by platform
+ */
+void cfs_daemonize(char *str);
+#define kportal_daemonize cfs_daemonize
+
+#ifdef __KERNEL__
+void cfs_block_allsigs(cfs_task_t *t);
+void cfs_block_sigs(cfs_task_t *t, cfs_sigset_t bits);
+cfs_sigset_t cfs_get_blocked_sigs(cfs_task_t *t);
+#endif
+
+int convert_server_error(__u64 ecode);
+int convert_client_oflag(int cflag);
+
+/*
+ * Stack-tracing filling.
+ */
+
+/*
+ * Platform-dependent data-type to hold stack frames.
+ */
+struct cfs_stack_trace;
+
+/*
+ * Fill @trace with current back-trace.
+ */
+void cfs_stack_trace_fill(struct cfs_stack_trace *trace);
+
+/*
+ * Return instruction pointer for frame @frame_no. NULL if @frame_no is
+ * invalid.
+ */
+void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no);
+
+/*
+ * Open flags.
+ */
+#define CFS_O_ACCMODE           0003
+#define CFS_O_CREAT             0100
+#define CFS_O_EXCL              0200
+#define CFS_O_NOCTTY            0400
+#define CFS_O_TRUNC             01000
+#define CFS_O_APPEND            02000
+#define CFS_O_NONBLOCK          04000
+#define CFS_O_NDELAY            CFS_O_NONBLOCK
+#define CFS_O_SYNC              010000
+#define CFS_O_ASYNC             020000
+#define CFS_O_DIRECT            040000
+#define CFS_O_LARGEFILE         0100000
+#define CFS_O_DIRECTORY         0200000
+#define CFS_O_NOFOLLOW          0400000
+#define CFS_O_NOATIME           01000000
+
+int cfs_oflags2univ(int flags);
+int cfs_univ2oflags(int flags);
 
 #define _LIBCFS_H
 

@@ -73,6 +73,11 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 /*
  * Wait Queue
  */
+typedef int                             cfs_task_state_t;
+
+#define CFS_TASK_INTERRUPTIBLE          TASK_INTERRUPTIBLE
+#define CFS_TASK_UNINT                  TASK_UNINTERRUPTIBLE
+
 typedef wait_queue_t			cfs_waitlink_t;
 typedef wait_queue_head_t		cfs_waitq_t;
 
@@ -86,8 +91,8 @@ typedef wait_queue_head_t		cfs_waitq_t;
 #define cfs_waitq_signal(w)	        wake_up(w)
 #define cfs_waitq_signal_nr(w,n)	wake_up_nr(w, n)
 #define cfs_waitq_broadcast(w)	        wake_up_all(w)
-#define cfs_waitq_wait(l)		schedule()
-#define cfs_waitq_timedwait(l, t)	schedule_timeout(t)
+#define cfs_waitq_wait(l, s)		do {set_current_state(s);schedule();} while(0)
+#define cfs_waitq_timedwait(l, s, t)	do {set_current_state(s);schedule_timeout(t);} while(0)
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
@@ -115,6 +120,7 @@ module_exit(fini)
 /*
  * Signal
  */
+typedef sigset_t cfs_sigset_t;
 #define cfs_sigmask_lock(t, f)          SIGNAL_MASK_LOCK(t, f)
 #define cfs_sigmask_unlock(t, f)        SIGNAL_MASK_UNLOCK(t, f)
 #define cfs_recalc_sigpending(t)        RECALC_SIGPENDING

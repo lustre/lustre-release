@@ -21,7 +21,7 @@
  * using the generic single-entry routines.
  */
 
-#define prefetch(a) ((void)a)
+#define prefetch(a) ((void *)a)
 
 struct list_head {
 	struct list_head *next, *prev;
