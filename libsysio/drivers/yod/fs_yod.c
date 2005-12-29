@@ -160,10 +160,10 @@ static int yod_inop_setattr(struct pnode *pno,
 			       struct inode *ino,
 			       unsigned mask,
 			       struct intnl_stat *stbuf);
-static ssize_t yod_getdirentries(struct inode *ino,
-				    char *buf,
-				    size_t nbytes,
-				    off64_t *basep);
+static ssize_t yod_filldirentries(struct inode *ino,
+				  off64_t *posp,
+				  char *buf,
+				  size_t nbytes);
 static int yod_inop_mkdir(struct pnode *pno, mode_t mode);
 static int yod_inop_rmdir(struct pnode *pno);
 static int yod_inop_symlink(struct pnode *pno, const char *data);
@@ -195,7 +195,7 @@ static struct inode_ops yod_i_ops = {
 	yod_inop_lookup,
 	yod_inop_getattr,
 	yod_inop_setattr,
-	yod_getdirentries,
+	yod_filldirentries,
 	yod_inop_mkdir,
 	yod_inop_rmdir,
 	yod_inop_symlink,
@@ -412,7 +412,6 @@ error:
 		_sysio_pb_gone(rootpb);
 	if (fs) {
 		FS_RELE(fs);
-		_sysio_fs_gone(fs);
 	}
 
 	return err;
@@ -741,10 +740,10 @@ out:
 }
 
 static ssize_t
-yod_getdirentries(struct inode *ino,
-		     char *buf,
-		     size_t nbytes,
-		     _SYSIO_OFF_T *basep)
+yod_filldirentries(struct inode *ino,
+		   char *buf,
+		   _SYSIO_OFF_T *posp,
+		    size_t nbytes)
 {
 	struct yod_inode *nino = I2NI(ino);
 	_SYSIO_OFF_T result;
@@ -755,15 +754,19 @@ yod_getdirentries(struct inode *ino,
 	result = *basep;
 	if (*basep != nino->ni_fpos &&
 	    (result = lseek_yod(nino->ni_fd,
-				*basep,
+				*posp,
 				SEEK_SET) == -1))
 		return -errno;
 	nino->ni_fpos = result;
 	memset(buf, 0, nbytes);
+	/*
+	 * This is almost certainly broken. The resulting position parameter
+	 * points to the block just filled, not the next.
+	 */
 	cc = getdirentries_yod(nino->ni_fd, buf, nbytes, &result);
 	if (cc < 0)
 		return -errno;
-	nino->ni_fpos = *basep = result;
+	nino->ni_fpos = *posp = result;
 	return cc;
 }
 

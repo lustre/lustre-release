@@ -105,7 +105,7 @@ int
 _SCANDIR(const char *dirname, 
 	 _DIRENT_T ***namelist, 
 	 int (*filter) (const _DIRENT_T *), 
-	 int (*cmp) (const void *, const void *))
+	 int (*compar) (const void *, const void *))
 {
 	DIR *dir = NULL;
 	_DIRENT_T *de 	  = NULL,
@@ -117,7 +117,7 @@ _SCANDIR(const char *dirname,
 
 	SYSIO_INTERFACE_ENTER;
 
-	if ((dir = opendir(dirname)) == NULL)
+	if ((dir = SYSIO_INTERFACE_NAME(opendir)(dirname)) == NULL)
 		SYSIO_INTERFACE_RETURN(-1, -errno);
 
 	while ((de = _READDIR(dir)) != NULL) {
@@ -137,12 +137,15 @@ _SCANDIR(const char *dirname,
 			s[i++] = (_DIRENT_T *)memcpy(nextde, de, desize);
 		}
 	}
-	if (cmp)
-		qsort (s, i, sizeof (*s), cmp);
+	if (compar)
+		qsort (s,
+		       i,
+		       sizeof (*s),
+		       (int (*)(const void *, const void *))compar);
 
 	*namelist = s;
 
-	closedir(dir);
+	SYSIO_INTERFACE_NAME(closedir)(dir);
 
 	SYSIO_INTERFACE_RETURN(i, 0);
 }

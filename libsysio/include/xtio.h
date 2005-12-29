@@ -49,6 +49,17 @@
 #ifndef _XTIO_H_
 #define _XTIO_H_
 
+/*
+ * When compiled for use with libsysio, this allows one to move all the
+ * externals to a distinct namespace. When not, we want it to do nothing.
+ *
+ * NB: The choice of macro name here is dangerous. It's in the global
+ * namespace! We should fix that one of these days.
+ */
+#if !defined(SYSIO_INTERFACE_NAME)
+#define SYSIO_INTERFACE_NAME(_n)	_n
+#endif
+
 #ifndef _IOID_T_DEFINED
 #define _IOID_T_DEFINED
 typedef void *ioid_t;
@@ -80,80 +91,80 @@ struct iovec;
 /*
  * Get status of previously posted async file IO operation.
  */
-extern int iodone(ioid_t ioid);
+extern int SYSIO_INTERFACE_NAME(iodone)(ioid_t ioid);
 
 /*
  * Wait for completion of a previously posted asynch file IO request.
  */
-extern ssize_t iowait(ioid_t ioid);
+extern ssize_t SYSIO_INTERFACE_NAME(iowait)(ioid_t ioid);
 
 /*
  * Post asynch read into buffers mapped by an iovec from file at given offset.
  */
-extern ioid_t ipreadv(int fd,
-		      const struct iovec *iov,
-		      size_t count,
-		      off_t offset);
+extern ioid_t SYSIO_INTERFACE_NAME(ipreadv)(int fd,
+					    const struct iovec *iov,
+					    size_t count,
+					    off_t offset);
 
 #if _LARGEFILE64_SOURCE
 /*
  * Post asynch read into buffers mapped by an iovec from file at given offset.
  */
-extern ioid_t ipread64v(int fd,
-			const struct iovec *iov, 
-			size_t count,
-			off64_t offset);
+extern ioid_t SYSIO_INTERFACE_NAME(ipread64v)(int fd,
+					      const struct iovec *iov, 
+					      size_t count,
+					      off64_t offset);
 #endif
 
 /*
  * Post asynch read into buffer from file at given offset.
  */
-extern ioid_t ipread(int fd,
-		     void *buf,
-		     size_t count, 
-		     off_t offset);
+extern ioid_t SYSIO_INTERFACE_NAME(ipread)(int fd,
+					   void *buf,
+					   size_t count, 
+					   off_t offset);
 
 #if _LARGEFILE64_SOURCE
 /*
  * Post asynch read into buffer from file at given offset.
  */
-extern ioid_t ipread64(int fd,
-		       void *buf,
-		       size_t count, 
-		       off64_t offset);
+extern ioid_t SYSIO_INTERFACE_NAME(ipread64)(int fd,
+					     void *buf,
+					     size_t count, 
+					     off64_t offset);
 #endif
 
 /*
  * Read into buffers mapped by an iovec from file at given offset.
  */
-extern ssize_t preadv(int fd,
-		      const struct iovec *iov,
-		      size_t count,
-		      off_t offset);
+extern ssize_t SYSIO_INTERFACE_NAME(preadv)(int fd,
+					    const struct iovec *iov,
+					    size_t count,
+					    off_t offset);
 
 #if _LARGEFILE64_SOURCE
 /*
  * Read into buffers mapped by an iovec from file at given offset.
  */
-extern ssize_t pread64v(int fd,
-			const struct iovec *iov, 
-			size_t count,
-			off64_t offset);
+extern ssize_t SYSIO_INTERFACE_NAME(pread64v)(int fd,
+					      const struct iovec *iov, 
+					      size_t count,
+					      off64_t offset);
 #endif
 
 /*
  * Post asynch read into buffers mapped by an iovec.
  */
-extern ioid_t ireadv(int fd,
-		     const struct iovec *iov, 
-		     int count);
+extern ioid_t SYSIO_INTERFACE_NAME(ireadv)(int fd,
+					   const struct iovec *iov, 
+					   int count);
 
 /*
  * Read into buffer.
  */
-extern ioid_t iread(int fd,
-		    void *buf,
-		    size_t count);
+extern ioid_t SYSIO_INTERFACE_NAME(iread)(int fd,
+					  void *buf,
+					  size_t count);
 
 /*
  * Post async read into buffers mapped by iovec from regions mapped
@@ -161,11 +172,11 @@ extern ioid_t iread(int fd,
  *
  * NB: An adaptation of "listio" from Argonne's PVFS.
  */
-extern ioid_t ireadx(int fd,
-		     const struct iovec *iov, 
-		     size_t iov_count,
-		     const struct xtvec *xtv,
-		     size_t xtv_count);
+extern ioid_t SYSIO_INTERFACE_NAME(ireadx)(int fd,
+					   const struct iovec *iov, 
+					   size_t iov_count,
+					   const struct xtvec *xtv,
+					   size_t xtv_count);
 
 #ifdef __USE_LARGEFILE64
 /*
@@ -174,11 +185,11 @@ extern ioid_t ireadx(int fd,
  *
  * NB: An adaptation of "listio" from Argonne's PVFS.
  */
-extern ioid_t iread64x(int fd,
-		       const struct iovec *iov, 
-		       size_t iov_count,
-		       const struct xtvec64 *xtv, 
-		       size_t xtv_count);
+extern ioid_t SYSIO_INTERFACE_NAME(iread64x)(int fd,
+					     const struct iovec *iov, 
+					     size_t iov_count,
+					     const struct xtvec64 *xtv,
+					     size_t xtv_count);
 #endif
 
 /*
@@ -187,11 +198,11 @@ extern ioid_t iread64x(int fd,
  *
  * NB: An adaptation of "listio" from Argonne's PVFS.
  */
-extern ssize_t readx(int fd,
-		     const struct iovec *iov, 
-		     size_t iov_count,
-		     const struct xtvec *xtv, 
-		     size_t xtv_count);
+extern ssize_t SYSIO_INTERFACE_NAME(readx)(int fd,
+					   const struct iovec *iov,
+					   size_t iov_count,
+					   const struct xtvec *xtv,
+					   size_t xtv_count);
 
 #ifdef __USE_LARGEFILE64
 /*
@@ -200,79 +211,79 @@ extern ssize_t readx(int fd,
  *
  * NB: An adaptation of "listio" from Argonne's PVFS.
  */
-extern ssize_t read64x(int fd,
-		       const struct iovec *iov, 
-		       size_t iov_count,
-		       const struct xtvec64 *xtv, 
-		       size_t xtv_count);
+extern ssize_t SYSIO_INTERFACE_NAME(read64x)(int fd,
+					     const struct iovec *iov,
+					     size_t iov_count,
+					     const struct xtvec64 *xtv,
+					     size_t xtv_count);
 #endif
 
 /*
  * Post asynch write from buffers mapped by an iovec to file at given offset.
  */
-extern ioid_t ipwritev(int fd,
-		       const struct iovec *iov, 
-		       size_t count,
-		       off_t offset);
+extern ioid_t SYSIO_INTERFACE_NAME(ipwritev)(int fd,
+					     const struct iovec *iov,
+					     size_t count,
+					     off_t offset);
 #if _LARGEFILE64_SOURCE
 /*
  * Post asynch write from buffers mapped by an iovec to file at given offset.
  */
-extern ioid_t ipwrite64v(int fd,
-			 const struct iovec *iov, 
-			 size_t count,
-			 off64_t offset);
+extern ioid_t SYSIO_INTERFACE_NAME(ipwrite64v)(int fd,
+					       const struct iovec *iov,
+					       size_t count,
+					       off64_t offset);
 #endif
 
 /*
  * Post asynch write from buffer to file at given offset.
  */
-extern ioid_t ipwrite(int fd,
-		      const void *buf, 
-		      size_t count,
-		      off_t offset);
+extern ioid_t SYSIO_INTERFACE_NAME(ipwrite)(int fd,
+					    const void *buf,
+					    size_t count,
+					    off_t offset);
 
 #if _LARGEFILE64_SOURCE
 /*
  * Post asynch write from buffer to file at given offset.
  */
-extern ioid_t ipwrite64(int fd,
-			const void *buf, 
-			size_t count,
-			off64_t offset);
+extern ioid_t SYSIO_INTERFACE_NAME(ipwrite64)(int fd,
+					      const void *buf,
+					      size_t count,
+					      off64_t offset);
 #endif
 
 /*
  * Write from buffers mapped by an iovec to file at given offset.
  */
-extern ssize_t pwritev(int fd,
-		       const struct iovec *iov,
-		       size_t count,
-		       off_t offset);
+extern ssize_t SYSIO_INTERFACE_NAME(pwritev)(int fd,
+					     const struct iovec *iov,
+					     size_t count,
+					     off_t offset);
 
 #if _LARGEFILE64_SOURCE
 /*
  * Write from buffers mapped by an iovec to file at given offset.
  */
-extern ssize_t pwrite64v(int fd,
-			 const struct iovec *iov,
-			 size_t count,
-			 off64_t offset);
+extern ssize_t SYSIO_INTERFACE_NAME(pwrite64v)(int fd,
+					       const struct iovec *iov,
+					       size_t count,
+					       off64_t offset);
 #endif
 
 /*
  * Post asynch write from buffer to file at given offset.
  */
-extern ioid_t iwritev(int fd,
-		      const struct iovec *iov,
-		      int count);
+extern ioid_t SYSIO_INTERFACE_NAME(iwritev)(int fd,
+					    const struct iovec *iov,
+					    int count);
 
 /*
  * Write from buffer to file at given offset.
  */
-extern ioid_t iwrite(int fd,
-		     const void *buf,
-		     size_t count);
+extern ioid_t SYSIO_INTERFACE_NAME(iwrite)(int fd,
+					   const void *buf,
+					   size_t count);
 
 /*
  * Post async write from buffers mapped by iovec to regions mapped
@@ -280,11 +291,11 @@ extern ioid_t iwrite(int fd,
  *
  * NB: An adaptation of "listio" from Argonne's PVFS.
  */
-extern ioid_t iwritex(int fd,
-		      const struct iovec *iov, 
-		      size_t iov_count,
-		      const struct xtvec *xtv, 
-		      size_t xtv_count);
+extern ioid_t SYSIO_INTERFACE_NAME(iwritex)(int fd,
+					    const struct iovec *iov,
+					    size_t iov_count,
+					    const struct xtvec *xtv,
+					    size_t xtv_count);
 
 #ifdef __USE_LARGEFILE64
 /*
@@ -293,11 +304,11 @@ extern ioid_t iwritex(int fd,
  *
  * NB: An adaptation of "listio" from Argonne's PVFS.
  */
-extern ioid_t iwrite64x(int fd,
-			const struct iovec *iov, 
-			size_t iov_count,
-			const struct xtvec64 *xtv, 
-			size_t xtv_count);
+extern ioid_t SYSIO_INTERFACE_NAME(iwrite64x)(int fd,
+					      const struct iovec *iov,
+					      size_t iov_count,
+					      const struct xtvec64 *xtv,
+					      size_t xtv_count);
 #endif
 
 /*
@@ -306,11 +317,11 @@ extern ioid_t iwrite64x(int fd,
  *
  * NB: An adaptation of "listio" from Argonne's PVFS.
  */
-extern ssize_t writex(int fd,
-		      const struct iovec *iov, 
-		      size_t iov_count,
-		      const struct xtvec *xtv, 
-		      size_t xtv_count);
+extern ssize_t SYSIO_INTERFACE_NAME(writex)(int fd,
+					    const struct iovec *iov,
+					    size_t iov_count,
+					    const struct xtvec *xtv,
+					    size_t xtv_count);
 
 #ifdef __USE_LARGEFILE64
 /*
@@ -319,10 +330,10 @@ extern ssize_t writex(int fd,
  *
  * NB: An adaptation of "listio" from Argonne's PVFS.
  */
-extern ssize_t write64x(int fd,
-			const struct iovec *iov, 
-			size_t iov_count,
-			const struct xtvec64 *xtv,
-			size_t xtv_count);
+extern ssize_t SYSIO_INTERFACE_NAME(write64x)(int fd,
+					      const struct iovec *iov, 
+					      size_t iov_count,
+					      const struct xtvec64 *xtv,
+					      size_t xtv_count);
 #endif
 #endif /* ! _XTIO_H_ */

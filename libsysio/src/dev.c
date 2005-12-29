@@ -56,7 +56,7 @@ const struct inode_ops _sysio_nodev_ops = {
 	_sysio_nodev_inop_lookup,
 	_sysio_nodev_inop_getattr,
 	_sysio_nodev_inop_setattr,
-	_sysio_nodev_getdirentries,
+	_sysio_nodev_filldirentries,
 	_sysio_nodev_inop_mkdir,
 	_sysio_nodev_inop_rmdir,
 	_sysio_nodev_inop_symlink,

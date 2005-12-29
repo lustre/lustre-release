@@ -50,8 +50,8 @@
 #include <sys/uio.h>
 #include <sys/queue.h>
 
-#include "xtio.h"
 #include "sysio.h"
+#include "xtio.h"
 #include "file.h"
 #include "inode.h"
 
@@ -773,7 +773,7 @@ SYSIO_INTERFACE_NAME(readx)(int fd,
 						 xtv, 
 						 xtv_count)) == IOID_FAIL)
 		return -1;
-	return iowait(ioid);
+	return SYSIO_INTERFACE_NAME(iowait)(ioid);
 }
 
 #if _LARGEFILE64_SOURCE
@@ -791,7 +791,7 @@ SYSIO_INTERFACE_NAME(read64x)(int fd,
 						   xtv, 
 						   xtv_count)) == IOID_FAIL)
 		return -1;
-	return iowait(ioid);
+	return SYSIO_INTERFACE_NAME(iowait)(ioid);
 }
 #endif
 
@@ -1298,7 +1298,7 @@ SYSIO_INTERFACE_NAME(writex)(int fd,
 					   xtv, 
 					   xtv_count)) == IOID_FAIL)
 		return -1;
-	return iowait(ioid);
+	return SYSIO_INTERFACE_NAME(iowait)(ioid);
 }
 
 #if _LARGEFILE64_SOURCE
@@ -1316,7 +1316,7 @@ SYSIO_INTERFACE_NAME(write64x)(int fd,
 						    xtv, 
 						    xtv_count)) == IOID_FAIL)
 		return -1;
-	return iowait(ioid);
+	return SYSIO_INTERFACE_NAME(iowait)(ioid);
 }
 #endif
 

@@ -76,6 +76,11 @@ SYSIO_INTERFACE_NAME(symlink)(const char *oldpath, const char *newpath)
 		err = -EROFS;
 		goto error;
 	}
+	/*
+	 * Use the parent node operations to request the task in case the
+	 * driver is implemented using differentiated inode operations based
+	 * on file type, such as incore does.
+	 */
 	err =
 	    (*pno->p_parent->p_base->pb_ino->i_ops.inop_symlink)(pno, oldpath);
 error:

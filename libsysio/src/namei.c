@@ -257,8 +257,6 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 			lpath[cc] = '\0';			/* NUL term */
 			/*
 			 * Handle symbolic links with recursion. Yuck!
-			 * Pass the NULL intent for recursive symlink
-			 * except the last component.
 			 */
 			ND_INIT(&nameidata,
 				(nd->nd_flags | ND_NEGOK),

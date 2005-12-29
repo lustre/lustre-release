@@ -73,7 +73,12 @@ SYSIO_INTERFACE_NAME(unlink)(const char *path)
 		err = -EROFS;
 		goto error;
 	}
-	err = (*ino->i_ops.inop_unlink)(pno);
+	/*
+	 * Use the parent node operations to request the task in case the
+	 * driver is implemented using differentiated inode operations based
+	 * on file type, such as incore does.
+	 */
+	err = (*pno->p_parent->p_base->pb_ino->i_ops.inop_unlink)(pno);
 	if (err)
 		goto error;
 	assert(pno->p_base->pb_ino);

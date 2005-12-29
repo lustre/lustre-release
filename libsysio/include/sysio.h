@@ -50,6 +50,15 @@
 
 #include "sysio-cmn.h"
 
+#if defined(_DIRENT_H) && _DIRENT_H
+/*
+ * Need directory access routines too.
+ */
+#define _DECLARE_DIR_ACCESS		1
+#else
+#define _DECLARE_DIR_ACCESS		0
+#endif
+
 #ifndef PATH_SEPARATOR
 /*
  * Path separator.
@@ -113,11 +122,15 @@ extern mode_t _sysio_umask;
 
 extern int _sysio_init(void);
 extern void _sysio_shutdown(void);
-#if DEFER_INIT_CWD
-extern int _sysio_boot(const char *buf, const char *path);
-#else
-extern int _sysio_boot(const char *buf);
+
+#if 0
+struct _sysio_boot_ctl {
+	const char *onam;
+	const char *oarg;
+};
 #endif
+
+extern int _sysio_boot(const char *opt, const char *arg);
 
 /*
  * Option-value pair information.
@@ -138,6 +151,10 @@ extern char * _sysio_get_args(char *buf, struct option_value_info *vec);
 
 extern time_t _sysio_local_time(void);
 
+#if SYSIO_TRACING
+extern void _sysio_cprintf(const char *fmt, ...);
+#endif
+
 /*
  * The following should be defined by the system includes, and probably are,
  * but it's not illegal to have multiple externs, so long as they are the
@@ -154,7 +171,11 @@ extern int SYSIO_INTERFACE_NAME(close)(int d);
 extern int SYSIO_INTERFACE_NAME(dup)(int oldfd);
 extern int SYSIO_INTERFACE_NAME(dup2)(int oldfd, int newfd);
 extern int SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...);
+extern int SYSIO_INTERFACE_NAME(fcntl64)(int fd, int cmd, ...);
 extern int SYSIO_INTERFACE_NAME(fstat)(int fd, struct stat *buf);
+#if _LARGEFILE64_SOURCE
+extern int SYSIO_INTERFACE_NAME(fstat64)(int fd, struct stat64 *buf);
+#endif
 extern int SYSIO_INTERFACE_NAME(fsync)(int fd);
 extern char *SYSIO_INTERFACE_NAME(getcwd)(char *buf, size_t size);
 extern off_t SYSIO_INTERFACE_NAME(lseek)(int fd, off_t offset, int whence);
@@ -189,6 +210,22 @@ extern int SYSIO_INTERFACE_NAME(stat)(const char *path, struct stat *buf);
 #if _LARGEFILE64_SOURCE
 extern int SYSIO_INTERFACE_NAME(stat64)(const char *path, struct stat64 *buf);
 #endif
+extern ssize_t  SYSIO_INTERFACE_NAME(read)(int fd, void *buf, size_t count);
+extern ssize_t  SYSIO_INTERFACE_NAME(pread)(int fd, void *buf, size_t count,
+					    off_t offset);
+extern ssize_t SYSIO_INTERFACE_NAME(readv)(int fd,
+					   const struct iovec *iov,
+					   int count);
+extern ssize_t SYSIO_INTERFACE_NAME(write)(int fd,
+					   const void *buf,
+					   size_t count);
+extern ssize_t SYSIO_INTERFACE_NAME(pwrite)(int fd,
+					    const void *buf,
+					    size_t count,
+					    off_t offset);
+extern ssize_t SYSIO_INTERFACE_NAME(writev)(int fd,
+					    const struct iovec *iov,
+					    int count);
 #ifdef _HAVE_STATVFS
 extern int SYSIO_INTERFACE_NAME(statvfs)(const char *path, struct statvfs *buf);
 #if _LARGEFILE64_SOURCE
@@ -229,3 +266,21 @@ extern int SYSIO_INTERFACE_NAME(mount)(const char *source, const char *target,
 				       unsigned long mountflags,
 				       const void *data);
 extern int SYSIO_INTERFACE_NAME(umount)(const char *target);
+#if _DECLARE_DIR_ACCESS
+extern DIR *SYSIO_INTERFACE_NAME(opendir)(const char *name);
+extern int SYSIO_INTERFACE_NAME(closedir)(DIR *dir);
+extern struct dirent *SYSIO_INTERFACE_NAME(readdir)(DIR *dir);
+extern int SYSIO_INTERFACE_NAME(scandir)(const char *dir,
+					 struct dirent ***namelist,
+					 int(*filter)(const struct dirent *),
+					 int(*compar)(const void *,
+						      const void *));
+#if defined(_BSD_SOURCE) || defined(_SVID_SOURCE)
+extern ssize_t SYSIO_INTERFACE_NAME(getdirentries)(int fd,
+						   char *buf,
+						   size_t nbytes,
+						   off_t *basep);
+#endif
+#endif /* _DECLARE_DIR_ACCESS */
+
+#undef _DECLARE_DIR_ACCESS

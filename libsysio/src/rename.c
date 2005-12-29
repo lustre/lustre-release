@@ -161,7 +161,12 @@ SYSIO_INTERFACE_NAME(rename)(const char *oldpath, const char *newpath)
 		err = -EBUSY;
 		goto error1;
 	}
-	err = old->p_base->pb_ino->i_ops.inop_rename(old, new);
+	/*
+	 * Use the parent node operations to request the task in case the
+	 * driver is implemented using differentiated inode operations based
+	 * on file type, such as incore does.
+	 */
+	err = old->p_parent->p_base->pb_ino->i_ops.inop_rename(old, new);
 	if (err)
 		goto error1;
 	/*

@@ -65,8 +65,8 @@
 #include <sys/uio.h>
 #include <sys/queue.h>
 
-#include "xtio.h"
 #include "sysio.h"
+#include "xtio.h"
 #include "native.h"
 #include "fs.h"
 #include "inode.h"
@@ -387,7 +387,7 @@ _sysio_sockets_inew()
 }
 
 int
-socket(int domain, int type, int protocol)
+SYSIO_INTERFACE_NAME(socket)(int domain, int type, int protocol)
 {
 	int	err;
 	struct inode *ino;
@@ -445,7 +445,7 @@ error:
 }
 
 int
-accept(int s, struct sockaddr *addr, socklen_t *addrlen)
+SYSIO_INTERFACE_NAME(accept)(int s, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int	err;
 	struct inode *ino;
@@ -517,7 +517,9 @@ error:
 }
 
 int
-bind(int sockfd, const struct sockaddr *my_addr, socklen_t addrlen)
+SYSIO_INTERFACE_NAME(bind)(int sockfd,
+			   const struct sockaddr *my_addr,
+			   socklen_t addrlen)
 {
 	int	err;
 	struct file *fil;
@@ -553,7 +555,7 @@ out:
 }
 
 int
-listen(int s, int backlog)
+SYSIO_INTERFACE_NAME(listen)(int s, int backlog)
 {
 	int	err;
 	struct file *fil;
@@ -587,7 +589,9 @@ out:
 }
 
 int
-connect(int sockfd, const struct sockaddr *serv_addr, socklen_t addrlen)
+SYSIO_INTERFACE_NAME(connect)(int sockfd,
+			      const struct sockaddr *serv_addr,
+			      socklen_t addrlen)
 {
 	int	err;
 	struct file *fil;

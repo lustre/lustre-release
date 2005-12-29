@@ -86,10 +86,10 @@ struct inode_ops {
                         struct inode *ino,
                         unsigned mask,
                         struct intnl_stat *stbuf);
-    ssize_t (*inop_getdirentries)(struct inode *ino,
-				  char *buf,
-				  size_t nbytes,
-				  _SYSIO_OFF_T *basep);
+    ssize_t (*inop_filldirentries)(struct inode *ino,
+				   _SYSIO_OFF_T *posp,
+				   char *buf,
+				   size_t nbytes);
     int (*inop_mkdir)(struct pnode *pno, mode_t mode);
     int (*inop_rmdir)(struct pnode *pno);
     int (*inop_symlink)(struct pnode *pno, const char *data);
@@ -483,6 +483,7 @@ extern int _sysio_ioctx_cb(struct ioctx *ioctx,
 			   void *data);
 extern void _sysio_ioctx_cb_free(struct ioctx_callback *cb);
 extern struct ioctx *_sysio_ioctx_find(void *id);
+extern int _sysio_ioctx_done(struct ioctx *ioctx);
 extern ssize_t _sysio_ioctx_wait(struct ioctx *ioctx);
 extern void _sysio_ioctx_complete(struct ioctx *ioctx);
 extern int _sysio_open(struct pnode *pno, int flags, mode_t mode);

@@ -53,8 +53,8 @@
 #endif
 #include <sys/queue.h>
 
-#include "xtio.h"
 #include "sysio.h"
+#include "xtio.h"
 #include "fs.h"
 #include "mount.h"
 #include "inode.h"

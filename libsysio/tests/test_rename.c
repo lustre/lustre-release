@@ -52,6 +52,9 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -95,7 +98,7 @@ main(int argc, char * const argv[])
 		exit(1);
 	}	
 
-	(void )umask(022);
+	(void )SYSIO_INTERFACE_NAME(umask)(022);
 
 	/*
 	 * Source
@@ -110,7 +113,7 @@ main(int argc, char * const argv[])
 	if (argc - optind)
 		usage();
 
-	err = rename(spath, dpath);
+	err = SYSIO_INTERFACE_NAME(rename)(spath, dpath);
 	if (err)
 		perror("rename");
 

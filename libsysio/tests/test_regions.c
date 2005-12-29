@@ -65,6 +65,9 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -197,7 +200,7 @@ main(int argc, char * const argv[])
 	if (use64)
 		flags |= O_LARGEFILE;
 #endif
-	fd = open(path, flags, 0666);
+	fd = SYSIO_INTERFACE_NAME(open)(path, flags, 0666);
 	if (fd < 0) {
 		perror(path);
 		err = 1;
@@ -205,11 +208,11 @@ main(int argc, char * const argv[])
 	}
 #ifdef GO64
 	if (use64)
-		off64 = lseek64(fd, off64, SEEK_SET);
+		off64 = SYSIO_INTERFACE_NAME(lseek64)(fd, off64, SEEK_SET);
 	else
 		off64 =
 #endif
-		  off = lseek(fd, off, SEEK_SET);
+		  off = SYSIO_INTERFACE_NAME(lseek)(fd, off, SEEK_SET);
 #ifdef GO64
 	if ((use64 && off64 < 0) || (!use64 && off < 0)) {
 		perror(use64 ? "lseek64" : "lseek");
@@ -224,9 +227,9 @@ main(int argc, char * const argv[])
 	}
 #endif
 	if (which == 'r')
-		cc = read(fd, buf, nbytes);
+		cc = SYSIO_INTERFACE_NAME(read)(fd, buf, nbytes);
 	else
-		cc = write(fd, buf, nbytes);
+		cc = SYSIO_INTERFACE_NAME(write)(fd, buf, nbytes);
 	if (cc < 0) {
 		perror(path);
 		err = 1;
@@ -234,11 +237,11 @@ main(int argc, char * const argv[])
 	}
 #ifdef GO64
 	if (use64) {
-		off64 = lseek64(fd, 0, SEEK_CUR);
+		off64 = SYSIO_INTERFACE_NAME(lseek64)(fd, 0, SEEK_CUR);
 	} else
 		off64 =
 #endif
-		  off = lseek(fd, 0, SEEK_CUR);
+		  off = SYSIO_INTERFACE_NAME(lseek)(fd, 0, SEEK_CUR);
 	(void )printf(("%s%s@"
 #ifdef GO64
 		       "%lld"
@@ -269,7 +272,7 @@ main(int argc, char * const argv[])
 		      );
 
 error:
-	if (fd > 0 && close(fd) != 0)
+	if (fd > 0 && SYSIO_INTERFACE_NAME(close)(fd) != 0)
 		perror(path);
 	free(buf);
 out:

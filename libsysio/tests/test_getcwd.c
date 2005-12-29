@@ -53,6 +53,9 @@
 #include <sys/queue.h>
 #include <dirent.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "mount.h"
 
@@ -144,11 +147,11 @@ doit(const char *path)
 {
 	char	*buf;
 
-	if (chdir(path) != 0) {
+	if (SYSIO_INTERFACE_NAME(chdir)(path) != 0) {
 		perror(path);
 		return -1;
 	}
-	buf = getcwd(NULL, 0);
+	buf = SYSIO_INTERFACE_NAME(getcwd)(NULL, 0);
 	if (!buf) {
 		perror(path);
 		return -1;

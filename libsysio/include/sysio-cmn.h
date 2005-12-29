@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2004 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -89,14 +89,18 @@ struct intnl_xtvec;
 
 struct iovec;
 
+
+#define _PREPEND_HELPER(p, x) \
+	p ## x
+#define PREPEND(p, x) \
+	_PREPEND_HELPER(p, x)
+
 /*
  * SYSIO name label macros
  */
-#define XPREPEND(p,x) p ## x
-#define PREPEND(p,x) XPREPEND(p,x)
-#define SYSIO_LABEL_NAMES 0
-#if SYSIO_LABEL_NAMES
-#define SYSIO_INTERFACE_NAME(x) PREPEND(sysio__, x)
+#ifdef SYSIO_LABEL_NAMES
+#define SYSIO_INTERFACE_NAME(x) \
+	PREPEND(SYSIO_LABEL_NAMES, x)
 #else
 #define SYSIO_INTERFACE_NAME(x) x
 #endif
@@ -147,23 +151,36 @@ struct iovec;
 	} while(0) 
 
 /* Interface enter/leave hook functions  */
-#if 0
-extern void _sysio_sysenter();
-extern void _sysio_sysleave();
+#if SYSIO_TRACING
+extern void *_sysio_entry_trace_q;
+extern void *_sysio_exit_trace_q;
 
+extern void *_sysio_register_trace(void *q,
+				   void (*)(const char *file,
+					    const char *func,
+					    int line));
+extern void _sysio_remove_trace(void *q, void *p);
+extern void _sysio_run_trace_q(void *q,
+			       const char *file,
+			       const char *func,
+			       int line);
 #define SYSIO_ENTER							\
-	do {								\
-		_sysio_sysenter();					\
-	} while(0)
+	do { \
+		_sysio_run_trace_q(_sysio_entry_trace_q,		\
+				   __FILE__, __func__, __LINE__);	\
+	} while (0)
+
 
 #define SYSIO_LEAVE							\
-	do {								\
-		_sysio_sysleave();					\
-	} while(0)
+	do { \
+		_sysio_run_trace_q(_sysio_exit_trace_q,			\
+				   __FILE__, __func__, __LINE__);	\
+	} while (0)
 #else
-#define SYSIO_ENTER
-#define SYSIO_LEAVE
-
+#define SYSIO_ENTER							\
+	do { } while (0)
+#define SYSIO_LEAVE							\
+	do { } while (0)
 #endif
 
 /* accounting for IO stats read and write char count */

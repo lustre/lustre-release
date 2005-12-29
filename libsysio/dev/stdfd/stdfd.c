@@ -54,8 +54,8 @@
 #include <sys/stat.h>
 #include <sys/queue.h>
 
-#include "xtio.h"
 #include "sysio.h"
+#include "xtio.h"
 #include "native.h"
 #include "inode.h"
 #include "dev.h"

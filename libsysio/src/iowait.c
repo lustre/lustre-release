@@ -68,10 +68,7 @@ SYSIO_INTERFACE_NAME(iodone)(void *ioid)
 	if (!ioctx)
 		SYSIO_INTERFACE_RETURN(-1, -EINVAL);
 
-	rc =
-	    (ioctx->ioctx_done ||
-	     (*ioctx->ioctx_ino->i_ops.inop_iodone)(ioctx));
-
+	rc = _sysio_ioctx_done(ioctx);
 	SYSIO_INTERFACE_RETURN(rc < 0 ? -1 : rc, rc < 0 ? rc : 0);
 }
 

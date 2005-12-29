@@ -75,7 +75,7 @@ _sysio_fnew(struct inode *ino, int flags)
 		return NULL;
 
 	_SYSIO_FINIT(fil, ino, flags);
-	I_REF(ino);
+	F_REF(fil);
 
 	return fil;
 }
@@ -272,7 +272,7 @@ _sysio_fd_dup(int oldfd, int newfd, int force)
 	struct file *fil;
 	int	fd;
 
-	if (oldfd == newfd)
+	if (oldfd == newfd && oldfd >= 0)
 		return newfd;
 
 	fil = _sysio_fd_find(oldfd);

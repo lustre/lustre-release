@@ -162,13 +162,7 @@ SYSIO_INTERFACE_NAME(open)(const char *path, int flags, ...)
 #endif
 		va_end(ap);
 		mode &= ~(_sysio_umask & 0777) | 07000;	/* apply umask */
-
-		if (flags & O_EXCL) {
-			/*
-			 * Tell others we intend to create this file.
-			 */
-			intent.int_opmask |= INT_CREAT;
-		}
+		intent.int_opmask |= INT_CREAT;
 	}
 #ifdef O_NOFOLLOW
 	if (flags & O_NOFOLLOW)
@@ -216,21 +210,25 @@ error:
 
 #ifdef __GLIBC__
 #undef __open
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open), __open)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(open)))
 #undef open64
 sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open), SYSIO_INTERFACE_NAME(open64))
 #undef __open64
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open), __open64)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(open64)))
 #endif
 
 #ifdef REDSTORM
 #undef __libc_open64
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open), __libc_open64)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(libc_open64)))
 #endif
 
 #ifdef BSD
 #undef _open
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open), _open)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(open),
+		     PREPEND(_, SYSIO_INTERFACE_NAME(open)))
 #endif
 
 int
@@ -246,43 +244,50 @@ SYSIO_INTERFACE_NAME(close)(int fd)
 
 #ifdef __GLIBC__
 #undef __close
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(close), __close)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(close),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(close)))
 #endif
 
 #ifdef BSD
 #undef _close
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(close), _close)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(close),
+		     PREPEND(_, SYSIO_INTERFACE_NAME(close)))
 #endif
 
 int
 SYSIO_INTERFACE_NAME(creat)(const char *path, mode_t mode)
 {
 
-	return open(path, O_CREAT|O_WRONLY|O_TRUNC, mode);
+	return SYSIO_INTERFACE_NAME(open)(path, O_CREAT|O_WRONLY|O_TRUNC, mode);
 }
 
 #ifdef __GLIBC__
 #undef __creat
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat), __creat)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(creat)))
 #undef creat64
 #ifndef HAVE_LUSTRE_HACK
 sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat), SYSIO_INTERFACE_NAME(creat64))
 #else
 /* XXX workaround SuSE SLES 8, glibc-2.2.5 */
-sysio_sym_strong_alias(SYSIO_INTERFACE_NAME(creat), SYSIO_INTERFACE_NAME(creat64))
+sysio_sym_strong_alias(SYSIO_INTERFACE_NAME(creat),
+		       SYSIO_INTERFACE_NAME(creat64))
 #endif
 #undef __creat64
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat), __creat64)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(creat64)))
 #endif
 
 #ifdef REDSTORM
 #undef __libc_creat
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat), __libc_creat)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(libc_creat)))
 #endif
 
 #ifdef BSD
 #undef _creat
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat), _creat)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(creat),
+		     PREPEND(_, SYSIO_INTERFACE_NAME(creat)))
 #endif
 
 mode_t
@@ -297,5 +302,6 @@ SYSIO_INTERFACE_NAME(umask)(mode_t mask)
 
 #ifdef REDSTORM
 #undef __umask
-sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(umask), __umask)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(umask),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(umask)))
 #endif

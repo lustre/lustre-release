@@ -72,8 +72,8 @@
 #include <sys/uio.h>
 #include <sys/queue.h>
 
-#include "xtio.h"
 #include "sysio.h"
+#include "xtio.h"
 #include "native.h"
 #include "fs.h"
 #include "mount.h"
@@ -86,13 +86,10 @@
 #endif
 
 #if defined(SYSIO_SYS_getdirentries)
-#define DIR_STREAMED 0
 #define DIR_CVT_64 0
 #elif defined(SYSIO_SYS_getdents64)
-#define DIR_STREAMED 1
 #define DIR_CVT_64 0
 #elif defined(SYSIO_SYS_getdents)
-#define DIR_STREAMED 1
 #if defined(_LARGEFILE64_SOURCE)
 #define DIR_CVT_64 1
 /*
@@ -143,7 +140,8 @@ struct native_inode_identifier {
 struct native_inode {
 	unsigned
 		ni_seekok		: 1,		/* can seek? */
-		ni_attrvalid		: 1;		/* cached attrs ok? */
+		ni_attrvalid		: 1,		/* cached attrs ok? */
+		ni_resetfpos		: 1;		/* reset fpos? */
 	struct native_inode_identifier ni_ident;	/* unique identifier */
 	struct file_identifier ni_fileid;		/* ditto */
 	int	ni_fd;					/* host fildes */
@@ -178,10 +176,10 @@ static int native_inop_setattr(struct pnode *pno,
 			       struct inode *ino,
 			       unsigned mask,
 			       struct intnl_stat *stbuf);
-static ssize_t native_getdirentries(struct inode *ino,
-				    char *buf,
-				    size_t nbytes,
-				    _SYSIO_OFF_T *basep);
+static ssize_t native_filldirentries(struct inode *ino,
+				     _SYSIO_OFF_T *posp,
+				     char *buf,
+				     size_t nbytes);
 static int native_inop_mkdir(struct pnode *pno, mode_t mode);
 static int native_inop_rmdir(struct pnode *pno);
 static int native_inop_symlink(struct pnode *pno, const char *data);
@@ -213,7 +211,7 @@ static struct inode_ops native_i_ops = {
 	native_inop_lookup,
 	native_inop_getattr,
 	native_inop_setattr,
-	native_getdirentries,
+	native_filldirentries,
 	native_inop_mkdir,
 	native_inop_rmdir,
 	native_inop_symlink,
@@ -324,6 +322,8 @@ native_i_new(struct filesys *fs, time_t expiration, struct intnl_stat *buf)
 		return NULL;
 	bzero(&nino->ni_ident, sizeof(nino->ni_ident));
 	nino->ni_seekok = 0;
+	nino->ni_attrvalid = 0;
+	nino->ni_resetfpos = 0;
 	nino->ni_ident.dev = buf->st_dev;
 	nino->ni_ident.ino = buf->st_ino;
 #ifdef HAVE_GENERATION
@@ -494,7 +494,6 @@ error:
 		_sysio_pb_gone(rootpb);
 	if (fs) {
 		FS_RELE(fs);
-		_sysio_fs_gone(fs);
 		nfs = NULL;
 	}
 	if (nfs)
@@ -953,26 +952,34 @@ native_pos(int fd, _SYSIO_OFF_T *offset, int whence)
 }
 
 static ssize_t
-native_filldirentries(struct native_inode *nino,
-		      char *buf,
-		      size_t nbytes,
-		      _SYSIO_OFF_T *basep)
+native_ifilldirentries(struct native_inode *nino,
+		       _SYSIO_OFF_T *posp,
+		       char *buf,
+		       size_t nbytes)
 {
 	int	err;
 	ssize_t	cc;
+#if defined(SYSIO_SYS_getdirentries)
+	_SYSIO_OFF_T	waste;
+#endif
 
-	if (*basep < 0)
+	if (*posp < 0)
 		return -EINVAL;
 
-#if DIR_STREAMED
 	/*
 	 * Stream-oriented access requires that we reposition prior to the
 	 * fill call.
 	 */
-	if ((err = native_pos(nino->ni_fd, basep, SEEK_SET)) != 0)
-		return err;
-#endif
-	nino->ni_fpos = *basep;
+	assert(nino->ni_seekok);
+	if (*posp != nino->ni_fpos || nino->ni_resetfpos) {
+		nino->ni_fpos = *posp;
+		err = native_pos(nino->ni_fd, &nino->ni_fpos, SEEK_SET);
+		if (err) {
+			nino->ni_resetfpos = 1;
+			return err;
+		}
+		nino->ni_resetfpos = 0;
+	}
 
 	cc =
 #if defined(SYSIO_SYS_getdirentries)
@@ -980,7 +987,7 @@ native_filldirentries(struct native_inode *nino,
 		    nino->ni_fd,
 		    buf,
 		    nbytes,
-		    basep);
+		    &waste);
 #elif defined(SYSIO_SYS_getdents64)
 	    syscall(SYSIO_SYS_getdents64, nino->ni_fd, buf, nbytes);
 #elif defined(SYSIO_SYS_getdents)
@@ -989,24 +996,26 @@ native_filldirentries(struct native_inode *nino,
 
 	if (cc < 0)
 		return -errno;
-#if DIR_STREAMED
 	/*
 	 * Stream-oriented access requires that we discover where we are
 	 * after the call.
 	 */
-	*basep = 0;
-	if ((err = native_pos(nino->ni_fd, basep, SEEK_CUR)) != 0)
+	if ((err = native_pos(nino->ni_fd, &nino->ni_fpos, SEEK_CUR)) != 0) {
+		/*
+		 * Leave the position at the old I suppose.
+		 */
+		nino->ni_resetfpos = 1;
 		return err;
-#endif
-	nino->ni_fpos = *basep;
+	}
+	*posp = nino->ni_fpos;
 	return cc;
 }
 
 static ssize_t
-native_getdirentries(struct inode *ino,
-		     char *buf,
-		     size_t nbytes,
-		     _SYSIO_OFF_T *basep)
+native_filldirentries(struct inode *ino,
+		      _SYSIO_OFF_T *posp,
+		      char *buf,
+		      size_t nbytes)
 {
 	struct native_inode *nino = I2NI(ino);
 #if DIR_CVT_64
@@ -1016,12 +1025,6 @@ native_getdirentries(struct inode *ino,
 	struct dirent64 *d64p;
 	size_t	namlen;
 	size_t	reclen;
-	/*
-	 * Work-around for broken 64 bit basep update 
-	 * Get value of basep to return from last directory 
-	 * entry d_off value 
-	 */
-	_SYSIO_OFF_T last_offset = *basep;
 #else
 #define bp buf
 #define count nbytes
@@ -1038,7 +1041,7 @@ native_getdirentries(struct inode *ino,
 			return -ENOMEM;
 	}
 #endif
-	cc = native_filldirentries(nino, bp, count, basep);
+	cc = native_ifilldirentries(nino, posp, bp, count);
 	if (cc < 0) {
 #if DIR_CVT_64
 		free(bp);
@@ -1048,30 +1051,31 @@ native_getdirentries(struct inode *ino,
 #if DIR_CVT_64
 	ldp = (struct linux_dirent *)bp;
 	d64p = (struct dirent64 *)buf;
-	for (;;) {
-		if (cc < 0 || (size_t )cc <= sizeof(*ldp))
-			break;
+	while (cc) {
 		namlen = strlen(ldp->ld_name);
-		reclen = sizeof(*d64p) - sizeof(d64p->d_name) + namlen + 1;
-		if (nbytes < reclen)
+		reclen = sizeof(*d64p) - sizeof(d64p->d_name) + namlen;
+		if (nbytes <= reclen)
 			break;
 		d64p->d_ino = ldp->ld_ino;
-		d64p->d_off = ldp->ld_off;
+		d64p->d_off = nino->ni_fpos = ldp->ld_off;
 		d64p->d_reclen = 
-		    (((reclen + sizeof(long) - 1)) / sizeof(long)) *
-		    sizeof(long);
+		    (((reclen + sizeof(long))) / sizeof(long)) * sizeof(long);
 		if (nbytes < d64p->d_reclen)
-			d64p->d_reclen = reclen;
+			d64p->d_reclen = reclen + 1;
 		d64p->d_type = DT_UNKNOWN;		/* you lose -- sorry. */
-		(void )strncpy(d64p->d_name, ldp->ld_name, namlen);
-		*(d64p->d_name + namlen) = '\0';
+		(void )memcpy(d64p->d_name, ldp->ld_name, namlen);
+		/*
+		 * Zero pad the rest.
+		 */
+		for (cp = d64p->d_name + namlen, n = d64p->d_reclen - reclen;
+		     n;
+		     n--)
+			*cp++ = 0;
 		cc -= ldp->ld_reclen;
 		ldp = (struct linux_dirent *)((char *)ldp + ldp->ld_reclen);
 		nbytes -= d64p->d_reclen;
-		last_offset = d64p->d_off;
 		d64p = (struct dirent64 *)((char *)d64p + d64p->d_reclen);
 	}
-	nino->ni_fpos = *basep = last_offset;
 	free(bp);
 	cc =
 	    (d64p == (struct dirent64 *)buf && cc)
@@ -1223,6 +1227,7 @@ native_inop_open(struct pnode *pno, int flags, mode_t mode)
 	/*
 	 * Invariant; First open. Must init.
 	 */
+	nino->ni_resetfpos = 0;
 	nino->ni_fpos = 0;
 	nino->ni_fd = fd;
 	/*
@@ -1260,6 +1265,7 @@ native_inop_close(struct inode *ino)
 		return -errno;
 
 	nino->ni_fd = -1;
+	nino->ni_resetfpos = 0;
 	nino->ni_fpos = 0;
 	return 0;
 }
@@ -1349,13 +1355,10 @@ dopio(void *buf, size_t count, _SYSIO_OFF_T off, struct native_io *nio)
 {
 	ssize_t	cc;
 
-	if (!(off == nio->nio_nino->ni_fpos || nio->nio_nino->ni_seekok))
-		return -ESPIPE;
-		
 	if (!nio->nio_nino->ni_seekok) {
 		if (off != nio->nio_nino->ni_fpos) {
 			/*
-			 * They've done a p{read,write} or somesuch. Can't
+			 * They're trying to reposition. Can't
 			 * seek on this descriptor so we err out now.
 			 */
 			errno = ESPIPE;
@@ -1408,8 +1411,11 @@ doiov(const struct iovec *iov,
 		int	err;
 
 		err = native_pos(nio->nio_nino->ni_fd, &off, SEEK_SET);
-		if (err)
+		if (err) {
+			nio->nio_nino->ni_resetfpos = 1;
 			return err;
+		}
+		nio->nio_nino->ni_resetfpos = 0;
 		nio->nio_nino->ni_fpos = off;
 	}
 
@@ -1745,6 +1751,7 @@ native_inop_ioctl(struct inode *ino,
 {
 	struct native_inode *nino;
 	long arg1, arg2, arg3, arg4;
+	int	rtn;
 
 	nino = I2NI(ino);
 	assert(nino->ni_fd >= 0);
@@ -1753,8 +1760,12 @@ native_inop_ioctl(struct inode *ino,
 	arg3 = va_arg(ap, long);
 	arg4 = va_arg(ap, long);
 
-	return syscall(SYSIO_SYS_ioctl, I2NI(ino)->ni_fd, request,
-		       arg1, arg2, arg3, arg4);
+	rtn =
+	    syscall(SYSIO_SYS_ioctl, I2NI(ino)->ni_fd, request,
+		    arg1, arg2, arg3, arg4);
+	if (rtn < 0)
+		rtn = -errno;
+	return rtn;
 }
 #else
 static int
@@ -1766,8 +1777,7 @@ native_inop_ioctl(struct inode *ino __IS_UNUSED,
 	/*
 	 * I'm lazy. Maybe implemented later.
 	 */
-	errno = ENOTTY;
-	return -1;
+	return -ENOTTY;
 }
 #endif
 

@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -46,6 +46,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/queue.h>
 
 #include "sysio.h"
@@ -54,16 +55,14 @@
 
 #include "sysio-symbols.h"
 
-static _SYSIO_OFF_T
-_sysio_lseek(int fd, _SYSIO_OFF_T offset, int whence)
+_SYSIO_OFF_T
+_sysio_lseek_prepare(struct file *fil,
+		     _SYSIO_OFF_T offset,
+		     int whence,
+		     _SYSIO_OFF_T max)
 {
-	struct file *fil;
 	_SYSIO_OFF_T off, pos;
 	struct intnl_stat stbuf;
-
-	fil = _sysio_fd_find(fd);
-	if (!fil)
-		return -EBADF;
 
 	off = -1;
 	switch (whence) {
@@ -99,14 +98,22 @@ _sysio_lseek(int fd, _SYSIO_OFF_T offset, int whence)
 	pos = off + offset;
 	if ((offset < 0 && -offset > off) || (offset > 0 && pos <= off))
 		return -EINVAL;
+	if (pos >= max)
+		return -EOVERFLOW;
+	return pos;
+}
 
-#ifdef O_LARGEFILE
-	if (pos >= ((fil->f_flags & O_LARGEFILE) ? _SYSIO_OFF_T_MAX : LONG_MAX))
-		return -EOVERFLOW;
-#else
-	if (pos >= _SYSIO_OFF_T_MAX)
-		return -EOVERFLOW;
-#endif
+static _SYSIO_OFF_T
+_sysio_lseek(struct file *fil,
+	     _SYSIO_OFF_T offset,
+	     int whence,
+	     _SYSIO_OFF_T max)
+{
+	_SYSIO_OFF_T pos;
+
+	pos = _sysio_lseek_prepare(fil, offset, whence, max);
+	if (pos < 0)
+		return pos;
 	pos = (fil->f_ino->i_ops.inop_pos)(fil->f_ino, pos);
 	if (pos < 0)
 		return pos;
@@ -120,17 +127,18 @@ _sysio_lseek(int fd, _SYSIO_OFF_T offset, int whence)
 extern off64_t
 SYSIO_INTERFACE_NAME(lseek64)(int fd, off64_t offset, int whence)
 {
-	_SYSIO_OFF_T off;
-	off64_t	rtn;
+	struct file *fil;
+	off64_t	off;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
-	off = _sysio_lseek(fd, offset, whence);
-	if (off < 0)
-		SYSIO_INTERFACE_RETURN((off64_t )-1, (int )off);
-	rtn = (off64_t )off;
-	assert(rtn == off);
-	SYSIO_INTERFACE_RETURN(rtn, 0);
+	fil = _sysio_fd_find(fd);
+	if (!fil)
+		SYSIO_INTERFACE_RETURN((off64_t )-1, -EBADF);
+	off = _sysio_lseek(fil, offset, whence, _SEEK_MAX(fil));
+	SYSIO_INTERFACE_RETURN(off < 0 ? (off64_t )-1 : off,
+			       off < 0 ? (int )off : 0);
+
 }
 #ifdef __GLIBC__
 #undef __lseek64
@@ -149,12 +157,16 @@ sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(lseek64),
 extern off_t
 SYSIO_INTERFACE_NAME(lseek)(int fd, off_t offset, int whence)
 {
+	struct file *fil;
 	_SYSIO_OFF_T off;
 	off_t	rtn;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
-	off = _sysio_lseek(fd, offset, whence);
+	fil = _sysio_fd_find(fd);
+	if (!fil)
+		SYSIO_INTERFACE_RETURN((off_t )-1, -EBADF);
+	off = _sysio_lseek(fil, offset, whence, LONG_MAX);
 	if (off < 0)
 		SYSIO_INTERFACE_RETURN((off_t )-1, (int )off);
 	rtn = (off_t )off;
@@ -177,6 +189,7 @@ SYSIO_INTERFACE_NAME(llseek)(unsigned int fd __IS_UNUSED,
        loff_t *result __IS_UNUSED,
        unsigned int whence __IS_UNUSED)
 {
+	struct file *fil;
 	loff_t	off;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
@@ -184,6 +197,9 @@ SYSIO_INTERFACE_NAME(llseek)(unsigned int fd __IS_UNUSED,
 	 * This is just plain goofy.
 	 */
 	SYSIO_INTERFACE_ENTER;
+	fil = _sysio_fd_find(fd);
+	if (!fil)
+		SYSIO_INTERFACE_RETURN(-1, -EBADF);
 #if !_LARGEFILE64_SOURCE
 	if (offset_high) {
 		/*
@@ -197,7 +213,7 @@ SYSIO_INTERFACE_NAME(llseek)(unsigned int fd __IS_UNUSED,
 	off <<= 32;
 	off |= offset_low;
 #endif
-	off = _sysio_lseek(fd, off, whence);
+	off = _sysio_lseek(fil, off, whence, _SEEK_MAX(fil));
 	if (off < 0)
 		SYSIO_INTERFACE_RETURN((off_t )-1, (int )off);
 	*result = off;

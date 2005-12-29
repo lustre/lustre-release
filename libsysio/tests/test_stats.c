@@ -55,6 +55,9 @@
 #endif
 #include <sys/uio.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -91,7 +94,7 @@ main(int argc, char * const argv[])
 		exit(1);
 	}	
 
-	(void )umask(022);
+	(void )SYSIO_INTERFACE_NAME(umask)(022);
 
 	while (optind < argc)
 		do_stats(argv[optind++]);
@@ -124,19 +127,19 @@ do_stats(const char *path)
 	struct statvfs stvfsbuf1, stvfsbuf2;
 #endif
 
-	fd = open(path, O_RDONLY);
+	fd = SYSIO_INTERFACE_NAME(open)(path, O_RDONLY);
 	if (fd < 0) {
 		perror(path);
 		return;
 	}
-	err = fstat(fd, &stbuf1);
+	err = SYSIO_INTERFACE_NAME(fstat)(fd, &stbuf1);
 	if (!err)
-		err = stat(path, &stbuf2);
+		err = SYSIO_INTERFACE_NAME(stat)(path, &stbuf2);
 #ifdef notdef
 	if (!err)
-		err = fstatvfs(fd, &stvfsbuf1);
+		err = SYSIO_INTERFACE_NAME(fstatvfs)(fd, &stvfsbuf1);
 	if (!err)
-		err = statvfs(path, &stvfsbuf1);
+		err = SYSIO_INTERFACE_NAME(statvfs)(path, &stvfsbuf1);
 #endif
 	if (err) {
 		perror(path);
@@ -182,6 +185,6 @@ do_stats(const char *path)
 	       (unsigned long )stbuf1.st_mtime,
 	       (unsigned long )stbuf1.st_ctime);
 out:
-	if (close(fd) != 0)
+	if (SYSIO_INTERFACE_NAME(close)(fd) != 0)
 		perror("closing file");
 }

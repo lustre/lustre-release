@@ -52,6 +52,9 @@
 #endif
 #include <sys/uio.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -141,7 +144,7 @@ static int
 unlinkit(const char *path)
 {
 
-	if (unlink(path) != 0) {
+	if (SYSIO_INTERFACE_NAME(unlink)(path) != 0) {
 		perror(path);
 		return -1;
 	}

@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -41,6 +41,8 @@
  * lee@sandia.gov
  */
 
+#define _BSD_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,11 +50,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#if 0
-#include <dirent.h>
-#endif
-#include <sys/uio.h>
-#include <sys/queue.h>
+#include <fcntl.h>
 
 #if defined(SYSIO_LABEL_NAMES)
 #include "sysio.h"
@@ -61,24 +59,23 @@
 #include "test.h"
 
 /*
- * Test hard link
+ * fcntl lock tests
  *
- * Usage: link oldpath newpath
- *
+ * Usage: test_fcnt_lock [<path> ...]
  */
 
-static void usage(void);
+void	usage(void);
+void	do_tests(const char *path);
 
 int
-main(int argc, char *const argv[])
+main(int argc, char * const argv[])
 {
 	int	i;
 	int	err;
-	int	n;
 	extern int _test_sysio_startup(void);
 
 	/*
-	 * Parse command line arguments.
+	 * Parse command-line args.
 	 */
 	while ((i = getopt(argc, argv, "")) != -1)
 		switch (i) {
@@ -87,53 +84,63 @@ main(int argc, char *const argv[])
 			usage();
 		}
 
-	/*
-	 * Init sysio lib.
-	 */
 	err = _test_sysio_startup();
 	if (err) {
 		errno = -err;
 		perror("sysio startup");
 		exit(1);
-	}
+	}	
 
-	n = argc - optind;
-	if (n < 2) usage();
-
-	/*
-	 * Try paths listed on command-line.
-	 */
-	while (optind < argc) {
-		const char *old, *new;
-		struct stat stbuf;
-
-		old = argv[optind++];
-		new = argv[optind++];
-		if ((err = SYSIO_INTERFACE_NAME(link)(old, new)) != 0) {
-			perror("link");
-			break;
-		}
-		if ((err = SYSIO_INTERFACE_NAME(lstat)(new, &stbuf)) != 0) {
-			perror(new);
-			break;
-		}
-	}
+	while (optind < argc)
+		do_tests(argv[optind++]);
 
 	/*
 	 * Clean up.
 	 */
 	_test_sysio_shutdown();
 
-	return err ? -1 : 0;
+	return 0;
 }
 
-static void
+void
 usage()
 {
 
 	(void )fprintf(stderr,
-		       "Usage: unlink"
-		       " oldpath newpath\n");
-
+		       "Usage: test_fcntl_lock"
+		       " source...\n");
 	exit(1);
+}
+
+void
+do_tests(const char *path)
+{
+	int	fd;
+	int	err;
+	struct flock flock;
+
+	fd = SYSIO_INTERFACE_NAME(open)(path, O_RDONLY);
+	if (fd < 0) {
+		perror(path);
+		return;
+	}
+	do {
+		flock.l_type = F_RDLCK;
+		flock.l_whence = SEEK_CUR;
+		flock.l_start = 0;
+		flock.l_len = 0;
+		flock.l_pid = 0;
+		err = SYSIO_INTERFACE_NAME(fcntl)(fd, F_SETLK, &flock);
+		if (err)
+			break;
+		flock.l_type = F_UNLCK;
+		err = SYSIO_INTERFACE_NAME(fcntl)(fd, F_SETLK, &flock);
+		if (err)
+			break;
+	} while (0);
+
+	if (err)
+		perror(path);
+	if (SYSIO_INTERFACE_NAME(close)(fd) != 0)
+		perror(path);
 }
