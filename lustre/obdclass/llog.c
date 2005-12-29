@@ -211,7 +211,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         char *buf;
         __u64 cur_offset = LLOG_CHUNK_SIZE;
         int rc = 0, index = 1, last_index;
-        int saved_index = 0;
+        int saved_index = 0, last_called_index = 0;
         ENTRY;
 
         LASSERT(llh);
@@ -289,6 +289,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                         /* if set, process the callback on this record */
                         if (ext2_test_bit(index, llh->llh_bitmap)) {
                                 rc = cb(loghandle, rec, data);
+                                last_called_index = index;
                                 if (rc == LLOG_PROC_BREAK) {
                                         CWARN("recovery from log: "LPX64":%x"
                                               " stopped\n",
@@ -310,6 +311,8 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         }
 
  out:
+        if (cd != NULL)
+                cd->last_idx = last_called_index;
         if (buf)
                 OBD_FREE(buf, LLOG_CHUNK_SIZE);
         RETURN(rc);

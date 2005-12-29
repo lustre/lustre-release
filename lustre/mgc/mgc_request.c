@@ -49,7 +49,7 @@
 
 #include "mgc_internal.h"
 
-
+/********************** class fns **********************/
 
 static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb, 
                         struct vfsmount *mnt)
@@ -549,7 +549,136 @@ static int mgc_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
-/* reuse the client_import_[add/del]_conn*/
+/* Get the client export to the MGS */
+static struct obd_export *get_mgs_export(struct obd_device *mgc)
+{
+        struct obd_export *exp, *n;
+
+        /* FIXME is this a Bad Idea?  Should I just store this export 
+           somewhere in the u.cli? */
+
+        /* There should be exactly 2 exports in the mgc, the mgs export and 
+           the mgc self-export, in that order. So just return the list head. */
+        LASSERT(!list_empty(&mgc->obd_exports));
+        LASSERT(mgc->obd_num_exports == 2);
+        list_for_each_entry_safe(exp, n, &mgc->obd_exports, exp_obd_chain) {
+                LASSERT(exp != mgc->obd_self_export);
+                break;
+        }
+        /*FIXME there's clearly a better way, but I'm too confused to sort it 
+          out now...
+        exp = &list_entry(&mgc->obd_exports->head, export_obd, exp_obd_chain);
+        */
+        return exp;
+}
+
+/* Get a config log from the MGS and process it.
+   This func is called for both clients and servers. */
+static int mgc_process_log(struct obd_device *mgc, char *logname, 
+                           struct config_llog_instance *cfg)
+{
+        struct llog_ctxt *rctxt;
+        struct config_llog_data *cld;
+        struct lustre_handle lockh;
+        int rc, rcl, flags = 0;
+        ENTRY;
+
+        CDEBUG(D_MGC, "parsing config log %s\n", logname);
+
+        rctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
+        if (!rctxt) {
+                CERROR("missing llog context\n");
+                RETURN(-EINVAL);
+        }
+
+        /* Remember where we last stopped in this log. 
+           hmm - hold global config lock over the entire llog parse?
+           I could just 'get' it again after the parse.  */
+        if (cfg && cfg->cfg_instance) 
+                cld = config_log_get(cfg->cfg_instance);
+        else
+                cld = config_log_get(logname);
+        if (cld && cfg) {
+                cfg->cfg_last_idx = cld->cld_gen;
+                CDEBUG(D_MGC, "parsing log %s from %d\n", logname, 
+                       cfg->cfg_last_idx);
+        }
+
+        /* Get the cfg lock on the llog */
+        rcl = mgc_enqueue(get_mgs_export(mgc), NULL, LDLM_PLAIN, NULL, 
+                          LCK_CR, &flags, NULL, NULL, NULL, 
+                          logname, 0, NULL, &lockh);
+        if (rcl) {
+                CERROR("Can't get cfg lock: %d\n", rcl);
+                config_log_put();
+                RETURN(rcl);
+        }
+        
+        //FIXME Copy the mgs remote log to the local disk
+
+        rc = class_config_parse_llog(rctxt, logname, cfg);
+        
+        /* Now drop the lock so MGS can revoke it */ 
+        rcl = mgc_cancel(get_mgs_export(mgc), NULL, LCK_CR, &lockh);
+        if (rcl) {
+                CERROR("Can't drop cfg lock: %d\n", rcl);
+        }
+        
+        /* Remember our gen */
+        if (!rc && cld && cfg)
+                cld->cld_gen = cfg->cfg_last_idx;
+        config_log_put();
+
+        if (rc) {
+                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
+                               "(%d) from the MGS.\n",
+                               mgc->obd_name, logname, rc);
+        }
+
+        RETURN(rc);
+}
+
+static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
+{
+        struct lustre_cfg *lcfg = buf;
+        int cmd;
+        int rc = 0;
+        ENTRY;
+
+        switch(cmd = lcfg->lcfg_command) {
+        case LCFG_LOV_ADD_OBD:
+        case LCFG_LOV_DEL_OBD: {
+                struct mgmt_target_info *mti;
+
+                if (LUSTRE_CFG_BUFLEN(lcfg, 1) != 
+                    sizeof(struct mgmt_target_info))
+                        GOTO(out, rc = -EINVAL);
+
+                mti = (struct mgmt_target_info *)lustre_cfg_buf(lcfg, 1);
+                CDEBUG(D_MGC, "add_target %s %#x\n",    
+                       mti->mti_svname, mti->mti_flags);
+                rc = mgc_target_add(get_mgs_export(obd), mti);
+                GOTO(out, rc);
+        }
+        case LCFG_PARSE_LOG: {
+                char *logname = lustre_cfg_string(lcfg, 1);
+                struct config_llog_instance *cfg;
+                cfg = (struct config_llog_instance *)lustre_cfg_buf(lcfg, 2);
+                CDEBUG(D_MGC, "parse_log %s from %d\n", logname, 
+                       cfg->cfg_last_idx);
+                mgc_process_log(obd, logname, cfg);
+                GOTO(out, rc);
+        }
+        default: {
+                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+                GOTO(out, rc = -EINVAL);
+
+        }
+        }
+out:
+        RETURN(rc);
+}
+
 struct obd_ops mgc_obd_ops = {
         .o_owner        = THIS_MODULE,
         .o_setup        = mgc_setup,
@@ -565,6 +694,7 @@ struct obd_ops mgc_obd_ops = {
         .o_import_event = mgc_import_event,
         .o_llog_init    = mgc_llog_init,
         .o_llog_finish  = mgc_llog_finish,
+        .o_process_config = mgc_process_config,
 };
 
 int __init mgc_init(void)

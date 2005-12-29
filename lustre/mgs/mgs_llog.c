@@ -83,8 +83,7 @@ static int db_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker;
                         marker = lustre_cfg_buf(lcfg, 1);
-                        db->fd_last_step = 
-                                max(db->fd_last_step, marker->cm_step);
+                        db->fd_gen = max(db->fd_gen, marker->cm_step);
                         CDEBUG(D_MGS, "marker %d %s\n", marker->cm_step, 
                                marker->cm_comment);
                 }
@@ -431,8 +430,8 @@ static int record_marker(struct obd_device *obd, struct llog_handle *llh,
         CDEBUG(D_MGS, "lcfg marker\n");
 
         if (flags & CM_START) 
-                db->fd_last_step++;
-        marker.cm_step = db->fd_last_step;
+                db->fd_gen++;
+        marker.cm_step = db->fd_gen;
         marker.cm_flags = flags;
         strncpy(marker.cm_comment, comment, sizeof(marker.cm_comment)); 
         lustre_cfg_bufs_reset(&bufs, NULL);
@@ -632,6 +631,7 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *db,
         rc = record_marker(obd, llh, db, CM_END, "lov setup"); 
         rc = record_end_log(obd, &llh);
         
+        OBD_FREE(lovdesc, sizeof(*lovdesc));
         RETURN(rc);
 }
 

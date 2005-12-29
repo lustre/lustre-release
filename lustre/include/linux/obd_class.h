@@ -106,8 +106,9 @@ void class_decref(struct obd_device *obd);
 
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
-        char * cfg_instance;
+        char *          cfg_instance;
         struct obd_uuid cfg_uuid;
+        int             cfg_last_idx; /* for partial llog processing */
 };
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg);

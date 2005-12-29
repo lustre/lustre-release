@@ -192,11 +192,9 @@ struct ll_sb_info;
 
 struct lustre_sb_info {
         int                       lsi_flags;
-        //struct lvfs_run_ctxt      lsi_ctxt;    /* mount context */
         struct obd_device        *lsi_mgc;     /* mgc obd */
         struct lustre_mount_data *lsi_lmd;     /* mount command info */
         struct lustre_disk_data  *lsi_ldd;     /* mount info on-disk */
-        //struct fsfilt_operations *lsi_fsops;
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
         struct vfsmount          *lsi_srv_mnt; /* the one server mount */
         atomic_t                  lsi_mounts;  /* references to the srv_mnt */
@@ -236,8 +234,11 @@ void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 int lustre_common_put_super(struct super_block *sb);
 struct lustre_mount_info *server_get_mount(char *name);
 int server_put_mount(char *name, struct vfsmount *mnt);
-int lustre_get_process_log(struct super_block *, char *,
+int config_log_start(struct super_block *, char *,
                            struct config_llog_instance *cfg);
+int config_log_end(char *instance);
+struct config_llog_data *config_log_get(char *name);
+void config_log_put(void);
 
 #endif
 

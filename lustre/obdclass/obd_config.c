@@ -43,6 +43,8 @@
 #include <libcfs/list.h>
 
 
+/********************** class fns **********************/
+
 /* Create a new device and set the type, name and uuid.  If
  * successful, the new device can be accessed by either name or uuid.
  */
@@ -628,8 +630,6 @@ int class_process_config(struct lustre_cfg *lcfg)
         case LCFG_DEL_MOUNTOPT: {
                 CDEBUG(D_IOCTL, "mountopt: profile %s\n",
                        lustre_cfg_string(lcfg, 1));
-                /* set these mount options somewhere, so ll_fill_super
-                 * can find them. */
                 class_del_profile(lustre_cfg_string(lcfg, 1));
                 GOTO(out, err = 0);
         }
@@ -652,9 +652,8 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_MARKER: {
                 struct cfg_marker *marker;
-                LCONSOLE_WARN("LCFG_MARKER not yet implemented.\n");
                 marker = lustre_cfg_buf(lcfg, 1);
-                CDEBUG(D_WARNING, "%d (%x) %s\n", marker->cm_step,
+                CDEBUG(D_IOCTL, "marker %d (%#x) %s\n", marker->cm_step,
                        marker->cm_flags, marker->cm_comment);
                 GOTO(out, err = 0);
         }
@@ -734,6 +733,13 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 if (rc)
                         GOTO(out, rc);
 
+                /* FIXME check cm_flags for skip - must save state,
+                   probably in handle 
+                if (lcfg->lcfg_command == LCFG_MARKER) {
+                        struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+                }
+                */
+
                 lustre_cfg_bufs_init(&bufs, lcfg);
 
                 if (cfg && cfg->cfg_instance && LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
@@ -755,7 +761,8 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 are unique */
                 if (cfg && cfg->cfg_instance && 
                     lcfg->lcfg_command == LCFG_ATTACH) {
-                        lustre_cfg_bufs_set_string(&bufs, 2, cfg->cfg_uuid.uuid);
+                        lustre_cfg_bufs_set_string(&bufs, 2,
+                                                   cfg->cfg_uuid.uuid);
                 }
 
                 lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
@@ -779,7 +786,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 }
 
                 lcfg_new->lcfg_nal = 0; /* illegal value for obsolete field */
-
+                
                 rc = class_process_config(lcfg_new);
                 lustre_cfg_free(lcfg_new);
 
@@ -803,6 +810,7 @@ out:
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg)
 {
+        struct llog_process_cat_data cd = {0, 0};
         struct llog_handle *llh;
         int rc, rc2;
         ENTRY;
@@ -816,7 +824,16 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
         if (rc)
                 GOTO(parse_out, rc);
 
-        rc = llog_process(llh, class_config_llog_handler, cfg, NULL);
+        /* continue processing from where we last stopped to end-of-log */
+        if (cfg)
+                cd.first_idx = cfg->cfg_last_idx;
+        cd.last_idx = 0;
+
+        rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
+
+        CERROR("Processed %d-%d\n", cd.first_idx, cd.last_idx);
+        cfg->cfg_last_idx = cd.last_idx;
+
 parse_out:
         rc2 = llog_close(llh);
         if (rc == 0)
@@ -825,7 +842,6 @@ parse_out:
         RETURN(rc);
 }
 
-#define D_DUMP D_INFO|D_WARNING
 int class_config_dump_handler(struct llog_handle * handle,
                               struct llog_rec_hdr *rec, void *data)
 {
@@ -850,7 +866,7 @@ int class_config_dump_handler(struct llog_handle * handle,
                         GOTO(out, rc);
                 lcfg = (struct lustre_cfg *)cfg_buf;
 
-                ptr += snprintf(ptr, end-ptr, "\n   cmd=%05x ",
+                ptr += snprintf(ptr, end-ptr, "cmd=%05x ",
                                 lcfg->lcfg_command);
                 if (lcfg->lcfg_flags) {
                         ptr += snprintf(ptr, end-ptr, "flags=%#08x ",
@@ -861,19 +877,26 @@ int class_config_dump_handler(struct llog_handle * handle,
                                         lcfg->lcfg_num);
                 }
                 if (lcfg->lcfg_nid) {
-                        ptr += snprintf(ptr, end-ptr, "nid=%s("LPX64")\n",
+                        ptr += snprintf(ptr, end-ptr, "nid=%s("LPX64")\n     ",
                                         libcfs_nid2str(lcfg->lcfg_nid),
                                         lcfg->lcfg_nid);
                 }
-                for (i = 0; i <  lcfg->lcfg_bufcount; i++) {
-                        ptr += snprintf(ptr, end-ptr, "%d:%s  ", i,
-                                        lustre_cfg_string(lcfg, i));
+                if (lcfg->lcfg_command == LCFG_MARKER) {
+                        struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+                        ptr += snprintf(ptr, end-ptr, "marker=%d(%#x)'%s'",
+                                        marker->cm_step, marker->cm_flags, 
+                                        marker->cm_comment);
+                } else {
+                        for (i = 0; i <  lcfg->lcfg_bufcount; i++) {
+                                ptr += snprintf(ptr, end-ptr, "%d:%s  ", i,
+                                                lustre_cfg_string(lcfg, i));
+                        }
                 }
-                CDEBUG(D_DUMP, "%s\n", outstr);
+                LCONSOLE_INFO("   %s\n", outstr);
         } else if (rec->lrh_type == PTL_CFG_REC) {
-                CDEBUG(D_DUMP, "Obsolete pcfg command\n");
+                LCONSOLE_INFO("Obsolete pcfg command\n");
         } else {
-                CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);
+                LCONSOLE_INFO("unhandled lrh_type: %#x\n", rec->lrh_type);
                 rc = -EINVAL;
         }
 out:
@@ -888,7 +911,7 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
         int rc, rc2;
         ENTRY;
 
-        CDEBUG(D_DUMP, "Dumping config log %s\n", name);
+        LCONSOLE_INFO("Dumping config log %s\n", name);
 
         rc = llog_create(ctxt, &llh, NULL, name);
         if (rc)
@@ -904,7 +927,7 @@ parse_out:
         if (rc == 0)
                 rc = rc2;
 
-        CDEBUG(D_DUMP, "End config log %s\n", name);
+        LCONSOLE_INFO("End config log %s\n", name);
         RETURN(rc);
 
 }

@@ -27,7 +27,7 @@ struct fs_db {
         struct list_head  fd_list;
         void*             fd_index_map;
         __u32             fd_flags;
-        __u32             fd_last_step;
+        __u32             fd_gen;
         //FIXME add a semaphore for locking the fs_db (and logs)
 };
 

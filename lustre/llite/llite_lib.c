@@ -521,7 +521,7 @@ int ll_fill_super(struct super_block *sb)
         cfg.cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
         
         /* set up client obds */
-        err = lustre_get_process_log(sb, profilenm, &cfg);
+        err = config_log_start(sb, profilenm, &cfg);
         if (err < 0) {
                 CERROR("Unable to process log: %d\n", err);
                 GOTO(out_free, err);
@@ -573,6 +573,7 @@ out_free:
 
 void ll_put_super(struct super_block *sb)
 {
+        char   ll_instance[sizeof(sb) * 2 + 1];
         struct obd_device *obd;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -581,6 +582,10 @@ void ll_put_super(struct super_block *sb)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
+        
+        sprintf(ll_instance, "%p", sb);
+        config_log_end(ll_instance);
+        
         obd = class_exp2obd(sbi->ll_mdc_exp);
         if (obd) {
                 int next = 0;
@@ -601,7 +606,7 @@ void ll_put_super(struct super_block *sb)
         
         if (profilenm) 
                 class_del_profile(profilenm);
-        
+
         ll_free_sbi(sb);
         lsi->lsi_llsbi = NULL;
 

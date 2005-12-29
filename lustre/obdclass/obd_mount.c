@@ -39,24 +39,22 @@
                       
 static int (*client_fill_super)(struct super_block *sb) = NULL;
 
+
 /*********** mount lookup *********/
+
 DECLARE_MUTEX(lustre_mount_info_lock);
-struct list_head lustre_mount_info_list = LIST_HEAD_INIT(lustre_mount_info_list);
+struct list_head server_mount_info_list = LIST_HEAD_INIT(server_mount_info_list);
 
 static struct lustre_mount_info *server_find_mount(char *name)
 {
         struct list_head *tmp;
         struct lustre_mount_info *lmi;
-        int found = 0;
-        list_for_each(tmp, &lustre_mount_info_list) {
+        
+        list_for_each(tmp, &server_mount_info_list) {
                 lmi = list_entry(tmp, struct lustre_mount_info, lmi_list_chain);
-                if (strcmp(name, lmi->lmi_name) == 0) {
-                        found++;
-                        break;
-                }
+                if (strcmp(name, lmi->lmi_name) == 0) 
+                        return(lmi);
         }
-        if (found)
-                return(lmi);
         return(NULL);
 }
 
@@ -93,7 +91,7 @@ static int server_register_mount(char *name, struct super_block *sb,
         lmi->lmi_name = name_cp;
         lmi->lmi_sb = sb;
         lmi->lmi_mnt = mnt;
-        list_add(&lmi->lmi_list_chain, &lustre_mount_info_list);
+        list_add(&lmi->lmi_list_chain, &server_mount_info_list);
          
         up(&lustre_mount_info_lock);
         return 0;
@@ -129,7 +127,7 @@ static void server_deregister_mount_all(struct vfsmount *mnt)
                 return;
 
         down(&lustre_mount_info_lock);
-        list_for_each_safe(tmp, n, &lustre_mount_info_list) {
+        list_for_each_safe(tmp, n, &server_mount_info_list) {
                 lmi = list_entry(tmp, struct lustre_mount_info, lmi_list_chain);
                 if (lmi->lmi_mnt == mnt) {
                         CERROR("Deregister failsafe %s\n", lmi->lmi_name);
@@ -224,18 +222,18 @@ static void ldd_print(struct lustre_disk_data *ldd)
 {
         int i;
 
-        CDEBUG(D_MOUNT, "disk data\n"); 
-        CDEBUG(D_MOUNT, "config:  %d\n", ldd->ldd_config_ver);
-        CDEBUG(D_MOUNT, "fs:      %s\n", ldd->ldd_fsname);
-        CDEBUG(D_MOUNT, "server:  %s\n", ldd->ldd_svname);
-        CDEBUG(D_MOUNT, "index:   %04x\n", ldd->ldd_svindex);
-        CDEBUG(D_MOUNT, "flags:   %#x\n", ldd->ldd_flags);
-        CDEBUG(D_MOUNT, "diskfs:  %s\n", MT_STR(ldd));
-        CDEBUG(D_MOUNT, "options: %s\n", ldd->ldd_mount_opts);
+        LCONSOLE_WARN("  disk data:\n"); 
+        LCONSOLE_WARN("config:  %d\n", ldd->ldd_config_ver);
+        LCONSOLE_WARN("fs:      %s\n", ldd->ldd_fsname);
+        LCONSOLE_WARN("server:  %s\n", ldd->ldd_svname);
+        LCONSOLE_WARN("index:   %04x\n", ldd->ldd_svindex);
+        LCONSOLE_WARN("flags:   %#x\n", ldd->ldd_flags);
+        LCONSOLE_WARN("diskfs:  %s\n", MT_STR(ldd));
+        LCONSOLE_WARN("options: %s\n", ldd->ldd_mount_opts);
         if (!ldd->ldd_mgsnid_count) 
-                CDEBUG(D_MOUNT, "no MGS nids\n");
+                LCONSOLE_WARN("no MGS nids\n");
         else for (i = 0; i < ldd->ldd_mgsnid_count; i++) {
-                CDEBUG(D_MOUNT, "mgs nid %d:  %s\n", i, 
+                LCONSOLE_WARN("mgs nid %d:  %s\n", i, 
                        libcfs_nid2str(ldd->ldd_mgsnid[i]));
         }
 }
@@ -374,77 +372,136 @@ out:
 }
 #endif
 
-/**************** config llog ********************/
 
-/* Get the client export to the MGS */
-static struct obd_export *get_mgs_export(struct obd_device *mgc)
+/********************** config llog list **********************/
+DECLARE_MUTEX(config_llog_lock);
+struct list_head config_llog_list = LIST_HEAD_INIT(config_llog_list);
+
+/* Find log and take the global lock (whether found or not) */
+struct config_llog_data *config_log_get(char *name)
 {
-        struct obd_export *exp, *n;
-
-        /* FIXME is this a Bad Idea?  Should I just store this export 
-           somewhere in the u.cli? Slightly annoying because of layering */
-
-        /* There should be exactly 2 exports in the mgc, the mgs export and 
-           the mgc self-export, in that order. So just return the list head. */
-        LASSERT(!list_empty(&mgc->obd_exports));
-        LASSERT(mgc->obd_num_exports == 2);
-        list_for_each_entry_safe(exp, n, &mgc->obd_exports, exp_obd_chain) {
-                LASSERT(exp != mgc->obd_self_export);
-                break;
+        struct list_head *tmp;
+        struct config_llog_data *cld;
+        down(&config_llog_lock);
+        list_for_each(tmp, &config_llog_list) {
+                cld = list_entry(tmp, struct config_llog_data, cld_list_chain);
+                if (strcmp(name, cld->cld_name) == 0) {
+                        return(cld);
+                }
         }
-        /*FIXME there's clearly a better way, but I'm too confused to sort it 
-          out now...
-        exp = &list_entry(&mgc->obd_exports->head, export_obd, exp_obd_chain);
-        */
-        return exp;
+        CERROR("can't get log %s\n", name);
+        return(NULL);
 }
+
+void config_log_put(void)
+{
+        up(&config_llog_lock);
+}
+
+static int config_log_add(char *name)
+{
+        struct config_llog_data *cld;
+        char *name_cp;
+        int rc;
+        ENTRY;
+
+        CDEBUG(D_MOUNT, "adding config llog %s\n", name);
+        if (config_log_get(name)) {
+                GOTO(out, rc = -EEXIST);
+        }
+
+        OBD_ALLOC(cld, sizeof(*cld));
+        if (!cld) 
+                GOTO(out, rc = -ENOMEM);
+        OBD_ALLOC(name_cp, strlen(name) + 1);
+        if (!name_cp) { 
+                OBD_FREE(cld, sizeof(*cld));
+                GOTO(out, rc = -ENOMEM);
+        }
+        strcpy(name_cp, name);
+
+        cld->cld_name = name_cp;
+        cld->cld_gen = 0;
+        list_add(&cld->cld_list_chain, &config_llog_list);
+out:
+        config_log_put();
+        RETURN(rc);
+}
+
+
+/* Stop watching for updates on this log. 2 clients on the same node
+   may be at different gens, so we need different log info (eg. 
+   already mounted client is at gen 10, but must start a new client
+   from gen 0.)*/
+int config_log_end(char *name)
+{       
+        struct config_llog_data *cld;
+        int rc = 0;
+        ENTRY;
+                                       
+        cld = config_log_get(name);
+        if (!cld) 
+                GOTO(out, rc = -ENOENT);
+        OBD_FREE(cld->cld_name, strlen(cld->cld_name) + 1);
+        list_del(&cld->cld_list_chain);
+        OBD_FREE(cld, sizeof(*cld));
+out:
+        config_log_put();
+        CDEBUG(D_MOUNT, "removed config llog %s %d\n", name, rc);
+        RETURN(rc);
+}
+
+static void config_log_end_all(void)
+{
+        struct list_head *tmp, *n;
+        struct config_llog_data *cld;
+        
+        down(&config_llog_lock);
+        list_for_each_safe(tmp, n, &config_llog_list) {
+                cld = list_entry(tmp, struct config_llog_data, cld_list_chain);
+                CERROR("conflog failsafe %s\n", cld->cld_name);
+                OBD_FREE(cld->cld_name, strlen(cld->cld_name) + 1);
+                list_del(&cld->cld_list_chain);
+                OBD_FREE(cld, sizeof(*cld));
+        }
+        up(&config_llog_lock);
+}
+
+/**************** config llog ********************/
 
 /* Get a config log from the MGS and process it.
    This func is called for both clients and servers. */
-/* FIXME maybe it makes more sense for this to be a mgc func, not
-   a mount func.  We could make this mgc_process_config */ 
-int lustre_get_process_log(struct super_block *sb, char *logname, 
+int config_log_start(struct super_block *sb, char *logname, 
                            struct config_llog_instance *cfg)
 {
+        struct lustre_cfg *lcfg;
+        struct lustre_cfg_bufs bufs;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
-        struct llog_ctxt *rctxt, *lctxt;
-        struct lustre_handle lockh;
-        int rc, rcl, flags = 0;
+        struct llog_ctxt *lctxt;
+        int rc;
+        ENTRY;
+
         LASSERT(mgc);
 
-        CDEBUG(D_MOUNT, "parsing config log %s\n", logname);
+        if (cfg && cfg->cfg_instance) 
+                config_log_add(cfg->cfg_instance);
+        else
+                config_log_add(logname);
 
-        rctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
-        if (!lctxt || !rctxt) {
+        if (!lctxt) {
                 CERROR("missing llog context\n");
                 return(-EINVAL);
         }
 
-        /* Get the cfg lock */
-        rcl = obd_enqueue(get_mgs_export(mgc), NULL, LDLM_PLAIN, NULL, 
-                          LCK_CR, &flags, NULL, NULL, NULL, 
-                          logname, 0, NULL, &lockh);
-        if (rcl) {
-                CERROR("Can't get cfg lock: %d\n", rcl);
-                return (rcl);
-        }
-        
-        //FIXME Copy the mgs remote log to the local disk
+        lustre_cfg_bufs_reset(&bufs, mgc->obd_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, logname);
+        lustre_cfg_bufs_set(&bufs, 2, cfg, sizeof(*cfg));
+        lcfg = lustre_cfg_new(LCFG_PARSE_LOG, &bufs);
+        rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
+        lustre_cfg_free(lcfg);
 
-#if 0
-        /* For debugging, it's useful to just dump the log */
-        class_config_dump_llog(rctxt, logname, cfg);
-#endif
-        rc = class_config_parse_llog(rctxt, logname, cfg);
-        
-        /* Now drop the lock so MGS can revoke it */ 
-        rcl = obd_cancel(get_mgs_export(mgc), NULL, LCK_CR, &lockh);
-        if (rcl) {
-                CERROR("Can't drop cfg lock: %d\n", rcl);
-        }
-        
         if (rc && !lmd_is_client(lsi->lsi_lmd)) {
                 int rc2;
                 LCONSOLE_INFO("%s: The configuration '%s' could not be read "
@@ -466,10 +523,8 @@ int lustre_get_process_log(struct super_block *sb, char *logname,
                                mgc->obd_name, logname, rc);
         }
 
-        CDEBUG(D_MOUNT, "after lustre_get_process_log %s\n", logname);
         class_obd_list();
-
-        return (rc);
+        RETURN(rc);
 }
 
 /**************** obd start *******************/
@@ -576,6 +631,8 @@ static int server_stop_mgs(struct super_block *sb)
         return rc;
 }
 
+static struct obd_export *mgc_mgs_export = NULL;
+
 /* Set up a mgcobd to process startup logs */
 static int lustre_start_mgc(struct super_block *sb)
 {
@@ -617,8 +674,12 @@ static int lustre_start_mgc(struct super_block *sb)
                 return rc;
 
         /* Generate a unique uuid for each MGC - use the 1st non-loopback nid */
-        /* FIXME if no loopback? Use lustre_generate_random_uuid? */
-        rc = LNetGetId(1, &id);  
+        i = 0;
+        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+                if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND) 
+                        continue;
+                break;
+        }
         OBD_ALLOC(uuid, sizeof(struct obd_uuid));
         sprintf(uuid, "mgc_"LPX64, id.nid);
         /* Start the MGC */
@@ -667,8 +728,10 @@ static int lustre_start_mgc(struct super_block *sb)
                 CERROR("connect failed %d\n", rc);
                 goto out;
         }
+        
         exp = class_conn2export(&mgc_conn);
-        LASSERT(exp == get_mgs_export(obd));
+        /* only 1 mgc, only 1 connection to the mgs */
+        mgc_mgs_export = exp;
 
         /* And keep a refcount of servers/clients who started with "mount",
            so we know when we can get rid of the mgc. */
@@ -701,7 +764,9 @@ static int lustre_stop_mgc(struct super_block *sb)
                 return -EBUSY; 
         }
 
-        obd_disconnect(get_mgs_export(obd));
+        if (mgc_mgs_export) 
+                obd_disconnect(mgc_mgs_export);
+        mgc_mgs_export = NULL;
 
         rc = class_manual_cleanup(obd);
         if (rc)
@@ -718,6 +783,9 @@ static int lustre_stop_mgc(struct super_block *sb)
                                libcfs_nid2str(nid), rc);
         }
         /* class_import_put will get rid of the additional connections */
+
+        config_log_end_all();
+
         return 0;
 }
           
@@ -836,15 +904,8 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
                libcfs_nid2str(mti->mti_nid), mti->mti_stripe_index);
 
         /* Register the target */
-        /* FIXME use ioctl instead? eg 
-        struct obd_ioctl_data ioc_data = { 0 };
-        ioc_data.ioc_inllen1 = strlen(ldd->ldd_svname) + 1;
-        ioc_data.ioc_inlbuf1 = ldd->ldd_svname;
-        
-        rc = obd_iocontrol(OBD_IOC_START, obd->obd_self_export,
-                            sizeof ioc_data, &ioc_data, NULL);
-        */
-        rc = obd_set_info(get_mgs_export(mgc),
+        /* FIXME use mdc_process_config instead */
+        rc = obd_set_info(mgc_mgs_export,
                           strlen("add_target"), "add_target",
                           sizeof(*mti), mti);
         CDEBUG(D_MOUNT, "disconnect");
@@ -921,7 +982,8 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         server_mgc_set_fs(lsi->lsi_mgc, sb);
 
         /* Get a new index if needed */
-        if (lsi->lsi_ldd->ldd_flags & (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER)) {
+        if (lsi->lsi_ldd->ldd_flags & 
+            (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER)) {
                 CDEBUG(D_MOUNT, "Need new target index from MGS\n");
                 rc = server_add_target(sb, mnt);
                 if (rc) {
@@ -931,14 +993,15 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 }
         }
 
-        /* Let the target look up the mount using the target's name. */
+        /* Let the target look up the mount using the target's name 
+           (we can't pass the sb or mnt through class_process_config.) */
         rc = server_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
         if (rc) 
                 goto out;
 
-        /* The MGC starts targets using the llog named with the target name */
+        /* Start targets using the llog named for the target */
         cfg.cfg_instance = NULL;
-        rc = lustre_get_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
+        rc = config_log_start(sb, lsi->lsi_ldd->ldd_svname, &cfg);
         if (rc) {
                 CERROR("failed to start server %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, rc);
@@ -1117,6 +1180,8 @@ static void server_put_super(struct super_block *sb)
                                                                                        
         CDEBUG(D_MOUNT, "server put_super %s\n", lsi->lsi_ldd->ldd_svname);
                                                                                        
+        config_log_end(lsi->lsi_ldd->ldd_svname);
+
         obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
         if (obd) {
                 CDEBUG(D_MOUNT, "stopping %s\n", obd->obd_name);
@@ -1163,15 +1228,39 @@ static void server_umount_begin(struct super_block *sb)
         lsi->lsi_flags |= LSI_UMOUNT_FAILOVER;
 }
 
-#define log2(n) ffz(~(n))
-#define LUSTRE_SUPER_MAGIC 0x0BD00BD1
+static int server_statfs (struct super_block *sb, struct kstatfs *buf)
+{
+        struct vfsmount *mnt = s2lsi(sb)->lsi_srv_mnt;
+        
+        if (mnt && mnt->mnt_sb && mnt->mnt_sb->s_op->statfs) {
+                int rc = mnt->mnt_sb->s_op->statfs(mnt->mnt_sb, buf);
+                if (!rc) {
+                        buf->f_type = sb->s_magic;
+                        return 0;
+                }
+        }
+        
+        /* just return 0 */
+        buf->f_type = sb->s_magic;
+        buf->f_bsize = sb->s_blocksize;
+        buf->f_blocks = 1;
+        buf->f_bfree = 0;
+        buf->f_bavail = 0;
+        buf->f_files = 1;
+        buf->f_ffree = 0;
+        buf->f_namelen = NAME_MAX;
+        return 0;
+}
 
 static struct super_operations server_ops =
 {
-        //.statfs         = NULL,
         .put_super      = server_put_super,
         .umount_begin   = server_umount_begin, /* umount -f */
+        .statfs         = server_statfs,
 };
+
+#define log2(n) ffz(~(n))
+#define LUSTRE_SUPER_MAGIC 0x0BD00BD1
 
 static int server_fill_super_common(struct super_block *sb)
 {
@@ -1317,20 +1406,20 @@ static void lmd_print(struct lustre_mount_data *lmd)
 {
         int i;
 
-        CDEBUG(D_MOUNT, "mount data\n"); 
+        LCONSOLE_WARN("  mount data:\n"); 
         if (!lmd->lmd_mgsnid_count) 
-                CDEBUG(D_MOUNT, "no MGS nids\n");
+                LCONSOLE_WARN("no MGS nids\n");
         else for (i = 0; i < lmd->lmd_mgsnid_count; i++) {
-                CDEBUG(D_MOUNT, "nid %d:  %s\n", i, 
+                LCONSOLE_WARN("nid %d:  %s\n", i, 
                        libcfs_nid2str(lmd->lmd_mgsnid[i]));
         }
         if (lmd_is_client(lmd)) 
-                CDEBUG(D_MOUNT, "fsname:  %s\n", lmd->lmd_dev);
+                LCONSOLE_WARN("fsname:  %s\n", lmd->lmd_dev);
         else
-                CDEBUG(D_MOUNT, "device:  %s\n", lmd->lmd_dev);
-        CDEBUG(D_MOUNT, "flags:   %x\n", lmd->lmd_flags);
+                LCONSOLE_WARN("device:  %s\n", lmd->lmd_dev);
+        LCONSOLE_WARN("flags:   %x\n", lmd->lmd_flags);
         if (lmd->lmd_opts)
-                CDEBUG(D_MOUNT, "options: %s\n", lmd->lmd_opts);
+                LCONSOLE_WARN("options: %s\n", lmd->lmd_opts);
 }
 
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)
@@ -1570,8 +1659,10 @@ int lustre_unregister_fs(void)
 
 EXPORT_SYMBOL(lustre_register_client_fill_super);
 EXPORT_SYMBOL(lustre_common_put_super);
-EXPORT_SYMBOL(lustre_get_process_log);
+EXPORT_SYMBOL(config_log_start);
+EXPORT_SYMBOL(config_log_end);
+EXPORT_SYMBOL(config_log_get);
+EXPORT_SYMBOL(config_log_put);
 EXPORT_SYMBOL(server_get_mount);
 EXPORT_SYMBOL(server_put_mount);
-
 

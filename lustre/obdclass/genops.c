@@ -310,10 +310,10 @@ void class_obd_list(void)
                         status = "AT";
                 else
                         status = "--";
-                CDEBUG(D_WARNING, "%3d %s %s %s %s %d\n",
-                       i, status, obd->obd_type->typ_name,
-                       obd->obd_name, obd->obd_uuid.uuid,
-                       atomic_read(&obd->obd_refcount));
+                LCONSOLE_WARN("%3d %s %s %s %s %d\n",
+                              i, status, obd->obd_type->typ_name,
+                              obd->obd_name, obd->obd_uuid.uuid,
+                              atomic_read(&obd->obd_refcount));
         }
         spin_unlock(&obd_dev_lock);
         return;
