@@ -1065,7 +1065,7 @@ static int lfs_quota(int argc, char **argv)
 
         print_quota(mnt, &qctl, 0);
 
-        if (!*obd_uuid) {
+        if (!*obd_uuid && qctl.qc_cmd != LUSTRE_Q_GETINFO) {
                 print_mds_quota(mnt, &qctl);
                 print_lov_quota(mnt, &qctl);
         }

@@ -1311,7 +1311,7 @@ int __init mdc_init(void)
         rc = class_register_type(&mdc_obd_ops, lvars.module_vars,
                                  LUSTRE_MDC_NAME);
         if (rc && quota_interface)
-                PORTAL_SYMBOL_PUT(osc_quota_interface);
+                PORTAL_SYMBOL_PUT(mdc_quota_interface);
 
         RETURN(rc);
 }
