@@ -76,6 +76,12 @@ case "$lustretag" in
         lnettag=b_release_1_4_6
         ;;
     
+    b_release_1_4_6)
+        portalstag=b_release_1_4_6
+        lnettag=b_release_1_4_6
+	libsysiotag=b_release_1_4_6
+        ;;
+
     # starting with 1_4_6, we have a tagged lnet too
     b_release_1_4_[6-9]*)
         portalstag=$lustretag

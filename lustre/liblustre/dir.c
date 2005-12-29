@@ -194,8 +194,8 @@ static int filldir(char *buf, int buflen,
         return 0;
 }
 
-ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
-                              _SYSIO_OFF_T *basep)
+ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
+			       char *buf, size_t nbytes)
 {
         struct llu_inode_info *lli = llu_i2info(ino);
         struct intnl_stat *st = llu_i2stat(ino);
