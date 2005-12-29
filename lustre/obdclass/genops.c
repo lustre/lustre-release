@@ -1226,7 +1226,7 @@ search_again:
 
         for (i = 0; i < num_to_evict; i++) {
                 exports_evicted++;
-                CERROR("%s: evict NID '%s' (%s) #%d at adminstrative request\n",
+                CWARN("%s: evict NID '%s' (%s) #%d at adminstrative request\n",
                        obd->obd_name, nid, doomed_exp[i]->exp_client_uuid.uuid,
                        exports_evicted);
                 class_fail_export(doomed_exp[i]);
@@ -1269,7 +1269,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
                 CERROR("%s: can't disconnect %s: no exports found\n",
                        obd->obd_name, uuid);
         } else {
-                CERROR("%s: evicting %s at adminstrative request\n",
+                CWARN("%s: evicting %s at adminstrative request\n",
                        obd->obd_name, doomed_exp->exp_client_uuid.uuid);
                 class_fail_export(doomed_exp);
                 class_export_put(doomed_exp);
