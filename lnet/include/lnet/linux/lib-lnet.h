@@ -11,6 +11,7 @@
 #ifdef __KERNEL__
 # include <asm/page.h>
 # include <linux/string.h>
+# include <linux/seq_file.h>
 # include <asm/io.h>
 # include <libcfs/kp30.h>
 
