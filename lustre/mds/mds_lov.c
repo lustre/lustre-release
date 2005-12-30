@@ -148,29 +148,32 @@ int mds_lov_set_nextid(struct obd_device *obd)
 int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int valsize, rc;
+        int tgt_count, valsize, rc;
+        __u32 stripes;
         ENTRY;
 
+        mds->mds_has_lov_desc = 0;
         valsize = sizeof(mds->mds_lov_desc);
         rc = obd_get_info(mds->mds_osc_exp, strlen("lovdesc") + 1,
                           "lovdesc", &valsize, &mds->mds_lov_desc);
-        if (rc)
+        if (rc) {
                 CERROR("can't get lov_desc, rc %d\n", rc);
-        
-        mds->mds_has_lov_desc = rc ? 0 : 1;
-
-        if (mds->mds_has_lov_desc) {
-                CDEBUG(D_HA, "updating lov_desc, tgt_count: %d\n",
-                       mds->mds_lov_desc.ld_tgt_count);
-
-                mds->mds_max_mdsize = lov_mds_md_size(mds->mds_lov_desc.ld_tgt_count);
-                mds->mds_max_cookiesize = mds->mds_lov_desc.ld_tgt_count *
-                        sizeof(struct llog_cookie);
-
-                CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
-                       mds->mds_max_mdsize, mds->mds_max_cookiesize);
+                RETURN(rc);
         }
-        RETURN(rc);
+                
+        mds->mds_has_lov_desc = 1;
+        tgt_count = mds->mds_lov_desc.ld_tgt_count;
+        stripes = min(tgt_count, (__u32)LOV_MAX_STRIPE_COUNT);
+
+        mds->mds_max_mdsize = lov_mds_md_size(stripes);
+        mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
+
+        CDEBUG(D_HA, "updated lov_desc, tgt_count: %d\n", tgt_count);
+
+        CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
+               mds->mds_max_mdsize, mds->mds_max_cookiesize);
+
+        RETURN(0);
 }
 
 /* update the LOV-OSC knowledge of the last used object id's */
@@ -624,11 +627,6 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                  * should be done on clients. */
                 rc = mds_init_lov_desc(obd, mds->mds_osc_exp);
                 if (rc)
-                        RETURN(rc);
-
-                rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"),
-                                  "mds_conn", 0, uuid);
-                if (rc != 0)
                         RETURN(rc);
 
                 rc = mds_lov_start_synchronize(obd, uuid, 1);
