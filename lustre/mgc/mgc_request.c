@@ -583,8 +583,6 @@ static int mgc_process_log(struct obd_device *mgc, char *logname,
         int rc, rcl, flags = 0;
         ENTRY;
 
-        CDEBUG(D_MGC, "parsing config log %s\n", logname);
-
         rctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         if (!rctxt) {
                 CERROR("missing llog context\n");
@@ -666,7 +664,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 cfg = (struct config_llog_instance *)lustre_cfg_buf(lcfg, 2);
                 CDEBUG(D_MGC, "parse_log %s from %d\n", logname, 
                        cfg->cfg_last_idx);
-                mgc_process_log(obd, logname, cfg);
+                rc = mgc_process_log(obd, logname, cfg);
                 GOTO(out, rc);
         }
         default: {

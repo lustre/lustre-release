@@ -26,6 +26,8 @@
 
 #define DEBUG_SUBSYSTEM S_MGMT
 #define D_MOUNT D_SUPER|D_CONFIG|D_ERROR
+#define PRINT_CMD LCONSOLE
+#define PRINT_MASK D_WARNING
 
 #include <linux/obd.h>
 #include <linux/lvfs.h>
@@ -94,6 +96,10 @@ static int server_register_mount(char *name, struct super_block *sb,
         list_add(&lmi->lmi_list_chain, &server_mount_info_list);
          
         up(&lustre_mount_info_lock);
+
+        CDEBUG(D_MOUNT, "reg_mnt %p from %s, vfscount=%d\n", 
+               lmi->lmi_mnt, name, atomic_read(&lmi->lmi_mnt->mnt_count));
+
         return 0;
 }
 
@@ -109,10 +115,15 @@ static int server_deregister_mount(char *name)
                 CERROR("%s not registered\n", name);
                 return -ENOENT;
         }
+        
+        CDEBUG(D_MOUNT, "dereg_mnt %p from %s, vfscount=%d\n", 
+               lmi->lmi_mnt, name, atomic_read(&lmi->lmi_mnt->mnt_count));
+        
         OBD_FREE(lmi->lmi_name, strlen(lmi->lmi_name) + 1);
         list_del(&lmi->lmi_list_chain);
         OBD_FREE(lmi, sizeof(*lmi));
         up(&lustre_mount_info_lock);
+
         return 0;
 }
 
@@ -161,8 +172,9 @@ struct lustre_mount_info *server_get_mount(char *name)
         
         up(&lustre_mount_info_lock);
         
-        CDEBUG(D_MOUNT, "get_mnt %p from %s, vfscount=%d\n", 
-               lmi->lmi_mnt, name, atomic_read(&lmi->lmi_mnt->mnt_count));
+        CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d, vfscount=%d\n", 
+               lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
+               atomic_read(&lmi->lmi_mnt->mnt_count));
 
         return lmi;
 }
@@ -191,10 +203,6 @@ int server_put_mount(char *name, struct vfsmount *mnt)
                 CERROR("Can't find mount for %s\n", name);
                 return -ENOENT;
         }
-
-        CDEBUG(D_MOUNT, "put_mnt %p from %s, vfscount=%d\n", 
-               lmi->lmi_mnt, name, atomic_read(&lmi->lmi_mnt->mnt_count));
-
         lsi = s2lsi(lmi->lmi_sb);
         LASSERT(lmi->lmi_mnt == mnt);
         unlock_mntput(lmi->lmi_mnt);
@@ -204,10 +212,14 @@ int server_put_mount(char *name, struct vfsmount *mnt)
                        atomic_read(&lmi->lmi_mnt->mnt_count));
                 /* last mount is the One True Mount */
                 if (atomic_read(&lmi->lmi_mnt->mnt_count) > 1)
-                        CERROR("%s: mount busy, vfscount=%d\n", name,
+                        CERROR("%s: mount busy, vfscount=%d!\n", name,
                                atomic_read(&lmi->lmi_mnt->mnt_count));
         }
         up(&lustre_mount_info_lock);
+
+        CDEBUG(D_MOUNT, "put_mnt %p from %s, refs=%d, vfscount=%d\n", 
+               lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
+               atomic_read(&lmi->lmi_mnt->mnt_count));
 
         /* this obd should never need the mount again */
         server_deregister_mount(name);
@@ -222,18 +234,18 @@ static void ldd_print(struct lustre_disk_data *ldd)
 {
         int i;
 
-        LCONSOLE_WARN("  disk data:\n"); 
-        LCONSOLE_WARN("config:  %d\n", ldd->ldd_config_ver);
-        LCONSOLE_WARN("fs:      %s\n", ldd->ldd_fsname);
-        LCONSOLE_WARN("server:  %s\n", ldd->ldd_svname);
-        LCONSOLE_WARN("index:   %04x\n", ldd->ldd_svindex);
-        LCONSOLE_WARN("flags:   %#x\n", ldd->ldd_flags);
-        LCONSOLE_WARN("diskfs:  %s\n", MT_STR(ldd));
-        LCONSOLE_WARN("options: %s\n", ldd->ldd_mount_opts);
+        PRINT_CMD(PRINT_MASK, "  disk data:\n"); 
+        PRINT_CMD(PRINT_MASK, "config:  %d\n", ldd->ldd_config_ver);
+        PRINT_CMD(PRINT_MASK, "fs:      %s\n", ldd->ldd_fsname);
+        PRINT_CMD(PRINT_MASK, "server:  %s\n", ldd->ldd_svname);
+        PRINT_CMD(PRINT_MASK, "index:   %04x\n", ldd->ldd_svindex);
+        PRINT_CMD(PRINT_MASK, "flags:   %#x\n", ldd->ldd_flags);
+        PRINT_CMD(PRINT_MASK, "diskfs:  %s\n", MT_STR(ldd));
+        PRINT_CMD(PRINT_MASK, "options: %s\n", ldd->ldd_mount_opts);
         if (!ldd->ldd_mgsnid_count) 
-                LCONSOLE_WARN("no MGS nids\n");
+                PRINT_CMD(PRINT_MASK, "no MGS nids\n");
         else for (i = 0; i < ldd->ldd_mgsnid_count; i++) {
-                LCONSOLE_WARN("mgs nid %d:  %s\n", i, 
+                PRINT_CMD(PRINT_MASK, "mgs nid %d:  %s\n", i, 
                        libcfs_nid2str(ldd->ldd_mgsnid[i]));
         }
 }
@@ -405,7 +417,7 @@ static int config_log_add(char *name)
         int rc;
         ENTRY;
 
-        CDEBUG(D_MOUNT, "adding config llog %s\n", name);
+        CDEBUG(D_MOUNT, "adding config log %s\n", name);
         if (config_log_get(name)) {
                 GOTO(out, rc = -EEXIST);
         }
@@ -447,7 +459,7 @@ int config_log_end(char *name)
         OBD_FREE(cld, sizeof(*cld));
 out:
         config_log_put();
-        CDEBUG(D_MOUNT, "removed config llog %s %d\n", name, rc);
+        CDEBUG(D_MOUNT, "dropping config log %s (%d)\n", name, rc);
         RETURN(rc);
 }
 
@@ -1370,10 +1382,13 @@ static int server_fill_super(struct super_block *sb)
         RETURN(0);
 
 out_mnt:
+        server_put_super(sb);
+#if 0
         if (mgs_service)
                 server_stop_mgs(sb);
         /* mgc is stopped in lustre_fill_super */
         unlock_mntput(mnt);
+#endif
 out:
         //if (lsi->lsi_ldd) class_del_profile(lsi->lsi_ldd->ldd_svname);
         RETURN(rc);
@@ -1406,20 +1421,20 @@ static void lmd_print(struct lustre_mount_data *lmd)
 {
         int i;
 
-        LCONSOLE_WARN("  mount data:\n"); 
+        PRINT_CMD(PRINT_MASK, "  mount data:\n"); 
         if (!lmd->lmd_mgsnid_count) 
-                LCONSOLE_WARN("no MGS nids\n");
+                PRINT_CMD(PRINT_MASK, "no MGS nids\n");
         else for (i = 0; i < lmd->lmd_mgsnid_count; i++) {
-                LCONSOLE_WARN("nid %d:  %s\n", i, 
+                PRINT_CMD(PRINT_MASK, "nid %d:  %s\n", i, 
                        libcfs_nid2str(lmd->lmd_mgsnid[i]));
         }
         if (lmd_is_client(lmd)) 
-                LCONSOLE_WARN("fsname:  %s\n", lmd->lmd_dev);
+                PRINT_CMD(PRINT_MASK, "fsname:  %s\n", lmd->lmd_dev);
         else
-                LCONSOLE_WARN("device:  %s\n", lmd->lmd_dev);
-        LCONSOLE_WARN("flags:   %x\n", lmd->lmd_flags);
+                PRINT_CMD(PRINT_MASK, "device:  %s\n", lmd->lmd_dev);
+        PRINT_CMD(PRINT_MASK, "flags:   %x\n", lmd->lmd_flags);
         if (lmd->lmd_opts)
-                LCONSOLE_WARN("options: %s\n", lmd->lmd_opts);
+                PRINT_CMD(PRINT_MASK, "options: %s\n", lmd->lmd_opts);
 }
 
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)

@@ -753,7 +753,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                 lustre_cfg_string(lcfg, 0),
                                 cfg->cfg_instance);
                         lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
-                        CERROR("cmd %x, instance name: %s\n", 
+                        CDEBUG(D_CONFIG, "cmd %x, instance name: %s\n", 
                                lcfg->lcfg_command, inst_name);
                 }
 
@@ -804,6 +804,10 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 break;
         }
 out:
+        if (rc) {
+                CERROR("Err %d on cfg command:\n", rc);
+                class_config_dump_handler(handle, rec, data);
+        }
         RETURN(rc);
 }
 
@@ -831,8 +835,10 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
-        CERROR("Processed %d-%d\n", cd.first_idx, cd.last_idx);
-        cfg->cfg_last_idx = cd.last_idx;
+        CDEBUG(D_CONFIG|D_ERROR, "Processed log %s gen %d-%d (%d)\n", name, 
+               cd.first_idx, cd.last_idx, rc);
+        if (cfg)
+                cfg->cfg_last_idx = cd.last_idx;
 
 parse_out:
         rc2 = llog_close(llh);
@@ -892,11 +898,11 @@ int class_config_dump_handler(struct llog_handle * handle,
                                                 lustre_cfg_string(lcfg, i));
                         }
                 }
-                LCONSOLE_INFO("   %s\n", outstr);
+                LCONSOLE(D_WARNING, "   %s\n", outstr);
         } else if (rec->lrh_type == PTL_CFG_REC) {
-                LCONSOLE_INFO("Obsolete pcfg command\n");
+                LCONSOLE(D_WARNING, "Obsolete pcfg command\n");
         } else {
-                LCONSOLE_INFO("unhandled lrh_type: %#x\n", rec->lrh_type);
+                LCONSOLE(D_WARNING, "unhandled lrh_type: %#x\n", rec->lrh_type);
                 rc = -EINVAL;
         }
 out:

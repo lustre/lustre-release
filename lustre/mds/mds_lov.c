@@ -494,8 +494,12 @@ static int __mds_lov_syncronize(void *data)
                 GOTO(out, rc);
         }
 
-        CWARN("MDS %s: %s now active, resetting orphans\n",
-              obd->obd_name, uuid ? (char *)uuid->uuid : "All OSC's");
+        if (uuid)
+                CWARN("MDS %s: %s now active, resetting orphans\n",
+                      obd->obd_name, (char *)uuid->uuid);
+        else
+                CWARN("MDS %s: All %d OSC's now active, resetting orphans\n",
+                      obd->obd_name, obd->u.mds.mds_lov_desc.ld_tgt_count);
 
         if (obd->obd_stopping)
                 GOTO(out, rc = -ENODEV);

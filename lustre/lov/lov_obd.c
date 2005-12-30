@@ -520,7 +520,8 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                 GOTO(out, rc);
 
         exp_observer = obd->obd_observer->obd_self_export;
-        rc = obd_set_info(exp_observer, strlen("next_id"),"next_id", 2, params);
+        rc = obd_set_info(exp_observer, strlen("next_id"),"next_id",
+                          sizeof(params), params);
         if (rc)
                 GOTO(out, rc);
 
@@ -579,6 +580,9 @@ static void __lov_del_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 
         LASSERT(tgt->reap);
         osc_obd = class_exp2obd(tgt->ltd_exp);
+
+        CDEBUG(D_CONFIG, "Removing tgt %s : %s\n", tgt->uuid.uuid, 
+               osc_obd ? osc_obd->obd_name : "<no obd>");
 
         if (tgt->ltd_exp)
                 lov_disconnect_obd(obd, tgt);

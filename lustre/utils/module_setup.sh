@@ -55,3 +55,8 @@ if [ `egrep -c "lustre|lnet" $MODFILE` -eq 0 ]; then
     echo "alias lustre llite" >> $MODFILE
     echo "# end Lustre modules" >> $MODFILE
 fi
+
+#  To generate gdb debug file:
+# modprobe lustre; modprobe mds; modprobe obdfilter; modprobe mgs; modprobe mgc
+# rm -f /r/tmp/ogdb-`hostname`
+# ./lctl modules > /r/tmp/ogdb-`hostname`

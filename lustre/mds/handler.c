@@ -1058,7 +1058,7 @@ static char *reint_names[] = {
         [REINT_OPEN]    "open",
 };
 
-static int mds_set_info(struct obd_export *exp, struct ptlrpc_request *req)
+static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
 {
         char *key;
         __u32 *val;
@@ -1297,7 +1297,7 @@ int mds_handle(struct ptlrpc_request *req)
 
         case MDS_SET_INFO:
                 DEBUG_REQ(D_INODE, req, "set_info");
-                rc = mds_set_info(req->rq_export, req);
+                rc = mds_set_info_rpc(req->rq_export, req);
                 break;
 
         case MDS_QUOTACHECK:
@@ -2228,6 +2228,40 @@ static int mds_health_check(struct obd_device *obd)
         return rc;
 }
 
+static int mds_set_info(struct obd_export *exp, obd_count keylen,
+                        void *key, obd_count vallen, void *val)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct mds_obd *mds = &obd->u.mds;
+        int rc = -EINVAL;
+        ENTRY;
+
+        if (KEY_IS("next_id")) {
+                int idx = (int)*((obd_id*)val);
+                obd_id id = *(((obd_id*)val) + 1);
+                
+                if (vallen != sizeof(obd_id) * 2)
+                        RETURN(-EINVAL);
+                
+                if (idx > mds->mds_lov_desc.ld_tgt_count) 
+                        RETURN(-EINVAL);
+                
+                mds->mds_lov_objids[idx] = id;
+                //mds->mds_lov_objids_valid = 1;
+
+                CWARN("got last object "LPU64" from OST %d\n",
+                      mds->mds_lov_objids[idx], idx);
+
+                rc = mds_lov_write_objids(obd);
+                if (rc)
+                        CERROR("got last objids from OSTs, but error "
+                               "writing objids file: %d\n", rc);
+        }
+        
+        RETURN(rc);
+}
+
+
 struct lvfs_callback_ops mds_lvfs_ops = {
         l_fid2dentry:     mds_lvfs_fid2dentry,
 };
@@ -2251,6 +2285,7 @@ static struct obd_ops mds_obd_ops = {
         .o_llog_finish     = mds_llog_finish,
         .o_notify          = mds_notify,
         .o_health_check    = mds_health_check,
+        .o_set_info        = mds_set_info,
 };
 
 static struct obd_ops mdt_obd_ops = {
