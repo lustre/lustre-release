@@ -806,7 +806,7 @@ static void target_finish_recovery(struct obd_device *obd)
                         CWARN("%s: all clients recovered, %d MDS "
                               "orphans deleted\n", obd->obd_name, rc);
                 else
-                        CERROR("postrecov failed %d\n", rc);
+                        CWARN("postrecov failed %d\n", rc);
         }
 
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
@@ -818,7 +818,6 @@ static void target_finish_recovery(struct obd_device *obd)
                 target_release_saved_req(req);
         }
         obd->obd_recovery_end = CURRENT_SECONDS;
-        return;
 }
 
 static void abort_recovery_queue(struct obd_device *obd)

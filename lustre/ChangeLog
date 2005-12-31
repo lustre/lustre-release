@@ -251,8 +251,8 @@ Description: do not expand extent locks acquired on OST-side
 Details    : Modify ldlm_extent_policy() to not expand local locks, acquired
 	     by server: they are not cached anyway.
 
-Severity   : medium
-Frequency  : seldom, when mmap is used/files executed from lustre
+Severity   : major
+Frequency  : when mmap is used/binaries executed from Lustre
 Bugzilla   : 9482
 Description: Unmmap pages before throwing them away from read cache.
 Details    : llap_shrink cache now attempts to unmap pages before discarding
@@ -443,9 +443,11 @@ Details    : Starting a ptlrpc service thread can fail if there are a large
 Severity   : minor
 Frequency  : always, but only if liblustre and non default acceptor port was used
 Bugzilla   : 9933
-Description: liblustre count not connect to servers with non default acceptor port
-Details    : tcpnal_set_default_params() was not called and therefore ignoring the
-		environment varaible TCPNAL_PORT, as well as other TCPNAL_ environment variables
+Description: liblustre could not connect to servers with non-default acceptor
+	     port
+Details    : tcpnal_set_default_params() was not called and was therefore
+	     ignoring the environment varaible TCPNAL_PORT, as well as other
+	     TCPNAL_ environment variables
 
 ------------------------------------------------------------------------------
 
