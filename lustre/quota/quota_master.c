@@ -301,29 +301,27 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         switch (opc) {
         case FSFILT_OP_RENAME:
                 /* acquire/release block quota on owner of original parent */
-                rc = qctxt_adjust_qunit(obd, qctxt, qpids[2], qpids[3], 1, 0);
+                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[2], qpids[3], 1, 0);
+                /* fall-through */
+        case FSFILT_OP_SETATTR:
+                /* acquire/release file quota on original owner */
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0);
                 /* fall-through */
         case FSFILT_OP_CREATE:
         case FSFILT_OP_UNLINK:
-                /* acquire/release file quota on owner of child, acquire/release
-                 * block quota on owner of parent */
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0);
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0);
-                break;
-        case FSFILT_OP_SETATTR:
-                /* acquire/release file quota on original & current owner 
-                 * of child*/
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0);
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0);
+                /* acquire/release file/block quota on owner of child (or current owner) */
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0);
+                /* acquire/release block quota on owner of parent (or original owner) */
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0);
                 break;
         default:
                 LBUG();
                 break;
         }
 
-        if (rc || rc2)
-                CERROR("mds adjust qunit failed! (opc:%d rc:%d)\n", 
-                       opc, rc ?: rc2);
+        if (rc2)
+                CERROR("mds adjust qunit failed! (opc:%d rc:%d)\n", opc, rc2);
         RETURN(0);
 }
 
