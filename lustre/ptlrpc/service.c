@@ -324,7 +324,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         /* Now allocate pool of reply buffers */
         /* Increase max reply size to next power of two */
         service->srv_max_reply_size = 1;
-        while(service->srv_max_reply_size < max_reply_size)
+        while (service->srv_max_reply_size < max_reply_size)
                 service->srv_max_reply_size <<= 1;
 
         if (proc_entry != NULL)
@@ -983,6 +983,7 @@ int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc,
         int i, rc = 0;
         ENTRY;
 
+        LASSERT(svc->srv_num_threads > 0);
         for (i = 0; i < svc->srv_num_threads; i++) {
                 char name[32];
                 sprintf(name, "%s_%02d", base_name, i);
