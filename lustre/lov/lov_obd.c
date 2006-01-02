@@ -109,15 +109,17 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         int rc;
         ENTRY;
 
-        class_obd_list();
 
         tgt_obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME,
                                         &obd->obd_uuid);
-
+        
         if (!tgt_obd) {
                 CERROR("Target %s not attached\n", tgt_uuid->uuid);
                 RETURN(-EINVAL);
         }
+        
+        CDEBUG(D_ERROR, "Connect tgt %s (%s)\n", (char *)tgt->uuid.uuid,
+               tgt_obd->obd_name);
 
         if (!tgt_obd->obd_set_up) {
                 CERROR("Target %s not set up\n", tgt_uuid->uuid);
@@ -260,7 +262,8 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         int rc;
         ENTRY;
 
-        CDEBUG(D_CONFIG, "Disconnecting lov target %s\n", obd->obd_uuid.uuid);
+        CDEBUG(D_CONFIG, "Disconnecting target %s from %s\n", 
+               osc_obd->obd_name, obd->obd_name);
 
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
@@ -432,7 +435,7 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         struct lov_tgt_desc *tgt;
         struct obd_export *exp_observer;
         __u32 bufsize;
-        __u32 size = 2;
+        __u32 size;
         obd_id params[2];
         int rc, old_count;
         ENTRY;
@@ -503,7 +506,7 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                 if (osc_obd)
                         osc_obd->obd_no_recov = 0;
         }
-
+        
         /* NULL may need to change when we use flags for osc's */
         rc = lov_connect_obd(obd, tgt, 1, NULL);
         if (rc || !obd->obd_observer)
@@ -514,23 +517,35 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         llog_cat_initialize(obd->obd_observer, lov->desc.ld_tgt_count);
 
         params[0] = index;
+        /* FIXME we must try to mds_lov_read_objids insetad of obd_get_info
+           to allow the mdt to start before the ost */
         rc = obd_get_info(tgt->ltd_exp, strlen("last_id"), "last_id", &size,
                           &params[1]);
         if (rc)
                 GOTO(out, rc);
 
         exp_observer = obd->obd_observer->obd_self_export;
-        rc = obd_set_info(exp_observer, strlen("next_id"),"next_id",
+        rc = obd_set_info(exp_observer, strlen("next_id"), "next_id",
                           sizeof(params), params);
         if (rc)
                 GOTO(out, rc);
 
-        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, 1);
-        GOTO(out, rc);
+        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, OBD_NOTIFY_ACTIVE);
+
+        /* if we added after the disconnect */
+        if (lov->connects == 0) {
+                CERROR("Disconnected\n");
+                rc = -ENODEV;
+        }
+
  out:
-        if (rc && tgt->ltd_exp != NULL)
-                lov_disconnect_obd(obd, tgt);
-        return rc;
+        if (rc) {
+                CERROR("add failed (%d), deleting %s\n", rc, 
+                       (char *)tgt->uuid.uuid);
+                //lov_disconnect_obd(obd, tgt);
+                lov_del_obd(obd, &tgt->uuid, index, 0);
+        }
+        RETURN(rc);
 }
 
 /* Schedule a target for deletion */
@@ -556,7 +571,7 @@ lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                 RETURN(-EINVAL);
         }
 
-        if (strncmp(uuidp->uuid, tgt->uuid.uuid, sizeof uuidp->uuid) != 0) {
+        if (!obd_uuid_equals(uuidp, &tgt->uuid)) {
                 CERROR("LOV target UUID %s at index %d doesn't match %s.\n",
                        tgt->uuid.uuid, index, uuidp->uuid);
                 RETURN(-EINVAL);
@@ -749,7 +764,10 @@ static int lov_cleanup(struct obd_device *obd)
                         /* We should never get here - these should have
                            been removed in the disconnect. */
                         if (!obd_uuid_empty(&tgt->uuid)) {
-                                CERROR("lov tgt %d not cleaned!\n", i);
+                                CERROR("lov tgt %d not cleaned!"
+                                       " deathrow=%d, lovrc=%d\n",
+                                       i, lov->death_row, 
+                                       atomic_read(&lov->refcount));
                                 lov_del_obd(obd, &tgt->uuid, i, 0);
                         }
                 }

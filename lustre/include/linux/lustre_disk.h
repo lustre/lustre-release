@@ -240,6 +240,9 @@ int config_log_end(char *instance);
 struct config_llog_data *config_log_get(char *name);
 void config_log_put(void);
 
+/* mgc_request.c */
+int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id);
+
 #endif
 
 

@@ -183,6 +183,23 @@ err_decref:
         RETURN(rc);
 }
 
+int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
+{
+        char *name_end;
+
+        /* fsname is at most 8 chars long at the beginning of the logname
+           e.g. "lustre-MDT0001" or "lustre" */
+        name_end = strchr(logname, '-');
+        if (!name_end)
+                name_end = logname + strlen(logname);
+        LASSERT(name_end - logname <= 8);
+
+        memcpy(&res_id->name[0], logname, name_end - logname);
+        CDEBUG(D_MGC, "log %s to resid "LPX64"\n", logname, res_id->name[0]);
+        return 0;
+}
+EXPORT_SYMBOL(mgc_logname2resid);
+
 /* based on ll_mdc_blocking_ast */
 static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, int flag)
@@ -190,6 +207,10 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         int rc;
         struct lustre_handle lockh;
         ENTRY;
+
+        /* FIXME should pass logname,sb as part of lock->l_ast_data,
+           lustre_get_process_log that.  Or based on resource.
+           Either way, must have one lock per llog. */
 
         switch (flag) {
         case LDLM_CB_BLOCKING:
@@ -199,27 +220,39 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 ldlm_lock2handle(lock, &lockh);
                 rc = ldlm_cli_cancel(&lockh);
                 if (rc < 0) {
-                        CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
+                        CDEBUG(D_MGC, "ldlm_cli_cancel: %d\n", rc);
                         RETURN(rc);
                 }
                 break;
         case LDLM_CB_CANCELING: {
+                char fsname[9];
+
                 /* We've given up the lock, prepare ourselves to update.
                    FIXME */
                 LDLM_ERROR(lock, "MGC cancel CB");
                 
-                //struct inode *inode = ll_inode_from_lock(lock);
+                //see struct inode *inode = ll_inode_from_lock(lock);
+
+                memcpy(fsname, &lock->l_resource->lr_name.name[0], 8);
+                fsname[8] = 0;
+                CERROR("Lock res "LPX64" (%s)\n",
+                       lock->l_resource->lr_name.name[0], fsname);
+
+                /* Make sure not to re-enqueue when the mgc is stopping
+                   (we get called from client_disconnect_export) */
+                if (!lock->l_conn_export ||
+                    !lock->l_conn_export->exp_obd->u.cli.cl_conn_count)
+                        break;
+
+                CERROR("Re-enqueue all locks on fs '%s'\n", fsname);
+                /* reenque _all_ logs that match the beginning fsname - 
+                   clients and servers */
+
                 /* <adilger> in the MGC case I suspect this callback will 
                    trigger a new enqueue for the same lock (in a separate
                    thread likely, which won't match the just-being-cancelled
                    lock due to CBPENDING flag) + config llog processing */
-                /* FIXME make sure not to re-enqueue when the mgc is stopping
-                   (we get called from client_disconnect_export) */
-                
-                CERROR("Lock res "LPU64"\n", lock->l_resource->lr_name.name[0]);
-                /* FIXME should pass logname,sb as part of lock->l_ast_data,
-                   lustre_get_process_log that.  Or based on resource.
-                   Either way, must have one lock per llog. */
+
                 //update_llog();
 
                 break;
@@ -249,6 +282,7 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         LASSERT(type == LDLM_PLAIN);
 
         CDEBUG(D_MGC, "Enqueue for %s\n", (char *)data);
+        rc = mgc_logname2resid(data, &res_id);
 
         /* Search for already existing locks.*/
         rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type, 

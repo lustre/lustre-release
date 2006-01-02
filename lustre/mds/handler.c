@@ -2246,6 +2246,10 @@ static int mds_set_info(struct obd_export *exp, obd_count keylen,
                 if (idx > mds->mds_lov_desc.ld_tgt_count) 
                         RETURN(-EINVAL);
                 
+                /* FIXME realloc mds_lov_objids -- 
+                   see HEAD mds_dt_update_desc */
+                LASSERT("FIXME must realloc mds_lov_objids");
+
                 mds->mds_lov_objids[idx] = id;
                 //mds->mds_lov_objids_valid = 1;
 
