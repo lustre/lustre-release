@@ -83,21 +83,23 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
         int stripe, i, rc = -EIO;
         ENTRY;
 
-        ost_idx = (req->rq_idx + 1) % ost_count; 
+        ost_idx = (req->rq_idx + lsm->lsm_stripe_count) % ost_count;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 if (lov->tgts[ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
                         continue;
                 }
                 /* check if objects has been created on this ost */
-                for (stripe = req->rq_stripe; stripe >= 0; stripe--) {
+                for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
+                        if (stripe == req->rq_stripe)
+                                continue;
                         if (ost_idx == lsm->lsm_oinfo[stripe].loi_ost_idx)
                                 break;
                 }
 
-                if (stripe < 0) {
+                if (stripe >= lsm->lsm_stripe_count) {
                         req->rq_idx = ost_idx;
-                        rc = obd_create(lov->tgts[ost_idx].ltd_exp, req->rq_oa, 
+                        rc = obd_create(lov->tgts[ost_idx].ltd_exp, req->rq_oa,
                                         &req->rq_md, set->set_oti);
                         if (!rc)
                                 break;

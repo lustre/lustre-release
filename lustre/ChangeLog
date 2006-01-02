@@ -441,13 +441,21 @@ Details    : Starting a ptlrpc service thread can fail if there are a large
 	     Handle this without oopsing.
 
 Severity   : minor
-Frequency  : always, but only if liblustre and non default acceptor port was used
+Frequency  : always, only if liblustre and non-default acceptor port was used
 Bugzilla   : 9933
 Description: liblustre could not connect to servers with non-default acceptor
 	     port
 Details    : tcpnal_set_default_params() was not called and was therefore
 	     ignoring the environment varaible TCPNAL_PORT, as well as other
 	     TCPNAL_ environment variables
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9923
+Description: two objects could be created on the same OST for a single file
+Details    : If an OST is down, in some cases it was possible to create two
+	     objects on a single OST for a single file.  No problems other
+	     than potential performance impact and spurious error messages.
 
 ------------------------------------------------------------------------------
 

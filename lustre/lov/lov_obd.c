@@ -2103,14 +2103,14 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                      i < data->lsm->lsm_stripe_count;
                      i++, loi++) {
                          if (lov->tgts[loi->loi_ost_idx].ltd_exp ==
-                                        data->lock->l_conn_export &&
-                            loi->loi_id == res_id->name[0] &&
-                            loi->loi_gr == res_id->name[2]) {
+                             data->lock->l_conn_export &&
+                             loi->loi_id == res_id->name[0] &&
+                             loi->loi_gr == res_id->name[2]) {
                                 *stripe = i;
                                 GOTO(out, rc = 0);
                         }
                 }
-                LDLM_ERROR(data->lock, "lock on inode without such object\n");
+                LDLM_ERROR(data->lock, "lock on inode without such object");
                 dump_lsm(D_ERROR, data->lsm);
                 GOTO(out, rc = -ENXIO);
         } else if (keylen >= strlen("last_id") && strcmp(key, "last_id") == 0) {
