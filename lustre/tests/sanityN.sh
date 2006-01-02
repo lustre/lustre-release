@@ -70,6 +70,8 @@ run_one() {
 	BEFORE=`date +%s`
 	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
+	export tfile=f${testnum}
+	export tdir=d${base}
 	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
