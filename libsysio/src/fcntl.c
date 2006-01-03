@@ -193,8 +193,7 @@ _sysio_vfcntl(int fd, int cmd, va_list ap)
 			}
 		}
 		break;
-#if defined(F_GETLK64) && (F_GETLK64 != F_GETLK)
-
+#if !(_LARGEFILE64_SOURCE || F_GETLK64 == F_GETLK)
 	    case F_GETLK:
 	    case F_SETLK:
 	    case F_SETLKW:
@@ -250,7 +249,7 @@ _sysio_vfcntl(int fd, int cmd, va_list ap)
 			rtn = 0;
 		}
 		break;
-#endif
+#endif /* !(_LARGEFILE64_SOURCE || F_GETLK64 == F_GETLK) */
 #if _LARGEFILE64_SOURCE
 	    case F_GETLK64:
 	    case F_SETLK64:

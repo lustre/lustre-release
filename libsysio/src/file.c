@@ -76,6 +76,7 @@ _sysio_fnew(struct inode *ino, int flags)
 
 	_SYSIO_FINIT(fil, ino, flags);
 	F_REF(fil);
+	I_REF(fil->f_ino);
 
 	return fil;
 }
@@ -92,6 +93,7 @@ _sysio_fgone(struct file *fil)
 	assert(fil->f_ino);
 	err = (*fil->f_ino->i_ops.inop_close)(fil->f_ino);
 	assert(!err);
+	I_RELE(fil->f_ino);
 	free(fil);
 }
 
