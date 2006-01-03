@@ -181,6 +181,7 @@ test_7() {
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f
     sync
+    sleep 1					# ensure we have a fresh statfs
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1
