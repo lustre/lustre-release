@@ -1301,9 +1301,15 @@ static int filter_iobuf_pool_init(struct filter_obd *filter)
 void *filter_iobuf_get(struct filter_obd *filter, struct obd_trans_info *oti)
 {
         int thread_id = oti ? oti->oti_thread_id : -1;
-        struct filter_iobuf **pool = &filter->fo_iobuf_pool[thread_id];
+        struct filter_iobuf *pool_local;
+        struct filter_iobuf **pool;
 
+        if (thread_id >= 0) {
         LASSERT(thread_id < filter->fo_iobuf_count);
+                pool = &filter->fo_iobuf_pool[thread_id];
+        } else
+                pool = &pool_local;
+
         if (unlikely(thread_id < 0 || *pool == NULL))
                 filter_alloc_iobuf(filter, OBD_BRW_WRITE,
                                    PTLRPC_MAX_BRW_PAGES, pool);

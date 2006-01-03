@@ -809,6 +809,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(out, ret = -ENOMEM);
 
         for (i = 0; i < oa_bufs; i++) {
+                lnb[i].page = pga[i].pg;
                 rnb[i].offset = pga[i].off;
                 rnb[i].len = pga[i].count;
         }
@@ -819,29 +820,6 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         ret = filter_preprw(cmd, exp, oa, 1, &ioo, oa_bufs, rnb, lnb, oti);
         if (ret != 0)
                 GOTO(out, ret);
-
-        for (i = 0; i < oa_bufs; i++) {
-                void *virt;
-                obd_off off;
-                void *addr;
-
-                if (lnb[i].page == NULL)
-                        break;
-
-                off = pga[i].off & ~PAGE_MASK;
-                virt = kmap(pga[i].pg);
-                addr = kmap(lnb[i].page);
-
-                /* 2 kmaps == vanishingly small deadlock opportunity */
-
-                if (cmd & OBD_BRW_WRITE)
-                        memcpy(addr + off, virt + off, pga[i].count);
-                else
-                        memcpy(virt + off, addr + off, pga[i].count);
-
-                kunmap(lnb[i].page);
-                kunmap(pga[i].pg);
-        }
 
         ret = filter_commitrw(cmd, exp, oa, 1, &ioo, oa_bufs, lnb, oti, ret);
 
