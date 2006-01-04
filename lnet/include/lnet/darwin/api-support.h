@@ -1,8 +1,8 @@
-#ifndef __LINUX_API_SUPPORT_H__
-#define __LINUX_API_SUPPORT_H__
+#ifndef __DARWIN_API_SUPPORT_H__
+#define __DARWIN_API_SUPPORT_H__
 
 #ifndef __LNET_API_SUPPORT_H__
-#error Do not #include this file directly. #include <lnet /api-support.h> instead
+#error Do not #include this file directly. #include <portals/api-support.h> instead
 #endif
 
 #ifndef __KERNEL__
@@ -16,5 +16,6 @@
 # include <setjmp.h>
 # include <time.h>
 #endif
+
 
 #endif

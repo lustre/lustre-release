@@ -24,7 +24,7 @@
 #include <libcfs/kp30.h>
 
 /*
- * Implementation of cfs_curproc API (see portals/include/libcfs/curproc.h)
+ * Implementation of cfs_curproc API (see lnet/include/libcfs/curproc.h)
  * for XNU kernel.
  */
 
@@ -104,7 +104,7 @@ char  *cfs_curproc_comm(void)
 
 cfs_kernel_cap_t cfs_curproc_cap_get(void)
 {
-        return 0;
+        return -1;
 }
 
 void cfs_curproc_cap_set(cfs_kernel_cap_t cap)

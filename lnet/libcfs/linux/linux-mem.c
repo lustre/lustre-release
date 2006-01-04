@@ -33,17 +33,17 @@ cfs_alloc(size_t nr_bytes, u_int32_t flags)
 	unsigned int mflags = 0;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-	if (flags & CFS_ALLOC_ATOMIC)
-		mflags |= __GFP_HIGH;
+        if (flags & CFS_ALLOC_ATOMIC)
+                mflags |= __GFP_HIGH;
         else if (flags & CFS_ALLOC_WAIT)
                 mflags |= __GFP_WAIT;
-	else
-		mflags |= (__GFP_HIGH | __GFP_WAIT);
+        else
+                mflags |= (__GFP_HIGH | __GFP_WAIT);
 
-	if (flags & CFS_ALLOC_FS)
-		mflags |= __GFP_FS;
-	if (flags & CFS_ALLOC_IO)
-		mflags |= __GFP_IO | __GFP_HIGHIO;
+        if (flags & CFS_ALLOC_FS)
+                mflags |= __GFP_FS;
+        if (flags & CFS_ALLOC_IO)
+                mflags |= __GFP_IO | __GFP_HIGHIO;
 #else
         if (flags & CFS_ALLOC_ATOMIC)
                 mflags |= __GFP_HIGH;
@@ -79,23 +79,26 @@ cfs_free_large(void *addr)
 	vfree(addr);
 }
 
-cfs_page_t *
-cfs_alloc_pages(unsigned int flags, unsigned int order)
+cfs_page_t *cfs_alloc_page(unsigned int flags)
 {
         unsigned int mflags = 0;
 
+        /*
+         * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+         * from here: this will lead to infinite recursion.
+         */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-	if (flags & CFS_ALLOC_ATOMIC)
-		mflags |= __GFP_HIGH;
+        if (flags & CFS_ALLOC_ATOMIC)
+                mflags |= __GFP_HIGH;
         else if (flags & CFS_ALLOC_WAIT)
                 mflags |= __GFP_WAIT;
-	else
-		mflags |= (__GFP_HIGH | __GFP_WAIT);
+        else
+                mflags |= (__GFP_HIGH | __GFP_WAIT);
 
-	if (flags & CFS_ALLOC_FS)
-		mflags |= __GFP_FS;
-	if (flags & CFS_ALLOC_IO)
-		mflags |= __GFP_IO | __GFP_HIGHIO;
+        if (flags & CFS_ALLOC_FS)
+                mflags |= __GFP_FS;
+        if (flags & CFS_ALLOC_IO)
+                mflags |= __GFP_IO | __GFP_HIGHIO;
         if (flags & CFS_ALLOC_HIGH)
                 mflags |=  __GFP_HIGHMEM;
 #else
@@ -111,15 +114,14 @@ cfs_alloc_pages(unsigned int flags, unsigned int order)
                 mflags |=  __GFP_HIGHMEM;
 #endif
 
-        return alloc_pages(mflags, order);
+        return alloc_pages(mflags, 0);
 }
 
 cfs_mem_cache_t *
 cfs_mem_cache_create (const char *name, size_t size, size_t offset,
-                      unsigned long flags, void (*ctor)(void*, kmem_cache_t *, unsigned long),
-                      void (*dtor)(void*, cfs_mem_cache_t *, unsigned long))
+                      unsigned long flags)
 {
-        return kmem_cache_create(name, size, offset, flags, ctor, dtor);
+        return kmem_cache_create(name, size, offset, flags, NULL, NULL);
 }
 
 int
@@ -133,25 +135,26 @@ cfs_mem_cache_alloc(cfs_mem_cache_t *cachep, int flags)
 {
         unsigned int mflags = 0;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-	if (flags & CFS_SLAB_ATOMIC)
-		mflags |= __GFP_HIGH;
+        if (flags & CFS_ALLOC_ATOMIC)
+                mflags |= __GFP_HIGH;
         else if (flags & CFS_ALLOC_WAIT)
                 mflags |= __GFP_WAIT;
-	else
-		mflags |= (__GFP_HIGH | __GFP_WAIT);
+        else
+                mflags |= (__GFP_HIGH | __GFP_WAIT);
 
-	if (flags & CFS_SLAB_FS)
-		mflags |= __GFP_FS;
-	if (flags & CFS_SLAB_IO)
-		mflags |= __GFP_IO | __GFP_HIGHIO;
+        if (flags & CFS_ALLOC_FS)
+                mflags |= __GFP_FS;
+        if (flags & CFS_ALLOC_IO)
+                mflags |= __GFP_IO | __GFP_HIGHIO;
 #else
-        if (flags & CFS_SLAB_ATOMIC)
+
+        if (flags & CFS_ALLOC_ATOMIC)
                 mflags |= __GFP_HIGH;
         else
                 mflags |= __GFP_WAIT;
-        if (flags & CFS_SLAB_FS)
+        if (flags & CFS_ALLOC_FS)
                 mflags |= __GFP_FS;
-        if (flags & CFS_SLAB_IO)
+        if (flags & CFS_ALLOC_IO)
                 mflags |= __GFP_IO;
 #endif
 
@@ -168,7 +171,7 @@ EXPORT_SYMBOL(cfs_alloc);
 EXPORT_SYMBOL(cfs_free);
 EXPORT_SYMBOL(cfs_alloc_large);
 EXPORT_SYMBOL(cfs_free_large);
-EXPORT_SYMBOL(cfs_alloc_pages);
+EXPORT_SYMBOL(cfs_alloc_page);
 EXPORT_SYMBOL(cfs_mem_cache_create);
 EXPORT_SYMBOL(cfs_mem_cache_destroy);
 EXPORT_SYMBOL(cfs_mem_cache_alloc);

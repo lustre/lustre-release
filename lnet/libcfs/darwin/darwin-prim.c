@@ -45,19 +45,19 @@
 void    *darwin_current_journal_info = NULL;
 int     darwin_current_cap_effective = -1;
 
-/* 
- * cfs pseudo device, actually pseudo char device in darwin 
+/*
+ * cfs pseudo device, actually pseudo char device in darwin
  */
 #define KPORTAL_MAJOR  -1
 
 kern_return_t  cfs_psdev_register(cfs_psdev_t *dev) {
 	dev->index = cdevsw_add(KPORTAL_MAJOR, dev->devsw);
 	if (dev->index < 0) {
-		printf("portal_init: failed to allocate a major number!\n");
+		printf("libcfs_init: failed to allocate a major number!\n");
 		return KERN_FAILURE;
 	}
-	dev->handle = devfs_make_node(makedev (dev->index, 0), 
-                                      DEVFS_CHAR, UID_ROOT, 
+	dev->handle = devfs_make_node(makedev (dev->index, 0),
+                                      DEVFS_CHAR, UID_ROOT,
                                       GID_WHEEL, 0666, (char *)dev->name, 0);
 	return KERN_SUCCESS;
 }
@@ -68,8 +68,8 @@ kern_return_t  cfs_psdev_deregister(cfs_psdev_t *dev) {
 	return KERN_SUCCESS;
 }
 
-/* 
- * KPortal symbol register / unregister support 
+/*
+ * KPortal symbol register / unregister support
  */
 static struct rw_semaphore cfs_symbol_lock;
 struct list_head           cfs_symbol_list;
@@ -87,9 +87,9 @@ cfs_symbol_get(const char *name)
                         sym->ref ++;
                         break;
                 }
-        } 
+        }
         up_read(&cfs_symbol_lock);
-        if (sym != NULL) 
+        if (sym != NULL)
                 return sym->value;
         return NULL;
 }
@@ -108,7 +108,7 @@ cfs_symbol_put(const char *name)
                         LASSERT(sym->ref >= 0);
                         break;
                 }
-        } 
+        }
         up_read(&cfs_symbol_lock);
         LASSERT(sym != NULL);
 
@@ -183,17 +183,17 @@ cfs_symbol_clean()
         return;
 }
 
-/* 
+/*
  * Register sysctl table
  */
 cfs_sysctl_table_header_t *
-register_cfs_sysctl_table (cfs_sysctl_table_t *table, int arg)
+cfs_register_sysctl_table (cfs_sysctl_table_t *table, int arg)
 {
 	cfs_sysctl_table_t	item;
 	int i = 0;
 
 	while ((item = table[i++]) != NULL) {
-		sysctl_register_oid(item); 
+		sysctl_register_oid(item);
 	}
 	return table;
 }
@@ -202,12 +202,12 @@ register_cfs_sysctl_table (cfs_sysctl_table_t *table, int arg)
  * Unregister sysctl table
  */
 void
-unregister_cfs_sysctl_table (cfs_sysctl_table_header_t *table) {
+cfs_unregister_sysctl_table (cfs_sysctl_table_header_t *table) {
 	int i = 0;
 	cfs_sysctl_table_t	item;
 
 	while ((item = table[i++]) != NULL) {
-		sysctl_unregister_oid(item); 
+		sysctl_unregister_oid(item);
 	}
 	return;
 }
@@ -216,39 +216,62 @@ struct kernel_thread_arg cfs_thread_arg;
 
 void
 cfs_thread_agent_init()
-{ 
-        set_targ_stat(&cfs_thread_arg, THREAD_ARG_FREE); 
-        spin_lock_init(&cfs_thread_arg.lock);        
-        cfs_thread_arg.arg = NULL;                       
-        cfs_thread_arg.func = NULL;       
+{
+        set_targ_stat(&cfs_thread_arg, THREAD_ARG_FREE);
+        spin_lock_init(&cfs_thread_arg.lock);
+        cfs_thread_arg.arg = NULL;
+        cfs_thread_arg.func = NULL;
 }
 
 void
-cfs_thread_agent (void) 
+cfs_thread_agent (void)
 {
         cfs_thread_t           func = NULL;
         void                   *arg = NULL;
 
         thread_arg_recv(&cfs_thread_arg, func, arg);
-        printf("entry of thread agent (func: %08lx).\n", (void *)func);
+        /* printf("entry of thread agent (func: %08lx).\n", (void *)func); */
         assert(func != NULL);
         func(arg);
-        printf("thread agent exit. (func: %08lx)\n", (void *)func);
+        /* printf("thread agent exit. (func: %08lx)\n", (void *)func); */
         (void) thread_terminate(current_act());
 }
 
 int
 cfs_kernel_thread(cfs_thread_t  func, void *arg, int flag)
-{ 
-        int ret = 0;   
-        thread_t th = NULL;  
-                                                
-        thread_arg_hold(&cfs_thread_arg, func, arg); 
-        th = kernel_thread(kernel_task, cfs_thread_agent);  
-        thread_arg_release(&cfs_thread_arg);      
-        if (th == THREAD_NULL) 
-                ret = -1;  
+{
+        int ret = 0;
+        thread_t th = NULL;
+
+        thread_arg_hold(&cfs_thread_arg, func, arg);
+        th = kernel_thread(kernel_task, cfs_thread_agent);
+        thread_arg_release(&cfs_thread_arg);
+        if (th == THREAD_NULL)
+                ret = -1;
         return ret;
+}
+
+void cfs_daemonize(char *str)
+{
+        snprintf(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX, "%s", str);
+        return;
+}
+
+extern int block_procsigmask(struct proc *p,  int bit);
+
+cfs_sigset_t cfs_get_blocked_sigs()
+{
+        return cfs_current()->uu_sigmask;
+}
+
+void cfs_block_allsigs()
+{
+        block_procsigmask(current_proc(), -1);
+}
+
+void cfs_block_sigs(sigset_t bit)
+{
+        block_procsigmask(current_proc(), bit);
 }
 
 void lustre_cone_in(boolean_t *state, funnel_t **cone)
@@ -297,7 +320,7 @@ void cfs_waitlink_init(struct cfs_waitlink *link)
 }
 
 void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link)
-{ 
+{
         link->wl_waitq = waitq;
 	ksleep_add(&waitq->wq_ksleep_chan, &link->wl_ksleep_link);
 }
@@ -329,6 +352,10 @@ int cfs_waitq_active(struct cfs_waitq *waitq)
 
 void cfs_waitq_signal(struct cfs_waitq *waitq)
 {
+	/*
+	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
 	ksleep_wake(&waitq->wq_ksleep_chan);
 }
 
@@ -342,61 +369,89 @@ void cfs_waitq_broadcast(struct cfs_waitq *waitq)
 	ksleep_wake_all(&waitq->wq_ksleep_chan);
 }
 
-void cfs_waitq_wait(struct cfs_waitlink *link)
-{ 
-        ksleep_wait(&link->wl_waitq->wq_ksleep_chan);
+void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state)
+{
+        ksleep_wait(&link->wl_waitq->wq_ksleep_chan, state);
 }
 
-cfs_duration_t  cfs_waitq_timedwait(struct cfs_waitlink *link, 
+cfs_duration_t  cfs_waitq_timedwait(struct cfs_waitlink *link,
+                                    cfs_task_state_t state,
                                     cfs_duration_t timeout)
-{ 
-        CDEBUG(D_TRACE, "timeout: %llu\n", (long long unsigned)timeout); 
-        return ksleep_timedwait(&link->chan->c, timeout);
+{
+        CDEBUG(D_TRACE, "timeout: %llu\n", (long long unsigned)timeout);
+        return ksleep_timedwait(&link->wl_waitq->wq_ksleep_chan, 
+                                state, timeout);
 }
 
 typedef  void (*ktimer_func_t)(void *);
 void cfs_timer_init(cfs_timer_t *t, void (* func)(unsigned long), void *arg)
-{ 
+{
         ktimer_init(&t->t, (ktimer_func_t)func, arg);
 }
 
 void cfs_timer_done(struct cfs_timer *t)
-{ 
+{
         ktimer_done(&t->t);
 }
 
 void cfs_timer_arm(struct cfs_timer *t, cfs_time_t deadline)
-{ 
+{
         ktimer_arm(&t->t, deadline);
 }
 
 void cfs_timer_disarm(struct cfs_timer *t)
-{ 
+{
         ktimer_disarm(&t->t);
 }
 
 int  cfs_timer_is_armed(struct cfs_timer *t)
-{ 
+{
         return ktimer_is_armed(&t->t);
 }
 
 cfs_time_t cfs_timer_deadline(struct cfs_timer *t)
-{ 
+{
         return ktimer_deadline(&t->t);
 }
 
-int
-libcfs_arch_init(void)
+void cfs_enter_debugger(void)
+{
+        extern void PE_enter_debugger(char *cause);
+        PE_enter_debugger("CFS");
+}
+
+int cfs_online_cpus()
+{
+        host_basic_info_data_t hinfo;
+        kern_return_t kret;
+        int count = HOST_BASIC_INFO_COUNT;
+#define BSD_HOST 1
+        kret = host_info(BSD_HOST, HOST_BASIC_INFO, &hinfo, &count);
+        if (kret == KERN_SUCCESS) 
+                return (hinfo.avail_cpus);
+        return(-EINVAL);
+}
+
+extern spinlock_t trace_cpu_serializer;
+extern struct list_head page_death_row;
+extern spinlock_t page_death_row_phylax;
+
+void raw_page_death_row_clean(void);
+
+int libcfs_arch_init(void)
 {
 	init_rwsem(&cfs_symbol_lock);
         CFS_INIT_LIST_HEAD(&cfs_symbol_list);
         cfs_thread_agent_init();
+        spin_lock_init(&trace_cpu_serializer);
+        CFS_INIT_LIST_HEAD(&page_death_row);
+        spin_lock_init(&page_death_row_phylax);
 	return 0;
 }
 
-void
-libcfs_arch_cleanup(void)
+void libcfs_arch_cleanup(void)
 {
 	cfs_symbol_clean();
+        raw_page_death_row_clean();
 }
 

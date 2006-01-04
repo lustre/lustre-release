@@ -52,7 +52,7 @@
 #define SOCKNAL_TYPED_CONNS      1              /* unidirectional large, bidirectional small? */
 #define SOCKNAL_ZC_MIN_FRAG     (2<<10)         /* default smallest zerocopy fragment */
 #define SOCKNAL_MIN_BULK        (1<<10)         /* smallest "large" message */
-#define SOCKNAL_BUFFER_SIZE     (8<<20)         /* default socket buffer size */
+#define SOCKNAL_BUFFER_SIZE      SOCK_BUFFER_SIZE /* default socket buffer size */
 #define SOCKNAL_NAGLE            0              /* enable/disable NAGLE? */
 #define SOCKNAL_IRQ_AFFINITY     1              /* enable/disable IRQ affinity? */
 #define SOCKNAL_KEEPALIVE_IDLE   35             /* # seconds idle before 1st probe */

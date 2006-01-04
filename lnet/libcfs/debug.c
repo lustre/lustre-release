@@ -42,8 +42,14 @@ EXPORT_SYMBOL(libcfs_debug);
 unsigned int libcfs_printk;
 EXPORT_SYMBOL(libcfs_printk);
 
+unsigned int libcfs_debug_binary = 1;
+EXPORT_SYMBOL(libcfs_debug_binary);
+
 unsigned int libcfs_stack;
 EXPORT_SYMBOL(libcfs_stack);
+
+unsigned int portal_enter_debugger = 0;
+EXPORT_SYMBOL(portal_enter_debugger);
 
 unsigned int libcfs_catastrophe;
 EXPORT_SYMBOL(libcfs_catastrophe);
@@ -72,7 +78,7 @@ void libcfs_debug_dumplog_internal(void *arg)
 
 int libcfs_debug_dumplog_thread(void *arg)
 {
-        libcfs_daemonize("");
+        cfs_daemonize("");
         reparent_to_init();
         libcfs_debug_dumplog_internal(arg);
         cfs_waitq_signal(&debug_ctlwq);
@@ -95,12 +101,11 @@ void libcfs_debug_dumplog(void)
         rc = cfs_kernel_thread(libcfs_debug_dumplog_thread,
                                (void *)(long)cfs_curproc_pid(),
                                CLONE_VM | CLONE_FS | CLONE_FILES);
-        if (rc < 0) {
+        if (rc < 0) 
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "
                        "%d\n", rc);
-        } else {
+        else
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
-        }
 
         /* be sure to teardown if kernel_thread() failed */
         cfs_waitq_del(&debug_ctlwq, &wait);

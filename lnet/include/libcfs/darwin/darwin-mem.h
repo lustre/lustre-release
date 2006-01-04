@@ -98,20 +98,16 @@ void xnu_page_ops_unregister(int type);
  * raw page, no cache object, just like buffer
  */
 struct xnu_raw_page {
-	struct xnu_page header;
-	vm_address_t    virtual;
-	upl_t		upl;
-	int		order;
-	atomic_t	count;
-	void           *private;
+	struct xnu_page  header;
+	void            *virtual;
+	atomic_t         count;
+	struct list_head dead;
 };
 
 /*
  * Public interface to lustre
  *
- * - cfs_alloc_pages(f, o)
  * - cfs_alloc_page(f)
- * - cfs_free_pages(p, o)
  * - cfs_free_page(p)
  * - cfs_kmap(p)
  * - cfs_kunmap(p)
@@ -124,14 +120,13 @@ struct xnu_raw_page {
  * pages only.
  */
 
-cfs_page_t *cfs_alloc_pages(u_int32_t flags, u_int32_t order);
 cfs_page_t *cfs_alloc_page(u_int32_t flags);
-void cfs_free_pages(cfs_page_t *pages, int order);
 void cfs_free_page(cfs_page_t *page);
 void cfs_get_page(cfs_page_t *page);
 int cfs_put_page_testzero(cfs_page_t *page);
 int cfs_page_count(cfs_page_t *page);
 void cfs_set_page_count(cfs_page_t *page, int v);
+#define cfs_page_index(pg)	(0)
 
 void *cfs_page_address(cfs_page_t *pg);
 void *cfs_kmap(cfs_page_t *pg);
@@ -141,11 +136,16 @@ void cfs_kunmap(cfs_page_t *pg);
  * Memory allocator
  */
 
-extern void *cfs_alloc(size_t nr_bytes, u_int32_t flags);
-extern void  cfs_free(void *addr);
+void *cfs_alloc(size_t nr_bytes, u_int32_t flags);
+void  cfs_free(void *addr);
 
-extern void *cfs_alloc_large(size_t nr_bytes);
-extern void  cfs_free_large(void *addr);
+void *cfs_alloc_large(size_t nr_bytes);
+void  cfs_free_large(void *addr);
+
+extern int get_preemption_level(void);
+
+#define CFS_ALLOC_ATOMIC_TRY                                    \
+	(get_preemption_level() != 0 ? CFS_ALLOC_ATOMIC : 0)
 
 /*
  * Slab:
@@ -164,17 +164,15 @@ typedef struct cfs_mem_cache {
 #define KMEM_CACHE_MAX_COUNT	64
 #define KMEM_MAX_ZONE		8192
 
-extern cfs_mem_cache_t * cfs_mem_cache_create (const char *, size_t, size_t, unsigned long,
-					       void (*)(void *, cfs_mem_cache_t *, unsigned long),
-					       void (*)(void *, cfs_mem_cache_t *, unsigned long));
-extern int cfs_mem_cache_destroy ( cfs_mem_cache_t * );
-extern void *cfs_mem_cache_alloc ( cfs_mem_cache_t *, int);
-extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
+cfs_mem_cache_t * cfs_mem_cache_create (const char *, size_t, size_t, unsigned long);
+int cfs_mem_cache_destroy ( cfs_mem_cache_t * );
+void *cfs_mem_cache_alloc ( cfs_mem_cache_t *, int);
+void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
 
 /*
  * Misc
  */
-/* XXX fix me */
+/* XXX Liang: num_physpages... fix me */
 #define num_physpages			(64 * 1024)
 
 #define CFS_DECL_MMSPACE		
@@ -183,9 +181,11 @@ extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
 
 #define copy_from_user(kaddr, uaddr, size)	copyin((caddr_t)uaddr, (caddr_t)kaddr, size)
 #define copy_to_user(uaddr, kaddr, size)	copyout((caddr_t)kaddr, (caddr_t)uaddr, size)
-
-#error "need this define"
-#define strncpy_from_user(kaddr, uaddr, size) "something"
+static inline int strncpy_from_user(char *kaddr, char *uaddr, int size)
+{
+	size_t count;
+	return copyinstr((void *)uaddr, (void *)kaddr, size, &count);
+}
 
 #if defined (__ppc__)
 #define mb()  __asm__ __volatile__ ("sync" : : : "memory")
@@ -201,9 +201,10 @@ extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
 
 #else	/* !__KERNEL__ */
 
-typedef struct cfs_page{
-	void	*foo;
-} cfs_page_t;
+#define CFS_CACHE_SHIFT 12
+#define PAGE_CACHE_SIZE (1 << CFS_CACHE_SHIFT)
+#include <libcfs/user-prim.h>
+
 #endif	/* __KERNEL__ */
 
 #endif	/* __XNU_CFS_MEM_H__ */

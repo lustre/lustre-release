@@ -32,10 +32,14 @@
 
 #define SOCKNAL_ARCH_EAGER_ACK		1
 
+#define KSN_SOCK2FILE(ksock)            ((struct file *)(ksock)->ks_file)
+
 #define SOCK_WMEM_QUEUED(so)		((so)->so_snd.sb_cc)
 #define SOCK_ERROR(so)			((so)->so_error)
 
 #define SOCK_TEST_NOSPACE(so)		(sbspace(&(so)->so_snd) < (so)->so_snd.sb_lowat)
+
+#define SOCK_BUFFER_SIZE                (1152 * 1024)
 
 static inline
 int ksocknal_nsched(void)

@@ -23,7 +23,7 @@
 
 #include <lnet/lib-lnet.h>
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) && defined(LNET_ROUTER)
 
 static char *forwarding = "";
 CFS_MODULE_PARM(forwarding, "s", charp, 0444,
@@ -487,7 +487,7 @@ lnet_get_route (int idx, __u32 *net, __u32 *hops,
         return -ENOENT;
 }
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) && defined(LNET_ROUTER)
 
 void
 lnet_destroy_rtrbuf(lnet_rtrbuf_t *rb, int npages)

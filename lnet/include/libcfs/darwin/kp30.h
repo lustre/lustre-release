@@ -24,7 +24,7 @@
 #include <libcfs/darwin/darwin-prim.h>
 #include <lnet/lnet.h>
 
-#define our_cond_resched()              schedule_timeout(1);
+#define our_cond_resched() cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE, 1)
 
 #ifdef CONFIG_SMP
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0) /* XXX */
@@ -32,8 +32,6 @@
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #endif
 #define LASSERT_SEM_LOCKED(sem) do {} while(0) /* XXX */
-
-#define LBUG_WITH_LOC(file, func, line)    do {libcfs_catastrophe = 1;} while(0)
 
 /* --------------------------------------------------------------------- */
 
@@ -46,12 +44,11 @@
 #define PORTAL_MODULE_USE                       do{int i = 0; i++;}while(0)
 #define PORTAL_MODULE_UNUSE                     do{int i = 0; i--;}while(0)
 
-#define printk(format, args...)                 printf(format, ## args)
+#define num_online_cpus()                       cfs_online_cpus()
 
 /******************************************************************************/
-/* Module parameter support */
-#define CFS_MODULE_PARM(name, t, type, perm, desc) \
-        this should force a syntax error
+/* XXX Liang: There is no module parameter supporting in OSX */
+#define CFS_MODULE_PARM(name, t, type, perm, desc) 
 
 #define CFS_SYSFS_MODULE_PARM    0 /* no sysfs access to module parameters */
 /******************************************************************************/

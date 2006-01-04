@@ -13,30 +13,32 @@
 extern union trace_data_union trace_data[NR_CPUS];
 extern char *tracefile;
 extern long long tracefile_size;
+
 struct rw_semaphore tracefile_sem;
 
-inline void tracefile_lock_init()
+void tracefile_lock_init()
 {
+	init_rwsem(&tracefile_sem);
 }
 
-inline void tracefile_read_lock()
+void tracefile_read_lock()
 {
-    down_read(&tracefile_sem);
+	down_read(&tracefile_sem);
 }
 
-inline void tracefile_read_unlock()
+void tracefile_read_unlock()
 {
-    up_read(&tracefile_sem);
+	up_read(&tracefile_sem);
 }
 
-inline void tracefile_write_lock()
+void tracefile_write_lock()
 {
-    down_write(&tracefile_sem);
+	down_write(&tracefile_sem);
 }
 
-inline void tracefile_write_unlock()
+void tracefile_write_unlock()
 {
-    up_write(&tracefile_sem);
+	up_write(&tracefile_sem);
 }
 
 inline struct trace_cpu_data *
@@ -56,6 +58,15 @@ trace_put_tcd (struct trace_cpu_data *tcd, unsigned long flags)
 {
 	local_irq_restore(flags); 
 	put_cpu();               
+}
+
+int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
+{
+	/*
+	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
+	return tcd->tcd_cpu == tage->cpu;
 }
 
 void
@@ -87,7 +98,7 @@ set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 void print_to_console(struct ptldebug_header *hdr, int mask, char *buf, 
 			     int len, char *file, const char *fn)
 { 
-	char *prefix = NULL, *ptype = NULL; 
+	char *prefix = "Lustre", *ptype = NULL; 
 	
 	if ((mask & D_EMERG) != 0) { 
 		prefix = "LustreError"; 
@@ -134,7 +145,7 @@ int trace_write_daemon_file(struct file *file, const char *buffer,
 	
 	name[off] = '\0'; 
 	
-	down_write(&tracefile_sem); 
+	tracefile_write_lock();
 	if (strcmp(name, "stop") == 0) { 
 		tracefile = NULL; 
 		trace_stop_thread(); 
@@ -163,7 +174,7 @@ int trace_write_daemon_file(struct file *file, const char *buffer,
 	
 	trace_start_thread(); 
 out_sem: 
-	up_write(&tracefile_sem); 
+	tracefile_write_unlock();
 out: 
 	kfree(name);
 	return count;
@@ -174,9 +185,9 @@ int trace_read_daemon_file(char *page, char **start, off_t off, int count,
 { 
 	int rc; 
 	
-	down_read(&tracefile_sem); 
+	tracefile_read_lock();
 	rc = snprintf(page, count, "%s", tracefile); 
-	up_read(&tracefile_sem); 
+	tracefile_read_unlock();
 
 	return rc;
 }

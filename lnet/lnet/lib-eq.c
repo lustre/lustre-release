@@ -226,8 +226,10 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                         struct timeval tv;
 
                         now = cfs_time_current();
-                        cfs_waitq_timedwait(&wl,  CFS_TASK_INTERRUPTIBLE, (int)cfs_time_seconds(timeout_ms)/1000);
-                        cfs_duration_usec(cfs_time_sub(cfs_time_current(), now), &tv); 
+                        cfs_waitq_timedwait(&wl, CFS_TASK_INTERRUPTIBLE,
+                                            cfs_time_seconds(timeout_ms)/1000);
+                        cfs_duration_usec(cfs_time_sub(cfs_time_current(), now), 
+                                          &tv); 
                         timeout_ms -= tv.tv_sec * 1000 + tv.tv_usec / 1000;
                         if (timeout_ms < 0)
                                 timeout_ms = 0;

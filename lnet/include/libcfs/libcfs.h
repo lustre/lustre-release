@@ -30,6 +30,27 @@
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
+/* cardinality of array */
+#define sizeof_array(a) ((sizeof (a)) / (sizeof ((a)[0])))
+
+#if !defined(container_of)
+/* given a pointer @ptr to the field @member embedded into type (usually
+ * struct) @type, return pointer to the embedding instance of @type. */
+#define container_of(ptr, type, member) \
+        ((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
+#endif
+
+/*
+ * true iff @i is power-of-2
+ */
+#define IS_PO2(i)                               \
+({                                              \
+        typeof(i) __i;                          \
+                                                \
+        __i = (i);                              \
+        !(__i & (__i - 1));                     \
+})
+
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
 /*
@@ -39,6 +60,7 @@ extern unsigned int libcfs_subsystem_debug;
 extern unsigned int libcfs_stack;
 extern unsigned int libcfs_debug;
 extern unsigned int libcfs_printk;
+extern unsigned int libcfs_debug_binary;
 
 /* Has there been an LBUG? */
 extern unsigned int libcfs_catastrophe;
@@ -217,7 +239,7 @@ do {                                                                    \
         goto label;                                                     \
 } while (0)
 
-#define CDEBUG_ENTRY_EXIT 1
+#define CDEBUG_ENTRY_EXIT (1)
 #if CDEBUG_ENTRY_EXIT
 
 /*
@@ -252,6 +274,28 @@ do {                                                                    \
 
 #endif /* !CDEBUG_ENTRY_EXIT */
 
+/*
+ * Some (nomina odiosa sunt) platforms define NULL as naked 0. This confuses
+ * Lustre RETURN(NULL) macro.
+ */
+#if defined(NULL)
+#undef NULL
+#endif
+
+/*
+ * Define lbug_with_loc for your own platform.
+ */
+void lbug_with_loc(char *file,
+                   const char *func,
+                   const int line) __attribute__((noreturn));
+
+#define LBUG_WITH_LOC(file, func, line)                                 \
+do {                                                                    \
+        libcfs_catastrophe = 1;                                         \
+        lbug_with_loc(file, func, line);                                \
+} while (0)
+
+#define NULL ((void *)0)
 
 #define LUSTRE_SRV_LNET_PID      LUSTRE_LNET_PID
 
@@ -320,7 +364,7 @@ void lc_watchdog_delete(struct lc_watchdog *lcw);
 
 /* Dump a debug log */
 void lc_watchdog_dumplog(struct lc_watchdog *lcw,
-                         struct task_struct *tsk,
+                         cfs_task_t *tsk,
                          void *data);
 
 /* __KERNEL__ */
@@ -375,6 +419,24 @@ static inline time_t cfs_unix_seconds(void)
 
         cfs_fs_time_current(&t);
         return (time_t)cfs_fs_time_sec(&t);
+}
+
+static inline cfs_time_t cfs_time_shift(int seconds)
+{
+        return cfs_time_add(cfs_time_current(), cfs_time_seconds(seconds));
+}
+
+static inline long cfs_timeval_sub(struct timeval *large, struct timeval *small,
+                                   struct timeval *result)
+{
+        long r = (long) (
+                (large->tv_sec - small->tv_sec) * ONE_MILLION +
+                (large->tv_usec - small->tv_usec));
+        if (result != NULL) {
+                result->tv_usec = do_div(r, ONE_MILLION);
+                result->tv_sec = r;
+        }
+        return r;
 }
 
 #define CFS_RATELIMIT(seconds)                                  \
@@ -433,7 +495,7 @@ static inline cfs_duration_t cfs_timeout_cap(cfs_duration_t timeout)
 }
 
 /*
- * Portable memory allocator API (draft)
+ * Universal memory allocator API 
  */
 enum cfs_alloc_flags {
         /* allocation is not allowed to block */
@@ -452,15 +514,7 @@ enum cfs_alloc_flags {
         CFS_ALLOC_USER   = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO,
 };
 
-#define CFS_SLAB_ATOMIC         CFS_ALLOC_ATOMIC
-#define CFS_SLAB_WAIT           CFS_ALLOC_WAIT
-#define CFS_SLAB_ZERO           CFS_ALLOC_ZERO
-#define CFS_SLAB_FS             CFS_ALLOC_FS
-#define CFS_SLAB_IO             CFS_ALLOC_IO
-#define CFS_SLAB_STD            CFS_ALLOC_STD
-#define CFS_SLAB_USER           CFS_ALLOC_USER
-
-/* flags for cfs_alloc_page() in addition to enum cfs_alloc_flags */
+/* flags for cfs_page_alloc() in addition to enum cfs_alloc_flags */
 enum cfs_alloc_page_flags {
         /* allow to return page beyond KVM. It has to be mapped into KVM by
          * cfs_page_map(); */
@@ -472,6 +526,31 @@ enum cfs_alloc_page_flags {
  * portable UNIX device file identification. (This is not _very_
  * portable. Probably makes no sense for Windows.)
  */
+/*
+ * Platform defines
+ *
+ * cfs_rdev_t
+ */
+
+typedef unsigned int cfs_major_nr_t;
+typedef unsigned int cfs_minor_nr_t;
+
+/*
+ * Defined by platform.
+ */
+cfs_rdev_t     cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor);
+cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev);
+cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev);
+
+/*
+ * Generic on-wire rdev format.
+ */
+
+typedef __u32 cfs_wire_rdev_t;
+
+cfs_wire_rdev_t cfs_wire_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor);
+cfs_major_nr_t  cfs_wire_rdev_major(cfs_wire_rdev_t rdev);
+cfs_minor_nr_t  cfs_wire_rdev_minor(cfs_wire_rdev_t rdev);
 
 /*
  * Drop into debugger, if possible. Implementation is provided by platform.
@@ -483,16 +562,14 @@ void cfs_enter_debugger(void);
  * Defined by platform
  */
 void cfs_daemonize(char *str);
-#define kportal_daemonize cfs_daemonize
-
 #ifdef __KERNEL__
-void cfs_block_allsigs(cfs_task_t *t);
-void cfs_block_sigs(cfs_task_t *t, cfs_sigset_t bits);
-cfs_sigset_t cfs_get_blocked_sigs(cfs_task_t *t);
+void cfs_block_allsigs(void);
+void cfs_block_sigs(cfs_sigset_t bits);
+cfs_sigset_t cfs_get_blocked_sigs(void);
 #endif
 
 int convert_server_error(__u64 ecode);
-int convert_client_oflag(int cflag);
+int convert_client_oflag(int cflag, int *result);
 
 /*
  * Stack-tracing filling.
@@ -515,7 +592,7 @@ void cfs_stack_trace_fill(struct cfs_stack_trace *trace);
 void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no);
 
 /*
- * Open flags.
+ * Universal open flags.
  */
 #define CFS_O_ACCMODE           0003
 #define CFS_O_CREAT             0100
@@ -533,7 +610,9 @@ void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no);
 #define CFS_O_NOFOLLOW          0400000
 #define CFS_O_NOATIME           01000000
 
+/* convert local open flags to universal open flags */
 int cfs_oflags2univ(int flags);
+/* convert universal open flags to local open flags */
 int cfs_univ2oflags(int flags);
 
 #define _LIBCFS_H

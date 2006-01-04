@@ -29,9 +29,10 @@
 #include <mach/mach_types.h>
 
 #define DEBUG_SUBSYSTEM S_LNET
+
 #include <libcfs/libcfs.h>
 
-static cfs_sysctl_table_header_t *portals_table_header = NULL;
+static cfs_sysctl_table_header_t *libcfs_table_header = NULL;
 extern unsigned int libcfs_debug;
 extern char debug_file_path[1024];
 extern unsigned int libcfs_subsystem_debug;
@@ -43,43 +44,47 @@ extern long max_debug_mb;
 extern int cfs_trace_daemon SYSCTL_HANDLER_ARGS;
 extern int cfs_debug_mb SYSCTL_HANDLER_ARGS;
 /*
- * sysctl table for portals
+ * sysctl table for lnet
  */
-SYSCTL_NODE (,		        OID_AUTO,	portals,	CTLFLAG_RW,
-	     0,			"portals sysctl top");
+SYSCTL_NODE (,		        OID_AUTO,	lnet,	CTLFLAG_RW,
+	     0,			"lnet sysctl top");
 
-SYSCTL_INT(_portals,		        OID_AUTO,	debug,	
+SYSCTL_INT(_lnet,		        OID_AUTO,	debug,	
 	     CTLTYPE_INT | CTLFLAG_RW ,			&libcfs_debug,	
 	     0,		"debug");
-SYSCTL_INT(_portals,		        OID_AUTO,	subsystem_debug,	
+SYSCTL_INT(_lnet,		        OID_AUTO,	subsystem_debug,	
 	     CTLTYPE_INT | CTLFLAG_RW,			&libcfs_subsystem_debug,	
 	     0,		"subsystem debug");
-SYSCTL_INT(_portals,		        OID_AUTO,	printk,	
+SYSCTL_INT(_lnet,		        OID_AUTO,	printk,	
 	     CTLTYPE_INT | CTLFLAG_RW,			&libcfs_printk,	
 	     0,		"printk");
-SYSCTL_STRING(_portals,		        OID_AUTO,	debug_path,	
+SYSCTL_STRING(_lnet,		        OID_AUTO,	debug_path,	
 	     CTLTYPE_STRING | CTLFLAG_RW,		debug_file_path,	
 	     1024,	"debug path");
-SYSCTL_INT(_portals,		        OID_AUTO,	memused,	
+SYSCTL_INT(_lnet,		        OID_AUTO,	memused,	
 	     CTLTYPE_INT | CTLFLAG_RW,			(int *)&libcfs_kmemory.counter,	
 	     0,		"memused");
-SYSCTL_PROC(_portals,		        OID_AUTO,	trace_daemon,
+SYSCTL_INT(_lnet,		        OID_AUTO,	catastrophe,	
+	     CTLTYPE_INT | CTLFLAG_RW,			(int *)&libcfs_catastrophe,	
+	     0,		"catastrophe");
+SYSCTL_PROC(_lnet,		        OID_AUTO,	trace_daemon,
 	     CTLTYPE_STRING | CTLFLAG_RW,		0,
 	     0,		&cfs_trace_daemon,		"A",	"trace daemon");
-SYSCTL_PROC(_portals,		        OID_AUTO,	debug_mb,
+SYSCTL_PROC(_lnet,		        OID_AUTO,	debug_mb,
 	     CTLTYPE_INT | CTLFLAG_RW,		        &max_debug_mb,
 	     0,		&cfs_debug_mb,		        "L",	"max debug size");
 
 
 static cfs_sysctl_table_t	top_table[] = {
-	&sysctl__portals,
-	&sysctl__portals_debug,
-	&sysctl__portals_subsystem_debug,
-	&sysctl__portals_printk,
-	&sysctl__portals_debug_path,
-	&sysctl__portals_memused,
-	&sysctl__portals_trace_daemon,
-	&sysctl__portals_debug_mb,
+	&sysctl__lnet,
+	&sysctl__lnet_debug,
+	&sysctl__lnet_subsystem_debug,
+	&sysctl__lnet_printk,
+	&sysctl__lnet_debug_path,
+	&sysctl__lnet_memused,
+	&sysctl__lnet_catastrophe,
+	&sysctl__lnet_trace_daemon,
+	&sysctl__lnet_debug_mb,
 	NULL
 };
 
@@ -110,8 +115,8 @@ int
 insert_proc(void)
 {
 #if 1
-        if (!portals_table_header) 
-                portals_table_header = register_cfs_sysctl_table(top_table, 0);
+        if (!libcfs_table_header) 
+                libcfs_table_header = cfs_register_sysctl_table(top_table, 0);
 #endif
 	return 0;
 }
@@ -120,9 +125,9 @@ void
 remove_proc(void)
 {
 #if 1
-        if (portals_table_header != NULL) 
-                unregister_cfs_sysctl_table(portals_table_header); 
-        portals_table_header = NULL;
+        if (libcfs_table_header != NULL) 
+                cfs_unregister_sysctl_table(libcfs_table_header); 
+        libcfs_table_header = NULL;
 #endif
 	return;
 }

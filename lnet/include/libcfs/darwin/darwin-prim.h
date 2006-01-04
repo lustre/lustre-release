@@ -28,6 +28,7 @@
 #include <vm/pmap.h>
 #include <vm/vm_kern.h>
 #include <mach/machine/vm_param.h>
+#include <machine/machine_routines.h>
 #include <kern/clock.h>
 #include <kern/thread_call.h>
 #include <sys/param.h>
@@ -63,10 +64,12 @@ extern kern_return_t            cfs_symbol_put(const char *);
  * User can register/unregister a list of sysctl_oids
  * sysctl_oid is data struct of osx's sysctl-entry
  */
+#define 	CONFIG_SYSCTL	1
+
 typedef struct sysctl_oid *     cfs_sysctl_table_t;
 typedef cfs_sysctl_table_t      cfs_sysctl_table_header_t;
-cfs_sysctl_table_header_t	*register_cfs_sysctl_table (cfs_sysctl_table_t *table, int arg);
-void unregister_cfs_sysctl_table (cfs_sysctl_table_header_t *table);
+cfs_sysctl_table_header_t	*cfs_register_sysctl_table (cfs_sysctl_table_t *table, int arg);
+void cfs_unregister_sysctl_table (cfs_sysctl_table_header_t *table);
 
 /*
  * Proc file system APIs, no /proc fs support in OSX
@@ -114,6 +117,8 @@ extern void             *get_bsdtask_info(task_t);
 typedef struct uthread		cfs_task_t;
 #define current_uthread()       ((struct uthread *)get_bsdthread_info(current_act()))
 #define cfs_current()		current_uthread()
+#define cfs_task_lock(t)	do {;} while (0)
+#define cfs_task_unlock(t)	do {;} while (0)
 
 #define set_current_state(s)	do {;} while (0)
 #define reparent_to_init()	do {;} while (0)
@@ -173,7 +178,7 @@ extern void cfs_thread_agent(void);
 			break;					\
 		}						\
 		spin_unlock(&(pta)->lock);			\
-		schedule();					\
+		cfs_schedule();					\
 	} while(1);						\
 
 /*
@@ -195,7 +200,7 @@ extern void cfs_thread_agent(void);
 			break;					\
 		}						\
 		spin_unlock(&(pta)->lock);			\
-		schedule();					\
+		cfs_schedule();					\
 	} while(1)
 
 /*
@@ -214,7 +219,7 @@ extern void cfs_thread_agent(void);
 			break;					\
 		}						\
 		spin_unlock(&(pta)->lock);			\
-		schedule();					\
+		cfs_schedule();					\
 	} while (1);						\
 
 /*
@@ -265,11 +270,16 @@ typedef struct cfs_waitlink {
 	struct ksleep_link  wl_ksleep_link;
 } cfs_waitlink_t;
 
+typedef int cfs_task_state_t;
+
+#define CFS_TASK_INTERRUPTIBLE	THREAD_INTERRUPTIBLE
+#define CFS_TASK_UNINT		THREAD_UNINT
+
 void cfs_waitq_init(struct cfs_waitq *waitq);
 void cfs_waitlink_init(struct cfs_waitlink *link);
 
 void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link);
-void cfs_waitq_add_exclusive(struct cfs_waitq *waitq, 
+void cfs_waitq_add_exclusive(struct cfs_waitq *waitq,
 			     struct cfs_waitlink *link);
 void cfs_waitq_forward(struct cfs_waitlink *link, struct cfs_waitq *waitq);
 void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link);
@@ -279,8 +289,9 @@ void cfs_waitq_signal(struct cfs_waitq *waitq);
 void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr);
 void cfs_waitq_broadcast(struct cfs_waitq *waitq);
 
-void cfs_waitq_wait(struct cfs_waitlink *link);
-cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link, 
+void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state);
+cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link,
+				   cfs_task_state_t state, 
 				   cfs_duration_t timeout);
 
 /*
@@ -288,20 +299,23 @@ cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link,
  */
 #define MAX_SCHEDULE_TIMEOUT    ((long)(~0UL>>12))
 
-static inline int schedule_timeout(int64_t timeout)
+static inline int cfs_schedule_timeout(int state, int64_t timeout)
 {
 	int          result;
 	
 	AbsoluteTime clock_current;
 	AbsoluteTime clock_delay;
-	result = assert_wait((event_t)current_uthread(), THREAD_UNINT);
-	clock_get_uptime(&clock_current);
-	nanoseconds_to_absolutetime(timeout, &clock_delay);
-	ADD_ABSOLUTETIME(&clock_current, &clock_delay);
-	thread_set_timer_deadline(clock_current);
+	result = assert_wait((event_t)current_uthread(), state);
+	if (timeout > 0) {
+		clock_get_uptime(&clock_current);
+		nanoseconds_to_absolutetime(timeout, &clock_delay);
+		ADD_ABSOLUTETIME(&clock_current, &clock_delay);
+		thread_set_timer_deadline(clock_current);
+	}
 	if (result == THREAD_WAITING)
 		result = thread_block(THREAD_CONTINUE_NULL);
-	thread_cancel_timer();
+	if (timeout > 0)
+		thread_cancel_timer();
 	if (result == THREAD_TIMED_OUT)
 		result = 0;
 	else
@@ -309,40 +323,59 @@ static inline int schedule_timeout(int64_t timeout)
 	return result;
 }
 
-#define schedule()                              \
-	do {                                    \
-		if (assert_wait_possible())     \
-			schedule_timeout(1);    \
-		else                            \
-			schedule_timeout(0);    \
-	} while (0)
+#define cfs_schedule()	cfs_schedule_timeout(CFS_TASK_UNINT, CFS_MIN_DELAY)
+#define cfs_pause(tick)	cfs_schedule_timeout(CFS_TASK_UNINT, tick)
 
-#define __wait_event(wq, condition)		\
-do {						\
-	struct cfs_waitlink __wait;		\
-						\
-	cfs_waitlink_init(&__wait);		\
-	for (;;) {				\
-		cfs_waitq_add(&wq, &__wait);	\
-		if (condition)			\
-			break;			\
-		cfs_waitq_wait(&__wait);	\
-		cfs_waitq_del(&wq, &__wait);	\
-	}					\
-	cfs_waitq_del(&wq, &__wait);		\
+#define __wait_event(wq, condition)				\
+do {								\
+	struct cfs_waitlink __wait;				\
+								\
+	cfs_waitlink_init(&__wait);				\
+	for (;;) {						\
+		cfs_waitq_add(&wq, &__wait);			\
+		if (condition)					\
+			break;					\
+		cfs_waitq_wait(&__wait, CFS_TASK_UNINT);	\
+		cfs_waitq_del(&wq, &__wait);			\
+	}							\
+	cfs_waitq_del(&wq, &__wait);				\
 } while (0)
 
-#define wait_event(wq, condition) 					\
-do {									\
-	if (condition)	 						\
-		break;							\
-	__wait_event(wq, condition);					\
+#define wait_event(wq, condition) 				\
+do {								\
+	if (condition)	 					\
+		break;						\
+	__wait_event(wq, condition);				\
 } while (0)
 
-#define wait_event_interruptible(wq, condition)	\
-({						\
-	wait_event(wq, condition);		\
-	0;					\
+#define __wait_event_interruptible(wq, condition, ret)		\
+do {								\
+	struct cfs_waitlink __wait;				\
+								\
+	cfs_waitlink_init(&__wait);				\
+	for (;;) {						\
+		cfs_waitq_add(&wq, &__wait);			\
+		if (condition)					\
+			break;					\
+		if (!cfs_signal_pending(cfs_current())) {	\
+			cfs_waitq_wait(&__wait, 		\
+				       CFS_TASK_INTERRUPTIBLE);	\
+			cfs_waitq_del(&wq, &__wait);		\
+			continue;				\
+		}						\
+		ret = -ERESTARTSYS;				\
+		break;						\
+	}							\
+	cfs_waitq_del(&wq, &__wait);				\
+} while (0)
+
+#define wait_event_interruptible(wq, condition)			\
+({								\
+ 	int __ret = 0;						\
+ 	if (!condition)						\
+		__wait_event_interruptible(wq, 			\
+			                   condition, __ret);	\
+	__ret;							\
 })
 
 extern void	wakeup_one __P((void * chan));
@@ -359,41 +392,30 @@ static inline void sleep_on(cfs_waitq_t *waitq)
 	
 	cfs_waitlink_init(&link);
 	cfs_waitq_add(waitq, &link);
-	cfs_waitq_wait(&link);
+	cfs_waitq_wait(&link, CFS_TASK_UNINT);
 	cfs_waitq_del(waitq, &link);
 }
 
 /*
- * XXX
  * Signal
+ * We don't use signal_lock/signal_unlock in cfs_sigmask_lock()
+ * and cfs_sigmask_unlock() because they will be called in 
+ * signal kernel APIs by xnu.
  */
-#define cfs_sigmask_lock(t, f)		do { f = 0; } while(0)
-#define cfs_sigmask_unlock(t, f)	do { f = 0; } while(0)
-#define cfs_signal_pending(t)		(0)
+typedef sigset_t	cfs_sigset_t;
+#define cfs_sigmask_lock(t, f)		do { f = 0; } while (0)
+#define cfs_sigmask_unlock(t, f)	do { f = 0; } while (0)
+#define cfs_signal_pending(ut)		SHOULDissignal(current_proc(), ut)
 
-#define cfs_siginitset(pmask, sigs)				\
-	do {							\
-		sigset_t __sigs = sigs & (~sigcantmask);	\
-		*(pmask) = __sigs;				\
-	} while(0)
-
-#define cfs_siginitsetinv(pmask, sigs)                          \
-	do {                                                    \
-		sigset_t __sigs = ~(sigs | sigcantmask);        \
-		*(pmask) = __sigs;				\
-	} while(0)
-
-#define cfs_recalc_sigpending(ut)				\
-        do {							\
-		(ut)->uu_siglist = (ut)->uu_siglist & ~(ut)->uu_sigmask;\
-	} while (0)
-#define cfs_sigfillset(s)					\
-	do {							\
-		memset((s), -1, sizeof(sigset_t));		\
-	} while(0)
-
-#define cfs_set_sig_blocked(ut, b)		do {(ut)->uu_sigmask = b;} while(0)
-#define cfs_get_sig_blocked(ut)			(&(ut)->uu_sigmask)
+/*
+ * We don't need to recalc_sigpending because xnu always
+ * call SHOULDissignal to checking if there are pending signals.
+ */
+#define cfs_recalc_sigpending(ut)	do {} while (0)
+/*
+ * Clear all pending signals.
+ */
+#define cfs_clear_sigpending(ut)	clear_procsiglist(current_proc(), -1)
 
 #define SIGNAL_MASK_ASSERT()
 
@@ -444,6 +466,7 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 #define smp_num_cpus				NR_CPUS
 /* XXX smp_call_function is not supported in xnu */
 #define smp_call_function(f, a, n, w)		do {} while(0)
+int cfs_online_cpus(void);
 
 /*
  * Misc
@@ -499,6 +522,11 @@ struct __dummy_ ## name ## _struct {}
 #define inter_module_get(n)			cfs_symbol_get(n)
 #define inter_module_put(n)			cfs_symbol_put(n)
 
+static inline int request_module(char *name)
+{
+	return (-EINVAL);
+}
+
 #ifndef __exit
 #define __exit
 #endif
@@ -514,10 +542,10 @@ struct __dummy_ ## name ## _struct {}
 #define MODULE_PARM_DESC(a, b)
 
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE (2*200+5*10+0)
+#define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
 
-#define NR_IRQS                         512
-#define in_interrupt()                  (0)
+#define NR_IRQS				512
+#define in_interrupt()			ml_at_interrupt_context()
 
 #define KERN_EMERG      "<0>"   /* system is unusable                   */
 #define KERN_ALERT      "<1>"   /* action must be taken immediately     */
@@ -538,17 +566,30 @@ static inline long PTR_ERR(const void *ptr)
 /* XXX */
 #define IS_ERR(p)	(0)
 
+#else	/* !__KERNEL__ */
+
+typedef struct cfs_proc_dir_entry{
+	void		*data;
+}cfs_proc_dir_entry_t;
+
+#include <libcfs/user-prim.h>
+#define __WORDSIZE	32
+
+#endif	/* END __KERNEL__ */
 /*
  * Error number
  */
+#define EPROTO          EPROTOTYPE
 #define EBADR		EBADRPC
-#define ERESTARTSYS	ERESTART
+#define ERESTARTSYS	512
 #define EDEADLOCK	EDEADLK
 #define ECOMM		EINVAL
 #define ENODATA		EINVAL
 
+#if BYTE_ORDER == BIG_ENDIAN
+# define __BIG_ENDIAN
 #else
-#define __WORDSIZE	32
-#endif	/* __KERNEL__ */
+# define __LITTLE_ENDIAN
+#endif
 
-#endif	/* __LINUX__ */
+#endif	/* __LIBCFS_DARWIN_CFS_PRIM_H__ */

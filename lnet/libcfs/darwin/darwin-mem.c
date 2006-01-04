@@ -2,7 +2,8 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2002 Cluster File Systems, Inc.
- * Author: Phil Schwan <phil@clusterfs.com>
+ * Author: Liang Zhen <liangzhen@clusterfs.com>
+ *         Nikita Danilov <nikita@clusterfs.com>
  *
  * This file is part of Lustre, http://www.lustre.org.
  *
@@ -113,9 +114,8 @@ zone_t cfs_zinit(vm_size_t size, vm_size_t max, int alloc, const char *name)
 }
 
 cfs_mem_cache_t *
-cfs_mem_cache_create (const char *name, size_t objsize, size_t off, unsigned long arg1,
-		void (*arg2)(void *, cfs_mem_cache_t *, unsigned long),
-		void (*arg3)(void *, cfs_mem_cache_t *, unsigned long))
+cfs_mem_cache_create (const char *name,
+                      size_t objsize, size_t off, unsigned long arg1)
 {
 	cfs_mem_cache_t	*new = NULL;
 
@@ -139,21 +139,30 @@ cfs_mem_cache_create (const char *name, size_t objsize, size_t off, unsigned lon
 	return new;
 }
 
-int
-cfs_mem_cache_destroy (cfs_mem_cache_t *cachep)
+int cfs_mem_cache_destroy (cfs_mem_cache_t *cachep)
 {
         FREE (cachep, M_TEMP);
 	return 0;
 }
 
-void *
-cfs_mem_cache_alloc (cfs_mem_cache_t *cachep, int flags)
+void *cfs_mem_cache_alloc (cfs_mem_cache_t *cachep, int flags)
 {
-        return (void *)zalloc(cachep->zone);
+        void *result;
+
+        /* zalloc_canblock() is not exported... Emulate it. */
+        if (flags & CFS_ALLOC_ATOMIC) {
+                result = (void *)zalloc_noblock(cachep->zone);
+        } else {
+                LASSERT(get_preemption_level() == 0);
+                result = (void *)zalloc(cachep->zone);
+        }
+        if (result != NULL && (flags & CFS_ALLOC_ZERO))
+                memset(result, 0, cachep->size);
+
+        return result;
 }
 
-void
-cfs_mem_cache_free (cfs_mem_cache_t *cachep, void *objp)
+void cfs_mem_cache_free (cfs_mem_cache_t *cachep, void *objp)
 {
         zfree (cachep->zone, (vm_address_t)objp);
 }
@@ -167,38 +176,14 @@ cfs_mem_cache_free (cfs_mem_cache_t *cachep, void *objp)
  * "Raw" pages
  */
 
-extern vm_map_t zone_map;
-static inline vm_map_t page_map(struct xnu_raw_page *pg)
-{
-        LASSERT(pg != NULL);
-
-        return pg->order == 0 ? zone_map : kernel_map;
-}
-
-static int raw_page_init(struct xnu_raw_page *pg)
-{
-	vm_size_t size = (1UL << pg->order) * PAGE_SIZE;
-	int upl_flags = UPL_SET_INTERNAL |
-                UPL_SET_LITE | UPL_SET_IO_WIRE | UPL_COPYOUT_FROM;
-        int     kr = 0;
-
-        /* XXX is it necessary? */
-	kr = vm_map_get_upl(page_map(pg),
-                            pg->virtual, &size, &pg->upl, 0, 0, &upl_flags, 0);
-        return kr;
-}
-
-static void raw_page_done(struct xnu_raw_page *pg)
-{
-	ubc_upl_abort(pg->upl, UPL_ABORT_FREE_ON_EMPTY);
-        return;
-}
+static unsigned int raw_pages = 0;
 
 static struct xnu_page_ops raw_page_ops;
 static struct xnu_page_ops *page_ops[XNU_PAGE_NTYPES] = {
         [XNU_PAGE_RAW] = &raw_page_ops
 };
 
+#if defined(LIBCFS_DEBUG)
 static int page_type_is_valid(cfs_page_t *page)
 {
         LASSERT(page != NULL);
@@ -209,6 +194,7 @@ static int page_is_raw(cfs_page_t *page)
 {
         return page->type == XNU_PAGE_RAW;
 }
+#endif
 
 static struct xnu_raw_page *as_raw(cfs_page_t *page)
 {
@@ -236,120 +222,83 @@ static struct xnu_page_ops raw_page_ops = {
         .page_address   = raw_page_address
 };
 
+extern int get_preemption_level(void);
 
-extern vm_size_t kalloc_max;
-extern vm_size_t kalloc_max_prerounded;
-extern int first_k_zone;
-extern struct zone *k_zone[16];
-extern vm_offset_t zalloc_canblock( register zone_t, boolean_t );
-extern vm_map_t zone_map;
+extern void print_backtrace(struct savearea *);
 
-static inline vm_address_t
-page_zone_alloc(int flags, int order)
+struct list_head page_death_row;
+spinlock_t page_death_row_phylax;
+
+static void raw_page_finish(struct xnu_raw_page *pg)
 {
-	register int zindex;
-	register vm_size_t allocsize;
-	vm_size_t size = (1UL << order) * PAGE_SIZE;
-	vm_address_t	addr;
-	kern_return_t	kr;
-
-	assert(order >= 0);
-	if (size > PAGE_SIZE){
-		/* XXX Liang:
-		 * zalloc_canblock() call kernel_memory_allocate to allocate
-		 * pages, kernel_memory_allocate cannot guarantee contig pages!
-		 * So any request bigger then PAGE_SIZE should not call zalloc()
-		 *
-		 * NB. kmem_alloc_contig could be very slow!!!! Anyway, I dont
-		 * know what will happen if order >= 1 :-(
-		 * */
-		CDEBUG(D_MALLOC, "Allocate contig pages!\n");
-		kr = kmem_alloc_contig(kernel_map, &addr, size, 0, 0);
-		if (kr)
-			return 0;
-		return addr;
-	}
-	allocsize = KALLOC_MINSIZE;
-	zindex = first_k_zone;
-	while (allocsize < size) {
-		allocsize <<= 1;
-		zindex++;
-	}
-	assert(allocsize < kalloc_max);
-	if (flags & M_NOWAIT != 0)
-		addr = zalloc_canblock(k_zone[zindex], FALSE);
-	else
-		addr = zalloc_canblock(k_zone[zindex], TRUE);
-	return addr;
+        -- raw_pages;
+        if (pg->virtual != NULL)
+                cfs_free(pg->virtual);
+        cfs_free(pg);
 }
 
-/* Allocate a "page", actually upl of darwin */
-struct xnu_raw_page *alloc_raw_pages(u_int32_t flags, u_int32_t order)
+void raw_page_death_row_clean(void)
 {
-	kern_return_t	kr;
-	vm_size_t size = (1UL << order) * PAGE_SIZE;
-        u_int32_t mflags = 0;
-	struct xnu_raw_page *pg;
+        struct xnu_raw_page *pg;
 
-        if (flags & CFS_ALLOC_ATOMIC != 0)
-                mflags |= M_NOWAIT;
-        else
-                mflags |= M_WAITOK;
-        if (flags & CFS_ALLOC_ZERO != 0)
-                mflags |= M_ZERO;
-
-	MALLOC (pg, struct xnu_raw_page *, sizeof *pg, M_TEMP, mflags);
-	if (pg == NULL)
-		return NULL;
-        pg->header.type = XNU_PAGE_RAW;
-        pg->order = order;
-	cfs_set_page_count(&pg->header, 1);
-	pg->virtual = page_zone_alloc(flags, order);
-	if (!pg->virtual)
-                /*
-                 * XXX nikita: Liang, shouldn't pg be freed here?
-                 */
-		return NULL;
-
-        kr = raw_page_init(pg);
-	if (kr != 0) {
-		size = (1UL << order) * PAGE_SIZE;
-                kmem_free(page_map(pg), pg->virtual, size);
-		return NULL;
-	}
-	return pg;
+        spin_lock(&page_death_row_phylax);
+        while (!list_empty(&page_death_row)) {
+                pg = container_of(page_death_row.next,
+                                  struct xnu_raw_page, dead);
+                list_del(&pg->dead);
+                spin_unlock(&page_death_row_phylax);
+                raw_page_finish(pg);
+                spin_lock(&page_death_row_phylax);
+        }
+        spin_unlock(&page_death_row_phylax);
 }
 
 /* Free a "page" */
-void free_raw_pages(struct xnu_raw_page *pg, u_int32_t order)
+void free_raw_page(struct xnu_raw_page *pg)
 {
-	vm_size_t size = (1UL << order) * PAGE_SIZE;
-
 	if (!atomic_dec_and_test(&pg->count))
 		return;
-        raw_page_done(pg);
-        kmem_free(page_map(pg), pg->virtual, size);
-	FREE(pg, M_TEMP);
-}
-
-cfs_page_t *cfs_alloc_pages(u_int32_t flags, u_int32_t order)
-{
-        return &alloc_raw_pages(flags, order)->header;
+        /*
+         * kmem_free()->vm_map_remove()->vm_map_delete()->lock_write() may
+         * block. (raw_page_done()->upl_abort() can block too) On the other
+         * hand, cfs_free_page() may be called in non-blockable context. To
+         * work around this, park pages on global list when cannot block.
+         */
+        if (get_preemption_level() > 0) {
+                spin_lock(&page_death_row_phylax);
+                list_add(&pg->dead, &page_death_row);
+                spin_unlock(&page_death_row_phylax);
+        } else {
+                raw_page_finish(pg);
+                raw_page_death_row_clean();
+        }
 }
 
 cfs_page_t *cfs_alloc_page(u_int32_t flags)
 {
-        return cfs_alloc_pages(flags, 0);
+        struct xnu_raw_page *page;
+
+        /*
+         * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+         * from here: this will lead to infinite recursion.
+         */
+
+        page = cfs_alloc(sizeof *page, flags);
+        if (page != NULL) {
+                page->virtual = cfs_alloc(CFS_PAGE_SIZE, flags);
+                if (page->virtual != NULL) {
+                        ++ raw_pages;
+                        page->header.type = XNU_PAGE_RAW;
+                        atomic_set(&page->count, 1);
+                } else
+                        cfs_free(page);
+        }
+        return page != NULL ? &page->header : NULL;
 }
 
-void cfs_free_pages(cfs_page_t *pages, int order)
+void cfs_free_page(cfs_page_t *pages)
 {
-        free_raw_pages(as_raw(pages), order);
-}
-
-void cfs_free_page(cfs_page_t *page)
-{
-        cfs_free_pages(page, 0);
+        free_raw_page(as_raw(pages));
 }
 
 void cfs_get_page(cfs_page_t *p)
@@ -378,6 +327,10 @@ void cfs_set_page_count(cfs_page_t *p, int v)
 
 void *cfs_page_address(cfs_page_t *pg)
 {
+        /*
+         * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+         * from here: this will lead to infinite recursion.
+         */
         LASSERT(page_type_is_valid(pg));
         return page_ops[pg->type]->page_address(pg);
 }
@@ -425,14 +378,14 @@ void *cfs_alloc(size_t nr_bytes, u_int32_t flags)
         int mflags;
 
         mflags = 0;
-        if (flags & CFS_ALLOC_ATOMIC != 0) {
-                mflags |= 0 /* M_NOWAIT */;
+        if (flags & CFS_ALLOC_ATOMIC) {
+                mflags |= M_NOWAIT;
         } else {
                 LASSERT(get_preemption_level() == 0);
                 mflags |= M_WAITOK;
         }
 
-        if (flags & CFS_ALLOC_ZERO != 0)
+        if (flags & CFS_ALLOC_ZERO)
                 mflags |= M_ZERO;
 
         return _MALLOC(nr_bytes, M_TEMP, mflags);
@@ -451,5 +404,6 @@ void *cfs_alloc_large(size_t nr_bytes)
 
 void  cfs_free_large(void *addr)
 {
+        LASSERT(get_preemption_level() == 0);
         return _FREE(addr, M_TEMP);
 }

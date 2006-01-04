@@ -182,11 +182,6 @@ static inline cfs_duration_t cfs_time_seconds(int seconds)
 	return cfs_duration_build(ONE_BILLION * (int64_t)seconds);
 }
 
-static inline cfs_time_t cfs_time_shift(int seconds)
-{
-	return cfs_time_add(cfs_time_current(), cfs_time_seconds(seconds));
-}
-
 /*
  * internal helper function used by cfs_fs_time_before*()
  */

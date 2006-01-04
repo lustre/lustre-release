@@ -118,7 +118,7 @@ struct ptldebug_header {
 /* initial pid  */
 #define LUSTRE_LNET_PID          12345
 
-#define ENTRY_NESTING_SUPPORT (0)
+#define ENTRY_NESTING_SUPPORT (1)
 #define ENTRY_NESTING   do {;} while (0)
 #define EXIT_NESTING   do {;} while (0)
 #define __current_nesting_level() (0)
@@ -135,6 +135,19 @@ struct ptldebug_header {
 typedef kernel_cap_t cfs_kernel_cap_t;
 #else
 typedef __u32 cfs_kernel_cap_t;
+#endif
+
+#if defined(__KERNEL__)
+/*
+ * No stack-back-tracing in Linux for now.
+ */
+struct cfs_stack_trace {
+};
+
+#ifndef WITH_WATCHDOG
+#define WITH_WATCHDOG
+#endif
+
 #endif
 
 #endif /* _LINUX_LIBCFS_H */

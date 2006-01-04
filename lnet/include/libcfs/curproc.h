@@ -20,6 +20,7 @@
 #ifndef __LIBCFS_CURPROC_H__
 #define __LIBCFS_CURPROC_H__
 
+#ifdef __KERNEL__
 /*
  * Portable API to access common characteristics of "current" UNIX process.
  *
@@ -48,6 +49,7 @@ char  *cfs_curproc_comm(void);
  */
 cfs_kernel_cap_t cfs_curproc_cap_get(void);
 void cfs_curproc_cap_set(cfs_kernel_cap_t cap);
+#endif
 
 /* __LIBCFS_CURPROC_H__ */
 #endif

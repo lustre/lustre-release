@@ -25,8 +25,6 @@
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 
-
-
 struct lc_watchdog {
         cfs_timer_t       lcw_timer; /* kernel timer */
         struct list_head  lcw_list;
@@ -49,7 +47,6 @@ struct lc_watchdog {
 };
 
 #ifdef WITH_WATCHDOG
-
 /*
  * The dispatcher will complete lcw_start_completion when it starts,
  * and lcw_stop_completion when it exits.
@@ -83,9 +80,9 @@ static spinlock_t       lcw_pending_timers_lock = SPIN_LOCK_UNLOCKED;
 static struct list_head lcw_pending_timers = \
         LIST_HEAD_INIT(lcw_pending_timers);
 
-static struct task_struct *lcw_lookup_task(struct lc_watchdog *lcw)
+static cfs_task_t *lcw_lookup_task(struct lc_watchdog *lcw)
 {
-        struct task_struct *tsk;
+        cfs_task_t *tsk;
         unsigned long flags;
         ENTRY;
 
@@ -119,8 +116,9 @@ static void lcw_cb(unsigned long data)
 
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
 
-        CWARN("Watchdog triggered for pid %d: it was inactive for %dms\n",
-              lcw->lcw_pid, (lcw->lcw_time * 1000) / HZ);
+        CWARN("Watchdog triggered for pid %d: it was inactive for %ldms\n",
+              lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time) * 1000);
+
 
         tsk = lcw_lookup_task(lcw);
         if (tsk != NULL)
@@ -159,7 +157,7 @@ static int lcw_dispatch_main(void *data)
 
         ENTRY;
 
-        libcfs_daemonize("lc_watchdogd");
+        cfs_daemonize("lc_watchdogd");
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -422,11 +420,6 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
 {
 }
 EXPORT_SYMBOL(lc_watchdog_delete);
-void lc_watchdog_dumplog(struct lc_watchdog *lcw,
-                         struct task_struct *tsk,
-                         void               *data)
-{
-}
-EXPORT_SYMBOL(lc_watchdog_dumplog);
 
 #endif
+

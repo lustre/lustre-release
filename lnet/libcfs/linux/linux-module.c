@@ -5,26 +5,25 @@
 
 #define LNET_MINOR 240
 
-
 void
 libcfs_daemonize (char *str)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,63)) 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,63))
 	daemonize(str);
-#else 
-	daemonize(); 
+#else
+	daemonize();
 	snprintf (current->comm, sizeof (current->comm), "%s", str);
 #endif
 }
 
 void
 libcfs_blockallsigs ()
-{ 
-	unsigned long  flags; 
-	
-	SIGNAL_MASK_LOCK(current, flags); 
-	sigfillset(&current->blocked); 
-	RECALC_SIGPENDING; 
+{
+	unsigned long  flags;
+
+	SIGNAL_MASK_LOCK(current, flags);
+	sigfillset(&current->blocked);
+	RECALC_SIGPENDING;
 	SIGNAL_MASK_UNLOCK(current, flags);
 }
 

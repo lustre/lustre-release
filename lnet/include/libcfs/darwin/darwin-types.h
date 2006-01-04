@@ -32,6 +32,10 @@
 #include <mach/mach_types.h>
 #include <sys/types.h>
 
+#ifndef _BLKID_TYPES_H
+#define _BLKID_TYPES_H
+#endif
+
 typedef u_int8_t  __u8;
 typedef u_int16_t __u16;
 typedef u_int32_t __u32;
@@ -69,13 +73,13 @@ typedef struct { volatile uint32_t counter; }	atomic_t;
 #define atomic_dec_and_test(a)		( atomic_dec(a) == 0 )
 
 #include <libsa/mach/mach.h>
-typedef uint64_t			loff_t;
+typedef off_t   			loff_t;
 
 #else	/* !__KERNEL__ */
 
 #include <stdint.h>
 
-typedef uint64_t			loff_t;
+typedef off_t   			loff_t;
 
 #endif	/* __KERNEL END */
 

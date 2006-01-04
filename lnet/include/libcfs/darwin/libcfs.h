@@ -9,6 +9,7 @@
 #endif
 
 #include <mach/mach_types.h>
+#include <sys/errno.h>
 #include <string.h>
 #include <libcfs/darwin/darwin-types.h>
 #include <libcfs/darwin/darwin-time.h>
@@ -89,7 +90,7 @@ struct ptldebug_header {
  * is executed, and decreased on EXIT and RETURN.
  */
 #ifdef __KERNEL__
-#define ENTRY_NESTING_SUPPORT (0)
+#define ENTRY_NESTING_SUPPORT (1)
 #endif
 
 #if ENTRY_NESTING_SUPPORT
@@ -169,5 +170,23 @@ __entry_nesting(&__cdd);
  * XNU has no capabilities
  */
 typedef int cfs_kernel_cap_t;
+
+#ifdef __KERNEL__
+enum {
+        /* if you change this, update darwin-util.c:cfs_stack_trace_fill() */
+        CFS_STACK_TRACE_DEPTH = 16
+};
+
+struct cfs_stack_trace {
+        void *frame[CFS_STACK_TRACE_DEPTH];
+};
+
+#define printk(format, args...)                 printf(format, ## args)
+
+#ifdef WITH_WATCHDOG
+#undef WITH_WATCHDOG
+#endif
+
+#endif /* __KERNEL__ */
 
 #endif /* _XNU_LIBCFS_H */

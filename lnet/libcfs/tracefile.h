@@ -162,6 +162,9 @@ extern void print_to_console(struct ptldebug_header *hdr, int mask,
 			     char *buf, int len, char *file, const char *fn);
 extern struct trace_cpu_data * __trace_get_tcd (unsigned long *flags);
 extern void __trace_put_tcd (struct trace_cpu_data *tcd, unsigned long flags);
+int trace_refill_stock(struct trace_cpu_data *tcd, int gfp,
+		       struct list_head *stock);
+
 
 #define trace_get_tcd(f)	__trace_get_tcd(&(f))
 #define trace_put_tcd(t, f)	__trace_put_tcd(t, f)

@@ -24,7 +24,10 @@
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
-#if defined(__KERNEL__)
+#if defined(__KERNEL__) && defined(LNET_ROUTER)
+
+#include <linux/seq_file.h>
+#include <linux/lustre_compat25.h>
 
 /* this is really lnet_proc.c */
 

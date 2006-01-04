@@ -1,7 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * Implementation of standard libcfs synchronization primitives for XNU
+ * kernel.
  *
  *  Copyright (c) 2004 Cluster File Systems, Inc.
  *
@@ -33,7 +34,7 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
-#define XNU_SYNC_DEBUG (0)
+#define XNU_SYNC_DEBUG (1)
 
 #if XNU_SYNC_DEBUG
 #define ON_SYNC_DEBUG(e) e
@@ -48,6 +49,7 @@ enum {
 	KCOND_MAGIC = 0xb01dface,
 	KRW_MAGIC   = 0xdabb1edd,
 	KSPIN_MAGIC = 0xca11ab1e,
+        KRW_SPIN_MAGIC    = 0xbabeface,
 	KSLEEP_CHAN_MAGIC = 0x0debac1e,
 	KSLEEP_LINK_MAGIC = 0xacc01ade,
 	KTIMER_MAGIC      = 0xbefadd1e
@@ -97,6 +99,22 @@ int kspin_isnotlocked(struct kspin *spin);
 #define kspin_islocked(s) (1)
 #define kspin_isnotlocked(s) (1)
 #endif
+
+/* ------------------------- rw spinlock ----------------------- */
+struct krw_spin {
+        struct kspin      guard;
+        int               count;
+#if XNU_SYNC_DEBUG
+        unsigned          magic;
+#endif
+};
+
+void krw_spin_init(struct krw_spin *sem);
+void krw_spin_done(struct krw_spin *sem);
+void krw_spin_down_r(struct krw_spin *sem);
+void krw_spin_down_w(struct krw_spin *sem);
+void krw_spin_up_r(struct krw_spin *sem);
+void krw_spin_up_w(struct krw_spin *sem);
 
 /* ------------------------- semaphore ------------------------- */
 
@@ -225,20 +243,20 @@ void ksleep_link_done(struct ksleep_link *link);
 void ksleep_add(struct ksleep_chan *chan, struct ksleep_link *link);
 void ksleep_del(struct ksleep_chan *chan, struct ksleep_link *link);
 
-void ksleep_wait(struct ksleep_chan *chan);
-int64_t  ksleep_timedwait(struct ksleep_chan *chan, uint64_t timeout);
+void ksleep_wait(struct ksleep_chan *chan, int state);
+int64_t  ksleep_timedwait(struct ksleep_chan *chan, int state, uint64_t timeout);
 
 void ksleep_wake(struct ksleep_chan *chan);
 void ksleep_wake_all(struct ksleep_chan *chan);
 void ksleep_wake_nr(struct ksleep_chan *chan, int nr);
 
-#define KSLEEP_LINK_DECLARE(name)			\
-{							\
-	.flags   = 0,					\
-	.event   = 0,					\
-	.hits    = 0,					\
-	.linkage = CFS_LIST_HEAD_INIT(name.linkage),	\
-	.magic   = KSLEEP_LINK_MAGIC			\
+#define KSLEEP_LINK_DECLARE(name)               \
+{                                               \
+	.flags   = 0,                           \
+	.event   = 0,                           \
+	.hits    = 0,                           \
+	.linkage = CFS_LIST_HEAD(name.linkage),	\
+	.magic   = KSLEEP_LINK_MAGIC            \
 }
 
 /* ------------------------- timer ------------------------- */

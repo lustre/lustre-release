@@ -1,5 +1,24 @@
-#ifndef __LIBCFS_DARWIN_CFS_FS_H__
-#define __LIBCFS_DARWIN_CFS_FS_H__
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Implementation of standard file system interfaces for XNU kernel.
+ *
+ *  Copyright (c) 2004 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or modify it under
+ *   the terms of version 2 of the GNU General Public License as published by
+ *   the Free Software Foundation. Lustre is distributed in the hope that it
+ *   will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ *   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details. You should have received a
+ *   copy of the GNU General Public License along with Lustre; if not, write
+ *   to the Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
+ *   USA.
+ */
+#ifndef __LIBCFS_DARWIN_FS_H__
+#define __LIBCFS_DARWIN_FS_H__
 
 #ifndef __LIBCFS_LIBCFS_H__
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
@@ -85,25 +104,25 @@ int file_count(cfs_file_t *fp);
 #define CFS_OFFSET_MAX			CFS_INT_LIMIT(loff_t)
 
 typedef struct flock			cfs_flock_t;
-#define CFS_FLOCK_TYPE(fl)		((fl)->l_type)
-#define CFS_FLOCK_SET_TYPE(fl, type)	do { (fl)->l_type = (type); } while(0)
-#define CFS_FLOCK_PID(fl)		((fl)->l_pid)
-#define CFS_FLOCK_SET_PID(fl, pid)	do { (fl)->l_pid = (pid); } while(0)
-#define CFS_FLOCK_START(fl)		((fl)->l_start)
-#define CFS_FLOCK_SET_START(fl, start)	do { (fl)->l_start = (start); } while(0)
-#define CFS_FLOCK_END(fl)		((fl)->l_len == 0? CFS_OFFSET_MAX: ((fl)->l_start + (fl)->l_en))
-#define CFS_FLOCK_SET_END(fl, end)		\
-	do {					\
-		if (end == CFS_OFFSET_MAX)	\
-			(fl)->l_len = 0;	\
-		else				\
-			(fl)->l_len = (end) - (fl)->l_start;\
-	} while(0)
+#define cfs_flock_type(fl)		((fl)->l_type)
+#define cfs_flock_set_type(fl, type)	do { (fl)->l_type = (type); } while(0)
+#define cfs_flock_pid(fl)		((fl)->l_pid)
+#define cfs_flock_set_pid(fl, pid)	do { (fl)->l_pid = (pid); } while(0)
+#define cfs_flock_start(fl)		((fl)->l_start)
+#define cfs_flock_set_start(fl, start)	do { (fl)->l_start = (start); } while(0)
 
-typedef struct {
-	void	*d;
-} cfs_dentry_t;
-typedef unsigned short umode_t;
+static inline loff_t cfs_flock_end(cfs_flock_t *fl)
+{
+        return (fl->l_len == 0 ? CFS_OFFSET_MAX: (fl->l_start + fl->l_len));
+}
+
+static inline void cfs_flock_set_end(cfs_flock_t *fl, loff_t end)
+{
+        if (end == CFS_OFFSET_MAX)
+                fl->l_len = 0;
+        else
+                fl->l_len = end - fl->l_start;
+}
 
 #define ATTR_MODE       0x0001
 #define ATTR_UID        0x0002
@@ -122,7 +141,46 @@ typedef unsigned short umode_t;
 
 #define in_group_p(x)	(0)
 
-#endif
+struct posix_acl_entry {
+        short                   e_tag;
+        unsigned short          e_perm;
+        unsigned int            e_id;
+};
+
+struct posix_acl {
+        atomic_t                a_refcount;
+        unsigned int            a_count;
+        struct posix_acl_entry  a_entries[0];
+};
+
+struct posix_acl *posix_acl_alloc(int count, int flags);
+static inline struct posix_acl *posix_acl_from_xattr(const void *value, 
+                                                     size_t size)
+{ 
+        return posix_acl_alloc(0, 0);
+}
+static inline void posix_acl_release(struct posix_acl *acl) {};
+static inline int posix_acl_valid(const struct posix_acl *acl) { return 0; }
+static inline struct posix_acl * posix_acl_dup(struct posix_acl *acl) 
+{ 
+        return acl;
+}
+
+/*
+ * portable UNIX device file identification.
+ */
+
+typedef dev_t cfs_rdev_t;
+
+#else	/* !__KERNEL__ */
+
+typedef struct file cfs_file_t;
+
+#endif	/* END __KERNEL__ */
+
+typedef struct {
+	void	*d;
+} cfs_dentry_t;
 
 #define O_SYNC					0
 #define O_DIRECTORY				0

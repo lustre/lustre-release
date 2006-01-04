@@ -38,7 +38,10 @@ static struct tracefiled_ctl trace_tctl;
 struct semaphore trace_thread_sem;
 static int thread_running = 0;
 
-static void put_pages_on_daemon_list_on_cpu(void *info);
+atomic_t tage_allocated = ATOMIC_INIT(0);
+
+static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
+                                         struct trace_cpu_data *tcd);
 
 static inline struct trace_page *tage_from_list(struct list_head *list)
 {
@@ -61,6 +64,7 @@ static struct trace_page *tage_alloc(int gfp)
         }
         
         tage->page = page;
+        atomic_inc(&tage_allocated);
         return tage;
 }
 
@@ -71,6 +75,7 @@ static void tage_free(struct trace_page *tage)
 
         cfs_free_page(tage->page);
         cfs_free(tage);
+        atomic_dec(&tage_allocated);
 }
 
 static void tage_to_tail(struct trace_page *tage, struct list_head *queue)
@@ -91,76 +96,127 @@ static void LASSERT_TAGE_INVARIANT(struct trace_page *tage)
                  cfs_page_count(tage->page));
 }
 
+int trace_refill_stock(struct trace_cpu_data *tcd, int gfp,
+                       struct list_head *stock)
+{
+        int i;
+
+        /*
+         * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+         * from here: this will lead to infinite recursion.
+         */
+
+        for (i = 0; i + tcd->tcd_cur_stock_pages < TCD_STOCK_PAGES ; ++ i) {
+                struct trace_page *tage;
+
+                tage = tage_alloc(gfp);
+                if (tage == NULL)
+                        break;
+                list_add_tail(&tage->linkage, stock);
+        }
+        return i;
+}
+
 /* return a page that has 'len' bytes left at the end */
-static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
-                                         unsigned long len)
+static struct trace_page *trace_get_tage_try(struct trace_cpu_data *tcd,
+                                             unsigned long len)
 {
         struct trace_page *tage;
 
-        if (len > CFS_PAGE_SIZE) {
-                printk(KERN_ERR "cowardly refusing to write %lu bytes in a "
-                       "page\n", len);
-                return NULL;
-        }
-
-        if (!list_empty(&tcd->tcd_pages)) {
+        if (tcd->tcd_cur_pages > 0) {
+                LASSERT(!list_empty(&tcd->tcd_pages));
                 tage = tage_from_list(tcd->tcd_pages.prev);
                 if (tage->used + len <= CFS_PAGE_SIZE)
                         return tage;
         }
 
         if (tcd->tcd_cur_pages < tcd->tcd_max_pages) {
-                tage = tage_alloc(CFS_ALLOC_ATOMIC);
-                if (tage == NULL) {
-                        /* the kernel should print a message for us.  fall back
-                         * to using the last page in the ring buffer. */
-                        goto ring_buffer;
+                if (tcd->tcd_cur_stock_pages > 0) {
+                        tage = tage_from_list(tcd->tcd_stock_pages.prev);
+                        -- tcd->tcd_cur_stock_pages;
+                        list_del_init(&tage->linkage);
+                } else {
+                        tage = tage_alloc(CFS_ALLOC_ATOMIC);
+                        if (tage == NULL) {
+                                printk(KERN_WARNING
+                                       "failure to allocate a tage (%ld)\n",
+                                       tcd->tcd_cur_pages);
+                                return NULL;
+                        }
                 }
-
+                
                 tage->used = 0;
                 tage->cpu = smp_processor_id();
                 list_add_tail(&tage->linkage, &tcd->tcd_pages);
                 tcd->tcd_cur_pages++;
-
+                
                 if (tcd->tcd_cur_pages > 8 && thread_running) {
                         struct tracefiled_ctl *tctl = &trace_tctl;
+                        /*
+                         * wake up tracefiled to process some pages.
+                         */
                         cfs_waitq_signal(&tctl->tctl_waitq);
                 }
                 return tage;
         }
+        return NULL;
+}
 
- ring_buffer:
-        if (thread_running) {
-                int pgcount = tcd->tcd_cur_pages / 10;
-                struct page_collection pc;
-                struct trace_page *tage;
-                struct trace_page *tmp;
+static void tcd_shrink(struct trace_cpu_data *tcd)
+{
+        int pgcount = tcd->tcd_cur_pages / 10;
+        struct page_collection pc;
+        struct trace_page *tage;
+        struct trace_page *tmp;
 
-                printk(KERN_WARNING "debug daemon buffer overflowed; discarding"
-                       " 10%% of pages (%d)\n", pgcount + 1);
+	/*
+	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
 
-                CFS_INIT_LIST_HEAD(&pc.pc_pages);
-                spin_lock_init(&pc.pc_lock);
+        printk(KERN_WARNING "debug daemon buffer overflowed; discarding"
+               " 10%% of pages (%d of %ld)\n", pgcount + 1, tcd->tcd_cur_pages);
 
-                list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
-                        if (pgcount-- == 0)
-                                break;
+        CFS_INIT_LIST_HEAD(&pc.pc_pages);
+        spin_lock_init(&pc.pc_lock);
 
-                        list_move_tail(&tage->linkage, &pc.pc_pages);
-                        tcd->tcd_cur_pages--;
-                }
-                put_pages_on_daemon_list_on_cpu(&pc);
+        list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
+                if (pgcount-- == 0)
+                        break;
 
-                LASSERT(!list_empty(&tcd->tcd_pages));
+                list_move_tail(&tage->linkage, &pc.pc_pages);
+                tcd->tcd_cur_pages--;
+        }
+        put_pages_on_tcd_daemon_list(&pc, tcd);
+}
+
+/* return a page that has 'len' bytes left at the end */
+static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
+                                         unsigned long len)
+{
+        struct trace_page *tage;
+
+	/*
+	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
+
+        if (len > CFS_PAGE_SIZE) {
+                printk(KERN_ERR
+                       "cowardly refusing to write %lu bytes in a page\n", len);
+                return NULL;
         }
 
-        if (list_empty(&tcd->tcd_pages))
-                return NULL;
-
-        tage = tage_from_list(tcd->tcd_pages.next);
-        tage->used = 0;
-        tage_to_tail(tage, &tcd->tcd_pages);
-
+        tage = trace_get_tage_try(tcd, len);
+        if (tage != NULL)
+                return tage;
+        if (thread_running)
+                tcd_shrink(tcd);
+        if (tcd->tcd_cur_pages > 0) {
+                tage = tage_from_list(tcd->tcd_pages.next);
+                tage->used = 0;
+                tage_to_tail(tage, &tcd->tcd_pages);
+        }
         return tage;
 }
 
@@ -170,10 +226,12 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
         struct trace_cpu_data *tcd;
         struct ptldebug_header header;
         struct trace_page *tage;
-        char *debug_buf = format;
+        char *string_buf = format;
+        char *debug_buf;
         int known_size, needed = 85 /* average message length */, max_nob;
         va_list       ap;
         unsigned long flags;
+        int depth;
 
         if (strchr(file, '/'))
                 file = strrchr(file, '/') + 1;
@@ -187,19 +245,24 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
                 goto out;
 
         set_ptldebug_header(&header, subsys, mask, line, stack);
-        known_size = sizeof(header) + strlen(file) + strlen(fn) + 2; // nulls
+
+        depth = __current_nesting_level();
+        known_size = strlen(file) + 1 + depth;
+        if (fn) 
+                known_size += strlen(fn) + 1;
+
+        if (libcfs_debug_binary)
+                known_size += sizeof(header);
 
  retry:
         tage = trace_get_tage(tcd, needed + known_size);
         if (tage == NULL) {
-                debug_buf = format;
                 if (needed + known_size > CFS_PAGE_SIZE)
                         mask |= D_ERROR;
-                needed = strlen(format);
                 goto out;
         }
 
-        debug_buf = cfs_page_address(tage->page) + tage->used + known_size;
+        string_buf = (char *)cfs_page_address(tage->page) + tage->used + known_size;
 
         max_nob = CFS_PAGE_SIZE - tage->used - known_size;
         if (max_nob <= 0) {
@@ -210,7 +273,7 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
                 goto out;
         }
         va_start(ap, format);
-        needed = vsnprintf(debug_buf, max_nob, format, ap);
+        needed = vsnprintf(string_buf, max_nob, format, ap);
         va_end(ap);
 
         if (needed > max_nob) /* overflow.  oh poop. */
@@ -219,17 +282,29 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
         header.ph_len = known_size + needed;
         debug_buf = (char *)cfs_page_address(tage->page) + tage->used;
 
-        memcpy(debug_buf, &header, sizeof(header));
-        tage->used += sizeof(header);
-        debug_buf += sizeof(header);
+        if (libcfs_debug_binary) {
+                memcpy(debug_buf, &header, sizeof(header));
+                tage->used += sizeof(header);
+                debug_buf += sizeof(header);
+        }
+
+        /* indent message according to the nesting level */
+        while (depth-- > 0) {
+                *(debug_buf++) = '.';
+                ++ tage->used;
+        }
 
         strcpy(debug_buf, file);
         tage->used += strlen(file) + 1;
         debug_buf += strlen(file) + 1;
 
-        strcpy(debug_buf, fn);
-        tage->used += strlen(fn) + 1;
-        debug_buf += strlen(fn) + 1;
+        if (fn) {
+                strcpy(debug_buf, fn);
+                tage->used += strlen(fn) + 1;
+                debug_buf += strlen(fn) + 1;
+        }
+
+        LASSERT(debug_buf == string_buf);
 
         tage->used += needed;
         if (tage->used > CFS_PAGE_SIZE)
@@ -238,7 +313,7 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
 
  out:
         if ((mask & (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE)) || libcfs_printk)
-                print_to_console(&header, mask, debug_buf, needed, file, fn);
+                print_to_console(&header, mask, string_buf, needed, file, fn);
 
         trace_put_tcd(tcd, flags);
 }
@@ -324,15 +399,11 @@ static void put_pages_back(struct page_collection *pc)
  * we have a good amount of data at all times for dumping during an LBUG, even
  * if we have been steadily writing (and otherwise discarding) pages via the
  * debug daemon. */
-static void put_pages_on_daemon_list_on_cpu(void *info)
+static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
+                                         struct trace_cpu_data *tcd)
 {
-        struct page_collection *pc = info;
-        struct trace_cpu_data *tcd;
         struct trace_page *tage;
         struct trace_page *tmp;
-        unsigned long flags;
-
-        tcd = trace_get_tcd(flags);
 
         spin_lock(&pc->pc_lock);
         list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
@@ -359,7 +430,15 @@ static void put_pages_on_daemon_list_on_cpu(void *info)
                 }
         }
         spin_unlock(&pc->pc_lock);
+}
 
+static void put_pages_on_daemon_list_on_cpu(void *info)
+{
+        struct trace_cpu_data *tcd;
+        unsigned long flags;
+
+        tcd = trace_get_tcd(flags);
+        put_pages_on_tcd_daemon_list(info, tcd);
         trace_put_tcd(tcd, flags);
 }
 
@@ -377,6 +456,7 @@ void trace_debug_print(void)
 
         spin_lock_init(&pc.pc_lock);
 
+        pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
                 char *p, *file, *fn;
@@ -471,6 +551,7 @@ void trace_flush_pages(void)
 
         spin_lock_init(&pc.pc_lock);
 
+        pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 
@@ -497,10 +578,12 @@ int trace_dk(struct file *file, const char *buffer, unsigned long count,
                 goto out;
         }
 
+#if !defined(__WINNT__)
         if (name[0] != '/') {
                 rc = -EINVAL;
                 goto out;
         }
+#endif
 
         /* be nice and strip out trailing '\n' */
         for (off = count ; off > 2 && isspace(name[off - 1]); off--)
@@ -529,7 +612,7 @@ static int tracefiled(void *arg)
 
         /* we're started late enough that we pick up init's fs context */
         /* this is so broken in uml?  what on earth is going on? */
-        libcfs_daemonize("ktracefiled");
+        cfs_daemonize("ktracefiled");
         reparent_to_init();
 
         spin_lock_init(&pc.pc_lock);
@@ -541,7 +624,8 @@ static int tracefiled(void *arg)
                 cfs_waitlink_init(&__wait);
                 cfs_waitq_add(&tctl->tctl_waitq, &__wait);
                 set_current_state(TASK_INTERRUPTIBLE);
-                cfs_waitq_timedwait(&__wait, CFS_TASK_INTERRUPTIBLE, cfs_time_seconds(1));
+                cfs_waitq_timedwait(&__wait, CFS_TASK_INTERRUPTIBLE, 
+                                    cfs_time_seconds(1));
                 cfs_waitq_del(&tctl->tctl_waitq, &__wait);
 
                 if (atomic_read(&tctl->tctl_shutdown))

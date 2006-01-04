@@ -227,11 +227,6 @@ static inline cfs_duration_t cfs_time_seconds(int seconds)
         return seconds * HZ;
 }
 
-static inline cfs_time_t cfs_time_shift(int seconds)
-{
-        return jiffies + seconds * HZ;
-}
-
 static inline time_t cfs_duration_sec(cfs_duration_t d)
 {
         return d / HZ;

@@ -173,7 +173,7 @@ static inline void down_read(struct rw_semaphore *s)
 static inline int down_read_trylock(struct rw_semaphore *s)
 {
 	int ret = krw_sem_down_r_try(&s->s);
-	return ret == 0? 1: 0;
+	return ret == 0;
 }
 
 static inline void down_write(struct rw_semaphore *s)
@@ -184,7 +184,7 @@ static inline void down_write(struct rw_semaphore *s)
 static inline int down_write_trylock(struct rw_semaphore *s)
 {
 	int ret = krw_sem_down_w_try(&s->s);
-	return ret == 0? 1: 0;
+	return ret == 0;
 }
 
 static inline void up_read(struct rw_semaphore *s)
@@ -199,7 +199,6 @@ static inline void up_write(struct rw_semaphore *s)
 
 /* 
  * read-write lock : Need to be investigated more!!
- * XXX nikita: for now, let rwlock_t to be identical to rw_semaphore
  *
  * - DECLARE_RWLOCK(l)
  * - rwlock_init(x)
@@ -208,14 +207,14 @@ static inline void up_write(struct rw_semaphore *s)
  * - write_lock(x)
  * - write_unlock(x)
  */
-typedef struct rw_semaphore rwlock_t;
+typedef struct krw_spin rwlock_t;
 
-#define rwlock_init(pl)		init_rwsem(pl)
+#define rwlock_init(pl)               krw_spin_init(pl)
 
-#define read_lock(l)		down_read(l)
-#define read_unlock(l)		up_read(l)
-#define write_lock(l)		down_write(l)
-#define write_unlock(l)		up_write(l)
+#define read_lock(l)          krw_spin_down_r(l)
+#define read_unlock(l)                krw_spin_up_r(l)
+#define write_lock(l)         krw_spin_down_w(l)
+#define write_unlock(l)               krw_spin_up_w(l)
 
 #define write_lock_irqsave(l, f)	do{			\
 					f = __disable_irq();	\
@@ -257,8 +256,9 @@ void lustre_net_ex(boolean_t state, funnel_t *cone);
 #define CFS_NET_IN  lustre_net_in(&__funnel_state, &__funnel)
 #define CFS_NET_EX  lustre_net_ex(__funnel_state, __funnel)
 
-/* __KERNEL__ */
-#endif
+#else
+#include <libcfs/user-lock.h>
+#endif /* __KERNEL__ */
 
 /* __XNU_CFS_LOCK_H */
 #endif

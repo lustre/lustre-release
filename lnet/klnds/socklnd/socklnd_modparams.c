@@ -20,8 +20,8 @@
 
 #include "socklnd.h"
 
-static int timeout = SOCKNAL_TIMEOUT;
-CFS_MODULE_PARM(timeout, "i", int, 0644,
+static int sock_timeout = SOCKNAL_TIMEOUT;
+CFS_MODULE_PARM(sock_timeout, "i", int, 0644,
                 "dead socket timeout (seconds)");
 
 static int credits = SOCKNAL_CREDITS;
@@ -89,7 +89,7 @@ CFS_MODULE_PARM(zc_min_frag, "i", int, 0644,
 #endif
 
 ksock_tunables_t ksocknal_tunables = {
-        .ksnd_timeout         = &timeout,
+        .ksnd_timeout         = &sock_timeout,
 	.ksnd_credits         = &credits,
 	.ksnd_peercredits     = &peer_credits,
 	.ksnd_nconnds         = &nconnds,

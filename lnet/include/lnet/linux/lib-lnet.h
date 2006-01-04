@@ -45,4 +45,6 @@ lnet_page2phys (struct page *p)
 # endif
 #endif
 
+#define LNET_ROUTER
+
 #endif /* __LNET_LINUX_LIB_LNET_H__ */
