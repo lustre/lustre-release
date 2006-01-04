@@ -30,44 +30,42 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #ifdef __KERNEL__
-# include <linux/module.h>
-# include <linux/slab.h>
-# include <linux/init.h>
-# include <linux/wait.h>
+# include <libcfs/libcfs.h>
 #else
 # include <liblustre.h>
 #endif
 
-#include <linux/lustre_dlm.h>
-#include <linux/obd_class.h>
+#include <lustre_dlm.h>
+#include <obd_class.h>
 #include <libcfs/list.h>
 #include "ldlm_internal.h"
 
-extern kmem_cache_t *ldlm_resource_slab;
-extern kmem_cache_t *ldlm_lock_slab;
+extern cfs_mem_cache_t *ldlm_resource_slab;
+extern cfs_mem_cache_t *ldlm_lock_slab;
 extern struct lustre_lock ldlm_handle_lock;
 extern struct list_head ldlm_namespace_list;
 
-static DECLARE_MUTEX(ldlm_ref_sem);
+extern struct semaphore ldlm_namespace_lock;
+static struct semaphore ldlm_ref_sem;
 static int ldlm_refcount;
 
 /* LDLM state */
 
 static struct ldlm_state *ldlm_state;
 
-inline unsigned long round_timeout(unsigned long timeout)
+inline cfs_time_t round_timeout(cfs_time_t timeout)
 {
-        return ((timeout / HZ) + 1) * HZ;
+        return cfs_time_seconds((int)cfs_duration_sec(cfs_time_sub(timeout, 0)) + 1);
 }
 
 #ifdef __KERNEL__
 /* w_l_spinlock protects both waiting_locks_list and expired_lock_thread */
 static spinlock_t waiting_locks_spinlock;
 static struct list_head waiting_locks_list;
-static struct timer_list waiting_locks_timer;
+static cfs_timer_t waiting_locks_timer;
 
 static struct expired_lock_thread {
-        wait_queue_head_t         elt_waitq;
+        cfs_waitq_t               elt_waitq;
         int                       elt_state;
         int                       elt_dump;
         struct list_head          elt_expired_locks;
@@ -81,7 +79,7 @@ static struct expired_lock_thread {
 struct ldlm_bl_pool {
         spinlock_t              blp_lock;
         struct list_head        blp_list;
-        wait_queue_head_t       blp_waitq;
+        cfs_waitq_t             blp_waitq;
         atomic_t                blp_num_threads;
         struct completion       blp_comp;
 };
@@ -110,21 +108,16 @@ static int expired_lock_main(void *arg)
 {
         struct list_head *expired = &expired_lock_thread.elt_expired_locks;
         struct l_wait_info lwi = { 0 };
-        unsigned long flags;
 
         ENTRY;
         lock_kernel();
-        libcfs_daemonize("ldlm_elt");
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
+        cfs_daemonize("ldlm_elt");
+        cfs_block_allsigs();
 
         unlock_kernel();
 
         expired_lock_thread.elt_state = ELT_READY;
-        wake_up(&expired_lock_thread.elt_waitq);
+        cfs_waitq_signal(&expired_lock_thread.elt_waitq);
 
         while (1) {
                 l_wait_event(expired_lock_thread.elt_waitq,
@@ -181,7 +174,7 @@ static int expired_lock_main(void *arg)
         }
 
         expired_lock_thread.elt_state = ELT_STOPPED;
-        wake_up(&expired_lock_thread.elt_waitq);
+        cfs_waitq_signal(&expired_lock_thread.elt_waitq);
         RETURN(0);
 }
 
@@ -198,7 +191,7 @@ static void waiting_locks_callback(unsigned long unused)
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
 
-                if (time_after(lock->l_callback_timeout, jiffies) ||
+                if (cfs_time_after(lock->l_callback_timeout, cfs_time_current()) ||
                     (lock->l_req_mode == LCK_GROUP))
                         break;
 
@@ -216,7 +209,7 @@ static void waiting_locks_callback(unsigned long unused)
                                lock->l_pending_chain.next,
                                lock->l_pending_chain.prev);
 
-                        INIT_LIST_HEAD(&waiting_locks_list);    /* HACK */
+                        CFS_INIT_LIST_HEAD(&waiting_locks_list);    /* HACK */
                         expired_lock_thread.elt_dump = __LINE__;
                         spin_unlock_bh(&waiting_locks_spinlock);
 
@@ -233,7 +226,7 @@ static void waiting_locks_callback(unsigned long unused)
                 list_add(&lock->l_pending_chain,
                          &expired_lock_thread.elt_expired_locks);
 
-                wake_up(&expired_lock_thread.elt_waitq);
+                cfs_waitq_signal(&expired_lock_thread.elt_waitq);
         }
 
         /*
@@ -241,11 +234,11 @@ static void waiting_locks_callback(unsigned long unused)
          * left.
          */
         if (!list_empty(&waiting_locks_list)) {
-                unsigned long timeout_rounded;
+                cfs_time_t timeout_rounded;
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
-                timeout_rounded = round_timeout(lock->l_callback_timeout);
-                mod_timer(&waiting_locks_timer, timeout_rounded);
+                timeout_rounded = (cfs_time_t)round_timeout(lock->l_callback_timeout);
+                cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
         }
         spin_unlock_bh(&waiting_locks_spinlock);
 }
@@ -260,17 +253,17 @@ static void waiting_locks_callback(unsigned long unused)
  */
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
-        unsigned long timeout_rounded;
+        cfs_time_t timeout_rounded;
 
         l_check_ns_lock(lock->l_resource->lr_namespace);
 
         spin_lock_bh(&waiting_locks_spinlock);
         if (lock->l_destroyed) {
-                static unsigned long next;
+                static cfs_time_t next;
                 spin_unlock_bh(&waiting_locks_spinlock);
                 LDLM_ERROR(lock, "not waiting on destroyed lock (bug 5653)");
-                if (time_after(jiffies, next)) {
-                        next = jiffies + 14400 * HZ;
+                if (cfs_time_after(cfs_time_current(), next)) {
+                        next = cfs_time_shift(14400);
                         libcfs_debug_dumpstack(NULL);
                 }
                 return 0;
@@ -282,13 +275,13 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 return 0;
         }
 
-        lock->l_callback_timeout = jiffies + (obd_timeout * HZ / 2);
+        lock->l_callback_timeout = cfs_time_shift(obd_timeout / 2);
 
         timeout_rounded = round_timeout(lock->l_callback_timeout);
 
-        if (time_before(timeout_rounded, waiting_locks_timer.expires) ||
-            !timer_pending(&waiting_locks_timer)) {
-                mod_timer(&waiting_locks_timer, timeout_rounded);
+        if (cfs_time_before(timeout_rounded, cfs_timer_deadline(&waiting_locks_timer)) ||
+            !cfs_timer_is_armed(&waiting_locks_timer)) {
+                cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
         }
         list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
         spin_unlock_bh(&waiting_locks_spinlock);
@@ -328,13 +321,13 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
                 /* Removing the head of the list, adjust timer. */
                 if (list_next == &waiting_locks_list) {
                         /* No more, just cancel. */
-                        del_timer(&waiting_locks_timer);
+                        cfs_timer_disarm(&waiting_locks_timer);
                 } else {
                         struct ldlm_lock *next;
                         next = list_entry(list_next, struct ldlm_lock,
                                           l_pending_chain);
-                        mod_timer(&waiting_locks_timer,
-                                  round_timeout(next->l_callback_timeout));
+                        cfs_timer_arm(&waiting_locks_timer,
+                                      round_timeout(next->l_callback_timeout));
                 }
         }
         list_del_init(&lock->l_pending_chain);
@@ -500,13 +493,6 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         RETURN(rc);
 }
 
-/* XXX copied from ptlrpc/service.c */
-static long timeval_sub(struct timeval *large, struct timeval *small)
-{
-        return (large->tv_sec - small->tv_sec) * 1000000 +
-                (large->tv_usec - small->tv_usec);
-}
-
 int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
         struct ldlm_request *body;
@@ -519,7 +505,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LASSERT(lock != NULL);
 
         do_gettimeofday(&granted_time);
-        total_enqueue_wait = timeval_sub(&granted_time,&lock->l_enqueued_time);
+        total_enqueue_wait = cfs_timeval_sub(&granted_time,&lock->l_enqueued_time, NULL);
 
         if (total_enqueue_wait / 1000000 > obd_timeout)
                 LDLM_ERROR(lock, "enqueue wait took %luus from %lu",
@@ -993,7 +979,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                                     struct ldlm_request *dlm_req,
                                     struct ldlm_lock *lock)
 {
-        LIST_HEAD(ast_list);
+        CFS_LIST_HEAD(ast_list);
         ENTRY;
 
         l_lock(&ns->ns_lock);
@@ -1080,7 +1066,8 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         l_unlock(&ns->ns_lock);
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
-            time_after(jiffies, lock->l_last_used + 10 * HZ)) {
+            cfs_time_after(cfs_time_current(), 
+                           cfs_time_add(lock->l_last_used, cfs_time_seconds(10)))) {
                 if (ldlm_bl_to_thread(ns, NULL, lock))
                         ldlm_handle_bl_callback(ns, NULL, lock);
                 EXIT;
@@ -1121,7 +1108,7 @@ int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 
         spin_lock(&blp->blp_lock);
         list_add_tail(&blwi->blwi_entry, &blp->blp_list);
-        wake_up(&blp->blp_waitq);
+        cfs_waitq_signal(&blp->blp_waitq);
         spin_unlock(&blp->blp_lock);
 
         RETURN(0);
@@ -1346,7 +1333,6 @@ static int ldlm_bl_thread_main(void *arg)
 {
         struct ldlm_bl_thread_data *bltd = arg;
         struct ldlm_bl_pool *blp = bltd->bltd_blp;
-        unsigned long flags;
         ENTRY;
 
         /* XXX boiler-plate */
@@ -1354,12 +1340,9 @@ static int ldlm_bl_thread_main(void *arg)
                 char name[sizeof(current->comm)];
                 snprintf(name, sizeof(name) - 1, "ldlm_bl_%02d",
                          bltd->bltd_num);
-                libcfs_daemonize(name);
+                cfs_daemonize(name);
         }
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
+        cfs_block_allsigs();
 
         atomic_inc(&blp->blp_num_threads);
         complete(&blp->blp_comp);
@@ -1473,10 +1456,10 @@ static int ldlm_setup(void)
         ldlm_state->ldlm_bl_pool = blp;
 
         atomic_set(&blp->blp_num_threads, 0);
-        init_waitqueue_head(&blp->blp_waitq);
+        cfs_waitq_init(&blp->blp_waitq);
         spin_lock_init(&blp->blp_lock);
 
-        INIT_LIST_HEAD(&blp->blp_list);
+        CFS_INIT_LIST_HEAD(&blp->blp_list);
 
 #ifdef __KERNEL__
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
@@ -1485,7 +1468,7 @@ static int ldlm_setup(void)
                         .bltd_blp = blp,
                 };
                 init_completion(&blp->blp_comp);
-                rc = kernel_thread(ldlm_bl_thread_main, &bltd, 0);
+                rc = cfs_kernel_thread(ldlm_bl_thread_main, &bltd, 0);
                 if (rc < 0) {
                         CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);
                         GOTO(out_thread, rc);
@@ -1503,17 +1486,15 @@ static int ldlm_setup(void)
         if (rc)
                 GOTO(out_thread, rc);
 
-        INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
+        CFS_INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
         expired_lock_thread.elt_state = ELT_STOPPED;
-        init_waitqueue_head(&expired_lock_thread.elt_waitq);
+        cfs_waitq_init(&expired_lock_thread.elt_waitq);
 
-        INIT_LIST_HEAD(&waiting_locks_list);
+        CFS_INIT_LIST_HEAD(&waiting_locks_list);
         spin_lock_init(&waiting_locks_spinlock);
-        waiting_locks_timer.function = waiting_locks_callback;
-        waiting_locks_timer.data = 0;
-        init_timer(&waiting_locks_timer);
+        cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, 0);
 
-        rc = kernel_thread(expired_lock_main, NULL, CLONE_VM | CLONE_FS);
+        rc = cfs_kernel_thread(expired_lock_main, NULL, CLONE_VM | CLONE_FS);
         if (rc < 0) {
                 CERROR("Cannot start ldlm expired-lock thread: %d\n", rc);
                 GOTO(out_thread, rc);
@@ -1562,7 +1543,7 @@ static int ldlm_cleanup(int force)
 
                 spin_lock(&blp->blp_lock);
                 list_add_tail(&blwi.blwi_entry, &blp->blp_list);
-                wake_up(&blp->blp_waitq);
+                cfs_waitq_signal(&blp->blp_waitq);
                 spin_unlock(&blp->blp_lock);
 
                 wait_for_completion(&blp->blp_comp);
@@ -1574,7 +1555,7 @@ static int ldlm_cleanup(int force)
         ldlm_proc_cleanup();
 
         expired_lock_thread.elt_state = ELT_TERMINATE;
-        wake_up(&expired_lock_thread.elt_waitq);
+        cfs_waitq_signal(&expired_lock_thread.elt_waitq);
         wait_event(expired_lock_thread.elt_waitq,
                    expired_lock_thread.elt_state == ELT_STOPPED);
 #else
@@ -1590,17 +1571,19 @@ static int ldlm_cleanup(int force)
 
 int __init ldlm_init(void)
 {
-        ldlm_resource_slab = kmem_cache_create("ldlm_resources",
+        init_mutex(&ldlm_ref_sem);
+        init_mutex(&ldlm_namespace_lock);
+        ldlm_resource_slab = cfs_mem_cache_create("ldlm_resources",
                                                sizeof(struct ldlm_resource), 0,
-                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
+                                               SLAB_HWCACHE_ALIGN);
         if (ldlm_resource_slab == NULL)
                 return -ENOMEM;
 
-        ldlm_lock_slab = kmem_cache_create("ldlm_locks",
+        ldlm_lock_slab = cfs_mem_cache_create("ldlm_locks",
                                            sizeof(struct ldlm_lock), 0,
-                                           SLAB_HWCACHE_ALIGN, NULL, NULL);
+                                           SLAB_HWCACHE_ALIGN);
         if (ldlm_lock_slab == NULL) {
-                kmem_cache_destroy(ldlm_resource_slab);
+                cfs_mem_cache_destroy(ldlm_resource_slab);
                 return -ENOMEM;
         }
 
@@ -1613,9 +1596,9 @@ void __exit ldlm_exit(void)
 {
         if ( ldlm_refcount )
                 CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
-        LASSERTF(kmem_cache_destroy(ldlm_resource_slab) == 0,
+        LASSERTF(cfs_mem_cache_destroy(ldlm_resource_slab) == 0,
                  "couldn't free ldlm resource slab\n");
-        LASSERTF(kmem_cache_destroy(ldlm_lock_slab) == 0,
+        LASSERTF(cfs_mem_cache_destroy(ldlm_lock_slab) == 0,
                  "couldn't free ldlm lock slab\n");
 }
 

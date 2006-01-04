@@ -5,7 +5,7 @@
 #ifndef _MDS_INTERNAL_H
 #define _MDS_INTERNAL_H
 
-#include <linux/lustre_mds.h>
+#include <lustre_mds.h>
 
 #define MDS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 

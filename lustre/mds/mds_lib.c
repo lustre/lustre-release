@@ -48,8 +48,8 @@
 #include <linux/slab.h>
 #include <asm/segment.h>
 
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
 #include "mds_internal.h"
 
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)

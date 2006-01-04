@@ -39,16 +39,16 @@
 #define DEBUG_SUBSYSTEM S_OST
 
 #include <linux/module.h>
-#include <linux/obd_ost.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_export.h>
-#include <linux/lustre_debug.h>
+#include <obd_ost.h>
+#include <lustre_net.h>
+#include <lustre_dlm.h>
+#include <lustre_export.h>
+#include <lustre_debug.h>
 #include <linux/init.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_commit_confd.h>
+#include <lprocfs_status.h>
+#include <lustre_commit_confd.h>
 #include <libcfs/list.h>
-#include <linux/lustre_quota.h>
+#include <lustre_quota.h>
 #include "ost_internal.h"
 
 void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)

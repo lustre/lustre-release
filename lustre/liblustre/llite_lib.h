@@ -6,10 +6,10 @@
 #define __LLU_H_
 
 #include <liblustre.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_lite.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_mds.h>
+#include <lustre_lite.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>

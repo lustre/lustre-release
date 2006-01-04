@@ -16,8 +16,8 @@
 #include <linux/kernel.h>
 #include <linux/random.h>
 
-#include <linux/lustre_quota.h>
-#include <linux/obd_class.h>
+#include <lustre_quota.h>
+#include <obd_class.h>
 
 #include "lustre_quota_fmt.h"
 

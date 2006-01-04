@@ -28,11 +28,11 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/lustre_net.h>
-#include <linux/obd.h>
-#include <linux/obd_lov.h>
-#include <linux/obd_class.h>
-#include <linux/obd_support.h>
+#include <lustre_net.h>
+#include <obd.h>
+#include <obd_lov.h>
+#include <obd_class.h>
+#include <obd_support.h>
 #include <lustre/lustre_user.h>
 
 #include "lov_internal.h"

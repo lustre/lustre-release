@@ -35,9 +35,9 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
-#include <linux/obd_class.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_quota.h>
+#include <obd_class.h>
+#include <lustre_fsfilt.h>
+#include <lustre_quota.h>
 #include "filter_internal.h"
 
 /* 512byte block min */

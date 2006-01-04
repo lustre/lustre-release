@@ -52,10 +52,10 @@
 #include <lnet/lnetctl.h>
 
 #include <liblustre.h>
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
+#include <obd.h>
+#include <lustre_lib.h>
 #include <lustre/liblustreapi.h>
-#include <linux/obd_lov.h>
+#include <obd_lov.h>
 #include <lustre/liblustreapi.h>
 
 static void err_msg(char *fmt, ...)

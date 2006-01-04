@@ -33,14 +33,14 @@
 #endif
 
 #ifdef __KERNEL__
-#include <linux/fs.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_net.h>
+#include <obd_class.h>
+#include <lustre_log.h>
+#include <lustre_net.h>
 #include <libcfs/list.h>
 
 /* This is a callback from the llog_* functions.

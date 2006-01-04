@@ -33,9 +33,9 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_net.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_net.h>
 
 
 #define HDR_SIZE(count) \
@@ -99,7 +99,7 @@ int lustre_pack_request (struct ptlrpc_request *req,
 
 #if RS_DEBUG
 LIST_HEAD(ptlrpc_rs_debug_lru);
-spinlock_t ptlrpc_rs_debug_lock = SPIN_LOCK_UNLOCKED;
+spinlock_t ptlrpc_rs_debug_lock;
 
 #define PTLRPC_RS_DEBUG_LRU_ADD(rs)                                     \
 do {                                                                    \
@@ -182,8 +182,8 @@ int lustre_pack_reply (struct ptlrpc_request *req,
         rs->rs_cb_id.cbid_arg = rs;
         rs->rs_service = req->rq_rqbd->rqbd_service;
         rs->rs_size = size;
-        INIT_LIST_HEAD(&rs->rs_exp_list);
-        INIT_LIST_HEAD(&rs->rs_obd_list);
+        CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
+        CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
 
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
@@ -269,7 +269,7 @@ void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
                 list_add(&rs->rs_list,
                          &svc->srv_free_rs_list);
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
-                wake_up(&svc->srv_free_rs_waitq);
+                cfs_waitq_signal(&svc->srv_free_rs_waitq);
         } else {
                 OBD_FREE(rs, rs->rs_size);
         }

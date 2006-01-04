@@ -28,8 +28,8 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
 #endif
-#include <linux/lprocfs_status.h>
-#include <linux/obd_class.h>
+#include <lprocfs_status.h>
+#include <obd_class.h>
 #include <linux/seq_file.h>
 
 #ifdef LPROCFS

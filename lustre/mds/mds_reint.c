@@ -34,15 +34,15 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/fs.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_ucache.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <obd.h>
+#include <lustre_lib.h>
+#include <lustre_idl.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lustre_fsfilt.h>
+#include <lustre_ucache.h>
 
 #include "mds_internal.h"
 

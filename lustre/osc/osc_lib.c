@@ -29,11 +29,11 @@
 
 #ifdef __KERNEL__
 # include <linux/module.h>
-# include <linux/obd.h>
-# include <linux/obd_ost.h>
-# include <linux/lustre_net.h>
-# include <linux/lustre_dlm.h>
-# include <linux/lustre_lib.h>
+# include <obd.h>
+# include <obd_ost.h>
+# include <lustre_net.h>
+# include <lustre_dlm.h>
+# include <lustre_lib.h>
 # include <linux/lustre_compat25.h>
 
 /* convert a pathname into a kdev_t */

@@ -166,7 +166,7 @@ static inline int lustre_cfg_len(uint32_t bufcount, uint32_t *buflens)
 }
 
 
-#include <linux/obd_support.h>
+#include <obd_support.h>
 
 static inline struct lustre_cfg *lustre_cfg_new(int cmd,
                                                 struct lustre_cfg_bufs *bufs)
@@ -198,6 +198,7 @@ static inline void lustre_cfg_free(struct lustre_cfg *lcfg)
 {
         int len;
 
+        ENTRY;
         len = lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens);
 
         OBD_FREE(lcfg, len);

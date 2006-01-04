@@ -5,8 +5,8 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
-#include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
+#include <lustre_idl.h>
+#include <lustre_dlm.h>
 
 struct mds_client_data;
 
@@ -23,7 +23,7 @@ struct osc_creator {
         struct obd_device       *oscc_obd;
         int                     oscc_flags;
         obd_id                  oscc_next_id;
-        wait_queue_head_t       oscc_waitq;
+        cfs_waitq_t             oscc_waitq;
 };
 
 struct ldlm_export_data {

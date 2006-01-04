@@ -27,12 +27,12 @@
 #include <linux/types.h>
 #include <linux/random.h>
 #include <linux/version.h>
-#include <linux/lustre_lite.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_dlm.h>
+#include <lustre_lite.h>
+#include <lustre_ha.h>
+#include <lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
-#include <linux/lprocfs_status.h>
+#include <lprocfs_status.h>
 #include "llite_internal.h"
 
 struct super_block * ll_get_sb(struct file_system_type *fs_type,

@@ -38,7 +38,7 @@
 
 #include "obdctl.h"
 
-#include <linux/obd.h>          /* for struct lov_stripe_md */
+#include <obd.h>          /* for struct lov_stripe_md */
 #include <linux/lustre_build_version.h>
 
 #include <unistd.h>
@@ -52,7 +52,7 @@
 #include <asm/page.h>           /* needed for PAGE_SIZE - rread */
 #endif
 
-#include <linux/obd_class.h>
+#include <obd_class.h>
 #include <lnet/lnetctl.h>
 #include "parser.h"
 #include <stdio.h>

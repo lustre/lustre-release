@@ -30,7 +30,43 @@ libptlrpc_a_CFLAGS = $(LLCFLAGS)
 endif
 
 if MODULES
+
+if LINUX
 modulefs_DATA = ptlrpc$(KMODEXT)
+endif #LINUX
+
+if DARWIN
+macos_PROGRAMS := ptlrpc
+
+ptlrpc_SOURCES := \
+        ptlrpc_module.c \
+        client.c \
+        connection.c \
+        events.c \
+        import.c \
+        llog_client.c \
+        llog_net.c \
+        llog_server.c \
+        lproc_ptlrpc.c \
+        niobuf.c \
+        pack_generic.c \
+        pers.c \
+        pinger.c \
+        ptlrpcd.c \
+        recover.c \
+        recov_thread.c \
+        service.c \
+        $(LDLM_COMM_SOURCES)
+
+ptlrpc_CFLAGS := $(EXTRA_KCFLAGS)
+ptlrpc_LDFLAGS := $(EXTRA_KLDFLAGS)
+ptlrpc_LDADD := $(EXTRA_KLIBS)
+
+plist_DATA := Info.plist
+
+#install-data-hook: fix-kext-ownership
+endif # DARWIN
+
 endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c

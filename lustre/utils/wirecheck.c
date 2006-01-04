@@ -5,8 +5,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <liblustre.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
+#include <lustre_lib.h>
+#include <lustre_idl.h>
 
 #define BLANK_LINE()                                            \
 do {                                                            \

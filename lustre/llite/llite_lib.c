@@ -28,10 +28,10 @@
 #include <linux/random.h>
 #include <linux/version.h>
 
-#include <linux/lustre_lite.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lprocfs_status.h>
+#include <lustre_lite.h>
+#include <lustre_ha.h>
+#include <lustre_dlm.h>
+#include <lprocfs_status.h>
 #include "llite_internal.h"
 
 kmem_cache_t *ll_file_data_slab;

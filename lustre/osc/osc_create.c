@@ -55,8 +55,8 @@
 # include <ctype.h>
 #endif
 
-# include <linux/lustre_dlm.h>
-#include <linux/obd_class.h>
+# include <lustre_dlm.h>
+#include <obd_class.h>
 #include "osc_internal.h"
 
 int oscc_recovering(struct osc_creator *oscc)
@@ -149,7 +149,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
                         CDEBUG(D_HA, "%s: oscc recovery finished: %d\n",
                                oscc->oscc_obd->obd_name, rc);
-                        wake_up(&oscc->oscc_waitq);
+                        cfs_waitq_signal(&oscc->oscc_waitq);
                 } else {
                         CDEBUG(D_ERROR, "%s: oscc recovery failed: %d\n",
                                oscc->oscc_obd->obd_name, rc);
@@ -242,5 +242,5 @@ void oscc_init(struct obd_device *obd)
         oscc->oscc_obd = obd;
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
-        init_waitqueue_head(&oscc->oscc_waitq);
+        cfs_waitq_init(&oscc->oscc_waitq);
 }

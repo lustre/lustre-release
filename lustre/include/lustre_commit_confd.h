@@ -9,7 +9,7 @@
 #ifndef _LUSTRE_COMMIT_CONFD_H
 #define _LUSTRE_COMMIT_CONFD_H
 
-#include <linux/lustre_log.h>
+#include <lustre_log.h>
 
 struct llog_canceld_ctxt {
         struct list_head           llcd_list;  /* free or pending struct list */
@@ -29,7 +29,7 @@ struct llog_commit_master {
         int                     lcm_thread_max;   /* <= num_osts normally */
 
         int                     lcm_flags;
-        wait_queue_head_t       lcm_waitq;
+        cfs_waitq_t             lcm_waitq;
 
         struct list_head        lcm_llcd_pending; /* llog_canceld_ctxt to send */
         struct list_head        lcm_llcd_resend;  /* try to resend this data */

@@ -20,8 +20,8 @@
  *
  */
 
-#ifndef _COMPAT25_H
-#define _COMPAT25_H
+#ifndef _LINUX_COMPAT25_H
+#define _LINUX_COMPAT25_H
 
 #ifdef __KERNEL__
 

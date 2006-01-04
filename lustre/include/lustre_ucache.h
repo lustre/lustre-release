@@ -34,7 +34,7 @@ struct upcall_cache_entry {
         struct group_info      *ue_group_info;
         atomic_t                ue_refcount;
         int                     ue_flags;
-        wait_queue_head_t       ue_waitq;
+        cfs_waitq_t             ue_waitq;
         unsigned long           ue_acquire_expire;
         unsigned long           ue_expire;
 };

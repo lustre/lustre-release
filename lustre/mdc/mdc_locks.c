@@ -36,10 +36,10 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lprocfs_status.h>
 #include "mdc_internal.h"
 
 int it_disposition(struct lookup_intent *it, int flag)

@@ -32,12 +32,12 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_idl.h>
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_fsfilt.h>
+#include <lustre_mds.h>
+#include <lustre_idl.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <lustre_lib.h>
+#include <lustre_fsfilt.h>
 
 #include "mds_internal.h"
 

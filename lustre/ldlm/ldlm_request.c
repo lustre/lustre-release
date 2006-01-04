@@ -28,9 +28,9 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/lustre_dlm.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
+#include <lustre_dlm.h>
+#include <obd_class.h>
+#include <obd.h>
 
 #include "ldlm_internal.h"
 
@@ -51,14 +51,14 @@ int ldlm_expired_completion_wait(void *data)
         struct obd_device *obd;
 
         if (lock->l_conn_export == NULL) {
-                static unsigned long next_dump = 0, last_dump = 0;
+                static cfs_time_t next_dump = 0, last_dump = 0;
 
                 LDLM_ERROR(lock, "lock timed out (enq %lus ago); not entering "
                            "recovery in server code, just going back to sleep",
                            lock->l_enqueued_time.tv_sec);
-                if (time_after(jiffies, next_dump)) {
+                if (cfs_time_after(cfs_time_current(), next_dump)) {
                         last_dump = next_dump;
-                        next_dump = jiffies + 300 * HZ;
+                        next_dump = cfs_time_shift(300);
                         ldlm_namespace_dump(D_DLMTRACE,
                                             lock->l_resource->lr_namespace);
                         if (last_dump == 0)
@@ -96,7 +96,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                        LDLM_FL_BLOCK_CONV))) {
-                wake_up(&lock->l_waitq);
+                cfs_waitq_signal(&lock->l_waitq);
                 RETURN(0);
         }
 
@@ -120,7 +120,7 @@ noreproc:
                            " met\n");
                 lwi = LWI_INTR(interrupted_completion_wait, &lwd);
         } else {
-                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ,
+                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout),
                                        ldlm_expired_completion_wait,
                                        interrupted_completion_wait, &lwd);
         }
@@ -734,7 +734,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 {
         struct ldlm_lock *lock, *next;
         int count, rc = 0;
-        LIST_HEAD(cblist);
+        CFS_LIST_HEAD(cblist);
         ENTRY;
 
 #ifndef __KERNEL__
@@ -793,7 +793,7 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                            void *opaque)
 {
         struct ldlm_resource *res;
-        struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
+        struct list_head *tmp, *next, list = CFS_LIST_HEAD_INIT(list);
         struct ldlm_ast_work *w;
         ENTRY;
 
@@ -1178,7 +1178,7 @@ int ldlm_replay_locks(struct obd_import *imp)
         int rc = 0;
 
         ENTRY;
-        INIT_LIST_HEAD(&list);
+        CFS_INIT_LIST_HEAD(&list);
 
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
 

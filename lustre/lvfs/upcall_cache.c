@@ -43,8 +43,8 @@
 #include <linux/slab.h>
 #include <asm/segment.h>
 
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
 struct group_info *groups_alloc(int ngroups)

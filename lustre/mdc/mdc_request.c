@@ -36,10 +36,10 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lprocfs_status.h>
 #include "mdc_internal.h"
 
 #define REQUEST_MINOR 244
@@ -621,7 +621,7 @@ static int mdc_close_interpret(struct ptlrpc_request *req, void *data, int rc)
                          rpc_lock, obd->u.cli.cl_rpc_lock);
                 mdc_put_rpc_lock(rpc_lock, NULL);
         }
-        wake_up(&req->rq_reply_waitq);
+        cfs_waitq_signal(&req->rq_reply_waitq);
         RETURN(rc);
 }
 

@@ -41,7 +41,7 @@
 #include <lnet/lnetctl.h>
 
 #include <liblustre.h>
-#include <linux/lustre_idl.h>
+#include <lustre_idl.h>
 #include <lustre/liblustreapi.h>
 #include <lustre/lustre_user.h>
 

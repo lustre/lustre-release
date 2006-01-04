@@ -25,8 +25,8 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_mds.h>
-#include <linux/lustre_lite.h>
+#include <lustre_mds.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 
 /* record that a write is in flight */

@@ -5,8 +5,8 @@
 #ifndef __IMPORT_H
 #define __IMPORT_H
 
-#include <linux/lustre_handles.h>
-#include <linux/lustre_idl.h>
+#include <lustre_handles.h>
+#include <lustre_idl.h>
 
 enum lustre_imp_state {
         LUSTRE_IMP_CLOSED     = 1,
@@ -44,7 +44,7 @@ struct obd_import_conn {
         struct list_head          oic_item;
         struct ptlrpc_connection *oic_conn;
         struct obd_uuid           oic_uuid;
-        unsigned long             oic_last_attempt; /* in jiffies */
+        cfs_time_t                oic_last_attempt; /* in cfs_time_t */
 };
 
 struct obd_import {
@@ -64,7 +64,7 @@ struct obd_import {
         struct list_head          imp_delayed_list;
 
         struct obd_device        *imp_obd;
-        wait_queue_head_t         imp_recovery_waitq;
+        cfs_waitq_t               imp_recovery_waitq;
         __u64                     imp_last_replay_transno;
         atomic_t                  imp_inflight;
         atomic_t                  imp_replay_inflight;
@@ -75,7 +75,7 @@ struct obd_import {
         __u64                     imp_peer_committed_transno;
         struct obd_uuid           imp_target_uuid; /* XXX -> lustre_name */
         struct lustre_handle      imp_remote_handle;
-        unsigned long             imp_next_ping;   /* jiffies */
+        cfs_time_t                imp_next_ping;   /* jiffies */
 
         /* all available obd_import_conn linked here */
         struct list_head          imp_conn_list;

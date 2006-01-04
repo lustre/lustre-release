@@ -34,12 +34,12 @@
 #define DEBUG_SUBSYSTEM S_RPC
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
+#include <obd_support.h>
+#include <obd_class.h>
 #include "ptlrpc_internal.h"
 
-static DECLARE_MUTEX(pinger_sem);
-static struct list_head pinger_imports = LIST_HEAD_INIT(pinger_imports);
+struct semaphore pinger_sem;
+static struct list_head pinger_imports = CFS_LIST_HEAD_INIT(pinger_imports);
 
 int ptlrpc_ping(struct obd_import *imp)
 {
@@ -88,7 +88,7 @@ static int ptlrpc_statfs_interpret(struct ptlrpc_request *req,
         
         spin_lock(&obd->obd_osfs_lock);
         obd->obd_osfs = *msfs;
-        obd->obd_osfs_age = jiffies;
+        obd->obd_osfs_age = cfs_time_current();
         spin_unlock(&obd->obd_osfs_lock);
         
         RETURN(0);
@@ -123,18 +123,18 @@ int ptlrpc_statfs(struct obd_import *imp)
 
 static void ptlrpc_update_next_ping(struct obd_import *imp)
 {
-        __u32 interval;
+        cfs_duration_t interval;
 
         interval = IMP_CROW_ABLE(imp) ?
                 STATFS_INTERVAL : PING_INTERVAL;
 
-        imp->imp_next_ping = jiffies + HZ *
-                (imp->imp_state == LUSTRE_IMP_DISCON ? 10 : interval);
+        imp->imp_next_ping = cfs_time_shift(cfs_time_seconds(
+                (imp->imp_state == LUSTRE_IMP_DISCON ? 10 : interval)));
 }
 
 void ptlrpc_ping_import_soon(struct obd_import *imp)
 {
-        imp->imp_next_ping = jiffies;
+        imp->imp_next_ping = cfs_time_current();
 }
 
 #ifdef __KERNEL__
@@ -142,16 +142,12 @@ static int ptlrpc_pinger_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct ptlrpc_thread *thread = data->thread;
-        unsigned long flags;
         ENTRY;
 
         lock_kernel();
         ptlrpc_daemonize();
 
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
+        cfs_block_allsigs();
 
         LASSERTF(strlen(data->name) < sizeof(current->comm),
                  "name %d > len %d\n",
@@ -161,15 +157,15 @@ static int ptlrpc_pinger_main(void *arg)
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
-        wake_up(&thread->t_ctl_waitq);
+        cfs_waitq_signal(&thread->t_ctl_waitq);
 
         /* And now, loop forever, pinging as needed. */
         while (1) {
                 unsigned long sleep_interval = PING_INTERVAL;
                 unsigned long update_interval = 0;
-                unsigned long this_ping = jiffies;
+                cfs_time_t this_ping = cfs_time_current();
                 struct l_wait_info lwi;
-                long time_to_next_ping;
+                cfs_duration_t time_to_next_ping;
                 struct list_head *iter;
 
                 down(&pinger_sem);
@@ -197,13 +193,13 @@ static int ptlrpc_pinger_main(void *arg)
                         if (force ||
                             /* if the next ping is within, say, 5 jiffies from
                                now, go ahead and ping. See note below. */
-                            time_after_eq(this_ping, imp->imp_next_ping - 5)) {
+                            cfs_time_aftereq(this_ping, 
+                                             imp->imp_next_ping - 5 * CFS_MIN_DELAY)) {
                                 if (level == LUSTRE_IMP_DISCON &&
                                     !imp->imp_deactive) {
                                         /* wait at least a timeout before
                                            trying recovery again. */
-                                        imp->imp_next_ping = jiffies +
-                                                obd_timeout * HZ;
+                                        imp->imp_next_ping = cfs_time_shift(obd_timeout);
                                         ptlrpc_initiate_recovery(imp);
                                 } else if (level != LUSTRE_IMP_FULL ||
                                          imp->imp_obd->obd_no_recov ||
@@ -225,7 +221,8 @@ static int ptlrpc_pinger_main(void *arg)
                                 if (!imp->imp_pingable)
                                         continue;
                                 CDEBUG(D_INFO,
-                                       "don't need to ping %s (%lu > %lu)\n",
+                                       "don't need to ping %s ("CFS_TIME_T
+                                       " > "CFS_TIME_T")\n",
                                        imp->imp_target_uuid.uuid,
                                        imp->imp_next_ping, this_ping);
                         }
@@ -237,8 +234,9 @@ static int ptlrpc_pinger_main(void *arg)
                                 STATFS_INTERVAL : PING_INTERVAL;
                         
                         /* obd_timeout might have changed */
-                        if (time_after(imp->imp_next_ping,
-                                       this_ping + update_interval * HZ))
+                        if (cfs_time_after(imp->imp_next_ping,
+                                           cfs_time_add(this_ping, 
+                                                        cfs_time_seconds(update_interval))))
                                 ptlrpc_update_next_ping(imp);
                 }
                 up(&pinger_sem);
@@ -247,7 +245,9 @@ static int ptlrpc_pinger_main(void *arg)
                  * sleep here smaller interval of two possible (ping or
                  * statfs). If one of imports is CROW capable we'll sleep
                  * STATFS_INTERVAL and PING_INTERVAL otherwise. */
-                time_to_next_ping = this_ping + (sleep_interval * HZ) - jiffies;
+                time_to_next_ping = cfs_time_sub(cfs_time_add(this_ping, 
+                                                              cfs_time_seconds(sleep_interval)), 
+                                                 cfs_time_current());
                 
                 /* The ping sent by ptlrpc_send_rpc may get sent out
                    say .01 second after this.
@@ -255,10 +255,11 @@ static int ptlrpc_pinger_main(void *arg)
                    next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
-                CDEBUG(D_INFO, "next ping in %lu (%lu)\n", time_to_next_ping,
-                       this_ping + sleep_interval * HZ);
+                CDEBUG(D_INFO, "next ping in "CFS_DURATION_T" ("CFS_TIME_T")\n", 
+                               time_to_next_ping, 
+                               cfs_time_add(this_ping, cfs_time_seconds(sleep_interval)));
                 if (time_to_next_ping > 0) {
-                        lwi = LWI_TIMEOUT(max_t(long, time_to_next_ping, HZ),
+                        lwi = LWI_TIMEOUT(max_t(cfs_duration_t, time_to_next_ping, cfs_time_seconds(1)),
                                           NULL, NULL);
                         l_wait_event(thread->t_ctl_waitq,
                                      thread->t_flags & (SVC_STOPPING|SVC_EVENT),
@@ -275,7 +276,7 @@ static int ptlrpc_pinger_main(void *arg)
         }
 
         thread->t_flags = SVC_STOPPED;
-        wake_up(&thread->t_ctl_waitq);
+        cfs_waitq_signal(&thread->t_ctl_waitq);
 
         CDEBUG(D_NET, "pinger thread exiting, process %d\n", current->pid);
         return 0;
@@ -331,7 +332,7 @@ int ptlrpc_stop_pinger(void)
                 RETURN(-EALREADY);
         down(&pinger_sem);
         pinger_thread->t_flags = SVC_STOPPING;
-        wake_up(&pinger_thread->t_ctl_waitq);
+        cfs_waitq_signal(&pinger_thread->t_ctl_waitq);
         up(&pinger_sem);
 
         l_wait_event(pinger_thread->t_ctl_waitq,
@@ -386,7 +387,7 @@ void ptlrpc_pinger_wake_up()
 {
 #ifdef ENABLE_PINGER
         pinger_thread->t_flags |= SVC_EVENT;
-        wake_up(&pinger_thread->t_ctl_waitq);
+        cfs_waitq_signal(&pinger_thread->t_ctl_waitq);
 #endif
 }
 
@@ -398,14 +399,14 @@ void ptlrpc_pinger_wake_up()
 
 static struct pinger_data {
         int             pd_recursion;
-        unsigned long   pd_this_ping;   /* jiffies */
-        unsigned long   pd_next_ping;   /* jiffies */
+        cfs_time_t      pd_this_ping;   /* jiffies */
+        cfs_time_t      pd_next_ping;   /* jiffies */
         struct ptlrpc_request_set *pd_set;
 } pinger_args;
 
 static int pinger_check_rpcs(void *arg)
 {
-        unsigned long curtime = jiffies;
+        cfs_time_t curtime = cfs_time_current();
         struct ptlrpc_request *req;
         struct ptlrpc_request_set *set;
         struct list_head *iter;
@@ -447,7 +448,8 @@ static int pinger_check_rpcs(void *arg)
                 int generation, level;
                 unsigned long flags;
 
-                if (time_after_eq(pd->pd_this_ping, imp->imp_next_ping - 5)) {
+                if (cfs_time_aftereq(pd->pd_this_ping, 
+                                     imp->imp_next_ping - 5 * CFS_MIN_DELAY)) {
                         /* Add a ping. */
                         spin_lock_irqsave(&imp->imp_lock, flags);
                         generation = imp->imp_generation;
@@ -474,8 +476,8 @@ static int pinger_check_rpcs(void *arg)
                         req->rq_import_generation = generation;
                         ptlrpc_set_add_req(set, req);
                 } else {
-                        CDEBUG(D_HA, "don't need to ping %s (%lu > "
-                               "%lu)\n", imp->imp_target_uuid.uuid,
+                        CDEBUG(D_HA, "don't need to ping %s ("CFS_TIME_T" > "
+                               CFS_TIME_T")\n", imp->imp_target_uuid.uuid,
                                imp->imp_next_ping, pd->pd_this_ping);
                 }
         }
@@ -500,7 +502,9 @@ do_check_set:
         rc = ptlrpc_check_set(set);
 
         /* not finished, and we are not expired, simply return */
-        if (!rc && time_before(curtime, pd->pd_this_ping + PING_INTERVAL * HZ)) {
+        if (!rc && cfs_time_before(curtime, 
+                                   cfs_time_add(pd->pd_this_ping, 
+                                                cfs_time_seconds(PING_INTERVAL)))) {
                 CDEBUG(D_HA, "not finished, but also not expired\n");
                 pd->pd_recursion--;
                 return 0;
@@ -532,7 +536,8 @@ do_check_set:
         pd->pd_set = NULL;
 
 out:
-        pd->pd_next_ping = pd->pd_this_ping + PING_INTERVAL * HZ;
+        pd->pd_next_ping = cfs_time_add(pd->pd_this_ping,
+                                        cfs_time_seconds(PING_INTERVAL));
         pd->pd_this_ping = 0; /* XXX for debug */
 
         CDEBUG(D_HA, "finished a round ping\n");
@@ -567,8 +572,8 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
         ptlrpc_update_next_ping(imp);
         if (pinger_args.pd_set == NULL &&
             time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
-                CDEBUG(D_HA, "set next ping to %ld(cur %ld)\n",
-                        imp->imp_next_ping, jiffies);
+                CDEBUG(D_HA, "set next ping to "CFS_TIME_T"(cur "CFS_TIME_T")\n",
+                        imp->imp_next_ping, cfs_time_current());
                 pinger_args.pd_next_ping = imp->imp_next_ping;
         }
         up(&pinger_sem);

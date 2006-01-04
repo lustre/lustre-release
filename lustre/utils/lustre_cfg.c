@@ -33,12 +33,12 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #endif
-#include <linux/lustre_lib.h>
-#include <linux/lustre_cfg.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/obd.h>          /* for struct lov_stripe_md */
-#include <linux/obd_lov.h>
+#include <lustre_lib.h>
+#include <lustre_cfg.h>
+#include <lustre_idl.h>
+#include <lustre_dlm.h>
+#include <obd.h>          /* for struct lov_stripe_md */
+#include <obd_lov.h>
 #include <linux/lustre_build_version.h>
 
 #include <unistd.h>

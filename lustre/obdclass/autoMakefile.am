@@ -1,3 +1,9 @@
+SUBDIRS := linux
+if DARWIN
+SUBDIRS += darwin
+endif
+DIST_SUBDIRS := $(SUBDIRS)
+
 if LIBLUSTRE
 
 noinst_LIBRARIES = liblustreclass.a
@@ -10,10 +16,35 @@ liblustreclass_a_CFLAGS = $(LLCFLAGS)
 
 endif
 
+
 if MODULES
+
+if LINUX
 modulefs_DATA = obdclass$(KMODEXT)
 noinst_DATA = llog_test$(KMODEXT)
+endif # LINUX
+
+if DARWIN
+macos_PROGRAMS := obdclass
+
+obdclass_SOURCES := \
+        darwin/darwin-module.c darwin/darwin-sysctl.c \
+        class_obd.c genops.c lprocfs_status.c           \
+        lustre_handles.c lustre_peer.c obd_config.c     \
+        obdo.c debug.c llog_ioctl.c uuid.c              \
+        llog_swab.c llog_obd.c llog.c llog_cat.c llog_lvfs.c
+
+obdclass_CFLAGS := $(EXTRA_KCFLAGS)
+obdclass_LDFLAGS := $(EXTRA_KLDFLAGS)
+obdclass_LDADD := $(EXTRA_KLIBS)
+
+plist_DATA := Info.plist
+
+#install-data-hook: fix-kext-ownership
+endif # DARWIN
+
 endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  llog-test.c
-DIST_SOURCES = $(filter-out llog-test.c,$(obdclass-objs:.o=.c)) $(llog-test-objs:.o=.c) llog_test.c llog_internal.h
+MOSTLYCLEANFILES += linux/*.o darwin/*.o
+DIST_SOURCES = $(filter-out llog-test.c,$(obdclass-all-objs:.o=.c)) $(llog-test-objs:.o=.c) llog_test.c llog_internal.h

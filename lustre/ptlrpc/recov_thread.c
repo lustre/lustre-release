@@ -36,21 +36,21 @@
 #endif
 
 #ifdef __KERNEL__
-#include <linux/fs.h>
+# include <libcfs/libcfs.h>
 #else
 # include <libcfs/list.h>
 # include <liblustre.h>
 #endif
 
 #include <libcfs/kp30.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_commit_confd.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_net.h>
+#include <obd_class.h>
+#include <lustre_commit_confd.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_net.h>
 #include <lnet/types.h>
 #include <libcfs/list.h>
-#include <linux/lustre_log.h>
+#include <lustre_log.h>
 #include "ptlrpc_internal.h"
 
 #ifdef __KERNEL__
@@ -132,7 +132,7 @@ void llcd_send(struct llog_canceld_ctxt *llcd)
         list_add_tail(&llcd->llcd_list, &llcd->llcd_lcm->lcm_llcd_pending);
         spin_unlock(&llcd->llcd_lcm->lcm_llcd_lock);
 
-        wake_up_nr(&llcd->llcd_lcm->lcm_waitq, 1);
+        cfs_waitq_signal_nr(&llcd->llcd_lcm->lcm_waitq, 1);
 }
 EXPORT_SYMBOL(llcd_send);
 
@@ -221,7 +221,6 @@ static int log_commit_thread(void *arg)
         struct llog_commit_master *lcm = arg;
         struct llog_commit_daemon *lcd;
         struct llog_canceld_ctxt *llcd, *n;
-        unsigned long flags;
         ENTRY;
 
         OBD_ALLOC(lcd, sizeof(*lcd));
@@ -231,23 +230,20 @@ static int log_commit_thread(void *arg)
         lock_kernel();
         ptlrpc_daemonize(); /* thread never needs to do IO */
 
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
+        cfs_block_allsigs();
 
         spin_lock(&lcm->lcm_thread_lock);
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1,
+        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1,
                     "ll_log_comt_%02d", atomic_read(&lcm->lcm_thread_total));
         atomic_inc(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
         unlock_kernel();
 
-        INIT_LIST_HEAD(&lcd->lcd_lcm_list);
-        INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+        CFS_INIT_LIST_HEAD(&lcd->lcd_lcm_list);
+        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
         lcd->lcd_lcm = lcm;
 
-        CDEBUG(D_HA, "%s started\n", current->comm);
+        CDEBUG(D_HA, "%s started\n", cfs_curproc_comm());
         do {
                 struct ptlrpc_request *request;
                 struct obd_import *import = NULL;
@@ -365,7 +361,7 @@ static int log_commit_thread(void *arg)
                                 spin_lock(&lcm->lcm_llcd_lock);
                                 list_splice(&lcd->lcd_llcd_list,
                                             &lcm->lcm_llcd_resend);
-                                INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+                                CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
                                 spin_unlock(&lcm->lcm_llcd_lock);
                                 break;
                         }
@@ -426,12 +422,12 @@ static int log_commit_thread(void *arg)
         spin_unlock(&lcm->lcm_thread_lock);
         OBD_FREE(lcd, sizeof(*lcd));
 
-        CDEBUG(D_HA, "%s exiting\n", current->comm);
+        CDEBUG(D_HA, "%s exiting\n", cfs_curproc_comm());
 
         spin_lock(&lcm->lcm_thread_lock);
         atomic_dec(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
-        wake_up(&lcm->lcm_waitq);
+        cfs_waitq_signal(&lcm->lcm_waitq);
 
         return 0;
 }
@@ -444,7 +440,7 @@ int llog_start_commit_thread(void)
         if (atomic_read(&lcm->lcm_thread_total) >= lcm->lcm_thread_max)
                 RETURN(0);
 
-        rc = kernel_thread(log_commit_thread, lcm, CLONE_VM | CLONE_FILES);
+        rc = cfs_kernel_thread(log_commit_thread, lcm, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("error starting thread #%d: %d\n",
                        atomic_read(&lcm->lcm_thread_total), rc);
@@ -464,14 +460,14 @@ static struct llog_process_args {
 
 int llog_init_commit_master(void)
 {
-        INIT_LIST_HEAD(&lcm->lcm_thread_busy);
-        INIT_LIST_HEAD(&lcm->lcm_thread_idle);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_thread_busy);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_thread_idle);
         spin_lock_init(&lcm->lcm_thread_lock);
         atomic_set(&lcm->lcm_thread_numidle, 0);
         init_waitqueue_head(&lcm->lcm_waitq);
-        INIT_LIST_HEAD(&lcm->lcm_llcd_pending);
-        INIT_LIST_HEAD(&lcm->lcm_llcd_resend);
-        INIT_LIST_HEAD(&lcm->lcm_llcd_free);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_llcd_pending);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_llcd_resend);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_llcd_free);
         spin_lock_init(&lcm->lcm_llcd_lock);
         atomic_set(&lcm->lcm_llcd_numfree, 0);
         lcm->lcm_llcd_minfree = 0;
@@ -486,7 +482,7 @@ int llog_cleanup_commit_master(int force)
         lcm->lcm_flags |= LLOG_LCM_FL_EXIT;
         if (force)
                 lcm->lcm_flags |= LLOG_LCM_FL_EXIT_FORCE;
-        wake_up(&lcm->lcm_waitq);
+        cfs_waitq_signal(&lcm->lcm_waitq);
 
         wait_event_interruptible(lcm->lcm_waitq,
                                  atomic_read(&lcm->lcm_thread_total) == 0);
@@ -500,19 +496,15 @@ static int log_process_thread(void *args)
         void   *cb = data->llpa_cb;
         struct llog_logid logid = *(struct llog_logid *)(data->llpa_arg);
         struct llog_handle *llh = NULL;
-        unsigned long flags;
         int rc;
         ENTRY;
 
         up(&data->llpa_sem);
         lock_kernel();
         ptlrpc_daemonize();     /* thread does IO to log files */
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "llog_process");
+        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1, "llog_process");
 
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
+        cfs_block_allsigs();
         unlock_kernel();
 
         rc = llog_create(ctxt, &llh, &logid, NULL);
@@ -555,7 +547,7 @@ static int llog_recovery_generic(struct llog_ctxt *ctxt, void *handle,void *arg)
         llpa.llpa_cb = handle;
         llpa.llpa_arg = arg;
 
-        rc = kernel_thread(log_process_thread, &llpa, CLONE_VM | CLONE_FILES);
+        rc = cfs_kernel_thread(log_process_thread, &llpa, CLONE_VM | CLONE_FILES);
         if (rc < 0)
                 CERROR("error starting log_process_thread: %d\n", rc);
         else {

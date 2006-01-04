@@ -14,7 +14,7 @@
 #ifndef __QUOTA_INTERNAL_H
 #define __QUOTA_INTERNAL_H
 
-#include <linux/lustre_quota.h>
+#include <lustre_quota.h>
 
 /* QUSG covnert bytes to blocks when counting block quota */
 #define QUSG(count, isblk)      (isblk ? toqb(count) : count)

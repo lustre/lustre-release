@@ -22,10 +22,10 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/version.h>
-#include <linux/lustre_lite.h>
-#include <linux/lprocfs_status.h>
+#include <lustre_lite.h>
+#include <lprocfs_status.h>
 #include <linux/seq_file.h>
-#include <linux/obd_support.h>
+#include <obd_support.h>
 
 #include "llite_internal.h"
 

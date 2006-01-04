@@ -27,19 +27,14 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 #ifdef __KERNEL__
-#include <linux/kmod.h>   /* for request_module() */
-#include <linux/module.h>
-#include <linux/obd_class.h>
-#include <linux/random.h>
-#include <linux/slab.h>
-#include <linux/pagemap.h>
+#include <obd_class.h>
 #else
 #include <liblustre.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
+#include <obd_class.h>
+#include <obd.h>
 #endif
-#include <linux/lustre_log.h>
-#include <linux/lprocfs_status.h>
+#include <lustre_log.h>
+#include <lprocfs_status.h>
 #include <libcfs/list.h>
 
 
@@ -52,6 +47,7 @@ int class_attach(struct lustre_cfg *lcfg)
         struct obd_device *obd = NULL;
         char *typename, *name, *namecopy, *uuid;
         int rc, len, cleanup_phase = 0;
+        ENTRY;
 
         if (!LUSTRE_CFG_BUFLEN(lcfg, 1)) {
                 CERROR("No type passed!\n");
@@ -97,23 +93,23 @@ int class_attach(struct lustre_cfg *lcfg)
         }
         cleanup_phase = 3;  /* class_release_dev */
 
-        INIT_LIST_HEAD(&obd->obd_exports);
-        INIT_LIST_HEAD(&obd->obd_exports_timed);
+        CFS_INIT_LIST_HEAD(&obd->obd_exports);
+        CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         obd->obd_num_exports = 0;
         spin_lock_init(&obd->obd_dev_lock);
         spin_lock_init(&obd->obd_osfs_lock);
-        obd->obd_osfs_age = jiffies - 1000 * HZ;
+        obd->obd_osfs_age = cfs_time_shift(-1000);
 
         /* XXX belongs in setup not attach  */
         /* recovery data */
-        init_timer(&obd->obd_recovery_timer);
+        cfs_init_timer(&obd->obd_recovery_timer);
         spin_lock_init(&obd->obd_processing_task_lock);
-        init_waitqueue_head(&obd->obd_next_transno_waitq);
-        INIT_LIST_HEAD(&obd->obd_recovery_queue);
-        INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
+        cfs_waitq_init(&obd->obd_next_transno_waitq);
+        CFS_INIT_LIST_HEAD(&obd->obd_recovery_queue);
+        CFS_INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
 
         spin_lock_init(&obd->obd_uncommitted_replies_lock);
-        INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
+        CFS_INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
@@ -483,12 +479,13 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(rc);
 }
 
-LIST_HEAD(lustre_profile_list);
+CFS_LIST_HEAD(lustre_profile_list);
 
 struct lustre_profile *class_get_profile(char * prof)
 {
         struct lustre_profile *lprof;
 
+        ENTRY;
         list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
                 if (!strcmp(lprof->lp_profile, prof)) {
                         RETURN(lprof);
@@ -503,10 +500,11 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
         struct lustre_profile *lprof;
         int err = 0;
 
+        ENTRY;
         OBD_ALLOC(lprof, sizeof(*lprof));
         if (lprof == NULL)
                 GOTO(out, err = -ENOMEM);
-        INIT_LIST_HEAD(&lprof->lp_list);
+        CFS_INIT_LIST_HEAD(&lprof->lp_list);
 
         LASSERT(proflen == (strlen(prof) + 1));
         OBD_ALLOC(lprof->lp_profile, proflen);

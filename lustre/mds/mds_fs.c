@@ -35,15 +35,15 @@
 #include <linux/kmod.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#include <linux/lustre_quota.h>
+#include <lustre_quota.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
 #endif
-#include <linux/lustre_mds.h>
-#include <linux/obd_class.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_fsfilt.h>
+#include <lustre_mds.h>
+#include <obd_class.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
+#include <lustre_fsfilt.h>
 #include <libcfs/list.h>
 
 #include "mds_internal.h"
@@ -382,7 +382,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 obd->obd_recovery_start = CURRENT_SECONDS;
                 /* Only used for lprocfs_status */
                 obd->obd_recovery_end = obd->obd_recovery_start +
-                        OBD_RECOVERY_TIMEOUT / HZ;
+                        OBD_RECOVERY_TIMEOUT;
         }
 
         mds->mds_mount_count = mount_count + 1;

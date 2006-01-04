@@ -32,11 +32,11 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/obd_support.h>
-#include <linux/lustre_lite.h>
-#include <linux/lustre_dlm.h>
+#include <obd_support.h>
+#include <lustre_lite.h>
+#include <lustre_dlm.h>
 #include <linux/lustre_version.h>
-#include <linux/lustre_mds.h>
+#include <lustre_mds.h>
 
 #include "llite_internal.h"
 

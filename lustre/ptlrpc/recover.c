@@ -35,15 +35,15 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_import.h>
-#include <linux/lustre_export.h>
-#include <linux/obd.h>
-#include <linux/obd_ost.h>
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
+#include <obd_support.h>
+#include <lustre_ha.h>
+#include <lustre_net.h>
+#include <lustre_import.h>
+#include <lustre_export.h>
+#include <obd.h>
+#include <obd_ost.h>
+#include <obd_class.h>
+#include <obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
 #include <libcfs/list.h>
 
 #include "ptlrpc_internal.h"
@@ -385,7 +385,8 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
         CDEBUG(D_HA, "%s: recovery started, waiting\n",
                imp->imp_target_uuid.uuid);
 
-        lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
+        lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
+                          NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           !ptlrpc_import_in_recovery(imp), &lwi);
         CDEBUG(D_HA, "%s: recovery finished\n",

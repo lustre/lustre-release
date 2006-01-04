@@ -9,28 +9,14 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 
-#ifdef HAVE_ASM_TYPES_H
-#include <asm/types.h>
+#if defined(__linux__)
+#include <linux/lustre_user.h>
+#elif defined(__APPLE__)
+#include <darwin/lustre_user.h>
+#elif defined(__WINNT__)
+#include <winnt/lustre_user.h>
 #else
-#include <lustre/types.h>
-#endif
-
-#ifdef HAVE_QUOTA_SUPPORT
-#include <linux/quota.h>
-#endif
-
-/*
- * asm-x86_64/processor.h on some SLES 9 distros seems to use
- * kernel-only typedefs.  fortunately skipping it altogether is ok
- * (for now).
- */
-#define __ASM_X86_64_PROCESSOR_H
-
-#ifdef __KERNEL__
-#include <linux/string.h>
-#else
-#include <string.h>
-#include <sys/stat.h>
+#error Unsupported operating system.
 #endif
 
 /* for statfs() */
@@ -95,14 +81,6 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
 
-#if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__)
-typedef struct stat     lstat_t;
-#define HAVE_LOV_USER_MDS_DATA
-#elif defined(__USE_LARGEFILE64) || defined(__KERNEL__)
-typedef struct stat64   lstat_t;
-#define HAVE_LOV_USER_MDS_DATA
-#endif
-
 /* Compile with -D_LARGEFILE64_SOURCE or -D_GNU_SOURCE (or #define) to
  * use this.  It is unsafe to #define those values in this header as it
  * is possible the application has already #included <sys/stat.h>. */
@@ -166,16 +144,6 @@ struct mds_grp_downcall_data {
         __u32           mgd_groups[0];
 };
 
-
-#ifndef __KERNEL__
-#define NEED_QUOTA_DEFS
-#else
-# include <linux/version.h>
-# if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,21)
-#  define NEED_QUOTA_DEFS
-# endif
-#endif
-
 #ifdef NEED_QUOTA_DEFS
 #ifndef QUOTABLOCK_BITS
 #define QUOTABLOCK_BITS 10
@@ -236,29 +204,6 @@ struct if_quotactl {
         __u8                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
-
-#ifndef LPU64
-/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
-#if defined(__x86_64__) && defined(__KERNEL__)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
-#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
-# define LPU64 "%lu"
-# define LPD64 "%ld"
-# define LPX64 "%#lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#endif
-#endif /* !LPU64 */
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))

@@ -44,7 +44,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <linux/obd_support.h>
+#include <obd_support.h>
 
 struct ctl_table_header *obd_table_header = NULL;
 

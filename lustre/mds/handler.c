@@ -35,10 +35,10 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
 #include <linux/init.h>
-#include <linux/obd_class.h>
+#include <obd_class.h>
 #include <linux/random.h>
 #include <linux/fs.h>
 #include <linux/jbd.h>
@@ -51,12 +51,12 @@
 #else
 # include <linux/locks.h>
 #endif
-#include <linux/obd_lov.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_commit_confd.h>
-#include <linux/lustre_quota.h>
+#include <obd_lov.h>
+#include <lustre_mds.h>
+#include <lustre_fsfilt.h>
+#include <lprocfs_status.h>
+#include <lustre_commit_confd.h>
+#include <lustre_quota.h>
 
 #include "mds_internal.h"
 
@@ -1740,8 +1740,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1) 
                               ? "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) / 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) % 60,
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("MDT %s now serving %s with recovery %s.\n",

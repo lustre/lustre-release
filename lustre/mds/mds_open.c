@@ -42,10 +42,10 @@
 # include <linux/locks.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <lustre_fsfilt.h>
+#include <lprocfs_status.h>
 
 #include "mds_internal.h"
 

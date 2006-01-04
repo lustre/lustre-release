@@ -5,7 +5,7 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
-#include <linux/lustre_debug.h>
+#include <lustre_debug.h>
 #include <linux/lustre_version.h>
 
 /*

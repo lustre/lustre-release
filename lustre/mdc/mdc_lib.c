@@ -27,9 +27,9 @@
 # include <fcntl.h>
 # include <liblustre.h>
 #endif
-#include <linux/lustre_idl.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_mds.h>
+#include <lustre_idl.h>
+#include <lustre_net.h>
+#include <lustre_mds.h>
 #include "mdc_internal.h"
 
 #ifndef __KERNEL__

@@ -46,10 +46,10 @@
 #endif
 
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_quota.h>
+#include <lustre_fsfilt.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_quota.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
 #endif

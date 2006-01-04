@@ -15,8 +15,8 @@
 #include <linux/ldiskfs_fs.h>
 #endif
 #include <liblustre.h>
-#include <linux/lustre_lib.h>
-#include <linux/obd.h>
+#include <lustre_lib.h>
+#include <obd.h>
 
 struct option longopts[] = {
 	{"ea", 0, 0, 'e'},

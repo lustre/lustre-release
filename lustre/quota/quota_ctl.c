@@ -35,13 +35,13 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_cfg.h>
-#include <linux/obd_ost.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_quota.h>
+#include <obd_class.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lustre_cfg.h>
+#include <obd_ost.h>
+#include <lustre_fsfilt.h>
+#include <lustre_quota.h>
 #include "quota_internal.h"
 
 #ifdef __KERNEL__

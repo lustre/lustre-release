@@ -38,7 +38,7 @@ AC_SUBST(pymoddir)
 #
 AC_DEFUN([LC_TARGET_SUPPORTED],
 [case $target_os in
-	linux*)
+	linux* | darwin*)
 $1
 		;;
 	*)
@@ -627,6 +627,7 @@ lustre/mds/Makefile
 lustre/mds/autoMakefile
 lustre/obdclass/Makefile
 lustre/obdclass/autoMakefile
+lustre/obdclass/linux/Makefile
 lustre/obdecho/Makefile
 lustre/obdecho/autoMakefile
 lustre/obdfilter/Makefile
@@ -645,4 +646,10 @@ lustre/tests/Makefile
 lustre/utils/Lustre/Makefile
 lustre/utils/Makefile
 ])
+case $lb_target_os in
+        darwin)
+                AC_CONFIG_FILES([ lustre/obdclass/darwin/Makefile ])
+                ;;
+esac
+
 ])

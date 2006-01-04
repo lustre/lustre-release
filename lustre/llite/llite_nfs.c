@@ -22,7 +22,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
-#include <linux/lustre_lite.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 
 __u32 get_uuid2int(const char *name, int len)

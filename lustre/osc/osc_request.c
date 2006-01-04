@@ -51,21 +51,21 @@
 # include <liblustre.h>
 #endif
 
-# include <linux/lustre_dlm.h>
+# include <lustre_dlm.h>
 #include <libcfs/kp30.h>
-#include <linux/lustre_net.h>
+#include <lustre_net.h>
 #include <lustre/lustre_user.h>
-#include <linux/obd_ost.h>
-#include <linux/obd_lov.h>
+#include <obd_ost.h>
+#include <obd_lov.h>
 
 #ifdef  __CYGWIN__
 # include <ctype.h>
 #endif
 
-#include <linux/lustre_ha.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_debug.h>
+#include <lustre_ha.h>
+#include <lprocfs_status.h>
+#include <lustre_log.h>
+#include <lustre_debug.h>
 #include "osc_internal.h"
 
 /* Pack OSC object metadata for disk storage (LE byte order). */
@@ -558,7 +558,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
         LASSERT(!(oa->o_valid & bits));
 
         oa->o_valid |= bits;
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         oa->o_dirty = cli->cl_dirty;
         if (cli->cl_dirty > cli->cl_dirty_max) {
                 CERROR("dirty %lu > dirty_max %lu\n",
@@ -576,7 +576,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
         oa->o_grant = cli->cl_avail_grant;
         oa->o_dropped = cli->cl_lost_grant;
         cli->cl_lost_grant = 0;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         CDEBUG(D_CACHE,"dirty: "LPU64" undirty: %u dropped %u grant: "LPU64"\n",
                oa->o_dirty, oa->o_undirty, oa->o_dropped, oa->o_grant);
 }
@@ -629,7 +629,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
                         osc_consume_write_grant(cli, ocw->ocw_oap);
                 }
 
-                wake_up(&ocw->ocw_waitq);
+                cfs_waitq_signal(&ocw->ocw_waitq);
         }
 
         EXIT;
@@ -637,11 +637,11 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
 static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 {
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         CDEBUG(D_CACHE, "got "LPU64" extra grant\n", body->oa.o_grant);
         cli->cl_avail_grant += body->oa.o_grant;
         /* waiters are woken in brw_interpret_oap */
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 }
 
 /* We assume that the reason this OSC got a short read is because it read
@@ -1335,7 +1335,7 @@ static void osc_occ_interrupted(struct oig_callback_context *occ)
         /* XXX member_of() */
         oap = list_entry(occ, struct osc_async_page, oap_occ);
 
-        spin_lock(&oap->oap_cli->cl_loi_list_lock);
+        client_obd_list_lock(&oap->oap_cli->cl_loi_list_lock);
 
         oap->oap_interrupted = 1;
 
@@ -1364,7 +1364,7 @@ static void osc_occ_interrupted(struct oig_callback_context *occ)
         }
 
 unlock:
-        spin_unlock(&oap->oap_cli->cl_loi_list_lock);
+        client_obd_list_unlock(&oap->oap_cli->cl_loi_list_lock);
 }
 
 /* this is trying to propogate async writeback errors back up to the
@@ -1442,7 +1442,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
 
         cli = aa->aa_cli;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         /* We need to decrement before osc_ap_completion->osc_wake_cache_waiters
          * is called so we know whether to go to sync BRWs or wait for more
@@ -1467,7 +1467,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(cli);
 
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         obdo_free(aa->aa_oa);
         OBD_FREE(aa->aa_pga, aa->aa_page_count * sizeof(struct brw_page));
@@ -1678,13 +1678,13 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
         loi_list_maint(cli, loi);
 
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         request = osc_build_req(cli, &rpc_list, page_count, cmd);
         if (IS_ERR(request)) {
                 /* this should happen rarely and is pretty bad, it makes the
                  * pending list not follow the dirty order */
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 list_for_each_safe(pos, tmp, &rpc_list) {
                         oap = list_entry(pos, struct osc_async_page,
                                          oap_rpc_item);
@@ -1731,7 +1731,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                                       starting_offset/PAGE_SIZE + 1);
         }
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         if (cmd == OBD_BRW_READ)
                 cli->cl_r_in_flight++;
@@ -1874,9 +1874,9 @@ static int ocw_granted(struct client_obd *cli, struct osc_cache_waiter *ocw)
 {
         int rc;
         ENTRY;
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         rc = list_empty(&ocw->ocw_entry) || rpcs_in_flight(cli) == 0;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         RETURN(rc);
 };
 
@@ -1911,18 +1911,18 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
          * other objects sure might. */
         if (cli->cl_w_in_flight) {
                 list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
-                init_waitqueue_head(&ocw.ocw_waitq);
+                cfs_waitq_init(&ocw.ocw_waitq);
                 ocw.ocw_oap = oap;
                 ocw.ocw_rc = 0;
 
                 loi_list_maint(cli, loi);
                 osc_check_rpcs(cli);
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 CDEBUG(D_CACHE, "sleeping for cache space\n");
                 l_wait_event(ocw.ocw_waitq, ocw_granted(cli, &ocw), &lwi);
 
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 if (!list_empty(&ocw.ocw_entry)) {
                         list_del(&ocw.ocw_entry);
                         RETURN(-EINTR);
@@ -2060,7 +2060,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         oap->oap_cmd = cmd;
         oap->oap_page_off = off;
@@ -2071,7 +2071,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (cmd & OBD_BRW_WRITE) {
                 rc = osc_enter_cache(cli, loi, oap);
                 if (rc) {
-                        spin_unlock(&cli->cl_loi_list_lock);
+                        client_obd_list_unlock(&cli->cl_loi_list_lock);
                         RETURN(rc);
                 }
                 lop = &loi->loi_write_lop;
@@ -2090,7 +2090,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                   cmd);
 
         osc_check_rpcs(cli);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         RETURN(0);
 }
@@ -2135,7 +2135,7 @@ static int osc_set_async_flags(struct obd_export *exp,
                 lop = &loi->loi_read_lop;
         }
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         if (list_empty(&oap->oap_pending_item))
                 GOTO(out, rc = -EINVAL);
@@ -2157,7 +2157,7 @@ static int osc_set_async_flags(struct obd_export *exp,
                         oap->oap_async_flags);
 out:
         osc_check_rpcs(cli);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         RETURN(rc);
 }
 
@@ -2188,7 +2188,7 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         oap->oap_cmd = cmd;
         oap->oap_page_off = off;
@@ -2209,7 +2209,7 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         LOI_DEBUG(loi, "oap %p page %p on group pending\n", oap, oap->oap_page);
 
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         RETURN(0);
 }
@@ -2241,13 +2241,13 @@ static int osc_trigger_group_io(struct obd_export *exp,
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         osc_group_to_pending(cli, loi, &loi->loi_write_lop, OBD_BRW_WRITE);
         osc_group_to_pending(cli, loi, &loi->loi_read_lop, OBD_BRW_READ);
 
         osc_check_rpcs(cli);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         RETURN(0);
 }
@@ -2275,7 +2275,7 @@ static int osc_teardown_async_page(struct obd_export *exp,
                 lop = &loi->loi_read_lop;
         }
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         if (!list_empty(&oap->oap_rpc_item))
                 GOTO(out, rc = -EBUSY);
@@ -2295,7 +2295,7 @@ static int osc_teardown_async_page(struct obd_export *exp,
 
         LOI_DEBUG(loi, "oap %p page %p torn down\n", oap, oap->oap_page);
 out:
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         RETURN(rc);
 }
 
@@ -3173,12 +3173,12 @@ static int osc_import_event(struct obd_device *obd,
 
                 /* Reset grants */
                 cli = &obd->u.cli;
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 cli->cl_avail_grant = 0;
                 cli->cl_lost_grant = 0;
                 /* all pages go to failing rpcs due to the invalid import */
                 osc_check_rpcs(cli);
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 

@@ -26,7 +26,7 @@
 #include <linux/version.h>
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_lite.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 
 static int ll_readlink_internal(struct inode *inode,

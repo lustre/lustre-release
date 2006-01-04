@@ -37,12 +37,12 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/obd.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/obd_echo.h>
-#include <linux/lustre_debug.h>
-#include <linux/lprocfs_status.h>
+#include <obd.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <obd_echo.h>
+#include <lustre_debug.h>
+#include <lprocfs_status.h>
 
 static obd_id last_object_id;
 
@@ -115,7 +115,7 @@ echo_copyin_lsm (struct obd_device *obd, struct lov_stripe_md *lsm,
         if (ulsm_nob < nob ||
             lsm->lsm_stripe_count > ec->ec_nstripes ||
             lsm->lsm_magic != LOV_MAGIC ||
-            (lsm->lsm_stripe_size & (PAGE_SIZE - 1)) != 0 ||
+            (lsm->lsm_stripe_size & (CFS_PAGE_SIZE - 1)) != 0 ||
             ((__u64)lsm->lsm_stripe_size * lsm->lsm_stripe_count > ~0UL))
                 return (-EINVAL);
 
@@ -200,7 +200,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                         lsm->lsm_stripe_count = ec->ec_nstripes;
 
                 if (lsm->lsm_stripe_size == 0)
-                        lsm->lsm_stripe_size = PAGE_SIZE;
+                        lsm->lsm_stripe_size = CFS_PAGE_SIZE;
 
                 idx = ll_insecure_random_int();
 
@@ -430,7 +430,7 @@ echo_get_stripe_off_id (struct lov_stripe_md *lsm, obd_off *offp, obd_id *idp)
 
 static void 
 echo_client_page_debug_setup(struct lov_stripe_md *lsm, 
-                             struct page *page, int rw, obd_id id, 
+                             cfs_page_t *page, int rw, obd_id id, 
                              obd_off offset, obd_off count)
 {
         char    *addr;
@@ -439,11 +439,11 @@ echo_client_page_debug_setup(struct lov_stripe_md *lsm,
         int      delta;
 
         /* no partial pages on the client */
-        LASSERT(count == PAGE_SIZE);
+        LASSERT(count == CFS_PAGE_SIZE);
 
-        addr = kmap(page);
+        addr = cfs_kmap(page);
 
-        for (delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
+        for (delta = 0; delta < CFS_PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
                 if (rw == OBD_BRW_WRITE) {
                         stripe_off = offset + delta;
                         stripe_id = id;
@@ -456,12 +456,12 @@ echo_client_page_debug_setup(struct lov_stripe_md *lsm,
                                   stripe_off, stripe_id);
         }
 
-        kunmap(page);
+        cfs_kunmap(page);
 }
 
 static int
 echo_client_page_debug_check(struct lov_stripe_md *lsm, 
-                             struct page *page, obd_id id, 
+                             cfs_page_t *page, obd_id id, 
                              obd_off offset, obd_off count)
 {
         obd_off stripe_off;
@@ -472,11 +472,11 @@ echo_client_page_debug_check(struct lov_stripe_md *lsm,
         int     rc2;
 
         /* no partial pages on the client */
-        LASSERT(count == PAGE_SIZE);
+        LASSERT(count == CFS_PAGE_SIZE);
 
-        addr = kmap(page);
+        addr = cfs_kmap(page);
 
-        for (rc = delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
+        for (rc = delta = 0; delta < CFS_PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
                 stripe_off = offset + delta;
                 stripe_id = id;
                 echo_get_stripe_off_id (lsm, &stripe_off, &stripe_id);
@@ -490,7 +490,7 @@ echo_client_page_debug_check(struct lov_stripe_md *lsm,
                 }
         }
 
-        kunmap(page);
+        cfs_kunmap(page);
         return rc;
 }
 
@@ -512,18 +512,18 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                   (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
                   (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
 
-        gfp_mask = ((oa->o_id & 2) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
+        gfp_mask = ((oa->o_id & 2) == 0) ? CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
 
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
 
         if (count <= 0 ||
-            (count & (PAGE_SIZE - 1)) != 0 ||
+            (count & (CFS_PAGE_SIZE - 1)) != 0 ||
             (lsm != NULL &&
              lsm->lsm_object_id != oa->o_id))
                 return (-EINVAL);
 
         /* XXX think again with misaligned I/O */
-        npages = count >> PAGE_SHIFT;
+        npages = count >> CFS_PAGE_SHIFT;
 
         OBD_ALLOC(pga, npages * sizeof(*pga));
         if (pga == NULL)
@@ -531,16 +531,16 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
 
         for (i = 0, pgp = pga, off = offset;
              i < npages;
-             i++, pgp++, off += PAGE_SIZE) {
+             i++, pgp++, off += CFS_PAGE_SIZE) {
 
                 LASSERT (pgp->pg == NULL);      /* for cleanup */
 
                 rc = -ENOMEM;
-                pgp->pg = alloc_pages (gfp_mask, 0);
+                pgp->pg = cfs_alloc_page (gfp_mask);
                 if (pgp->pg == NULL)
                         goto out;
 
-                pgp->count = PAGE_SIZE;
+                pgp->count = CFS_PAGE_SIZE;
                 pgp->off = off;
                 pgp->flag = 0;
 
@@ -566,7 +566,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;
                 }
-                __free_pages(pgp->pg, 0);
+                cfs_free_page(pgp->pg);
         }
         OBD_FREE(pga, npages * sizeof(*pga));
         return (rc);
@@ -594,13 +594,13 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
         /* NB: for now, only whole pages, page aligned */
 
         if (count <= 0 ||
-            ((long)buffer & (PAGE_SIZE - 1)) != 0 ||
-            (count & (PAGE_SIZE - 1)) != 0 ||
+            ((long)buffer & (CFS_PAGE_SIZE - 1)) != 0 ||
+            (count & (CFS_PAGE_SIZE - 1)) != 0 ||
             (lsm != NULL && lsm->lsm_object_id != oa->o_id))
                 return (-EINVAL);
 
         /* XXX think again with misaligned I/O */
-        npages = count >> PAGE_SHIFT;
+        npages = count >> CFS_PAGE_SHIFT;
 
         OBD_ALLOC(pga, npages * sizeof(*pga));
         if (pga == NULL)
@@ -620,10 +620,10 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
 
         for (i = 0, off = offset, pgp = pga;
              i < npages;
-             i++, off += PAGE_SIZE, pgp++) {
+             i++, off += CFS_PAGE_SIZE, pgp++) {
                 pgp->off = off;
                 pgp->pg = kiobuf->maplist[i];
-                pgp->count = PAGE_SIZE;
+                pgp->count = CFS_PAGE_SIZE;
                 pgp->flag = 0;
         }
 
@@ -657,7 +657,7 @@ struct echo_async_state;
 #define EAP_MAGIC 79277927
 struct echo_async_page {
         int                     eap_magic;
-        struct page             *eap_page;
+        cfs_page_t             *eap_page;
         void                    *eap_cookie;
         obd_off                 eap_off;
         struct echo_async_state *eap_eas;
@@ -674,7 +674,7 @@ struct echo_async_state {
         obd_off                 eas_end_offset;
         int                     eas_in_flight;
         int                     eas_rc;
-        wait_queue_head_t       eas_waitq;
+        cfs_waitq_t             eas_waitq;
         struct list_head        eas_avail;
         struct obdo             eas_oa;
         struct lov_stripe_md    *eas_lsm;
@@ -701,7 +701,7 @@ static int ec_ap_refresh_count(void *data, int cmd)
 {
         /* our pages are issued with a stable count */
         LBUG();
-        return PAGE_SIZE;
+        return CFS_PAGE_SIZE;
 }
 static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
@@ -724,14 +724,14 @@ static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
             (eas->eas_oa.o_flags & OBD_FL_DEBUG_CHECK) != 0)
                 echo_client_page_debug_check(eas->eas_lsm, eap->eap_page, 
                                              eas->eas_oa.o_id, eap->eap_off,
-                                             PAGE_SIZE);
+                                             CFS_PAGE_SIZE);
 
         spin_lock_irqsave(&eas->eas_lock, flags);
         if (rc && !eas->eas_rc)
                 eas->eas_rc = rc;
         eas->eas_in_flight--;
         list_add(&eap->eap_item, &eas->eas_avail);
-        wake_up(&eas->eas_waitq);
+        cfs_waitq_signal(&eas->eas_waitq);
         spin_unlock_irqrestore(&eas->eas_lock, flags);
 }
 
@@ -753,7 +753,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         struct list_head *pos, *n;
         int rc = 0;
         unsigned long flags;
-        LIST_HEAD(pages);
+        CFS_LIST_HEAD(pages);
 #if 0
         int                     verify;
         int                     gfp_mask;
@@ -768,28 +768,28 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
 
         if (count <= 0 ||
-            (count & (PAGE_SIZE - 1)) != 0 ||
+            (count & (CFS_PAGE_SIZE - 1)) != 0 ||
             (lsm != NULL &&
              lsm->lsm_object_id != oa->o_id))
                 return (-EINVAL);
 
         /* XXX think again with misaligned I/O */
-        npages = batching >> PAGE_SHIFT;
+        npages = batching >> CFS_PAGE_SHIFT;
 
         memcpy(&eas.eas_oa, oa, sizeof(*oa));
         eas.eas_next_offset = offset;
         eas.eas_end_offset = offset + count;
         spin_lock_init(&eas.eas_lock);
-        init_waitqueue_head(&eas.eas_waitq);
+        cfs_waitq_init(&eas.eas_waitq);
         eas.eas_in_flight = 0;
         eas.eas_rc = 0;
         eas.eas_lsm = lsm;
-        INIT_LIST_HEAD(&eas.eas_avail);
+        CFS_INIT_LIST_HEAD(&eas.eas_avail);
 
         /* prepare the group of pages that we're going to be keeping
          * in flight */
         for (i = 0; i < npages; i++) {
-                struct page *page = alloc_page(GFP_KERNEL);
+                cfs_page_t *page = cfs_alloc_page(CFS_ALLOC_STD);
                 if (page == NULL)
                         GOTO(out, rc = -ENOMEM);
 
@@ -835,7 +835,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                         eap->eap_cookie = NULL;
                 }
 
-                eas.eas_next_offset += PAGE_SIZE;
+                eas.eas_next_offset += CFS_PAGE_SIZE;
                 eap->eap_off = eas.eas_next_offset;
 
                 rc = obd_prep_async_page(exp, lsm, NULL, eap->eap_page,
@@ -852,11 +852,11 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                     (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0)
                         echo_client_page_debug_setup(lsm, eap->eap_page, rw, 
                                                      oa->o_id, 
-                                                     eap->eap_off, PAGE_SIZE);
+                                                     eap->eap_off, CFS_PAGE_SIZE);
 
                 /* always asserts urgent, which isn't quite right */
                 rc = obd_queue_async_io(exp, lsm, NULL, eap->eap_cookie,
-                                        rw, 0, PAGE_SIZE, 0,
+                                        rw, 0, CFS_PAGE_SIZE, 0,
                                         ASYNC_READY | ASYNC_URGENT |
                                         ASYNC_COUNT_STABLE);
                 spin_lock_irqsave(&eas.eas_lock, flags);
@@ -882,7 +882,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
 out:
         list_for_each_safe(pos, n, &pages) {
-                struct page *page = list_entry(pos, struct page, 
+                cfs_page_t *page = list_entry(pos, cfs_page_t, 
                                                PAGE_LIST_ENTRY);
 
                 list_del(&PAGE_LIST(page));
@@ -893,7 +893,7 @@ out:
                                                         eap->eap_cookie);
                         OBD_FREE(eap, sizeof(*eap));
                 }
-                __free_page(page);
+                cfs_free_page(page);
         }
 
         RETURN(rc);
@@ -912,12 +912,12 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
         int i, ret = 0;
         ENTRY;
 
-        if (count <= 0 || (count & (PAGE_SIZE - 1)) != 0 ||
+        if (count <= 0 || (count & (CFS_PAGE_SIZE - 1)) != 0 ||
             (lsm != NULL && lsm->lsm_object_id != oa->o_id))
                 RETURN(-EINVAL);
 
-        npages = batch >> PAGE_SHIFT;
-        tot_pages = count >> PAGE_SHIFT;
+        npages = batch >> CFS_PAGE_SHIFT;
+        tot_pages = count >> CFS_PAGE_SHIFT;
 
         OBD_ALLOC(lnb, npages * sizeof(struct niobuf_local));
         OBD_ALLOC(rnb, npages * sizeof(struct niobuf_remote));
@@ -933,9 +933,9 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 if (tot_pages < npages)
                         npages = tot_pages;
 
-                for (i = 0; i < npages; i++, off += PAGE_SIZE) {
+                for (i = 0; i < npages; i++, off += CFS_PAGE_SIZE) {
                         rnb[i].offset = off;
-                        rnb[i].len = PAGE_SIZE;
+                        rnb[i].len = CFS_PAGE_SIZE;
                 }
 
                 /* XXX this can't be the best.. */
@@ -947,7 +947,7 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                         GOTO(out, ret);
 
                 for (i = 0; i < npages; i++) {
-                        struct page *page = lnb[i].page;
+                        cfs_page_t *page = lnb[i].page;
 
                         /* read past eof? */
                         if (page == NULL && lnb[i].rc == 0)
@@ -1096,8 +1096,8 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         if (!(mode == LCK_PR || mode == LCK_PW))
                 return -EINVAL;
 
-        if ((offset & (PAGE_SIZE - 1)) != 0 ||
-            (nob & (PAGE_SIZE - 1)) != 0)
+        if ((offset & (CFS_PAGE_SIZE - 1)) != 0 ||
+            (nob & (CFS_PAGE_SIZE - 1)) != 0)
                 return -EINVAL;
 
         rc = echo_get_object (&eco, obd, oa);
@@ -1347,7 +1347,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         }
 
         spin_lock_init (&ec->ec_lock);
-        INIT_LIST_HEAD (&ec->ec_objects);
+        CFS_INIT_LIST_HEAD (&ec->ec_objects);
         ec->ec_unique = 0;
 
         rc = obd_connect(&conn, tgt, &echo_uuid, NULL /* obd_connect_data */);
@@ -1402,7 +1402,7 @@ static int echo_client_connect(struct lustre_handle *conn,
         rc = class_connect(conn, src, cluuid);
         if (rc == 0) {
                 exp = class_conn2export(conn);
-                INIT_LIST_HEAD(&exp->exp_ec_data.eced_locks);
+                CFS_INIT_LIST_HEAD(&exp->exp_ec_data.eced_locks);
                 class_export_put(exp);
         }
 

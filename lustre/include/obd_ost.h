@@ -11,7 +11,7 @@
 #ifndef _LUSTRE_OST_H
 #define _LUSTRE_OST_H
 
-#include <linux/obd_class.h>
+#include <obd_class.h>
 
 #define LUSTRE_FILTER_NAME "obdfilter"
 #define LUSTRE_OST_NAME "ost"

@@ -37,18 +37,18 @@
 #include <linux/quotaops.h>
 #include <linux/version.h>
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
+#include <lustre_fsfilt.h>
+#include <obd.h>
+#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/lustre_compat25.h>
-#include <linux/lvfs.h>
+#include <lvfs.h>
 #include "lvfs_internal.h"
 
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_quota.h>
+#include <obd.h>
+#include <lustre_lib.h>
+#include <lustre_quota.h>
 
 atomic_t obd_memory;
 int obd_memmax;

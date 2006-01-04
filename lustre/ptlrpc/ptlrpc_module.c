@@ -28,19 +28,21 @@
 #endif
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifdef __KERNEL__
-# include <linux/module.h>
-# include <linux/init.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_net.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_net.h>
 
 #include "ptlrpc_internal.h"
 
+extern spinlock_t ptlrpc_last_xid_lock;
+extern spinlock_t ptlrpc_rs_debug_lock;
+extern spinlock_t ptlrpc_all_services_lock;
+extern struct semaphore pinger_sem;
+extern struct semaphore ptlrpcd_sem;
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
 
@@ -50,6 +52,11 @@ __init int ptlrpc_init(void)
         ENTRY;
 
         lustre_assert_wire_constants();
+        spin_lock_init(&ptlrpc_last_xid_lock);
+        spin_lock_init(&ptlrpc_rs_debug_lock);
+        spin_lock_init(&ptlrpc_all_services_lock);
+        init_mutex(&pinger_sem);
+        init_mutex(&ptlrpcd_sem);
 
         rc = ptlrpc_init_portals();
         if (rc)
@@ -224,6 +231,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor and Lock Management");
 MODULE_LICENSE("GPL");
 
-module_init(ptlrpc_init);
-module_exit(ptlrpc_exit);
+cfs_module(ptlrpc, "1.0.0", ptlrpc_init, ptlrpc_exit);
 #endif

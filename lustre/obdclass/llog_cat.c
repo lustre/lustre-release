@@ -35,14 +35,12 @@
 #define EXPORT_SYMTAB
 #endif
 
-#ifdef __KERNEL__
-#include <linux/fs.h>
-#else
+#ifndef __KERNEL__
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
+#include <obd_class.h>
+#include <lustre_log.h>
 #include <libcfs/list.h>
 
 /* Create a new log handle and add it to the open list.
@@ -343,6 +341,7 @@ int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec,
         struct llog_handle *llh;
         int rc;
 
+        ENTRY;
         if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);

@@ -26,21 +26,21 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifdef __KERNEL__
-# include <linux/lustre_dlm.h>
+# include <lustre_dlm.h>
 #else
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
+#include <obd_class.h>
 #include "ldlm_internal.h"
 
-kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
+cfs_mem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
 DECLARE_MUTEX(ldlm_namespace_lock);
-struct list_head ldlm_namespace_list = LIST_HEAD_INIT(ldlm_namespace_list);
-struct proc_dir_entry *ldlm_type_proc_dir = NULL;
-struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
-struct proc_dir_entry *ldlm_svc_proc_dir = NULL;
+struct list_head ldlm_namespace_list = CFS_LIST_HEAD_INIT(ldlm_namespace_list);
+cfs_proc_dir_entry_t *ldlm_type_proc_dir = NULL;
+cfs_proc_dir_entry_t *ldlm_ns_proc_dir = NULL;
+cfs_proc_dir_entry_t *ldlm_svc_proc_dir = NULL;
 
 #ifdef LPROCFS
 static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
@@ -242,9 +242,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
         strcpy(ns->ns_name, name);
 
-        INIT_LIST_HEAD(&ns->ns_root_list);
+        CFS_INIT_LIST_HEAD(&ns->ns_root_list);
         l_lock_init(&ns->ns_lock);
-        init_waitqueue_head(&ns->ns_refcount_waitq);
+        cfs_waitq_init(&ns->ns_refcount_waitq);
         atomic_set(&ns->ns_refcount, 0);
         ns->ns_client = client;
         spin_lock_init(&ns->ns_counter_lock);
@@ -252,9 +252,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
-                INIT_LIST_HEAD(bucket);
+                CFS_INIT_LIST_HEAD(bucket);
 
-        INIT_LIST_HEAD(&ns->ns_unused_list);
+        CFS_INIT_LIST_HEAD(&ns->ns_unused_list);
         ns->ns_nr_unused = 0;
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
 
@@ -444,17 +444,17 @@ static struct ldlm_resource *ldlm_resource_new(void)
 {
         struct ldlm_resource *res;
 
-        OBD_SLAB_ALLOC(res, ldlm_resource_slab, SLAB_NOFS, sizeof *res);
+        OBD_SLAB_ALLOC(res, ldlm_resource_slab, CFS_ALLOC_IO, sizeof *res);
         if (res == NULL)
                 return NULL;
 
         memset(res, 0, sizeof(*res));
 
-        INIT_LIST_HEAD(&res->lr_children);
-        INIT_LIST_HEAD(&res->lr_childof);
-        INIT_LIST_HEAD(&res->lr_granted);
-        INIT_LIST_HEAD(&res->lr_converting);
-        INIT_LIST_HEAD(&res->lr_waiting);
+        CFS_INIT_LIST_HEAD(&res->lr_children);
+        CFS_INIT_LIST_HEAD(&res->lr_childof);
+        CFS_INIT_LIST_HEAD(&res->lr_granted);
+        CFS_INIT_LIST_HEAD(&res->lr_converting);
+        CFS_INIT_LIST_HEAD(&res->lr_waiting);
         sema_init(&res->lr_lvb_sem, 1);
         atomic_set(&res->lr_refcount, 1);
 
@@ -623,7 +623,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 
                 if (atomic_dec_and_test(&ns->ns_refcount)) {
                         CDEBUG(D_DLMTRACE, "last ref on ns %s\n", ns->ns_name);
-                        wake_up(&ns->ns_refcount_waitq);
+                        cfs_waitq_signal(&ns->ns_refcount_waitq);
                 }
 
                 rc = 1;
@@ -714,7 +714,7 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
                atomic_read(&ns->ns_refcount), ns->ns_client);
 
         l_lock(&ns->ns_lock);
-        if (time_after(jiffies, ns->ns_next_dump)) {
+        if (cfs_time_after(cfs_time_current(), ns->ns_next_dump)) {
                 list_for_each(tmp, &ns->ns_root_list) {
                         struct ldlm_resource *res;
                         res = list_entry(tmp, struct ldlm_resource, lr_childof);
@@ -723,7 +723,7 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
                          * really dump them recursively. */
                         ldlm_resource_dump(level, res);
                 }
-                ns->ns_next_dump = jiffies + 10 * HZ;
+                ns->ns_next_dump = cfs_time_shift(10);
         }
         l_unlock(&ns->ns_lock);
 }

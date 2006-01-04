@@ -24,8 +24,8 @@
  */
 #define DEBUG_SUBSYSTEM S_ECHO
 
-#include <linux/lprocfs_status.h>
-#include <linux/obd_class.h>
+#include <lprocfs_status.h>
+#include <obd_class.h>
 
 #ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = {

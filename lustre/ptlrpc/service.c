@@ -28,17 +28,17 @@
 #include <liblustre.h>
 #include <libcfs/kp30.h>
 #endif
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_net.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_net.h>
 #include <lnet/types.h>
 #include "ptlrpc_internal.h"
 
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
 
-static LIST_HEAD (ptlrpc_all_services);
-static spinlock_t ptlrpc_all_services_lock = SPIN_LOCK_UNLOCKED;
+static CFS_LIST_HEAD (ptlrpc_all_services);
+spinlock_t ptlrpc_all_services_lock;
 
 static char *
 ptlrpc_alloc_request_buffer (int size)
@@ -76,7 +76,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_service *svc)
         rqbd->rqbd_refcount = 0;
         rqbd->rqbd_cbid.cbid_fn = request_in_callback;
         rqbd->rqbd_cbid.cbid_arg = rqbd;
-        INIT_LIST_HEAD(&rqbd->rqbd_reqs);
+        CFS_INIT_LIST_HEAD(&rqbd->rqbd_reqs);
         rqbd->rqbd_buffer = ptlrpc_alloc_request_buffer(svc->srv_buf_size);
 
         if (rqbd->rqbd_buffer == NULL) {
@@ -168,7 +168,7 @@ ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs)
         rs->rs_scheduled = 1;
         list_del (&rs->rs_list);
         list_add (&rs->rs_list, &svc->srv_reply_queue);
-        wake_up (&svc->srv_waitq);
+        cfs_waitq_signal (&svc->srv_waitq);
 }
 
 void
@@ -267,7 +267,7 @@ struct ptlrpc_service *
 ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
                 int req_portal, int rep_portal, int watchdog_timeout,
                 svc_handler_t handler, char *name,
-                struct proc_dir_entry *proc_entry,
+                cfs_proc_dir_entry_t *proc_entry,
                 svcreq_printfn_t svcreq_printfn, int num_threads)
 {
         int                    rc;
@@ -285,8 +285,8 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
 
         service->srv_name = name;
         spin_lock_init(&service->srv_lock);
-        INIT_LIST_HEAD(&service->srv_threads);
-        init_waitqueue_head(&service->srv_waitq);
+        CFS_INIT_LIST_HEAD(&service->srv_threads);
+        cfs_waitq_init(&service->srv_waitq);
 
         service->srv_nbuf_per_group = nbufs;
         service->srv_max_req_size = max_req_size;
@@ -300,15 +300,15 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         service->srv_request_max_cull_seq = 0;
         service->srv_num_threads = num_threads;
 
-        INIT_LIST_HEAD(&service->srv_request_queue);
-        INIT_LIST_HEAD(&service->srv_idle_rqbds);
-        INIT_LIST_HEAD(&service->srv_active_rqbds);
-        INIT_LIST_HEAD(&service->srv_history_rqbds);
-        INIT_LIST_HEAD(&service->srv_request_history);
-        INIT_LIST_HEAD(&service->srv_active_replies);
-        INIT_LIST_HEAD(&service->srv_reply_queue);
-        INIT_LIST_HEAD(&service->srv_free_rs_list);
-        init_waitqueue_head(&service->srv_free_rs_waitq);
+        CFS_INIT_LIST_HEAD(&service->srv_request_queue);
+        CFS_INIT_LIST_HEAD(&service->srv_idle_rqbds);
+        CFS_INIT_LIST_HEAD(&service->srv_active_rqbds);
+        CFS_INIT_LIST_HEAD(&service->srv_history_rqbds);
+        CFS_INIT_LIST_HEAD(&service->srv_request_history);
+        CFS_INIT_LIST_HEAD(&service->srv_active_replies);
+        CFS_INIT_LIST_HEAD(&service->srv_reply_queue);
+        CFS_INIT_LIST_HEAD(&service->srv_free_rs_list);
+        cfs_waitq_init(&service->srv_free_rs_waitq);
 
         spin_lock (&ptlrpc_all_services_lock);
         list_add (&service->srv_list, &ptlrpc_all_services);
@@ -537,7 +537,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         request->rq_phase = RQ_PHASE_INTERPRET;
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%d\n", current->comm,
+               "%s:%s+%d:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
@@ -551,7 +551,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         request->rq_phase = RQ_PHASE_COMPLETE;
 
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%d\n", current->comm,
+               "%s:%s+%d:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
@@ -738,10 +738,13 @@ liblustre_check_services (void *arg)
 /* Don't use daemonize, it removes fs struct from new thread (bug 418) */
 void ptlrpc_daemonize(void)
 {
-        exit_mm(current);
+        exit_mm(cfs_current());
         lustre_daemonize_helper();
+#if LINUX_
+        /* XXX Liang: */
         set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
-        exit_files(current);
+#endif
+        exit_files(cfs_current());
         reparent_to_init();
 }
 
@@ -781,7 +784,7 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_reply_state *rs;
         struct lc_watchdog     *watchdog;
         unsigned long           flags;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+#ifdef WITH_GROUP_INFO
         struct group_info *ginfo = NULL;
 #endif
         int rc = 0;
@@ -790,15 +793,12 @@ static int ptlrpc_main(void *arg)
         lock_kernel();
         ptlrpc_daemonize();
 
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
+        cfs_block_allsigs();
 
-        LASSERTF(strlen(data->name) < sizeof(current->comm),
+        LASSERTF(strlen(data->name) < CFS_CURPROC_COMM_MAX,
                  "name %d > len %d\n",
-                 (int)strlen(data->name), (int)sizeof(current->comm));
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
+                 (int)strlen(data->name), CFS_CURPROC_COMM_MAX);
+        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1, "%s", data->name);
         unlock_kernel();
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9) && CONFIG_NUMA
@@ -814,11 +814,11 @@ static int ptlrpc_main(void *arg)
                                 break;
                         num_cpu++;
                 }
-                set_cpus_allowed(current, node_to_cpumask(cpu_to_node(cpu)));
+                set_cpus_allowed(cfs_current(), node_to_cpumask(cpu_to_node(cpu)));
         }
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+#ifdef WITH_GROUP_INFO
         ginfo = groups_alloc(0);
         if (!ginfo) {
                 rc = -ENOMEM;
@@ -836,7 +836,7 @@ static int ptlrpc_main(void *arg)
         }
 
         /* Alloc reply state structure for this one */
-        OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, GFP_KERNEL);
+        OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, CFS_ALLOC_STD);
         if (!rs) {
                 rc = -ENOMEM;
                 goto out_srv_init;
@@ -848,7 +848,7 @@ static int ptlrpc_main(void *arg)
          * wake up our creator. Note: @data is invalid after this point,
          * because it's allocated on ptlrpc_start_thread() stack.
          */
-        wake_up(&thread->t_ctl_waitq);
+        cfs_waitq_signal(&thread->t_ctl_waitq);
 
         watchdog = lc_watchdog_add(svc->srv_watchdog_timeout,
                                    LC_WATCHDOG_DEFAULT_CB, NULL);
@@ -857,7 +857,7 @@ static int ptlrpc_main(void *arg)
         svc->srv_nthreads++;
         list_add(&rs->rs_list, &svc->srv_free_rs_list);
         spin_unlock_irqrestore(&svc->srv_lock, flags);
-        wake_up(&svc->srv_free_rs_waitq);
+        cfs_waitq_signal(&svc->srv_free_rs_waitq);
 
         CDEBUG(D_NET, "service thread %d started\n", thread->t_id);
 
@@ -903,7 +903,7 @@ static int ptlrpc_main(void *arg)
                         /* I just failed to repost request buffers.  Wait
                          * for a timeout (unless something else happens)
                          * before I try again */
-                        svc->srv_rqbd_timeout = HZ/10;
+                        svc->srv_rqbd_timeout = cfs_time_seconds(1)/10;
                 }
         }
 
@@ -921,7 +921,7 @@ out:
 
         svc->srv_nthreads--;                    /* must know immediately */
         thread->t_flags = SVC_STOPPED;
-        wake_up(&thread->t_ctl_waitq);
+        cfs_waitq_signal(&thread->t_ctl_waitq);
 
         spin_unlock_irqrestore(&svc->srv_lock, flags);
 
@@ -941,7 +941,7 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
         thread->t_flags = SVC_STOPPING;
         spin_unlock_irqrestore(&svc->srv_lock, flags);
 
-        wake_up_all(&svc->srv_waitq);
+        cfs_waitq_broadcast(&svc->srv_waitq);
         l_wait_event(thread->t_ctl_waitq, (thread->t_flags & SVC_STOPPED),
                      &lwi);
 
@@ -1003,7 +1003,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         OBD_ALLOC(thread, sizeof(*thread));
         if (thread == NULL)
                 RETURN(-ENOMEM);
-        init_waitqueue_head(&thread->t_ctl_waitq);
+        cfs_waitq_init(&thread->t_ctl_waitq);
         thread->t_id = id;
 
         spin_lock_irqsave(&svc->srv_lock, flags);
@@ -1018,7 +1018,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
          * just drop the VM and FILES in ptlrpc_daemonize() right away.
          */
-        rc = kernel_thread(ptlrpc_main, &d, CLONE_VM | CLONE_FILES);
+        rc = cfs_kernel_thread(ptlrpc_main, &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread '%s': rc %d\n", name, rc);
 
@@ -1083,7 +1083,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
 
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT(300 * HZ, NULL, NULL);
+                lwi = LWI_TIMEOUT(cfs_time_seconds(300), NULL, NULL);
                 rc = l_wait_event(service->srv_waitq,
                                   service->srv_nrqbd_receiving == 0,
                                   &lwi);
@@ -1136,7 +1136,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         /* wait for all outstanding replies to complete (they were
          * scheduled having been flagged to abort above) */
         while (atomic_read(&service->srv_outstanding_replies) != 0) {
-                struct l_wait_info lwi = LWI_TIMEOUT(10 * HZ, NULL, NULL);
+                struct l_wait_info lwi = LWI_TIMEOUT(cfs_time_seconds(10), NULL, NULL);
 
                 rc = l_wait_event(service->srv_waitq,
                                   !list_empty(&service->srv_reply_queue), &lwi);

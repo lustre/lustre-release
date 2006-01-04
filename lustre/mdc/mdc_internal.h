@@ -1,4 +1,4 @@
-#include <linux/lustre_mds.h>
+#include <lustre_mds.h>
 void mdc_pack_req_body(struct ptlrpc_request *);
 void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,

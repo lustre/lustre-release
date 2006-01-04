@@ -24,8 +24,8 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_lite.h>
+#include <lustre_dlm.h>
+#include <lustre_lite.h>
 #include <linux/pagemap.h>
 #include <linux/file.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

@@ -27,10 +27,10 @@
 #include <linux/init.h>
 #include <linux/quota.h>
 
-#include <linux/obd_class.h>
-#include <linux/lustre_quota.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_mds.h>
+#include <obd_class.h>
+#include <lustre_quota.h>
+#include <lustre_fsfilt.h>
+#include <lustre_mds.h>
 
 #include "quota_internal.h"
 

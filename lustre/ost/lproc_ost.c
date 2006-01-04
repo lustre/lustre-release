@@ -24,8 +24,8 @@
  */
 #define DEBUG_SUBSYSTEM S_OST
 
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
 #include <linux/seq_file.h>
 #include "ost_internal.h"
 

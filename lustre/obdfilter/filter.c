@@ -47,15 +47,15 @@
 # include <linux/buffer_head.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_commit_confd.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <lustre_dlm.h>
+#include <lustre_fsfilt.h>
+#include <lprocfs_status.h>
+#include <lustre_log.h>
+#include <lustre_commit_confd.h>
 #include <libcfs/list.h>
-#include <linux/lustre_quota.h>
+#include <lustre_quota.h>
 
 #include "filter_internal.h"
 
@@ -529,7 +529,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 obd->obd_recovery_start = CURRENT_SECONDS;
                 /* Only used for lprocfs_status */
                 obd->obd_recovery_end = obd->obd_recovery_start +
-                        OBD_RECOVERY_TIMEOUT / HZ;
+                        OBD_RECOVERY_TIMEOUT;
         }
 
 out:
@@ -1318,7 +1318,7 @@ static int filter_iobuf_pool_init(struct filter_obd *filter, int count)
 
         LASSERT(count <= OST_NUM_THREADS);
 
-        OBD_ALLOC_GFP(pool, OST_NUM_THREADS * sizeof pool[0], GFP_KERNEL);
+        OBD_ALLOC_GFP(pool, OST_NUM_THREADS * sizeof pool[0], CFS_ALLOC_STD);
         if (pool == NULL)
                 RETURN(-ENOMEM);
 
@@ -1475,8 +1475,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1)
                               ? "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) / 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) % 60,
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("OST %s now serving %s with recovery %s.\n",

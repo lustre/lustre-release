@@ -22,9 +22,9 @@
  */
 
 #include <liblustre.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/obd_ost.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <obd_ost.h>
 
 #define LIBLUSTRE_TEST 1
 #include "../utils/lctl.c"

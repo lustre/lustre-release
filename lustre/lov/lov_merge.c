@@ -33,8 +33,8 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
+#include <obd_class.h>
+#include <obd_lov.h>
 
 #include "lov_internal.h"
 
