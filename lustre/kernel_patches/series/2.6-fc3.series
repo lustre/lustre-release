@@ -1,5 +1,6 @@
 uml-2.6.10-fc3.patch
 lustre_version.patch
+fc3_to_rhel4_updates.patch 
 vfs_intent-2.6-rhel4.patch
 vfs_nointent-2.6-rhel4.patch
 vfs_races-2.6-fc3.patch
@@ -19,3 +20,4 @@ hostfs_readdir_large.patch
 ext3-patch-fuzz-fixup-fc3.patch
 uml-exprt-clearuser.patch
 fsprivate-2.6.patch
+linux-2.6.9-ext3-sub-second-timestamp.patch 
