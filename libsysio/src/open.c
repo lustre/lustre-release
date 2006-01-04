@@ -112,6 +112,10 @@ _sysio_open(struct pnode *pno, int flags, mode_t mode)
 		err = -EEXIST;
 	else if (!ino)
 		err = _sysio_p_validate(pno, NULL, NULL);
+#ifdef O_NOFOLLOW
+	else if (flags & O_NOFOLLOW)
+		err = -ELOOP;
+#endif
 	else {
 		/*
 		 * Simple open of pre-existing file.
@@ -181,14 +185,6 @@ SYSIO_INTERFACE_NAME(open)(const char *path, int flags, ...)
 	/*
 	 * Ask for the open/creat.
 	 */
-
-#ifdef O_NOFOLLOW
-	if (pno && pno->p_base->pb_ino && (flags & O_NOFOLLOW) &&
-	    S_ISLNK(pno->p_base->pb_ino->i_stbuf.st_mode)) {
-		rtn = -ELOOP;
-		goto error;
-	}
-#endif
 	rtn = _sysio_open(pno, flags, mode);
 	if (rtn)
 		goto error;
