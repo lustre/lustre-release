@@ -392,109 +392,12 @@ out:
 #endif
 
 
-/********************** config llog list **********************/
-DECLARE_MUTEX(config_llog_lock);
-struct list_head config_llog_list = LIST_HEAD_INIT(config_llog_list);
-
-/* Find log and take the global lock (whether found or not) */
-struct config_llog_data *config_log_get(char *name)
-{
-        struct list_head *tmp;
-        struct config_llog_data *cld;
-        down(&config_llog_lock);
-        list_for_each(tmp, &config_llog_list) {
-                cld = list_entry(tmp, struct config_llog_data, cld_list_chain);
-                if (strcmp(name, cld->cld_name) == 0) {
-                        return(cld);
-                }
-        }
-        CERROR("can't get log %s\n", name);
-        return(NULL);
-}
-
-void config_log_put(void)
-{
-        up(&config_llog_lock);
-}
-
-/* Add this log to our list of active logs */
-static int config_log_add(char *name)
-{
-        struct config_llog_data *cld;
-        char *name_cp;
-        int rc;
-        ENTRY;
-
-        CDEBUG(D_MOUNT, "adding config log %s\n", name);
-        if (config_log_get(name)) {
-                GOTO(out, rc = -EEXIST);
-        }
-
-        OBD_ALLOC(cld, sizeof(*cld));
-        if (!cld) 
-                GOTO(out, rc = -ENOMEM);
-        OBD_ALLOC(name_cp, strlen(name) + 1);
-        if (!name_cp) { 
-                OBD_FREE(cld, sizeof(*cld));
-                GOTO(out, rc = -ENOMEM);
-        }
-        strcpy(name_cp, name);
-
-        cld->cld_name = name_cp;
-        cld->cld_gen = 0;
-        list_add(&cld->cld_list_chain, &config_llog_list);
-out:
-        config_log_put();
-        RETURN(rc);
-}
-
-
-/* Stop watching for updates on this log. 2 clients on the same node
-   may be at different gens, so we need different log info (eg. 
-   already mounted client is at gen 10, but must start a new client
-   from gen 0.)*/
-int config_log_end(char *name)
-{       
-        struct config_llog_data *cld;
-        int rc = 0;
-        ENTRY;
-                                       
-        cld = config_log_get(name);
-        if (!cld) 
-                GOTO(out, rc = -ENOENT);
-        OBD_FREE(cld->cld_name, strlen(cld->cld_name) + 1);
-        list_del(&cld->cld_list_chain);
-        OBD_FREE(cld, sizeof(*cld));
-out:
-        config_log_put();
-        CDEBUG(D_MOUNT, "dropping config log %s (%d)\n", name, rc);
-        RETURN(rc);
-}
-
-static void config_log_end_all(void)
-{
-        struct list_head *tmp, *n;
-        struct config_llog_data *cld;
-        ENTRY;
-        
-        down(&config_llog_lock);
-        list_for_each_safe(tmp, n, &config_llog_list) {
-                cld = list_entry(tmp, struct config_llog_data, cld_list_chain);
-                CERROR("conflog failsafe %s\n", cld->cld_name);
-                OBD_FREE(cld->cld_name, strlen(cld->cld_name) + 1);
-                list_del(&cld->cld_list_chain);
-                OBD_FREE(cld, sizeof(*cld));
-        }
-        up(&config_llog_lock);
-        EXIT;
-}
-
 /**************** config llog ********************/
 
 /* Get a config log from the MGS and process it.
    This func is called for both clients and servers. */
-int config_log_start(struct super_block *sb, char *logname, 
-                           struct config_llog_instance *cfg)
+int lustre_process_log(struct super_block *sb, char *logname, 
+                     struct config_llog_instance *cfg)
 {
         struct lustre_cfg *lcfg;
         struct lustre_cfg_bufs bufs;
@@ -504,16 +407,13 @@ int config_log_start(struct super_block *sb, char *logname,
         ENTRY;
 
         LASSERT(mgc);
+        LASSERT(cfg);
 
-        if (cfg && cfg->cfg_instance) 
-                config_log_add(cfg->cfg_instance);
-        else
-                config_log_add(logname);
-
+        /* mgc_process_config */
         lustre_cfg_bufs_reset(&bufs, mgc->obd_name);
         lustre_cfg_bufs_set_string(&bufs, 1, logname);
         lustre_cfg_bufs_set(&bufs, 2, cfg, sizeof(*cfg));
-        lcfg = lustre_cfg_new(LCFG_PARSE_LOG, &bufs);
+        lcfg = lustre_cfg_new(LCFG_LOG_START, &bufs);
         rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
         lustre_cfg_free(lcfg);
 
@@ -549,6 +449,30 @@ int config_log_start(struct super_block *sb, char *logname,
 
         class_obd_list();
         RETURN(rc);
+}
+
+
+int lustre_end_log(struct super_block *sb, char *logname, 
+                       struct config_llog_instance *cfg)
+{
+        struct lustre_cfg *lcfg;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_sb_info *lsi = s2lsi(sb);
+        struct obd_device *mgc = lsi->lsi_mgc;
+        int rc;
+        ENTRY;
+
+        LASSERT(mgc);
+
+        /* mgc_process_config */
+        lustre_cfg_bufs_reset(&bufs, mgc->obd_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, logname);
+        if (cfg)
+                lustre_cfg_bufs_set(&bufs, 2, cfg, sizeof(*cfg));
+        lcfg = lustre_cfg_new(LCFG_LOG_END, &bufs);
+        rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
+        lustre_cfg_free(lcfg);
+        RETURN(0);
 }
 
 /**************** obd start *******************/
@@ -814,8 +738,6 @@ static int lustre_stop_mgc(struct super_block *sb)
         }
         /* class_import_put will get rid of the additional connections */
 
-        config_log_end_all();
-
         RETURN(0);
 }
           
@@ -1037,7 +959,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         /* Start targets using the llog named for the target */
         cfg.cfg_instance = NULL;
-        rc = config_log_start(sb, lsi->lsi_ldd->ldd_svname, &cfg);
+        rc = lustre_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
         if (rc) {
                 CERROR("failed to start server %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, rc);
@@ -1215,7 +1137,8 @@ static void server_put_super(struct super_block *sb)
 
         CDEBUG(D_MOUNT, "server put_super %s\n", lsi->lsi_ldd->ldd_svname);
                                                                                        
-        config_log_end(lsi->lsi_ldd->ldd_svname);
+        /* tell the mgc to drop the config log */
+        lustre_end_log(sb, lsi->lsi_ldd->ldd_svname, NULL);
 
         obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
         if (obd) {
@@ -1699,10 +1622,8 @@ int lustre_unregister_fs(void)
 
 EXPORT_SYMBOL(lustre_register_client_fill_super);
 EXPORT_SYMBOL(lustre_common_put_super);
-EXPORT_SYMBOL(config_log_start);
-EXPORT_SYMBOL(config_log_end);
-EXPORT_SYMBOL(config_log_get);
-EXPORT_SYMBOL(config_log_put);
+EXPORT_SYMBOL(lustre_process_log);
+EXPORT_SYMBOL(lustre_end_log);
 EXPORT_SYMBOL(server_get_mount);
 EXPORT_SYMBOL(server_put_mount);
 

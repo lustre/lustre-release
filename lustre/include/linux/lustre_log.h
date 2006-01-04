@@ -107,14 +107,6 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
 int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 
-/* list of configuration llogs we are watching */
-struct config_llog_data {
-        char               *cld_name;
-        __u32               cld_gen;
-        struct ldlm_res_id  cld_res_id;
-        struct list_head    cld_list_chain;
-};
-
 /* llog_obd.c */
 int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                int count,  struct llog_logid *logid,struct llog_operations *op);

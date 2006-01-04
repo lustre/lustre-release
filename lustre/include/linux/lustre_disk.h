@@ -232,13 +232,12 @@ struct lustre_mount_info {
 /* obd_mount.c */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 int lustre_common_put_super(struct super_block *sb);
+int lustre_process_log(struct super_block *sb, char *logname, 
+                     struct config_llog_instance *cfg);
+int lustre_end_log(struct super_block *sb, char *logname, 
+                       struct config_llog_instance *cfg);
 struct lustre_mount_info *server_get_mount(char *name);
 int server_put_mount(char *name, struct vfsmount *mnt);
-int config_log_start(struct super_block *, char *,
-                           struct config_llog_instance *cfg);
-int config_log_end(char *instance);
-struct config_llog_data *config_log_get(char *name);
-void config_log_put(void);
 
 /* mgc_request.c */
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id);

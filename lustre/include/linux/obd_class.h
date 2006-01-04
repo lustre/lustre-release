@@ -115,6 +115,14 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
                            struct config_llog_instance *cfg);
 
+/* list of active configuration logs  */
+struct config_llog_data {
+        char               *cld_logname;
+        struct ldlm_res_id  cld_resid;
+        struct config_llog_instance cld_cfg;
+        struct list_head    cld_list_chain;
+};
+
 struct lustre_profile {
         struct list_head lp_list;
         char * lp_profile;

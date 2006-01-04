@@ -836,7 +836,7 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
         CDEBUG(D_CONFIG|D_ERROR, "Processed log %s gen %d-%d (%d)\n", name, 
-               cd.first_idx, cd.last_idx, rc);
+               cd.first_idx + 1, cd.last_idx, rc);
         if (cfg)
                 cfg->cfg_last_idx = cd.last_idx;
 

@@ -262,8 +262,8 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         int rc;
         ENTRY;
 
-        CDEBUG(D_CONFIG, "Disconnecting target %s from %s\n", 
-               osc_obd->obd_name, obd->obd_name);
+        CDEBUG(D_CONFIG, "%s: disconnecting target %s\n", 
+               obd->obd_name, osc_obd->obd_name);
 
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {

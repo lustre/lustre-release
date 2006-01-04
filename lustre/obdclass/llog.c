@@ -220,8 +220,10 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         if (!buf)
                 RETURN(-ENOMEM);
 
-        if (cd != NULL)
+        if (cd != NULL) {
+                last_called_index = cd->first_idx;
                 index = cd->first_idx + 1;
+        }
         if (cd != NULL && cd->last_idx)
                 last_index = cd->last_idx;
         else

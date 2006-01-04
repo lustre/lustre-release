@@ -51,7 +51,8 @@ enum lcfg_command_type {
         LCFG_LOV_DEL_OBD    = 0x00cf00e,
         LCFG_PARAM          = 0x00cf00f,
         LCFG_MARKER         = 0x00cf010,
-        LCFG_PARSE_LOG      = 0x00cf011,
+        LCFG_LOG_START      = 0x00cf011,
+        LCFG_LOG_END        = 0x00cf012,
 };
 
 struct lustre_cfg_bufs {
