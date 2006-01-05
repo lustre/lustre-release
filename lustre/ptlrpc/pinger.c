@@ -416,7 +416,7 @@ static int pinger_check_rpcs(void *arg)
                 DEBUG_REQ(D_HA, req, "pinging %s->%s",
                           req->rq_import->imp_obd->obd_uuid.uuid,
                           req->rq_import->imp_target_uuid.uuid);
-                (void)ptl_send_rpc(req);
+                (void)ptl_send_rpc(req, 0);
         }
 
 do_check_set:

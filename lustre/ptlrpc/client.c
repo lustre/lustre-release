@@ -713,7 +713,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
                req->rq_reqmsg->opc);
 
-        rc = ptl_send_rpc(req);
+        rc = ptl_send_rpc(req, 0);
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); expect timeout", rc);
                 req->rq_net_err = 1;
@@ -844,7 +844,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                         }
                                 }
 
-                                rc = ptl_send_rpc(req);
+                                rc = ptl_send_rpc(req, 0);
                                 if (rc) {
                                         DEBUG_REQ(D_HA, req, "send failed (%d)",
                                                   rc);
@@ -1561,7 +1561,7 @@ restart:
         list_add_tail(&req->rq_list, &imp->imp_sending_list);
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-        rc = ptl_send_rpc(req);
+        rc = ptl_send_rpc(req, 0);
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); recovering", rc);
                 timeout = 1;

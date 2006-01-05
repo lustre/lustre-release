@@ -489,7 +489,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_timeout = ldlm_timeout; /* timeout for initial AST reply */
         if (unlikely(instant_cancel)) {
-                rc = ptl_send_rpc_nowait(req);
+                rc = ptl_send_rpc(req, 1);
         } else {
                 rc = ptlrpc_queue_wait(req);
         }
@@ -821,6 +821,8 @@ existing_lock:
                 else if (lock->l_granted_mode == lock->l_req_mode)
                         ldlm_add_waiting_lock(lock);
         }
+        /* Make sure we never ever grant usual metadata locks to liblustre
+           clients */
         if ((dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN ||
             dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS) &&
              req->rq_export->exp_libclient) {

@@ -705,11 +705,18 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 rc = ptlrpc_queue_wait(req);
 
                 if (rc == ESTALE) {
-                        CERROR("client/server (nid %s) out of sync"
-                               " -- not fatal, flags %d\n",
-                               libcfs_nid2str(req->rq_import->
-                                              imp_connection->c_peer.nid),
-                               lock->l_flags);
+                        /* For PLAIN (inodebits) locks on liblustre clients
+                           this is a valid race between us cancelling a lock
+                           from lru and sending notification and server
+                           cancelling our lock at the same time */
+#ifndef __KERNEL__
+                        if (lock->l_resource->lr_type != LDLM_PLAIN /* IBITS */)
+#endif
+                                CERROR("client/server (nid %s) out of sync"
+                                       " -- not fatal, flags %d\n",
+                                       libcfs_nid2str(req->rq_import->
+                                                    imp_connection->c_peer.nid),
+                                       lock->l_flags);
                 } else if (rc == -ETIMEDOUT) {
                         ptlrpc_req_finished(req);
                         GOTO(restart, rc);
@@ -763,6 +770,13 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 
         list_for_each_entry_safe(lock, next, &ns->ns_unused_list, l_lru) {
                 LASSERT(!lock->l_readers && !lock->l_writers);
+
+                /* If we have chosen to canecl this lock voluntarily, we better
+                   send cancel notification to server, so that it frees
+                   appropriate state. This might lead to a race where while
+                   we are doing cancel here, server is also silently
+                   cancelling this lock. */
+                lock->l_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
 
                 /* Setting the CBPENDING flag is a little misleading, but
                  * prevents an important race; namely, once CBPENDING is set,
@@ -1128,6 +1142,14 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         int size[2];
         int flags;
 
+        /* If this is reply-less callback lock, we cannot replay it, since
+         * server might have long dropped it, but notification of that event was
+         * lost by network. (and server granted conflicting lock already) */
+        if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) {
+                LDLM_DEBUG(lock, "Not replaying reply-less lock:");
+                ldlm_lock_cancel(lock);
+                RETURN(0);
+        }
         /*
          * If granted mode matches the requested mode, this lock is granted.
          *
