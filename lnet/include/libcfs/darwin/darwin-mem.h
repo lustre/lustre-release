@@ -101,7 +101,7 @@ struct xnu_raw_page {
 	struct xnu_page  header;
 	void            *virtual;
 	atomic_t         count;
-	struct list_head dead;
+	struct list_head link;
 };
 
 /*

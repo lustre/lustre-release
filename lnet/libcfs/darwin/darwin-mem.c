@@ -244,8 +244,8 @@ void raw_page_death_row_clean(void)
         spin_lock(&page_death_row_phylax);
         while (!list_empty(&page_death_row)) {
                 pg = container_of(page_death_row.next,
-                                  struct xnu_raw_page, dead);
-                list_del(&pg->dead);
+                                  struct xnu_raw_page, link);
+                list_del(&pg->link);
                 spin_unlock(&page_death_row_phylax);
                 raw_page_finish(pg);
                 spin_lock(&page_death_row_phylax);
@@ -266,7 +266,7 @@ void free_raw_page(struct xnu_raw_page *pg)
          */
         if (get_preemption_level() > 0) {
                 spin_lock(&page_death_row_phylax);
-                list_add(&pg->dead, &page_death_row);
+                list_add(&pg->link, &page_death_row);
                 spin_unlock(&page_death_row_phylax);
         } else {
                 raw_page_finish(pg);
@@ -285,6 +285,11 @@ cfs_page_t *cfs_alloc_page(u_int32_t flags)
 
         page = cfs_alloc(sizeof *page, flags);
         if (page != NULL) {
+                /*
+                 * XXX Liang: we need to use use zalloc() instead of 
+                 * cfs_alloc(), cfs_alloc()->_MALLOC() will waste a lot
+                 * of memory while allcating memory block at PAGE_SIZE.
+                 */
                 page->virtual = cfs_alloc(CFS_PAGE_SIZE, flags);
                 if (page->virtual != NULL) {
                         ++ raw_pages;

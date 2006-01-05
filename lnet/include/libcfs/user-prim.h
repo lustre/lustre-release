@@ -38,6 +38,8 @@
 
 #ifndef __KERNEL__
 
+#include <stdlib.h>
+#include <string.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
 #include <libcfs/list.h>

@@ -21,7 +21,11 @@
  * using the generic single-entry routines.
  */
 
+#ifndef __WINNT__
+#define prefetch(a) ((void)a)
+#else
 #define prefetch(a) ((void *)a)
+#endif
 
 struct list_head {
 	struct list_head *next, *prev;

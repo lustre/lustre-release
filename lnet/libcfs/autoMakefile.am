@@ -25,12 +25,12 @@ endif
 if DARWIN
 macos_PROGRAMS := libcfs
 
-nodist_libcfs_SOURCES := debug.c module.c tracefile.c nidstrings.c   \
-	darwin/darwin-debug.c darwin/darwin-fs.c darwin/darwin-mem.c \
-	darwin/darwin-module.c darwin/darwin-prim.c		     \
-	darwin/darwin-proc.c darwin/darwin-tracefile.c		     \
-	darwin/darwin-utils.c darwin/darwin-sync.c		     \
-	darwin/darwin-curproc.c darwin/darwin-tcpip.c
+nodist_libcfs_SOURCES := darwin/darwin-sync.c darwin/darwin-mem.c	\
+	darwin/darwin-prim.c darwin/darwin-fs.c darwin/darwin-curproc.c	\
+	darwin/darwin-tcpip.c darwin/darwin-utils.c 			\
+	darwin/darwin-debug.c darwin/darwin-proc.c 			\
+	darwin/darwin-tracefile.c darwin/darwin-module.c 		\
+	debug.c module.c tracefile.c nidstrings.c   
 
 libcfs_CFLAGS := $(EXTRA_KCFLAGS)
 libcfs_LDFLAGS := $(EXTRA_KLDFLAGS)
