@@ -371,8 +371,8 @@ void __liblustre_cleanup_(void)
          * liblutre. this dilema lead to another hack in
          * libsysio/src/file_hack.c FIXME
          */
-        _sysio_shutdown();
 #ifdef INIT_SYSIO
+        _sysio_shutdown();
         cleanup_lib_portals();
         LNetFini();
 #endif
