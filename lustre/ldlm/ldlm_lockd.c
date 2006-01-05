@@ -498,6 +498,10 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         ptlrpc_req_finished(req);
 
+        /* If we cancelled the lock, we need to restart ldlm_reprocess_queue */
+        if (!rc && instant_cancel)
+                rc = -ERESTART;
+
         RETURN(rc);
 }
 
@@ -514,7 +518,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct ptlrpc_request *req;
         struct timeval granted_time;
         long total_enqueue_wait;
-        int rc = 0, size[2] = {sizeof(*body)}, buffers = 1;
+        int rc = 0, size[2] = {sizeof(*body)}, buffers = 1, instant_cancel = 0;
         ENTRY;
 
         LASSERT(lock != NULL);
@@ -573,11 +577,13 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                    ldlm_handle_enqueue will call ldlm_lock_cancel() still, that
                    would not only cancel the loc, but will also remove it from
                    waiting list */
-                if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK)
+                if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) {
                         ldlm_lock_cancel(lock);
-                else
+                        instant_cancel = 1;
+                } else {
                         ldlm_add_waiting_lock(lock); /* start the lock-timeout
                                                          clock */
+                }
         }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
@@ -586,6 +592,10 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 rc = ldlm_handle_ast_error(lock, req, rc, "completion");
 
         ptlrpc_req_finished(req);
+
+        /* If we cancelled the lock, we need to restart ldlm_reprocess_queue */
+        if (!rc && instant_cancel)
+                rc = -ERESTART;
 
         RETURN(rc);
 }
