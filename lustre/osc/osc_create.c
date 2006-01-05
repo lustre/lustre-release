@@ -35,18 +35,7 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #ifdef __KERNEL__
-# include <linux/version.h>
-# include <linux/module.h>
-# include <linux/mm.h>
-# include <linux/highmem.h>
-# include <linux/ctype.h>
-# include <linux/init.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#  include <linux/workqueue.h>
-#  include <linux/smp_lock.h>
-# else
-#  include <linux/locks.h>
-# endif
+# include <libcfs/libcfs.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif

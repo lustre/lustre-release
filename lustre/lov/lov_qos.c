@@ -28,8 +28,7 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #ifdef __KERNEL__
-#include <linux/types.h>
-#include <linux/random.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif

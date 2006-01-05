@@ -97,6 +97,7 @@ static inline int have_expired_locks(void)
 {
         int need_to_run;
 
+        ENTRY;
         spin_lock_bh(&waiting_locks_spinlock);
         need_to_run = !list_empty(&expired_lock_thread.elt_expired_locks);
         spin_unlock_bh(&waiting_locks_spinlock);
@@ -511,12 +512,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 LDLM_ERROR(lock, "enqueue wait took %luus from %lu",
                            total_enqueue_wait, lock->l_enqueued_time.tv_sec);
 
-        down(&lock->l_resource->lr_lvb_sem);
+        mutex_down(&lock->l_resource->lr_lvb_sem);
         if (lock->l_resource->lr_lvb_len) {
                 buffers = 2;
                 size[1] = lock->l_resource->lr_lvb_len;
         }
-        up(&lock->l_resource->lr_lvb_sem);
+        mutex_up(&lock->l_resource->lr_lvb_sem);
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LDLM_CP_CALLBACK, buffers, size, NULL);
@@ -532,12 +533,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         if (buffers == 2) {
                 void *lvb;
 
-                down(&lock->l_resource->lr_lvb_sem);
+                mutex_down(&lock->l_resource->lr_lvb_sem);
                 lvb = lustre_msg_buf(req->rq_reqmsg, 1,
                                      lock->l_resource->lr_lvb_len);
                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                        lock->l_resource->lr_lvb_len);
-                up(&lock->l_resource->lr_lvb_sem);
+                mutex_up(&lock->l_resource->lr_lvb_sem);
         }
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %ldus wait)",
@@ -585,9 +586,9 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
                sizeof(body->lock_handle1));
         ldlm_lock2desc(lock, &body->lock_desc);
 
-        down(&lock->l_resource->lr_lvb_sem);
+        mutex_down(&lock->l_resource->lr_lvb_sem);
         size = lock->l_resource->lr_lvb_len;
-        up(&lock->l_resource->lr_lvb_sem);
+        mutex_up(&lock->l_resource->lr_lvb_sem);
         req->rq_replen = lustre_msg_size(1, &size);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
@@ -717,12 +718,12 @@ existing_lock:
         } else {
                 int buffers = 1;
 
-                down(&lock->l_resource->lr_lvb_sem);
+                mutex_down(&lock->l_resource->lr_lvb_sem);
                 if (lock->l_resource->lr_lvb_len) {
                         size[1] = lock->l_resource->lr_lvb_len;
                         buffers = 2;
                 }
-                up(&lock->l_resource->lr_lvb_sem);
+                mutex_up(&lock->l_resource->lr_lvb_sem);
 
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
                         GOTO(out, rc = -ENOMEM);
@@ -785,7 +786,7 @@ existing_lock:
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 if (rc == 0) {
-                        down(&lock->l_resource->lr_lvb_sem);
+                        mutex_down(&lock->l_resource->lr_lvb_sem);
                         size[1] = lock->l_resource->lr_lvb_len;
                         if (size[1] > 0) {
                                 void *lvb = lustre_msg_buf(req->rq_repmsg,
@@ -796,7 +797,7 @@ existing_lock:
                                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                                        size[1]);
                         }
-                        up(&lock->l_resource->lr_lvb_sem);
+                        mutex_up(&lock->l_resource->lr_lvb_sem);
                 } else {
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy(lock);
@@ -1337,7 +1338,7 @@ static int ldlm_bl_thread_main(void *arg)
 
         /* XXX boiler-plate */
         {
-                char name[sizeof(current->comm)];
+                char name[CFS_CURPROC_COMM_MAX];
                 snprintf(name, sizeof(name) - 1, "ldlm_bl_%02d",
                          bltd->bltd_num);
                 cfs_daemonize(name);
@@ -1376,20 +1377,22 @@ static int ldlm_cleanup(int force);
 int ldlm_get_ref(void)
 {
         int rc = 0;
-        down(&ldlm_ref_sem);
+        ENTRY;
+        mutex_down(&ldlm_ref_sem);
         if (++ldlm_refcount == 1) {
                 rc = ldlm_setup();
                 if (rc)
                         ldlm_refcount--;
         }
-        up(&ldlm_ref_sem);
+        mutex_up(&ldlm_ref_sem);
 
         RETURN(rc);
 }
 
 void ldlm_put_ref(int force)
 {
-        down(&ldlm_ref_sem);
+        ENTRY;
+        mutex_down(&ldlm_ref_sem);
         if (ldlm_refcount == 1) {
                 int rc = ldlm_cleanup(force);
                 if (rc)
@@ -1399,7 +1402,7 @@ void ldlm_put_ref(int force)
         } else {
                 ldlm_refcount--;
         }
-        up(&ldlm_ref_sem);
+        mutex_up(&ldlm_ref_sem);
 
         EXIT;
 }

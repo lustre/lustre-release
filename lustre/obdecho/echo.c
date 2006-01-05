@@ -134,6 +134,7 @@ int echo_destroy(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device *obd = class_exp2obd(exp);
 
+        ENTRY;
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
@@ -150,7 +151,7 @@ int echo_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        return 0;
+        RETURN(0);
 }
 
 static int echo_getattr(struct obd_export *exp, struct obdo *oa,
@@ -159,6 +160,7 @@ static int echo_getattr(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = class_exp2obd(exp);
         obd_id id = oa->o_id;
 
+        ENTRY;
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
@@ -173,7 +175,7 @@ static int echo_getattr(struct obd_export *exp, struct obdo *oa,
         obdo_cpy_md(oa, &obd->u.echo.eo_oa, oa->o_valid);
         oa->o_id = id;
 
-        return 0;
+        RETURN(0);
 }
 
 static int echo_setattr(struct obd_export *exp, struct obdo *oa,
@@ -181,6 +183,7 @@ static int echo_setattr(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device *obd = class_exp2obd(exp);
 
+        ENTRY;
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
@@ -201,7 +204,7 @@ static int echo_setattr(struct obd_export *exp, struct obdo *oa,
                 oti->oti_ack_locks[0].lock = obd->u.echo.eo_nl_lock;
         }
 
-        return 0;
+        RETURN(0);
 }
 
 static void
@@ -503,7 +506,7 @@ static int echo_cleanup(struct obd_device *obd)
         /* XXX Bug 3413; wait for a bit to ensure the BL callback has
          * happened before calling ldlm_namespace_free() */
         set_current_state (TASK_UNINTERRUPTIBLE);
-        schedule_timeout (cfs_time_seconds(1));
+        cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
@@ -554,7 +557,7 @@ echo_persistent_pages_init (void)
                 int gfp_mask = (i < ECHO_PERSISTENT_PAGES/2) ?
                         CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
 
-                pg = alloc_pages (gfp_mask, 0);
+                pg = cfs_alloc_page (gfp_mask);
                 if (pg == NULL) {
                         echo_persistent_pages_fini ();
                         return (-ENOMEM);
@@ -574,6 +577,7 @@ static int __init obdecho_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
+        ENTRY;
         printk(KERN_INFO "Lustre: Echo OBD driver; info@clusterfs.com\n");
 
         LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
@@ -611,4 +615,4 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Testing Echo OBD driver");
 MODULE_LICENSE("GPL");
 
-cfs_module(obdecho, "1.0.0", obdecho_init, obdecho_exit)
+cfs_module(obdecho, "1.0.0", obdecho_init, obdecho_exit);

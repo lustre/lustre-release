@@ -22,22 +22,6 @@
 
 #ifdef __KERNEL__
 
-/* 
- * XXX Liang:
- * liblustre.h has defined all of them in user space.
- * Where should we put them in OSX?
- */
-#define IT_OPEN     0x0001
-#define IT_CREAT    0x0002
-#define IT_READDIR  0x0004
-#define IT_GETATTR  0x0008
-#define IT_LOOKUP   0x0010
-#define IT_UNLINK   0x0020
-#define IT_GETXATTR 0x0040
-#define IT_EXEC     0x0080
-#define IT_PIN      0x0100
-#define IT_CHDIR    0x0200
-
 struct iattr {
         unsigned int    ia_valid;
         umode_t         ia_mode;

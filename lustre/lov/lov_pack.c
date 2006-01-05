@@ -417,6 +417,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         obd_id last_id = 0;
 
+        ENTRY;
         for (i = 0; i < lump->lmm_stripe_count; i++) {
                 __u32 len = sizeof(last_id);
                 oexp = lov->tgts[lump->lmm_objects[i].l_ost_idx].ltd_exp;

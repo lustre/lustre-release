@@ -913,7 +913,7 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
 }
 
 static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      unsigned long max_age)
+                      cfs_time_t max_age)
 {
         struct ptlrpc_request *req;
         struct obd_statfs *msfs;

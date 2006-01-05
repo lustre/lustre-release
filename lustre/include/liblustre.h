@@ -533,7 +533,9 @@ struct semaphore {
 
 /* use the macro's argument to avoid unused warnings */
 #define down(a) do { (void)a; } while (0)
+#define mutex_down(a)   down(a)
 #define up(a) do { (void)a; } while (0)
+#define mutex_up(a)     up(a)
 #define down_read(a) do { (void)a; } while (0)
 #define up_read(a) do { (void)a; } while (0)
 #define down_write(a) do { (void)a; } while (0)

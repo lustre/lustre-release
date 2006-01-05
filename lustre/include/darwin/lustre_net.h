@@ -27,8 +27,8 @@
 #error Do not #include this file directly. #include <lustre_net.h> instead
 #endif
 
+#include <libcfs/libcfs.h>
 #include <netat/sysglue.h>
-#include <libcfs/darwin/darwin-prim.h>
 
 #undef WITH_GROUP_INFO
 

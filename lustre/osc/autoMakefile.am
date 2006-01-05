@@ -11,7 +11,27 @@ libosc_a_CFLAGS = $(LLCFLAGS)
 endif
 
 if MODULES
+
+if LINUX
 modulefs_DATA = osc$(KMODEXT)
+endif
+
+if DARWIN
+macos_PROGRAMS := osc
+
+osc_SOURCES := \
+        osc_create.c \
+        osc_request.c
+
+osc_CFLAGS := $(EXTRA_KCFLAGS)
+osc_LDFLAGS := $(EXTRA_KLDFLAGS)
+osc_LDADD := $(EXTRA_KLIBS)
+
+plist_DATA := Info.plist
+
+#install-data-hook: fix-kext-ownership
+endif # Darwin
+
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

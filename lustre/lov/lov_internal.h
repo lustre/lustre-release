@@ -84,7 +84,7 @@ static inline struct lov_lock_handles *lov_llh_new(struct lov_stripe_md *lsm)
                 return NULL;
         atomic_set(&llh->llh_refcount, 2);
         llh->llh_stripe_count = lsm->lsm_stripe_count;
-        INIT_LIST_HEAD(&llh->llh_handle.h_link);
+        CFS_INIT_LIST_HEAD(&llh->llh_handle.h_link);
         class_handle_hash(&llh->llh_handle, lov_llh_addref);
         return llh;
 }

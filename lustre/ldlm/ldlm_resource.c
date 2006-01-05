@@ -36,7 +36,7 @@
 
 cfs_mem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
-DECLARE_MUTEX(ldlm_namespace_lock);
+struct semaphore ldlm_namespace_lock;
 struct list_head ldlm_namespace_list = CFS_LIST_HEAD_INIT(ldlm_namespace_list);
 cfs_proc_dir_entry_t *ldlm_type_proc_dir = NULL;
 cfs_proc_dir_entry_t *ldlm_ns_proc_dir = NULL;
@@ -258,9 +258,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         ns->ns_nr_unused = 0;
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
 
-        down(&ldlm_namespace_lock);
+        mutex_down(&ldlm_namespace_lock);
         list_add(&ns->ns_list_chain, &ldlm_namespace_list);
-        up(&ldlm_namespace_lock);
+        mutex_up(&ldlm_namespace_lock);
         ldlm_proc_namespace(ns);
         RETURN(ns);
 
@@ -374,12 +374,13 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
 /* Cleanup, but also free, the namespace */
 int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 {
+        ENTRY;
         if (!ns)
                 RETURN(ELDLM_OK);
 
-        down(&ldlm_namespace_lock);
+        mutex_down(&ldlm_namespace_lock);
         list_del(&ns->ns_list_chain);
-        up(&ldlm_namespace_lock);
+        mutex_up(&ldlm_namespace_lock);
 
         /* At shutdown time, don't call the cancellation callback */
         ldlm_namespace_cleanup(ns, 0);
@@ -543,12 +544,12 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 /* Although this is technically a lock inversion risk (lvb_sem
                  * should be taken before DLM lock), this resource was just
                  * created, so nobody else can take the lvb_sem yet. -p */
-                down(&res->lr_lvb_sem);
+                mutex_down(&res->lr_lvb_sem);
                 /* Drop the dlm lock, because lvbo_init can touch the disk */
                 l_unlock(&ns->ns_lock);
                 OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CREATE_RESOURCE, 2);
                 rc = ns->ns_lvbo->lvbo_init(res);
-                up(&res->lr_lvb_sem);
+                mutex_up(&res->lr_lvb_sem);
                 if (rc)
                         CERROR("lvbo_init failed for resource "LPU64"/"LPU64
                                ": rc %d\n", name.name[0], name.name[1], rc);
@@ -695,7 +696,7 @@ void ldlm_dump_all_namespaces(int level)
 {
         struct list_head *tmp;
 
-        down(&ldlm_namespace_lock);
+        mutex_down(&ldlm_namespace_lock);
 
         list_for_each(tmp, &ldlm_namespace_list) {
                 struct ldlm_namespace *ns;
@@ -703,7 +704,7 @@ void ldlm_dump_all_namespaces(int level)
                 ldlm_namespace_dump(level, ns);
         }
 
-        up(&ldlm_namespace_lock);
+        mutex_up(&ldlm_namespace_lock);
 }
 
 void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)

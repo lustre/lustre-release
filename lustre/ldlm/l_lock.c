@@ -60,7 +60,7 @@ void l_lock(struct lustre_lock *lock)
         if (owner) {
                 ++lock->l_depth;
         } else {
-                down(&lock->l_sem);
+                mutex_down(&lock->l_sem);
                 spin_lock(&lock->l_spin);
                 lock->l_owner = cfs_current();
                 lock->l_depth = 0;
@@ -78,7 +78,7 @@ void l_unlock(struct lustre_lock *lock)
         if (--lock->l_depth < 0) {
                 lock->l_owner = NULL;
                 spin_unlock(&lock->l_spin);
-                up(&lock->l_sem);
+                mutex_up(&lock->l_sem);
                 return;
         }
         spin_unlock(&lock->l_spin);
@@ -101,16 +101,15 @@ int l_has_lock(struct lustre_lock *lock)
 }
 
 #ifdef __KERNEL__
-#include <linux/lustre_version.h>
 void l_check_ns_lock(struct ldlm_namespace *ns)
 {
-        static unsigned long next_msg;
+        static cfs_time_t next_msg;
 
-        if (!l_has_lock(&ns->ns_lock) && time_after(jiffies, next_msg)) {
+        if (!l_has_lock(&ns->ns_lock) && cfs_time_after(cfs_time_current(), next_msg)) {
                 CERROR("namespace %s lock not held when it should be; tell "
                        "phil\n", ns->ns_name);
                 libcfs_debug_dumpstack(NULL);
-                next_msg = jiffies + 60 * HZ;
+                next_msg = cfs_time_shift(60);
         }
 }
 

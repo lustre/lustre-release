@@ -50,6 +50,7 @@ int ldlm_expired_completion_wait(void *data)
         struct obd_import *imp;
         struct obd_device *obd;
 
+        ENTRY;
         if (lock->l_conn_export == NULL) {
                 static cfs_time_t next_dump = 0, last_dump = 0;
 
@@ -1019,6 +1020,7 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
 {
         int i, rc = LDLM_ITER_CONTINUE;
 
+        ENTRY;
         l_lock(&ns->ns_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
                 struct list_head *tmp, *next;
@@ -1082,6 +1084,7 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
 
+        ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
@@ -1117,6 +1120,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         int size[2];
         int flags;
 
+        ENTRY;
         /*
          * If granted mode matches the requested mode, this lock is granted.
          *

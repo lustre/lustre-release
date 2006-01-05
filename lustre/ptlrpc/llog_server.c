@@ -34,8 +34,6 @@
 
 #ifndef __KERNEL__
 #include <liblustre.h>
-#else
-#include <linux/fs.h>
 #endif
 
 #include <obd_class.h>

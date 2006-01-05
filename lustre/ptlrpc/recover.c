@@ -27,10 +27,7 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 #ifdef __KERNEL__
-# include <linux/config.h>
-# include <linux/module.h>
-# include <linux/kmod.h>
-# include <linux/list.h>
+# include <libcfs/libcfs.h>
 #else
 # include <liblustre.h>
 #endif
@@ -311,6 +308,7 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         struct obd_device *obd = imp->imp_obd;
         int rc = 0;
 
+        ENTRY;
         LASSERT(obd);
 
         /* When deactivating, mark import invalid, and abort in-flight

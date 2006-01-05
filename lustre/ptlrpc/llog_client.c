@@ -234,6 +234,7 @@ static int llog_client_close(struct llog_handle *handle)
 {
         int rc = 0;
 
+        ENTRY;
         RETURN(rc);
 }
 

@@ -29,8 +29,6 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #else
-#include <linux/version.h>
-#include <asm/semaphore.h>
 #define DEBUG_SUBSYSTEM S_RPC
 #endif
 
@@ -149,10 +147,10 @@ static int ptlrpc_pinger_main(void *arg)
 
         cfs_block_allsigs();
 
-        LASSERTF(strlen(data->name) < sizeof(current->comm),
+        LASSERTF(strlen(data->name) < CFS_CURPROC_COMM_MAX,
                  "name %d > len %d\n",
-                 (int)strlen(data->name), (int)sizeof(current->comm));
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
+                 (int)strlen(data->name), CFS_CURPROC_COMM_MAX);
+        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1, "%s", data->name);
         unlock_kernel();
 
         /* Record that the thread is running */
@@ -168,7 +166,7 @@ static int ptlrpc_pinger_main(void *arg)
                 cfs_duration_t time_to_next_ping;
                 struct list_head *iter;
 
-                down(&pinger_sem);
+                mutex_down(&pinger_sem);
                 list_for_each(iter, &pinger_imports) {
                         struct obd_import *imp =
                                 list_entry(iter, struct obd_import,
@@ -239,7 +237,7 @@ static int ptlrpc_pinger_main(void *arg)
                                                         cfs_time_seconds(update_interval))))
                                 ptlrpc_update_next_ping(imp);
                 }
-                up(&pinger_sem);
+                mutex_up(&pinger_sem);
 
                 /* Wait until the next ping time, or until we're stopped. We
                  * sleep here smaller interval of two possible (ping or
@@ -278,7 +276,7 @@ static int ptlrpc_pinger_main(void *arg)
         thread->t_flags = SVC_STOPPED;
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        CDEBUG(D_NET, "pinger thread exiting, process %d\n", current->pid);
+        CDEBUG(D_NET, "pinger thread exiting, process %d\n", cfs_curproc_pid());
         return 0;
 }
 
@@ -300,14 +298,14 @@ int ptlrpc_start_pinger(void)
         OBD_ALLOC(pinger_thread, sizeof(*pinger_thread));
         if (pinger_thread == NULL)
                 RETURN(-ENOMEM);
-        init_waitqueue_head(&pinger_thread->t_ctl_waitq);
+        cfs_waitq_init(&pinger_thread->t_ctl_waitq);
 
         d.name = "ll_ping";
         d.thread = pinger_thread;
 
         /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
          * just drop the VM and FILES in ptlrpc_daemonize() right away. */
-        rc = kernel_thread(ptlrpc_pinger_main, &d, CLONE_VM | CLONE_FILES);
+        rc = cfs_kernel_thread(ptlrpc_pinger_main, &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
                 OBD_FREE(pinger_thread, sizeof(*pinger_thread));
@@ -330,10 +328,10 @@ int ptlrpc_stop_pinger(void)
 
         if (pinger_thread == NULL)
                 RETURN(-EALREADY);
-        down(&pinger_sem);
+        mutex_down(&pinger_sem);
         pinger_thread->t_flags = SVC_STOPPING;
         cfs_waitq_signal(&pinger_thread->t_ctl_waitq);
-        up(&pinger_sem);
+        mutex_up(&pinger_sem);
 
         l_wait_event(pinger_thread->t_ctl_waitq,
                      (pinger_thread->t_flags & SVC_STOPPED), &lwi);
@@ -354,7 +352,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         if (!list_empty(&imp->imp_pinger_chain))
                 RETURN(-EALREADY);
 
-        down(&pinger_sem);
+        mutex_down(&pinger_sem);
         CDEBUG(D_HA, "adding pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, imp->imp_target_uuid.uuid);
         ptlrpc_update_next_ping(imp);
@@ -363,7 +361,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         class_import_get(imp);
 
         ptlrpc_pinger_wake_up();
-        up(&pinger_sem);
+        mutex_up(&pinger_sem);
 
         RETURN(0);
 }
@@ -374,12 +372,12 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         if (list_empty(&imp->imp_pinger_chain))
                 RETURN(-ENOENT);
 
-        down(&pinger_sem);
+        mutex_down(&pinger_sem);
         list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, imp->imp_target_uuid.uuid);
         class_import_put(imp);
-        up(&pinger_sem);
+        mutex_up(&pinger_sem);
         RETURN(0);
 }
 
@@ -441,7 +439,7 @@ static int pinger_check_rpcs(void *arg)
         set = pd->pd_set;
 
         /* add rpcs into set */
-        down(&pinger_sem);
+        mutex_down(&pinger_sem);
         list_for_each(iter, &pinger_imports) {
                 struct obd_import *imp =
                         list_entry(iter, struct obd_import, imp_pinger_chain);
@@ -482,7 +480,7 @@ static int pinger_check_rpcs(void *arg)
                 }
         }
         pd->pd_this_ping = curtime;
-        up(&pinger_sem);
+        mutex_up(&pinger_sem);
 
         /* Might be empty, that's OK. */
         if (set->set_remaining == 0)
@@ -511,7 +509,7 @@ do_check_set:
         }
 
         /* Expire all the requests that didn't come back. */
-        down(&pinger_sem);
+        mutex_down(&pinger_sem);
         list_for_each(iter, &set->set_requests) {
                 req = list_entry(iter, struct ptlrpc_request,
                                  rq_set_chain);
@@ -530,7 +528,7 @@ do_check_set:
                 CDEBUG(D_HA, "pinger initiate expire_one_request\n");
                 ptlrpc_expire_one_request(req);
         }
-        up(&pinger_sem);
+        mutex_up(&pinger_sem);
 
         ptlrpc_set_destroy(set);
         pd->pd_set = NULL;
@@ -568,7 +566,7 @@ int ptlrpc_stop_pinger(void)
 
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
-        down(&pinger_sem);
+        mutex_down(&pinger_sem);
         ptlrpc_update_next_ping(imp);
         if (pinger_args.pd_set == NULL &&
             time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
@@ -576,7 +574,7 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
                         imp->imp_next_ping, cfs_time_current());
                 pinger_args.pd_next_ping = imp->imp_next_ping;
         }
-        up(&pinger_sem);
+        mutex_up(&pinger_sem);
 }
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)
@@ -589,10 +587,10 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
                imp->imp_obd->obd_uuid.uuid, imp->imp_target_uuid.uuid);
         ptlrpc_pinger_sending_on_import(imp);
 
-        down(&pinger_sem);
+        mutex_down(&pinger_sem);
         list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
         class_import_get(imp);
-        up(&pinger_sem);
+        mutex_up(&pinger_sem);
 
         RETURN(0);
 }
@@ -603,12 +601,12 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         if (list_empty(&imp->imp_pinger_chain))
                 RETURN(-ENOENT);
 
-        down(&pinger_sem);
+        mutex_down(&pinger_sem);
         list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, imp->imp_target_uuid.uuid);
         class_import_put(imp);
-        up(&pinger_sem);
+        mutex_up(&pinger_sem);
         RETURN(0);
 }
 

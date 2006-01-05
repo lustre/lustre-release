@@ -30,13 +30,7 @@
 #endif
 #define DEBUG_SUBSYSTEM S_LOV
 #ifdef __KERNEL__
-#include <linux/slab.h>
-#include <linux/module.h>
-#include <linux/init.h>
-#include <linux/slab.h>
-#include <linux/pagemap.h>
-#include <linux/seq_file.h>
-#include <asm/div64.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
@@ -67,7 +61,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         struct lustre_handle conn = {0, };
         struct obd_import *imp;
 #ifdef __KERNEL__
-        struct proc_dir_entry *lov_proc_dir;
+        cfs_proc_dir_entry_t *lov_proc_dir;
 #endif
         int rc;
         ENTRY;
@@ -130,7 +124,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
                 struct obd_device *osc_obd = class_conn2obd(&conn);
-                struct proc_dir_entry *osc_symlink;
+                cfs_proc_dir_entry_t *osc_symlink;
                 char name[MAX_STRING_SIZE];
 
                 LASSERT(osc_obd != NULL);
@@ -214,7 +208,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
 static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 {
-        struct proc_dir_entry *lov_proc_dir;
+        cfs_proc_dir_entry_t *lov_proc_dir;
         struct obd_device *osc_obd = class_exp2obd(tgt->ltd_exp);
         struct lov_obd *lov = &obd->u.lov;
         int rc;
@@ -224,7 +218,7 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
-                struct proc_dir_entry *osc_symlink;
+                cfs_proc_dir_entry_t *osc_symlink;
 
                 osc_symlink = lprocfs_srch(lov_proc_dir, osc_obd->obd_name);
                 if (osc_symlink) {
@@ -362,11 +356,12 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         int rc;
         struct obd_uuid *uuid;
 
+        ENTRY;
         if (strcmp(watched->obd_type->typ_name, "osc")) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name,
                        watched->obd_name);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
 
@@ -621,7 +616,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_obd_setup(obd, lvars.obd_vars);
 #ifdef LPROCFS
         {
-                struct proc_dir_entry *entry;
+                cfs_proc_dir_entry_t *entry;
 
                 entry = create_proc_entry("target_obd", 0444,
                                           obd->obd_proc_entry);
@@ -654,6 +649,7 @@ static int lov_cleanup(struct obd_device *obd)
 {
         struct lov_obd *lov = &obd->u.lov;
 
+        ENTRY;
         lprocfs_obd_cleanup(obd);
         if (lov->tgts) {
                 int i;
@@ -778,7 +774,7 @@ lov_create(struct obd_export *exp, struct obdo *src_oa,
         struct lov_request_set *set = NULL;
         struct lov_obd *lov;
         struct obd_statfs osfs;
-        unsigned long maxage;
+        cfs_time_t maxage;
         struct lov_request *req;
         int rc = 0;
         ENTRY;
@@ -801,7 +797,7 @@ lov_create(struct obd_export *exp, struct obdo *src_oa,
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
         
-        maxage = jiffies - lov->desc.ld_qos_maxage * HZ;
+        maxage = cfs_time_shift(-lov->desc.ld_qos_maxage);
         obd_statfs(exp->exp_obd, &osfs, maxage);                
 
         rc = lov_prep_create_set(exp, ea, src_oa, oti, &set);
@@ -1397,6 +1393,7 @@ static int lov_queue_async_io(struct obd_export *exp,
         struct lov_async_page *lap;
         int rc;
 
+        ENTRY;
         LASSERT(loi == NULL);
 
         ASSERT_LSM_MAGIC(lsm);
@@ -1420,6 +1417,7 @@ static int lov_set_async_flags(struct obd_export *exp,
         struct lov_async_page *lap;
         int rc;
 
+        ENTRY;
         LASSERT(loi == NULL);
 
         ASSERT_LSM_MAGIC(lsm);
@@ -1444,6 +1442,7 @@ static int lov_queue_group_io(struct obd_export *exp,
         struct lov_async_page *lap;
         int rc;
 
+        ENTRY;
         LASSERT(loi == NULL);
 
         ASSERT_LSM_MAGIC(lsm);
@@ -1469,6 +1468,7 @@ static int lov_trigger_group_io(struct obd_export *exp,
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         int rc = 0, i, err;
 
+        ENTRY;
         LASSERT(loi == NULL);
 
         ASSERT_LSM_MAGIC(lsm);
@@ -1496,6 +1496,7 @@ static int lov_teardown_async_page(struct obd_export *exp,
         struct lov_async_page *lap;
         int rc;
 
+        ENTRY;
         LASSERT(loi == NULL);
 
         ASSERT_LSM_MAGIC(lsm);
@@ -1770,7 +1771,7 @@ static int lov_join_lru(struct obd_export *exp,
         } while(0)
 
 static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      unsigned long max_age)
+                      cfs_time_t max_age)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_statfs lov_sfs;
@@ -2199,16 +2200,16 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
 
 void lov_stripe_lock(struct lov_stripe_md *md)
 {
-        LASSERT(md->lsm_lock_owner != current);
+        LASSERT(md->lsm_lock_owner != cfs_current());
         spin_lock(&md->lsm_lock);
         LASSERT(md->lsm_lock_owner == NULL);
-        md->lsm_lock_owner = current;
+        md->lsm_lock_owner = cfs_current();
 }
 EXPORT_SYMBOL(lov_stripe_lock);
 
 void lov_stripe_unlock(struct lov_stripe_md *md)
 {
-        LASSERT(md->lsm_lock_owner == current);
+        LASSERT(md->lsm_lock_owner == cfs_current());
         md->lsm_lock_owner = NULL;
         spin_unlock(&md->lsm_lock);
 }
@@ -2291,6 +2292,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver");
 MODULE_LICENSE("GPL");
 
-module_init(lov_init);
-module_exit(lov_exit);
+cfs_module(lov, "1.0.0", lov_init, lov_exit);
 #endif

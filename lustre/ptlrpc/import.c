@@ -309,6 +309,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         struct ptlrpc_connect_async_args *aa;
         unsigned long flags;
 
+        ENTRY;
         spin_lock_irqsave(&imp->imp_lock, flags);
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
@@ -596,6 +597,7 @@ finish:
 static int completed_replay_interpret(struct ptlrpc_request *req,
                                     void * data, int rc)
 {
+        ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
         if (req->rq_status == 0) {
                 ptlrpc_import_recovery_state_machine(req->rq_import);
@@ -667,6 +669,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         char *target_start;
         int target_len;
 
+        ENTRY;
         if (imp->imp_state == LUSTRE_IMP_EVICTED) {
                 deuuidify(imp->imp_target_uuid.uuid, NULL,
                           &target_start, &target_len);

@@ -98,7 +98,7 @@ int lustre_pack_request (struct ptlrpc_request *req,
 }
 
 #if RS_DEBUG
-LIST_HEAD(ptlrpc_rs_debug_lru);
+CFS_LIST_HEAD(ptlrpc_rs_debug_lru);
 spinlock_t ptlrpc_rs_debug_lock;
 
 #define PTLRPC_RS_DEBUG_LRU_ADD(rs)                                     \

@@ -28,7 +28,7 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #ifdef __KERNEL__
-#include <asm/div64.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif

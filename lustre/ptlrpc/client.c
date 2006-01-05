@@ -113,6 +113,7 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp (struct ptlrpc_request *req,
         struct obd_import *imp = req->rq_import;
         struct ptlrpc_bulk_desc *desc;
 
+        ENTRY;
         LASSERT(type == BULK_PUT_SINK || type == BULK_GET_SOURCE);
         desc = new_bulk(npages, type, portal);
         if (desc == NULL)
@@ -137,6 +138,7 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp (struct ptlrpc_request *req,
         struct obd_export *exp = req->rq_export;
         struct ptlrpc_bulk_desc *desc;
 
+        ENTRY;
         LASSERT(type == BULK_PUT_SOURCE || type == BULK_GET_SINK);
 
         desc = new_bulk(npages, type, portal);
@@ -379,6 +381,7 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
 {
         struct ptlrpc_request_set *set;
 
+        ENTRY;
         OBD_ALLOC(set, sizeof *set);
         if (!set)
                 RETURN(NULL);
@@ -1668,6 +1671,7 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         struct obd_import *imp = req->rq_import;
         unsigned long flags;
 
+        ENTRY;
         atomic_dec(&imp->imp_replay_inflight);
 
         if (!req->rq_replied) {

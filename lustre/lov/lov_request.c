@@ -28,7 +28,7 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #ifdef __KERNEL__
-#include <asm/div64.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
@@ -44,7 +44,7 @@ static void lov_init_set(struct lov_request_set *set)
         set->set_count = 0;
         set->set_completes = 0;
         set->set_success = 0;
-        INIT_LIST_HEAD(&set->set_list);
+        CFS_INIT_LIST_HEAD(&set->set_list);
         atomic_set(&set->set_refcount, 1);
 }
 

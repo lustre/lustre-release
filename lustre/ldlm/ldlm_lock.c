@@ -27,9 +27,7 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #ifdef __KERNEL__
-# include <linux/slab.h>
-# include <linux/module.h>
-# include <lustre_dlm.h>
+# include <libcfs/libcfs.h>
 #else
 # include <liblustre.h>
 # include <libcfs/kp30.h>
@@ -974,6 +972,7 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 {
         int i, rc;
 
+        ENTRY;
         l_lock(&ns->ns_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
                 struct list_head *tmp, *next;

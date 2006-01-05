@@ -329,6 +329,7 @@ int client_obd_cleanup(struct obd_device *obddev)
 {
         struct client_obd *cli = &obddev->u.cli;
 
+        ENTRY;
         if (!cli->cl_import)
                 RETURN(-EINVAL);
         class_destroy_import(cli->cl_import);
@@ -352,7 +353,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         int rc;
         ENTRY;
 
-        down(&cli->cl_sem);
+        mutex_down(&cli->cl_sem);
         rc = class_connect(dlm_handle, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
@@ -405,7 +406,7 @@ out_disco:
                 class_export_put(exp);
         }
 out_sem:
-        up(&cli->cl_sem);
+        mutex_up(&cli->cl_sem);
         return rc;
 }
 
@@ -423,7 +424,7 @@ int client_disconnect_export(struct obd_export *exp)
                 RETURN(-EINVAL);
         }
 
-        down(&cli->cl_sem);
+        mutex_down(&cli->cl_sem);
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
                        obd->obd_name);
@@ -459,7 +460,7 @@ int client_disconnect_export(struct obd_export *exp)
         if (!rc && err)
                 rc = err;
  out_sem:
-        up(&cli->cl_sem);
+        mutex_up(&cli->cl_sem);
         RETURN(rc);
 }
 
@@ -470,6 +471,7 @@ int client_disconnect_export(struct obd_export *exp)
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                             struct obd_uuid *cluuid)
 {
+        ENTRY;
         if (exp->exp_connection) {
                 struct lustre_handle *hdl;
                 hdl = &exp->exp_imp_reverse->imp_remote_handle;
@@ -860,6 +862,7 @@ void target_abort_recovery(void *data)
 {
         struct obd_device *obd = data;
 
+        ENTRY;
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -879,6 +882,7 @@ void target_abort_recovery(void *data)
         target_finish_recovery(obd);
 
         ptlrpc_run_recovery_over_upcall(obd);
+        EXIT;
 }
 
 static void target_recovery_expired(unsigned long castmeharder)

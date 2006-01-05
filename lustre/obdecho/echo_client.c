@@ -24,15 +24,7 @@
 
 #define DEBUG_SUBSYSTEM S_ECHO
 #ifdef __KERNEL__
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/fs.h>
-#include <linux/completion.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/iobuf.h>
-#endif
-#include <asm/div64.h>
-#include <linux/smp_lock.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
@@ -750,10 +742,11 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         obd_count npages, i;
         struct echo_async_page *eap;
         struct echo_async_state eas;
-        struct list_head *pos, *n;
         int rc = 0;
         unsigned long flags;
-        CFS_LIST_HEAD(pages);
+        struct echo_async_page **aps = NULL;
+
+        ENTRY;
 #if 0
         int                     verify;
         int                     gfp_mask;
@@ -786,6 +779,10 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         eas.eas_lsm = lsm;
         CFS_INIT_LIST_HEAD(&eas.eas_avail);
 
+        OBD_ALLOC(aps, npages * sizeof aps[0]);
+        if (aps == NULL)
+                return (-ENOMEM);
+
         /* prepare the group of pages that we're going to be keeping
          * in flight */
         for (i = 0; i < npages; i++) {
@@ -793,18 +790,17 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 if (page == NULL)
                         GOTO(out, rc = -ENOMEM);
 
-                page->private = 0;
-                list_add_tail(&PAGE_LIST(page), &pages);
-
                 OBD_ALLOC(eap, sizeof(*eap));
-                if (eap == NULL)
+                if (eap == NULL) {
+                        cfs_free_page(page);
                         GOTO(out, rc = -ENOMEM);
+                }
 
                 eap->eap_magic = EAP_MAGIC;
                 eap->eap_page = page;
                 eap->eap_eas = &eas;
-                page->private = (unsigned long)eap;
                 list_add_tail(&eap->eap_item, &eas.eas_avail);
+                aps[i] = eap;
         }
 
         /* first we spin queueing io and being woken by its completion */
@@ -881,19 +877,19 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         spin_unlock_irqrestore(&eas.eas_lock, flags);
 
 out:
-        list_for_each_safe(pos, n, &pages) {
-                cfs_page_t *page = list_entry(pos, cfs_page_t, 
-                                               PAGE_LIST_ENTRY);
+        if (aps != NULL) {
+                for (i = 0; i < npages; ++ i) {
+                        cfs_page_t *page;
 
-                list_del(&PAGE_LIST(page));
-                if (page->private != 0) {
-                        eap = (struct echo_async_page *)page->private;
+                        eap = aps[i];
+                        page = eap->eap_page;
                         if (eap->eap_cookie != NULL)
-                                obd_teardown_async_page(exp, lsm, NULL, 
+                                obd_teardown_async_page(exp, lsm, NULL,
                                                         eap->eap_cookie);
                         OBD_FREE(eap, sizeof(*eap));
+                        cfs_free_page(page);
                 }
-                cfs_free_page(page);
+                OBD_FREE(aps, npages * sizeof aps[0]);
         }
 
         RETURN(rc);
@@ -1399,6 +1395,7 @@ static int echo_client_connect(struct lustre_handle *conn,
         struct obd_export *exp;
         int                rc;
 
+        ENTRY;
         rc = class_connect(conn, src, cluuid);
         if (rc == 0) {
                 exp = class_conn2export(conn);

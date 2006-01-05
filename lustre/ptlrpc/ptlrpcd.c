@@ -199,6 +199,7 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
         int rc = 0;
 
+        ENTRY;
         memset(pc, 0, sizeof(*pc));
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
@@ -244,7 +245,7 @@ int ptlrpcd_addref(void)
         int rc = 0;
         ENTRY;
 
-        down(&ptlrpcd_sem);
+        mutex_down(&ptlrpcd_sem);
         if (++ptlrpcd_users != 1)
                 GOTO(out, rc);
 
@@ -261,16 +262,16 @@ int ptlrpcd_addref(void)
                 GOTO(out, rc);
         }
 out:
-        up(&ptlrpcd_sem);
+        mutex_up(&ptlrpcd_sem);
         RETURN(rc);
 }
 
 void ptlrpcd_decref(void)
 {
-        down(&ptlrpcd_sem);
+        mutex_down(&ptlrpcd_sem);
         if (--ptlrpcd_users == 0) {
                 ptlrpcd_stop(&ptlrpcd_pc);
                 ptlrpcd_stop(&ptlrpcd_recovery_pc);
         }
-        up(&ptlrpcd_sem);
+        mutex_up(&ptlrpcd_sem);
 }

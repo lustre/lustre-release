@@ -32,7 +32,7 @@
 #undef LPROCFS
 #endif
 
-#include <sys/mount.h>
+#include <libcfs/libcfs.h>
 #define kstatfs statfs
 
 /*

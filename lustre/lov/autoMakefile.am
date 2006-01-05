@@ -11,7 +11,33 @@ liblov_a_CFLAGS = $(LLCFLAGS)
 endif
 
 if MODULES
+if LINUX
 modulefs_DATA = lov$(KMODEXT)
+endif
+
+if DARWIN
+macos_PROGRAMS := lov
+
+lov_SOURCES :=          \
+        lov_log.c       \
+        lov_obd.c       \
+        lov_pack.c      \
+        lov_request.c   \
+        lov_merge.c     \
+        lov_qos.c       \
+        lov_offset.c    \
+        lov_internal.h
+
+lov_CFLAGS := $(EXTRA_KCFLAGS)
+lov_LDFLAGS := $(EXTRA_KLDFLAGS)
+lov_LDADD := $(EXTRA_KLIBS)
+
+plist_DATA := Info.plist
+
+#install-data-hook: fix-kext-ownership
+
+endif # DARWIN
+
 endif # MODULES
 
 DIST_SOURCES = $(lov-objs:.o=.c) lov_internal.h
