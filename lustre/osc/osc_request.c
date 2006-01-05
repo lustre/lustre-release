@@ -3352,9 +3352,9 @@ int osc_cleanup(struct obd_device *obd)
         /* free memory of osc quota cache */
         lquota_cleanup(quota_interface, obd);
 
+        rc = client_obd_cleanup(obd);
         ptlrpc_free_rq_pool(cli->cl_rq_pool);
 
-        rc = client_obd_cleanup(obd);
         ptlrpcd_decref();
         RETURN(rc);
 }
