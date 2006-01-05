@@ -113,7 +113,7 @@ _sysio_open(struct pnode *pno, int flags, mode_t mode)
 	else if (!ino)
 		err = _sysio_p_validate(pno, NULL, NULL);
 #ifdef O_NOFOLLOW
-	else if (flags & O_NOFOLLOW)
+	else if (flags & O_NOFOLLOW && S_ISLNK(ino->i_stbuf.st_mode))
 		err = -ELOOP;
 #endif
 	else {
