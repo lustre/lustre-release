@@ -155,7 +155,7 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
                               int nonblock);
 int mds_post_mds_lovconf(struct obd_device *obd);
 int mds_notify(struct obd_device *obd, struct obd_device *watched,
-               enum obd_notify_event ev);
+               enum obd_notify_event ev, void *data);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
 void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,

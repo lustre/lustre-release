@@ -3211,7 +3211,7 @@ static int osc_import_event(struct obd_device *obd,
                 break;
         }
         case IMP_EVENT_INACTIVE: {
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE, NULL);
                 break;
         }
         case IMP_EVENT_INVALIDATE: {
@@ -3239,7 +3239,7 @@ static int osc_import_event(struct obd_device *obd,
                         oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
                         spin_unlock(&oscc->oscc_lock);
                 }
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);
                 break;
         }
         case IMP_EVENT_OCD: {
@@ -3252,7 +3252,7 @@ static int osc_import_event(struct obd_device *obd,
                 if (ocd->ocd_connect_flags & OBD_CONNECT_REQPORTAL)
                         imp->imp_client->cli_request_portal =OST_REQUEST_PORTAL;
 
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
                 break;
         }
         default:

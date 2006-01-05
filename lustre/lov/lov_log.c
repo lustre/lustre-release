@@ -117,7 +117,7 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 
                 rc = llog_connect(cctxt, 1, logid, gen, uuid);
                 if (rc) {
-                        CERROR("error osc_llog_connect %d\n", i);
+                        CERROR("error osc_llog_connect tgt %d (%d)\n", i, rc);
                         break;
                 }
         }

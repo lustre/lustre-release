@@ -991,7 +991,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                 break;
         }
         case IMP_EVENT_INACTIVE: {
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE, NULL);
                 break;
         }
         case IMP_EVENT_INVALIDATE: {
@@ -1002,7 +1002,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                 break;
         }
         case IMP_EVENT_ACTIVE: {
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);
                 break;
         }
         case IMP_EVENT_OCD:

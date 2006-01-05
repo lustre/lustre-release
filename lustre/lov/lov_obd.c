@@ -393,7 +393,7 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 }
 
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
-                      enum obd_notify_event ev)
+                      enum obd_notify_event ev, void *data)
 {
         int rc;
         struct obd_uuid *uuid;
@@ -423,7 +423,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         }
 
         /* Pass the notification up the chain. */
-        rc = obd_notify_observer(obd, watched, ev);
+        rc = obd_notify_observer(obd, watched, ev, data);
 
         RETURN(rc);
 }
@@ -433,11 +433,8 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
-        struct obd_export *exp_observer;
         __u32 bufsize;
-        __u32 size;
-        obd_id params[2];
-        int rc, old_count;
+        int rc;
         ENTRY;
 
         CDEBUG(D_CONFIG, "uuid: %s idx: %d gen: %d\n",
@@ -487,7 +484,6 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         /* XXX - add a sanity check on the generation number. */
         tgt->ltd_gen = gen;
 
-        old_count = lov->desc.ld_tgt_count;
         if (index >= lov->desc.ld_tgt_count)
                 lov->desc.ld_tgt_count = index + 1;
 
@@ -506,37 +502,17 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                 if (osc_obd)
                         osc_obd->obd_no_recov = 0;
         }
-        
+
         /* NULL may need to change when we use flags for osc's */
         rc = lov_connect_obd(obd, tgt, 1, NULL);
-        if (rc || !obd->obd_observer)
-                RETURN(rc);
-
-        /* tell the mds_lov about the new target */
-        obd_llog_finish(obd->obd_observer, old_count);
-        llog_cat_initialize(obd->obd_observer, lov->desc.ld_tgt_count);
-
-        params[0] = index;
-        /* FIXME we must try to mds_lov_read_objids insetad of obd_get_info
-           to allow the mdt to start before the ost */
-        rc = obd_get_info(tgt->ltd_exp, strlen("last_id"), "last_id", &size,
-                          &params[1]);
         if (rc)
                 GOTO(out, rc);
 
-        exp_observer = obd->obd_observer->obd_self_export;
-        rc = obd_set_info(exp_observer, strlen("next_id"), "next_id",
-                          sizeof(params), params);
-        if (rc)
-                GOTO(out, rc);
+        /* Crazy high index, catch collision with flag here */
+        LASSERT((index & LOV_IDX_MAGIC) == 0);
 
-        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, OBD_NOTIFY_ACTIVE);
-
-        /* if we added after the disconnect */
-        if (lov->connects == 0) {
-                CERROR("Disconnected\n");
-                rc = -ENODEV;
-        }
+        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, OBD_NOTIFY_ACTIVE,
+                        (void *)(index | LOV_IDX_MAGIC));
 
  out:
         if (rc) {

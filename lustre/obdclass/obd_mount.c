@@ -508,7 +508,7 @@ static int lustre_start_simple(char *obdname, char *type, char *uuid,
                                char *s1, char *s2)
 {
         int rc;
-        CDEBUG(D_MOUNT, "Starting obd %s\n", obdname);
+        CDEBUG(D_MOUNT, "Starting obd %s (typ=%s)\n", obdname, type);
 
         rc = do_lcfg(obdname, 0, LCFG_ATTACH, type, uuid, 0, 0);
         if (rc) {

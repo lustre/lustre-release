@@ -1050,7 +1050,8 @@ static inline void obd_import_event(struct obd_device *obd,
 
 static inline int obd_notify(struct obd_device *obd,
                              struct obd_device *watched,
-                             enum obd_notify_event ev)
+                             enum obd_notify_event ev,
+                             void *data)
 {
         OBD_CHECK_DEV(obd);
         if (!obd->obd_set_up) {
@@ -1064,12 +1065,13 @@ static inline int obd_notify(struct obd_device *obd,
         }
 
         OBD_COUNTER_INCREMENT(obd, notify);
-        return OBP(obd, notify)(obd, watched, ev);
+        return OBP(obd, notify)(obd, watched, ev, data);
 }
 
 static inline int obd_notify_observer(struct obd_device *observer,
                                       struct obd_device *observed,
-                                      enum obd_notify_event ev)
+                                      enum obd_notify_event ev,
+                                      void *data)
 {
         int rc1;
         int rc2;
@@ -1077,7 +1079,7 @@ static inline int obd_notify_observer(struct obd_device *observer,
         struct obd_notify_upcall *onu;
 
         if (observer->obd_observer)
-                rc1 = obd_notify(observer->obd_observer, observed, ev);
+                rc1 = obd_notify(observer->obd_observer, observed, ev, data);
         else
                 rc1 = 0;
         /*
@@ -1089,7 +1091,7 @@ static inline int obd_notify_observer(struct obd_device *observer,
         else
                 rc2 = 0;
 
-        return rc1 ?: rc2;
+        return rc1 ? rc1 : rc2;
 }
 
 static inline int obd_quotacheck(struct obd_export *exp,

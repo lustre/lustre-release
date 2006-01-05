@@ -376,7 +376,8 @@ struct mds_obd {
         int                              mds_has_lov_desc;
         struct lov_desc                  mds_lov_desc;
         obd_id                          *mds_lov_objids;
-        int                              mds_lov_objids_valid;
+        int                              mds_lov_objids_size;
+        int                              mds_lov_objids_red;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
@@ -788,7 +789,7 @@ struct obd_ops {
                               enum obd_import_event);
 
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
-                        enum obd_notify_event ev);
+                        enum obd_notify_event ev, void *data);
 
         int (*o_health_check)(struct obd_device *);
 

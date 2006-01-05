@@ -1831,10 +1831,8 @@ static int mds_cleanup(struct obd_device *obd)
         mds_quota_cleanup(mds);
 
         mds_update_server_data(obd, 1);
-        if (mds->mds_lov_objids != NULL) {
-                OBD_FREE(mds->mds_lov_objids,
-                         mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
-        }
+        if (mds->mds_lov_objids != NULL) 
+                OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
         mds_fs_cleanup(obd);
 
         upcall_cache_cleanup(mds->mds_group_hash);
@@ -2228,6 +2226,7 @@ static int mds_health_check(struct obd_device *obd)
         return rc;
 }
 
+#if 0
 static int mds_set_info(struct obd_export *exp, obd_count keylen,
                         void *key, obd_count vallen, void *val)
 {
@@ -2242,16 +2241,32 @@ static int mds_set_info(struct obd_export *exp, obd_count keylen,
                 
                 if (vallen != sizeof(obd_id) * 2)
                         RETURN(-EINVAL);
-                
-                if (idx > mds->mds_lov_desc.ld_tgt_count) 
+                if (idx >= mds->mds_lov_desc.ld_tgt_count) 
                         RETURN(-EINVAL);
-                
-                /* FIXME realloc mds_lov_objids -- 
-                   see HEAD mds_dt_update_desc */
-                LASSERT("FIXME must realloc mds_lov_objids");
 
+                if (idx >= mds->mds_lov_desc.ld_tgt_count) {
+                        obd_id *ids;
+                        int     size;
+
+                        size = mds->mds_lov_desc.ld_tgt_count * sizeof(*ids);
+                        OBD_ALLOC(ids, size);
+                        if (ids == NULL)
+                                RETURN(-ENOMEM);
+
+                        memset(ids, 0, size);
+
+                        if (mds->mds_lov_objids != NULL) {
+                                int oldsize = mds->mds_lov_desc.ld_tgt_count * 
+                                        sizeof(*ids);
+                                memcpy(ids, mds->mds_lov_objids, oldsize);
+                                OBD_FREE(mds->mds_lov_objids, oldsize);
+                        }
+                        mds->mds_lov_objids = ids;
+                        mds->mds_lov_desc.ld_tgt_count = 
+                                mds->mds_lov_desc.ld_tgt_count;
+                }
+                
                 mds->mds_lov_objids[idx] = id;
-                //mds->mds_lov_objids_valid = 1;
 
                 CWARN("got last object "LPU64" from OST %d\n",
                       mds->mds_lov_objids[idx], idx);
@@ -2264,7 +2279,7 @@ static int mds_set_info(struct obd_export *exp, obd_count keylen,
         
         RETURN(rc);
 }
-
+#endif
 
 struct lvfs_callback_ops mds_lvfs_ops = {
         l_fid2dentry:     mds_lvfs_fid2dentry,
@@ -2289,7 +2304,6 @@ static struct obd_ops mds_obd_ops = {
         .o_llog_finish     = mds_llog_finish,
         .o_notify          = mds_notify,
         .o_health_check    = mds_health_check,
-        .o_set_info        = mds_set_info,
 };
 
 static struct obd_ops mdt_obd_ops = {
