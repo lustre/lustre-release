@@ -923,16 +923,15 @@ out_srv_init:
                 svc->srv_done(thread);
 
 out:
-        spin_lock_irqsave(&svc->srv_lock, flags);
-
-        svc->srv_nthreads--;                    /* must know immediately */
-        thread->t_flags = SVC_STOPPED;
-        wake_up(&thread->t_ctl_waitq);
-
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
-
         CDEBUG(D_NET, "service thread %d exiting: rc %d\n", thread->t_id, rc);
+
+        spin_lock_irqsave(&svc->srv_lock, flags);
+        svc->srv_nthreads--;                    /* must know immediately */
         thread->t_id = rc;
+        thread->t_flags = SVC_STOPPED;
+
+        wake_up(&thread->t_ctl_waitq);
+        spin_unlock_irqrestore(&svc->srv_lock, flags);
 
         return rc;
 }
