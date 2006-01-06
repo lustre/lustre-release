@@ -202,7 +202,9 @@ restart:
                                "inode %p refc %d\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
                                dentry->d_inode, atomic_read(&dentry->d_count));
-                        __d_drop(dentry);
+                        /* actually we don't unhash the dentry, rather just
+                         * mark it inaccessible for to __d_lookup(). otherwise
+                         * sys_getcwd() could return -ENOENT -bzzz */
                         dentry->d_flags |= DCACHE_LUSTRE_INVALID;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                         __d_drop(dentry);
