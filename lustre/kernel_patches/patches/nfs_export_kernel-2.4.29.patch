@@ -287,7 +287,7 @@ Index: linux-2.4.29/fs/nfsd/vfs.c
 ===================================================================
 --- linux-2.4.29.orig/fs/nfsd/vfs.c	2005-05-03 16:28:21.000000000 +0300
 +++ linux-2.4.29/fs/nfsd/vfs.c	2005-05-03 18:46:09.372133224 +0300
-@@ -77,6 +77,126 @@
+@@ -77,6 +77,127 @@
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -300,6 +300,7 @@ Index: linux-2.4.29/fs/nfsd/vfs.c
 +	struct nameidata nd = { .dentry = ddir, .last = dnew->d_name };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->link_raw(&old_nd, &nd);
++	igrab(dold->d_inode);
 +	d_instantiate(dnew, dold->d_inode);
 +	if (dold->d_inode->i_op && dold->d_inode->i_op->revalidate_it)
 +		dold->d_inode->i_op->revalidate_it(dnew, NULL);

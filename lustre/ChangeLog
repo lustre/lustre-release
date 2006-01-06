@@ -457,6 +457,13 @@ Details    : If an OST is down, in some cases it was possible to create two
 	     objects on a single OST for a single file.  No problems other
 	     than potential performance impact and spurious error messages.
 
+Severity   : minor
+Frequency  : always
+Bugzilla   : 9942
+Description: Inode refcounting problems in NFS export code
+Details    : link_raw functions used to call d_instantiate without obtaining
+	     extra inode reference first.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
