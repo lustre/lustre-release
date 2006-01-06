@@ -50,6 +50,7 @@ int tcpnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *cookie,
                 int delayed, unsigned int niov,
                 struct iovec *iov, lnet_kiov_t *kiov,
                 unsigned int offset, unsigned int mlen, unsigned int rlen);
+extern int tcpnal_set_global_params();
 
 
 

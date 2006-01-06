@@ -236,6 +236,8 @@ void tcpnal_shutdown(bridge b)
 int tcpnal_init(bridge b)
 {
     manager m;
+    
+    tcpnal_set_global_params();
         
     if (!(m=init_connections(from_connection,b))){
         /* TODO: this needs to shut down the
