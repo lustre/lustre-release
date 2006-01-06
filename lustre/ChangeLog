@@ -464,6 +464,18 @@ Description: Inode refcounting problems in NFS export code
 Details    : link_raw functions used to call d_instantiate without obtaining
 	     extra inode reference first.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9942,9903
+Description: Referencing freed requests leading to crash, memleask with NFS.
+Details    : We used to require that call to ll_revalidate_it was always
+	     followed by ll_lookup_it. Also with revalidate_special() it is
+	     possible to call ll_revalidate_it() twice for the same dentry
+	     even if first occurence returned success. This fix changes semantic
+	     between DISP_ENQ_COMPLETE disposition flag to mean there is extra
+	     reference on a request referred from the intent.
+	     ll_intent_release() then releases such a request.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

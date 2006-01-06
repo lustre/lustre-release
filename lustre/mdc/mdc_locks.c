@@ -54,6 +54,11 @@ void it_set_disposition(struct lookup_intent *it, int flag)
 }
 EXPORT_SYMBOL(it_set_disposition);
 
+void it_clear_disposition(struct lookup_intent *it, int flag)
+{
+        it->d.lustre.it_disposition &= ~flag;
+}
+
 static int it_to_lock_mode(struct lookup_intent *it)
 {
         /* CREAT needs to be tested before open (both could be set) */
@@ -593,6 +598,12 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
+        } else if (!op_data->fid2.id) {
+                /* DISP_ENQ_COMPLETE set means there is extra reference on
+                   request referenced from this intent, saved for subsequent
+                   lookup. This path is executed when we proceed to this
+                   lookup, so we clear DISP_ENQ_COMPLETE */
+                it_clear_disposition(it, DISP_ENQ_COMPLETE);
         }
         request = *reqp = it->d.lustre.it_data;
         LASSERT(request != NULL);

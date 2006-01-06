@@ -134,6 +134,12 @@ void ll_intent_release(struct lookup_intent *it)
         ll_intent_drop_lock(it);
         it->it_magic = 0;
         it->it_op_release = 0;
+        if (it_disposition(it, DISP_ENQ_COMPLETE)) {
+                /* We are still holding extra reference on a request, need to
+                   free it */
+                struct ptlrpc_request *request = it->d.lustre.it_data;
+                ptlrpc_req_finished(request);
+        }
         it->d.lustre.it_disposition = 0;
         it->d.lustre.it_data = NULL;
         EXIT;
@@ -337,11 +343,11 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         spin_unlock(&dcache_lock);
 
  out:
-        /* If we had succesful it lookup on mds, but it happened to be negative,
-           we do not free request as it will be reused during lookup (see
-           comment in mdc/mdc_locks.c::mdc_intent_lock(). But if
+        /* We do not free request as it may be reused during following lookup
+          (see comment in mdc/mdc_locks.c::mdc_intent_lock()), request will
+           be freed in ll_lookup_it or in ll_intent_release. But if
            request was not completed, we need to free it. (bug 5154) */
-        if (req != NULL && (rc == 1 || !it_disposition(it, DISP_ENQ_COMPLETE)))
+        if (req != NULL && !it_disposition(it, DISP_ENQ_COMPLETE))
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 ll_unhash_aliases(de->d_inode);
