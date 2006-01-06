@@ -376,6 +376,11 @@ static int lfs_check(int argc, char **argv)
                 endmntent(fp);
         }
 
+        if (!mnt) {
+                fprintf(stderr, "No suitable Lustre mount found\n");
+                return -1;
+        }
+
         rc = llapi_target_check(num_types, obd_types, mnt->mnt_dir);
 
         if (rc)
