@@ -1731,7 +1731,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                         rc = ll_get_max_mdsize(sbi, &ealen);
                         if (rc) 
                                 RETURN(rc); 
-                        valid |= OBD_MD_FLEASIZE;
+                        valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
                 }
                 ll_inode2fid(&fid, inode);
                 rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, ealen, &req);

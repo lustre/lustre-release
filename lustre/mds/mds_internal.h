@@ -177,6 +177,10 @@ int mds_get_parents_children_locked(struct obd_device *obd,
                                     struct dentry **de_newp,
                                     struct lustre_handle *dlm_handles,
                                     int child_mode);
+
+void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
+                      struct mds_body *body);
+int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm);
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
@@ -231,6 +235,7 @@ int mds_done_writing(struct ptlrpc_request *req, int offset);
 /*mds/mds_join.c*/
 int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req, 
                   struct dentry *dchild, struct lustre_handle *lockh);
+
 /* mds/mds_fs.c */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                    struct mds_export_data *med, int cl_off);

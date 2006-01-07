@@ -216,21 +216,22 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
                                 lustre_msg_buf(req->rq_repmsg, 1, 0);
         int max_cookiesize = lmmj->lmmj_md.lmm_stripe_count *
                                 sizeof(struct llog_cookie);
+        int max_easize = sizeof(*lmmj);
 
         CDEBUG(D_INFO, "change the max md size from %d to %d \n",
                mds->mds_max_mdsize, sizeof(*lmmj));
-        body->eadatasize = mds->mds_max_mdsize > sizeof(*lmmj) ?
-                           mds->mds_max_mdsize : sizeof(*lmmj);
-        if (mds->mds_max_mdsize < body->eadatasize) {
-                mds->mds_max_mdsize = body->eadatasize;
-                body->valid |= OBD_MD_FLMODEASIZE;
-        }
-        if (mds->mds_max_cookiesize < max_cookiesize) {
-                mds->mds_max_cookiesize = max_cookiesize;
-                body->capability = max_cookiesize;
-                body->valid |= OBD_MD_FLMODEASIZE;
-        }
 
+        if (mds->mds_max_mdsize < max_easize || 
+            mds->mds_max_cookiesize < max_cookiesize) {
+                body->max_mdsize = mds->mds_max_mdsize > max_easize ?
+                                   mds->mds_max_mdsize : max_easize;
+                mds->mds_max_mdsize = body->max_mdsize;
+                body->max_cookiesize = mds->mds_max_cookiesize > max_cookiesize?
+                                   mds->mds_max_cookiesize : max_cookiesize;
+                mds->mds_max_cookiesize = body->max_cookiesize;
+                body->valid |= OBD_MD_FLMODEASIZE;
+        }
+        
         if (body->valid & OBD_MD_FLMODEASIZE)
                 CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
                        mds->mds_max_mdsize, mds->mds_max_cookiesize);

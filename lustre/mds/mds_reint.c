@@ -461,7 +461,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         struct mds_logcancel_data *mlcd = NULL;
         struct lov_mds_md *lmm = NULL;
         struct llog_cookie *logcookies = NULL;
-        int lmm_size = 0, need_lock = 1;
+        int lmm_size = 0, need_lock = 1, cookie_size = 0;
         int rc = 0, cleanup_phase = 0, err, locked = 0;
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         unsigned int qpids[MAXQUOTAS] = {rec->ur_iattr.ia_uid,
@@ -546,14 +546,14 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
                 /* journal chown/chgrp in llog, just like unlink */
                 if (rc == 0 && lmm_size){
-                        OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
+                        cookie_size = mds_get_cookie_size(obd, lmm); 
+                        OBD_ALLOC(logcookies, cookie_size);
                         if (logcookies == NULL)
                                 GOTO(cleanup, rc = -ENOMEM);
 
                         if (mds_log_op_setattr(obd, inode, lmm, lmm_size,
-                                               logcookies,
-                                               mds->mds_max_cookiesize) <= 0) {
-                                OBD_FREE(logcookies, mds->mds_max_cookiesize);
+                                               logcookies, cookie_size) <= 0) {
+                                OBD_FREE(logcookies, cookie_size);
                                 logcookies = NULL;
                         }
                 }
@@ -641,7 +641,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         case 2:
                 OBD_FREE(lmm, mds->mds_max_mdsize);
                 if (logcookies)
-                        OBD_FREE(logcookies, mds->mds_max_cookiesize);
+                        OBD_FREE(logcookies, cookie_size);
         case 1:
                 if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
                     rec->ur_eadata != NULL)
@@ -1409,6 +1409,35 @@ out_dput:
         RETURN(rc);
 }
 
+int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm)
+{
+        int count = le32_to_cpu(lmm->lmm_stripe_count);
+        int real_csize = count * sizeof(struct llog_cookie); 
+        return real_csize;
+}
+
+void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
+                      struct mds_body *body)
+{
+        int cookie_size = 0, md_size = 0;
+
+        if (body && body->valid & OBD_MD_FLEASIZE) {
+                md_size = body->eadatasize;
+        }
+        if (body && body->valid & OBD_MD_FLCOOKIE) {
+                LASSERT(body->valid & OBD_MD_FLEASIZE);
+                cookie_size = mds_get_cookie_size(obd, lustre_msg_buf(
+                                                  req->rq_repmsg, 1, 0));
+        }
+
+        CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", md_size,
+               cookie_size);
+ 
+        lustre_shrink_reply(req, 1, md_size, 1);
+        
+        lustre_shrink_reply(req, md_size? 2:1, cookie_size, 0); 
+}
+
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req,
                             struct lustre_handle *lh)
@@ -1630,6 +1659,8 @@ cleanup:
                 LBUG();
         }
         req->rq_status = rc;
+
+        mds_shrink_reply(obd, req, body);
 
         /* trigger dqrel on the owner of child and parent */
         lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_UNLINK);

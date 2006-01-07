@@ -653,7 +653,7 @@ struct mds_body {
         __u64          ino;
         __u32          fsuid;
         __u32          fsgid;
-        __u32          capability; /*return max cookie size, in case of join*/
+        __u32          capability; 
         __u32          mode;
         __u32          uid;
         __u32          gid;
@@ -664,8 +664,8 @@ struct mds_body {
         __u32          suppgid;
         __u32          eadatasize;
         __u32          aclsize;
-        __u32          padding_2; /* also fix lustre_swab_mds_body */
-        __u32          padding_3; /* also fix lustre_swab_mds_body */
+        __u32          max_mdsize;
+        __u32          max_cookiesize; /* also fix lustre_swab_mds_body */
         __u32          padding_4; /* also fix lustre_swab_mds_body */
 };
 

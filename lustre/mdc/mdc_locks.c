@@ -342,7 +342,7 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[repbufcnt++] = obddev->u.cli.cl_max_mds_cookiesize;
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
-                                  OBD_MD_FLACL;
+                                  OBD_MD_FLACL | OBD_MD_FLMODEASIZE;
                 size[req_buffers++] = sizeof(struct mds_body);
                 size[req_buffers++] = data->namelen + 1;
 
@@ -451,22 +451,6 @@ int mdc_enqueue(struct obd_export *exp,
                         CERROR ("Can't swab mds_body\n");
                         RETURN (-EPROTO);
                 }
-                if (body->valid & OBD_MD_FLMODEASIZE) {
-                        LASSERTF(it->it_flags & O_JOIN_FILE,
-                                "flags %#x should include join\n",it->it_flags);
-                        if (obddev->u.cli.cl_max_mds_easize < body->eadatasize){
-                           obddev->u.cli.cl_max_mds_easize = body->eadatasize;
-                                CDEBUG(D_INFO, "change maxeasize to %d,\n",
-                                       body->eadatasize);
-                        }
-                        if (obddev->u.cli.cl_max_mds_cookiesize <
-                            body->capability) {
-                          obddev->u.cli.cl_max_mds_cookiesize =body->capability;
-                                CDEBUG(D_INFO, "change maxcookiesize to %d,\n",
-                                       body->capability);
-                        }
-                        RETURN(rc);
-                }
 
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
                         /* The eadata is opaque; just check that it is there.
@@ -476,6 +460,22 @@ int mdc_enqueue(struct obd_export *exp,
                         if (eadata == NULL) {
                                 CERROR ("Missing/short eadata\n");
                                 RETURN (-EPROTO);
+                        }
+                        if (body->valid & OBD_MD_FLMODEASIZE) {
+                                if (obddev->u.cli.cl_max_mds_easize < 
+                                                        body->max_mdsize) {
+                                        obddev->u.cli.cl_max_mds_easize = 
+                                                body->max_mdsize;
+                                        CDEBUG(D_INFO, "maxeasize become %d\n",
+                                               body->max_mdsize);
+                                }
+                                if (obddev->u.cli.cl_max_mds_cookiesize <
+                                                        body->max_cookiesize) {
+                                        obddev->u.cli.cl_max_mds_cookiesize =
+                                                body->max_cookiesize;
+                                        CDEBUG(D_INFO, "cookiesize become %d\n",
+                                               body->max_cookiesize);
+                                }
                         }
                         /* We save the reply LOV EA in case we have to replay
                          * a create for recovery.  If we didn't allocate a

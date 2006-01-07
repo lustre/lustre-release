@@ -100,7 +100,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         struct mds_obd *mds = &obd->u.mds;
         struct lov_mds_md *lmm = NULL;
         struct llog_cookie *logcookies = NULL;
-        int lmm_size, log_unlink = 0;
+        int lmm_size, log_unlink = 0, cookie_size = 0;
         void *handle = NULL;
         int rc, err;
         ENTRY;
@@ -140,11 +140,12 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 CERROR("error %d unlinking orphan %.*s from PENDING\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
         } else if (lmm_size) {
-                OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
+                cookie_size = mds_get_cookie_size(obd, lmm); 
+                OBD_ALLOC(logcookies, cookie_size);
                 if (logcookies == NULL)
                         rc = -ENOMEM;
                 else if (mds_log_op_unlink(obd, inode, lmm,lmm_size,logcookies,
-                                           mds->mds_max_cookiesize) > 0)
+                                           cookie_size) > 0)
                         log_unlink = 1;
         }
 
@@ -159,7 +160,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         }
 
         if (logcookies != NULL)
-                OBD_FREE(logcookies, mds->mds_max_cookiesize);
+                OBD_FREE(logcookies, cookie_size);
 out_free_lmm:
         OBD_FREE(lmm, mds->mds_max_mdsize);
         RETURN(rc);

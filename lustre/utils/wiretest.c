@@ -839,14 +839,14 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_body, aclsize));
         LASSERTF((int)sizeof(((struct mds_body *)0)->aclsize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_body *)0)->aclsize));
-        LASSERTF((int)offsetof(struct mds_body, padding_2) == 156, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_body, padding_2));
-        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_2) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_body *)0)->padding_2));
-        LASSERTF((int)offsetof(struct mds_body, padding_3) == 160, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_body, padding_3));
-        LASSERTF((int)sizeof(((struct mds_body *)0)->padding_3) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_body *)0)->padding_3));
+        LASSERTF((int)offsetof(struct mds_body, max_mdsize) == 156, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, max_mdsize));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->max_mdsize) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->max_mdsize));
+        LASSERTF((int)offsetof(struct mds_body, max_cookiesize) == 160, " found %lld\n",
+                 (long long)(int)offsetof(struct mds_body, max_cookiesize));
+        LASSERTF((int)sizeof(((struct mds_body *)0)->max_cookiesize) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct mds_body *)0)->max_cookiesize));
         LASSERTF((int)offsetof(struct mds_body, padding_4) == 164, " found %lld\n",
                  (long long)(int)offsetof(struct mds_body, padding_4));
         LASSERTF((int)sizeof(((struct mds_body *)0)->padding_4) == 4, " found %lld\n",

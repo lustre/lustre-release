@@ -666,6 +666,13 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                 reply_off++;
         }
 
+        if (reqbody->valid & OBD_MD_FLMODEASIZE) {
+                struct mds_obd *mds = mds_req2mds(req);
+                body->max_cookiesize = mds->mds_max_cookiesize;
+                body->max_mdsize = mds->mds_max_mdsize;
+                body->valid |= OBD_MD_FLMODEASIZE;
+        }
+
         if (rc)
                 RETURN(rc);
 

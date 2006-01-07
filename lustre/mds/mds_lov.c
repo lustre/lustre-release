@@ -148,7 +148,7 @@ int mds_lov_set_nextid(struct obd_device *obd)
 int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int tgt_count, valsize, rc;
+        int valsize, rc, tgt_count;
         __u32 stripes;
         ENTRY;
 
@@ -163,7 +163,7 @@ int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp)
                 
         mds->mds_has_lov_desc = 1;
         tgt_count = mds->mds_lov_desc.ld_tgt_count;
-        stripes = min(tgt_count, (__u32)LOV_MAX_STRIPE_COUNT);
+        stripes = min(tgt_count, LOV_MAX_STRIPE_COUNT);
 
         mds->mds_max_mdsize = lov_mds_md_size(stripes);
         mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
