@@ -390,7 +390,11 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                    (we get called from client_disconnect_export) */
                 if (!lock->l_conn_export ||
                     !lock->l_conn_export->exp_obd->u.cli.cl_conn_count) {
-                        CERROR("Disconnecting, don't requeue\n");
+                        CDEBUG(D_MGC, "Disconnecting, don't requeue\n");
+                        break;
+                }
+                if (lock->l_req_mode != lock->l_granted_mode) {
+                        CERROR("original grant failed, don't requeue\n");
                         break;
                 }
 
@@ -444,6 +448,13 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                               type, NULL, mode, flags, 
                               mgc_blocking_ast, ldlm_completion_ast, NULL,
                               data, NULL, 0, NULL, lockh);
+        if (rc == 0) {
+                /* Allow matches for other clients mounted on this host */
+                struct ldlm_lock *lock = ldlm_handle2lock(lockh);
+                LASSERT(lock);
+                ldlm_lock_allow_match(lock);
+                LDLM_LOCK_PUT(lock);
+        }
 
         RETURN(rc);
 }

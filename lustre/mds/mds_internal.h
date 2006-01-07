@@ -151,8 +151,9 @@ int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_set_nextid(struct obd_device *obd);
 int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
-int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
-                              int nonblock);
+int mds_lov_start_synchronize(struct obd_device *obd, 
+                              struct obd_device *watched,
+                              void *data, int nonblock);
 int mds_post_mds_lovconf(struct obd_device *obd);
 int mds_notify(struct obd_device *obd, struct obd_device *watched,
                enum obd_notify_event ev, void *data);

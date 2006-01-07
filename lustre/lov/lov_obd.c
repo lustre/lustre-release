@@ -433,7 +433,7 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
-        __u32 bufsize;
+        __u32 bufsize, idx;
         int rc;
         ENTRY;
 
@@ -508,11 +508,9 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         if (rc)
                 GOTO(out, rc);
 
-        /* Crazy high index, catch collision with flag here */
-        LASSERT((index & LOV_IDX_MAGIC) == 0);
-
+        idx = index;
         rc = lov_notify(obd, tgt->ltd_exp->exp_obd, OBD_NOTIFY_ACTIVE,
-                        (void *)(index | LOV_IDX_MAGIC));
+                        (void *)&idx);
 
  out:
         if (rc) {
@@ -2194,7 +2192,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         int i, rc = 0, err;
         ENTRY;
 
-        if (KEY_IS("next_id")) {
+        if (KEY_IS(KEY_NEXT_ID)) {
                 if (vallen != lov->desc.ld_tgt_count)
                         RETURN(-EINVAL);
                 vallen = sizeof(obd_id);
@@ -2202,7 +2200,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
 
         lov_getref(obddev);
 
-        if (KEY_IS("next_id") || KEY_IS("checksum")) {
+        if (KEY_IS(KEY_NEXT_ID) || KEY_IS("checksum")) {
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         /* OST was disconnected */
                         if (!lov->tgts[i].ltd_exp)
@@ -2231,7 +2229,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                 GOTO(out, rc);
         }
 
-        if (KEY_IS("mds_conn") || KEY_IS("unlinked")) {
+        if (KEY_IS(KEY_MDS_CONN) || KEY_IS("unlinked")) {
                 if (vallen != 0)
                         GOTO(out, rc = -EINVAL);
         } else {

@@ -233,6 +233,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(0);
 
 err_exp:
+        CERROR("setup %s failed (%d)\n", obd->obd_name, err);
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
         obd->obd_starting = 0;

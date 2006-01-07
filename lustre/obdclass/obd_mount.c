@@ -194,6 +194,8 @@ static void unlock_mntput(struct vfsmount *mnt)
         }
 }
 
+static int lustre_put_lsi(struct super_block *sb);
+
 /* to be called from obd_cleanup methods */
 int server_put_mount(char *name, struct vfsmount *mnt)
 {
@@ -211,7 +213,12 @@ int server_put_mount(char *name, struct vfsmount *mnt)
         lsi = s2lsi(lmi->lmi_sb);
         LASSERT(lmi->lmi_mnt == mnt);
         unlock_mntput(lmi->lmi_mnt);
-        if (atomic_dec_and_test(&lsi->lsi_mounts)) {
+
+        CDEBUG(D_MOUNT, "put_mnt %p from %s, refs=%d, vfscount=%d\n", 
+               lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
+               atomic_read(&lmi->lmi_mnt->mnt_count));
+
+        if (lustre_put_lsi(lmi->lmi_sb)) {
                 CDEBUG(D_MOUNT, "Last put of mnt %p from %s, vfscount=%d\n", 
                        lmi->lmi_mnt, name, 
                        atomic_read(&lmi->lmi_mnt->mnt_count));
@@ -221,10 +228,6 @@ int server_put_mount(char *name, struct vfsmount *mnt)
                                atomic_read(&lmi->lmi_mnt->mnt_count));
         }
         up(&lustre_mount_info_lock);
-
-        CDEBUG(D_MOUNT, "put_mnt %p from %s, refs=%d, vfscount=%d\n", 
-               lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
-               atomic_read(&lmi->lmi_mnt->mnt_count));
 
         /* this obd should never need the mount again */
         server_deregister_mount(name);
@@ -997,7 +1000,8 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
         }
 
         s2lsi_nocast(sb) = lsi;
-        atomic_set(&lsi->lsi_mounts, 0);
+        /* we take 1 extra ref for our setup */
+        atomic_set(&lsi->lsi_mounts, 1);
         RETURN(lsi);
 }
 
@@ -1009,12 +1013,11 @@ static int lustre_free_lsi(struct super_block *sb)
         if (!lsi)
                 RETURN(0);
                 
-        if (atomic_read(&lsi->lsi_mounts) > 0) {
-                /* someone didn't call server_put_mount */
-                /* FIXME this should assert */
-                CERROR("There are still mounts on this sb!\n");
-                RETURN(-EBUSY);
-        }
+        CDEBUG(D_MOUNT, "Freeing lsi\n");
+        
+        /* someone didn't call server_put_mount. */
+        LASSERT(atomic_read(&lsi->lsi_mounts) == 0);
+
         if (lsi->lsi_ldd != NULL) 
                 OBD_FREE(lsi->lsi_ldd, sizeof(*lsi->lsi_ldd));
         
@@ -1038,6 +1041,21 @@ static int lustre_free_lsi(struct super_block *sb)
         RETURN(0);
 }
            
+static int lustre_put_lsi(struct super_block *sb)
+{
+        struct lustre_sb_info *lsi = s2lsi(sb);
+        ENTRY;
+
+        LASSERT(lsi);
+        
+        CDEBUG(D_MOUNT, "put %p %d\n", sb, atomic_read(&lsi->lsi_mounts));
+
+        if (atomic_dec_and_test(&lsi->lsi_mounts)) {
+                lustre_free_lsi(sb);
+                RETURN(1);
+        }
+        RETURN(0);
+}
 
 /*************** server mount ******************/
 
@@ -1174,6 +1192,8 @@ static void server_put_super(struct super_block *sb)
 
         /* drop the One True Mount */
         unlock_mntput(mnt);
+
+        CDEBUG(D_MOUNT, "umount done\n");
         EXIT;
 }
 
@@ -1359,7 +1379,7 @@ int lustre_common_put_super(struct super_block *sb)
                    needs the mgc.  Let him clean it up. */
                 CDEBUG(D_MOUNT, "MGC busy, will stop later\n");
         }
-        rc = lustre_free_lsi(sb);
+        lustre_put_lsi(sb);
         RETURN(rc);
 }      
 
@@ -1520,7 +1540,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
         /* Figure out the lmd from the mount options */
         if (lmd_parse((char *)data, lmd)) {
-                lustre_free_lsi(sb);
+                lustre_put_lsi(sb);
                 RETURN(-EINVAL);
         }
 
@@ -1537,22 +1557,23 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                         /* Connect and start */
                         /* (should always be ll_fill_super) */
                         rc = (*client_fill_super)(sb);
+                        if (rc) 
+                                lustre_common_put_super(sb);
                 }
         } else {
                 CDEBUG(D_MOUNT, "Mounting server from %s\n", lmd->lmd_dev);
+                lsi->lsi_flags |= LSI_SERVER;
                 rc = server_fill_super(sb);
                 /* s_f_s calls lustre_start_mgc after the mount because we need
                    the MGS nids which are stored on disk.  Plus, we may
                    need to start the MGS first. */
+                /* s_f_s will call server_put_super on failure */
         }
                                                                                 
 out:
         if (rc){
-                /* s_f_s will call server_put_super on failure */
                 CERROR("Unable to mount %s\n", 
                        s2lsi(sb) ? lmd->lmd_dev : "");
-                lustre_stop_mgc(sb);
-                lustre_free_lsi(sb);
         } else {
                 CDEBUG(D_MOUNT, "Successfully mounted %s\n", lmd->lmd_dev);
         }

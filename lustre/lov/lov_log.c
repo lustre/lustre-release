@@ -101,10 +101,10 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         int i, rc = 0;
         ENTRY;
 
-        if (lov->desc.ld_tgt_count != count)
-                CERROR("Origin connect %d != %d\n",
-                       lov->desc.ld_tgt_count, count);
-        for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
+        if (count != lov->desc.ld_tgt_count )
+                CERROR("Origin connect mds cnt %d != lov cnt %d\n", count,
+                       lov->desc.ld_tgt_count);
+        for (i = 0, tgt = lov->tgts; i < count; i++, tgt++) {
                 struct obd_device *child;
                 struct llog_ctxt *cctxt;
                 

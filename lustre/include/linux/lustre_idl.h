@@ -788,7 +788,6 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
  * array of UUIDs returned by the MDS.  With the current
  * protocol, this will limit the max number of OSTs per LOV */
 
-#define LOV_IDX_MAGIC  0x80000000
 #define LOV_DESC_MAGIC 0xB0CCDE5C
 
 struct lov_desc {

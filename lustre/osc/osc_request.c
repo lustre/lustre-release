@@ -3034,7 +3034,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
 
-        if (KEY_IS("next_id")) {
+        if (KEY_IS(KEY_NEXT_ID)) {
                 if (vallen != sizeof(obd_id))
                         RETURN(-EINVAL);
                 obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
@@ -3072,7 +3072,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (!KEY_IS("mds_conn") && !KEY_IS("evict_by_nid"))
+        if (!KEY_IS(KEY_MDS_CONN) && !KEY_IS("evict_by_nid"))
                 RETURN(-EINVAL);
 
 

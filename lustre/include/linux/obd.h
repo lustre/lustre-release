@@ -373,11 +373,11 @@ struct mds_obd {
         struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
         struct obd_export               *mds_osc_exp; /* XXX lov_exp */
-        int                              mds_has_lov_desc;
         struct lov_desc                  mds_lov_desc;
+        struct semaphore                 mds_lov_sem;
         obd_id                          *mds_lov_objids;
         int                              mds_lov_objids_size;
-        int                              mds_lov_objids_red;
+        __u32                            mds_lov_objids_red;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
@@ -825,5 +825,9 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                 ptlrpc_commit_replies (obd);
         }
 }
+
+/* get/set_info keys */
+#define KEY_MDS_CONN "mds_conn"
+#define KEY_NEXT_ID  "next_id"
 
 #endif /* __OBD_H */

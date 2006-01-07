@@ -1528,6 +1528,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         sema_init(&mds->mds_orphan_recovery_sem, 1);
         sema_init(&mds->mds_epoch_sem, 1);
+        sema_init(&mds->mds_lov_sem, 1);
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
@@ -1752,13 +1753,11 @@ int mds_postrecov(struct obd_device *obd)
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
 
+        /* FIXME just put this in the synchronize, why not? */
         /* set nextid first, so we are sure it happens */
         rc = mds_lov_set_nextid(obd);
-        if (rc) {
-                CERROR ("%s: mds_lov_set_nextid failed\n",
-                        obd->obd_name);
+        if (rc) 
                 GOTO(out, rc);
-        }
 
         /* clean PENDING dir */
         rc = mds_cleanup_pending(obd);
@@ -1768,8 +1767,8 @@ int mds_postrecov(struct obd_device *obd)
                 item = rc;
         }
 
-        /* Does anyone need this to be synchronous ever? */
-        mds_lov_start_synchronize(obd, NULL, obd->obd_async_recov);
+        /* Does target_finish_recovery really need this to be synchronous? */
+        mds_lov_start_synchronize(obd, NULL, NULL, obd->obd_async_recov);
 
 out:
         RETURN(rc < 0 ? rc : item);
@@ -2225,61 +2224,6 @@ static int mds_health_check(struct obd_device *obd)
         
         return rc;
 }
-
-#if 0
-static int mds_set_info(struct obd_export *exp, obd_count keylen,
-                        void *key, obd_count vallen, void *val)
-{
-        struct obd_device *obd = exp->exp_obd;
-        struct mds_obd *mds = &obd->u.mds;
-        int rc = -EINVAL;
-        ENTRY;
-
-        if (KEY_IS("next_id")) {
-                int idx = (int)*((obd_id*)val);
-                obd_id id = *(((obd_id*)val) + 1);
-                
-                if (vallen != sizeof(obd_id) * 2)
-                        RETURN(-EINVAL);
-                if (idx >= mds->mds_lov_desc.ld_tgt_count) 
-                        RETURN(-EINVAL);
-
-                if (idx >= mds->mds_lov_desc.ld_tgt_count) {
-                        obd_id *ids;
-                        int     size;
-
-                        size = mds->mds_lov_desc.ld_tgt_count * sizeof(*ids);
-                        OBD_ALLOC(ids, size);
-                        if (ids == NULL)
-                                RETURN(-ENOMEM);
-
-                        memset(ids, 0, size);
-
-                        if (mds->mds_lov_objids != NULL) {
-                                int oldsize = mds->mds_lov_desc.ld_tgt_count * 
-                                        sizeof(*ids);
-                                memcpy(ids, mds->mds_lov_objids, oldsize);
-                                OBD_FREE(mds->mds_lov_objids, oldsize);
-                        }
-                        mds->mds_lov_objids = ids;
-                        mds->mds_lov_desc.ld_tgt_count = 
-                                mds->mds_lov_desc.ld_tgt_count;
-                }
-                
-                mds->mds_lov_objids[idx] = id;
-
-                CWARN("got last object "LPU64" from OST %d\n",
-                      mds->mds_lov_objids[idx], idx);
-
-                rc = mds_lov_write_objids(obd);
-                if (rc)
-                        CERROR("got last objids from OSTs, but error "
-                               "writing objids file: %d\n", rc);
-        }
-        
-        RETURN(rc);
-}
-#endif
 
 struct lvfs_callback_ops mds_lvfs_ops = {
         l_fid2dentry:     mds_lvfs_fid2dentry,

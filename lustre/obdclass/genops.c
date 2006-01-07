@@ -85,13 +85,15 @@ struct obd_type *class_get_type(char *name)
 
 #ifdef CONFIG_KMOD
         if (!type) {
-                if (strcmp(name, LUSTRE_MDT_NAME) == 0) 
-                        name = LUSTRE_MDS_NAME;
-                if (!request_module(name)) {
-                        CDEBUG(D_INFO, "Loaded module '%s'\n", name);
+                char *modname = name;
+                if (strcmp(modname, LUSTRE_MDT_NAME) == 0) 
+                        modname = LUSTRE_MDS_NAME;
+                if (!request_module(modname)) {
+                        CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
                         type = class_search_type(name);
-                } else
-                        CDEBUG(D_INFO, "Can't load module '%s'\n", name);
+                } else {
+                        LCONSOLE_ERROR("Can't load module '%s'\n", modname);
+                }
         }
 #endif
         if (type)
