@@ -522,7 +522,7 @@ void lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
 int lnet_send(lnet_nid_t nid, lnet_msg_t *msg);
 void lnet_return_credits_locked (lnet_msg_t *msg);
 int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr,
-                lnet_nid_t fromnid, void *private, int rdma_get);
+                lnet_nid_t fromnid, void *private, int rdma_req);
 void lnet_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
                unsigned int offset, unsigned int mlen, unsigned int rlen);
 lnet_msg_t *lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *get_msg);
