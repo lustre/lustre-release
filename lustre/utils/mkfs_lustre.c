@@ -77,20 +77,22 @@ void usage(FILE *out)
                 "\t\t\tfor this device on an alternate device\n"
                 "\t\t--failover=<failover-address>\n"
                 "\t\t--backfstype=<fstype>: backing fs type (ext3, ldiskfs)\n"
-                "\t\t--device_size=#N(KB):device size \n"
-                "\t\t--stripe_count=#N:number of stripe\n"
-                "\t\t--stripe_size=#N(KB):stripe size\n"
+                "\t\t--device-size=#N(KB):device size \n"
+                "\t\t--stripe-count=#N:number of stripe\n"
+                "\t\t--stripe-size=#N(KB):stripe size\n"
                 "\t\t--index=#N:target index\n"
                 "\t\t--mountfsoptions=<opts>: permanent mount options\n"
+#ifndef TUNEFS
                 "\t\t--mkfsoptions=<opts>: format options\n"
-                "\t\t--timeout=<secs>: system timeout period\n"
-                "\t\t--startupwait=<secs>: time to wait for other servers to join\n"
                 "\t\t--reformat: overwrite an existing disk\n"
-                "\t\t--verbose\n");
+#endif
+                "\t\t--timeout=<secs>: system timeout period\n"
+                "\t\t--verbose\n"
+                "\t\t--quiet\n");
         return;
 }
 
-#define vprint if (verbose) printf
+#define vprint if (verbose > 0) printf
 
 static void fatal(void)
 {
@@ -122,8 +124,8 @@ int get_os_version()
 
                 fd = open("/proc/sys/kernel/osrelease", O_RDONLY);
                 if (fd < 0) 
-                        fprintf(stderr, "Warning: Can't resolve kernel version,"
-                        " assuming 2.6\n");
+                        fprintf(stderr, "%s: Warning: Can't resolve kernel "
+                                "version, assuming 2.6\n", progname);
                 else {
                         read(fd, release, 4);
                         close(fd);
@@ -136,13 +138,13 @@ int get_os_version()
         return version;
 }
 
-//Ugly implement. FIXME 
 int run_command(char *cmd)
 {
        int i = 0,ret = 0;
        FILE *rfile = NULL;
 
-       vprint("cmd: %s\n", cmd);
+       if (verbose > 1)
+               printf("cmd: %s\n", cmd);
        
        strcat(cmd, " >");
        strcat(cmd, ret_file);
@@ -152,17 +154,18 @@ int run_command(char *cmd)
 
        rfile = fopen(ret_file, "r");
        if (rfile == NULL){
-                fprintf(stderr,"Could not open %s \n",ret_file);
+                fprintf(stderr,"%s: Could not open %s \n", progname, ret_file);
                 exit(2);
        }
       
        memset(cmd_out, 0, sizeof(cmd_out));
        while (fgets(cmd_out[i], 128, rfile) != NULL) {
-               if (verbose > 2) printf("  _ %s", cmd_out[i]); 
+               if (verbose > 2) 
+                       printf("  _ %s", cmd_out[i]); 
                i++;
                if (i >= 32) {
-                       fprintf(stderr,"WARNING losing some output from %s",
-                               cmd);
+                       fprintf(stderr,"%s: WARNING losing some output from %s",
+                               progname, cmd);
                        break;
                }
        }
@@ -186,8 +189,8 @@ static void lnet_start()
 {
         ptl_initialize(0, NULL);
         if (access("/proc/sys/lnet", X_OK) != 0) {
-                fprintf(stderr, "The LNET module must be loaded to determine "
-                        "local NIDs\n");
+                fprintf(stderr, "%s: The LNET module must be loaded to "
+                        "determine local NIDs\n", progname);
                 exit(1);
         }
         if (jt_ptl_get_nids(NULL) == -ENETDOWN) {
@@ -220,7 +223,7 @@ int loop_setup(struct mkfs_opts *mop)
         else if (!access("/dev/loop/0", F_OK | R_OK))
                 strcpy(loop_base, "/dev/loop/\0");
         else {
-                fprintf(stderr, "can't access loop devices\n");
+                fprintf(stderr, "%s: can't access loop devices\n", progname);
                 exit(1);
         }
 
@@ -238,8 +241,8 @@ int loop_setup(struct mkfs_opts *mop)
                         sprintf(cmd, "losetup %s %s", l_device, mop->mo_device);
                         ret = run_command(cmd);
                         if (ret) {
-                                fprintf(stderr, "error %d on losetup: %s\n",
-                                        ret, strerror(ret));
+                                fprintf(stderr, "%s: error %d on losetup: %s\n",
+                                        progname, ret, strerror(ret));
                                 exit(8);
                         }
                         strcpy(mop->mo_loopdev, l_device);
@@ -247,7 +250,7 @@ int loop_setup(struct mkfs_opts *mop)
                 }
         }
         
-        fprintf(stderr,"out of loop devices!\n");
+        fprintf(stderr,"%s: out of loop devices!\n", progname);
         return EMFILE;
 }       
 
@@ -272,7 +275,7 @@ int is_block(char* devname)
                 return 0;
         ret = stat(devname, &st);
         if (ret != 0) {
-                fprintf(stderr, "cannot stat %s\n",devname);
+                fprintf(stderr, "%s: cannot stat %s\n", progname, devname);
                 exit(4);
         }
         return S_ISBLK(st.st_mode);
@@ -294,14 +297,16 @@ __u64 get_device_size(char* device)
         /* bz5831 BLKGETSIZE64 */
         fd = open(device, O_RDONLY);
         if (fd < 0) {
-                fprintf(stderr, "cannot open %s: %s\n", device, strerror(errno));
+                fprintf(stderr, "%s: cannot open %s: %s\n", 
+                        progname, device, strerror(errno));
                 exit(4);
         }
 
         ret = ioctl(fd, BLKGETSIZE64, (void*)&size);
         close(fd);
         if (ret < 0) {
-                fprintf(stderr, "size ioctl failed: %s\n", strerror(errno));
+                fprintf(stderr, "%s: size ioctl failed: %s\n", 
+                        progname, strerror(errno));
                 exit(4);
         }
         
@@ -314,7 +319,7 @@ int loop_format(struct mkfs_opts *mop)
        
         if (mop->mo_device_sz == 0) {
                 fatal();
-                fprintf(stderr, "loop device requires a --device_size= "
+                fprintf(stderr, "loop device requires a --device-size= "
                         "param\n");
                 return EINVAL;
         }
@@ -323,10 +328,53 @@ int loop_format(struct mkfs_opts *mop)
         ret = truncate(mop->mo_device, mop->mo_device_sz * 1024);
         if (ret != 0) {
                 ret = errno;
-                fprintf(stderr, "Unable to create backing store: %d\n", ret);
+                fprintf(stderr, "%s: Unable to create backing store: %d\n", 
+                        progname, ret);
         }
 
         return ret;
+}
+
+/* Check whether the file exists in the device */
+static int file_in_dev(char *file_name, char *dev_name)
+{
+        FILE *fp;
+        char debugfs_cmd[256];
+        unsigned int inode_num;
+
+        vprint("checking %s\n", file_name);
+        /* Construct debugfs command line. */
+        memset(debugfs_cmd, 0, sizeof(debugfs_cmd));
+        sprintf(debugfs_cmd, "debugfs -c -R 'stat %s' %s 2>&1 | egrep Inode",
+                file_name, dev_name);
+
+        fp = popen(debugfs_cmd, "r");
+        if (!fp) {
+                fprintf(stderr, "%s: %s\n", progname, strerror(errno));
+                return 0;
+        }
+
+        if (fscanf(fp, "Inode: %u", &inode_num) == 1) { /* exist */
+                pclose(fp);
+                return 1;
+        }
+
+        pclose(fp);
+        return 0;
+}
+
+/* Check whether the device has already been fomatted by mkfs.lustre */
+static int is_lustre_target(struct mkfs_opts *mop)
+{
+        /* Check whether there exist MOUNT_DATA_FILE,
+           LAST_RCVD or CATLIST in the device. */
+        if (file_in_dev(MOUNT_DATA_FILE, mop->mo_device)
+            || file_in_dev(LAST_RCVD, mop->mo_device)
+            || file_in_dev(CATLIST, mop->mo_device)) { 
+                return 1; 
+        }
+
+        return 0; /* The device is not a lustre target. */
 }
 
 /* Build fs according to type */
@@ -340,9 +388,9 @@ int make_lustre_backfs(struct mkfs_opts *mop)
 
         if (mop->mo_device_sz != 0) {
                 if (mop->mo_device_sz < 8096){
-                        fprintf(stderr, "size of filesystem must be larger "
+                        fprintf(stderr, "%s: size of filesystem must be larger "
                                 "than 8MB, but is set to %lldKB\n",
-                                mop->mo_device_sz);
+                                progname, mop->mo_device_sz);
                         return EINVAL;
                 }
                 block_count = mop->mo_device_sz / 4; /* block size is 4096 */
@@ -427,8 +475,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 sprintf(mkfs_cmd, "mkreiserfs -ff ");
 
         } else {
-                fprintf(stderr,"unsupported fs type: %d (%s)\n",
-                        mop->mo_ldd.ldd_mount_type, 
+                fprintf(stderr,"%s: unsupported fs type: %d (%s)\n",
+                        progname, mop->mo_ldd.ldd_mount_type, 
                         MT_STR(&mop->mo_ldd));
                 return EINVAL;
         }
@@ -500,8 +548,8 @@ int write_local_files(struct mkfs_opts *mop)
         /* Mount this device temporarily in order to write these files */
         vprint("mounting backing device\n");
         if (!mkdtemp(mntpt)) {
-                fprintf(stderr, "Can't create temp mount point %s: %s\n",
-                        mntpt, strerror(errno));
+                fprintf(stderr, "%s: Can't create temp mount point %s: %s\n",
+                        progname, mntpt, strerror(errno));
                 return errno;
         }
 
@@ -511,18 +559,20 @@ int write_local_files(struct mkfs_opts *mop)
         
         ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
         if (ret) {
-                fprintf(stderr, "Unable to mount %s: %s\n", mop->mo_device,
-                        strerror(ret));
+                fprintf(stderr, "%s: Unable to mount %s: %s\n", 
+                        progname, mop->mo_device, strerror(ret));
                 goto out_rmdir;
         }
 
         /* Set up initial directories */
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_CONFIGS_DIR);
         ret = mkdir(filepnm, 0777);
-        if (ret) {
-                fprintf(stderr, "Can't make configs dir %s (%d)\n", 
-                        filepnm, ret);
+        if ((ret != 0) && (errno != EEXIST)) {
+                fprintf(stderr, "%s: Can't make configs dir %s (%d)\n", 
+                        progname, filepnm, ret);
                 goto out_umnt;
+        } else if (errno == EEXIST) {
+                ret = 0;
         }
 
         /* Save the persistent mount data into a file. Lustre must pre-read
@@ -531,40 +581,13 @@ int write_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
         filep = fopen(filepnm, "w");
         if (!filep) {
-                fprintf(stderr, "Unable to create %s file\n", filepnm);
+                fprintf(stderr, "%s: Unable to create %s file\n",
+                        progname, filepnm);
                 goto out_umnt;
         }
         fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         fclose(filep);
         
-#if 0
-        struct lr_server_data lsd;
-        /* servers create their own last_rcvd if nonexistent - why do it here?*/
-        /* Create the inital last_rcvd file */
-        vprint("Writing %s\n", LAST_RCVD);
-        sprintf(filepnm, "%s/%s", mntpt, LAST_RCVD);
-        filep = fopen(filepnm, "w");
-        if (!filep) {
-                ret = errno;
-                fprintf(stderr,"Unable to create %s file\n", filepnm);
-                goto out_umnt;
-        }
-        memset(&lsd, 0, sizeof(lsd));
-        strncpy(lsd.lsd_uuid, mop->mo_ldd.ldd_svname, sizeof(lsd.lsd_uuid));
-        // FIXME any need for the lsd_index? 
-        lsd.lsd_index = mop->mo_ldd.ldd_svindex;
-        lsd.lsd_feature_compat |= cpu_to_le32(LR_COMPAT_COMMON_LR);
-        lsd.lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
-        lsd.lsd_client_start = cpu_to_le32(LR_CLIENT_START);
-        lsd.lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
-        if (IS_MDT(&mop->mo_ldd))
-                lsd.lsd_feature_rocompat = cpu_to_le32(MDS_ROCOMPAT_LOVOBJID);
-        
-        fwrite(&lsd, sizeof(lsd), 1, filep);
-        ret = 0;
-        fclose(filep);
-#endif
-
 out_umnt:
         vprint("unmounting backing device\n");
         umount(mntpt);    
@@ -603,7 +626,7 @@ int main(int argc , char *const argv[])
         static struct option long_opt[] = {
                 {"backfstype", 1, 0, 'b'},
                 {"configdev", 1, 0, 'C'},
-                {"device_size", 1, 0, 'd'},
+                {"device-size", 1, 0, 'd'},
                 {"fsname",1, 0, 'n'},
                 {"failover", 1, 0, 'f'},
                 {"help", 0, 0, 'h'},
@@ -613,22 +636,27 @@ int main(int argc , char *const argv[])
                 {"mkfsoptions", 1, 0, 'k'},
                 {"mountfsoptions", 1, 0, 'o'},
                 {"ost", 0, 0, 'O'},
+                {"quiet", 0, 0, 'q'},
                 {"reformat", 0, 0, 'r'},
                 {"startupwait", 1, 0, 'w'},
-                {"stripe_count", 1, 0, 'c'},
-                {"stripe_size", 1, 0, 's'},
-                {"stripe_index", 1, 0, 'i'},
+                {"stripe-count", 1, 0, 'c'},
+                {"stripe-size", 1, 0, 's'},
+                {"stripe-index", 1, 0, 'i'},
                 {"index", 1, 0, 'i'},
                 {"timeout", 1, 0, 't'},
                 {"verbose", 0, 0, 'v'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "b:C:d:n:f:hI:MGm:k:o:Orw:c:s:i:t:v";
+        char *optstring = "b:C:d:n:f:hI:MGm:k:o:Oqrw:c:s:i:t:v";
         char opt;
         char *mountopts = NULL;
         int  ret = 0;
 
-        progname = argv[0];
+        if ((progname = strrchr(argv[0], '/')) != NULL)
+                progname++;
+        else
+                progname = argv[0];
+
         if (argc < 3) {
                 usage(stderr);
                 exit(0);
@@ -697,8 +725,8 @@ int main(int argc , char *const argv[])
                                 mop.mo_ldd.ldd_mgsnid[i++] =
                                         libcfs_str2nid(s2);
                                 if (i >= MAX_FAILOVER_NIDS) {
-                                        fprintf(stderr, "too many MGS nids, "
-                                                "ignoring %s\n", s1);
+                                        fprintf(stderr, "%s: too many MGS nids, "
+                                                "ignoring %s\n", progname, s1);
                                         break;
                                 }
                         }
@@ -725,6 +753,9 @@ int main(int argc , char *const argv[])
                         break;
                 case 'O':
                         mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_OST;
+                        break;
+                case 'q':
+                        verbose--;
                         break;
                 case 'r':
                         mop.mo_flags |= MO_FORCEFORMAT;
@@ -767,7 +798,8 @@ int main(int argc , char *const argv[])
 
         if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd) && 
             mop.mo_ldd.ldd_mgsnid_count == 0) {
-                vprint("No management node specified, adding MGS to this MDT\n");
+                vprint("No management node specified, adding MGS to this "
+                       "MDT\n");
                 mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
         }
 
@@ -779,8 +811,8 @@ int main(int argc , char *const argv[])
                 lnet_start();
                 i = jt_ptl_get_nids(&nids);
                 if (i < 0) {
-                        fprintf(stderr, "Can't find local nids "
-                                "(is the lnet module loaded?)\n");
+                        fprintf(stderr, "%s: Can't find local nids "
+                                "(is the lnet module loaded?)\n", progname);
                 } else {
                         if (i > 0) {
                                 if (i > MAX_FAILOVER_NIDS) 
@@ -834,8 +866,8 @@ int main(int argc , char *const argv[])
         }
         default: {
                 fatal();
-                fprintf(stderr, "%s: unknown fs type %d '%s'\n",
-                        progname, mop.mo_ldd.ldd_mount_type,
+                fprintf(stderr, "unknown fs type %d '%s'\n",
+                        mop.mo_ldd.ldd_mount_type,
                         MT_STR(&mop.mo_ldd));
                 ret = EINVAL;
                 goto out;
@@ -855,11 +887,25 @@ int main(int argc , char *const argv[])
                 
         ldd_make_sv_name(&(mop.mo_ldd));
 
+        if (verbose > 0)
+                print_ldd(&(mop.mo_ldd));
+
+#ifndef TUNEFS /* mkfs.lustre */
         /* Create the loopback file */
         if (mop.mo_flags & MO_IS_LOOP) {
-                ret = loop_format(&mop);
-                if (!ret)
+                ret = access(mop.mo_device, F_OK);
+                if (ret) 
+                        ret = loop_format(&mop);
+                if (!ret) {     
+                        /* Device already exists or loop_format() succeeds. */
                         ret = loop_setup(&mop);
+                        if (mop.mo_device_sz == 0) {
+                                fatal();
+                                fprintf(stderr, "loop device requires a "
+                                        "--device-size= param\n");
+                                goto out;
+                        }
+                }
                 if (ret) {
                         fatal();
                         fprintf(stderr, "Loop device setup failed: %s\n", 
@@ -868,8 +914,17 @@ int main(int argc , char *const argv[])
                 }
         }
 
-        if (verbose)
-                print_ldd(&(mop.mo_ldd));
+        /* Check whether the disk has already been formatted by mkfs.lustre */
+        if (!(mop.mo_flags & MO_FORCEFORMAT)) {
+                ret = is_lustre_target(&mop);
+                if (ret) {
+                        fatal();
+                        fprintf(stderr, "Device %s has already been formatted," 
+                                " use --reformat to reformat it.\n",
+                                mop.mo_device);
+                        goto out;
+                }
+        }
 
         ret = make_lustre_backfs(&mop);
         if (ret != 0) {
@@ -877,14 +932,45 @@ int main(int argc , char *const argv[])
                 fprintf(stderr, "mkfs failed %d\n", ret);
                 goto out;
         }
-        
+
+#else   /* tunefs.lustre */
+        /* Set up the loopback file */
+        if (mop.mo_flags & MO_IS_LOOP) {
+                ret = access(mop.mo_device, F_OK);
+                if (ret) {
+                        fatal();
+                        fprintf(stderr, "Device %s does not exist!\n", 
+                                mop.mo_device);
+                        lnet_stop();
+                        return ret;
+                }
+
+                ret = loop_setup(&mop);
+                if (ret) {
+                        fatal();
+                        fprintf(stderr, "Loop device setup failed: %s\n", 
+                                strerror(ret));
+                        goto out;
+                }
+        }
+
+        /* Check whether the disk has already been formatted by mkfs.lustre */
+        ret = is_lustre_target(&mop);
+        if (!ret) {
+                fatal();
+                fprintf(stderr, "Device %s has not been formatted with "
+                        "mkfs.lustre\n", mop.mo_device);
+                goto out;
+        }
+#endif
+
         ret = write_local_files(&mop);
         if (ret != 0) {
                 fatal();
                 fprintf(stderr, "failed to write local files\n");
                 goto out;
         }
-            
+
 out:
         loop_cleanup(&mop);      
         lnet_stop();

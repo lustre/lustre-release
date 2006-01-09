@@ -15,7 +15,8 @@ bin_scripts = lfind lstripe
 if UTILS
 rootsbin_SCRIPTS =
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
-	mount_lustre mount.lustre mkfs_lustre mkfs.lustre l_getgroups 
+	mount_lustre mount.lustre mkfs_lustre mkfs.lustre \
+	tunefs_lustre tunefs.lustre l_getgroups 
 bin_PROGRAMS = lfs llog_reader
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
@@ -54,6 +55,12 @@ mount_lustre_SOURCES = mount_lustre.c
 mkfs_lustre_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
 mkfs_lustre_SOURCES = parser.c obd.c lustre_cfg.c mkfs_lustre.c parser.h obdctl.h
+mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS)
+
+tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
+tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
+tunefs_lustre_SOURCES = $(mkfs_lustre_SOURCES)
+tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
 
 EXTRA_DIST = $(bin_scripts) $(sbin_scripts)
 
@@ -66,4 +73,7 @@ mount.lustre$(EXEEXT): mount_lustre
 	cp $< $@
 
 mkfs.lustre$(EXEEXT): mkfs_lustre
+	cp $< $@
+
+tunefs.lustre$(EXEEXT): tunefs_lustre
 	cp $< $@
