@@ -1,10 +1,10 @@
-------------------------------------------------------------------------------
-
-12-31-2005  Cluster File Systems, Inc. <info@clusterfs.com>
+01-31-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
 	 INTEROPERATE with older versions automatically.  Please read the 
 	 user documentation before upgrading any part of a live system.
+       * WARNING: Lustre networking configuration changes are required with
+	 this release.  See <url> for details.
        * bug fixes
 
 Severity   : enhancement
