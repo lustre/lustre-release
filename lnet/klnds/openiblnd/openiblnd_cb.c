@@ -2387,7 +2387,7 @@ kibnal_connd (void *arg)
                         continue;
 
                 set_current_state (TASK_INTERRUPTIBLE);
-                add_wait_queue (&kibnal_data.kib_connd_waitq, &wait);
+                add_wait_queue_exclusive(&kibnal_data.kib_connd_waitq, &wait);
 
                 spin_unlock_irqrestore (&kibnal_data.kib_connd_lock, flags);
 
@@ -2459,7 +2459,7 @@ kibnal_scheduler(void *arg)
                         counter = 0;
 
                         if (!did_something) {
-                                rc = wait_event_interruptible(
+                                rc = wait_event_interruptible_exclusive(
                                         kibnal_data.kib_sched_waitq,
                                         !list_empty(&kibnal_data.kib_sched_txq) || 
                                         !list_empty(&kibnal_data.kib_sched_rxq) || 

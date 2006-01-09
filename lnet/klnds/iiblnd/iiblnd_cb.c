@@ -3084,7 +3084,7 @@ kibnal_scheduler(void *arg)
                 /* Nothing to do; sleep... */
 
                 set_current_state(TASK_INTERRUPTIBLE);
-                add_wait_queue(&kibnal_data.kib_sched_waitq, &wait);
+                add_wait_queue_exclusive(&kibnal_data.kib_sched_waitq, &wait);
                 spin_unlock_irqrestore(&kibnal_data.kib_sched_lock,
                                        flags);
 

@@ -1282,8 +1282,9 @@ int ksocknal_scheduler (void *arg)
                         nloops = 0;
 
                         if (!did_something) {   /* wait for something to do */
-                                rc = wait_event_interruptible (sched->kss_waitq,
-                                                               !ksocknal_sched_cansleep(sched));
+                                rc = wait_event_interruptible_exclusive(
+                                        sched->kss_waitq,
+                                        !ksocknal_sched_cansleep(sched));
                                 LASSERT (rc == 0);
                         } else
                                our_cond_resched();
@@ -1802,10 +1803,11 @@ ksocknal_connd (void *arg)
                 spin_unlock_irqrestore(&ksocknal_data.ksnd_connd_lock,
                                        flags);
 
-                rc = wait_event_interruptible(ksocknal_data.ksnd_connd_waitq,
-                                              ksocknal_data.ksnd_shuttingdown ||
-                                              !list_empty(&ksocknal_data.ksnd_connd_connreqs) ||
-                                              !list_empty(&ksocknal_data.ksnd_connd_routes));
+                rc = wait_event_interruptible_exclusive(
+                        ksocknal_data.ksnd_connd_waitq,
+                        ksocknal_data.ksnd_shuttingdown ||
+                        !list_empty(&ksocknal_data.ksnd_connd_connreqs) ||
+                        !list_empty(&ksocknal_data.ksnd_connd_routes));
 
                 spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock, flags);
         }

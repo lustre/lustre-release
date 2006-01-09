@@ -1355,8 +1355,9 @@ int ksocknal_scheduler (void *arg)
                         nloops = 0;
 
                         if (!did_something) {   /* wait for something to do */
-                                wait_event_interruptible (sched->kss_waitq,
-                                                          !ksocknal_sched_cansleep(sched), rc);
+                                wait_event_interruptible_exclusive(
+                                        sched->kss_waitq,
+                                        !ksocknal_sched_cansleep(sched), rc);
                                 LASSERT (rc == 0);
                         } else
                                our_cond_resched();

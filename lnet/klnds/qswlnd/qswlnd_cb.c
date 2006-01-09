@@ -1525,11 +1525,12 @@ kqswnal_scheduler (void *arg)
                                          * there's nothing left to do */
                                         break;
                                 }
-                                rc = wait_event_interruptible (kqswnal_data.kqn_sched_waitq,
-                                                               kqswnal_data.kqn_shuttingdown == 2 ||
-                                                               !list_empty(&kqswnal_data.kqn_readyrxds) ||
-                                                               !list_empty(&kqswnal_data.kqn_donetxds) ||
-                                                               !list_empty(&kqswnal_data.kqn_delayedtxds));
+                                rc = wait_event_interruptible_exclusive (
+                                        kqswnal_data.kqn_sched_waitq,
+                                        kqswnal_data.kqn_shuttingdown == 2 ||
+                                        !list_empty(&kqswnal_data.kqn_readyrxds) ||
+                                        !list_empty(&kqswnal_data.kqn_donetxds) ||
+                                        !list_empty(&kqswnal_data.kqn_delayedtxds));
                                 LASSERT (rc == 0);
                         } else if (need_resched())
                                 schedule ();

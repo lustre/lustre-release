@@ -1076,7 +1076,7 @@ kranal_connd (void *arg)
                         continue;
 
                 set_current_state(TASK_INTERRUPTIBLE);
-                add_wait_queue(&kranal_data.kra_connd_waitq, &wait);
+                add_wait_queue_exclusive(&kranal_data.kra_connd_waitq, &wait);
 
                 spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
@@ -1998,7 +1998,7 @@ kranal_scheduler (void *arg)
                         continue;
 
                 set_current_state(TASK_INTERRUPTIBLE);
-                add_wait_queue(&dev->rad_waitq, &wait);
+                add_wait_queue_exclusive(&dev->rad_waitq, &wait);
                 spin_unlock_irqrestore(&dev->rad_lock, flags);
 
                 if (nsoonest == 0) {
