@@ -98,7 +98,6 @@ typedef struct
         ptllnd_peer_t             *rx_peer;
         kptl_msg_t                *rx_msg;
         int                        rx_nob;
-        int                        rx_replied;
         char                       rx_space[0];
 } ptllnd_rx_t;
 

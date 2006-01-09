@@ -115,7 +115,7 @@ do_stat (int fd)
 	   counter.route_length = subull(new_counter.route_length, old_counter.route_length);
 	   counter.drop_length = subull(new_counter.drop_length, old_counter.drop_length);
 
-	   printf ("M %lu(%lu) E %0.0f S %7.2f/%6.0f R %7.2f/%6.0f F %7.2f/%6.0f D %4.2f/%0.0f\n",
+	   printf ("M %3lu(%3lu) E %0.0f S %7.2f/%6.0f R %7.2f/%6.0f F %7.2f/%6.0f D %4.2f/%0.0f\n",
 		   counter.msgs_alloc, counter.msgs_max,
 		   rul(counter.errors,t),
 		   rull(counter.send_length,t*1024.0*1024.0), rul(counter.send_count, t),

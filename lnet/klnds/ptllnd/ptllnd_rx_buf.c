@@ -772,7 +772,7 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
                 rc = lnet_parse(kptllnd_data->kptl_ni,
                         &msg->ptlm_u.immediate.kptlim_hdr,
                         msg->ptlm_srcnid,
-                        rx);
+                        rx, 0);
                 /* RX Completing asynchronously */
                 if( rc >= 0)
                         rx = 0;
@@ -795,7 +795,7 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
                 rc = lnet_parse(kptllnd_data->kptl_ni,
                         &msg->ptlm_u.req.kptlrm_hdr,
                         msg->ptlm_srcnid,
-                        rx);
+                        rx, 1);
 
                 /* RX Completing asynchronously */
                 if( rc >= 0)
@@ -878,7 +878,7 @@ kptllnd_rx_alloc(
                 return 0;
         }
 
-        rx = cfs_mem_cache_alloc ( kptllnd_data->kptl_rx_cache , CFS_SLAB_ATOMIC);
+        rx = cfs_mem_cache_alloc(kptllnd_data->kptl_rx_cache , CFS_ALLOC_ATOMIC);
         if(rx == 0 ){
                 CERROR("Failed to allocate rx\n");
                 STAT_UPDATE(kps_rx_allocation_failed);

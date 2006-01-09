@@ -29,7 +29,7 @@ lolnd_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT (!lntmsg->msg_routing);
         LASSERT (!lntmsg->msg_target_is_router);
 
-        rc = lnet_parse(ni, &lntmsg->msg_hdr, ni->ni_nid, lntmsg);
+        rc = lnet_parse(ni, &lntmsg->msg_hdr, ni->ni_nid, lntmsg, 0);
         if (rc >= 0)
                 lnet_finalize(ni, lntmsg, 0);
         

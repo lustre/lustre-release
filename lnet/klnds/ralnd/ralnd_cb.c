@@ -368,6 +368,7 @@ kranal_unmap_buffer (kra_tx_t *tx)
 void
 kranal_tx_done (kra_tx_t *tx, int completion)
 {
+        lnet_msg_t      *lnetmsg[2];
         unsigned long    flags;
         int              i;
 
@@ -375,15 +376,8 @@ kranal_tx_done (kra_tx_t *tx, int completion)
 
         kranal_unmap_buffer(tx);
 
-        for (i = 0; i < 2; i++) {
-                /* tx may have up to 2 lntmsgs to finalise */
-                if (tx->tx_lntmsg[i] == NULL)
-                        continue;
-
-                lnet_finalize(kranal_data.kra_ni, tx->tx_lntmsg[i], 
-                              completion);
-                tx->tx_lntmsg[i] = NULL;
-        }
+        lnetmsg[0] = tx->tx_lntmsg[0]; tx->tx_lntmsg[0] = NULL;
+        lnetmsg[1] = tx->tx_lntmsg[1]; tx->tx_lntmsg[1] = NULL;
 
         tx->tx_buftype = RANAL_BUF_NONE;
         tx->tx_msg.ram_type = RANAL_MSG_NONE;
@@ -394,6 +388,14 @@ kranal_tx_done (kra_tx_t *tx, int completion)
         list_add_tail(&tx->tx_list, &kranal_data.kra_idle_txs);
 
         spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
+
+        /* finalize AFTER freeing lnet msgs */
+        for (i = 0; i < 2; i++) {
+                if (lnetmsg[i] == NULL)
+                        continue;
+
+                lnet_finalize(kranal_data.kra_ni, lnetmsg[i], completion);
+        }
 }
 
 kra_conn_t *
@@ -598,7 +600,6 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         lnet_kiov_t      *kiov = lntmsg->msg_kiov;
         unsigned int      offset = lntmsg->msg_offset;
         unsigned int      nob = lntmsg->msg_len;
-        kra_conn_t       *conn;
         kra_tx_t         *tx;
         int               rc;
 
@@ -676,53 +677,6 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 return 0;
 
         case LNET_MSG_REPLY:
-                /* reply's 'private' is the conn that received the GET_REQ */
-                conn = private;
-
-                LASSERT (routing || conn != NULL);
-                
-                LASSERT (conn->rac_rxmsg != NULL);
-
-                if (!routing && conn->rac_rxmsg->ram_type != RANAL_MSG_IMMEDIATE) {
-                        /* Incoming message consistent with RDMA? */
-                        if (conn->rac_rxmsg->ram_type != RANAL_MSG_GET_REQ) {
-                                CERROR("REPLY to %s bad msg type %x!!!\n",
-                                       libcfs_nid2str(target.nid), 
-                                       conn->rac_rxmsg->ram_type);
-                                return -EIO;
-                        }
-
-                        tx = kranal_get_idle_tx();
-                        if (tx == NULL)
-                                return -EIO;
-
-                        rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, 
-                                                      offset, nob);
-                        if (rc != 0) {
-                                kranal_tx_done(tx, rc);
-                                return -EIO;
-                        }
-
-                        tx->tx_conn = conn;
-                        tx->tx_lntmsg[0] = lntmsg;
-
-                        rc = kranal_map_buffer(tx);
-                        if (rc != 0) {
-                                kranal_tx_done(tx, rc);
-                                return -EIO;
-                        }
-
-                        kranal_rdma(tx, RANAL_MSG_GET_DONE,
-                                    &conn->rac_rxmsg->ram_u.get.ragm_desc, nob,
-                                    conn->rac_rxmsg->ram_u.get.ragm_cookie);
-
-                        /* flag matched by consuming rx message */
-                        kranal_consume_rxmsg(conn, NULL, 0);
-                        return 0;
-                }
-
-                /* Fall through and handle like PUT */
-
         case LNET_MSG_PUT:
                 if (kiov == NULL &&             /* not paged */
                     nob <= RANAL_FMA_MAX_DATA && /* small enough */
@@ -767,6 +721,44 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         return 0;
 }
 
+void
+kranal_reply(lnet_ni_t *ni, kra_conn_t *conn, lnet_msg_t *lntmsg)
+{
+        kra_msg_t     *rxmsg = conn->rac_rxmsg;
+        unsigned int   niov = lntmsg->msg_niov;
+        struct iovec  *iov = lntmsg->msg_iov;
+        lnet_kiov_t   *kiov = lntmsg->msg_kiov;
+        unsigned int   offset = lntmsg->msg_offset;
+        unsigned int   nob = lntmsg->msg_len;
+        kra_tx_t      *tx;
+        int            rc;
+
+        tx = kranal_get_idle_tx();
+        if (tx == NULL)
+                goto failed_0;
+
+        rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, offset, nob);
+        if (rc != 0)
+                goto failed_1;
+
+        tx->tx_conn = conn;
+        tx->tx_lntmsg[0] = lntmsg;
+
+        rc = kranal_map_buffer(tx);
+        if (rc != 0)
+                goto failed_1;
+
+        kranal_rdma(tx, RANAL_MSG_GET_DONE,
+                    &rxmsg->ram_u.get.ragm_desc, nob,
+                    rxmsg->ram_u.get.ragm_cookie);
+        return;
+
+ failed_1:
+        kranal_tx_done(tx, -EIO);
+ failed_0:
+        lnet_finalize(ni, lntmsg, -EIO);
+}
+
 int
 kranal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
              int delayed, unsigned int niov, 
@@ -786,13 +778,6 @@ kranal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 
         CDEBUG(D_NET, "conn %p, rxmsg %p, lntmsg %p\n", conn, rxmsg, lntmsg);
 
-        if (rxmsg == NULL) {
-                /* already consumed: must have been a GET_REQ that matched */
-                LASSERT (mlen == 0);
-                LASSERT (lntmsg == NULL);       /* no need to finalise */
-                return 0;
-        }
-        
         switch(rxmsg->ram_type) {
         default:
                 LBUG();
@@ -858,14 +843,18 @@ kranal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                 return 0;
 
         case RANAL_MSG_GET_REQ:
-                /* This one didn't match anything */
-                tx = kranal_new_tx_msg(RANAL_MSG_GET_NAK);
-                if (tx != NULL) {
-                        tx->tx_msg.ram_u.completion.racm_cookie = 
-                                rxmsg->ram_u.get.ragm_cookie;
-                        kranal_post_fma(conn, tx);
+                if (lntmsg != NULL) {
+                        /* Matched! */
+                        kranal_reply(ni, conn, lntmsg);
+                } else {
+                        /* No match */
+                        tx = kranal_new_tx_msg(RANAL_MSG_GET_NAK);
+                        if (tx != NULL) {
+                                tx->tx_msg.ram_u.completion.racm_cookie = 
+                                        rxmsg->ram_u.get.ragm_cookie;
+                                kranal_post_fma(conn, tx);
+                        }
                 }
-                LASSERT (lntmsg == NULL);       /* no need to finalise */
                 kranal_consume_rxmsg(conn, NULL, 0);
                 return 0;
         }
@@ -1742,14 +1731,14 @@ kranal_check_fma_rx (kra_conn_t *conn)
         case RANAL_MSG_IMMEDIATE:
                 CDEBUG(D_NET, "RX IMMEDIATE on %p\n", conn);
                 rc = lnet_parse(kranal_data.kra_ni, &msg->ram_u.immediate.raim_hdr, 
-                                msg->ram_srcnid, conn);
+                                msg->ram_srcnid, conn, 0);
                 repost = rc < 0;
                 break;
 
         case RANAL_MSG_PUT_REQ:
                 CDEBUG(D_NET, "RX PUT_REQ on %p\n", conn);
                 rc = lnet_parse(kranal_data.kra_ni, &msg->ram_u.putreq.raprm_hdr, 
-                                msg->ram_srcnid, conn);
+                                msg->ram_srcnid, conn, 1);
                 repost = rc < 0;
                 break;
 
@@ -1793,7 +1782,7 @@ kranal_check_fma_rx (kra_conn_t *conn)
         case RANAL_MSG_GET_REQ:
                 CDEBUG(D_NET, "RX GET_REQ on %p\n", conn);
                 rc = lnet_parse(kranal_data.kra_ni, &msg->ram_u.get.ragm_hdr, 
-                                msg->ram_srcnid, conn);
+                                msg->ram_srcnid, conn, 1);
                 repost = rc < 0;
                 break;
 

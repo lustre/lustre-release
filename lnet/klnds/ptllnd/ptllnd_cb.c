@@ -412,7 +412,6 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         kptl_tx_t        *tx = NULL;
         kptl_data_t      *kptllnd_data = ni->ni_data;
         int               nob;
-        int               rc;
 
         PJK_UT_MSG_DATA(">>> SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
         PJK_UT_MSG_DATA("nob=%d nov=%d offset=%d to %s\n",
@@ -452,8 +451,9 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 LBUG();
                 return -EINVAL;
 
+        case LNET_MSG_REPLY:
         case LNET_MSG_PUT:
-                PJK_UT_MSG_DATA("LNET_MSG_PUT\n");
+                PJK_UT_MSG_DATA("LNET_MSG_PUT/REPLY\n");
 
                 /*
                  * Get an idle tx descriptor
@@ -470,8 +470,10 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if (nob <= *kptllnd_tunables.kptl_max_msg_size)
                         break;
 
-
-                STAT_UPDATE(kps_send_put);
+                if (type == LNET_MSG_REPLY)
+                        STAT_UPDATE(kps_send_reply);
+                else
+                        STAT_UPDATE(kps_send_put);
 
                 kptllnd_do_put(tx,lntmsg,kptllnd_data);
 
@@ -534,80 +536,6 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 PJK_UT_MSG_DATA("LNET_MSG_ACK\n");
                 LASSERT (payload_nob == 0);
                 break;
-
-        case LNET_MSG_REPLY:
-                PJK_UT_MSG_DATA("LNET_MSG_REPLY\n");
-
-                STAT_UPDATE(kps_send_reply);
-
-                if(routing!=0 || target_is_router!=0)
-                {
-                        /*
-                         * Get an idle tx descriptor
-                         */
-                        tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_LARGE_PUT);
-                        if(tx == NULL){
-                                CERROR ("Can't send %d to %s: tx descs exhausted\n",
-                                        type, libcfs_id2str(target));
-                                return -ENOMEM;
-                        }
-
-                        /* Is the payload small enough not to need RDMA? */
-                        nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob]);
-                        if (nob <= *kptllnd_tunables.kptl_max_msg_size)
-                                break;
-
-                        kptllnd_do_put(tx,lntmsg,kptllnd_data);
-
-                        PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
-                        return 0;
-                }else{
-                        /*
-                         * Reply's private is the incoming rx descriptor
-                         */
-                        kptl_rx_t *rx = private;
-                        LASSERT(rx != NULL);
-
-                        /*
-                         * If the request was to NOT do RDMA
-                         * break out and just send back an IMMEDIATE message
-                         */
-                        if (rx->rx_msg->ptlm_type == PTLLND_MSG_TYPE_IMMEDIATE) {
-                                /* RDMA not expected */
-                                nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob]);
-                                if (nob > *kptllnd_tunables.kptl_max_msg_size) {
-                                        CERROR("REPLY for %s too big but RDMA not requested:"
-                                               "%d (max for message is %d)\n",
-                                               libcfs_id2str(target), payload_nob,
-                                               *kptllnd_tunables.kptl_max_msg_size);
-                                        CERROR("Can't REPLY IMMEDIATE %d to %s\n",
-                                               nob, libcfs_id2str(target));
-                                        return -EINVAL;
-                                }
-                                break;
-                        }
-
-
-                        /* Incoming message consistent with RDMA? */
-                        if (rx->rx_msg->ptlm_type != PTLLND_MSG_TYPE_GET) {
-                                CERROR("REPLY to %s bad msg type %x!!!\n",
-                                       libcfs_id2str(target), rx->rx_msg->ptlm_type);
-                                return -EINVAL;
-                        }
-
-                        rc = kptllnd_start_bulk_rdma(
-                                kptllnd_data,
-                                rx,
-                                lntmsg,
-                                PTL_MD_OP_PUT,
-                                payload_niov,
-                                payload_iov,
-                                payload_kiov,
-                                payload_offset,
-                                payload_nob);
-                        PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS rc=%d\n",rc);
-                        return rc;
-                }
         }
 
 
@@ -785,13 +713,25 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
 
         case PTLLND_MSG_TYPE_GET:
                 PJK_UT_MSG_DATA("PTLLND_MSG_TYPE_GET\n");
-                /* We get called here just to discard any junk after the
-                 * GET hdr. */
-                LASSERT (lntmsg == NULL); /* What is this all about ???*/
 
-                lnet_finalize (ni, lntmsg, 0);
-
-                rc = 0;
+                if (lntmsg == NULL) {
+                        /* No match for the GET request */
+                        /* XXX should RDMA 0 bytes of payload + hdr data saying GET failed */
+                        rc = 0;
+                } else {
+                        /* GET matched */
+                        rc = kptllnd_start_bulk_rdma(
+                                kptllnd_data,
+                                rx,
+                                lntmsg,
+                                PTL_MD_OP_PUT,
+                                lntmsg->msg_niov,
+                                lntmsg->msg_iov,
+                                lntmsg->msg_kiov,
+                                lntmsg->msg_offset,
+                                lntmsg->msg_len);
+                        PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS rc=%d\n",rc);
+                }
                 break;
 
         case PTLLND_MSG_TYPE_PUT:
@@ -926,7 +866,8 @@ kptllnd_watchdog(void *arg)
 
                 set_current_state (TASK_INTERRUPTIBLE);
                 cfs_waitq_add(&kptllnd_data->kptl_sched_waitq, &waitlink);
-                cfs_waitq_timedwait(&waitlink,cfs_time_seconds(PTLLND_TIMEOUT_SEC));
+                cfs_waitq_timedwait(&waitlink,CFS_TASK_INTERRUPTIBLE,
+                                    cfs_time_seconds(PTLLND_TIMEOUT_SEC));
                 set_current_state (TASK_RUNNING);
                 cfs_waitq_del (&kptllnd_data->kptl_sched_waitq, &waitlink);
 
@@ -1004,7 +945,8 @@ kptllnd_scheduler(void *arg)
 
                 set_current_state (TASK_INTERRUPTIBLE);
                 cfs_waitq_add(&kptllnd_data->kptl_sched_waitq, &waitlink);
-                cfs_waitq_timedwait(&waitlink,cfs_time_seconds(PTLLND_TIMEOUT_SEC));
+                cfs_waitq_timedwait(&waitlink, CFS_TASK_INTERRUPTIBLE,
+                                    cfs_time_seconds(PTLLND_TIMEOUT_SEC));
                 set_current_state (TASK_RUNNING);
                 cfs_waitq_del (&kptllnd_data->kptl_sched_waitq, &waitlink);
 

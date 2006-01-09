@@ -43,6 +43,7 @@ kibnal_schedule_tx_done (kib_tx_t *tx)
 void
 kibnal_tx_done (kib_tx_t *tx)
 {
+        lnet_msg_t      *lntmsg[2];
         unsigned long    flags;
         int              i;
         int              rc;
@@ -81,16 +82,11 @@ kibnal_tx_done (kib_tx_t *tx)
 #endif
         }
 
-        for (i = 0; i < 2; i++) {
-                /* tx may have up to 2 ptlmsgs to finalise */
-                if (tx->tx_lntmsg[i] == NULL)
-                        continue;
+        /* tx may have up to 2 ptlmsgs to finalise */
+        lntmsg[0] = tx->tx_lntmsg[0]; tx->tx_lntmsg[0] = NULL;
+        lntmsg[1] = tx->tx_lntmsg[1]; tx->tx_lntmsg[1] = NULL;
+        rc = tx->tx_status;
 
-                lnet_finalize (kibnal_data.kib_ni, tx->tx_lntmsg[i], 
-                               tx->tx_status);
-                tx->tx_lntmsg[i] = NULL;
-        }
-        
         if (tx->tx_conn != NULL) {
                 kibnal_put_conn (tx->tx_conn);
                 tx->tx_conn = NULL;
@@ -105,6 +101,14 @@ kibnal_tx_done (kib_tx_t *tx)
         list_add_tail (&tx->tx_list, &kibnal_data.kib_idle_txs);
 
         spin_unlock_irqrestore (&kibnal_data.kib_tx_lock, flags);
+
+        /* delay finalize until my descs have been freed */
+        for (i = 0; i < 2; i++) {
+                if (lntmsg[i] == NULL)
+                        continue;
+
+                lnet_finalize (kibnal_data.kib_ni, lntmsg[i], rc);
+        }
 }
 
 kib_tx_t *
@@ -365,23 +369,20 @@ kibnal_rx (kib_rx_t *rx)
         int          rc = 0;
         kib_msg_t   *msg = rx->rx_msg;
 
-        /* Clear flag so I can detect if I've sent an RDMA completion */
-        rx->rx_rdma = 0;
-
         switch (msg->ibm_type) {
         case IBNAL_MSG_GET_RDMA:
                 rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr,
-                                msg->ibm_srcnid, rx);
+                                msg->ibm_srcnid, rx, 1);
                 break;
                 
         case IBNAL_MSG_PUT_RDMA:
                 rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr,
-                                msg->ibm_srcnid, rx);
+                                msg->ibm_srcnid, rx, 1);
                 break;
 
         case IBNAL_MSG_IMMEDIATE:
                 rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr,
-                                msg->ibm_srcnid, rx);
+                                msg->ibm_srcnid, rx, 0);
                 break;
 
         default:
@@ -1085,12 +1086,6 @@ kibnal_start_active_rdma (int type, int status,
         LASSERT (type == IBNAL_MSG_GET_DONE ||
                  type == IBNAL_MSG_PUT_DONE);
 
-        /* Flag I'm completing the RDMA.  Even if I fail to send the
-         * completion message, I will have tried my best so further
-         * attempts shouldn't be tried. */
-        LASSERT (!rx->rx_rdma);
-        rx->rx_rdma = 1;
-
         if (type == IBNAL_MSG_GET_DONE) {
                 access   = 0;
                 rdma_op  = IB_OP_RDMA_WRITE;
@@ -1246,31 +1241,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                                                  NULL, lntmsg->msg_md->md_iov.kiov,
                                                  lntmsg->msg_md->md_length);
 
-        case LNET_MSG_REPLY: {
-                /* reply's 'private' is the incoming receive */
-                kib_rx_t *rx = private;
-
-                LASSERT (routing || rx != NULL);
-
-                /* RDMA reply expected? */
-                if (!routing && rx->rx_msg->ibm_type != IBNAL_MSG_IMMEDIATE) {
-                        /* Incoming message consistent with RDMA */
-                        if (rx->rx_msg->ibm_type != IBNAL_MSG_GET_RDMA) {
-                                CERROR ("REPLY to %s bad ibm type %d!!!\n",
-                                        libcfs_nid2str(target.nid), 
-                                        rx->rx_msg->ibm_type);
-                                return (-EIO);
-                        }
-
-                        kibnal_start_active_rdma(IBNAL_MSG_GET_DONE, 0,
-                                                 rx, lntmsg, payload_niov, 
-                                                 payload_iov, payload_kiov,
-                                                 payload_offset, payload_nob);
-                        return (0);
-                }
-                /* Fall through to handle like PUT */
-        }
-
+        case LNET_MSG_REPLY:
         case LNET_MSG_PUT:
                 /* Is the payload small enough not to need RDMA? */
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
@@ -1365,8 +1336,16 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                 break;
 
         case IBNAL_MSG_GET_RDMA:
-                LASSERT (lntmsg == NULL);       /* no need to finalise */
-                if (!rx->rx_rdma) {
+                if (lntmsg != NULL) {
+                        /* GET matched: RDMA lntmsg's payload */
+                        kibnal_start_active_rdma(IBNAL_MSG_GET_DONE, 0,
+                                                 rx, lntmsg, 
+                                                 lntmsg->msg_niov, 
+                                                 lntmsg->msg_iov, 
+                                                 lntmsg->msg_kiov,
+                                                 lntmsg->msg_offset, 
+                                                 lntmsg->msg_len);
+                } else {
                         /* GET didn't match anything */
                         kibnal_start_active_rdma (IBNAL_MSG_GET_DONE, -ENODATA,
                                                   rx, NULL, 0, NULL, NULL, 0, 0);

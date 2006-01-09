@@ -121,10 +121,6 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 
                 tx->tx_msgnob += len;
                 tx->tx_large_nob = 0;
-
-                /* We've copied everything... */
-                LASSERT(tx->tx_lntmsg == NULL);
-                lnet_finalize(ni, lntmsg, 0);
         } else {
                 /* stash payload pts to copy later */
                 tx->tx_large_nob = len;
@@ -134,10 +130,10 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         tx->tx_large_frags.kiov = kiov;
                 else
                         tx->tx_large_frags.iov = iov;
-
-                /* finalize later */
-                tx->tx_lntmsg = lntmsg;
         }
+
+        LASSERT(tx->tx_lntmsg == NULL);
+        tx->tx_lntmsg = lntmsg;
         
         spin_lock(&gmni->gmni_tx_lock);
 

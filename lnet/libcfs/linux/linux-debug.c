@@ -130,7 +130,8 @@ void lbug_with_loc(char *file, const char *func, const int line)
         libcfs_debug_dumplog();
         libcfs_run_lbug_upcall(file, func, line);
         set_task_state(current, TASK_UNINTERRUPTIBLE);
-        schedule();
+        while (1)
+                schedule();
 }
 #endif /* __arch_um__ */
 

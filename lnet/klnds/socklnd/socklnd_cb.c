@@ -359,6 +359,8 @@ ksocknal_zc_callback (zccd_t *zcd)
 void
 ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx, int asynch)
 {
+        lnet_msg_t  *lnetmsg = tx->tx_lnetmsg;
+        int          rc = (tx->tx_resid == 0) ? 0 : -EIO;
         ENTRY;
 
         if (tx->tx_conn != NULL) {
@@ -373,8 +375,9 @@ ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx, int asynch)
 #endif
         }
 
-        lnet_finalize (ni, tx->tx_lnetmsg, (tx->tx_resid == 0) ? 0 : -EIO);
         ksocknal_free_tx (tx);
+        lnet_finalize (ni, lnetmsg, rc);
+
         EXIT;
 }
 
@@ -1013,7 +1016,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 ksocknal_conn_addref(conn);     /* ++ref while parsing */
                 
                 rc = lnet_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, 
-                                conn->ksnc_peer->ksnp_id.nid, conn);
+                                conn->ksnc_peer->ksnp_id.nid, conn, 0);
                 if (rc < 0) {
                         /* I just received garbage: give up on this conn */
                         ksocknal_new_packet(conn, 0);
