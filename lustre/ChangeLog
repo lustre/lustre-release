@@ -4,7 +4,8 @@
 	 INTEROPERATE with older versions automatically.  Please read the 
 	 user documentation before upgrading any part of a live system.
        * WARNING: Lustre networking configuration changes are required with
-	 this release.  See <url> for details.
+	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052	 
+	 for details.
        * bug fixes
 
 Severity   : enhancement
