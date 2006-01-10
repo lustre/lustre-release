@@ -248,9 +248,15 @@ int init_lib_portals()
         int rc;
         ENTRY;
 
+        rc = libcfs_debug_init(5 * 1024 * 1024);
+        if (rc != 0) {
+                CERROR("libcfs_debug_init() failed: %d\n", rc);
+                RETURN (-ENXIO);
+        }
+
         rc = LNetInit();
         if (rc != 0) {
-                CERROR("LNetInit failed: %d\n", rc);
+                CERROR("LNetInit() failed: %d\n", rc);
                 RETURN (-ENXIO);
         }
         RETURN(0);
@@ -259,5 +265,6 @@ int init_lib_portals()
 extern void ptlrpc_exit_portals(void);
 void cleanup_lib_portals()
 {
+        libcfs_debug_cleanup();
         ptlrpc_exit_portals();
 }

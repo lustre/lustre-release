@@ -40,14 +40,6 @@
 #include <file.h>
 #endif
 
-/* env variables */
-#define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
-#define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
-#define ENV_LUSTRE_TIMEOUT              "LIBLUSTRE_TIMEOUT"
-#define ENV_LUSTRE_DUMPFILE             "LIBLUSTRE_DUMPFILE"
-#define ENV_LUSTRE_DEBUG_MASK           "LIBLUSTRE_DEBUG_MASK"
-#define ENV_LUSTRE_DEBUG_SUBSYS         "LIBLUSTRE_DEBUG_SUBSYS"
-
 /* both sys/queue.h (libsysio require it) and portals/lists.h have definition
  * of 'LIST_HEAD'. undef it to suppress warnings
  */
@@ -61,8 +53,8 @@
 static int lllib_init(void)
 {
         if (liblustre_init_current("liblustre") ||
-            init_obdclass() ||
             init_lib_portals() ||
+            init_obdclass() ||
             ptlrpc_init() ||
             mdc_init() ||
             lov_init() ||
@@ -268,7 +260,7 @@ int _sysio_lustre_init(void)
                 perror("init llite driver");
                 return err;
         }
-        timeout = getenv(ENV_LUSTRE_TIMEOUT);
+        timeout = getenv("LIBLUSTRE_TIMEOUT");
         if (timeout) {
                 obd_timeout = (unsigned int) strtol(timeout, NULL, 0);
                 printf("LibLustre: set obd timeout as %u seconds\n",
@@ -276,11 +268,11 @@ int _sysio_lustre_init(void)
         }
 
         /* debug masks */
-        debug_mask = getenv(ENV_LUSTRE_DEBUG_MASK);
+        debug_mask = getenv("LIBLUSTRE_DEBUG_MASK");
         if (debug_mask)
                 libcfs_debug = (unsigned int) strtol(debug_mask, NULL, 0);
 
-        debug_subsys = getenv(ENV_LUSTRE_DEBUG_SUBSYS);
+        debug_subsys = getenv("LIBLUSTRE_DEBUG_SUBSYS");
         if (debug_subsys)
                 libcfs_subsystem_debug =
                                 (unsigned int) strtol(debug_subsys, NULL, 0);
@@ -305,13 +297,13 @@ void __liblustre_setup_(void)
         unsigned mntflgs = 0;
         int err;
 
-        lustre_path = getenv(ENV_LUSTRE_MNTPNT);
+        lustre_path = getenv("LIBLUSTRE_MOUNT_POINT");
         if (!lustre_path) {
                 lustre_path = "/mnt/lustre";
         }
 
         /* mount target */
-        target = getenv(ENV_LUSTRE_MNTTGT);
+        target = getenv("LIBLUSTRE_MOUNT_TARGET");
         if (!target) {
                 printf("LibLustre: no mount target specified\n");
                 exit(1);

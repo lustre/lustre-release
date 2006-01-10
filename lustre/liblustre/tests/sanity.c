@@ -1081,16 +1081,17 @@ struct testlist {
 int main(int argc, char * const argv[])
 {
         struct testlist *test;
-        int opt_index, c, rc = 0, numonly = 0;
+        int opt_index, c, rc = 0, numonly = 0, verbose = 0;
         char *only[100];
         static struct option long_opts[] = {
                 {"dumpfile", 1, 0, 'd'},
                 {"only", 1, 0, 'o'},
                 {"target", 1, 0, 't'},
+                {"verbose", 1, 0, 'v'},
                 {0, 0, 0, 0}
         };
 
-        while ((c = getopt_long(argc, argv, "d:o:t:", long_opts, &opt_index)) != -1) {
+        while ((c = getopt_long(argc, argv, "d:o:t:v", long_opts, &opt_index)) != -1) {
                 switch (c) {
                 case 'd':
                         setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
@@ -1103,6 +1104,9 @@ int main(int argc, char * const argv[])
                         break;
                 case 't':
                         setenv(ENV_LUSTRE_MNTTGT, optarg, 1);
+                        break;
+                case 'v':
+                        verbose++;
                         break;
                 default:
                         usage(argv[0]);
@@ -1122,6 +1126,8 @@ int main(int argc, char * const argv[])
         __liblustre_setup_();
 
         buf_size = _npages * PAGE_SIZE;
+        if (verbose)
+                printf("allocating %d bytes buffer\n", buf_size);
         buf_alloc = calloc(1, buf_size);
         if (buf_alloc == NULL) {
                 fprintf(stderr, "error allocating %d\n", buf_size);
