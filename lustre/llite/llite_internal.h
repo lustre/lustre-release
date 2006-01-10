@@ -391,6 +391,7 @@ extern void ll_set_dd(struct dentry *de);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
+int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name);
 
 /* llite/llite_lib.c */
 

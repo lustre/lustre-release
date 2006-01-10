@@ -123,6 +123,10 @@ void lustre_free_sbi(struct super_block *sb)
         EXIT;
 }
 
+static struct dentry_operations ll_d_root_ops = {
+        .d_compare = ll_dcompare,
+};
+
 int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 {
         struct inode *root = 0;
@@ -330,6 +334,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sb->s_root = d_alloc_root(root);
         if (data != NULL)
                 OBD_FREE(data, sizeof(*data));
+        sb->s_root->d_op = &ll_d_root_ops;
         RETURN(err);
 
 out_root:

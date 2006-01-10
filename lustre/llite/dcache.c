@@ -59,8 +59,7 @@ static void ll_release(struct dentry *de)
  * an AST before calling d_revalidate_it().  The dentry still exists (marked
  * INVALID) so d_lookup() matches it, but we have no lock on it (so
  * lock_match() fails) and we spin around real_lookup(). */
-static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
-                       struct qstr *name)
+int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
 {
         struct dentry *dchild;
         ENTRY;
@@ -71,6 +70,7 @@ static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
         if (memcmp(d_name->name, name->name, name->len))
                 RETURN(1);
 
+        /* XXX: d_name must be in-dentry structure */
         dchild = container_of(d_name, struct dentry, d_name); /* ugh */
         if (dchild->d_flags & DCACHE_LUSTRE_INVALID) {
                 CDEBUG(D_DENTRY,"INVALID dentry %p not matched, was bug 3784\n",
