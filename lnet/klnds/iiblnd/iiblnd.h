@@ -347,7 +347,6 @@ typedef struct kib_rx                           /* receive message */
 {
         struct list_head          rx_list;      /* queue for attention */
         struct kib_conn          *rx_conn;      /* owning conn */
-        int                       rx_responded; /* responded to peer? */
         int                       rx_nob;       /* # bytes received (-1 while posted) */
         __u64                     rx_hca_msg;   /* pre-mapped buffer (hca vaddr) */
         kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
@@ -402,7 +401,6 @@ typedef struct kib_conn
         __u64               ibc_rxseq;          /* rx sequence number */
         atomic_t            ibc_refcount;       /* # users */
         int                 ibc_state;          /* what's happening */
-        atomic_t            ibc_nob;            /* # bytes buffered */
         int                 ibc_nsends_posted;  /* # uncompleted sends */
         int                 ibc_credits;        /* # credits I have */
         int                 ibc_outstanding_credits; /* # credits to return */

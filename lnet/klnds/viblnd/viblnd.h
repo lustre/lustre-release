@@ -114,7 +114,7 @@
 #define IBNAL_PEER_HASH_SIZE         101        /* # peer lists */
 #define IBNAL_RESCHED                100        /* # scheduler loops before reschedule */
 #define IBNAL_MSG_QUEUE_SIZE         8          /* # messages/RDMAs in-flight */
-#define IBNAL_CREDIT_HIGHWATER       7          /* when to eagerly return credits */
+#define IBNAL_CREDIT_HIGHWATER       7          /* when eagerly to return credits */
 #define IBNAL_MSG_SIZE              (4<<10)     /* max size of queued messages (inc hdr) */
 
 /* constants derived from sdp-connection.c */
@@ -277,7 +277,6 @@ typedef struct kib_rx                           /* receive message */
 {
         struct list_head          rx_list;      /* queue for attention */
         struct kib_conn          *rx_conn;      /* owning conn */
-        int                       rx_responded; /* responded to peer? */
         int                       rx_nob;       /* # bytes received (-1 while posted) */
         vv_l_key_t                rx_lkey;      /* local key */
         kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
@@ -346,7 +345,6 @@ typedef struct kib_conn
         __u64               ibc_rxseq;          /* rx sequence number */
         atomic_t            ibc_refcount;       /* # users */
         int                 ibc_state;          /* what's happening */
-        atomic_t            ibc_nob;            /* # bytes buffered */
         int                 ibc_nsends_posted;  /* # uncompleted sends */
         int                 ibc_credits;        /* # credits I have */
         int                 ibc_outstanding_credits; /* # credits to return */
@@ -504,8 +502,6 @@ kibnal_peer_active (kib_peer_t *peer)
 static inline void
 kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
 {
-        /* CAVEAT EMPTOR: tx takes caller's ref on conn */
-
         LASSERT (tx->tx_nwrq > 0);              /* work items set up */
         LASSERT (!tx->tx_queued);               /* not queued for sending already */
 

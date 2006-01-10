@@ -20,6 +20,8 @@ sbin_PROGRAMS = debugctl
 lib_LIBRARIES = libptlctl.a
 
 libptlctl_a_SOURCES = portals.c nidstrings.c debug.c l_ioctl.c parser.c parser.h
+libptlctl_a_CPPFLAGS = $(LLCPPFLAGS)
+libptlctl_a_CFLAGS = $(LLCFLAGS) -DLUSTRE_UTILS=1
 
 if UTILS
 sbin_PROGRAMS += ptlctl routerstat wirecheck 

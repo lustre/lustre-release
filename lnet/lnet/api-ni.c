@@ -1033,7 +1033,7 @@ lnet_startup_lndnis (void)
                         the_lnet.ln_loni = ni;
                         continue;
                 }
-                
+
 #ifndef __KERNEL__
                 if (lnd->lnd_wait != NULL) {
                         if (the_lnet.ln_eqwaitni == NULL) {
@@ -1079,7 +1079,7 @@ lnet_startup_lndnis (void)
         }
 
         return 0;
-        
+
  failed:
         lnet_shutdown_lndnis();
 
@@ -1088,7 +1088,7 @@ lnet_startup_lndnis (void)
                 list_del(&ni->ni_list);
                 LIBCFS_FREE(ni, sizeof(*ni));
         }
-        
+
         return -ENETDOWN;
 }
 
@@ -1105,7 +1105,7 @@ LNetInit(void)
         rc = lnet_get_portals_compatibility();
         if (rc < 0)
                 return rc;
-        
+
         lnet_init_locks();
         CFS_INIT_LIST_HEAD(&the_lnet.ln_lnds);
         the_lnet.ln_ptlcompat = rc;
@@ -1165,7 +1165,7 @@ LNetNIInit(lnet_pid_t requested_pid)
                 rc = -ENETDOWN;
                 goto failed0;
         }
-        
+
         rc = lnet_prepare(requested_pid);
         if (rc != 0)
                 goto failed0;
@@ -1173,7 +1173,7 @@ LNetNIInit(lnet_pid_t requested_pid)
         rc = lnet_startup_lndnis();
         if (rc != 0)
                 goto failed1;
-        
+
         rc = lnet_parse_routes(lnet_get_routes(), &im_a_router);
         if (rc != 0)
                 goto failed2;

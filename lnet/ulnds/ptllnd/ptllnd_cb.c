@@ -871,40 +871,7 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
                 PJK_UT_MSG("<<< rc=%d\n",rc);
                 return rc;
 
-        case LNET_MSG_REPLY: {
-                ptllnd_rx_t *rx = private;      /* incoming GET */
-                LASSERT (rx != NULL);
-
-                PJK_UT_MSG("LNET_MSG_REPLY rx=%p\n",rx);
-
-                if (rx->rx_msg->ptlm_type == PTLLND_MSG_TYPE_GET) {
-                        __u64        matchbits;
-
-                        matchbits = rx->rx_msg->ptlm_u.req.kptlrm_matchbits;
-                        PJK_UT_MSG("matchbits="LPX64"\n",matchbits);
-
-                        LASSERT (!rx->rx_replied);
-                        rc = ptllnd_active_rdma(plp, PTLLND_RDMA_WRITE, msg,
-                                                matchbits,
-                                                msg->msg_niov, msg->msg_iov,
-                                                msg->msg_offset, msg->msg_len);
-                        rx->rx_replied = (rc == 0);
-                        ptllnd_peer_decref(plp);
-                        PJK_UT_MSG("<<< rc=%d\n",rc);
-                        return rc;
-                }
-
-                if (rx->rx_msg->ptlm_type != PTLLND_MSG_TYPE_IMMEDIATE) {
-                        CERROR("Reply to %s bad msg type %x!!!\n",
-                               libcfs_id2str(msg->msg_target),
-                               rx->rx_msg->ptlm_type);
-                        ptllnd_peer_decref(plp);
-                        return -EPROTO;
-                }
-
-                /* fall through to handle like PUT */
-        }
-
+        case LNET_MSG_REPLY:
         case LNET_MSG_PUT:
                 PJK_UT_MSG("LNET_MSG_PUT nob=%d\n",msg->msg_len);
                 nob = msg->msg_len;
@@ -972,6 +939,9 @@ ptllnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
         ptllnd_rx_t *stackrx = private;
         ptllnd_rx_t *heaprx;
 
+        /* Shouldn't get here; recvs only block for router buffers */
+        LBUG();
+        
         PJK_UT_MSG("rx=%p (stack)\n", stackrx);
 
         /* Don't ++plni_nrxs: heaprx replaces stackrx */
@@ -1039,9 +1009,20 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
 
         case PTLLND_MSG_TYPE_GET:
                 PJK_UT_MSG("PTLLND_MSG_TYPE_GET\n");
-                LASSERT (msg == NULL);          /* no need to finalize */
-                if (!rx->rx_replied)            /* peer will time out */
+                if (msg != NULL) {
+                        /* matched! */
+                        PJK_UT_MSG("matchbits="LPX64"\n",
+                                   rx->rx_msg->ptlm_u.req.kptlrm_matchbits);
+
+                        rc = ptllnd_active_rdma(rx->rx_peer, PTLLND_RDMA_WRITE, msg,
+                                                rx->rx_msg->ptlm_u.req.kptlrm_matchbits,
+                                                msg->msg_niov, msg->msg_iov,
+                                                msg->msg_offset, msg->msg_len);
+                        PJK_UT_MSG("<<< rc=%d\n",rc);
+                        break;
+                } else {
                         ptllnd_close_peer(rx->rx_peer);
+                }
                 break;
         }
 
@@ -1236,7 +1217,6 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         rx.rx_peer      = plp;
         rx.rx_msg       = msg;
         rx.rx_nob       = nob;
-        rx.rx_replied   = 0;
         plni->plni_nrxs++;
 
         PJK_UT_MSG("rx=%p type=%d\n",&rx,msg->ptlm_type);
@@ -1251,7 +1231,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 PJK_UT_MSG("PTLLND_MSG_TYPE_%s\n",
                         msg->ptlm_type==PTLLND_MSG_TYPE_PUT ? "PUT" : "GET");
                 rc = lnet_parse(ni, &msg->ptlm_u.req.kptlrm_hdr,
-                                msg->ptlm_srcnid, &rx);
+                                msg->ptlm_srcnid, &rx, 1);
                 PJK_UT_MSG("lnet_parse rc=%d\n",rc);
                 if (rc < 0)
                         ptllnd_rx_done(&rx);
@@ -1260,8 +1240,8 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         case PTLLND_MSG_TYPE_IMMEDIATE:
                 PJK_UT_MSG("PTLLND_MSG_TYPE_IMMEDIATE\n");
                 rc = lnet_parse(ni, &msg->ptlm_u.immediate.kptlim_hdr,
-                                msg->ptlm_srcnid, &rx);
-                PJK_UT_MSG("lnet_parse rc=%d\n",rc);
+                                msg->ptlm_srcnid, &rx, 0);
+                PJK_UT_MSG("lnet_parse rc=%d\n",rc, 0);
                 if (rc < 0)
                         ptllnd_rx_done(&rx);
                 break;

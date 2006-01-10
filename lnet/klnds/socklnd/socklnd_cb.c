@@ -359,6 +359,8 @@ ksocknal_zc_callback (zccd_t *zcd)
 void
 ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx, int asynch)
 {
+        lnet_msg_t  *lnetmsg = tx->tx_lnetmsg;
+        int          rc = (tx->tx_resid == 0) ? 0 : -EIO;
         ENTRY;
 
         if (tx->tx_conn != NULL) {
@@ -373,8 +375,9 @@ ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx, int asynch)
 #endif
         }
 
-        lnet_finalize (ni, tx->tx_lnetmsg, (tx->tx_resid == 0) ? 0 : -EIO);
         ksocknal_free_tx (tx);
+        lnet_finalize (ni, lnetmsg, rc);
+
         EXIT;
 }
 
@@ -1013,7 +1016,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 ksocknal_conn_addref(conn);     /* ++ref while parsing */
                 
                 rc = lnet_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, 
-                                conn->ksnc_peer->ksnp_id.nid, conn);
+                                conn->ksnc_peer->ksnp_id.nid, conn, 0);
                 if (rc < 0) {
                         /* I just received garbage: give up on this conn */
                         ksocknal_new_packet(conn, 0);
@@ -1279,8 +1282,9 @@ int ksocknal_scheduler (void *arg)
                         nloops = 0;
 
                         if (!did_something) {   /* wait for something to do */
-                                rc = wait_event_interruptible (sched->kss_waitq,
-                                                               !ksocknal_sched_cansleep(sched));
+                                rc = wait_event_interruptible_exclusive(
+                                        sched->kss_waitq,
+                                        !ksocknal_sched_cansleep(sched));
                                 LASSERT (rc == 0);
                         } else
                                our_cond_resched();
@@ -1799,10 +1803,11 @@ ksocknal_connd (void *arg)
                 spin_unlock_irqrestore(&ksocknal_data.ksnd_connd_lock,
                                        flags);
 
-                rc = wait_event_interruptible(ksocknal_data.ksnd_connd_waitq,
-                                              ksocknal_data.ksnd_shuttingdown ||
-                                              !list_empty(&ksocknal_data.ksnd_connd_connreqs) ||
-                                              !list_empty(&ksocknal_data.ksnd_connd_routes));
+                rc = wait_event_interruptible_exclusive(
+                        ksocknal_data.ksnd_connd_waitq,
+                        ksocknal_data.ksnd_shuttingdown ||
+                        !list_empty(&ksocknal_data.ksnd_connd_connreqs) ||
+                        !list_empty(&ksocknal_data.ksnd_connd_routes));
 
                 spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock, flags);
         }

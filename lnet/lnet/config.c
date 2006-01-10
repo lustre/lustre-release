@@ -157,7 +157,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
         char      *str;
         lnet_ni_t *ni;
         __u32      net;
-        int        count = 0;
+        int        nnets = 0;
 
 	if (strlen(networks) > LNET_SINGLE_TEXTBUF_NOB) {
 		/* _WAY_ conservative */
@@ -222,12 +222,14 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
                         goto failed;
                 } 
 
-                if (count++ > 0) {
+                if (nnets > 0 &&
+                    the_lnet.ln_ptlcompat > 0) {
                         LCONSOLE_ERROR("Only 1 network supported when "
                                        "'portals_compatible' is set\n");
                         goto failed;
                 }
 
+                nnets++;
                 ni = lnet_new_ni(net, nilist);
                 if (ni == NULL)
                         goto failed;

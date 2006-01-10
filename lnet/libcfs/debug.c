@@ -228,14 +228,26 @@ void libcfs_debug_dumplog(void)
 
 
 int libcfs_debug_init(unsigned long bufsize)
-{ 
+{
+        /* if (getenv("LIBLUSTRE_DEBUG_BASENAME")) {
+                struct FILE *newfile;
+                sprintf(filename, "%s-%s-%lu.log",
+                        getenv("LIBLUSTRE_DEBUG_BASENAME", uname(), time(0));
+                newfile = fopen(filename, "w");
+                if (newfile != NULL)
+                        debug_file_fd = newfile;
+        } else
+         */
         debug_file_fd = stdout;
+
         return 0;
 }
 
 int libcfs_debug_cleanup(void)
 {
-        return 0; //close(portals_debug_fd);
+        if (debug_file_fd != stdout)
+                fclose(debug_file_fd);
+        return 0;
 }
 
 int libcfs_debug_clear_buffer(void)
@@ -253,39 +265,25 @@ int libcfs_debug_mark_buffer(char *text)
         return 0;
 }
 
-/* FIXME: I'm not very smart; someone smarter should make this better. */
 void
-libcfs_debug_msg (int subsys, int mask, char *file, const char *fn, 
+libcfs_debug_msg (int subsys, int mask, char *file, const char *fn,
                   const int line, unsigned long stack, char *format, ...)
 {
         va_list       ap;
-        unsigned long flags;
         struct timeval tv;
         int nob;
 
-
-        /* NB since we pass a non-zero sized buffer (at least) on the first
-         * print, we can be assured that by the end of all the snprinting,
-         * we _do_ have a terminated buffer, even if our message got truncated.
-         */
+        if (debug_file_fd == NULL)
+                return;
 
         gettimeofday(&tv, NULL);
 
-        nob += fprintf(debug_file_fd,
-                              "%02x:%06x:%d:%lu.%06lu ",
-                              subsys >> 24, mask, smp_processor_id,
-                              tv.tv_sec, tv.tv_usec);
-
-        nob += fprintf(debug_file_fd,
-                            "(%s:%d:%s() %d+%ld): ",
-                            file, line, fn, 0,
-                            8192 - ((unsigned long)&flags & 8191UL));
+        nob += fprintf(debug_file_fd, "%lu.%06lu:(%s:%d:%s()): ",
+                       tv.tv_sec, tv.tv_usec, file, line, fn);
 
         va_start (ap, format);
-        nob += fprintf(debug_file_fd, format, ap);
+        nob += vfprintf(debug_file_fd, format, ap);
         va_end (ap);
-
-
 }
 
 void

@@ -145,7 +145,6 @@ typedef struct lnet_msg {
         int                 msg_ack:1;          /* ack on finalize (PUT) */
         int                 msg_sending:1;      /* outgoing message */
         int                 msg_receiving:1;    /* being received */
-        int                 msg_recvaftersend:1; /* lnd_recv() outstanding */
         int                 msg_delayed:1;      /* had to Q for buffer or tx credit */
         int                 msg_txcredit:1;     /* taken an NI send credit */
         int                 msg_peertxcredit:1; /* taken a peer send credit */

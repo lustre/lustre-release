@@ -712,8 +712,8 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
         LASSERT (mlen == 0 || msg != NULL);
         
         if (msg != NULL) {
-                LASSERT(!msg->msg_recvaftersend);
                 LASSERT(msg->msg_receiving);
+                LASSERT(!msg->msg_sending);
                 msg->msg_receiving = 0;
 
                 if (mlen != 0) {
@@ -796,23 +796,9 @@ void
 lnet_ni_send(lnet_ni_t *ni, lnet_msg_t *msg) 
 {
         void   *priv = msg->msg_private;
-        int     recv = msg->msg_recvaftersend;
-        int     delayed = msg->msg_delayed;
         int     rc;
 
         LASSERT (!in_interrupt ());
-
-        /* On GET, call lnet_ni_recv() right after the send. The recv gets
-         * delayed until after the send to ensure the LND still has any RDMA
-         * descriptors associated with the incoming GET when lnd_send() calls
-         * in with the REPLY.  Note that if we actually had to pass 'msg' in to
-         * lnet_ni_recv() here, we'd be forking it (i.e. it would have 2 separate
-         * existances and we'd have to refcount it) */
-
-        LASSERT (!recv == !msg->msg_receiving);
-        msg->msg_recvaftersend = 0;
-        msg->msg_receiving = 0;
-
         LASSERT (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND ||
                  (msg->msg_txcredit && msg->msg_peertxcredit));
 
@@ -820,9 +806,6 @@ lnet_ni_send(lnet_ni_t *ni, lnet_msg_t *msg)
         LASSERT(!in_interrupt());
         if (rc < 0)
                 lnet_finalize(ni, msg, rc);
-        
-        if (recv)
-                lnet_ni_recv(ni, priv, NULL, delayed, 0, 0, 0);
 }
 
 int
@@ -835,20 +818,13 @@ lnet_eager_recv_locked(lnet_msg_t *msg)
         LASSERT (!msg->msg_delayed);
         msg->msg_delayed = 1;
 
-        /* I might have to do an eager receive since I'm blocking */
-        if (!msg->msg_receiving)
-                return 0;
+        LASSERT (msg->msg_receiving);
+        LASSERT (msg->msg_routing);
+        LASSERT (!msg->msg_sending);
         
-        if (msg->msg_routing) {
-                peer = msg->msg_rxpeer;
-                LASSERT (!msg->msg_sending);
-        } else {
-                peer = msg->msg_txpeer;
-                LASSERT (msg->msg_recvaftersend);
-                LASSERT (msg->msg_type == LNET_MSG_REPLY);
-        }
-
+        peer = msg->msg_rxpeer;
         ni = peer->lp_ni;
+
         if (ni->ni_lnd->lnd_eager_recv != NULL) {
                 LNET_UNLOCK();
                         
@@ -877,18 +853,22 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
         lnet_peer_t *lp = msg->msg_txpeer;
         lnet_ni_t   *ni = lp->lp_ni;
 
+        /* non-lnet_send() callers have checked before */
+        LASSERT (!do_send || msg->msg_delayed);
+        LASSERT (!msg->msg_receiving);
+
         if (!msg->msg_peertxcredit) {
                 LASSERT ((lp->lp_txcredits < 0) == !list_empty(&lp->lp_txq));
 
                 msg->msg_peertxcredit = 1;
                 lp->lp_txqnob += msg->msg_len + sizeof(lnet_hdr_t);
                 lp->lp_txcredits--;
+
                 if (lp->lp_txcredits < lp->lp_mintxcredits)
                         lp->lp_mintxcredits = lp->lp_txcredits;
 
                 if (lp->lp_txcredits < 0) {
-                        /* must have checked eager_recv before here */
-                        LASSERT (msg->msg_delayed);
+                        msg->msg_delayed = 1;
                         list_add_tail (&msg->msg_list, &lp->lp_txq);
                         return EAGAIN;
                 }
@@ -904,8 +884,7 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
                         ni->ni_mintxcredits = ni->ni_txcredits;
 
                 if (ni->ni_txcredits < 0) {
-                        /* must have checkd eager_recv before here */
-                        LASSERT (msg->msg_delayed);
+                        msg->msg_delayed = 1;
                         list_add_tail (&msg->msg_list, &ni->ni_txq);
                         return EAGAIN;
                 }
@@ -913,8 +892,6 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
 
         if (do_send) {
                 LNET_UNLOCK();
-                /* non-lnet_send() callers always send delayed */
-                LASSERT (msg->msg_delayed);
                 lnet_ni_send(ni, msg);
                 LNET_LOCK();
         }
@@ -959,7 +936,7 @@ lnet_msg2bufpool(lnet_msg_t *msg)
 int
 lnet_post_routed_recv_locked (lnet_msg_t *msg, int do_recv)
 {
-        /* lnet_route is going to LNET_UNLOCK immediately after this, so it
+        /* lnet_parse is going to LNET_UNLOCK immediately after this, so it
          * sets do_recv FALSE and I don't do the unlock/send/lock bit.  I
          * return EAGAIN if msg blocked and 0 if sent or OK to send */
         lnet_peer_t         *lp = msg->msg_rxpeer;
@@ -971,6 +948,10 @@ lnet_post_routed_recv_locked (lnet_msg_t *msg, int do_recv)
         LASSERT (msg->msg_niov == 0);
         LASSERT (msg->msg_routing);
         LASSERT (msg->msg_receiving);
+        LASSERT (!msg->msg_sending);
+
+        /* non-lnet_parse callers only send delayed messages */
+        LASSERT (!do_recv || msg->msg_delayed);
 
         if (!msg->msg_peerrtrcredit) {
                 LASSERT ((lp->lp_rtrcredits < 0) == !list_empty(&lp->lp_rtrq));
@@ -1015,8 +996,6 @@ lnet_post_routed_recv_locked (lnet_msg_t *msg, int do_recv)
 
         if (do_recv) {
                 LNET_UNLOCK();
-                /* non-lnet_route() callers always send delayed  */
-                LASSERT (msg->msg_delayed);
                 lnet_ni_recv(lp->lp_ni, msg->msg_private, msg, 1,
                              0, msg->msg_len, msg->msg_len);
                 LNET_LOCK();
@@ -1107,8 +1086,6 @@ lnet_return_credits_locked (lnet_msg_t *msg)
                                           lnet_msg_t, msg_list);
                         list_del(&msg2->msg_list);
                         
-                        LASSERT (msg2->msg_delayed);
-
                         (void) lnet_post_routed_recv_locked(msg2, 1);
                 }
         }
@@ -1124,8 +1101,6 @@ lnet_return_credits_locked (lnet_msg_t *msg)
                         msg2 = list_entry(rxpeer->lp_rtrq.next,
                                           lnet_msg_t, msg_list);
                         list_del(&msg2->msg_list);
-                        
-                        LASSERT (msg2->msg_delayed);
                         
                         (void) lnet_post_routed_recv_locked(msg2, 1);
                 }
@@ -1159,6 +1134,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
         LASSERT (msg->msg_txpeer == NULL);
         LASSERT (!msg->msg_sending);
         LASSERT (!msg->msg_target_is_router);
+        LASSERT (!msg->msg_receiving);
 
         msg->msg_sending = 1;
 
@@ -1299,17 +1275,6 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 
         msg->msg_txpeer = lp;                   /* msg takes my ref on lp */
 
-        if (!msg->msg_delayed &&
-            (lp->lp_txcredits <= 0 || src_ni->ni_txcredits <= 0)) {
-                rc = lnet_eager_recv_locked(msg);
-                if (rc != 0) {
-                        msg->msg_txpeer = NULL;
-                        lnet_peer_decref_locked(lp);
-                        LNET_UNLOCK();
-                        return rc;
-                }
-        }
-        
         rc = lnet_post_send_locked(msg, 0);
         LNET_UNLOCK();
 
@@ -1409,7 +1374,7 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 }
 
 static int
-lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg)
+lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 {
         lnet_hdr_t        *hdr = &msg->msg_hdr;
         unsigned int       mlength = 0;
@@ -1453,24 +1418,21 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg)
         msg->msg_ev.target.nid = hdr->dest_nid;
         msg->msg_ev.hdr_data = 0;
 
-        /* set msg_recvaftersend so the incoming message is consumed (by
-         * calling lnet_ni_recv()) in lnet_ni_send() AFTER lnd_send() has been
-         * called.  This ensures that the LND can rely on the recv happening
-         * after the send so any RDMA descriptors it has stashed are still
-         * valid. */
-        msg->msg_recvaftersend = 1;
-        
+        if (rdma_get) {
+                /* The LND completes the REPLY from her recv procedure */
+                lnet_ni_recv(ni, msg->msg_private, msg, 0, 0, 0, 0);
+                return 0;
+        }
+
+        lnet_ni_recv(ni, msg->msg_private, NULL, 0, 0, 0, 0);
+        msg->msg_receiving = 0;
+                             
         rc = lnet_send(ni->ni_nid, msg);
         if (rc < 0) {
                 /* didn't get as far as lnet_ni_send() */
                 CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
                        libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), rc);
 
-                /* consume to release LND resources */
-                lnet_ni_recv(ni, msg->msg_private, NULL, 0, 0, 0, 0);
-
-                msg->msg_recvaftersend = 0;
-                msg->msg_receiving = 0;
                 lnet_finalize(ni, msg, rc);
         }
 
@@ -1681,7 +1643,8 @@ lnet_print_hdr(lnet_hdr_t * hdr)
 
 
 int
-lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
+lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, 
+           void *private, int rdma_req)
 {
         int            rc = 0;
         int            for_me;
@@ -1738,7 +1701,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
         if (!for_me) {
                 if (the_lnet.ln_ptlcompat > 0) {
                         /* portals compatibility is single-network */
-                        CERROR ("%s, %s: Bad dest nid %s "
+                        CERROR ("%s, src %s: Bad dest nid %s "
                                 "(routing not supported)\n",
                                 libcfs_nid2str(from_nid),
                                 libcfs_nid2str(src_nid),
@@ -1749,7 +1712,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
                 if (the_lnet.ln_ptlcompat == 0 &&
                     LNET_NIDNET(dest_nid) == LNET_NIDNET(ni->ni_nid)) {
                         /* should have gone direct */
-                        CERROR ("%s, %s: Bad dest nid %s "
+                        CERROR ("%s, src %s: Bad dest nid %s "
                                 "(should have been sent direct)\n",
                                 libcfs_nid2str(from_nid),
                                 libcfs_nid2str(src_nid),
@@ -1761,7 +1724,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
                     lnet_islocalnid(dest_nid)) {
                         /* dest is another local NI; sender should have used
                          * this node's NID on its own network */
-                        CERROR ("%s, %s: Bad dest nid %s "
+                        CERROR ("%s, src %s: Bad dest nid %s "
                                 "(it's my nid but on a different network)\n",
                                 libcfs_nid2str(from_nid),
                                 libcfs_nid2str(src_nid),
@@ -1769,8 +1732,17 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
                         return -EPROTO;
                 }
 
+                if (rdma_req && type == LNET_MSG_GET) {
+                        CERROR ("%s, src %s: Bad optimized GET for %s "
+                                "(final destination must be me)\n",
+                                libcfs_nid2str(from_nid),
+                                libcfs_nid2str(src_nid),
+                                libcfs_nid2str(dest_nid));
+                        return -EPROTO;
+                }
+                
                 if (!the_lnet.ln_routing) {
-                        CERROR ("%s, %s: Dropping message for %s "
+                        CERROR ("%s, src %s: Dropping message for %s "
                                 "(routing not enabled)\n",
                                 libcfs_nid2str(from_nid),
                                 libcfs_nid2str(src_nid),
@@ -1864,7 +1836,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
                 rc = lnet_parse_put(ni, msg);
                 break;
         case LNET_MSG_GET:
-                rc = lnet_parse_get(ni, msg);
+                rc = lnet_parse_get(ni, msg, rdma_req);
                 break;
         case LNET_MSG_REPLY:
                 rc = lnet_parse_reply(ni, msg);

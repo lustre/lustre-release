@@ -188,9 +188,10 @@ do {                                                                    \
 do {                                                                    \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||   \
             (libcfs_debug & (mask) &&                                   \
-             libcfs_subsystem_debug & DEBUG_SUBSYSTEM))                 \
-                fprintf(stderr, "(%s:%d:%s()) " format,                 \
-                        __FILE__, __LINE__, __FUNCTION__, ## a);        \
+             libcfs_subsystem_debug & DEBUG_SUBSYSTEM)) {               \
+                libcfs_debug_msg(DEBUG_SUBSYSTEM, mask, __FILE__,       \
+                                __FUNCTION__, __LINE__, 0, format, ## a);\
+        }                                                               \
 } while (0)
 #define CDEBUG_LIMIT CDEBUG
 

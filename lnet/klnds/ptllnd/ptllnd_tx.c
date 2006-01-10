@@ -197,7 +197,10 @@ exit:
 void
 kptllnd_tx_done (kptl_tx_t *tx)
 {
+        lnet_msg_t  *lnetmsg[2];
+        int          status = tx->tx_status;
         kptl_data_t *kptllnd_data = tx->tx_po.po_kptllnd_data;
+
         LASSERT (!in_interrupt());
 
         PJK_UT_MSG(">>> tx=%p\n",tx);
@@ -208,16 +211,9 @@ kptllnd_tx_done (kptl_tx_t *tx)
         LASSERT(atomic_read(&tx->tx_refcount) == 0);
         LASSERT(list_empty(&tx->tx_schedlist)); /*not any the scheduler list*/
 
-        if(tx->tx_ptlmsg != NULL){
-                PJK_UT_MSG("tx=%p finalize\n",tx);
-                lnet_finalize (kptllnd_data->kptl_ni, tx->tx_ptlmsg, tx->tx_status);
-                tx->tx_ptlmsg = NULL;
-        }
-        if(tx->tx_ptlmsg_reply != NULL){
-                PJK_UT_MSG("tx=%p finalize reply\n",tx);
-                lnet_finalize (kptllnd_data->kptl_ni, tx->tx_ptlmsg_reply, tx->tx_status);
-                tx->tx_ptlmsg_reply = NULL;
-        }
+        /* stash lnet msgs for finalize AFTER I free this tx desc */
+        lnetmsg[0] = tx->tx_ptlmsg; tx->tx_ptlmsg = NULL;
+        lnetmsg[1] = tx->tx_ptlmsg_reply; tx->tx_ptlmsg_reply = NULL;
 
         /*
          * Release the associated RX if there is one
@@ -252,6 +248,12 @@ kptllnd_tx_done (kptl_tx_t *tx)
         list_add (&tx->tx_list, &kptllnd_data->kptl_idle_txs);
         STAT_UPDATE(kps_tx_released);
         spin_unlock(&kptllnd_data->kptl_tx_lock);
+        
+        if (lnetmsg[0] != NULL)
+                lnet_finalize(kptllnd_data->kptl_ni, lnetmsg[0], status);
+
+        if (lnetmsg[1] != NULL)
+                lnet_finalize(kptllnd_data->kptl_ni, lnetmsg[1], status);
 
         PJK_UT_MSG("<<< tx=%p\n",tx);
 }

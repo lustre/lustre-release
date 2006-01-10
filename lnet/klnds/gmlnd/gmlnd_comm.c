@@ -149,8 +149,9 @@ gmnal_tx_done(gmnal_tx_t *tx, int rc)
 {
 	gmnal_ni_t *gmni = tx->tx_gmni;
         int         wake_sched = 0;
+        lnet_msg_t *lnetmsg = tx->tx_lntmsg;
         
-        LASSERT(tx->tx_lntmsg == NULL);
+        tx->tx_lntmsg = NULL;
 
         spin_lock(&gmni->gmni_tx_lock);
         
@@ -172,6 +173,10 @@ gmnal_tx_done(gmnal_tx_t *tx, int rc)
                 gmnal_check_txqueues_locked(gmni);
 
         spin_unlock(&gmni->gmni_tx_lock);
+
+        /* Delay finalize until tx is free */
+        if (lnetmsg != NULL)
+                lnet_finalize(gmni->gmni_ni, lnetmsg, 0);
 }
 
 void 
@@ -288,14 +293,8 @@ gmnal_check_txqueues_locked (gmnal_ni_t *gmni)
 
                         tx->tx_msgnob += tx->tx_large_nob;
 
-                        /* We've copied everything... */
-                        lnet_finalize(gmni->gmni_ni, tx->tx_lntmsg, 0);
-                        tx->tx_lntmsg = NULL;
-
                         spin_lock(&gmni->gmni_tx_lock);
                 }
-
-                LASSERT (tx->tx_lntmsg == NULL);
 
                 list_add_tail(&tx->tx_list, &gmni->gmni_cred_txq);
         }
@@ -434,7 +433,7 @@ gmnal_rx_thread(void *arg)
                         rc =  lnet_parse(gmni->gmni_ni, 
                                          &msg->gmm_u.immediate.gmim_hdr,
                                          msg->gmm_srcnid,
-                                         rx);
+                                         rx, 0);
                 }
 
                 if (rc < 0)                     /* parse failure */

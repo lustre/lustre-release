@@ -44,6 +44,8 @@
 # define RECALC_SIGPENDING         recalc_sigpending()
 # define CLEAR_SIGPENDING          (current->sigpending = 0)
 # define CURRENT_SECONDS           CURRENT_TIME
+# define wait_event_interruptible_exclusive(wq, condition)              \
+        wait_event_interruptible(wq, condition)
 
 #else /* 2.4.x */
 
@@ -56,6 +58,8 @@
 # define RECALC_SIGPENDING         recalc_sigpending(current)
 # define CLEAR_SIGPENDING          (current->sigpending = 0)
 # define CURRENT_SECONDS           CURRENT_TIME
+# define wait_event_interruptible_exclusive(wq, condition)              \
+        wait_event_interruptible(wq, condition)
 
 #endif
 

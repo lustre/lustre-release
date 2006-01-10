@@ -355,6 +355,10 @@ kqswnal_get_idle_tx (void)
 void
 kqswnal_tx_done_in_thread_context (kqswnal_tx_t *ktx)
 {
+        lnet_msg_t    *lnetmsg[2];
+        int            status[2];
+        int            nlnetmsg = 0;
+        
         LASSERT (!in_interrupt());
         
         if (ktx->ktx_status == -EHOSTDOWN)
@@ -364,20 +368,20 @@ kqswnal_tx_done_in_thread_context (kqswnal_tx_t *ktx)
         case KTX_RDMAING:          /* optimized GET/PUT handled */
         case KTX_PUTTING:          /* optimized PUT sent */
         case KTX_SENDING:          /* normal send */
-                lnet_finalize (kqswnal_data.kqn_ni,
-                               (lnet_msg_t *)ktx->ktx_args[1],
-                               ktx->ktx_status);
+                lnetmsg[0] = (lnet_msg_t *)ktx->ktx_args[1];
+                status[0] = ktx->ktx_status;
+                nlnetmsg = 1;
                 break;
 
         case KTX_GETTING:          /* optimized GET sent & REPLY received */
                 /* Complete the GET with success since we can't avoid
                  * delivering a REPLY event; we committed to it when we
                  * launched the GET */
-                lnet_finalize (kqswnal_data.kqn_ni, 
-                               (lnet_msg_t *)ktx->ktx_args[1], 0);
-                lnet_finalize (kqswnal_data.kqn_ni,
-                               (lnet_msg_t *)ktx->ktx_args[2],
-                               ktx->ktx_status);
+                lnetmsg[0] = (lnet_msg_t *)ktx->ktx_args[1];
+                status[0] = 0;
+                lnetmsg[1] = (lnet_msg_t *)ktx->ktx_args[2];
+                status[1] = ktx->ktx_status;
+                nlnetmsg = 2;
                 break;
 
         default:
@@ -385,6 +389,10 @@ kqswnal_tx_done_in_thread_context (kqswnal_tx_t *ktx)
         }
 
         kqswnal_put_idle_tx (ktx);
+
+        while (nlnetmsg-- > 0)
+                lnet_finalize (kqswnal_data.kqn_ni, 
+                               lnetmsg[nlnetmsg], status[nlnetmsg]);
 }
 
 void
@@ -978,20 +986,6 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         /* payload is either all vaddrs or all pages */
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
-        if (type == LNET_MSG_REPLY) {
-                kqswnal_rx_t *rx = (kqswnal_rx_t *)private;
-                
-                LASSERT (routing || rx != NULL);
-                
-                if (!routing && rx->krx_rpc_reply_needed) { /* is it an RPC */
-                        /* Must be a REPLY for an optimized GET */
-                        return kqswnal_rdma (
-                                rx, lntmsg, LNET_MSG_GET,
-                                payload_niov, payload_iov, payload_kiov, 
-                                payload_offset, payload_nob);
-                }
-        }
-
         if (kqswnal_nid2elanid (target.nid) < 0) {
                 CERROR("%s not in my cluster\n", libcfs_nid2str(target.nid));
                 return -EIO;
@@ -1147,8 +1141,12 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                target_is_router ? "(router)" : "", rc);
 
         if (rc != 0) {
-                if (ktx->ktx_state == KTX_GETTING &&
-                    ktx->ktx_args[2] != NULL) {
+                lnet_msg_t *repmsg = (lnet_msg_t *)ktx->ktx_args[2];
+                int         state = ktx->ktx_state;
+                
+                kqswnal_put_idle_tx (ktx);
+
+                if (state == KTX_GETTING && repmsg != NULL) {
                         /* We committed to reply, but there was a problem
                          * launching the GET.  We can't avoid delivering a
                          * REPLY event since we committed above, so we
@@ -1156,11 +1154,9 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                          * failed. */
                         rc = 0;
                         lnet_finalize (kqswnal_data.kqn_ni, lntmsg, 0);
-                        lnet_finalize (kqswnal_data.kqn_ni,
-                                       (lnet_msg_t *)ktx->ktx_args[2], -EIO);
+                        lnet_finalize (kqswnal_data.kqn_ni, repmsg, -EIO);
                 }
                 
-                kqswnal_put_idle_tx (ktx);
         }
         
         atomic_dec(&kqswnal_data.kqn_pending_txs);
@@ -1273,7 +1269,8 @@ kqswnal_parse (kqswnal_rx_t *krx)
 
         fromnid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ep_rxd_node(krx->krx_rxd));
         
-        rc = lnet_parse(ni, hdr, kqswnal_rx_nid(krx), krx);
+        rc = lnet_parse(ni, hdr, kqswnal_rx_nid(krx), krx,
+                        krx->krx_rpc_reply_needed);
         if (rc < 0) {
                 kqswnal_rx_decref(krx);
                 return;
@@ -1359,12 +1356,38 @@ kqswnal_recv (lnet_ni_t      *ni,
 
         /* NB hdr still in network byte order */
 
-        if (krx->krx_rpc_reply_needed &&
-            (hdrtype == LNET_MSG_PUT ||
-             hdrtype == LNET_MSG_REPLY)) {
-                /* This is an optimized PUT/REPLY */
-                rc = kqswnal_rdma(krx, lntmsg, hdrtype,
-                                  niov, iov, kiov, offset, mlen);
+        if (krx->krx_rpc_reply_needed) {
+                /* optimized (rdma) request sent as RPC */
+                switch (hdrtype) {
+                case LNET_MSG_PUT:
+                case LNET_MSG_REPLY:
+                        /* This is an optimized PUT/REPLY */
+                        rc = kqswnal_rdma(krx, lntmsg, hdrtype,
+                                          niov, iov, kiov, offset, mlen);
+                        break;
+
+                case LNET_MSG_GET:
+                        if (lntmsg == NULL) {
+                                /* No buffer match: my decref will complete the
+                                 * RPC with failure */
+                                rc = 0;
+                        } else {
+                                /* Matched something! */
+                                rc = kqswnal_rdma (krx, lntmsg, 
+                                                   LNET_MSG_GET,
+                                                   lntmsg->msg_niov, 
+                                                   lntmsg->msg_iov, 
+                                                   lntmsg->msg_kiov, 
+                                                   lntmsg->msg_offset, 
+                                                   lntmsg->msg_len);
+                        }
+                        break;
+
+                default:
+                        CERROR("Bad RPC type %d\n", hdrtype);
+                        rc = -EPROTO;
+                        break;
+                }
                 kqswnal_rx_decref(krx);
                 return rc;
         }
@@ -1502,11 +1525,12 @@ kqswnal_scheduler (void *arg)
                                          * there's nothing left to do */
                                         break;
                                 }
-                                rc = wait_event_interruptible (kqswnal_data.kqn_sched_waitq,
-                                                               kqswnal_data.kqn_shuttingdown == 2 ||
-                                                               !list_empty(&kqswnal_data.kqn_readyrxds) ||
-                                                               !list_empty(&kqswnal_data.kqn_donetxds) ||
-                                                               !list_empty(&kqswnal_data.kqn_delayedtxds));
+                                rc = wait_event_interruptible_exclusive (
+                                        kqswnal_data.kqn_sched_waitq,
+                                        kqswnal_data.kqn_shuttingdown == 2 ||
+                                        !list_empty(&kqswnal_data.kqn_readyrxds) ||
+                                        !list_empty(&kqswnal_data.kqn_donetxds) ||
+                                        !list_empty(&kqswnal_data.kqn_delayedtxds));
                                 LASSERT (rc == 0);
                         } else if (need_resched())
                                 schedule ();
