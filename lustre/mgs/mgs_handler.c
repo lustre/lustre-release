@@ -304,18 +304,16 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         ENTRY;
 
         mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
-                                 lustre_swab_mgmt_target_info);
+                                 lustre_swab_mgs_target_info);
         
         CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 
                mti->mti_stripe_index);
 
         /* set the new target index if needed */
-        if (mti->mti_flags & LDD_F_NEED_INDEX) {
-                rc = mgs_set_next_index(obd, mti);
-                if (rc) {
-                        CERROR("Can't get index (%d)\n", rc);
-                        GOTO(out, rc);
-                }
+        rc = mgs_set_index(obd, mti);
+        if (rc) {
+                CERROR("Can't get index (%d)\n", rc);
+                GOTO(out, rc);
         }
 
         /* revoke the config lock so everyone will update */

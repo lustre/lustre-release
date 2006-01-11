@@ -68,21 +68,33 @@ static inline char *mt_str(enum ldd_mount_type mt)
         return mount_type_string[mt];
 }
 
-#define MAX_FAILOVER_NIDS 10
+#ifndef MTI_NIDS_MAX  /* match lustre_idl.h */
+#define MTI_NIDS_MAX 10
+#endif
 
 struct lustre_disk_data {
         __u32      ldd_magic;
-        __u32      ldd_config_ver;      /* we have integrated all llog steps
-                                           through this llog ver. */
+        __u32      ldd_config_ver;      /* not used? */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
         char       ldd_fsname[64];      /* filesystem this server is part of */
-        char       ldd_svname[64];      /* this server's name (lustre-mdt0001) */
-        __u16      ldd_svindex;         /* server index (0001), must match svname */
-        __u16      ldd_mgsnid_count;    /* how many failover nids we have for the MGS */
-        lnet_nid_t ldd_mgsnid[MAX_FAILOVER_NIDS]; /* mgmt nid list; lmd can override */
+        char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
+        __u16      ldd_svindex;         /* server index (0001), must match 
+                                           svname */
+        __u16      ldd_mgsnid_count;
+        lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX]; /* mgmt nid list; lmd can 
+                                                     override */
+        __u16      ldd_failnid_count;   /* server failover nid count */
+        lnet_nid_t ldd_failnid[MTI_NIDS_MAX]; /* server failover nids */
         enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
         char       ldd_mount_opts[1024]; /* target fs mount opts */
-        char       ldd_pad[1024];
+        
+        /* Below here is required for writing mdt, ost,or client logs,
+           and is ignored after that. */
+        int   ldd_stripe_sz;
+        int   ldd_stripe_count;
+        int   ldd_stripe_pattern;
+        int   ldd_stripe_offset;
+        int   ldd_timeout;               /* obd timeout */
 };
         
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
@@ -114,8 +126,9 @@ static inline void ldd_make_sv_name(struct lustre_disk_data *ldd)
 struct lustre_mount_data {
         __u32      lmd_magic;
         __u32      lmd_flags;         /* lustre mount flags */
-        __u16      lmd_mgsnid_count;  /* how many failover nids we have for the MGS */
-        lnet_nid_t lmd_mgsnid[MAX_FAILOVER_NIDS];  /* who to contact at startup */
+        __u16      lmd_mgsnid_count;  /* how many failover nids we have for 
+                                         the MGS */
+        lnet_nid_t lmd_mgsnid[MTI_NIDS_MAX];/* who to contact at startup */
         char      *lmd_dev;           /* device or file system name */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
                                          _device_ mount options) */
@@ -145,12 +158,6 @@ struct mkfs_opts {
         char  mo_loopdev[128];          /* in case a loop dev is needed */
         __u64 mo_device_sz;
         int   mo_flags; 
-
-        /* Below here is required for writing mdt,ost,or client logs */
-        int   mo_stripe_sz;
-        int   mo_stripe_count;
-        int   mo_stripe_pattern;
-        int   mo_timeout;               /* obd timeout */
 };
 
 /****************** last_rcvd file *********************/

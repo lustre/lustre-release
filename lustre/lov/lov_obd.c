@@ -207,6 +207,10 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         int rc, rc2, i;
         ENTRY;
 
+        lov->ocd.ocd_connect_flags = OBD_CONNECT_EMPTY; 
+        if (data) 
+                lov->ocd = *data;
+
         rc = class_connect(conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
@@ -433,6 +437,7 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
+        struct obd_connect_data *ocd = NULL;
         __u32 bufsize, idx;
         int rc;
         ENTRY;
@@ -503,8 +508,16 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                         osc_obd->obd_no_recov = 0;
         }
 
-        /* NULL may need to change when we use flags for osc's */
-        rc = lov_connect_obd(obd, tgt, 1, NULL);
+        if (lov->ocd.ocd_connect_flags != OBD_CONNECT_EMPTY) { 
+                /* Keep the original connect flags pristine */
+                OBD_ALLOC(ocd, sizeof(*ocd));
+                if (!ocd) 
+                        RETURN(-ENOMEM);
+                *ocd = lov->ocd;
+        }
+        rc = lov_connect_obd(obd, tgt, 1, ocd);
+        if (ocd)
+                OBD_FREE(ocd, sizeof(*ocd));
         if (rc)
                 GOTO(out, rc);
 
@@ -516,7 +529,6 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         if (rc) {
                 CERROR("add failed (%d), deleting %s\n", rc, 
                        (char *)tgt->uuid.uuid);
-                //lov_disconnect_obd(obd, tgt);
                 lov_del_obd(obd, &tgt->uuid, index, 0);
         }
         RETURN(rc);

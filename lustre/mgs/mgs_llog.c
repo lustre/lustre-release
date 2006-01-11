@@ -135,7 +135,7 @@ static int next_ost_index(void *index_map, int map_len)
                          set_bit(i, index_map);
                          return i;
                  }
-        CERROR("max index exceeded.\n");
+        CERROR("max index %d exceeded.\n", i);
         return -1;
 }
 
@@ -269,7 +269,7 @@ static int mgs_find_or_make_db(struct obd_device *obd, char *name,
         return 0;
 }
 
-int mgs_set_next_index(struct obd_device *obd, struct mgmt_target_info *mti)
+int mgs_set_index(struct obd_device *obd, struct mgmt_target_info *mti)
 {
         struct fs_db *db;
         int rc = 0;
@@ -280,8 +280,25 @@ int mgs_set_next_index(struct obd_device *obd, struct mgmt_target_info *mti)
                 return rc;
         }
 
-        /* FIXME use mti->mti_stripe_index if given, report error if already 
-           in use */
+        if (!(mti->mti_flags & LDD_F_NEED_INDEX)) {
+                if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8) {
+                        LCONSOLE_ERROR("Server %s requested index %d, but the"
+                                       "max index is %d.\n", 
+                                       mti->mti_svname, mti->mti_stripe_index,
+                                       INDEX_MAP_SIZE * 8);
+                        return -ERANGE;
+                }
+                if (test_bit(mti->mti_stripe_index, db->fd_index_map)) {
+                        LCONSOLE_ERROR("Server %s requested index %d, but that"
+                                       "index is already in use.\n", 
+                                       mti->mti_svname, mti->mti_stripe_index);
+                        return -EADDRINUSE;
+                } else {
+                        set_bit(mti->mti_stripe_index, db->fd_index_map);
+                        return 0;
+                }
+        } 
+
         if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                 rc = next_ost_index(db->fd_index_map, INDEX_MAP_SIZE);
                 if (rc == -1)
@@ -369,6 +386,14 @@ static inline int record_add_uuid(struct obd_device *obd,
                                   uint64_t nid, char *uuid)
 {
         return record_base(obd,llh,NULL,nid,LCFG_ADD_UUID,uuid,0,0,0);
+
+}
+
+static inline int record_add_conn(struct obd_device *obd, 
+                                  struct llog_handle *llh, 
+                                  char *uuid)
+{
+        return record_base(obd,llh,NULL,0,LCFG_ADD_CONN,uuid,0,0,0);
 }
 
 static inline int record_attach(struct obd_device *obd, struct llog_handle *llh,
@@ -591,6 +616,7 @@ static int mgs_clear_log(struct obd_device *obd, char *name)
 
 /* lov is the first thing in the mdt and client logs */
 static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *db, 
+                             struct mgmt_target_info *mti,
                              char *logname, char *lovname)
 {
         struct llog_handle *llh = NULL;
@@ -614,10 +640,10 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *db,
         /* Use defaults here, will fix them later with LCFG_PARAM */
         lovdesc->ld_magic = LOV_DESC_MAGIC;
         lovdesc->ld_tgt_count = 0;
-        lovdesc->ld_pattern = 0;
-        lovdesc->ld_default_stripe_count = 1;
-        lovdesc->ld_default_stripe_size = 1024*1024;
-        lovdesc->ld_default_stripe_offset = 0;
+        lovdesc->ld_default_stripe_count = mti->mti_stripe_count;
+        lovdesc->ld_pattern = mti->mti_stripe_pattern;
+        lovdesc->ld_default_stripe_size = mti->mti_stripe_size;
+        lovdesc->ld_default_stripe_offset = mti->mti_stripe_offset;
         sprintf((char*)lovdesc->ld_uuid.uuid, "%s_UUID", lovname);
         /* can these be the same? */
         uuid = (char *)lovdesc->ld_uuid.uuid;
@@ -640,7 +666,8 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
 {
         struct llog_handle *llh = NULL;
         char *cliname, *mdcname, *lovname, *nodeuuid, *mdsuuid, *mdcuuid;
-        int rc, first_log = 0;
+        lnet_nid_t nid;
+        int rc, i, first_log = 0;
 
         CDEBUG(D_MGS, "writing new mdt %s\n", mti->mti_svname);
 
@@ -650,7 +677,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
                 /* This is the first time for all logs for this fs, 
                    since any ost should have already started the mdt log. */
                 first_log++;
-                rc = mgs_write_log_lov(obd, db, mti->mti_svname,
+                rc = mgs_write_log_lov(obd, db, mti, mti->mti_svname,
                                        lovname);
         } 
 
@@ -682,11 +709,11 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         name_create(mti->mti_fsname, "-clilov", &lovname);
         if (first_log) {
                 /* Start client log */
-                rc = mgs_write_log_lov(obd, db, cliname, lovname);
+                rc = mgs_write_log_lov(obd, db, mti, cliname, lovname);
         }
 
-        /* Add the mdt info to the client */
-        name_create(libcfs_nid2str(mti->mti_nid), "_UUID", &nodeuuid);
+        /* Add the mdt info to the client log */
+        name_create(libcfs_nid2str(mti->mti_nids[0]), /*"_UUID"*/"", &nodeuuid);
         name_create(mti->mti_svname, "-mdc", &mdcname);
         name_create(mdcname, "_UUID", &mdcuuid);
         /* 
@@ -698,13 +725,19 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         #14 L mount_option 0:  1:client  2:lov1  3:MDC_uml1_mdsA_MNT_client
         */
         rc = record_start_log(obd, &llh, cliname);
-        /* FIXME can we just use the nid as the node uuid, or do we really
-           need the hostname? */
         rc = record_marker(obd, llh, db, CM_START, "add mdc"); 
-        rc = record_add_uuid(obd, llh, mti->mti_nid, nodeuuid);
+        for (i = 0; i < mti->mti_nid_count; i++) {
+                CERROR("add nid %s\n", libcfs_nid2str(mti->mti_nids[i]));
+                rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
+        }
         rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, mdcuuid);
         rc = record_setup(obd,llh,mdcname,mdsuuid,nodeuuid,0,0);
-        /* FIXME add uuid, add_conn for failover mdt's */
+        for (i = 0; i < mti->mti_failnid_count; i++) {
+                nid = mti->mti_failnids[i];
+                CERROR("add failover nid %s\n", libcfs_nid2str(nid));
+                rc = record_add_uuid(obd, llh, nid, libcfs_nid2str(nid));
+                rc = record_add_conn(obd, llh, libcfs_nid2str(nid));
+        }
         rc = record_mount_opt(obd, llh, cliname, lovname, mdcname);
         rc = record_marker(obd, llh, db, CM_END, "add mdc"); 
         rc = record_end_log(obd, &llh);
@@ -726,17 +759,18 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
         struct llog_handle *llh = NULL;
         char *nodeuuid, *oscname, *oscuuid, *lovuuid;
         char index[5];
-        int rc;
+        lnet_nid_t nid;
+        int i, rc;
 
         if (mgs_log_is_empty(obd, logname)) {
                 /* The first time an osc is added, setup the lov */
-                rc = mgs_write_log_lov(obd, db, logname, lovname);
+                rc = mgs_write_log_lov(obd, db, mti, logname, lovname);
         }
   
         CDEBUG(D_MGS, "adding osc for %s to log %s\n",
                mti->mti_svname, logname);
 
-        name_create(libcfs_nid2str(mti->mti_nid), "_UUID", &nodeuuid);
+        name_create(libcfs_nid2str(mti->mti_nids[0]), /*"_UUID"*/"", &nodeuuid);
         name_create(mti->mti_svname, "-osc", &oscname);
         name_create(oscname, "_UUID", &oscuuid);
         name_create(lovname, "_UUID", &lovuuid);
@@ -751,10 +785,18 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
         */
         rc = record_start_log(obd, &llh, logname);
         rc = record_marker(obd, llh, db, CM_START, "add osc"); 
-        rc = record_add_uuid(obd, llh, mti->mti_nid, nodeuuid);
+        for (i = 0; i < mti->mti_nid_count; i++) {
+                CERROR("add nid %s\n", libcfs_nid2str(mti->mti_nids[i]));
+                rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
+        }
         rc = record_attach(obd, llh, oscname, LUSTRE_OSC_NAME, lovuuid);
         rc = record_setup(obd, llh, oscname, ostuuid, nodeuuid, 0, 0);
-        /* FIXME add uuid, add_conn for failover ost's */
+        for (i = 0; i < mti->mti_failnid_count; i++) {
+                nid = mti->mti_failnids[i];
+                CERROR("add failover nid %s\n", libcfs_nid2str(nid));
+                rc = record_add_uuid(obd, llh, nid, libcfs_nid2str(nid));
+                rc = record_add_conn(obd, llh, libcfs_nid2str(nid));
+        }
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
         rc = record_lov_add(obd,llh, lovname, ostuuid, index,"1"/*generation*/);
         rc = record_marker(obd, llh, db, CM_END, "add osc"); 
@@ -786,8 +828,11 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *db,
            Heck, what do we do about the client and mds logs? We better
            abort. */
         if (!mgs_log_is_empty(obd, mti->mti_svname)) {
-                CERROR("The config log for %s already exists, not adding.\n",
-                       mti->mti_svname);
+                LCONSOLE_ERROR("The config log for %s already exists, yet the "
+                               "server claims it never registered.  It may have"
+                               " been reformatted, or the index changed. This "
+                               "must be resolved before this server can be "
+                               "added.\n", mti->mti_svname);
                 return -EALREADY;
         }
         /*

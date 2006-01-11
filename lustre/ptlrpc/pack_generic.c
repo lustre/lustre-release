@@ -566,15 +566,22 @@ void lustre_swab_mds_body (struct mds_body *b)
         CLASSERT(offsetof(typeof(*b), padding_4) != 0);
 }
 
-void lustre_swab_mgmt_target_info(struct mgmt_target_info *mti)
+void lustre_swab_mgs_target_info(struct mgmt_target_info *mti)
 {
-        __swab64s(&mti->mti_nid);
-        __swab32s(&mti->mti_config_ver);
-        __swab32s(&mti->mti_flags);
-        __swab32s(&mti->mti_stripe_index);
-        __swab32s(&mti->mti_stripe_pattern);
+        int i;
+        for (i = 0; i < MTI_NIDS_MAX; i++) {
+                __swab64s(&mti->mti_nids[i]);
+                __swab64s(&mti->mti_failnids[i]);
+        }
         __swab64s(&mti->mti_stripe_size);
         __swab64s(&mti->mti_stripe_offset);
+        __swab32s(&mti->mti_stripe_count);
+        __swab32s(&mti->mti_stripe_pattern);
+        __swab32s(&mti->mti_stripe_index);
+        __swab32s(&mti->mti_nid_count);
+        __swab32s(&mti->mti_failnid_count);
+        __swab32s(&mti->mti_config_ver);
+        __swab32s(&mti->mti_flags);
 }
 
 static void lustre_swab_obd_dqinfo (struct obd_dqinfo *i)

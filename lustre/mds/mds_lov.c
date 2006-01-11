@@ -49,8 +49,10 @@ void mds_lov_update_objids(struct obd_device *obd, obd_id *ids)
 
         lock_kernel();
         for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
-                if (ids[i] > (mds->mds_lov_objids)[i])
+                if (ids[i] > (mds->mds_lov_objids)[i]) {
                         (mds->mds_lov_objids)[i] = ids[i];
+                        mds->mds_lov_objids_dirty = 1;
+                }
         unlock_kernel();
         EXIT;
 }
@@ -64,6 +66,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
         ENTRY;
 
         LASSERT(!mds->mds_lov_objids_size);
+        LASSERT(!mds->mds_lov_objids_dirty);
 
         /* Read everything in the file, even if our current lov desc 
            has fewer targets. Old targets not in the lov descriptor 
@@ -83,17 +86,16 @@ static int mds_lov_read_objids(struct obd_device *obd)
         rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, ids, size, &off);
         if (rc < 0) {
                 CERROR("Error reading objids %d\n", rc);
-        } else {
-                mds->mds_lov_objids_red = size / sizeof(*ids); 
-                rc = 0;
+                RETURN(rc);
         }
-
-        for (i = 0; i < mds->mds_lov_objids_red; i++)
-                //FIXME D_ERROR
-                CDEBUG(D_INFO|D_ERROR, "read last object "LPU64" for idx %d\n",
+                
+        mds->mds_lov_objids_in_file = size / sizeof(*ids); 
+        
+        for (i = 0; i < mds->mds_lov_objids_in_file; i++) {
+                CDEBUG(D_INFO, "read last object "LPU64" for idx %d\n",
                        mds->mds_lov_objids[i], i);
-
-        RETURN(rc);
+        }
+        RETURN(0);
 }
 
 int mds_lov_write_objids(struct obd_device *obd)
@@ -103,19 +105,26 @@ int mds_lov_write_objids(struct obd_device *obd)
         int i, rc, tgts; 
         ENTRY;
 
-        tgts = max(mds->mds_lov_desc.ld_tgt_count, mds->mds_lov_objids_red);
+        if (!mds->mds_lov_objids_dirty)
+                RETURN(0);
+
+        tgts = max(mds->mds_lov_desc.ld_tgt_count, mds->mds_lov_objids_in_file);
 
         if (!tgts)
                 RETURN(0);
 
         for (i = 0; i < tgts; i++)
-                //FIXME D_ERROR
-                CDEBUG(D_INFO|D_ERROR, "writing last object "LPU64" for idx %d\n",
+                CDEBUG(D_INFO, "writing last object "LPU64" for idx %d\n",
                        mds->mds_lov_objids[i], i);
 
         rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp,
                                  mds->mds_lov_objids, tgts * sizeof(obd_id),
                                  &off, 0);
+        if (rc >= 0) {
+                mds->mds_lov_objids_dirty = 0;
+                rc = 0;
+        }
+
         RETURN(rc);
 }
 
@@ -189,17 +198,23 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
             (size > mds->mds_lov_objids_size)) {
                 obd_id *ids;
                 
-                /* add room for a bunch at a time */
-                size = (ld->ld_tgt_count + 8) * sizeof(obd_id);
+                /* add room by powers of 2 */
+                size = 1;
+                while (size < ld->ld_tgt_count) 
+                        size = size << 1;
+                CERROR("Next size=%d\n", size);
+                size = size * sizeof(obd_id);
 
                 OBD_ALLOC(ids, size);
                 if (ids == NULL)
                         GOTO(out, rc = -ENOMEM);
                 memset(ids, 0, size);
                 if (mds->mds_lov_objids_size) {
+                        obd_id *old_ids = mds->mds_lov_objids;
                         memcpy(ids, mds->mds_lov_objids, 
                                mds->mds_lov_objids_size);
-                        OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
+                        mds->mds_lov_objids = ids;
+                        OBD_FREE(old_ids, mds->mds_lov_objids_size);
                 }
                 mds->mds_lov_objids = ids;
                 mds->mds_lov_objids_size = size;
@@ -226,8 +241,8 @@ static int mds_lov_add_ost(struct obd_device *obd, struct obd_device *watched,
         int rc = 0;
         ENTRY;
 
-        //FIXME remove D_ERROR
-        CDEBUG(D_CONFIG|D_ERROR, "Updating mds lov for OST idx %d\n", idx);
+        //FIXME remove D_WARNING
+        CDEBUG(D_CONFIG|D_WARNING, "Updating mds lov for OST idx %d\n", idx);
 
         old_count = mds->mds_lov_desc.ld_tgt_count;
         rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
@@ -240,7 +255,7 @@ static int mds_lov_add_ost(struct obd_device *obd, struct obd_device *watched,
                 RETURN(-EINVAL);
         }
         
-        if (idx >= mds->mds_lov_objids_red) {
+        if (idx >= mds->mds_lov_objids_in_file) {
                 /* We never read this lastid; ask the osc */
                 obd_id lastid;
                 __u32 size = sizeof(lastid);
@@ -252,6 +267,7 @@ static int mds_lov_add_ost(struct obd_device *obd, struct obd_device *watched,
                 mds->mds_lov_objids[idx] = lastid;
                 CWARN("got last object "LPU64" from OST %d\n",
                       mds->mds_lov_objids[idx], idx);
+                mds->mds_lov_objids_dirty = 1;
                 mds_lov_write_objids(obd);
         } else {
                 /* We did read this lastid; tell the osc */ 
@@ -322,7 +338,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
-        if (mds->mds_lov_desc.ld_tgt_count > mds->mds_lov_objids_red) {
+        if (mds->mds_lov_desc.ld_tgt_count > mds->mds_lov_objids_in_file) {
                 int size = sizeof(obd_id) * mds->mds_lov_desc.ld_tgt_count;
                 rc = obd_get_info(mds->mds_osc_exp, strlen("last_id"),
                                   "last_id", &size, mds->mds_lov_objids);
@@ -330,6 +346,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                         for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
                                 CWARN("got last object "LPU64" from OST %d\n",
                                       mds->mds_lov_objids[i], i);
+                        mds->mds_lov_objids_dirty = 1;
                         rc = mds_lov_write_objids(obd);
                         if (rc)
                                 CERROR("got last objids from OSTs, but error "
@@ -586,7 +603,7 @@ static int __mds_lov_synchronize(void *data)
         struct mds_obd *mds;
         struct obd_uuid *uuid = NULL;
         __u32  idx;
-        int rc = 0;
+        int rc = 0, have_sem = 0;
         ENTRY;
 
         obd = mlsi->mlsi_obd;
@@ -600,9 +617,15 @@ static int __mds_lov_synchronize(void *data)
 
         LASSERT(obd != NULL);
 
-        /* Hold this throughout a synchronize, and wherever we
-           reference the contents of mds_lov_desc */
-        down(&mds->mds_lov_sem);
+        /* We can't change the target count in one of these sync
+           threads while another sync thread is doing the clearorphans on
+           all the targets. */
+        if (!watched || (idx != MLSI_NO_INDEX)) {
+                /* if we're syncing a particular target, or we're not 
+                   changing the target_count, then we don't need the sem */
+                down(&mds->mds_lov_sem);
+                have_sem++;
+        }
 
         rc = obd_set_info(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
                           KEY_MDS_CONN, 0, uuid);
@@ -643,7 +666,8 @@ static int __mds_lov_synchronize(void *data)
         }
 
 out:
-        up(&mds->mds_lov_sem);
+        if (have_sem) 
+                up(&mds->mds_lov_sem);
         class_decref(obd);
         RETURN(rc);
 }

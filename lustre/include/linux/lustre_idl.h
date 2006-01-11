@@ -212,6 +212,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_ACL         0x80ULL /* client using access control lists */
 #define OBD_CONNECT_XATTR      0x100ULL /* client using extended attributes*/
 #define OBD_CONNECT_CROW       0x200ULL /* MDS is expecting create-on-write */
+#define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
 /*
  * set by servers supporting taking extent locks during obd_punch(). Currently
  * is requested by liblustre clients only. See bug 9528.
@@ -939,22 +940,25 @@ typedef enum {
 
 #define MTI_NAME_MAXLEN 64
 #define MTI_UUID_MAXLEN MTI_NAME_MAXLEN + 5
+#define MTI_NIDS_MAX 10 /* match lustre_disk.h */
 
 struct mgmt_target_info {
         char             mti_fsname[MTI_NAME_MAXLEN];
         char             mti_svname[MTI_NAME_MAXLEN];
-        char             mti_nodename[MTI_NAME_MAXLEN];
-        char             mti_uuid[MTI_UUID_MAXLEN];
-        __u64            mti_nid;            /* lnet_nid_t */ //nid list?
-        __u32            mti_config_ver;
-        __u32            mti_flags;
-        __u32            mti_stripe_index;
-        __u32            mti_stripe_pattern;   /* PATTERN_RAID0, PATTERN_RAID1 */
+        __u64            mti_nids[MTI_NIDS_MAX];     /* lnet_nid_t host nids */
+        __u64            mti_failnids[MTI_NIDS_MAX]; /* partner nids */
         __u64            mti_stripe_size;      
         __u64            mti_stripe_offset;    
+        __u32            mti_stripe_count;     /* how many objects are used */
+        __u32            mti_stripe_pattern;   /* PATTERN_RAID0, PATTERN_RAID1*/
+        __u32            mti_stripe_index;
+        __u32            mti_nid_count;
+        __u32            mti_failnid_count;
+        __u32            mti_config_ver;
+        __u32            mti_flags;
 };
 
-extern void lustre_swab_mgmt_target_info(struct mgmt_target_info *oinfo);
+extern void lustre_swab_mgs_target_info(struct mgmt_target_info *oinfo);
 
 #define CM_START 0x01
 #define CM_END   0x02

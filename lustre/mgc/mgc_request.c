@@ -570,7 +570,7 @@ int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
-                                             lustre_swab_mgmt_target_info);
+                                             lustre_swab_mgs_target_info);
                 memcpy(mti, rep_mti, sizeof(*rep_mti));
                 CDEBUG(D_MGC, "target_add %s got index = %d\n",
                        mti->mti_svname, mti->mti_stripe_index);
@@ -603,7 +603,7 @@ int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *mti)
         if (!rc) {
                 int index;
                 rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
-                                             lustre_swab_mgmt_target_info);
+                                             lustre_swab_mgs_target_info);
                 index = rep_mti->mti_stripe_index;
                 if (index != mti->mti_stripe_index) {
                         CERROR ("OST DEL failed. rc=%d\n", index);

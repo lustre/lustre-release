@@ -138,6 +138,7 @@ int get_os_version()
         return version;
 }
 
+/* FIXME use popen */
 int run_command(char *cmd)
 {
        int i = 0,ret = 0;
@@ -440,11 +441,11 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 if (strstr(mop->mo_mkfsopts, "-I") == NULL) {
                         long inode_size = 0;
                         if (IS_MDT(&mop->mo_ldd)) {
-                                if (mop->mo_stripe_count > 77)
+                                if (mop->mo_ldd.ldd_stripe_count > 77)
                                         inode_size = 512; /* bz 7241 */
-                                else if (mop->mo_stripe_count > 34)
+                                else if (mop->mo_ldd.ldd_stripe_count > 34)
                                         inode_size = 2048;
-                                else if (mop->mo_stripe_count > 13)
+                                else if (mop->mo_ldd.ldd_stripe_count > 13)
                                         inode_size = 1024;
                                 else 
                                         inode_size = 512;
@@ -599,7 +600,7 @@ out_rmdir:
 void set_defaults(struct mkfs_opts *mop)
 {
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
-        mop->mo_ldd.ldd_config_ver = 0;
+        mop->mo_ldd.ldd_config_ver = 1;
         mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER;
         mop->mo_ldd.ldd_mgsnid_count = 0;
         strcpy(mop->mo_ldd.ldd_fsname, "lustre");
@@ -609,7 +610,9 @@ void set_defaults(struct mkfs_opts *mop)
                 mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
         
         mop->mo_ldd.ldd_svindex = -1;
-        mop->mo_stripe_count = 1;
+        mop->mo_ldd.ldd_stripe_count = 1;
+        mop->mo_ldd.ldd_stripe_sz = 1024 * 1024;
+        mop->mo_ldd.ldd_stripe_pattern = 0;
 }
 
 static inline void badopt(char opt, char *type)
@@ -685,7 +688,12 @@ int main(int argc , char *const argv[])
                 case 'c':
                         if (IS_MDT(&mop.mo_ldd)) {
                                 int stripe_count = atol(optarg);
-                                mop.mo_stripe_count = stripe_count;
+                                if (stripe_count <= 0) {
+                                        fprintf(stderr, "%s: bad stripe count "
+                                                "%d\n", progname, stripe_count);
+                                        exit(1);
+                                }
+                                mop.mo_ldd.ldd_stripe_count = stripe_count;
                         } else {
                                 badopt(opt, "MDT");
                         }
@@ -724,9 +732,9 @@ int main(int argc , char *const argv[])
                         while ((s2 = strsep(&s1, ","))) {
                                 mop.mo_ldd.ldd_mgsnid[i++] =
                                         libcfs_str2nid(s2);
-                                if (i >= MAX_FAILOVER_NIDS) {
-                                        fprintf(stderr, "%s: too many MGS nids, "
-                                                "ignoring %s\n", progname, s1);
+                                if (i >= MTI_NIDS_MAX) {
+                                        fprintf(stderr, "%s: too many MGS nids,"
+                                                " ignoring %s\n", progname, s1);
                                         break;
                                 }
                         }
@@ -762,12 +770,12 @@ int main(int argc , char *const argv[])
                         break;
                 case 's':
                         if (IS_MDT(&mop.mo_ldd)) 
-                                mop.mo_stripe_sz = atol(optarg) * 1024;
+                                mop.mo_ldd.ldd_stripe_sz = atol(optarg) * 1024;
                         else 
                                 badopt(opt, "MDT");
                         break;
                 case 't':
-                        mop.mo_timeout = atol(optarg);
+                        mop.mo_ldd.ldd_timeout = atol(optarg);
                         break;
                 case 'v':
                         verbose++;
@@ -815,8 +823,8 @@ int main(int argc , char *const argv[])
                                 "(is the lnet module loaded?)\n", progname);
                 } else {
                         if (i > 0) {
-                                if (i > MAX_FAILOVER_NIDS) 
-                                        i = MAX_FAILOVER_NIDS;
+                                if (i > MTI_NIDS_MAX) 
+                                        i = MTI_NIDS_MAX;
                                 vprint("Adding %d local nids for MGS\n", i);
                                 memcpy(mop.mo_ldd.ldd_mgsnid, nids,
                                        sizeof(mop.mo_ldd.ldd_mgsnid));
@@ -833,9 +841,6 @@ int main(int argc , char *const argv[])
                 goto out;
         }
 
-        if (IS_MDT(&mop.mo_ldd) && (mop.mo_stripe_sz == 0))
-                mop.mo_stripe_sz = 1024 * 1024;
-        
         strcpy(mop.mo_device, argv[optind]);
         
         /* These are the permanent mount options (always included) */ 

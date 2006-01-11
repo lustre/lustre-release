@@ -319,6 +319,8 @@ static int ldd_write(struct lvfs_run_ctxt *mount_ctxt,
         ENTRY;
 
         LASSERT(ldd->ldd_magic == LDD_MAGIC);
+        
+        ldd->ldd_config_ver++;  
 
         push_ctxt(&saved, mount_ctxt, NULL);
         
@@ -842,26 +844,33 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
                 sizeof(mti->mti_fsname));
         strncpy(mti->mti_svname, ldd->ldd_svname,
                 sizeof(mti->mti_svname));
-        // char             mti_nodename[NAME_MAXLEN];
-        // char             mti_uuid[UUID_MAXLEN];
-        /* FIXME nid 0 is lo generally, need to send all non-lo nids */
+        
+        mti->mti_nid_count = 0;
         while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
                 if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND) 
                         continue;
-                /* FIXME use all non-lo nids, not just first */
-                break;
+                mti->mti_nids[mti->mti_nid_count] = id.nid;
+                mti->mti_nid_count++;
+                if (mti->mti_nid_count >= MTI_NIDS_MAX) {
+                        CWARN("Only using first %d nids for %s\n",
+                              mti->mti_nid_count, mti->mti_svname);
+                        break;
+                }
         }       
-        mti->mti_nid = id.nid;
+      
+        memcpy(mti->mti_failnids, ldd->ldd_failnid, sizeof(mti->mti_failnids));
+        mti->mti_failnid_count = ldd->ldd_failnid_count;
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;
-        mti->mti_stripe_pattern = 0; //FIXME
-        mti->mti_stripe_size = 1024*1024;  //FIXME    
-        mti->mti_stripe_offset = 0; //FIXME    
+        mti->mti_stripe_count = ldd->ldd_stripe_count;
+        mti->mti_stripe_pattern = ldd->ldd_stripe_pattern;
+        mti->mti_stripe_size = ldd->ldd_stripe_sz; 
+        mti->mti_stripe_offset = ldd->ldd_stripe_offset;  
 
         CDEBUG(D_MOUNT, "Initial registration %s, fs=%s, %s, index=%04x\n",
                mti->mti_svname, mti->mti_fsname,
-               libcfs_nid2str(mti->mti_nid), mti->mti_stripe_index);
+               libcfs_nid2str(mti->mti_nids[0]), mti->mti_stripe_index);
 
         /* Register the target */
         /* FIXME use mdc_process_config instead */
@@ -881,16 +890,16 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
                        " %s\n",
                        ldd->ldd_svindex, mti->mti_stripe_index, 
                        mti->mti_svname);
-                ldd->ldd_flags &= ~(LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER);
-                /* This server has never been started, so has no config */
-                ldd->ldd_config_ver = 0;  
                 ldd->ldd_svindex = mti->mti_stripe_index;
                 strncpy(ldd->ldd_svname, mti->mti_svname, 
                         sizeof(ldd->ldd_svname));
                 /* or ldd_make_sv_name(ldd); */
-                ldd_write(&mgc->obd_lvfs_ctxt, ldd);
                 /* FIXME write last_rcvd?, disk label? */
         }
+
+        /* Always write out the new flags */
+        ldd->ldd_flags &= ~(LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER);
+        ldd_write(&mgc->obd_lvfs_ctxt, ldd);
 
 out:
         if (mti)        
@@ -942,7 +951,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
            to read and write configs locally. */
         server_mgc_set_fs(lsi->lsi_mgc, sb);
 
-        /* Get a new index if needed */
+        /* Register if needed */
         if (lsi->lsi_ldd->ldd_flags & 
             (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER)) {
                 CDEBUG(D_MOUNT, "Need new target index from MGS\n");
@@ -1304,7 +1313,7 @@ static int server_fill_super(struct super_block *sb)
 
         /* append ldd nids to lmd nids */
         for (i = 0; (i < lsi->lsi_ldd->ldd_mgsnid_count) && 
-              (lsi->lsi_lmd->lmd_mgsnid_count < MAX_FAILOVER_NIDS); i++) {
+              (lsi->lsi_lmd->lmd_mgsnid_count < MTI_NIDS_MAX); i++) {
                 lsi->lsi_lmd->lmd_mgsnid[lsi->lsi_lmd->lmd_mgsnid_count++] = 
                         lsi->lsi_ldd->ldd_mgsnid[i];
         }
@@ -1475,7 +1484,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         LCONSOLE_ERROR("Can't parse NID '%s'\n", s1);
                         goto invalid;
                 }
-                if (lmd->lmd_mgsnid_count >= MAX_FAILOVER_NIDS) {
+                if (lmd->lmd_mgsnid_count >= MTI_NIDS_MAX) {
                         LCONSOLE_ERROR("Too many NIDs: '%s'\n", s1);
                         goto invalid;
                 }

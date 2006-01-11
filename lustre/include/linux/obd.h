@@ -377,7 +377,8 @@ struct mds_obd {
         struct semaphore                 mds_lov_sem;
         obd_id                          *mds_lov_objids;
         int                              mds_lov_objids_size;
-        __u32                            mds_lov_objids_red;
+        __u32                            mds_lov_objids_in_file;
+        unsigned int                     mds_lov_objids_dirty:1;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
@@ -425,6 +426,7 @@ struct lov_obd {
         struct semaphore lov_lock;
         atomic_t refcount;
         struct lov_desc desc;
+        struct obd_connect_data ocd;
         int bufsize;
         int connects;
         int death_row;      /* Do we have tgts scheduled to be deleted?
