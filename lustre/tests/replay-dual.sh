@@ -2,8 +2,8 @@
 
 set -e
 
-# bug 6088 9761 (CROW related)
-ALWAYS_EXCEPT="8 15a 15b 15c $REPLAY_DUAL_EXCEPT"
+# bug number:  6088 
+ALWAYS_EXCEPT="8    $REPLAY_DUAL_EXCEPT"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
@@ -316,6 +316,7 @@ test_15() {
     df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
+    [ -e $MOUNT1/$tfile-2-0 ] && error "$tfile-2-0 exists"
 
     zconf_mount `hostname` $MOUNT2
     return 0
@@ -369,7 +370,7 @@ test_15a() {
     zconf_mount `hostname` $MOUNT2
     return 0
 }
-run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
+#CROW run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
 
 test_15b() {
     replay_barrier mds
@@ -385,15 +386,12 @@ test_15b() {
     zconf_mount `hostname` $MOUNT2
     return 0
 }
-run_test 15b "multiple delayed OST clear orphans"
+#CROW run_test 15b "multiple delayed OST clear orphans"
 
 test_15c() {
-    local ost_last_id=""
-    local osc_last_id=""
-    
     replay_barrier mds
-    for ((i=0;i<20000;i++)); do
-	echo "data" > "$MOUNT2/${tfile}-$i"
+    for ((i = 0; i < 2000; i++)); do
+	echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
     done
     
     umount $MOUNT2

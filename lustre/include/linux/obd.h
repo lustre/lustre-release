@@ -287,9 +287,6 @@ struct filter_obd {
          *
          * Locking: none, each OST thread uses only one element, determined by
          * its "ordinal number", ->t_id.
-         *
-         * This is (void *) array, because 2.4 and 2.6 use different iobuf
-         * structures.
          */
         struct filter_iobuf    **fo_iobuf_pool;
         int                      fo_iobuf_count;

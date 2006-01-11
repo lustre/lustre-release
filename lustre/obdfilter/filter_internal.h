@@ -151,8 +151,8 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                   obd_size want, obd_size fs_space_left);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
-int filter_alloc_iobuf(struct filter_obd *, int rw, int num_pages,
-                       struct filter_iobuf **ret);
+struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *, int rw,
+                                        int num_pages);
 void filter_free_iobuf(struct filter_iobuf *iobuf);
 int filter_iobuf_add_page(struct obd_device *obd, struct filter_iobuf *iobuf,
                           struct inode *inode, struct page *page);

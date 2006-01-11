@@ -48,6 +48,7 @@
 
 void *buf_alloc;
 int buf_size;
+int opt_verbose;
 
 extern char *lustre_path;
 
@@ -88,6 +89,9 @@ int t1(char *name)
         char path[MAX_PATH_LENGTH] = "";
 
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t1", lustre_path);
+
+        if (opt_verbose)
+                printf("touch+unlink %s\n", path);
 
         t_touch(path);
         t_unlink(path);
@@ -1081,7 +1085,7 @@ struct testlist {
 int main(int argc, char * const argv[])
 {
         struct testlist *test;
-        int opt_index, c, rc = 0, numonly = 0, verbose = 0;
+        int opt_index, c, rc = 0, numonly = 0;
         char *only[100];
         static struct option long_opts[] = {
                 {"dumpfile", 1, 0, 'd'},
@@ -1106,7 +1110,7 @@ int main(int argc, char * const argv[])
                         setenv(ENV_LUSTRE_MNTTGT, optarg, 1);
                         break;
                 case 'v':
-                        verbose++;
+                        opt_verbose++;
                         break;
                 default:
                         usage(argv[0]);
@@ -1126,7 +1130,7 @@ int main(int argc, char * const argv[])
         __liblustre_setup_();
 
         buf_size = _npages * PAGE_SIZE;
-        if (verbose)
+        if (opt_verbose)
                 printf("allocating %d bytes buffer\n", buf_size);
         buf_alloc = calloc(1, buf_size);
         if (buf_alloc == NULL) {

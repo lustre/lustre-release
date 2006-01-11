@@ -1,4 +1,5 @@
 #!/bin/bash
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
 
@@ -77,6 +78,12 @@ start() {
     do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
         --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
         $@ $XMLCONFIG
+    RC=${PIPESTATUS[0]}
+    if [ $RC -ne 0 ]; then
+        # maybe acceptor error, dump tcp port usage
+        netstat -tpn
+    fi
+    return $RC
 }
 
 stop() {

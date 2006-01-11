@@ -296,32 +296,30 @@ static void clear_kiobuf(struct kiobuf *iobuf)
         iobuf->length = 0;
 }
 
-int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
-                       struct filter_iobuf **ret)
+struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
+                                        int rw, int num_pages)
 {
-        int rc;
         struct kiobuf *iobuf;
+        int rc;
         ENTRY;
 
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
 
-        *ret = NULL;
         rc = alloc_kiovec(1, &iobuf);
         if (rc)
-                RETURN(rc);
+                RETURN(ERR_PTR(rc));
 
         rc = expand_kiobuf(iobuf, num_pages);
         if (rc) {
                 free_kiovec(1, &iobuf);
-                RETURN(rc);
+                RETURN(ERR_PTR(rc));
         }
 
 #ifdef HAVE_KIOBUF_DOVARY
         iobuf->dovary = 0; /* this prevents corruption, not present in 2.4.20 */
 #endif
         clear_kiobuf(iobuf);
-        *ret = (void *)iobuf;
-        RETURN(0);
+        RETURN((void *)iobuf);
 }
 
 void filter_free_iobuf(struct filter_iobuf *buf)

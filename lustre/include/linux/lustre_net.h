@@ -105,12 +105,14 @@
  * MDS_MAXREQSIZE ~= 4736 bytes =
  * lustre_msg + ldlm_request + mds_body + mds_rec_create + FNAME_MAX + PATH_MAX
  * MDS_MAXREPSIZE ~= 8300 bytes = lustre_msg + llog_header
+ * or, for mds_close() and mds_reint_unlink() on a many-OST filesystem:
+ *      = 9210 bytes = lustre_msg + mds_body + 160 * (easize + cookiesize)
  *
  * Realistic size is about 512 bytes (20 character name + 128 char symlink),
  * except in the open case where there are a large number of OSTs in a LOV.
  */
 #define MDS_MAXREQSIZE  (5 * 1024)
-#define MDS_MAXREPSIZE  (9 * 1024)
+#define MDS_MAXREPSIZE  max(9 * 1024, 280 + LOV_MAX_STRIPE_COUNT * 56)
 
 #define OST_MAX_THREADS 512UL
 #define OST_DEF_THREADS max_t(unsigned long, 2, \

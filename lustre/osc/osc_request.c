@@ -3353,6 +3353,7 @@ int osc_cleanup(struct obd_device *obd)
         lquota_cleanup(quota_interface, obd);
 
         rc = client_obd_cleanup(obd);
+
         ptlrpc_free_rq_pool(cli->cl_rq_pool);
 
         ptlrpcd_decref();

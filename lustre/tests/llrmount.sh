@@ -1,4 +1,5 @@
 #!/bin/sh
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 export PATH=`dirname $0`/../utils:$PATH
 
@@ -30,7 +31,11 @@ fi
 [ "$DEBUG" ] && portals_opt="$portals_opt --ptldebug=$DEBUG"
 [ "$PTLDEBUG" ] && portals_opt="$portals_opt --ptldebug=$PTLDEBUG"
 
-${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt $@ $conf_opt || exit 2
+${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt $@ $conf_opt || {
+    # maybe acceptor error, dump tcp port usage
+    netstat -tpn
+    exit 2
+}
 
 
 if [ "$MOUNT2" ]; then

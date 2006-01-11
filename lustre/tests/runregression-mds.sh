@@ -26,7 +26,7 @@ cleanup() {
 OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
 if [ -z "$OSCMT" ]; then
 	$LCONF $@ || exit 1
-        trap cleanup 0
+        trap cleanup EXIT
 	OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
 	[ -z "$OSCMT" ] && fail "no lustre filesystem mounted" 1
 fi

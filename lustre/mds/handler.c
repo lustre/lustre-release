@@ -2138,7 +2138,7 @@ static int mds_cleanup(struct obd_device *obd)
 
         /* We can only unlock kernel if we are in the context of sys_ioctl,
            otherwise we never called lock_kernel */
-        if (kernel_locked()) {
+        if (ll_kernel_locked()) {
                 unlock_kernel();
                 must_relock++;
         }

@@ -329,8 +329,8 @@ void get_random_bytes(void *ptr, int size);
 
 /* memory */
 
-/* FIXME */
-#define num_physpages (16 * 1024)
+/* memory size: used for some client tunables */
+#define num_physpages (256 * 1024) /* 1GB */
 
 static inline int copy_from_user(void *a,void *b, int c)
 {

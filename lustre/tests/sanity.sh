@@ -48,6 +48,7 @@ IOPENTEST2=${IOPENTEST2:-iopentest2}
 MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
 ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
+UMOUNT=${UMOUNT:-"umount -d"}
 
 if [ $UID -ne 0 ]; then
     echo "Warning: running as non-root uid $UID"
@@ -115,7 +116,7 @@ run_one() {
 	export TESTNAME=test_$1
 	export tfile=f${testnum}
 	export tdir=d${base}
-	test_$1 || error "test_$1: exit with rc=$?"
+	test_$1 || error "exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
@@ -174,6 +175,7 @@ run_test() {
 error() { 
 	sysctl -w lustre.fail_loc=0
 	log "FAIL: $TESTNAME $@"
+	$LCTL dk $TMP/lustre-log-$TESTNAME.log
 	if [ "$SANITYLOG" ]; then
 		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
 	else
@@ -1200,7 +1202,7 @@ test_32a() {
 	mkdir -p $DIR/d32a/ext2-mountpoint 
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32a/ext2-mountpoint || error
 	$CHECKSTAT -t dir $DIR/d32a/ext2-mountpoint/.. || error  
-	umount $DIR/d32a/ext2-mountpoint || error
+	$UMOUNT $DIR/d32a/ext2-mountpoint || error
 }
 run_test 32a "stat d32a/ext2-mountpoint/.. ====================="
 
@@ -1209,7 +1211,7 @@ test_32b() {
 	mkdir -p $DIR/d32b/ext2-mountpoint 
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32b/ext2-mountpoint || error
 	ls -al $DIR/d32b/ext2-mountpoint/.. || error
-	umount $DIR/d32b/ext2-mountpoint || error
+	$UMOUNT $DIR/d32b/ext2-mountpoint || error
 }
 run_test 32b "open d32b/ext2-mountpoint/.. ====================="
  
@@ -1219,7 +1221,7 @@ test_32c() {
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32c/ext2-mountpoint || error
 	mkdir -p $DIR/d32c/d2/test_dir    
 	$CHECKSTAT -t dir $DIR/d32c/ext2-mountpoint/../d2/test_dir || error
-	umount $DIR/d32c/ext2-mountpoint || error
+	$UMOUNT $DIR/d32c/ext2-mountpoint || error
 }
 run_test 32c "stat d32c/ext2-mountpoint/../d2/test_dir ========="
 
@@ -1229,7 +1231,7 @@ test_32d() {
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32d/ext2-mountpoint || error
 	mkdir -p $DIR/d32d/d2/test_dir    
 	ls -al $DIR/d32d/ext2-mountpoint/../d2/test_dir || error
-	umount $DIR/d32d/ext2-mountpoint || error
+	$UMOUNT $DIR/d32d/ext2-mountpoint || error
 }
 run_test 32d "open d32d/ext2-mountpoint/../d2/test_dir ========="
 
@@ -1289,7 +1291,7 @@ test_32i() {
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32i/ext2-mountpoint || error
 	touch $DIR/d32i/test_file
 	$CHECKSTAT -t file $DIR/d32i/ext2-mountpoint/../test_file || error  
-	umount $DIR/d32i/ext2-mountpoint || error
+	$UMOUNT $DIR/d32i/ext2-mountpoint || error
 }
 run_test 32i "stat d32i/ext2-mountpoint/../test_file ==========="
 
@@ -1299,7 +1301,7 @@ test_32j() {
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32j/ext2-mountpoint || error
 	touch $DIR/d32j/test_file
 	cat $DIR/d32j/ext2-mountpoint/../test_file || error
-	umount $DIR/d32j/ext2-mountpoint || error
+	$UMOUNT $DIR/d32j/ext2-mountpoint || error
 }
 run_test 32j "open d32j/ext2-mountpoint/../test_file ==========="
 
@@ -1310,7 +1312,7 @@ test_32k() {
 	mkdir -p $DIR/d32k/d2
 	touch $DIR/d32k/d2/test_file || error
 	$CHECKSTAT -t file $DIR/d32k/ext2-mountpoint/../d2/test_file || error
-	umount $DIR/d32k/ext2-mountpoint || error
+	$UMOUNT $DIR/d32k/ext2-mountpoint || error
 }
 run_test 32k "stat d32k/ext2-mountpoint/../d2/test_file ========"
 
@@ -1321,7 +1323,7 @@ test_32l() {
 	mkdir -p $DIR/d32l/d2
 	touch $DIR/d32l/d2/test_file
 	cat  $DIR/d32l/ext2-mountpoint/../d2/test_file || error
-	umount $DIR/d32l/ext2-mountpoint || error
+	$UMOUNT $DIR/d32l/ext2-mountpoint || error
 }
 run_test 32l "open d32l/ext2-mountpoint/../d2/test_file ========"
 
@@ -1391,7 +1393,7 @@ test_32q() {
         touch $DIR/d32q/under_the_mount
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32q
 	ls $DIR/d32q/under_the_mount && error || true
-	umount $DIR/d32q || error
+	$UMOUNT $DIR/d32q || error
 }
 run_test 32q "stat follows mountpoints in Lustre (should return error)"
 
@@ -1401,7 +1403,7 @@ test_32r() {
         touch $DIR/d32r/under_the_mount
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32r
 	ls $DIR/d32r | grep -q under_the_mount && error || true
-	umount $DIR/d32r || error
+	$UMOUNT $DIR/d32r || error
 }
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
@@ -1536,7 +1538,7 @@ test_37() {
 	echo f > $DIR/dextra/fbugfile
 	mount -t ext2 -o loop $EXT2_DEV $DIR/dextra
 	ls $DIR/dextra | grep "\<fbugfile\>" && error
-	umount $DIR/dextra || error
+	$UMOUNT $DIR/dextra || error
 	rm -f $DIR/dextra/fbugfile || error
 }
 run_test 37 "ls a mounted file system to check old content ====="
@@ -1554,10 +1556,15 @@ test_39() {
 #	ls -lc  $DIR/test_39_file $DIR/test_39_file2
 	sleep 2
 	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/test_39_file2
-#	ls -l  $DIR/test_39_file $DIR/test_39_file2
-#	ls -lu  $DIR/test_39_file $DIR/test_39_file2
-#	ls -lc  $DIR/test_39_file $DIR/test_39_file2
-	[ $DIR/test_39_file2 -nt $DIR/test_39_file ] || error
+	if [ ! $DIR/test_39_file2 -nt $DIR/test_39_file ]; then
+		echo "mtime"
+		ls -l  $DIR/test_39_file $DIR/test_39_file2
+		echo "atime"
+		ls -lu  $DIR/test_39_file $DIR/test_39_file2
+		echo "ctime"
+		ls -lc  $DIR/test_39_file $DIR/test_39_file2
+		error "O_TRUNC didn't change timestamps"
+	fi
 }
 run_test 39 "mtime changed on create ==========================="
 
@@ -1583,6 +1590,7 @@ count_ost_writes() {
 WRITEBACK_SAVE=500
 
 start_writeback() {
+	trap 0
 	# in 2.6, restore /proc/sys/vm/dirty_writeback_centisecs
 	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
 		echo $WRITEBACK_SAVE > /proc/sys/vm/dirty_writeback_centisecs
@@ -1705,10 +1713,10 @@ test_42d() {
 run_test 42d "test complete truncate of file with cached dirty data"
 
 test_43() {
-	mkdir $DIR/d43
-	cp -p /bin/ls $DIR/d43/f
-	exec 100>> $DIR/d43/f
-	$DIR/d43/f && error || true
+	mkdir $DIR/$tdir
+	cp -p /bin/ls $DIR/$tdir/$tfile
+	exec 100>> $DIR/$tdir/$tfile
+	$DIR/$tdir/$tfile && error || true
 	exec 100<&-
 }
 run_test 43 "execution of file opened for write should return -ETXTBSY"
@@ -2103,7 +2111,7 @@ test_54c() {
 	dd if=/dev/zero of=$tdir/tmp bs=`page_size` count=30 || error "dd write"
 	df $tdir
 	dd if=$tdir/tmp of=/dev/zero bs=`page_size` count=30 || error "dd read"
-	umount $tdir
+	$UMOUNT $tdir
 	losetup -d $loopdev
 	rm $loopdev
 }
@@ -2147,7 +2155,7 @@ test_55() {
         $IOPENTEST2 $DIR/d55 || error "running $IOPENTEST2"
         echo "check for $EXT2_DEV. Please wait..."
         rm -rf $DIR/d55/*
-        umount $DIR/d55 || error "unmounting"
+        $UMOUNT $DIR/d55 || error "unmounting"
 }
 run_test 55 "check iopen_connect_dentry() ======================"
 
@@ -2474,6 +2482,7 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 run_test 67 "supplementary group failure (should return error) ="
 
 cleanup_68() {
+	trap 0
 	if [ "$LOOPDEV" ]; then
 		swapoff $LOOPDEV || error "swapoff failed"
 		losetup -d $LOOPDEV || error "losetup -d failed"
@@ -2609,64 +2618,87 @@ run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
 
 JOIN=${JOIN:-"lfs join"}
 test_75() {
-	rm -rf $DIR/f75*
+	F=$DIR/$tfile
+	F128k=${F}_128k
+	FHEAD=${F}_head
+	FTAIL=${F}_tail
+	rm -f $F*
 
-	dd if=/dev/urandom of=$DIR/f75_128k bs=1024 count=128
-	chmod 777 $DIR/f75_128k
-	cp -p $DIR/f75_128k $DIR/f75_head
-	cp -p $DIR/f75_128k $DIR/f75_tail
-	cat $DIR/f75_128k >> $DIR/f75_sim_sim
-	cat $DIR/f75_128k >> $DIR/f75_sim_sim
+	dd if=/dev/urandom of=${F}_128k bs=1024 count=128 || error "dd failed"
+	chmod 777 ${F128k}
+	cp -p ${F128k} ${FHEAD}
+	cp -p ${F128k} ${FTAIL}
+	cat ${F128k} ${F128k} > ${F}_sim_sim
 
-	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
-	diff $DIR/f75_head $DIR/f75_sim_sim
-	diff -u $DIR/f75_head $DIR/f75_sim_sim || error "files are different"
-	$CHECKSTAT -a $DIR/f75_tail || error "tail file still exist after join"
+	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+	diff ${FHEAD} ${F}_sim_sim
+	diff -u ${FHEAD} ${F}_sim_sim || error "${FHEAD} ${F}_sim_sim differ"
+	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
 
-	cp -p $DIR/f75_128k $DIR/f75_tail
-	cat $DIR/f75_sim_sim >> $DIR/f75_join_sim
-	cat $DIR/f75_128k >> $DIR/f75_join_sim
-	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
-	diff -u $DIR/f75_head $DIR/f75_join_sim
-	diff -u $DIR/f75_head $DIR/f75_join_sim || error "files are different"
-	$CHECKSTAT -a $DIR/f75_tail || error "tail file still exist after join"
+	cp -p ${F128k} ${FTAIL}
+	cat ${F}_sim_sim >> ${F}_join_sim
+	cat ${F128k} >> ${F}_join_sim
+	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+	diff -u ${FHEAD} ${F}_join_sim
+	diff -u ${FHEAD} ${F}_join_sim || \
+		error "${FHEAD} ${F}_join_sim are different"
+	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
 
-	cp -p $DIR/f75_128k $DIR/f75_tail
-	cat $DIR/f75_128k >> $DIR/f75_sim_join
-	cat $DIR/f75_join_sim >> $DIR/f75_sim_join
-	$JOIN $DIR/f75_tail $DIR/f75_head || error "join error"
-	diff -u $DIR/f75_tail $DIR/f75_sim_join || error "files are different"
-	$CHECKSTAT -a $DIR/f75_head || error "tail file still exist after join"
+	cp -p ${F128k} ${FTAIL}
+	cat ${F128k} >> ${F}_sim_join
+	cat ${F}_join_sim >> ${F}_sim_join
+	$JOIN ${FTAIL} ${FHEAD} || error "join error"
+	diff -u ${FTAIL} ${F}_sim_join || \
+		error "${FTAIL} ${F}_sim_join are different"
+	$CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
 
-	cp -p $DIR/f75_128k $DIR/f75_head
-	cp -p $DIR/f75_128k $DIR/f75_head_tmp
-	cat $DIR/f75_sim_sim >> $DIR/f75_join_join
-	cat $DIR/f75_sim_join >> $DIR/f75_join_join
-	$JOIN $DIR/f75_head $DIR/f75_head_tmp || error "join error"
-	$JOIN $DIR/f75_head $DIR/f75_tail || error "join error"
-	diff -u $DIR/f75_head $DIR/f75_join_join || error "files are different"
-	$CHECKSTAT -a $DIR/f75_head_tmp || error "tail file exist after join"
-	$CHECKSTAT -a $DIR/f75_tail || error "tail file still exist after join"
+	cp -p ${F128k} ${FHEAD}
+	cp -p ${F128k} ${FHEAD}_tmp
+	cat ${F}_sim_sim >> ${F}_join_join
+	cat ${F}_sim_join >> ${F}_join_join
+	$JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
+	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+	diff -u ${FHEAD} ${F}_join_join ||error "${FHEAD} ${F}_join_join differ"
+	$CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
+	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
 
-	rm -rf $DIR/f75_head || "delete join file error"
-	cp -p $DIR/f75_128k $DIR/f75_join_10_compare
-	cp -p $DIR/f75_128k $DIR/f75_join_10
-	for ((i=0;i<10;i++)); do
-		cat $DIR/f75_128k >> $DIR/f75_join_10_compare
-		cp -p $DIR/f75_128k $DIR/f75_tail
-		$JOIN $DIR/f75_join_10 $DIR/f75_tail || error "join error"
-		$CHECKSTAT -a $DIR/f75_tail ||error "tail file exist after join"
+	rm -rf ${FHEAD} || "delete join file error"
+	cp -p ${F128k} ${F}_join_10_compare
+	cp -p ${F128k} ${F}_join_10
+	for ((i = 0; i < 10; i++)); do
+		cat ${F128k} >> ${F}_join_10_compare
+		cp -p ${F128k} ${FTAIL}
+		$JOIN ${F}_join_10 ${FTAIL} || \
+			error "join ${F}_join_10 ${FTAIL} error"
+		$CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
 	done
-	diff -u $DIR/f75_join_10 $DIR/f75_join_10_compare || \
-		error "files are different"
-	$LFS getstripe $DIR/f75_join_10
-	$OPENUNLINK $DIR/f75_join_10 $DIR/f75_join_10||error "files unlink open"
+	diff -u ${F}_join_10 ${F}_join_10_compare || \
+		error "files ${F}_join_10 ${F}_join_10_compare are different"
+	$LFS getstripe ${F}_join_10
+	$OPENUNLINK ${F}_join_10 ${F}_join_10 || error "files unlink open"
 
-	rm -rf $DIR/f75*
+	rm -f $F*
 }
-
 run_test 75 "TEST join file"
 
+num_inodes() {
+	awk '/lustre_inode_cache|^inode_cache/ {print $2; exit}' /proc/slabinfo
+}
+
+test_76() { # bug 1443
+	BEFORE_INODES=`num_inodes`
+	echo "before inodes: $BEFORE_INODES"
+	for i in `seq 1000`; do
+		touch $DIR/$tfile
+		rm -f $DIR/$tfile
+	done
+	AFTER_INODES=`num_inodes`
+	echo "after inodes: $AFTER_INODES"
+	[ $AFTER_INODES -gt $((BEFORE_INODES + 10)) ] && \
+		error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
+	true
+}
+run_test 76 "destroy duplicate inodes in client inode cache"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

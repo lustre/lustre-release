@@ -225,7 +225,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
 
         /* times */
         if ((ia_valid & (ATTR_MTIME|ATTR_ATIME)) == (ATTR_MTIME|ATTR_ATIME)) {
-                if (rec->ur_uc.luc_fsuid != inode->i_uid &&
+                if (current->fsuid != inode->i_uid &&
                     (error = ll_permission(inode, MAY_WRITE, NULL)) != 0)
                         RETURN(error);
         }

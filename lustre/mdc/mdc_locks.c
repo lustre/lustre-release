@@ -600,14 +600,15 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
         } else if (!op_data->fid2.id) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
-                   request referenced from this intent, saved for subsequent
-                   lookup. This path is executed when we proceed to this
-                   lookup, so we clear DISP_ENQ_COMPLETE */
+                 * request referenced from this intent, saved for subsequent
+                 * lookup.  This path is executed when we proceed to this
+                 * lookup, so we clear DISP_ENQ_COMPLETE */
                 it_clear_disposition(it, DISP_ENQ_COMPLETE);
         }
         request = *reqp = it->d.lustre.it_data;
         LASSERT(request != NULL);
         LASSERT(request != LP_POISON);
+        LASSERT(request->rq_repmsg != LP_POISON);
 
         /* If we're doing an IT_OPEN which did not result in an actual
          * successful open, then we need to remove the bit which saves

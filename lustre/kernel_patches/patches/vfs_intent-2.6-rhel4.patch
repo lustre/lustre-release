@@ -174,8 +174,8 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
 +				}
 +				if (lookup_flags & LOOKUP_DIRECTORY) {
 +					err = -ENOTDIR;
-+					if(!nd->dentry->d_inode->i_op ||
-+					  !nd->dentry->d_inode->i_op->lookup) {
++					if (!nd->dentry->d_inode->i_op ||
++					    !nd->dentry->d_inode->i_op->lookup){
 +						path_release(nd);
 +						goto return_err;
 +					}

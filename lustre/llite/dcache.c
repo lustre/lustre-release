@@ -134,12 +134,10 @@ void ll_intent_release(struct lookup_intent *it)
         ll_intent_drop_lock(it);
         it->it_magic = 0;
         it->it_op_release = 0;
-        if (it_disposition(it, DISP_ENQ_COMPLETE)) {
-                /* We are still holding extra reference on a request, need to
-                   free it */
-                struct ptlrpc_request *request = it->d.lustre.it_data;
-                ptlrpc_req_finished(request);
-        }
+        /* We are still holding extra reference on a request, need to free it */
+        if (it_disposition(it, DISP_ENQ_COMPLETE))
+                ptlrpc_req_finished(it->d.lustre.it_data);
+
         it->d.lustre.it_disposition = 0;
         it->d.lustre.it_data = NULL;
         EXIT;

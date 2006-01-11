@@ -476,7 +476,7 @@ int ptlrpc_ni_init(void)
 #endif
         if (rc == 0)
                 return 0;
-        
+
         CERROR ("Failed to allocate event queue: %d\n", rc);
         LNetNIFini();
 

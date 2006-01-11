@@ -162,14 +162,13 @@ static int can_be_merged(struct bio *bio, sector_t sector)
         return bio->bi_sector + size == sector ? 1 : 0;
 }
 
-int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
-                       struct filter_iobuf **ret)
+struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
+                                        int rw, int num_pages)
 {
         struct filter_iobuf *iobuf;
 
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
 
-        *ret = NULL;
         OBD_ALLOC(iobuf, sizeof(*iobuf));
         if (iobuf == NULL)
                 goto failed_0;
@@ -191,8 +190,7 @@ int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
         iobuf->dr_max_pages = num_pages;
         iobuf->dr_npages = 0;
 
-        *ret = iobuf;
-        RETURN(0);
+        RETURN(iobuf);
 
  failed_2:
         OBD_FREE(iobuf->dr_pages,
@@ -200,7 +198,7 @@ int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
  failed_1:
         OBD_FREE(iobuf, sizeof(*iobuf));
  failed_0:
-        RETURN(-ENOMEM);
+        RETURN(ERR_PTR(-ENOMEM));
 }
 
 static void filter_clear_iobuf(struct filter_iobuf *iobuf)

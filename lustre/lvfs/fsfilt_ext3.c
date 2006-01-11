@@ -1731,7 +1731,6 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
         struct ext3_sb_info *sbi = EXT3_SB(sb);
         int i, group;
         struct qchk_ctxt *qctxt;
-        struct quota_info *dqopt = sb_dqopt(sb);
         struct buffer_head *bitmap_bh = NULL;
         unsigned long ino;
         struct inode *inode;
@@ -1802,23 +1801,24 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
                 if (qctxt->qckt_first_check[i])
                         continue;
-                
-                LASSERT(dqopt->files[i] != NULL);
+
+
+                LASSERT(sb_dqopt(sb)->files[i] != NULL);
                 INIT_LIST_HEAD(&id_list);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)                
-                rc = lustre_get_qids(dqopt->files[i], NULL, i, &id_list);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
+                rc = lustre_get_qids(sb_dqopt(sb)->files[i], NULL, i, &id_list);
 #else
-                rc = lustre_get_qids(NULL, dqopt->files[i], i, &id_list);
+                rc = lustre_get_qids(NULL, sb_dqopt(sb)->files[i], i, &id_list);
 #endif
                 if (rc)
                         CERROR("read old limits failed. (rc:%d)\n", rc);
-                        
+
                 list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
                         list_del_init(&dqid->di_link);
-                        
+
                         if (!rc)
-                                cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list, 
-                                      dqid->di_id, i, 
+                                cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list,
+                                      dqid->di_id, i,
                                       qctxt->qckt_first_check[i]);
                         kfree(dqid);
                 }

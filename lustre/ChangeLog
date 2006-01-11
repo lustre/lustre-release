@@ -399,13 +399,14 @@ Details    : Check if the client we are about to send or are sending data to
 	     of exit condition at specified intervals).
 
 Severity   : minor
+Frequency  : rare, normally only when NFS exporting is done from client
 Bugzilla   : 9301
-Frequency  : rare
-Description: 'bad disk LOV MAGIC: 0x00000000' error when chown'ing files without
-	     objects
-Details    : Make mds_get_md to recognise empty md case and set lmm size to 0.
+Description: 'bad disk LOV MAGIC: 0x00000000' error when chown'ing files
+	     without objects
+Details    : Make mds_get_md() recognise empty md case and set lmm size to 0.
 
 Severity   : minor
+Frequency  : always, if srand() is called before liblustre initialization
 Bugzilla   : 9794
 Description: Liblustre uses system PRNG disturbing its usage by user application
 Details    : Introduce internal to lustre fast and high-quality PRNG for
@@ -444,8 +445,7 @@ Details    : Starting a ptlrpc service thread can fail if there are a large
 Severity   : minor
 Frequency  : always, only if liblustre and non-default acceptor port was used
 Bugzilla   : 9933
-Description: liblustre could not connect to servers with non-default acceptor
-	     port
+Description: liblustre cannot connect to servers with non-default acceptor port
 Details    : tcpnal_set_default_params() was not called and was therefore
 	     ignoring the environment varaible TCPNAL_PORT, as well as other
 	     TCPNAL_ environment variables
@@ -467,7 +467,7 @@ Details    : link_raw functions used to call d_instantiate without obtaining
 
 Severity   : minor
 Frequency  : rare
-Bugzilla   : 9942,9903
+Bugzilla   : 9942, 9903
 Description: Referencing freed requests leading to crash, memleask with NFS.
 Details    : We used to require that call to ll_revalidate_it was always
 	     followed by ll_lookup_it. Also with revalidate_special() it is
@@ -476,6 +476,50 @@ Details    : We used to require that call to ll_revalidate_it was always
 	     between DISP_ENQ_COMPLETE disposition flag to mean there is extra
 	     reference on a request referred from the intent.
 	     ll_intent_release() then releases such a request.
+
+Severity   : minor
+Frequency  : rare, normally benchmark loads only
+Bugzilla   : 1443
+Description: unlinked inodes were kept in memory on the client
+Details    : If a client is repeatedly creating and unlinking files it
+	     can accumulate a lot of stale inodes in the inode slab cache.
+	     If there is no other client load running this can cause the
+	     client node to run out of memory.  Instead flush old inodes
+	     from client cache that have the same inode number as a new inode.
+
+Severity   : minor
+Frequency  : echo_client brw_test command
+Bugzilla   : 9919
+Description: fix echo_client to work with OST preallocated code
+Details    : OST preallocation code (5137) didn't take echo_client IO path
+	     into account: echo_client calls filter methods outside of any
+	     OST thread and, hence, there is no per-thread preallocated
+	     pages and buffers to use. Solution: hijack pga pages for IO. As
+	     a byproduct, this avoids unnecessary data copying.
+
+Severity   : major
+Frequency  : rare, unless heavy write-truncate concurrency is continuous
+Bugzilla   : 4180, 6984, 7171, 9963, 9331
+Description: OST becomes very slow and/or deadlocked during object unlink
+Details    : filter_destroy() was holding onto the parent directory lock
+	     while truncating+unlinking objects.  For very large objects this
+	     may block other threads for a long time and slow overall OST
+	     responsiveness.  It may also be possible to get a lock ordering
+	     deadlock in this case, or run out of journal credits because of
+	     the combined truncate+unlink.  Solution is to do object truncate
+	     first in one transaction without parent lock, and then do the
+	     final unlink in a new transaction with the parent lock.  This
+	     reduces the lock hold time dramatically.
+
+Severity   : major
+Frequency  : rare, 2.4 kernels only
+Bugzilla   : 9967
+Description: MDS or OST cleanup may trip kernel BUG when dropping kernel lock
+Details    : mds_cleanup() and filter_cleanup() need to drop the kernel lock
+	     before unmounting their filesystem in order to avoid deadlock.
+	     The kernel_locked() function in 2.4 kernels only checks whether
+	     the kernel lock is held, not whether it is this process that is
+	     holding it as 2.6 kernels do.
 
 ------------------------------------------------------------------------------
 

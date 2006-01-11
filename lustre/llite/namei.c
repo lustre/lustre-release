@@ -72,8 +72,27 @@ static int ll_test_inode(struct inode *inode, void *opaque)
         if (inode->i_ino != md->body->ino)
                 return 0;
 #endif
-        if (inode->i_generation != md->body->generation)
+        if (inode->i_generation != md->body->generation) {
+                struct ll_sb_info *sbi = ll_i2sbi(inode);
+                struct ll_inode_info *lli = ll_i2info(inode);
+
+                if (inode->i_state & (I_FREEING | I_CLEAR))
+                        return 0;
+
+                atomic_inc(&inode->i_count);
+                inode->i_nlink = 0;
+                inode->i_state |= I_FREEING;
+                LASSERT(list_empty(&lli->lli_dead_list));
+                /* add "duplicate" inode into deathrow for destroy */
+                spin_lock(&sbi->ll_deathrow_lock);
+                list_add(&lli->lli_dead_list, &sbi->ll_deathrow);
+                spin_unlock(&sbi->ll_deathrow_lock);
+
+                /* remove inode from dirty/io lists */
+                list_del_init(&inode->i_list);
+                
                 return 0;
+        }
 
         /* Apply the attributes in 'opaque' to this inode */
         if (!(inode->i_state & (I_FREEING | I_CLEAR)))

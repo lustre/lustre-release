@@ -25,15 +25,6 @@ Index: linux-2.6.12-rc6/include/linux/fs.h
  #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
  
  extern int vfs_readlink(struct dentry *, char __user *, int, const char *);
-Index: linux-2.6.12-rc6/kernel/kallsyms.c
-===================================================================
---- linux-2.6.12-rc6.orig/kernel/kallsyms.c	2005-06-06 17:22:29.000000000 +0200
-+++ linux-2.6.12-rc6/kernel/kallsyms.c	2005-06-14 15:54:30.293639648 +0200
-@@ -418,3 +418,4 @@
- __initcall(kallsyms_init);
- 
- EXPORT_SYMBOL(__print_symbol);
-+EXPORT_SYMBOL(kernel_text_address);
 Index: linux-2.6.12-rc6/net/core/sock.c
 ===================================================================
 --- linux-2.6.12-rc6.orig/net/core/sock.c	2005-06-06 17:22:29.000000000 +0200

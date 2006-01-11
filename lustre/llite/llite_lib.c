@@ -105,6 +105,9 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         spin_lock(&ll_sb_lock);
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
         spin_unlock(&ll_sb_lock);
+
+        INIT_LIST_HEAD(&sbi->ll_deathrow);
+        spin_lock_init(&sbi->ll_deathrow_lock);
         RETURN(sbi);
 }
 
@@ -414,7 +417,7 @@ void lustre_throw_orphan_dentries(struct super_block *sb)
         struct hlist_node *tmp, *next;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 
-        /* We do this to get rid of orphaned dentries. That is not really trw. */
+        /* Do this to get rid of orphaned dentries. That is not really trw. */
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
                 CWARN("found orphan dentry %.*s (%p->%p) at unmount, dumping "
@@ -429,12 +432,54 @@ void lustre_throw_orphan_dentries(struct super_block *sb)
 #define lustre_throw_orphan_dentries(sb)
 #endif
 
+static void prune_deathrow(struct ll_sb_info *sbi, int try)
+{
+        LIST_HEAD(throw_away);
+        int locked = 0;
+        ENTRY;
+
+        if (try) {
+                locked = spin_trylock(&sbi->ll_deathrow_lock);
+        } else {
+                spin_lock(&sbi->ll_deathrow_lock);
+                locked = 1;
+        }
+
+        if (!locked) {
+                EXIT;
+                return;
+        }
+
+        list_splice_init(&sbi->ll_deathrow, &throw_away);
+        spin_unlock(&sbi->ll_deathrow_lock);
+
+        while (!list_empty(&throw_away)) {
+                struct ll_inode_info *lli;
+                struct inode *inode;
+
+                lli = list_entry(throw_away.next, struct ll_inode_info,
+                                 lli_dead_list);
+                list_del_init(&lli->lli_dead_list);
+
+                inode = ll_info2i(lli);
+                d_prune_aliases(inode);
+
+                CDEBUG(D_INODE, "prune duplicate inode %p inum %lu count %u\n",
+                       inode, inode->i_ino, atomic_read(&inode->i_count));
+                iput(inode);
+        }
+        EXIT;
+}
+
 void lustre_common_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
 
         ll_close_thread_shutdown(sbi->ll_lcq);
+
+        /* destroy inodes in deathrow */
+        prune_deathrow(sbi, 0);
 
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp);
@@ -448,6 +493,7 @@ void lustre_common_put_super(struct super_block *sb)
         obd_disconnect(sbi->ll_mdc_exp);
 
         lustre_throw_orphan_dentries(sb);
+
         EXIT;
 }
 
@@ -562,6 +608,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
         lli->lli_inode_magic = LLI_INODE_MAGIC;
+        INIT_LIST_HEAD(&lli->lli_dead_list);
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
@@ -997,6 +1044,10 @@ void ll_clear_inode(struct inode *inode)
 #endif
 
         lli->lli_inode_magic = LLI_INODE_DEAD;
+
+        spin_lock(&sbi->ll_deathrow_lock);
+        list_del_init(&lli->lli_dead_list);
+        spin_unlock(&sbi->ll_deathrow_lock);
 
         EXIT;
 }
@@ -1681,7 +1732,13 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset,struct super_block *sb)
 {
         struct lustre_md md;
+        struct ll_sb_info *sbi = NULL;
         int rc = 0;
+        ENTRY;
+
+        LASSERT(*inode || sb);
+        sbi = sb ? ll_s2sbi(sb) : ll_i2sbi(*inode);
+        prune_deathrow(sbi, 1);
 
         rc = mdc_req2lustre_md(req, offset, exp, &md);
         if (rc)

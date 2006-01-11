@@ -15,9 +15,10 @@ COUNT=${COUNT:-100}
 
 cleanup() {
 	[ $CR_PID ] && kill -9 $CR_PID
+	[ $ST_PID ] && kill -9 $ST_PID
 }
 
-trap cleanup 0
+trap cleanup EXIT
 
 LOCKDIR=$DIR/lockdir
 LOCKFILE=$LOCKDIR/lockfile

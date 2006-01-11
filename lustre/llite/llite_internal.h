@@ -84,6 +84,8 @@ struct ll_inode_info {
 
         struct posix_acl       *lli_posix_acl;
 
+        struct list_head        lli_dead_list;
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
@@ -173,6 +175,9 @@ struct ll_sb_info {
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
         struct file_operations   *ll_fop;
+
+        struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
+        spinlock_t                ll_deathrow_lock;
 };
 
 struct ll_ra_read {

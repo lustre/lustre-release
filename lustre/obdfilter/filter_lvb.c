@@ -70,8 +70,12 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         LASSERT(obd != NULL);
 
         dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
-        if (IS_ERR(dentry))
-                RETURN(PTR_ERR(dentry));
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("%s: bad object "LPU64"/"LPU64": rc %d\n", obd->obd_name,
+                       res->lr_name.name[0], res->lr_name.name[1], rc);
+                RETURN(rc);
+        }
 
         if (dentry->d_inode == NULL)
                 GOTO(out_dentry, rc = -ENOENT);

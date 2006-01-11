@@ -45,6 +45,7 @@
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 # include <linux/mount.h>
 # include <linux/buffer_head.h>
+# include <linux/security.h>
 #endif
 
 #include <linux/obd_class.h>
@@ -57,6 +58,7 @@
 #include <linux/lustre_commit_confd.h>
 #include <libcfs/list.h>
 #include <linux/lustre_quota.h>
+#include <linux/quotaops.h>
 
 #include "filter_internal.h"
 
@@ -779,11 +781,13 @@ static int filter_prep(struct obd_device *obd)
                 GOTO(err_filp, rc = -ENOENT);
         }
 
-        /* steal operations */
-        inode = file->f_dentry->d_inode;
-        filter->fo_fop = file->f_op;
-        filter->fo_iop = inode->i_op;
-        filter->fo_aops = inode->i_mapping->a_ops;
+        inode = file->f_dentry->d_parent->d_inode;
+        /* We use i_op->unlink directly in filter_vfs_unlink() */
+        if (!inode->i_op || !inode->i_op->create || !inode->i_op->unlink) {
+                CERROR("%s: filesystem does not support create/unlink ops\n",
+                       obd->obd_name);
+                GOTO(err_filp, rc = -EOPNOTSUPP);
+        }
 
         rc = filter_init_server_data(obd, file);
         if (rc) {
@@ -794,7 +798,7 @@ static int filter_prep(struct obd_device *obd)
         file = filp_open(HEALTH_CHECK, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
-                CERROR("OBD filter: cannot open/create %s rc = %d\n", 
+                CERROR("OBD filter: cannot open/create %s rc = %d\n",
                         HEALTH_CHECK, rc);
                 GOTO(err_filp, rc);
         }
@@ -1027,7 +1031,60 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
         RETURN(rc);
 }
 
+/* This is vfs_unlink() without down(i_sem).  If we call regular vfs_unlink()
+ * we have 2.6 lock ordering issues with filter_commitrw_write() as it takes
+ * i_sem before starting a handle, while filter_destroy() + vfs_unlink do the
+ * reverse.  Caller must take i_sem before starting the transaction and we
+ * drop it here before the inode is removed from the dentry.  bug 4180/6984 */
+int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
+{
+        int rc;
+        ENTRY;
+
+        /* don't need dir->i_zombie for 2.4, it is for rename/unlink of dir
+         * itself we already hold dir->i_sem for child create/unlink ops */
+        LASSERT(down_trylock(&dir->i_sem) != 0);
+        LASSERT(down_trylock(&dentry->d_inode->i_sem) != 0);
+
+        /* may_delete() */
+        if (!dentry->d_inode || dentry->d_parent->d_inode != dir)
+                GOTO(out, rc = -ENOENT);
+
+        rc = ll_permission(dir, MAY_WRITE | MAY_EXEC, NULL);
+        if (rc)
+                GOTO(out, rc);
+
+        if (IS_APPEND(dir))
+                GOTO(out, rc = -EPERM);
+
+        /* check_sticky() */
+        if ((dentry->d_inode->i_uid != current->fsuid && !capable(CAP_FOWNER))||
+            IS_APPEND(dentry->d_inode) || IS_IMMUTABLE(dentry->d_inode))
+                GOTO(out, rc = -EPERM);
+
+        /* NOTE: This might need to go outside i_sem, though it isn't clear if
+         *       that was done because of journal_start (which is already done
+         *       here) or some other ordering issue. */
+        DQUOT_INIT(dir);
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        rc = security_inode_unlink(dir, dentry);
+        if (rc)
+                GOTO(out, rc);
+#endif
+
+        rc = dir->i_op->unlink(dir, dentry);
+out:
+        /* need to drop i_sem before we lose inode reference */
+        up(&dentry->d_inode->i_sem);
+        if (rc == 0)
+                d_delete(dentry);
+
+        RETURN(rc);
+}
+
 /* Caller must hold LCK_PW on parent and push us into kernel context.
+ * Caller must hold child i_sem, we drop it always.
  * Caller is also required to ensure that dchild->d_inode exists. */
 static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
                                    struct dentry *dparent,
@@ -1035,7 +1092,6 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
 {
         struct inode *inode = dchild->d_inode;
         int rc;
-        ENTRY;
 
         if (inode->i_nlink != 1 || atomic_read(&inode->i_count) != 1) {
                 CERROR("destroying objid %.*s ino %lu nlink %lu count %d\n",
@@ -1044,11 +1100,11 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
                        atomic_read(&inode->i_count));
         }
 
-        rc = vfs_unlink(dparent->d_inode, dchild);
+        rc = filter_vfs_unlink(dparent->d_inode, dchild);
         if (rc)
                 CERROR("error unlinking objid %.*s: rc %d\n",
                        dchild->d_name.len, dchild->d_name.name, rc);
-        RETURN(rc);
+        return(rc);
 }
 
 static int filter_intent_policy(struct ldlm_namespace *ns,
@@ -1300,21 +1356,23 @@ static int filter_iobuf_pool_init(struct filter_obd *filter)
  * If we haven't allocated a pool entry for this thread before, do so now. */
 void *filter_iobuf_get(struct filter_obd *filter, struct obd_trans_info *oti)
 {
-        int thread_id = oti ? oti->oti_thread_id : -1;
-        struct filter_iobuf *pool_local;
-        struct filter_iobuf **pool;
+        int thread_id                    = oti ? oti->oti_thread_id : -1;
+        struct filter_iobuf  *pool       = NULL;
+        struct filter_iobuf **pool_place = NULL;
 
         if (thread_id >= 0) {
-        LASSERT(thread_id < filter->fo_iobuf_count);
-                pool = &filter->fo_iobuf_pool[thread_id];
-        } else
-                pool = &pool_local;
+                LASSERT(thread_id < filter->fo_iobuf_count);
+                pool = *(pool_place = &filter->fo_iobuf_pool[thread_id]);
+        }
 
-        if (unlikely(thread_id < 0 || *pool == NULL))
-                filter_alloc_iobuf(filter, OBD_BRW_WRITE,
-                                   PTLRPC_MAX_BRW_PAGES, pool);
+        if (unlikely(pool == NULL)) {
+                pool = filter_alloc_iobuf(filter, OBD_BRW_WRITE,
+                                          PTLRPC_MAX_BRW_PAGES);
+                if (pool_place != NULL)
+                        *pool_place = pool;
+        }
 
-        return *pool;
+        return pool;
 }
 
 /* mount the file system (secretly).  lustre_cfg parameters are:
@@ -1630,7 +1688,7 @@ static int filter_cleanup(struct obd_device *obd)
 
         /* We can only unlock kernel if we are in the context of sys_ioctl,
            otherwise we never called lock_kernel */
-        if (kernel_locked()) {
+        if (ll_kernel_locked()) {
                 unlock_kernel();
                 must_relock++;
         }
@@ -2587,12 +2645,13 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         struct obd_device *obd;
         struct filter_obd *filter;
-        struct dentry *dchild = NULL, *dparent = NULL;
+        struct dentry *dchild = NULL, *dparent;
         struct lvfs_run_ctxt saved;
         void *handle = NULL;
         struct llog_cookie *fcc = NULL;
-        int rc, rc2, cleanup_phase = 0, have_prepared = 0;
+        int rc, rc2, cleanup_phase = 0;
         obd_gr group = 0;
+        struct iattr iattr;
         ENTRY;
 
         if (oa->o_valid & OBD_MD_FLGROUP)
@@ -2602,14 +2661,9 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         filter = &obd->u.filter;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
- acquire_locks:
-        dparent = filter_parent_lock(obd, group, oa->o_id);
-        if (IS_ERR(dparent))
-                GOTO(cleanup, rc = PTR_ERR(dparent));
         cleanup_phase = 1;
 
-        dchild = filter_fid2dentry(obd, dparent, group, oa->o_id);
+        dchild = filter_fid2dentry(obd, NULL, group, oa->o_id);
         if (IS_ERR(dchild))
                 GOTO(cleanup, rc = PTR_ERR(dchild));
         cleanup_phase = 2;
@@ -2626,31 +2680,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc = -ENOENT);
         }
 
-        if (!have_prepared) {
-                /* If we're really going to destroy the object, get ready
-                 * by getting the clients to discard their cached data.
-                 *
-                 * We have to drop the parent lock, because
-                 * filter_prepare_destroy will acquire a PW on the object, and
-                 * we don't want to deadlock with an incoming write to the
-                 * object, which has the extent PW and then wants to get the
-                 * parent dentry to do the lookup.
-                 *
-                 * We dput the child because it's not worth the extra
-                 * complication of condition the above code to skip it on the
-                 * second time through. */
-                f_dput(dchild);
-                filter_parent_unlock(dparent);
-
-                filter_prepare_destroy(obd, oa->o_id);
-                have_prepared = 1;
-                goto acquire_locks;
-        }
-
-        handle = fsfilt_start_log(obd, dparent->d_inode,FSFILT_OP_UNLINK,oti,1);
-        if (IS_ERR(handle))
-                GOTO(cleanup, rc = PTR_ERR(handle));
-        cleanup_phase = 3;
+        filter_prepare_destroy(obd, oa->o_id);
 
         /* Our MDC connection is established by the MDS to us */
         if (oa->o_valid & OBD_MD_FLCOOKIE) {
@@ -2659,14 +2689,58 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                         memcpy(fcc, obdo_logcookie(oa), sizeof(*fcc));
         }
 
+        /* we're gonna truncate it first in order to avoid possible deadlock:
+         *      P1                      P2
+         * open trasaction      open transaction
+         * down(i_zombie)       down(i_zombie)
+         *                      restart transaction
+         * (see BUG 4180) -bzzz
+         */
+        down(&dchild->d_inode->i_sem);
+        handle = fsfilt_start_log(obd, dchild->d_inode, FSFILT_OP_SETATTR,
+                                  NULL, 1);
+        if (IS_ERR(handle)) {
+                up(&dchild->d_inode->i_sem);
+                GOTO(cleanup, rc = PTR_ERR(handle));
+        }
+
+        iattr.ia_valid = ATTR_SIZE;
+        iattr.ia_size = 0;
+        rc = fsfilt_setattr(obd, dchild, handle, &iattr, 1);
+        rc2 = fsfilt_commit(obd, dchild->d_inode, handle, 0);
+        up(&dchild->d_inode->i_sem);
+        if (rc)
+                GOTO(cleanup, rc);
+        if (rc2)
+                GOTO(cleanup, rc = rc2);
+
+        /* We don't actually need to lock the parent until we are unlinking
+         * here, and not while truncating above.  That avoids holding the
+         * parent lock for a long time during truncate, which can block other
+         * threads from doing anything to objects in that directory. bug 7171 */
+        dparent = filter_parent_lock(obd, group, oa->o_id);
+        if (IS_ERR(dparent))
+                GOTO(cleanup, rc = PTR_ERR(dparent));
+        cleanup_phase = 3; /* filter_parent_unlock */
+
+        down(&dchild->d_inode->i_sem);
+        handle = fsfilt_start_log(obd, dparent->d_inode,FSFILT_OP_UNLINK,oti,1);
+        if (IS_ERR(handle)) {
+                up(&dchild->d_inode->i_sem);
+                GOTO(cleanup, rc = PTR_ERR(handle));
+        }
+        cleanup_phase = 4; /* fsfilt_commit */
+
         /* Quota release need uid/gid of inode */
         obdo_from_inode(oa, dchild->d_inode, OBD_MD_FLUID|OBD_MD_FLGID);
+
+        /* this drops dchild->d_inode->i_sem unconditionally */
         rc = filter_destroy_internal(obd, oa->o_id, dparent, dchild);
 
         EXIT;
 cleanup:
         switch(cleanup_phase) {
-        case 3:
+        case 4:
                 if (fcc != NULL) {
                         fsfilt_add_journal_cb(obd, 0,
                                               oti ? oti->oti_handle : handle,
@@ -2679,11 +2753,11 @@ cleanup:
                         if (!rc)
                                 rc = rc2;
                 }
+        case 3:
+                filter_parent_unlock(dparent);
         case 2:
                 f_dput(dchild);
         case 1:
-                filter_parent_unlock(dparent);
-        case 0:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 break;
         default:

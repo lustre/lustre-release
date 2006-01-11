@@ -2,7 +2,7 @@ Index: linux-2.6.12/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.12.orig/fs/ext3/super.c	2005-06-17 13:48:29.000000000 -0600
 +++ linux-2.6.12/fs/ext3/super.c	2005-11-25 05:59:47.000000000 -0700
-@@ -2165,13 +2165,12 @@
+@@ -2165,13 +2165,13 @@
  {
  	struct ext3_super_block *es = EXT3_SB(sb)->s_es;
  	unsigned long overhead;
@@ -15,10 +15,11 @@ Index: linux-2.6.12/fs/ext3/super.c
 -		ngroups = EXT3_SB(sb)->s_groups_count;
 +		unsigned long ngroups = EXT3_SB(sb)->s_groups_count, group;
 +		unsigned long three = 1, five = 5, seven = 7;
++		unsigned long metabg = -1UL;
  		smp_rmb();
  
  		/*
-@@ -2189,11 +2188,13 @@
+@@ -2189,11 +2188,14 @@
  		 * block group descriptors.  If the sparse superblocks
  		 * feature is turned on, then not all groups have this.
  		 */
@@ -28,12 +29,13 @@ Index: linux-2.6.12/fs/ext3/super.c
 -			cond_resched();
 -		}
 +		overhead += 1 + EXT3_SB(sb)->s_gdb_count; /* group 0 */
++		if (EXT3_HAS_INCOMPAT_FEATURE(sb,EXT3_FEATURE_INCOMPAT_META_BG))
++			metabg =le32_to_cpu(EXT3_SB(sb)->s_es->s_first_meta_bg);
 +
-+		while ((group = ext3_list_backups(sb,&three,&five,&seven)) <
-+		       ngroups)
-+			overhead += 1 + group >
-+				LDISKFS_SB(sb)->s_es->s_first_meta_bg ? 1 :
-+				LDISKFS_SB(sb)->s_gdb_count;
++		while ((group = ext3_list_backups(sb, &three, &five, &seven)) <
++		       ngroups) /* sb + group descriptors backups */
++			overhead += 1 + (group >= metabg ? 1 :
++					 EXT3_SB(sb)->s_gdb_count);
  
  		/*
  		 * Every block group has an inode bitmap, a block
@@ -70,7 +72,7 @@ Index: linux-2.6.12/fs/ext3/resize.c
 +				unsigned long *five, unsigned long *seven)
  {
 -	unsigned *min = three;
-+	int first_metabg = le32_to_cpu(LDISKFS_SB(sb)->s_es->s_first_meta_bg);
++	unsigned long metabg = le32_to_cpu(EXT3_SB(sb)->s_es->s_first_meta_bg);
 +	unsigned long *min = three, ret;
  	int mult = 3;
 -	unsigned ret;
@@ -84,24 +86,28 @@ Index: linux-2.6.12/fs/ext3/resize.c
  		return ret;
  	}
  
-@@ -308,8 +307,22 @@
+@@ -308,8 +307,26 @@
  		mult = 7;
  	}
  
 -	ret = *min;
 -	*min *= mult;
-+	if (EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_META_BG) &&
-+	    *min > first_metabg)) {
-+		if (*min & (EXT3_DESC_PER_BLOCK(sb) - 1)) {
-+			ret = first_metabg);
-+			*three = (first_metabg |
-+				  (EXT3_DESC_PER_BLOCK(sb) - 1)) + 1;
-+			*five = -1UL;
-+			*seven = -1UL;
-+		} else {
-+			ret = *three;
-+			*three += EXT3_DESC_PER_BLOCK(sb);
++	if (EXT3_HAS_INCOMPAT_FEATURE(sb,EXT3_FEATURE_INCOMPAT_META_BG) &&
++	    *min >= metabg * EXT3_DESC_PER_BLOCK(sb)) {
++		ret = *min;
++		switch (ret & (EXT3_DESC_PER_BLOCK(sb) - 1)) {
++		case 0:
++			*three = ret + 1;
++			break;
++		case 1:
++			*three = ret + EXT3_DESC_PER_BLOCK(sb) - 2;
++			break;
++		default:
++			*three = (ret | (EXT3_DESC_PER_BLOCK(sb) - 1)) + 1;
++			break;
 +		}
++		*five = -1UL;
++		*seven = -1UL;
 +	} else {
 +		ret = *min;
 +		*min *= mult;

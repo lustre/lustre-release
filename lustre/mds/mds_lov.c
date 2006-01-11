@@ -160,7 +160,7 @@ int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp)
                 CERROR("can't get lov_desc, rc %d\n", rc);
                 RETURN(rc);
         }
-                
+
         mds->mds_has_lov_desc = 1;
         tgt_count = mds->mds_lov_desc.ld_tgt_count;
         stripes = min(tgt_count, LOV_MAX_STRIPE_COUNT);

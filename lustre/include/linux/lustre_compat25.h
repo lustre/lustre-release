@@ -61,6 +61,7 @@ void groups_free(struct group_info *ginfo);
 
 #define lock_24kernel()         do {} while (0)
 #define unlock_24kernel()       do {} while (0)
+#define ll_kernel_locked()      kernel_locked()
 
 /*
  * OBD need working random driver, thus all our
@@ -155,6 +156,7 @@ static inline int cleanup_group_info(void)
 
 #define lock_24kernel()         lock_kernel()
 #define unlock_24kernel()       unlock_kernel()
+#define ll_kernel_locked()      (current->lock_depth >= 0)
 
 #ifdef HAVE_MM_INLINE
 #include <linux/mm_inline.h>
