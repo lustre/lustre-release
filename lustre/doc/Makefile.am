@@ -24,7 +24,7 @@ LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
 CLEANFILES = *.aux *.tex *.log *.pdf
 
 EXTRA_DIST = tex2pdf $(man_MANS) \
-	$(LYXFILES) lfs.1 lmc.1 lwizard.1 lconf.8 lctl.8	
+	$(LYXFILES) lfs.1 lmc.1 lconf.8 lctl.8	
 
 all:
 
