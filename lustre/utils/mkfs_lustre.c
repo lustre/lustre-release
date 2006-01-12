@@ -532,7 +532,8 @@ void print_ldd(struct lustre_disk_data *ldd)
         printf("Flags:      %s%s%s%s\n",
                IS_MDT(ldd) ? "MDT ":"", IS_OST(ldd) ? "OST ":"",
                IS_MGMT(ldd) ? "MGMT ":"",
-               ldd->ldd_flags & LDD_F_NEED_INDEX   ? "needs_index ":"");
+               ldd->ldd_flags & LDD_F_NEED_INDEX   ? "needs_index ":"",
+               ldd->ldd_flags & LDD_F_NEED_REGISTER   ? "must_register ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
         printf("MGS nids: ");
         for (i = 0; i < ldd->ldd_mgsnid_count; i++) {

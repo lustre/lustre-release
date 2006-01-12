@@ -1074,7 +1074,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         if (cli->cl_max_mds_easize < size)
                 cli->cl_max_mds_easize = size;
 
-        rc = obd_get_info(lov_exp, strlen("lovdesc") + 1, "lovdesc",
+        rc = obd_get_info(lov_exp, strlen(KEY_LOVDESC) + 1, KEY_LOVDESC,
                           &valsize, &desc);
         if (rc)
                 RETURN(rc);

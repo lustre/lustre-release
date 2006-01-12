@@ -138,16 +138,6 @@ int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 
         LASSERT(mds->mds_lov_objids != NULL);
 
-        // FIXME remove all this debug stuff
-        CERROR("Clearorphans, %d targets\n", mds->mds_lov_desc.ld_tgt_count);
-        for (rc = 0; rc < mds->mds_lov_desc.ld_tgt_count; rc++)
-                CDEBUG(D_WARNING, "clearorphans "LPU64" for idx %d\n",
-                       mds->mds_lov_objids[rc], rc);
-        /* FIXME --- can't clearorphans for lov tgts that the mds does not
-           know about yet!  can only clearorphans on 
-           mds->mds_lov_desc.ld_tgt_count (if that - if late tgt joins
-           first, is that okay?) */
-
         /* This create will in fact either create or destroy:  If the OST is
          * missing objects below this ID, they will be created.  If it finds
          * objects above this ID, they will be removed. */
@@ -197,7 +187,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         if (!ld)
                 RETURN(-ENOMEM);
 
-        rc = obd_get_info(lov, strlen("lovdesc") + 1, "lovdesc",
+        rc = obd_get_info(lov, strlen(KEY_LOVDESC) + 1, KEY_LOVDESC,
                           &valsize, ld);
         if (rc)
                 GOTO(out, rc);
@@ -280,7 +270,7 @@ static int mds_lov_add_ost(struct obd_device *obd, struct obd_device *watched,
                 mds->mds_lov_objids_dirty = 1;
                 mds_lov_write_objids(obd);
         } else {
-                /* We did read this lastid; tell the osc */ 
+                /* We have read this lastid from disk; tell the osc */ 
                 rc = mds_lov_set_nextid(obd);
         }
 
@@ -613,7 +603,7 @@ static int __mds_lov_synchronize(void *data)
         struct mds_obd *mds;
         struct obd_uuid *uuid = NULL;
         __u32  idx;
-        int rc = 0, have_sem = 0;
+        int rc = 0;
         ENTRY;
 
         obd = mlsi->mlsi_obd;
@@ -625,17 +615,14 @@ static int __mds_lov_synchronize(void *data)
 
         OBD_FREE(mlsi, sizeof(*mlsi));
 
-        LASSERT(obd != NULL);
+        LASSERT(obd);
 
-        /* We can't change the target count in one of these sync
-           threads while another sync thread is doing clearorphans on
-           all the targets. 
-           If we're syncing a particular target, or we're not 
-           changing the target_count, then we don't need the sem */
-        if (!watched || (idx != MLSI_NO_INDEX)) {
-                down(&mds->mds_lov_sem);
-                have_sem++;
-        }
+        /* We only sync one osc at a time, so that we don't have to hold
+           any kind of lock on the whole mds_lov_desc, which may change 
+           (grow) as a result of mds_lov_add_ost.  This also avoids any
+           kind of mismatch between the lov_desc and the mds_lov_desc, 
+           which are not in lock-step during lov_add_obd */
+        LASSERT(uuid);
 
         if (idx != MLSI_NO_INDEX) {
                 rc = mds_lov_add_ost(obd, watched, idx);
@@ -658,12 +645,8 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
         }
 
-        if (uuid)
-                CWARN("MDS %s: %s now active, resetting orphans\n",
-                      obd->obd_name, (char *)uuid->uuid);
-        else
-                CWARN("MDS %s: All %d OSC's now active, resetting orphans\n",
-                      obd->obd_name, mds->mds_lov_desc.ld_tgt_count);
+        CWARN("MDS %s: %s now active, resetting orphans\n",
+              obd->obd_name, (char *)uuid->uuid);
 
         if (obd->obd_stopping)
                 GOTO(out, rc = -ENODEV);
@@ -676,8 +659,6 @@ static int __mds_lov_synchronize(void *data)
         }
 
 out:
-        if (have_sem) 
-                up(&mds->mds_lov_sem);
         class_decref(obd);
         RETURN(rc);
 }
@@ -707,6 +688,8 @@ int mds_lov_start_synchronize(struct obd_device *obd,
         int rc;
 
         ENTRY;
+
+        LASSERT(watched);
 
         OBD_ALLOC(mlsi, sizeof(*mlsi));
         if (mlsi == NULL)
@@ -755,8 +738,16 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         int rc = 0;
         ENTRY;
 
-        if (ev != OBD_NOTIFY_ACTIVE)
+        switch (ev) {
+        case OBD_NOTIFY_ACTIVE:
+        case OBD_NOTIFY_SYNC:
+        case OBD_NOTIFY_SYNC_NONBLOCK:
+                break;
+        default:
                 RETURN(0);
+        }
+
+        CDEBUG(D_WARNING, "notify %s ev=%d\n", watched->obd_name, ev);
 
         if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 CERROR("unexpected notification of %s %s!\n",
@@ -773,7 +764,8 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         } 
 
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
-        rc = mds_lov_start_synchronize(obd, watched, data, 1);
+        rc = mds_lov_start_synchronize(obd, watched, data, 
+                                       !(ev == OBD_NOTIFY_SYNC));
         RETURN(rc);
 }
 

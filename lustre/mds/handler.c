@@ -1528,7 +1528,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         sema_init(&mds->mds_orphan_recovery_sem, 1);
         sema_init(&mds->mds_epoch_sem, 1);
-        sema_init(&mds->mds_lov_sem, 1);
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
@@ -1753,7 +1752,7 @@ int mds_postrecov(struct obd_device *obd)
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
 
-        /* FIXME just put this in the synchronize, why not? */
+        /* FIXME why not put this in the synchronize? */
         /* set nextid first, so we are sure it happens */
         rc = mds_lov_set_nextid(obd);
         if (rc) 
@@ -1767,8 +1766,12 @@ int mds_postrecov(struct obd_device *obd)
                 item = rc;
         }
 
-        /* Does target_finish_recovery really need this to be synchronous? */
-        mds_lov_start_synchronize(obd, NULL, NULL, obd->obd_async_recov);
+        /* FIXME Does target_finish_recovery really need this to block? */
+        /* Notify the LOV, which will in turn call mds_notify for each tgt */
+        obd_notify(obd->u.mds.mds_osc_obd, NULL, 
+                   obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
+                   OBD_NOTIFY_SYNC, NULL);
+        //mds_lov_start_synchronize(obd, NULL, NULL, obd->obd_async_recov);
 
 out:
         RETURN(rc < 0 ? rc : item);

@@ -83,7 +83,8 @@ static struct config_llog_data *config_log_get(char *logname,
         int match_instance = 0;
 
         if (cfg) {
-                CDEBUG(D_MGC, "get log %s:%s\n", logname, cfg->cfg_instance);
+                CDEBUG(D_MGC, "get log %s:%s\n", logname ? logname : "-",
+                       cfg->cfg_instance ? cfg->cfg_instance : "-");
                 if (cfg->cfg_instance)
                         match_instance++;
         }

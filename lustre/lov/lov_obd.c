@@ -399,18 +399,21 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                       enum obd_notify_event ev, void *data)
 {
-        int rc;
-        struct obd_uuid *uuid;
-
-        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
-                CERROR("unexpected notification of %s %s!\n",
-                       watched->obd_type->typ_name,
-                       watched->obd_name);
-                return -EINVAL;
-        }
-        uuid = &watched->u.cli.cl_import->imp_target_uuid;
+        int rc = 0;
 
         if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE) {
+                struct obd_uuid *uuid;
+
+                LASSERT(watched);
+
+                if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+                        CERROR("unexpected notification of %s %s!\n",
+                               watched->obd_type->typ_name,
+                               watched->obd_name);
+                        return -EINVAL;
+                }
+                uuid = &watched->u.cli.cl_import->imp_target_uuid;
+
                 /* Set OSC as active before notifying the observer, so the
                  * observer can use the OSC normally.
                  */
@@ -427,7 +430,29 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         }
 
         /* Pass the notification up the chain. */
-        rc = obd_notify_observer(obd, watched, ev, data);
+        if (watched) {
+                rc = obd_notify_observer(obd, watched, ev, data);
+        } else {
+                /* NULL watched means all osc's in the lov (only for syncs) */
+                struct lov_obd *lov = &obd->u.lov;
+                struct lov_tgt_desc *tgt;
+                struct obd_device *tgt_obd;
+                int i;
+                for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; 
+                      i++, tgt++) {
+                        if (obd_uuid_empty(&tgt->uuid))
+                                continue;
+                        tgt_obd = class_exp2obd(tgt->ltd_exp);
+                        rc = obd_notify_observer(obd, tgt_obd, ev, data);
+                        if (rc) {
+                                CERROR("%s: notify %s of %s failed %d\n",
+                                       obd->obd_name, 
+                                       obd->obd_observer->obd_name,
+                                       tgt_obd->obd_name, rc);
+                                break;
+                        }
+                }
+        }
 
         RETURN(rc);
 }
@@ -2186,7 +2211,8 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                                 GOTO(out, rc);
                 }
                 GOTO(out, rc = 0);
-        } else if (keylen >= strlen("lovdesc") && strcmp(key, "lovdesc") == 0) {
+        } else if (keylen >= strlen(KEY_LOVDESC) && 
+                   strcmp(key, KEY_LOVDESC) == 0) {
                 struct lov_desc *desc_ret = val;
                 *desc_ret = lov->desc;
 

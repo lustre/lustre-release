@@ -318,6 +318,7 @@ struct client_obd {
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
         struct osc_creator       cl_oscc;
+
         /* mgc datastruct */
         struct semaphore         cl_mgc_sem;
         struct vfsmount         *cl_mgc_vfsmnt;
@@ -374,7 +375,6 @@ struct mds_obd {
         char                            *mds_profile;
         struct obd_export               *mds_osc_exp; /* XXX lov_exp */
         struct lov_desc                  mds_lov_desc;
-        struct semaphore                 mds_lov_sem;
         obd_id                          *mds_lov_objids;
         int                              mds_lov_objids_size;
         __u32                            mds_lov_objids_in_file;
@@ -540,7 +540,10 @@ enum obd_notify_event {
         /* Device deactivated */
         OBD_NOTIFY_INACTIVE,
         /* Connect data for import were changed */
-        OBD_NOTIFY_OCD
+        OBD_NOTIFY_OCD,
+        /* Sync request */
+        OBD_NOTIFY_SYNC_NONBLOCK,
+        OBD_NOTIFY_SYNC
 };
 
 /*
@@ -831,5 +834,6 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
 /* get/set_info keys */
 #define KEY_MDS_CONN "mds_conn"
 #define KEY_NEXT_ID  "next_id"
+#define KEY_LOVDESC  "lovdesc"
 
 #endif /* __OBD_H */
