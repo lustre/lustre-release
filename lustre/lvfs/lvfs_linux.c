@@ -194,8 +194,10 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
                atomic_read(&current->fs->pwdmnt->mnt_count));
         */
 
-        LASSERT(current->fs->pwd == new_ctx->pwd);
-        LASSERT(current->fs->pwdmnt == new_ctx->pwdmnt);
+        LASSERTF(current->fs->pwd == new_ctx->pwd, "%p != %p\n",
+                 current->fs->pwd, new_ctx->pwd);
+        LASSERTF(current->fs->pwdmnt == new_ctx->pwdmnt, "%p != %p\n",
+                 current->fs->pwdmnt, new_ctx->pwdmnt);
 
         set_fs(saved->fs);
         set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);

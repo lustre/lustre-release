@@ -190,7 +190,7 @@ struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
         struct llog_gen          loc_gen;
         struct obd_device       *loc_obd; /* points back to the containing obd*/
-        struct obd_export       *loc_exp;
+        struct obd_export       *loc_exp; /* parent "disk" export (e.g. MDS) */
         struct obd_import       *loc_imp; /* to use in RPC's: can be backward
                                              pointing import */
         struct llog_operations  *loc_logops;
