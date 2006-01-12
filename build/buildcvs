@@ -26,11 +26,13 @@ case "$lustretag" in
 
     b1_4_next_recovery_transno)
         snmptag="HEAD"
+        portalstag="b_hd_newconfig"
         libsysiotag="b_release_1_4_6"
 	;;
 
     b1_4_lov_lvb_cleanup)
         snmptag="HEAD"
+        portalstag="b_hd_newconfig"
         libsysiotag="b_release_1_4_6"
 	;;
 	
