@@ -138,6 +138,16 @@ int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 
         LASSERT(mds->mds_lov_objids != NULL);
 
+        // FIXME remove all this debug stuff
+        CERROR("Clearorphans, %d targets\n", mds->mds_lov_desc.ld_tgt_count);
+        for (rc = 0; rc < mds->mds_lov_desc.ld_tgt_count; rc++)
+                CDEBUG(D_WARNING, "clearorphans "LPU64" for idx %d\n",
+                       mds->mds_lov_objids[rc], rc);
+        /* FIXME --- can't clearorphans for lov tgts that the mds does not
+           know about yet!  can only clearorphans on 
+           mds->mds_lov_desc.ld_tgt_count (if that - if late tgt joins
+           first, is that okay?) */
+
         /* This create will in fact either create or destroy:  If the OST is
          * missing objects below this ID, they will be created.  If it finds
          * objects above this ID, they will be removed. */
@@ -618,25 +628,25 @@ static int __mds_lov_synchronize(void *data)
         LASSERT(obd != NULL);
 
         /* We can't change the target count in one of these sync
-           threads while another sync thread is doing the clearorphans on
-           all the targets. */
+           threads while another sync thread is doing clearorphans on
+           all the targets. 
+           If we're syncing a particular target, or we're not 
+           changing the target_count, then we don't need the sem */
         if (!watched || (idx != MLSI_NO_INDEX)) {
-                /* if we're syncing a particular target, or we're not 
-                   changing the target_count, then we don't need the sem */
                 down(&mds->mds_lov_sem);
                 have_sem++;
         }
-
-        rc = obd_set_info(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
-                          KEY_MDS_CONN, 0, uuid);
-        if (rc != 0)
-                GOTO(out, rc);
 
         if (idx != MLSI_NO_INDEX) {
                 rc = mds_lov_add_ost(obd, watched, idx);
                 if (rc != 0)
                         GOTO(out, rc);
         }
+        
+        rc = obd_set_info(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
+                          KEY_MDS_CONN, 0, uuid);
+        if (rc != 0)
+                GOTO(out, rc);
 
         rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
                           mds->mds_lov_desc.ld_tgt_count,

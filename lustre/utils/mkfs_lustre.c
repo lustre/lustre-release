@@ -63,30 +63,35 @@ static char *ret_file = "/tmp/mkfs.log";
 
 void usage(FILE *out)
 {
-        fprintf(out, "usage: %s [options] <device>\n", progname);
+        fprintf(out, "usage: %s <target types> [options] <device>\n", progname);
 
         fprintf(out, 
                 "\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
-                "\toptions:\n"
+                "\ttarget types:\n"
                 "\t\t--ost: object storage, mutually exclusive with mdt\n"
                 "\t\t--mdt: metadata storage, mutually exclusive with ost\n"
                 "\t\t--mgmt: configuration management service - one per site\n"
-                "\t\t--mgmtnid=<nid>[,<...>]:nid(s) of a remote mgmt node\n"
-                "\t\t--fsname=<filesystem_name>\n"
+                "\toptions:\n"
+                "\t\t--mgmtnid=<nid>[,<...>] : NID(s) of a remote mgmt node\n"
+                "\t\t\trequired for all targets other than the mgmt node\n"
+                "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
+#if 0 /* FIXME implement */
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
                 "\t\t\tfor this device on an alternate device\n"
-                "\t\t--failover=<failover-address>\n"
-                "\t\t--backfstype=<fstype>: backing fs type (ext3, ldiskfs)\n"
-                "\t\t--device-size=#N(KB):device size \n"
-                "\t\t--stripe-count=#N:number of stripe\n"
-                "\t\t--stripe-size=#N(KB):stripe size\n"
-                "\t\t--index=#N:target index\n"
-                "\t\t--mountfsoptions=<opts>: permanent mount options\n"
+#endif
+                "\t\t--failover=<nid>[,<...>] : list of NIDs for the failover\n"
+                "\t\t\tpartners for this target\n" 
+                "\t\t--backfstype=<fstype> : backing fs type (ext3, ldiskfs)\n"
+                "\t\t--device-size=#N(KB) : device size for loop devices\n"
+                "\t\t--stripe-count=#N : default number of stripes\n"
+                "\t\t--stripe-size=#N(KB) : default stripe size\n"
+                "\t\t--index=#N : target index\n"
+                "\t\t--mountfsoptions=<opts> : permanent mount options\n"
 #ifndef TUNEFS
-                "\t\t--mkfsoptions=<opts>: format options\n"
+                "\t\t--mkfsoptions=<opts> : format options\n"
                 "\t\t--reformat: overwrite an existing disk\n"
 #endif
-                "\t\t--timeout=<secs>: system timeout period\n"
+                "\t\t--timeout=<secs> : system timeout period\n"
                 "\t\t--verbose\n"
                 "\t\t--quiet\n");
         return;
@@ -489,7 +494,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         
         vprint("formatting backing filesystem %s on %s\n",
                MT_STR(&mop->mo_ldd), dev);
-        vprint("\tservice name  %s\n", mop->mo_ldd.ldd_svname);
+        vprint("\ttarget name  %s\n", mop->mo_ldd.ldd_svname);
         vprint("\t4k blocks     %d\n", block_count);
         vprint("\toptions       %s\n", mop->mo_mkfsopts);
 
@@ -521,7 +526,7 @@ void print_ldd(struct lustre_disk_data *ldd)
 {
         int i = 0;
         printf("\nPermanent disk data:\n");
-        printf("Server:     %s\n", ldd->ldd_svname);
+        printf("Target:     %s\n", ldd->ldd_svname);
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
         printf("Flags:      %s%s%s%s\n",
@@ -708,7 +713,7 @@ int main(int argc , char *const argv[])
                 case 'f':
                         /* we must pass this info on when we register with
                            the mgs */
-                        //mop.mo_hostnid.backup = libcfs_str2nid(optarg);
+                        // FIXME
                         break;
                 case 'G':
                         mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
@@ -799,7 +804,7 @@ int main(int argc , char *const argv[])
         if (!(IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd) || 
               IS_MGMT(&mop.mo_ldd))) {
                 fatal();
-                fprintf(stderr, "must set server type :{mdt,ost,mgmt}\n");
+                fprintf(stderr, "must set target type :{mdt,ost,mgmt}\n");
                 usage(stderr);
                 exit(1);
         }

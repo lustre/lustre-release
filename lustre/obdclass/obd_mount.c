@@ -256,6 +256,12 @@ static void ldd_print(struct lustre_disk_data *ldd)
                 PRINT_CMD(PRINT_MASK, "mgs nid %d:  %s\n", i, 
                        libcfs_nid2str(ldd->ldd_mgsnid[i]));
         }
+        if (!ldd->ldd_failnid_count)
+                PRINT_CMD(PRINT_MASK, "no failover nids\n");
+        else for (i = 0; i < ldd->ldd_failnid_count; i++) {
+                PRINT_CMD(PRINT_MASK, "failover nid %d:  %s\n", i,
+                          libcfs_nid2str(ldd->ldd_failnid[i]));
+        }
 }
 
 static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt, 

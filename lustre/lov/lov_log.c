@@ -101,11 +101,10 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         int i, rc = 0;
         ENTRY;
 
+        /* We might have added an osc and not told the mds yet */
         if (count != lov->desc.ld_tgt_count)
                 CERROR("Origin connect mds cnt %d != lov cnt %d\n", count,
                        lov->desc.ld_tgt_count);
-        /* count must match if we're doing all */
-        LASSERT(uuid || (count == lov->desc.ld_tgt_count));
 
         for (i = 0, tgt = lov->tgts; i < count; i++, tgt++) {
                 struct obd_device *child;

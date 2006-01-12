@@ -37,10 +37,10 @@
 
 #include "obdctl.h"
 
-int          verbose;
-int          nomtab;
-int          fake;
-int          force;
+int          verbose = 0;
+int          nomtab = 0;
+int          fake = 0;
+int          force = 0;
 static char *progname = NULL;
 
 void usage(FILE *out)
