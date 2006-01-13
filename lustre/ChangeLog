@@ -206,7 +206,7 @@ Details    : Having an LWI_INTR() wait event (interruptible, but no timeout)
 	     request was interrupted, and we also didn't break out of the
 	     event loop if there was no timeout
 
-Severity   : minor
+Severity   : major
 Frequency  : rare
 Bugzilla   : 5047
 Description: data loss during non-page-aligned writes to a single file from
