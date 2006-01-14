@@ -195,7 +195,7 @@ do {                                                                           \
 # else
 #  define LASSERT(e)
 #  define LASSERTF(cond, args...) do { } while (0)
-# endif
+# endif /* LIBCFS_DEBUG */
 # define LBUG()   assert(0)
 # define printk(format, args...) printf (format, ## args)
 # define LIBCFS_ALLOC(ptr, size) do { (ptr) = calloc(1,size); } while (0);
