@@ -170,13 +170,13 @@ Index: linux-2.6.12.5/fs/namei.c
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
-+ 				nd->flags |= LOOKUP_LAST;
-+ 				err = revalidate_special(nd);
-+ 				nd->flags &= ~LOOKUP_LAST;
++				nd->flags |= LOOKUP_LAST;
++				err = revalidate_special(nd);
++				nd->flags &= ~LOOKUP_LAST;
 +				if (!nd->dentry->d_inode)
 +					err = -ENOENT;
 +				if (err) {
-+ 					path_release(nd);
++					path_release(nd);
 +					goto return_err;
 +				}
 +				if (lookup_flags & LOOKUP_DIRECTORY) {
@@ -272,9 +272,9 @@ Index: linux-2.6.12.5/fs/namei.c
  	dir = nd->dentry;
  	nd->flags &= ~LOOKUP_PARENT;
  	down(&dir->d_inode->i_sem);
-+ 	nd->flags |= LOOKUP_LAST;
++	nd->flags |= LOOKUP_LAST;
  	path.dentry = __lookup_hash(&nd->last, nd->dentry, nd);
-+ 	nd->flags &= ~LOOKUP_LAST;
++	nd->flags &= ~LOOKUP_LAST;
  	path.mnt = nd->mnt;
  
  do_last:
@@ -282,9 +282,9 @@ Index: linux-2.6.12.5/fs/namei.c
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
-+ 	nd->flags |= LOOKUP_LAST;
++	nd->flags |= LOOKUP_LAST;
  	path.dentry = __lookup_hash(&nd->last, nd->dentry, nd);
-+ 	nd->flags &= ~LOOKUP_LAST;
++	nd->flags &= ~LOOKUP_LAST;
  	path.mnt = nd->mnt;
  	putname(nd->last.name);
  	goto do_last;

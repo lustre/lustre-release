@@ -7,7 +7,7 @@ Index: linux-stage/fs/ext3/Makefile
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
 -ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
-+ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o\
++ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
  	   ioctl.o namei.o super.o symlink.o hash.o resize.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
@@ -124,7 +124,7 @@ Index: linux-stage/fs/ext3/iopen.c
 +	}
 +
 +	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
-+	assert(d_unhashed(dentry));		/* d_rehash */
++	assert(d_unhashed(dentry));			/* d_rehash */
 +
 +	/* preferrably return a connected dentry */
 +	spin_lock(&dcache_lock);
@@ -188,7 +188,7 @@ Index: linux-stage/fs/ext3/iopen.c
 +	assert(dentry->d_inode == NULL);
 +	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
 +	if (rehash)
-+		assert(d_unhashed(dentry));	/* d_rehash */
++		assert(d_unhashed(dentry));		/* d_rehash */
 +	assert(list_empty(&dentry->d_subdirs));
 +
 +	spin_lock(&dcache_lock);
@@ -411,7 +411,7 @@ Index: linux-stage/fs/ext3/namei.c
  
 -	err = ext3_add_nondir(handle, dentry, inode);
 +	err = ext3_add_link(handle, dentry, inode);
-+	ext3_orphan_del(handle,inode);
++	ext3_orphan_del(handle, inode);
  	ext3_journal_stop(handle);
  	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
  		goto retry;
@@ -420,20 +420,20 @@ Index: linux-stage/fs/ext3/super.c
 --- linux-stage.orig/fs/ext3/super.c	2005-02-25 14:37:30.987717392 +0200
 +++ linux-stage/fs/ext3/super.c	2005-02-25 14:44:50.495901992 +0200
 @@ -586,6 +586,7 @@
- 	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0,
-+	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
++	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  };
  
+ static match_table_t tokens = {
 @@ -633,6 +634,9 @@
  	{Opt_ignore, "noquota"},
  	{Opt_ignore, "quota"},
  	{Opt_ignore, "usrquota"},
-+	{Opt_iopen,  "iopen"},
-+	{Opt_noiopen,  "noiopen"},
-+	{Opt_iopen_nopriv,  "iopen_nopriv"},
++	{Opt_iopen, "iopen"},
++	{Opt_noiopen, "noiopen"},
++	{Opt_iopen_nopriv, "iopen_nopriv"},
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
@@ -464,8 +464,8 @@ Index: linux-stage/include/linux/ext3_fs.h
  #define EXT3_MOUNT_POSIX_ACL		0x08000	/* POSIX Access Control Lists */
  #define EXT3_MOUNT_BARRIER		0x10000 /* Use block barriers */
  #define EXT3_MOUNT_RESERVATION		0x20000	/* Preallocation */
-+#define EXT3_MOUNT_IOPEN		0x40000 /* Allow access via iopen */
-+#define EXT3_MOUNT_IOPEN_NOPRIV		0x80000 /* Make iopen world-readable */
++#define EXT3_MOUNT_IOPEN		0x80000	/* Allow access via iopen */
++#define EXT3_MOUNT_IOPEN_NOPRIV		0x100000/* Make iopen world-readable */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H

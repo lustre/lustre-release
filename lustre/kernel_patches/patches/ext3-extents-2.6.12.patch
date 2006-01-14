@@ -2482,12 +2482,13 @@ Index: linux-2.6.12-rc6/fs/ext3/Makefile
 ===================================================================
 --- linux-2.6.12-rc6.orig/fs/ext3/Makefile	2005-06-14 16:31:09.179354899 +0200
 +++ linux-2.6.12-rc6/fs/ext3/Makefile	2005-06-14 16:31:25.872714069 +0200
-@@ -5,7 +5,7 @@
+@@ -5,7 +5,8 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
- ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o\
+ ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
 -	   ioctl.o namei.o super.o symlink.o hash.o resize.o
-+	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o
++	   ioctl.o namei.o super.o symlink.o hash.o resize.o \
++	   extents.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
@@ -2512,19 +2513,18 @@ Index: linux-2.6.12-rc6/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -593,7 +596,7 @@
- 	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
+@@ -593,6 +596,7 @@
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0,
+ 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
--	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
-+	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_extents, Opt_extdebug,
++	Opt_extents, Opt_extdebug,
  };
  
  static match_table_t tokens = {
 @@ -644,6 +647,8 @@
- 	{Opt_iopen,  "iopen"},
- 	{Opt_noiopen,  "noiopen"},
- 	{Opt_iopen_nopriv,  "iopen_nopriv"},
+ 	{Opt_iopen, "iopen"},
+ 	{Opt_noiopen, "noiopen"},
+ 	{Opt_iopen_nopriv, "iopen_nopriv"},
 +	{Opt_extents, "extents"},
 +	{Opt_extdebug, "extdebug"},
  	{Opt_barrier, "barrier=%u"},
@@ -2593,8 +2593,8 @@ Index: linux-2.6.12-rc6/include/linux/ext3_fs.h
   * Structure of an inode on the disk
 @@ -360,6 +364,8 @@
  #define EXT3_MOUNT_NOBH			0x40000 /* No bufferheads */
- #define EXT3_MOUNT_IOPEN		0x80000 /* Allow access via iopen */
- #define EXT3_MOUNT_IOPEN_NOPRIV		0x100000 /* Make iopen world-readable */
+ #define EXT3_MOUNT_IOPEN		0x80000	/* Allow access via iopen */
+ #define EXT3_MOUNT_IOPEN_NOPRIV		0x100000/* Make iopen world-readable */
 +#define EXT3_MOUNT_EXTENTS		0x200000/* Extents support */
 +#define EXT3_MOUNT_EXTDEBUG		0x400000/* Extents debug */
  

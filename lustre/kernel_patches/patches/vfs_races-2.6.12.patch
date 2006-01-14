@@ -2,22 +2,20 @@ Index: linux-2.6.7-vanilla/fs/dcache.c
 ===================================================================
 --- linux-2.6.7-vanilla.orig/fs/dcache.c	2004-07-01 12:09:19.000000000 +0300
 +++ linux-2.6.7-vanilla/fs/dcache.c	2004-07-01 12:29:12.510193264 +0300
-@@ -219,7 +219,14 @@
+@@ -219,6 +219,13 @@
  		spin_unlock(&dcache_lock);
  		return 0;
  	}
--	/*
 +
-+        /* network invalidation by Lustre */
++	/* network invalidation by Lustre */
 +	if (dentry->d_flags & DCACHE_LUSTRE_INVALID) {
 +		spin_unlock(&dcache_lock);
 +		return 0;
 +	}
 +
-+        /*
+ 	/*
  	 * Check whether to do a partial shrink_dcache
  	 * to get rid of unused child entries.
- 	 */
 @@ -1199,16 +1199,25 @@
   * Adds a dentry to the hash according to its name.
   */
