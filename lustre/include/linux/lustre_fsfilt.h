@@ -61,8 +61,9 @@ struct fsfilt_operations {
         int     (* fs_iocontrol)(struct inode *inode, struct file *file,
                                  unsigned int cmd, unsigned long arg);
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
-                              int size);
-        int     (* fs_get_md)(struct inode *inode, void *md, int size);
+                              int size, const char *name);
+        int     (* fs_get_md)(struct inode *inode, void *md, int size,
+                              const char *name);
         /*
          * this method is needed to make IO operation fsfilt nature depend.
          *
@@ -273,15 +274,16 @@ static inline int fsfilt_iocontrol(struct obd_device *obd, struct inode *inode,
 }
 
 static inline int fsfilt_set_md(struct obd_device *obd, struct inode *inode,
-                                void *handle, void *md, int size)
+                                void *handle, void *md, int size,
+                                const char *name)
 {
-        return obd->obd_fsops->fs_set_md(inode, handle, md, size);
+        return obd->obd_fsops->fs_set_md(inode, handle, md, size, name);
 }
 
 static inline int fsfilt_get_md(struct obd_device *obd, struct inode *inode,
-                                void *md, int size)
+                                void *md, int size, const char *name)
 {
-        return obd->obd_fsops->fs_get_md(inode, md, size);
+        return obd->obd_fsops->fs_get_md(inode, md, size, name);
 }
 
 static inline int fsfilt_send_bio(int rw, struct obd_device *obd,

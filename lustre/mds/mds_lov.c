@@ -678,7 +678,7 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                 GOTO(conv_free, rc);
         }
 
-        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size);
+        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size, "lov");
 
         err = fsfilt_commit(obd, inode, handle, 0);
         if (!rc)

@@ -473,7 +473,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
         CDEBUG(D_INODE, "join finish, set lmm V2 to inode %lu \n",
                head_inode->i_ino);
         fsfilt_set_md(obd, head_inode, handle, head_lmmj,
-                      sizeof(struct lov_mds_md_join));
+                      sizeof(struct lov_mds_md_join), "lov");
         mds_finish_join(mds, req, head_inode, head_lmmj);
 cleanup:
         rc = mds_finish_transno(mds, head_inode, handle, req, rc, 0);

@@ -492,7 +492,7 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
 
         if (lock)
                 down(&inode->i_sem);
-        rc = fsfilt_get_md(obd, inode, md, *size);
+        rc = fsfilt_get_md(obd, inode, md, *size, "lov");
 
         if (rc < 0) {
                 CERROR("Error %d reading eadata for ino %lu\n",
@@ -707,7 +707,8 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         if ((S_ISREG(inode->i_mode) && (body->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))) {
                 down(&inode->i_sem);
-                rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0);
+                rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0,
+                                   "lov");
                 up(&inode->i_sem);
                 CDEBUG(D_INODE, "got %d bytes MD data for inode %lu\n",
                        rc, inode->i_ino);

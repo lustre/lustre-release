@@ -364,7 +364,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 LASSERT(lmm_buf);
                 LASSERT(lmm_bufsize >= lmm_size);
                 memcpy(lmm_buf, lmm, lmm_size);
-                rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
+                rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
                 if (rc)
                         CERROR("open replay failed to set md:%d\n", rc);
                 RETURN(0);
@@ -477,7 +477,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 GOTO(out_oa, rc);
         }
 
-        rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
+        rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
         lmm_bufsize = req->rq_repmsg->buflens[offset];
         LASSERT(lmm_buf);

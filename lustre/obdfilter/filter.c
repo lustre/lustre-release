@@ -2061,7 +2061,7 @@ int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                        LPU64"/"LPU64")\n", oa->o_fid, oa->o_stripe_idx,
                        oa->o_generation, oa->o_id, group);
 
-                rc = fsfilt_set_md(obd, inode, handle, &ff, sizeof(ff));
+                rc = fsfilt_set_md(obd, inode, handle, &ff, sizeof(ff), "fid");
                 if (rc)
                         CERROR("store fid in object failed! rc: %d\n", rc);
         } else {
@@ -2208,7 +2208,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
                                     __FUNCTION__, 1);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
-                        
+
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         lock_kernel();

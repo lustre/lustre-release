@@ -577,7 +577,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                       lum->lmm_stripe_count == 0) ||
                     /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
                     lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1))){
-                        rc = fsfilt_set_md(obd, inode, handle, NULL, 0);
+                        rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
                 } else {
@@ -590,7 +590,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         obd_free_memmd(mds->mds_osc_exp, &lsm);
 
                         rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
-                                           rec->ur_eadatalen);
+                                           rec->ur_eadatalen, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
                 }
@@ -865,7 +865,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         if (rc > 0) {
                                 down(&inode->i_sem);
                                 rc = fsfilt_set_md(obd, inode, handle,
-                                                   &lmm, lmm_size);
+                                                   &lmm, lmm_size, "lov");
                                 up(&inode->i_sem);
                         }
                         if (rc)
