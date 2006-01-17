@@ -390,6 +390,9 @@ depend_kernel()
     diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
     if [ -s $tmpfile ]; then
         { cat <<EOF
+To: qa@lists.clusterfs.com
+Subject: kernel_config change 
+
 The result of a make oldconfig on file $CONFIG_FILE resulted in a
 difference when compared to .config in the following way:
 
@@ -399,7 +402,7 @@ EOF
 	# not sure these are entirely useful.  the above and "patch" are good
 	#echo -e "\nThe entire new .config file:\n"
         #cat .config
-        } | mail -s "kernel_config change" qa@lists.clusterfs.com
+        } | sendmail -fqa@clusterfs.com -t
     fi
     rm -f $tmpfile
     case "$VERSION" in
