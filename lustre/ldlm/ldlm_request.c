@@ -385,7 +385,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                          sizeof(*body), "buflen[%d] = %d, not %d\n",
                          MDS_REQ_INTENT_LOCKREQ_OFF,
                          req->rq_reqmsg->buflens[MDS_REQ_INTENT_LOCKREQ_OFF],
-                         sizeof(*body));
+                         (int)sizeof(*body));
         }
 
         lock->l_conn_export = exp;
