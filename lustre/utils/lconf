@@ -2776,7 +2776,7 @@ if __name__ == "__main__":
         rc = e.rc
         if rc == 0:
             rc = 1
-        sys.exit(e.rc)
+        sys.exit(rc)
 
     if first_cleanup_error:
         sys.exit(first_cleanup_error)
