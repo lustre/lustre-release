@@ -417,10 +417,10 @@ int lov_fini_cancel_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
 
+        LASSERT(set->set_exp);
         if (set->set_lockh)
                 lov_llh_put(set->set_lockh);
 
@@ -594,9 +594,9 @@ int lov_fini_create_set(struct lov_request_set *set,struct lov_stripe_md **lsmp)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 rc = create_done(set->set_exp, set, lsmp);
                 /* FIXME update qos data here */
@@ -787,9 +787,9 @@ int lov_fini_brw_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 rc = brw_done(set);
                 /* FIXME update qos data here */
@@ -917,9 +917,9 @@ int lov_fini_getattr_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes)
                 rc = common_attr_done(set);
 
@@ -985,9 +985,9 @@ int lov_fini_destroy_set(struct lov_request_set *set)
 {
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 /* FIXME update qos data here */
         }
@@ -1064,9 +1064,9 @@ int lov_fini_setattr_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 rc = common_attr_done(set);
                 /* FIXME update qos data here */
@@ -1177,9 +1177,9 @@ int lov_fini_punch_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 if (!set->set_success)
                         rc = -EIO;
@@ -1258,9 +1258,9 @@ int lov_fini_sync_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 if (!set->set_success)
                         rc = -EIO;
