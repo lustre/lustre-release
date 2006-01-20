@@ -58,6 +58,8 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
                 LNET_LOCK();
                 lnet_eq_free (eq);
                 LNET_UNLOCK();
+
+                return -ENOMEM;
         }
 
         /* NB this resets all event sequence numbers to 0, to be earlier

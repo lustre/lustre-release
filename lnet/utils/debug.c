@@ -620,6 +620,7 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
 
 int jt_dbg_mark_debug_buf(int argc, char **argv)
 {
+        char scratch[MAX_MARK_SIZE];
         int rc, max_size = MAX_MARK_SIZE-1;
         struct libcfs_ioctl_data data;
         char *text;
@@ -627,7 +628,7 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 
         if (argc > 1) {
                 int counter;
-                text = malloc(MAX_MARK_SIZE);
+                text = scratch;
                 strncpy(text, argv[1], max_size);
                 max_size-=strlen(argv[1]);
                 for(counter = 2; (counter < argc) && (max_size > 0) ; counter++){
