@@ -530,7 +530,11 @@ static int lfs_quotacheck(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
         qctl.qc_id = QFMT_LDISKFS;
         qctl.qc_type = check_type;
-        llapi_quotactl(mnt, &qctl);
+        rc = llapi_quotactl(mnt, &qctl);
+        if (rc) {
+                fprintf(stderr, "quota off failed: %s\n", strerror(errno));
+                return rc;
+        }
 
         rc = llapi_quotacheck(mnt, check_type);
         if (rc) {
