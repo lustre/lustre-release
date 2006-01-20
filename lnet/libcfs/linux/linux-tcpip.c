@@ -279,7 +279,7 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
                 set_fs (KERNEL_DS);
                 then = jiffies;
                 rc = sock_sendmsg (sock, &msg, iov.iov_len);
-                ticks -= then - jiffies;
+                ticks -= jiffies - then;
                 set_fs (oldmm);
 
 		if (rc == nob)
