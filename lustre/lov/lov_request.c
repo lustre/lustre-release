@@ -202,7 +202,7 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
 
                 lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
                 LASSERT(lov_lockhp);
-                if (lov_lockhp->cookie == 0)
+                if (!lustre_handle_is_used(lov_lockhp))
                         continue;
 
                 rc = obd_cancel(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,
@@ -458,7 +458,7 @@ int lov_prep_cancel_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                 struct lustre_handle *lov_lockhp;
 
                 lov_lockhp = set->set_lockh->llh_handles + i;
-                if (lov_lockhp->cookie == 0) {
+                if (!lustre_handle_is_used(lov_lockhp)) {
                         CDEBUG(D_HA, "lov idx %d subobj "LPX64" no lock?\n",
                                loi->loi_ost_idx, loi->loi_id);
                         continue;
@@ -567,7 +567,7 @@ cleanup:
                         continue;
 
                 sub_exp = lov->tgts[req->rq_idx].ltd_exp;
-                err = obd_destroy(sub_exp, req->rq_oa, NULL, oti);
+                err = obd_destroy(sub_exp, req->rq_oa, NULL, oti, NULL);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
@@ -690,7 +690,8 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
                 rc = lov_alloc_memmd(&set->set_md, stripes,
                                      lov->desc.ld_pattern ?
-                                     lov->desc.ld_pattern : LOV_PATTERN_RAID0);
+                                     lov->desc.ld_pattern : LOV_PATTERN_RAID0, 
+                                     LOV_MAGIC);
                 if (rc < 0)
                         goto out_set;
                 newea = 1;
@@ -863,6 +864,7 @@ int lov_prep_brw_set(struct obd_export *exp, struct obdo *src_oa,
                 if (src_oa)
                         memcpy(req->rq_oa, src_oa, sizeof(*req->rq_oa));
                 req->rq_oa->o_id = loi->loi_id;
+                req->rq_oa->o_stripe_idx = i;
 
                 req->rq_buflen = sizeof(*req->rq_md);
                 OBD_ALLOC(req->rq_md, req->rq_buflen);
@@ -1114,6 +1116,7 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obdo *src_oa,
                         GOTO(out_set, rc = -ENOMEM);
                 memcpy(req->rq_oa, src_oa, sizeof(*req->rq_oa));
                 req->rq_oa->o_id = loi->loi_id;
+                req->rq_oa->o_stripe_idx = i;
 
                 if (src_oa->o_valid & OBD_MD_FLSIZE) {
                         if (lov_stripe_offset(lsm, src_oa->o_size, i,
@@ -1233,6 +1236,7 @@ int lov_prep_punch_set(struct obd_export *exp, struct obdo *src_oa,
                         GOTO(out_set, rc = -ENOMEM);
                 memcpy(req->rq_oa, src_oa, sizeof(*req->rq_oa));
                 req->rq_oa->o_id = loi->loi_id;
+                req->rq_oa->o_stripe_idx = i;
 
                 req->rq_extent.start = rs;
                 req->rq_extent.end = re;
@@ -1312,6 +1316,7 @@ int lov_prep_sync_set(struct obd_export *exp, struct obdo *src_oa,
                         GOTO(out_set, rc = -ENOMEM);
                 memcpy(req->rq_oa, src_oa, sizeof(*req->rq_oa));
                 req->rq_oa->o_id = loi->loi_id;
+                req->rq_oa->o_stripe_idx = i;
 
                 req->rq_extent.start = rs;
                 req->rq_extent.end = re;

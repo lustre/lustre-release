@@ -55,6 +55,7 @@ char *ldlm_typename[] = {
         [LDLM_PLAIN] "PLN",
         [LDLM_EXTENT] "EXT",
         [LDLM_FLOCK] "FLK",
+        [LDLM_IBITS] "IBT",
 };
 
 char *ldlm_it2str(int it)
@@ -92,6 +93,7 @@ static ldlm_processing_policy ldlm_processing_policy_table[] = {
         [LDLM_FLOCK] ldlm_process_flock_lock,
         //[LDLM_LLOG]  ldlm_process_llog_lock,
 #endif
+        [LDLM_IBITS] ldlm_process_inodebits_lock,
 };
 
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res)
@@ -130,7 +132,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 struct obd_export *export = NULL;
 
                 l_lock(&ns->ns_lock);
-                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
+                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing it.");
                 LASSERT(lock->l_destroyed);
                 LASSERT(list_empty(&lock->l_res_link));
 
@@ -381,11 +383,48 @@ struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *ns,
 
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
 {
-        ldlm_res2desc(lock->l_resource, &desc->l_resource);
-        desc->l_req_mode = lock->l_req_mode;
-        desc->l_granted_mode = lock->l_granted_mode;
-        memcpy(&desc->l_policy_data, &lock->l_policy_data,
-               sizeof(desc->l_policy_data));
+        struct obd_export *exp = lock->l_export?:lock->l_conn_export;
+        /* INODEBITS_INTEROP: If the other side does not support
+         * inodebits, reply with a plain lock descriptor.
+         */
+        if ((lock->l_resource->lr_type == LDLM_IBITS) &&
+            (exp && !(exp->exp_connect_flags & OBD_CONNECT_IBITS))) {
+                struct ldlm_resource res = *lock->l_resource;
+
+                /* Make sure all the right bits are set in this lock we
+                   are going to pass to client */
+                LASSERTF(lock->l_policy_data.l_inodebits.bits ==
+                         (MDS_INODELOCK_LOOKUP|MDS_INODELOCK_UPDATE),
+                         "Inappropriate inode lock bits during "
+                         "conversion " LPU64 "\n",
+                         lock->l_policy_data.l_inodebits.bits);
+                res.lr_type = LDLM_PLAIN;
+                ldlm_res2desc(&res, &desc->l_resource);
+                /* Convert "new" lock mode to something old client can
+                   understand */
+                if ((lock->l_req_mode == LCK_CR) ||
+                    (lock->l_req_mode == LCK_CW))
+                        desc->l_req_mode = LCK_PR;
+                else
+                        desc->l_req_mode = lock->l_req_mode;
+                if ((lock->l_granted_mode == LCK_CR) ||
+                    (lock->l_granted_mode == LCK_CW)) {
+                        desc->l_granted_mode = LCK_PR;
+                } else {
+                        /* We never grant PW/EX locks to clients */
+                        LASSERT((lock->l_granted_mode != LCK_PW) &&
+                                (lock->l_granted_mode != LCK_EX));
+                        desc->l_granted_mode = lock->l_granted_mode;
+                }
+
+                /* We do not copy policy here, because there is no
+                   policy for plain locks */
+        } else {
+                ldlm_res2desc(lock->l_resource, &desc->l_resource);
+                desc->l_req_mode = lock->l_req_mode;
+                desc->l_granted_mode = lock->l_granted_mode;
+                desc->l_policy_data = lock->l_policy_data;
+        }
 }
 
 void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
@@ -602,6 +641,14 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                     lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
                         continue;
 
+                /* We match if we have existing lock with same or wider set
+                   of bits. */
+                if (lock->l_resource->lr_type == LDLM_IBITS &&
+                     ((lock->l_policy_data.l_inodebits.bits &
+                      policy->l_inodebits.bits) !=
+                      policy->l_inodebits.bits))
+                        continue;
+
                 if (lock->l_destroyed || (lock->l_flags & LDLM_FL_FAILED))
                         continue;
 
@@ -717,19 +764,19 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         if (rc) {
                 l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "matched ("LPU64" "LPU64")",
-                           type == LDLM_PLAIN ? res_id->name[2] :
-                                policy->l_extent.start,
-                           type == LDLM_PLAIN ? res_id->name[3] :
-                                policy->l_extent.end);
+                           (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                res_id->name[2] : policy->l_extent.start,
+                           (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                res_id->name[3] : policy->l_extent.end);
                 l_unlock(&ns->ns_lock);
         } else if (!(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
                                   LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
                                   type, mode, res_id->name[0], res_id->name[1],
-                                  type == LDLM_PLAIN ? res_id->name[2] :
-                                        policy->l_extent.start,
-                                  type == LDLM_PLAIN ? res_id->name[3] :
-                                        policy->l_extent.end);
+                                  (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                        res_id->name[2] :policy->l_extent.start,
+                                (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                        res_id->name[3] : policy->l_extent.end);
         }
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
@@ -1219,6 +1266,9 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                        lock->l_policy_data.l_flock.pid,
                        lock->l_policy_data.l_flock.start,
                        lock->l_policy_data.l_flock.end);
+       else if (lock->l_resource->lr_type == LDLM_IBITS)
+                CDEBUG(level, "  Bits: "LPX64"\n",
+                       lock->l_policy_data.l_inodebits.bits);
 }
 
 void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)

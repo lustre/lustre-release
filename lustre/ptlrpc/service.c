@@ -324,7 +324,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         /* Now allocate pool of reply buffers */
         /* Increase max reply size to next power of two */
         service->srv_max_reply_size = 1;
-        while(service->srv_max_reply_size < max_reply_size)
+        while (service->srv_max_reply_size < max_reply_size)
                 service->srv_max_reply_size <<= 1;
 
         if (proc_entry != NULL)
@@ -570,17 +570,23 @@ put_conn:
         timediff = timeval_sub(&work_end, &work_start);
 
         if (timediff / 1000000 > (long)obd_timeout)
-                CERROR("request "LPU64" opc %u from %s processed in %lds\n",
+                CERROR("request "LPU64" opc %u from %s processed in %lds "
+                       "trans "LPU64" rc %d/%d\n",
                        request->rq_xid, request->rq_reqmsg->opc,
                        libcfs_id2str(request->rq_peer),
                        timeval_sub(&work_end,
-                                   &request->rq_arrival_time) / 1000000);
+                                   &request->rq_arrival_time) / 1000000,
+                       request->rq_repmsg ? request->rq_repmsg->transno :
+                       request->rq_transno, request->rq_status,
+                       request->rq_repmsg ? request->rq_repmsg->status : -999);
         else
-                CDEBUG(D_HA,"request "LPU64" opc %u from %s processed in %ldus"
-                       " (%ldus total)\n", request->rq_xid,
-                       request->rq_reqmsg->opc,
+                CDEBUG(D_HA, "request "LPU64" opc %u from %s processed in "
+                       "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
+                       request->rq_xid, request->rq_reqmsg->opc,
                        libcfs_id2str(request->rq_peer), timediff,
-                       timeval_sub(&work_end, &request->rq_arrival_time));
+                       timeval_sub(&work_end, &request->rq_arrival_time),
+                       request->rq_transno, request->rq_status,
+                       request->rq_repmsg ? request->rq_repmsg->status : -999);
 
         if (svc->srv_stats != NULL) {
                 int opc = opcode_offset(request->rq_reqmsg->opc);
@@ -625,7 +631,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
 
         list_del_init (&rs->rs_list);
 
-        /* Disengage from notifiers carefully (lock ordering!) */
+        /* Disengage from notifiers carefully (lock order - irqrestore below!)*/
         spin_unlock(&svc->srv_lock);
 
         spin_lock (&obd->obd_uncommitted_replies_lock);
@@ -919,16 +925,15 @@ out_srv_init:
                 svc->srv_done(thread);
 
 out:
-        spin_lock_irqsave(&svc->srv_lock, flags);
-
-        svc->srv_nthreads--;                    /* must know immediately */
-        thread->t_flags = SVC_STOPPED;
-        wake_up(&thread->t_ctl_waitq);
-
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
-
         CDEBUG(D_NET, "service thread %d exiting: rc %d\n", thread->t_id, rc);
+
+        spin_lock_irqsave(&svc->srv_lock, flags);
+        svc->srv_nthreads--;                    /* must know immediately */
         thread->t_id = rc;
+        thread->t_flags = SVC_STOPPED;
+
+        wake_up(&thread->t_ctl_waitq);
+        spin_unlock_irqrestore(&svc->srv_lock, flags);
 
         return rc;
 }
@@ -972,13 +977,14 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
         spin_unlock_irqrestore(&svc->srv_lock, flags);
 }
 
-/* @base_name should be 12 characters or less - 3 will be added on */
+/* @base_name should be 11 characters or less - 3 will be added on */
 int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc,
                          char *base_name)
 {
         int i, rc = 0;
         ENTRY;
 
+        LASSERT(svc->srv_num_threads > 0);
         for (i = 0; i < svc->srv_num_threads; i++) {
                 char name[32];
                 sprintf(name, "%s_%02d", base_name, i);

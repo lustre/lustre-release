@@ -163,6 +163,10 @@ void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
         if (!ptlrpc_bulk_active(desc))          /* completed or */
                 return;                         /* never started */
         
+        /* Do not send any meaningful data over the wire for evicted clients */
+        if (desc->bd_export && desc->bd_export->exp_failed)
+                ptl_rpc_wipe_bulk_pages(desc);
+
         /* The unlink ensures the callback happens ASAP and is the last
          * one.  If it fails, it must be because completion just happened,
          * but we must still l_wait_event() in this case, to give liblustre
@@ -377,63 +381,7 @@ int ptlrpc_error(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
-int ptl_send_rpc_nowait(struct ptlrpc_request *request)
-{
-        int rc;
-        struct ptlrpc_connection *connection;
-        unsigned long flags;
-        ENTRY;
-
-        LASSERT (request->rq_type == PTL_RPC_MSG_REQUEST);
-
-        if (request->rq_import->imp_obd &&
-            request->rq_import->imp_obd->obd_fail) {
-                CDEBUG(D_HA, "muting rpc for failed imp obd %s\n",
-                       request->rq_import->imp_obd->obd_name);
-                /* this prevents us from waiting in ptlrpc_queue_wait */
-                request->rq_err = 1;
-                RETURN(-ENODEV);
-        }
-        
-        connection = request->rq_import->imp_connection;
-
-        request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
-        request->rq_reqmsg->type = PTL_RPC_MSG_REQUEST;
-        request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
-
-        spin_lock_irqsave (&request->rq_lock, flags);
-        /* If the MD attach succeeds, there _will_ be a reply_in callback */
-        request->rq_receiving_reply = 0;
-        /* Clear any flags that may be present from previous sends. */
-        request->rq_replied = 0;
-        request->rq_err = 0;
-        request->rq_timedout = 0;
-        request->rq_net_err = 0;
-        request->rq_resend = 0;
-        request->rq_restart = 0;
-        spin_unlock_irqrestore (&request->rq_lock, flags);
-
-        ptlrpc_request_addref(request);       /* +1 ref for the SENT callback */
-
-        request->rq_sent = CURRENT_SECONDS;
-        ptlrpc_pinger_sending_on_import(request->rq_import);
-        rc = ptl_send_buf(&request->rq_req_md_h, 
-                          request->rq_reqmsg, request->rq_reqlen,
-                          LNET_NOACK_REQ, &request->rq_req_cbid, 
-                          connection,
-                          request->rq_request_portal,
-                          request->rq_xid);
-        if (rc == 0) {
-                ptlrpc_lprocfs_rpc_sent(request);
-        } else {
-                ptlrpc_req_finished (request);          /* drop callback ref */
-        }
-
-        return rc;
-}
-
-
-int ptl_send_rpc(struct ptlrpc_request *request)
+int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 {
         int rc;
         int rc2;
@@ -472,24 +420,26 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_reqmsg->type = PTL_RPC_MSG_REQUEST;
         request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
 
-        LASSERT (request->rq_replen != 0);
-        if (request->rq_repmsg == NULL)
-                OBD_ALLOC(request->rq_repmsg, request->rq_replen);
-        if (request->rq_repmsg == NULL)
-                GOTO(cleanup_bulk, rc = -ENOMEM);
+        if (!noreply) {
+                LASSERT (request->rq_replen != 0);
+                if (request->rq_repmsg == NULL)
+                        OBD_ALLOC(request->rq_repmsg, request->rq_replen);
+                if (request->rq_repmsg == NULL)
+                        GOTO(cleanup_bulk, rc = -ENOMEM);
 
-        rc = LNetMEAttach(request->rq_reply_portal, /* XXX FIXME bug 249 */
-                          connection->c_peer, request->rq_xid, 0,
-                          LNET_UNLINK, LNET_INS_AFTER, &reply_me_h);
-        if (rc != 0) {
-                CERROR("LNetMEAttach failed: %d\n", rc);
-                LASSERT (rc == -ENOMEM);
-                GOTO(cleanup_repmsg, rc = -ENOMEM);
+                rc = LNetMEAttach(request->rq_reply_portal,/*XXX FIXME bug 249*/
+                                  connection->c_peer, request->rq_xid, 0,
+                                  LNET_UNLINK, LNET_INS_AFTER, &reply_me_h);
+                if (rc != 0) {
+                        CERROR("LNetMEAttach failed: %d\n", rc);
+                        LASSERT (rc == -ENOMEM);
+                        GOTO(cleanup_repmsg, rc = -ENOMEM);
+                }
         }
 
         spin_lock_irqsave (&request->rq_lock, flags);
         /* If the MD attach succeeds, there _will_ be a reply_in callback */
-        request->rq_receiving_reply = 1;
+        request->rq_receiving_reply = !noreply;
         /* Clear any flags that may be present from previous sends. */
         request->rq_replied = 0;
         request->rq_err = 0;
@@ -499,29 +449,31 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_restart = 0;
         spin_unlock_irqrestore (&request->rq_lock, flags);
 
-        reply_md.start     = request->rq_repmsg;
-        reply_md.length    = request->rq_replen;
-        reply_md.threshold = 1;
-        reply_md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT;
-        reply_md.user_ptr  = &request->rq_reply_cbid;
-        reply_md.eq_handle = ptlrpc_eq_h;
+        if (!noreply) {
+                reply_md.start     = request->rq_repmsg;
+                reply_md.length    = request->rq_replen;
+                reply_md.threshold = 1;
+                reply_md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT;
+                reply_md.user_ptr  = &request->rq_reply_cbid;
+                reply_md.eq_handle = ptlrpc_eq_h;
 
-        rc = LNetMDAttach(reply_me_h, reply_md, LNET_UNLINK, 
-                         &request->rq_reply_md_h);
-        if (rc != 0) {
-                CERROR("LNetMDAttach failed: %d\n", rc);
-                LASSERT (rc == -ENOMEM);
-                spin_lock_irqsave (&request->rq_lock, flags);
-                /* ...but the MD attach didn't succeed... */
-                request->rq_receiving_reply = 0;
-                spin_unlock_irqrestore (&request->rq_lock, flags);
-                GOTO(cleanup_me, rc -ENOMEM);
+                rc = LNetMDAttach(reply_me_h, reply_md, LNET_UNLINK, 
+                                 &request->rq_reply_md_h);
+                if (rc != 0) {
+                        CERROR("LNetMDAttach failed: %d\n", rc);
+                        LASSERT (rc == -ENOMEM);
+                        spin_lock_irqsave (&request->rq_lock, flags);
+                        /* ...but the MD attach didn't succeed... */
+                        request->rq_receiving_reply = 0;
+                        spin_unlock_irqrestore (&request->rq_lock, flags);
+                        GOTO(cleanup_me, rc -ENOMEM);
+                }
+
+                CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64
+                       ", portal %u\n",
+                       request->rq_replen, request->rq_xid,
+                       request->rq_reply_portal);
         }
-
-        CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64
-               ", portal %u\n",
-               request->rq_replen, request->rq_xid,
-               request->rq_reply_portal);
 
         ptlrpc_request_addref(request);       /* +1 ref for the SENT callback */
 
@@ -540,6 +492,10 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         ptlrpc_req_finished (request);          /* drop callback ref */
 
+        if (noreply)
+                RETURN(rc);
+        else
+                GOTO(cleanup_me, rc);
  cleanup_me:
         /* MEUnlink is safe; the PUT didn't even get off the ground, and
          * nobody apart from the PUT's target has the right nid+XID to

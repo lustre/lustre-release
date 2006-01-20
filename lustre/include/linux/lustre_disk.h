@@ -3,7 +3,6 @@
  *
  *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
  *   Author: Nathan Rutman <nathan@clusterfs.com>
- *   Author: Lin Song Tao <lincent@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -28,7 +27,6 @@
 #define _LUSTRE_DISK_H
 
 #include <linux/types.h>
-
 #include <lnet/types.h>
 
 
@@ -122,6 +120,11 @@ static inline void ldd_make_sv_name(struct lustre_disk_data *ldd)
 
 /****************** mount command *********************/
 
+/* The lmd is only used internally by Lustre; mount simply passes 
+   everything as string options */
+
+#define LMD_MAGIC    0xbdacbd03
+
 /* gleaned from the mount command - no persistent info here */
 struct lustre_mount_data {
         __u32      lmd_magic;
@@ -134,10 +137,11 @@ struct lustre_mount_data {
                                          _device_ mount options) */
 };
 
-#define LMD_FLG_RECOVER      0x0001  /* Allow recovery */
-#define LMD_FLG_NOSVC        0x0002  /* Only start MGS/MGC for servers, no other services */
-#define LMD_FLG_MNTCNF       0x1000  /* MountConf compat */
-#define LMD_FLG_CLIENT       0x2000  /* Mounting a client only; no real device */
+#define LMD_FLG_MNTCNF       0x0001  /* Mountconf compat */
+#define LMD_FLG_CLIENT       0x0002  /* Mounting a client only */
+#define LMD_FLG_RECOVER      0x0004  /* Allow recovery */
+#define LMD_FLG_NOSVC        0x0008  /* Only start MGS/MGC for servers, 
+                                        no other services */
 
 /* 2nd half is for old clients */
 #define lmd_is_client(x) \
@@ -163,15 +167,34 @@ struct mkfs_opts {
 /****************** last_rcvd file *********************/
 
 #define LAST_RCVD "last_rcvd"
+#define LOV_OBJID "lov_objid"
 #define LR_SERVER_SIZE    512
 #define LR_CLIENT_START   8192
 #define LR_CLIENT_SIZE    128
+#if LR_CLIENT_START < LR_SERVER_SIZE
+#error "Can't have LR_CLIENT_START < LR_SERVER_SIZE"
+#endif
+/* This limit is arbitrary (32k clients on x86), but it is convenient to use
+ * 2^n * PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */#define LR_MAX_CLIENTS (PAGE_SIZE * 8)
+#define LR_MAX_CLIENTS (PAGE_SIZE * 8)
+                                                                                
+#define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
+#define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
+#define OBD_COMPAT_COMMON_LR    0x00000008 /* common last_rvcd format */
+                                                                                
+#define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
+#define OBD_ROCOMPAT_CROW       0x00000002 /* OST will CROW create objects */
+                                                                                
+#define OBD_INCOMPAT_GROUPS     0x00000001 /* OST handles group subdirs */
+#define OBD_INCOMPAT_OST        0x00000002 /* this is an OST (permanent) */
+#define OBD_INCOMPAT_MDT        0x00000004 /* this is an MDT (permanent) */
+
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
    This should be common to filter_internal.h, lustre_mds.h */
 struct lr_server_data {
         __u8  lsd_uuid[40];        /* server UUID */
-        __u64 lsd_unused;          /* was lsd_last_objid - don't use for now */
+        __u64 lsd_unused;          /* was fsd_last_objid - don't use for now */
         __u64 lsd_last_transno;    /* last completed transaction ID */
         __u64 lsd_mount_count;     /* incarnation number */
         __u32 lsd_feature_compat;  /* compatible feature flags */
@@ -184,14 +207,31 @@ struct lr_server_data {
         __u64 lsd_catalog_oid;     /* recovery catalog object id */
         __u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
         __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u32 lsd_index;           /* target index (stripe index for ost)*/
-        __u8  lsd_padding[LR_SERVER_SIZE - 144];
+        __u32 lsd_ost_index;       /* index number of OST in LOV */
+        __u32 lsd_mds_index;       /* index number of MDS in LMV */
+        __u8  lsd_padding[LR_SERVER_SIZE - 148];
 };
 
-#define LR_COMPAT_COMMON_LR     0x10000000   /* Common last_rvcd format (e.g. above) */
+/* Data stored per client in the last_rcvd file.  In le32 order. */
+struct lsd_client_data {
+        __u8 lcd_uuid[40];      /* client UUID */
+        __u64 lcd_last_transno; /* last completed transaction ID */
+        __u64 lcd_last_xid;     /* xid for the last transaction */
+        __u32 lcd_last_result;  /* result from last RPC */
+        __u32 lcd_last_data;    /* per-op data (disposition for open &c.) */
+        /* for MDS_CLOSE requests */
+        __u64 lcd_last_close_transno; /* last completed transaction ID */
+        __u64 lcd_last_close_xid;     /* xid for the last transaction */
+        __u32 lcd_last_close_result;  /* result from last RPC */
+        __u32 lcd_last_close_data;    /* per-op data */
+        __u8 lcd_padding[LR_CLIENT_SIZE - 88];
+};
+
+/*
 #define MDS_ROCOMPAT_LOVOBJID   0x00000001
 #define MDS_ROCOMPAT_SUPP       (MDS_ROCOMPAT_LOVOBJID)
 #define MDS_INCOMPAT_SUPP       (0)
+*/
 
 #ifdef __KERNEL__
 /****************** superblock additional info *********************/
@@ -235,6 +275,7 @@ struct lustre_mount_info {
 /****************** prototypes *********************/
 
 #ifdef __KERNEL__
+#include <linux/obd_class.h>
 
 /* obd_mount.c */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));

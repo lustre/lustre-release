@@ -62,6 +62,10 @@ static int mds_getxattr_pack_msg(struct ptlrpc_request *req,
                         return -EFAULT;
                 }
 
+                if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
+                    (strncmp(xattr_name, "user.", 5) == 0))
+                        return -EOPNOTSUPP;
+
                 if (inode->i_op && inode->i_op->getxattr)
                         rc = inode->i_op->getxattr(de, xattr_name, NULL, 0);
         } else if (body->valid & OBD_MD_FLXATTRLS) {
@@ -208,6 +212,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         char *xattr = NULL;
         int xattrlen;
         int rc = -EOPNOTSUPP, err = 0;
+        __u64 lockpart;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
@@ -218,8 +223,10 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
-        de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_PW,
-                                   &lockh, NULL, 0);
+        lockpart = MDS_INODELOCK_UPDATE;
+
+        de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
+                                   &lockh, NULL, 0, lockpart);
         if (IS_ERR(de))
                 GOTO(out, rc = PTR_ERR(de));
 
@@ -238,9 +245,14 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                   body->valid & OBD_MD_FLXATTR ? "set" : "remove",
                   xattr_name);
 
-        if (!strncmp(xattr_name, "trusted.", 8)) {
-                if (!strcmp(xattr_name, "trusted."XATTR_LUSTRE_MDS_LOV_EA))
+        if (strncmp(xattr_name, "trusted.", 8) == 0) {
+                if (strcmp(xattr_name + 8, XATTR_LUSTRE_MDS_LOV_EA) == 0)
                         GOTO(out_dput, rc = -EACCES);
+        }
+
+        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
+            (strncmp(xattr_name, "user.", 5) == 0)) {
+                GOTO(out_dput, rc = -EOPNOTSUPP);
         }
 
         /* filter_op simply use setattr one */
@@ -287,9 +299,9 @@ out_trans:
 out_dput:
         l_dput(de);
         if (rc)
-                ldlm_lock_decref(&lockh, LCK_PW);
+                ldlm_lock_decref(&lockh, LCK_EX);
         else
-                ptlrpc_save_lock (req, &lockh, LCK_PW);
+                ptlrpc_save_lock (req, &lockh, LCK_EX);
 
         if (err && !rc)
                 rc = err;

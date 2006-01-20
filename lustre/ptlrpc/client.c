@@ -301,10 +301,10 @@ static struct ptlrpc_request *ptlrpc_prep_req_from_pool(struct ptlrpc_request_po
         return request;
 }
 
-struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, int opcode,
-                                            int count, int *lengths,
-                                            char **bufs,
-                                            struct ptlrpc_request_pool *pool)
+struct ptlrpc_request *
+ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
+                     int count, int *lengths, char **bufs,
+                     struct ptlrpc_request_pool *pool)
 {
         struct ptlrpc_request *request = NULL;
         int rc;
@@ -333,6 +333,11 @@ struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, int opcode,
                 RETURN(NULL);
         }
 
+#if 0   /* TODO: enable this while really introducing msg version.
+         * it's disabled because it will break compatibility with b1_4.
+         */        
+        request->rq_reqmsg->version |= version;
+#endif
         if (imp->imp_server_timeout)
                 request->rq_timeout = obd_timeout / 2;
         else
@@ -368,12 +373,13 @@ struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, int opcode,
         RETURN(request);
 }
 
-struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
-                                       int count, int *lengths, char **bufs)
+struct ptlrpc_request *
+ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode,
+                int count, int *lengths, char **bufs)
 {
-        return ptlrpc_prep_req_pool(imp, opcode, count, lengths, bufs, NULL);
+        return ptlrpc_prep_req_pool(imp, version, opcode, count, lengths,
+                                    bufs, NULL);
 }
-
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void)
 {
@@ -707,7 +713,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
                req->rq_reqmsg->opc);
 
-        rc = ptl_send_rpc(req);
+        rc = ptl_send_rpc(req, 0);
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); expect timeout", rc);
                 req->rq_net_err = 1;
@@ -716,6 +722,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+/* this sends any unsent RPCs in @set and returns TRUE if all are sent */
 int ptlrpc_check_set(struct ptlrpc_request_set *set)
 {
         unsigned long flags;
@@ -837,7 +844,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                         }
                                 }
 
-                                rc = ptl_send_rpc(req);
+                                rc = ptl_send_rpc(req, 0);
                                 if (rc) {
                                         DEBUG_REQ(D_HA, req, "send failed (%d)",
                                                   rc);
@@ -1554,7 +1561,7 @@ restart:
         list_add_tail(&req->rq_list, &imp->imp_sending_list);
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-        rc = ptl_send_rpc(req);
+        rc = ptl_send_rpc(req, 0);
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); recovering", rc);
                 timeout = 1;
@@ -1799,7 +1806,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
         }
 
         /* Last chance to free reqs left on the replay list, but we
-         * will still leak reqs that haven't comitted.  */
+         * will still leak reqs that haven't committed.  */
         if (imp->imp_replayable)
                 ptlrpc_free_committed(imp);
 

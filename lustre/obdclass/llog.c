@@ -298,6 +298,9 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                                               loghandle->lgh_id.lgl_oid,
                                               loghandle->lgh_id.lgl_ogen);
                                         GOTO(out, rc);
+                                } else if (rc == LLOG_DEL_RECORD) {
+                                        llog_cancel_rec(loghandle, rec->lrh_index);
+                                        rc = 0;
                                 }
                                 if (rc)
                                         GOTO(out, rc);
@@ -329,3 +332,85 @@ int llog_get_size(struct llog_handle *loghandle)
 }
 EXPORT_SYMBOL(llog_get_size);
 
+int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
+                         void *data, void *catdata)
+{
+        struct llog_log_hdr *llh = loghandle->lgh_hdr;
+        struct llog_process_cat_data *cd = catdata;
+        void *buf;
+        int rc = 0, first_index = 1, index, idx;
+        struct llog_rec_tail *tail;
+        ENTRY;
+
+        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
+        if (!buf)
+                RETURN(-ENOMEM);
+
+        if (cd != NULL)
+                first_index = cd->first_idx + 1;
+        if (cd != NULL && cd->last_idx)
+                index = cd->last_idx;
+        else
+                index = LLOG_BITMAP_BYTES * 8 - 1;
+
+        while (rc == 0) {
+                struct llog_rec_hdr *rec;
+
+                /* skip records not set in bitmap */
+                while (index >= first_index &&
+                       !ext2_test_bit(index, llh->llh_bitmap))
+                        --index;
+
+                LASSERT(index >= first_index - 1);
+                if (index == first_index - 1)
+                        break;
+
+                /* get the buf with our target record; avoid old garbage */
+                memset(buf, 0, LLOG_CHUNK_SIZE);
+                rc = llog_prev_block(loghandle, index, buf, LLOG_CHUNK_SIZE);
+                if (rc)
+                        GOTO(out, rc);
+
+                rec = buf;
+                idx = le32_to_cpu(rec->lrh_index);
+                if (idx < index)
+                        CDEBUG(D_HA, "index %u : idx %u\n", index, idx);
+                while (idx < index) {
+                        rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
+                        idx ++;
+                }
+
+                /* process records in buffer, starting where we found one */
+                while ((void *)rec >= buf) {
+                        if (rec->lrh_index == 0)
+                                GOTO(out, 0); /* no more records */
+
+                        /* if set, process the callback on this record */
+                        if (ext2_test_bit(index, llh->llh_bitmap)) {
+                                rc = cb(loghandle, rec, data);
+                                if (rc == LLOG_PROC_BREAK) {
+                                        CWARN("recovery from log: "LPX64":%x"
+                                              " stopped\n",
+                                              loghandle->lgh_id.lgl_oid,
+                                              loghandle->lgh_id.lgl_ogen);
+                                        GOTO(out, rc);
+                                }
+                                if (rc)
+                                        GOTO(out, rc);
+                        }
+
+                        /* previous record, still in buffer? */
+                        --index;
+                        if (index < first_index)
+                                GOTO(out, rc = 0);
+                        tail = (void *)rec - sizeof(struct llog_rec_tail);
+                        rec = ((void *)rec - le32_to_cpu(tail->lrt_len));
+                }
+        }
+
+out:
+        if (buf)
+                OBD_FREE(buf, LLOG_CHUNK_SIZE);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_reverse_process);

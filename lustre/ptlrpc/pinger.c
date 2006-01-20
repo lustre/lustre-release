@@ -47,8 +47,7 @@ int ptlrpc_ping(struct obd_import *imp)
         int rc = 0;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
-                              NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 0, NULL, NULL);
         if (req) {
                 DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
@@ -66,7 +65,7 @@ int ptlrpc_ping(struct obd_import *imp)
         RETURN(rc);
 }
 
-static inline void ptlrpc_update_next_ping(struct obd_import *imp)
+static void ptlrpc_update_next_ping(struct obd_import *imp)
 {
         imp->imp_next_ping = jiffies + HZ *
                 (imp->imp_state == LUSTRE_IMP_DISCON ? 10 : PING_INTERVAL);
@@ -106,9 +105,8 @@ static int ptlrpc_pinger_main(void *arg)
         /* And now, loop forever, pinging as needed. */
         while (1) {
                 unsigned long this_ping = jiffies;
-                long time_to_next_ping;
-                struct l_wait_info lwi = LWI_TIMEOUT(PING_INTERVAL * HZ,
-                                                     NULL, NULL);
+                long time_to_next_ping = 0;
+                struct l_wait_info lwi;
                 struct list_head *iter;
 
                 down(&pinger_sem);
@@ -119,12 +117,12 @@ static int ptlrpc_pinger_main(void *arg)
                         int force, level;
                         unsigned long flags;
 
-
                         spin_lock_irqsave(&imp->imp_lock, flags);
                         level = imp->imp_state;
                         force = imp->imp_force_verify;
                         imp->imp_force_verify = 0;
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
+
                         CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
                                "level %s/%u force %u deactive %u pingable %u\n",
                                ptlrpc_import_state_name(level), level,
@@ -172,9 +170,10 @@ static int ptlrpc_pinger_main(void *arg)
 
                 /* Wait until the next ping time, or until we're stopped. */
                 time_to_next_ping = this_ping + (PING_INTERVAL * HZ) - jiffies;
+                
                 /* The ping sent by ptlrpc_send_rpc may get sent out
                    say .01 second after this.
-                   ptlrpc_pinger_sending_on_import will then set the
+                   ptlrpc_pinger_eending_on_import will then set the
                    next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
@@ -233,12 +232,13 @@ int ptlrpc_start_pinger(void)
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
                 OBD_FREE(pinger_thread, sizeof(*pinger_thread));
+                pinger_thread = NULL;
                 RETURN(rc);
         }
         l_wait_event(pinger_thread->t_ctl_waitq,
                      pinger_thread->t_flags & SVC_RUNNING, &lwi);
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 int ptlrpc_stop_pinger(void)
@@ -384,8 +384,8 @@ static int pinger_check_rpcs(void *arg)
                                 continue;
                         }
 
-                        req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
-                                              NULL);
+                        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING,
+                                              0, NULL, NULL);
                         if (!req) {
                                 CERROR("out of memory\n");
                                 break;
@@ -416,7 +416,7 @@ static int pinger_check_rpcs(void *arg)
                 DEBUG_REQ(D_HA, req, "pinging %s->%s",
                           req->rq_import->imp_obd->obd_uuid.uuid,
                           req->rq_import->imp_target_uuid.uuid);
-                (void)ptl_send_rpc(req);
+                (void)ptl_send_rpc(req, 0);
         }
 
 do_check_set:

@@ -369,7 +369,6 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 rc = fsfilt_read_record(loghandle->lgh_ctxt->loc_exp->exp_obd,
                                         loghandle->lgh_file, buf, len,
                                         &ppos);
-
                 if (rc) {
                         CERROR("Cant read llog block at log id "LPU64
                                "/%u offset "LPU64"\n",
@@ -418,6 +417,79 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 if (rec->lrh_index > next_idx) {
                         CERROR("missed desired record? %u > %u\n",
                                rec->lrh_index, next_idx);
+                        RETURN(-ENOENT);
+                }
+                RETURN(0);
+        }
+        RETURN(-EIO);
+}
+
+static int llog_lvfs_prev_block(struct llog_handle *loghandle,
+                                int prev_idx, void *buf, int len)
+{
+        __u64 cur_offset;
+        int rc;
+        ENTRY;
+
+        if (len == 0 || len & (LLOG_CHUNK_SIZE - 1))
+                RETURN(-EINVAL);
+
+        CDEBUG(D_OTHER, "looking for log index %u n", prev_idx);
+
+        cur_offset = LLOG_CHUNK_SIZE;
+        llog_skip_over(&cur_offset, 0, prev_idx);
+
+        while (cur_offset < loghandle->lgh_file->f_dentry->d_inode->i_size) {
+                struct llog_rec_hdr *rec;
+                struct llog_rec_tail *tail;
+                loff_t ppos;
+
+                ppos = cur_offset;
+
+                rc = fsfilt_read_record(loghandle->lgh_ctxt->loc_exp->exp_obd,
+                                        loghandle->lgh_file, buf, len,
+                                        &ppos);
+                if (rc) {
+                        CERROR("Cant read llog block at log id "LPU64
+                               "/%u offset "LPU64"\n",
+                               loghandle->lgh_id.lgl_oid,
+                               loghandle->lgh_id.lgl_ogen,
+                               cur_offset);
+                        RETURN(rc);
+                }
+
+                /* put number of bytes read into rc to make code simpler */
+                rc = ppos - cur_offset;
+                cur_offset = ppos;
+
+                if (rc == 0) /* end of file, nothing to do */
+                        RETURN(0);
+
+                if (rc < sizeof(*tail)) {
+                        CERROR("Invalid llog block at log id "LPU64"/%u offset "
+                               LPU64"\n", loghandle->lgh_id.lgl_oid,
+                               loghandle->lgh_id.lgl_ogen, cur_offset);
+                        RETURN(-EINVAL);
+                }
+
+                tail = buf + rc - sizeof(struct llog_rec_tail);
+
+                /* this shouldn't happen */
+                if (tail->lrt_index == 0) {
+                        CERROR("Invalid llog tail at log id "LPU64"/%u offset "
+                               LPU64"\n", loghandle->lgh_id.lgl_oid,
+                               loghandle->lgh_id.lgl_ogen, cur_offset);
+                        RETURN(-EINVAL);
+                }
+                if (le32_to_cpu(tail->lrt_index) < prev_idx)
+                        continue;
+
+                /* sanity check that the start of the new buffer is no farther
+                 * than the record that we wanted.  This shouldn't happen. */
+                rec = buf;
+                if (le32_to_cpu(rec->lrh_index) > prev_idx) {
+                        CERROR("missed desired record? %u > %u\n",
+                               le32_to_cpu(rec->lrh_index), prev_idx);
                         RETURN(-ENOENT);
                 }
                 RETURN(0);
@@ -516,9 +588,10 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 oa = obdo_alloc();
                 if (oa == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
-                /* XXX get some filter group constants */
-                oa->o_gr = 1;
+
+                oa->o_gr = FILTER_GROUP_LLOG;
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
+
                 rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
                 if (rc)
                         GOTO(cleanup, rc);
@@ -606,7 +679,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL);
+        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL);
  out:
         obdo_free(oa);
         RETURN(rc);
@@ -700,6 +773,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 struct llog_operations llog_lvfs_ops = {
         lop_write_rec:   llog_lvfs_write_rec,
         lop_next_block:  llog_lvfs_next_block,
+        lop_prev_block:  llog_lvfs_prev_block,
         lop_read_header: llog_lvfs_read_header,
         lop_create:      llog_lvfs_create,
         lop_destroy:     llog_lvfs_destroy,
@@ -729,6 +803,13 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                                 int next_idx, __u64 *cur_offset, void *buf,
                                 int len)
+{
+        LBUG();
+        return 0;
+}
+
+static int llog_lvfs_prev_block(struct llog_handle *loghandle,
+                                int prev_idx, void *buf, int len)
 {
         LBUG();
         return 0;
@@ -770,6 +851,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 struct llog_operations llog_lvfs_ops = {
         lop_write_rec:   llog_lvfs_write_rec,
         lop_next_block:  llog_lvfs_next_block,
+        lop_prev_block:  llog_lvfs_prev_block,
         lop_read_header: llog_lvfs_read_header,
         lop_create:      llog_lvfs_create,
         lop_destroy:     llog_lvfs_destroy,

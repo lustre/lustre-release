@@ -61,8 +61,7 @@
  * Unset cookies should be all-zero (which will never occur naturally). */
 static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies,
-                        llog_fill_rec_cb_t fill_cb)
+                        struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
@@ -70,21 +69,34 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
         int i, rc = 0;
         ENTRY;
 
-        LASSERT(logcookies && numcookies >= lsm->lsm_stripe_count);
+        LASSERTF(logcookies && numcookies >= lsm->lsm_stripe_count, 
+                 "logcookies %p, numcookies %d lsm->lsm_stripe_count %d \n",
+                 logcookies, numcookies, lsm->lsm_stripe_count);
 
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
                 struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
-                struct llog_fill_rec_data data;
 
                 /* fill mds unlink/setattr log record */
-                data.lfd_id = loi->loi_id;
-                data.lfd_ogen = loi->loi_gr;
-                fill_cb(rec, &data);
+                switch (rec->lrh_type) {
+                case MDS_UNLINK_REC: {
+                        struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
+                        lur->lur_oid = loi->loi_id;
+                        lur->lur_ogen = loi->loi_gr;
+                        break;
+                }
+                case MDS_SETATTR_REC: {
+                        struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
+                        lsr->lsr_oid = loi->loi_id;
+                        lsr->lsr_ogen = loi->loi_gr;
+                        break;
+                }
+                default:
+                        break;
+                }
 
                 rc += llog_add(cctxt, rec, NULL, logcookies + rc,
-                                numcookies - rc, fill_cb);
-
+                                numcookies - rc);
         }
 
         RETURN(rc);

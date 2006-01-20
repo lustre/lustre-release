@@ -1,9 +1,7 @@
-MODULES := lvfs #quotactl_test quotacheck_test
+MODULES := lvfs
 @SERVER_TRUE@MODULES += fsfilt_@BACKINGFS@
 
 lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o upcall_cache.o
-#quotactl-objs := quotactl_test.o
-#quotaccheck-objs := quotacheck_test.o
 
 ifeq ($(PATCHLEVEL),6)
 fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o

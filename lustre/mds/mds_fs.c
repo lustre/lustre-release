@@ -49,12 +49,6 @@
 
 #include "mds_internal.h"
 
-/* This limit is arbitrary (32k clients on x86), but it is convenient to use
- * 2^n * PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
-#define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
-
-#define LAST_RCVD "last_rcvd"
-#define LOV_OBJID "lov_objid"
 #define HEALTH_CHECK "health_check"
 
 /* Add client data to the MDS.  We use a bitmap to locate a free space
@@ -83,15 +77,15 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
          * there's no need for extra complication here
          */
         if (new_client) {
-                cl_idx = find_first_zero_bit(bitmap, MDS_MAX_CLIENTS);
+                cl_idx = find_first_zero_bit(bitmap, LR_MAX_CLIENTS);
         repeat:
-                if (cl_idx >= MDS_MAX_CLIENTS ||
+                if (cl_idx >= LR_MAX_CLIENTS ||
                     OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_CLIENT_ADD)) {
-                        CERROR("no room for clients - fix MDS_MAX_CLIENTS\n");
+                        CERROR("no room for clients - fix LR_MAX_CLIENTS\n");
                         return -EOVERFLOW;
                 }
                 if (test_and_set_bit(cl_idx, bitmap)) {
-                        cl_idx = find_next_zero_bit(bitmap, MDS_MAX_CLIENTS,
+                        cl_idx = find_next_zero_bit(bitmap, LR_MAX_CLIENTS,
                                                     cl_idx);
                         goto repeat;
                 }
@@ -206,7 +200,7 @@ int mds_client_free(struct obd_export *exp)
 
 static int mds_server_free_data(struct mds_obd *mds)
 {
-        OBD_FREE(mds->mds_client_bitmap, MDS_MAX_CLIENTS / 8);
+        OBD_FREE(mds->mds_client_bitmap, LR_MAX_CLIENTS / 8);
         OBD_FREE(mds->mds_server_data, sizeof(*mds->mds_server_data));
         mds->mds_server_data = NULL;
 
@@ -228,15 +222,13 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         LASSERT(offsetof(struct lr_server_data, lsd_padding) +
                 sizeof(lsd->lsd_padding) == LR_SERVER_SIZE);
         LASSERT(offsetof(struct mds_client_data, mcd_padding) +
-                sizeof(mcd->mcd_padding) == MDS_LR_CLIENT_SIZE);
-        LASSERT(MDS_LR_CLIENT_SIZE == LR_CLIENT_SIZE);
-        LASSERT(MDS_LR_CLIENT_START == LR_CLIENT_START);
+                sizeof(mcd->mcd_padding) == LR_CLIENT_SIZE);
 
         OBD_ALLOC_WAIT(lsd, sizeof(*lsd));
         if (!lsd)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC_WAIT(mds->mds_client_bitmap, MDS_MAX_CLIENTS / 8);
+        OBD_ALLOC_WAIT(mds->mds_client_bitmap, LR_MAX_CLIENTS / 8);
         if (!mds->mds_client_bitmap) {
                 OBD_FREE(lsd, sizeof(*lsd));
                 RETURN(-ENOMEM);
@@ -250,11 +242,11 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 memcpy(lsd->lsd_uuid, obd->obd_uuid.uuid,sizeof(lsd->lsd_uuid));
                 lsd->lsd_last_transno = 0;
                 mount_count = lsd->lsd_mount_count = 0;
-                lsd->lsd_server_size = cpu_to_le32(MDS_LR_SERVER_SIZE);
-                lsd->lsd_client_start = cpu_to_le32(MDS_LR_CLIENT_START);
-                lsd->lsd_client_size = cpu_to_le16(MDS_LR_CLIENT_SIZE);
-                lsd->lsd_feature_rocompat = cpu_to_le32(MDS_ROCOMPAT_LOVOBJID);
-                lsd->lsd_feature_compat = cpu_to_le32(LR_COMPAT_COMMON_LR);
+                lsd->lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
+                lsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
+                lsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
+                lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
+                lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_COMMON_LR);
         } else {
                 rc = fsfilt_read_record(obd, file, lsd, sizeof(*lsd), &off);
                 if (rc) {
@@ -268,27 +260,27 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 }
                 mount_count = le64_to_cpu(lsd->lsd_mount_count);
         }
-        if (lsd->lsd_feature_incompat & ~cpu_to_le32(MDS_INCOMPAT_SUPP)) {
-                CERROR("unsupported incompat feature %x\n",
-                       le32_to_cpu(lsd->lsd_feature_incompat) &
-                       ~MDS_INCOMPAT_SUPP);
+        if (lsd->lsd_feature_incompat & ~cpu_to_le32(MDT_INCOMPAT_SUPP)) {
+                CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
+                       obd->obd_name, le32_to_cpu(lsd->lsd_feature_incompat) &
+                       ~MDT_INCOMPAT_SUPP);
                 GOTO(err_msd, rc = -EINVAL);
         }
 
-        if (lsd->lsd_feature_rocompat & ~cpu_to_le32(MDS_ROCOMPAT_SUPP)) {
-                CERROR("unsupported read-only feature %x\n",
-                       le32_to_cpu(lsd->lsd_feature_rocompat) &
-                       ~MDS_ROCOMPAT_SUPP);
+        if (lsd->lsd_feature_rocompat & ~cpu_to_le32(MDT_ROCOMPAT_SUPP)) {
+                CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
+                       obd->obd_name, le32_to_cpu(lsd->lsd_feature_rocompat) &
+                       ~MDT_ROCOMPAT_SUPP);
                 /* Do something like remount filesystem read-only */
                 GOTO(err_msd, rc = -EINVAL);
         }
 
-        if (!(lsd->lsd_feature_compat & cpu_to_le32(LR_COMPAT_COMMON_LR))) {
-                CDEBUG(D_WARNING, "old last_rcvd format\n");
-                lsd->lsd_mount_count = lsd->lsd_last_transno; //msd->msd_mount_count
-                lsd->lsd_last_transno = lsd->lsd_unused; //msd->msd_last_transno;
+        if (!(lsd->lsd_feature_compat & cpu_to_le32(OBD_COMPAT_COMMON_LR))) {
+                CDEBUG(D_WARNING, "using old last_rcvd format\n");
+                lsd->lsd_mount_count = lsd->lsd_last_transno;
+                lsd->lsd_last_transno = lsd->lsd_unused;
                 /* If we update the last_rcvd, we can never go back to 
-                   an old install.  Leave this in the old format for now.
+                   an old install, so leave this in the old format for now.
                 lsd->lsd_feature_compat |= cpu_to_le32(LR_COMPAT_COMMON_LR);
                 */
         }
@@ -437,9 +429,9 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 RETURN(rc);
 
         mds->mds_vfsmnt = mnt;
-        mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
+        obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
 
-        fsfilt_setup(obd, mds->mds_sb);
+        fsfilt_setup(obd, obd->u.obt.obt_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;
@@ -588,8 +580,8 @@ int mds_fs_cleanup(struct obd_device *obd)
         int rc = 0;
 
         if (obd->obd_fail)
-                CERROR("%s: shutting down for failover; client state will"
-                       " be preserved.\n", obd->obd_name);
+                CWARN("%s: shutting down for failover; client state will "
+                      "be preserved.\n", obd->obd_name);
 
         class_disconnect_exports(obd); /* cleans up client info too */
         mds_server_free_data(mds);
@@ -626,12 +618,12 @@ int mds_fs_cleanup(struct obd_device *obd)
                 mds->mds_pending_dir = NULL;
         }
 
-        mds_fs_quota_cleanup(mds);
-        
+        lquota_fs_cleanup(quota_interface, obd);
+
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
-        LL_DQUOT_OFF(mds->mds_sb);
+        LL_DQUOT_OFF(obd->u.obt.obt_sb);
 
         return rc;
 }
@@ -644,7 +636,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
-        unsigned int tmpname = ll_insecure_random_int();
+        unsigned int tmpname = ll_rand();
         struct file *filp;
         struct dentry *new_child;
         struct lvfs_run_ctxt saved;
@@ -726,7 +718,8 @@ out_pop:
 }
 
 int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *ea, struct obd_trans_info *oti)
+                    struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                    struct obd_export *md_exp)
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;

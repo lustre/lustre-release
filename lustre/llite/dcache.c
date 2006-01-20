@@ -59,8 +59,7 @@ static void ll_release(struct dentry *de)
  * an AST before calling d_revalidate_it().  The dentry still exists (marked
  * INVALID) so d_lookup() matches it, but we have no lock on it (so
  * lock_match() fails) and we spin around real_lookup(). */
-static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
-                       struct qstr *name)
+int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
 {
         struct dentry *dchild;
         ENTRY;
@@ -71,6 +70,7 @@ static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
         if (memcmp(d_name->name, name->name, name->len))
                 RETURN(1);
 
+        /* XXX: d_name must be in-dentry structure */
         dchild = container_of(d_name, struct dentry, d_name); /* ugh */
         if (dchild->d_flags & DCACHE_LUSTRE_INVALID) {
                 CDEBUG(D_DENTRY,"INVALID dentry %p not matched, was bug 3784\n",
@@ -134,6 +134,10 @@ void ll_intent_release(struct lookup_intent *it)
         ll_intent_drop_lock(it);
         it->it_magic = 0;
         it->it_op_release = 0;
+        /* We are still holding extra reference on a request, need to free it */
+        if (it_disposition(it, DISP_ENQ_COMPLETE))
+                ptlrpc_req_finished(it->d.lustre.it_data);
+
         it->d.lustre.it_disposition = 0;
         it->d.lustre.it_data = NULL;
         EXIT;
@@ -179,6 +183,7 @@ restart:
                         continue;
                 }
 
+                lock_dentry(dentry);
                 if (atomic_read(&dentry->d_count) == 0) {
                         CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
                                "inode %p\n", dentry->d_name.len,
@@ -186,9 +191,7 @@ restart:
                                dentry->d_inode);
                         dget_locked(dentry);
                         __d_drop(dentry);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                        INIT_HLIST_NODE(&dentry->d_hash);
-#endif
+                        unlock_dentry(dentry);
                         spin_unlock(&dcache_lock);
                         dput(dentry);
                         goto restart;
@@ -197,11 +200,17 @@ restart:
                                "inode %p refc %d\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
                                dentry->d_inode, atomic_read(&dentry->d_count));
-                        hlist_del_init(&dentry->d_hash);
+                        /* actually we don't unhash the dentry, rather just
+                         * mark it inaccessible for to __d_lookup(). otherwise
+                         * sys_getcwd() could return -ENOENT -bzzz */
                         dentry->d_flags |= DCACHE_LUSTRE_INVALID;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                        __d_drop(dentry);
                         hlist_add_head(&dentry->d_hash,
                                        &sbi->ll_orphan_dentry_list);
+#endif
                 }
+                unlock_dentry(dentry);
         }
         spin_unlock(&dcache_lock);
         EXIT;
@@ -327,16 +336,18 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         /* unfortunately ll_intent_lock may cause a callback and revoke our
          * dentry */
         spin_lock(&dcache_lock);
-        hlist_del_init(&de->d_hash);
+        lock_dentry(de);
+        __d_drop(de);
+        unlock_dentry(de);
         __d_rehash(de, 0);
         spin_unlock(&dcache_lock);
 
  out:
-        /* If we had succesful it lookup on mds, but it happened to be negative,
-           we do not free request as it will be reused during lookup (see
-           comment in mdc/mdc_locks.c::mdc_intent_lock(). But if
+        /* We do not free request as it may be reused during following lookup
+          (see comment in mdc/mdc_locks.c::mdc_intent_lock()), request will
+           be freed in ll_lookup_it or in ll_intent_release. But if
            request was not completed, we need to free it. (bug 5154) */
-        if (req != NULL && (rc == 1 || !it_disposition(it, DISP_ENQ_COMPLETE)))
+        if (req != NULL && !it_disposition(it, DISP_ENQ_COMPLETE))
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 ll_unhash_aliases(de->d_inode);
@@ -348,7 +359,9 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                                de->d_name.name, de, de->d_parent, de->d_inode,
                                atomic_read(&de->d_count));
                 ll_lookup_finish_locks(it, de);
+                lock_dentry(de);
                 de->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                unlock_dentry(de);
         }
         RETURN(rc);
 }

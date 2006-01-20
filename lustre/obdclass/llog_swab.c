@@ -77,7 +77,7 @@ void lustre_swab_llogd_conn_body (struct llogd_conn_body *d)
 }
 EXPORT_SYMBOL(lustre_swab_llogd_conn_body);
 
-void lustre_swab_ll_fid (struct ll_fid *fid)
+void lustre_swab_ll_fid(struct ll_fid *fid)
 {
         __swab64s (&fid->id);
         __swab32s (&fid->generation);

@@ -202,7 +202,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                 if (lsm->lsm_stripe_size == 0)
                         lsm->lsm_stripe_size = PAGE_SIZE;
 
-                idx = ll_insecure_random_int();
+                idx = ll_rand();
 
                 /* setup stripes: indices + default ids if required */
                 for (i = 0; i < lsm->lsm_stripe_count; i++) {
@@ -222,9 +222,9 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                 oa->o_id = ++last_object_id;
 
         if (on_target) {
-                /* XXX get some filter group constants */
-                oa->o_gr = 2;
+                oa->o_gr = FILTER_GROUP_ECHO;
                 oa->o_valid |= OBD_MD_FLGROUP;
+
                 rc = obd_create(ec->ec_exp, oa, &lsm, oti);
                 if (rc != 0)
                         goto failed;
@@ -247,7 +247,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                         oa->o_id, on_target ? " (undoing create)" : "");
 
                 if (on_target)
-                        obd_destroy(ec->ec_exp, oa, lsm, oti);
+                        obd_destroy(ec->ec_exp, oa, lsm, oti, NULL);
 
                 rc = -EEXIST;
                 goto failed;
@@ -938,9 +938,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                         rnb[i].len = PAGE_SIZE;
                 }
 
-                /* XXX this can't be the best.. */
-                memset(oti, 0, sizeof(*oti));
                 ioo.ioo_bufcnt = npages;
+                oti->oti_transno = 0;
 
                 ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti);
                 if (ret != 0)
@@ -988,7 +987,7 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_trans_info dummy_oti;
+        struct obd_trans_info dummy_oti = { .oti_thread_id = -1 };
         struct ec_object *eco;
         int rc;
         ENTRY;
@@ -997,11 +996,9 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        memset(&dummy_oti, 0, sizeof(dummy_oti));
-
         data->ioc_obdo1.o_valid &= ~OBD_MD_FLHANDLE;
         data->ioc_obdo1.o_valid |= OBD_MD_FLGROUP;
-        data->ioc_obdo1.o_gr = 2;
+        data->ioc_obdo1.o_gr = FILTER_GROUP_ECHO;
 
         switch((long)data->ioc_pbuf1) {
         case 1:
@@ -1222,10 +1219,10 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
                         oa = &data->ioc_obdo1;
-                        oa->o_gr = 2;
+                        oa->o_gr = FILTER_GROUP_ECHO;
                         oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eco_lsm, 
-                                         &dummy_oti);
+                                         &dummy_oti, NULL);
                         if (rc == 0)
                                 eco->eco_deleted = 1;
                         echo_put_object(eco);

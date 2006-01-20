@@ -57,55 +57,9 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 void oscc_init(struct obd_device *obd);
 void osc_wake_cache_waiters(struct client_obd *cli);
 
-#ifdef HAVE_QUOTA_SUPPORT
-int osc_get_quota_flag(struct client_obd *cli, unsigned int uid,
-                       unsigned int gid);
-int osc_set_quota_flag(struct client_obd *cli,
-                       unsigned int uid, unsigned int gid,
-                       obd_flag valid, obd_flag flags);
-int osc_qinfo_cleanup(struct client_obd *cli);
-int osc_qinfo_init(void);
-void osc_qinfo_exit(void);
-int osc_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl);
-int osc_poll_quotacheck(struct obd_export *exp, struct if_quotacheck *qchk);
-int osc_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl);
-#else /* !HAVE_QUOTA_SUPPORT */
-static inline int osc_get_quota_flag(struct client_obd *cli,
-                                     unsigned int uid, unsigned int gid)
-{
-       return QUOTA_OK;
-}
-static inline int osc_set_quota_flag(struct client_obd *cli,
-                                     unsigned int uid, unsigned int gid,
-                                     obd_flag valid, obd_flag flags)
-{
-        return 0;
-}
-static inline int osc_qinfo_cleanup(struct client_obd *cli)
-{
-        return 0;
-}
-static inline int osc_qinfo_init(void)
-{
-        return 0;
-}
-static inline void osc_qinfo_exit(void) {}
-static inline int osc_quotacheck(struct obd_export *exp,
-                                 struct obd_quotactl *oqctl)
-{
-        return -ENOTSUPP;
-}
-static inline int osc_poll_quotacheck(struct obd_export *exp,
-                                      struct if_quotacheck *qchk)
-{
-        return -ENOTSUPP;
-}
-static inline int osc_quotactl(struct obd_export *exp,
-                               struct obd_quotactl *oqctl)
-{
-        return -ENOTSUPP;
-}
-#endif /* HAVE_QUOTA_SUPPORT */
+
+/* Quota stuff */
+extern quota_interface_t *quota_interface;
 
 #ifdef LPROCFS
 int lproc_osc_attach_seqstat(struct obd_device *dev);

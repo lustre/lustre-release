@@ -1,4 +1,5 @@
 #!/bin/bash
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
 
@@ -31,7 +32,7 @@ init_test_env() {
     export XMLCONFIG=${XMLCONFIG:-${TESTSUITE}.xml}
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
-    [ -d /r ] && export ROOT=/r
+    [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
@@ -41,6 +42,10 @@ init_test_env() {
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
+
+    if [ "$ACCEPTOR_PORT" ]; then
+        export PORT_OPT="--port $ACCEPTOR_PORT"
+    fi
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
@@ -73,6 +78,12 @@ start() {
     do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
         --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
         $@ $XMLCONFIG
+    RC=${PIPESTATUS[0]}
+    if [ $RC -ne 0 ]; then
+        # maybe acceptor error, dump tcp port usage
+        netstat -tpn
+    fi
+    return $RC
 }
 
 stop() {
@@ -85,6 +96,7 @@ stop() {
 }
 
 zconf_mount() {
+    local OPTIONS
     client=$1
     mnt=$2
 
@@ -92,17 +104,17 @@ zconf_mount() {
 
     # Only supply -o to mount if we have options
     if [ -n "$MOUNTOPT" ]; then
-        MOUNTOPT="-o $MOUNTOPT"
+        OPTIONS="-o $MOUNTOPT"
     fi
 
     if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre $MOUNTOPT \
+	do_node $client mount -t lustre $OPTIONS \
 		`facet_nid mds`:/mds_svc/client_facet $mnt || return 1
     else
 	# this is so cheating
 	do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG > \
 		/dev/null || return 2
-	do_node $client $LLMOUNT $MOUNTOPT \
+	do_node $client $LLMOUNT $OPTIONS \
 		`facet_nid mds`:/mds_svc/client_facet $mnt || return 4
     fi
 
@@ -342,24 +354,29 @@ add_facet() {
     echo "add facet $facet: `facet_host $facet`"
     do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
         --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
-    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` --nettype lnet
+    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
+        --nettype lnet $PORT_OPT
 }
 
 add_mds() {
-    facet=$1
+    local MOUNT_OPTS
+    local facet=$1
     shift
     rm -f ${facet}active
     add_facet $facet
+    [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
     do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc \
-    	--fstype $FSTYPE $* $MDSOPT
+    	--fstype $FSTYPE $* $MOUNT_OPTS
 }
 
 add_mdsfailover() {
-    facet=$1
+    local MOUNT_OPTS
+    local facet=$1
     shift
     add_facet ${facet}failover  --lustre_upcall $UPCALL
+    [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
     do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc \
-    	--fstype $FSTYPE $* $MDSOPT
+    	--fstype $FSTYPE $* $MOUNT_OPTS
 }
 
 add_ost() {
@@ -387,11 +404,13 @@ add_lov() {
 }
 
 add_client() {
-    facet=$1
+    local MOUNT_OPTS
+    local facet=$1
     mds=$2
     shift; shift
+    [ "x$CLIENTOPT" != "x" ] && MOUNT_OPTS="--clientoptions $CLIENTOPT"
     add_facet $facet --lustre_upcall $UPCALL
-    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $* $CLIENTOPT
+    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $* $MOUNT_OPTS
 }
 
 
@@ -542,7 +561,7 @@ build_test_filter() {
             eval ONLY_${O}=true
         done
         [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-		log "skipping test `echo $EXCEPT $ALWAYS_EXCEPT`"
+		log "skipping tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
         for E in $EXCEPT $ALWAYS_EXCEPT; do
             eval EXCEPT_${E}=true
         done

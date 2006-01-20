@@ -45,7 +45,7 @@ static char *progname = NULL;
 
 void usage(FILE *out)
 {
-        fprintf(out, "%s v1.%d\n", progname, LMD_MAGIC & 0xFF);
+        fprintf(out, "%s v2.0\n", progname);
         fprintf(out, "usage: %s <mgmtnid>[:<altmgtnid>...]:/<filesystem>[/<cfgname>] <mountpt> "
                 "[-fhnv] [-o mntopt]\n", progname);
         fprintf(out, "\t<mdsnode>: nid of MDS (config) node\n"
@@ -188,10 +188,13 @@ static const struct opt_map opt_map[] = {
   { "nouser",   0, 1, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  0, 1, 0         },      /* Device owner has no special privs */
   { "_netdev",  0, 0, 0         },      /* Device accessible only via network */
+  /* These strings are passed through and parsed in lustre ll_options */
   { "flock",    0, 0, 0         },      /* Enable flock support */
   { "noflock",  1, 1, 0         },      /* Disable flock support */
   { "user_xattr",   0, 0, 0     },      /* Enable get/set user xattr */
   { "nouser_xattr", 1, 1, 0     },      /* Disable user xattr */
+  { "acl",      0, 0, 0         },      /* Enable ACL support */
+  { "noacl",    1, 1, 0         },      /* Disable ACL support */
   { "nosvc",    0, 0, 0         },      /* Only start MGS/MGC, no other services */
   { NULL,       0, 0, 0         }
 };

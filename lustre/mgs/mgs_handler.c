@@ -45,6 +45,7 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_commit_confd.h>
 #include <linux/lustre_disk.h>
+#include <linux/lustre_ver.h>
 #include "mgs_internal.h"
 
 static int mgs_cleanup(struct obd_device *obd);
@@ -68,7 +69,17 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         if (data != NULL) {
                 data->ocd_connect_flags &= MGMT_CONNECT_SUPPORTED;
+                data->ocd_ibits_known &= MDS_INODELOCK_FULL;
+
+                /* If no known bits (which should not happen, probably,
+                   as everybody should support LOOKUP and UPDATE bits at least)
+                   revert to compat mode with plain locks. */
+                if (!data->ocd_ibits_known &&
+                    data->ocd_connect_flags & OBD_CONNECT_IBITS)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_IBITS;
+
                 exp->exp_connect_flags = data->ocd_connect_flags;
+                data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
         if (rc) {
@@ -267,12 +278,10 @@ static int mgs_cleanup(struct obd_device *obd)
 static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
                             struct lustre_handle *lockh)
 {
-        /* FIXME resource should be based on fsname, 
-           one lock per fs.  One lock per config log? */
-        struct ldlm_res_id res_id = {.name = {12321}};
+        struct ldlm_res_id res_id;
         int rc, flags = 0;
+        ENTRY;
 
-        CERROR("mgs_lock %s\n", fsname);
         rc = mgc_logname2resid(fsname, &res_id);
 
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
@@ -282,8 +291,8 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
         if (rc) {
                 CERROR("can't take cfg lock %d\n", rc);
         }
-
-        return rc;
+        
+        RETURN(rc);
 }
 
 static int mgs_put_cfg_lock(struct lustre_handle *lockh)

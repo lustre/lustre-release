@@ -106,7 +106,7 @@ EXPORT_SYMBOL(llog_sync);
 
 int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
-                int numcookies, llog_fill_rec_cb_t fill_cb)
+                int numcookies)
 {
         int rc;
         ENTRY;
@@ -118,7 +118,7 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
 
-        rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies, fill_cb);
+        rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_add);
@@ -283,8 +283,7 @@ EXPORT_SYMBOL(llog_obd_origin_cleanup);
 /* add for obdfilter/sz and mds/unlink */
 int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies,
-                        llog_fill_rec_cb_t fill_cb)
+                        struct llog_cookie *logcookies, int numcookies)
 {
         struct llog_handle *cathandle;
         int rc;

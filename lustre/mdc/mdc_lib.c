@@ -39,12 +39,12 @@
 #endif
 #endif
 
-void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
-                      struct ll_fid *mdc_fid)
+void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
+                      __u32 size, struct ll_fid *mdc_fid)
 {
         struct mds_body *b;
 
-        b = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*b));
+        b = lustre_msg_buf(req->rq_reqmsg, pos, sizeof (*b));
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
@@ -63,9 +63,15 @@ static void mdc_pack_body(struct mds_body *b)
         b->capability = current->cap_effective;
 }
 
-void mdc_pack_req_body(struct ptlrpc_request *req)
+void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
+                       __u64 valid, struct ll_fid *fid, int ea_size)
 {
-        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*b));
+        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+
+        if (fid)
+                b->fid1 = *fid;
+        b->valid = valid;
+        b->eadatasize = ea_size;
         mdc_pack_body(b);
 }
 
@@ -111,10 +117,22 @@ static __u32 mds_pack_open_flags(__u32 flags)
                 ((flags & O_APPEND) ? MDS_OPEN_APPEND : 0) |
                 ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
                 ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
+                ((flags & O_JOIN_FILE) ? MDS_OPEN_JOIN_FILE : 0) |
                 0;
 }
 
 /* packing of MDS records */
+void mdc_join_pack(struct ptlrpc_request *req, int offset,
+                   struct mdc_op_data *op_data, __u64 head_size)
+{
+        struct mds_rec_join *rec;
+
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
+        LASSERT(rec != NULL);
+        rec->jr_fid = op_data->fid2;
+        rec->jr_headsize = head_size;
+}
+
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *lmm, int lmmlen)
@@ -150,11 +168,11 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
-void mdc_setattr_pack(struct ptlrpc_request *req, struct mdc_op_data *data,
-                      struct iattr *iattr, void *ea, int ealen,
-                      void *ea2, int ea2len)
+void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
+                      struct mdc_op_data *data, struct iattr *iattr,
+                      void *ea, int ealen, void *ea2, int ea2len)
 {
-        struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, 0,
+        struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset,
                                                      sizeof (*rec));
         rec->sa_opcode = REINT_SETATTR;
         rec->sa_fsuid = current->fsuid;
@@ -182,12 +200,12 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct mdc_op_data *data,
         if (ealen == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, 1, ealen), ea, ealen);
+        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 1, ealen), ea, ealen);
 
         if (ea2len == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, 2, ea2len), ea2, ea2len);
+        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 2, ea2len), ea2, ea2len);
 }
 
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
@@ -265,7 +283,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
-void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
+void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
                       int flags, struct mdc_op_data *data)
 {
         struct mds_body *b;

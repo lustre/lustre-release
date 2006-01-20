@@ -1,5 +1,5 @@
 # Lustre test Makefile
-AM_CPPFLAGS = $(LLCPPFLAGS) -I/opt/lam/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
+AM_CPPFLAGS = $(LLCPPFLAGS) -I/opt/lam/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS
 AM_CFLAGS = $(LLCFLAGS)
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
@@ -7,7 +7,7 @@ AM_CFLAGS = $(LLCFLAGS)
 pkgexample_scripts = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh
 pkgexample_scripts += local.sh echo.sh uml.sh lov.sh
 noinst_DATA =
-noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh tbox.sh
+noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh
 noinst_SCRIPTS += llrmount.sh runfailure-mds runvmstat runfailure-net
 noinst_SCRIPTS += runfailure-ost runiozone runregression-net.sh runtests
 noinst_SCRIPTS += sanity.sh rundbench
@@ -18,7 +18,7 @@ if TESTS
 pkgexample_SCRIPTS = $(pkgexample_scripts)
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime
+noinst_PROGRAMS += stat createmany chownmany statmany multifstat createtest mlink utime
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod

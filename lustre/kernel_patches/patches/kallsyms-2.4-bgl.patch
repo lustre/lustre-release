@@ -252,7 +252,7 @@ Index: linux-bgl/kernel/kallsyms.c
 +   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 +  */
 +
-+#ident "$Id: kallsyms-2.4-bgl.patch,v 1.1.20.1 2005/03/24 22:50:28 jacob Exp $"
++#ident "$Id: kallsyms-2.4-bgl.patch,v 1.1.20.2 2005/04/01 21:30:19 green Exp $"
 +
 +/*
 +   This code uses the list of all kernel and module symbols to :-
@@ -568,7 +568,7 @@ Index: linux-bgl/include/linux/kallsyms.h
 +   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 + */
 +
-+#ident "$Id: kallsyms-2.4-bgl.patch,v 1.1.20.1 2005/03/24 22:50:28 jacob Exp $"
++#ident "$Id: kallsyms-2.4-bgl.patch,v 1.1.20.2 2005/04/01 21:30:19 green Exp $"
 +
 +#ifndef MODUTILS_KALLSYMS_H
 +#define MODUTILS_KALLSYMS_H 1

@@ -321,9 +321,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                         CERROR("Device %d not attached\n", obd->obd_minor);
                         GOTO(out, err = -ENODEV);
                 }
-                CDEBUG(D_IOCTL,
-                       "disabling committed-transno notifications on %d\n",
-                       obd->obd_minor);
+                CDEBUG(D_HA, "%s: disabling committed-transno notification\n",
+                       obd->obd_name);
                 obd->obd_no_transno = 1;
                 GOTO(out, err = 0);
         }
@@ -475,6 +474,9 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
 
                 obd = &obd_dev[i];
                 if (obd->obd_type == NULL)
+                        continue;
+
+                if (obd->obd_stopping)
                         continue;
 
                 atomic_inc(&obd->obd_refcount);

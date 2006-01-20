@@ -51,16 +51,9 @@
 #include <linux/lustre_quota.h>
 #include "ost_internal.h"
 
-void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)
-{
-        if (oti == NULL)
-                return;
-        memset(oti, 0, sizeof *oti);
-
-        if (req->rq_repmsg && req->rq_reqmsg != 0)
-                oti->oti_transno = req->rq_repmsg->transno;
-        oti->oti_thread = req->rq_svc_thread;
-}
+static int ost_num_threads;
+CFS_MODULE_PARM(ost_num_threads, "i", int, 0444,
+                "number of OST service threads to start");
 
 void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
 {
@@ -72,6 +65,7 @@ void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
 
         if (req->rq_repmsg)
                 req->rq_repmsg->transno = oti->oti_transno;
+        req->rq_transno = oti->oti_transno;
 
         /* XXX 4 == entries in oti_ack_locks??? */
         for (ack_lock = oti->oti_ack_locks, i = 0; i < 4; i++, ack_lock++) {
@@ -101,7 +95,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                 oti->oti_logcookies = obdo_logcookie(&body->oa);
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_destroy(exp, &body->oa, NULL, oti);
+        req->rq_status = obd_destroy(exp, &body->oa, NULL, oti, NULL);
         RETURN(0);
 }
 
@@ -138,6 +132,8 @@ static int ost_statfs(struct ptlrpc_request *req)
         osfs = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*osfs));
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs, jiffies-HZ);
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
+                osfs->os_bfree = osfs->os_bavail = 64;
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
@@ -552,13 +548,13 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         LASSERT(mode == LCK_PR || mode == LCK_PW);
         LASSERT(!lustre_handle_is_used(lh));
 
+        if (nrbufs == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
+                RETURN(0);
+
         /* EXPENSIVE ASSERTION */
         for (i = 1; i < nrbufs; i ++)
                 LASSERT((nb[0].flags & OBD_BRW_SRVLOCK) ==
                         (nb[i].flags & OBD_BRW_SRVLOCK));
-
-        if (nrbufs == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
-                RETURN(0);
 
         policy.l_extent.start = nb[0].offset & CFS_PAGE_MASK;
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
@@ -705,16 +701,26 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
         }
 
+        /* Check if client was evicted while we were doing i/o before touching
+           network */
         if (rc == 0) {
-                rc = ptlrpc_start_bulk_transfer(desc);
+                if (desc->bd_export->exp_failed)
+                        rc = -ENOTCONN;
+                else
+                        rc = ptlrpc_start_bulk_transfer(desc);
                 if (rc == 0) {
-                        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
-                                          ost_bulk_timeout, desc);
+                        lwi = LWI_TIMEOUT_INTERVAL(obd_timeout * HZ / 4, HZ,
+                                                   ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
-                                          !ptlrpc_bulk_active(desc), &lwi);
+                                          !ptlrpc_bulk_active(desc) ||
+                                          desc->bd_export->exp_failed, &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
                                 DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT");
+                                ptlrpc_abort_bulk(desc);
+                        } else if (desc->bd_export->exp_failed) {
+                                DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
+                                rc = -ENOTCONN;
                                 ptlrpc_abort_bulk(desc);
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
@@ -908,15 +914,24 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                       pp_rnb[i].offset & (PAGE_SIZE - 1),
                                       pp_rnb[i].len);
 
-        rc = ptlrpc_start_bulk_transfer (desc);
+        /* Check if client was evicted while we were doing i/o before touching
+           network */
+        if (desc->bd_export->exp_failed)
+                rc = -ENOTCONN;
+        else
+                rc = ptlrpc_start_bulk_transfer (desc);
         if (rc == 0) {
-                lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
-                                  ost_bulk_timeout, desc);
-                rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc),
-                                  &lwi);
+                lwi = LWI_TIMEOUT_INTERVAL(obd_timeout * HZ / 4, HZ,
+                                           ost_bulk_timeout, desc);
+                rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc) ||
+                                  desc->bd_export->exp_failed, &lwi);
                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                 if (rc == -ETIMEDOUT) {
                         DEBUG_REQ(D_ERROR, req, "timeout on bulk GET");
+                        ptlrpc_abort_bulk(desc);
+                } else if (desc->bd_export->exp_failed) {
+                        DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
+                        rc = -ENOTCONN;
                         ptlrpc_abort_bulk(desc);
                 } else if (!desc->bd_success ||
                            desc->bd_nob_transferred != desc->bd_nob) {
@@ -1167,6 +1182,50 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+static int ost_handle_quotactl(struct ptlrpc_request *req)
+{
+        struct obd_quotactl *oqctl, *repoqc;
+        int rc, size = sizeof(*repoqc);
+        ENTRY;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+        if (oqctl == NULL)
+                GOTO(out, rc = -EPROTO);
+
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc)
+                GOTO(out, rc);
+
+        repoqc = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repoqc));
+
+        req->rq_status = obd_quotactl(req->rq_export, oqctl);
+        *repoqc = *oqctl;
+out:
+        RETURN(rc);
+}
+
+static int ost_handle_quotacheck(struct ptlrpc_request *req)
+{
+        struct obd_quotactl *oqctl;
+        int rc;
+        ENTRY;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+        if (oqctl == NULL) 
+                RETURN(-EPROTO);
+
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
+        if (rc) {
+                CERROR("ost: out of memory while packing quotacheck reply\n");
+                RETURN(-ENOMEM);
+        }
+
+        req->rq_status = obd_quotacheck(req->rq_export, oqctl);
+        RETURN(0);
+}
+
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
 {
@@ -1195,6 +1254,66 @@ static int ost_filter_recovery_request(struct ptlrpc_request *req,
                 req->rq_status = -EAGAIN;
                 RETURN(ptlrpc_error(req));
         }
+}
+
+int ost_msg_check_version(struct lustre_msg *msg)
+{
+        int rc;
+
+        /* TODO: enable the below check while really introducing msg version.
+         * it's disabled because it will break compatibility with b1_4.
+         */
+        return (0);
+        switch(msg->opc) {
+        case OST_CONNECT:
+        case OST_DISCONNECT:
+        case OBD_PING:
+                rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_OBD_VERSION);
+                break;
+        case OST_CREATE:
+        case OST_DESTROY:
+        case OST_GETATTR:
+        case OST_SETATTR:
+        case OST_WRITE:
+        case OST_READ:
+        case OST_SAN_READ:
+        case OST_SAN_WRITE:
+        case OST_PUNCH:
+        case OST_STATFS:
+        case OST_SYNC:
+        case OST_SET_INFO:
+        case OST_GET_INFO:
+        case OST_QUOTACHECK:
+        case OST_QUOTACTL:
+                rc = lustre_msg_check_version(msg, LUSTRE_OST_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_OST_VERSION);
+                break;
+        case LDLM_ENQUEUE:
+        case LDLM_CONVERT:
+        case LDLM_CANCEL:
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
+                rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_DLM_VERSION);
+                break;
+        case LLOG_ORIGIN_CONNECT:
+        case OBD_LOG_CANCEL:
+                rc = lustre_msg_check_version(msg, LUSTRE_LOG_VERSION);
+                if (rc)
+                        CERROR("bad opc %u version %08x, expecting %08x\n",
+                               msg->opc, msg->version, LUSTRE_LOG_VERSION);
+        default:
+                CERROR("Unexpected opcode %d\n", msg->opc);
+                rc = -ENOTSUPP;
+        }
+        return rc;
 }
 
 static int ost_handle(struct ptlrpc_request *req)
@@ -1235,6 +1354,9 @@ static int ost_handle(struct ptlrpc_request *req)
         }
 
         oti_init(oti, req);
+        rc = ost_msg_check_version(req->rq_reqmsg);
+        if (rc)
+                RETURN(rc);
 
         switch (req->rq_reqmsg->opc) {
         case OST_CONNECT: {
@@ -1334,12 +1456,12 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_QUOTACHECK:
                 CDEBUG(D_INODE, "quotacheck\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_QUOTACHECK_NET, 0);
-                rc = ost_quotacheck(req);
+                rc = ost_handle_quotacheck(req);
                 break;
         case OST_QUOTACTL:
                 CDEBUG(D_INODE, "quotactl\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_QUOTACTL_NET, 0);
-                rc = ost_quotactl(req);
+                rc = ost_handle_quotactl(req);
                 break;
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
@@ -1429,7 +1551,6 @@ static void ost_thread_done(struct ptlrpc_thread *thread)
         ENTRY;
 
         LASSERT(thread != NULL);
-        LASSERT(thread->t_data != NULL);
 
         /*
          * be prepared to handle partially-initialized pools (because this is
@@ -1460,7 +1581,7 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
 
         LASSERT(thread != NULL);
         LASSERT(thread->t_data == NULL);
-        LASSERT(thread->t_id < OST_NUM_THREADS);
+        LASSERT(thread->t_id < OST_MAX_THREADS);
 
         OBD_ALLOC_PTR(tls);
         if (tls != NULL) {
@@ -1502,13 +1623,18 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         sema_init(&ost->ost_health_sem, 1);
 
+        if (ost_num_threads < 2)
+                ost_num_threads = OST_DEF_THREADS;
+        if (ost_num_threads > OST_MAX_THREADS)
+                ost_num_threads = OST_MAX_THREADS;
+
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_REQUEST_PORTAL,
                                 OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, LUSTRE_OSS_NAME,
                                 obd->obd_proc_entry, ost_print_req,
-                                OST_NUM_THREADS);
+                                ost_num_threads);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
                 GOTO(out_lprocfs, rc = -ENOMEM);
@@ -1540,7 +1666,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                                 OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, "ost_io",
                                 obd->obd_proc_entry, ost_print_req,
-                                OST_NUM_THREADS);
+                                ost_num_threads);
         if (ost->ost_io_service == NULL) {
                 CERROR("failed to start OST I/O service\n");
                 GOTO(out_create, rc = -ENOMEM);
@@ -1630,14 +1756,17 @@ static struct obd_ops ost_obd_ops = {
         .o_health_check = ost_health_check,
 };
 
+
 static int __init ost_init(void)
 {
         struct lprocfs_static_vars lvars;
+        int rc;
         ENTRY;
 
-        lprocfs_init_vars(ost,&lvars);
-        RETURN(class_register_type(&ost_obd_ops, lvars.module_vars,
-                                   LUSTRE_OSS_NAME));
+        lprocfs_init_vars(ost, &lvars);
+        rc = class_register_type(&ost_obd_ops, lvars.module_vars,
+                                 LUSTRE_OSS_NAME);
+        RETURN(rc);
 }
 
 static void /*__exit*/ ost_exit(void)

@@ -1,4 +1,5 @@
 #!/bin/sh
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 export PATH=`dirname $0`/../utils:$PATH
 
@@ -27,11 +28,16 @@ else
 fi    
 
 [ "$NODE" ] && node_opt="--node $NODE"
+[ "$DEBUG" ] && portals_opt="$portals_opt --ptldebug=$DEBUG"
+[ "$PTLDEBUG" ] && portals_opt="$portals_opt --ptldebug=$PTLDEBUG"
 
-${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt $@ $conf_opt || exit 2
+${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt $@ $conf_opt || {
+    # maybe acceptor error, dump tcp port usage
+    netstat -tpn
+    exit 2
+}
 
-[ $DEBUG ] && sysctl -w lnet.debug=$DEBUG
 
 if [ "$MOUNT2" ]; then
-	$LLMOUNT -v `hostname`:/mds1/client $MOUNT2 || exit 3
+	$LLMOUNT -v -o user_xattr,acl `hostname`:/mds1/client $MOUNT2 || exit 3
 fi

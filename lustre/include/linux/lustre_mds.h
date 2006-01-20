@@ -13,6 +13,9 @@
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/dcache.h>
+# ifdef CONFIG_FS_POSIX_ACL
+# include <linux/xattr_acl.h>
+# endif
 #endif
 #include <linux/lustre_handles.h>
 #include <libcfs/kp30.h>
@@ -32,8 +35,11 @@ struct obd_device;
 struct ll_file_data;
 
 struct lustre_md {
-        struct mds_body *body;
-        struct lov_stripe_md *lsm;
+        struct mds_body         *body;
+        struct lov_stripe_md    *lsm;
+#ifdef CONFIG_FS_POSIX_ACL
+        struct posix_acl        *posix_acl;
+#endif
 };
 
 struct mdc_op_data {
@@ -67,26 +73,6 @@ struct mds_update_record {
         struct lvfs_grp_hash_entry *ur_grp_entry;
 };
 
-#define MDS_LR_SERVER_SIZE    512
-
-#define MDS_LR_CLIENT_START  8192
-#define MDS_LR_CLIENT_SIZE    128
-#if MDS_LR_CLIENT_START < MDS_LR_SERVER_SIZE
-#error "Can't have MDS_LR_CLIENT_START < MDS_LR_SERVER_SIZE"
-#endif
-
-#define MDS_CLIENT_SLOTS 17
-
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mds_client_data {
-        __u8 mcd_uuid[40];      /* client UUID */
-        __u64 mcd_last_transno; /* last completed transaction ID */
-        __u64 mcd_last_xid;     /* xid for the last transaction */
-        __u32 mcd_last_result;  /* result from last RPC */
-        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 64];
-};
-
 /* file data for open files on MDS */
 struct mds_file_data {
         struct portals_handle mfd_handle; /* must be first */
@@ -97,6 +83,15 @@ struct mds_file_data {
         struct dentry        *mfd_dentry;
 };
 
+/* ACL */
+#ifdef CONFIG_FS_POSIX_ACL
+#define LUSTRE_POSIX_ACL_MAX_ENTRIES    (32)
+#define LUSTRE_POSIX_ACL_MAX_SIZE       \
+                (xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
+#else
+#define LUSTRE_POSIX_ACL_MAX_SIZE       0
+#endif
+
 /* mds/mds_reint.c */
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
@@ -106,7 +101,7 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
-                                     char *name, int namelen);
+                                     char *name, int namelen, __u64 lockpart);
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt);
 int mds_update_server_data(struct obd_device *, int force_sync);
@@ -145,14 +140,17 @@ int mdc_enqueue(struct obd_export *exp,
 
 /* mdc/mdc_request.c */
 int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp);
-int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
+
+int mdc_req2lustre_md(struct ptlrpc_request *req, int offset, 
                       struct obd_export *exp, struct lustre_md *md);
+void mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
+
 int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
 int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 obd_valid valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
 int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
-                     char *filename, int namelen, unsigned long valid,
+                     const char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,

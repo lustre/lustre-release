@@ -40,10 +40,10 @@
 
 #include "filter_internal.h"
 
-int filter_log_sz_change(struct llog_handle *cathandle, 
+int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
                          __u32 io_epoch,
-                         struct llog_cookie *logcookie, 
+                         struct llog_cookie *logcookie,
                          struct inode *inode)
 {
         struct llog_size_change_rec *lsc;
@@ -53,10 +53,10 @@ int filter_log_sz_change(struct llog_handle *cathandle,
 
         down(&inode->i_sem);
         ofd = inode->i_filterdata;
-        
+
         if (ofd && ofd->ofd_epoch >= io_epoch) {
                 if (ofd->ofd_epoch > io_epoch)
-                        CERROR("client sent old epoch %d for obj ino %ld\n", 
+                        CERROR("client sent old epoch %d for obj ino %ld\n",
                                io_epoch, inode->i_ino);
                 up(&inode->i_sem);
                 RETURN(0);
@@ -116,8 +116,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 }
 
 /* Callback for processing the unlink log record received from MDS by 
- * llog_client_api.
- */
+ * llog_client_api. */
 static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                                       struct llog_rec_hdr *rec,
                                       struct llog_cookie *cookie)
@@ -140,7 +139,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         memcpy(obdo_logcookie(oa), cookie, sizeof(*cookie));
         oid = oa->o_id;
 
-        rc = filter_destroy(exp, oa, NULL, NULL);
+        rc = filter_destroy(exp, oa, NULL, NULL, NULL);
         obdo_free(oa);
         if (rc == -ENOENT) {
                 CDEBUG(D_HA, "object already removed, send cookie\n");
@@ -155,8 +154,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
 }
 
 /* Callback for processing the setattr log record received from MDS by
- * llog_client_api.
- */
+ * llog_client_api. */
 static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
                                        struct llog_rec_hdr *rec,
                                        struct llog_cookie *cookie)
@@ -208,12 +206,6 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
-        if (rec->lrh_type != MDS_UNLINK_REC &&
-            rec->lrh_type != MDS_SETATTR_REC &&
-            rec->lrh_type != LLOG_GEN_REC) {
-                CERROR("log record type error\n");
-                RETURN(-EINVAL);
-        }
 
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
@@ -236,7 +228,10 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                 llog_cancel(ctxt, NULL, 1, &cookie, 0);
                 RETURN(rc);
                 }
+                break;
         default:
+                CERROR("log record type %08x unknown\n", rec->lrh_type);
+                RETURN(-EINVAL);
                 break;
         }
 

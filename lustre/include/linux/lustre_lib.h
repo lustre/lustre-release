@@ -51,6 +51,10 @@
 #endif
 #endif
 
+/* prng.c */
+unsigned int ll_rand(void);        /* returns a random 32-bit integer */
+void ll_srand(unsigned int, unsigned int);     /* seed the generator */
+
 /* target.c */
 struct ptlrpc_request;
 struct recovd_data;
@@ -474,13 +478,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define POISON_BULK 0
 
-static inline int ll_insecure_random_int(void)
-{
-        struct timeval t;
-        do_gettimeofday(&t);
-        return (int)(t.tv_usec);
-}
-
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller
  * configuration of interrupt and timeout sensitivity along with actions to
@@ -515,12 +512,21 @@ static inline int ll_insecure_random_int(void)
  * SIGNALS.  The caller must therefore beware that if 'timeout' is zero, or if
  * 'timeout_handler' is not NULL and returns FALSE, then the ONLY thing that
  * can unblock the current process is 'condition' becoming TRUE.
+ *
+ * Another form of usage is:
+ * struct l_wait_info lwi = LWI_TIMEOUT_INTERVAL(timeout, interval,
+ *                                               timeout_handler);
+ * rc = l_wait_event(waitq, condition, &lwi);
+ * This is the same as previous case, but condition is checked once every
+ * 'interval' jiffies (if non-zero).
+ *
  */
 
 #define LWI_ON_SIGNAL_NOOP ((void (*)(void *))(-1))
 
 struct l_wait_info {
         long   lwi_timeout;
+        long   lwi_interval;
         int  (*lwi_on_timeout)(void *);
         void (*lwi_on_signal)(void *);
         void  *lwi_cb_data;
@@ -531,15 +537,26 @@ struct l_wait_info {
 ((struct l_wait_info) {                         \
         .lwi_timeout    = time,                 \
         .lwi_on_timeout = cb,                   \
-        .lwi_cb_data    = data                  \
+        .lwi_cb_data    = data,                 \
+        .lwi_interval   = 0                     \
 })
+
+#define LWI_TIMEOUT_INTERVAL(time, interval, cb, data)  \
+((struct l_wait_info) {                                 \
+        .lwi_timeout    = time,                         \
+        .lwi_on_timeout = cb,                           \
+        .lwi_cb_data    = data,                         \
+        .lwi_interval   = interval                      \
+})
+
 
 #define LWI_TIMEOUT_INTR(time, time_cb, sig_cb, data)                          \
 ((struct l_wait_info) {                                                        \
         .lwi_timeout    = time,                                                \
         .lwi_on_timeout = time_cb,                                             \
         .lwi_on_signal = (sig_cb == NULL) ? LWI_ON_SIGNAL_NOOP : sig_cb,       \
-        .lwi_cb_data    = data                                                 \
+        .lwi_cb_data    = data,                                                \
+        .lwi_interval    = 0                                                   \
 })
 
 #define LWI_INTR(cb, data)  LWI_TIMEOUT_INTR(0, NULL, cb, data)
@@ -566,7 +583,7 @@ static inline sigset_t l_w_e_set_sigs(int sigs)
 #define __l_wait_event(wq, condition, info, ret, excl)                         \
 do {                                                                           \
         wait_queue_t  __wait;                                                  \
-        signed long   __timeout = info->lwi_timeout;                           \
+        unsigned long __timeout = info->lwi_timeout;                           \
         unsigned long __irqflags;                                              \
         sigset_t      __blocked;                                               \
                                                                                \
@@ -595,7 +612,11 @@ do {                                                                           \
                 if (__timeout == 0) {                                          \
                         schedule();                                            \
                 } else {                                                       \
-                        __timeout = schedule_timeout(__timeout);               \
+                        unsigned long interval = info->lwi_interval?           \
+                                             min_t(unsigned long,              \
+                                                 info->lwi_interval,__timeout):\
+                                             __timeout;                        \
+                        __timeout -= interval - schedule_timeout(interval);    \
                         if (__timeout == 0) {                                  \
                                 if (info->lwi_on_timeout == NULL ||            \
                                     info->lwi_on_timeout(info->lwi_cb_data)) { \
@@ -658,7 +679,8 @@ do {                                                                    \
                 __then = time(NULL);                                    \
                                                                         \
         while (!(condition)) {                                          \
-                if (liblustre_wait_event(__timeout)) {                  \
+                if (liblustre_wait_event(info->lwi_interval?:__timeout) || \
+                    (info->lwi_interval && info->lwi_interval < __timeout)) {\
                         if (__timeout != 0 && info->lwi_timeout != 0) { \
                                 __now = time(NULL);                     \
                                 __timeout -= __now - __then;            \
@@ -699,8 +721,6 @@ do {                                                                    \
         __l_wait_event(wq, condition, __info, __ret, 1);        \
         __ret;                                                  \
 })
-
-#define LMD_MAGIC    0xbdacbd03
 
 #ifdef __KERNEL__
 #define LIBLUSTRE_CLIENT (0)

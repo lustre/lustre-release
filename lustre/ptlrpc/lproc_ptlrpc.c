@@ -477,7 +477,8 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(obd->u.cli.cl_import, OBD_PING, 0, NULL, NULL);
+        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
+                              OBD_PING, 0, NULL, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 

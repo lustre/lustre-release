@@ -20,6 +20,13 @@ do {                                                            \
 
 #define STRINGIFY(a) #a
 
+
+#define CHECK_CDEFINE(a)                                        \
+        printf("        CLASSERT("#a" == "STRINGIFY(a) ");\n")
+
+#define CHECK_CVALUE(a)                                         \
+        printf("        CLASSERT("#a" == %lld);\n", (long long)a)
+
 #define CHECK_DEFINE(a)                                         \
 do {                                                            \
         printf("        LASSERTF("#a" == "STRINGIFY(a)          \
@@ -117,7 +124,6 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_easize);
         CHECK_MEMBER(obdo, o_mds);
         CHECK_MEMBER(obdo, o_padding_1);
-        CHECK_MEMBER(obdo, o_padding_2);
         CHECK_MEMBER(obdo, o_inline);
 
         CHECK_VALUE(OBD_INLINESZ);
@@ -145,7 +151,7 @@ check_obdo(void)
         CHECK_VALUE(OBD_MD_FLQOS);
         CHECK_VALUE(OBD_MD_FLCOOKIE);
         CHECK_VALUE(OBD_MD_FLGROUP);
-        CHECK_VALUE(OBD_MD_FLIFID);
+        CHECK_VALUE(OBD_MD_FLFID);
         CHECK_VALUE(OBD_MD_FLEPOCH);
         CHECK_VALUE(OBD_MD_FLGRANT);
         CHECK_VALUE(OBD_MD_FLDIREA);
@@ -204,7 +210,7 @@ check_obd_statfs(void)
         CHECK_MEMBER(obd_statfs, os_fsid);
         CHECK_MEMBER(obd_statfs, os_bsize);
         CHECK_MEMBER(obd_statfs, os_namelen);
-        CHECK_MEMBER(obd_statfs, os_spare);
+        CHECK_MEMBER(obd_statfs, os_state);
 }
 
 static void
@@ -249,6 +255,11 @@ check_obd_quotactl(void)
         CHECK_MEMBER(obd_dqblk, dqb_itime);
         CHECK_MEMBER(obd_dqblk, dqb_valid);
         CHECK_MEMBER(obd_dqblk, padding);
+
+        CHECK_DEFINE(Q_QUOTACHECK);
+        CHECK_DEFINE(Q_INITQUOTA);
+        CHECK_DEFINE(Q_GETOINFO);
+        CHECK_DEFINE(Q_GETOQUOTA);
 }
 
 static void
@@ -322,14 +333,15 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, generation);
         CHECK_MEMBER(mds_body, suppgid);
         CHECK_MEMBER(mds_body, eadatasize);
-        CHECK_MEMBER(mds_body, padding_1);
-        CHECK_MEMBER(mds_body, padding_2);
-        CHECK_MEMBER(mds_body, padding_3);
+        CHECK_MEMBER(mds_body, aclsize);
+        CHECK_MEMBER(mds_body, max_mdsize);
+        CHECK_MEMBER(mds_body, max_cookiesize);
         CHECK_MEMBER(mds_body, padding_4);
 
         CHECK_VALUE(FMODE_READ);
         CHECK_VALUE(FMODE_WRITE);
         CHECK_VALUE(FMODE_EXEC);
+
         CHECK_VALUE(MDS_OPEN_CREAT);
         CHECK_VALUE(MDS_OPEN_EXCL);
         CHECK_VALUE(MDS_OPEN_TRUNC);
@@ -337,7 +349,10 @@ check_mds_body(void)
         CHECK_VALUE(MDS_OPEN_SYNC);
         CHECK_VALUE(MDS_OPEN_DIRECTORY);
         CHECK_VALUE(MDS_OPEN_DELAY_CREATE);
-        CHECK_VALUE(MDS_OPEN_HAS_EA);
+        CHECK_CDEFINE(MDS_OPEN_OWNEROVERRIDE);
+        CHECK_CDEFINE(MDS_OPEN_JOIN_FILE);
+        CHECK_CDEFINE(MDS_OPEN_HAS_EA);
+        CHECK_CDEFINE(MDS_OPEN_HAS_OBJS);
 }
 
 static void
@@ -906,8 +921,6 @@ main(int argc, char **argv)
         CHECK_VALUE(MDS_STATUS_CONN);
         CHECK_VALUE(MDS_STATUS_LOV);
 
-        CHECK_VALUE(MDS_OPEN_HAS_EA);
-
         CHECK_VALUE(LDLM_ENQUEUE);
         CHECK_VALUE(LDLM_CONVERT);
         CHECK_VALUE(LDLM_CANCEL);
@@ -943,9 +956,13 @@ main(int argc, char **argv)
         CHECK_VALUE(OBD_CONNECT_INDEX);
         CHECK_VALUE(OBD_CONNECT_GRANT);
         CHECK_VALUE(OBD_CONNECT_SRVLOCK);
+        CHECK_VALUE(OBD_CONNECT_VERSION);
+        CHECK_VALUE(OBD_CONNECT_REQPORTAL);
         CHECK_VALUE(OBD_CONNECT_ACL);
         CHECK_VALUE(OBD_CONNECT_XATTR);
         CHECK_VALUE(OBD_CONNECT_CROW);
+        CHECK_VALUE(OBD_CONNECT_TRUNCLOCK);
+        CHECK_VALUE(OBD_CONNECT_TRANSNO);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();

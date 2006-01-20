@@ -18,6 +18,10 @@ LUSTRE_LIBS = libllite.a \
               $(top_builddir)/lustre/obdclass/liblustreclass.a \
               $(top_builddir)/lustre/lvfs/liblvfs.a
 
+if QUOTA
+QUOTA_LIBS = $(top_builddir)/lustre/quota/libquota.a
+endif
+
 LND_LIBS =
 if BUILD_USOCKLND
 LND_LIBS +=    $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
@@ -56,8 +60,8 @@ libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
 liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
 		     llite_lib.h
 
-liblustre.a : $(LUSTRE_LIBS) $(LND_LIBS) $(LNET_LIBS) $(SYSIO_LIBS)
-	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)"
+liblustre.a : $(LUSTRE_LIBS) $(LND_LIBS) $(LNET_LIBS) $(SYSIO_LIBS) $(QUOTA_LIBS)
+	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)" "$(QUOTA_LIBS)" "$(CAP_LIBS)"
 
 EXTRA_DIST = genlib.sh
 

@@ -3,11 +3,12 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768 3192 4035
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b  14c"}
+# bug number for skipped test:  3192 4035
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+[ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
+	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITYN_EXCEPT`"
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
@@ -69,6 +70,8 @@ run_one() {
 	BEFORE=`date +%s`
 	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
+	export tfile=f${testnum}
+	export tdir=d${base}
 	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
@@ -86,7 +89,7 @@ run_test() {
 			echo -n "."
 		fi
 	done
-	for X in $EXCEPT $ALWAYS_EXCEPT; do
+	for X in $EXCEPT $ALWAYS_EXCEPT $SANITYN_EXCEPT; do
 		if [ "`echo $1 | grep '\<'$X'[a-z]*\>'`" ]; then
 			echo "skipping excluded test $1"
 			return 0
@@ -350,7 +353,7 @@ test_15() {	# bug 974 - ENOSPC
 run_test 15 "test out-of-space with multiple writers ==========="
 
 test_16() {
-	fsx -c 50 -p 100 -N 2500 $MOUNT1/fsxfile $MOUNT2/fsxfile
+	fsx -c 50 -p 100 -N 2500 -S 0 $MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
 
@@ -421,23 +424,45 @@ test_20() {
 	[ $CNTD -gt 0 ] && \
 	    error $CNTD" page left in cache after lock cancel" || true
 }
-
 run_test 20 "test extra readahead page left in cache ===="
+
+cleanup_21() {
+	trap 0
+	umount $DIR1/d21
+}
 
 test_21() { # Bug 5907
 	mkdir $DIR1/d21
-	mount /etc $DIR1/d21 --bind # Poor man's mount.
-	rmdir $DIR1/d21 && error "Removed mounted directory"
-	rmdir $DIR2/d21 && echo "Removed mounted directory from another mountpoint, needs to be fixed"
-	test -d $DIR1/d21 || error "Monted directory disappeared"
-	umount $DIR1/d21
+	mount /etc $DIR1/d21 --bind || error "mount failed" # Poor man's mount.
+	trap cleanup_21 EXIT
+	rmdir -v $DIR1/d21 && error "Removed mounted directory"
+	rmdir -v $DIR2/d21 && echo "Removed mounted directory from another mountpoint, needs to be fixed"
+	test -d $DIR1/d21 || error "Mounted directory disappeared"
+	cleanup_21
 	test -d $DIR2/d21 || test -d $DIR1/d21 && error "Removed dir still visible after umount"
 	true
 }
-
 run_test 21 " Try to remove mountpoint on another dir ===="
 
+JOIN=${JOIN:-"lfs join"}
 
+test_22() { # Bug 9926
+	mkdir $DIR1/d21
+	dd if=/dev/urandom of=$DIR1/d21/128k bs=1024 count=128
+	cp -p $DIR1/d21/128k $DIR1/d21/f_head
+	for ((i=0;i<10;i++)); do
+		cp -p $DIR1/d21/128k $DIR1/d21/f_tail
+		$JOIN $DIR1/d21/f_head $DIR1/d21/f_tail || error "join error"
+		$CHECKSTAT -a $DIR1/d21/f_tail || error "tail file exist after join"
+	done
+	echo aaaaaaaaaaa >> $DIR1/d21/no_joined
+
+	mv $DIR2/d21/f_head $DIR2/
+	munlink $DIR2/f_head || error "unlink joined file error"
+	cat $DIR2/d21/no_joined || error "cat error"
+	rm -rf $DIR2/d21/no_joined || error "unlink normal file error"
+}
+run_test 22 " After joining in one dir,  open/close unlink file in anther dir" 
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

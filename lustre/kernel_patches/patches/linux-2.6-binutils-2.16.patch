@@ -1,0 +1,102 @@
+--- linux/arch/i386/kernel/process.c.seg	2005-03-27 13:07:14.000000000 -0800
++++ linux/arch/i386/kernel/process.c	2005-03-28 10:28:47.000000000 -0800
+@@ -597,8 +597,8 @@ struct task_struct fastcall * __switch_t
+ 	 * Save away %fs and %gs. No need to save %es and %ds, as
+ 	 * those are always kernel segments while inside the kernel.
+ 	 */
+-	asm volatile("movl %%fs,%0":"=m" (*(int *)&prev->fs));
+-	asm volatile("movl %%gs,%0":"=m" (*(int *)&prev->gs));
++	asm volatile("mov %%fs,%0":"=m" (prev->fs));
++	asm volatile("mov %%gs,%0":"=m" (prev->gs));
+ 
+ 	/*
+ 	 * Restore %fs and %gs if needed.
+--- linux/arch/i386/kernel/vm86.c.seg	2005-03-27 13:07:14.000000000 -0800
++++ linux/arch/i386/kernel/vm86.c	2005-03-28 10:28:47.000000000 -0800
+@@ -294,8 +294,8 @@ static void do_sys_vm86(struct kernel_vm
+  */
+ 	info->regs32->eax = 0;
+ 	tsk->thread.saved_esp0 = tsk->thread.esp0;
+-	asm volatile("movl %%fs,%0":"=m" (tsk->thread.saved_fs));
+-	asm volatile("movl %%gs,%0":"=m" (tsk->thread.saved_gs));
++	asm volatile("mov %%fs,%0":"=m" (tsk->thread.saved_fs));
++	asm volatile("mov %%gs,%0":"=m" (tsk->thread.saved_gs));
+ 
+ 	tss = &per_cpu(init_tss, get_cpu());
+ 	tsk->thread.esp0 = (unsigned long) &info->VM86_TSS_ESP0;
+--- linux/arch/x86_64/kernel/process.c.seg	2005-03-27 13:07:49.000000000 -0800
++++ linux/arch/x86_64/kernel/process.c	2005-03-28 11:11:04.206766410 -0800
+@@ -391,10 +391,10 @@ int copy_thread(int nr, unsigned long cl
+ 	p->thread.fs = me->thread.fs;
+ 	p->thread.gs = me->thread.gs;
+ 
+-	asm("movl %%gs,%0" : "=m" (p->thread.gsindex));
+-	asm("movl %%fs,%0" : "=m" (p->thread.fsindex));
+-	asm("movl %%es,%0" : "=m" (p->thread.es));
+-	asm("movl %%ds,%0" : "=m" (p->thread.ds));
++	asm("mov %%gs,%0" : "=m" (p->thread.gsindex));
++	asm("mov %%fs,%0" : "=m" (p->thread.fsindex));
++	asm("mov %%es,%0" : "=m" (p->thread.es));
++	asm("mov %%ds,%0" : "=m" (p->thread.ds));
+ 
+ 	if (unlikely(me->thread.io_bitmap_ptr != NULL)) { 
+ 		p->thread.io_bitmap_ptr = kmalloc(IO_BITMAP_BYTES, GFP_KERNEL);
+@@ -457,11 +457,11 @@ struct task_struct *__switch_to(struct t
+ 	 * Switch DS and ES.
+ 	 * This won't pick up thread selector changes, but I guess that is ok.
+ 	 */
+-	asm volatile("movl %%es,%0" : "=m" (prev->es)); 
++	asm volatile("mov %%es,%0" : "=m" (prev->es)); 
+ 	if (unlikely(next->es | prev->es))
+ 		loadsegment(es, next->es); 
+ 	
+-	asm volatile ("movl %%ds,%0" : "=m" (prev->ds)); 
++	asm volatile ("mov %%ds,%0" : "=m" (prev->ds)); 
+ 	if (unlikely(next->ds | prev->ds))
+ 		loadsegment(ds, next->ds);
+ 
+@@ -472,7 +472,7 @@ struct task_struct *__switch_to(struct t
+ 	 */
+ 	{ 
+ 		unsigned fsindex;
+-		asm volatile("movl %%fs,%0" : "=g" (fsindex)); 
++		asm volatile("movl %%fs,%0" : "=r" (fsindex)); 
+ 		/* segment register != 0 always requires a reload. 
+ 		   also reload when it has changed. 
+ 		   when prev process used 64bit base always reload
+@@ -493,7 +493,7 @@ struct task_struct *__switch_to(struct t
+ 	}
+ 	{ 
+ 		unsigned gsindex;
+-		asm volatile("movl %%gs,%0" : "=g" (gsindex)); 
++		asm volatile("movl %%gs,%0" : "=r" (gsindex)); 
+ 		if (unlikely(gsindex | next->gsindex | prev->gs)) {
+ 			load_gs_index(next->gsindex);
+ 			if (gsindex)
+--- linux/include/asm-i386/system.h.seg	2005-03-27 13:09:12.000000000 -0800
++++ linux/include/asm-i386/system.h	2005-03-28 10:28:47.000000000 -0800
+@@ -81,7 +81,7 @@ static inline unsigned long _get_base(ch
+ #define loadsegment(seg,value)			\
+ 	asm volatile("\n"			\
+ 		"1:\t"				\
+-		"movl %0,%%" #seg "\n"		\
++		"mov %0,%%" #seg "\n"		\
+ 		"2:\n"				\
+ 		".section .fixup,\"ax\"\n"	\
+ 		"3:\t"				\
+@@ -93,13 +93,13 @@ static inline unsigned long _get_base(ch
+ 		".align 4\n\t"			\
+ 		".long 1b,3b\n"			\
+ 		".previous"			\
+-		: :"m" (*(unsigned int *)&(value)))
++		: :"m" (value))
+ 
+ /*
+  * Save a segment register away
+  */
+ #define savesegment(seg, value) \
+-	asm volatile("movl %%" #seg ",%0":"=m" (*(int *)&(value)))
++	asm volatile("mov %%" #seg ",%0":"=m" (value))
+ 
+ /*
+  * Clear and set 'TS' bit respectively

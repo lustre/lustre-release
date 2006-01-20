@@ -53,6 +53,7 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
 #endif
+#include <linux/lustre_compat25.h>
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #include <linux/ext3_extents.h>
@@ -71,6 +72,16 @@ struct fsfilt_cb_data {
 #ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
+
+static char *fsfilt_ext3_label(struct super_block *sb)
+{
+        return EXT3_SB(sb)->s_es->s_volume_name;
+}
+
+static char *fsfilt_ext3_uuid(struct super_block *sb)
+{
+        return EXT3_SB(sb)->s_es->s_uuid;
+}
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -152,6 +163,19 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                  * blocks for catalog header bitmap update + unlink of logs */
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
                         EXT3_DELETE_TRANS_BLOCKS * logs;
+                break;
+        case FSFILT_OP_JOIN:
+                /* delete 2 file(file + array id) + create 1 file (array id) 
+                 * create/update logs for each stripe */
+                nblocks += 2 * EXT3_DELETE_TRANS_BLOCKS;
+               
+                /*create array log for head file*/ 
+                nblocks += 3;
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS);
+                /*update head file array */
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                        EXT3_DATA_TRANS_BLOCKS;
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
                 LBUG();
@@ -414,13 +438,15 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                 /* make sure _something_ gets set - so new inode
                  * goes to disk (probably won't work over XFS */
                 if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
-                        iattr->ia_valid |= ATTR_MODE;
-                        iattr->ia_mode = inode->i_mode;
+                        iattr->ia_valid |= ATTR_MTIME;
+                        iattr->ia_mtime = inode->i_mtime;
                 }
         }
 
         /* Don't allow setattr to change file type */
-        iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
+        if (iattr->ia_valid & ATTR_MODE)
+                iattr->ia_mode = (inode->i_mode & S_IFMT) |
+                                 (iattr->ia_mode & ~S_IFMT);
 
         /* We set these flags on the client, but have already checked perms
          * so don't confuse inode_change_ok. */
@@ -435,7 +461,6 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         }
 
         unlock_kernel();
-
         return rc;
 }
 
@@ -444,6 +469,12 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
 {
         int rc = 0;
         ENTRY;
+
+        /* FIXME: Can't do this because of nested transaction deadlock */
+        if (cmd == EXT3_IOC_SETFLAGS && (*(int *)arg) & EXT3_JOURNAL_DATA_FL) {
+                CERROR("can't set data journal flag on file\n");
+                RETURN(-EPERM);
+        }
 
         if (inode->i_fop->ioctl)
                 rc = inode->i_fop->ioctl(inode, file, cmd, arg);
@@ -458,7 +489,7 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 {
         int rc;
 
-        LASSERT(down_trylock(&inode->i_sem) != 0);
+        LASSERT_SEM_LOCKED(&inode->i_sem);
 
         if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
                 CWARN("setting EA on %lu/%u again... interesting\n",
@@ -481,7 +512,7 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
 
-        LASSERT(down_trylock(&inode->i_sem) != 0);
+        LASSERT_SEM_LOCKED(&inode->i_sem);
         lock_24kernel();
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
@@ -737,6 +768,26 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
         return bg_start + colour + block;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/locks.h>
+static void ll_unmap_underlying_metadata(struct super_block *sb,
+                                         unsigned long blocknr)
+{
+        struct buffer_head *old_bh;
+
+        old_bh = get_hash_table(sb->s_dev, blocknr, sb->s_blocksize);
+        if (old_bh) {
+                mark_buffer_clean(old_bh);
+                wait_on_buffer(old_bh);
+                clear_bit(BH_Req, &old_bh->b_state);
+                __brelse(old_bh);
+        }
+}
+#else
+#define ll_unmap_underlying_metadata(sb, blocknr) \
+        unmap_underlying_metadata((sb)->s_bdev, blocknr)
+#endif
+
 static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                                   struct ext3_ext_path *path,
                                   struct ext3_ext_cache *cex)
@@ -844,8 +895,6 @@ out:
         unlock_24kernel();
 map:
         if (err >= 0) {
-                struct block_device *bdev = inode->i_sb->s_bdev;
-
                 /* map blocks */
                 if (bp->num == 0) {
                         CERROR("hmm. why do we find this extent?\n");
@@ -868,10 +917,9 @@ map:
                         } else {
                                 *(bp->created) = 1;
                                 /* unmap any possible underlying metadata from
-                                 * the block device mapping.  bug 6998.
-                                 * This only compiles on 2.6, but there are
-                                 * no users of mballoc on 2.4. */
-                                unmap_underlying_metadata(bdev, *(bp->blocks));
+                                 * the block device mapping.  bug 6998. */
+                                ll_unmap_underlying_metadata(inode->i_sb,
+                                                             *(bp->blocks));
                         }
                         bp->created++;
                         bp->blocks++;
@@ -958,7 +1006,7 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
 cleanup:
         return rc;
 }
-#endif
+#endif /* EXT3_MULTIBLOCK_ALLOCATOR */
 
 extern int ext3_map_inode_page(struct inode *inode, struct page *page,
                                unsigned long *blocks, int *created, int create);
@@ -1161,6 +1209,8 @@ static int fsfilt_ext3_setup(struct super_block *sb)
         set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
+        if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
+                CWARN("filesystem doesn't have dir_index feature enabled\n");
         return 0;
 }
 
@@ -1193,6 +1243,248 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
         }
 
         return 0;
+}
+
+static const char *op_quotafile[] = { "lquota.user", "lquota.group" };
+
+#define DQINFO_COPY(out, in)                    \
+do {                                            \
+        Q_COPY(out, in, dqi_bgrace);            \
+        Q_COPY(out, in, dqi_igrace);            \
+        Q_COPY(out, in, dqi_flags);             \
+        Q_COPY(out, in, dqi_valid);             \
+} while (0)
+
+#define DQBLK_COPY(out, in)                     \
+do {                                            \
+        Q_COPY(out, in, dqb_bhardlimit);        \
+        Q_COPY(out, in, dqb_bsoftlimit);        \
+        Q_COPY(out, in, dqb_curspace);          \
+        Q_COPY(out, in, dqb_ihardlimit);        \
+        Q_COPY(out, in, dqb_isoftlimit);        \
+        Q_COPY(out, in, dqb_curinodes);         \
+        Q_COPY(out, in, dqb_btime);             \
+        Q_COPY(out, in, dqb_itime);             \
+        Q_COPY(out, in, dqb_valid);             \
+} while (0)
+
+      
+
+static int fsfilt_ext3_quotactl(struct super_block *sb,
+                                struct obd_quotactl *oqc)
+{
+        int i, rc = 0, error = 0;
+        struct quotactl_ops *qcop;
+        struct if_dqinfo *info;
+        struct if_dqblk *dqblk;
+        ENTRY;
+
+        if (!sb->s_qcop)
+                RETURN(-ENOSYS);
+
+        OBD_ALLOC_PTR(info);
+        if (!info)
+                RETURN(-ENOMEM);
+        OBD_ALLOC_PTR(dqblk);
+        if (!dqblk) {
+                OBD_FREE_PTR(info);
+                RETURN(-ENOMEM);
+        }
+
+        DQINFO_COPY(info, &oqc->qc_dqinfo);
+        DQBLK_COPY(dqblk, &oqc->qc_dqblk);
+
+        qcop = sb->s_qcop;
+        if (oqc->qc_cmd == Q_QUOTAON || oqc->qc_cmd == Q_QUOTAOFF) {
+                for (i = 0; i < MAXQUOTAS; i++) {
+                        if (!Q_TYPESET(oqc, i))
+                                continue;
+
+                        if (oqc->qc_cmd == Q_QUOTAON) {
+                                if (!qcop->quota_on)
+                                        GOTO(out, rc = -ENOSYS);
+                                rc = qcop->quota_on(sb, i, oqc->qc_id,
+                                                    (char *)op_quotafile[i]);
+                        } else if (oqc->qc_cmd == Q_QUOTAOFF) {
+                                if (!qcop->quota_off)
+                                        GOTO(out, rc = -ENOSYS);
+                                rc = qcop->quota_off(sb, i);
+                        }
+
+                        if (rc == -EBUSY)
+                                error = rc;
+                        else if (rc)
+                                GOTO(out, rc);
+                }
+                GOTO(out, rc ?: error);
+        }
+
+        switch (oqc->qc_cmd) {
+        case Q_GETOINFO:
+        case Q_GETINFO:
+                if (!qcop->get_info)
+                        GOTO(out, rc = -ENOSYS);
+                rc = qcop->get_info(sb, oqc->qc_type, info);
+                break;
+        case Q_SETQUOTA:
+        case Q_INITQUOTA:
+                if (!qcop->set_dqblk)
+                        GOTO(out, rc = -ENOSYS);
+                rc = qcop->set_dqblk(sb, oqc->qc_type, oqc->qc_id, dqblk);
+                break;
+        case Q_GETOQUOTA:
+        case Q_GETQUOTA:
+                if (!qcop->get_dqblk)
+                        GOTO(out, rc = -ENOSYS);
+                rc = qcop->get_dqblk(sb, oqc->qc_type, oqc->qc_id, dqblk);
+                break;
+        case Q_SYNC:
+                if (!sb->s_qcop->quota_sync)
+                        GOTO(out, rc = -ENOSYS);
+                qcop->quota_sync(sb, oqc->qc_type);
+                break;
+        default:
+                CERROR("unsupported quotactl command: %d", oqc->qc_cmd);
+                LBUG();
+        }
+out:
+        DQINFO_COPY(&oqc->qc_dqinfo, info);
+        DQBLK_COPY(&oqc->qc_dqblk, dqblk);
+
+        OBD_FREE_PTR(info);
+        OBD_FREE_PTR(dqblk);
+
+        if (rc)
+                CDEBUG(D_QUOTA, "quotactl command %#x, id %u, type %d "
+                                "failed: %d\n",
+                       oqc->qc_cmd, oqc->qc_id, oqc->qc_type, rc);
+        RETURN(rc);
+}
+
+struct chk_dqblk{
+        struct hlist_node       dqb_hash;        /* quotacheck hash */
+        struct list_head        dqb_list;        /* in list also */
+        qid_t                   dqb_id;          /* uid/gid */
+        short                   dqb_type;        /* USRQUOTA/GRPQUOTA */
+        __u32                   dqb_bhardlimit;  /* block hard limit */
+        __u32                   dqb_bsoftlimit;  /* block soft limit */
+        qsize_t                 dqb_curspace;    /* current space */
+        __u32                   dqb_ihardlimit;  /* inode hard limit */
+        __u32                   dqb_isoftlimit;  /* inode soft limit */
+        __u32                   dqb_curinodes;   /* current inodes */
+        __u64                   dqb_btime;       /* block grace time */
+        __u64                   dqb_itime;       /* inode grace time */
+        __u32                   dqb_valid;       /* flag for above fields */
+};
+
+static inline unsigned int const
+chkquot_hash(qid_t id, int type)
+{
+        return (id * (MAXQUOTAS - type)) % NR_DQHASH;
+}
+
+static inline struct chk_dqblk *
+find_chkquot(struct hlist_head *head, qid_t id, int type)
+{
+        struct hlist_node *node;
+        struct chk_dqblk *cdqb;
+
+        hlist_for_each(node, head) {
+                cdqb = hlist_entry(node, struct chk_dqblk, dqb_hash);
+                if (cdqb->dqb_id == id && cdqb->dqb_type == type)
+                        return cdqb;
+        }
+
+        return NULL;
+}
+
+static struct chk_dqblk *alloc_chkquot(qid_t id, int type)
+{
+        struct chk_dqblk *cdqb;
+
+        OBD_ALLOC_PTR(cdqb);
+        if (cdqb) {
+                INIT_HLIST_NODE(&cdqb->dqb_hash);
+                INIT_LIST_HEAD(&cdqb->dqb_list);
+                cdqb->dqb_id = id;
+                cdqb->dqb_type = type;
+        }
+
+        return cdqb;
+}
+
+static struct chk_dqblk *
+cqget(struct super_block *sb, struct hlist_head *hash, struct list_head *list,
+      qid_t id, int type, int first_check)
+{
+        struct hlist_head *head = hash + chkquot_hash(id, type);
+        struct if_dqblk dqb;
+        struct chk_dqblk *cdqb;
+        int rc;
+
+        cdqb = find_chkquot(head, id, type);
+        if (cdqb)
+                return cdqb;
+
+        cdqb = alloc_chkquot(id, type);
+        if (!cdqb)
+                return NULL;
+
+        if (!first_check) {
+                rc = sb->s_qcop->get_dqblk(sb, type, id, &dqb);
+                if (rc) {
+                        CERROR("get_dqblk of id %u, type %d failed: %d\n",
+                               id, type, rc);
+                } else {
+                        DQBLK_COPY(cdqb, &dqb);
+                        cdqb->dqb_curspace = 0;
+                        cdqb->dqb_curinodes = 0;
+                }
+        }
+
+        hlist_add_head(&cdqb->dqb_hash, head);
+        list_add_tail(&cdqb->dqb_list, list);
+
+        return cdqb;
+}
+
+static inline int quota_onoff(struct super_block *sb, int cmd, int type)
+{
+        struct obd_quotactl *oqctl;
+        int rc;
+
+        OBD_ALLOC_PTR(oqctl);
+        if (!oqctl)
+                RETURN(-ENOMEM);
+
+        oqctl->qc_cmd = cmd;
+        oqctl->qc_id = QFMT_LDISKFS;
+        oqctl->qc_type = type;
+        rc = fsfilt_ext3_quotactl(sb, oqctl);
+
+        OBD_FREE_PTR(oqctl);
+        return rc;
+}
+
+static inline int read_old_dqinfo(struct super_block *sb, int type,
+                                  struct if_dqinfo *dqinfo)
+{
+        struct obd_quotactl *oqctl;
+        int rc;
+        ENTRY;
+
+        OBD_ALLOC_PTR(oqctl);
+        if (!oqctl)
+                RETURN(-ENOMEM);
+
+        oqctl->qc_cmd = Q_GETINFO;
+        oqctl->qc_type = type;
+        rc = fsfilt_ext3_quotactl(sb, oqctl);
+        if (!rc)
+                ((struct obd_dqinfo *)dqinfo)[type] = oqctl->qc_dqinfo;
+
+        OBD_FREE_PTR(oqctl);
+        RETURN(rc);
 }
 
 static inline struct ext3_group_desc *
@@ -1233,13 +1525,410 @@ static inline struct inode *ext3_iget_inuse(struct super_block *sb,
         return inode;
 }
 
+struct qchk_ctxt {
+        struct hlist_head       qckt_hash[NR_DQHASH];        /* quotacheck hash */
+        struct list_head        qckt_list;                   /* quotacheck list */
+        int                     qckt_first_check[MAXQUOTAS]; /* 1 if no old quotafile */
+        struct if_dqinfo        qckt_dqinfo[MAXQUOTAS];      /* old dqinfo */
+};
+
+static int add_inode_quota(struct inode *inode, struct qchk_ctxt *qctxt,
+                           struct obd_quotactl *oqc)
+{
+        struct chk_dqblk *cdqb[MAXQUOTAS] = { NULL, };
+        loff_t size = 0;
+        qid_t qid[MAXQUOTAS];
+        int cnt, i, rc = 0;
+
+        if (!inode)
+                return 0;
+
+        qid[USRQUOTA] = inode->i_uid;
+        qid[GRPQUOTA] = inode->i_gid;
+
+        if (S_ISDIR(inode->i_mode) ||
+            S_ISREG(inode->i_mode) ||
+            S_ISLNK(inode->i_mode))
+                size = inode_get_bytes(inode);
+
+        for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+                if (!Q_TYPESET(oqc, cnt))
+                        continue;
+
+                cdqb[cnt] = cqget(inode->i_sb, qctxt->qckt_hash,
+                                &qctxt->qckt_list, qid[cnt], cnt,
+                                qctxt->qckt_first_check[cnt]);
+                if (!cdqb[cnt]) {
+                        rc = -ENOMEM;
+                        break;
+                }
+
+                cdqb[cnt]->dqb_curspace += size;
+                cdqb[cnt]->dqb_curinodes++;
+        }
+
+        if (rc) {
+                for (i = 0; i < cnt; i++) {
+                        if (!Q_TYPESET(oqc, i))
+                                continue;
+                        LASSERT(cdqb[i]);
+                        cdqb[i]->dqb_curspace -= size;
+                        cdqb[i]->dqb_curinodes--;
+                }
+        }
+
+        return rc;
+}
+
+static int v2_write_dqheader(struct file *f, int type)
+{
+        static const __u32 quota_magics[] = V2_INITQMAGICS;
+        static const __u32 quota_versions[] = V2_INITQVERSIONS;
+        struct v2_disk_dqheader dqhead;
+        loff_t offset = 0;
+
+        CLASSERT(ARRAY_SIZE(quota_magics) == ARRAY_SIZE(quota_versions));
+        LASSERT(0 <= type && type < ARRAY_SIZE(quota_magics));
+
+        dqhead.dqh_magic = cpu_to_le32(quota_magics[type]);
+        dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
+
+        return cfs_user_write(f, (char *)&dqhead, sizeof(dqhead), &offset);
+}
+
+/* write dqinfo struct in a new quota file */
+static int v2_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
+{
+        struct v2_disk_dqinfo dqinfo;
+        __u32 blocks = V2_DQTREEOFF + 1;
+        loff_t offset = V2_DQINFOOFF;
+
+        if (info) {
+                dqinfo.dqi_bgrace = cpu_to_le32(info->dqi_bgrace);
+                dqinfo.dqi_igrace = cpu_to_le32(info->dqi_igrace);
+                dqinfo.dqi_flags = cpu_to_le32(info->dqi_flags & DQF_MASK &
+                                               ~DQF_INFO_DIRTY);
+        } else {
+                dqinfo.dqi_bgrace = cpu_to_le32(MAX_DQ_TIME);
+                dqinfo.dqi_igrace = cpu_to_le32(MAX_IQ_TIME);
+                dqinfo.dqi_flags = 0;
+        }
+
+        dqinfo.dqi_blocks = cpu_to_le32(blocks);
+        dqinfo.dqi_free_blk = 0;
+        dqinfo.dqi_free_entry = 0;
+
+        return cfs_user_write(f, (char *)&dqinfo, sizeof(dqinfo), &offset);
+}
+
+static int create_new_quota_files(struct qchk_ctxt *qctxt,
+                                  struct obd_quotactl *oqc)
+{
+        int i, rc = 0;
+        ENTRY;
+
+        for (i = 0; i < MAXQUOTAS; i++) {
+                struct if_dqinfo *info = qctxt->qckt_first_check[i]?
+                                         NULL : &qctxt->qckt_dqinfo[i];
+                struct file *file;
+
+                if (!Q_TYPESET(oqc, i))
+                        continue;
+
+                file = filp_open(op_quotafile[i], O_RDWR | O_CREAT | O_TRUNC,
+                                 0644);
+                if (IS_ERR(file)) {
+                        rc = PTR_ERR(file);
+                        CERROR("can't create %s file: rc = %d\n",
+                               op_quotafile[i], rc);
+                        GOTO(out, rc);
+                }
+
+                if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                        CERROR("file %s is not regular", op_quotafile[i]);
+                        filp_close(file, 0);
+                        GOTO(out, rc = -EINVAL);
+                }
+
+                rc = v2_write_dqheader(file, i);
+                if (rc) {
+                        filp_close(file, 0);
+                        GOTO(out, rc);
+                }
+
+                rc = v2_write_dqinfo(file, i, info);
+                filp_close(file, 0);
+                if (rc)
+                        GOTO(out, rc);
+        }
+
+out:
+        RETURN(rc);
+}
+
+
+static int commit_chkquot(struct super_block *sb, struct qchk_ctxt *qctxt,
+                          struct chk_dqblk *cdqb)
+{
+        struct obd_quotactl *oqc;
+        struct timeval now;
+        int rc;
+        ENTRY;
+
+        OBD_ALLOC_PTR(oqc);
+        if (!oqc)
+                RETURN(-ENOMEM);
+
+        do_gettimeofday(&now);
+
+        if (cdqb->dqb_bsoftlimit &&
+            toqb(cdqb->dqb_curspace) >= cdqb->dqb_bsoftlimit &&
+            !cdqb->dqb_btime)
+                cdqb->dqb_btime = now.tv_sec +
+                               qctxt->qckt_dqinfo[cdqb->dqb_type].dqi_bgrace;
+
+        if (cdqb->dqb_isoftlimit &&
+            cdqb->dqb_curinodes >= cdqb->dqb_isoftlimit &&
+            !cdqb->dqb_itime)
+                cdqb->dqb_itime = now.tv_sec +
+                               qctxt->qckt_dqinfo[cdqb->dqb_type].dqi_igrace;
+
+        cdqb->dqb_valid = QIF_ALL;
+
+        oqc->qc_cmd = Q_SETQUOTA;
+        oqc->qc_type = cdqb->dqb_type;
+        oqc->qc_id = cdqb->dqb_id;
+        DQBLK_COPY(&oqc->qc_dqblk, cdqb);
+
+        rc = fsfilt_ext3_quotactl(sb, oqc);
+        OBD_FREE_PTR(oqc);
+        RETURN(rc);
+}
+
+static int prune_chkquots(struct super_block *sb,
+                          struct qchk_ctxt *qctxt, int error)
+{
+        struct chk_dqblk *cdqb, *tmp;
+        int rc;
+
+        list_for_each_entry_safe(cdqb, tmp, &qctxt->qckt_list, dqb_list) {
+                if (!error) {
+                        rc = commit_chkquot(sb, qctxt, cdqb);
+                        if (rc)
+                                error = rc;
+                }
+                hlist_del_init(&cdqb->dqb_hash);
+                list_del(&cdqb->dqb_list);
+                OBD_FREE_PTR(cdqb);
+        }
+
+        return error;
+}
+
+static int fsfilt_ext3_quotacheck(struct super_block *sb,
+                                  struct obd_quotactl *oqc)
+{
+        struct ext3_sb_info *sbi = EXT3_SB(sb);
+        int i, group;
+        struct qchk_ctxt *qctxt;
+        struct buffer_head *bitmap_bh = NULL;
+        unsigned long ino;
+        struct inode *inode;
+        int rc = 0;
+        ENTRY;
+
+        /* turn on quota and read dqinfo if existed */
+        OBD_ALLOC_PTR(qctxt);
+        if (!qctxt) {
+                oqc->qc_stat = -ENOMEM;
+                RETURN(-ENOMEM);
+        }
+
+        for (i = 0; i < NR_DQHASH; i++)
+                INIT_HLIST_HEAD(&qctxt->qckt_hash[i]);
+        INIT_LIST_HEAD(&qctxt->qckt_list);
+
+        for (i = 0; i < MAXQUOTAS; i++) {
+                if (!Q_TYPESET(oqc, i))
+                        continue;
+
+                rc = quota_onoff(sb, Q_QUOTAON, i);
+                if (!rc || rc == -EBUSY) {
+                        rc = read_old_dqinfo(sb, i, qctxt->qckt_dqinfo);
+                        if (rc)
+                                GOTO(out, rc);
+                } else if (rc == -ENOENT) {
+                        qctxt->qckt_first_check[i] = 1;
+                } else if (rc) {
+                        GOTO(out, rc);
+                }
+        }
+
+        /* check quota and update in hash */
+        for (group = 0; group < sbi->s_groups_count; group++) {
+                ino = group * sbi->s_inodes_per_group + 1;
+                bitmap_bh = read_inode_bitmap(sb, group);
+                if (!bitmap_bh) {
+                        CERROR("read_inode_bitmap group %d failed", group);
+                        GOTO(out, -EIO);
+                }
+
+                for (i = 0; i < sbi->s_inodes_per_group; i++, ino++) {
+                        if (ino < sbi->s_first_ino)
+                                continue;
+
+                        inode = ext3_iget_inuse(sb, bitmap_bh, i, ino);
+                        rc = add_inode_quota(inode, qctxt, oqc);
+                        iput(inode);
+                        if (rc) {
+                                brelse(bitmap_bh);
+                                GOTO(out, rc);
+                        }
+                }
+
+                brelse(bitmap_bh);
+        }
+
+        /* read old quota limits from old quota file. (only for the user
+         * has limits but hasn't file) */
 #ifdef HAVE_QUOTA_SUPPORT
-# include "fsfilt_ext3_quota.h"
+        for (i = 0; i < MAXQUOTAS; i++) {
+                struct list_head id_list;
+                struct dquot_id *dqid, *tmp;
+
+                if (!Q_TYPESET(oqc, i))
+                        continue;
+
+                if (qctxt->qckt_first_check[i])
+                        continue;
+
+
+                LASSERT(sb_dqopt(sb)->files[i] != NULL);
+                INIT_LIST_HEAD(&id_list);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
+                rc = lustre_get_qids(sb_dqopt(sb)->files[i], NULL, i, &id_list);
+#else
+                rc = lustre_get_qids(NULL, sb_dqopt(sb)->files[i], i, &id_list);
+#endif
+                if (rc)
+                        CERROR("read old limits failed. (rc:%d)\n", rc);
+
+                list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
+                        list_del_init(&dqid->di_link);
+
+                        if (!rc)
+                                cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list,
+                                      dqid->di_id, i,
+                                      qctxt->qckt_first_check[i]);
+                        kfree(dqid);
+                }
+        }
+#endif
+        /* turn off quota cause we are to dump chk_dqblk to files */
+        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
+
+        rc = create_new_quota_files(qctxt, oqc);
+        if (rc)
+                GOTO(out, rc);
+
+        /* we use vfs functions to set dqblk, so turn quota on */
+        rc = quota_onoff(sb, Q_QUOTAON, oqc->qc_type);
+out:
+        /* dump and free chk_dqblk */
+        rc = prune_chkquots(sb, qctxt, rc);
+        OBD_FREE_PTR(qctxt);
+
+        /* turn off quota, `lfs quotacheck` will turn on when all
+         * nodes quotacheck finish. */
+        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
+
+        oqc->qc_stat = rc;
+        if (rc)
+                CERROR("quotacheck failed: rc = %d\n", rc);
+
+        RETURN(rc);
+}
+
+#ifdef HAVE_QUOTA_SUPPORT
+static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type, 
+                                 int cmd)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (lqi->qi_files[type] == NULL) {
+                CERROR("operate qinfo before it's enabled!\n");
+                RETURN(-EIO);
+        }
+
+        switch (cmd) {
+        case QFILE_CHK:
+                rc = lustre_check_quota_file(lqi, type);
+                break;
+        case QFILE_RD_INFO:
+                rc = lustre_read_quota_info(lqi, type);
+                break;
+        case QFILE_WR_INFO:
+                rc = lustre_write_quota_info(lqi, type);
+                break;
+        case QFILE_INIT_INFO:
+                rc = lustre_init_quota_info(lqi, type);
+                break;
+        default:
+                CERROR("Unsupported admin quota file cmd %d\n", cmd);
+                LBUG();
+                break;
+        }
+        RETURN(rc);
+}
+
+static int fsfilt_ext3_qids(struct file *file, struct inode *inode, int type,
+                            struct list_head *list)
+{
+        return lustre_get_qids(file, inode, type, list);
+}
+
+static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (dquot->dq_info->qi_files[dquot->dq_type] == NULL) {
+                CERROR("operate dquot before it's enabled!\n");
+                RETURN(-EIO);
+        }
+
+        switch (cmd) {
+        case QFILE_RD_DQUOT:
+                rc = lustre_read_dquot(dquot);
+                break;
+        case QFILE_WR_DQUOT:
+                if (dquot->dq_dqb.dqb_ihardlimit ||
+                    dquot->dq_dqb.dqb_isoftlimit ||
+                    dquot->dq_dqb.dqb_bhardlimit ||
+                    dquot->dq_dqb.dqb_bsoftlimit)
+                        clear_bit(DQ_FAKE_B, &dquot->dq_flags);
+                else
+                        set_bit(DQ_FAKE_B, &dquot->dq_flags);
+
+                rc = lustre_commit_dquot(dquot);
+                if (rc >= 0)
+                        rc = 0;
+                break;
+        default:
+                CERROR("Unsupported admin quota file cmd %d\n", cmd);
+                LBUG();
+                break;
+        }
+        RETURN(rc);
+}
 #endif
 
 static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_type                = "ext3",
         .fs_owner               = THIS_MODULE,
+        .fs_label               = fsfilt_ext3_label,
+        .fs_uuid                = fsfilt_ext3_uuid,
         .fs_start               = fsfilt_ext3_start,
         .fs_brw_start           = fsfilt_ext3_brw_start,
         .fs_commit              = fsfilt_ext3_commit,
@@ -1260,10 +1949,11 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_setup               = fsfilt_ext3_setup,
         .fs_send_bio            = fsfilt_ext3_send_bio,
         .fs_get_op_len          = fsfilt_ext3_get_op_len,
-#ifdef HAVE_QUOTA_SUPPORT
         .fs_quotactl            = fsfilt_ext3_quotactl,
         .fs_quotacheck          = fsfilt_ext3_quotacheck,
+#ifdef HAVE_QUOTA_SUPPORT
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
+        .fs_qids                = fsfilt_ext3_qids,
         .fs_dquot               = fsfilt_ext3_dquot,
 #endif
 };

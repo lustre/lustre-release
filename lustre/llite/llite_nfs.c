@@ -69,7 +69,9 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         if (inode)
                 return inode;
         if (S_ISREG(mode)) {
-                eadatalen = obd_size_diskmd(sbi->ll_osc_exp, NULL);
+                rc = ll_get_max_mdsize(sbi, &eadatalen);
+                if (rc) 
+                        return ERR_PTR(rc); 
                 valid |= OBD_MD_FLEASIZE;
         }
         fid.id = (__u64)ino;
@@ -125,13 +127,16 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         spin_lock(&dcache_lock);
         for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
                 result = list_entry(lp,struct dentry, d_alias);
+                lock_dentry(result);
                 if (!(result->d_flags & DCACHE_DISCONNECTED)) {
                         dget_locked(result);
                         ll_set_dflags(result, DCACHE_REFERENCED);
+                        unlock_dentry(result);
                         spin_unlock(&dcache_lock);
                         iput(inode);
                         return result;
                 }
+                unlock_dentry(result);
         }
         spin_unlock(&dcache_lock);
         result = d_alloc_root(inode);

@@ -1,80 +1,42 @@
- Documentation/filesystems/ext2.txt |   16 ++
- fs/ext3/Makefile                   |    2 
- fs/ext3/inode.c                    |    4 
- fs/ext3/iopen.c                    |  259 +++++++++++++++++++++++++++++++++++++
- fs/ext3/iopen.h                    |   13 +
- fs/ext3/namei.c                    |   13 +
- fs/ext3/super.c                    |   11 +
- include/linux/ext3_fs.h            |    2 
- 8 files changed, 318 insertions(+), 2 deletions(-)
-
-Index: kernel-2.4.212l35/Documentation/filesystems/ext2.txt
+Index: linux-2.6.12-rc6/fs/ext3/Makefile
 ===================================================================
---- kernel-2.4.212l35.orig/Documentation/filesystems/ext2.txt	2001-07-11 15:44:45.000000000 -0700
-+++ kernel-2.4.212l35/Documentation/filesystems/ext2.txt	2004-05-06 19:48:32.000000000 -0700
-@@ -35,6 +35,22 @@
+--- linux-2.6.12-rc6.orig/fs/ext3/Makefile	2005-06-14 16:00:45.206720992 +0200
++++ linux-2.6.12-rc6/fs/ext3/Makefile	2005-06-14 16:14:33.595382720 +0200
+@@ -4,7 +4,7 @@
  
- sb=n				Use alternate superblock at this location.
+ obj-$(CONFIG_EXT3_FS) += ext3.o
  
-+iopen				Makes an invisible pseudo-directory called
-+				__iopen__ available in the root directory
-+				of the filesystem.  Allows open-by-inode-
-+				number.  i.e., inode 3145 can be accessed
-+				via /mntpt/__iopen__/3145
-+
-+iopen_nopriv			This option makes the iopen directory be
-+				world-readable.  This may be safer since it
-+				allows daemons to run as an unprivileged user,
-+				however it significantly changes the security
-+				model of a Unix filesystem, since previously
-+				all files under a mode 700 directory were not
-+				generally avilable even if the
-+				permissions on the file itself is
-+				world-readable.
-+
- grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
+-ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
++ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o\
+ 	   ioctl.o namei.o super.o symlink.o hash.o resize.o
  
- 
-Index: kernel-2.4.212l35/fs/ext3/Makefile
+ ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
+Index: linux-2.6.12-rc6/fs/ext3/inode.c
 ===================================================================
---- kernel-2.4.212l35.orig/fs/ext3/Makefile	2004-05-06 19:46:22.000000000 -0700
-+++ kernel-2.4.212l35/fs/ext3/Makefile	2004-05-06 19:48:32.000000000 -0700
-@@ -11,7 +11,7 @@
- 
- export-objs := ext3-exports.o
- 
--obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
-+obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
- 		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
- obj-m    := $(O_TARGET)
- 
-Index: kernel-2.4.212l35/fs/ext3/inode.c
-===================================================================
---- kernel-2.4.212l35.orig/fs/ext3/inode.c	2004-05-06 19:46:24.000000000 -0700
-+++ kernel-2.4.212l35/fs/ext3/inode.c	2004-05-06 19:48:32.000000000 -0700
-@@ -34,6 +34,7 @@
- #include <linux/highuid.h>
- #include <linux/quotaops.h>
- #include <linux/module.h>
+--- linux-2.6.12-rc6.orig/fs/ext3/inode.c	2005-06-14 16:01:16.272150299 +0200
++++ linux-2.6.12-rc6/fs/ext3/inode.c	2005-06-14 16:24:55.686195412 +0200
+@@ -37,6 +37,7 @@
+ #include <linux/mpage.h>
+ #include <linux/uio.h>
+ #include "xattr.h"
 +#include "iopen.h"
+ #include "acl.h"
  
- /*
-  * SEARCH_FROM_ZERO forces each block allocation to search from the start
-@@ -2252,6 +2253,9 @@
- 	struct buffer_head *bh;
- 	int block;
- 	
-+	if (ext3_iopen_get_inode(inode))
-+		return;
-+
- 	if(ext3_get_inode_loc(inode, &iloc))
+ static int ext3_writepage_trans_blocks(struct inode *inode);
+@@ -2437,6 +2438,8 @@
+ 	ei->i_default_acl = EXT3_ACL_NOT_CACHED;
+ #endif
+ 	ei->i_block_alloc_info = NULL;
++ 	if (ext3_iopen_get_inode(inode))
++ 		return;
+ 
+ 	if (__ext3_get_inode_loc(inode, &iloc, 0))
  		goto bad_inode;
- 	bh = iloc.bh;
-Index: kernel-2.4.212l35/fs/ext3/iopen.c
+Index: linux-2.6.12-rc6/fs/ext3/iopen.c
 ===================================================================
---- kernel-2.4.212l35.orig/fs/ext3/iopen.c	2003-03-27 11:16:05.000000000 -0800
-+++ kernel-2.4.212l35/fs/ext3/iopen.c	2004-05-06 19:48:41.000000000 -0700
-@@ -0,0 +1,285 @@
+--- linux-2.6.12-rc6.orig/fs/ext3/iopen.c	2005-06-14 16:14:33.530929595 +0200
++++ linux-2.6.12-rc6/fs/ext3/iopen.c	2005-06-14 16:14:33.626632719 +0200
+@@ -0,0 +1,278 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -107,11 +69,12 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +
 +#include <linux/sched.h>
 +#include <linux/fs.h>
-+#include <linux/locks.h>
 +#include <linux/ext3_jbd.h>
 +#include <linux/jbd.h>
 +#include <linux/ext3_fs.h>
 +#include <linux/smp_lock.h>
++#include <linux/dcache.h>
++#include <linux/security.h>
 +#include "iopen.h"
 +
 +#ifndef assert
@@ -123,7 +86,8 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +/*
 + * This implements looking up an inode by number.
 + */
-+static struct dentry *iopen_lookup(struct inode *dir, struct dentry *dentry)
++static struct dentry *iopen_lookup(struct inode * dir, struct dentry *dentry,
++				   struct nameidata *nd)
 +{
 +	struct inode *inode;
 +	unsigned long ino;
@@ -148,7 +112,7 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +	     //ino != EXT3_ACL_IDX_INO &&
 +	     //ino != EXT3_ACL_DATA_INO &&
 +	     ino < EXT3_FIRST_INO(dir->i_sb)) ||
-+	    ino > le32_to_cpu(dir->i_sb->u.ext3_sb.s_es->s_inodes_count))
++	    ino > le32_to_cpu(EXT3_SB(dir->i_sb)->s_es->s_inodes_count))
 +		return ERR_PTR(-ENOENT);
 +
 +	inode = iget(dir->i_sb, ino);
@@ -160,31 +124,33 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +	}
 +
 +	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
-+	assert(list_empty(&dentry->d_hash));		/* d_rehash */
++	assert(d_unhashed(dentry));		/* d_rehash */
 +
 +	/* preferrably return a connected dentry */
 +	spin_lock(&dcache_lock);
 +	list_for_each(lp, &inode->i_dentry) {
 +		alternate = list_entry(lp, struct dentry, d_alias);
-+		assert(!(alternate->d_flags & DCACHE_NFSD_DISCONNECTED));
++		assert(!(alternate->d_flags & DCACHE_DISCONNECTED));
 +	}
 +
 +	if (!list_empty(&inode->i_dentry)) {
 +		alternate = list_entry(inode->i_dentry.next,
 +				       struct dentry, d_alias);
 +		dget_locked(alternate);
-+		alternate->d_vfs_flags |= DCACHE_REFERENCED;
++		spin_lock(&alternate->d_lock);
++		alternate->d_flags |= DCACHE_REFERENCED;
++		spin_unlock(&alternate->d_lock);
 +		iput(inode);
 +		spin_unlock(&dcache_lock);
 +		return alternate;
 +	}
-+	dentry->d_flags |= DCACHE_NFSD_DISCONNECTED;
++	dentry->d_flags |= DCACHE_DISCONNECTED;
 +
 +	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
 +	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
 +	dentry->d_inode = inode;
 +
-+	__d_rehash(dentry, 0);				/* d_rehash */
++	d_rehash_cond(dentry, 0);				/* d_rehash */
 +	spin_unlock(&dcache_lock);
 +
 +	return NULL;
@@ -198,7 +164,7 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +{
 +	const unsigned char *old_name, *new_name;
 +
-+	memcpy(dentry->d_iname, target->d_iname, DNAME_INLINE_LEN);
++	memcpy(dentry->d_iname, target->d_iname, DNAME_INLINE_LEN_MIN);
 +	old_name = target->d_name.name;
 +	new_name = dentry->d_name.name;
 +	if (old_name == target->d_iname)
@@ -222,7 +188,7 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +	assert(dentry->d_inode == NULL);
 +	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
 +	if (rehash)
-+		assert(list_empty(&dentry->d_hash));	/* d_rehash */
++		assert(d_unhashed(dentry));	/* d_rehash */
 +	assert(list_empty(&dentry->d_subdirs));
 +
 +	spin_lock(&dcache_lock);
@@ -235,7 +201,7 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +	/* preferrably return a connected dentry */
 +	list_for_each(lp, &inode->i_dentry) {
 +		tmp = list_entry(lp, struct dentry, d_alias);
-+		if (tmp->d_flags & DCACHE_NFSD_DISCONNECTED) {
++		if (tmp->d_flags & DCACHE_DISCONNECTED) {
 +			assert(tmp->d_alias.next == &inode->i_dentry);
 +			assert(tmp->d_alias.prev == &inode->i_dentry);
 +			goal = tmp;
@@ -247,23 +213,12 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +	if (!goal)
 +		goto do_instantiate;
 +
-+	/* Move the goal to the de hash queue - like d_move() */
-+	goal->d_flags &= ~DCACHE_NFSD_DISCONNECTED;
-+	list_del_init(&goal->d_hash);
-+
-+	list_del(&goal->d_child);
-+	list_del(&dentry->d_child);
-+
-+	/* Switch the parents and the names.. */
-+	switch_names(goal, dentry);
-+	do_switch(goal->d_parent, dentry->d_parent);
-+	do_switch(goal->d_name.len, dentry->d_name.len);
-+	do_switch(goal->d_name.hash, dentry->d_name.hash);
-+
-+	/* And add them back to the (new) parent lists */
-+	list_add(&goal->d_child, &goal->d_parent->d_subdirs);
-+	list_add(&dentry->d_child, &dentry->d_parent->d_subdirs);
-+	__d_rehash(goal, 0);
++	/* Move the goal to the de hash queue */
++	goal->d_flags &= ~DCACHE_DISCONNECTED;
++	security_d_instantiate(goal, inode);
++	__d_drop(dentry);
++	d_rehash_cond(dentry, 0);
++	__d_move(goal, dentry);
 +	spin_unlock(&dcache_lock);
 +	iput(inode);
 +
@@ -275,7 +230,7 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +	dentry->d_inode = inode;
 +do_rehash:
 +	if (rehash)
-+		__d_rehash(dentry, 0);			/* d_rehash */
++		d_rehash_cond(dentry, 0);			/* d_rehash */
 +	spin_unlock(&dcache_lock);
 +
 +	return NULL;
@@ -346,7 +301,7 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +	inode->i_atime = CURRENT_TIME;
 +	inode->i_ctime = CURRENT_TIME;
 +	inode->i_mtime = CURRENT_TIME;
-+	inode->u.ext3_i.i_dtime = 0;
++	EXT3_I(inode)->i_dtime = 0;
 +	inode->i_blksize = PAGE_SIZE;	/* This is the optimal IO size
 +					 * (for stat), not the fs block
 +					 * size */
@@ -360,10 +315,10 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +
 +	return 1;
 +}
-Index: kernel-2.4.212l35/fs/ext3/iopen.h
+Index: linux-2.6.12-rc6/fs/ext3/iopen.h
 ===================================================================
---- kernel-2.4.212l35.orig/fs/ext3/iopen.h	2003-03-27 11:16:05.000000000 -0800
-+++ kernel-2.4.212l35/fs/ext3/iopen.h	2004-05-06 19:48:41.000000000 -0700
+--- linux-2.6.12-rc6.orig/fs/ext3/iopen.h	2005-06-14 16:14:33.534835845 +0200
++++ linux-2.6.12-rc6/fs/ext3/iopen.h	2005-06-14 16:14:33.633468657 +0200
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -380,20 +335,19 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
-Index: kernel-2.4.212l35/fs/ext3/namei.c
+Index: linux-2.6.12-rc6/fs/ext3/namei.c
 ===================================================================
---- kernel-2.4.212l35.orig/fs/ext3/namei.c	2004-05-06 19:46:23.000000000 -0700
-+++ kernel-2.4.212l35/fs/ext3/namei.c	2004-05-06 19:51:48.000000000 -0700
-@@ -36,7 +36,7 @@
- #include <linux/string.h>
- #include <linux/locks.h>
- #include <linux/quotaops.h>
--
+--- linux-2.6.12-rc6.orig/fs/ext3/namei.c	2005-06-14 16:01:14.701837819 +0200
++++ linux-2.6.12-rc6/fs/ext3/namei.c	2005-06-14 16:14:33.644210844 +0200
+@@ -37,6 +37,7 @@
+ #include <linux/buffer_head.h>
+ #include <linux/smp_lock.h>
+ #include "xattr.h"
 +#include "iopen.h"
+ #include "acl.h"
  
  /*
-  * define how far ahead to read directories while searching them.
-@@ -932,6 +932,9 @@
+@@ -985,6 +986,9 @@
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);
  
@@ -403,29 +357,31 @@ Index: kernel-2.4.212l35/fs/ext3/namei.c
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -943,8 +946,8 @@
+@@ -995,10 +999,8 @@
+ 		if (!inode)
  			return ERR_PTR(-EACCES);
- 		}
  	}
+-	if (inode)
+-		return d_splice_alias(inode, dentry);
 -	d_add(dentry, inode);
 -	return NULL;
 +
 +	return iopen_connect_dentry(dentry, inode, 1);
  }
  
- #define S_SHIFT 12
-@@ -1936,10 +1940,6 @@
+ 
+@@ -2042,10 +2044,6 @@
  			      inode->i_nlink);
- 	inode->i_version = ++event;
+ 	inode->i_version++;
  	inode->i_nlink = 0;
 -	/* There's no need to set i_disksize: the fact that i_nlink is
 -	 * zero will ensure that the right thing happens during any
 -	 * recovery. */
 -	inode->i_size = 0;
  	ext3_orphan_add(handle, inode);
- 	dir->i_nlink--;
- 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
-@@ -2058,6 +2058,23 @@
+ 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME_SEC;
+ 	ext3_mark_inode_dirty(handle, inode);
+@@ -2168,6 +2166,23 @@
  	return err;
  }
  
@@ -449,49 +405,67 @@ Index: kernel-2.4.212l35/fs/ext3/namei.c
  static int ext3_link (struct dentry * old_dentry,
  		struct inode * dir, struct dentry *dentry)
  {
-@@ -2085,7 +2102,8 @@
+@@ -2191,7 +2206,8 @@
  	ext3_inc_count(handle, inode);
  	atomic_inc(&inode->i_count);
  
 -	err = ext3_add_nondir(handle, dentry, inode);
 +	err = ext3_add_link(handle, dentry, inode);
-+	ext3_orphan_del(handle, inode);
- 	ext3_journal_stop(handle, dir);
- 	return err;
- }
-Index: kernel-2.4.212l35/fs/ext3/super.c
++	ext3_orphan_del(handle,inode);
+ 	ext3_journal_stop(handle);
+ 	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
+ 		goto retry;
+Index: linux-2.6.12-rc6/fs/ext3/super.c
 ===================================================================
---- kernel-2.4.212l35.orig/fs/ext3/super.c	2004-05-06 19:46:23.000000000 -0700
-+++ kernel-2.4.212l35/fs/ext3/super.c	2004-05-06 19:48:32.000000000 -0700
-@@ -869,6 +869,18 @@
- 		         || !strcmp (this_char, "quota")
- 		         || !strcmp (this_char, "usrquota"))
- 			/* Don't do anything ;-) */ ;
-+		else if (!strcmp (this_char, "iopen")) {
+--- linux-2.6.12-rc6.orig/fs/ext3/super.c	2005-06-14 16:01:16.287775299 +0200
++++ linux-2.6.12-rc6/fs/ext3/super.c	2005-06-14 16:14:33.656906156 +0200
+@@ -590,6 +590,7 @@
+ 	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
+ 	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
+ 	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0,
++	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+ 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
+ };
+ 
+@@ -638,6 +639,9 @@
+ 	{Opt_ignore, "noquota"},
+ 	{Opt_ignore, "quota"},
+ 	{Opt_ignore, "usrquota"},
++	{Opt_iopen,  "iopen"},
++	{Opt_noiopen,  "noiopen"},
++	{Opt_iopen_nopriv,  "iopen_nopriv"},
+ 	{Opt_barrier, "barrier=%u"},
+ 	{Opt_err, NULL},
+ 	{Opt_resize, "resize"},
+@@ -921,6 +925,18 @@
+ 			else
+ 				clear_opt(sbi->s_mount_opt, BARRIER);
+ 			break;
++		case Opt_iopen:
 +			set_opt (sbi->s_mount_opt, IOPEN);
 +			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
-+		}
-+		else if (!strcmp (this_char, "noiopen")) {
++			break;
++		case Opt_noiopen:
 +			clear_opt (sbi->s_mount_opt, IOPEN);
 +			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
-+		}
-+		else if (!strcmp (this_char, "iopen_nopriv")) {
++			break;
++		case Opt_iopen_nopriv:
 +			set_opt (sbi->s_mount_opt, IOPEN);
 +			set_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
-+		}
- 		else if (!strcmp (this_char, "journal")) {
- 			/* @@@ FIXME */
- 			/* Eventually we will want to be able to create
-Index: kernel-2.4.212l35/include/linux/ext3_fs.h
++			break;
+ 		case Opt_ignore:
+ 			break;
+ 		case Opt_resize:
+Index: linux-2.6.12-rc6/include/linux/ext3_fs.h
 ===================================================================
---- kernel-2.4.212l35.orig/include/linux/ext3_fs.h	2004-05-06 19:46:24.000000000 -0700
-+++ kernel-2.4.212l35/include/linux/ext3_fs.h	2004-05-06 19:48:32.000000000 -0700
-@@ -324,6 +324,8 @@
- #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
- #define EXT3_MOUNT_POSIX_ACL		0x8000	/* POSIX Access Control Lists */
- #define EXT3_MOUNT_ASYNCDEL		0x20000 /* Delayed deletion */
-+#define EXT3_MOUNT_IOPEN		0x40000	/* Allow access via iopen */
-+#define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
+--- linux-2.6.12-rc6.orig/include/linux/ext3_fs.h	2005-06-14 16:01:14.709650318 +0200
++++ linux-2.6.12-rc6/include/linux/ext3_fs.h	2005-06-14 16:28:38.452794245 +0200
+@@ -358,6 +358,8 @@
+ #define EXT3_MOUNT_RESERVATION		0x10000	/* Preallocation */
+ #define EXT3_MOUNT_BARRIER		0x20000 /* Use block barriers */
+ #define EXT3_MOUNT_NOBH			0x40000 /* No bufferheads */
++#define EXT3_MOUNT_IOPEN		0x80000 /* Allow access via iopen */
++#define EXT3_MOUNT_IOPEN_NOPRIV		0x100000 /* Make iopen world-readable */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H

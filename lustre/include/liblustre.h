@@ -140,7 +140,7 @@ static inline void *kmalloc(int size, int prot)
 #define GFP_HIGHUSER 1
 #define GFP_ATOMIC 1
 #define GFP_NOFS 1
-#define IS_ERR(a) (((a) && abs((long)(a)) < 500) ? 1 : 0)
+#define IS_ERR(a) ((unsigned long)(a) < 1000)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
@@ -294,6 +294,7 @@ typedef __u64 kdev_t;
 
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { }
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
+#define LASSERT_SEM_LOCKED(sem) do {} while(0)
 
 static inline void spin_lock(spinlock_t *l) {return;}
 static inline void spin_unlock(spinlock_t *l) {return;}
@@ -333,8 +334,8 @@ void get_random_bytes(void *ptr, int size);
 
 /* memory */
 
-/* FIXME */
-#define num_physpages (16 * 1024)
+/* memory size: used for some client tunables */
+#define num_physpages (256 * 1024) /* 1GB */
 
 static inline int copy_from_user(void *a,void *b, int c)
 {
@@ -815,6 +816,52 @@ struct file_lock {
         void *result = NULL;                    \
         result;                                 \
 })
+
+/* ACL */
+struct posix_acl_entry {
+        short                   e_tag;
+        unsigned short          e_perm;
+        unsigned int            e_id;
+};
+
+struct posix_acl {
+        atomic_t                a_refcount;
+        unsigned int            a_count;
+        struct posix_acl_entry  a_entries[0];
+};
+
+typedef struct {
+        __u16           e_tag;
+        __u16           e_perm;
+        __u32           e_id;
+} xattr_acl_entry;
+
+typedef struct {
+        __u32           a_version;
+        xattr_acl_entry a_entries[0];
+} xattr_acl_header;
+
+static inline size_t xattr_acl_size(int count)
+{
+        return sizeof(xattr_acl_header) + count * sizeof(xattr_acl_entry);
+}
+
+static inline
+struct posix_acl * posix_acl_from_xattr(const void *value, size_t size)
+{
+        return NULL;
+}
+
+static inline
+int posix_acl_valid(const struct posix_acl *acl)
+{
+        return 0;
+}
+
+static inline
+void posix_acl_release(struct posix_acl *acl)
+{
+}
 
 #ifndef ENOTSUPP
 #define ENOTSUPP ENOTSUP

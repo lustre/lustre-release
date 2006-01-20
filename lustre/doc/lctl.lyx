@@ -910,7 +910,7 @@ setup
 
 
 \size small 
-lctl > setup /dev/loop0 extN
+lctl > setup /dev/loop0 ldiskfs
 \newline 
 lctl > quit
 \size default 

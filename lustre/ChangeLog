@@ -1,78 +1,11 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.7
-
-Severity   : minor
-Frequency  : occasional (Cray XT3 only)
-Bugzilla   : 7305
-Description: root not authorized to access files in CRAY_PORTALS environment
-Details    : The client process capabilities were not honoured on the MDS in
-	     a CRAY_PORTALS/CRAY_XT3 environment.  If the file had previously
-	     been accessed by an authorized user then root was able to access
-	     the file on the local client also.  The root user capabilities
-	     are now allowed on the MDS, as this environment has secure UID.
-
-Severity   : minor
-Frequency  : occasional
-Bugzilla   : 6449
-Description: ldiskfs "too long searching" message happens too often
-Details    : A debugging message (otherwise harmless) prints too often on
-	     the OST console.  This has been reduced to only happen when
-	     there are fragmentation problems on the filesystem.
-
-Severity   : minor
-Frequency  : rare
-Bugzilla   : 9598
-Description: Division by zero in statfs when all OSCs are inactive
-Details    : lov_get_stripecnt() returns zero due to incorrect order of checks,
-	     lov_statfs divides by value returned by lov_get_stripecnt().
-
-Severity   : minor
-Frequency  : common
-Bugzilla   : 9489, 3273
-Description: First write from each client to each OST was only 4kB in size,
-	     to initialize client writeback cache, which caused sub-optimal
-	     RPCs and poor layout on disk for the first writen file.
-Details    : Clients now request an initial cache grant at (re)connect time
-	     and so that they can start streaming writes to the cache right
-	     away and always do full-sized RPCs if there is enough data.
-	     If the OST is rebooted the client also re-establishes its grant
-	     so that client cached writes will be honoured under the grant.
-	     
-Severity   : minor
-Frequency  : common
-Bugzilla   : 7198
-Description: Slow ls (and stat(2) syscall) on files residing on IO-loaded OSTs
-Details    : Now I/O RPCs go to different portal number and (presumably) fast
-             lock requests (and glimses) and other RPCs get their own service
-             threads pool that should be able to service those RPCs
-             immediatelly.
-
-Severity   : enhancement
-Bugzilla   : 7417
-Description: Ability to exchange lustre version between client and servers and
-             issue warnings at client side if client is too old. Also for
-             liblustre clients there is ability to refuse connection of too old
-             clients.
-Details    : New 'version' field is added to connect data structure that is
-             filled with version info. That info is later checked by server and
-             by client.
-
-Severity   : minor
-Frequency  : rare, liblustre only.
-Bugzilla   : 7198
-Description: Two simultaneous writes from liblustre at offset within same page
-	     might proceed at the same time overwriting eachother with stale
-	     data.
-Details    : I/O lock withing llu_file_prwv was released too early, before data
-	     actually was hitting the wire. Extended lock-holding time until
-	     server acknowledges receiving data.
-
-
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+01-31-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
 	 INTEROPERATE with older versions automatically.  Please read the 
 	 user documentation before upgrading any part of a live system.
+       * WARNING: Lustre networking configuration changes are required with
+	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052	 
+	 for details.
        * bug fixes
 
 Severity   : enhancement
@@ -87,7 +20,7 @@ Details    : LNET is new networking infrastructure for Lustre, it includes
 
 Severity   : enhancement
 Bugzilla   : 7982
-Description: Configuration change for the XT3 
+Description: Configuration change for the XT3
 	     The PTLLND is now used to run Lustre over Portals on the XT3
 	     The configure option(s) --with-cray-portals are no longer used.
 	     Rather --with-portals=<path-to-portals-includes> is used to
@@ -319,8 +252,8 @@ Description: do not expand extent locks acquired on OST-side
 Details    : Modify ldlm_extent_policy() to not expand local locks, acquired
 	     by server: they are not cached anyway.
 
-Severity   : medium
-Frequency  : seldom, when mmap is used/files executed from lustre
+Severity   : major
+Frequency  : when mmap is used/binaries executed from Lustre
 Bugzilla   : 9482
 Description: Unmmap pages before throwing them away from read cache.
 Details    : llap_shrink cache now attempts to unmap pages before discarding
@@ -341,12 +274,78 @@ Details    : lconf --force (implied by --failover) sets the global obd_timeout
 Severity   : enhancement
 Frequency  : if MDS is started with down OST
 Bugzilla   : 9439,5706
-Description: Allow startup/shutdown of an MDS without depending on the 
+Description: Allow startup/shutdown of an MDS without depending on the
 	     availability of the OSTs.
 Details    : Asynchronously call mds_lov_synchronize during MDS startup.
 	     Add appropriate locking and lov-osc refcounts for safe
 	     cleaning.  Add osc abort_inflight calls in case the
 	     synchronize never started.
+
+Severity   : minor
+Frequency  : occasional (Cray XT3 only)
+Bugzilla   : 7305
+Description: root not authorized to access files in CRAY_PORTALS environment
+Details    : The client process capabilities were not honoured on the MDS in
+	     a CRAY_PORTALS/CRAY_XT3 environment.  If the file had previously
+	     been accessed by an authorized user then root was able to access
+	     the file on the local client also.  The root user capabilities
+	     are now allowed on the MDS, as this environment has secure UID.
+
+Severity   : minor
+Frequency  : occasional
+Bugzilla   : 6449
+Description: ldiskfs "too long searching" message happens too often
+Details    : A debugging message (otherwise harmless) prints too often on
+	     the OST console.  This has been reduced to only happen when
+	     there are fragmentation problems on the filesystem.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9598
+Description: Division by zero in statfs when all OSCs are inactive
+Details    : lov_get_stripecnt() returns zero due to incorrect order of checks,
+	     lov_statfs divides by value returned by lov_get_stripecnt().
+
+Severity   : minor
+Frequency  : common
+Bugzilla   : 9489, 3273
+Description: First write from each client to each OST was only 4kB in size,
+	     to initialize client writeback cache, which caused sub-optimal
+	     RPCs and poor layout on disk for the first writen file.
+Details    : Clients now request an initial cache grant at (re)connect time
+	     and so that they can start streaming writes to the cache right
+	     away and always do full-sized RPCs if there is enough data.
+	     If the OST is rebooted the client also re-establishes its grant
+	     so that client cached writes will be honoured under the grant.
+
+Severity   : minor
+Frequency  : common
+Bugzilla   : 7198
+Description: Slow ls (and stat(2) syscall) on files residing on IO-loaded OSTs
+Details    : Now I/O RPCs go to different portal number and (presumably) fast
+	     lock requests (and glimses) and other RPCs get their own service
+	     threads pool that should be able to service those RPCs
+	     immediatelly.
+
+Severity   : enhancement
+Bugzilla   : 7417
+Description: Ability to exchange lustre version between client and servers and
+	     issue warnings at client side if client is too old. Also for
+	     liblustre clients there is ability to refuse connection of too old
+	     clients.
+Details    : New 'version' field is added to connect data structure that is
+	     filled with version info. That info is later checked by server and
+	     by client.
+
+Severity   : minor
+Frequency  : rare, liblustre only.
+Bugzilla   : 9296, 9581
+Description: Two simultaneous writes from liblustre at offset within same page
+	     might proceed at the same time overwriting eachother with stale
+	     data.
+Details    : I/O lock withing llu_file_prwv was released too early, before data
+	     actually was hitting the wire. Extended lock-holding time until
+	     server acknowledges receiving data.
 
 Severity   : minor
 Frequency  : extremely rare. Never observed in practice.
@@ -360,12 +359,167 @@ Details    : class_handle_hash() generates handle cookies by incrementing
 	     sections in this function into one.
 
 Severity   : enhancement
-Frequency  : liblustre-only
 Bugzilla   : 9528
 Description: allow liblustre clients to delegate truncate locking to OST
 Details    : To avoid overhead of locking, liblustre client instructs OST to
 	     take extent lock in ost_punch() on client's behalf. New connection
 	     flag is added to handle backward compatibility.
+
+Severity   : enhancement
+Bugzilla   : 4928, 7341, 9758
+Description: allow number of OST service threads to be specified
+Details    : a module parameter allows the number of OST service threads
+	     to be specified via "options ost ost_num_threads=X" in
+	     /etc/modules.conf or /etc/modutils.conf.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 9635
+Description: servers crash with bad pointer in target_handle_connect()
+Details    : In rare cases when a client is reconnecting it was possible that
+	     the connection request was the last reference for that export.
+	     We would temporarily drop the export reference and get a new
+	     one, but this may have been the last reference and the export
+	     was just destroyed.  Get new reference before dropping old one.
+
+Severity   : enhancement
+Frequency  : if client is started with failover MDS
+Bugzilla   : 9818
+Description: Allow multiple MDS hostnames in the mount command
+Details    : Try to read the configuration from all specified MDS
+	     hostnames during a client mount in case the "primary"
+	     MDS is down.
+
+Severity   : enhancement
+Bugzilla   : 9297
+Description: Stop sending data to evicted clients as soon as possible.
+Details    : Check if the client we are about to send or are sending data to
+	     was evicted already. (Check is done every second of waiting,
+	     for which l_wait_event interface was extended to allow checking
+	     of exit condition at specified intervals).
+
+Severity   : minor
+Frequency  : rare, normally only when NFS exporting is done from client
+Bugzilla   : 9301
+Description: 'bad disk LOV MAGIC: 0x00000000' error when chown'ing files
+	     without objects
+Details    : Make mds_get_md() recognise empty md case and set lmm size to 0.
+
+Severity   : minor
+Frequency  : always, if srand() is called before liblustre initialization
+Bugzilla   : 9794
+Description: Liblustre uses system PRNG disturbing its usage by user application
+Details    : Introduce internal to lustre fast and high-quality PRNG for
+	     lustre usage and make liblustre and some other places in generic
+	     lustre code to use it.
+
+Severity   : enhancement
+Bugzilla   : 9477, 9557, 9870
+Description: Verify that the MDS configuration logs are updated when xml is
+Details    : Check if the .xml configuration logs are newer than the config
+	     logs stored on the MDS and report an error if this is the case.
+	     Request --write-conf, or allow starting with --old_conf.
+
+Severity   : enhancement
+Bugzilla   : 6034
+Description: Handle symlinks in the path when checking if Lustre is mounted.
+Details    : Resolve intermediate symlinks when checking if a client has
+	     mounted a filesystem to avoid duplicate client mounts.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9309
+Description: lconf can hit an error exception but still return success.
+Details    : The lconf command catches the Command error exception at the top
+	     level script context and will exit with the associated exit
+	     status, but doesn't ensure that this exit status is non-zero.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9493
+Description: failure of ptlrpc thread startup can cause oops
+Details    : Starting a ptlrpc service thread can fail if there are a large
+	     number of threads or the server memory is very fragmented.
+	     Handle this without oopsing.
+
+Severity   : minor
+Frequency  : always, only if liblustre and non-default acceptor port was used
+Bugzilla   : 9933
+Description: liblustre cannot connect to servers with non-default acceptor port
+Details    : tcpnal_set_default_params() was not called and was therefore
+	     ignoring the environment varaible TCPNAL_PORT, as well as other
+	     TCPNAL_ environment variables
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9923
+Description: two objects could be created on the same OST for a single file
+Details    : If an OST is down, in some cases it was possible to create two
+	     objects on a single OST for a single file.  No problems other
+	     than potential performance impact and spurious error messages.
+
+Severity   : minor
+Frequency  : always
+Bugzilla   : 9942
+Description: Inode refcounting problems in NFS export code
+Details    : link_raw functions used to call d_instantiate without obtaining
+	     extra inode reference first.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9942, 9903
+Description: Referencing freed requests leading to crash, memleask with NFS.
+Details    : We used to require that call to ll_revalidate_it was always
+	     followed by ll_lookup_it. Also with revalidate_special() it is
+	     possible to call ll_revalidate_it() twice for the same dentry
+	     even if first occurence returned success. This fix changes semantic
+	     between DISP_ENQ_COMPLETE disposition flag to mean there is extra
+	     reference on a request referred from the intent.
+	     ll_intent_release() then releases such a request.
+
+Severity   : minor
+Frequency  : rare, normally benchmark loads only
+Bugzilla   : 1443
+Description: unlinked inodes were kept in memory on the client
+Details    : If a client is repeatedly creating and unlinking files it
+	     can accumulate a lot of stale inodes in the inode slab cache.
+	     If there is no other client load running this can cause the
+	     client node to run out of memory.  Instead flush old inodes
+	     from client cache that have the same inode number as a new inode.
+
+Severity   : minor
+Frequency  : echo_client brw_test command
+Bugzilla   : 9919
+Description: fix echo_client to work with OST preallocated code
+Details    : OST preallocation code (5137) didn't take echo_client IO path
+	     into account: echo_client calls filter methods outside of any
+	     OST thread and, hence, there is no per-thread preallocated
+	     pages and buffers to use. Solution: hijack pga pages for IO. As
+	     a byproduct, this avoids unnecessary data copying.
+
+Severity   : major
+Frequency  : rare, unless heavy write-truncate concurrency is continuous
+Bugzilla   : 4180, 6984, 7171, 9963, 9331
+Description: OST becomes very slow and/or deadlocked during object unlink
+Details    : filter_destroy() was holding onto the parent directory lock
+	     while truncating+unlinking objects.  For very large objects this
+	     may block other threads for a long time and slow overall OST
+	     responsiveness.  It may also be possible to get a lock ordering
+	     deadlock in this case, or run out of journal credits because of
+	     the combined truncate+unlink.  Solution is to do object truncate
+	     first in one transaction without parent lock, and then do the
+	     final unlink in a new transaction with the parent lock.  This
+	     reduces the lock hold time dramatically.
+
+Severity   : major
+Frequency  : rare, 2.4 kernels only
+Bugzilla   : 9967
+Description: MDS or OST cleanup may trip kernel BUG when dropping kernel lock
+Details    : mds_cleanup() and filter_cleanup() need to drop the kernel lock
+	     before unmounting their filesystem in order to avoid deadlock.
+	     The kernel_locked() function in 2.4 kernels only checks whether
+	     the kernel lock is held, not whether it is this process that is
+	     holding it as 2.6 kernels do.
 
 ------------------------------------------------------------------------------
 
@@ -481,7 +635,7 @@ Details    : lconf was attempting to abort recovery on the MDT device and not
        * bug fixes
 
 Severity   : major
-Frequency  : rare (only unsupported configurations with a node running as an 
+Frequency  : rare (only unsupported configurations with a node running as an
 	     OST and a client)
 Bugzilla   : 6514, 5137
 Description: Mounting a Lustre file system on a node running as an OST could
@@ -510,7 +664,7 @@ Details    : By default, OSTs will now run in failover mode.  To return to
 Severity   : enhancement
 Bugzilla   : 1693
 Description: Health checks are now provided for MDS and OSTs
-Details    : Additional detailed health check information on MSD and OSTs   
+Details    : Additional detailed health check information on MSD and OSTs
              is now provided through the procfs health_check value.
 
 Severity   : minor
@@ -560,7 +714,7 @@ Details    : It was possible under high-load situations to have an extent
 
 Severity   : minor
 Bugzilla   : 7241
-Frequency  : filesystems with default stripe_count larger than 77 
+Frequency  : filesystems with default stripe_count larger than 77
 Description: lconf+mke2fs fail when formatting filesystem with > 77 stripes
 Details    : lconf specifies an inode size of 4096 bytes when the default
              stripe_count is larger than 77.  This conflicts with the default
@@ -627,7 +781,7 @@ Severity:  : enhancement
 Bugzilla   : 3262, 6359
 Description: Attempts to reconnect to servers are now more aggressive.
 Details    : This builds on the enhanced upcall-less recovery that was added
-             in 1.4.2.  When trying to reconnect to servers,  clients will 
+             in 1.4.2.  When trying to reconnect to servers,  clients will
              now try each server in the failover group every 10 seconds.  By
              default, clients would previously try one server every 25 seconds.
 
@@ -637,13 +791,13 @@ Bugzilla   : 6371
 Description: After recovery, certain operations trigger a failed
              assertion on a client.
 Details    : Failing over an mds, using lconf -d --failover, while a
-             client was doing a readdir() call would cause the client to 
+             client was doing a readdir() call would cause the client to
              LBUG after recovery completed and the readdir() was resent.
 
 Severity   : enhancement
 Bugzilla   : 6296
 Description: Default groups are now added by lconf
-Details    : You can now run lconf --group <servicename> without having to 
+Details    : You can now run lconf --group <servicename> without having to
              manually add groups with lmc.
 
 Severity   : major
@@ -702,7 +856,7 @@ Details    : Creating a new file via mkdir or mknod (starting a transaction
 
 Severity   : minor
 Frequency  : occasional
-Description: While starting a server, the fsfilt_ext3 module could not be 
+Description: While starting a server, the fsfilt_ext3 module could not be
              loaded.
 Details    : CFS's improved ext3 filesystem is named ldiskfs for 2.6
              kernels.  Previously, lconf would still use the ext3 name
@@ -808,11 +962,11 @@ Description: Changes the "SCSI I/O Stats" kernel patch to default to "enabled"
 	- lconf should create multiple TCP connections from a client (5201)
 	- init scripts are now turned off by default; run chkconfig --on
 	  lustre and chkconfig --on lustrefs to use them
-	- upcalls are no longer needed for clients to recover to failover 
+	- upcalls are no longer needed for clients to recover to failover
 	  servers (3262)
 	- add --abort-recovery option to lconf to abort recovery on device
 	  startup (6017)
-	- add support for an arbitrary number of OSTs (3026)  
+	- add support for an arbitrary number of OSTs (3026)
 	- Quota support protocol changes.
 	- forward compatibility changes to wire structs (6007)
 	- rmmod NALs that might be loaded because of /etc/modules.conf (6133)
@@ -1590,9 +1744,9 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	  - fix dbench 2, extN refcount problem (170, 258, 356, 418)
 	  - fix double-O_EXCL intent crash (424)
 	  - avoid sending multiple lock CANCELs (352)
-	* Features 
+	* Features
 	  - MDS can do multi-client recovery (modulo bugs in new code)
-	* Documentation 
+	* Documentation
 	  - many updates, edits, cleanups
 
 2002-11-18  Phil Schwan  <phil@clusterfs.com>
@@ -1776,8 +1930,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	* small changes in the DLM wire protocol
 
 2002-07-25  Peter J. Braam  <braam@clusterfs.com>
-	* version 0_5_1 with some initial stability, 
-	* locking on MD and file I/O. 
+	* version 0_5_1 with some initial stability,
+	* locking on MD and file I/O.
 	* documentation updates
 	* several bug fixes since 0.5.0
 	* small changes in wire protocol
@@ -1811,4 +1965,4 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	* move forward to latest Lustre kernel
 
 2002-06-25  Peter Braam  <braam@clusterfs.com>
-	* release version v0_4_1.  Hopefully stable on single node use. 
+	* release version v0_4_1.  Hopefully stable on single node use.

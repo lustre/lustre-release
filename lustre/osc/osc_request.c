@@ -184,8 +184,8 @@ static int osc_getattr_async(struct obd_export *exp, struct obdo *oa,
         struct osc_getattr_async_args *aa;
         ENTRY;
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_GETATTR, 1,
-                                  &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_GETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -211,8 +211,8 @@ static int osc_getattr(struct obd_export *exp, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_GETATTR, 1,
-                                  &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_GETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -255,8 +255,8 @@ static int osc_setattr(struct obd_export *exp, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SETATTR, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_SETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -293,8 +293,8 @@ static int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 
         LASSERT(oti);
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SETATTR, 1,
-                                  &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_SETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -331,8 +331,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                         RETURN(rc);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_CREATE, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_CREATE, 1, &size, NULL);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
@@ -408,8 +408,8 @@ static int osc_punch(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_PUNCH, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_PUNCH, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -455,8 +455,8 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SYNC, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_SYNC, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -490,7 +490,8 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
 }
 
 static int osc_destroy(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *ea, struct obd_trans_info *oti)
+                       struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                       struct obd_export *md_export)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
@@ -502,8 +503,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_DESTROY, 1,
-                                  &size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_DESTROY, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -789,7 +790,8 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         size[2] = niocount * sizeof(*niobuf);
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM);
-        req = ptlrpc_prep_req_pool(imp, opc, 3, size, NULL, pool);
+        req = ptlrpc_prep_req_pool(imp, LUSTRE_OST_VERSION, opc, 3,
+                                   size, NULL, pool);
         if (req == NULL)
                 return (-ENOMEM);
 
@@ -933,6 +935,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         if (rc < 0 && rc != -EDQUOT)
                 RETURN(rc);
 
+        LASSERTF(req->rq_repmsg != NULL, "rc = %d\n", rc);
         body = lustre_swab_repbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
         if (body == NULL) {
                 CERROR ("Can't unpack body\n");
@@ -942,8 +945,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         /* set/clear over quota flag for a uid/gid */
         if (req->rq_reqmsg->opc == OST_WRITE &&
             body->oa.o_valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA))
-                osc_set_quota_flag(cli, body->oa.o_uid, body->oa.o_gid,
-                                   body->oa.o_valid, body->oa.o_flags);
+                lquota_setdq(quota_interface, cli, body->oa.o_uid,
+                             body->oa.o_gid, body->oa.o_valid,
+                             body->oa.o_flags);
 
         if (rc < 0)
                 RETURN(rc);
@@ -1244,6 +1248,9 @@ static void osc_check_rpcs(struct client_obd *cli);
 static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
                            int sent);
 
+/* This maintains the lists of pending pages to read/write for a given object
+ * (lop).  This is used by osc_check_rpcs->osc_next_loi() and loi_list_maint()
+ * to quickly find objects that are ready to send an RPC. */
 static int lop_makes_rpc(struct client_obd *cli, struct loi_oap_pages *lop,
                          int cmd)
 {
@@ -1771,6 +1778,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                !list_empty(&(LOI)->loi_read_lop.lop_urgent),             \
                args)                                                     \
 
+/* This is called by osc_check_rpcs() to find which objects have pages that
+ * we could be sending.  These lists are maintained by lop_makes_rpc(). */
 struct lov_oinfo *osc_next_loi(struct client_obd *cli)
 {
         ENTRY;
@@ -2049,7 +2058,8 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 ops = oap->oap_caller_ops;
                 ops->ap_fill_obdo(oap->oap_caller_data, cmd, oa);
-                if (osc_get_quota_flag(cli, oa->o_uid, oa->o_gid) == NO_QUOTA)
+                if (lquota_chkdq(quota_interface, cli, oa->o_uid, oa->o_gid) ==
+                    NO_QUOTA)
                         rc = -EDQUOT;
 
                 obdo_free(oa);
@@ -2320,7 +2330,8 @@ static int sanosc_brw_read(struct obd_export *exp, struct obdo *oa,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*nioptr);
 
-        request = ptlrpc_prep_req(imp, OST_SAN_READ, 3, size, NULL);
+        request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                  OST_SAN_READ, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -2454,7 +2465,8 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*nioptr);
 
-        request = ptlrpc_prep_req_pool(imp, OST_SAN_WRITE,
+        request = ptlrpc_prep_req_pool(class_exp2cliimp(exp),
+                                       LUSTRE_OST_VERSION, OST_SAN_WRITE,
                                        3, size, NULL, cli->cl_rq_pool);
         if (!request)
                 RETURN(-ENOMEM);
@@ -2693,7 +2705,8 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (*flags & LDLM_FL_HAS_INTENT) {
                 int size[2] = {sizeof(struct ldlm_request), sizeof(lvb)};
 
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
+                req = ptlrpc_prep_req(class_exp2cliimp(exp),
+                                      LUSTRE_DLM_VERSION, LDLM_ENQUEUE, 1,
                                       size, NULL);
                 if (req == NULL)
                         RETURN(-ENOMEM);
@@ -2817,7 +2830,8 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
          * during mount that would help a bit).  Having relative timestamps
          * is not so great if request processing is slow, while absolute
          * timestamps are not ideal because they need time synchronization. */
-        request = ptlrpc_prep_req(obd->u.cli.cl_import, OST_STATFS,0,NULL,NULL);
+        request = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OST_VERSION,
+                                  OST_STATFS,0,NULL,NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -2887,6 +2901,7 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
 
         RETURN(rc);
 }
+
 
 static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
@@ -2963,7 +2978,8 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                                data->ioc_offset);
                 GOTO(out, err);
         case OBD_IOC_POLL_QUOTACHECK:
-                err = osc_poll_quotacheck(exp, (struct if_quotacheck *)karg);
+                err = lquota_poll_check(quota_interface, exp,
+                                        (struct if_quotacheck *)karg);
                 GOTO(out, err);
         default:
                 CDEBUG(D_INODE, "unrecognised ioctl %#x by %s\n",
@@ -2997,8 +3013,8 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 obd_id *reply;
                 char *bufs[1] = {key};
                 int rc;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), OST_GET_INFO, 1,
-                                      &keylen, bufs);
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                      OST_GET_INFO, 1, &keylen, bufs);
                 if (req == NULL)
                         RETURN(-ENOMEM);
 
@@ -3044,7 +3060,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
 
                 RETURN(0);
         }
-
+        
         if (KEY_IS("unlinked")) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
@@ -3052,7 +3068,6 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(0);
         }
-
 
         if (KEY_IS("initial_recov")) {
                 struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
@@ -3076,7 +3091,8 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-EINVAL);
 
 
-        req = ptlrpc_prep_req(imp, OST_SET_INFO, 2, size, bufs);
+        req = ptlrpc_prep_req(imp, LUSTRE_OST_VERSION, OST_SET_INFO,
+                              2, size, bufs);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -3334,11 +3350,12 @@ int osc_cleanup(struct obd_device *obd)
         spin_unlock(&oscc->oscc_lock);
 
         /* free memory of osc quota cache */
-        osc_qinfo_cleanup(cli);
+        lquota_cleanup(quota_interface, obd);
+
+        rc = client_obd_cleanup(obd);
 
         ptlrpc_free_rq_pool(cli->cl_rq_pool);
 
-        rc = client_obd_cleanup(obd);
         ptlrpcd_decref();
         RETURN(rc);
 }
@@ -3385,8 +3402,6 @@ struct obd_ops osc_obd_ops = {
         .o_import_event         = osc_import_event,
         .o_llog_init            = osc_llog_init,
         .o_llog_finish          = osc_llog_finish,
-        .o_quotacheck           = osc_quotacheck,
-        .o_quotactl             = osc_quotactl,
 };
 
 #if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -3423,6 +3438,9 @@ struct obd_ops sanosc_obd_ops = {
 };
 #endif
 
+static quota_interface_t *quota_interface;
+extern quota_interface_t osc_quota_interface;
+
 int __init osc_init(void)
 {
         struct lprocfs_static_vars lvars;
@@ -3437,19 +3455,28 @@ int __init osc_init(void)
         lprocfs_init_vars(osc, &sanlvars);
 #endif
 
+        quota_interface = PORTAL_SYMBOL_GET(osc_quota_interface);
+        lquota_init(quota_interface);
+        init_obd_quota_ops(quota_interface, &osc_obd_ops);
+
         rc = class_register_type(&osc_obd_ops, lvars.module_vars,
                                  LUSTRE_OSC_NAME);
-        if (rc)
+        if (rc) {
+                if (quota_interface)
+                        PORTAL_SYMBOL_PUT(osc_quota_interface);
                 RETURN(rc);
+        }
 
 #if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         rc = class_register_type(&sanosc_obd_ops, sanlvars.module_vars,
                                  LUSTRE_SANOSC_NAME);
-        if (rc)
+        if (rc) {
                 class_unregister_type(LUSTRE_OSC_NAME);
+                if (quota_interface)
+                        PORTAL_SYMBOL_PUT(osc_quota_interface);
+                RETURN(rc);
+        }
 #endif
-
-        rc = osc_qinfo_init();
 
         RETURN(rc);
 }
@@ -3457,7 +3484,10 @@ int __init osc_init(void)
 #ifdef __KERNEL__
 static void /*__exit*/ osc_exit(void)
 {
-        osc_qinfo_exit();
+        lquota_exit(quota_interface);
+        if (quota_interface)
+                PORTAL_SYMBOL_PUT(osc_quota_interface);
+
 #if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         class_unregister_type(LUSTRE_SANOSC_NAME);
 #endif

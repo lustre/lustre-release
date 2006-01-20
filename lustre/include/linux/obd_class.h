@@ -426,6 +426,20 @@ static inline int obd_free_memmd(struct obd_export *exp,
         return obd_unpackmd(exp, mem_tgt, NULL, 0);
 }
 
+static inline int obd_checkmd(struct obd_export *exp,
+                              struct obd_export *md_exp,
+                              struct lov_stripe_md *mem_tgt)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, checkmd);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, checkmd);
+
+        rc = OBP(exp->exp_obd, checkmd)(exp, md_exp, mem_tgt);
+        RETURN(rc);
+}
+
 static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
                              struct lov_stripe_md **ea,
                              struct obd_trans_info *oti)
@@ -442,7 +456,8 @@ static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
 
 static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
                               struct lov_stripe_md *ea,
-                              struct obd_trans_info *oti)
+                              struct obd_trans_info *oti,
+                              struct obd_export *md_exp)
 {
         int rc;
         ENTRY;
@@ -450,7 +465,7 @@ static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_OP(exp, destroy);
         OBD_COUNTER_INCREMENT(exp->exp_obd, destroy);
 
-        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti);
+        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti, md_exp);
         RETURN(rc);
 }
 
@@ -1172,11 +1187,6 @@ static inline struct obdo *obdo_alloc(void)
 
         return oa;
 }
-
-/* qunit hash stuff */
-extern kmem_cache_t *qunit_cachep;
-extern struct list_head qunit_hash[];
-extern spinlock_t qunit_hash_lock;
 
 static inline void obdo_free(struct obdo *oa)
 {

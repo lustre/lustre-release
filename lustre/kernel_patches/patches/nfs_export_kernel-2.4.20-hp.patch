@@ -285,7 +285,7 @@
  
 --- linux-2.4.20-hp4-pnnl13/fs/nfsd/vfs.c~nfs_export_kernel-2.4.20-hp	2002-11-29 02:53:15.000000000 +0300
 +++ linux-2.4.20-hp4-pnnl13-alexey/fs/nfsd/vfs.c	2003-10-08 10:54:08.000000000 +0400
-@@ -77,6 +77,129 @@ struct raparms {
+@@ -77,6 +77,130 @@ struct raparms {
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -298,6 +298,7 @@
 +	struct nameidata nd = { .dentry = ddir, .last = dnew->d_name };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->link_raw(&old_nd, &nd);
++	igrab(dold->d_inode);
 +	d_instantiate(dnew, dold->d_inode);
 +	if (dold->d_inode->i_op && dold->d_inode->i_op->revalidate_it)
 +		dold->d_inode->i_op->revalidate_it(dnew, NULL);

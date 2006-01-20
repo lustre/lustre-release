@@ -105,6 +105,9 @@ struct ll_sb_info *ll_init_sbi(void)
         spin_lock(&ll_sb_lock);
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
         spin_unlock(&ll_sb_lock);
+
+        INIT_LIST_HEAD(&sbi->ll_deathrow);
+        spin_lock_init(&sbi->ll_deathrow_lock);
         RETURN(sbi);
 }
 
@@ -121,6 +124,10 @@ void ll_free_sbi(struct super_block *sb)
         }
         EXIT;
 }
+
+static struct dentry_operations ll_d_root_ops = {
+        .d_compare = ll_dcompare,
+};
 
 int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 {
@@ -154,8 +161,15 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                         CERROR("could not register mount in /proc/lustre");
         }
 
+        /* indicate that inodebits locking is supported by this client */
+        data->ocd_connect_flags |= OBD_CONNECT_IBITS;
+        data->ocd_ibits_known = MDS_INODELOCK_FULL;
+
         if (sb->s_flags & MS_RDONLY)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
+        if (sbi->ll_flags & LL_SBI_USER_XATTR)
+                data->ocd_connect_flags |= OBD_CONNECT_XATTR;
+        data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_JOIN;
 
         if (sbi->ll_flags & LL_SBI_FLOCK) {
                 sbi->ll_fop = &ll_file_operations_flock;
@@ -165,6 +179,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         data->ocd_connect_flags |= OBD_CONNECT_VERSION;
         data->ocd_version = LUSTRE_VERSION_CODE;
+
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An MDT (mdc %s) is performing recovery, of which this"
@@ -181,12 +196,33 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if (err)
                 GOTO(out_mdc, err);
 
+        /* async connect is surely finished by now */
+        *data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
+
         LASSERT(osfs.os_bsize);
         sb->s_blocksize = osfs.os_bsize;
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
         sbi->ll_namelen = osfs.os_namelen;
+
+        if ((sbi->ll_flags & LL_SBI_USER_XATTR) &&
+            !(data->ocd_connect_flags & OBD_CONNECT_XATTR)) {
+                LCONSOLE_INFO("Disabling user_xattr feature because "
+                              "it is not supported on the server\n"); 
+                sbi->ll_flags &= ~LL_SBI_USER_XATTR;
+        }
+
+        if (data->ocd_connect_flags & OBD_CONNECT_ACL) {
+#ifdef MS_POSIXACL
+                sb->s_flags |= MS_POSIXACL;
+#endif
+                sbi->ll_flags |= LL_SBI_ACL;
+        } else
+                sbi->ll_flags &= ~LL_SBI_ACL;
+
+        if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
+                sbi->ll_flags |= LL_SBI_JOIN;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* We set sb->s_dev equal on all lustre clients in order to support
@@ -256,7 +292,9 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         /* make root inode
          * XXX: move this to after cbd setup? */
         err = mdc_getattr(sbi->ll_mdc_exp, &rootfid,
-                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
+                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS |
+                          (sbi->ll_flags & LL_SBI_ACL ? OBD_MD_FLACL : 0),
+                          0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_osc, err);
@@ -275,8 +313,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         ptlrpc_req_finished(request);
 
         if (root == NULL || is_bad_inode(root)) {
-                if (md.lsm != NULL)
-                        obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
+                mdc_free_lustre_md(sbi->ll_osc_exp, &md);
                 CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_root, err = -EBADF);
         }
@@ -299,6 +336,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sb->s_root = d_alloc_root(root);
         if (data != NULL)
                 OBD_FREE(data, sizeof(*data));
+        sb->s_root->d_op = &ll_d_root_ops;
         RETURN(err);
 
 out_root:
@@ -313,6 +351,20 @@ out:
                 OBD_FREE(data, sizeof(*data));
         lprocfs_unregister_mountpoint(sbi);
         RETURN(err);
+}
+
+int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
+{
+        int size, rc;
+
+        *lmmsize = obd_size_diskmd(sbi->ll_osc_exp, NULL);
+        size = sizeof(int);
+        rc = obd_get_info(sbi->ll_mdc_exp, strlen("max_easize"), "max_easize", 
+                          &size, lmmsize);
+        if (rc) 
+                CERROR("Get max mdsize error rc %d \n", rc);
+        
+        RETURN(rc);
 }
 
 void ll_dump_inode(struct inode *inode)
@@ -358,13 +410,75 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
         }
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+void lustre_throw_orphan_dentries(struct super_block *sb)
+{
+        struct hlist_node *tmp, *next;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        /* Do this to get rid of orphaned dentries. That is not really trw. */
+        hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
+                struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
+                CWARN("found orphan dentry %.*s (%p->%p) at unmount, dumping "
+                      "before and after shrink_dcache_parent\n",
+                      dentry->d_name.len, dentry->d_name.name, dentry, next);
+                lustre_dump_dentry(dentry, 1);
+                shrink_dcache_parent(dentry);
+                lustre_dump_dentry(dentry, 1);
+        }
+}
+#else
+#define lustre_throw_orphan_dentries(sb)
+#endif
+
+static void prune_deathrow(struct ll_sb_info *sbi, int try)
+{
+        LIST_HEAD(throw_away);
+        int locked = 0;
+        ENTRY;
+
+        if (try) {
+                locked = spin_trylock(&sbi->ll_deathrow_lock);
+        } else {
+                spin_lock(&sbi->ll_deathrow_lock);
+                locked = 1;
+        }
+
+        if (!locked) {
+                EXIT;
+                return;
+        }
+
+        list_splice_init(&sbi->ll_deathrow, &throw_away);
+        spin_unlock(&sbi->ll_deathrow_lock);
+
+        while (!list_empty(&throw_away)) {
+                struct ll_inode_info *lli;
+                struct inode *inode;
+
+                lli = list_entry(throw_away.next, struct ll_inode_info,
+                                 lli_dead_list);
+                list_del_init(&lli->lli_dead_list);
+
+                inode = ll_info2i(lli);
+                d_prune_aliases(inode);
+
+                CDEBUG(D_INODE, "prune duplicate inode %p inum %lu count %u\n",
+                       inode, inode->i_ino, atomic_read(&inode->i_count));
+                iput(inode);
+        }
+        EXIT;
+}
+
 void client_common_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct hlist_node *tmp, *next;
         ENTRY;
 
         ll_close_thread_shutdown(sbi->ll_lcq);
+
+        /* destroy inodes in deathrow */
+        prune_deathrow(sbi, 0);
 
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp);
@@ -377,16 +491,8 @@ void client_common_put_super(struct super_block *sb)
 
         obd_disconnect(sbi->ll_mdc_exp);
 
-        // We do this to get rid of orphaned dentries. That is not really trw.
-        hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
-                struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
-                CWARN("found orphan dentry %.*s (%p->%p) at unmount, dumping "
-                      "before and after shrink_dcache_parent\n",
-                      dentry->d_name.len, dentry->d_name.name, dentry, next);
-                lustre_dump_dentry(dentry, 1);
-                shrink_dcache_parent(dentry);
-                lustre_dump_dentry(dentry, 1);
-        }
+        lustre_throw_orphan_dentries(sb);
+
         EXIT;
 }
 
@@ -419,7 +525,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
         ENTRY;
 
         CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
-        if (strncmp(opt, data, strlen(opt)))
+        if (strncmp(opt, data, strlen(opt)) != 0)
                 RETURN(0);
         else
                 RETURN(fl);
@@ -474,6 +580,17 @@ void ll_options(char *options, int *flags)
                         *flags &= ~tmp;
                         continue;
                 }
+                tmp = ll_set_opt("acl", this_char, LL_SBI_ACL);
+                if (tmp) {
+                        /* Ignore deprecated mount option.  The client will
+                         * always try to mount with ACL support, whether this
+                         * is used depends on whether server supports it. */
+                        continue;
+                }
+                tmp = ll_set_opt("noacl", this_char, LL_SBI_ACL);
+                if (tmp) {
+                        continue;
+                }
         }
         CERROR("flags %#x\n", *flags);
 
@@ -489,6 +606,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
         lli->lli_inode_magic = LLI_INODE_MAGIC;
+        INIT_LIST_HEAD(&lli->lli_dead_list);
 }
 
 int ll_fill_super(struct super_block *sb)
@@ -703,7 +821,20 @@ void ll_clear_inode(struct inode *inode)
                          strlen(lli->lli_symlink_name) + 1);
                 lli->lli_symlink_name = NULL;
         }
+
+#ifdef CONFIG_FS_POSIX_ACL
+        if (lli->lli_posix_acl) {
+                LASSERT(atomic_read(&lli->lli_posix_acl->a_refcount) == 1);
+                posix_acl_release(lli->lli_posix_acl);
+                lli->lli_posix_acl = NULL;
+        }
+#endif
+
         lli->lli_inode_magic = LLI_INODE_DEAD;
+
+        spin_lock(&sbi->ll_deathrow_lock);
+        list_del_init(&lli->lli_dead_list);
+        spin_unlock(&sbi->ll_deathrow_lock);
 
         EXIT;
 }
@@ -723,7 +854,8 @@ void ll_clear_inode(struct inode *inode)
  */
 int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 {
-        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
@@ -804,14 +936,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * above to avoid invoking vmtruncate, otherwise it is important
                  * to call vmtruncate in inode_setattr to update inode->i_size
                  * (bug 6196) */
-                inode_setattr(inode, attr);
+                rc = inode_setattr(inode, attr);
 
-                ll_update_inode(inode, md.body, md.lsm);
+                ll_update_inode(inode, &md);
                 ptlrpc_req_finished(request);
 
                 if (!lsm || !S_ISREG(inode->i_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
-                        RETURN(0);
+                        RETURN(rc);
                 }
         } else {
                 /* The OST doesn't check permissions, but the alternative is
@@ -833,7 +965,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
 
                 /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
-                inode_setattr(inode, attr);
+                rc = inode_setattr(inode, attr);
         }
 
         /* We really need to get our PW lock before we change inode->i_size.
@@ -846,7 +978,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
                                                            OBD_OBJECT_EOF } };
                 struct lustre_handle lockh = { 0 };
-                struct ll_inode_info *lli = ll_i2info(inode);
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
@@ -886,14 +1017,20 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                 rc = err;
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
+                obd_flag flags;
                 struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
+                
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_valid = OBD_MD_FLID;
-                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
+                flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                        OBD_MD_FLFID | OBD_MD_FLGENER;
+                
+                obdo_from_inode(&oa, inode, flags);
                 rc = obd_setattr(sbi->ll_osc_exp, &oa, lsm, NULL);
                 if (rc)
                         CERROR("obd_setattr fails: rc=%d\n", rc);
@@ -1020,15 +1157,34 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
         up(&lli->lli_size_sem);
 }
 
-void ll_update_inode(struct inode *inode, struct mds_body *body,
-                     struct lov_stripe_md *lsm)
+static void ll_replace_lsm(struct inode *inode, struct lov_stripe_md *lsm)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
+ 
+        dump_lsm(D_INODE, lsm);
+        dump_lsm(D_INODE, lli->lli_smd); 
+        LASSERTF(lsm->lsm_magic == LOV_MAGIC_JOIN, 
+                 "lsm must be joined lsm %p\n", lsm);
+        obd_free_memmd(ll_i2obdexp(inode), &lli->lli_smd);
+        CDEBUG(D_INODE, "replace lsm %p to lli_smd %p for inode %lu%u(%p)\n",
+               lsm, lli->lli_smd, inode->i_ino, inode->i_generation, inode);
+        lli->lli_smd = lsm;
+        lli->lli_maxbytes = lsm->lsm_maxbytes;
+        if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
+                lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+}
+
+void ll_update_inode(struct inode *inode, struct lustre_md *md)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct mds_body *body = md->body;
+        struct lov_stripe_md *lsm = md->lsm;
 
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
-                        if (lsm->lsm_magic != LOV_MAGIC) {
+                        if (lsm->lsm_magic != LOV_MAGIC && 
+                            lsm->lsm_magic != LOV_MAGIC_JOIN) {
                                 dump_lsm(D_ERROR, lsm);
                                 LBUG();
                         }
@@ -1042,15 +1198,20 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
-                                CERROR("lsm mismatch for inode %ld\n",
-                                       inode->i_ino);
-                                CERROR("lli_smd:\n");
-                                dump_lsm(D_ERROR, lli->lli_smd);
-                                CERROR("lsm:\n");
-                                dump_lsm(D_ERROR, lsm);
-                                LBUG();
-                        }
+                        if (lli->lli_smd->lsm_magic == lsm->lsm_magic &&
+                             lli->lli_smd->lsm_stripe_count == 
+                                        lsm->lsm_stripe_count) {
+                                if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
+                                        CERROR("lsm mismatch for inode %ld\n",
+                                                inode->i_ino);
+                                        CERROR("lli_smd:\n");
+                                        dump_lsm(D_ERROR, lli->lli_smd);
+                                        CERROR("lsm:\n");
+                                        dump_lsm(D_ERROR, lsm);
+                                        LBUG();
+                                }
+                        } else 
+                                ll_replace_lsm(inode, lsm);
                 }
                 /* bug 2844 - limit i_blksize for broken user-space apps */
                 LASSERTF(lsm->lsm_xfersize != 0, "%lu\n", lsm->lsm_xfersize);
@@ -1061,6 +1222,17 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                 inode->i_blksize = max(inode->i_blksize,
                                        inode->i_sb->s_blocksize);
         }
+
+#ifdef CONFIG_FS_POSIX_ACL
+        LASSERT(!md->posix_acl || (body->valid & OBD_MD_FLACL));
+        if (body->valid & OBD_MD_FLACL) {
+                spin_lock(&lli->lli_lock);
+                if (lli->lli_posix_acl)
+                        posix_acl_release(lli->lli_posix_acl);
+                lli->lli_posix_acl = md->posix_acl;
+                spin_unlock(&lli->lli_lock);
+        }
+#endif
 
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;
@@ -1136,7 +1308,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         LTIME_S(inode->i_atime) = 0;
         LTIME_S(inode->i_ctime) = 0;
         inode->i_rdev = 0;
-        ll_update_inode(inode, md->body, md->lsm);
+        ll_update_inode(inode, md);
 
         /* OIDEBUG(inode); */
 
@@ -1247,6 +1419,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 oa->o_flags = flags;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
 
+                obdo_from_inode(oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
                 rc = obd_setattr(sbi->ll_osc_exp, oa, lsm, NULL);
                 obdo_free(oa);
                 if (rc) {
@@ -1346,26 +1519,34 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset,struct super_block *sb)
 {
         struct lustre_md md;
+        struct ll_sb_info *sbi = NULL;
         int rc = 0;
+        ENTRY;
+
+        LASSERT(*inode || sb);
+        sbi = sb ? ll_s2sbi(sb) : ll_i2sbi(*inode);
+        prune_deathrow(sbi, 1);
 
         rc = mdc_req2lustre_md(req, offset, exp, &md);
         if (rc)
                 RETURN(rc);
 
         if (*inode) {
-                ll_update_inode(*inode, md.body, md.lsm);
+                ll_update_inode(*inode, &md);
         } else {
                 LASSERT(sb);
                 *inode = ll_iget(sb, md.body->ino, &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
-                        /* free the lsm if we allocated one above */
-                        if (md.lsm != NULL)
-                                obd_free_memmd(exp, &md.lsm);
+                        mdc_free_lustre_md(exp, &md);
                         rc = -ENOMEM;
                         CERROR("new_inode -fatal: rc %d\n", rc);
+                        GOTO(out, rc);
                 }
         }
 
+        rc = obd_checkmd(exp, ll_i2mdcexp(*inode),
+                         ll_i2info(*inode)->lli_smd);
+out:
         RETURN(rc);
 }
 

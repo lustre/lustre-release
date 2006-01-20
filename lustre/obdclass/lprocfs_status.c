@@ -356,6 +356,49 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", conn->c_remote_uuid.uuid);
 }
 
+static const char *obd_connect_names[] = {
+        "read_only",
+        "lov_index",
+        "unused",
+        "write_grant",
+        "server_lock",
+        "version",
+        "request_portal",
+        "acl",
+        "xattr",
+        "create_on_write",
+        "truncate_lock",
+        "initial_transno",
+        "inode_bit_locks",
+        "join_file",
+        NULL
+};
+
+int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
+                             int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        __u64 mask = 1, flags;
+        int i, ret;
+
+        if (obd == NULL)
+                return 0;
+
+        flags = obd->u.cli.cl_import->imp_connect_data.ocd_connect_flags;
+        ret = snprintf(page, count, "flags="LPX64"\n", flags);
+        for (i = 0; obd_connect_names[i] != NULL; i++, mask <<= 1) {
+                if (flags & mask)
+                        ret += snprintf(page + ret, count - ret, "%s\n",
+                                        obd_connect_names[i]);
+        }
+        if (flags & ~(mask - 1))
+                ret += snprintf(page + ret, count - ret,
+                                "unknown flags "LPX64"\n", flags & ~(mask - 1));
+
+        return ret;
+}
+EXPORT_SYMBOL(lprocfs_rd_connect_flags);
+
 int lprocfs_rd_num_exports(char *page, char **start, off_t off, int count,
                            int *eof,  void *data)
 {
@@ -635,6 +678,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, packmd);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpackmd);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, checkmd);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, preallocate);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, create);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy);
@@ -673,9 +717,9 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, import_event);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, notify);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, health_check);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotacheck);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, health_check);
 
         for (i = num_private_stats; i < num_stats; i++) {
                 /* If this LBUGs, it is likely that an obd

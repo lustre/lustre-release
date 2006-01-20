@@ -21,7 +21,7 @@ struct obd_device;
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
-#define LDLM_DEFAULT_LRU_SIZE 100
+#define LDLM_DEFAULT_LRU_SIZE (100 * smp_num_cpus)
 
 typedef enum {
         ELDLM_OK = 0,
@@ -122,15 +122,7 @@ typedef enum {
 #define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX)
 #define LCK_COMPAT_GROUP  (LCK_GROUP | LCK_NL)
 
-static ldlm_mode_t lck_compat_array[] = {
-        [LCK_EX] LCK_COMPAT_EX,
-        [LCK_PW] LCK_COMPAT_PW,
-        [LCK_PR] LCK_COMPAT_PR,
-        [LCK_CW] LCK_COMPAT_CW,
-        [LCK_CR] LCK_COMPAT_CR,
-        [LCK_NL] LCK_COMPAT_NL,
-        [LCK_GROUP] LCK_COMPAT_GROUP
-};
+extern ldlm_mode_t lck_compat_array[];
 
 static inline void lockmode_verify(ldlm_mode_t mode)
 {
@@ -370,6 +362,29 @@ do {                                                                          \
                        lock->l_pid);                                          \
                 break;                                                        \
         }                                                                     \
+        if (lock->l_resource->lr_type == LDLM_IBITS) {                        \
+                CDEBUG(level, "### " format                                   \
+                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
+                       "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "  \
+                       "flags: %x remote: "LPX64" expref: %d "                \
+                       "pid %u\n" , ## a,                                     \
+                       lock->l_resource->lr_namespace->ns_name,               \
+                       lock, lock->l_handle.h_cookie,                         \
+                       atomic_read (&lock->l_refc),                           \
+                       lock->l_readers, lock->l_writers,                      \
+                       ldlm_lockname[lock->l_granted_mode],                   \
+                       ldlm_lockname[lock->l_req_mode],                       \
+                       lock->l_resource->lr_name.name[0],                     \
+                       lock->l_resource->lr_name.name[1],                     \
+                       lock->l_policy_data.l_inodebits.bits,                  \
+                       atomic_read(&lock->l_resource->lr_refcount),           \
+                       ldlm_typename[lock->l_resource->lr_type],              \
+                       lock->l_flags, lock->l_remote_handle.cookie,           \
+                       lock->l_export ?                                       \
+                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
+                       lock->l_pid);                                          \
+                break;                                                        \
+        }                                                                     \
         {                                                                     \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
@@ -481,7 +496,7 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
 int ldlm_lock_match(struct ldlm_namespace *ns, int flags, struct ldlm_res_id *,
-                    __u32 type, ldlm_policy_data_t *, ldlm_mode_t mode,
+                    ldlm_type_t type, ldlm_policy_data_t *, ldlm_mode_t mode,
                     struct lustre_handle *);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
@@ -506,7 +521,7 @@ static inline void ldlm_proc_cleanup(void) {}
 /* resource.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
-                                        struct ldlm_res_id, __u32 type,
+                                        struct ldlm_res_id, ldlm_type_t type,
                                         int create);
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res);
 int ldlm_resource_putref(struct ldlm_resource *res);
@@ -530,7 +545,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
                      struct ldlm_res_id,
-                     __u32 type,
+                     ldlm_type_t type,
                      ldlm_policy_data_t *,
                      ldlm_mode_t mode,
                      int *flags,

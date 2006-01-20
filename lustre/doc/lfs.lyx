@@ -32,7 +32,8 @@ LFS
 NAME
 \layout Description
 
-lfs Lustre utility to create a file with specific striping pattern
+lfs Lustre utility to create a file with specific striping pattern and manipulat
+e disk quotas
 \layout Subsection
 
 SYNOPSIS
@@ -70,6 +71,43 @@ setstripe -d <dirname>
 \series bold 
 lfs\SpecialChar ~
 check <mds| osts| servers>
+\layout Standard
+
+
+\series bold 
+lfs\SpecialChar ~
+quotachog [-i] <filesystem>
+\layout Standard
+
+
+\series bold 
+lfs\SpecialChar ~
+quotacheck [-ug] <filesystem>
+\layout Standard
+
+
+\series bold 
+lfs\SpecialChar ~
+quotaon [-ugf] <filesystem>
+\layout Standard
+
+
+\series bold 
+lfs\SpecialChar ~
+quotaoff [-ug] <filesystem>
+\layout Standard
+
+
+\series bold 
+lfs\SpecialChar ~
+setquota [-u|-g] <name> <block-softlimit> <block-hardlimit> <inode-softlimit>
+ <inode-hardlimit> <filesystem>
+\layout Standard
+
+
+\series bold 
+lfs\SpecialChar ~
+quota [-o obd_uuid] [-u|-g] <name> <filesystem>
 \layout Subsection
 
 DESCRIPTION
@@ -77,7 +115,8 @@ DESCRIPTION
 
 This utility can be used to create a new file with a specific striping pattern,
  determine the default striping pattern, gather the extended attributes
- (object numbers and location) for a specific file.
+ (object numbers and location) for a specific file, and manipulate disk
+ quotas.
  It can be invoked interactively without any arguments or in a non-interactive
  mode with one of the arguements listed and explained below:
 \layout List
@@ -124,6 +163,55 @@ Display the status of MDS or OSTs (as specified in the command) or all the
 osts
 \series default 
  List all the OSTs for the filesystem
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+quotachog
+\series default 
+ Change files' owner and group on OSTs of the specified filesystem
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+quotacheck
+\series default 
+ Scan the specified filesystem for disk usage, and create or update quota
+ files
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+quotaon
+\series default 
+ Turn filesystem quotas on
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+quotaoff
+\series default 
+ Turn filesystem quotas off
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+setquota
+\series default 
+ Set filesystem quotas
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+quota
+\series default 
+ Display disk usage and limits
 \layout List
 \labelwidthstring 00.00.0000
 
@@ -239,6 +327,77 @@ List all the OSTs
 \layout LyX-Code
 
    $
+\layout Description
+
+Change\SpecialChar ~
+file\SpecialChar ~
+owner\SpecialChar ~
+and\SpecialChar ~
+group
+\layout LyX-Code
+
+   $lfs quotachog -i /mnt/lustre
+\layout Description
+
+Quotacheck\SpecialChar ~
+for\SpecialChar ~
+user\SpecialChar ~
+and\SpecialChar ~
+group
+\layout LyX-Code
+
+   $lfs quotacheck -ug /mnt/lustre
+\layout Description
+
+Turn\SpecialChar ~
+quotas\SpecialChar ~
+of\SpecialChar ~
+user\SpecialChar ~
+and\SpecialChar ~
+group\SpecialChar ~
+on
+\layout LyX-Code
+
+   $lfs quotaon -ug /mnt/lustre
+\layout Description
+
+Turn\SpecialChar ~
+quotas\SpecialChar ~
+of\SpecialChar ~
+user\SpecialChar ~
+and\SpecialChar ~
+group\SpecialChar ~
+off
+\layout LyX-Code
+
+   $lfs quotaoff -ug /mnt/lustre
+\layout Description
+
+Set\SpecialChar ~
+quotas\SpecialChar ~
+of\SpecialChar ~
+user\SpecialChar ~
+`bob':\SpecialChar ~
+1GB\SpecialChar ~
+block\SpecialChar ~
+quota\SpecialChar ~
+and\SpecialChar ~
+10,000\SpecialChar ~
+file\SpecialChar ~
+quota
+\layout LyX-Code
+
+   $lfs setquota -u bob 0 1000000 0 10000 /mnt/lustre
+\layout Description
+
+List\SpecialChar ~
+quotas\SpecialChar ~
+of\SpecialChar ~
+user\SpecialChar ~
+`bob'
+\layout LyX-Code
+
+   $lfs quota -u bob /mnt/lustre
 \layout Subsection
 
 BUGS

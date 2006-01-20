@@ -56,6 +56,7 @@
 #include <linux/lustre_lib.h>
 #include <lustre/liblustreapi.h>
 #include <linux/obd_lov.h>
+#include <lustre/liblustreapi.h>
 
 static void err_msg(char *fmt, ...)
 {
@@ -362,13 +363,80 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
         }
 }
 
+void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname,
+                            char *fname, int obdindex, int quiet,
+                            int header, int body)
+{
+        struct lov_user_md_join *lumj = (struct lov_user_md_join *)lum;
+        int i, obdstripe = 0;
+
+        if (obdindex != OBD_NOT_FOUND) {
+                for (i = 0; i < lumj->lmm_stripe_count; i++) {
+                        if (obdindex == lumj->lmm_objects[i].l_ost_idx) {
+                                printf("%s/%s\n", dname, fname);
+                                obdstripe = 1;
+                                break;
+                        }
+                }
+        } else if (!quiet) {
+                printf("%s/%s\n", dname, fname);
+                obdstripe = 1;
+        }
+
+        if (header && obdstripe == 1) {
+                printf("lmm_magic:          0x%08X\n",  lumj->lmm_magic);
+                printf("lmm_object_gr:      "LPX64"\n", lumj->lmm_object_gr);
+                printf("lmm_object_id:      "LPX64"\n", lumj->lmm_object_id);
+                printf("lmm_stripe_count:   %u\n", (int)lumj->lmm_stripe_count);
+                printf("lmm_stripe_size:    %u\n",      lumj->lmm_stripe_size);
+                printf("lmm_stripe_pattern: %x\n",      lumj->lmm_pattern);
+                printf("lmm_extent_count:   %x\n",      lumj->lmm_extent_count);
+        }
+
+        if (body) {
+                unsigned long long start = -1, end = 0;
+                if (!quiet && obdstripe == 1)
+                        printf("joined\tobdidx\t\t objid\t\tobjid\t\t group"
+                               "\t\tstart\t\tend\n");
+                for (i = 0; i < lumj->lmm_stripe_count; i++) {
+                        int idx = lumj->lmm_objects[i].l_ost_idx;
+                        long long oid = lumj->lmm_objects[i].l_object_id;
+                        long long gr = lumj->lmm_objects[i].l_object_gr;
+                        if (obdindex == OBD_NOT_FOUND || obdindex == idx)
+                                printf("\t%6u\t%14llu\t%#13llx\t%14llu%s",
+                                       idx, oid, oid, gr,
+                                       obdindex == idx ? " *" : "");
+                        if (start != lumj->lmm_objects[i].l_extent_start ||
+                            end != lumj->lmm_objects[i].l_extent_end) {
+                                start = lumj->lmm_objects[i].l_extent_start;
+                                printf("\t%14llu", start);
+                                end = lumj->lmm_objects[i].l_extent_end;
+                                if (end == (unsigned long long)-1)
+                                        printf("\t\tEOF\n");
+                                else
+                                        printf("\t\t%llu\n", end);
+                        } else {
+                                printf("\t\t\t\t\n");
+                        }
+                }
+                printf("\n");
+        }
+}
+
 void llapi_lov_dump_user_lmm(struct find_param *param, char *dname, char *fname)
 {
         switch(*(__u32 *)&param->lmd->lmd_lmm) { /* lum->lmm_magic */
         case LOV_USER_MAGIC_V1:
-                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, dname, fname, param->obdindex,
-                                     param->quiet, param->verbose,
-                                     (param->verbose || !param->obduuid));
+                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, dname, fname,
+                                      param->obdindex, param->quiet,
+                                      param->verbose,
+                                      (param->verbose || !param->obduuid));
+                break;
+        case LOV_USER_MAGIC_JOIN:
+                lov_dump_user_lmm_join(&param->lmd->lmd_lmm, dname, fname,
+                                       param->obdindex, param->quiet,
+                                       param->verbose,
+                                       (param->verbose || !param->obduuid));
                 break;
         default:
                 printf("unknown lmm_magic:  %#x (expecting %#x)\n",
@@ -654,7 +722,7 @@ int llapi_ping(char *obd_type, char *obd_name)
         return rc;
 }
 
-int llapi_target_check(int type_num, char **obd_type, char *dir)
+int llapi_target_iterate(int type_num, char **obd_type, void *args, llapi_cb_t cb)
 {
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
@@ -669,6 +737,7 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
         while (fgets(buf, sizeof(buf), fp) != NULL) {
                 char *obd_type_name = NULL;
                 char *obd_name = NULL;
+                char *obd_uuid = NULL;
                 char rawbuf[OBD_MAX_IOCTL_BUFFER];
                 char *bufl = rawbuf;
                 char *bufp = buf;
@@ -682,6 +751,7 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                         obd_type_name = strsep(&bufp, " ");
                 }
                 obd_name = strsep(&bufp, " ");
+                obd_uuid = strsep(&bufp, " ");
 
                 memset(&osfs_buffer, 0, sizeof (osfs_buffer));
 
@@ -693,17 +763,30 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                         if (strcmp(obd_type_name, obd_type[i]) != 0)
                                 continue;
 
-                        rc = llapi_ping(obd_type_name, obd_name);
-                        if (rc) {
-                                fprintf(stderr, "error: check %s: %s\n",
-                                        obd_name, strerror(rc = errno));
-                        } else {
-                                printf("%s active.\n", obd_name);
-                        }
+                        cb(obd_type_name, obd_name, obd_uuid, args);
                 }
         }
         fclose(fp);
         return rc;
+}
+
+static void do_target_check(char *obd_type_name, char *obd_name,
+                            char *obd_uuid, void *args)
+{
+        int rc;
+
+        rc = llapi_ping(obd_type_name, obd_name);
+        if (rc) {
+                fprintf(stderr, "error: check %s: %s\n",
+                        obd_name, strerror(rc = errno));
+        } else {
+                printf("%s active.\n", obd_name);
+        }
+}
+
+int llapi_target_check(int type_num, char **obd_type, char *dir)
+{
+        return llapi_target_iterate(type_num, obd_type, NULL, do_target_check);
 }
 
 #undef MAX_STRING_SIZE
@@ -785,7 +868,7 @@ int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk)
 
         while (1) {
                 rc = ioctl(dirfd(root), LL_IOC_POLL_QUOTACHECK, qchk);
-                if (!rc || errno != ENODATA)
+                if (!rc)
                         break;
                 sleep(poll_intvl);
                 if (poll_intvl < 30)
@@ -813,7 +896,7 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
         return rc;
 }
 
-static int quotachog_process_file(DIR *dir, char *dname, char *fname,
+static int quotachown_process_file(DIR *dir, char *dname, char *fname,
                         struct find_param *param)
 {
         lstat_t *st;
@@ -839,6 +922,10 @@ static int quotachog_process_file(DIR *dir, char *dname, char *fname,
 
         st = &param->lmd->lmd_st;
         snprintf(pathname, sizeof(pathname), "%s/%s", dname, fname);
+
+        /* libc chown() will do extra check, and if the real owner is
+         * the same as the ones to set, it won't fall into kernel, so
+         * invoke syscall directly. */
         rc = syscall(SYS_chown, pathname, st->st_uid, st->st_gid);
         if (rc)
                 fprintf(stderr, "chown %s (%u,%u) fail: %s\n",
@@ -846,7 +933,7 @@ static int quotachog_process_file(DIR *dir, char *dname, char *fname,
         return rc;
 }
 
-int llapi_quotachog(char *path, int flag)
+int llapi_quotachown(char *path, int flag)
 {
         struct find_param param;
         int ret = 0;
@@ -855,7 +942,7 @@ int llapi_quotachog(char *path, int flag)
         param.recursive = 1;
         param.verbose = 0;
         param.quiet = 1;
-        param.process_file = quotachog_process_file;
+        param.process_file = quotachown_process_file;
 
         ret = prepare_find(&param);
         if (ret)

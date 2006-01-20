@@ -47,7 +47,7 @@
 #define XATTR_USER_T            (1)
 #define XATTR_TRUSTED_T         (2)
 #define XATTR_SECURITY_T        (3)
-#define XATTR_POSIXACL_T        (4)
+#define XATTR_ACL_T             (4)
 #define XATTR_OTHER_T           (5)
 
 static
@@ -55,7 +55,7 @@ int get_xattr_type(const char *name)
 {
         if (!strcmp(name, XATTR_NAME_ACL_ACCESS) ||
             !strcmp(name, XATTR_NAME_ACL_DEFAULT))
-                return XATTR_POSIXACL_T;
+                return XATTR_ACL_T;
 
         if (!strncmp(name, XATTR_USER_PREFIX,
                      sizeof(XATTR_USER_PREFIX) - 1))
@@ -73,6 +73,21 @@ int get_xattr_type(const char *name)
 }
 
 static
+int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
+{
+        if (xattr_type == XATTR_ACL_T && !(sbi->ll_flags & LL_SBI_ACL))
+                return -EOPNOTSUPP;
+        if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
+                return -EOPNOTSUPP;
+        if (xattr_type == XATTR_TRUSTED_T && !capable(CAP_SYS_ADMIN))
+                return -EPERM;
+        if (xattr_type == XATTR_OTHER_T)
+                return -EOPNOTSUPP;
+
+        return 0;
+}
+
+static
 int ll_setxattr_common(struct inode *inode, const char *name,
                        const void *value, size_t size,
                        int flags, __u64 valid)
@@ -86,19 +101,17 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_SETXATTR);
 
         xattr_type = get_xattr_type(name);
-        if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
-                RETURN(-EOPNOTSUPP);
-        if (xattr_type == XATTR_TRUSTED_T && !capable(CAP_SYS_ADMIN))
-                RETURN(-EPERM);
-        if (xattr_type == XATTR_OTHER_T)
-                RETURN(-EOPNOTSUPP);
+        rc = xattr_type_filter(sbi, xattr_type);
+        if (rc)
+                RETURN(rc);
 
         ll_inode2fid(&fid, inode);
         rc = mdc_setxattr(sbi->ll_mdc_exp, &fid, valid,
                           name, value, size, 0, flags, &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
-                        CWARN("disable user_xattr from now on\n");
+                        LCONSOLE_INFO("Disabling user_xattr feature because "
+                                      "it is not supported on the server\n"); 
                         sbi->ll_flags &= ~LL_SBI_USER_XATTR;
                 }
                 RETURN(rc);
@@ -109,7 +122,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 }
 
 int ll_setxattr(struct dentry *dentry, const char *name,
-		const void *value, size_t size, int flags)
+                const void *value, size_t size, int flags)
 {
         struct inode *inode = dentry->d_inode;
 
@@ -164,12 +177,9 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         }
 
         xattr_type = get_xattr_type(name);
-        if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
-                RETURN(-EOPNOTSUPP);
-        if (xattr_type == XATTR_TRUSTED_T && !capable(CAP_SYS_ADMIN))
-                RETURN(-EPERM);
-        if (xattr_type == XATTR_OTHER_T)
-                RETURN(-EOPNOTSUPP);
+        rc = xattr_type_filter(sbi, xattr_type);
+        if (rc)
+                RETURN(rc);
 
 do_getxattr:
         ll_inode2fid(&fid, inode);
@@ -177,7 +187,8 @@ do_getxattr:
                           size, &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
-                        CWARN("disable user_xattr from now on\n");
+                        LCONSOLE_INFO("Disabling user_xattr feature because "
+                                      "it is not supported on the server\n"); 
                         sbi->ll_flags &= ~LL_SBI_USER_XATTR;
                 }
                 RETURN(rc);
@@ -193,7 +204,7 @@ do_getxattr:
 
         if (size < body->eadatasize) {
                 CERROR("server bug: replied size %u > %u\n",
-                       body->eadatasize, size);
+                       body->eadatasize, (int)size);
                 GOTO(out, rc = -ERANGE);
         }
 
@@ -219,8 +230,8 @@ out:
         RETURN(rc);
 }
 
-int ll_getxattr(struct dentry *dentry, const char *name,
-		void *buffer, size_t size)
+ssize_t ll_getxattr(struct dentry *dentry, const char *name,
+                    void *buffer, size_t size)
 {
         struct inode *inode = dentry->d_inode;
 
@@ -233,7 +244,7 @@ int ll_getxattr(struct dentry *dentry, const char *name,
         return ll_getxattr_common(inode, name, buffer, size, OBD_MD_FLXATTR);
 }
 
-int ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
+ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
         struct inode *inode = dentry->d_inode;
 

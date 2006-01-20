@@ -42,10 +42,10 @@
 /* Called with res->lr_lvb_sem held */
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
-        int rc = 0;
         struct ost_lvb *lvb = NULL;
         struct obd_device *obd;
         struct dentry *dentry;
+        int rc = 0;
         ENTRY;
 
         LASSERT(res);
@@ -57,11 +57,11 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                 RETURN(0);
 
         if (res->lr_lvb_data)
-                GOTO(out, rc = 0);
+                RETURN(0);
 
         OBD_ALLOC(lvb, sizeof(*lvb));
         if (lvb == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         res->lr_lvb_data = lvb;
         res->lr_lvb_len = sizeof(*lvb);
@@ -70,8 +70,12 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         LASSERT(obd != NULL);
 
         dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
-        if (IS_ERR(dentry))
-                GOTO(out, rc = PTR_ERR(dentry));
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("%s: bad object "LPU64"/"LPU64": rc %d\n", obd->obd_name,
+                       res->lr_name.name[0], res->lr_name.name[1], rc);
+                RETURN(rc);
+        }
 
         if (dentry->d_inode == NULL)
                 GOTO(out_dentry, rc = -ENOENT);
@@ -85,9 +89,10 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                res->lr_name.name[0], lvb->lvb_size,
                lvb->lvb_mtime, lvb->lvb_blocks);
 
- out_dentry:
+        EXIT;
+out_dentry:
         f_dput(dentry);
- out:
+
         /* Don't free lvb data on lookup error */
         return rc;
 }

@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2003 Cluster File Systems, Inc.
+ *  Copyright (C) 2005 Cluster File Systems, Inc.
  *   Author: Lai Siyao <lsy@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org/
@@ -24,12 +24,11 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_ost.h>
 
-char *test_quotafile[] = {"aquotactl.user", "aquotactl.group"};
+static struct obd_quotactl oqctl;
 
 /* Test quotaon */
 static int quotactl_test_1(struct obd_device *obd, struct super_block *sb)
 {
-        struct obd_quotactl oqctl;
         int rc;
         ENTRY;
 
@@ -37,12 +36,9 @@ static int quotactl_test_1(struct obd_device *obd, struct super_block *sb)
         oqctl.qc_id = QFMT_LDISKFS;
         oqctl.qc_type = UGQUOTA;
         rc = fsfilt_quotactl(obd, sb, &oqctl);
-        if (rc) {
+        if (rc)
                 CERROR("1a: quotactl Q_QUOTAON failed: %d\n", rc);
-                RETURN(rc);
-        }
-
-        RETURN(0);
+        RETURN(rc);
 }
 
 #if 0 /* set/getinfo not supported, this is for cluster-wide quotas */
@@ -88,7 +84,6 @@ static int quotactl_test_2(struct obd_device *obd, struct super_block *sb)
 /* Test set/getquota */
 static int quotactl_test_3(struct obd_device *obd, struct super_block *sb)
 {
-        struct obd_quotactl oqctl;
         int rc;
         ENTRY;
 
@@ -236,7 +231,6 @@ static int quotactl_test_3(struct obd_device *obd, struct super_block *sb)
 /* Test quotaoff */
 static int quotactl_test_4(struct obd_device *obd, struct super_block *sb)
 {
-        struct obd_quotactl oqctl;
         int rc;
         ENTRY;
 
@@ -262,14 +256,13 @@ static int quotactl_run_tests(struct obd_device *obd, struct obd_device *tgt)
         int rc;
         ENTRY;
 
-        if (!strcmp(tgt->obd_type->typ_name, LUSTRE_MDS_NAME))
-                sb = tgt->u.mds.mds_sb;
-        else if (!strcmp(tgt->obd_type->typ_name, "obdfilter"))
-                sb = tgt->u.filter.fo_sb;
-        else {
-                CERROR("TARGET OBD should be mds or obdfilter\n");
+        if (strcmp(tgt->obd_type->typ_name, LUSTRE_MDS_NAME) &&
+            !strcmp(tgt->obd_type->typ_name, "obdfilter")) {
+                CERROR("TARGET OBD should be mds or ost\n");
                 RETURN(-EINVAL);
         }
+
+        sb = tgt->u.obt.obt_sb;
 
         push_ctxt(&saved, &tgt->obd_lvfs_ctxt, NULL);
 

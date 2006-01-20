@@ -5,6 +5,11 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+#ifdef CONFIG_FS_POSIX_ACL
+# include <linux/fs.h>
+# include <linux/xattr_acl.h>
+#endif
+
 #include <linux/lustre_debug.h>
 #include <linux/lustre_version.h>
 #include <linux/lustre_disk.h>  /* for s2sbi */
@@ -77,6 +82,11 @@ struct ll_inode_info {
         struct file_operations *ll_save_ffop;
         struct file_operations *ll_save_wfop;
         struct file_operations *ll_save_wrfop;
+
+        struct posix_acl       *lli_posix_acl;
+
+        struct list_head        lli_dead_list;
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
@@ -129,10 +139,12 @@ struct ll_ra_info {
 };
 
 /* flags for sbi->ll_flags */
-#define LL_SBI_NOLCK            0x1 /* DLM locking disabled (directio-only) */
-#define LL_SBI_CHECKSUM         0x2 /* checksum each page as it's written */
-#define LL_SBI_FLOCK            0x4
-#define LL_SBI_USER_XATTR       0x8 /* support user xattr */
+#define LL_SBI_NOLCK            0x01 /* DLM locking disabled (directio-only) */
+#define LL_SBI_CHECKSUM         0x02 /* checksum each page as it's written */
+#define LL_SBI_FLOCK            0x04
+#define LL_SBI_USER_XATTR       0x08 /* support user xattr */
+#define LL_SBI_ACL              0x10 /* support ACL */
+#define LL_SBI_JOIN             0x20 /* support JOIN */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -162,6 +174,9 @@ struct ll_sb_info {
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
         struct file_operations   *ll_fop;
+
+        struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
+        spinlock_t                ll_deathrow_lock;
 };
 
 struct ll_ra_read {
@@ -235,10 +250,6 @@ extern spinlock_t inode_lock;
 
 extern struct proc_dir_entry *proc_lustre_fs_root;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# define hlist_del_init list_del_init
-#endif
-
 static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -266,7 +277,8 @@ struct ll_async_page {
         unsigned int     llap_write_queued:1,
                          llap_defer_uptodate:1,
                          llap_origin:3,
-                         llap_ra_used:1;
+                         llap_ra_used:1,
+                         llap_ignore_quota:1;
         void            *llap_cookie;
         struct page     *llap_page;
         struct list_head llap_pending_write;
@@ -370,6 +382,11 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 #endif
 struct ll_file_data *ll_file_data_get(void);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
+#else
+int ll_inode_permission(struct inode *inode, int mask);
+#endif
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);
@@ -378,6 +395,7 @@ extern void ll_set_dd(struct dentry *de);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
+int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name);
 
 /* llite/llite_lib.c */
 
@@ -396,8 +414,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr);
 int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                        unsigned long maxage);
-void ll_update_inode(struct inode *inode, struct mds_body *body,
-                     struct lov_stripe_md *lsm);
+void ll_update_inode(struct inode *inode, struct lustre_md *md);
 void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
@@ -409,6 +426,7 @@ void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);
 struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
                                              struct list_head *list);
+int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 
 /* llite/llite_nfs.c */
 __u32 get_uuid2int(const char *name, int len);
@@ -541,9 +559,9 @@ static inline __u64 ll_file_maxbytes(struct inode *inode)
 /* llite/xattr.c */
 int ll_setxattr(struct dentry *dentry, const char *name,
                 const void *value, size_t size, int flags);
-int ll_getxattr(struct dentry *dentry, const char *name,
-                void *buffer, size_t size);
-int ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
+ssize_t ll_getxattr(struct dentry *dentry, const char *name,
+                    void *buffer, size_t size);
+ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
 int ll_removexattr(struct dentry *dentry, const char *name);
 
 #endif /* LLITE_INTERNAL_H */

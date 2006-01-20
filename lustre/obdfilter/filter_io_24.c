@@ -149,13 +149,13 @@ static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
 }
 
 /* Must be called with i_sem taken for writes; this will drop it */
-int filter_direct_io(int rw, struct dentry *dchild, void *buf,
+int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *buf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle)
 {
         struct obd_device *obd = exp->exp_obd;
         struct inode *inode = dchild->d_inode;
-        struct kiobuf *iobuf = buf;
+        struct kiobuf *iobuf = (void *)buf;
         int rc, create = (rw == OBD_BRW_WRITE), committed = 0;
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits, cleanup_phase = 0;
         struct semaphore *sem = NULL;
@@ -296,50 +296,60 @@ static void clear_kiobuf(struct kiobuf *iobuf)
         iobuf->length = 0;
 }
 
-void filter_iobuf_put(void *iobuf)
+struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
+                                        int rw, int num_pages)
 {
-        clear_kiobuf(iobuf);
-}
-
-int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
-                       void **ret)
-{
-        int rc;
         struct kiobuf *iobuf;
+        int rc;
         ENTRY;
 
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
 
         rc = alloc_kiovec(1, &iobuf);
         if (rc)
-                RETURN(rc);
+                RETURN(ERR_PTR(rc));
 
         rc = expand_kiobuf(iobuf, num_pages);
         if (rc) {
                 free_kiovec(1, &iobuf);
-                RETURN(rc);
+                RETURN(ERR_PTR(rc));
         }
 
 #ifdef HAVE_KIOBUF_DOVARY
         iobuf->dovary = 0; /* this prevents corruption, not present in 2.4.20 */
 #endif
         clear_kiobuf(iobuf);
-        *ret = iobuf;
-        RETURN(0);
+        RETURN((void *)iobuf);
 }
 
-void filter_free_iobuf(void *buf)
+void filter_free_iobuf(struct filter_iobuf *buf)
 {
-        struct kiobuf *iobuf = buf;
+        struct kiobuf *iobuf = (void *)buf;
 
         clear_kiobuf(iobuf);
         free_kiovec(1, &iobuf);
 }
 
-int filter_iobuf_add_page(struct obd_device *obd, void *buf,
+void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
+                      struct obd_trans_info *oti)
+{
+        int thread_id = oti ? oti->oti_thread_id : -1;
+
+        if (unlikely(thread_id < 0)) {
+                filter_free_iobuf(iobuf);
+                return;
+        }
+
+        LASSERTF(filter->fo_iobuf_pool[thread_id] == iobuf,
+                 "iobuf mismatch for thread %d: pool %p iobuf %p\n",
+                 thread_id, filter->fo_iobuf_pool[thread_id], iobuf);
+        clear_kiobuf((void *)iobuf);
+}
+
+int filter_iobuf_add_page(struct obd_device *obd, struct filter_iobuf *buf,
                            struct inode *inode, struct page *page)
 {
-        struct kiobuf *iobuf = buf;
+        struct kiobuf *iobuf = (void *)buf;
 
         iobuf->maplist[iobuf->nr_pages++] = page;
         iobuf->length += PAGE_SIZE;
@@ -370,7 +380,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        iobuf = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
+        iobuf = filter_iobuf_get(&obd->u.filter, oti);
+        if (iobuf == NULL)
+                GOTO(cleanup, rc = -ENOMEM);
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -414,7 +426,34 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
 
         fsfilt_check_slow(now, obd_timeout, "brw_start");
 
-        iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
+        i = OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+
+        /* If the inode still has SUID+SGID bits set (see filter_precreate())
+         * then we will accept the UID+GID if sent by the client for
+         * initializing the ownership of this inode.  We only allow this to
+         * happen once (so clear these bits) and later only allow setattr. */
+        if (inode->i_mode & S_ISUID)
+                i |= OBD_MD_FLUID;
+        if (inode->i_mode & S_ISGID)
+                i |= OBD_MD_FLGID;
+
+        iattr_from_obdo(&iattr, oa, i);
+        if (iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
+                CDEBUG(D_INODE, "update UID/GID to %lu/%lu\n",
+                       (unsigned long)oa->o_uid, (unsigned long)oa->o_gid);
+
+                cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+
+                iattr.ia_valid |= ATTR_MODE;
+                iattr.ia_mode = inode->i_mode;
+                if (iattr.ia_valid & ATTR_UID)
+                        iattr.ia_mode &= ~S_ISUID;
+                if (iattr.ia_valid & ATTR_GID)
+                        iattr.ia_mode &= ~S_ISGID;
+
+                rc = filter_update_fidea(exp, inode, oti->oti_handle, oa);
+        }
+
         /* filter_direct_io drops i_sem */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
@@ -442,7 +481,7 @@ cleanup:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
-                filter_iobuf_put(iobuf);
+                filter_iobuf_put(&obd->u.filter, iobuf, oti);
         case 0:
                 /*
                  * lnb->page automatically returns back into per-thread page

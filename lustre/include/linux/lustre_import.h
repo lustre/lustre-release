@@ -88,11 +88,12 @@ struct obd_import {
         /* flags */
         unsigned int              imp_invalid:1, imp_replayable:1,
                                   imp_dlm_fake:1, imp_server_timeout:1,
-                                  imp_initial_recov:1, imp_force_verify:1,
-                                  imp_pingable:1, imp_resend_replay:1,
-                                  imp_deactive:1, imp_initial_recov_bk:1;
+                                  imp_initial_recov:1, imp_initial_recov_bk:1,
+                                  imp_force_verify:1, imp_pingable:1, 
+                                  imp_resend_replay:1, imp_deactive:1;
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
+        __u64                     imp_connect_flags_orig;
 };
 
 typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,

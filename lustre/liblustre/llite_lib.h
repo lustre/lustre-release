@@ -231,8 +231,8 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                          void *data, int flag);
 
 /* dir.c */
-ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
-                              _SYSIO_OFF_T *basep);
+ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
+			       char *buf, size_t nbytes);
 
 /* ext2 related */
 #define EXT2_NAME_LEN (255)

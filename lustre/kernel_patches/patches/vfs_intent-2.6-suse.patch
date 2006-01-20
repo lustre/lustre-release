@@ -853,25 +853,3 @@ Index: linux-2.6.5-12.1/include/linux/fshooks.h
  
  #define FSHOOK_END_USER_WALK(type, err, field) ((void)0);}
  
-Index: linux-2.6.5-12.1/kernel/exit.c
-===================================================================
---- linux-2.6.5-12.1.orig/kernel/exit.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/kernel/exit.c	2004-06-03 18:31:28.000000000 -0400
-@@ -260,6 +260,8 @@
- 	write_unlock_irq(&tasklist_lock);
- }
- 
-+EXPORT_SYMBOL(reparent_to_init);
-+
- void __set_special_pids(pid_t session, pid_t pgrp)
- {
- 	struct task_struct *curr = current;
-@@ -429,6 +431,8 @@
- 	__exit_files(tsk);
- }
- 
-+EXPORT_SYMBOL(exit_files);
-+
- static inline void __put_fs_struct(struct fs_struct *fs)
- {
- 	/* No need to hold fs->lock if we are killing it */

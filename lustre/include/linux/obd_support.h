@@ -162,6 +162,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
 #define OBD_FAIL_OBD_LOGD_NET            0x602
 #define OBD_FAIL_OBD_QC_CALLBACK_NET     0x603
+#define OBD_FAIL_OBD_DQACQ               0x604
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701

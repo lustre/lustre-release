@@ -37,6 +37,7 @@
 
 /* methods */
 
+/* called from iget{4,5_locked}->find_inode() under inode_lock spinlock */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static int ll_test_inode(struct inode *inode, unsigned long ino, void *opaque)
 #else
@@ -71,12 +72,31 @@ static int ll_test_inode(struct inode *inode, void *opaque)
         if (inode->i_ino != md->body->ino)
                 return 0;
 #endif
-        if (inode->i_generation != md->body->generation)
+        if (inode->i_generation != md->body->generation) {
+                struct ll_sb_info *sbi = ll_i2sbi(inode);
+                struct ll_inode_info *lli = ll_i2info(inode);
+
+                if (inode->i_state & (I_FREEING | I_CLEAR))
+                        return 0;
+
+                atomic_inc(&inode->i_count);
+                inode->i_nlink = 0;
+                inode->i_state |= I_FREEING;
+                LASSERT(list_empty(&lli->lli_dead_list));
+                /* add "duplicate" inode into deathrow for destroy */
+                spin_lock(&sbi->ll_deathrow_lock);
+                list_add(&lli->lli_dead_list, &sbi->ll_deathrow);
+                spin_unlock(&sbi->ll_deathrow_lock);
+
+                /* remove inode from dirty/io lists */
+                list_del_init(&inode->i_list);
+                
                 return 0;
+        }
 
         /* Apply the attributes in 'opaque' to this inode */
         if (!(inode->i_state & (I_FREEING | I_CLEAR)))
-                ll_update_inode(inode, md->body, md->lsm);
+                ll_update_inode(inode, md);
         return 1;
 }
 
@@ -150,28 +170,33 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 break;
         case LDLM_CB_CANCELING: {
                 struct inode *inode = ll_inode_from_lock(lock);
+                __u64 bits = lock->l_policy_data.l_inodebits.bits;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
                         break;
-
-                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
-                          &(ll_i2info(inode)->lli_flags));
 
                 if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
                     lock->l_resource->lr_name.name[1] != inode->i_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%u (%p)",
                                    inode->i_ino, inode->i_generation, inode);
                 }
-                if (S_ISDIR(inode->i_mode)) {
+
+                if (bits & MDS_INODELOCK_UPDATE)
+                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
+                                  &(ll_i2info(inode)->lli_flags));
+
+                
+                if (S_ISDIR(inode->i_mode) &&
+                     (bits & MDS_INODELOCK_UPDATE))  {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
-
                         truncate_inode_pages(inode->i_mapping, 0);
                 }
 
                 if (inode->i_sb->s_root &&
-                    inode != inode->i_sb->s_root->d_inode)
+                    inode != inode->i_sb->s_root->d_inode &&
+                    (bits & MDS_INODELOCK_LOOKUP))
                         ll_unhash_aliases(inode);
                 iput(inode);
                 break;
@@ -306,13 +331,12 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                            de->d_name.len) != 0)
                         continue;
 
-                if (!list_empty(&dentry->d_lru))
-                        list_del_init(&dentry->d_lru);
-
-                hlist_del_init(&dentry->d_hash);
-                __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
+                dget_locked(dentry);
+                lock_dentry(dentry);
+                __d_drop(dentry);
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-                atomic_inc(&dentry->d_count);
+                unlock_dentry(dentry);
+                __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
                 iput(inode);
                 CDEBUG(D_DENTRY, "alias dentry %.*s (%p) parent %p inode %p "
@@ -374,7 +398,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
         RETURN(0);
 }
-
 
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                    struct lookup_intent *it, int lookup_flags)
@@ -510,7 +533,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
         if (rc)
                 RETURN(rc);
 
-        mdc_store_inode_generation(request, 2, 1);
+        mdc_store_inode_generation(request, MDS_REQ_INTENT_REC_OFF, 1);
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, mode, 0, it);
         if (IS_ERR(inode)) {
@@ -621,7 +644,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
 
                 ll_update_times(request, 0, dir);
 
-                err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0,
+                err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0, 
                                     dchild->d_sb);
                 if (err)
                         GOTO(out_err, err);
@@ -756,8 +779,6 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         int rc;
         ENTRY;
 
-        oti.oti_thread = request->rq_svc_thread;
-
         /* req is swabbed so this is safe */
         body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
 
@@ -787,6 +808,10 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         }
         LASSERT(rc >= sizeof(*lsm));
 
+        rc = obd_checkmd(ll_i2obdexp(dir), ll_i2mdcexp(dir), lsm);
+        if (rc)
+                GOTO(out_free_memmd, rc);
+
         oa = obdo_alloc();
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
@@ -807,7 +832,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(ll_i2obdexp(dir), oa, lsm, &oti);
+        rc = obd_destroy(ll_i2obdexp(dir), oa, lsm, &oti, ll_i2mdcexp(dir));
         obdo_free(oa);
         if (rc)
                 CERROR("obd destroy objid "LPX64" error %d\n",
@@ -891,6 +916,7 @@ struct inode_operations ll_dir_inode_operations = {
         .create             = ll_create_nd,
         .getattr_it         = ll_getattr,
 #endif
+        .permission         = ll_inode_permission,
         .setxattr           = ll_setxattr,
         .getxattr           = ll_getxattr,
         .listxattr          = ll_listxattr,

@@ -11,30 +11,21 @@
 #include <linux/lustre_handles.h>
 #include <linux/lustre_debug.h>
 #include <linux/obd.h>
+#include <linux/lustre_disk.h>
 
 #define FILTER_LAYOUT_VERSION "2"
 
-#define LAST_RCVD "last_rcvd"
 #define HEALTH_CHECK "health_check"
 #define FILTER_INIT_OBJID 0
-
-#define FILTER_LR_SERVER_SIZE    512
-
-#define FILTER_LR_CLIENT_START   8192
-#define FILTER_LR_CLIENT_SIZE    128
-
-/* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
-#define FILTER_LR_MAX_CLIENTS (PAGE_SIZE * 8)
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 #define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
+#define FILTER_ROCOMPAT_SUPP (0)
+
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
-#define FILTER_ROCOMPAT_SUPP   (0)
-
-#define FILTER_INCOMPAT_GROUPS 0x00000001
-#define FILTER_INCOMPAT_SUPP   (FILTER_INCOMPAT_GROUPS)
+#define FILTER_INCOMPAT_SUPP   (OBD_INCOMPAT_GROUPS)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
 #define GRANT_FOR_LLOG(obd) 16
@@ -44,7 +35,7 @@ struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 56];
+        __u8  fcd_padding[LR_CLIENT_SIZE - 56];
 };
 
 #define FILTER_DENTRY_MAGIC 0x9efba101
@@ -54,6 +45,12 @@ struct filter_client_data {
 #define FILTER_VALID_FLAGS (OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLGENER  |\
                             OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ|\
                             OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
+
+struct filter_fid {
+        struct ll_fid   ff_fid;
+        __u64           ff_objid;
+        __u64           ff_group;
+};
 
 enum {
         LPROC_FILTER_READ_BYTES = 0,
@@ -80,15 +77,22 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
 __u64 filter_last_id(struct filter_obd *, struct obdo *);
+int filter_update_fidea(struct obd_export *exp, struct inode *inode,
+                        void *handle, struct obdo *oa);
 int filter_update_server_data(struct obd_device *, struct file *,
                               struct lr_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *);
+                   struct lov_stripe_md *md, struct obd_trans_info *,
+                   struct obd_export *);
+int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
+                            struct obdo *oa, struct obd_trans_info *oti);
 int filter_setattr(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *oti);
+
+struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 
 /* filter_lvb.c */
 extern struct ldlm_valblock_ops filter_lvbo;
@@ -107,6 +111,7 @@ int filter_brw(int cmd, struct obd_export *, struct obdo *,
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
 
 /* filter_io_*.c */
+struct filter_iobuf;
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
                           struct niobuf_local *res, struct obd_trans_info *oti,
@@ -116,13 +121,15 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                   obd_size want, obd_size fs_space_left);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
-int filter_alloc_iobuf(struct filter_obd *, int rw, int num_pages, void **ret);
-void filter_free_iobuf(void *iobuf);
-int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
+struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *, int rw,
+                                        int num_pages);
+void filter_free_iobuf(struct filter_iobuf *iobuf);
+int filter_iobuf_add_page(struct obd_device *obd, struct filter_iobuf *iobuf,
                           struct inode *inode, struct page *page);
-void *filter_iobuf_get(struct ptlrpc_thread *thread, struct filter_obd *filter);
-void filter_iobuf_put(void *iobuf);
-int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
+void *filter_iobuf_get(struct filter_obd *filter, struct obd_trans_info *oti);
+void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
+                      struct obd_trans_info *oti);
+int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle);
 
@@ -163,71 +170,6 @@ static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {}
 #endif
 
 /* Quota stuff */
-#ifdef HAVE_QUOTA_SUPPORT
-int filter_quota_setup(struct filter_obd *filter);
-void filter_quota_cleanup(struct filter_obd *filter);
-void filter_quota_set_info(struct obd_export *exp, struct obd_device *obd);
-int filter_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl);
-int filter_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl);
-int filter_quota_enforcement(struct obd_device *obd,
-                                    unsigned int fsuid, unsigned int fsgid,
-                                    struct lvfs_ucred **ret_uc);
-int filter_get_quota_flag(struct obd_device *obd, struct obdo *oa);
-int filter_quota_check_master(struct obd_device *obd, struct inode *inode);
-
-#ifdef LPROCFS
-int lprocfs_filter_rd_bunit(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data);
-int lprocfs_filter_rd_iunit(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data);
-int lprocfs_filter_wr_bunit(struct file *file, const char *buffer,
-                                   unsigned long count, void *data);
-int lprocfs_filter_wr_iunit(struct file *file, const char *buffer,
-                                   unsigned long count, void *data);
-int lprocfs_filter_rd_btune(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data);
-int lprocfs_filter_rd_itune(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data);
-int lprocfs_filter_wr_btune(struct file *file, const char *buffer,
-                                   unsigned long count, void *data);
-int lprocfs_filter_wr_itune(struct file *file, const char *buffer,
-                                   unsigned long count, void *data);
-#endif /* LPROCFS */
-#else /* !HAVE_QUOTA_SUPPORT */
-static inline int filter_quota_setup(struct filter_obd *filter)
-{
-        return 0;
-}
-static inline void filter_quota_cleanup(struct filter_obd *filter) {}
-static inline void filter_quota_set_info(struct obd_export *exp,
-                                         struct obd_device *obd) {}
-static inline int filter_quotacheck(struct obd_export *exp,
-                                    struct obd_quotactl *oqctl)
-{
-        return -ENOTSUPP;
-}
-static inline int filter_quotactl(struct obd_export *exp,
-                                  struct obd_quotactl *oqctl)
-{
-        return -ENOTSUPP;
-}
-static inline int filter_quota_enforcement(struct obd_device *obd,
-                                           unsigned int fsuid,
-                                           unsigned int fsgid,
-                                           struct lvfs_ucred **ret_uc)
-{
-        return 0;
-}
-static inline int filter_get_quota_flag(struct obd_device *obd,
-                                        struct obdo *oa)
-{
-        return 0;
-}
-static inline int filter_quota_check_master(struct obd_device *obd,
-                                            struct inode *inode)
-{
-        return 0;
-}
-#endif /* HAVE_QUOTA_SUPPORT */
+extern quota_interface_t *quota_interface;
 
 #endif /* _FILTER_INTERNAL_H */

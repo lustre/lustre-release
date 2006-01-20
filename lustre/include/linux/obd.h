@@ -81,31 +81,61 @@ static inline void loi_init(struct lov_oinfo *loi)
         INIT_LIST_HEAD(&loi->loi_write_item);
         INIT_LIST_HEAD(&loi->loi_read_item);
 }
+/*extent array item for describing the joined file extent info*/
+struct lov_extent {
+        __u64 le_start;            /* extent start */
+        __u64 le_len;              /* extent length */
+        int   le_loi_idx;          /* extent #1 loi's index in lsm loi array */
+        int   le_stripe_count;     /* extent stripe count*/
+};
+
+/*Lov array info for describing joined file array EA info*/
+struct lov_array_info {
+        struct llog_logid    lai_array_id;    /* MDS med llog object id */
+        unsigned             lai_ext_count; /* number of extent count */
+        struct lov_extent    *lai_ext_array; /* extent desc array */
+};
 
 struct lov_stripe_md {
         spinlock_t       lsm_lock;
         void            *lsm_lock_owner; /* debugging */
 
-        /* Public members. */
-        __u64 lsm_object_id;        /* lov object id */
-        __u64 lsm_object_gr;        /* lov object id */
-        __u64 lsm_maxbytes;         /* maximum possible file size */
-        unsigned long lsm_xfersize; /* optimal transfer size */
+        struct {
+                /* Public members. */
+                __u64 lw_object_id;        /* lov object id */
+                __u64 lw_object_gr;        /* lov object id */
+                __u64 lw_maxbytes;         /* maximum possible file size */
+                unsigned long lw_xfersize; /* optimal transfer size */
 
-        /* LOV-private members start here -- only for use in lov/. */
-        __u32 lsm_magic;
-        __u32 lsm_stripe_size;      /* size of the stripe */
-        __u32 lsm_pattern;          /* striping pattern (RAID0, RAID1) */
-        unsigned lsm_stripe_count;  /* number of objects being striped over */
+                /* LOV-private members start here -- only for use in lov/. */
+                __u32 lw_magic;
+                __u32 lw_stripe_size;      /* size of the stripe */
+                __u32 lw_pattern;          /* striping pattern (RAID0, RAID1) */
+                unsigned lw_stripe_count;  /* number of objects being striped over */
+        } lsm_wire;
+
+        struct lov_array_info *lsm_array; /*Only for joined file array info*/
         struct lov_oinfo lsm_oinfo[0];
 };
 
-/* compare all fields except for semaphore */
+#define lsm_object_id    lsm_wire.lw_object_id
+#define lsm_object_gr    lsm_wire.lw_object_gr
+#define lsm_maxbytes     lsm_wire.lw_maxbytes
+#define lsm_xfersize     lsm_wire.lw_xfersize
+#define lsm_magic        lsm_wire.lw_magic
+#define lsm_stripe_size  lsm_wire.lw_stripe_size
+#define lsm_pattern      lsm_wire.lw_pattern
+#define lsm_stripe_count lsm_wire.lw_stripe_count
+
+/* compare all relevant fields. */
 static inline int lov_stripe_md_cmp(struct lov_stripe_md *m1,
                                     struct lov_stripe_md *m2)
 {
-        return memcmp(&m1->lsm_object_id, &m2->lsm_object_id,
-                      (char *)&m2->lsm_oinfo[0] - (char *)&m2->lsm_object_id);
+        /*
+         * ->lsm_wire contains padding, but it should be zeroed out during
+         * allocation.
+         */
+        return memcmp(&m1->lsm_wire, &m2->lsm_wire, sizeof m1->lsm_wire);
 }
 
 void lov_stripe_lock(struct lov_stripe_md *md);
@@ -180,22 +210,42 @@ struct obd_histogram {
 
 struct ost_server_data;
 
+/* hold common fields for "target" device */
+struct obd_device_target {
+        struct super_block       *obt_sb;
+        atomic_t                  obt_quotachecking;
+        struct lustre_quota_ctxt  obt_qctxt;
+};
+
+#define FILTER_GROUP_LLOG 1
+#define FILTER_GROUP_ECHO 2
+
+struct filter_ext {
+        __u64                fe_start;
+        __u64                fe_end;
+};
+
 struct filter_obd {
+        /* NB this field MUST be first */
+        struct obd_device_target fo_obt;
         const char          *fo_fstype;
-        struct super_block  *fo_sb;
         struct vfsmount     *fo_vfsmnt;
         struct dentry       *fo_dentry_O;
         struct dentry      **fo_dentry_O_groups;
         struct dentry      **fo_dentry_O_sub;
-        spinlock_t           fo_objidlock; /* protect fo_lastobjid increment */
-        spinlock_t           fo_translock; /* protect fsd_last_rcvd increment */
+        spinlock_t           fo_objidlock;      /* protect fo_lastobjid
+                                                 * increment */
+        
+        spinlock_t           fo_translock;      /* protect fsd_last_rcvd
+                                                 * increment */
+        
         struct file         *fo_rcvd_filp;
         struct file         *fo_health_check_filp;
         struct lr_server_data *fo_fsd;
         unsigned long       *fo_last_rcvd_slots;
         __u64                fo_mount_count;
 
-        unsigned int         fo_destroy_in_progress:1;
+        int                  fo_destroy_in_progress;
         struct semaphore     fo_create_lock;
 
         struct file_operations *fo_fop;
@@ -237,11 +287,8 @@ struct filter_obd {
          *
          * Locking: none, each OST thread uses only one element, determined by
          * its "ordinal number", ->t_id.
-         *
-         * This is (void *) array, because 2.4 and 2.6 use different iobuf
-         * structures.
          */
-        void                   **fo_iobuf_pool;
+        struct filter_iobuf    **fo_iobuf_pool;
         int                      fo_iobuf_count;
 
         struct obd_histogram     fo_r_pages;
@@ -263,14 +310,9 @@ struct filter_obd {
 };
 
 #define OSC_MAX_RIF_DEFAULT       8
-#define OSC_MAX_RIF_MAX          64
-#define OSC_MAX_DIRTY_DEFAULT    32
-#define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
-
-enum {
-        CL_QUOTACHECKING = 1,
-        CL_NO_QUOTACHECK
-};
+#define OSC_MAX_RIF_MAX         256
+#define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
+#define OSC_MAX_DIRTY_MB_MAX   2048     /* totally arbitrary */
 
 struct mdc_rpc_lock;
 struct client_obd {
@@ -332,10 +374,11 @@ struct client_obd {
         struct osc_async_rc      cl_ar;
 
         /* used by quotacheck */
-        spinlock_t               cl_qchk_lock;
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
         struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
 };
+
+#define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
 
 struct mgs_obd {
         struct ptlrpc_service           *mgs_service;
@@ -349,10 +392,11 @@ struct mgs_obd {
 };
 
 struct mds_obd {
+        /* NB this field MUST be first */
+        struct obd_device_target         mds_obt;
         struct ptlrpc_service           *mds_service;
         struct ptlrpc_service           *mds_setattr_service;
         struct ptlrpc_service           *mds_readpage_service;
-        struct super_block              *mds_sb;
         struct vfsmount                 *mds_vfsmnt;
         struct dentry                   *mds_fid_de;
         int                              mds_max_mdsize;
@@ -385,10 +429,13 @@ struct mds_obd {
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
         struct upcall_cache             *mds_group_hash;
+
         struct lustre_quota_info         mds_quota_info;
-        struct lustre_quota_ctxt         mds_quota_ctxt;
-        atomic_t                         mds_quotachecking;
+        struct semaphore                 mds_qonoff_sem;
         struct semaphore                 mds_health_sem;
+        unsigned long                    mds_lov_objids_valid:1,
+                                         mds_fl_user_xattr:1,
+                                         mds_fl_acl:1;
 };
 
 struct echo_obd {
@@ -483,8 +530,23 @@ struct obd_trans_info {
         int                      oti_numcookies;
 
         /* initial thread handling transaction */
-        struct ptlrpc_thread    *oti_thread;
+        int                      oti_thread_id;
 };
+
+static inline void oti_init(struct obd_trans_info *oti,
+                            struct ptlrpc_request *req)
+{
+        if (oti == NULL)
+                return;
+        memset(oti, 0, sizeof *oti);
+
+        if (req == NULL)
+                return;
+
+        if (req->rq_repmsg && req->rq_reqmsg != 0)
+                oti->oti_transno = req->rq_repmsg->transno;
+        oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
+}
 
 static inline void oti_alloc_cookies(struct obd_trans_info *oti,int num_cookies)
 {
@@ -528,6 +590,8 @@ enum llog_ctxt_id {
         LLOG_RD1_REPL_CTXT     =  9,
         LLOG_TEST_ORIG_CTXT    = 10,
         LLOG_TEST_REPL_CTXT    = 11,
+        LLOG_LOVEA_ORIG_CTXT  = 12,
+        LLOG_LOVEA_REPL_CTXT  = 13,
         LLOG_MAX_CTXTS
 };
 
@@ -582,8 +646,8 @@ struct obd_device {
         __u64                   obd_last_committed;
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
-        struct obd_statfs       obd_osfs;
-        unsigned long           obd_osfs_age;    /* jiffies */
+        struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
+        unsigned long           obd_osfs_age;   /* jiffies */
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
@@ -613,6 +677,7 @@ struct obd_device {
         time_t                           obd_recovery_end;
 
         union {
+                struct obd_device_target obt;
                 struct filter_obd filter;
                 struct mds_obd mds;
                 struct client_obd cli;
@@ -682,13 +747,16 @@ struct obd_ops {
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
-                          struct lov_mds_md *disk_src, int disk_len);
+                          struct lov_mds_md *disk_src, int disk_len); 
+        int (*o_checkmd)(struct obd_export *exp, struct obd_export *md_exp, 
+                         struct lov_stripe_md *mem_tgt);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *ea, struct obd_trans_info *oti);
+                         struct lov_stripe_md *ea, struct obd_trans_info *oti, 
+                         struct obd_export *md_exp);
         int (*o_setattr)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti);
         int (*o_setattr_async)(struct obd_export *exp, struct obdo *oa,
@@ -813,6 +881,38 @@ struct obd_ops {
          */
 };
 
+struct lsm_operations {
+        void (*lsm_free)(struct lov_stripe_md *);
+        int (*lsm_destroy)(struct lov_stripe_md *, struct obdo *oa, 
+                           struct obd_export *md_exp);
+        void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, obd_off *,
+                                     unsigned long *);
+        void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
+                                     unsigned long *);
+        obd_off (*lsm_stripe_offset_by_index)(struct lov_stripe_md *, int);
+        int (*lsm_stripe_index_by_offset)(struct lov_stripe_md *, obd_off);
+        int (*lsm_revalidate) (struct lov_stripe_md *, struct obd_device *obd);
+        int (*lsm_lmm_verify) (struct lov_mds_md *lmm, int lmm_bytes,
+                               int *stripe_count);
+        int (*lsm_unpackmd) (struct lov_obd *lov, struct lov_stripe_md *lsm,
+                             struct lov_mds_md *lmm);
+};
+
+extern struct lsm_operations lsm_plain_ops;
+extern struct lsm_operations lsm_join_ops;
+static inline struct lsm_operations *lsm_op_find(int magic)
+{
+        switch(magic) {
+        case LOV_MAGIC:
+               return &lsm_plain_ops;
+        case LOV_MAGIC_JOIN:
+               return &lsm_join_ops;
+        default:
+               CERROR("Cannot recognize lsm_magic %d", magic);
+               return NULL;
+        }
+}
+
 int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 
 static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
@@ -829,6 +929,17 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                 obd->obd_last_committed = transno;
                 ptlrpc_commit_replies (obd);
         }
+}
+
+static inline void init_obd_quota_ops(quota_interface_t *interface,
+                                      struct obd_ops *obd_ops)
+{
+        if (!interface)
+                return;
+
+        LASSERT(obd_ops);
+        obd_ops->o_quotacheck = QUOTA_OP(interface, check);
+        obd_ops->o_quotactl = QUOTA_OP(interface, ctl);
 }
 
 /* get/set_info keys */

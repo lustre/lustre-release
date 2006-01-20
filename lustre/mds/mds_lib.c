@@ -365,14 +365,17 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
         LASSERT(body != NULL); /* previously verified & swabbed by caller */
 
 #if CRAY_XT3
-        ucred->luc_fsuid = req->rq_uid;
-        if (req->rq_uid == 0)  /* allow root to keep capabilities, bug 7305 */
-                ucred->luc_cap = body->capability;
-#else
-        ucred->luc_fsuid = body->fsuid;
-        ucred->luc_fsgid = body->fsgid;
-        ucred->luc_cap = body->capability;
+        if (req->rq_uid != LNET_UID_ANY) {
+                /* Non-root local cluster client */
+                LASSERT (req->rq_uid != 0);
+                ucred->luc_fsuid = req->rq_uid;
+        } else
 #endif
+        {
+                ucred->luc_fsuid = body->fsuid;
+                ucred->luc_fsgid = body->fsgid;
+                ucred->luc_cap = body->capability;
+        }
 
         ucred->luc_uce = upcall_cache_get_entry(mds->mds_group_hash,
                                                 ucred->luc_fsuid,

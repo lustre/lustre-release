@@ -6,3 +6,4 @@ blkdev_tunables-2.6-suse.patch
 uml-exprt-clearuser.patch
 qsnet-suse-2.6.patch 
 fsprivate-2.6.patch
+dcache-qstr-api-fix-2.6-suse.patch 

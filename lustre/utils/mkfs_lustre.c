@@ -529,7 +529,7 @@ void print_ldd(struct lustre_disk_data *ldd)
         printf("Target:     %s\n", ldd->ldd_svname);
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
-        printf("Flags:      %s%s%s%s\n",
+        printf("Flags:      %s%s%s%s%s\n",
                IS_MDT(ldd) ? "MDT ":"", IS_OST(ldd) ? "OST ":"",
                IS_MGMT(ldd) ? "MGMT ":"",
                ldd->ldd_flags & LDD_F_NEED_INDEX   ? "needs_index ":"",

@@ -62,6 +62,14 @@ void *inter_module_get(char *arg)
                 return ldlm_namespace_cleanup;
         else if (!strcmp(arg, "ldlm_replay_locks"))
                 return ldlm_replay_locks;
+#ifdef HAVE_QUOTA_SUPPORT
+        else if (!strcmp(arg, "osc_quota_interface"))
+                return &osc_quota_interface;
+        else if (!strcmp(arg, "mdc_quota_interface"))
+                return &mdc_quota_interface;
+        else if (!strcmp(arg, "lov_quota_interface"))
+                return &lov_quota_interface;
+#endif
         else
                 return NULL;
 }
@@ -69,9 +77,6 @@ void *inter_module_get(char *arg)
 /*
  * random number generator stuff
  */
-#ifdef LIBLUSTRE_USE_URANDOM
-static int _rand_dev_fd = -1;
-#endif
 
 #ifdef HAVE_GETHOSTBYNAME
 static int get_ipv4_addr()
@@ -99,49 +104,57 @@ static int get_ipv4_addr()
 
 void liblustre_init_random()
 {
-        int seed;
+        int _rand_dev_fd;
+        int seed[2];
         struct timeval tv;
 
 #ifdef LIBLUSTRE_USE_URANDOM
         _rand_dev_fd = syscall(SYS_open, "/dev/urandom", O_RDONLY);
         if (_rand_dev_fd >= 0) {
                 if (syscall(SYS_read, _rand_dev_fd,
-                            &seed, sizeof(int)) == sizeof(int)) {
-                        srand(seed);
+                            &seed, sizeof(seed)) == sizeof(seed)) {
+                        ll_srand(seed[0], seed[1]);
                         return;
                 }
                 syscall(SYS_close, _rand_dev_fd);
-                _rand_dev_fd = -1;
         }
 #endif /* LIBLUSTRE_USE_URANDOM */
 
 #ifdef HAVE_GETHOSTBYNAME
-        seed = get_ipv4_addr();
+        seed[0] = get_ipv4_addr();
 #else
-        seed = _my_pnid;
+        seed[0] = _my_pnid;
 #endif
         gettimeofday(&tv, NULL);
-        srand(tv.tv_sec + tv.tv_usec + getpid() + __swab32(seed));
+        ll_srand(tv.tv_usec | __swab32(getpid()), tv.tv_sec|__swab32(seed[0]));
 }
 
 void get_random_bytes(void *buf, int size)
 {
-        char *p = buf;
+        int *p = buf;
+        int rem;
         LASSERT(size >= 0);
 
-#ifdef LIBLUSTRE_USE_URANDOM
-        if (_rand_dev_fd >= 0) {
-                if (syscall(SYS_read, _rand_dev_fd, buf, size) == size)
-                        return;
-                syscall(SYS_close, _rand_dev_fd);
-                _rand_dev_fd = -1;
+        rem = min((unsigned long)buf & (sizeof(int) - 1), size);
+        if (rem) {
+                int val = ll_rand();
+                memcpy(buf, &val, rem);
+                p = buf + rem;
+                size -= rem;
         }
-#endif
 
-        while (size--) 
-                *p++ = rand();
+        while (size >= sizeof(int)) {
+                *p = ll_rand();
+                size -= sizeof(int);
+                p++;
+        }
+        buf = p;
+        if (size) {
+                int val = ll_rand();
+                memcpy(buf, &val, size);
+        }
 }
-
+ 
 static void init_capability(int *res)
 {
 #ifdef HAVE_LIBCAP
@@ -235,9 +248,15 @@ int init_lib_portals()
         int rc;
         ENTRY;
 
+        rc = libcfs_debug_init(5 * 1024 * 1024);
+        if (rc != 0) {
+                CERROR("libcfs_debug_init() failed: %d\n", rc);
+                RETURN (-ENXIO);
+        }
+
         rc = LNetInit();
         if (rc != 0) {
-                CERROR("LNetInit failed: %d\n", rc);
+                CERROR("LNetInit() failed: %d\n", rc);
                 RETURN (-ENXIO);
         }
         RETURN(0);
@@ -246,5 +265,6 @@ int init_lib_portals()
 extern void ptlrpc_exit_portals(void);
 void cleanup_lib_portals()
 {
+        libcfs_debug_cleanup();
         ptlrpc_exit_portals();
 }

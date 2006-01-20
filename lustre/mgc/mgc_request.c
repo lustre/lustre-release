@@ -53,16 +53,24 @@
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
 {
         char *name_end;
-
+        int len;
+        __u64 resname = 0;
+        
         /* fsname is at most 8 chars long at the beginning of the logname
            e.g. "lustre-MDT0001" or "lustre" */
         name_end = strchr(logname, '-');
-        if (!name_end)
-                name_end = logname + strlen(logname);
-        LASSERT(name_end - logname <= 8);
+        if (name_end)
+                len = name_end - logname;
+        else
+                len = strlen(logname);
+        LASSERT(len <= 8);
+        memcpy(&resname, logname, len);
 
-        memcpy(&res_id->name[0], logname, name_end - logname);
-        CDEBUG(D_MGC, "log %s to resid "LPX64"\n", logname, res_id->name[0]);
+        memset(res_id, 0, sizeof(*res_id));
+        /* FIXME are resid names swabbed across the wire? */
+        res_id->name[0] = cpu_to_le64(resname);
+        CDEBUG(D_MGC, "log %s to resid "LPX64"/"LPX64" (%.8s)\n", logname,
+               res_id->name[0], res_id->name[1], (char *)&res_id->name[0]);
         return 0;
 }
 EXPORT_SYMBOL(mgc_logname2resid);
@@ -375,7 +383,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         switch (flag) {
         case LDLM_CB_BLOCKING:
                 /* mgs wants the lock, give it up... */
-                LDLM_DEBUG(lock, "MGC blocking CB");
+                LDLM_ERROR(lock, "MGC blocking CB");
                 ldlm_lock2handle(lock, &lockh);
                 rc = ldlm_cli_cancel(&lockh);
                 break;
@@ -385,7 +393,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 
                 CERROR("Lock res "LPX64" (%.8s)\n",
                        lock->l_resource->lr_name.name[0], 
-                       (char *)lock->l_resource->lr_name.name);
+                       (char *)&lock->l_resource->lr_name.name[0]);
 
                 /* Make sure not to re-enqueue when the mgc is stopping
                    (we get called from client_disconnect_export) */
@@ -432,8 +440,6 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct obd_device *obd = class_exp2obd(exp);
         int rc;
         ENTRY;
-
-        LASSERT(type == LDLM_PLAIN);
 
         CDEBUG(D_MGC, "Enqueue for %s (res "LPX64")\n", cld->cld_logname,
                cld->cld_resid.name[0]);
@@ -556,8 +562,8 @@ int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_TARGET_ADD, 
-                              1, &size, NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
+                              MGMT_TARGET_ADD, 1, &size, NULL);
         if (!req)
                 RETURN(rc = -ENOMEM);
 
@@ -592,8 +598,8 @@ int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *mti)
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MGMT_TARGET_DEL,
-                              1, &size, NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
+                              MGMT_TARGET_DEL, 1, &size, NULL);
         if (!req)
                 RETURN(rc = -ENOMEM);
 
@@ -888,7 +894,7 @@ struct obd_ops mgc_obd_ops = {
         .o_del_conn     = client_import_del_conn,
         .o_connect      = client_connect_import,
         .o_disconnect   = client_disconnect_export,
-        .o_enqueue      = mgc_enqueue,
+        //.o_enqueue      = mgc_enqueue,
         .o_cancel       = mgc_cancel,
         //.o_iocontrol    = mgc_iocontrol,
         .o_set_info     = mgc_set_info,

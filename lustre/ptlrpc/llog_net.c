@@ -74,7 +74,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
         lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
         lgr->lgr_gen = ctxt->loc_gen;
-        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1, NULL);
+        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
         OBD_FREE(lgr, sizeof(*lgr));
         if (rc != 1)
                 RETURN(rc);
@@ -82,7 +82,8 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         LASSERT(ctxt->loc_imp);
         imp = ctxt->loc_imp;
 
-        request = ptlrpc_prep_req(imp, LLOG_ORIGIN_CONNECT, 1, &size, NULL);
+        request = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
+                                  LLOG_ORIGIN_CONNECT, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 

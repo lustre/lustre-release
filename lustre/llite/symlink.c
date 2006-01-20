@@ -161,6 +161,7 @@ struct inode_operations ll_fast_symlink_inode_operations = {
 #else 
         .getattr_it     = ll_getattr,
 #endif
+        .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,
         .listxattr      = ll_listxattr,

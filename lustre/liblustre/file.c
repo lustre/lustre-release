@@ -237,7 +237,6 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         int rc;
         ENTRY;
 
-        oti.oti_thread = request->rq_svc_thread;
         /* req is swabbed so this is safe */
         body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
 
@@ -260,7 +259,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 GOTO(out, rc = -EPROTO);
         }
 
-        rc = obd_unpackmd(llu_i2obdexp(dir), &lsm, eadata, body->eadatasize);
+        rc = obd_unpackmd(llu_i2obdexp(dir), &lsm, eadata,body->eadatasize);
         if (rc < 0) {
                 CERROR("obd_unpackmd: %d\n", rc);
                 GOTO(out, rc);
@@ -287,7 +286,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti);
+        rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti, NULL);
         obdo_free(oa);
         if (rc)
                 CERROR("obd destroy objid 0x"LPX64" error %d\n",
@@ -438,12 +437,12 @@ static void llu_truncate(struct inode *inode, obd_flag flags)
         }
 
         oa.o_id = lsm->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&oa, inode,
-                        OBD_MD_FLTYPE|OBD_MD_FLMODE|OBD_MD_FLATIME|
-                        OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLFLAGS);
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+        oa.o_flags = flags; /* We don't actually want to copy inode flags */
 
-        oa.o_flags |= flags; /* OBD_MD_FLFLAGS is already set at this point */
+        obdo_from_inode(&oa, inode,
+                        OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLATIME |
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
         obd_adjust_kms(llu_i2obdexp(inode), lsm, st->st_size, 1);
 

@@ -22,10 +22,12 @@ OSTFAILOVER=${OSTFAILOVER:-}
 MOUNT=${MOUNT:-/mnt/lustre}
 FSTYPE=${FSTYPE:-ext3}
 
-CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
+MDS_MOUNT_OPTS="user_xattr,acl,${MDS_MOUNT_OPTS:-""}"
+CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
 
 NETTYPE=${NETTYPE:-tcp}
 NIDTYPE=${NIDTYPE:-$NETTYPE}
+[ "$ACCEPTOR_PORT" ] && PORT_OPT="--port $ACCEPTOR_PORT"
 
 # NOTE - You can't have different MDS/OST nodes and also have clients on the
 #        MDS/OST nodes without using --endlevel and --startlevel during lconf.
@@ -86,13 +88,17 @@ h2iib () {
 echo -n "adding NET for:"
 for NODE in `echo $MDSNODE $OSTNODES $CLIENTS | tr -s " " "\n" | sort -u`; do
 	echo -n " $NODE"
-	${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` --nettype $NETTYPE || exit 1
+	${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` \
+    --nettype $NETTYPE $PORT_OPT || exit 1
 done
 
 # configure mds server
+[ "x$MDS_MOUNT_OPTS" != "x" ] &&
+    MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
+
 echo; echo "adding MDS on: $MDSNODE"
 ${LMC} -m $config --add mds --node $MDSNODE --mds mds1 --fstype $FSTYPE \
-	--dev $MDSDEV --size $MDSSIZE $MDSOPT || exit 10
+	--dev $MDSDEV $MDS_MOUNT_OPTS --size $MDSSIZE $MDSOPT || exit 10
 
 # configure ost
 ${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \

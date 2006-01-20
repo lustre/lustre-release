@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug 6088
-ALWAYS_EXCEPT="8"
+# bug number:  6088 
+ALWAYS_EXCEPT="8    $REPLAY_DUAL_EXCEPT"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
@@ -253,9 +253,9 @@ test_12() {
     sysctl -w lustre.fail_loc=0
 
     ls $DIR/$tfile
-    $CHECKSTAT -t file $DIR/$tfile || return 2
     kill -USR1 $MULTIPID || return 3
     wait $MULTIPID || return 4
+    $CHECKSTAT -t file $DIR/$tfile || return 2
     rm $DIR/$tfile
 
     return 0
@@ -316,11 +316,93 @@ test_15() {
     df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
+    [ -e $MOUNT1/$tfile-2-0 ] && error "$tfile-2-0 exists"
 
     zconf_mount `hostname` $MOUNT2
     return 0
 }
 run_test 15 "timeout waiting for lost client during replay, 1 client completes"
+
+test_15a() {
+    local ost_last_id=""
+    local osc_last_id=""
+    
+    replay_barrier mds
+    echo "data" > "$MOUNT2/${tfile}-m2"
+
+    umount $MOUNT2
+    facet_failover mds
+    df $MOUNT || return 1
+    
+    ost_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    mds_last_id=`cat /proc/fs/lustre/osc/*mds*/last_id`
+    
+    echo "Ids after MDS<->OST synchonizing"
+    echo "--------------------------------"
+    echo "MDS last_id:"
+    echo $mds_last_id
+    echo "OST last_id:"
+    echo $ost_last_id
+
+    local i=0
+    echo $ost_last_id | while read id; do
+	ost_ids[$i]=$id
+	((i++))
+    done
+    
+    i=0
+    echo $mds_last_id | while read id; do
+	mds_ids[$i]=$id
+	((i++))
+    done
+    
+    local arr_len=${#mds_ids[*]}
+    for ((i=0;i<$arr_len;i++)); do
+	    mds_id=${mds_ids[i]}
+	    ost_id=${ost_ids[i]}
+	    
+	    test $mds_id -ge $ost_id || {
+		echo "MDS last id ($mds_id) is smaller than OST one ($ost_id)"
+		return 2
+	    }
+    done
+
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+#CROW run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
+
+test_15b() {
+    replay_barrier mds
+    echo "data" > "$MOUNT2/${tfile}-m2"
+    umount $MOUNT2
+
+    do_facet ost "sysctl -w lustre.fail_loc=0x80000802"
+    facet_failover mds
+
+    df $MOUNT || return 1
+    do_facet ost "sysctl -w lustre.fail_loc=0"
+    
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+#CROW run_test 15b "multiple delayed OST clear orphans"
+
+test_15c() {
+    replay_barrier mds
+    for ((i = 0; i < 2000; i++)); do
+	echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
+    done
+    
+    umount $MOUNT2
+    facet_failover mds
+
+    df $MOUNT || return 1
+    
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+run_test 15c "remove multiple OST orphans"
 
 test_16() {
     replay_barrier mds

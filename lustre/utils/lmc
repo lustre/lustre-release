@@ -95,6 +95,7 @@ Object creation command summary:
   --mdsuuid uuid
   --mkfsoptions options
   --mountfsoptions options
+  --quota quotaon=u|g|ug,iunit=,bunit=,itune=,btune= 
 
 --add lov
   --lov lov_name
@@ -118,6 +119,7 @@ Object creation command summary:
   --ostuuid uuid
   --mkfsoptions options
   --mountfsoptions options
+  --quota quotaon=u|g|ug,iunit=,bunit=,itune=,btune=
  
 --add mtpt  - Mountpoint
   --node node_name
@@ -199,7 +201,19 @@ lmc_options = [
     ('mdsuuid', "Optional argument to specify MDS UUID", PARAM,""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
-
+    ('quota', "quotaon:enable quota, only u|g|ug is supported now. \
+               iunit: the unit for slave to acquire/release inode quota from/to masteri.\
+                      Int type (>0), default value in Lustre is 5000 inodes.\
+               bunit: the unit for slave to acquire/release block quota from/to master.\
+                      Mbytes (>0), default value in Lustre is 100(Mbytes).\
+               itune: used to tune the threthold. When inode quota usage reach the threthold,\
+                      slave should acquire/release inode quota from/to master.\
+                      Int type (100 > btune > 0), default value in Lustre is 50 (percentge).\
+                      inode threthold = iunit * itune / 100.\
+               btune: used to tune the threthold. When block quota usage reach the threthold,\
+                      slave should acquire/release block quota from/to master.\
+                      Int type (100 > btune > 0), default value in Lustre is 50 (percentage).\
+                      block threthold = bunit * btune / 100.", PARAM,""),
     # clients: mountpoint and echo
     ('echo_client', "", PARAM),
     ('path', "Specify the mountpoint for Lustre.", PARAM),
@@ -383,7 +397,7 @@ class GenConfig:
 
     def osd(self, name, uuid, fstype, osdtype, devname, format, ost_uuid,
             node_uuid, dev_size=0, journal_size=0, inode_size=0, nspath="", 
-            mkfsoptions="", mountfsoptions=""):
+            mkfsoptions="", mountfsoptions="", quota=""):
         osd = self.newService("osd", name, uuid)
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
@@ -403,6 +417,8 @@ class GenConfig:
                 self.addElement(osd, "mkfsoptions", mkfsoptions)
             if mountfsoptions:
                 self.addElement(osd, "mountfsoptions", mountfsoptions)
+            if quota:
+                self.addElement(osd, "quota", quota)
         if nspath:
             self.addElement(osd, "nspath", nspath)
         return osd
@@ -446,7 +462,7 @@ class GenConfig:
 
     def mdsdev(self, name, uuid, fstype, devname, format, node_uuid,
                mds_uuid, dev_size=0, journal_size=0, inode_size=256,
-               nspath="", mkfsoptions="", mountfsoptions="", group_upcall=""):
+               nspath="", mkfsoptions="", mountfsoptions="", quota="", group_upcall=""):
         mdd = self.newService("mdsdev", name, uuid)
         self.addElement(mdd, "fstype", fstype)
         dev = self.addElement(mdd, "devpath", devname)
@@ -463,6 +479,8 @@ class GenConfig:
             self.addElement(mdd, "mkfsoptions", mkfsoptions)
         if mountfsoptions:
             self.addElement(mdd, "mountfsoptions", mountfsoptions)
+        if quota:
+            self.addElement(mdd, "quota", quota)
 	if group_upcall:
             self.addElement(mdd, "group_upcall", group_upcall)
 
@@ -760,6 +778,7 @@ def add_mds(gen, lustre, options):
     nspath = get_option(options, 'nspath')
     mkfsoptions = get_option(options, 'mkfsoptions')
     mountfsoptions = get_option(options, 'mountfsoptions')
+    quota = get_option(options, 'quota')
     group_upcall = get_option(options, 'group_upcall')
 
     node_uuid = name2uuid(lustre, node_name, 'node')
@@ -773,7 +792,7 @@ def add_mds(gen, lustre, options):
     mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname,
                      get_format_flag(options), node_uuid, mds_uuid,
                      size, journal_size, inode_size, nspath, mkfsoptions,
-                     mountfsoptions, group_upcall)
+                     mountfsoptions, quota, group_upcall)
     lustre.appendChild(mdd)
                    
 
@@ -792,7 +811,8 @@ def add_ost(gen, lustre, options):
         journal_size = ''
         inode_size = ''
         mkfsoptions = ''
-        mountfsoptions = ''
+	mountfsoptions = ''
+        quota = ''
     else:
         devname = get_option(options, 'dev') # can be unset for bluearcs
         size = get_option(options, 'size')
@@ -800,7 +820,8 @@ def add_ost(gen, lustre, options):
         journal_size = get_option(options, 'journal_size')
         inode_size = get_option(options, 'inode_size')
         mkfsoptions = get_option(options, 'mkfsoptions')
-        mountfsoptions = get_option(options, 'mountfsoptions')
+	mountfsoptions = get_option(options, 'mountfsoptions')
+        quota = get_option(options, 'quota')
         
     nspath = get_option(options, 'nspath')
 
@@ -839,7 +860,7 @@ def add_ost(gen, lustre, options):
     osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname,
                   get_format_flag(options), ost_uuid, node_uuid, size,
                   journal_size, inode_size, nspath, mkfsoptions,
-                  mountfsoptions)
+                  mountfsoptions, quota)
 
     node = findByName(lustre, node_name, "node")
 

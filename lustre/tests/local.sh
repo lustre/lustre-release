@@ -14,11 +14,13 @@ FSTYPE=${FSTYPE:-ext3}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 NETTYPE=${NETTYPE:-tcp}
+[ "$ACCEPTOR_PORT" ] && PORT_OPT="--port $ACCEPTOR_PORT"
 
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-400000}
 
-CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
+MDS_MOUNT_OPTS="user_xattr,acl,${MDS_MOUNT_OPTS:-""}"
+CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
 
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}
@@ -58,16 +60,21 @@ h2iib () {
 
 # create nodes
 ${LMC} --add node --node $HOSTNAME || exit 10
-${LMC} --add net --node $HOSTNAME --nid `h2$NETTYPE $HOSTNAME` --nettype $NETTYPE || exit 11
-${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
+${LMC} --add net --node $HOSTNAME --nid `h2$NETTYPE $HOSTNAME` \
+    --nettype $NETTYPE $PORT_OPT || exit 11
+${LMC} --add net --node client --nid '*' --nettype $NETTYPE $PORT_OPT|| exit 12
 
+# configure mds server
 [ "x$MDS_MOUNT_OPTS" != "x" ] &&
     MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
 
+[ "x$QUOTA_OPTS" != "x" ] &&
+    QUOTA_OPTS="--quota $QUOTA_OPTS"
+    
 # configure mds server
 ${LMC} --add mds --node $HOSTNAME --mds mds1 --fstype $FSTYPE \
-	--dev $MDSDEV \
-	$MDS_MOUNT_OPTS --size $MDSSIZE $JARG $IARG $MDSOPT || exit 20
+	--dev $MDSDEV $MDS_MOUNT_OPTS $QUOTA_OPTS\
+	--size $MDSSIZE $JARG $IARG $MDSOPT || exit 20
 
 [ "x$OST_MOUNT_OPTS" != "x" ] &&
     OST_MOUNT_OPTS="--mountfsoptions $OST_MOUNT_OPTS"
@@ -77,7 +84,7 @@ ${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 $LOVOPT || exit 20
 
 ${LMC} --add ost --node $HOSTNAME --lov lov1 --fstype $FSTYPE \
-	--dev $OSTDEV \
+	--dev $OSTDEV $QUOTA_OPTS\
 	$OST_MOUNT_OPTS --size $OSTSIZE $JARG $OSTOPT || exit 30
 
 # create client config

@@ -57,12 +57,15 @@
 #define LL_IOC_QUOTACHECK               _IOW ('f', 160, int)
 #define LL_IOC_POLL_QUOTACHECK          _IOR ('f', 161, struct if_quotacheck *)
 #define LL_IOC_QUOTACTL                 _IOWR('f', 162, struct if_quotactl *)
+#define LL_IOC_JOIN                     _IOW ('f', 163, long)
+
 
 #define IOC_MDC_TYPE            'i'
 #define IOC_MDC_GETSTRIPE       _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
 #define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_mds_data *)
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
+#define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002
@@ -70,6 +73,8 @@
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
+
+#define LOV_USER_MAGIC_JOIN 0x0BD20BD0
 
 #define LOV_PATTERN_RAID0 0x001
 #define LOV_PATTERN_RAID1 0x002
@@ -95,7 +100,8 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
 
-#if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__)
+#if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
+    defined(__craynv)
 typedef struct stat     lstat_t;
 #define HAVE_LOV_USER_MDS_DATA
 #elif defined(__USE_LARGEFILE64) || defined(__KERNEL__)
@@ -113,6 +119,37 @@ struct lov_user_mds_data_v1 {
         struct lov_user_md_v1 lmd_lmm;  /* LOV EA user data */
 } __attribute__((packed));
 #endif
+
+struct lov_user_ost_data_join {   /* per-stripe data structure */
+        __u64 l_extent_start;     /* extent start*/
+        __u64 l_extent_end;       /* extent end*/
+        __u64 l_object_id;        /* OST object ID */
+        __u64 l_object_gr;        /* OST object group (creating MDS number) */
+        __u32 l_ost_gen;          /* generation of this OST index */
+        __u32 l_ost_idx;          /* OST index in LOV */
+} __attribute__((packed));
+
+/* Identifier for a single log object */
+struct llog_logid {
+        __u64                   lgl_oid;
+        __u64                   lgl_ogr;
+        __u32                   lgl_ogen;
+} __attribute__((packed));
+
+struct lov_user_md_join {         /* LOV EA user data (host-endian) */
+        __u32 lmm_magic;          /* magic number = LOV_MAGIC_JOIN */
+        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
+        __u64 lmm_object_id;      /* LOV object ID */
+        __u64 lmm_object_gr;      /* LOV object group */
+        __u32 lmm_stripe_size;    /* size of stripe in bytes */
+        __u32 lmm_stripe_count;   /* num stripes in use for this object */
+        __u32 lmm_extent_count;   /* extent count of lmm*/
+        __u64 lmm_tree_id;        /* mds tree object id */
+        __u64 lmm_tree_gen;       /* mds tree object gen */
+        struct llog_logid lmm_array_id; /* mds extent desc llog object id */
+        struct lov_user_ost_data_join lmm_objects[0]; /* per-stripe data */
+} __attribute__((packed));
+
 
 struct ll_recreate_obj {
         __u64 lrc_id;
@@ -139,14 +176,20 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
 
+#define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
+#define LUSTRE_Q_QUOTAOFF 0x800003     /* turn quotas off */
+#define LUSTRE_Q_GETINFO  0x800005     /* get information about quota files */
+#define LUSTRE_Q_SETINFO  0x800006     /* set information about quota files */
+#define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
+#define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
+
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
 
 #define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
 
 struct if_quotacheck {
-        char                    obd_type[10];
+        __u8                    obd_type[16];
         struct obd_uuid         obd_uuid;
-        int                     stat;
 };
 
 #define MDS_GRP_DOWNCALL_MAGIC 0x6d6dd620
@@ -170,8 +213,6 @@ struct mds_grp_downcall_data {
 # endif
 #endif
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 #ifdef NEED_QUOTA_DEFS
 #ifndef QUOTABLOCK_BITS
 #define QUOTABLOCK_BITS 10
@@ -183,30 +224,6 @@ struct mds_grp_downcall_data {
 
 #ifndef toqb
 #define toqb(x) (((x) + QUOTABLOCK_SIZE - 1) >> QUOTABLOCK_BITS)
-#endif
-
-/* XXX: these two structs should be in /usr/include/linux/quota.h */
-#ifndef HAVE_STRUCT_IF_DQINFO
-struct if_dqinfo {
-        __u64 dqi_bgrace;
-        __u64 dqi_igrace;
-        __u32 dqi_flags;
-        __u32 dqi_valid;
-};
-#endif
-
-#ifndef HAVE_STRUCT_IF_DQBLK
-struct if_dqblk {
-        __u64 dqb_bhardlimit;
-        __u64 dqb_bsoftlimit;
-        __u64 dqb_curspace;
-        __u64 dqb_ihardlimit;
-        __u64 dqb_isoftlimit;
-        __u64 dqb_curinodes;
-        __u64 dqb_btime;
-        __u64 dqb_itime;
-        __u32 dqb_valid;
-};
 #endif
 
 #ifndef QIF_BLIMITS
@@ -222,25 +239,40 @@ struct if_dqblk {
 #define QIF_ALL         (QIF_LIMITS | QIF_USAGE | QIF_TIMES)
 #endif
 
-#endif /* NEED_QUOTA_DEFS */
+#endif /* !__KERNEL__ */
+
+/* XXX: same as if_dqinfo struct in kernel */
+struct obd_dqinfo {
+        __u64 dqi_bgrace;
+        __u64 dqi_igrace;
+        __u32 dqi_flags;
+        __u32 dqi_valid;
+};
+
+/* XXX: same as if_dqblk struct in kernel, plus one padding */
+struct obd_dqblk {
+        __u64 dqb_bhardlimit;
+        __u64 dqb_bsoftlimit;
+        __u64 dqb_curspace;
+        __u64 dqb_ihardlimit;
+        __u64 dqb_isoftlimit;
+        __u64 dqb_curinodes;
+        __u64 dqb_btime;
+        __u64 dqb_itime;
+        __u32 dqb_valid;
+        __u32 padding;
+};
 
 struct if_quotactl {
-        int                     qc_cmd;
-        int                     qc_type;
-        int                     qc_id;
-        int                     qc_stat;
-        struct if_dqinfo        qc_dqinfo;
-        struct if_dqblk         qc_dqblk;
-        char                    obd_type[10];
+        __u32                   qc_cmd;
+        __u32                   qc_type;
+        __u32                   qc_id;
+        __u32                   qc_stat;
+        struct obd_dqinfo       qc_dqinfo;
+        struct obd_dqblk        qc_dqblk;
+        __u8                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
-
-#else
-
-struct if_quotactl {
-};
-
-#endif /* HAVE_QUOTA_SUPPORT */
 
 #ifndef LPU64
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */

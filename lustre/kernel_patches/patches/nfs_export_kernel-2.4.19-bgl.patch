@@ -13,7 +13,7 @@ Index: linux-bgl/fs/nfsd/vfs.c
 ===================================================================
 --- linux-bgl.orig/fs/nfsd/vfs.c	2003-07-02 08:44:33.000000000 -0700
 +++ linux-bgl/fs/nfsd/vfs.c	2004-12-28 17:13:59.940919832 -0800
-@@ -77,6 +77,128 @@
+@@ -77,6 +77,129 @@
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -26,6 +26,7 @@ Index: linux-bgl/fs/nfsd/vfs.c
 +	struct nameidata nd = { .dentry = ddir, .last = dnew->d_name };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->link_raw(&old_nd, &nd);
++	igrab(dold->d_inode);
 +	d_instantiate(dnew, dold->d_inode);
 +	if(dold->d_inode->i_op && dold->d_inode->i_op->revalidate_it)
 +		dold->d_inode->i_op->revalidate_it(dnew, NULL);

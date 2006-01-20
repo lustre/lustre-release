@@ -320,8 +320,19 @@ AC_MSG_RESULT([$enable_ldiskfs])
 if test x$enable_ldiskfs = xyes ; then
 	BACKINGFS="ldiskfs"
 
+	AC_MSG_CHECKING([whether to enable quilt for making ldiskfs])
+	AC_ARG_ENABLE([quilt],
+			AC_HELP_STRING([--disable-quilt],[disable use of quilt for ldiskfs]),
+			[],[enable_quilt='yes'])
+	AC_MSG_RESULT([$enable_quilt])
+
 	AC_PATH_PROG(PATCH, patch, [no])
-	AC_PATH_PROG(QUILT, quilt, [no])
+
+	if test x$enable_quilt = xno ; then
+	    QUILT="no"
+	else
+	    AC_PATH_PROG(QUILT, quilt, [no])
+	fi
 
 	if test x$enable_ldiskfs$PATCH$QUILT = xyesnono ; then
 		AC_MSG_ERROR([Quilt or patch are needed to build the ldiskfs module (for Linux 2.6)])
@@ -348,11 +359,15 @@ case $BACKINGFS in
 		])
 		;;
 	ldiskfs)
-		LC_FSHOOKS([
-			LDISKFS_SERIES="2.6-suse.series"
-		],[
-			LDISKFS_SERIES="2.6-rhel4.series"
-		])
+		AC_MSG_CHECKING([which ldiskfs series to use])
+		case $LINUXRELEASE in
+		2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
+		2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
+		2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
+		2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
+		*) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix lustre/autoconf/lustre-core.m4])
+		esac
+		AC_MSG_RESULT([$LDISKFS_SERIES])
 		AC_SUBST(LDISKFS_SERIES)
 		;;
 esac # $BACKINGFS
@@ -439,6 +454,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	LC_CONFIG_BACKINGFS
 fi
 LC_CONFIG_PINGER
+LC_CONFIG_QUOTA
 
 LC_STRUCT_KIOBUF
 LC_FUNC_COND_RESCHED
@@ -512,6 +528,26 @@ ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"
 ])
 
 #
+# LC_CONFIG_QUOTA
+#
+# whether to enable quota support
+#
+AC_DEFUN([LC_CONFIG_QUOTA],
+[AC_MSG_CHECKING([whether to enable quota support])
+AC_ARG_ENABLE([quota], 
+	AC_HELP_STRING([--enable-quota],
+			[enable quota support]),
+	[],[enable_quota='yes'])
+AC_MSG_RESULT([$enable_quota])
+if test x$linux25 != xyes; then
+   enable_quota='no'
+fi
+if test x$enable_quota != xno; then
+   AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+fi
+])
+  
+#
 # LC_CONFIGURE
 #
 # other configure checks
@@ -525,16 +561,6 @@ AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
 # include/lustre/lustre_user.h
 # See note there re: __ASM_X86_64_PROCESSOR_H
 AC_CHECK_HEADERS([linux/quota.h])
-
-AC_CHECK_TYPES([struct if_dqinfo],[],[],[
-#define __ASM_X86_64_PROCESSOR_H
-#include <linux/quota.h>
-])
-
-AC_CHECK_TYPES([struct if_dqblk],[],[],[
-#define __ASM_X86_64_PROCESSOR_H
-#include <linux/quota.h>
-])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])
@@ -573,6 +599,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
+AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
 ])
 
 #
@@ -630,6 +657,8 @@ lustre/mgs/Makefile
 lustre/mgs/autoMakefile
 lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
+lustre/quota/Makefile
+lustre/quota/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
 lustre/tests/Makefile

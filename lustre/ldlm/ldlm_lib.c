@@ -318,8 +318,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 }
         }
 
-        spin_lock_init(&cli->cl_qchk_lock);
-        cli->cl_qchk_stat = CL_NO_QUOTACHECK;
+        cli->cl_qchk_stat = CL_NOT_QUOTACHECKED;
 
         RETURN(rc);
 
@@ -381,8 +380,10 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 GOTO(out_ldlm, rc);
 
         ocd = &imp->imp_connect_data;
-        if (data)
+        if (data) {
                 *ocd = *data;
+                imp->imp_connect_flags_orig = data->ocd_connect_flags;
+        }
 
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
@@ -679,6 +680,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         req->rq_repmsg->handle = conn;
 
+        /* ownership of this export ref transfers to the request AFTER we
+         * drop any previous reference the request had, but we don't want
+         * that to go to zero before we get our new export reference. */
+        export = class_conn2export(&conn);
+        LASSERT(export != NULL);
+
         /* If the client and the server are the same node, we will already
          * have an export that really points to the client's DLM export,
          * because we have a shared handles table.
@@ -689,9 +696,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (req->rq_export != NULL)
                 class_export_put(req->rq_export);
 
-        /* ownership of this export ref transfers to the request */
-        export = req->rq_export = class_conn2export(&conn);
-        LASSERT(export != NULL);
+        req->rq_export = export;
 
         spin_lock_irqsave(&export->exp_lock, flags);
         if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
@@ -806,7 +811,7 @@ static void target_finish_recovery(struct obd_device *obd)
                         CWARN("%s: all clients recovered, %d MDS "
                               "orphans deleted\n", obd->obd_name, rc);
                 else
-                        CERROR("postrecov failed %d\n", rc);
+                        CWARN("postrecov failed %d\n", rc);
         }
 
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
@@ -818,7 +823,6 @@ static void target_finish_recovery(struct obd_device *obd)
                 target_release_saved_req(req);
         }
         obd->obd_recovery_end = CURRENT_SECONDS;
-        return;
 }
 
 static void abort_recovery_queue(struct obd_device *obd)
@@ -1043,7 +1047,7 @@ static void process_recovery_queue(struct obd_device *obd)
                 obd->obd_replayed_requests++;
                 reset_recovery_timer(obd);
                 /* bug 1580: decide how to properly sync() in recovery */
-                //mds_fsync_super(mds->mds_sb);
+                //mds_fsync_super(obd->u.obt.obt_sb);
                 class_export_put(req->rq_export);
                 if (req->rq_reply_state != NULL) {
                         ptlrpc_rs_decref(req->rq_reply_state);
@@ -1198,7 +1202,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         OBD_ALLOC(reqmsg, req->rq_reqlen);
         if (!reqmsg)
                 LBUG();
-        memcpy(saved_req, req, sizeof *saved_req);
+        *saved_req = *req;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
         /* Don't race cleanup */
@@ -1370,3 +1374,74 @@ void target_committed_to_req(struct ptlrpc_request *req)
 }
 
 EXPORT_SYMBOL(target_committed_to_req);
+
+#ifdef HAVE_QUOTA_SUPPORT
+int target_handle_qc_callback(struct ptlrpc_request *req)
+{
+        struct obd_quotactl *oqctl;
+        struct client_obd *cli = &req->rq_export->exp_obd->u.cli;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+
+        cli->cl_qchk_stat = oqctl->qc_stat;
+
+        return 0;
+}
+
+int target_handle_dqacq_callback(struct ptlrpc_request *req)
+{
+#ifdef __KERNEL__
+        struct obd_device *obd = req->rq_export->exp_obd;
+        struct obd_device *master_obd;
+        struct lustre_quota_ctxt *qctxt;
+        struct qunit_data *qdata, *rep;
+        int rc = 0, repsize = sizeof(struct qunit_data);
+        ENTRY;
+        
+        rc = lustre_pack_reply(req, 1, &repsize, NULL);
+        if (rc) {
+                CERROR("packing reply failed!: rc = %d\n", rc);
+                RETURN(rc);
+        }
+        rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep));
+        LASSERT(rep);
+        
+        qdata = lustre_swab_reqbuf(req, 0, sizeof(*qdata), lustre_swab_qdata);
+        if (qdata == NULL) {
+                CERROR("unpacking request buffer failed!");
+                RETURN(-EPROTO);
+        }
+
+        /* we use the observer */
+        LASSERT(obd->obd_observer && obd->obd_observer->obd_observer);
+        master_obd = obd->obd_observer->obd_observer;
+        qctxt = &master_obd->u.obt.obt_qctxt;
+        
+        LASSERT(qctxt->lqc_handler);
+        rc = qctxt->lqc_handler(master_obd, qdata, req->rq_reqmsg->opc);
+        if (rc && rc != -EDQUOT)
+                CDEBUG(rc == -EBUSY  ? D_QUOTA : D_ERROR, 
+                       "dqacq failed! (rc:%d)\n", rc);
+        
+        /* the qd_count might be changed in lqc_handler */
+        memcpy(rep, qdata, sizeof(*rep));
+        req->rq_status = rc;
+        rc = ptlrpc_reply(req);
+        
+        RETURN(rc);     
+#else
+        return 0;
+#endif /* !__KERNEL__ */
+}
+#endif /* HAVE_QUOTA_SUPPORT */
+
+ldlm_mode_t lck_compat_array[] = {
+        [LCK_EX] LCK_COMPAT_EX,
+        [LCK_PW] LCK_COMPAT_PW,
+        [LCK_PR] LCK_COMPAT_PR,
+        [LCK_CW] LCK_COMPAT_CW,
+        [LCK_CR] LCK_COMPAT_CR,
+        [LCK_NL] LCK_COMPAT_NL,
+        [LCK_GROUP] LCK_COMPAT_GROUP
+};

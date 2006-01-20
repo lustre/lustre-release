@@ -425,6 +425,13 @@ static int llog_test_5(struct obd_device *obd)
                 GOTO(out, rc);
         }
 
+        CWARN("5f: print plain log entries reversely.. expect 6\n");
+        rc = llog_cat_reverse_process(llh, plain_print_cb, "foobar");
+        if (rc) {
+                CERROR("5f: reversely process with plain_print_cb failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+
  out:
         CWARN("5: close re-opened catalog\n");
         if (llh)
@@ -478,6 +485,10 @@ static int llog_test_6(struct obd_device *obd, char *name)
         rc = llog_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
         if (rc)
                 CERROR("6: llog_process failed %d\n", rc);
+
+        rc = llog_reverse_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
+        if (rc)
+                CERROR("6: llog_reverse_process failed %d\n", rc);
 
 parse_out:
         rc = llog_close(llh);
@@ -645,7 +656,7 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 RETURN(rc);
 
-        llog_test_rand = ll_insecure_random_int();
+        llog_test_rand = ll_rand();
 
         rc = llog_run_tests(obd);
         if (rc)

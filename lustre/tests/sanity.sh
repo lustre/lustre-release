@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71 101"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 64b 71 101"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
@@ -19,8 +19,8 @@ case `uname -r` in
 *) error "unsupported kernel" ;;
 esac
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && \
-	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT`"
+[ "$ALWAYS_EXCEPT$EXCEPT$SANITY_EXCEPT" ] && \
+	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITY_EXCEPT`"
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
@@ -47,6 +47,8 @@ IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
 MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
+ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
+UMOUNT=${UMOUNT:-"umount -d"}
 
 if [ $UID -ne 0 ]; then
     echo "Warning: running as non-root uid $UID"
@@ -112,6 +114,8 @@ run_one() {
 	BEFORE=`date +%s`
 	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
+	export tfile=f${testnum}
+	export tdir=d${base}
 	test_$1 || error "exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
@@ -123,7 +127,7 @@ build_test_filter() {
         for O in $ONLY; do
             eval ONLY_${O}=true
         done
-        for E in $EXCEPT $ALWAYS_EXCEPT; do
+        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_EXCEPT; do
             eval EXCEPT_${E}=true
         done
 }
@@ -171,6 +175,7 @@ run_test() {
 error() { 
 	sysctl -w lustre.fail_loc=0
 	log "FAIL: $TESTNAME $@"
+	$LCTL dk $TMP/lustre-log-$TESTNAME.log
 	if [ "$SANITYLOG" ]; then
 		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
 	else
@@ -699,7 +704,11 @@ run_test 24l "Renaming a file to itself ========================"
 
 test_24m() {
 	f="$DIR/f24m"
-	multiop $f OcLN ${f}2 ${f}2 || error
+	multiop $f OcLN ${f}2 ${f}2 || error "link ${f}2 ${f}2 failed"
+	# on ext3 this does not remove either the source or target files
+	# though the "expected" operation would be to remove the source
+	$CHECKSTAT -t file ${f} || error "${f} missing"
+	$CHECKSTAT -t file ${f}2 || error "${f}2 missing"
 }
 run_test 24m "Renaming a file to a hard link to itself ========="
 
@@ -868,7 +877,7 @@ test_27d() {
 	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
-	#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
+	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
 run_test 27d "create file with default settings ================"
 
@@ -1009,6 +1018,7 @@ test_27o() {
 	reset_enospc
 	rm -f $DIR/d27/f27o
 	exhaust_all_precreations 0x215
+	sleep 5
 
 	touch $DIR/d27/f27o && error
 
@@ -1192,7 +1202,7 @@ test_32a() {
 	mkdir -p $DIR/d32a/ext2-mountpoint 
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32a/ext2-mountpoint || error
 	$CHECKSTAT -t dir $DIR/d32a/ext2-mountpoint/.. || error  
-	umount $DIR/d32a/ext2-mountpoint || error
+	$UMOUNT $DIR/d32a/ext2-mountpoint || error
 }
 run_test 32a "stat d32a/ext2-mountpoint/.. ====================="
 
@@ -1201,7 +1211,7 @@ test_32b() {
 	mkdir -p $DIR/d32b/ext2-mountpoint 
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32b/ext2-mountpoint || error
 	ls -al $DIR/d32b/ext2-mountpoint/.. || error
-	umount $DIR/d32b/ext2-mountpoint || error
+	$UMOUNT $DIR/d32b/ext2-mountpoint || error
 }
 run_test 32b "open d32b/ext2-mountpoint/.. ====================="
  
@@ -1211,7 +1221,7 @@ test_32c() {
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32c/ext2-mountpoint || error
 	mkdir -p $DIR/d32c/d2/test_dir    
 	$CHECKSTAT -t dir $DIR/d32c/ext2-mountpoint/../d2/test_dir || error
-	umount $DIR/d32c/ext2-mountpoint || error
+	$UMOUNT $DIR/d32c/ext2-mountpoint || error
 }
 run_test 32c "stat d32c/ext2-mountpoint/../d2/test_dir ========="
 
@@ -1221,7 +1231,7 @@ test_32d() {
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32d/ext2-mountpoint || error
 	mkdir -p $DIR/d32d/d2/test_dir    
 	ls -al $DIR/d32d/ext2-mountpoint/../d2/test_dir || error
-	umount $DIR/d32d/ext2-mountpoint || error
+	$UMOUNT $DIR/d32d/ext2-mountpoint || error
 }
 run_test 32d "open d32d/ext2-mountpoint/../d2/test_dir ========="
 
@@ -1281,7 +1291,7 @@ test_32i() {
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32i/ext2-mountpoint || error
 	touch $DIR/d32i/test_file
 	$CHECKSTAT -t file $DIR/d32i/ext2-mountpoint/../test_file || error  
-	umount $DIR/d32i/ext2-mountpoint || error
+	$UMOUNT $DIR/d32i/ext2-mountpoint || error
 }
 run_test 32i "stat d32i/ext2-mountpoint/../test_file ==========="
 
@@ -1291,7 +1301,7 @@ test_32j() {
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32j/ext2-mountpoint || error
 	touch $DIR/d32j/test_file
 	cat $DIR/d32j/ext2-mountpoint/../test_file || error
-	umount $DIR/d32j/ext2-mountpoint || error
+	$UMOUNT $DIR/d32j/ext2-mountpoint || error
 }
 run_test 32j "open d32j/ext2-mountpoint/../test_file ==========="
 
@@ -1302,7 +1312,7 @@ test_32k() {
 	mkdir -p $DIR/d32k/d2
 	touch $DIR/d32k/d2/test_file || error
 	$CHECKSTAT -t file $DIR/d32k/ext2-mountpoint/../d2/test_file || error
-	umount $DIR/d32k/ext2-mountpoint || error
+	$UMOUNT $DIR/d32k/ext2-mountpoint || error
 }
 run_test 32k "stat d32k/ext2-mountpoint/../d2/test_file ========"
 
@@ -1313,7 +1323,7 @@ test_32l() {
 	mkdir -p $DIR/d32l/d2
 	touch $DIR/d32l/d2/test_file
 	cat  $DIR/d32l/ext2-mountpoint/../d2/test_file || error
-	umount $DIR/d32l/ext2-mountpoint || error
+	$UMOUNT $DIR/d32l/ext2-mountpoint || error
 }
 run_test 32l "open d32l/ext2-mountpoint/../d2/test_file ========"
 
@@ -1383,7 +1393,7 @@ test_32q() {
         touch $DIR/d32q/under_the_mount
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32q
 	ls $DIR/d32q/under_the_mount && error || true
-	umount $DIR/d32q || error
+	$UMOUNT $DIR/d32q || error
 }
 run_test 32q "stat follows mountpoints in Lustre (should return error)"
 
@@ -1393,7 +1403,7 @@ test_32r() {
         touch $DIR/d32r/under_the_mount
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32r
 	ls $DIR/d32r | grep -q under_the_mount && error || true
-	umount $DIR/d32r || error
+	$UMOUNT $DIR/d32r || error
 }
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
@@ -1412,8 +1422,9 @@ test_33a() {
         rm -fr $DIR/d33
         mkdir -p $DIR/d33
         chown $RUNAS_ID $DIR/d33
-        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 || error
-        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 && error || true
+        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33|| error "create"
+        $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 && \
+		error "open RDWR" || true
 }
 run_test 33a "test open file(mode=0444) with O_RDWR (should return error)"
 
@@ -1527,7 +1538,7 @@ test_37() {
 	echo f > $DIR/dextra/fbugfile
 	mount -t ext2 -o loop $EXT2_DEV $DIR/dextra
 	ls $DIR/dextra | grep "\<fbugfile\>" && error
-	umount $DIR/dextra || error
+	$UMOUNT $DIR/dextra || error
 	rm -f $DIR/dextra/fbugfile || error
 }
 run_test 37 "ls a mounted file system to check old content ====="
@@ -1545,10 +1556,15 @@ test_39() {
 #	ls -lc  $DIR/test_39_file $DIR/test_39_file2
 	sleep 2
 	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/test_39_file2
-#	ls -l  $DIR/test_39_file $DIR/test_39_file2
-#	ls -lu  $DIR/test_39_file $DIR/test_39_file2
-#	ls -lc  $DIR/test_39_file $DIR/test_39_file2
-	[ $DIR/test_39_file2 -nt $DIR/test_39_file ] || error
+	if [ ! $DIR/test_39_file2 -nt $DIR/test_39_file ]; then
+		echo "mtime"
+		ls -l  $DIR/test_39_file $DIR/test_39_file2
+		echo "atime"
+		ls -lu  $DIR/test_39_file $DIR/test_39_file2
+		echo "ctime"
+		ls -lc  $DIR/test_39_file $DIR/test_39_file2
+		error "O_TRUNC didn't change timestamps"
+	fi
 }
 run_test 39 "mtime changed on create ==========================="
 
@@ -1574,6 +1590,7 @@ count_ost_writes() {
 WRITEBACK_SAVE=500
 
 start_writeback() {
+	trap 0
 	# in 2.6, restore /proc/sys/vm/dirty_writeback_centisecs
 	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
 		echo $WRITEBACK_SAVE > /proc/sys/vm/dirty_writeback_centisecs
@@ -1696,10 +1713,10 @@ test_42d() {
 run_test 42d "test complete truncate of file with cached dirty data"
 
 test_43() {
-	mkdir $DIR/d43
-	cp -p /bin/ls $DIR/d43/f
-	exec 100>> $DIR/d43/f
-	$DIR/d43/f && error || true
+	mkdir $DIR/$tdir
+	cp -p /bin/ls $DIR/$tdir/$tfile
+	exec 100>> $DIR/$tdir/$tfile
+	$DIR/$tdir/$tfile && error || true
 	exec 100<&-
 }
 run_test 43 "execution of file opened for write should return -ETXTBSY"
@@ -2002,17 +2019,17 @@ test_52a() {
 	[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 	mkdir -p $DIR/d52a
 	touch $DIR/d52a/foo
-	chattr =a $DIR/d52a/foo || error
-	echo bar >> $DIR/d52a/foo || error
-	cp /etc/hosts $DIR/d52a/foo && error
-	rm -f $DIR/d52a/foo 2>/dev/null && error
-	link $DIR/d52a/foo $DIR/d52a/foo_link 2>/dev/null && error
-	echo foo >> $DIR/d52a/foo || error
-	mrename $DIR/d52a/foo $DIR/d52a/foo_ren && error
-	lsattr $DIR/d52a/foo | egrep -q "^-+a-+ $DIR/d52a/foo" || error
-	chattr -a $DIR/d52a/foo || error
+	chattr =a $DIR/d52a/foo || error "chattr =a failed"
+	echo bar >> $DIR/d52a/foo || error "append bar failed"
+	cp /etc/hosts $DIR/d52a/foo && error "cp worked"
+	rm -f $DIR/d52a/foo 2>/dev/null && error "rm worked"
+	link $DIR/d52a/foo $DIR/d52a/foo_link 2>/dev/null && error "link worked"
+	echo foo >> $DIR/d52a/foo || error "append foo failed"
+	mrename $DIR/d52a/foo $DIR/d52a/foo_ren && error "rename worked"
+	lsattr $DIR/d52a/foo | egrep -q "^-+a-+ $DIR/d52a/foo" || error "lsattr"
+	chattr -a $DIR/d52a/foo || error "chattr -a failed"
 
-	rm -fr $DIR/d52a || error
+	rm -fr $DIR/d52a || error "cleanup rm failed"
 }
 run_test 52a "append-only flag test (should return errors) ====="
 
@@ -2054,7 +2071,7 @@ test_54a() {
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
 }
-run_test 54a "unix damain socket test =========================="
+run_test 54a "unix domain socket test =========================="
 
 test_54b() {
 	f="$DIR/f54b"
@@ -2081,11 +2098,11 @@ test_54c() {
 	tfile="$DIR/f54c"
 	tdir="$DIR/d54c"
 	loopdev="$DIR/loop54c"
-	
+
 	find_loop_dev 
 	[ -z "$LOOPNUM" ] && echo "couldn't find empty loop device" && return
 	mknod $loopdev b 7 $LOOPNUM
-	echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."	
+	echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."
 	dd if=/dev/zero of=$tfile bs=`page_size` seek=1024 count=1 > /dev/null
 	losetup $loopdev $tfile || error "can't set up $loopdev for $tfile"
 	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
@@ -2094,7 +2111,7 @@ test_54c() {
 	dd if=/dev/zero of=$tdir/tmp bs=`page_size` count=30 || error "dd write"
 	df $tdir
 	dd if=$tdir/tmp of=/dev/zero bs=`page_size` count=30 || error "dd read"
-	umount $tdir
+	$UMOUNT $tdir
 	losetup -d $loopdev
 	rm $loopdev
 }
@@ -2138,7 +2155,7 @@ test_55() {
         $IOPENTEST2 $DIR/d55 || error "running $IOPENTEST2"
         echo "check for $EXT2_DEV. Please wait..."
         rm -rf $DIR/d55/*
-        umount $DIR/d55 || error "unmounting"
+        $UMOUNT $DIR/d55 || error "unmounting"
 }
 run_test 55 "check iopen_connect_dentry() ======================"
 
@@ -2310,7 +2327,7 @@ test_63() {
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
 		echo $MAX_DIRTY_MB > $i
 	done
-	true
+	rm -f $DIR/f63 || true
 }
 run_test 63 "Verify oig_wait interruption does not crash ======="
 
@@ -2407,7 +2424,7 @@ test_65g() {
         $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
         $LSTRIPE -d $DIR/d65 || error "setstripe"
         $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || \
-		error "delete default stripe failed"	
+		error "delete default stripe failed"
 }
 run_test 65g "directory setstripe -d ==========================="
 
@@ -2465,6 +2482,7 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 run_test 67 "supplementary group failure (should return error) ="
 
 cleanup_68() {
+	trap 0
 	if [ "$LOOPDEV" ]; then
 		swapoff $LOOPDEV || error "swapoff failed"
 		losetup -d $LOOPDEV || error "losetup -d failed"
@@ -2554,7 +2572,7 @@ test_71() {
 	mkdir $DIR$LIB71 || error "can't create $DIR$LIB71"
 	cp $LIB71/libc* $DIR$LIB71 || error "can't copy $LIB71/libc*"
 	cp $LIB71/ld-* $DIR$LIB71 || error "can't create $LIB71/ld-*"
-	
+
 	echo "chroot $DIR /dbench -c client.txt 2"
 	chroot $DIR /dbench -c client.txt 2
 	RC=$?
@@ -2597,6 +2615,90 @@ test_74() { # bug 6149, 6184
 	true
 }
 run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
+
+JOIN=${JOIN:-"lfs join"}
+test_75() {
+	F=$DIR/$tfile
+	F128k=${F}_128k
+	FHEAD=${F}_head
+	FTAIL=${F}_tail
+	rm -f $F*
+
+	dd if=/dev/urandom of=${F}_128k bs=1024 count=128 || error "dd failed"
+	chmod 777 ${F128k}
+	cp -p ${F128k} ${FHEAD}
+	cp -p ${F128k} ${FTAIL}
+	cat ${F128k} ${F128k} > ${F}_sim_sim
+
+	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+	diff ${FHEAD} ${F}_sim_sim
+	diff -u ${FHEAD} ${F}_sim_sim || error "${FHEAD} ${F}_sim_sim differ"
+	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
+
+	cp -p ${F128k} ${FTAIL}
+	cat ${F}_sim_sim >> ${F}_join_sim
+	cat ${F128k} >> ${F}_join_sim
+	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+	diff -u ${FHEAD} ${F}_join_sim
+	diff -u ${FHEAD} ${F}_join_sim || \
+		error "${FHEAD} ${F}_join_sim are different"
+	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
+
+	cp -p ${F128k} ${FTAIL}
+	cat ${F128k} >> ${F}_sim_join
+	cat ${F}_join_sim >> ${F}_sim_join
+	$JOIN ${FTAIL} ${FHEAD} || error "join error"
+	diff -u ${FTAIL} ${F}_sim_join || \
+		error "${FTAIL} ${F}_sim_join are different"
+	$CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
+
+	cp -p ${F128k} ${FHEAD}
+	cp -p ${F128k} ${FHEAD}_tmp
+	cat ${F}_sim_sim >> ${F}_join_join
+	cat ${F}_sim_join >> ${F}_join_join
+	$JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
+	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+	diff -u ${FHEAD} ${F}_join_join ||error "${FHEAD} ${F}_join_join differ"
+	$CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
+	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
+
+	rm -rf ${FHEAD} || "delete join file error"
+	cp -p ${F128k} ${F}_join_10_compare
+	cp -p ${F128k} ${F}_join_10
+	for ((i = 0; i < 10; i++)); do
+		cat ${F128k} >> ${F}_join_10_compare
+		cp -p ${F128k} ${FTAIL}
+		$JOIN ${F}_join_10 ${FTAIL} || \
+			error "join ${F}_join_10 ${FTAIL} error"
+		$CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
+	done
+	diff -u ${F}_join_10 ${F}_join_10_compare || \
+		error "files ${F}_join_10 ${F}_join_10_compare are different"
+	$LFS getstripe ${F}_join_10
+	$OPENUNLINK ${F}_join_10 ${F}_join_10 || error "files unlink open"
+
+	rm -f $F*
+}
+run_test 75 "TEST join file"
+
+num_inodes() {
+	awk '/lustre_inode_cache|^inode_cache/ {print $2; exit}' /proc/slabinfo
+}
+
+test_76() { # bug 1443
+	BEFORE_INODES=`num_inodes`
+	echo "before inodes: $BEFORE_INODES"
+	for i in `seq 1000`; do
+		touch $DIR/$tfile
+		rm -f $DIR/$tfile
+	done
+	AFTER_INODES=`num_inodes`
+	echo "after inodes: $AFTER_INODES"
+	[ $AFTER_INODES -gt $((BEFORE_INODES + 10)) ] && \
+		error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
+	true
+}
+run_test 76 "destroy duplicate inodes in client inode cache"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
@@ -2663,7 +2765,7 @@ test_100() {
 	netstat -tna | while read PROT SND RCV LOCAL REMOTE STAT; do
 		[ "$PROT" != "tcp" ] && continue
 		RPORT=`echo $REMOTE | cut -d: -f2`
-		[ "$RPORT" != "988" ] && continue
+		[ "$RPORT" != "$ACCEPTOR_PORT" ] && continue
 		LPORT=`echo $LOCAL | cut -d: -f2`
 		[ $LPORT -ge 1024 ] && error "local port: $LPORT > 1024" || true
 	done
@@ -2714,6 +2816,7 @@ test_101() {
 		cat $LPROC/llite/*/read_ahead_stats
 		error "too many ($discard) discarded pages" 
 	fi
+	rm -f $DIR/f101 || true
 }
 run_test 101 "check read-ahead for random reads ==========="
 
@@ -2724,7 +2827,7 @@ test_102() {
         touch $testfile
 
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ -z "`mount | grep " $DIR .*\<user_xattr\>"`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	[ -z "grep \<xattr\> /proc/fs/lustre/mdc/MDC*MNT*/connect_flags" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
@@ -2761,6 +2864,45 @@ test_102() {
 	rm -f $testfile
 }
 run_test 102 "user xattr test ====================="
+
+run_acl_subtest()
+{
+    $SAVE_PWD/acl/run $SAVE_PWD/acl/$1.test
+    return $?
+}
+
+test_103 () {
+    SAVE_UMASK=`umask`
+    umask 0022
+    cd $DIR
+
+    [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
+    [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
+    [ -z "`grep acl /proc/fs/lustre/mdc/MDC*MNT*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
+
+    echo "performing cp ..."
+    run_acl_subtest cp || error
+    echo "performing getfacl-noacl..."
+    run_acl_subtest getfacl-noacl || error
+    echo "performing misc..."
+    run_acl_subtest misc || error
+#    XXX add back permission test when we support supplementary groups.
+#    echo "performing permissions..."
+#    run_acl_subtest permissions || error
+    echo "performing setfacl..."
+    run_acl_subtest setfacl || error
+
+    # inheritance test got from HP
+    echo "performing inheritance..."
+    cp $SAVE_PWD/acl/make-tree . || error
+    chmod +x make-tree || error
+    run_acl_subtest inheritance || error
+    rm -f make-tree
+
+    cd $SAVED_PWD
+    umask $SAVE_UMASK
+}
+run_test 103 "==============acl test ============="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

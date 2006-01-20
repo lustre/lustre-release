@@ -78,14 +78,15 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
         struct ldlm_res_id res_id =
                 { .name = {st->st_ino, (__u64)lli->lli_st_generation} };
+        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_PLAIN, NULL, LCK_PR, &lockh);
+                             &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
                 llu_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, &it, LCK_PR,
+                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, &it, LCK_CR,
                                  &data, &lockh, NULL, 0,
                                  ldlm_completion_ast, llu_mdc_blocking_ast,
                                  inode, LDLM_FL_CANCEL_ON_BLOCK);
@@ -116,7 +117,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         ptlrpc_req_finished(request);
         EXIT;
 
-        ldlm_lock_decref(&lockh, LCK_PR);
+        ldlm_lock_decref(&lockh, LCK_CR);
         return rc;
 }
 
@@ -193,8 +194,8 @@ static int filldir(char *buf, int buflen,
         return 0;
 }
 
-ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
-                              _SYSIO_OFF_T *basep)
+ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
+			       char *buf, size_t nbytes)
 {
         struct llu_inode_info *lli = llu_i2info(ino);
         struct intnl_stat *st = llu_i2stat(ino);

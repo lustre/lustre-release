@@ -257,19 +257,18 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         lock->l_flags |= *flags & LDLM_INHERIT_FLAGS;
         lock->l_lvb_swabber = lvb_swabber;
         if (policy != NULL)
-                memcpy(&lock->l_policy_data, policy, sizeof(*policy));
+                lock->l_policy_data = *policy;
         if (type == LDLM_EXTENT)
-                memcpy(&lock->l_req_extent, &policy->l_extent,
-                       sizeof(policy->l_extent));
+                lock->l_req_extent = policy->l_extent;
 
         err = ldlm_lock_enqueue(ns, &lock, policy, flags);
         if (err != ELDLM_OK)
                 GOTO(out, err);
 
         if (policy != NULL)
-                memcpy(policy, &lock->l_policy_data, sizeof(*policy));
+                *policy = lock->l_policy_data;
         if ((*flags) & LDLM_FL_LOCK_CHANGED)
-                memcpy(&res_id, &lock->l_resource->lr_name, sizeof(res_id));
+                res_id = lock->l_resource->lr_name;
 
         LDLM_DEBUG_NOLOCK("client-side local enqueue handler END (lock %p)",
                           lock);
@@ -324,7 +323,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
-        int rc, size[2] = {sizeof(*body), lvb_len}, req_passed_in = 1;
+        int rc, size[] = {sizeof(*body), lvb_len}, req_passed_in = 1;
         int is_replay = *flags & LDLM_FL_REPLAY;
         int cleanup_phase = 0;
         ENTRY;
@@ -353,11 +352,23 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 ldlm_lock_addref_internal(lock, mode);
                 ldlm_lock2handle(lock, lockh);
                 lock->l_lvb_swabber = lvb_swabber;
-                if (policy != NULL)
-                        memcpy(&lock->l_policy_data, policy, sizeof(*policy));
+                if (policy != NULL) {
+                        /* INODEBITS_INTEROP: If the server does not support
+                         * inodebits, we will request a plain lock in the
+                         * descriptor (ldlm_lock2desc() below) but use an
+                         * inodebits lock internally with both bits set.
+                         */
+                        if (type == LDLM_IBITS && !(exp->exp_connect_flags &
+                                                    OBD_CONNECT_IBITS))
+                                lock->l_policy_data.l_inodebits.bits =
+                                        MDS_INODELOCK_LOOKUP |
+                                        MDS_INODELOCK_UPDATE;
+                        else
+                                lock->l_policy_data = *policy;
+                }
+
                 if (type == LDLM_EXTENT)
-                        memcpy(&lock->l_req_extent, &policy->l_extent,
-                               sizeof(policy->l_extent));
+                        lock->l_req_extent = policy->l_extent;
                 LDLM_DEBUG(lock, "client-side enqueue START");
         }
 
@@ -365,33 +376,36 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         cleanup_phase = 2;
 
         if (req == NULL) {
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
-                                      size, NULL);
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
+                                      LDLM_ENQUEUE, 1, size, NULL);
                 if (req == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
                 req_passed_in = 0;
-        } else if (req->rq_reqmsg->buflens[0] != sizeof(*body))
-                LBUG();
-
-        /* Dump lock data into the request buffer */
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
-        ldlm_lock2desc(lock, &body->lock_desc);
-        body->lock_flags = *flags;
-
-        memcpy(&body->lock_handle1, lockh, sizeof(*lockh));
-
-        /* Continue as normal. */
-        if (!req_passed_in) {
-                int buffers = 1;
-                if (lvb_len > 0)
-                        buffers = 2;
-                size[0] = sizeof(*reply);
-                req->rq_replen = lustre_msg_size(buffers, size);
+        } else {
+                LASSERTF(req->rq_reqmsg->buflens[MDS_REQ_INTENT_LOCKREQ_OFF] ==
+                         sizeof(*body), "buflen[%d] = %d, not %d\n",
+                         MDS_REQ_INTENT_LOCKREQ_OFF,
+                         req->rq_reqmsg->buflens[MDS_REQ_INTENT_LOCKREQ_OFF],
+                         sizeof(*body));
         }
+
         lock->l_conn_export = exp;
         lock->l_export = NULL;
         lock->l_blocking_ast = blocking;
 
+        /* Dump lock data into the request buffer */
+        body = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_INTENT_LOCKREQ_OFF,
+                              sizeof(*body));
+        ldlm_lock2desc(lock, &body->lock_desc);
+        body->lock_flags = *flags;
+
+        body->lock_handle1 = *lockh;
+
+        /* Continue as normal. */
+        if (!req_passed_in) {
+                size[0] = sizeof(*reply);
+                req->rq_replen = lustre_msg_size(1 + (lvb_len > 0), size);
+        }
         LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
 
@@ -438,8 +452,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         /* lock enqueued on the server */
         cleanup_phase = 1;
 
-        memcpy(&lock->l_remote_handle, &reply->lock_handle,
-               sizeof(lock->l_remote_handle));
+        lock->l_remote_handle = reply->lock_handle;
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
 
@@ -474,9 +487,10 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         LDLM_DEBUG(lock, "client-side enqueue, new resource");
                 }
                 if (policy != NULL)
-                        memcpy(&lock->l_policy_data,
-                               &reply->lock_desc.l_policy_data,
-                               sizeof(reply->lock_desc.l_policy_data));
+                        if (!(type == LDLM_IBITS && !(exp->exp_connect_flags &
+                                                    OBD_CONNECT_IBITS)))
+                                lock->l_policy_data =
+                                                 reply->lock_desc.l_policy_data;
                 if (type != LDLM_PLAIN)
                         LDLM_DEBUG(lock,"client-side enqueue, new policy data");
         }
@@ -586,13 +600,12 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
         LDLM_DEBUG(lock, "client-side convert");
 
         req = ptlrpc_prep_req(class_exp2cliimp(lock->l_conn_export),
-                              LDLM_CONVERT, 1, &size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_CONVERT, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
-        memcpy(&body->lock_handle1, &lock->l_remote_handle,
-               sizeof(body->lock_handle1));
+        body->lock_handle1 = lock->l_remote_handle;
 
         body->lock_desc.l_req_mode = new_mode;
         body->lock_flags = *flags;
@@ -675,7 +688,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                         goto local_cancel;
                 }
 
-                req = ptlrpc_prep_req(imp, LDLM_CANCEL, 1, &size, NULL);
+                req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_CANCEL,
+                                      1, &size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
                 req->rq_no_resend = 1;
@@ -685,19 +699,25 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
                 body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
-                memcpy(&body->lock_handle1, &lock->l_remote_handle,
-                       sizeof(body->lock_handle1));
+                body->lock_handle1 = lock->l_remote_handle;
 
                 req->rq_replen = lustre_msg_size(0, NULL);
 
                 rc = ptlrpc_queue_wait(req);
 
                 if (rc == ESTALE) {
-                        CERROR("client/server (nid %s) out of sync"
-                               " -- not fatal, flags %d\n",
-                               libcfs_nid2str(req->rq_import->
-                                              imp_connection->c_peer.nid),
-                               lock->l_flags);
+                        /* For PLAIN (inodebits) locks on liblustre clients
+                           this is a valid race between us cancelling a lock
+                           from lru and sending notification and server
+                           cancelling our lock at the same time */
+#ifndef __KERNEL__
+                        if (lock->l_resource->lr_type != LDLM_PLAIN /* IBITS */)
+#endif
+                                CERROR("client/server (nid %s) out of sync"
+                                       " -- not fatal, flags %d\n",
+                                       libcfs_nid2str(req->rq_import->
+                                                    imp_connection->c_peer.nid),
+                                       lock->l_flags);
                 } else if (rc == -ETIMEDOUT) {
                         ptlrpc_req_finished(req);
                         GOTO(restart, rc);
@@ -751,6 +771,13 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 
         list_for_each_entry_safe(lock, next, &ns->ns_unused_list, l_lru) {
                 LASSERT(!lock->l_readers && !lock->l_writers);
+
+                /* If we have chosen to canecl this lock voluntarily, we better
+                   send cancel notification to server, so that it frees
+                   appropriate state. This might lead to a race where while
+                   we are doing cancel here, server is also silently
+                   cancelling this lock. */
+                lock->l_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
 
                 /* Setting the CBPENDING flag is a little misleading, but
                  * prevents an important race; namely, once CBPENDING is set,
@@ -1096,8 +1123,7 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
                 GOTO (out, rc = -EPROTO);
         }
 
-        memcpy(&lock->l_remote_handle, &reply->lock_handle,
-               sizeof(lock->l_remote_handle));
+        lock->l_remote_handle = reply->lock_handle;
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);
  out:
@@ -1117,6 +1143,14 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         int size[2];
         int flags;
 
+        /* If this is reply-less callback lock, we cannot replay it, since
+         * server might have long dropped it, but notification of that event was
+         * lost by network. (and server granted conflicting lock already) */
+        if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) {
+                LDLM_DEBUG(lock, "Not replaying reply-less lock:");
+                ldlm_lock_cancel(lock);
+                RETURN(0);
+        }
         /*
          * If granted mode matches the requested mode, this lock is granted.
          *
@@ -1141,7 +1175,8 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
                 flags = LDLM_FL_REPLAY;
 
         size[0] = sizeof(*body);
-        req = ptlrpc_prep_req(imp, LDLM_ENQUEUE, 1, size, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
+                              1, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 

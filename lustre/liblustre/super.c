@@ -290,6 +290,10 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 dst->o_generation = lli->lli_st_generation;
                 newvalid |= OBD_MD_FLGENER;
         }
+        if (valid & OBD_MD_FLFID) {
+                dst->o_fid = st->st_ino;
+                newvalid |= OBD_MD_FLFID;
+        }
 
         dst->o_valid |= newvalid;
 }
@@ -344,14 +348,14 @@ static struct inode* llu_new_inode(struct filesys *fs,
         struct inode *inode;
         struct llu_inode_info *lli;
         struct intnl_stat st = {
-                st_dev:         0,
+                .st_dev  = 0,
 #ifndef AUTOMOUNT_FILE_NAME
-                st_mode:        fid->f_type & S_IFMT,
+                .st_mode = fid->f_type & S_IFMT,
 #else
-                st_mode:        fid->f_type /* all of the bits! */
+                .st_mode = fid->f_type /* all of the bits! */
 #endif
-                st_uid:         geteuid(),
-                st_gid:         getegid(),
+                .st_uid  = geteuid(),
+                .st_gid  = getegid(),
         };
 
         OBD_ALLOC(lli, sizeof(*lli));
@@ -368,8 +372,7 @@ static struct inode* llu_new_inode(struct filesys *fs,
 
         lli->lli_sysio_fid.fid_data = &lli->lli_fid;
         lli->lli_sysio_fid.fid_len = sizeof(lli->lli_fid);
-
-        memcpy(&lli->lli_fid, fid, sizeof(*fid));
+        lli->lli_fid = *fid;
 
         /* file identifier is needed by functions like _sysio_i_find() */
         inode = _sysio_i_new(fs, &lli->lli_sysio_fid,
@@ -381,13 +384,14 @@ static struct inode* llu_new_inode(struct filesys *fs,
         return inode;
 }
 
-static int llu_have_md_lock(struct inode *inode)
+static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
 {
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct llu_inode_info *lli = llu_i2info(inode);
         struct lustre_handle lockh;
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obddev;
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart } };
         int flags;
         ENTRY;
 
@@ -401,14 +405,14 @@ static int llu_have_md_lock(struct inode *inode)
 
         /* FIXME use LDLM_FL_TEST_LOCK instead */
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, LCK_PR, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
+                            &policy, LCK_PR, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PR);
                 RETURN(1);
         }
 
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, LCK_PW, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
+                            &policy, LCK_PW, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PW);
                 RETURN(1);
         }
@@ -425,7 +429,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 RETURN(0);
         }
 
-        if (!llu_have_md_lock(inode)) {
+        if (!llu_have_md_lock(inode, MDS_INODELOCK_UPDATE)) {
                 struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
@@ -1761,7 +1765,8 @@ llu_fsswop_mount(const char *source,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
-        ocd.ocd_connect_flags = OBD_CONNECT_VERSION;
+        ocd.ocd_connect_flags = OBD_CONNECT_IBITS|OBD_CONNECT_VERSION;
+        ocd.ocd_ibits_known = MDS_INODELOCK_FULL;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
         /* setup mdc */
@@ -1882,7 +1887,10 @@ static struct inode_ops llu_inode_ops = {
         inop_lookup:    llu_iop_lookup,
         inop_getattr:   llu_iop_getattr,
         inop_setattr:   llu_iop_setattr,
-        inop_getdirentries:     llu_iop_getdirentries,
+        /*
+        FIXME doesn't work on 2.6.10fc3? 
+        inop_filldirentries:     llu_iop_filldirentries,
+        */
         inop_mkdir:     llu_iop_mkdir_raw,
         inop_rmdir:     llu_iop_rmdir_raw,
         inop_symlink:   llu_iop_symlink_raw,

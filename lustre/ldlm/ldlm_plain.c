@@ -104,6 +104,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
  restart:
         LASSERT(res->lr_tmp == NULL);
         res->lr_tmp = &rpc_list;
+
         rc = ldlm_plain_compat_queue(&res->lr_granted, lock, 1);
         rc += ldlm_plain_compat_queue(&res->lr_waiting, lock, 1);
         res->lr_tmp = NULL;

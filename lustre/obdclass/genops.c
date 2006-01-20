@@ -36,7 +36,6 @@
 #include <linux/obd_ost.h>
 #include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
-#include <linux/lustre_quota.h>
 
 extern struct list_head obd_types;
 static spinlock_t obd_types_lock = SPIN_LOCK_UNLOCKED;
@@ -44,16 +43,6 @@ static spinlock_t obd_types_lock = SPIN_LOCK_UNLOCKED;
 kmem_cache_t *obdo_cachep = NULL;
 EXPORT_SYMBOL(obdo_cachep);
 kmem_cache_t *import_cachep = NULL;
-
-#ifdef HAVE_QUOTA_SUPPORT
-kmem_cache_t *qunit_cachep = NULL;
-struct list_head qunit_hash[NR_DQHASH];
-spinlock_t qunit_hash_lock = SPIN_LOCK_UNLOCKED;
-EXPORT_SYMBOL(qunit_cachep);
-EXPORT_SYMBOL(qunit_hash);
-EXPORT_SYMBOL(qunit_hash_lock);
-#endif
-
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
@@ -137,12 +126,12 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
 #ifdef LPROCFS
         type->typ_procroot = lprocfs_register(type->typ_name, proc_lustre_root,
                                               vars, type);
-#endif
         if (IS_ERR(type->typ_procroot)) {
                 rc = PTR_ERR(type->typ_procroot);
                 type->typ_procroot = NULL;
                 GOTO (failed, rc);
         }
+#endif
 
         spin_lock(&obd_types_lock);
         list_add(&type->typ_chain, &obd_types);
@@ -396,25 +385,6 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
         return NULL;
 }
 
-static void obd_cleanup_qunit_cache(void)
-{
-#ifdef HAVE_QUOTA_SUPPORT
-        int i;
-        ENTRY;
-
-        spin_lock(&qunit_hash_lock);
-        for (i = 0; i < NR_DQHASH; i++)
-                LASSERT(list_empty(qunit_hash + i));
-        spin_unlock(&qunit_hash_lock);
-
-        if (qunit_cachep) {
-                LASSERTF(kmem_cache_destroy(qunit_cachep) == 0,
-                         "Cannot destroy ll_qunit_cache\n");
-                qunit_cachep = NULL;
-        }
-        EXIT;
-#endif
-}
 
 void obd_cleanup_caches(void)
 {
@@ -429,35 +399,11 @@ void obd_cleanup_caches(void)
                          "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
-        obd_cleanup_qunit_cache();
         EXIT;
-}
-
-static int obd_init_qunit_cache(void)
-{
-
-#ifdef HAVE_QUOTA_SUPPORT
-        int i;
-        ENTRY;
-
-        LASSERT(qunit_cachep == NULL);
-        qunit_cachep = kmem_cache_create("ll_qunit_cache",
-                                         sizeof(struct lustre_qunit),
-                                         0, 0, NULL, NULL);
-        if (!qunit_cachep)
-                RETURN(-ENOMEM);
-
-        spin_lock(&qunit_hash_lock);
-        for (i = 0; i < NR_DQHASH; i++)
-                INIT_LIST_HEAD(qunit_hash + i);
-        spin_unlock(&qunit_hash_lock);
-#endif
-        RETURN(0);
 }
 
 int obd_init_caches(void)
 {
-        int rc = 0;
         ENTRY;
 
         LASSERT(obdo_cachep == NULL);
@@ -472,10 +418,6 @@ int obd_init_caches(void)
                                           0, 0, NULL, NULL);
         if (!import_cachep)
                 GOTO(out, -ENOMEM);
-
-        rc = obd_init_qunit_cache();
-        if (rc)
-                GOTO(out, rc);
 
         RETURN(0);
  out:
@@ -1102,7 +1044,15 @@ static int ping_evictor_main(void *arg)
         ENTRY;
 
         lock_kernel();
-        libcfs_daemonize("ping_evictor");
+
+        /* ptlrpc_daemonize() */
+        exit_mm(current);
+        lustre_daemonize_helper();
+        set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
+        exit_files(current);
+        reparent_to_init();
+        THREAD_NAME(current->comm, sizeof(current->comm), "ping_evictor");
+
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
@@ -1143,12 +1093,13 @@ static int ping_evictor_main(void *arg)
                                 class_export_get(exp);
                                 spin_unlock(&obd->obd_dev_lock);
                                 LCONSOLE_WARN("%s: haven't heard from %s in %ld"
-                                              " seconds.  I think it's dead, "
-                                              "and I am evicting it.\n",
-                                              obd->obd_name,
+                                              " seconds. Last request was at %ld. "
+                                              "I think it's dead, and I am evicting "
+                                              "it.\n", obd->obd_name,
                                               obd_export_nid2str(exp),
                                               (long)(CURRENT_SECONDS -
-                                                   exp->exp_last_request_time));
+                                                     exp->exp_last_request_time),
+                                              exp->exp_last_request_time);
 
 
                                 class_fail_export(exp);
@@ -1258,10 +1209,10 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
                 /* Check if the oldest entry is expired. */
                 if (CURRENT_SECONDS > (oldest_time +
                                        (3 * obd_timeout / 2) + extra_delay)) {
-                        /* We need a second timer, in case the net was
-                         * down and it just came back. Since the pinger
-                         * may skip every other PING_INTERVAL (see note in
-                         * ptlrpc_pinger_main), we better wait for 3. */
+                        /* We need a second timer, in case the net was down and
+                         * it just came back. Since the pinger may skip every
+                         * other PING_INTERVAL (see note in ptlrpc_pinger_main),
+                         * we better wait for 3. */
                         exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
                                 3 * PING_INTERVAL;
                         CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
@@ -1306,8 +1257,8 @@ search_again:
 
         for (i = 0; i < num_to_evict; i++) {
                 exports_evicted++;
-                CERROR("evicting NID '%s' (%s) #%d at adminstrative request\n",
-                       nid, doomed_exp[i]->exp_client_uuid.uuid,
+                CWARN("%s: evict NID '%s' (%s) #%d at adminstrative request\n",
+                       obd->obd_name, nid, doomed_exp[i]->exp_client_uuid.uuid,
                        exports_evicted);
                 class_fail_export(doomed_exp[i]);
                 class_export_put(doomed_exp[i]);
@@ -1318,7 +1269,8 @@ search_again:
         }
 
         if (!exports_evicted)
-                CERROR("can't disconnect NID '%s': no exports found\n", nid);
+                CERROR("%s: can't disconnect NID '%s': no exports found\n",
+                       obd->obd_name, nid);
         return exports_evicted;
 }
 EXPORT_SYMBOL(obd_export_evict_by_nid);
@@ -1345,10 +1297,11 @@ int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
         spin_unlock(&obd->obd_dev_lock);
 
         if (doomed_exp == NULL) {
-                CERROR("can't disconnect %s: no exports found\n", uuid);
+                CERROR("%s: can't disconnect %s: no exports found\n",
+                       obd->obd_name, uuid);
         } else {
-                CERROR("evicting %s at adminstrative request\n",
-                       doomed_exp->exp_client_uuid.uuid);
+                CWARN("%s: evicting %s at adminstrative request\n",
+                       obd->obd_name, doomed_exp->exp_client_uuid.uuid);
                 class_fail_export(doomed_exp);
                 class_export_put(doomed_exp);
                 exports_evicted++;
