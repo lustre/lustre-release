@@ -1556,6 +1556,7 @@ kibnal_register_all_memory(void)
          * chunk starting at 0 */
         struct sysinfo     si;
         __u64              total;
+        __u64              total2;
         __u64              roundup = (128<<20);     /* round up in big chunks */
         IB_MR_PHYS_BUFFER  phys;
         IB_ACCESS_CONTROL  access;
@@ -1575,13 +1576,20 @@ kibnal_register_all_memory(void)
         }
 
         si_meminfo(&si);
+
+        CDEBUG(D_NET, "si_meminfo: %lu/%u, num_physpages %lu/%lu\n",
+               si.totalram, si.mem_unit, num_physpages, PAGE_SIZE);
+
         total = ((__u64)si.totalram) * si.mem_unit;
+        total2 = num_physpages * PAGE_SIZE;
+        if (total < total2)
+                total = total2;
 
         if (total == 0) {
                 CERROR("Can't determine memory size\n");
                 return -ENOMEM;
         }
-        
+                 
         roundup = (128<<20);
         total = (total + (roundup - 1)) & ~(roundup - 1);
 
@@ -1600,8 +1608,8 @@ kibnal_register_all_memory(void)
                 return -EIO;
         }
 
-        CDEBUG(D_NET, "registered phys mem from "LPX64" for "LPU64"\n", 
-               phys.PhysAddr, phys.Length);
+        CDEBUG(D_WARNING, "registered phys mem from 0("LPX64") for "LPU64"("LPU64") -> "LPX64"\n",
+               phys.PhysAddr, total, phys.Length, kibnal_data.kib_whole_mem.md_addr);
 
         return 0;
 }
