@@ -35,6 +35,12 @@ case "$lustretag" in
         portalstag="b_hd_newconfig"
         libsysiotag="b_release_1_4_6"
 	;;
+    
+    b1_4_atime_update)
+        snmptag="HEAD"
+        portalstag="b_hd_newconfig"
+        libsysiotag="b_release_1_4_6"
+	;;
 
     b1_4_lov_lvb_cleanup)
         snmptag="HEAD"
