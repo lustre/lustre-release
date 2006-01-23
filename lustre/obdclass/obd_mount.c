@@ -973,6 +973,12 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 }
         }
 
+        if (class_name2obd(lsi->lsi_ldd->ldd_svname)) {
+                LCONSOLE_ERROR("The target named %s is already running\n",
+                               lsi->lsi_ldd->ldd_svname);
+                GOTO(out, rc = -EBUSY);
+        }
+
         /* Let the target look up the mount using the target's name 
            (we can't pass the sb or mnt through class_process_config.) */
         rc = server_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
@@ -980,7 +986,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 GOTO(out, rc);
 
         /* Start targets using the llog named for the target */
-        cfg.cfg_instance = NULL;
+        memset(&cfg, 0, sizeof(cfg));
         rc = lustre_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
         if (rc) {
                 CERROR("failed to start server %s: %d\n",

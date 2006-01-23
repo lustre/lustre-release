@@ -49,50 +49,62 @@
 /******************** DB functions *********************/
 
 /* from the (client) config log, figure out:
-        1. which ost's are active (by index)
+        1. which ost's/mdt's are configured (by index)
         2. what the last config step is
 */
+/* FIXME is it better to have a separate db file, instead of parsing the info
+   out of the client log? */
 static int db_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
                       void *data)
 {
         struct fs_db *db = (struct fs_db *)data;
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
-        int rc = 0;
+        struct lustre_cfg *lcfg;
+        int index, rc = 0;
         ENTRY;
 
-        if (rec->lrh_type == OBD_CFG_REC) {
-                struct lustre_cfg *lcfg;
-                int index;
-
-                rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
-                if (rc)
-                        GOTO(out, rc);
-
-                lcfg = (struct lustre_cfg *)cfg_buf;
-
-                if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD ||
-                    lcfg->lcfg_command == LCFG_LOV_DEL_OBD) {
-                        index = simple_strtol(lustre_cfg_string(lcfg, 2),
-                                              NULL, 0);
-                        set_bit(index, db->fd_index_map);
-                }
-                /* Never clear_bit: once assigned, we can never reassign the
-                   same index again */
-                
-                if (lcfg->lcfg_command == LCFG_MARKER) {
-                        struct cfg_marker *marker;
-                        marker = lustre_cfg_buf(lcfg, 1);
-                        db->fd_gen = max(db->fd_gen, marker->cm_step);
-                        CDEBUG(D_MGS, "marker %d %s\n", marker->cm_step, 
-                               marker->cm_comment);
-                }
-
-        } else {
+        if (rec->lrh_type != OBD_CFG_REC) {
                 CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);
-                rc = -EINVAL;
+                RETURN(-EINVAL);
         }
-out:
+
+        rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+        if (rc)
+                RETURN(rc);
+
+        lcfg = (struct lustre_cfg *)cfg_buf;
+
+        CDEBUG(D_INFO, "cmd %x %s %s\n", lcfg->lcfg_command, 
+               lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
+
+        /* Figure out ost indicies */ 
+        if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD ||
+            lcfg->lcfg_command == LCFG_LOV_DEL_OBD) {
+                index = simple_strtol(lustre_cfg_string(lcfg, 2),
+                                      NULL, 10);
+                set_bit(index, db->fd_ost_index_map);
+        }
+        
+        /* Figure out mdt indicies */
+        if ((lcfg->lcfg_command == LCFG_ATTACH) &&
+            (strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_MDC_NAME) == 0)) {
+                rc = sv_name2index(lustre_cfg_string(lcfg, 0), &index);
+                if (rc) 
+                        RETURN(rc);
+                CDEBUG(D_MGS, "MDT index is %d\n", index);
+                set_bit(index, db->fd_mdt_index_map);
+        }
+
+        /* Keep track of the latest marker step */
+        if (lcfg->lcfg_command == LCFG_MARKER) {
+                struct cfg_marker *marker;
+                marker = lustre_cfg_buf(lcfg, 1);
+                db->fd_gen = max(db->fd_gen, marker->cm_step);
+                CDEBUG(D_MGS, "marker %d %s\n", marker->cm_step, 
+                       marker->cm_comment);
+        }
+
         RETURN(rc);
 }
 
@@ -127,12 +139,11 @@ out_pop:
         RETURN(rc);
 }
 
-static int next_ost_index(void *index_map, int map_len)
+static int next_index(void *index_map, int map_len)
 {
         int i;
         for (i = 0; i < map_len * 8; i++)
                  if (!test_bit(i, index_map)) {
-                         set_bit(i, index_map);
                          return i;
                  }
         CERROR("max index %d exceeded.\n", i);
@@ -168,18 +179,19 @@ static struct fs_db *mgs_new_db(struct obd_device *obd, char *fsname)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct fs_db *db;
+        ENTRY;
         
         OBD_ALLOC(db, sizeof(*db));
-        if (!db) {
-                CERROR("No memory for fs_db.\n");
-                return NULL;
+        if (!db) 
+                RETURN(NULL);
+
+        OBD_ALLOC(db->fd_ost_index_map, INDEX_MAP_SIZE);
+        OBD_ALLOC(db->fd_mdt_index_map, INDEX_MAP_SIZE);
+        if (!db->fd_ost_index_map || !db->fd_mdt_index_map) {
+                CERROR("No memory for index maps\n");
+                GOTO(err, 0);
         }
-        OBD_ALLOC(db->fd_index_map, INDEX_MAP_SIZE);
-        if (!db->fd_index_map) {
-                CERROR("No memory for index_map.\n");
-                OBD_FREE(db, sizeof(*db));
-                return NULL;
-        }
+        
         strncpy(db->fd_name, fsname, sizeof(db->fd_name));
         //INIT_LIST_HEAD(&db->ost_infos);
 
@@ -187,13 +199,21 @@ static struct fs_db *mgs_new_db(struct obd_device *obd, char *fsname)
         list_add(&db->fd_list, &mgs->mgs_fs_db_list);
         spin_unlock(&mgs->mgs_fs_db_lock);
 
-        return db;
+        RETURN(db);
+err:
+        if (db->fd_ost_index_map) 
+                OBD_FREE(db->fd_ost_index_map, INDEX_MAP_SIZE);
+        if (db->fd_mdt_index_map) 
+                OBD_FREE(db->fd_mdt_index_map, INDEX_MAP_SIZE);
+        OBD_FREE(db, sizeof(*db));
+        RETURN(NULL);
 }
 
 static void mgs_free_db(struct fs_db *db)
 {
         list_del(&db->fd_list);
-        OBD_FREE(db->fd_index_map, INDEX_MAP_SIZE);
+        OBD_FREE(db->fd_ost_index_map, INDEX_MAP_SIZE);
+        OBD_FREE(db->fd_mdt_index_map, INDEX_MAP_SIZE);
         OBD_FREE(db, sizeof(*db));
 }
 
@@ -272,49 +292,68 @@ static int mgs_find_or_make_db(struct obd_device *obd, char *name,
 int mgs_set_index(struct obd_device *obd, struct mgmt_target_info *mti)
 {
         struct fs_db *db;
+        void *imap;
         int rc = 0;
+        ENTRY;
 
         rc = mgs_find_or_make_db(obd, mti->mti_fsname, &db); 
         if (rc) {
                 CERROR("Can't get db for %s\n", mti->mti_fsname);
-                return rc;
+                RETURN(rc);
         }
 
-        if (!(mti->mti_flags & LDD_F_NEED_INDEX)) {
-                if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8) {
-                        LCONSOLE_ERROR("Server %s requested index %d, but the"
-                                       "max index is %d.\n", 
-                                       mti->mti_svname, mti->mti_stripe_index,
-                                       INDEX_MAP_SIZE * 8);
-                        return -ERANGE;
-                }
-                if (test_bit(mti->mti_stripe_index, db->fd_index_map)) {
-                        LCONSOLE_ERROR("Server %s requested index %d, but that"
-                                       "index is already in use.\n", 
-                                       mti->mti_svname, mti->mti_stripe_index);
-                        return -EADDRINUSE;
-                } else {
-                        set_bit(mti->mti_stripe_index, db->fd_index_map);
-                        return 0;
-                }
-        } 
+        if (mti->mti_flags & LDD_F_SV_TYPE_OST) 
+                imap = db->fd_ost_index_map;
+        else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) 
+                imap = db->fd_mdt_index_map;
+        else
+                RETURN(-EINVAL);
 
-        if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
-                rc = next_ost_index(db->fd_index_map, INDEX_MAP_SIZE);
+        if (mti->mti_flags & LDD_F_NEED_INDEX) {
+                rc = next_index(imap, INDEX_MAP_SIZE);
                 if (rc == -1)
-                        return -ERANGE;
+                        RETURN(-ERANGE);
                 mti->mti_stripe_index = rc;
-        } else {
-                mti->mti_stripe_index = 1; /*FIXME*/
         }
 
-        make_sv_name(mti->mti_flags, mti->mti_stripe_index,
+        /* Remove after CMD */
+        if ((mti->mti_flags & LDD_F_SV_TYPE_MDT) && 
+            (mti->mti_stripe_index > 0)) {
+                LCONSOLE_ERROR("MDT index must = 0 (until Clustered MetaData "
+                               "feature is ready.)\n");
+                mti->mti_stripe_index = 0;
+        }
+
+        if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8) {
+                LCONSOLE_ERROR("Server %s requested index %d, but the"
+                               "max index is %d.\n", 
+                               mti->mti_svname, mti->mti_stripe_index,
+                               INDEX_MAP_SIZE * 8);
+                RETURN(-ERANGE);
+        }
+
+        if (test_bit(mti->mti_stripe_index, imap)) {
+                LCONSOLE_ERROR("Server %s requested index %d, but that "
+                               "index is already in use in the %s "
+                               "filesystem. This server "
+                               "may have been reformatted, or the "
+                               "index changed. (To reformat the entire "
+                               "filesystem, specify 'destroy_fs' "
+                               "when reformatting a MDT.)\n",
+                               mti->mti_svname, mti->mti_stripe_index,
+                               mti->mti_fsname);
+                /* FIXME implement destroy_fs! */
+                RETURN(-EADDRINUSE);
+        }
+         
+        set_bit(mti->mti_stripe_index, imap);
+        sv_make_name(mti->mti_flags, mti->mti_stripe_index,
                      mti->mti_fsname, mti->mti_svname);
 
         CDEBUG(D_MGS, "Set new index for %s to %d\n", mti->mti_svname, 
                mti->mti_stripe_index);
 
-        return 0;
+        RETURN(0);
 }
                            
 /******************** config log recording functions *********************/
@@ -680,6 +719,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
                 rc = mgs_write_log_lov(obd, db, mti, mti->mti_svname,
                                        lovname);
         } 
+        /* else there's already some ost entries in the mdt log. */
 
         name_create(mti->mti_svname, "_UUID", &mdsuuid);
         
@@ -853,8 +893,9 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *db,
         /* We also have to update the other logs where this osc is part of 
            the lov */
         /* Append ost info to mdt log */
-        // FIXME need real mdt name
-        name_create(mti->mti_fsname, "-MDT0001", &logname);
+        // FIXME need real mdt name -- but MDT may not have registered yet!
+        // FIXME add to all mdt logs for CMD
+        name_create(mti->mti_fsname, "-MDT0000", &logname);
         name_create(mti->mti_fsname, "-mdtlov", &lovname);
         mgs_write_log_osc(obd, db, mti, logname, lovname, ostuuid);
         name_destroy(lovname);

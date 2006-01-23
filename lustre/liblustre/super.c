@@ -1887,10 +1887,8 @@ static struct inode_ops llu_inode_ops = {
         inop_lookup:    llu_iop_lookup,
         inop_getattr:   llu_iop_getattr,
         inop_setattr:   llu_iop_setattr,
-        /*
-        FIXME doesn't work on 2.6.10fc3? 
-        inop_filldirentries:     llu_iop_filldirentries,
-        */
+      //FIXME corresponding libsysio is tagged b_release_1_4_6
+        //  inop_filldirentries:     llu_iop_filldirentries,
         inop_mkdir:     llu_iop_mkdir_raw,
         inop_rmdir:     llu_iop_rmdir_raw,
         inop_symlink:   llu_iop_symlink_raw,
