@@ -29,6 +29,7 @@ if [ -f $TMP ]; then
 		echo "CVS: Branch $BRANCH" >> $TMP
 	fi
 cat - >> $TMP <<- EOF
+	CVS: Remove "CVS:" from start of lines that should be in commit message
 	CVS: did you update the ChangeLog for a bug fix?
 	CVS: did you update the hours spent in Bugzilla?
 	CVS: did you verify/update the HLD/DLD in CVS?

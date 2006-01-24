@@ -110,6 +110,10 @@ AC_ARG_WITH([linux],
 AC_MSG_RESULT([$LINUX])
 AC_SUBST(LINUX)
 
+# -------- check for linux --------
+LB_CHECK_FILE([$LINUX],[],
+	[AC_MSG_ERROR([Kernel source $LINUX could not be found.])])
+
 # -------- linux objects (for 2.6) --
 AC_MSG_CHECKING([for Linux objects dir])
 AC_ARG_WITH([linux-obj],
@@ -120,7 +124,7 @@ AC_ARG_WITH([linux-obj],
 AC_MSG_RESULT([$LINUX_OBJ])
 AC_SUBST(LINUX_OBJ)
 
-# -------- check for .confg --------
+# -------- check for .config --------
 AC_ARG_WITH([linux-config],
 	[AC_HELP_STRING([--with-linux-config=path],
 			[set path to Linux .conf (default=$LINUX_OBJ/.config)])],
