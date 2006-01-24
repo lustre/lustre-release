@@ -62,24 +62,54 @@ enum {
  */
 #define SMP (1)
 
+#include <libcfs/list.h>
+
+#ifdef __DARWIN8__
+
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/kernel.h>
+#include <kern/locks.h>
+
+/*
+ * hw_lock is not available in Darwin8 (hw_lock_* are not exported at all), 
+ * so use lck_spin_t. we can hack out lck_spin_t easily:
+ *
+ * typedef struct {
+ *      unsigned int             opaque[3];
+ * } lck_spin_t;
+ *
+ * But it's not very necessory.
+ */
+typedef lck_spin_t      *xnu_spin_t;
+/* 
+ * wait_queue is not available in Darwin8 (wait_queue_* are not exported), 
+ * use assert_wait/wakeup/wake_one (wait_queue in kernel hash).
+ */
+typedef void * xnu_wait_queue_t;
+
+/* DARWIN8 */
+#else
+
+#include <mach/mach_types.h>
+#include <sys/types.h>
 #include <kern/simple_lock.h>
 
-#include <libcfs/list.h>
+typedef hw_lock_data_t  xnu_spin_t;
+typedef struct wait_queue       xnu_wait_queue_t;
+
+/* DARWIN8 */
+#endif
 
 struct kspin {
 #if SMP
-	hw_lock_data_t lock;
+	xnu_spin_t      lock;
 #endif
 #if XNU_SYNC_DEBUG
-	unsigned magic;
-	thread_t owner;
+	unsigned        magic;
+	thread_t        owner;
 #endif
 };
-
-/*
- * XXX nikita: we cannot use simple_* functions, because bsd/sys/lock.h
- * redefines them to nothing. Use low-level hw_lock_* instead.
- */
 
 void kspin_init(struct kspin *spin);
 void kspin_done(struct kspin *spin);
@@ -120,7 +150,7 @@ void krw_spin_up_w(struct krw_spin *sem);
 
 struct ksem {
         struct kspin      guard;
-        struct wait_queue q;
+        xnu_wait_queue_t  q;
         int               value;
 #if XNU_SYNC_DEBUG
         unsigned          magic;

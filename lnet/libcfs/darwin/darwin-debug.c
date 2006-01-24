@@ -9,11 +9,6 @@ void libcfs_debug_dumpstack(cfs_task_t *tsk)
 	return;
 }
 
-cfs_task_t *libcfs_current(void)
-{ 
-	return cfs_current();
-}
-
 void libcfs_run_lbug_upcall(char *file, const char *fn, const int line)
 {
 }

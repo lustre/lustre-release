@@ -135,7 +135,7 @@ set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 	header->ph_stack = stack;
 	header->ph_pid = cfs_curproc_pid();
 	header->ph_line_num = line;
-	header->ph_extern_pid = (__u32)current_uthread();
+	header->ph_extern_pid = (__u32)current_thread();
 }
 
 void print_to_console(struct ptldebug_header *hdr, int mask, char *buf,
@@ -183,7 +183,7 @@ int cfs_trace_daemon SYSCTL_HANDLER_ARGS
 		return -ENOMEM;
 	tracefile_write_lock();
 	error = sysctl_handle_string(oidp, name, req->newlen + 1, req);
-	if (!error || req->newptr != NULL) {
+	if (!error || !req->newptr) {
 		/* write */
 		if (strcmp(name, "stop") == 0) {
 			/* stop tracefile daemon */
@@ -208,7 +208,7 @@ int cfs_trace_daemon SYSCTL_HANDLER_ARGS
 		tracefile = name;
 		name = NULL;
 		trace_start_thread();
-	} else if (req->newptr != NULL) {
+	} else if (!req->newptr) {
 		/* Something was wrong with the write request */
 		printf("sysctl debug daemon failed: %d.\n", error);
 		goto out;
@@ -230,7 +230,7 @@ int cfs_debug_mb SYSCTL_HANDLER_ARGS
 	int error = 0;
 
 	error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req);
-	if (!error && req->newptr != NULL) {
+	if (!error && !req->newptr) {
 		/* We have a new value stored in the standard location */
 		if (max_debug_mb <= 0)
 			return -EINVAL;
@@ -243,7 +243,7 @@ int cfs_debug_mb SYSCTL_HANDLER_ARGS
 			tcd = &trace_data[i].tcd;
 			tcd->tcd_max_pages = max_debug_mb;
 		}
-	} else if (req->newptr != NULL) {
+	} else if (!req->newptr) {
 		/* Something was wrong with the write request */
 		printf ("sysctl debug_mb fault: %d.\n", error);
 	} else {

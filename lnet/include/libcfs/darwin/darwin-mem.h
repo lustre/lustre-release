@@ -33,26 +33,31 @@
 #include <libcfs/list.h>
 
 /*
- * Page of OSX
- *
- * There is no page in OSX, however, we need page in lustre.
- */
-#define PAGE_MASK				(~(PAGE_SIZE-1))
-#define _ALIGN_UP(addr,size)			(((addr)+((size)-1))&(~((size)-1)))
-#define _ALIGN(addr,size)			_ALIGN_UP(addr,size)
-#define PAGE_ALIGN(addr)			_ALIGN(addr, PAGE_SIZE)
-
-/*
  * Basic xnu_page struct, should be binary compatibility with
  * all page types in xnu (we have only xnu_raw_page, xll_page now)
  */
 
 /* Variable sized pages are not supported */
 
+#ifdef PAGE_SHIFT
+#define CFS_PAGE_SHIFT	PAGE_SHIFT
+#else
 #define CFS_PAGE_SHIFT	12
+#endif
+
+#ifdef PAGE_SIZE
+#define CFS_PAGE_SIZE	PAGE_SIZE
+#else
 #define CFS_PAGE_SIZE	(1 << CFS_PAGE_SHIFT)
+#endif
+
 #define PAGE_CACHE_SIZE CFS_PAGE_SIZE
+
+#ifdef PAGE_MASK
+#define CFS_PAGE_MASK	PAGE_MASK
+#else
 #define CFS_PAGE_MASK	(~(CFS_PAGE_SIZE - 1))
+#endif
 
 enum {
 	XNU_PAGE_RAW,
@@ -150,15 +155,40 @@ extern int get_preemption_level(void);
 /*
  * Slab:
  *
- * No slab in OSX, use zone allocator to fake slab
+ * No slab in OSX, use zone allocator to simulate slab
  */
 #define SLAB_HWCACHE_ALIGN		0
 
+#ifdef __DARWIN8__
+/* 
+ * In Darwin8, we cannot use zalloc_noblock(not exported by kernel),
+ * also, direct using of zone allocator is not recommended.
+ */
+#define CFS_INDIVIDUAL_ZONE     (0)
+
+#if !CFS_INDIVIDUAL_ZONE
+#include <libkern/OSMalloc.h>
+typedef 	OSMallocTag	mem_cache_t;
+#else
+typedef		void*		zone_t;
+typedef		zone_t		mem_cache_t;
+#endif
+
+#else /* !__DARWIN8__ */
+
+#define CFS_INDIVIDUAL_ZONE     (1)
+
+typedef 	zone_t		mem_cache_t;
+
+#endif /* !__DARWIN8__ */
+
+#define MC_NAME_MAX_LEN		64
+
 typedef struct cfs_mem_cache {
-	struct list_head	link;
-	zone_t			zone;
-	int			size;
-	char			name [ZONE_NAME_MAX_LEN];
+	int			mc_size;
+	mem_cache_t		mc_cache;
+	struct list_head	mc_link;
+	char			mc_name [MC_NAME_MAX_LEN];
 } cfs_mem_cache_t;
 
 #define KMEM_CACHE_MAX_COUNT	64
@@ -179,13 +209,16 @@ void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
 #define CFS_MMSPACE_OPEN		do {} while(0)
 #define CFS_MMSPACE_CLOSE		do {} while(0)
 
-#define copy_from_user(kaddr, uaddr, size)	copyin((caddr_t)uaddr, (caddr_t)kaddr, size)
-#define copy_to_user(uaddr, kaddr, size)	copyout((caddr_t)kaddr, (caddr_t)uaddr, size)
+#define copy_from_user(kaddr, uaddr, size)	copyin(CAST_USER_ADDR_T(uaddr), (caddr_t)kaddr, size)
+#define copy_to_user(uaddr, kaddr, size)	copyout((caddr_t)kaddr, CAST_USER_ADDR_T(uaddr), size)
+
+#if 0
 static inline int strncpy_from_user(char *kaddr, char *uaddr, int size)
 {
 	size_t count;
-	return copyinstr((void *)uaddr, (void *)kaddr, size, &count);
+	return copyinstr((const user_addr_t)uaddr, (void *)kaddr, size, &count);
 }
+#endif
 
 #if defined (__ppc__)
 #define mb()  __asm__ __volatile__ ("sync" : : : "memory")

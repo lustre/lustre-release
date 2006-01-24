@@ -448,7 +448,7 @@ static inline void obit_convert(int *cflag, int *sflag,
  */
 int convert_client_oflag(int cflag, int *result)
 {
-	int sflag;
+	int sflag = 0;
 
 	cflag = 0;
 	obit_convert(&cflag, &sflag, O_RDONLY,   LINUX_O_RDONLY);
@@ -481,6 +481,8 @@ int convert_client_oflag(int cflag, int *result)
 		return -EINVAL;
 }
 
+#ifdef __DARWIN8__
+#else /* !__DARWIN8__ */
 extern int unix_syscall();
 extern int unix_syscall_return();
 
@@ -497,6 +499,8 @@ static int is_addr_in_range(void *addr, void *start, void *end)
 {
 	return start <= addr && addr <= end;
 }
+
+extern void cfs_thread_agent (void);
 
 static int is_last_frame(void *addr)
 {
@@ -571,3 +575,4 @@ void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
         else
                 return NULL;
 }
+#endif /* !__DARWIN8__ */

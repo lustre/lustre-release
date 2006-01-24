@@ -9,20 +9,23 @@
 #include <sys/types.h>
 #include <sys/systm.h>
 
-#ifndef __APPLE_API_PRIVATE
-#define __APPLE_API_PRIVATE
-#include <sys/user.h>
-#undef __APPLE_API_PRIVATE
-#else
-#include <sys/user.h>
-#endif
+#ifndef __DARWIN8__
+# ifndef __APPLE_API_PRIVATE
+#  define __APPLE_API_PRIVATE
+#  include <sys/user.h>
+#  undef __APPLE_API_PRIVATE
+# else
+#  include <sys/user.h>
+# endif
+# include <mach/mach_traps.h>
+# include <mach/thread_switch.h>
+# include <machine/cpu_number.h>
+#endif /* !__DARWIN8__ */
 
 #include <sys/kernel.h>
 
 #include <mach/thread_act.h>
 #include <mach/mach_types.h>
-#include <mach/mach_traps.h>
-#include <mach/thread_switch.h>
 #include <mach/time_value.h>
 #include <kern/sched_prim.h>
 #include <vm/pmap.h>
@@ -114,9 +117,19 @@ extern kern_return_t            cfs_psdev_deregister(cfs_psdev_t *);
 extern boolean_t        assert_wait_possible(void);
 extern void             *get_bsdtask_info(task_t);
 
+#ifdef __DARWIN8__
+
+typedef struct {}		cfs_task_t;
+#define cfs_current()		((cfs_task_t *)current_thread())
+#else	/* !__DARWIN8__ */
+
 typedef struct uthread		cfs_task_t;
+
 #define current_uthread()       ((struct uthread *)get_bsdthread_info(current_act()))
 #define cfs_current()		current_uthread()
+
+#endif /* !__DARWIN8__ */
+
 #define cfs_task_lock(t)	do {;} while (0)
 #define cfs_task_unlock(t)	do {;} while (0)
 
@@ -133,108 +146,11 @@ typedef struct uthread		cfs_task_t;
  *
  * OSX kernel thread can not be created with args,
  * so we have to implement new APIs to create thread with args
- *
- * All requests to create kernel thread will create a new
- * thread instance of cfs_thread_agent, one by one.
- * cfs_thread_agent will call the caller's thread function
- * with argument supplied by caller.
  */
 
 typedef int (*cfs_thread_t)(void *);
 
 extern task_t	kernel_task;
-
-struct kernel_thread_arg
-{
-	spinlock_t	lock;
-	atomic_t	inuse;
-	cfs_thread_t	func;
-	void		*arg;
-};
-
-extern struct kernel_thread_arg cfs_thread_arg;
-extern void cfs_thread_agent(void);
-
-#define THREAD_ARG_FREE			0
-#define THREAD_ARG_HOLD			1
-#define THREAD_ARG_RECV			2
-
-#define set_targ_stat(a, v)		atomic_set(&(a)->inuse, v)
-#define get_targ_stat(a)		atomic_read(&(a)->inuse)
-
-/*
- * Hold the thread argument and set the status of thread_status
- * to THREAD_ARG_HOLD, if the thread argument is held by other
- * threads (It's THREAD_ARG_HOLD already), current-thread has to wait.
- */
-#define thread_arg_hold(pta, _func, _arg)			\
-	do {							\
-		spin_lock(&(pta)->lock);			\
-		if (get_targ_stat(pta) == THREAD_ARG_FREE) {	\
-			set_targ_stat((pta), THREAD_ARG_HOLD);	\
-			(pta)->arg = (void *)_arg;		\
-			(pta)->func = _func;			\
-			spin_unlock(&(pta)->lock);		\
-			break;					\
-		}						\
-		spin_unlock(&(pta)->lock);			\
-		cfs_schedule();					\
-	} while(1);						\
-
-/*
- * Release the thread argument if the thread argument has been
- * received by the child-thread (Status of thread_args is
- * THREAD_ARG_RECV), otherwise current-thread has to wait.
- * After release, the thread_args' status will be set to
- * THREAD_ARG_FREE, and others can re-use the thread_args to
- * create new kernel_thread.
- */
-#define thread_arg_release(pta)					\
-	do {							\
-		spin_lock(&(pta)->lock);			\
-		if (get_targ_stat(pta) == THREAD_ARG_RECV) {	\
-			(pta)->arg = NULL;			\
-			(pta)->func = NULL;			\
-			set_targ_stat(pta, THREAD_ARG_FREE);	\
-			spin_unlock(&(pta)->lock);		\
-			break;					\
-		}						\
-		spin_unlock(&(pta)->lock);			\
-		cfs_schedule();					\
-	} while(1)
-
-/*
- * Receive thread argument (Used in child thread), set the status
- * of thread_args to THREAD_ARG_RECV.
- */
-#define __thread_arg_recv_fin(pta, _func, _arg, fin)		\
-	do {							\
-		spin_lock(&(pta)->lock);			\
-		if (get_targ_stat(pta) == THREAD_ARG_HOLD) {	\
-			if (fin)				\
-			    set_targ_stat(pta, THREAD_ARG_RECV);\
-			_arg = (pta)->arg;			\
-			_func = (pta)->func;			\
-			spin_unlock(&(pta)->lock);		\
-			break;					\
-		}						\
-		spin_unlock(&(pta)->lock);			\
-		cfs_schedule();					\
-	} while (1);						\
-
-/*
- * Just set the thread_args' status to THREAD_ARG_RECV
- */
-#define thread_arg_fin(pta)					\
-	do {							\
-		spin_lock(&(pta)->lock);			\
-		assert( get_targ_stat(pta) == THREAD_ARG_HOLD);	\
-		set_targ_stat(pta, THREAD_ARG_RECV);		\
-		spin_unlock(&(pta)->lock);			\
-	} while(0)
-
-#define thread_arg_recv(pta, f, a)	__thread_arg_recv_fin(pta, f, a, 1)
-#define thread_arg_keep(pta, f, a)	__thread_arg_recv_fin(pta, f, a, 0)
 
 /*
  * cloning flags, no use in OSX, just copy them from Linux
@@ -272,7 +188,7 @@ typedef struct cfs_waitlink {
 
 typedef int cfs_task_state_t;
 
-#define CFS_TASK_INTERRUPTIBLE	THREAD_INTERRUPTIBLE
+#define CFS_TASK_INTERRUPTIBLE	THREAD_ABORTSAFE
 #define CFS_TASK_UNINT		THREAD_UNINT
 
 void cfs_waitq_init(struct cfs_waitq *waitq);
@@ -298,19 +214,23 @@ cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link,
  * Thread schedule APIs.
  */
 #define MAX_SCHEDULE_TIMEOUT    ((long)(~0UL>>12))
+extern void thread_set_timer_deadline(uint64_t	deadline);
+extern void thread_cancel_timer(void);
 
 static inline int cfs_schedule_timeout(int state, int64_t timeout)
 {
 	int          result;
 	
-	AbsoluteTime clock_current;
-	AbsoluteTime clock_delay;
+#ifdef __DARWIN8__
+	result = assert_wait((event_t)current_thread(), state);
+#else
 	result = assert_wait((event_t)current_uthread(), state);
+#endif
 	if (timeout > 0) {
-		clock_get_uptime(&clock_current);
-		nanoseconds_to_absolutetime(timeout, &clock_delay);
-		ADD_ABSOLUTETIME(&clock_current, &clock_delay);
-		thread_set_timer_deadline(clock_current);
+		uint64_t expire;
+		nanoseconds_to_absolutetime(timeout, &expire);
+		clock_absolutetime_interval_to_deadline(expire, &expire);
+		thread_set_timer_deadline(expire);
 	}
 	if (result == THREAD_WAITING)
 		result = thread_block(THREAD_CONTINUE_NULL);
@@ -323,7 +243,7 @@ static inline int cfs_schedule_timeout(int state, int64_t timeout)
 	return result;
 }
 
-#define cfs_schedule()	cfs_schedule_timeout(CFS_TASK_UNINT, CFS_MIN_DELAY)
+#define cfs_schedule()	cfs_schedule_timeout(CFS_TASK_UNINT, CFS_JIFFY)
 #define cfs_pause(tick)	cfs_schedule_timeout(CFS_TASK_UNINT, tick)
 
 #define __wait_event(wq, condition)				\
@@ -348,16 +268,19 @@ do {								\
 	__wait_event(wq, condition);				\
 } while (0)
 
-#define __wait_event_interruptible(wq, condition, ret)		\
+#define __wait_event_interruptible(wq, condition, ex, ret)	\
 do {								\
 	struct cfs_waitlink __wait;				\
 								\
 	cfs_waitlink_init(&__wait);				\
 	for (;;) {						\
-		cfs_waitq_add(&wq, &__wait);			\
+		if (ex == 0)					\
+			cfs_waitq_add(&wq, &__wait);		\
+		else						\
+			cfs_waitq_add_exclusive(&wq, &__wait);	\
 		if (condition)					\
 			break;					\
-		if (!cfs_signal_pending(cfs_current())) {	\
+		if (!cfs_signal_pending()) {			\
 			cfs_waitq_wait(&__wait, 		\
 				       CFS_TASK_INTERRUPTIBLE);	\
 			cfs_waitq_del(&wq, &__wait);		\
@@ -373,16 +296,27 @@ do {								\
 ({								\
  	int __ret = 0;						\
  	if (!condition)						\
-		__wait_event_interruptible(wq, 			\
-			                   condition, __ret);	\
+		__wait_event_interruptible(wq, condition,	\
+					   0, __ret);		\
 	__ret;							\
 })
 
+#define wait_event_interruptible_exclusive(wq, condition)	\
+({								\
+ 	int __ret = 0;						\
+ 	if (!condition)						\
+		__wait_event_interruptible(wq, condition,	\
+					   1, __ret);		\
+	__ret;							\
+})
+
+#ifndef __DARWIN8__
 extern void	wakeup_one __P((void * chan));
+#endif
 /* only used in tests */
-#define wake_up_process(p)			\
-	do {					\
-		wakeup_one(p);			\
+#define wake_up_process(p)					\
+	do {							\
+		wakeup_one((caddr_t)p);				\
 	} while (0)
 	
 /* used in couple of places */
@@ -403,19 +337,18 @@ static inline void sleep_on(cfs_waitq_t *waitq)
  * signal kernel APIs by xnu.
  */
 typedef sigset_t	cfs_sigset_t;
-#define cfs_sigmask_lock(t, f)		do { f = 0; } while (0)
-#define cfs_sigmask_unlock(t, f)	do { f = 0; } while (0)
-#define cfs_signal_pending(ut)		SHOULDissignal(current_proc(), ut)
-
+#define cfs_sigmask_lock(f)		do { f = 0; } while (0)
+#define cfs_sigmask_unlock(f)		do { f = 0; } while (0)
+int cfs_signal_pending(void);
 /*
  * We don't need to recalc_sigpending because xnu always
  * call SHOULDissignal to checking if there are pending signals.
  */
-#define cfs_recalc_sigpending(ut)	do {} while (0)
+#define cfs_recalc_sigpending()		do {} while (0)
 /*
  * Clear all pending signals.
  */
-#define cfs_clear_sigpending(ut)	clear_procsiglist(current_proc(), -1)
+#define cfs_clear_sigpending()		clear_procsiglist(current_proc(), -1)
 
 #define SIGNAL_MASK_ASSERT()
 
@@ -456,14 +389,19 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 /*
  * CPU
  */
-#include <machine/cpu_number.h>
 /* Run in PowerG5 who is PPC64 */
 #define SMP_CACHE_BYTES                         128
 #define __cacheline_aligned                     __attribute__((__aligned__(SMP_CACHE_BYTES)))
-/* XXX How to get the value of NCPUS from xnu ? */
 #define NR_CPUS					2
-#define smp_processor_id()			cpu_number()
-#define smp_num_cpus				NR_CPUS
+
+extern unsigned int cpu_number(void);
+#define smp_num_cpus				cpu_number()
+/* 
+ * XXX Liang: patch xnu and export current_processor()?
+ *
+ * #define smp_processor_id()			current_processor()
+ */
+#define smp_processor_id()			0
 /* XXX smp_call_function is not supported in xnu */
 #define smp_call_function(f, a, n, w)		do {} while(0)
 int cfs_online_cpus(void);
@@ -471,6 +409,8 @@ int cfs_online_cpus(void);
 /*
  * Misc
  */
+extern int is_suser(void);
+
 #ifndef likely
 #define likely(exp) (exp)
 #endif
@@ -579,13 +519,27 @@ typedef struct cfs_proc_dir_entry{
 /*
  * Error number
  */
+#ifndef EPROTO
 #define EPROTO          EPROTOTYPE
+#endif
+#ifndef EBADR
 #define EBADR		EBADRPC
+#endif
+#ifndef ERESTARTSYS
 #define ERESTARTSYS	512
+#endif
+#ifndef EDEADLOCK
 #define EDEADLOCK	EDEADLK
+#endif
+#ifndef ECOMM
 #define ECOMM		EINVAL
+#endif
+#ifndef ENODATA
 #define ENODATA		EINVAL
+#endif
+#ifndef ENOTSUPP
 #define ENOTSUPP	EINVAL
+#endif
 
 #if BYTE_ORDER == BIG_ENDIAN
 # define __BIG_ENDIAN

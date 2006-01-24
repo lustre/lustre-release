@@ -26,32 +26,24 @@
 
 #include <mach/mach_types.h>
 #include <string.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <sys/file.h>
 #include <sys/conf.h>
-#include <sys/vnode.h>
 #include <sys/uio.h>
 #include <sys/filedesc.h>
 #include <sys/namei.h>
 #include <miscfs/devfs/devfs.h>
-#include <kern/kalloc.h>
-#include <kern/zalloc.h>
 #include <kern/thread.h>
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
 
-void    *darwin_current_journal_info = NULL;
-int     darwin_current_cap_effective = -1;
-
 /*
  * cfs pseudo device, actually pseudo char device in darwin
  */
-#define KPORTAL_MAJOR  -1
+#define KLNET_MAJOR  -1
 
 kern_return_t  cfs_psdev_register(cfs_psdev_t *dev) {
-	dev->index = cdevsw_add(KPORTAL_MAJOR, dev->devsw);
+	dev->index = cdevsw_add(KLNET_MAJOR, dev->devsw);
 	if (dev->index < 0) {
 		printf("libcfs_init: failed to allocate a major number!\n");
 		return KERN_FAILURE;
@@ -71,8 +63,8 @@ kern_return_t  cfs_psdev_deregister(cfs_psdev_t *dev) {
 /*
  * KPortal symbol register / unregister support
  */
-static struct rw_semaphore cfs_symbol_lock;
-struct list_head           cfs_symbol_list;
+struct rw_semaphore             cfs_symbol_lock;
+struct list_head                cfs_symbol_list;
 
 void *
 cfs_symbol_get(const char *name)
@@ -183,39 +175,99 @@ cfs_symbol_clean()
         return;
 }
 
-/*
- * Register sysctl table
- */
-cfs_sysctl_table_header_t *
-cfs_register_sysctl_table (cfs_sysctl_table_t *table, int arg)
+struct kernel_thread_arg
 {
-	cfs_sysctl_table_t	item;
-	int i = 0;
-
-	while ((item = table[i++]) != NULL) {
-		sysctl_register_oid(item);
-	}
-	return table;
-}
-
-/*
- * Unregister sysctl table
- */
-void
-cfs_unregister_sysctl_table (cfs_sysctl_table_header_t *table) {
-	int i = 0;
-	cfs_sysctl_table_t	item;
-
-	while ((item = table[i++]) != NULL) {
-		sysctl_unregister_oid(item);
-	}
-	return;
-}
+	spinlock_t	lock;
+	atomic_t	inuse;
+	cfs_thread_t	func;
+	void		*arg;
+};
 
 struct kernel_thread_arg cfs_thread_arg;
 
+#define THREAD_ARG_FREE			0
+#define THREAD_ARG_HOLD			1
+#define THREAD_ARG_RECV			2
+
+#define set_targ_stat(a, v)		atomic_set(&(a)->inuse, v)
+#define get_targ_stat(a)		atomic_read(&(a)->inuse)
+
+/*
+ * Hold the thread argument and set the status of thread_status
+ * to THREAD_ARG_HOLD, if the thread argument is held by other
+ * threads (It's THREAD_ARG_HOLD already), current-thread has to wait.
+ */
+#define thread_arg_hold(pta, _func, _arg)			\
+	do {							\
+		spin_lock(&(pta)->lock);			\
+		if (get_targ_stat(pta) == THREAD_ARG_FREE) {	\
+			set_targ_stat((pta), THREAD_ARG_HOLD);	\
+			(pta)->arg = (void *)_arg;		\
+			(pta)->func = _func;			\
+			spin_unlock(&(pta)->lock);		\
+			break;					\
+		}						\
+		spin_unlock(&(pta)->lock);			\
+		cfs_schedule();					\
+	} while(1);						\
+
+/*
+ * Release the thread argument if the thread argument has been
+ * received by the child-thread (Status of thread_args is
+ * THREAD_ARG_RECV), otherwise current-thread has to wait.
+ * After release, the thread_args' status will be set to
+ * THREAD_ARG_FREE, and others can re-use the thread_args to
+ * create new kernel_thread.
+ */
+#define thread_arg_release(pta)					\
+	do {							\
+		spin_lock(&(pta)->lock);			\
+		if (get_targ_stat(pta) == THREAD_ARG_RECV) {	\
+			(pta)->arg = NULL;			\
+			(pta)->func = NULL;			\
+			set_targ_stat(pta, THREAD_ARG_FREE);	\
+			spin_unlock(&(pta)->lock);		\
+			break;					\
+		}						\
+		spin_unlock(&(pta)->lock);			\
+		cfs_schedule();					\
+	} while(1)
+
+/*
+ * Receive thread argument (Used in child thread), set the status
+ * of thread_args to THREAD_ARG_RECV.
+ */
+#define __thread_arg_recv_fin(pta, _func, _arg, fin)		\
+	do {							\
+		spin_lock(&(pta)->lock);			\
+		if (get_targ_stat(pta) == THREAD_ARG_HOLD) {	\
+			if (fin)				\
+			    set_targ_stat(pta, THREAD_ARG_RECV);\
+			_arg = (pta)->arg;			\
+			_func = (pta)->func;			\
+			spin_unlock(&(pta)->lock);		\
+			break;					\
+		}						\
+		spin_unlock(&(pta)->lock);			\
+		cfs_schedule();					\
+	} while (1);						\
+
+/*
+ * Just set the thread_args' status to THREAD_ARG_RECV
+ */
+#define thread_arg_fin(pta)					\
+	do {							\
+		spin_lock(&(pta)->lock);			\
+		assert( get_targ_stat(pta) == THREAD_ARG_HOLD);	\
+		set_targ_stat(pta, THREAD_ARG_RECV);		\
+		spin_unlock(&(pta)->lock);			\
+	} while(0)
+
+#define thread_arg_recv(pta, f, a)	__thread_arg_recv_fin(pta, f, a, 1)
+#define thread_arg_keep(pta, f, a)	__thread_arg_recv_fin(pta, f, a, 0)
+
 void
-cfs_thread_agent_init()
+cfs_thread_agent_init(void)
 {
         set_targ_stat(&cfs_thread_arg, THREAD_ARG_FREE);
         spin_lock_init(&cfs_thread_arg.lock);
@@ -223,6 +275,21 @@ cfs_thread_agent_init()
         cfs_thread_arg.func = NULL;
 }
 
+void
+cfs_thread_agent_fini(void)
+{
+        assert(get_targ_stat(&cfs_thread_arg) == THREAD_ARG_FREE);
+
+        spin_lock_done(&cfs_thread_arg.lock);
+}
+
+/*
+ *
+ * All requests to create kernel thread will create a new
+ * thread instance of cfs_thread_agent, one by one.
+ * cfs_thread_agent will call the caller's thread function
+ * with argument supplied by caller.
+ */
 void
 cfs_thread_agent (void)
 {
@@ -234,8 +301,10 @@ cfs_thread_agent (void)
         assert(func != NULL);
         func(arg);
         /* printf("thread agent exit. (func: %08lx)\n", (void *)func); */
-        (void) thread_terminate(current_act());
+        (void) thread_terminate(current_thread());
 }
+
+extern thread_t kernel_thread(task_t task, void (*start)(void));
 
 int
 cfs_kernel_thread(cfs_thread_t  func, void *arg, int flag)
@@ -257,22 +326,50 @@ void cfs_daemonize(char *str)
         return;
 }
 
-extern int block_procsigmask(struct proc *p,  int bit);
-
-cfs_sigset_t cfs_get_blocked_sigs()
+int cfs_signal_pending(void)
 {
-        return cfs_current()->uu_sigmask;
+#ifdef __DARWIN8__
+        extern int thread_issignal(proc_t, thread_t, sigset_t);
+        return thread_issignal(current_proc(), current_thread(), (sigset_t)-1);
+#else
+        return SHOULDissignal(current_proc(), current_uthread())
+#endif
 }
+
+/*
+ * XXX Liang: kexts cannot access sigmask in Darwin8.
+ * it's almost impossible for us to get/set signal mask
+ * without patching kernel.
+ * Should we provide these functions in xnu?
+ *
+ * There are several functions/MACRO which are very 
+ * confusing for me:
+ *
+ * proc_pendingsignals()
+ * thread_issignal()
+ * SHOULDissignal()
+ */
+extern int block_procsigmask(struct proc *p,  int bit);
 
 void cfs_block_allsigs()
 {
+#ifdef __DARWIN8__
+#else
         block_procsigmask(current_proc(), -1);
+#endif
 }
 
 void cfs_block_sigs(sigset_t bit)
 {
+#ifdef __DARWIN8__
+#else
         block_procsigmask(current_proc(), bit);
+#endif
 }
+
+#ifdef __DARWIN8__
+
+#else /* !__DARWIN8__ */
 
 void lustre_cone_in(boolean_t *state, funnel_t **cone)
 {
@@ -307,7 +404,7 @@ void lustre_net_ex(boolean_t state, funnel_t *cone)
         else if (cone == NULL)
                 (void) thread_funnel_set(network_flock, state);
 }
-
+#endif /* !__DARWIN8__ */
 
 void cfs_waitq_init(struct cfs_waitq *waitq)
 {
@@ -416,12 +513,25 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t)
 
 void cfs_enter_debugger(void)
 {
+#ifdef __DARWIN8__
+        extern void Debugger(const char * reason);
+        Debugger("CFS");
+#else
         extern void PE_enter_debugger(char *cause);
         PE_enter_debugger("CFS");
+#endif
 }
 
-int cfs_online_cpus()
+int cfs_online_cpus(void)
 {
+        int     activecpu;
+        size_t  size;
+
+#ifdef __DARWIN8__ 
+        size = sizeof(int);
+        sysctlbyname("hw.activecpu", &activecpu, &size, NULL, 0);
+        return activecpu;
+#else
         host_basic_info_data_t hinfo;
         kern_return_t kret;
         int count = HOST_BASIC_INFO_COUNT;
@@ -430,28 +540,16 @@ int cfs_online_cpus()
         if (kret == KERN_SUCCESS) 
                 return (hinfo.avail_cpus);
         return(-EINVAL);
+#endif
 }
 
-extern spinlock_t trace_cpu_serializer;
-extern struct list_head page_death_row;
-extern spinlock_t page_death_row_phylax;
-
-void raw_page_death_row_clean(void);
-
-int libcfs_arch_init(void)
+int cfs_ncpus(void)
 {
-	init_rwsem(&cfs_symbol_lock);
-        CFS_INIT_LIST_HEAD(&cfs_symbol_list);
-        cfs_thread_agent_init();
-        spin_lock_init(&trace_cpu_serializer);
-        CFS_INIT_LIST_HEAD(&page_death_row);
-        spin_lock_init(&page_death_row_phylax);
-	return 0;
-}
+        int     ncpu;
+        size_t  size;
 
-void libcfs_arch_cleanup(void)
-{
-	cfs_symbol_clean();
-        raw_page_death_row_clean();
-}
+        size = sizeof(int);
 
+        sysctlbyname("hw.ncpu", &ncpu, &size, NULL, 0);
+        return ncpu;
+}

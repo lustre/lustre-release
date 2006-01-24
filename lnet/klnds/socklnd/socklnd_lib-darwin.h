@@ -25,25 +25,26 @@
 #include <mach/mach_types.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <netat/sysglue.h>
 #include <stdarg.h>
 
 #include <libcfs/libcfs.h>
 
+#ifdef __DARWIN8__
+
+#define SOCKNAL_ARCH_EAGER_ACK		0
+
+#else /* !__DARWIN8__ */
+
 #define SOCKNAL_ARCH_EAGER_ACK		1
 
-#define KSN_SOCK2FILE(ksock)            ((struct file *)(ksock)->ks_file)
-
-#define SOCK_WMEM_QUEUED(so)		((so)->so_snd.sb_cc)
-#define SOCK_ERROR(so)			((so)->so_error)
-
-#define SOCK_TEST_NOSPACE(so)		(sbspace(&(so)->so_snd) < (so)->so_snd.sb_lowat)
+#endif
 
 #define SOCK_BUFFER_SIZE                (1152 * 1024)
 
 static inline
 int ksocknal_nsched(void)
 { 
+	/* XXX Liang: fix it */
 	return 1;
 }
 

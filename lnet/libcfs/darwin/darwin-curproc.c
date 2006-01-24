@@ -30,7 +30,11 @@
 
 static inline struct ucred *curproc_ucred(void)
 {
+#ifdef __DARWIN8__
+        return proc_ucred(current_proc());
+#else
         return current_proc()->p_cred->pc_ucred;
+#endif
 }
 
 uid_t  cfs_curproc_uid(void)
@@ -46,17 +50,29 @@ gid_t  cfs_curproc_gid(void)
 
 uid_t  cfs_curproc_fsuid(void)
 {
+#ifdef __DARWIN8__
+        return curproc_ucred()->cr_ruid;
+#else
         return current_proc()->p_cred->p_ruid;
+#endif
 }
 
 gid_t  cfs_curproc_fsgid(void)
 {
+#ifdef __DARWIN8__
+        return curproc_ucred()->cr_rgid;
+#else
         return current_proc()->p_cred->p_rgid;
+#endif
 }
 
 pid_t  cfs_curproc_pid(void)
 {
+#ifdef __DARWIN8__
+        return proc_pid(current_proc());
+#else
         return current_proc()->p_pid;
+#endif
 }
 
 int    cfs_curproc_groups_nr(void)
@@ -94,12 +110,34 @@ void   cfs_curproc_groups_dump(gid_t *array, int size)
 
 mode_t cfs_curproc_umask(void)
 {
+#ifdef __DARWIN8__
+        /*
+         * XXX Liang:
+         *
+         * fd_cmask is not available in kexts, so we just assume 
+         * verything is permited.
+         */
+        return -1;
+#else
         return current_proc()->p_fd->fd_cmask;
+#endif
 }
 
 char  *cfs_curproc_comm(void)
 {
+#ifdef __DARWIN8__
+        /*
+         * Writing to proc->p_comm is not permited in Darwin8,
+         * because proc_selfname() only return a copy of proc->p_comm,
+         * so this function is not really working.
+         */
+        static char     pcomm[MAXCOMLEN+1];
+
+        proc_selfname(pcomm, MAXCOMLEN+1);
+        return pcomm;
+#else
         return current_proc()->p_comm;
+#endif
 }
 
 cfs_kernel_cap_t cfs_curproc_cap_get(void)

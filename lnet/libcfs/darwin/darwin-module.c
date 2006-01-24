@@ -104,7 +104,7 @@ libcfs_ioctl (dev_t dev, u_long cmd, caddr_t arg, int flag, struct proc *p)
 	
 	if (devid > 16) return (-ENXIO);
 
-	if (suser(p->p_ucred, &p->p_acflag))
+	if (!is_suser())
 		return (-EPERM);
 	
 	pfile.off = 0;
@@ -142,4 +142,58 @@ cfs_psdev_t libcfs_dev = {
 	&libcfs_devsw,
 	NULL
 };
+
+extern void cfs_sync_init(void);
+extern void cfs_sync_fini(void);
+extern int cfs_sysctl_init(void);
+extern void cfs_sysctl_fini(void);
+extern int cfs_mem_cache_init(void);
+extern int cfs_mem_cache_fini(void);
+extern spinlock_t trace_cpu_serializer;
+extern struct list_head page_death_row;
+extern spinlock_t page_death_row_phylax;
+extern void raw_page_death_row_clean(void);
+extern void cfs_thread_agent_init(void);
+extern void cfs_thread_agent_fini(void);
+extern void cfs_symbol_clean(void);
+extern struct rw_semaphore cfs_symbol_lock;
+extern struct list_head cfs_symbol_list;
+
+int libcfs_arch_init(void)
+{
+	cfs_sync_init();
+
+	cfs_sysctl_init();
+	cfs_mem_cache_init();
+
+	init_rwsem(&cfs_symbol_lock);
+	CFS_INIT_LIST_HEAD(&cfs_symbol_list);
+
+	cfs_thread_agent_init();
+
+	spin_lock_init(&trace_cpu_serializer);
+
+	CFS_INIT_LIST_HEAD(&page_death_row);
+	spin_lock_init(&page_death_row_phylax);
+	return 0;
+}
+
+void libcfs_arch_cleanup(void)
+{
+	cfs_symbol_clean();
+
+	spin_lock_done(&trace_cpu_serializer);
+
+	cfs_thread_agent_fini();
+
+	raw_page_death_row_clean();
+	spin_lock_done(&page_death_row_phylax);
+
+	fini_rwsem(&cfs_symbol_lock);
+
+	cfs_mem_cache_fini();
+	cfs_sysctl_fini();
+
+	cfs_sync_fini();
+}
 

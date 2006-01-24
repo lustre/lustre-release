@@ -17,6 +17,7 @@
 #include <libcfs/darwin/darwin-mem.h>
 #include <libcfs/darwin/darwin-lock.h>
 #include <libcfs/darwin/darwin-fs.h>
+#include <libcfs/darwin/darwin-tcpip.h>
 
 #ifdef __KERNEL__
 # include <sys/types.h>
@@ -90,7 +91,7 @@ struct ptldebug_header {
  * is executed, and decreased on EXIT and RETURN.
  */
 #ifdef __KERNEL__
-#define ENTRY_NESTING_SUPPORT (1)
+#define ENTRY_NESTING_SUPPORT (0)
 #endif
 
 #if ENTRY_NESTING_SUPPORT
@@ -165,7 +166,7 @@ __entry_nesting(&__cdd);
  *
  * Implementation is in darwin-curproc.c
  */
-#define CFS_CURPROC_COMM_MAX (sizeof ((struct proc *)0)->p_comm)
+#define CFS_CURPROC_COMM_MAX    MAXCOMLEN
 /*
  * XNU has no capabilities
  */

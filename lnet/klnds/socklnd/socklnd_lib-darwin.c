@@ -148,7 +148,7 @@ ksocknal_lib_bind_irq (unsigned int irq)
 }
 
 unsigned int
-ksocknal_lib_sock_irq (struct socket *sock)
+ksocknal_lib_sock_irq (cfs_socket_t *sock)
 {
         return 0;
 }
@@ -177,6 +177,373 @@ ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 
         return 0;
 }
+
+static int
+ksocknal_lib_buffersize (int current_sz, int tunable_sz)
+{
+        /* ensure >= SOCKNAL_MIN_BUFFER */
+        if (current_sz < SOCKNAL_MIN_BUFFER)
+                return MAX(SOCKNAL_MIN_BUFFER, tunable_sz);
+
+        if (tunable_sz > SOCKNAL_MIN_BUFFER)
+                return tunable_sz;
+
+        /* leave alone */
+        return 0;
+}
+
+#ifdef __DARWIN8__
+
+int
+ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
+{
+        socket_t        sock = C2B_SOCK(conn->ksnc_sock);
+        size_t          sndlen;
+        int             nob;
+        int             rc;
+
+#if SOCKNAL_SINGLE_FRAG_TX
+        struct iovec    scratch;
+        struct iovec   *scratchiov = &scratch;
+        unsigned int    niov = 1;
+#else
+        struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov;
+        unsigned int    niov = tx->tx_niov;
+#endif
+        struct msghdr msg = {
+                .msg_name       = NULL,
+                .msg_namelen    = 0,
+                .msg_iov        = scratchiov,
+                .msg_iovlen     = niov,
+                .msg_control    = NULL,
+                .msg_controllen = 0,
+                .msg_flags      = MSG_DONTWAIT
+        };
+        
+        int  i;
+        
+        for (nob = i = 0; i < niov; i++) {
+                scratchiov[i] = tx->tx_iov[i];
+                nob += scratchiov[i].iov_len;
+        } 
+        
+        /* 
+         * XXX Liang:
+         * Linux has MSG_MORE, do wen have anyting to
+         * reduce number of partial TCP segments sent?
+         */
+        rc = -sock_send(sock, &msg, MSG_DONTWAIT, &sndlen);
+        if (rc == 0)
+                rc = sndlen;
+        return rc;
+}
+
+int
+ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
+{
+        socket_t       sock = C2B_SOCK(conn->ksnc_sock);
+        lnet_kiov_t   *kiov = tx->tx_kiov;
+        int            rc;
+        int            nob;
+        size_t         sndlen;
+
+#if SOCKNAL_SINGLE_FRAG_TX
+        struct iovec  scratch;
+        struct iovec *scratchiov = &scratch;
+        unsigned int  niov = 1;
+#else
+        struct iovec *scratchiov = conn->ksnc_tx_scratch_iov;
+        unsigned int  niov = tx->tx_nkiov;
+#endif
+        struct msghdr msg = {
+                .msg_name       = NULL,
+                .msg_namelen    = 0,
+                .msg_iov        = scratchiov,
+                .msg_iovlen     = niov,
+                .msg_control    = NULL,
+                .msg_controllen = 0,
+                .msg_flags      = MSG_DONTWAIT
+        };
+        
+        int           i;
+        
+        for (nob = i = 0; i < niov; i++) {
+                scratchiov[i].iov_base = cfs_kmap(kiov[i].kiov_page) +
+                                         kiov[i].kiov_offset;
+                nob += scratchiov[i].iov_len = kiov[i].kiov_len;
+        }
+
+        /* 
+         * XXX Liang:
+         * Linux has MSG_MORE, do wen have anyting to
+         * reduce number of partial TCP segments sent?
+         */
+        rc = -sock_send(sock, &msg, MSG_DONTWAIT, &sndlen);
+        for (i = 0; i < niov; i++)
+                cfs_kunmap(kiov[i].kiov_page);
+        if (rc == 0)
+                rc = sndlen;
+        return rc;
+}
+
+int
+ksocknal_lib_recv_iov (ksock_conn_t *conn)
+{
+#if SOCKNAL_SINGLE_FRAG_RX
+        struct iovec  scratch;
+        struct iovec *scratchiov = &scratch;
+        unsigned int  niov = 1;
+#else
+        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
+        unsigned int  niov = conn->ksnc_rx_niov;
+#endif
+        struct iovec *iov = conn->ksnc_rx_iov;
+        struct msghdr msg = {
+                .msg_name       = NULL,
+                .msg_namelen    = 0,
+                .msg_iov        = scratchiov,
+                .msg_iovlen     = niov,
+                .msg_control    = NULL,
+                .msg_controllen = 0,
+                .msg_flags      = 0
+        };
+        size_t       rcvlen;
+        int          nob;
+        int          i;
+        int          rc;
+
+        LASSERT (niov > 0);
+
+        for (nob = i = 0; i < niov; i++) {
+                scratchiov[i] = iov[i];
+                nob += scratchiov[i].iov_len;
+        }
+        LASSERT (nob <= conn->ksnc_rx_nob_wanted); 
+        rc = -sock_receive (C2B_SOCK(conn->ksnc_sock), &msg, MSG_DONTWAIT, &rcvlen);
+        if (rc == 0)
+                rc = rcvlen;
+
+        return rc;
+}
+
+int
+ksocknal_lib_recv_kiov (ksock_conn_t *conn)
+{
+#if SOCKNAL_SINGLE_FRAG_RX
+        struct iovec  scratch;
+        struct iovec *scratchiov = &scratch;
+        unsigned int  niov = 1;
+#else
+        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
+        unsigned int  niov = conn->ksnc_rx_nkiov;
+#endif
+        lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
+        struct msghdr msg = {
+                .msg_name       = NULL,
+                .msg_namelen    = 0,
+                .msg_iov        = scratchiov,
+                .msg_iovlen     = niov,
+                .msg_control    = NULL,
+                .msg_controllen = 0,
+                .msg_flags      = 0
+        };
+        int          nob;
+        int          i;
+        size_t       rcvlen;
+        int          rc;
+
+        /* NB we can't trust socket ops to either consume our iovs
+         * or leave them alone. */
+        for (nob = i = 0; i < niov; i++) {
+                scratchiov[i].iov_base = cfs_kmap(kiov[i].kiov_page) + \
+                                         kiov[i].kiov_offset;
+                nob += scratchiov[i].iov_len = kiov[i].kiov_len;
+        }
+        LASSERT (nob <= conn->ksnc_rx_nob_wanted);
+        rc = sock_receive(C2B_SOCK(conn->ksnc_sock), &msg, MSG_DONTWAIT, &rcvlen); 
+        for (i = 0; i < niov; i++)
+                cfs_kunmap(kiov[i].kiov_page); 
+        if (rc == 0)
+                rc = rcvlen;
+        return (rc);
+}
+
+void
+ksocknal_lib_eager_ack (ksock_conn_t *conn)
+{
+        /* XXX Liang: */
+}
+
+int
+ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int *nagle)
+{
+        socket_t       sock = C2B_SOCK(conn->ksnc_sock);
+        int            len;
+        int            rc;
+
+        rc = ksocknal_connsock_addref(conn);
+        if (rc != 0) {
+                LASSERT (conn->ksnc_closing);
+                *txmem = *rxmem = *nagle = 0;
+                return (-ESHUTDOWN);
+        }
+        rc = libcfs_sock_getbuf(B2C_SOCK(sock), txmem, rxmem);
+        if (rc == 0) {
+                len = sizeof(*nagle);
+                rc = -sock_getsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+                                      nagle, &len);
+        }
+        ksocknal_connsock_decref(conn);
+
+        if (rc == 0)
+                *nagle = !*nagle;
+        else
+                *txmem = *rxmem = *nagle = 0;
+
+        return (rc);
+}
+
+int
+ksocknal_lib_setup_sock (cfs_socket_t *sock)
+{
+        int             rc; 
+        int             option; 
+        int             sndbuf;
+        int             rcvbuf;
+        int             keep_idle; 
+        int             keep_intvl; 
+        int             keep_count; 
+        int             do_keepalive; 
+        socket_t        so = C2B_SOCK(sock);
+        struct linger   linger;
+
+        /* Ensure this socket aborts active sends immediately when we close
+         * it. */
+        linger.l_onoff = 0;
+        linger.l_linger = 0;
+        rc = -sock_setsockopt(so, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
+        if (rc != 0) {
+                CERROR ("Can't set SO_LINGER: %d\n", rc);
+                return (rc);
+        }
+
+        if (!*ksocknal_tunables.ksnd_nagle) { 
+                option = 1; 
+                rc = -sock_setsockopt(so, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option));
+                if (rc != 0) { 
+                        CERROR ("Can't disable nagle: %d\n", rc); 
+                        return (rc);
+                } 
+        } 
+
+        rc = libcfs_sock_getbuf(sock, &sndbuf, &rcvbuf);
+        if (rc != 0) {
+                CERROR("Can't get buffer sizes: %d\n", rc);
+                return (rc);
+        }
+
+        sndbuf = ksocknal_lib_buffersize(sndbuf,
+                                         *ksocknal_tunables.ksnd_buffer_size);
+        rcvbuf = ksocknal_lib_buffersize(rcvbuf,
+                                         *ksocknal_tunables.ksnd_buffer_size);
+        rc = libcfs_sock_setbuf(sock, sndbuf, rcvbuf);
+        if (rc != 0) {
+                CERROR ("Can't set buffer tx %d, rx %d buffers: %d\n",
+                        sndbuf, rcvbuf, rc);
+                return (rc);
+        }
+
+        /* snapshot tunables */ 
+        keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle; 
+        keep_count = *ksocknal_tunables.ksnd_keepalive_count; 
+        keep_intvl = *ksocknal_tunables.ksnd_keepalive_intvl;
+
+        do_keepalive = (keep_idle > 0 && keep_count > 0 && keep_intvl > 0); 
+        option = (do_keepalive ? 1 : 0); 
+
+        rc = -sock_setsockopt(so, SOL_SOCKET, SO_KEEPALIVE, &option, sizeof(option)); 
+        if (rc != 0) { 
+                CERROR ("Can't set SO_KEEPALIVE: %d\n", rc); 
+                return (rc);
+        }
+        
+        if (!do_keepalive)
+                return (rc);
+        rc = -sock_setsockopt(so, IPPROTO_TCP, TCP_KEEPALIVE, 
+                              &keep_idle, sizeof(keep_idle));
+        
+        return (rc);
+}
+
+void
+ksocknal_lib_push_conn(ksock_conn_t *conn)
+{ 
+        socket_t        sock; 
+        int             val = 1; 
+        int             rc; 
+        
+        rc = ksocknal_connsock_addref(conn); 
+        if (rc != 0)            /* being shut down */ 
+                return; 
+        sock = C2B_SOCK(conn->ksnc_sock); 
+
+        rc = -sock_setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)); 
+        LASSERT(rc == 0);
+
+        ksocknal_connsock_decref(conn);
+        return;
+}
+
+extern void ksocknal_read_callback (ksock_conn_t *conn);
+extern void ksocknal_write_callback (ksock_conn_t *conn);
+
+static void
+ksocknal_upcall(socket_t so, void *arg, int waitf)
+{
+        ksock_conn_t  *conn = (ksock_conn_t *)arg;
+        ENTRY;
+
+        read_lock (&ksocknal_data.ksnd_global_lock);
+        if (conn == NULL)
+                goto out;
+
+        ksocknal_read_callback (conn);
+out:
+        read_unlock (&ksocknal_data.ksnd_global_lock);
+        EXIT;
+}
+
+void
+ksocknal_lib_save_callback(cfs_socket_t *sock, ksock_conn_t *conn)
+{ 
+        /* No callback need to save in osx */
+        return;
+}
+
+void
+ksocknal_lib_set_callback(cfs_socket_t *sock, ksock_conn_t *conn)
+{ 
+        sock->s_upcallarg = (void *)conn;
+        sock->s_upcall = ksocknal_upcall; 
+        sock->s_flags |= CFS_SOCK_UPCALL; 
+        return;
+}
+
+void
+ksocknal_lib_act_callback(cfs_socket_t *sock, ksock_conn_t *conn)
+{
+        ksocknal_upcall (C2B_SOCK(sock), (void *)conn, 0);
+}
+
+void 
+ksocknal_lib_reset_callback(cfs_socket_t *sock, ksock_conn_t *conn)
+{ 
+        sock->s_flags &= ~CFS_SOCK_UPCALL; 
+        sock->s_upcall = NULL; 
+        sock->s_upcallarg = NULL; 
+}
+
+#else /* !__DARWIN8__ */
 
 int
 ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
@@ -524,20 +891,6 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
         return (rc);
 }
 
-static int
-ksocknal_lib_buffersize (int current_sz, int tunable_sz)
-{
-        /* ensure >= SOCKNAL_MIN_BUFFER */
-        if (current_sz < SOCKNAL_MIN_BUFFER)
-                return MAX(SOCKNAL_MIN_BUFFER, tunable_sz);
-
-        if (tunable_sz > SOCKNAL_MIN_BUFFER)
-                return tunable_sz;
-
-        /* leave alone */
-        return 0;
-}
-
 int
 ksocknal_lib_setup_sock (struct socket *so)
 {
@@ -673,6 +1026,7 @@ ksocknal_lib_push_conn(ksock_conn_t *conn)
         return;
 }
 
+
 extern void ksocknal_read_callback (ksock_conn_t *conn);
 extern void ksocknal_write_callback (ksock_conn_t *conn);
 
@@ -751,3 +1105,4 @@ ksocknal_lib_reset_callback(struct socket *sock, ksock_conn_t *conn)
         CFS_NET_EX;
 }
 
+#endif  /* !__DARWIN8__ */

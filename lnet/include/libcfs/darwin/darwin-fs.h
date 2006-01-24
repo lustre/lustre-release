@@ -28,25 +28,13 @@
 
 #include <sys/types.h>
 #include <sys/systm.h>
-/*
- * __APPLE_API_PRIVATE is defined before include user.h
- * Doing this way to get the define of uthread, it's not good
- * but I do need to know what's inside uthread.
- */
-#ifndef __APPLE_API_PRIVATE
-#define __APPLE_API_PRIVATE
-#include <sys/vnode.h>
-#undef __APPLE_API_PRIVATE
-#else
-#include <sys/vnode.h>
-#endif
 
 #include <sys/kernel.h>
 #include <sys/file.h>
 #include <sys/time.h>
 #include <sys/filedesc.h>
-#include <sys/stat.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/ubc.h>
 #include <sys/mbuf.h>
@@ -56,7 +44,6 @@
 #include <stdarg.h>
 
 #include <mach/mach_types.h>
-#include <mach/mach_traps.h>
 #include <mach/time_value.h>
 #include <kern/clock.h>
 #include <sys/param.h>
@@ -70,28 +57,42 @@
 /*
  * File operating APIs in kernel
  */
+#ifdef __DARWIN8__
+/*
+ * Kernel file descriptor
+ */
+typedef struct cfs_kern_file {
+        int             f_flags;
+        vnode_t         f_vp;
+        vfs_context_t   f_ctxt;
+} cfs_file_t;
+
+#else
+
 typedef struct file cfs_file_t;
 
-int	filp_node_size(cfs_file_t *fp, off_t	*size);
+#endif
+
+int	kern_file_size(cfs_file_t *fp, off_t	*size);
 #define cfs_filp_size(fp)			\
 	({					\
 		off_t		__size;		\
-		filp_node_size((fp), &__size);	\
+		kern_file_size((fp), &__size);	\
 		__size;				\
 	 })
 #define cfs_filp_poff(fp)               (NULL)
 
-cfs_file_t *filp_open(const char *name, int flags, int mode, int *err);
-int filp_close(cfs_file_t *fp);
-int filp_read(cfs_file_t *fp, void *buf, size_t nbytes, off_t *pos);
-int filp_write(cfs_file_t *fp, void *buf, size_t nbytes, off_t *pos);
-int filp_fsync(cfs_file_t *fp);
+cfs_file_t *kern_file_open(const char *name, int flags, int mode, int *err);
+int kern_file_close(cfs_file_t *fp);
+int kern_file_read(cfs_file_t *fp, void *buf, size_t nbytes, off_t *pos);
+int kern_file_write(cfs_file_t *fp, void *buf, size_t nbytes, off_t *pos);
+int kern_file_sync(cfs_file_t *fp);
 
-#define cfs_filp_open(n, f, m, e)	filp_open(n, f, m, e)
-#define cfs_filp_close(f)		filp_close(f)
-#define cfs_filp_read(f, b, n, p)	filp_read(f, b, n, p)
-#define cfs_filp_write(f, b, n, p)	filp_write(f, b, n, p)
-#define cfs_filp_fsync(f)		filp_fsync(f)
+#define cfs_filp_open(n, f, m, e)	kern_file_open(n, f, m, e)
+#define cfs_filp_close(f)		kern_file_close(f)
+#define cfs_filp_read(f, b, n, p)	kern_file_read(f, b, n, p)
+#define cfs_filp_write(f, b, n, p)	kern_file_write(f, b, n, p)
+#define cfs_filp_fsync(f)		kern_file_sync(f)
 
 int ref_file(cfs_file_t *fp);
 int rele_file(cfs_file_t *fp);
@@ -182,8 +183,14 @@ typedef struct {
 	void	*d;
 } cfs_dentry_t;
 
+#ifndef O_SYNC
 #define O_SYNC					0
+#endif
+#ifndef O_DIRECTORY
 #define O_DIRECTORY				0
+#endif
+#ifndef O_LARGEFILE
 #define O_LARGEFILE				0
+#endif
 
 #endif
