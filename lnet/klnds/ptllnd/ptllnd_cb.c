@@ -30,14 +30,14 @@ kptllnd_setup_md(
         struct iovec    *payload_iov,
         lnet_kiov_t     *payload_kiov,
         unsigned int     payload_offset,
-        int              payload_nob,
-        tempiov_t       *tempiov)
+        int              payload_nob)
 {
-        unsigned int niov = 0;
+        kptl_fragvec_t *frags = tx->tx_frags;
+        unsigned int    niov = 0;
 
-        PJK_UT_MSG_DATA("%s nob=%d offset=%d niov=%d\n",
-                op == PTL_MD_OP_GET ? "GET" : "PUT",
-                payload_nob,payload_offset,payload_niov);
+        CDEBUG(D_NET, "%s nob=%d offset=%d niov=%d\n",
+               op == PTL_MD_OP_GET ? "GET" : "PUT",
+               payload_nob,payload_offset,payload_niov);
 
         /* One but not both of iov or kiov must be NULL (XOR) */
         LASSERT( (payload_iov != NULL && payload_kiov == NULL) ||
@@ -85,23 +85,23 @@ kptllnd_setup_md(
                 while(payload_nob){
                         LASSERT( payload_offset < payload_iov->iov_len);
                         LASSERT (payload_niov > 0);
-                        LASSERT (niov < sizeof(tempiov->iov)/sizeof(tempiov->iov[0]));
+                        LASSERT (niov < sizeof(frags->iov)/sizeof(frags->iov[0]));
 
-                        tempiov->iov[niov].iov_base = payload_iov->iov_base + payload_offset;
-                        tempiov->iov[niov].iov_len  = min((int)(payload_iov->iov_len - payload_offset),
+                        frags->iov[niov].iov_base = payload_iov->iov_base + payload_offset;
+                        frags->iov[niov].iov_len  = min((int)(payload_iov->iov_len - payload_offset),
                                                 (int)payload_nob);
 
-                        PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiov->iov[niov].iov_base);
-                        PJK_UT_MSG("iov_len[%d] =%d\n",niov,tempiov->iov[niov].iov_len);
+                        CDEBUG(D_NET, "iov_base[%d]=%p\n",niov,frags->iov[niov].iov_base);
+                        CDEBUG(D_NET, "iov_len[%d] =%d\n",niov,(int)frags->iov[niov].iov_len);
 
                         payload_offset = 0;
-                        payload_nob -= tempiov->iov[niov].iov_len;
+                        payload_nob -= frags->iov[niov].iov_len;
                         payload_iov++;
                         payload_niov--;
                         niov++;
                 }
 
-                md->start = tempiov->iov;
+                md->start = frags->iov;
                 md->options |= PTL_MD_IOVEC;
         }else{
 
@@ -117,21 +117,21 @@ kptllnd_setup_md(
                 while(payload_nob){
                         LASSERT( payload_offset < payload_kiov->kiov_len);
                         LASSERT (payload_niov > 0);
-                        LASSERT (niov < sizeof(tempiov->kiov)/sizeof(tempiov->kiov[0]));
+                        LASSERT (niov < sizeof(frags->kiov)/sizeof(frags->kiov[0]));
 
-                        tempiov->kiov[niov].kiov_page   = payload_kiov->kiov_page;
-                        tempiov->kiov[niov].kiov_offset = payload_kiov->kiov_offset + payload_offset;
-                        tempiov->kiov[niov].kiov_len    = min((int)(payload_kiov->kiov_len - payload_offset),
+                        frags->kiov[niov].kiov_page   = payload_kiov->kiov_page;
+                        frags->kiov[niov].kiov_offset = payload_kiov->kiov_offset + payload_offset;
+                        frags->kiov[niov].kiov_len    = min((int)(payload_kiov->kiov_len - payload_offset),
                                                         (int)payload_nob);
 
                         payload_offset = 0;
-                        payload_nob -=  tempiov->kiov[niov].kiov_len;
+                        payload_nob -=  frags->kiov[niov].kiov_len;
                         payload_kiov++;
                         payload_niov--;
                         niov++;
                 }
 
-                md->start = tempiov->kiov;
+                md->start = frags->kiov;
                 md->options |= PTL_MD_KIOV;
 
 #else /* _USING_CRAY_PORTALS_ */
@@ -144,9 +144,9 @@ kptllnd_setup_md(
 #error "Conflicting compilation directives"
 #endif
 
-                PJK_UT_MSG("payload_offset %d\n",payload_offset);
-                PJK_UT_MSG("payload_niov   %d\n",payload_niov);
-                PJK_UT_MSG("payload_nob    %d\n",payload_nob);
+                CDEBUG(D_NET, "payload_offset %d\n",payload_offset);
+                CDEBUG(D_NET, "payload_niov   %d\n",payload_niov);
+                CDEBUG(D_NET, "payload_nob    %d\n",payload_nob);
 
                 while (payload_offset >= payload_kiov->kiov_len) {
                         payload_offset -= payload_kiov->kiov_len;
@@ -165,29 +165,29 @@ kptllnd_setup_md(
                         
                         LASSERT (payload_offset < payload_kiov->kiov_len);
                         LASSERT (payload_niov > 0);
-                        LASSERT (niov < sizeof(tempiov->iov)/sizeof(tempiov->iov[0]));
+                        LASSERT (niov < sizeof(frags->iov)/sizeof(frags->iov[0]));
                         LASSERT (sizeof(void *) > 4 || 
                                  (phys <= 0xffffffffULL &&
                                   phys + (nob - 1) <= 0xffffffffULL));
 
-                        PJK_UT_MSG("kiov_page  [%d]="LPX64" (phys)\n",niov,phys_page);
-                        PJK_UT_MSG("kiov_offset[%d]=%d (phys)\n",niov,payload_kiov->kiov_offset);
-                        PJK_UT_MSG("kiov_len   [%d]=%d (phys)\n",niov,payload_kiov->kiov_len);
+                        CDEBUG(D_NET, "kiov_page  [%d]="LPX64" (phys)\n",niov,phys_page);
+                        CDEBUG(D_NET, "kiov_offset[%d]=%d (phys)\n",niov,payload_kiov->kiov_offset);
+                        CDEBUG(D_NET, "kiov_len   [%d]=%d (phys)\n",niov,payload_kiov->kiov_len);
 
-                        tempiov->iov[niov].iov_base = (void *)((unsigned long)phys);
-                        tempiov->iov[niov].iov_len = nob;
+                        frags->iov[niov].iov_base = (void *)((unsigned long)phys);
+                        frags->iov[niov].iov_len = nob;
 
-                        PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiov->iov[niov].iov_base);
-                        PJK_UT_MSG("iov_len [%d]=%d\n",niov,tempiov->iov[niov].iov_len);
+                        CDEBUG(D_NET, "iov_base[%d]=%p\n",niov,frags->iov[niov].iov_base);
+                        CDEBUG(D_NET, "iov_len [%d]=%d\n",niov,(int)frags->iov[niov].iov_len);
 
                         payload_offset = 0;
-                        payload_nob -= tempiov->iov[niov].iov_len;
+                        payload_nob -= frags->iov[niov].iov_len;
                         payload_kiov++;
                         payload_niov--;
                         niov++;
                 }
 
-                md->start = tempiov->iov;
+                md->start = frags->iov;
                 md->options |= PTL_MD_IOVEC | PTL_MD_PHYS;
 #endif
 
@@ -199,8 +199,8 @@ kptllnd_setup_md(
          */
         md->length = niov;
 
-        PJK_UT_MSG("md->options=%x\n",md->options);
-        PJK_UT_MSG("md->length=%d\n",md->length);
+        CDEBUG(D_NET, "md->options=%x\n",md->options);
+        CDEBUG(D_NET, "md->length=%u\n",(unsigned)md->length);
 }
 
 int
@@ -220,7 +220,6 @@ kptllnd_start_bulk_rdma(
         ptl_err_t        ptl_rc;
         ptl_err_t        ptl_rc2;
         int              rc;
-        tempiov_t        tempiov;
         kptl_msg_t      *rxmsg = rx->rx_msg;
         kptl_peer_t     *peer = rx->rx_peer;
         unsigned long    flags;
@@ -246,28 +245,24 @@ kptllnd_start_bulk_rdma(
         tx->tx_associated_rx = rx;
         kptllnd_rx_addref(rx,"tx");
 
-        PJK_UT_MSG_DATA(">>> %s rx=%p associated with tx=%p\n",
+        CDEBUG(D_NET, ">>> %s rx=%p associated with tx=%p\n",
                 op == PTL_MD_OP_GET ? "GET" : "PUT",
                 rx,tx);
-        PJK_UT_MSG_DATA("matchibts=" LPX64 "\n",
+        CDEBUG(D_NET, "matchibts=" LPX64 "\n",
                 rxmsg->ptlm_u.req.kptlrm_matchbits);
 
         /*
          * Setup the MD
          */
-        kptllnd_setup_md(kptllnd_data,&md,op,tx,
-                payload_niov,payload_iov,payload_kiov,
-                payload_offset,payload_nob,&tempiov);
+        kptllnd_setup_md(kptllnd_data, &md, op, tx,
+                         payload_niov, payload_iov, payload_kiov,
+                         payload_offset, payload_nob);
 
         /*
          * Attach the MD
          */
-        ptl_rc = PtlMDBind(
-                kptllnd_data->kptl_nih,
-                md,
-                PTL_UNLINK,
-                &mdh);
-        if(ptl_rc != PTL_OK){
+        ptl_rc = PtlMDBind(kptllnd_data->kptl_nih, md, PTL_UNLINK, &mdh);
+        if (ptl_rc != PTL_OK) {
                 CERROR("PtlMDBind failed %d\n",ptl_rc);
                 rc = -ENOMEM;
                 goto end;
@@ -370,7 +365,7 @@ end:
          */
         kptllnd_tx_decref(tx);
 
-        PJK_UT_MSG("<<< rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;
 }
 
@@ -413,12 +408,12 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         kptl_data_t      *kptllnd_data = ni->ni_data;
         int               nob;
 
-        PJK_UT_MSG_DATA(">>> SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
-        PJK_UT_MSG_DATA("nob=%d nov=%d offset=%d to %s\n",
+        CDEBUG(D_NET, ">>> SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
+        CDEBUG(D_NET, "nob=%d nov=%d offset=%d to %s\n",
                payload_nob, payload_niov, payload_offset,
                libcfs_id2str(target));
-        PJK_UT_MSG_DATA("routing=%d target_is_router=%d\n",
-                routing,target_is_router);
+        CDEBUG(D_NET, "routing=%d target_is_router=%d\n",
+               routing,target_is_router);
 
         if(routing)
                 STAT_UPDATE(kps_send_routing);
@@ -453,7 +448,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         case LNET_MSG_REPLY:
         case LNET_MSG_PUT:
-                PJK_UT_MSG_DATA("LNET_MSG_PUT/REPLY\n");
+                CDEBUG(D_NET, "LNET_MSG_PUT/REPLY\n");
 
                 /*
                  * Get an idle tx descriptor
@@ -477,12 +472,12 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 kptllnd_do_put(tx,lntmsg,kptllnd_data);
 
-                PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
+                CDEBUG(D_NET, "<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
                 return 0;
 
         case LNET_MSG_GET:
 
-                PJK_UT_MSG_DATA("LNET_MSG_GET\n");
+                CDEBUG(D_NET, "LNET_MSG_GET\n");
 
                 /*
                  * Get an idle tx descriptor
@@ -500,7 +495,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if(target_is_router || routing)
                         break;
 
-                PJK_UT_MSG_DATA("nob=%d\n",lntmsg->msg_md->md_length);
+                CDEBUG(D_NET, "nob=%d\n",lntmsg->msg_md->md_length);
 
                 /* Is the payload small enough not to need RDMA? */
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[lntmsg->msg_md->md_length]);
@@ -533,14 +528,14 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 goto launch;
 
         case LNET_MSG_ACK:
-                PJK_UT_MSG_DATA("LNET_MSG_ACK\n");
+                CDEBUG(D_NET, "LNET_MSG_ACK\n");
                 LASSERT (payload_nob == 0);
                 break;
         }
 
 
         if(tx == NULL){
-                PJK_UT_MSG_DATA("PTLLND_MSG_TYPE_IMMEDIATE\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
 
                 /*
                  * Get an idle tx descriptor
@@ -552,7 +547,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         return -ENOMEM;
                 }
         }else{
-                PJK_UT_MSG_DATA("Using PTLLND_MSG_TYPE_IMMEDIATE\n");
+                CDEBUG(D_NET, "Using PTLLND_MSG_TYPE_IMMEDIATE\n");
                 /*
                  * Repurpose this TX
                  */
@@ -593,7 +588,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
 launch:
         kptllnd_tx_launch(tx, target, lntmsg);
-        PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
+        CDEBUG(D_NET, "<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
         return 0;
 }
 
@@ -606,7 +601,7 @@ int kptllnd_eager_recv(
         //kptl_data_t    *kptllnd_data = ni->ni_data;
         kptl_rx_t    *rx = private;
 
-        PJK_UT_MSG_DATA("Eager RX=%p RXB=%p\n",rx,rx->rx_rxb);
+        CDEBUG(D_NET, "Eager RX=%p RXB=%p\n",rx,rx->rx_rxb);
 
         LASSERT(rx->rx_nob < *kptllnd_tunables.kptl_max_msg_size);
 
@@ -645,8 +640,8 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         int           nob;
         int           rc;
 
-        PJK_UT_MSG_DATA(">>> RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
-        PJK_UT_MSG_DATA("niov=%d offset=%d mlen=%d rlen=%d\n",
+        CDEBUG(D_NET, ">>> RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
+        CDEBUG(D_NET, "niov=%d offset=%d mlen=%d rlen=%d\n",
                 niov,offset,mlen,rlen);
 
         LASSERT (mlen <= rlen);
@@ -682,7 +677,7 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
-                PJK_UT_MSG_DATA("PTLLND_MSG_TYPE_IMMEDIATE\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
 
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[rlen]);
                 if (nob > *kptllnd_tunables.kptl_max_msg_size) {
@@ -712,7 +707,7 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 break;
 
         case PTLLND_MSG_TYPE_GET:
-                PJK_UT_MSG_DATA("PTLLND_MSG_TYPE_GET\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_GET\n");
 
                 if (lntmsg == NULL) {
                         /* No match for the GET request */
@@ -730,12 +725,12 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                                 lntmsg->msg_kiov,
                                 lntmsg->msg_offset,
                                 lntmsg->msg_len);
-                        PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS rc=%d\n",rc);
+                        CDEBUG(D_NET, "<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS rc=%d\n",rc);
                 }
                 break;
 
         case PTLLND_MSG_TYPE_PUT:
-                PJK_UT_MSG_DATA("PTLLND_MSG_TYPE_PUT\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_PUT\n");
 
                 if (mlen == 0) { /* No payload */
                         lnet_finalize(ni, lntmsg, 0);
@@ -760,7 +755,7 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
          */
         kptllnd_rx_decref(rx,"lnet_parse",kptllnd_data);
 
-        PJK_UT_MSG_DATA("<<< RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR rc=%d\n",rc);
         return rc;
 }
 
@@ -845,7 +840,7 @@ kptllnd_watchdog(void *arg)
         int                timeout;
         int                i;
 
-        PJK_UT_MSG(">>>\n");
+        CDEBUG(D_NET, ">>>\n");
 
         /*
          * Daemonize
@@ -907,7 +902,7 @@ kptllnd_watchdog(void *arg)
         }
 
         kptllnd_thread_fini(thread_data);
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
         return (0);
 };
 
@@ -924,7 +919,7 @@ kptllnd_scheduler(void *arg)
         kptl_rx_buffer_t        *rxb = NULL;
         kptl_tx_t               *tx = NULL;
 
-        PJK_UT_MSG(">>>\n");
+        CDEBUG(D_NET, ">>>\n");
 
         /*
          * Daemonize
@@ -997,9 +992,9 @@ kptllnd_scheduler(void *arg)
                         if(rxb)
                                 kptllnd_rx_buffer_post_handle_error(rxb);
                         if(tx){
-                                PJK_UT_MSG(">>> tx=%p\n",tx);
+                                CDEBUG(D_NET, ">>> tx=%p\n",tx);
                                 kptllnd_tx_done(tx);
-                                PJK_UT_MSG("<<<\n");
+                                CDEBUG(D_NET, "<<<\n");
                         }
 
                         /*
@@ -1010,7 +1005,7 @@ kptllnd_scheduler(void *arg)
         }
 
         kptllnd_thread_fini(thread_data);
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
         return (0);
 }
 
@@ -1025,7 +1020,7 @@ void kptllnd_clean_canceled_peers(kptl_data_t *kptllnd_data)
 
 
         if(!list_empty(&kptllnd_data->kptl_canceled_peers)){
-                PJK_UT_MSG("Cleaning Canceled Peers\n");
+                CDEBUG(D_NET, "Cleaning Canceled Peers\n");
                 STAT_UPDATE(kps_cleaning_caneled_peers);
         }
 

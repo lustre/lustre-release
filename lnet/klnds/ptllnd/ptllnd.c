@@ -194,8 +194,8 @@ kptllnd_msg_unpack(kptl_msg_t *msg, int nob,kptl_data_t *kptllnd_data)
         /*
          * Src nid can not be ANY
          */
-        if (msg->ptlm_srcnid == PTL_NID_ANY) {
-                CERROR("Bad src nid: "LPX64"\n", msg->ptlm_srcnid);
+        if (msg->ptlm_srcnid == LNET_NID_ANY) {
+                CERROR("Bad src nid: %s\n", libcfs_nid2str(msg->ptlm_srcnid));
                 return -EPROTO;
         }
 
@@ -211,7 +211,7 @@ kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
         int          rc = -EINVAL;
         kptl_data_t *kptllnd_data = ni->ni_data;
 
-        PJK_UT_MSG(">>> kptllnd_ctl cmd=%u arg=%p\n",cmd,arg);
+        CDEBUG(D_NET, ">>> kptllnd_ctl cmd=%u arg=%p\n",cmd,arg);
 
         /*
          * Validate that the context block is actually
@@ -221,7 +221,7 @@ kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 
         switch(cmd) {
         case IOC_LIBCFS_DEL_PEER: {
-                rc = kptllnd_peer_del (kptllnd_data,data->ioc_nid);
+                rc = kptllnd_peer_del (kptllnd_data, data->ioc_nid);
                 break;
         }
         /*
@@ -237,7 +237,7 @@ kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
                 rc=-EINVAL;
                 break;
         }
-        PJK_UT_MSG("<<< kptllnd_ctl rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< kptllnd_ctl rc=%d\n",rc);
         return rc;
 }
 
@@ -268,7 +268,7 @@ kptllnd_startup (lnet_ni_t *ni)
         ptl_err_t       ptl_rc;
 
 
-        PJK_UT_MSG(">>>\n");
+        CDEBUG(D_NET, ">>>\n");
 
         LASSERT (ni->ni_lnd == &kptllnd_lnd);
 
@@ -335,7 +335,7 @@ kptllnd_startup (lnet_ni_t *ni)
                 8,                      /* We use callback - no need for max */
                 kptllnd_eq_callback,    /* handler callback */
                 &kptllnd_data->kptl_eqh);   /* output handle */
-        if(ptl_rc != 0) {
+        if(ptl_rc != PTL_OK) {
                 CERROR("PtlEQAlloc failed %d\n",ptl_rc);
                 rc = -ENOMEM;
                 goto failed;
@@ -344,33 +344,39 @@ kptllnd_startup (lnet_ni_t *ni)
         /*
          * Fetch the lower NID
          */
-        if(ptl_rc != PtlGetId(kptllnd_data->kptl_nih,&kptllnd_data->kptl_portals_id)){
+        ptl_rc != PtlGetId(kptllnd_data->kptl_nih, &kptllnd_data->kptl_portals_id);
+        if (ptl_rc != PTL_OK) {
                 CERROR ("PtlGetID: error %d\n", ptl_rc);
                 rc = -EINVAL;
                 goto failed;
         }
 
-        PJK_UT_MSG("lnet nid=" LPX64 " (passed in)\n",ni->ni_nid);
+        if (kptllnd_data->kptl_portals_id.pid != PTLLND_PID) {
+                /* The kernel ptllnd must have the expected PID */
+                CERROR("Unexpected PID: %u (%u expected)\n",
+                       kptllnd_data->kptl_portals_id.pid, PTLLND_PID);
+                rc = -EINVAL;
+                goto failed;
+        }
+        
+        CDEBUG(D_NET, "lnet nid=" LPX64 " (passed in)\n",ni->ni_nid);
 
         /*
          * Create the new NID.  Based on the LND network type
          * and the lower ni's address data.
          */
-        ni->ni_nid = ptl2lnetnid(kptllnd_data,kptllnd_data->kptl_portals_id.nid);
+        ni->ni_nid = ptl2lnetnid(kptllnd_data, kptllnd_data->kptl_portals_id.nid);
 
-        PJK_UT_MSG("ptl  nid=" FMT_NID "\n",kptllnd_data->kptl_portals_id.nid);
-        PJK_UT_MSG("lnet nid=" LPX64 " (passed back)\n",ni->ni_nid);
-
-        CDEBUG(D_INFO,"ptl  nid=" FMT_NID "\n",kptllnd_data->kptl_portals_id.nid);
-        CDEBUG(D_INFO,"lnet nid=" LPX64 "\n",ni->ni_nid);
+        CDEBUG(D_NET, "ptl  nid=" FMT_NID "\n",kptllnd_data->kptl_portals_id.nid);
+        CDEBUG(D_NET, "ptl  pid= %d\n", kptllnd_data->kptl_portals_id.pid);
+        CDEBUG(D_NET, "lnet nid=" LPX64 " (passed back)\n",ni->ni_nid);
 
         /*
          * Initialized the incarnation
          */
         do_gettimeofday(&tv);
         kptllnd_data->kptl_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
-        PJK_UT_MSG("Incarnation=" LPX64 "\n",kptllnd_data->kptl_incarnation);
-        CDEBUG(D_INFO,"Incarnation=" LPX64 "\n",kptllnd_data->kptl_incarnation);
+        CDEBUG(D_NET, "Incarnation=" LPX64 "\n",kptllnd_data->kptl_incarnation);
 
         /*
          * Setup the sched locks/lists/waitq
@@ -390,7 +396,7 @@ kptllnd_startup (lnet_ni_t *ni)
         /*
          * Allocate and setup the peer hash table
          */
-        PJK_UT_MSG("Allocate Peer Hash Table\n");
+        CDEBUG(D_NET, "Allocate Peer Hash Table\n");
         rwlock_init(&kptllnd_data->kptl_peer_rw_lock);
         kptllnd_data->kptl_peer_hash_size = *kptllnd_tunables.kptl_peer_hash_table_size;
         INIT_LIST_HEAD(&kptllnd_data->kptl_canceled_peers);
@@ -416,7 +422,7 @@ kptllnd_startup (lnet_ni_t *ni)
          * this will be automatically cleaned up now that PTLNAT_INIT_DATA
          * state has been entered
          */
-        PJK_UT_MSG("starting %d scheduler threads\n",PTLLND_N_SCHED);
+        CDEBUG(D_NET, "starting %d scheduler threads\n",PTLLND_N_SCHED);
         for (i = 0; i < PTLLND_N_SCHED; i++) {
                 rc = kptllnd_thread_start (
                         kptllnd_scheduler,
@@ -443,7 +449,7 @@ kptllnd_startup (lnet_ni_t *ni)
          * because we'll use the pointer being NULL as a sentry
          * to know that we have to clean this up
          */
-        PJK_UT_MSG("Allocate TX Descriptor array\n");
+        CDEBUG(D_NET, "Allocate TX Descriptor array\n");
         LIBCFS_ALLOC (kptllnd_data->kptl_tx_descs,
                       (*kptllnd_tunables.kptl_ntx) * sizeof(kptl_tx_t));
         if (kptllnd_data->kptl_tx_descs == NULL){
@@ -501,13 +507,13 @@ kptllnd_startup (lnet_ni_t *ni)
 
         /*****************************************************/
 
-        PJK_UT_MSG("<<< kptllnd_startup SUCCESS\n");
+        CDEBUG(D_NET, "<<< kptllnd_startup SUCCESS\n");
         return 0;
 
  failed:
         CDEBUG(D_NET, "kptllnd_startup failed rc=%d\n",rc);
         kptllnd_shutdown (ni);
-        PJK_UT_MSG("<<< kptllnd_startup rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< kptllnd_startup rc=%d\n",rc);
         return rc;
 }
 
@@ -517,7 +523,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
         int             i;
         kptl_data_t    *kptllnd_data = ni->ni_data;
 
-        PJK_UT_MSG(">>> kptllnd_shutdown\n");
+        CDEBUG(D_NET, ">>> kptllnd_shutdown\n");
 
         /*
          * Validate that the context block is actually
@@ -536,7 +542,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
 
         case PTLLND_INIT_ALL:
         case PTLLND_INIT_RXD:
-                PJK_UT_MSG("PTLLND_INIT_RXD\n");
+                CDEBUG(D_NET, "PTLLND_INIT_RXD\n");
 
                 kptllnd_rx_buffer_pool_fini(
                         &kptllnd_data->kptl_rx_buffer_pool);
@@ -546,17 +552,17 @@ kptllnd_shutdown (lnet_ni_t *ni)
 
                 /* fall through */
         case PTLLND_INIT_TXD:
-                PJK_UT_MSG("PTLLND_INIT_TXD\n");
+                CDEBUG(D_NET, "PTLLND_INIT_TXD\n");
 
                 /*
                  * If there were peers started up then
                  * clean them up.
                  */
                 if( atomic_read(&kptllnd_data->kptl_npeers) != 0) {
-                        PJK_UT_MSG("Deleting %d peers\n",atomic_read(&kptllnd_data->kptl_npeers));
+                        CDEBUG(D_NET, "Deleting %d peers\n",atomic_read(&kptllnd_data->kptl_npeers));
 
                         /* nuke all peers */
-                        kptllnd_peer_del(kptllnd_data,PTL_NID_ANY);
+                        kptllnd_peer_del(kptllnd_data, LNET_NID_ANY);
 
                         i = 2;
                         while (atomic_read (&kptllnd_data->kptl_npeers) != 0) {
@@ -565,14 +571,14 @@ kptllnd_shutdown (lnet_ni_t *ni)
                                 CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                                        "Waiting for %d peers to terminate\n",
                                        atomic_read (&kptllnd_data->kptl_npeers));
-                                PJK_UT_MSG("Waiting for %d peers to terminate\n",
+                                CDEBUG(D_NET, "Waiting for %d peers to terminate\n",
                                         atomic_read (&kptllnd_data->kptl_npeers));
                                 cfs_pause(cfs_time_seconds(1));
                         }
                 }
 
                 LASSERT(list_empty(&kptllnd_data->kptl_canceled_peers));
-                PJK_UT_MSG("All peers deleted\n");
+                CDEBUG(D_NET, "All peers deleted\n");
 
                 /*
                  * Set the shutdown flag
@@ -589,7 +595,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
                  * if we are not in the right state.
                  */
                 if(atomic_read (&kptllnd_data->kptl_nthreads) != 0){
-                        PJK_UT_MSG("Stopping %d threads\n",atomic_read(&kptllnd_data->kptl_nthreads));
+                        CDEBUG(D_NET, "Stopping %d threads\n",atomic_read(&kptllnd_data->kptl_nthreads));
                         /*
                          * Wake up all the schedulers
                          */
@@ -601,13 +607,13 @@ kptllnd_shutdown (lnet_ni_t *ni)
                                 CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                                        "Waiting for %d threads to terminate\n",
                                        atomic_read (&kptllnd_data->kptl_nthreads));
-                                PJK_UT_MSG("Waiting for %d threads to terminate\n",
+                                CDEBUG(D_NET, "Waiting for %d threads to terminate\n",
                                         atomic_read (&kptllnd_data->kptl_nthreads));
                                 cfs_pause(cfs_time_seconds(1));
                         }
 
                 }
-                PJK_UT_MSG("All Threads stopped\n");
+                CDEBUG(D_NET, "All Threads stopped\n");
 
 
                 LASSERT(list_empty(&kptllnd_data->kptl_sched_txq));
@@ -617,7 +623,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
                 /* fall through */
         case PTLLND_INIT_DATA:
 
-                PJK_UT_MSG("PTLLND_INIT_DATA\n");
+                CDEBUG(D_NET, "PTLLND_INIT_DATA\n");
 
                 LASSERT (atomic_read(&kptllnd_data->kptl_npeers) == 0);
                 LASSERT (kptllnd_data->kptl_peers != NULL);
@@ -633,7 +639,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
                 /* fall through */
 
         case PTLLND_INIT_NOTHING:
-                PJK_UT_MSG("PTLLND_INIT_NOTHING\n");
+                CDEBUG(D_NET, "PTLLND_INIT_NOTHING\n");
                 break;
         }
 
@@ -688,7 +694,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
                atomic_read (&libcfs_kmemory));
 
         PORTAL_MODULE_UNUSE;
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
 }
 
 int __init
@@ -696,7 +702,7 @@ kptllnd_module_init (void)
 {
         int    rc;
 
-        PJK_UT_MSG(">>> %s %s\n",__DATE__,__TIME__);
+        CDEBUG(D_NET, ">>> %s %s\n",__DATE__,__TIME__);
 
         /*
          * Display the module parameters
@@ -730,7 +736,7 @@ kptllnd_module_init (void)
         kptllnd_proc_init();
         lnet_register_lnd(&kptllnd_lnd);
 
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
         return 0;
 }
 
@@ -738,12 +744,12 @@ void __exit
 kptllnd_module_fini (void)
 {
 
-        PJK_UT_MSG(">>> %s %s\n",__DATE__,__TIME__);
+        CDEBUG(D_NET, ">>> %s %s\n",__DATE__,__TIME__);
         lnet_unregister_lnd(&kptllnd_lnd);
         kptllnd_proc_fini();
         kptllnd_tunables_fini();
-        kpttllnd_get_stats();
-        PJK_UT_MSG("<<<\n");
+        // kpttllnd_get_stats();
+        CDEBUG(D_NET, "<<<\n");
 }
 
 #define DO_TYPE(x) case x: return #x;
@@ -782,7 +788,7 @@ const char *get_msg_type_string(int type)
         }
 }
 
-#define LOGSTAT(x) PJK_UT_MSG_ALWAYS("%30.30s %d\n",#x,kptllnd_stats.x);
+#define LOGSTAT(x) CDEBUG(D_NET, "%30.30s %d\n",#x,kptllnd_stats.x);
 
 kptl_stats_t* kpttllnd_get_stats(void)
 {

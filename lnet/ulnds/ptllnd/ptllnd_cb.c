@@ -76,7 +76,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
         ptllnd_tx_t       *tx;
         int                rc;
 
-        PJK_UT_MSG(">>> nid=%s\n",libcfs_nid2str(nid));
+        CDEBUG(D_NET, ">>> nid=%s\n",libcfs_nid2str(nid));
 
         LASSERT (LNET_NIDNET(nid) == LNET_NIDNET(ni->ni_nid));
 
@@ -85,7 +85,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
 
                 if (plp->plp_nid == nid) {
                         ptllnd_peer_addref(plp);
-                        PJK_UT_MSG("<<< peer=%p FOUND\n",plp);
+                        CDEBUG(D_NET, "<<< peer=%p FOUND\n",plp);
                         return plp;
                 }
         }
@@ -109,12 +109,12 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
                 return NULL;
         }
 
-        PJK_UT_MSG("new peer=%p\n",plp);
+        CDEBUG(D_NET, "new peer=%p\n",plp);
 
         plp->plp_ni = ni;
         plp->plp_nid = nid;
         plp->plp_ptlid.nid = LNET_NIDADDR(nid);
-        plp->plp_ptlid.pid = plni->plni_pid;
+        plp->plp_ptlid.pid = plni->plni_ptllnd_pid;
         plp->plp_max_credits =
         plp->plp_credits = 1; /* add more later when she gives me credits */
         plp->plp_max_msg_size = plni->plni_max_msg_size; /* until I hear from her */
@@ -143,7 +143,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
 
         ptllnd_post_tx(tx);
 
-        PJK_UT_MSG("<<< peer=%p NEW\n",plp);
+        CDEBUG(D_NET, "<<< peer=%p NEW\n",plp);
         return plp;
 }
 
@@ -177,7 +177,7 @@ ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
         ptllnd_tx_t *tx;
         int          msgsize;
 
-        PJK_UT_MSG("peer=%p type=%d payload=%d\n",peer,type,payload_nob);
+        CDEBUG(D_NET, "peer=%p type=%d payload=%d\n",peer,type,payload_nob);
 
         switch (type) {
         default:
@@ -215,7 +215,7 @@ ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
 
         LASSERT (msgsize <= peer->plp_max_msg_size);
 
-        PJK_UT_MSG("msgsize=%d\n",msgsize);
+        CDEBUG(D_NET, "msgsize=%d\n",msgsize);
 
         LIBCFS_ALLOC(tx, offsetof(ptllnd_tx_t, tx_msg) + msgsize);
 
@@ -254,7 +254,7 @@ ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
         ptllnd_peer_addref(peer);
         plni->plni_ntxs++;
 
-        PJK_UT_MSG("tx=%p\n",tx);
+        CDEBUG(D_NET, "tx=%p\n",tx);
 
         return tx;
 }
@@ -289,12 +289,12 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
          * events for this tx until it's unlinked.  So I set tx_completing to
          * flag the tx is getting handled */
 
-        PJK_UT_MSG(">>> tx=%p peer=%p\n",tx,peer);
-        PJK_UT_MSG("completing=%d\n",tx->tx_completing);
-        PJK_UT_MSG("status=%d\n",tx->tx_status);
-        PJK_UT_MSG("niov=%d\n",tx->tx_niov);
-        PJK_UT_MSG("lnetreplymsg=%p\n",tx->tx_lnetreplymsg);
-        PJK_UT_MSG("lnetmsg=%p\n",tx->tx_lnetmsg);
+        CDEBUG(D_NET, ">>> tx=%p peer=%p\n",tx,peer);
+        CDEBUG(D_NET, "completing=%d\n",tx->tx_completing);
+        CDEBUG(D_NET, "status=%d\n",tx->tx_status);
+        CDEBUG(D_NET, "niov=%d\n",tx->tx_niov);
+        CDEBUG(D_NET, "lnetreplymsg=%p\n",tx->tx_lnetreplymsg);
+        CDEBUG(D_NET, "lnetmsg=%p\n",tx->tx_lnetmsg);
 
         if (tx->tx_completing)
                 return;
@@ -320,7 +320,7 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
                 LASSERT (tx->tx_lnetmsg != NULL);
                 /* Simulate GET success always  */
                 lnet_finalize(ni, tx->tx_lnetmsg, 0);
-                PJK_UT_MSG("lnet_finalize(tx_lnetreplymsg=%p)\n",tx->tx_lnetreplymsg);
+                CDEBUG(D_NET, "lnet_finalize(tx_lnetreplymsg=%p)\n",tx->tx_lnetreplymsg);
                 lnet_finalize(ni, tx->tx_lnetreplymsg, tx->tx_status);
         } else if (tx->tx_lnetmsg != NULL) {
                 lnet_finalize(ni, tx->tx_lnetmsg, tx->tx_status);
@@ -332,7 +332,7 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
         plni->plni_ntxs--;
         LIBCFS_FREE(tx, offsetof(ptllnd_tx_t, tx_msg) + tx->tx_msgsize);
 
-        PJK_UT_MSG("<<< tx=%p\n",tx);
+        CDEBUG(D_NET, "<<< tx=%p\n",tx);
 }
 
 void
@@ -361,9 +361,9 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 return 0;
         }
 
-        PJK_UT_MSG("niov  =%d\n",niov);
-        PJK_UT_MSG("offset=%d\n",offset);
-        PJK_UT_MSG("len   =%d\n",len);
+        CDEBUG(D_NET, "niov  =%d\n",niov);
+        CDEBUG(D_NET, "offset=%d\n",offset);
+        CDEBUG(D_NET, "len   =%d\n",len);
 
 
         /*
@@ -380,9 +380,9 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 iov++;
         }
 
-        PJK_UT_MSG("niov  =%d (after)\n",niov);
-        PJK_UT_MSG("offset=%d (after)\n",offset);
-        PJK_UT_MSG("len   =%d (after)\n",len);
+        CDEBUG(D_NET, "niov  =%d (after)\n",niov);
+        CDEBUG(D_NET, "offset=%d (after)\n",offset);
+        CDEBUG(D_NET, "len   =%d (after)\n",len);
 
         for (;;) {
                 int temp_offset = offset;
@@ -392,10 +392,10 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                         return -ENOMEM;
 
                 for (npiov = 0;; npiov++) {
-                        PJK_UT_MSG("npiov=%d\n",npiov);
-                        PJK_UT_MSG("offset=%d\n",temp_offset);
-                        PJK_UT_MSG("len=%d\n",resid);
-                        PJK_UT_MSG("iov[npiov].iov_len=%d\n",iov[npiov].iov_len);
+                        CDEBUG(D_NET, "npiov=%d\n",npiov);
+                        CDEBUG(D_NET, "offset=%d\n",temp_offset);
+                        CDEBUG(D_NET, "len=%d\n",resid);
+                        CDEBUG(D_NET, "iov[npiov].iov_len=%d\n",iov[npiov].iov_len);
 
                         LASSERT (npiov < niov);
                         LASSERT (iov->iov_len >= temp_offset);
@@ -415,8 +415,8 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 if (npiov == niov) {
                         tx->tx_niov = niov;
                         tx->tx_iov = piov;
-                        PJK_UT_MSG("tx->tx_iov=%p\n",tx->tx_iov);
-                        PJK_UT_MSG("tx->tx_niov=%d\n",tx->tx_niov);
+                        CDEBUG(D_NET, "tx->tx_iov=%p\n",tx->tx_iov);
+                        CDEBUG(D_NET, "tx->tx_niov=%d\n",tx->tx_niov);
                         return 0;
                 }
 
@@ -507,15 +507,15 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
         ptl_handle_md_t mdh;
         int             rc;
 
-        PJK_UT_MSG(">>> peer=%p\n",peer);
-        PJK_UT_MSG("plp_outstanding_credits=%d\n",peer->plp_outstanding_credits);
+        CDEBUG(D_NET, ">>> peer=%p\n",peer);
+        CDEBUG(D_NET, "plp_outstanding_credits=%d\n",peer->plp_outstanding_credits);
 
         if (list_empty(&peer->plp_txq) &&
             peer->plp_outstanding_credits >=
             PTLLND_CREDIT_HIGHWATER(plni)) {
 
                 tx = ptllnd_new_tx(peer, PTLLND_MSG_TYPE_NOOP, 0);
-                PJK_UT_MSG("NOOP tx=%p\n",tx);
+                CDEBUG(D_NET, "NOOP tx=%p\n",tx);
                 if (tx == NULL) {
                         CERROR("Can't return credits to %s\n",
                                libcfs_nid2str(peer->plp_nid));
@@ -527,9 +527,9 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
         while (!list_empty(&peer->plp_txq)) {
                 tx = list_entry(peer->plp_txq.next, ptllnd_tx_t, tx_list);
 
-                PJK_UT_MSG("Looking at TX=%p\n",tx);
-                PJK_UT_MSG("plp_credits=%d\n",peer->plp_credits);
-                PJK_UT_MSG("plp_outstanding_credits=%d\n",peer->plp_outstanding_credits);
+                CDEBUG(D_NET, "Looking at TX=%p\n",tx);
+                CDEBUG(D_NET, "plp_credits=%d\n",peer->plp_credits);
+                CDEBUG(D_NET, "plp_outstanding_credits=%d\n",peer->plp_outstanding_credits);
 
                 LASSERT (tx->tx_msgsize > 0);
 
@@ -548,7 +548,7 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
 
                 list_del_init(&tx->tx_list);
 
-                PJK_UT_MSG("Sending at TX=%p type=%s (%d)\n",tx,
+                CDEBUG(D_NET, "Sending at TX=%p type=%s (%d)\n",tx,
                         get_msg_type_string(tx->tx_type),tx->tx_type);
 
                 if (tx->tx_type == PTLLND_MSG_TYPE_NOOP &&
@@ -567,7 +567,7 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                  */
                 tx->tx_msg.ptlm_dststamp = peer->plp_stamp;
 
-                PJK_UT_MSG("Returning %d to peer\n",peer->plp_outstanding_credits);
+                CDEBUG(D_NET, "Returning %d to peer\n",peer->plp_outstanding_credits);
 
                 /*
                  * Return all the credits we have
@@ -611,7 +611,7 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                 list_add_tail(&tx->tx_list, &plni->plni_active_txs);
         }
 
-        PJK_UT_MSG("<<< peer=%p\n",peer);
+        CDEBUG(D_NET, "<<< peer=%p\n",peer);
 }
 
 int
@@ -629,9 +629,9 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         int             rc;
         int             rc2;
 
-        PJK_UT_MSG(">>> peer=%p type=%s(%d) tx=%p\n",peer,
+        CDEBUG(D_NET, ">>> peer=%p type=%s(%d) tx=%p\n",peer,
                 type == PTLLND_MSG_TYPE_GET ? "GET" : "PUT/REPLY",type,tx);
-        PJK_UT_MSG("niov=%d offset=%d len=%d\n",niov,offset,len);
+        CDEBUG(D_NET, "niov=%d offset=%d len=%d\n",niov,offset,len);
 
         LASSERT (type == PTLLND_MSG_TYPE_GET ||
                  type == PTLLND_MSG_TYPE_PUT);
@@ -663,7 +663,7 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         ptllnd_set_md_buffer(&md, tx);
 
         while (!peer->plp_recvd_hello) {        /* wait to validate plp_match */
-                PJK_UT_MSG("Wait For Hello\n");
+                CDEBUG(D_NET, "Wait For Hello\n");
                 if (peer->plp_closing) {
                         rc = -EIO;
                         goto failed;
@@ -674,8 +674,8 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         if(peer->plp_match < PTL_RESERVED_MATCHBITS)
                 peer->plp_match = PTL_RESERVED_MATCHBITS;
         matchbits = peer->plp_match++;
-        PJK_UT_MSG("matchbits " LPX64 "\n",matchbits);
-        PJK_UT_MSG("nid " FMT_NID " pid=%d\n",peer->plp_ptlid.nid,peer->plp_ptlid.pid);
+        CDEBUG(D_NET, "matchbits " LPX64 "\n",matchbits);
+        CDEBUG(D_NET, "nid " FMT_NID " pid=%d\n",peer->plp_ptlid.nid,peer->plp_ptlid.pid);
 
         rc = PtlMEAttach(plni->plni_nih, plni->plni_portal, peer->plp_ptlid,
                          matchbits, 0, PTL_UNLINK, PTL_INS_BEFORE, &meh);
@@ -686,15 +686,13 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
                 goto failed;
         }
 
-/*
-        PJK_UT_MSG("md.start=%p\n",md.start);
-        PJK_UT_MSG("md.length=%d\n",md.length);
-        PJK_UT_MSG("md.threshold=%d\n",md.threshold);
-        PJK_UT_MSG("md.max_size=%d\n",md.max_size);
-        PJK_UT_MSG("md.options=0x%x\n",md.options);
-        PJK_UT_MSG("md.user_ptr=%p\n",md.user_ptr);
-        PJK_UT_MSG("md.eq_handle=%p\n",md.eq_handle);
-*/
+        CDEBUG(D_NET, "md.start=%p\n",md.start);
+        CDEBUG(D_NET, "md.length=%d\n",md.length);
+        CDEBUG(D_NET, "md.threshold=%d\n",md.threshold);
+        CDEBUG(D_NET, "md.max_size=%d\n",md.max_size);
+        CDEBUG(D_NET, "md.options=0x%x\n",md.options);
+        CDEBUG(D_NET, "md.user_ptr=%p\n",md.user_ptr);
+
         rc = PtlMDAttach(meh, md, LNET_UNLINK, &mdh);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach for %s failed: %d\n",
@@ -728,12 +726,12 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
 
         tx->tx_lnetmsg = msg;
         ptllnd_post_tx(tx);
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
         return 0;
 
  failed:
         ptllnd_tx_done(tx);
-        PJK_UT_MSG("<<< rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;
 }
 
@@ -750,9 +748,9 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
         ptl_handle_md_t  mdh;
         int              rc;
 
-        PJK_UT_MSG(">>> peer=%p type=%d tx=%p\n",peer,type,tx);
-        PJK_UT_MSG("niov=%u offset=%u len=%u\n",niov,offset,len);
-        PJK_UT_MSG("matchbits " LPX64 "\n",matchbits);
+        CDEBUG(D_NET, ">>> peer=%p type=%d tx=%p\n",peer,type,tx);
+        CDEBUG(D_NET, "niov=%u offset=%u len=%u\n",niov,offset,len);
+        CDEBUG(D_NET, "matchbits " LPX64 "\n",matchbits);
 
         LASSERT (type == PTLLND_RDMA_READ ||
                  type == PTLLND_RDMA_WRITE);
@@ -805,7 +803,7 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
                 rc = PtlPut(mdh, PTL_NOACK_REQ, peer->plp_ptlid,
                             plni->plni_portal, 0, matchbits, 0, 0);
         if (rc == 0){
-                PJK_UT_MSG("<<<\n");
+                CDEBUG(D_NET, "<<<\n");
                 return 0;
         }
 
@@ -813,7 +811,7 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
  failed:
         tx->tx_status = rc;
         ptllnd_tx_done(tx);    /* this will close peer */
-        PJK_UT_MSG("<<< rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;
 }
 
@@ -831,11 +829,11 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
 
         LASSERT (msg->msg_niov <= PTL_MD_MAX_IOV); /* !!! */
 
-        PJK_UT_MSG("msg=%p nid=%s\n",msg,libcfs_nid2str(msg->msg_target.nid));
-        PJK_UT_MSG("is_target_router=%d\n",msg->msg_target_is_router);
-        PJK_UT_MSG("msg_niov=%d\n",msg->msg_niov);
-        PJK_UT_MSG("msg_offset=%d\n",msg->msg_offset);
-        PJK_UT_MSG("msg_len=%d\n",msg->msg_len);
+        CDEBUG(D_NET, "msg=%p nid=%s\n",msg,libcfs_nid2str(msg->msg_target.nid));
+        CDEBUG(D_NET, "is_target_router=%d\n",msg->msg_target_is_router);
+        CDEBUG(D_NET, "msg_niov=%d\n",msg->msg_niov);
+        CDEBUG(D_NET, "msg_offset=%d\n",msg->msg_offset);
+        CDEBUG(D_NET, "msg_len=%d\n",msg->msg_len);
 
         plp = ptllnd_find_peer(ni, msg->msg_target.nid, 1);
         if (plp == NULL)
@@ -846,13 +844,13 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
                 LBUG();
 
         case LNET_MSG_ACK:
-                PJK_UT_MSG("LNET_MSG_ACK\n");
+                CDEBUG(D_NET, "LNET_MSG_ACK\n");
 
                 LASSERT (msg->msg_len == 0);
                 break;                          /* send IMMEDIATE */
 
         case LNET_MSG_GET:
-                PJK_UT_MSG("LNET_MSG_GET nob=%d\n",msg->msg_md->md_length);
+                CDEBUG(D_NET, "LNET_MSG_GET nob=%d\n",msg->msg_md->md_length);
 
                 if (msg->msg_target_is_router)
                         break;                  /* send IMMEDIATE */
@@ -868,15 +866,15 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
                                          msg->msg_md->md_iov.iov,
                                          0, msg->msg_md->md_length);
                 ptllnd_peer_decref(plp);
-                PJK_UT_MSG("<<< rc=%d\n",rc);
+                CDEBUG(D_NET, "<<< rc=%d\n",rc);
                 return rc;
 
         case LNET_MSG_REPLY:
         case LNET_MSG_PUT:
-                PJK_UT_MSG("LNET_MSG_PUT nob=%d\n",msg->msg_len);
+                CDEBUG(D_NET, "LNET_MSG_PUT nob=%d\n",msg->msg_len);
                 nob = msg->msg_len;
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[nob]);
-                PJK_UT_MSG("msg_size=%d max=%d\n",msg->msg_len,plp->plp_max_msg_size);
+                CDEBUG(D_NET, "msg_size=%d max=%d\n",msg->msg_len,plp->plp_max_msg_size);
                 if (nob <= plp->plp_max_msg_size)
                         break;                  /* send IMMEDIATE */
 
@@ -884,14 +882,14 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
                                          msg->msg_niov, msg->msg_iov,
                                          msg->msg_offset, msg->msg_len);
                 ptllnd_peer_decref(plp);
-                PJK_UT_MSG("<<< rc=%d\n",rc);
+                CDEBUG(D_NET, "<<< rc=%d\n",rc);
                 return rc;
         }
 
         /* send IMMEDIATE
          * NB copy the payload so we don't have to do a fragmented send */
 
-        PJK_UT_MSG("IMMEDIATE len=%d\n", msg->msg_len);
+        CDEBUG(D_NET, "IMMEDIATE len=%d\n", msg->msg_len);
         tx = ptllnd_new_tx(plp, PTLLND_MSG_TYPE_IMMEDIATE, msg->msg_len);
         if (tx == NULL) {
                 CERROR("Can't allocate tx for lnet type %d to %s\n",
@@ -909,7 +907,7 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
         tx->tx_lnetmsg = msg;
         ptllnd_post_tx(tx);
         ptllnd_peer_decref(plp);
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
         return 0;
 }
 
@@ -920,7 +918,7 @@ ptllnd_rx_done(ptllnd_rx_t *rx)
         lnet_ni_t     *ni = plp->plp_ni;
         ptllnd_ni_t   *plni = ni->ni_data;
 
-        PJK_UT_MSG("rx=%p\n", rx);
+        CDEBUG(D_NET, "rx=%p\n", rx);
 
         plp->plp_outstanding_credits++;
         ptllnd_check_sends(rx->rx_peer);
@@ -942,7 +940,7 @@ ptllnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
         /* Shouldn't get here; recvs only block for router buffers */
         LBUG();
         
-        PJK_UT_MSG("rx=%p (stack)\n", stackrx);
+        CDEBUG(D_NET, "rx=%p (stack)\n", stackrx);
 
         /* Don't ++plni_nrxs: heaprx replaces stackrx */
 
@@ -952,7 +950,7 @@ ptllnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
         if (heaprx == NULL)
                 return -ENOMEM;
 
-        PJK_UT_MSG("rx=%p (new heap)\n", stackrx);
+        CDEBUG(D_NET, "rx=%p (new heap)\n", stackrx);
 
         heaprx->rx_msg = (kptl_msg_t *)heaprx->rx_space;
         memcpy(&heaprx->rx_msg, stackrx->rx_msg, stackrx->rx_nob);
@@ -973,11 +971,11 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
         LASSERT (kiov == NULL);
         LASSERT (niov <= PTL_MD_MAX_IOV);       /* !!! */
 
-        PJK_UT_MSG(">>> msg=%p\n",msg);
-        PJK_UT_MSG("rx=%p rx_nob=%d\n",rx,rx->rx_nob);
-        PJK_UT_MSG("niov=%d\n",niov);
-        PJK_UT_MSG("offset=%d\n",offset);
-        PJK_UT_MSG("mlen=%d rlen=%d\n",mlen,rlen);
+        CDEBUG(D_NET, ">>> msg=%p\n",msg);
+        CDEBUG(D_NET, "rx=%p rx_nob=%d\n",rx,rx->rx_nob);
+        CDEBUG(D_NET, "niov=%d\n",niov);
+        CDEBUG(D_NET, "offset=%d\n",offset);
+        CDEBUG(D_NET, "mlen=%d rlen=%d\n",mlen,rlen);
 
         switch (rx->rx_msg->ptlm_type) {
         default:
@@ -985,7 +983,7 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[mlen]);
-                PJK_UT_MSG("PTLLND_MSG_TYPE_IMMEDIATE nob=%d\n",nob);
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE nob=%d\n",nob);
                 if (nob > rx->rx_nob) {
                         CERROR("Immediate message from %s too big: %d(%d)\n",
                                libcfs_nid2str(rx->rx_peer->plp_nid),
@@ -1001,24 +999,24 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
                 break;
 
         case PTLLND_MSG_TYPE_PUT:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_PUT offset=%d mlen=%d\n",offset,mlen);
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_PUT offset=%d mlen=%d\n",offset,mlen);
                 rc = ptllnd_active_rdma(rx->rx_peer, PTLLND_RDMA_READ, msg,
                                         rx->rx_msg->ptlm_u.req.kptlrm_matchbits,
                                         niov, iov, offset, mlen);
                 break;
 
         case PTLLND_MSG_TYPE_GET:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_GET\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_GET\n");
                 if (msg != NULL) {
                         /* matched! */
-                        PJK_UT_MSG("matchbits="LPX64"\n",
+                        CDEBUG(D_NET, "matchbits="LPX64"\n",
                                    rx->rx_msg->ptlm_u.req.kptlrm_matchbits);
 
                         rc = ptllnd_active_rdma(rx->rx_peer, PTLLND_RDMA_WRITE, msg,
                                                 rx->rx_msg->ptlm_u.req.kptlrm_matchbits,
                                                 msg->msg_niov, msg->msg_iov,
                                                 msg->msg_offset, msg->msg_len);
-                        PJK_UT_MSG("<<< rc=%d\n",rc);
+                        CDEBUG(D_NET, "<<< rc=%d\n",rc);
                         break;
                 } else {
                         ptllnd_close_peer(rx->rx_peer);
@@ -1027,7 +1025,7 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
         }
 
         ptllnd_rx_done(rx);
-        PJK_UT_MSG("<<< rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;
 }
 
@@ -1043,7 +1041,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         int            rc;
 
 
-        PJK_UT_MSG(">>> initiator=%s nob=%d\n",ptllnd_ptlid2str(initiator),nob);
+        CDEBUG(D_NET, ">>> initiator=%s nob=%d\n",ptllnd_ptlid2str(initiator),nob);
 
         if (nob < basenob) {
                 CERROR("Short receive from %s\n",
@@ -1068,7 +1066,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 __swab64s(&msg->ptlm_seq);
         }
         
-        PJK_UT_MSG_ALWAYS("src = %s\n",libcfs_nid2str(msg->ptlm_srcnid));
+        CDEBUG(D_NET, "src = %s\n",libcfs_nid2str(msg->ptlm_srcnid));
 
         if (msg->ptlm_version != PTLLND_MSG_VERSION) {
                 CERROR("Bad version %d from %s\n", (__u32)msg->ptlm_version,
@@ -1100,7 +1098,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         switch (msg->ptlm_type) {
         case PTLLND_MSG_TYPE_PUT:
         case PTLLND_MSG_TYPE_GET:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_%s\n",
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_%s\n",
                         msg->ptlm_type==PTLLND_MSG_TYPE_PUT ? "PUT" : "GET");
                 if (nob < basenob + sizeof(kptl_request_msg_t)) {
                         CERROR("Short rdma request from %s(%s)\n",
@@ -1113,7 +1111,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_IMMEDIATE\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
                 if (nob < offsetof(kptl_msg_t,
                                    ptlm_u.immediate.kptlim_payload)) {
                         CERROR("Short immediate from %s(%s)\n",
@@ -1124,7 +1122,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 break;
 
         case PTLLND_MSG_TYPE_HELLO:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_HELLO from %s(%s)\n",
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_HELLO from %s(%s)\n",
                                libcfs_nid2str(msg->ptlm_srcnid),
                                ptllnd_ptlid2str(initiator));
                 if (nob < basenob + sizeof(kptl_hello_msg_t)) {
@@ -1140,7 +1138,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 break;
                 
         case PTLLND_MSG_TYPE_NOOP:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_NOOP from %s(%s)\n",
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_NOOP from %s(%s)\n",
                                libcfs_nid2str(msg->ptlm_srcnid),
                                ptllnd_ptlid2str(initiator));        
                 break;
@@ -1168,9 +1166,9 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                         return;
                 }
 
-                PJK_UT_MSG("kptlhm_max_msg_size=%d\n",msg->ptlm_u.hello.kptlhm_max_msg_size);
-                PJK_UT_MSG("kptlhm_matchbits="LPX64"\n",msg->ptlm_u.hello.kptlhm_matchbits);
-                PJK_UT_MSG("ptlm_srcstamp="LPX64"\n",msg->ptlm_srcstamp);
+                CDEBUG(D_NET, "kptlhm_max_msg_size=%d\n",msg->ptlm_u.hello.kptlhm_max_msg_size);
+                CDEBUG(D_NET, "kptlhm_matchbits="LPX64"\n",msg->ptlm_u.hello.kptlhm_matchbits);
+                CDEBUG(D_NET, "ptlm_srcstamp="LPX64"\n",msg->ptlm_srcstamp);
 
                 plp->plp_max_msg_size = MAX(plni->plni_max_msg_size,
                         msg->ptlm_u.hello.kptlhm_max_msg_size);
@@ -1179,7 +1177,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
                 plp->plp_max_credits += msg->ptlm_credits;
                 plp->plp_recvd_hello = 1;
 
-                PJK_UT_MSG("plp_max_msg_size=%d\n",plp->plp_max_msg_size);
+                CDEBUG(D_NET, "plp_max_msg_size=%d\n",plp->plp_max_msg_size);
 
         } else if (!plp->plp_recvd_hello) {
 
@@ -1198,7 +1196,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         }
 
         if (msg->ptlm_credits > 0) {
-                PJK_UT_MSG("Getting back %d credits from peer\n",msg->ptlm_credits);
+                CDEBUG(D_NET, "Getting back %d credits from peer\n",msg->ptlm_credits);
                 if (plp->plp_credits + msg->ptlm_credits >
                     plp->plp_max_credits) {
                         CWARN("Too many credits from %s: %d + %d > %d\n",
@@ -1219,7 +1217,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         rx.rx_nob       = nob;
         plni->plni_nrxs++;
 
-        PJK_UT_MSG("rx=%p type=%d\n",&rx,msg->ptlm_type);
+        CDEBUG(D_NET, "rx=%p type=%d\n",&rx,msg->ptlm_type);
 
         switch (msg->ptlm_type) {
         default: /* message types have been checked already */
@@ -1228,20 +1226,20 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
 
         case PTLLND_MSG_TYPE_PUT:
         case PTLLND_MSG_TYPE_GET:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_%s\n",
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_%s\n",
                         msg->ptlm_type==PTLLND_MSG_TYPE_PUT ? "PUT" : "GET");
                 rc = lnet_parse(ni, &msg->ptlm_u.req.kptlrm_hdr,
                                 msg->ptlm_srcnid, &rx, 1);
-                PJK_UT_MSG("lnet_parse rc=%d\n",rc);
+                CDEBUG(D_NET, "lnet_parse rc=%d\n",rc);
                 if (rc < 0)
                         ptllnd_rx_done(&rx);
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_IMMEDIATE\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
                 rc = lnet_parse(ni, &msg->ptlm_u.immediate.kptlim_hdr,
                                 msg->ptlm_srcnid, &rx, 0);
-                PJK_UT_MSG("lnet_parse rc=%d\n",rc, 0);
+                CDEBUG(D_NET, "lnet_parse rc=%d\n",rc);
                 if (rc < 0)
                         ptllnd_rx_done(&rx);
                 break;
@@ -1249,7 +1247,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
 
         ptllnd_peer_decref(plp);
 
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
 }
 
 void
@@ -1265,7 +1263,7 @@ ptllnd_buf_event (lnet_ni_t *ni, ptl_event_t *event)
         LASSERT (event->type == PTL_EVENT_PUT_END ||
                  event->type == PTL_EVENT_UNLINK);
 
-        PJK_UT_MSG("buf=%p event=%d\n",buf,event->type);
+        CDEBUG(D_NET, "buf=%p event=%d\n",buf,event->type);
 
         if (event->type == PTL_EVENT_PUT_END)
                 ptllnd_parse_request(ni, event->initiator,
@@ -1281,7 +1279,7 @@ ptllnd_buf_event (lnet_ni_t *ni, ptl_event_t *event)
         repost = (event->type == PTL_EVENT_UNLINK);
 #endif
 
-        PJK_UT_MSG("repost=%d unlinked=%d\n",repost,unlinked);
+        CDEBUG(D_NET, "repost=%d unlinked=%d\n",repost,unlinked);
 
         if(unlinked){
                 LASSERT(buf->plb_posted);
@@ -1309,13 +1307,13 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
 
         LASSERT (!PtlHandleIsEqual(event->md_handle, PTL_INVALID_HANDLE));
 
-        PJK_UT_MSG("tx=%p type=%s (%d)\n",tx,
+        CDEBUG(D_NET, "tx=%p type=%s (%d)\n",tx,
                 get_msg_type_string(tx->tx_type),tx->tx_type);
-        PJK_UT_MSG("unlinked=%d\n",unlinked);
-        PJK_UT_MSG("error=%d\n",error);
+        CDEBUG(D_NET, "unlinked=%d\n",unlinked);
+        CDEBUG(D_NET, "error=%d\n",error);
 
         isreq = PtlHandleIsEqual(event->md_handle, tx->tx_reqmdh);
-        PJK_UT_MSG("isreq=%d\n",isreq);
+        CDEBUG(D_NET, "isreq=%d\n",isreq);
         if (isreq) {
                 LASSERT (event->md.start == (void *)&tx->tx_msg);
                 if (unlinked)
@@ -1324,7 +1322,7 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
 
 
         isbulk = PtlHandleIsEqual(event->md_handle, tx->tx_bulkmdh);
-        PJK_UT_MSG("isbulk=%d\n",isbulk);
+        CDEBUG(D_NET, "isbulk=%d\n",isbulk);
         if ( isbulk && unlinked )
                 tx->tx_bulkmdh = PTL_INVALID_HANDLE;
 
@@ -1381,7 +1379,7 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
                         tx->tx_status = -EIO;
                 list_del(&tx->tx_list);
                 list_add_tail(&tx->tx_list, &plni->plni_zombie_txs);
-                PJK_UT_MSG("tx=%p ONTO ZOMBIE LIST\n",tx);
+                CDEBUG(D_NET, "tx=%p ONTO ZOMBIE LIST\n",tx);
         }
 }
 
@@ -1397,7 +1395,7 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
         int            found = 0;
         int            timeout = 0;
 
-        PJK_UT_MSG(">>> ms=%d\n",milliseconds);
+        CDEBUG(D_NET, ">>> ms=%d\n",milliseconds);
 
         /* Handle any currently queued events, returning immediately if any.
          * Otherwise block for the timeout and handle all events queued
@@ -1406,13 +1404,13 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
         for (;;) {
                 rc = PtlEQPoll(&plni->plni_eqh, 1, timeout, &event, &which);
                 timeout = 0;
-                PJK_UT_MSG("PtlEQPoll rc=%d\n",rc);
+                CDEBUG(D_NET, "PtlEQPoll rc=%d\n",rc);
 
                 if (rc == PTL_EQ_EMPTY) {
                         if (found ||            /* handled some events */
                             milliseconds == 0 || /* just checking */
                             blocked){            /* blocked already */
-                                PJK_UT_MSG("found=%d blocked=%d\n",found,blocked);
+                                CDEBUG(D_NET, "found=%d blocked=%d\n",found,blocked);
                                 break;
                             }
 
@@ -1427,7 +1425,7 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                         CERROR("Event queue: size %d is too small\n",
                                plni->plni_eq_size);
 
-                PJK_UT_MSG("event.type=%s(%d)\n",
+                CDEBUG(D_NET, "event.type=%s(%d)\n",
                         get_ev_type_string(event.type),event.type);
 
                 found = 1;
@@ -1448,9 +1446,9 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
         while (!list_empty(&plni->plni_zombie_txs)) {
                 tx = list_entry(plni->plni_zombie_txs.next,
                                 ptllnd_tx_t, tx_list);
-                PJK_UT_MSG("Process ZOMBIE tx=%p\n",tx);
+                CDEBUG(D_NET, "Process ZOMBIE tx=%p\n",tx);
                 ptllnd_tx_done(tx);
         }
 
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
 }

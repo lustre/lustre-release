@@ -37,7 +37,7 @@
 typedef struct
 {
         int                        plni_portal;
-        ptl_pid_t                  plni_pid;
+        ptl_pid_t                  plni_ptllnd_pid; /* Portals PID of peers I may connect to */
         int                        plni_peer_credits;
         int                        plni_max_msg_size;
         int                        plni_buffer_size;
@@ -214,12 +214,6 @@ lnet2ptlnid(lnet_nid_t lnet_nid)
 }
 
 /*
- * Define this to enable console debug logging
- * and simulation
- */
-//#define PJK_DEBUGGING
-
-/*
  * A note about lprintf():
  *  Normally printf() is redirected to stdout of the console
  *  from which yod launched the catamount application.  However
@@ -232,37 +226,4 @@ lnet2ptlnid(lnet_nid_t lnet_nid)
  *  cases.
  */
 
-#ifdef PJK_DEBUGGING
-
-#define PJK_UT_MSG_ALWAYS(fmt, a...)                    \
-do{                                                     \
-        lprintf("ptllnd:%-30s:",__FUNCTION__);          \
-        lprintf(fmt,## a);                              \
-}while(0)
-
-
-#define PJK_UT_MSG_SIMULATION(fmt, a...)        PJK_UT_MSG_ALWAYS(fmt, ## a )
-
-
-#if 1
-#define PJK_UT_MSG_DATA(fmt, a...)              PJK_UT_MSG_ALWAYS(fmt, ## a )
-#else
-#define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)
-#endif
-
-#if 1
-#define PJK_UT_MSG(fmt, a...)                   PJK_UT_MSG_ALWAYS(fmt, ## a )
-#else
-#define PJK_UT_MSG(fmt, a...)                   do{}while(0)
-#endif
-
-#else
-
-
-#define PJK_UT_MSG_ALWAYS(fmt, a...)            do{}while(0)
-#define PJK_UT_MSG_SIMULATION(fmt, a...)        do{}while(0)
-#define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)
-#define PJK_UT_MSG(fmt, a...)                   do{}while(0)
-
-#endif
 

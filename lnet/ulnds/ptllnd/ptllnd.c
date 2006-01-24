@@ -68,7 +68,7 @@ ptllnd_get_tunables(lnet_ni_t *ni)
                                       "PTLLND_PID", PTLLND_PID);
         if (rc != 0)
                 return rc;
-        plni->plni_pid = (ptl_pid_t)temp;
+        plni->plni_ptllnd_pid = (ptl_pid_t)temp;
 
         rc = ptllnd_parse_int_tunable(&plni->plni_peer_credits,
                                       "PTLLND_PEERCREDITS", PTLLND_PEERCREDITS);
@@ -111,15 +111,15 @@ ptllnd_get_tunables(lnet_ni_t *ni)
 
         plni->plni_buffer_size = plni->plni_max_msg_size * msgs_per_buffer;
 
-        PJK_UT_MSG("portal          = %d\n",plni->plni_portal);
-        PJK_UT_MSG("pid             = %d\n",plni->plni_pid);
-        PJK_UT_MSG("max_immediate   = %d\n",max_immediate);
-        PJK_UT_MSG("msgs_per_buffer = %d\n",msgs_per_buffer);
-        PJK_UT_MSG("msgs_spare      = %d\n",plni->plni_msgs_spare);
-        PJK_UT_MSG("peer_hash_size  = %d\n",plni->plni_peer_hash_size);
-        PJK_UT_MSG("eq_size         = %d\n",plni->plni_eq_size);
-        PJK_UT_MSG("max_msg_size    = %d\n",plni->plni_max_msg_size);
-        PJK_UT_MSG("buffer_size     = %d\n",plni->plni_buffer_size);
+        CDEBUG(D_NET, "portal          = %d\n",plni->plni_portal);
+        CDEBUG(D_NET, "ptllnd_pid      = %d\n",plni->plni_ptllnd_pid);
+        CDEBUG(D_NET, "max_immediate   = %d\n",max_immediate);
+        CDEBUG(D_NET, "msgs_per_buffer = %d\n",msgs_per_buffer);
+        CDEBUG(D_NET, "msgs_spare      = %d\n",plni->plni_msgs_spare);
+        CDEBUG(D_NET, "peer_hash_size  = %d\n",plni->plni_peer_hash_size);
+        CDEBUG(D_NET, "eq_size         = %d\n",plni->plni_eq_size);
+        CDEBUG(D_NET, "max_msg_size    = %d\n",plni->plni_max_msg_size);
+        CDEBUG(D_NET, "buffer_size     = %d\n",plni->plni_buffer_size);
 
         return 0;
 }
@@ -176,8 +176,8 @@ ptllnd_grow_buffers (lnet_ni_t *ni)
         int              nbufs;
         int              rc;
 
-        PJK_UT_MSG("nposted_buffers = %d (before)\n",plni->plni_nposted_buffers);
-        PJK_UT_MSG("nbuffers = %d (before)\n",plni->plni_nbuffers);
+        CDEBUG(D_NET, "nposted_buffers = %d (before)\n",plni->plni_nposted_buffers);
+        CDEBUG(D_NET, "nbuffers = %d (before)\n",plni->plni_nbuffers);
 
 
         nmsgs = plni->plni_npeers * plni->plni_peer_credits +
@@ -204,8 +204,8 @@ ptllnd_grow_buffers (lnet_ni_t *ni)
                 }
         }
 
-        PJK_UT_MSG("nposted_buffers = %d (after)\n",plni->plni_nposted_buffers);
-        PJK_UT_MSG("nbuffers = %d (after)\n",plni->plni_nbuffers);
+        CDEBUG(D_NET, "nposted_buffers = %d (after)\n",plni->plni_nposted_buffers);
+        CDEBUG(D_NET, "nbuffers = %d (after)\n",plni->plni_nbuffers);
         return 0;
 }
 
@@ -217,13 +217,13 @@ ptllnd_destroy_buffers (lnet_ni_t *ni)
         struct list_head  *tmp;
         struct list_head  *nxt;
 
-        PJK_UT_MSG("nposted_buffers = %d (before)\n",plni->plni_nposted_buffers);
-        PJK_UT_MSG("nbuffers = %d (before)\n",plni->plni_nbuffers);
+        CDEBUG(D_NET, "nposted_buffers = %d (before)\n",plni->plni_nposted_buffers);
+        CDEBUG(D_NET, "nbuffers = %d (before)\n",plni->plni_nbuffers);
 
         list_for_each_safe(tmp, nxt, &plni->plni_buffers) {
                 buf = list_entry(tmp, ptllnd_buffer_t, plb_list);
 
-                //PJK_UT_MSG("buf=%p posted=%d\n",buf,buf->plb_posted);
+                //CDEBUG(D_NET, "buf=%p posted=%d\n",buf,buf->plb_posted);
 
                 LASSERT (plni->plni_nbuffers > 0);
                 if (buf->plb_posted) {
@@ -249,8 +249,8 @@ ptllnd_destroy_buffers (lnet_ni_t *ni)
                 ptllnd_destroy_buffer(buf);
         }
 
-        PJK_UT_MSG("nposted_buffers = %d (after)\n",plni->plni_nposted_buffers);
-        PJK_UT_MSG("nbuffers = %d (after)\n",plni->plni_nbuffers);
+        CDEBUG(D_NET, "nposted_buffers = %d (after)\n",plni->plni_nposted_buffers);
+        CDEBUG(D_NET, "nbuffers = %d (after)\n",plni->plni_nbuffers);
 
         LASSERT (plni->plni_nposted_buffers == 0);
         LASSERT (plni->plni_nbuffers == 0);
@@ -300,7 +300,7 @@ ptllnd_close_peers (lnet_ni_t *ni)
         ptllnd_peer_t  *plp;
         int             i;
 
-        PJK_UT_MSG(">>> npeers=%d\n",plni->plni_npeers);
+        CDEBUG(D_NET, ">>> npeers=%d\n",plni->plni_npeers);
 
         for (i = 0; i < plni->plni_peer_hash_size; i++)
                 while (!list_empty(&plni->plni_peer_hash[i])) {
@@ -310,7 +310,7 @@ ptllnd_close_peers (lnet_ni_t *ni)
                         ptllnd_close_peer(plp);
                 }
 
-        PJK_UT_MSG("<<< npeers=%d\n",plni->plni_npeers);
+        CDEBUG(D_NET, "<<< npeers=%d\n",plni->plni_npeers);
 }
 
 __u64
@@ -329,7 +329,7 @@ ptllnd_shutdown (lnet_ni_t *ni)
         ptllnd_ni_t *plni = ni->ni_data;
         int          rc;
 
-        PJK_UT_MSG(">>>\n");
+        CDEBUG(D_NET, ">>>\n");
 
         LASSERT (ptllnd_ni_count == 1);
 
@@ -353,7 +353,7 @@ ptllnd_shutdown (lnet_ni_t *ni)
         LIBCFS_FREE(plni, sizeof(*plni));
         ptllnd_ni_count--;
 
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
 }
 
 int
@@ -362,7 +362,7 @@ ptllnd_startup (lnet_ni_t *ni)
         ptllnd_ni_t *plni;
         int          rc;
 
-        PJK_UT_MSG(">>> ni=%p\n",ni);
+        CDEBUG(D_NET, ">>> ni=%p\n",ni);
 
 	/* could get limits from portals I guess... */
 	ni->ni_maxtxcredits =
@@ -393,7 +393,7 @@ ptllnd_startup (lnet_ni_t *ni)
          * the lnet pid to the pid of this process.
          */
         the_lnet.ln_pid = getpid();
-        PJK_UT_MSG("Forcing LNET pid to %d\n",the_lnet.ln_pid);
+        CDEBUG(D_NET, "Forcing LNET pid to %d\n",the_lnet.ln_pid);
 
         plni->plni_stamp = ptllnd_get_timestamp();
         plni->plni_nrxs = 0;
@@ -416,14 +416,18 @@ ptllnd_startup (lnet_ni_t *ni)
         if (rc != 0)
                 goto failed1;
 
-        rc = PtlNIInit(PTL_IFACE_DEFAULT, plni->plni_pid,
+        /* NB I most probably won't get the PID I requested here.  It doesn't
+         * matter because I don't need a fixed PID (only connection acceptors
+         * need a "well known" PID). */
+
+        rc = PtlNIInit(PTL_IFACE_DEFAULT, plni->plni_ptllnd_pid,
                        NULL, NULL, &plni->plni_nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
                 CERROR("PtlNIInit failed: %d\n", rc);
                 rc = -ENODEV;
                 goto failed2;
         }
-        PJK_UT_MSG("plni->plni_nih=%x\n",plni->plni_nih);
+        CDEBUG(D_NET, "plni->plni_nih=%x\n",plni->plni_nih);
 
         rc = PtlEQAlloc(plni->plni_nih, plni->plni_eq_size,
                         PTL_EQ_HANDLER_NONE, &plni->plni_eqh);
@@ -432,7 +436,7 @@ ptllnd_startup (lnet_ni_t *ni)
                 rc = -ENODEV;
                 goto failed3;
         }
-        PJK_UT_MSG("plni->plni_eqh=%x\n",plni->plni_eqh);
+        CDEBUG(D_NET, "plni->plni_eqh=%x\n",plni->plni_eqh);
 
         /*
          * Fetch the Portals NID
@@ -443,7 +447,7 @@ ptllnd_startup (lnet_ni_t *ni)
                 goto failed4;
         }
 
-        PJK_UT_MSG("lnet nid=" LPX64 " (passed in)\n",ni->ni_nid);
+        CDEBUG(D_NET, "lnet nid=" LPX64 " (passed in)\n",ni->ni_nid);
 
         /*
          * Create the new NID.  Based on the LND network type
@@ -451,19 +455,15 @@ ptllnd_startup (lnet_ni_t *ni)
          */
         ni->ni_nid = ptl2lnetnid(ni,plni->plni_portals_id.nid);
 
-        PJK_UT_MSG("ptl  pid=" FMT_PID "\n",plni->plni_portals_id.pid);
-        PJK_UT_MSG("ptl  nid=" FMT_NID "\n",plni->plni_portals_id.nid);
-        PJK_UT_MSG("lnet nid=" LPX64 " (passed back)\n",ni->ni_nid);
-
-        CDEBUG(D_INFO,"ptl  pid=" FMT_PID "\n",plni->plni_portals_id.pid);
-        CDEBUG(D_INFO,"ptl  nid=" FMT_NID "\n",plni->plni_portals_id.nid);
-        CDEBUG(D_INFO,"lnet nid=" LPX64 "\n",ni->ni_nid);
+        CDEBUG(D_NET, "ptl  pid=" FMT_PID "\n",plni->plni_portals_id.pid);
+        CDEBUG(D_NET, "ptl  nid=" FMT_NID "\n",plni->plni_portals_id.nid);
+        CDEBUG(D_NET, "lnet nid=" LPX64 " (passed back)\n",ni->ni_nid);
 
         rc = ptllnd_grow_buffers(ni);
         if (rc != 0)
                 goto failed4;
 
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
 	return 0;
 
  failed4:
@@ -477,7 +477,7 @@ ptllnd_startup (lnet_ni_t *ni)
         LIBCFS_FREE(plni, sizeof(*plni));
  failed0:
         ptllnd_ni_count--;
-        PJK_UT_MSG("<<< rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;
 }
 

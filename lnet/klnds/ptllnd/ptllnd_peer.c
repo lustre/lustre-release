@@ -23,12 +23,6 @@ void
 kptllnd_peer_destroy (
         kptl_peer_t *peer);
 
-kptl_peer_t *
-kptllnd_peer_find_holding_list_lock (
-        kptl_data_t *kptllnd_data,
-        lnet_process_id_t target);
-
-
 int
 kptllnd_peer_add_to_list_locked (
         kptl_data_t *kptllnd_data,
@@ -62,7 +56,7 @@ kptllnd_peer_add_to_list_locked (
         /* And add this to the list */
         LASSERT(list_empty(&peer->peer_list));
         list_add_tail (&peer->peer_list,
-                       kptllnd_nid2peerlist (kptllnd_data,peer->peer_nid));
+                       kptllnd_ptlnid2peerlist(kptllnd_data,peer->peer_ptlid.nid));
 
         STAT_UPDATE(kps_peers_created);
 
@@ -70,17 +64,16 @@ kptllnd_peer_add_to_list_locked (
 }
 
 int
-kptllnd_peer_allocate (
-        kptl_data_t *kptllnd_data,
-        kptl_peer_t **peerp,
-        lnet_process_id_t target)
+kptllnd_peer_allocate (kptl_data_t       *kptllnd_data,
+                       kptl_peer_t      **peerp,
+                       ptl_process_id_t   ptlid) 
 {
         kptl_peer_t     *peer;
         int             rc;
 
-        PJK_UT_MSG(">>> id=%s\n",libcfs_id2str(target));
+        CDEBUG(D_NET, ">>> "FMT_NID"/%d\n", ptlid.nid, ptlid.pid);
 
-        LASSERT (target.nid != PTL_NID_ANY);
+        LASSERT (ptlid.nid != PTL_NID_ANY);
 
         LIBCFS_ALLOC(peer, sizeof (*peer));
         if (peer == NULL) {
@@ -98,8 +91,10 @@ kptllnd_peer_allocate (
 
         peer->peer_state = PEER_STATE_ALLOCATED;
         peer->peer_kptllnd_data = kptllnd_data;
-        peer->peer_nid = target.nid;
-        peer->peer_pid = target.pid;
+
+        peer->peer_nid = ptl2lnetnid(kptllnd_data, ptlid.nid);
+        peer->peer_ptlid = ptlid;
+
         //peer->peer_incarnation = 0;
         //peer->peer_tx_seqnum = 0;
 
@@ -136,7 +131,8 @@ kptllnd_peer_allocate (
          */
         atomic_set (&peer->peer_refcount, 1);
 
-        PJK_UT_MSG("<<< Peer=%p id=%s\n",peer,libcfs_id2str(target));
+        CDEBUG(D_NET, "<<< Peer=%p nid=%s\n", 
+               peer, libcfs_nid2str(peer->peer_nid));
         *peerp = peer;
         return 0;
 }
@@ -148,7 +144,7 @@ kptllnd_peer_destroy (
 {
         kptl_data_t *kptllnd_data = peer->peer_kptllnd_data;
 
-        PJK_UT_MSG("Peer=%p\n",peer);
+        CDEBUG(D_NET, "Peer=%p\n",peer);
 
         LASSERT (atomic_read (&peer->peer_refcount) == 0);
         /* Not on the peer list */
@@ -181,14 +177,6 @@ kptllnd_peer_addref (
         const char *owner)
 {
         atomic_inc(&peer->peer_refcount);
-
-        /*
-         * The below message could actually be out of sync
-         * with the real ref count, and is for informational purposes
-         * only
-         */
-        PJK_UT_MSG("peer=%p owner=%s count=%d\n",peer,owner,
-                atomic_read(&peer->peer_refcount));
 }
 
 void
@@ -199,19 +187,10 @@ kptllnd_peer_decref (
         unsigned long    flags;
         kptl_data_t     *kptllnd_data = peer->peer_kptllnd_data;
 
-        if( !atomic_dec_and_test(&peer->peer_refcount)){
-
-                /*
-                 * The below message could actually be out of sync
-                 * with the real ref count, and is for informational purposes
-                 * only
-                 */
-                PJK_UT_MSG("peer=%p owner=%s count=%d\n",peer,owner,
-                        atomic_read(&peer->peer_refcount));
+        if( !atomic_dec_and_test(&peer->peer_refcount))
                 return;
-        }
 
-        PJK_UT_MSG("peer=%p owner=%s LAST REF\n",peer,owner);
+        CDEBUG(D_NET, "peer=%p owner=%s LAST REF\n",peer,owner);
 
         write_lock_irqsave(&kptllnd_data->kptl_peer_rw_lock, flags);
         list_del_init (&peer->peer_list);
@@ -243,7 +222,7 @@ kptllnd_peer_cancel_pending_txs(
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         if(!list_empty(&peer->peer_pending_txs))
-                PJK_UT_MSG("Clearing Pending TXs\n");
+                CDEBUG(D_NET, "Clearing Pending TXs\n");
 
         list_for_each_safe (tx_temp, tx_next, &peer->peer_pending_txs) {
                 tx = list_entry (tx_temp, kptl_tx_t, tx_list);
@@ -277,7 +256,7 @@ kptllnd_peer_cancel_active_txs(
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         if(!list_empty(&peer->peer_active_txs))
-                PJK_UT_MSG("Clearing Active TXs\n");
+                CDEBUG(D_NET, "Clearing Active TXs\n");
 
 again:
 
@@ -303,7 +282,7 @@ again:
                  */
 
                 if(!PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE)){
-                        PJK_UT_MSG("Unlink mhd_msg\n");
+                        CDEBUG(D_NET, "Unlink mhd_msg\n");
                         LASSERT(atomic_read(&tx->tx_refcount)>1);
                         ptl_rc = PtlMDUnlink(tx->tx_mdh_msg);
 #ifndef LUSTRE_PORTALS_UNLINK_SEMANTICS
@@ -315,7 +294,7 @@ again:
                 }
 
                 if(!PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE)){
-                        PJK_UT_MSG("Unlink mdh\n");
+                        CDEBUG(D_NET, "Unlink mdh\n");
                         LASSERT(atomic_read(&tx->tx_refcount)>1);
                         ptl_rc = PtlMDUnlink(tx->tx_mdh);
 #ifndef LUSTRE_PORTALS_UNLINK_SEMANTICS
@@ -349,7 +328,7 @@ kptllnd_peer_cancel(
         unsigned long      flags;
         int                list_owns_ref=0;
 
-        PJK_UT_MSG(">>> Peer=%p\n",peer);
+        CDEBUG(D_NET, ">>> Peer=%p\n",peer);
 
         write_lock_irqsave(&kptllnd_data->kptl_peer_rw_lock, flags);
         if(peer->peer_state != PEER_STATE_CANCELED){
@@ -374,13 +353,11 @@ kptllnd_peer_cancel(
         if(list_owns_ref)
                 kptllnd_peer_decref(peer,"list");
 
-        PJK_UT_MSG("<<< Peer=%p\n",peer);
+        CDEBUG(D_NET, "<<< Peer=%p\n",peer);
 }
 
 int
-kptllnd_peer_del (
-        kptl_data_t *kptllnd_data,
-        lnet_nid_t nid)
+kptllnd_peer_del (kptl_data_t *kptllnd_data, lnet_nid_t nid)
 {
         struct list_head  *ptmp;
         struct list_head  *pnxt;
@@ -391,16 +368,18 @@ kptllnd_peer_del (
         unsigned long      flags;
         int                rc = -ENOENT;
 
-
-        PJK_UT_MSG(">>> NID="LPX64"\n",nid);
+        CDEBUG(D_NET, ">>> NID="LPX64"\n",nid);
 
         /*
-         * Find the single bucket we are supposed to look at
-         * or if nid = PTL_NID_ANY then look at all of the buckets
+         * Find the single bucket we are supposed to look at or if nid is a
+         * wildcard (LNET_NID_ANY) then look at all of the buckets
          */
-        if (nid != PTL_NID_ANY)
-                lo = hi = kptllnd_nid2peerlist(kptllnd_data,nid) - kptllnd_data->kptl_peers;
-        else {
+        if (nid != LNET_NID_ANY) {
+                ptl_nid_t         ptlnid = lnet2ptlnid(kptllnd_data, nid);
+                struct list_head *l = kptllnd_ptlnid2peerlist(kptllnd_data, ptlnid);
+                
+                lo = hi =  l - kptllnd_data->kptl_peers;
+        } else {
                 lo = 0;
                 hi = kptllnd_data->kptl_peer_hash_size - 1;
         }
@@ -415,7 +394,7 @@ again:
                         /*
                          * Is this the right one?
                          */
-                        if (!(nid == PTL_NID_ANY || peer->peer_nid == nid))
+                        if (!(nid == LNET_NID_ANY || peer->peer_nid == nid))
                                 continue;
 
                         kptllnd_peer_addref(peer,"temp"); /* 1 ref for me... */
@@ -435,7 +414,7 @@ again:
 
         read_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock, flags);
 
-        PJK_UT_MSG("<<< rc=%d\n",rc);
+        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return (rc);
 }
 
@@ -444,7 +423,7 @@ kptllnd_peer_queue_tx_locked (
         kptl_peer_t *peer,
         kptl_tx_t *tx)
 {
-        PJK_UT_MSG("Peer=%p TX=%p\n",peer,tx);
+        CDEBUG(D_NET, "Peer=%p TX=%p\n",peer,tx);
 
         LASSERT(peer->peer_state != PEER_STATE_CANCELED);
         LASSERT(tx->tx_state == TX_STATE_ALLOCATED);
@@ -463,7 +442,7 @@ kptllnd_peer_queue_bulk_rdma_tx_locked(
         kptl_peer_t *peer,
         kptl_tx_t *tx)
 {
-        PJK_UT_MSG("Peer=%p TX=%p\n",peer,tx);
+        CDEBUG(D_NET, "Peer=%p TX=%p\n",peer,tx);
 
         LASSERT(peer->peer_state != PEER_STATE_CANCELED);
         LASSERT(tx->tx_state == TX_STATE_ALLOCATED);
@@ -511,7 +490,7 @@ kptllnd_peer_dequeue_tx(
 
 void
 kptllnd_peer_check_sends (
-        kptl_peer_t *peer )
+        kptl_peer_t *peer)
 {
 
         kptl_tx_t       *tx;
@@ -521,7 +500,6 @@ kptllnd_peer_check_sends (
         ptl_handle_me_t  meh;
         ptl_handle_md_t  mdh;
         ptl_handle_md_t  mdh_msg;
-        ptl_process_id_t target;
         unsigned long    flags;
 
         LASSERT(!in_interrupt());
@@ -532,7 +510,7 @@ kptllnd_peer_check_sends (
          */
         spin_lock_irqsave(&peer->peer_lock, flags);
 
-        PJK_UT_MSG_DATA(">>>Peer=%p Credits=%d Outstanding=%d\n",
+        CDEBUG(D_NET, ">>>Peer=%p Credits=%d Outstanding=%d\n",
                 peer,peer->peer_credits,peer->peer_outstanding_credits);
 
         if(list_empty(&peer->peer_pending_txs) &&
@@ -543,8 +521,8 @@ kptllnd_peer_check_sends (
                  */
                 tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
                 if( tx == NULL ) {
-                        CERROR ("Can't return credits to "LPX64": tx descs exhausted\n",
-                                peer->peer_nid);
+                        CERROR("Can't return credits to %s: tx descs exhausted\n",
+                               libcfs_nid2str(peer->peer_nid));
                 }else{
                         kptllnd_init_msg(tx->tx_msg, PTLLND_MSG_TYPE_NOOP,0);
                         kptllnd_peer_queue_tx_locked(peer,tx);
@@ -568,7 +546,8 @@ kptllnd_peer_check_sends (
                  */
                 if (peer->peer_credits == 0) {
                         STAT_UPDATE(kps_no_credits);
-                        CDEBUG(D_NET, LPX64": no credits\n",peer->peer_nid);
+                        CDEBUG(D_NET, "%s: no credits\n",
+                               libcfs_nid2str(peer->peer_nid));
                         break;
                 }
 
@@ -580,8 +559,8 @@ kptllnd_peer_check_sends (
                 if (peer->peer_credits == 1 &&
                     peer->peer_outstanding_credits == 0) {
                         STAT_UPDATE(kps_saving_last_credit);
-                        CDEBUG(D_NET, LPX64": not using last credit\n",
-                               peer->peer_nid);
+                        CDEBUG(D_NET, "%s: not using last credit\n",
+                               libcfs_nid2str(peer->peer_nid));
                         break;
                 }
 
@@ -612,15 +591,17 @@ kptllnd_peer_check_sends (
                         spin_unlock_irqrestore(&peer->peer_lock, flags);
                         /* redundant NOOP */
                         kptllnd_tx_decref(tx);
-                        CDEBUG(D_NET, LPX64": redundant noop\n",
-                               peer->peer_nid);
+                        CDEBUG(D_NET, "%s: redundant noop\n",
+                               libcfs_nid2str(peer->peer_nid));
                         spin_lock_irqsave(&peer->peer_lock, flags);
                         continue;
                 }
 
-                PJK_UT_MSG_DATA("--- TXTXTXTXTXTXTXTXTXTXTXTXTXTX\n");
-                PJK_UT_MSG_DATA("Sending TX=%p Size=%d\n",tx,tx->tx_msg->ptlm_nob);
-                PJK_UT_MSG_DATA("Target nid="LPX64" pid=%d\n",peer->peer_nid,peer->peer_pid);
+                CDEBUG(D_NET, "--- TXTXTXTXTXTXTXTXTXTXTXTXTXTX\n");
+                CDEBUG(D_NET, "Sending TX=%p Size=%d\n",tx,tx->tx_msg->ptlm_nob);
+                CDEBUG(D_NET, "Target nid=%s ptl "FMT_NID"/%d\n",
+                       libcfs_nid2str(peer->peer_nid), 
+                       peer->peer_ptlid.nid, peer->peer_ptlid.pid);
 
                 mdh = PTL_INVALID_HANDLE;
                 mdh_msg =PTL_INVALID_HANDLE;
@@ -628,10 +609,10 @@ kptllnd_peer_check_sends (
                 /*
                  * Assign matchbits for a put/get
                  */
-                if(tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_PUT ||
-                   tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_GET){
+                if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_PUT ||
+                    tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_GET) {
 
-                        PJK_UT_MSG_DATA("next matchbits="LPX64" (before)\n",
+                        CDEBUG(D_NET, "next matchbits="LPX64" (before)\n",
                                 peer->peer_next_matchbits);
 
 
@@ -643,11 +624,10 @@ kptllnd_peer_check_sends (
                          * not use them.  Just skip over them.  This check protects us
                          * even in the case of 64-bit rollover.
                          */
-                        if(peer->peer_next_matchbits < PTL_RESERVED_MATCHBITS){
-                                CDEBUG(D_INFO,"Match Bits Rollover for "LPX64"\n",
-                                        peer->peer_nid);
+                        if (peer->peer_next_matchbits < PTL_RESERVED_MATCHBITS) {
+                                CDEBUG(D_INFO,"Match Bits Rollover for %s\n",
+                                       libcfs_nid2str(peer->peer_nid));
                                 peer->peer_next_matchbits = PTL_RESERVED_MATCHBITS;
-
                         }
 
                         /*
@@ -656,7 +636,7 @@ kptllnd_peer_check_sends (
                         tx->tx_msg->ptlm_u.req.kptlrm_matchbits =
                                 peer->peer_next_matchbits ++;
 
-                        PJK_UT_MSG_DATA("next matchbits="LPX64" (after)\n",
+                        CDEBUG(D_NET, "next matchbits="LPX64" (after)\n",
                                 peer->peer_next_matchbits);
                 }
 
@@ -664,14 +644,12 @@ kptllnd_peer_check_sends (
                  * Complete the message fill in all the rest
                  * of the header
                  */
-                kptllnd_msg_pack(
-                        tx->tx_msg,
-                        peer->peer_outstanding_credits,
-                        peer->peer_nid,
-                        peer->peer_incarnation,
-                        peer->peer_tx_seqnum,
-                        kptllnd_data);
-
+                kptllnd_msg_pack(tx->tx_msg,
+                                 peer->peer_outstanding_credits,
+                                 peer->peer_nid,
+                                 peer->peer_incarnation,
+                                 peer->peer_tx_seqnum,
+                                 kptllnd_data);
                 /*
                  * We just sent a packet
                  */
@@ -702,51 +680,47 @@ kptllnd_peer_check_sends (
                  * Construct an address that Portals needs from the NID
                  */
 
-                target.nid = lnet2ptlnid(kptllnd_data,peer->peer_nid);
-                target.pid = peer->peer_pid;
+                CDEBUG(D_NET, "Msg NOB = %d\n",tx->tx_msg->ptlm_nob);
+                CDEBUG(D_NET, "Giving %d credits back to peer\n",
+                       tx->tx_msg->ptlm_credits);
+                CDEBUG(D_NET, "Seq # = "LPX64"\n",tx->tx_msg->ptlm_seq);
 
-                PJK_UT_MSG_DATA("Msg NOB = %d\n",tx->tx_msg->ptlm_nob);
-                PJK_UT_MSG_DATA("Giving %d credits back to peer\n",tx->tx_msg->ptlm_credits);
-                PJK_UT_MSG_DATA("Seq # = "LPX64"\n",tx->tx_msg->ptlm_seq);
+                CDEBUG(D_NET, "lnet TX %s\n", libcfs_nid2str(peer->peer_nid));
+                CDEBUG(D_NET, "ptl  TX "FMT_NID"/%d\n",
+                       peer->peer_ptlid.nid, peer->peer_ptlid.pid);
 
-                PJK_UT_MSG("lnet TX nid=" LPX64 " pid=%d\n",peer->peer_nid,peer->peer_pid);
-                PJK_UT_MSG("ptl  TX nid=" FMT_NID " pid=%d\n",target.nid,target.pid);
+                if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_GET ||
+                    tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_PUT) {
+                        int       op;
+                        
+                        if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_PUT)
+                                op = PTL_MD_OP_GET;
+                        else
+                                op = PTL_MD_OP_PUT;
 
-                if(tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_GET ||
-                   tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_PUT){
-                        tempiov_t tempiov;
-
-                        PJK_UT_MSG_DATA("matchibts=" LPX64 "\n",
+                        CDEBUG(D_NET, "matchibts=" LPX64 "\n",
                                 tx->tx_msg->ptlm_u.req.kptlrm_matchbits);
 
-                        /*
-                         * Attach the ME
-                         */
-                        rc = PtlMEAttach(
-                            kptllnd_data->kptl_nih,
-                            *kptllnd_tunables.kptl_portal,
-                            target,
-                            tx->tx_msg->ptlm_u.req.kptlrm_matchbits,
-                            0, /* all matchbits are valid - ignore none*/
-                            PTL_UNLINK,
-                            PTL_INS_BEFORE,
-                            &meh);
-                        if(rc != 0) {
+                        rc = PtlMEAttach(kptllnd_data->kptl_nih,
+                                         *kptllnd_tunables.kptl_portal,
+                                         peer->peer_ptlid,
+                                         tx->tx_msg->ptlm_u.req.kptlrm_matchbits,
+                                         0, /* ignore none */
+                                         PTL_UNLINK,
+                                         PTL_INS_BEFORE,
+                                         &meh);
+                        if (rc != PTL_OK) {
                                 CERROR("PtlMeAttach failed %d\n",rc);
                                 goto failed_without_lock;
                         }
 
                         /* Setup the MD */
-                        kptllnd_setup_md(kptllnd_data,&md,
-                                tx->tx_msg->ptlm_type == LNET_MSG_GET ? PTL_MD_OP_PUT :
-                                        PTL_MD_OP_GET,
-                                tx,
-                                tx->tx_payload_niov,
-                                tx->tx_payload_iov,
-                                tx->tx_payload_kiov,
-                                tx->tx_payload_offset,
-                                tx->tx_payload_nob,
-                                &tempiov);
+                        kptllnd_setup_md(kptllnd_data, &md, op, tx,
+                                         tx->tx_payload_niov,
+                                         tx->tx_payload_iov,
+                                         tx->tx_payload_kiov,
+                                         tx->tx_payload_offset,
+                                         tx->tx_payload_nob);
 
                         /*
                          * Add a ref for this MD, because unlink
@@ -798,13 +772,10 @@ kptllnd_peer_check_sends (
                 /*
                  * Bind the MD
                  */
-                rc = PtlMDBind (
-                        kptllnd_data->kptl_nih,
-                        md,
-                        PTL_UNLINK,
-                        &mdh_msg);
-                if(rc != 0){
-                        if(!PtlHandleIsEqual(mdh,PTL_INVALID_HANDLE)){
+                rc = PtlMDBind(kptllnd_data->kptl_nih, md,
+                               PTL_UNLINK, &mdh_msg);
+                if (rc != PTL_OK) {
+                        if (!PtlHandleIsEqual(mdh,PTL_INVALID_HANDLE)) {
                                 rc2 = PtlMDUnlink(mdh);
                                 /*
                                  * The unlink should succeed
@@ -824,19 +795,19 @@ kptllnd_peer_check_sends (
                 LASSERT(PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
                 LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
 #ifdef _USING_LUSTRE_PORTALS_
-                PJK_UT_MSG("tx_mdh     = " LPX64 "\n",mdh.cookie);
-                PJK_UT_MSG("tx_mdh_msg = " LPX64 "\n",mdh_msg.cookie);
+                CDEBUG(D_NET, "tx_mdh     = " LPX64 "\n",mdh.cookie);
+                CDEBUG(D_NET, "tx_mdh_msg = " LPX64 "\n",mdh_msg.cookie);
 #endif
                 tx->tx_mdh = mdh;
                 tx->tx_mdh_msg = mdh_msg;
 
-                if(tx->tx_type == TX_TYPE_SMALL_MESSAGE)
-                        LASSERT(PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
+                LASSERT (tx->tx_type != TX_TYPE_SMALL_MESSAGE ||
+                         PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
 
                 list_add_tail(&tx->tx_list, &peer->peer_active_txs);
                 peer->peer_active_txs_change_counter++;
 
-                LASSERT(tx->tx_peer == peer);
+                LASSERT (tx->tx_peer == peer);
 
                 /*
                  * Grab a ref so the TX doesn't go away
@@ -846,25 +817,22 @@ kptllnd_peer_check_sends (
 
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
-                rc = PtlPut (
-                            tx->tx_mdh_msg,
-                            PTL_NOACK_REQ,     /* we dont need an ack */
-                            target,            /* peer "address" */
-                            *kptllnd_tunables.kptl_portal,     /* portal */
-                            0,                 /* cookie */
-                            LNET_MSG_MATCHBITS, /* match bits */
-                            0,                 /* offset */
-                            0);                /* header data */
-                if(rc != 0){
+                rc = PtlPut (tx->tx_mdh_msg,
+                             PTL_NOACK_REQ,     /* we dont need an ack */
+                             peer->peer_ptlid,  /* peer "address" */
+                             *kptllnd_tunables.kptl_portal,     /* portal */
+                             0,                 /* cookie */
+                             LNET_MSG_MATCHBITS, /* match bits */
+                             0,                 /* offset */
+                             0);                /* header data */
+                if (rc != PTL_OK) {
                         CERROR("PtlPut error %d\n",rc);
-
                         /*
                          * Do the unlink which should succeed
                          */
                         LASSERT(atomic_read(&tx->tx_refcount)>1);
                         rc2 = PtlMDUnlink(tx->tx_mdh_msg);
                         LASSERT( rc2 == 0);
-
 
 #ifndef LUSTRE_PORTALS_UNLINK_SEMANTICS
                         tx->tx_mdh_msg = PTL_INVALID_HANDLE;
@@ -882,10 +850,9 @@ kptllnd_peer_check_sends (
 
         }
 
-
         spin_unlock_irqrestore(&peer->peer_lock, flags);
 
-        PJK_UT_MSG_DATA("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
         return;
 
 failed_without_lock:
@@ -916,7 +883,7 @@ failed_without_lock:
          */
         kptllnd_tx_decref(tx);
 
-        PJK_UT_MSG("<<< FAILED\n");
+        CDEBUG(D_NET, "<<< FAILED\n");
 }
 
 int
@@ -936,7 +903,7 @@ kptllnd_peer_timedout(kptl_peer_t *peer)
         if(!list_empty(&peer->peer_pending_txs)){
                 tx = list_entry(peer->peer_pending_txs.next,kptl_tx_t,tx_list);
                 if(time_after_eq(jiffies,tx->tx_deadline)){
-                        PJK_UT_MSG("Peer=%p PENDING tx=%p time=%lu sec\n",
+                        CDEBUG(D_NET, "Peer=%p PENDING tx=%p time=%lu sec\n",
                                 peer,tx,(jiffies - tx->tx_deadline)/HZ);
                         rc = 1;
                 }
@@ -948,7 +915,7 @@ kptllnd_peer_timedout(kptl_peer_t *peer)
         if(!list_empty(&peer->peer_active_txs)){
                 tx = list_entry(peer->peer_active_txs.next,kptl_tx_t,tx_list);
                 if(time_after_eq(jiffies,tx->tx_deadline)){
-                        PJK_UT_MSG("Peer=%p ACTIVE tx=%p time=%lu sec\n",
+                        CDEBUG(D_NET, "Peer=%p ACTIVE tx=%p time=%lu sec\n",
                                 peer,tx,(jiffies - tx->tx_deadline)/HZ);
                         rc = 1;
                 }
@@ -968,7 +935,7 @@ kptllnd_peer_check_bucket (int idx, kptl_data_t *kptllnd_data)
         unsigned long      flags;
 
 
-        /*PJK_UT_MSG("Bucket=%d\n",idx);*/
+        CDEBUG(D_INFO, "Bucket=%d\n",idx);
 
  again:
         /* NB. We expect to have a look at all the peers and not find any
@@ -979,8 +946,8 @@ kptllnd_peer_check_bucket (int idx, kptl_data_t *kptllnd_data)
         list_for_each (ptmp, peers) {
                 peer = list_entry (ptmp, kptl_peer_t, peer_list);
 
-                PJK_UT_MSG("Peer=%p Credits=%d Outstanding=%d\n",
-                        peer,peer->peer_credits,peer->peer_outstanding_credits);
+                CDEBUG(D_NET, "Peer=%p Credits=%d Outstanding=%d\n",
+                       peer,peer->peer_credits,peer->peer_outstanding_credits);
 
                 /* In case we have enough credits to return via a
                  * NOOP, but there were no non-blocking tx descs
@@ -995,7 +962,8 @@ kptllnd_peer_check_bucket (int idx, kptl_data_t *kptllnd_data)
                 read_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock,
                                        flags);
 
-                CERROR("Timed out RDMA with "LPX64"\n",peer->peer_nid);
+                CERROR("Timed out communications with %s\n",
+                       libcfs_nid2str(peer->peer_nid));
 
                 kptllnd_peer_cancel(peer);
                 kptllnd_peer_decref(peer,"temp"); /* ...until here */
@@ -1008,28 +976,14 @@ kptllnd_peer_check_bucket (int idx, kptl_data_t *kptllnd_data)
 }
 
 kptl_peer_t *
-kptllnd_peer_find (
-        kptl_data_t *kptllnd_data,
-        lnet_process_id_t target)
+kptllnd_ptlnid2peer_locked (kptl_data_t  *kptllnd_data,
+                            ptl_nid_t     nid)
 {
-        kptl_peer_t *peer;
-        unsigned long flags;
-        read_lock_irqsave(&kptllnd_data->kptl_peer_rw_lock, flags);
-        peer = kptllnd_peer_find_holding_list_lock(kptllnd_data,target);
-        read_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock, flags);
-        return peer;
-}
-
-kptl_peer_t *
-kptllnd_peer_find_holding_list_lock (
-        kptl_data_t *kptllnd_data,
-        lnet_process_id_t target)
-{
-        struct list_head *peer_list = kptllnd_nid2peerlist (kptllnd_data,target.nid);
+        struct list_head *peer_list = kptllnd_ptlnid2peerlist(kptllnd_data, nid);
         struct list_head *tmp;
         kptl_peer_t      *peer;
 
-        PJK_UT_MSG(">>> id=%s\n",libcfs_id2str(target));
+        CDEBUG(D_NET, ">>> id="FMT_NID"\n", nid);
 
         list_for_each (tmp, peer_list) {
 
@@ -1037,44 +991,64 @@ kptllnd_peer_find_holding_list_lock (
 
                 LASSERT(peer->peer_state != PEER_STATE_CANCELED);
                 
-                PJK_UT_MSG("NID: peer="LPX64" target="LPX64"\n",
-                        peer->peer_nid,target.nid);
-                PJK_UT_MSG("PID: peer=%d target=%d\n",
-                        peer->peer_pid,target.pid);
-                        
-                if (! (peer->peer_nid == target.nid && 
-                       peer->peer_pid == target.pid))
+                if (peer->peer_ptlid.nid != nid)
                         continue;
 
-                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
-                       peer, libcfs_id2str(target), atomic_read (&peer->peer_refcount));
-
                 kptllnd_peer_addref(peer,"find");
-                PJK_UT_MSG("<<< Peer=%p\n",peer);
+
+                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
+                       peer, libcfs_nid2str(peer->peer_nid), 
+                       atomic_read (&peer->peer_refcount));
                 return peer;
         }
 
-        PJK_UT_MSG("<<< NOTFOUND\n");
+        CDEBUG(D_NET, "<<< NOTFOUND\n");
         return NULL;
 }
 
 kptl_peer_t *
-kptllnd_peer_handle_hello (
-        kptl_data_t *kptllnd_data,
-        lnet_process_id_t initiator,
-        kptl_msg_t *msg)
+kptllnd_ptlnid2peer (kptl_data_t *kptllnd_data, ptl_nid_t nid)
+{
+        kptl_peer_t   *peer;
+        unsigned long  flags;
+
+        read_lock_irqsave(&kptllnd_data->kptl_peer_rw_lock, flags);
+        peer = kptllnd_ptlnid2peer_locked(kptllnd_data, nid);
+        read_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock, flags);
+
+        return peer;
+}
+
+kptl_peer_t *
+kptllnd_nid2peer_locked (kptl_data_t  *kptllnd_data,
+                         lnet_nid_t    nid)
+{
+        return kptllnd_ptlnid2peer_locked(kptllnd_data,
+                                          lnet2ptlnid(kptllnd_data, nid));
+}
+
+kptl_peer_t *
+kptllnd_nid2peer (kptl_data_t *kptllnd_data, lnet_nid_t nid)
+{
+        return kptllnd_ptlnid2peer(kptllnd_data,
+                                   lnet2ptlnid(kptllnd_data, nid));
+}
+
+kptl_peer_t *
+kptllnd_peer_handle_hello (kptl_data_t      *kptllnd_data,
+                           ptl_process_id_t  initiator,
+                           kptl_msg_t       *msg)
 {
         kptl_peer_t    *peer           = NULL;
-        kptl_peer_t    *peer_allocated = NULL;
+        kptl_peer_t    *new_peer       = NULL;
         kptl_peer_t    *peer_to_cancel = NULL;
         unsigned long   flags;
-        kptl_tx_t      *tx_hello = NULL;
+        kptl_tx_t      *hello_tx = NULL;
         int             rc;
         __u64           safe_matchbits_from_peer;
         __u64           safe_matchbits_to_peer = 0;
 
-
-        PJK_UT_MSG(">>>\n");
+        CDEBUG(D_NET, ">>> "FMT_NID"/%d\n", initiator.nid, initiator.pid);
 
         safe_matchbits_from_peer = msg->ptlm_u.hello.kptlhm_matchbits +
                         *kptllnd_tunables.kptl_peercredits;
@@ -1082,12 +1056,11 @@ kptllnd_peer_handle_hello (
         /*
          * Immediate message sizes MUST be equal
          */
-        if(  msg->ptlm_u.hello.kptlhm_max_msg_size !=
-                *kptllnd_tunables.kptl_max_msg_size){
+        if (msg->ptlm_u.hello.kptlhm_max_msg_size !=
+            *kptllnd_tunables.kptl_max_msg_size) {
                 CERROR("IMMD message size MUST be equal for all peers got %d expected %d\n",
-                        msg->ptlm_u.hello.kptlhm_max_msg_size,
-                        *kptllnd_tunables.kptl_max_msg_size);
-
+                       msg->ptlm_u.hello.kptlhm_max_msg_size,
+                       *kptllnd_tunables.kptl_max_msg_size);
                 return 0;
         }
 
@@ -1095,26 +1068,26 @@ kptllnd_peer_handle_hello (
          * Setup a connect HELLO message.  We ultimately might not
          * use it but likely we will.
          */
-        tx_hello = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
-        if( tx_hello == NULL) {
-                CERROR("Unable to allocate connect message for %s\n",libcfs_id2str(initiator));
+        hello_tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
+        if (hello_tx == NULL) {
+                CERROR("Unable to allocate connect message for "FMT_NID"/%d\n",
+                       initiator.nid, initiator.pid);
                 return 0;
         }
 
-        kptllnd_init_msg(
-                tx_hello->tx_msg,
-                PTLLND_MSG_TYPE_HELLO,
-                sizeof(kptl_hello_msg_t));
+        kptllnd_init_msg(hello_tx->tx_msg, PTLLND_MSG_TYPE_HELLO,
+                         sizeof(kptl_hello_msg_t));
 
         /*
-         * Allocate a peer, even though we might not ultimatly use it
-         * however we want to avoid doing this while holidng
+         * Allocate a peer, even though we might not ultimately use it
+         * however we want to avoid doing this while holding
          * the peer_rw_lock and be forced into atomic context
          */
-        rc = kptllnd_peer_allocate ( kptllnd_data, &peer_allocated, initiator);
-        if(rc != 0){
-                kptllnd_tx_decref(tx_hello);
-                CERROR("Failed to create peer (id=%s)\n",libcfs_id2str(initiator));
+        rc = kptllnd_peer_allocate(kptllnd_data, &new_peer, initiator);
+        if (rc != 0){
+                kptllnd_tx_decref(hello_tx);
+                CERROR("Failed to create peer for "FMT_NID"/%d\n",
+                       initiator.nid, initiator.pid);
                 return 0;
         }
 
@@ -1123,14 +1096,13 @@ kptllnd_peer_handle_hello (
         /*
          * Look for peer because it could have been previously here
          */
-        peer = kptllnd_peer_find_holding_list_lock(kptllnd_data,initiator);
+        peer = kptllnd_ptlnid2peer_locked(kptllnd_data, initiator.nid);
 
         /*
          * If peer is already here
          */
-        if(peer != NULL){
-
-                if(peer->peer_incarnation == 0) {
+        if (peer != NULL) {
+                if (peer->peer_incarnation == 0) {
                         /*
                          * Update the peer state
                          */
@@ -1145,22 +1117,24 @@ kptllnd_peer_handle_hello (
                         /*
                          * Save the match bits
                          */
-                        PJK_UT_MSG_DATA(" **** Updating Matchbits="LPX64" ****\n",
-                                safe_matchbits_from_peer);
+                        CDEBUG(D_NET, " **** Updating Matchbits="LPX64" ****\n",
+                               safe_matchbits_from_peer);
 
                         peer->peer_next_matchbits = safe_matchbits_from_peer;
-                        if(peer->peer_next_matchbits < PTL_RESERVED_MATCHBITS)
+                        if (peer->peer_next_matchbits < PTL_RESERVED_MATCHBITS)
                                 peer->peer_next_matchbits = PTL_RESERVED_MATCHBITS;
-                }
 
-                /*
-                 * If the incarnation has changed then we need to
-                 * resend the hello.
-                 */
-                else if( peer->peer_incarnation != msg->ptlm_srcnid ) {
+                } else if (peer->peer_incarnation != msg->ptlm_srcstamp ||
+                           peer->peer_ptlid.pid != initiator.pid) {
 
+                        CDEBUG(D_NET, "Peer %s reconnecting with pid,stamp: "
+                               "%d,"LPX64" (old %d,"LPX64"\n",
+                               libcfs_nid2str(peer->peer_nid),
+                               initiator.pid, msg->ptlm_srcstamp,
+                               peer->peer_ptlid.pid, peer->peer_incarnation);
                         /*
-                         * Put the match bits into the hello message
+                         * If the incarnation or PID have changed, assume the
+                         * peer has rebooted and resend the hello 
                          */
                         safe_matchbits_to_peer =
                                 peer->peer_last_matchbits_seen + 1 +
@@ -1172,35 +1146,33 @@ kptllnd_peer_handle_hello (
                         peer_to_cancel = peer;
                         peer = NULL;
 
-                }else{
+                } else {
                         CERROR("Receiving HELLO message on already connected peer %s\n",
-                                libcfs_id2str(initiator));
+                               libcfs_nid2str(peer->peer_nid));
                 }
         }
 
-        if( peer == NULL) {
-
+        if (peer == NULL) {
                 /*
                  * Put the match bits into the hello message
                  */
-                tx_hello->tx_msg->ptlm_u.hello.kptlhm_matchbits =
+                hello_tx->tx_msg->ptlm_u.hello.kptlhm_matchbits =
                         safe_matchbits_to_peer;
-                tx_hello->tx_msg->ptlm_u.hello.kptlhm_max_msg_size =
+                hello_tx->tx_msg->ptlm_u.hello.kptlhm_max_msg_size =
                         *kptllnd_tunables.kptl_max_msg_size;
 
                 /*
                  * Try and attach this peer to the list
                  */
-                rc = kptllnd_peer_add_to_list_locked ( kptllnd_data, peer_allocated);
-                if(rc != 0){
-                        CERROR("Failed to create peer (id=%s)\n",
-                                libcfs_id2str(initiator));
+                rc = kptllnd_peer_add_to_list_locked(kptllnd_data, new_peer);
+                if (rc != 0) {
+                        CERROR("Failed to create peer for "FMT_NID"/%d\n",
+                               initiator.nid, initiator.pid);
                         goto failed;
                 }
 
-                peer = peer_allocated;
-                peer_allocated = NULL;
-
+                peer = new_peer;
+                new_peer = NULL;
 
                 LASSERT(peer->peer_state == PEER_STATE_WAITING_HELLO);
                 peer->peer_state = PEER_STATE_ACTIVE;
@@ -1220,12 +1192,11 @@ kptllnd_peer_handle_hello (
                 /*
                  * Save the match bits
                  */
-                PJK_UT_MSG_DATA("**** Setting Matchbits="LPX64" ****\n",
-                        safe_matchbits_from_peer);
+                CDEBUG(D_NET, "**** Setting Matchbits="LPX64" ****\n",
+                       safe_matchbits_from_peer);
                 peer->peer_next_matchbits = safe_matchbits_from_peer;
                 if(peer->peer_next_matchbits < PTL_RESERVED_MATCHBITS)
                         peer->peer_next_matchbits = PTL_RESERVED_MATCHBITS;
-
 
                 /*
                  * And save them from a previous incarnation
@@ -1235,60 +1206,54 @@ kptllnd_peer_handle_hello (
                 /*
                  * Queue the message
                  */
-                kptllnd_peer_queue_tx_locked(peer,tx_hello);
+                kptllnd_peer_queue_tx_locked(peer,hello_tx);
 
                 /*
                  * And don't free it because it's queued
                  */
-                tx_hello = NULL;
-
+                hello_tx = NULL;
         }
 
 failed:
         write_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock,flags);
 
-        if(tx_hello)
-                kptllnd_tx_decref(tx_hello);
+        if (hello_tx != NULL)
+                kptllnd_tx_decref(hello_tx);
 
-        /*
-         *
-         */
-        if(peer){
+        if (peer != NULL)
                 kptllnd_peer_check_sends(peer);
-        }
 
-        if(peer_to_cancel) {
+        if (peer_to_cancel != NULL) {
                 kptllnd_peer_cancel(peer_to_cancel);
-                kptllnd_peer_decref(peer_to_cancel,"find");
+                kptllnd_peer_decref(peer_to_cancel, "find");
         }
 
-        if(peer_allocated)
-                kptllnd_peer_decref(peer_allocated,"alloc");
+        if (new_peer != NULL)
+                kptllnd_peer_decref(new_peer, "alloc");
 
-        PJK_UT_MSG("<<< Peer=%p\n",peer);
-
+        CDEBUG(D_NET, "<<< Peer=%p\n", peer);
         return peer;
 }
 
 void
-kptllnd_tx_launch (
-        kptl_tx_t *tx,
-        lnet_process_id_t target,
-        lnet_msg_t *ptlmsg )
+kptllnd_tx_launch (kptl_tx_t         *tx,
+                   lnet_process_id_t  target,
+                   lnet_msg_t        *ptlmsg)
 {
         kptl_data_t     *kptllnd_data = tx->tx_po.po_kptllnd_data;
         kptl_peer_t     *peer = NULL;
-        kptl_peer_t     *peer_allocated = NULL;
+        kptl_peer_t     *new_peer = NULL;
         unsigned long    flags;
         rwlock_t        *g_lock = &kptllnd_data->kptl_peer_rw_lock;
         int              rc;
-        kptl_tx_t       *tx_hello = NULL;
+        ptl_process_id_t ptlid;
+        kptl_tx_t       *hello_tx = NULL;
 
 
         /* If I get here, I've committed to send, so I complete the tx with
          * failure on any problems */
 
-        PJK_UT_MSG(">>> TX=%p target=%s\n",tx,libcfs_id2str(target));
+        CDEBUG(D_NET, ">>> TX=%p target=%s\n",tx,libcfs_id2str(target));
 
         LASSERT (tx->tx_ptlmsg == NULL);
         tx->tx_ptlmsg = ptlmsg;              /* finalize ptlmsg on completion */
@@ -1300,7 +1265,7 @@ kptllnd_tx_launch (
          * First try to find the peer (this will grab the
          * read lock
          */
-        peer = kptllnd_peer_find (kptllnd_data,target);
+        peer = kptllnd_nid2peer(kptllnd_data, target.nid);
 
         /*
          * If we find the peer
@@ -1313,7 +1278,7 @@ kptllnd_tx_launch (
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
                 kptllnd_peer_check_sends(peer);
                 kptllnd_peer_decref(peer,"find");
-                PJK_UT_MSG("<<< FOUND\n");
+                CDEBUG(D_NET, "<<< FOUND\n");
                 return;
         }
 
@@ -1324,15 +1289,16 @@ kptllnd_tx_launch (
          * (in the case that the peer is racing to connect with us)
          * but more than likely we will.
          */
-        tx_hello = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
-        if( tx_hello == NULL) {
-                CERROR("Unable to allocate connect message for %s\n",libcfs_id2str(target));
+        hello_tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
+        if( hello_tx == NULL) {
+                CERROR("Unable to allocate connect message for %s\n",
+                       libcfs_id2str(target));
                 kptllnd_tx_decref (tx);
                 return;
         }
 
         kptllnd_init_msg(
-                tx_hello->tx_msg,
+                hello_tx->tx_msg,
                 PTLLND_MSG_TYPE_HELLO,
                 sizeof(kptl_hello_msg_t));
 
@@ -1340,20 +1306,25 @@ kptllnd_tx_launch (
          * We've never seen this peer before.  So setup
          * a default message.
          */
-        tx_hello->tx_msg->ptlm_u.hello.kptlhm_matchbits = 0;
-        tx_hello->tx_msg->ptlm_u.hello.kptlhm_max_msg_size =
+        hello_tx->tx_msg->ptlm_u.hello.kptlhm_matchbits = 0;
+        hello_tx->tx_msg->ptlm_u.hello.kptlhm_max_msg_size =
                 *kptllnd_tunables.kptl_max_msg_size;
 
         /*
          * Allocate a new peer
          * (it's not active until its on the list)
          */
-        PJK_UT_MSG("TX %p creating NEW PEER %s\n",tx,libcfs_id2str(target));
-        rc = kptllnd_peer_allocate ( kptllnd_data, &peer_allocated, target);
-        if(rc != 0){
-                CERROR("Failed to create peer %s\n",libcfs_id2str(target));
-                kptllnd_tx_decref (tx);
-                kptllnd_tx_decref (tx_hello);
+        CDEBUG(D_NET, "TX %p creating NEW PEER %s\n", 
+               tx, libcfs_id2str(target));
+        ptlid.nid = lnet2ptlnid(kptllnd_data, target.nid);
+        ptlid.pid = kptllnd_data->kptl_portals_id.pid;
+
+        rc = kptllnd_peer_allocate(kptllnd_data, &new_peer, ptlid);
+
+        if (rc != 0) {
+                CERROR("Failed to create peer %s\n", libcfs_id2str(target));
+                kptllnd_tx_decref(tx);
+                kptllnd_tx_decref(hello_tx);
                 return;
         }
 
@@ -1364,7 +1335,7 @@ kptllnd_tx_launch (
          */
         write_lock_irqsave(g_lock, flags);
 
-        peer = kptllnd_peer_find_holding_list_lock (kptllnd_data,target);
+        peer = kptllnd_nid2peer_locked(kptllnd_data, target.nid);
 
         /*
          * If we find the peer
@@ -1374,7 +1345,8 @@ kptllnd_tx_launch (
         if (peer != NULL) {
                 write_unlock_irqrestore(g_lock, flags);
 
-                CDEBUG(D_TRACE,"HELLO message race occurred for %s\n",libcfs_id2str(target));
+                CDEBUG(D_TRACE,"HELLO message race occurred for %s\n",
+                       libcfs_id2str(target));
 
                 spin_lock_irqsave(&peer->peer_lock, flags);
                 kptllnd_peer_queue_tx_locked ( peer, tx );
@@ -1382,31 +1354,32 @@ kptllnd_tx_launch (
 
                 kptllnd_peer_check_sends(peer);
                 kptllnd_peer_decref(peer,"find");
-                kptllnd_peer_decref(peer_allocated,"alloc");
+                kptllnd_peer_decref(new_peer,"alloc");
 
                 /* and we don't need the connection tx*/
-                kptllnd_tx_decref(tx_hello);
+                kptllnd_tx_decref(hello_tx);
 
-                PJK_UT_MSG("<<< FOUND2\n");
+                CDEBUG(D_NET, "<<< FOUND2\n");
                 return;
         }
 
 
-        rc = kptllnd_peer_add_to_list_locked ( kptllnd_data, peer_allocated);
+        rc = kptllnd_peer_add_to_list_locked ( kptllnd_data, new_peer);
         if(rc != 0){
                 write_unlock_irqrestore(g_lock, flags);
 
-                CERROR("Failed to add peer to list for %s\n",libcfs_id2str(target));
+                CERROR("Failed to add peer to list for %s\n",
+                       libcfs_id2str(target));
 
                 /* Drop these TXs tx*/
-                kptllnd_tx_decref (tx);
-                kptllnd_tx_decref (tx_hello);
-                kptllnd_peer_decref(peer_allocated,"create");
+                kptllnd_tx_decref(tx);
+                kptllnd_tx_decref(hello_tx);
+                kptllnd_peer_decref(new_peer,"create");
                 return;
         }
 
-        peer = peer_allocated;
-        peer_allocated = NULL;
+        peer = new_peer;
+        new_peer = NULL;
 
         write_unlock_irqrestore(g_lock,flags);
 
@@ -1417,16 +1390,16 @@ kptllnd_tx_launch (
          * the connection request will go out, and
          * the tx will wait for a reply.
          */
-        PJK_UT_MSG("TXHello=%p\n",tx_hello);
+        CDEBUG(D_NET, "TXHello=%p\n", hello_tx);
 
 
         spin_lock_irqsave(&peer->peer_lock, flags);
-        kptllnd_peer_queue_tx_locked(peer,tx_hello);
-        kptllnd_peer_queue_tx_locked(peer,tx);
+        kptllnd_peer_queue_tx_locked(peer, hello_tx);
+        kptllnd_peer_queue_tx_locked(peer, tx);
         spin_unlock_irqrestore(&peer->peer_lock, flags);
 
         kptllnd_peer_check_sends(peer);
         kptllnd_peer_decref(peer,"find");
 
-        PJK_UT_MSG("<<<\n");
+        CDEBUG(D_NET, "<<<\n");
 }
