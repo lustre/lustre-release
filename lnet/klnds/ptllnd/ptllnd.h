@@ -91,6 +91,7 @@ typedef struct
         int             *kptl_cksum;            /* checksum kptl_msg_t? */
         int             *kptl_timeout;          /* comms timeout (seconds) */
         int             *kptl_portal;           /* portal number */
+        int             *kptl_pid;              /* portals PID (self + kernel peers) */
         int             *kptl_rxb_npages;       /* number of pages for rx buffer */
         int             *kptl_credits;          /* number of credits */
         int             *kptl_peercredits;      /* number of credits */

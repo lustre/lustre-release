@@ -316,7 +316,7 @@ kptllnd_startup (lnet_ni_t *ni)
 #else /* _USING_CRAY_PORTALS_ */
                 CRAY_KERN_NAL,
 #endif
-                PTLLND_PID, NULL, NULL,
+                *kptllnd_tunables.kptl_pid, NULL, NULL,
                 &kptllnd_data->kptl_nih);
 
         /*
@@ -351,10 +351,12 @@ kptllnd_startup (lnet_ni_t *ni)
                 goto failed;
         }
 
-        if (kptllnd_data->kptl_portals_id.pid != PTLLND_PID) {
+        if (kptllnd_data->kptl_portals_id.pid !=
+                *kptllnd_tunables.kptl_pid) {
                 /* The kernel ptllnd must have the expected PID */
                 CERROR("Unexpected PID: %u (%u expected)\n",
-                       kptllnd_data->kptl_portals_id.pid, PTLLND_PID);
+                       kptllnd_data->kptl_portals_id.pid,
+                       *kptllnd_tunables.kptl_pid);
                 rc = -EINVAL;
                 goto failed;
         }
