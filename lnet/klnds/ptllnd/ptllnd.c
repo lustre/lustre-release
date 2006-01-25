@@ -491,8 +491,9 @@ kptllnd_startup (lnet_ni_t *ni)
         kptllnd_data->kptl_rx_cache = cfs_mem_cache_create (
                 "ptllnd_rx",
                 sizeof(kptl_rx_t) + *kptllnd_tunables.kptl_max_msg_size,
-                0, /* offset */
-                0); /* flags */
+                0,    /* offset */
+                0,    /* flags */
+                NULL, NULL); /* ctor/dtor (not used) */
         if (kptllnd_data->kptl_rx_cache == NULL) {
                 CERROR("Can't create slab for RX descriptrs\n");
                 goto failed;
