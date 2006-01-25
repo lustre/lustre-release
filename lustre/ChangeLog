@@ -640,14 +640,14 @@ Frequency  : rare (only unsupported configurations with a node running as an
 Bugzilla   : 6514, 5137
 Description: Mounting a Lustre file system on a node running as an OST could
 	     lead to deadlocks
-Details    : OSTs now allocate memory needed to write out data at
-             startup, instead of when needed, to avoid having to
-             allocate memory in possibly low memory situations.
-             Specifically, if the file system is mounted on on OST,
-             memory pressure could force it to try to write out data,
-             which it needed to allocate memory to do.  Due to the low
-             memory, it would be unable to do so and the node would
-             become unresponsive.
+Details    : OSTs now preallocates memory needed to write out data at
+	     startup, instead of when needed, to avoid having to
+	     allocate memory in possibly low memory situations.
+	     Specifically, if the file system is mounted on on OST,
+	     memory pressure could force it to try to write out data,
+	     which it needed to allocate memory to do.  Due to the low
+	     memory, it would be unable to do so and the node would
+	     become unresponsive.
 
 Severity   : enhancement
 Bugzilla   : 7015
@@ -685,6 +685,16 @@ Description: Network or server problems during mount may cause partially
 Details    : The config llog parsing code may overwrite the error return
              code during mount error handling, returning success instead
              of an error.
+
+Severity   : minor
+Bugzilla   : 6422
+Frequency  : rare
+Description: MDS can fail to allocate large reply buffers
+Details    : After long uptimes the MDS can fail to allocate large reply
+	     buffers (e.g. zconf client mount config records) due to memory
+	     fragmentation or consumption by the buffer cache.  Preallocate
+	     some large reply buffers so that these replies can be sent even
+	     under memory pressure.
 
 Severity   : minor
 Bugzilla   : 6266

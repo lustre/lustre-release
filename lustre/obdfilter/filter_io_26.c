@@ -449,7 +449,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 LASSERT(iobuf->dr_npages > 0);
                 create = 1;
                 sem = &obd->u.filter.fo_alloc_lock;
-                
+
                 lquota_enforce(quota_interface, obd, iobuf->dr_ignore_quota);
         }
 remap:
@@ -626,9 +626,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
                 CDEBUG(D_INODE, "update UID/GID to %lu/%lu\n",
                        (unsigned long)oa->o_uid, (unsigned long)oa->o_gid);
-                
+
                 cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
-                
+
                 iattr.ia_valid |= ATTR_MODE;
                 iattr.ia_mode = inode->i_mode;
                 if (iattr.ia_valid & ATTR_UID)

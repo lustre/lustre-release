@@ -799,7 +799,7 @@ static int filter_prep(struct obd_device *obd)
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
                 CERROR("OBD filter: cannot open/create %s rc = %d\n",
-                        HEALTH_CHECK, rc);
+                       HEALTH_CHECK, rc);
                 GOTO(err_filp, rc);
         }
         filter->fo_health_check_filp = file;
