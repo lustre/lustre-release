@@ -766,9 +766,9 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
                  * Save the last match bits used
                  */
                 spin_lock_irqsave(&rx->rx_peer->peer_lock, flags);
-                if (msg->ptlm_u.req.kptlrm_matchbits > 
+                if (msg->ptlm_u.req.kptlrm_matchbits >
                     rx->rx_peer->peer_last_matchbits_seen)
-                        rx->rx_peer->peer_last_matchbits_seen = 
+                        rx->rx_peer->peer_last_matchbits_seen =
                                 msg->ptlm_u.req.kptlrm_matchbits;
                 spin_unlock_irqrestore(&rx->rx_peer->peer_lock, flags);
 
