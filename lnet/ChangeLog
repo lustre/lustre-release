@@ -1,6 +1,24 @@
+2006-01-24  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.6
+       * bug fixes
+
+Severity   : major
+Frequency  : Cray XT3 only
+Bugzilla   : 10074
+Description: fix use of portals/lnet pid
+Details    : incorrect use of portals/lnet pid caused them to get out of
+	     sync and would result in silent dropping of RPC messages
+
+Severity   : major
+Frequency  : Infiniband IB LND only
+Bugzilla   : 9776
+Description: iiblnd wasn't mapping all memory
+Details    : iiblnd wasn't mapping all memory, resulting in comms errors
+	     on some architectures/memory configs
+
 2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
 	* Configuration change for the XT3
-             The PTLLND is now used to run Lustre over Portals on the XT3.
+	     The PTLLND is now used to run Lustre over Portals on the XT3.
 	     The configure option(s) --with-cray-portals are no longer
 	     used.  Rather --with-portals=<path-to-portals-includes> is
 	     used to enable building on the XT3.  In addition to enable
@@ -9,7 +27,7 @@
 
 2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
 	* Portals has been removed, replaced by LNET.
-  	   LNET is new networking infrastructure for Lustre, it includes a
+	   LNET is new networking infrastructure for Lustre, it includes a
 	   reorganized network configuration mode (see the user
 	   documentation for full details) as well as support for routing
 	   between different network fabrics.  Lustre Networking Devices

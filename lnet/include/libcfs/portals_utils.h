@@ -12,6 +12,8 @@
 #include <libcfs/linux/portals_utils.h>
 #elif defined(__APPLE__)
 #include <libcfs/darwin/portals_utils.h>
+#elif defined(__WINNT__)
+#include <libcfs/winnt/portals_utils.h>
 #else
 #error Unsupported Operating System
 #endif

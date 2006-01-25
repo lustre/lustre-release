@@ -30,7 +30,7 @@ kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
         kptl_tx_t       *tx;
         int             i;
 
-        PJK_UT_MSG("\n");
+        CDEBUG(D_NET, "\n");
 
         /*
          * First initialize the tx descriptors
@@ -54,20 +54,29 @@ kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
                  */
                 tx->tx_state = TX_STATE_ON_IDLE_QUEUE;
 
-                LIBCFS_ALLOC( tx->tx_msg, *kptllnd_tunables.kptl_max_msg_size );
-                if(tx->tx_msg == NULL){
+                LIBCFS_ALLOC(tx->tx_msg, *kptllnd_tunables.kptl_max_msg_size);
+                if (tx->tx_msg == NULL) {
                         CERROR("Failed to allocate TX payload\n");
-                        kptllnd_cleanup_tx_descs(kptllnd_data);
+                        goto failed;
                 }
 
-
+                LIBCFS_ALLOC(tx->tx_frags, sizeof(*tx->tx_frags));
+                if (tx->tx_frags == NULL) {
+                        CERROR("Failed to allocate TX frags\n");
+                        goto failed;
+                }
+                
                 /*
                  * Add this to the queue
                  */
                 list_add (&tx->tx_list,&kptllnd_data->kptl_idle_txs);
         }
 
-        return (0);
+        return 0;
+
+ failed:
+        kptllnd_cleanup_tx_descs(kptllnd_data);
+        return -ENOMEM;
 }
 
 void
@@ -76,50 +85,43 @@ kptllnd_cleanup_tx_descs(kptl_data_t *kptllnd_data)
         kptl_tx_t       *tx;
         int             i;
 
-        PJK_UT_MSG("\n");
+        CDEBUG(D_NET, "\n");
 
         for (i = 0; i < (*kptllnd_tunables.kptl_ntx); i++) {
                 tx = &kptllnd_data->kptl_tx_descs[i];
 
-
-                /*
-                 * Handle partial initization by stopping
-                 * when we hit one that is not fully initialized
-                 */
-                if( tx->tx_msg == NULL )
-                        break;
+                if (tx->tx_msg != NULL)
+                        LIBCFS_FREE(tx->tx_msg, 
+                                    *kptllnd_tunables.kptl_max_msg_size);
+                        
+                if (tx->tx_frags != NULL)
+                        LIBCFS_FREE(tx->tx_frags, sizeof(*tx->tx_frags));
 
                 LASSERT( tx->tx_state == TX_STATE_ON_IDLE_QUEUE );
-
-                LIBCFS_FREE(tx->tx_msg,*kptllnd_tunables.kptl_max_msg_size);
         }
 }
 
 kptl_tx_t *
-kptllnd_get_idle_tx(
-        kptl_data_t *kptllnd_data,
-        kptl_tx_type_t purpose)
+kptllnd_get_idle_tx(kptl_data_t *kptllnd_data,
+                    enum kptl_tx_type purpose)
 {
         kptl_tx_t      *tx = NULL;
 
-        PJK_UT_MSG(">>> purpose=%d\n",purpose);
+        CDEBUG(D_NET, ">>> purpose=%d\n",purpose);
 
         if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX_PUT_ALLOC ) && purpose == TX_TYPE_LARGE_PUT){
-                PJK_UT_MSG_SIMULATION("FAIL_BLOCKING_TX_PUT_ALLOC SIMULATION triggered\n");
                 CERROR ("FAIL_BLOCKING_TX_PUT_ALLOC SIMULATION triggered\n");
                 tx = NULL;
                 STAT_UPDATE(kps_tx_allocation_failed);
                 goto exit;
         }
         if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX_GET_ALLOC ) && purpose == TX_TYPE_LARGE_GET){
-                PJK_UT_MSG_SIMULATION("FAIL_BLOCKING_TX_GET_ALLOC SIMULATION triggered\n");
                 CERROR ("FAIL_BLOCKING_TX_GET_ALLOC SIMULATION triggered\n");
                 tx = NULL;
                 STAT_UPDATE(kps_tx_allocation_failed);
                 goto exit;
         }
         if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX )){
-                PJK_UT_MSG_SIMULATION("FAIL_BLOCKING_TX SIMULATION triggered\n");
                 CERROR ("FAIL_BLOCKING_TX SIMULATION triggered\n");
                 tx = NULL;
                 STAT_UPDATE(kps_tx_allocation_failed);
@@ -190,7 +192,7 @@ kptllnd_get_idle_tx(
 
 
 exit:
-        PJK_UT_MSG("<<< tx=%p\n",tx);
+        CDEBUG(D_NET, "<<< tx=%p\n",tx);
         return tx;
 }
 
@@ -203,7 +205,7 @@ kptllnd_tx_done (kptl_tx_t *tx)
 
         LASSERT (!in_interrupt());
 
-        PJK_UT_MSG(">>> tx=%p\n",tx);
+        CDEBUG(D_NET, ">>> tx=%p\n",tx);
 
         LASSERT(tx->tx_state != TX_STATE_ON_IDLE_QUEUE);
         LASSERT(PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
@@ -219,7 +221,7 @@ kptllnd_tx_done (kptl_tx_t *tx)
          * Release the associated RX if there is one
          */
         if(tx->tx_associated_rx){
-                PJK_UT_MSG("tx=%p destroy associated rx %p\n",tx,tx->tx_associated_rx);
+                CDEBUG(D_NET, "tx=%p destroy associated rx %p\n",tx,tx->tx_associated_rx);
                 kptllnd_rx_decref(tx->tx_associated_rx,"tx",kptllnd_data);
                 tx->tx_associated_rx = NULL;
         }
@@ -228,7 +230,7 @@ kptllnd_tx_done (kptl_tx_t *tx)
          * Cleanup resources associate with the peer
          */
         if(tx->tx_peer){
-                PJK_UT_MSG("tx=%p detach from peer=%p\n",tx,tx->tx_peer);
+                CDEBUG(D_NET, "tx=%p detach from peer=%p\n",tx,tx->tx_peer);
                 kptllnd_peer_dequeue_tx(tx->tx_peer,tx);
                 kptllnd_peer_decref(tx->tx_peer,"tx");
                 tx->tx_peer = NULL;
@@ -255,7 +257,7 @@ kptllnd_tx_done (kptl_tx_t *tx)
         if (lnetmsg[1] != NULL)
                 lnet_finalize(kptllnd_data->kptl_ni, lnetmsg[1], status);
 
-        PJK_UT_MSG("<<< tx=%p\n",tx);
+        CDEBUG(D_NET, "<<< tx=%p\n",tx);
 }
 
 void
@@ -264,7 +266,7 @@ kptllnd_tx_schedule (kptl_tx_t *tx)
         kptl_data_t *kptllnd_data = tx->tx_po.po_kptllnd_data;
         unsigned long    flags;
 
-        PJK_UT_MSG("tx=%p\n",tx);
+        CDEBUG(D_NET, "tx=%p\n",tx);
 
         spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
         LASSERT(list_empty(&tx->tx_schedlist));
@@ -282,13 +284,13 @@ kptllnd_tx_callback(ptl_event_t *ev)
         int              do_decref = 0;
         unsigned long    flags;
 
-        PJK_UT_MSG(">>> %s(%d) tx=%p fail=%d\n",
+        CDEBUG(D_NET, ">>> %s(%d) tx=%p fail=%d\n",
                 get_ev_type_string(ev->type),ev->type,tx,ev->ni_fail_type);
 
         STAT_UPDATE(kps_tx_event);
 
 #ifdef LUSTRE_PORTALS_UNLINK_SEMANTICS
-        PJK_UT_MSG("ev->unlinked=%d\n",ev->unlinked);
+        CDEBUG(D_NET, "ev->unlinked=%d\n",ev->unlinked);
         if(ev->unlinked)
                 STAT_UPDATE(kps_tx_unlink_event);
 #endif
@@ -303,7 +305,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
                  * event's and we've already cleaned up in
                  * those cases.
                  */
-                PJK_UT_MSG("<<<\n");
+                CDEBUG(D_NET, "<<<\n");
                 return;
 #else
                 /*
@@ -316,7 +318,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
 
                 tx->tx_status = -EINVAL;
                 kptllnd_tx_scheduled_decref(tx);
-                PJK_UT_MSG("<<<\n");
+                CDEBUG(D_NET, "<<<\n");
                 return;
 #endif
         }
@@ -347,7 +349,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
                         break;
 
                 case TX_TYPE_SMALL_MESSAGE:
-                        PJK_UT_MSG("TX_TYPE_SMALL_MESSAGE\n");
+                        CDEBUG(D_NET, "TX_TYPE_SMALL_MESSAGE\n");
                         LASSERT(PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
 
                         /*
@@ -359,7 +361,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
 
                 case TX_TYPE_LARGE_PUT:
                 case TX_TYPE_LARGE_GET:
-                        PJK_UT_MSG("TX_TYPE_LARGE_%s\n",
+                        CDEBUG(D_NET, "TX_TYPE_LARGE_%s\n",
                                 tx->tx_type == TX_TYPE_LARGE_PUT ?
                                 "PUT" : "GET");
                         /*
@@ -399,7 +401,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
                         break;
 
                 case TX_TYPE_LARGE_PUT_RESPONSE:
-                        PJK_UT_MSG("TX_TYPE_LARGE_PUT_RESPONSE\n");
+                        CDEBUG(D_NET, "TX_TYPE_LARGE_PUT_RESPONSE\n");
                         LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
 
                         /*
@@ -414,7 +416,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
                         break;
 
                 case TX_TYPE_LARGE_GET_RESPONSE:
-                        PJK_UT_MSG("TX_TYPE_LARGE_GET_RESPONSE\n");
+                        CDEBUG(D_NET, "TX_TYPE_LARGE_GET_RESPONSE\n");
                         LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
 
                         /*
@@ -452,7 +454,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
 
         if(do_decref)
                 kptllnd_tx_scheduled_decref(tx);
-        PJK_UT_MSG("<<< decref=%d\n",do_decref);
+        CDEBUG(D_NET, "<<< decref=%d\n",do_decref);
 }
 
 void
@@ -470,7 +472,7 @@ kptllnd_tx_decref(
                 return;
         }
 
-        PJK_UT_MSG("tx=%p LAST REF\n",tx);
+        CDEBUG(D_NET, "tx=%p LAST REF\n",tx);
         kptllnd_tx_done(tx);
 }
 
@@ -484,11 +486,11 @@ kptllnd_tx_scheduled_decref(
                  * with the real ref count, and is for informational purposes
                  * only
                  */
-                PJK_UT_MSG("tx=%p count=%d\n",tx,
+                CDEBUG(D_NET, "tx=%p count=%d\n",tx,
                         atomic_read(&tx->tx_refcount));
                 return;
         }
 
-        PJK_UT_MSG("tx=%p LAST REF\n",tx);
+        CDEBUG(D_NET, "tx=%p LAST REF\n",tx);
         kptllnd_tx_schedule(tx);
 }

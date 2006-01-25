@@ -972,13 +972,93 @@ kibnal_tx_complete (IB_WORK_COMPLETION *wc)
 
         if (failed &&
             tx->tx_status == 0 &&
-            conn->ibc_state == IBNAL_CONN_ESTABLISHED)
+            conn->ibc_state == IBNAL_CONN_ESTABLISHED) {
+#if KIBLND_DETAILED_DEBUG
+                int                   i;
+                IB_WORK_REQ2         *wrq = &tx->tx_wrq[0];
+                IB_LOCAL_DATASEGMENT *gl = &tx->tx_gl[0];
+                lnet_msg_t           *lntmsg = tx->tx_lntmsg[0];
+#endif
                 CERROR("tx -> %s type %x cookie "LPX64
-                       "sending %d waiting %d: failed %d\n", 
+                       " sending %d waiting %d failed %d nwrk %d\n", 
                        libcfs_nid2str(conn->ibc_peer->ibp_nid),
                        tx->tx_msg->ibm_type, tx->tx_cookie,
-                       tx->tx_sending, tx->tx_waiting, wc->Status);
+                       tx->tx_sending, tx->tx_waiting, wc->Status,
+                       tx->tx_nwrq);
+#if KIBLND_DETAILED_DEBUG
+                for (i = 0; i < tx->tx_nwrq; i++, wrq++, gl++) {
+                        switch (wrq->Operation) {
+                        default:
+                                CDEBUG(D_ERROR, "    [%3d] Addr %p Next %p OP %d "
+                                       "DSList %p(%p)/%d: "LPX64"/%d K %x\n",
+                                       i, wrq, wrq->Next, wrq->Operation,
+                                       wrq->DSList, gl, wrq->DSListDepth,
+                                       gl->Address, gl->Length, gl->Lkey);
+                                break;
+                        case WROpSend:
+                                CDEBUG(D_ERROR, "    [%3d] Addr %p Next %p SEND "
+                                       "DSList %p(%p)/%d: "LPX64"/%d K %x\n",
+                                       i, wrq, wrq->Next, 
+                                       wrq->DSList, gl, wrq->DSListDepth,
+                                       gl->Address, gl->Length, gl->Lkey);
+                                break;
+                        case WROpRdmaWrite:
+                                CDEBUG(D_ERROR, "    [%3d] Addr %p Next %p DMA "
+                                       "DSList: %p(%p)/%d "LPX64"/%d K %x -> "
+                                       LPX64" K %x\n",
+                                       i, wrq, wrq->Next, 
+                                       wrq->DSList, gl, wrq->DSListDepth,
+                                       gl->Address, gl->Length, gl->Lkey,
+                                       wrq->Req.SendRC.RemoteDS.Address,
+                                       wrq->Req.SendRC.RemoteDS.Rkey);
+                                break;
+                        }
+                }
+                
+                switch (tx->tx_msg->ibm_type) {
+                default:
+                        CERROR("  msg type %x %p/%d, No RDMA\n", 
+                               tx->tx_msg->ibm_type, 
+                               tx->tx_msg, tx->tx_msg->ibm_nob);
+                        break;
 
+                case IBNAL_MSG_PUT_DONE:
+                case IBNAL_MSG_GET_DONE:
+                        CERROR("  msg type %x %p/%d, RDMA key %x frags %d...\n", 
+                               tx->tx_msg->ibm_type, 
+                               tx->tx_msg, tx->tx_msg->ibm_nob,
+                               tx->tx_rd->rd_key, tx->tx_rd->rd_nfrag);
+                        for (i = 0; i < tx->tx_rd->rd_nfrag; i++)
+                                CDEBUG(D_ERROR, "    [%d] "LPX64"/%d\n", i,
+                                       tx->tx_rd->rd_frags[i].rf_addr,
+                                       tx->tx_rd->rd_frags[i].rf_nob);
+                        if (lntmsg == NULL) {
+                                CERROR("  No lntmsg\n");
+                        } else if (lntmsg->msg_iov != NULL) {
+                                CERROR("  lntmsg in %d VIRT frags...\n", 
+                                       lntmsg->msg_niov);
+                                for (i = 0; i < lntmsg->msg_niov; i++)
+                                        CDEBUG(D_ERROR, "    [%d] %p/%d\n", i,
+                                               lntmsg->msg_iov[i].iov_base,
+                                               lntmsg->msg_iov[i].iov_len);
+                        } else if (lntmsg->msg_kiov != NULL) {
+                                CERROR("  lntmsg in %d PAGE frags...\n", 
+                                       lntmsg->msg_niov);
+                                for (i = 0; i < lntmsg->msg_niov; i++)
+                                        CDEBUG(D_ERROR, "    [%d] %p+%d/%d\n", i,
+                                               lntmsg->msg_kiov[i].kiov_page,
+                                               lntmsg->msg_kiov[i].kiov_offset,
+                                               lntmsg->msg_kiov[i].kiov_len);
+                        } else {
+                                CERROR("  lntmsg in %d frags\n", 
+                                       lntmsg->msg_niov);
+                        }
+                        
+                        break;
+                }
+#endif
+        }
+        
         spin_lock(&conn->ibc_lock);
 
         /* I could be racing with rdma completion.  Whoever makes 'tx' idle

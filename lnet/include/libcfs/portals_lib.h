@@ -29,6 +29,8 @@
 #include <libcfs/linux/portals_lib.h>
 #elif defined(__APPLE__)
 #include <libcfs/darwin/portals_lib.h>
+#elif defined(__WINNT__)
+#include <libcfs/winnt/portals_lib.h>
 #else
 #error Unsupported Operating System
 #endif
@@ -68,7 +70,7 @@ static inline int size_round0(int val)
 
 static inline size_t round_strlen(char *fset)
 {
-        return size_round(strlen(fset) + 1);
+        return (size_t)size_round((int)strlen(fset) + 1);
 }
 
 #define LOGL(var,len,ptr)                                       \

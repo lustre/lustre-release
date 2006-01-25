@@ -6,11 +6,14 @@
 
 #define LIBCFS_DEBUG
 #include <libcfs/libcfs.h>
+#include <lnet/types.h>
 
 #if defined(__linux__)
 #include <libcfs/linux/kp30.h>
 #elif defined(__APPLE__)
 #include <libcfs/darwin/kp30.h>
+#elif defined(__WINNT__)
+#include <libcfs/winnt/kp30.h>
 #else
 #error Unsupported operating system
 #endif
@@ -192,7 +195,7 @@ do {                                                                           \
 # else
 #  define LASSERT(e)
 #  define LASSERTF(cond, args...) do { } while (0)
-# endif
+# endif /* LIBCFS_DEBUG */
 # define LBUG()   assert(0)
 # define printk(format, args...) printf (format, ## args)
 # define LIBCFS_ALLOC(ptr, size) do { (ptr) = calloc(1,size); } while (0);
@@ -364,7 +367,7 @@ static inline int libcfs_ioctl_is_invalid(struct libcfs_ioctl_data *data)
                 CERROR ("LIBCFS ioctl: plen2 nonzero but no pbuf2 pointer\n");
                 return 1;
         }
-        if (libcfs_ioctl_packlen(data) != data->ioc_len ) {
+        if ((__u32)libcfs_ioctl_packlen(data) != data->ioc_len ) {
                 CERROR ("LIBCFS ioctl: packlen != ioc_len\n");
                 return 1;
         }

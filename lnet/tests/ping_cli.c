@@ -90,8 +90,8 @@ static void pingcli_callback(lnet_event_t *ev)
 {
         int i;
         unsigned magic;
-        i = __le32_to_cpu(*(int *)(ev->md.start + ev->offset + sizeof(unsigned)));
-        magic = __le32_to_cpu(*(int *)(ev->md.start + ev->offset));
+        i = __le32_to_cpu(*(int *)((char *)ev->md.start + ev->offset + sizeof(unsigned)));
+        magic = __le32_to_cpu(*(int *)((char *)ev->md.start + ev->offset));
 
         if(magic != 0xcafebabe) {
                 CERROR("Unexpected response %x\n", magic);

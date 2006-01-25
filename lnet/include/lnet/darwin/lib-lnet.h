@@ -11,4 +11,6 @@
 #include <string.h>
 #include <libcfs/libcfs.h>
 
+#undef LNET_ROUTER
+
 #endif

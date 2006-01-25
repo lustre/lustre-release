@@ -46,6 +46,8 @@
 
 #define SOCKNAL_ARCH_EAGER_ACK	0
 
+#define SOCK_BUFFER_SIZE	(8<<20)
+
 #ifndef CONFIG_SMP
 static inline
 int ksocknal_nsched(void)

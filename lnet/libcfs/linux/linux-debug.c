@@ -114,6 +114,27 @@ void libcfs_run_lbug_upcall(char *file, const char *fn, const int line)
         libcfs_run_upcall (argv);
 }
 
+#ifdef __arch_um__
+void lbug_with_loc(char *file, const char *func, const int line)
+{
+        CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");
+        libcfs_debug_dumplog();
+        libcfs_run_lbug_upcall(file, func, line);
+        panic("LBUG");
+}
+#else
+void lbug_with_loc(char *file, const char *func, const int line)
+{
+        CEMERG("LBUG\n");
+        libcfs_debug_dumpstack(NULL);
+        libcfs_debug_dumplog();
+        libcfs_run_lbug_upcall(file, func, line);
+        set_task_state(current, TASK_UNINTERRUPTIBLE);
+        while (1)
+                schedule();
+}
+#endif /* __arch_um__ */
+
 #ifdef __KERNEL__
 
 void libcfs_debug_dumpstack(struct task_struct *tsk)
@@ -148,3 +169,4 @@ EXPORT_SYMBOL(libcfs_current);
 
 EXPORT_SYMBOL(libcfs_run_upcall);
 EXPORT_SYMBOL(libcfs_run_lbug_upcall);
+EXPORT_SYMBOL(lbug_with_loc);

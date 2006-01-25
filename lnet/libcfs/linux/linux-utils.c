@@ -35,13 +35,25 @@ int convert_server_error(__u64 ecode)
 {
 	return ecode;
 }
+EXPORT_SYMBOL(convert_server_error);
 
 /*
  * convert <fcntl.h> flag from client to server.
  */
-int convert_client_oflag(int cflag)
+int convert_client_oflag(int cflag, int *result)
 {
-	return cflag;
+        *result = cflag;
+	return 0;
 }
+EXPORT_SYMBOL(convert_client_oflag);
 
+void cfs_stack_trace_fill(struct cfs_stack_trace *trace)
+{}
+EXPORT_SYMBOL(cfs_stack_trace_fill);
+
+void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
+{
+        return NULL;
+}
+EXPORT_SYMBOL(cfs_stack_trace_frame);
 

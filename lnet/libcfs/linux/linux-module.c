@@ -5,26 +5,25 @@
 
 #define LNET_MINOR 240
 
-
 void
 libcfs_daemonize (char *str)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,63)) 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,63))
 	daemonize(str);
-#else 
-	daemonize(); 
+#else
+	daemonize();
 	snprintf (current->comm, sizeof (current->comm), "%s", str);
 #endif
 }
 
 void
 libcfs_blockallsigs ()
-{ 
-	unsigned long  flags; 
-	
-	SIGNAL_MASK_LOCK(current, flags); 
-	sigfillset(&current->blocked); 
-	RECALC_SIGPENDING; 
+{
+	unsigned long  flags;
+
+	SIGNAL_MASK_LOCK(current, flags);
+	sigfillset(&current->blocked);
+	RECALC_SIGPENDING;
 	SIGNAL_MASK_UNLOCK(current, flags);
 }
 
@@ -79,13 +78,13 @@ int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
 
 extern struct cfs_psdev_ops          libcfs_psdev_ops;
 
-static int 
+static int
 libcfs_psdev_open(struct inode * inode, struct file * file)
-{ 
+{
 	struct libcfs_device_userstate **pdu = NULL;
 	int    rc = 0;
 
-	if (!inode) 
+	if (!inode)
 		return (-EINVAL);
 	pdu = (struct libcfs_device_userstate **)&file->private_data;
 	if (libcfs_psdev_ops.p_open != NULL)
@@ -96,13 +95,13 @@ libcfs_psdev_open(struct inode * inode, struct file * file)
 }
 
 /* called when closing /dev/device */
-static int 
+static int
 libcfs_psdev_release(struct inode * inode, struct file * file)
 {
 	struct libcfs_device_userstate *pdu;
 	int    rc = 0;
 
-	if (!inode) 
+	if (!inode)
 		return (-EINVAL);
 	pdu = file->private_data;
 	if (libcfs_psdev_ops.p_close != NULL)
@@ -112,55 +111,55 @@ libcfs_psdev_release(struct inode * inode, struct file * file)
 	return rc;
 }
 
-static int 
-libcfs_ioctl(struct inode *inode, struct file *file, 
+static int
+libcfs_ioctl(struct inode *inode, struct file *file,
 	     unsigned int cmd, unsigned long arg)
-{ 
+{
 	struct cfs_psdev_file	 pfile;
 	int    rc = 0;
 
-	if (current->fsuid != 0) 
-		return -EACCES; 
-	
-	if ( _IOC_TYPE(cmd) != IOC_LIBCFS_TYPE || 
-	     _IOC_NR(cmd) < IOC_LIBCFS_MIN_NR  || 
-	     _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR ) { 
-		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n", 
-		       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd)); 
-		return (-EINVAL); 
-	} 
-	
+	if (current->fsuid != 0)
+		return -EACCES;
+
+	if ( _IOC_TYPE(cmd) != IOC_LIBCFS_TYPE ||
+	     _IOC_NR(cmd) < IOC_LIBCFS_MIN_NR  ||
+	     _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR ) {
+		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
+		       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
+		return (-EINVAL);
+	}
+
 	/* Handle platform-dependent IOC requests */
-	switch (cmd) { 
-	case IOC_LIBCFS_PANIC: 
-		if (!capable (CAP_SYS_BOOT)) 
-			return (-EPERM); 
-		panic("debugctl-invoked panic"); 
+	switch (cmd) {
+	case IOC_LIBCFS_PANIC:
+		if (!capable (CAP_SYS_BOOT))
+			return (-EPERM);
+		panic("debugctl-invoked panic");
 		return (0);
-	case IOC_LIBCFS_MEMHOG: 
-		if (!capable (CAP_SYS_ADMIN)) 
+	case IOC_LIBCFS_MEMHOG:
+		if (!capable (CAP_SYS_ADMIN))
 			return -EPERM;
 		/* go thought */
 	}
 
 	pfile.off = 0;
 	pfile.private_data = file->private_data;
-	if (libcfs_psdev_ops.p_ioctl != NULL) 
-		rc = libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void *)arg); 
+	if (libcfs_psdev_ops.p_ioctl != NULL)
+		rc = libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void *)arg);
 	else
 		rc = -EPERM;
 	return (rc);
 }
 
-static struct file_operations libcfs_fops = { 
-	ioctl:   libcfs_ioctl, 
-	open:    libcfs_psdev_open, 
+static struct file_operations libcfs_fops = {
+	ioctl:   libcfs_ioctl,
+	open:    libcfs_psdev_open,
 	release: libcfs_psdev_release
 };
 
-cfs_psdev_t libcfs_dev = { 
-	LNET_MINOR, 
-	"lnet", 
+cfs_psdev_t libcfs_dev = {
+	LNET_MINOR,
+	"lnet",
 	&libcfs_fops
 };
 

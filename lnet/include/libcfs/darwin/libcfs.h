@@ -9,6 +9,7 @@
 #endif
 
 #include <mach/mach_types.h>
+#include <sys/errno.h>
 #include <string.h>
 #include <libcfs/darwin/darwin-types.h>
 #include <libcfs/darwin/darwin-time.h>
@@ -16,6 +17,7 @@
 #include <libcfs/darwin/darwin-mem.h>
 #include <libcfs/darwin/darwin-lock.h>
 #include <libcfs/darwin/darwin-fs.h>
+#include <libcfs/darwin/darwin-tcpip.h>
 
 #ifdef __KERNEL__
 # include <sys/types.h>
@@ -164,10 +166,28 @@ __entry_nesting(&__cdd);
  *
  * Implementation is in darwin-curproc.c
  */
-#define CFS_CURPROC_COMM_MAX (sizeof ((struct proc *)0)->p_comm)
+#define CFS_CURPROC_COMM_MAX    MAXCOMLEN
 /*
  * XNU has no capabilities
  */
 typedef int cfs_kernel_cap_t;
+
+#ifdef __KERNEL__
+enum {
+        /* if you change this, update darwin-util.c:cfs_stack_trace_fill() */
+        CFS_STACK_TRACE_DEPTH = 16
+};
+
+struct cfs_stack_trace {
+        void *frame[CFS_STACK_TRACE_DEPTH];
+};
+
+#define printk(format, args...)                 printf(format, ## args)
+
+#ifdef WITH_WATCHDOG
+#undef WITH_WATCHDOG
+#endif
+
+#endif /* __KERNEL__ */
 
 #endif /* _XNU_LIBCFS_H */

@@ -41,7 +41,7 @@ void
 kptllnd_rx_buffer_pool_init(
         kptl_rx_buffer_pool_t *rxbp)
 {
-        PJK_UT_MSG("kptllnd_rx_buffer_pool_init\n");
+        CDEBUG(D_NET, "kptllnd_rx_buffer_pool_init\n");
         memset(rxbp,0,sizeof(*rxbp));
 
         spin_lock_init (&rxbp->rxbp_lock);
@@ -58,7 +58,7 @@ kptllnd_rx_buffer_pool_fini(
         int                     i;
         unsigned long           flags;
 
-        PJK_UT_MSG("kptllnd_rx_buffer_pool_fini\n");
+        CDEBUG(D_NET, "kptllnd_rx_buffer_pool_fini\n");
 
         spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
@@ -130,7 +130,7 @@ kptllnd_rx_buffer_pool_fini(
 
                                 spin_lock_irqsave(&rxbp->rxbp_lock, flags);
                         }else{
-                                PJK_UT_MSG("PtlMDUnlink(%p) rc=%d\n",rxb,rc);
+                                CDEBUG(D_NET, "PtlMDUnlink(%p) rc=%d\n",rxb,rc);
                                 /*
                                  * The unlinked failed so put this back
                                  * on the list for later
@@ -153,7 +153,7 @@ kptllnd_rx_buffer_pool_fini(
                  */
                 if(!list_empty(&rxbp->rxbp_list)){
                         i++;
-                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
+                        CDEBUG(((i & (-i)) == i) ? D_NET : D_NET, /* power of 2? */
                                "Waiting for %d Busy RX Buffers\n",
                                rxbp->rxbp_count);
                         spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
@@ -165,12 +165,12 @@ kptllnd_rx_buffer_pool_fini(
         CDEBUG(D_TRACE,"|rxbp_list|=EMPTY\n");
 
         if(rxbp->rxbp_count != 0){
-                PJK_UT_MSG("Waiting for %d RX Buffers to unlink\n",rxbp->rxbp_count);
+                CDEBUG(D_NET, "Waiting for %d RX Buffers to unlink\n",rxbp->rxbp_count);
 
                 i = 2;
                 while (rxbp->rxbp_count != 0) {
                         i++;
-                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
+                        CDEBUG(((i & (-i)) == i) ? D_NET : D_NET, /* power of 2? */
                                "Waiting for %d RX Buffers to unlink\n",
                                rxbp->rxbp_count);
                         spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
@@ -200,7 +200,7 @@ kptllnd_rx_buffer_pool_reserve(
 
         spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
-        PJK_UT_MSG("kptllnd_rx_buffer_pool_reserve(%d)\n",count);
+        CDEBUG(D_NET, "kptllnd_rx_buffer_pool_reserve(%d)\n",count);
 
         /*
          * Prevent reservation of anymore while we are shutting down
@@ -224,12 +224,12 @@ kptllnd_rx_buffer_pool_reserve(
                 (PAGE_SIZE * (*kptllnd_tunables.kptl_rxb_npages));
         ++nbuffers ;
 
-        PJK_UT_MSG("nbuffers=%d rxbp_count=%d\n",nbuffers,rxbp->rxbp_count);
+        CDEBUG(D_NET, "nbuffers=%d rxbp_count=%d\n",nbuffers,rxbp->rxbp_count);
 
         if(rxbp->rxbp_count < nbuffers)
                 add = nbuffers - rxbp->rxbp_count;
 
-        PJK_UT_MSG("adding=%d\n",add);
+        CDEBUG(D_NET, "adding=%d\n",add);
 
         /*
          * Under the same lock assume they are added
@@ -305,7 +305,7 @@ kptllnd_rx_buffer_pool_unreserve(
 {
         unsigned long flags;
         spin_lock_irqsave(&rxbp->rxbp_lock, flags);
-        PJK_UT_MSG("kptllnd_rx_buffer_pool_unreserve(%d)\n",count);
+        CDEBUG(D_NET, "kptllnd_rx_buffer_pool_unreserve(%d)\n",count);
         rxbp->rxbp_reserved -= count;
         spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
 }
@@ -317,7 +317,7 @@ kptllnd_rx_buffer_scheduled_post(
         kptl_data_t     *kptllnd_data = rxb->rxb_po.po_kptllnd_data;
         unsigned long    flags;
 
-        PJK_UT_MSG("rxb=%p\n",rxb);
+        CDEBUG(D_NET, "rxb=%p\n",rxb);
 
         spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
         LASSERT(list_empty(&rxb->rxb_repost_list));
@@ -343,7 +343,7 @@ kptllnd_rx_buffer_post(
         any.nid = PTL_NID_ANY;
         any.pid = PTL_PID_ANY;
 
-        /*PJK_UT_MSG("rxb=%p\n",rxb);*/
+        //CDEBUG(D_NET, "rxb=%p\n",rxb);
 
         spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
@@ -517,9 +517,9 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
                 STAT_UPDATE(kps_rx_unlink_event);
 
         if(!rxbp->rxbp_shutdown){
-                PJK_UT_MSG("RXB Callback %s(%d) rxb=%p id="FMT_NID" unlink=%d\n",
-                        get_ev_type_string(ev->type),ev->type,
-                        rxb,ev->initiator.nid,unlinked);
+                CDEBUG(D_NET, "RXB Callback %s(%d) rxb=%p id="FMT_NID" unlink=%d\n",
+                       get_ev_type_string(ev->type),ev->type,
+                       rxb,ev->initiator.nid,unlinked);
         }
 
         LASSERT( ev->md.start == rxb->rxb_buffer);
@@ -527,7 +527,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         LASSERT( ev->type == PTL_EVENT_PUT_END || ev->type == PTL_EVENT_UNLINK);
         LASSERT( ev->match_bits == LNET_MSG_MATCHBITS);
 
-        CDEBUG((ev->ni_fail_type == PTL_OK) ? D_NET : D_ERROR,
+        CDEBUG((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR,
                "event type %d, status %d from "FMT_NID"\n",
                ev->type, ev->ni_fail_type,ev->initiator.nid);
 
@@ -575,7 +575,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
                 return;
         }
 
-        PJK_UT_MSG_DATA("New RX=%p\n",rx);
+        CDEBUG(D_NET, "New RX=%p\n",rx);
 
         /*
          * If we are unlinked we can just transfer the ref
@@ -595,7 +595,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         kptllnd_rx_schedule(rx);
 
         if(!rxbp->rxbp_shutdown){
-                PJK_UT_MSG("<<< rx=%p rxb=%p\n",rx,rxb);
+                CDEBUG(D_NET, "<<< rx=%p rxb=%p\n",rx,rxb);
         }
 }
 
@@ -606,9 +606,7 @@ kptllnd_rx_schedule (kptl_rx_t *rx)
         unsigned long    flags;
         kptl_data_t  *kptllnd_data = rx->rx_rxb->rxb_po.po_kptllnd_data;
 
-        CDEBUG(D_NET, "rx\n");
-
-        PJK_UT_MSG("RX Schedule %p\n",rx);
+        CDEBUG(D_NET, "RX Schedule %p\n",rx);
 
         spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
         list_add_tail(&rx->rx_list,&kptllnd_data->kptl_sched_rxq);
@@ -626,99 +624,85 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         kptl_data_t            *kptllnd_data = rxb->rxb_po.po_kptllnd_data;
         kptl_peer_t            *peer = NULL;
         int                     returned_credits = 0;
-        int                     type = msg->ptlm_type;
-        lnet_process_id_t       lnet_initiator;
         unsigned long           flags;
 
+        CDEBUG(D_NET, ">>> RXRXRXRXRX rx=%p nob=%d "FMT_NID"/%d\n",
+               rx, rx->rx_nob, rx->rx_initiator.nid, rx->rx_initiator.pid);
 
-        PJK_UT_MSG_DATA(">>> RXRXRXRXRXRXRXRXRXRXRXRX\n");
-        PJK_UT_MSG_DATA("rx=%p nob=%d\n",rx,rx->rx_nob);
-
-        /*
-         * Setup the intiator for LNET
-         */        
-        lnet_initiator.nid = ptl2lnetnid(kptllnd_data,rx->rx_initiator.nid);
-        lnet_initiator.pid = rx->rx_initiator.pid;
-
-        /*
-         * If the nob==0 then silently discard this message
-         */
-        if(rx->rx_nob == 0)
-                goto exit;
-
+        if (rx->rx_nob == 0) {
+                /* discard silently!!! */
+                goto out;
+        }
+        
         rc = kptllnd_msg_unpack(msg, rx->rx_nob, kptllnd_data);
         if (rc != 0) {
-                CERROR ("Error %d unpacking rx from "FMT_NID"\n",
-                        rc, rx->rx_initiator.nid);
-                goto exit;
+                CERROR ("Error %d unpacking rx from "FMT_NID"/%d\n",
+                        rc, rx->rx_initiator.nid, rx->rx_initiator.pid);
+                goto out;
         }
 
-        PJK_UT_MSG_DATA("RX=%p Type=%s(%d)\n",rx,
-                get_msg_type_string(type),type);
-        PJK_UT_MSG_DATA("Msg NOB = %d\n",msg->ptlm_nob);
-        PJK_UT_MSG_DATA("Credits back from peer=%d\n",msg->ptlm_credits);
-        PJK_UT_MSG_DATA("Seq # ="LPX64"\n",msg->ptlm_seq);
-        PJK_UT_MSG_DATA("lnet RX nid=" LPX64 "\n",lnet_initiator.nid);
-        PJK_UT_MSG("ptl  RX nid=" FMT_NID " pid=%d\n",rx->rx_initiator.nid,rx->rx_initiator.pid);
+        CDEBUG(D_NET, "RX=%p Type=%s(%d)\n",
+               rx, get_msg_type_string(msg->ptlm_type), msg->ptlm_type);
+        CDEBUG(D_NET, "Msg NOB = %d\n", msg->ptlm_nob);
+        CDEBUG(D_NET, "Credits back from peer=%d\n", msg->ptlm_credits);
+        CDEBUG(D_NET, "Seq # ="LPX64"\n",msg->ptlm_seq);
+        CDEBUG(D_NET, "ptl  RX id="FMT_NID"/%d\n",
+               rx->rx_initiator.nid, rx->rx_initiator.pid);
 
-        if(type == PTLLND_MSG_TYPE_HELLO)
-        {
-                peer = kptllnd_peer_handle_hello(
-                        kptllnd_data,
-                        lnet_initiator,
-                        msg);
-                if( peer == NULL){
-                        CERROR ("Failed to create peer for %s\n",
-                                libcfs_id2str(lnet_initiator));
-                        goto exit;
+        if (msg->ptlm_type == PTLLND_MSG_TYPE_HELLO) {
+                peer = kptllnd_peer_handle_hello(kptllnd_data,
+                                                 rx->rx_initiator, 
+                                                 msg);
+                if (peer == NULL) {
+                        CERROR ("Failed to create peer for "FMT_NID"/%d\n",
+                                rx->rx_initiator.nid, rx->rx_initiator.pid);
+                        goto out;
                 }
 
-                if (!( msg->ptlm_dststamp == kptllnd_data->kptl_incarnation ||
-                       msg->ptlm_dststamp == 0)) {
-                        CERROR ("Stale rx from "LPX64" dststamp "LPX64" expected "LPX64"\n",
-                                peer->peer_nid,
-                                msg->ptlm_dststamp,
-                                kptllnd_data->kptl_incarnation );
-                        goto exit;
+                if (!(msg->ptlm_dststamp == kptllnd_data->kptl_incarnation ||
+                      msg->ptlm_dststamp == 0)) {
+                        CERROR("Stale rx from %s dststamp "LPX64" expected "LPX64"\n",
+                               libcfs_nid2str(peer->peer_nid),
+                               msg->ptlm_dststamp,
+                               kptllnd_data->kptl_incarnation);
+                        goto out;
                 }
-        }
-        else
-        {
-                peer = kptllnd_peer_find(kptllnd_data,lnet_initiator);
+        } else {
+                peer = kptllnd_ptlnid2peer(kptllnd_data, rx->rx_initiator.nid);
                 if( peer == NULL){
-                        CERROR ("No connection with %s\n",
-                                libcfs_id2str(lnet_initiator));
-                        goto exit;
+                        CERROR("No connection with "FMT_NID"/%d\n",
+                               rx->rx_initiator.nid, rx->rx_initiator.pid);
+                        goto out;
                 }
 
                 if (msg->ptlm_dststamp != kptllnd_data->kptl_incarnation) {
-                        CERROR ("Stale rx from "LPX64" dststamp "LPX64" expected "LPX64"\n",
-                                peer->peer_nid,
-                                msg->ptlm_dststamp,
-                                kptllnd_data->kptl_incarnation );
-                        goto exit;
+                        CERROR("Stale rx from %s dststamp "LPX64" expected "LPX64"\n",
+                               libcfs_nid2str(peer->peer_nid),
+                               msg->ptlm_dststamp,
+                               kptllnd_data->kptl_incarnation );
+                        goto out;
                 }
         }
 
-        if( msg->ptlm_srcnid != peer->peer_nid){
-                CERROR ("Stale rx srcnid "LPX64" expected "LPX64"\n",
-                        msg->ptlm_srcnid,
-                        peer->peer_nid );
-                goto exit;
+        if (msg->ptlm_srcnid != peer->peer_nid) {
+                CERROR("Bad rx srcnid %s expected %s\n",
+                       libcfs_nid2str(msg->ptlm_srcnid),
+                       libcfs_nid2str(peer->peer_nid));
+                goto out;
         }
-        if( msg->ptlm_srcstamp != peer->peer_incarnation){
-                CERROR ("Stale rx from "LPX64" srcstamp"LPX64" expected "LPX64"\n",
-                        peer->peer_nid,
+        if (msg->ptlm_srcstamp != peer->peer_incarnation) {
+                CERROR ("Stale rx from %s srcstamp "LPX64" expected "LPX64"\n",
+                        libcfs_nid2str(peer->peer_nid),
                         msg->ptlm_srcstamp,
-                        peer->peer_incarnation );
-                goto exit;
+                        peer->peer_incarnation);
+                goto out;
         }
-        if( msg->ptlm_dstnid != kptllnd_data->kptl_ni->ni_nid){
-                CERROR ("Stale rx from "LPX64" dststamp "LPX64" expected "LPX64"\n",
-                        peer->peer_nid,
-                        msg->ptlm_dstnid,
-                        kptllnd_data->kptl_ni->ni_nid );
-                goto exit;
+        if (msg->ptlm_dstnid != kptllnd_data->kptl_ni->ni_nid) {
+                CERROR ("Bad rx from %s dstnid %s expected %s\n",
+                        libcfs_nid2str(peer->peer_nid),
+                        libcfs_nid2str(msg->ptlm_dstnid),
+                        libcfs_nid2str(kptllnd_data->kptl_ni->ni_nid));
+                goto out;
         }
 
         /*
@@ -735,89 +719,81 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
                         *kptllnd_tunables.kptl_peercredits);
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
-                PJK_UT_MSG("Peer=%p Credits=%d Outstanding=%d\n",
+                CDEBUG(D_NET, "Peer=%p Credits=%d Outstanding=%d\n",
                         peer,peer->peer_credits,peer->peer_outstanding_credits);
-                PJK_UT_MSG_DATA("Getting %d credits back rx=%p\n",returned_credits,rx);
+                CDEBUG(D_NET, "Getting %d credits back rx=%p\n",returned_credits,rx);
 
                 kptllnd_peer_check_sends(peer);
         }
 
-        /*
-         * Attach the peer to the RX
-         * it now is responsibly for releaseing the refrence
-         */
+        /* Attach the peer to the RX (it takes over my reference) */
         rx->rx_peer = peer;
-        peer = 0;
+        peer = NULL;
 
-        /*
-         * Note: We are explicitly ignore sequence #
-         * It is informational only
-         */
+        /* NB msg->ptlm_seq is ignored; it's only a debugging aid */
+
         switch (msg->ptlm_type) {
         default:
-                CERROR("Bad PTL message type %x from "LPX64"\n",
-                       msg->ptlm_type, rx->rx_peer->peer_nid);
+                CERROR("Bad PTL message type %x from %s\n",
+                       msg->ptlm_type, libcfs_nid2str(rx->rx_peer->peer_nid));
                 break;
 
         case PTLLND_MSG_TYPE_HELLO:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_HELLO\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_HELLO\n");
                 break;
 
         case PTLLND_MSG_TYPE_NOOP:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_NOOP\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_NOOP\n");
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_IMMEDIATE\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
                 rc = lnet_parse(kptllnd_data->kptl_ni,
-                        &msg->ptlm_u.immediate.kptlim_hdr,
-                        msg->ptlm_srcnid,
-                        rx, 0);
+                                &msg->ptlm_u.immediate.kptlim_hdr,
+                                msg->ptlm_srcnid,
+                                rx, 0);
                 /* RX Completing asynchronously */
-                if( rc >= 0)
-                        rx = 0;
+                if ( rc >= 0)
+                        rx = NULL;
                 break;
 
         case PTLLND_MSG_TYPE_PUT:
         case PTLLND_MSG_TYPE_GET:
-                PJK_UT_MSG("PTLLND_MSG_TYPE_%s\n",
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_%s\n",
                         msg->ptlm_type == PTLLND_MSG_TYPE_PUT ?
                         "PUT" : "GET");
-
                 /*
                  * Save the last match bits used
                  */
                 spin_lock_irqsave(&rx->rx_peer->peer_lock, flags);
-                if(msg->ptlm_u.req.kptlrm_matchbits > rx->rx_peer->peer_last_matchbits_seen)
-                        rx->rx_peer->peer_last_matchbits_seen = msg->ptlm_u.req.kptlrm_matchbits;
+                if (msg->ptlm_u.req.kptlrm_matchbits >
+                    rx->rx_peer->peer_last_matchbits_seen)
+                        rx->rx_peer->peer_last_matchbits_seen =
+                                msg->ptlm_u.req.kptlrm_matchbits;
                 spin_unlock_irqrestore(&rx->rx_peer->peer_lock, flags);
 
                 rc = lnet_parse(kptllnd_data->kptl_ni,
-                        &msg->ptlm_u.req.kptlrm_hdr,
-                        msg->ptlm_srcnid,
-                        rx, 1);
+                                &msg->ptlm_u.req.kptlrm_hdr,
+                                msg->ptlm_srcnid,
+                                rx, 1);
 
                 /* RX Completing asynchronously */
                 if( rc >= 0)
-                        rx = 0;
+                        rx = NULL;
                 break;
          }
 
-
-        CDEBUG (D_NET, "Received %x[%d] from "LPX64"\n",
-                type, returned_credits, peer->peer_nid);
-
-exit:
+out:
         /* PEER == NULL if it is not yet assigned or already
          * been attached to RX */
-        if(peer)
-                kptllnd_peer_decref(peer,"lookup");
+        if (peer != NULL)
+                kptllnd_peer_decref(peer, "lookup");
 
         /* RX == NULL if it is completing asynchronously */
-        if(rx)
-                kptllnd_rx_decref(rx,"sched",kptllnd_data);
+        if (rx != NULL)
+                kptllnd_rx_decref(rx, "sched", kptllnd_data);
 
-        PJK_UT_MSG_DATA("<<< RXRXRXRXRXRXRXRXRXRXRXRX rx=%p\n",rx);
+        CDEBUG(D_NET, "<<< RXRXRXRXRXRXRXRXRXRXRXRX rx=%p\n",rx);
         return;
 }
 
@@ -834,7 +810,7 @@ kptllnd_rx_buffer_addref(
          * with the real ref count, and is for informational purposes
          * only
          */
-        PJK_UT_MSG("rxb=%p owner=%s count=%d\n",rxb,owner,
+        CDEBUG(D_NET, "rxb=%p owner=%s count=%d\n",rxb,owner,
                 atomic_read(&rxb->rxb_refcount));
 #endif
 }
@@ -844,24 +820,10 @@ kptllnd_rx_buffer_decref(
         kptl_rx_buffer_t *rxb,
         const char *owner)
 {
-        if( !atomic_dec_and_test (&rxb->rxb_refcount)){
-
-#if 0
-                /*
-                 * The below message could actually be out of sync
-                 * with the real ref count, and is for informational purposes
-                 * only
-                 */
-                PJK_UT_MSG("rxb=%p owner=%s count=%d\n",rxb,owner,
-                        atomic_read(&rxb->rxb_refcount));
-#endif
+        if (!atomic_dec_and_test (&rxb->rxb_refcount))
                 return;
-        }
 
-#if 0
-        PJK_UT_MSG("rxb=%p owner=%s LAST REF reposting\n",rxb,owner);
-#endif
-
+        CDEBUG(D_NET, "rxb=%p owner=%s LAST REF reposting\n",rxb,owner);
         kptllnd_rx_buffer_post_handle_error(rxb);
 }
 
@@ -872,7 +834,6 @@ kptllnd_rx_alloc(
         kptl_rx_t* rx;
 
         if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_RX_ALLOC )){
-                PJK_UT_MSG_SIMULATION("FAIL_BLOCKING_RX_ALLOC SIMULATION triggered\n");
                 CERROR ("FAIL_BLOCKING_RX_ALLOC SIMULATION triggered\n");
                 STAT_UPDATE(kps_rx_allocation_failed);
                 return 0;
@@ -902,18 +863,18 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
         kptl_peer_t    *peer = rx->rx_peer;
         unsigned long   flags;
 
-        PJK_UT_MSG(">>> rx=%p\n",rx);
+        CDEBUG(D_NET, ">>> rx=%p\n",rx);
 
         STAT_UPDATE(kps_rx_released);
 
         LASSERT(atomic_read(&rx->rx_refcount)==0);
 
         if(rx->rx_rxb){
-                PJK_UT_MSG("Release rxb=%p\n",rx->rx_rxb);
+                CDEBUG(D_NET, "Release rxb=%p\n",rx->rx_rxb);
                 kptllnd_rx_buffer_decref(rx->rx_rxb,"rx");
                 rx->rx_rxb = 0;
         }else{
-                PJK_UT_MSG("rxb already released\n");
+                CDEBUG(D_NET, "rxb already released\n");
         }
 
         if(peer){
@@ -928,8 +889,8 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
                         *kptllnd_tunables.kptl_peercredits);
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
-                PJK_UT_MSG("Peer=%p Credits=%d Outstanding=%d\n",
-                        peer,peer->peer_credits,peer->peer_outstanding_credits);
+                CDEBUG(D_NET, "Peer=%p Credits=%d Outstanding=%d\n",
+                       peer,peer->peer_credits,peer->peer_outstanding_credits);
 
                 /* Have I received credits that will let me send? */
                 kptllnd_peer_check_sends(peer);
@@ -939,7 +900,7 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
 
         cfs_mem_cache_free(kptllnd_data->kptl_rx_cache,rx);
 
-        PJK_UT_MSG("<<< rx=%p\n",rx);
+        CDEBUG(D_NET, "<<< rx=%p\n",rx);
 }
 
 void
@@ -952,26 +913,17 @@ kptllnd_rx_addref(kptl_rx_t *rx,const char *owner)
          * with the real ref count, and is for informational purposes
          * only
          */
-        PJK_UT_MSG("rx=%p owner=%s count=%d\n",rx,owner,
-                atomic_read(&rx->rx_refcount));
+        CDEBUG(D_NET, "rx=%p owner=%s count=%d\n",rx,owner,
+               atomic_read(&rx->rx_refcount));
 }
 
 void
 kptllnd_rx_decref(kptl_rx_t *rx,const char *owner,kptl_data_t *kptllnd_data)
 {
-        if( !atomic_dec_and_test (&rx->rx_refcount)){
-                /*
-                 * The below message could actually be out of sync
-                 * with the real ref count, and is for informational purposes
-                 * only
-                 */
-                PJK_UT_MSG("rx=%p owner=%s count=%d\n",rx,owner,
-                        atomic_read(&rx->rx_refcount));
+        if (!atomic_dec_and_test (&rx->rx_refcount))
                 return;
-        }
 
-        PJK_UT_MSG("rx=%p owner=%s LAST REF destroying\n",rx,owner);
-
-        kptllnd_rx_destroy(rx,kptllnd_data);
+        CDEBUG(D_NET, "rx=%p owner=%s LAST REF destroying\n",rx,owner);
+        kptllnd_rx_destroy(rx, kptllnd_data);
 }
 

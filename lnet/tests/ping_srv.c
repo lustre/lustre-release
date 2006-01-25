@@ -98,7 +98,7 @@ int pingsrv_thread(void *arg)
                         continue;
                 }
                
-                magic =  __le32_to_cpu(*((int *)(server->evnt.md.start 
+                magic =  __le32_to_cpu(*((int *)((char *)server->evnt.md.start 
                                         + server->evnt.offset)));
                 
                 
@@ -170,9 +170,9 @@ static void pingsrv_callback(lnet_event_t *ev)
                "(off=%u rlen=%u mlen=%u head=%x seq=%d size=%d)\n",
                libcfs_nid2str(ev->initiator.nid), 
                ev->offset, ev->rlength, ev->mlength,
-               __le32_to_cpu(*((int *)(ev->md.start + ev->offset))),
-               __le32_to_cpu(*((int *)(ev->md.start + ev->offset + sizeof(unsigned)))),
-               __le32_to_cpu(*((int *)(ev->md.start + ev->offset + 2 * 
+               __le32_to_cpu(*((int *)((char *)ev->md.start + ev->offset))),
+               __le32_to_cpu(*((int *)((char *)ev->md.start + ev->offset + sizeof(unsigned)))),
+               __le32_to_cpu(*((int *)((char *)ev->md.start + ev->offset + 2 * 
                                sizeof(unsigned)))));
         
         packets_valid++;
@@ -186,7 +186,7 @@ static struct pingsrv_data *pingsrv_setup(void)
 {
         int rc;
 
-       /* Aquire and initialize the proper nal for portals. */
+        /* Aquire and initialize the proper nal for portals. */
         rc = LNetNIInit(0);
         if (!(rc == 0 || rc == 1)) {
                 CDEBUG (D_OTHER, "LNetNIInit: error %d\n", rc);

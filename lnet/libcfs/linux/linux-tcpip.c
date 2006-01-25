@@ -41,14 +41,14 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 		CERROR ("Can't create socket: %d\n", rc);
 		return rc;
 	}
-	
+
 	nob = strnlen(name, IFNAMSIZ);
 	if (nob == IFNAMSIZ) {
 		CERROR("Interface name %s too long\n", name);
 		rc = -EINVAL;
 		goto out;
 	}
-	
+
 	CLASSERT (sizeof(ifr.ifr_name) >= IFNAMSIZ);
 
 	strcpy(ifr.ifr_name, name);
@@ -80,7 +80,7 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 		CERROR("Can't get IP address for interface %s\n", name);
 		goto out;
 	}
-	
+
 	val = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
 	*ip = ntohl(val);
 
@@ -89,12 +89,12 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 	set_fs(KERNEL_DS);
 	rc = sock->ops->ioctl(sock, SIOCGIFNETMASK, (unsigned long)&ifr);
 	set_fs(oldmm);
-	
+
 	if (rc != 0) {
 		CERROR("Can't get netmask for interface %s\n", name);
 		goto out;
 	}
-	
+
 	val = ((struct sockaddr_in *)&ifr.ifr_netmask)->sin_addr.s_addr;
 	*mask = ntohl(val);
 
@@ -143,10 +143,10 @@ libcfs_ipif_enumerate (char ***namesp)
 			rc = -ENOMEM;
 			goto out0;
 		}
-		
+
 		ifc.ifc_buf = (char *)ifr;
 		ifc.ifc_len = nalloc * sizeof(*ifr);
-		
+
 		set_fs(KERNEL_DS);
 		rc = sock->ops->ioctl(sock, SIOCGIFCONF, (unsigned long)&ifc);
 		set_fs(oldmm);
@@ -155,7 +155,7 @@ libcfs_ipif_enumerate (char ***namesp)
 			CERROR ("Error %d enumerating interfaces\n", rc);
 			goto out1;
 		}
-		
+
 		LASSERT (rc == 0);
 
 		nfound = ifc.ifc_len/sizeof(*ifr);
@@ -178,13 +178,13 @@ libcfs_ipif_enumerate (char ***namesp)
         }
         /* NULL out all names[i] */
         memset (names, 0, nfound * sizeof(*names));
-                
+
 	for (i = 0; i < nfound; i++) {
 
 		nob = strnlen (ifr[i].ifr_name, IFNAMSIZ);
 		if (nob == IFNAMSIZ) {
 			/* no space for terminating NULL */
-			CERROR("interface name %.*s too long (%d max)\n", 
+			CERROR("interface name %.*s too long (%d max)\n",
 			       nob, ifr[i].ifr_name, IFNAMSIZ);
 			rc = -ENAMETOOLONG;
                         goto out2;
@@ -202,7 +202,7 @@ libcfs_ipif_enumerate (char ***namesp)
 
         *namesp = names;
 	rc = nfound;
-        
+
  out2:
         if (rc < 0)
                 libcfs_ipif_free_enumeration(names, nfound);
@@ -238,7 +238,7 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 	long           ticks = timeout * HZ;
 	unsigned long  then;
 	struct timeval tv;
-	
+
 	LASSERT (nob > 0);
 	/* Caller may pass a zero timeout if she thinks the socket buffer is
 	 * empty enough to take the whole message immediately */
@@ -270,7 +270,7 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 			set_fs(oldmm);
 			if (rc != 0) {
 				CERROR("Can't set socket send timeout "
-				       "%ld.%06d: %d\n", 
+				       "%ld.%06d: %d\n",
                                        (long)tv.tv_sec, (int)tv.tv_usec, rc);
 				return rc;
 			}
@@ -279,7 +279,7 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
                 set_fs (KERNEL_DS);
                 then = jiffies;
                 rc = sock_sendmsg (sock, &msg, iov.iov_len);
-                ticks -= then - jiffies;
+                ticks -= jiffies - then;
                 set_fs (oldmm);
 
 		if (rc == nob)
@@ -295,14 +295,13 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 
 		if (ticks <= 0)
 			return -EAGAIN;
-		
+
                 buffer = ((char *)buffer) + rc;
                 nob -= rc;
         }
 
         return (0);
 }
-
 EXPORT_SYMBOL(libcfs_sock_write);
 
 int
@@ -373,7 +372,7 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
 EXPORT_SYMBOL(libcfs_sock_read);
 
 static int
-libcfs_sock_create (struct socket **sockp, int *fatal, 
+libcfs_sock_create (struct socket **sockp, int *fatal,
                     __u32 local_ip, int local_port)
 {
         struct sockaddr_in  locaddr;
@@ -409,10 +408,10 @@ libcfs_sock_create (struct socket **sockp, int *fatal,
                 memset(&locaddr, 0, sizeof(locaddr));
                 locaddr.sin_family = AF_INET;
                 locaddr.sin_port = htons(local_port);
-                locaddr.sin_addr.s_addr = (local_ip == 0) ? 
+                locaddr.sin_addr.s_addr = (local_ip == 0) ?
                                           INADDR_ANY : htonl(local_ip);
-                
-                rc = sock->ops->bind(sock, (struct sockaddr *)&locaddr, 
+
+                rc = sock->ops->bind(sock, (struct sockaddr *)&locaddr,
                                      sizeof(locaddr));
                 if (rc == -EADDRINUSE) {
                         CDEBUG(D_NET, "Port %d already in use\n", local_port);
@@ -425,7 +424,7 @@ libcfs_sock_create (struct socket **sockp, int *fatal,
                         goto failed;
                 }
         }
-        
+
 	return 0;
 
  failed:
@@ -447,12 +446,12 @@ libcfs_sock_setbuf (struct socket *sock, int txbufsize, int rxbufsize)
                                      (char *)&option, sizeof (option));
                 set_fs (oldmm);
                 if (rc != 0) {
-                        CERROR ("Can't set send buffer %d: %d\n", 
+                        CERROR ("Can't set send buffer %d: %d\n",
                                 option, rc);
                         return (rc);
                 }
         }
-        
+
         if (rxbufsize != 0) {
                 option = rxbufsize;
                 set_fs (KERNEL_DS);
@@ -460,12 +459,12 @@ libcfs_sock_setbuf (struct socket *sock, int txbufsize, int rxbufsize)
                                       (char *)&option, sizeof (option));
                 set_fs (oldmm);
                 if (rc != 0) {
-                        CERROR ("Can't set receive buffer %d: %d\n", 
+                        CERROR ("Can't set receive buffer %d: %d\n",
                                 option, rc);
                         return (rc);
                 }
         }
-        
+
         return 0;
 }
 
@@ -517,7 +516,7 @@ libcfs_sock_getbuf (struct socket *sock, int *txbufsize, int *rxbufsize)
                 }
                 *txbufsize = option;
         }
-        
+
         if (rxbufsize != NULL) {
                 optlen = sizeof(option);
                 set_fs (KERNEL_DS);
@@ -530,14 +529,14 @@ libcfs_sock_getbuf (struct socket *sock, int *txbufsize, int *rxbufsize)
                 }
                 *rxbufsize = option;
         }
-        
+
         return 0;
 }
 
 EXPORT_SYMBOL(libcfs_sock_getbuf);
 
 int
-libcfs_sock_listen (struct socket **sockp, 
+libcfs_sock_listen (struct socket **sockp,
                     __u32 local_ip, int local_port, int backlog)
 {
         int      fatal;
@@ -550,11 +549,11 @@ libcfs_sock_listen (struct socket **sockp,
                                local_port);
                 return rc;
         }
-        
+
 	rc = (*sockp)->ops->listen(*sockp, backlog);
 	if (rc == 0)
 		return 0;
-	
+
 	CERROR("Can't set listen backlog %d: %d\n", backlog, rc);
 	sock_release(*sockp);
 	return rc;
@@ -601,14 +600,14 @@ libcfs_sock_accept (struct socket **newsockp, struct socket *sock)
 
 	set_current_state(TASK_INTERRUPTIBLE);
 	add_wait_queue(sock->sk->sk_sleep, &wait);
-	
+
 	rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
 	if (rc == -EAGAIN) {
 		/* Nothing ready, so wait for activity */
 		schedule();
 		rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
 	}
-	
+
 	remove_wait_queue(sock->sk->sk_sleep, &wait);
 	set_current_state(TASK_RUNNING);
 
