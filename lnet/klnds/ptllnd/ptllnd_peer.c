@@ -187,14 +187,14 @@ kptllnd_peer_decref (
         unsigned long    flags;
         kptl_data_t     *kptllnd_data = peer->peer_kptllnd_data;
 
-        if( !atomic_dec_and_test(&peer->peer_refcount))
+        if (!atomic_dec_and_test(&peer->peer_refcount))
                 return;
 
         CDEBUG(D_NET, "peer=%p owner=%s LAST REF\n",peer,owner);
 
         write_lock_irqsave(&kptllnd_data->kptl_peer_rw_lock, flags);
         list_del_init (&peer->peer_list);
-        if(peer->peer_state == PEER_STATE_CANCELED)
+        if (peer->peer_state == PEER_STATE_CANCELED)
                 kptllnd_data->kptl_canceled_peers_counter++;
         write_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock, flags);
 

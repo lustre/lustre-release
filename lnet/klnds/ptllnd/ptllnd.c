@@ -344,7 +344,8 @@ kptllnd_startup (lnet_ni_t *ni)
         /*
          * Fetch the lower NID
          */
-        ptl_rc != PtlGetId(kptllnd_data->kptl_nih, &kptllnd_data->kptl_portals_id);
+        ptl_rc = PtlGetId(kptllnd_data->kptl_nih,
+                          &kptllnd_data->kptl_portals_id);
         if (ptl_rc != PTL_OK) {
                 CERROR ("PtlGetID: error %d\n", ptl_rc);
                 rc = -EINVAL;
@@ -360,25 +361,27 @@ kptllnd_startup (lnet_ni_t *ni)
                 rc = -EINVAL;
                 goto failed;
         }
-        
+
         CDEBUG(D_NET, "lnet nid=" LPX64 " (passed in)\n",ni->ni_nid);
 
         /*
          * Create the new NID.  Based on the LND network type
          * and the lower ni's address data.
          */
-        ni->ni_nid = ptl2lnetnid(kptllnd_data, kptllnd_data->kptl_portals_id.nid);
+        ni->ni_nid = ptl2lnetnid(kptllnd_data,
+                                 kptllnd_data->kptl_portals_id.nid);
 
-        CDEBUG(D_NET, "ptl  nid=" FMT_NID "\n",kptllnd_data->kptl_portals_id.nid);
-        CDEBUG(D_NET, "ptl  pid= %d\n", kptllnd_data->kptl_portals_id.pid);
-        CDEBUG(D_NET, "lnet nid=" LPX64 " (passed back)\n",ni->ni_nid);
+        CDEBUG(D_NET, "ptl nid="FMT_NID"\n", kptllnd_data->kptl_portals_id.nid);
+        CDEBUG(D_NET, "ptl pid= %d\n", kptllnd_data->kptl_portals_id.pid);
+        CDEBUG(D_NET, "lnet nid="LPX64" (passed back)\n", ni->ni_nid);
 
         /*
          * Initialized the incarnation
          */
         do_gettimeofday(&tv);
-        kptllnd_data->kptl_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
-        CDEBUG(D_NET, "Incarnation=" LPX64 "\n",kptllnd_data->kptl_incarnation);
+        kptllnd_data->kptl_incarnation = (((__u64)tv.tv_sec) * 1000000) +
+                                         tv.tv_usec;
+        CDEBUG(D_NET, "Incarnation="LPX64"\n", kptllnd_data->kptl_incarnation);
 
         /*
          * Setup the sched locks/lists/waitq
@@ -400,10 +403,11 @@ kptllnd_startup (lnet_ni_t *ni)
          */
         CDEBUG(D_NET, "Allocate Peer Hash Table\n");
         rwlock_init(&kptllnd_data->kptl_peer_rw_lock);
-        kptllnd_data->kptl_peer_hash_size = *kptllnd_tunables.kptl_peer_hash_table_size;
+        kptllnd_data->kptl_peer_hash_size =
+                *kptllnd_tunables.kptl_peer_hash_table_size;
         INIT_LIST_HEAD(&kptllnd_data->kptl_canceled_peers);
-        LIBCFS_ALLOC (kptllnd_data->kptl_peers,
-                      sizeof (struct list_head) * kptllnd_data->kptl_peer_hash_size);
+        LIBCFS_ALLOC(kptllnd_data->kptl_peers,
+                     sizeof(struct list_head)*kptllnd_data->kptl_peer_hash_size);
         if (kptllnd_data->kptl_peers == NULL) {
                 CERROR("Failed to allocate space for peer hash table size=%d\n",
                         kptllnd_data->kptl_peer_hash_size);
@@ -435,7 +439,7 @@ kptllnd_startup (lnet_ni_t *ni)
                         goto failed;
                 }
         }
-        
+
         rc = kptllnd_thread_start (
                 kptllnd_watchdog,
                 0,
@@ -455,8 +459,8 @@ kptllnd_startup (lnet_ni_t *ni)
         LIBCFS_ALLOC (kptllnd_data->kptl_tx_descs,
                       (*kptllnd_tunables.kptl_ntx) * sizeof(kptl_tx_t));
         if (kptllnd_data->kptl_tx_descs == NULL){
-                CERROR ("Can't allocate space for TX Descriptor array count=%d\n",
-                        (*kptllnd_tunables.kptl_ntx));
+                CERROR("Can't allocate space for TX Descriptor array count=%d\n",
+                       (*kptllnd_tunables.kptl_ntx));
                 rc = -ENOMEM;
                 goto failed;
         }
@@ -489,7 +493,7 @@ kptllnd_startup (lnet_ni_t *ni)
                 sizeof(kptl_rx_t) + *kptllnd_tunables.kptl_max_msg_size,
                 0, /* offset */
                 0); /* flags */
-        if( kptllnd_data->kptl_rx_cache == NULL ){
+        if (kptllnd_data->kptl_rx_cache == NULL) {
                 CERROR("Can't create slab for RX descriptrs\n");
                 goto failed;
         }
@@ -498,7 +502,7 @@ kptllnd_startup (lnet_ni_t *ni)
                         &kptllnd_data->kptl_rx_buffer_pool,
                         kptllnd_data,
                         *kptllnd_tunables.kptl_concurrent_peers);
-        if( rc != 0) {
+        if (rc != 0) {
                 CERROR("Can't reserve RX Buffer pool: %d\n",rc);
                 goto failed;
         }
@@ -560,8 +564,9 @@ kptllnd_shutdown (lnet_ni_t *ni)
                  * If there were peers started up then
                  * clean them up.
                  */
-                if( atomic_read(&kptllnd_data->kptl_npeers) != 0) {
-                        CDEBUG(D_NET, "Deleting %d peers\n",atomic_read(&kptllnd_data->kptl_npeers));
+                if (atomic_read(&kptllnd_data->kptl_npeers) != 0) {
+                        CDEBUG(D_NET, "Deleting %d peers\n",
+                               atomic_read(&kptllnd_data->kptl_npeers));
 
                         /* nuke all peers */
                         kptllnd_peer_del(kptllnd_data, LNET_NID_ANY);
@@ -570,11 +575,9 @@ kptllnd_shutdown (lnet_ni_t *ni)
                         while (atomic_read (&kptllnd_data->kptl_npeers) != 0) {
 
                                 i++;
-                                CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
+                                CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
                                        "Waiting for %d peers to terminate\n",
-                                       atomic_read (&kptllnd_data->kptl_npeers));
-                                CDEBUG(D_NET, "Waiting for %d peers to terminate\n",
-                                        atomic_read (&kptllnd_data->kptl_npeers));
+                                       atomic_read(&kptllnd_data->kptl_npeers));
                                 cfs_pause(cfs_time_seconds(1));
                         }
                 }
@@ -597,7 +600,8 @@ kptllnd_shutdown (lnet_ni_t *ni)
                  * if we are not in the right state.
                  */
                 if(atomic_read (&kptllnd_data->kptl_nthreads) != 0){
-                        CDEBUG(D_NET, "Stopping %d threads\n",atomic_read(&kptllnd_data->kptl_nthreads));
+                        CDEBUG(D_NET, "Stopping %d threads\n",
+                               atomic_read(&kptllnd_data->kptl_nthreads));
                         /*
                          * Wake up all the schedulers
                          */
@@ -608,15 +612,12 @@ kptllnd_shutdown (lnet_ni_t *ni)
                                 i++;
                                 CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                                        "Waiting for %d threads to terminate\n",
-                                       atomic_read (&kptllnd_data->kptl_nthreads));
-                                CDEBUG(D_NET, "Waiting for %d threads to terminate\n",
-                                        atomic_read (&kptllnd_data->kptl_nthreads));
+                                       atomic_read(&kptllnd_data->kptl_nthreads));
                                 cfs_pause(cfs_time_seconds(1));
                         }
 
                 }
                 CDEBUG(D_NET, "All Threads stopped\n");
-
 
                 LASSERT(list_empty(&kptllnd_data->kptl_sched_txq));
 

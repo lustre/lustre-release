@@ -943,7 +943,7 @@ ksocknal_accept (lnet_ni_t *ni, struct socket *sock)
         spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock, flags);
 
         list_add_tail(&cr->ksncr_list, &ksocknal_data.ksnd_connd_connreqs);
-        cfs_waitq_signal(&ksocknal_data.ksnd_connd_waitq);
+        wake_up(&ksocknal_data.ksnd_connd_waitq);
                         
         spin_unlock_irqrestore(&ksocknal_data.ksnd_connd_lock, flags);
         return 0;

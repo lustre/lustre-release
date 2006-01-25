@@ -21,10 +21,9 @@
  *
  */
 
-#include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
-#if defined(__KERNEL__) && defined(LNET_ROUTER)
+#ifdef __KERNEL__
 
 #include <linux/seq_file.h>
 #include <linux/lustre_compat25.h>
@@ -82,7 +81,7 @@ lnet_router_proc_stats_write(struct file *file, const char *ubuffer,
 }
 
 typedef struct {
-        __u64                lrsi_version;
+        unsigned long long   lrsi_version;
         lnet_remotenet_t    *lrsi_net;
         lnet_route_t        *lrsi_route;
         loff_t               lrsi_off;

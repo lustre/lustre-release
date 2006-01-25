@@ -23,7 +23,7 @@
 
 #include <lnet/lib-lnet.h>
 
-#if defined(__KERNEL__) && defined(LNET_ROUTER)
+#ifdef __KERNEL__
 
 static char *forwarding = "";
 CFS_MODULE_PARM(forwarding, "s", charp, 0444,
@@ -70,8 +70,6 @@ kpr_do_upcall (void *arg)
 
         snprintf (nidstr, sizeof(nidstr), "%s", libcfs_nid2str(u->kpru_nid));
         snprintf (whenstr, sizeof(whenstr), "%ld", u->kpru_when);
-
-        libcfs_run_upcall (argv);
 
         libcfs_run_upcall (argv);
 
@@ -487,7 +485,7 @@ lnet_get_route (int idx, __u32 *net, __u32 *hops,
         return -ENOENT;
 }
 
-#if defined(__KERNEL__) && defined(LNET_ROUTER)
+#ifdef __KERNEL__
 
 void
 lnet_destroy_rtrbuf(lnet_rtrbuf_t *rb, int npages)
@@ -495,7 +493,7 @@ lnet_destroy_rtrbuf(lnet_rtrbuf_t *rb, int npages)
         int sz = offsetof(lnet_rtrbuf_t, rb_kiov[npages]);
 
         while (--npages >= 0)
-                cfs_free_page(rb->rb_kiov[npages].kiov_page);
+                __free_page(rb->rb_kiov[npages].kiov_page);
 
         LIBCFS_FREE(rb, sz);
 }
@@ -514,10 +512,10 @@ lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp)
         rb->rb_pool = rbp;
 
         for (i = 0; i < npages; i++) {
-                page = cfs_alloc_page(CFS_ALLOC_ZERO /*GFP_KERNEL*/); /* HIGH? */
+                page = alloc_page(GFP_KERNEL); /* HIGH? */
                 if (page == NULL) {
                         while (--i >= 0)
-                                cfs_free_page(rb->rb_kiov[i].kiov_page);
+                                __free_page(rb->rb_kiov[i].kiov_page);
 
                         LIBCFS_FREE(rb, sz);
                         return NULL;

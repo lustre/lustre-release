@@ -1145,8 +1145,8 @@ int ksocknal_scheduler (void *arg)
         char               name[16];
 
         snprintf (name, sizeof (name),"socknal_sd%02d", id);
-        cfs_daemonize (name);
-        cfs_block_allsigs ();
+        libcfs_daemonize (name);
+        libcfs_blockallsigs ();
 
 #if (CONFIG_SMP && CPU_AFFINITY)
         id = ksocknal_sched2cpu(id);
@@ -1753,8 +1753,8 @@ ksocknal_connd (void *arg)
         int                did_something;
 
         snprintf (name, sizeof (name), "socknal_cd%02ld", id);
-        cfs_daemonize (name);
-        cfs_block_allsigs ();
+        libcfs_daemonize (name);
+        libcfs_blockallsigs ();
 
         spin_lock_irqsave (&ksocknal_data.ksnd_connd_lock, flags);
 
@@ -1954,8 +1954,8 @@ ksocknal_reaper (void *arg)
         int                peer_index = 0;
         cfs_time_t         deadline = cfs_time_current();
 
-        cfs_daemonize ("socknal_reaper");
-        cfs_block_allsigs ();
+        libcfs_daemonize ("socknal_reaper");
+        libcfs_blockallsigs ();
 
         CFS_INIT_LIST_HEAD(&enomem_conns);
         cfs_waitlink_init (&wait);
@@ -2062,7 +2062,7 @@ ksocknal_reaper (void *arg)
                 if (!ksocknal_data.ksnd_shuttingdown &&
                     list_empty (&ksocknal_data.ksnd_deathrow_conns) &&
                     list_empty (&ksocknal_data.ksnd_zombie_conns))
-                        cfs_waitq_timedwait (&wait, CFS_TASK_INTERRUPTIBLE, timeout);
+                        cfs_waitq_timedwait (&wait, timeout);
 
                 set_current_state (TASK_RUNNING);
                 cfs_waitq_del (&ksocknal_data.ksnd_reaper_waitq, &wait);

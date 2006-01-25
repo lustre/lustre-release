@@ -91,6 +91,28 @@ static inline void our_cond_resched(void)
 #endif
 #define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
 
+#ifdef __arch_um__
+#define LBUG_WITH_LOC(file, func, line)                                 \
+do {                                                                    \
+        CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
+        libcfs_catastrophe = 1;                                        \
+        libcfs_debug_dumplog();                                        \
+        libcfs_run_lbug_upcall(file, func, line);                      \
+        panic("LBUG");                                                  \
+} while (0)
+#else
+#define LBUG_WITH_LOC(file, func, line)                                 \
+do {                                                                    \
+        CEMERG("LBUG\n");                                               \
+        libcfs_catastrophe = 1;                                        \
+        libcfs_debug_dumpstack(NULL);                                  \
+        libcfs_debug_dumplog();                                        \
+        libcfs_run_lbug_upcall(file, func, line);                      \
+        set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
+        schedule();                                                     \
+} while (0)
+#endif /* __arch_um__ */
+
 /* ------------------------------------------------------------------- */
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

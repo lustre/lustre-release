@@ -328,8 +328,8 @@ lnet_acceptor(void *arg)
         }
 
 	snprintf(name, sizeof(name), "acceptor_%03d", accept_port);
-	cfs_daemonize(name);
-	cfs_block_allsigs();
+	libcfs_daemonize(name);
+	libcfs_blockallsigs();
 
 	rc = libcfs_sock_listen(&lnet_acceptor_state.pta_sock,
 				0, accept_port, accept_backlog);

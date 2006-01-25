@@ -115,7 +115,7 @@ static inline int cfs_time_beforeq(cfs_time_t t1, cfs_time_t t2)
 
 static inline cfs_duration_t cfs_duration_build(int64_t nano)
 {
-        return (cfs_duration_t) (nano / ONE_BILLION);
+        return nano / ONE_BILLION;
 }
 
 static inline time_t cfs_duration_sec(cfs_duration_t d)
