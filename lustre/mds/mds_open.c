@@ -799,9 +799,8 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
  open:
-        rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep,
-                             NULL);
-        rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
+        rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
+        rc = mds_finish_transno(mds, dchild->d_inode, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
 
