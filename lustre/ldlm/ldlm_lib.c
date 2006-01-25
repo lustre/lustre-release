@@ -414,8 +414,8 @@ out_sem:
 int client_disconnect_export(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct client_obd *cli = &obd->u.cli;
-        struct obd_import *imp = cli->cl_import;
+        struct client_obd *cli;
+        struct obd_import *imp;
         int rc = 0, err;
         ENTRY;
 
@@ -424,6 +424,9 @@ int client_disconnect_export(struct obd_export *exp)
                        exp, exp ? exp->exp_handle.h_cookie : -1);
                 RETURN(-EINVAL);
         }
+
+        cli = &obd->u.cli;
+        imp = cli->cl_import;
 
         down(&cli->cl_sem);
         if (!cli->cl_conn_count) {
