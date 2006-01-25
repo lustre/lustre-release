@@ -344,7 +344,7 @@ kptllnd_startup (lnet_ni_t *ni)
         /*
          * Fetch the lower NID
          */
-        ptl_rc != PtlGetId(kptllnd_data->kptl_nih, &kptllnd_data->kptl_portals_id);
+        ptl_rc = PtlGetId(kptllnd_data->kptl_nih, &kptllnd_data->kptl_portals_id);
         if (ptl_rc != PTL_OK) {
                 CERROR ("PtlGetID: error %d\n", ptl_rc);
                 rc = -EINVAL;
