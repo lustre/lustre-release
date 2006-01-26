@@ -200,7 +200,7 @@ static inline time_t cfs_duration_sec(cfs_duration_t d)
 static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
 {
         s->tv_sec = d / NSEC_PER_SEC;
-        s->tv_usec = (d - s->tv_sec * NSEC_PER_SEC) / NSEC_PER_USEC;
+        s->tv_usec = (d - ((int64_t)s->tv_sec) * NSEC_PER_SEC) / NSEC_PER_USEC;
 }
 
 static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)

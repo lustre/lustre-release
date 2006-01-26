@@ -54,6 +54,15 @@ int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
         RETURN(err);
 }
 
+int libcfs_ioctl_popdata(void *arg, void *data, int size)
+{
+	/* 
+	 * system call will copy out ioctl arg to user space
+	 */
+	memcpy(arg, data, size);
+	return 0;
+}
+
 extern struct cfs_psdev_ops		libcfs_psdev_ops;
 struct libcfs_device_userstate		*mdev_state[16];
 
