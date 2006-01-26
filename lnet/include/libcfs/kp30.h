@@ -164,9 +164,6 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #define ntohs(x) ___ntohs(x)
 #endif
 
-/* debug.c */
-extern spinlock_t stack_backtrace_lock;
-
 void libcfs_debug_dumpstack(cfs_task_t *tsk);
 void libcfs_run_upcall(char **argv);
 void libcfs_run_lbug_upcall(char * file, const char *fn, const int line);
