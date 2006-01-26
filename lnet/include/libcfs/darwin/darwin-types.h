@@ -76,8 +76,8 @@ typedef struct { volatile uint32_t counter; }	atomic_t;
 #define atomic_inc(a)			atomic_add(1, a)
 #define atomic_dec(a)			atomic_sub(1, a)
 #endif /* !__DARWIN8__ */
-#define atomic_sub_and_test(v, a)	( atomic_sub(v, a) == 0 )
-#define atomic_dec_and_test(a)		( atomic_dec(a) == 0 )
+#define atomic_sub_and_test(v, a)	( atomic_sub(v, a) == -(a) )
+#define atomic_dec_and_test(a)		( atomic_dec(a) == 1 )
 
 #include <libsa/mach/mach.h>
 typedef off_t   			loff_t;
