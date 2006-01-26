@@ -138,6 +138,14 @@ case "$lustretag" in
         portalstag=$lustretag
         ;;
 
+    # temporary branch for initial LNET protocol version compatibility work
+    b_rls146_lnetprotovrsn)
+        lnettag=$lustretag
+	lustretag=b_release_1_4_6	
+        portalstag=b_release_1_4_6
+	libsysiotag=b_release_1_4_6
+        ;;
+
     # v1.0-v1.3, v1.4.0-v1.4.2
     v1_[0-3]_*|v1_4_[0-2]*)
         portalstag="$lustretag"
