@@ -56,7 +56,7 @@ esac
 CC=`echo $CC | sed -e "s/\-m64//g"`
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -x c -pipe -Wno-trigraphs -fasm-blocks -g -O0"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-four-char-constants -Wmost -O0"
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -fmessage-length=0 -ffix-and-continue"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -fmessage-length=0"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -I$kernel_framework/Headers"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -I$kernel_framework/Headers/bsd"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -I$kernel_framework/PrivateHeaders"
@@ -66,7 +66,7 @@ EXTRA_KCFLAGS="$EXTRA_KCFLAGS -force_cpusubtype_ALL -fno-exceptions"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -msoft-float -static"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -DKERNEL -DKERNEL_PRIVATE"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -DDRIVER_PRIVATE -DAPPLE -DNeXT"
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__KERNEL__"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__KERNEL__ -D__DARWIN__"
 #
 # C flags for Panther/Tiger
 #
@@ -75,7 +75,7 @@ case $target_os in
                 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__DARWIN8__"
 	;;
         darwin7*)
-                EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__DARWIN__"
+                EXTRA_KCFLAGS="$EXTRA_KCFLAGS -ffix-and-continue"
         ;;
 esac
 
