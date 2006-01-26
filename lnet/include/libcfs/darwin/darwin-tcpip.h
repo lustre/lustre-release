@@ -35,23 +35,19 @@ struct socket;
 typedef void    (*so_upcall)(socket_t sock, void* arg, int waitf);
 
 #define CFS_SOCK_UPCALL         0x1
+#define CFS_SOCK_MAGIC          0xbabeface
 
 typedef struct cfs_socket {
         socket_t        s_so;
+        int             s_magic;
         int             s_flags;
         so_upcall       s_upcall;
         void           *s_upcallarg;
 } cfs_socket_t;
 
-#ifndef container_of
-#define container_of(ptr, type, member) \
-                ((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
-#endif
 
 /* cfs_socket_t to bsd socket */
 #define C2B_SOCK(s)             ((s)->s_so)     
-/* bsd socket to cfs_socket_t */
-#define B2C_SOCK(s)             container_of((s), cfs_socket_t, s_so)
 
 static inline int get_sock_intopt(socket_t so, int opt)
 {
@@ -63,9 +59,10 @@ static inline int get_sock_intopt(socket_t so, int opt)
          * so it can be blocked. So be careful while using 
          * them.
          */
+        len = sizeof(val);
         rc = sock_getsockopt(so, SOL_SOCKET, opt, &val, &len);
         assert(rc == 0);
-        return opt;
+        return val;
 }
 
 #define SOCK_ERROR(s)           get_sock_intopt(C2B_SOCK(s), SO_ERROR)        

@@ -32,14 +32,15 @@
 #ifdef __DARWIN8__
 
 #define SOCKNAL_ARCH_EAGER_ACK		0
+#define SOCK_BUFFER_SIZE 		(224*1024)
 
 #else /* !__DARWIN8__ */
 
 #define SOCKNAL_ARCH_EAGER_ACK		1
+#define SOCK_BUFFER_SIZE                (1152 * 1024)
 
 #endif
 
-#define SOCK_BUFFER_SIZE                (1152 * 1024)
 
 static inline
 int ksocknal_nsched(void)

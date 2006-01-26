@@ -139,7 +139,7 @@ ksocknal_lib_tunables_fini ()
  * 4. Increase net.inet.tcp.recvspace
  * 5. Increase kern.ipc.maxsockbuf
  */
-#define KSOCKNAL_MAX_BUF        (1152*1024)
+#define KSOCKNAL_MAX_BUFFER        (1152*1024)
 
 void
 ksocknal_lib_bind_irq (unsigned int irq)
@@ -185,8 +185,11 @@ ksocknal_lib_buffersize (int current_sz, int tunable_sz)
         if (current_sz < SOCKNAL_MIN_BUFFER)
                 return MAX(SOCKNAL_MIN_BUFFER, tunable_sz);
 
-        if (tunable_sz > SOCKNAL_MIN_BUFFER)
-                return tunable_sz;
+        if (tunable_sz > SOCKNAL_MIN_BUFFER) 
+                if (tunable_sz > KSOCKNAL_MAX_BUFFER)
+                        return KSOCKNAL_MAX_BUFFER;
+                else
+                        return tunable_sz;
 
         /* leave alone */
         return 0;
@@ -387,7 +390,7 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
                 *txmem = *rxmem = *nagle = 0;
                 return (-ESHUTDOWN);
         }
-        rc = libcfs_sock_getbuf(B2C_SOCK(sock), txmem, rxmem);
+        rc = libcfs_sock_getbuf(conn->ksnc_sock, txmem, rxmem);
         if (rc == 0) {
                 len = sizeof(*nagle);
                 rc = -sock_getsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
@@ -508,6 +511,8 @@ ksocknal_upcall(socket_t so, void *arg, int waitf)
                 goto out;
 
         ksocknal_read_callback (conn);
+        /* XXX Liang */
+        ksocknal_write_callback (conn);
 out:
         read_unlock (&ksocknal_data.ksnd_global_lock);
         EXIT;
@@ -523,24 +528,22 @@ ksocknal_lib_save_callback(cfs_socket_t *sock, ksock_conn_t *conn)
 void
 ksocknal_lib_set_callback(cfs_socket_t *sock, ksock_conn_t *conn)
 { 
-        sock->s_upcallarg = (void *)conn;
-        sock->s_upcall = ksocknal_upcall; 
-        sock->s_flags |= CFS_SOCK_UPCALL; 
+        libcfs_sock_set_cb(sock, ksocknal_upcall, (void *)conn);
         return;
 }
 
 void
 ksocknal_lib_act_callback(cfs_socket_t *sock, ksock_conn_t *conn)
 {
-        ksocknal_upcall (C2B_SOCK(sock), (void *)conn, 0);
+        LASSERT(sock->s_upcall != NULL);
+
+        sock->s_upcall (C2B_SOCK(sock), (void *)conn, 0);
 }
 
 void 
 ksocknal_lib_reset_callback(cfs_socket_t *sock, ksock_conn_t *conn)
 { 
-        sock->s_flags &= ~CFS_SOCK_UPCALL; 
-        sock->s_upcall = NULL; 
-        sock->s_upcallarg = NULL; 
+        libcfs_sock_reset_cb(sock);
 }
 
 #else /* !__DARWIN8__ */

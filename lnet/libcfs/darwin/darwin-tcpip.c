@@ -275,9 +275,11 @@ static void libcfs_sock_upcall(socket_t so, void* arg, int waitf)
 {
         cfs_socket_t    *sock;
 
-        sock = B2C_SOCK(so);
+        sock = (cfs_socket_t *)arg;
+        LASSERT(sock->s_magic == CFS_SOCK_MAGIC);
+
         if ((sock->s_flags & CFS_SOCK_UPCALL) != 0 && sock->s_upcall != NULL)
-                sock->s_upcall((struct socket *)so, sock->s_upcallarg, waitf);
+                sock->s_upcall(so, sock->s_upcallarg, waitf);
         return;
 }
 
@@ -316,9 +318,10 @@ libcfs_sock_create (cfs_socket_t **sockp, int *fatal,
                 return -ENOMEM;
         }
         *sockp = sock;
+        sock->s_magic = CFS_SOCK_MAGIC;
 
         rc = -sock_socket(PF_INET, SOCK_STREAM, 0, 
-                          libcfs_sock_upcall, NULL, &C2B_SOCK(sock));
+                          libcfs_sock_upcall, sock, &C2B_SOCK(sock));
         if (rc != 0) 
                 goto out;
         option = 1;
@@ -396,12 +399,13 @@ libcfs_sock_accept (cfs_socket_t **newsockp, cfs_socket_t *sock)
                 CERROR("Can't allocate cfs_socket.\n");
                 return -ENOMEM;
         }
+        newsock->s_magic = CFS_SOCK_MAGIC;
         /*
          * thread will sleep in sock_accept by calling of msleep(), 
          * it can be interrupted because msleep() use PCATCH as argument.
          */
         rc = -sock_accept(C2B_SOCK(sock), NULL, 0, 0, 
-                          libcfs_sock_upcall, NULL, &C2B_SOCK(newsock));
+                          libcfs_sock_upcall, newsock, &C2B_SOCK(newsock));
         if (rc) {
                 if (C2B_SOCK(newsock) != NULL) sock_close(C2B_SOCK(newsock));
                 FREE(newsock, M_TEMP);
@@ -477,14 +481,8 @@ libcfs_sock_read (cfs_socket_t *sock, void *buffer, int nob, int timeout)
                 rc = -sock_receive(C2B_SOCK(sock), &msg, 0, &rcvlen);
                 to -= cfs_time_current() - then;
 
-                if (rc != 0) {
-                        if (rcvlen != nob && \
-                        (rc == ERESTART || rc == EINTR || rc == EWOULDBLOCK))
-                                rc = 0;
-                        if (rc != 0)
-                                return rc;
-                }
-
+                if (rc != 0 && rc != -EWOULDBLOCK)
+                        return rc;
                 if (rcvlen == nob)
                         return 0;
 
@@ -520,32 +518,31 @@ libcfs_sock_write (cfs_socket_t *sock, void *buffer, int nob, int timeout)
                         .msg_iovlen     = 1,
                         .msg_control    = NULL,
                         .msg_controllen = 0,
-                        .msg_flags      = 0,
+                        .msg_flags      = (timeout == 0) ? MSG_DONTWAIT : 0,
                 };
-                cfs_duration_usec(to, &tv);
-                rc = -sock_setsockopt(C2B_SOCK(sock), SOL_SOCKET, SO_SNDTIMEO,
-                                      &tv, sizeof(tv));
-                if (rc != 0) {
-                        CERROR("Can't set socket send timeout "
-                                        "%ld.%06d: %d\n",
-                                        (long)tv.tv_sec, (int)tv.tv_usec, rc);
-                        return rc;
+
+                if (timeout != 0) {
+                        cfs_duration_usec(to, &tv);
+                        rc = -sock_setsockopt(C2B_SOCK(sock), SOL_SOCKET, SO_SNDTIMEO,
+                                              &tv, sizeof(tv));
+                        if (rc != 0) {
+                                CERROR("Can't set socket send timeout "
+                                       "%ld.%06d: %d\n",
+                                       (long)tv.tv_sec, (int)tv.tv_usec, rc);
+                                return rc;
+                        }
                 }
 
                 then = cfs_time_current();
-                rc = -sock_send(C2B_SOCK(sock), &msg, 0, &sndlen);
+                rc = -sock_send(C2B_SOCK(sock), &msg, 
+                                ((timeout == 0) ? MSG_DONTWAIT : 0), &sndlen);
                 to -= cfs_time_current() - then;
 
-                if (rc != 0) {
-                        if (sndlen != nob && \
-                        (rc == ERESTART || rc == EINTR || rc == EWOULDBLOCK))
-                                rc = 0;
-                        if (rc != 0)
-                                return rc;
-                }
-
+                if (rc != 0 && rc != -EWOULDBLOCK)
+                        return rc;
                 if (sndlen == nob)
                         return 0;
+
                 if (to <= 0)
                         return -EAGAIN;
                 buffer = ((char *)buffer) + sndlen;
@@ -677,7 +674,7 @@ libcfs_sock_connect (cfs_socket_t **sockp, int *fatal,
                 return 0;
         }
 
-        *fatal = !(rc == -EADDRNOTAVAIL);
+        *fatal = !(rc == -EADDRNOTAVAIL || rc == -EADDRINUSE);
         CDEBUG(*fatal ? D_ERROR : D_NET,
                "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
                HIPQUAD(local_ip), local_port, HIPQUAD(peer_ip), peer_port);
