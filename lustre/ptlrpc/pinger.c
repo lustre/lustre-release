@@ -68,7 +68,8 @@ int ptlrpc_ping(struct obd_import *imp)
 static void ptlrpc_update_next_ping(struct obd_import *imp)
 {
         imp->imp_next_ping = jiffies + HZ *
-                (imp->imp_state == LUSTRE_IMP_DISCON ? 10 : PING_INTERVAL);
+                (imp->imp_state == LUSTRE_IMP_DISCON ? RECONNECT_INTERVAL :
+                                                       PING_INTERVAL);
 }
 
 void ptlrpc_ping_import_soon(struct obd_import *imp)
@@ -319,6 +320,7 @@ void ptlrpc_pinger_wake_up()
  * the current implementation of pinger in liblustre is not optimized
  */
 
+#ifdef ENABLE_PINGER
 static struct pinger_data {
         int             pd_recursion;
         unsigned long   pd_this_ping;   /* jiffies */
@@ -464,11 +466,12 @@ out:
 }
 
 static void *pinger_callback = NULL;
+#endif /* ENABLE_PINGER */
 
 int ptlrpc_start_pinger(void)
 {
-        memset(&pinger_args, 0, sizeof(pinger_args));
 #ifdef ENABLE_PINGER
+        memset(&pinger_args, 0, sizeof(pinger_args));
         pinger_callback =
                 liblustre_register_wait_callback(&pinger_check_rpcs, &pinger_args);
 #endif

@@ -4,7 +4,7 @@
 	 INTEROPERATE with older versions automatically.  Please read the 
 	 user documentation before upgrading any part of a live system.
        * WARNING: Lustre networking configuration changes are required with
-	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052	 
+	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052
 	 for details.
        * bug fixes
 
@@ -521,6 +521,16 @@ Details    : mds_cleanup() and filter_cleanup() need to drop the kernel lock
 	     the kernel lock is held, not whether it is this process that is
 	     holding it as 2.6 kernels do.
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 9635
+Description: MDS or OST may oops/LBUG if a client is connecting multiple times
+Details    : The client ptlrpc code may be trying to reconnect to a down
+	     server before a previous connection attempt has timed out.
+	     Increase the reconnect interval to be longer than the connection
+	     timeout interval to avoid sending duplicate connections to
+	     servers.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -791,7 +801,7 @@ Severity:  : enhancement
 Bugzilla   : 3262, 6359
 Description: Attempts to reconnect to servers are now more aggressive.
 Details    : This builds on the enhanced upcall-less recovery that was added
-             in 1.4.2.  When trying to reconnect to servers,  clients will
+             in 1.4.2.  When trying to reconnect to servers, clients will
              now try each server in the failover group every 10 seconds.  By
              default, clients would previously try one server every 25 seconds.
 
