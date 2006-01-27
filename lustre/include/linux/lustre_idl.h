@@ -241,7 +241,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
-                                OBD_CONNECT_TRUNCLOCK)
+                                OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX)
 #define ECHO_CONNECT_SUPPORTED (0)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\

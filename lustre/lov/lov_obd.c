@@ -220,6 +220,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (obd_uuid_empty(&tgt->uuid))
                         continue;
+                if (connect_flags & OBD_CONNECT_INDEX)
+                        data->ocd_index = i;
                 rc = lov_connect_obd(obd, tgt, 0, data);
                 if (rc)
                         GOTO(out_disc, rc);
@@ -1166,7 +1168,7 @@ static int lov_setattr_async(struct obd_export *exp, struct obdo *src_oa,
 
         LASSERT(!(src_oa->o_valid &  ~(OBD_MD_FLID | OBD_MD_FLUID |
                                        OBD_MD_FLGID| OBD_MD_FLCOOKIE |
-				       OBD_MD_FLFID | OBD_MD_FLGENER)));
+                                       OBD_MD_FLFID | OBD_MD_FLGENER)));
         lov = &exp->exp_obd->u.lov;
 
         loi = lsm->lsm_oinfo;

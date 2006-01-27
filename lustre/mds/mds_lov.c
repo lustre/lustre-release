@@ -38,6 +38,7 @@
 #include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_ver.h>
 
 #include "mds_internal.h"
 
@@ -181,6 +182,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0,};
+        struct obd_connect_data *data;
         int rc, i;
         ENTRY;
 
@@ -197,8 +199,14 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 RETURN(-ENOTCONN);
         }
 
-        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid,
-                         NULL /* obd_connect_data */);
+        OBD_ALLOC(data, sizeof(*data));
+        if (data == NULL)
+                RETURN(-ENOMEM);
+        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX;
+        data->ocd_version = LUSTRE_VERSION_CODE;
+        /* NB: lov_connect() needs to fill in .ocd_index for each OST */
+        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, data);
+        OBD_FREE(data, sizeof(*data));
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);

@@ -1714,32 +1714,59 @@ static int filter_cleanup(struct obd_device *obd)
 static int filter_connect_internal(struct obd_export *exp,
                                    struct obd_connect_data *data)
 {
-        if (data != NULL) {
-                CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
-                       " ocd_version: %x ocd_grant: %d\n",
-                       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
-                       data->ocd_connect_flags, data->ocd_version,
-                       data->ocd_grant);
+        if (!data) 
+                RETURN(0);
+        
+        CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
+               " ocd_version: %x ocd_grant: %d\n",
+               exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
+               data->ocd_connect_flags, data->ocd_version,
+               data->ocd_grant);
 
-                data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
-                exp->exp_connect_flags = data->ocd_connect_flags;
-                data->ocd_version = LUSTRE_VERSION_CODE;
+        data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
+        exp->exp_connect_flags = data->ocd_connect_flags;
+        data->ocd_version = LUSTRE_VERSION_CODE;
 
-                if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
-                        obd_size left, want;
+        if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
+                obd_size left, want;
 
-                        spin_lock(&exp->exp_obd->obd_osfs_lock);
-                        left = filter_grant_space_left(exp);
-                        want = data->ocd_grant;
-                        data->ocd_grant = filter_grant(exp, 0, want, left);
-                        spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                spin_lock(&exp->exp_obd->obd_osfs_lock);
+                left = filter_grant_space_left(exp);
+                want = data->ocd_grant;
+                data->ocd_grant = filter_grant(exp, 0, want, left);
+                spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
-                        CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "
-                               "%lld left: %lld\n", exp->exp_obd->obd_name,
-                               exp->exp_client_uuid.uuid, exp,
-                               data->ocd_grant, want, left);
+                CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "
+                       "%lld left: %lld\n", exp->exp_obd->obd_name,
+                       exp->exp_client_uuid.uuid, exp,
+                       data->ocd_grant, want, left);
+        }
+
+        if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
+                struct filter_obd *filter = &exp->exp_obd->u.filter;
+                struct filter_server_data *fsd = filter->fo_fsd;
+                int index = le32_to_cpu(fsd->fsd_ost_index);
+                
+                if (!(fsd->fsd_feature_compat &
+                      cpu_to_le32(OBD_COMPAT_OST))) {
+                        /* this will only happen on the first connect */
+                        fsd->fsd_ost_index = le32_to_cpu(data->ocd_index);
+                        fsd->fsd_feature_compat |= cpu_to_le32(OBD_COMPAT_OST);
+                        filter_update_server_data(exp->exp_obd, 
+                                                  filter->fo_rcvd_filp, fsd, 1);
+                } else if (index != data->ocd_index) {
+                        LCONSOLE_ERROR("Connection from %s to index "
+                                       "%u doesn't match actual OST "
+                                       "index %u, bad configuration?\n",
+                                       obd_export_nid2str(exp), index, 
+                                       data->ocd_index);
+                        RETURN(-EBADF);
                 }
         }
+        /* FIXME: Do the same with the MDS UUID and fsd_peeruuid.
+         * FIXME: We don't strictly need the COMPAT flag for that,
+         * FIXME: as fsd_peeruuid[0] will tell us if that is set.
+         * FIXME: We needed it for the index, as index 0 is valid. */
 
         RETURN(0);
 }
@@ -1761,7 +1788,8 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
 
 /* nearly identical to mds_connect */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid, struct obd_connect_data *data)
+                          struct obd_uuid *cluuid,
+                          struct obd_connect_data *data)
 {
         struct obd_export *exp;
         struct filter_export_data *fed;
