@@ -1230,15 +1230,15 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                 return;
         }
 
-        CDEBUG(level, "  -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
+        CDEBUG(level," -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
                lock, lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                pos, lock->l_pid);
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {
                 CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
-                       libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid),
-                       lock->l_remote_handle.cookie);
+                     libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid),
+                     lock->l_remote_handle.cookie);
         } else if (obd == NULL) {
                 CDEBUG(level, "  Node: local\n");
         } else {
@@ -1251,9 +1251,10 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                lock->l_resource->lr_name.name[0],
                lock->l_resource->lr_name.name[1]);
         CDEBUG(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
-               "write: %d\n", ldlm_lockname[lock->l_req_mode],
+               "write: %d flags: %#x\n", ldlm_lockname[lock->l_req_mode],
                ldlm_lockname[lock->l_granted_mode],
-               atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers);
+               atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers,
+               lock->l_flags);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
                 CDEBUG(level, "  Extent: "LPU64" -> "LPU64
                        " (req "LPU64"-"LPU64")\n",
