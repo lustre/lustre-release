@@ -531,6 +531,12 @@ Details    : The client ptlrpc code may be trying to reconnect to a down
 	     timeout interval to avoid sending duplicate connections to
 	     servers.
 
+Severity   : minor
+Frequency  : liblustre only
+Bugzilla   : 9794
+Description: Random seed of liblustre clients was not sufficiently random
+Details    : Improve initial seed of liblustre random number generator.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
