@@ -472,8 +472,8 @@ int ptlrpc_start_pinger(void)
 {
 #ifdef ENABLE_PINGER
         memset(&pinger_args, 0, sizeof(pinger_args));
-        pinger_callback =
-                liblustre_register_wait_callback(&pinger_check_rpcs, &pinger_args);
+        pinger_callback = liblustre_register_wait_callback(&pinger_check_rpcs,
+                                                           &pinger_args);
 #endif
         return 0;
 }
@@ -489,6 +489,7 @@ int ptlrpc_stop_pinger(void)
 
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
+#ifdef ENABLE_PINGER
         down(&pinger_sem);
         ptlrpc_update_next_ping(imp);
         if (pinger_args.pd_set == NULL &&
@@ -498,6 +499,7 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
                 pinger_args.pd_next_ping = imp->imp_next_ping;
         }
         up(&pinger_sem);
+#endif
 }
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)
