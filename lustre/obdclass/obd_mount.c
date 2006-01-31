@@ -297,6 +297,7 @@ static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
                        MOUNT_DATA_FILE, rc, len);
                 GOTO(out_close, rc = -EINVAL);
         }
+        rc = 0;
 
         if (ldd->ldd_magic != LDD_MAGIC) {
                 CERROR("Bad magic in %s: %x!=%x\n", MOUNT_DATA_FILE, 
@@ -304,7 +305,20 @@ static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
                 GOTO(out_close, rc = -EINVAL);
         }
         
-        rc = 0;
+        if (ldd->ldd_feature_incompat & ~LDD_INCOMPAT_SUPP) {
+                CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
+                       ldd->ldd_svname, 
+                       ldd->ldd_feature_incompat & ~LDD_INCOMPAT_SUPP);
+                GOTO(out_close, rc = -EINVAL);
+        }
+        if (ldd->ldd_feature_rocompat & ~LDD_ROCOMPAT_SUPP) {
+                CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
+                       ldd->ldd_svname,  
+                       ldd->ldd_feature_rocompat & ~LDD_ROCOMPAT_SUPP);
+                /* Do something like remount filesystem read-only */
+                GOTO(out_close, rc = -EINVAL);
+        }
+
         ldd_print(ldd);
 
 out_close:

@@ -537,9 +537,18 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         obd_str2uuid (&tgtuuid, str);
         target = class_uuid2obd(&tgtuuid);
+        /* COMPAT_146 */
         if (!target) {
                 target = class_name2obd(str);
         }
+        /* old (pre 1.6) lustre_process_log tries to connect to mdsname
+           (eg. mdsA) instead of uuid.  Since 1.6 changes names, the above
+           hack fails. */
+        if (!target) {
+                snprintf((char *)tgtuuid.uuid, sizeof(tgtuuid), "%s_UUID", str);
+                target = class_uuid2obd(&tgtuuid);
+        }
+        /* end COMPAT_146 */
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "

@@ -578,7 +578,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
 
         } else if (name) {
                 /* COMPAT_146 */
-                if (obd->obd_type->typ_name == LUSTRE_MDS_NAME) {
+                if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0) {
                         handle->lgh_file = llog_filp_open(MDT_LOGS_DIR, name, 
                                                           open_flags, 0644);
                 } else {
@@ -659,7 +659,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         ENTRY;
 
         /* COMPAT_146 */
-        if (obd->obd_type->typ_name == LUSTRE_MDS_NAME)
+        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0)
                 dir = MDT_LOGS_DIR;
         else
                 /* end COMPAT_146 */

@@ -700,6 +700,11 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         }
 out:
+        if ((err == -ENOSYS || err == -EINVAL) && 
+            !(lcfg->lcfg_command & LCFG_REQUIRED)) {
+                CWARN("Skipping optional command %#x\n", lcfg->lcfg_command);
+                err = 0;
+        }
         return err;
 }
 

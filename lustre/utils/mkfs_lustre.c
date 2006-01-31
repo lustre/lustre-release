@@ -91,6 +91,8 @@ void usage(FILE *out)
 #ifndef TUNEFS
                 "\t\t--mkfsoptions=<opts> : format options\n"
                 "\t\t--reformat: overwrite an existing disk\n"
+#else
+                "\t\t--nomgs: turn off MGS service on this MDT\n"
 #endif
                 "\t\t--print: just report what we would do; don't write to "
                 "disk\n"
@@ -610,12 +612,14 @@ int write_local_files(struct mkfs_opts *mop)
         fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         fclose(filep);
         
+        /* COMPAT_146 */
 #ifdef TUNEFS
         /* Check for upgrade */
         if ((mop->mo_ldd.ldd_flags & (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) 
             == (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) {
-                /* Copy the old logs to fsname-client, fsname-mdt */
+                char *term;
                 vprint("Copying old logs\n");
+                /* Copy the old logs to fsname-client, fsname-mdt */
                 sprintf(filepnm, "%s/%s/%s-client", 
                         mntpt, MOUNT_CONFIGS_DIR, mop->mo_ldd.ldd_fsname);
                 sprintf(cmd, "cp %s/%s/client %s", mntpt, MDT_LOGS_DIR,
@@ -633,16 +637,39 @@ int write_local_files(struct mkfs_opts *mop)
                                 mop->mo_device, 
                                 mop->mo_ldd.ldd_fsname, MOUNT_CONFIGS_DIR,
                                 mop->mo_ldd.ldd_fsname);
-                        ret = 1;
                         goto out_umnt;
                 }
-                /* copy the mdt log as well - name from mdt_UUID 
+                /* Copy the mdt log as well - name from mdt_UUID 
                    to fsname-MDT0000 */
-                /* FIXME Yuk - parse the client log to find mdt name? */
-                //filep = fopen(filepnm, "r");
-
+                ret = 1;
+                strcpy(filepnm, mop->mo_ldd.ldd_uuid);
+                term = strstr(filepnm, "_UUID");
+                if (term) {
+                        *term = '\0';
+                        sprintf(cmd, "cp %s/%s/%s %s/%s/%s",
+                                mntpt, MDT_LOGS_DIR, filepnm, 
+                                mntpt, MOUNT_CONFIGS_DIR,
+                                mop->mo_ldd.ldd_svname);
+                        if (verbose > 1) 
+                                printf("cmd: %s\n", cmd);
+                        ret = system(cmd);
+                }
+                if (ret) {
+                        fprintf(stderr, "%s: Can't copy 1.4 config %s/%s "
+                                "(%d)\n", progname, MDT_LOGS_DIR, filepnm, ret);
+                        fprintf(stderr, "mount -t ext3 %s somewhere, "
+                                "find the MDT log for fs %s and "
+                                "copy it manually into %s/%s, "
+                                "then umount.\n",
+                                mop->mo_device, 
+                                mop->mo_ldd.ldd_fsname, MOUNT_CONFIGS_DIR,
+                                mop->mo_ldd.ldd_svname);
+                        goto out_umnt;
+                }
         }
 #endif
+        /* end COMPAT_146 */
+
 
 out_umnt:
         vprint("unmounting backing device\n");
@@ -679,17 +706,13 @@ int read_local_files(struct mkfs_opts *mop)
                 goto out_rmdir;
         }
 
-
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
         filep = fopen(filepnm, "r");
         if (filep) {
                 vprint("Reading %s\n", MOUNT_DATA_FILE);
                 fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
-                /* drop FL_MGS from old config if FL_MDT is set --
-                   will re-set based on --mgsnode/--mgs */
-                if (mop->mo_ldd.ldd_flags & LDD_F_SV_TYPE_MDT)
-                        mop->mo_ldd.ldd_flags &= ~LDD_F_SV_TYPE_MGS;
         } else {
+                /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */
                 struct lr_server_data lsd;
                 fprintf(stderr, "%s: Unable to read %s, trying last_rcvd\n",
@@ -722,15 +745,18 @@ int read_local_files(struct mkfs_opts *mop)
                                 mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
                                 mop->mo_ldd.ldd_svindex = lsd.lsd_ost_index;
                         } else {
-                                if ((ret = access(filepnm, F_OK)) == 0) 
+                                if ((ret = access(filepnm, F_OK)) == 0) {
                                         mop->mo_ldd.ldd_flags =
                                         LDD_F_SV_TYPE_MDT | 
                                         LDD_F_SV_TYPE_MGS;
-                                else
+                                        /* Old MDT's are always index 0 
+                                           (pre CMD) */
+                                        mop->mo_ldd.ldd_svindex = 0;
+                                } else {
+                                        /* The index won't be correct */
                                         mop->mo_ldd.ldd_flags =
-                                        LDD_F_SV_TYPE_OST;
-                                /* The index won't be correct */
-                                mop->mo_ldd.ldd_flags |= LDD_F_NEED_INDEX;
+                                        LDD_F_SV_TYPE_OST | LDD_F_NEED_INDEX;
+                                }
                         }
                 }
 
@@ -738,6 +764,7 @@ int read_local_files(struct mkfs_opts *mop)
                        sizeof(mop->mo_ldd.ldd_uuid));
                 mop->mo_ldd.ldd_flags |= LDD_F_UPGRADE14;
         }
+        /* end COMPAT_146 */
         fclose(filep);
         
 out_umnt:
@@ -789,6 +816,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"mgsnid", 1, 0, 'm'},
                 {"mkfsoptions", 1, 0, 'k'},
                 {"mountfsoptions", 1, 0, 'o'},
+                {"nomgs", 0, 0, 'N'},
                 {"ost", 0, 0, 'O'},
                 {"print", 0, 0, 'p'},
                 {"quiet", 0, 0, 'q'},
@@ -802,7 +830,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"verbose", 0, 0, 'v'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "b:C:d:n:f:hI:MGm:k:o:Opqrw:c:s:i:t:v";
+        char *optstring = "b:C:d:n:f:hI:MGm:k:No:Opqrw:c:s:i:t:v";
         char opt;
         int longidx;
 
@@ -918,6 +946,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         if (optarg[0] != 0) 
                                 strncpy(mop->mo_ldd.ldd_fsname, optarg, 
                                         sizeof(mop->mo_ldd.ldd_fsname) - 1);
+                        break;
+                case 'N':
+                        mop->mo_ldd.ldd_flags &= ~LDD_F_SV_TYPE_MGS;
                         break;
                 case 'o':
                         mountopts = optarg;

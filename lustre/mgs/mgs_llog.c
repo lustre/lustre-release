@@ -985,6 +985,8 @@ int mgs_write_log_target(struct obd_device *obd,
         return rc;
 }
 
+
+/* COMPAT_146 */
 /***************** upgrade pre-mountconf logs to mountconf *****************/
 
 int mgs_upgrade_logs_14(struct obd_device *obd, struct fs_db *db, 
@@ -1118,6 +1120,7 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 
         RETURN(rc);
 }
+/* end COMPAT_146 */
 
 /******************** unused *********************/
 

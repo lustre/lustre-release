@@ -325,6 +325,7 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                                lockrc);
         }
 
+        /* COMPAT_146 */
         if (mti->mti_flags & LDD_F_UPGRADE14) {
                 CDEBUG(D_MGS, "upgrading fs %s from pre-1.6\n", 
                        mti->mti_fsname); 
@@ -339,6 +340,7 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
 
                 mti->mti_flags &= ~LDD_F_UPGRADE14;
         }
+        /* end COMPAT_146 */
 
         if (mti->mti_flags & LDD_F_NEED_REGISTER) {
                 CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 

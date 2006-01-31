@@ -33,6 +33,9 @@
 #define LCFG_HDR_SIZE(count) \
     size_round(offsetof (struct lustre_cfg, lcfg_buflens[(count)]))
 
+/* If not LCFG_REQUIRED, we can ignore this cmd and go on. */
+#define LCFG_REQUIRED         0x0001000
+
 enum lcfg_command_type {
         LCFG_ATTACH         = 0x00cf001,
         LCFG_DETACH         = 0x00cf002,
@@ -48,10 +51,10 @@ enum lcfg_command_type {
         LCFG_DEL_CONN       = 0x00cf00c,
         LCFG_LOV_ADD_OBD    = 0x00cf00d,
         LCFG_LOV_DEL_OBD    = 0x00cf00e,
-        LCFG_PARAM          = 0x00cf00f,
-        LCFG_MARKER         = 0x00cf010,
-        LCFG_LOG_START      = 0x00cf011,
-        LCFG_LOG_END        = 0x00cf012,
+        LCFG_PARAM          = 0x00ce00f,
+        LCFG_MARKER         = 0x00ce010,
+        LCFG_LOG_START      = 0x00ce011,
+        LCFG_LOG_END        = 0x00ce012,
 };
 
 struct lustre_cfg_bufs {

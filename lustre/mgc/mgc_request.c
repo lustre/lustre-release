@@ -848,7 +848,9 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
         }
         case LCFG_LOV_DEL_OBD: 
                 /* Unimplemented */
-                LASSERT(0);
+                CERROR("lov_del_obd unimplemented\n");
+                rc = -ENOSYS;
+                break;
         case LCFG_LOG_START: {
                 struct config_llog_data *cld;
                 struct config_llog_instance *cfg;

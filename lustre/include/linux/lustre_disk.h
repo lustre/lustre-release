@@ -38,7 +38,7 @@
 #define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"/mountdata"
 #define MDT_LOGS_DIR      "LOGS"  /* COMPAT_146 */
 
-#define LDD_MAGIC 0xbabb0001
+#define LDD_MAGIC 0x1dd00001
 
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
@@ -72,9 +72,17 @@ static inline char *mt_str(enum ldd_mount_type mt)
 #define MTI_NIDS_MAX 10
 #endif
 
+#define LDD_INCOMPAT_SUPP 0
+#define LDD_ROCOMPAT_SUPP 0
+
+/* FIXME does on-disk ldd have to be a fixed endianness? (like last_rcvd) */
 struct lustre_disk_data {
         __u32      ldd_magic;
-        __u32      ldd_config_ver;      /* not used? */
+        __u32      ldd_feature_compat;  /* compatible feature flags */
+        __u32      ldd_feature_rocompat;/* read-only compatible feature flags */
+        __u32      ldd_feature_incompat;/* incompatible feature flags */
+        
+        __u32      ldd_config_ver;      /* config rewrite count - not used */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
         enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
         char       ldd_fsname[64];      /* filesystem this server is part of */
@@ -84,7 +92,7 @@ struct lustre_disk_data {
         __u16      ldd_mgsnid_count;
         __u16      ldd_failnid_count;   /* server failover nid count */
         lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgmt nid list; lmd can 
-                                                     override */
+                                                 override */
         lnet_nid_t ldd_failnid[MTI_NIDS_MAX]; /* server failover nids */
         char       ldd_mount_opts[2048]; /* target fs mount opts */
         
