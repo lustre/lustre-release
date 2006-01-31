@@ -1215,8 +1215,8 @@ search_again:
         list_for_each(p, &obd->obd_exports) {
                 doomed_exp[num_to_evict] = list_entry(p, struct obd_export,
                                                       exp_obd_chain);
-                if (strcmp(obd_export_nid2str(doomed_exp[num_to_evict]), nid)
-                    == 0) {
+                if (strcmp(obd_export_nid2str(doomed_exp[num_to_evict]),
+                           nid) == 0) {
                         class_export_get(doomed_exp[num_to_evict]);
                         if (++num_to_evict == EVICT_BATCH)
                                 break;
@@ -1238,7 +1238,7 @@ search_again:
         }
 
         if (!exports_evicted)
-                CERROR("%s: can't disconnect NID '%s': no exports found\n",
+                CDEBUG(D_HA,"%s: can't disconnect NID '%s': no exports found\n",
                        obd->obd_name, nid);
         return exports_evicted;
 }
