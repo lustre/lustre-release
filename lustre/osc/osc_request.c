@@ -1169,6 +1169,8 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, obd_count page_count,
                    struct brw_page *pga, struct obd_trans_info *oti)
 {
+        struct obdo *saved_oa = NULL;
+        int          rc;
         ENTRY;
 
         if (cmd & OBD_BRW_CHECK) {
@@ -1181,9 +1183,10 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 RETURN(0);
         }
 
+        rc = 0;
+
         while (page_count) {
                 obd_count pages_per_brw;
-                int rc;
 
                 if (page_count > PTLRPC_MAX_BRW_PAGES)
                         pages_per_brw = PTLRPC_MAX_BRW_PAGES;
@@ -1193,15 +1196,32 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 sort_brw_pages(pga, pages_per_brw);
                 pages_per_brw = max_unfragmented_pages(pga, pages_per_brw);
 
+                if (saved_oa != NULL) {
+                        /* restore previously saved oa */
+                        *oa = *saved_oa;
+                } else if (page_count > pages_per_brw) {
+                        /* save a copy of oa (brw will clobber it) */
+                        OBD_ALLOC(saved_oa, sizeof(*saved_oa));
+                        if (saved_oa == NULL) {
+                                CERROR("Can't save oa (ENOMEM)\n");
+                                RETURN(-ENOMEM);
+                        }
+                        *saved_oa = *oa;
+                }
+                
                 rc = osc_brw_internal(cmd, exp, oa, md, pages_per_brw, pga);
 
                 if (rc != 0)
-                        RETURN(rc);
+                        break;
 
                 page_count -= pages_per_brw;
                 pga += pages_per_brw;
         }
-        RETURN(0);
+
+        if (saved_oa != NULL)
+                OBD_FREE(saved_oa, sizeof(*saved_oa));
+
+        RETURN(rc);
 }
 
 static int osc_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
