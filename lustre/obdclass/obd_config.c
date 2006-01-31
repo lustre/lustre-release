@@ -727,7 +727,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 int inst = 0;
 
                 lcfg = (struct lustre_cfg *)cfg_buf;
-                if (lcfg->lcfg_magic == __swab32(LUSTRE_CFG_MAGIC))
+                if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION))
                         lustre_swab_lustre_cfg(lcfg);
 
                 rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
@@ -907,7 +907,7 @@ int class_config_dump_handler(struct llog_handle * handle,
                 rc = -EINVAL;
         }
 out:
-        OBD_FREE(outstr, end - outstr);
+        OBD_FREE(outstr, 256);
         RETURN(rc);
 }
 

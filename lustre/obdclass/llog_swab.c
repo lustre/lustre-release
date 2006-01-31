@@ -209,7 +209,6 @@ static void print_lustre_cfg(struct lustre_cfg *lcfg)
         if (!(libcfs_debug & D_OTHER)) /* don't loop on nothing */
                 return;
         CDEBUG(D_OTHER, "lustre_cfg: %p\n", lcfg);
-        CDEBUG(D_OTHER, "\tlcfg->lcfg_magic: %#x\n", lcfg->lcfg_magic);
         CDEBUG(D_OTHER, "\tlcfg->lcfg_version: %#x\n", lcfg->lcfg_version);
 
         CDEBUG(D_OTHER, "\tlcfg->lcfg_command: %#x\n", lcfg->lcfg_command);
@@ -230,22 +229,19 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
         int i;
         ENTRY;
 
-        __swab32s(&lcfg->lcfg_magic);
+        __swab32s(&lcfg->lcfg_version);
 
-        if (lcfg->lcfg_magic != LUSTRE_CFG_MAGIC) {
-                CERROR("not swabbing lustre_cfg magic %#x (expecting %#x)\n",
-                       lcfg->lcfg_magic, LUSTRE_CFG_MAGIC);
+        if (lcfg->lcfg_version != LUSTRE_CFG_VERSION) {
+                CERROR("not swabbing lustre_cfg version %#x (expecting %#x)\n",
+                       lcfg->lcfg_version, LUSTRE_CFG_VERSION);
                 EXIT;
                 return;
         }
 
-        __swab32s(&lcfg->lcfg_version);
         __swab32s(&lcfg->lcfg_command);
-
         __swab32s(&lcfg->lcfg_num);
         __swab32s(&lcfg->lcfg_flags);
         __swab64s(&lcfg->lcfg_nid);
-
         __swab32s(&lcfg->lcfg_bufcount);
         for (i = 0; i < lcfg->lcfg_bufcount && i < LUSTRE_CFG_MAX_BUFCOUNT; i++)
                 __swab32s(&lcfg->lcfg_buflens[i]);

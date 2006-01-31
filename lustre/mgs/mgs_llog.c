@@ -46,6 +46,18 @@
 #include "mgs_internal.h"
 
 
+static inline int sv_name2index(char *svname, unsigned long *idx)
+{
+        char *dash = strchr(svname, '-');
+        if (!dash) {
+                CERROR("Can't understand server name %s\n", svname);
+                return(-EINVAL);
+        }
+        *idx = simple_strtoul(dash + 4, NULL, 16);
+        return 0;
+}
+
+
 /******************** DB functions *********************/
 
 /* from the (client) config log, figure out:
@@ -54,14 +66,15 @@
 */
 /* FIXME is it better to have a separate db file, instead of parsing the info
    out of the client log? */
-static int db_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
+static int mgsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
                       void *data)
 {
         struct fs_db *db = (struct fs_db *)data;
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         struct lustre_cfg *lcfg;
-        int index, rc = 0;
+        unsigned long index;
+        int rc = 0;
         ENTRY;
 
         if (rec->lrh_type != OBD_CFG_REC) {
@@ -70,8 +83,10 @@ static int db_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         }
 
         rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
-        if (rc)
+        if (rc) {
+                CERROR("Insane cfg\n");
                 RETURN(rc);
+        }
 
         lcfg = (struct lustre_cfg *)cfg_buf;
 
@@ -79,20 +94,29 @@ static int db_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
 
         /* Figure out ost indicies */ 
+        /* lov_modify_tgts add 0:lov1  1:ost1_UUID  2(index):0  3(gen):1 */
         if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD ||
             lcfg->lcfg_command == LCFG_LOV_DEL_OBD) {
-                index = simple_strtol(lustre_cfg_string(lcfg, 2),
-                                      NULL, 10);
+                index = simple_strtoul(lustre_cfg_string(lcfg, 2),
+                                       NULL, 10);
+                CDEBUG(D_MGS, "OST index for %s is %lu (%s)\n",
+                       lustre_cfg_string(lcfg, 1), index, 
+                       lustre_cfg_string(lcfg, 2));
                 set_bit(index, db->fd_ost_index_map);
         }
         
         /* Figure out mdt indicies */
+        /* attach   0:MDC_uml1_mdsA_MNT_client  1:mdc  2:1d834_MNT_client_03f */
         if ((lcfg->lcfg_command == LCFG_ATTACH) &&
             (strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_MDC_NAME) == 0)) {
                 rc = sv_name2index(lustre_cfg_string(lcfg, 0), &index);
-                if (rc) 
-                        RETURN(rc);
-                CDEBUG(D_MGS, "MDT index is %d\n", index);
+                if (rc) {
+                        CWARN("Unparsable MDC name %s, assuming index 0\n",
+                              lustre_cfg_string(lcfg, 0));
+                        index = 0;
+                        rc = 0;
+                }
+                CDEBUG(D_MGS, "MDT index is %lu\n", index);
                 set_bit(index, db->fd_mdt_index_map);
         }
 
@@ -108,8 +132,8 @@ static int db_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         RETURN(rc);
 }
 
-static int get_db_from_llog(struct obd_device *obd, char *logname,
-                                   struct fs_db *db)
+static int mgs_get_db_from_llog(struct obd_device *obd, char *logname,
+                                struct fs_db *db)
 {
         struct llog_handle *loghandle;
         struct lvfs_run_ctxt saved;
@@ -126,7 +150,7 @@ static int get_db_from_llog(struct obd_device *obd, char *logname,
         if (rc)
                 GOTO(out_close, rc);
 
-        rc = llog_process(loghandle, db_handler, (void *)db, NULL);
+        rc = llog_process(loghandle, mgsdb_handler, (void *)db, NULL);
         CDEBUG(D_MGS, "get_db = %d\n", rc);
 out_close:
         rc2 = llog_close(loghandle);
@@ -276,7 +300,7 @@ static int mgs_find_or_make_db(struct obd_device *obd, char *name,
 
         /* populate the db from the client llog */
         name_create(name, "-client", &cliname);
-        rc = get_db_from_llog(obd, cliname, db);
+        rc = mgs_get_db_from_llog(obd, cliname, db);
         name_destroy(cliname);
         if (rc) {
                 CERROR("Can't get db from llog %d\n", rc);
@@ -289,7 +313,7 @@ static int mgs_find_or_make_db(struct obd_device *obd, char *name,
         return 0;
 }
 
-int mgs_set_index(struct obd_device *obd, struct mgmt_target_info *mti)
+int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
 {
         struct fs_db *db;
         void *imap;
@@ -655,7 +679,7 @@ static int mgs_clear_log(struct obd_device *obd, char *name)
 
 /* lov is the first thing in the mdt and client logs */
 static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *db, 
-                             struct mgmt_target_info *mti,
+                             struct mgs_target_info *mti,
                              char *logname, char *lovname)
 {
         struct llog_handle *llh = NULL;
@@ -701,16 +725,27 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *db,
 }
 
 static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
-                             struct mgmt_target_info *mti)
+                             struct mgs_target_info *mti)
 {
         struct llog_handle *llh = NULL;
-        char *cliname, *mdcname, *lovname, *nodeuuid, *mdsuuid, *mdcuuid;
+        char *cliname, *mdcname, *lovname, *nodeuuid, *mdcuuid;
         lnet_nid_t nid;
         int rc, i, first_log = 0;
+        ENTRY;
 
         CDEBUG(D_MGS, "writing new mdt %s\n", mti->mti_svname);
 
-        name_create(mti->mti_fsname, "-mdtlov", &lovname);
+        if (*mti->mti_uuid == 0) {
+                snprintf(mti->mti_uuid, sizeof(mti->mti_uuid),
+                         "%s_UUID", mti->mti_svname);
+                name_create(mti->mti_fsname, "-mdtlov", &lovname);
+        } else {
+                /* We're starting with an old uuid.  Assume old name for lov
+                   as well. */
+                /* FIXME parse mds name out of uuid */
+                name_create("lov", "_mdsA", &lovname);
+        }
+
         /* Append mdt info to mdt log */
         if (mgs_log_is_empty(obd, mti->mti_svname)) {
                 /* This is the first time for all logs for this fs, 
@@ -721,8 +756,6 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         } 
         /* else there's already some ost entries in the mdt log. */
 
-        name_create(mti->mti_svname, "_UUID", &mdsuuid);
-        
         /* We added the lov, maybe some osc's, now for the mdt.
            We might add more ost's after this. Note that during the parsing
            of this log, this is when the mdt will start. (This was not 
@@ -736,12 +769,17 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         rc = record_start_log(obd, &llh, mti->mti_svname);
         rc = record_marker(obd, llh, db, CM_START, "add mdt"); 
         rc = record_mount_opt(obd, llh, mti->mti_svname, lovname, 0);
-        rc = record_attach(obd, llh, mti->mti_svname, LUSTRE_MDS_NAME, mdsuuid);
+        rc = record_attach(obd, llh, mti->mti_svname, LUSTRE_MDS_NAME, 
+                           mti->mti_uuid);
         rc = record_setup(obd,llh,mti->mti_svname,
                           "dev"/*ignored*/,"type"/*ignored*/,
                           mti->mti_svname, 0/*options*/);
         rc = record_marker(obd, llh, db, CM_END, "add mdt"); 
         rc = record_end_log(obd, &llh);
+
+        if (mti->mti_flags & LDD_F_UPGRADE14) 
+                /* If we're upgrading, the client log is done. */
+                GOTO(out_nocli, rc);
 
         /* Append the mdt info to the client log */
         name_create(mti->mti_fsname, "-client", &cliname);
@@ -752,7 +790,6 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
                 rc = mgs_write_log_lov(obd, db, mti, cliname, lovname);
         }
 
-        /* Add the mdt info to the client log */
         name_create(libcfs_nid2str(mti->mti_nids[0]), /*"_UUID"*/"", &nodeuuid);
         name_create(mti->mti_svname, "-mdc", &mdcname);
         name_create(mdcname, "_UUID", &mdcuuid);
@@ -771,7 +808,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
                 rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
         }
         rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, mdcuuid);
-        rc = record_setup(obd,llh,mdcname,mdsuuid,nodeuuid,0,0);
+        rc = record_setup(obd,llh,mdcname,mti->mti_uuid,nodeuuid,0,0);
         for (i = 0; i < mti->mti_failnid_count; i++) {
                 nid = mti->mti_failnids[i];
                 CERROR("add failover nid %s\n", libcfs_nid2str(nid));
@@ -786,15 +823,15 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         name_destroy(mdcname);
         name_destroy(nodeuuid);
         name_destroy(cliname);
-        name_destroy(mdsuuid);
+out_nocli:
         name_destroy(lovname);
-        return rc;
+        RETURN(rc);
 }
 
 /* Add the ost info to the client/mdt lov */
 static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
-                             struct mgmt_target_info *mti,
-                             char *logname, char *lovname, char *ostuuid)
+                             struct mgs_target_info *mti,
+                             char *logname, char *lovname)
 {
         struct llog_handle *llh = NULL;
         char *nodeuuid, *oscname, *oscuuid, *lovuuid;
@@ -821,7 +858,7 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
         #05 L setup    0:OSC_uml1_ost1_MNT_client  1:ost1_UUID  2:uml1_UUID
         #06 L add_uuid nid=uml2@tcp(0x20000c0a80202) 0:  1:uml2_UUID
         #07 L add_conn 0:OSC_uml1_ost1_MNT_client  1:uml2_UUID
-        #08 L lov_modify_tgts add 0:lov1  1:ost1_UUID  2:0  3:1
+        #08 L lov_modify_tgts add 0:lov1  1:ost1_UUID  2(index):0  3(gen):1
         */
         rc = record_start_log(obd, &llh, logname);
         rc = record_marker(obd, llh, db, CM_START, "add osc"); 
@@ -830,7 +867,7 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
                 rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
         }
         rc = record_attach(obd, llh, oscname, LUSTRE_OSC_NAME, lovuuid);
-        rc = record_setup(obd, llh, oscname, ostuuid, nodeuuid, 0, 0);
+        rc = record_setup(obd, llh, oscname, mti->mti_uuid, nodeuuid, 0, 0);
         for (i = 0; i < mti->mti_failnid_count; i++) {
                 nid = mti->mti_failnids[i];
                 CERROR("add failover nid %s\n", libcfs_nid2str(nid));
@@ -838,7 +875,7 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
                 rc = record_add_conn(obd, llh, libcfs_nid2str(nid));
         }
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
-        rc = record_lov_add(obd,llh, lovname, ostuuid, index,"1"/*generation*/);
+        rc = record_lov_add(obd, llh, lovname, mti->mti_uuid, index, "1");
         rc = record_marker(obd, llh, db, CM_END, "add osc"); 
         rc = record_end_log(obd, &llh);
         
@@ -850,11 +887,12 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
 }
 
 static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *db,
-                             struct mgmt_target_info *mti)
+                             struct mgs_target_info *mti)
 {
         struct llog_handle *llh = NULL;
-        char *logname, *lovname, *ostuuid;
+        char *logname, *lovname;
         int rc;
+        ENTRY;
         
         CDEBUG(D_MGS, "writing new ost %s\n", mti->mti_svname);
 
@@ -881,15 +919,21 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *db,
         */
         rc = record_start_log(obd, &llh, mti->mti_svname);
         rc = record_marker(obd, llh, db, CM_START, "add ost"); 
-        name_create(mti->mti_svname, "_UUID", &ostuuid);
+        if (*mti->mti_uuid == 0) 
+                snprintf(mti->mti_uuid, sizeof(mti->mti_uuid),
+                         "%s_UUID", mti->mti_svname);
         rc = record_attach(obd, llh, mti->mti_svname,
-                           "obdfilter"/*LUSTRE_OST_NAME*/, ostuuid);
+                           "obdfilter"/*LUSTRE_OST_NAME*/, mti->mti_uuid);
         rc = record_setup(obd,llh,mti->mti_svname,
                           "dev"/*ignored*/,"type"/*ignored*/,
                           "f", 0/*options*/);
         rc = record_marker(obd, llh, db, CM_END, "add ost"); 
         rc = record_end_log(obd, &llh);
         
+        if (mti->mti_flags & LDD_F_UPGRADE14) 
+                /* If we're upgrading, the client log is done. */
+                RETURN(rc);
+
         /* We also have to update the other logs where this osc is part of 
            the lov */
         /* Append ost info to mdt log */
@@ -897,26 +941,32 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *db,
         // FIXME add to all mdt logs for CMD
         name_create(mti->mti_fsname, "-MDT0000", &logname);
         name_create(mti->mti_fsname, "-mdtlov", &lovname);
-        mgs_write_log_osc(obd, db, mti, logname, lovname, ostuuid);
+        mgs_write_log_osc(obd, db, mti, logname, lovname);
         name_destroy(lovname);
         name_destroy(logname);
 
         /* Append ost info to the client log */
         name_create(mti->mti_fsname, "-client", &logname);
         name_create(mti->mti_fsname, "-clilov", &lovname);
-        mgs_write_log_osc(obd, db, mti, logname, lovname, ostuuid);
+        mgs_write_log_osc(obd, db, mti, logname, lovname);
         name_destroy(lovname);
         name_destroy(logname);
         
-        name_destroy(ostuuid);
-        return rc;
+        RETURN(rc);
 }
 
 int mgs_write_log_target(struct obd_device *obd,
-                         struct mgmt_target_info *mti)
+                         struct mgs_target_info *mti)
 {
         struct fs_db *db;
         int rc = -EINVAL;
+
+        /* set/check the new target index */
+        rc = mgs_set_index(obd, mti);
+        if (rc) {
+                CERROR("Can't get index (%d)\n", rc);
+                return rc;
+        }
 
         rc = mgs_find_or_make_db(obd, mti->mti_fsname, &db); 
         if (rc) {
@@ -933,6 +983,140 @@ int mgs_write_log_target(struct obd_device *obd,
                        mti->mti_flags, mti->mti_svname);
         }
         return rc;
+}
+
+/***************** upgrade pre-mountconf logs to mountconf *****************/
+
+int mgs_upgrade_logs_14(struct obd_device *obd, struct fs_db *db, 
+                        struct mgs_target_info *mti)
+{
+        int rc = 0;
+        ENTRY;
+
+        CDEBUG(D_MGS, "Upgrading old logs for %s\n", mti->mti_fsname);
+
+        /* If we get here, we know: 
+                the client log fsname-client exists
+                the logs have not been updated
+           so
+        1. parse the old client log (client log name?) to find out UUIDs for
+           all servers
+        2. regen all ost logs: servers will get new
+           name based on index, but will keep their old uuids.
+        3. append mdt startup to the end of the mdt log
+        4. append marker to old client log signifying we did the upgrade
+        ?  translate mds/client logs to new names?
+                  2 UP mdt MDS MDS_uuid 3
+                  3 UP lov lov_mdsA 47d06_lov_mdsA_61f31f85bc 4
+                  4 UP osc OSC_uml1_ost1_mdsA 47d06_lov_mdsA_61f31f85bc 4
+                  5 UP osc OSC_uml1_ost2_mdsA 47d06_lov_mdsA_61f31f85bc 4
+                  6 UP mds lustre-MDT0000 mdsA_UUID 3
+                to
+        ?  update server uuids?
+        */
+
+        /* FIXME hardcoded for proof-of-concept. Really, we have to parse the
+           old logs to find osts, lov & mdc for client mountopt.  */
+
+        if (!(mti->mti_flags & LDD_F_SV_TYPE_MDT)) {
+                CERROR("MDT first\n");
+                RETURN(-EINVAL);
+        }
+                
+        if (1) 
+        {
+                CDEBUG(D_MGS, "Upgrade MDT\n");
+                /* Need to set the mdsuuid first */
+                mti->mti_stripe_index = 0;
+                sv_make_name(mti->mti_flags, mti->mti_stripe_index,
+                             mti->mti_fsname, mti->mti_svname);
+                sprintf(mti->mti_uuid, "mdsA_UUID");
+                if (mgs_log_is_empty(obd, mti->mti_svname)) {
+                        CERROR("The MDT log %s is missing.\n", mti->mti_svname);
+                        RETURN(-ENOENT);
+                }
+                /* FIXME Old logs already have an old mount opt 
+                   which we should drop */
+                rc = mgs_write_log_mdt(obd, db, mti);
+        }
+
+        {
+                /* Write the ost logs */
+                struct mgs_target_info omti;
+                CDEBUG(D_MGS, "Upgrade OST\n");
+
+                /* these indicies were already marked by mgs_db_handler */
+                omti = *mti;
+                omti.mti_flags |= LDD_F_SV_TYPE_OST;
+                omti.mti_flags &= ~(LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_MGS);
+                omti.mti_stripe_index = 0;
+                sv_make_name(omti.mti_flags, omti.mti_stripe_index,
+                             omti.mti_fsname, omti.mti_svname);
+                sprintf(omti.mti_uuid, "ost1_UUID");
+                if (!mgs_log_is_empty(obd, omti.mti_svname)) {
+                        CERROR("The OST log %s already exists.\n",
+                               omti.mti_svname);
+                } else {
+                        rc = mgs_write_log_ost(obd, db, &omti);
+                }
+
+                omti.mti_stripe_index = 1;
+                sv_make_name(omti.mti_flags, omti.mti_stripe_index,
+                             omti.mti_fsname, omti.mti_svname);
+                sprintf(omti.mti_uuid, "ost2_UUID");
+                if (!mgs_log_is_empty(obd, omti.mti_svname)) {
+                        CERROR("The OST log %s already exists.\n",
+                               omti.mti_svname);
+                } else {
+                        rc = mgs_write_log_ost(obd, db, &omti);
+                }
+        }
+
+        {
+                struct llog_handle *llh = NULL;
+                char *cliname;
+                CDEBUG(D_MGS, "Upgrade client\n");
+
+                name_create(mti->mti_fsname, "-client", &cliname);
+
+                /* Mark the client log so we know we updated (fd_gen == 1) */
+                rc = record_start_log(obd, &llh, cliname);
+                rc = record_marker(obd, llh, db, CM_START, "upgrade from 1.4"); 
+                /* FIXME find the old lovname and mdcname */
+                /* old: mount_option 0:  1:client  2:lov1  3:MDC_uml1_mdsA_MNT_client */
+                /* new: mount_option 0:  1:lustre-client  2:lustre-clilov  3:lustre-MDT0000-mdc */
+                rc = record_mount_opt(obd, llh, cliname, "lov1", "MDC_uml1_mdsA_MNT_client");
+                rc = record_marker(obd, llh, db, CM_END, "upgrade to 1.6"); 
+                rc = record_end_log(obd, &llh);
+                name_destroy(cliname);
+        }
+        
+        RETURN(rc);
+}
+
+/* Make newly-connecting upgraded servers happy. */ 
+int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
+{
+        struct fs_db *db;
+        int rc = 0;
+        ENTRY;
+        
+        rc = mgs_find_or_make_db(obd, mti->mti_fsname, &db);
+        if (rc) {
+                LCONSOLE_ERROR("The 1.4 log for fs %s is unreadable, I can't "
+                               "upgrade.\n", mti->mti_fsname);
+                RETURN(-ENOENT);
+        }
+
+        if (db->fd_gen == 0) {
+                /* There were no markers in the client log, meaning we have 
+                   not updated the logs for this fs */
+                rc = mgs_upgrade_logs_14(obd, db, mti);
+                if (rc) 
+                        RETURN(rc);
+        }
+
+        RETURN(rc);
 }
 
 /******************** unused *********************/

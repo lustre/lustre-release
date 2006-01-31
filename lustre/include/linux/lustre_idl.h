@@ -243,7 +243,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK)
 #define ECHO_CONNECT_SUPPORTED (0)
-#define MGMT_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
+#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
                                                 ((patch)<<8) + (fix))
@@ -980,21 +980,22 @@ extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
  * Opcodes for mountconf (mgs and mgc)
  */
 typedef enum {
-        MGMT_CONNECT = 250,
-        MGMT_DISCONNECT,
-        MGMT_EXCEPTION,         /* node died, etc. */
-        MGMT_TARGET_ADD,
-        MGMT_TARGET_DEL,
-        MGMT_LAST_OPC
+        MGS_CONNECT = 250,
+        MGS_DISCONNECT,
+        MGS_EXCEPTION,         /* node died, etc. */
+        MGS_TARGET_ADD,
+        MGS_TARGET_DEL,
+        MGS_LAST_OPC
 } mgs_cmd_t;
 
 #define MTI_NAME_MAXLEN 64
 #define MTI_UUID_MAXLEN MTI_NAME_MAXLEN + 5
 #define MTI_NIDS_MAX 10 /* match lustre_disk.h */
 
-struct mgmt_target_info {
+struct mgs_target_info {
         char             mti_fsname[MTI_NAME_MAXLEN];
         char             mti_svname[MTI_NAME_MAXLEN];
+        char             mti_uuid[sizeof(struct obd_uuid)];
         lnet_nid_t       mti_nids[MTI_NIDS_MAX];     /* host nids */
         lnet_nid_t       mti_failnids[MTI_NIDS_MAX]; /* partner nids */
         __u64            mti_stripe_size;      
@@ -1008,7 +1009,7 @@ struct mgmt_target_info {
         __u32            mti_flags;
 };
 
-extern void lustre_swab_mgs_target_info(struct mgmt_target_info *oinfo);
+extern void lustre_swab_mgs_target_info(struct mgs_target_info *oinfo);
 
 #define CM_START 0x01
 #define CM_END   0x02

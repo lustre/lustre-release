@@ -553,17 +553,17 @@ out:
 #endif
 
 /* Get index and add to config llog, depending on flags */
-int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
+int mgc_target_add(struct obd_export *exp, struct mgs_target_info *mti)
 {
         struct ptlrpc_request *req;
-        struct mgmt_target_info *req_mti, *rep_mti;
+        struct mgs_target_info *req_mti, *rep_mti;
         int size = sizeof(*req_mti);
         int rep_size = sizeof(*mti);
         int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
-                              MGMT_TARGET_ADD, 1, &size, NULL);
+                              MGS_TARGET_ADD, 1, &size, NULL);
         if (!req)
                 RETURN(rc = -ENOMEM);
 
@@ -590,16 +590,16 @@ int mgc_target_add(struct obd_export *exp, struct mgmt_target_info *mti)
 }
 
 /* Remove from config llog */
-int mgc_target_del(struct obd_export *exp, struct mgmt_target_info *mti)
+int mgc_target_del(struct obd_export *exp, struct mgs_target_info *mti)
 {
         struct ptlrpc_request *req;
-        struct mgmt_target_info *req_mti, *rep_mti;
+        struct mgs_target_info *req_mti, *rep_mti;
         int size = sizeof(*req_mti);
         int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
-                              MGMT_TARGET_DEL, 1, &size, NULL);
+                              MGS_TARGET_DEL, 1, &size, NULL);
         if (!req)
                 RETURN(rc = -ENOMEM);
 
@@ -655,10 +655,10 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
         /* Hack alert */
         if (keylen == strlen("add_target") &&
             memcmp(key, "add_target", keylen) == 0) {
-                struct mgmt_target_info *mti;
-                if (vallen != sizeof(struct mgmt_target_info))
+                struct mgs_target_info *mti;
+                if (vallen != sizeof(struct mgs_target_info))
                         RETURN(-EINVAL);
-                mti = (struct mgmt_target_info *)val;
+                mti = (struct mgs_target_info *)val;
                 CDEBUG(D_MGC, "add_target %s %#x\n",
                        mti->mti_svname, mti->mti_flags);
                 rc =  mgc_target_add(exp, mti);
@@ -833,20 +833,22 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
         ENTRY;
 
         switch(cmd = lcfg->lcfg_command) {
-        case LCFG_LOV_ADD_OBD:
-        case LCFG_LOV_DEL_OBD: {
-                struct mgmt_target_info *mti;
+        case LCFG_LOV_ADD_OBD: {
+                struct mgs_target_info *mti;
 
                 if (LUSTRE_CFG_BUFLEN(lcfg, 1) != 
-                    sizeof(struct mgmt_target_info))
+                    sizeof(struct mgs_target_info))
                         GOTO(out, rc = -EINVAL);
 
-                mti = (struct mgmt_target_info *)lustre_cfg_buf(lcfg, 1);
+                mti = (struct mgs_target_info *)lustre_cfg_buf(lcfg, 1);
                 CDEBUG(D_MGC, "add_target %s %#x\n",    
                        mti->mti_svname, mti->mti_flags);
                 rc = mgc_target_add(get_mgs_export(obd), mti);
                 break;
         }
+        case LCFG_LOV_DEL_OBD: 
+                /* Unimplemented */
+                LASSERT(0);
         case LCFG_LOG_START: {
                 struct config_llog_data *cld;
                 struct config_llog_instance *cfg;

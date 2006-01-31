@@ -835,7 +835,7 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
         struct lustre_disk_data *ldd = lsi->lsi_ldd;
-        struct mgmt_target_info *mti = NULL;
+        struct mgs_target_info *mti = NULL;
         lnet_process_id_t         id;
         int i = 0;
         int rc;
@@ -843,7 +843,7 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
 
         LASSERT(mgc);
 
-        /* send MGMT_TARGET_ADD rpc via MGC, MGS should reply with an 
+        /* send MGS_TARGET_ADD rpc via MGC, MGS should reply with an 
            index number. */
         
         OBD_ALLOC(mti, sizeof(*mti));
@@ -905,10 +905,11 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
                         sizeof(ldd->ldd_svname));
                 /* or ldd_make_sv_name(ldd); */
                 /* FIXME write last_rcvd?, disk label? */
+                mti->mti_flags &= ~LDD_F_NEED_INDEX;
         }
 
         /* Always write out the new flags */
-        ldd->ldd_flags &= ~(LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER);
+        ldd->ldd_flags = mti->mti_flags;
         ldd_write(&mgc->obd_lvfs_ctxt, ldd);
 
 out:
@@ -963,7 +964,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         /* Register if needed */
         if (lsi->lsi_ldd->ldd_flags & 
-            (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER)) {
+            (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER | LDD_F_UPGRADE14)) {
                 CDEBUG(D_MOUNT, "Need new target index from MGS\n");
                 rc = server_add_target(sb, mnt);
                 if (rc) {
@@ -1136,13 +1137,14 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
 
         options = (char *)page;
         memset(options, 0, PAGE_SIZE);
-        strcpy(options, ldd->ldd_mount_opts);
+        strncpy(options, ldd->ldd_mount_opts, PAGE_SIZE - 2);
         
         /* Add in any mount-line options */
         if (lmd->lmd_opts && (*(lmd->lmd_opts) != 0)) {
+                int len = PAGE_SIZE - strlen(options) - 2;
                 if (*options != 0) 
                         strcat(options, ",");
-                strcat(options, lmd->lmd_opts);
+                strncat(options, lmd->lmd_opts, len);
         }
 
         /* Special permanent mount flags */
@@ -1204,7 +1206,7 @@ static void server_put_super(struct super_block *sb)
 
         /* If they wanted the mgs to stop separately from the mdt, they
            should have put it on a different device. */ 
-        if (IS_MGMT(lsi->lsi_ldd)) {
+        if (IS_MGS(lsi->lsi_ldd)) {
                 /* stop the mgc before the mgs so the connection gets cleaned
                    up */
                 lustre_stop_mgc(sb);
@@ -1335,7 +1337,7 @@ static int server_fill_super(struct super_block *sb)
         }
 
         /* start MGS before MGC */
-        if (IS_MGMT(lsi->lsi_ldd)) {
+        if (IS_MGS(lsi->lsi_ldd)) {
                 rc = server_start_mgs(sb);
                 if (rc) {
                         CERROR("ignoring Failed MGS start!!\n");

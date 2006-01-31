@@ -36,15 +36,17 @@
    Used before the setup llog can be read. */
 #define MOUNT_CONFIGS_DIR "CONFIGS"
 #define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"/mountdata"
-#define INDEX_BITMAP_FILE "IB"
+#define MDT_LOGS_DIR      "LOGS"  /* COMPAT_146 */
 
 #define LDD_MAGIC 0xbabb0001
 
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
-#define LDD_F_SV_TYPE_MGMT  0x0004
+#define LDD_F_SV_TYPE_MGS   0x0004
 #define LDD_F_NEED_INDEX    0x0010
 #define LDD_F_NEED_REGISTER 0x0020
+#define LDD_F_UPGRADE14     0x0040 /* COMPAT_14 */
+
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0, 
@@ -74,20 +76,21 @@ struct lustre_disk_data {
         __u32      ldd_magic;
         __u32      ldd_config_ver;      /* not used? */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
+        enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
         char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
         __u16      ldd_svindex;         /* server index (0001), must match 
                                            svname */
         __u16      ldd_mgsnid_count;
-        lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX]; /* mgmt nid list; lmd can 
-                                                     override */
         __u16      ldd_failnid_count;   /* server failover nid count */
+        lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgmt nid list; lmd can 
+                                                     override */
         lnet_nid_t ldd_failnid[MTI_NIDS_MAX]; /* server failover nids */
-        enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
-        char       ldd_mount_opts[1024]; /* target fs mount opts */
+        char       ldd_mount_opts[2048]; /* target fs mount opts */
         
         /* Below here is required for writing mdt, ost,or client logs,
            and is ignored after that. */
+        __u8  ldd_uuid[40];        /* server UUID */
         int   ldd_stripe_sz;
         int   ldd_stripe_count;
         int   ldd_stripe_pattern;
@@ -97,7 +100,7 @@ struct lustre_disk_data {
         
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
 #define IS_OST(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_OST)
-#define IS_MGMT(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGMT)
+#define IS_MGS(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGS)
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
@@ -107,23 +110,12 @@ static inline int sv_make_name(__u32 flags, __u16 index, char *fs, char *name)
                 sprintf(name, "%.8s-%s%04x", fs,
                         (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",  
                         index);
-        } else if (flags & LDD_F_SV_TYPE_MGMT) {
+        } else if (flags & LDD_F_SV_TYPE_MGS) {
                 sprintf(name, "MGMT");
         } else {
                 CERROR("unknown server type %#x\n", flags);
                 return 1;
         }
-        return 0;
-}
-
-static inline int sv_name2index(char *svname, int *idx)
-{
-        char *dash = strchr(svname, '-');
-        if (!dash) {
-                CERROR("Can't understand server name %s\n", svname);
-                return(-EINVAL);
-        }
-        *idx = simple_strtol(dash + 4, NULL, 16);
         return 0;
 }
 
@@ -224,7 +216,7 @@ struct lr_server_data {
         __u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
         __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
         __u32 lsd_ost_index;       /* index number of OST in LOV */
-        __u32 lsd_mds_index;       /* index number of MDS in LMV */
+        __u32 lsd_mdt_index;       /* index number of MDT in LMV */
         __u8  lsd_padding[LR_SERVER_SIZE - 148];
 };
 

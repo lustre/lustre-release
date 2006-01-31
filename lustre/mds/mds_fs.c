@@ -477,11 +477,11 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         }
         mds->mds_pending_dir = dentry;
 
-        dentry = simple_mkdir(current->fs->pwd, MOUNT_CONFIGS_DIR, 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, MDT_LOGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n",
-                       MOUNT_CONFIGS_DIR, rc);
+                       MDT_LOGS_DIR, rc);
                 GOTO(err_pending, rc);
         }
         mds->mds_logs_dir = dentry;

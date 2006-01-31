@@ -68,7 +68,7 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(exp);
 
         if (data != NULL) {
-                data->ocd_connect_flags &= MGMT_CONNECT_SUPPORTED;
+                data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
                 data->ocd_ibits_known &= MDS_INODELOCK_FULL;
 
                 /* If no known bits (which should not happen, probably,
@@ -307,7 +307,7 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
 {    
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lustre_handle lockh;
-        struct mgmt_target_info *mti, *rep_mti;
+        struct mgs_target_info *mti, *rep_mti;
         int rep_size = sizeof(*mti);
         int rc, lockrc;
         ENTRY;
@@ -315,41 +315,52 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
                                  lustre_swab_mgs_target_info);
         
-        CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 
-               mti->mti_stripe_index);
-
-        /* set the new target index if needed */
-        rc = mgs_set_index(obd, mti);
-        if (rc) {
-                CERROR("Can't get index (%d)\n", rc);
-                GOTO(out, rc);
-        }
-
         /* revoke the config lock so everyone will update */
         lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
         if (lockrc != ELDLM_OK) {
-                LCONSOLE_ERROR("Can't signal other nodes to update their "
-                               "configuration (%d). Updating local logs "
+                LCONSOLE_ERROR("Can't signal other nodes to update "
+                               "their configuration (%d). Updating local logs "
                                "anyhow; you might have to manually restart "
-                               "other servers to get the latest configuration."
-                               "\n", lockrc);
+                               "other nodes to get the latest configuration.\n",
+                               lockrc);
         }
 
-        /* create the log for the new target 
-           and update the client/mdt logs */
-        rc = mgs_write_log_target(obd, mti);
-        
+        if (mti->mti_flags & LDD_F_UPGRADE14) {
+                CDEBUG(D_MGS, "upgrading fs %s from pre-1.6\n", 
+                       mti->mti_fsname); 
+                /* nobody else should be running 1.6 yet, since we're going
+                   to rewrite logs.  
+                   FIXME We should set a "must restart" flag in the lock */
+                rc = mgs_upgrade_sv_14(obd, mti);
+                if (rc) {
+                        CERROR("Can't upgrade from 1.4 (%d)\n", rc);
+                        GOTO(out, rc);
+                }
+
+                mti->mti_flags &= ~LDD_F_UPGRADE14;
+        }
+
+        if (mti->mti_flags & LDD_F_NEED_REGISTER) {
+                CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 
+                       mti->mti_stripe_index);
+                
+                /* create the log for the new target 
+                   and update the client/mdt logs */
+                rc = mgs_write_log_target(obd, mti);
+                if (rc) {
+                        CERROR("Failed to write %s log (%d)\n", 
+                               mti->mti_svname, rc);
+                        GOTO(out, rc);
+                }
+
+                mti->mti_flags &= ~LDD_F_NEED_REGISTER;
+        }
+
+out:
         /* done with log update */
         if (lockrc == ELDLM_OK)
                 mgs_put_cfg_lock(&lockh);
 
-        if (rc) {
-                CERROR("Failed to write %s log (%d)\n", 
-                       mti->mti_svname, rc);
-                GOTO(out, rc);
-        }
-
-out:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname, 
                mti->mti_stripe_index, rc);
         lustre_pack_reply(req, 1, &rep_size, NULL); 
@@ -361,14 +372,14 @@ out:
 
 int mgs_handle(struct ptlrpc_request *req)
 {
-        int fail = OBD_FAIL_MGMT_ALL_REPLY_NET;
+        int fail = OBD_FAIL_MGS_ALL_REPLY_NET;
         int rc = 0;
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MGMT_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
+        OBD_FAIL_RETURN(OBD_FAIL_MGS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
         LASSERT(current->journal_info == NULL);
-        if (req->rq_reqmsg->opc != MGMT_CONNECT) {
+        if (req->rq_reqmsg->opc != MGS_CONNECT) {
                 if (req->rq_export == NULL) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
                                req->rq_reqmsg->opc);
@@ -378,23 +389,23 @@ int mgs_handle(struct ptlrpc_request *req)
         }
 
         switch (req->rq_reqmsg->opc) {
-        case MGMT_CONNECT:
+        case MGS_CONNECT:
                 DEBUG_REQ(D_MGS, req, "connect");
-                OBD_FAIL_RETURN(OBD_FAIL_MGMT_CONNECT_NET, 0);
+                OBD_FAIL_RETURN(OBD_FAIL_MGS_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mgs_handle);
                 break;
-        case MGMT_DISCONNECT:
+        case MGS_DISCONNECT:
                 DEBUG_REQ(D_MGS, req, "disconnect");
-                OBD_FAIL_RETURN(OBD_FAIL_MGMT_DISCONNECT_NET, 0);
+                OBD_FAIL_RETURN(OBD_FAIL_MGS_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
 
-        case MGMT_TARGET_ADD:
+        case MGS_TARGET_ADD:
                 DEBUG_REQ(D_MGS, req, "target add\n");
                 rc = mgs_handle_target_add(req);
                 break;
-        case MGMT_TARGET_DEL:
+        case MGS_TARGET_DEL:
                 DEBUG_REQ(D_MGS, req, "target del\n");
                 //rc = mgs_handle_target_del(req);
                 break;

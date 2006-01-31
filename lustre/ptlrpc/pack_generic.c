@@ -628,7 +628,7 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->padding_4);
 }
 
-void lustre_swab_mgs_target_info(struct mgmt_target_info *mti)
+void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
 {
         int i;
         LASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
@@ -1117,16 +1117,16 @@ void lustre_assert_wire_constants(void)
                  (long long)LCK_GROUP);
         LASSERTF(LCK_MAXMODE == 65, " found %lld\n",
                  (long long)LCK_MAXMODE);
-        LASSERTF(MGMT_CONNECT == 250, " found %lld\n",
-                 (long long)MGMT_CONNECT);
-        LASSERTF(MGMT_DISCONNECT == 251, " found %lld\n",
-                 (long long)MGMT_DISCONNECT);
-        LASSERTF(MGMT_EXCEPTION == 252, " found %lld\n",
-                 (long long)MGMT_EXCEPTION);
-        LASSERTF(MGMT_TARGET_ADD == 253, " found %lld\n",
-                 (long long)MGMT_TARGET_ADD);
-        LASSERTF(MGMT_TARGET_DEL == 254, " found %lld\n",
-                 (long long)MGMT_TARGET_DEL);
+        LASSERTF(MGS_CONNECT == 250, " found %lld\n",
+                 (long long)MGS_CONNECT);
+        LASSERTF(MGS_DISCONNECT == 251, " found %lld\n",
+                 (long long)MGS_DISCONNECT);
+        LASSERTF(MGS_EXCEPTION == 252, " found %lld\n",
+                 (long long)MGS_EXCEPTION);
+        LASSERTF(MGS_TARGET_ADD == 253, " found %lld\n",
+                 (long long)MGS_TARGET_ADD);
+        LASSERTF(MGS_TARGET_DEL == 254, " found %lld\n",
+                 (long long)MGS_TARGET_DEL);
         LASSERTF(OBD_PING == 400, " found %lld\n",
                  (long long)OBD_PING);
         LASSERTF(OBD_LOG_CANCEL == 401, " found %lld\n",

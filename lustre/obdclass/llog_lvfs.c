@@ -497,18 +497,20 @@ static int llog_lvfs_prev_block(struct llog_handle *loghandle,
         RETURN(-EIO);
 }
 
-static struct file *llog_filp_open(char *name, int flags, int mode)
+static struct file *llog_filp_open(char *dir, char *name, int flags, int mode)
 {
         char *logname;
         struct file *filp;
         int len;
 
+        //FIXME remove
+        CDEBUG(D_ERROR, "path %s/%s\n", dir, name);
+
         OBD_ALLOC(logname, PATH_MAX);
         if (logname == NULL)
                 return ERR_PTR(-ENOMEM);
 
-        len = snprintf(logname, PATH_MAX, "%s/%s", 
-                       MOUNT_CONFIGS_DIR, name);
+        len = snprintf(logname, PATH_MAX, "%s/%s", dir, name);
         if (len >= PATH_MAX - 1) {
                 filp = ERR_PTR(-ENAMETOOLONG);
         } else {
@@ -575,7 +577,16 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                handle->lgh_file = llog_filp_open(name, open_flags, 0644);
+                /* COMPAT_146 */
+                if (obd->obd_type->typ_name == LUSTRE_MDS_NAME) {
+                        handle->lgh_file = llog_filp_open(MDT_LOGS_DIR, name, 
+                                                          open_flags, 0644);
+                } else {
+                        /* end COMPAT_146 */
+                        handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR,
+                                                          name, open_flags, 
+                                                          0644);
+                }
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
 
@@ -642,12 +653,22 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 {
         struct dentry *fdentry;
         struct obdo *oa;
+        struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
+        char *dir;
         int rc;
         ENTRY;
 
+        /* COMPAT_146 */
+        if (obd->obd_type->typ_name == LUSTRE_MDS_NAME)
+                dir = MDT_LOGS_DIR;
+        else
+                /* end COMPAT_146 */
+                dir = MOUNT_CONFIGS_DIR;
+        // FIXME remove
+        CDEBUG(D_ERROR, "using config dir %s\n", dir);
+
         fdentry = handle->lgh_file->f_dentry;
-        if (strcmp(fdentry->d_parent->d_name.name, MOUNT_CONFIGS_DIR) == 0) {
-                struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
+        if (strcmp(fdentry->d_parent->d_name.name, dir) == 0) {
                 struct inode *inode = fdentry->d_parent->d_inode;
                 struct lvfs_run_ctxt saved;
 
