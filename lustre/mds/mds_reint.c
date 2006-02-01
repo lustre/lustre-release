@@ -115,8 +115,10 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         /* if the export has already been failed, we have no last_rcvd slot */
         if (req->rq_export->exp_failed) {
-                CWARN("committing transaction for disconnected client %s\n",
-                      req->rq_export->exp_client_uuid.uuid);
+                CWARN("commit transaction for disconnected client %s: rc %d\n",
+                      req->rq_export->exp_client_uuid.uuid, rc);
+                if (rc == 0)
+                        rc = -ENOTCONN;
                 if (handle)
                         GOTO(commit, rc);
                 RETURN(rc);
@@ -334,8 +336,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                 ptlrpc_schedule_difficult_reply (oldrep);
 
                 spin_unlock (&svc->srv_lock);
-                spin_unlock_irqrestore (&exp->exp_lock, flags);
-                return;
+                break;
         }
         spin_unlock_irqrestore (&exp->exp_lock, flags);
 }

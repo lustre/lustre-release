@@ -54,7 +54,6 @@ struct obd_import {
         struct lustre_handle      imp_dlm_handle; /* client's ldlm export */
         struct ptlrpc_connection *imp_connection;
         struct ptlrpc_client     *imp_client;
-        struct list_head          imp_observers;
         struct list_head          imp_pinger_chain;
 
         /* Lists of requests that are retained for replay, waiting for a reply,
@@ -89,7 +88,7 @@ struct obd_import {
         unsigned int              imp_invalid:1, imp_replayable:1,
                                   imp_dlm_fake:1, imp_server_timeout:1,
                                   imp_initial_recov:1, imp_initial_recov_bk:1,
-                                  imp_force_verify:1, imp_pingable:1, 
+                                  imp_force_verify:1, imp_pingable:1,
                                   imp_resend_replay:1, imp_deactive:1;
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;

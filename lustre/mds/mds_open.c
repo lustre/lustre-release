@@ -777,28 +777,23 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
 
         if (dchild->d_inode != NULL) {
                 mds_inode_set_orphan(dchild->d_inode);
-                mds_pack_inode2fid(&body->fid1, dchild->d_inode);
-                mds_pack_inode2body(body, dchild->d_inode);
-                intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-                intent_set_disposition(rep, DISP_LOOKUP_POS);
                 CWARN("Orphan %s found and opened in PENDING directory\n",
                        fidname);
-                goto open;
-        }
-        l_dput(dchild);
+        } else {
+                l_dput(dchild);
 
-        /* We didn't find it in PENDING so it isn't an orphan.  See
-         * if it was a regular inode that was previously created. */
-        dchild = mds_fid2dentry(mds, fid, NULL);
-        if (IS_ERR(dchild))
-                RETURN(PTR_ERR(dchild));
+                /* We didn't find it in PENDING so it isn't an orphan.  See
+                 * if it was a regular inode that was previously created. */
+                dchild = mds_fid2dentry(mds, fid, NULL);
+                if (IS_ERR(dchild))
+                        RETURN(PTR_ERR(dchild));
+        }
 
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
- open:
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
         rc = mds_finish_transno(mds, dchild->d_inode, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);

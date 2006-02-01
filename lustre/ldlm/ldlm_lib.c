@@ -535,9 +535,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         obd_str2uuid (&tgtuuid, str);
         target = class_uuid2obd(&tgtuuid);
-        if (!target) {
+        if (!target)
                 target = class_name2obd(str);
-        }
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "
@@ -624,8 +623,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (!export) {
                 spin_unlock(&target->obd_dev_lock);
         } else if (req->rq_reqmsg->conn_cnt == 1) {
-                CERROR("%s reconnected with 1 conn_cnt; cookies not random?\n",
-                       cluuid.uuid);
+                CERROR("%s: NID %s (%s) reconnected with 1 conn_cnt; "
+                       "cookies not random?\n", target->obd_name,
+                       libcfs_nid2str(req->rq_peer.nid), cluuid.uuid);
                 GOTO(out, rc = -EALREADY);
         }
 
@@ -648,9 +648,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (export == NULL) {
                 if (target->obd_recovering) {
-                        CERROR("%s: denying connection for new client %s: "
+                        CERROR("%s: denying connection for new client %s (%s): "
                                "%d clients in recovery for %lds\n",
-                               target->obd_name, cluuid.uuid,
+                               target->obd_name,
+                               libcfs_nid2str(req->rq_peer.nid), cluuid.uuid,
                                target->obd_recoverable_clients,
                                (target->obd_recovery_timer.expires-jiffies)/HZ);
                         rc = -EBUSY;
@@ -698,9 +699,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         spin_lock_irqsave(&export->exp_lock, flags);
         if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
-                CERROR("%s: already connected at a higher conn_cnt: %d > %d\n",
-                       cluuid.uuid, export->exp_conn_cnt,
-                       req->rq_reqmsg->conn_cnt);
+                CERROR("%s: %s already connected at higher conn_cnt: %d > %d\n",
+                       cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
+                       export->exp_conn_cnt, req->rq_reqmsg->conn_cnt);
                 spin_unlock_irqrestore(&export->exp_lock, flags);
                 GOTO(out, rc = -EALREADY);
         }
@@ -748,7 +749,6 @@ out:
 
 int target_handle_disconnect(struct ptlrpc_request *req)
 {
-        struct obd_export *exp;
         int rc;
         ENTRY;
 
@@ -757,8 +757,7 @@ int target_handle_disconnect(struct ptlrpc_request *req)
                 RETURN(rc);
 
         /* keep the rq_export around so we can send the reply */
-        exp = class_export_get(req->rq_export);
-        req->rq_status = obd_disconnect(exp);
+        req->rq_status = obd_disconnect(class_export_get(req->rq_export));
         RETURN(0);
 }
 

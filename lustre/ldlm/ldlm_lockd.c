@@ -393,6 +393,12 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                                    libcfs_nid2str(peer.nid));
                         ldlm_lock_cancel(lock);
                         rc = -ERESTART;
+                } else if (lock->l_flags & LDLM_FL_CANCEL) {
+                        LDLM_DEBUG(lock, "%s AST timeout from nid %s, but "
+                                   "cancel was received (AST reply lost?)",
+                                   ast_type, libcfs_nid2str(peer.nid));
+                        ldlm_lock_cancel(lock);
+                        rc = -ERESTART;
                 } else {
                         l_lock(&lock->l_resource->lr_namespace->ns_lock);
                         ldlm_del_waiting_lock(lock);

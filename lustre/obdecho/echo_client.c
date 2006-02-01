@@ -515,11 +515,11 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         gfp_mask = ((oa->o_id & 2) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
 
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
+        LASSERT(lsm != NULL);
+        LASSERT(lsm->lsm_object_id == oa->o_id);
 
         if (count <= 0 ||
-            (count & (PAGE_SIZE - 1)) != 0 ||
-            (lsm != NULL &&
-             lsm->lsm_object_id != oa->o_id))
+            (count & (PAGE_SIZE - 1)) != 0)
                 return (-EINVAL);
 
         /* XXX think again with misaligned I/O */
