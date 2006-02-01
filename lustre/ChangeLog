@@ -374,7 +374,7 @@ Details    : a module parameter allows the number of OST service threads
 
 Severity   : major
 Frequency  : rare
-Bugzilla   : 9635
+Bugzilla   : 6146, 9635, 9895
 Description: servers crash with bad pointer in target_handle_connect()
 Details    : In rare cases when a client is reconnecting it was possible that
 	     the connection request was the last reference for that export.
@@ -487,16 +487,6 @@ Details    : If a client is repeatedly creating and unlinking files it
 	     client node to run out of memory.  Instead flush old inodes
 	     from client cache that have the same inode number as a new inode.
 
-Severity   : minor
-Frequency  : echo_client brw_test command
-Bugzilla   : 9919
-Description: fix echo_client to work with OST preallocated code
-Details    : OST preallocation code (5137) didn't take echo_client IO path
-	     into account: echo_client calls filter methods outside of any
-	     OST thread and, hence, there is no per-thread preallocated
-	     pages and buffers to use. Solution: hijack pga pages for IO. As
-	     a byproduct, this avoids unnecessary data copying.
-
 Severity   : major
 Frequency  : rare, unless heavy write-truncate concurrency is continuous
 Bugzilla   : 4180, 6984, 7171, 9963, 9331
@@ -532,121 +522,6 @@ Details    : The client ptlrpc code may be trying to reconnect to a down
 	     servers.
 
 Severity   : minor
-Frequency  : liblustre only
-Bugzilla   : 9794
-Description: Random seed of liblustre clients was not sufficiently random
-Details    : Improve initial seed of liblustre random number generator.
-
-Severity   : minor
-Frequency  : occasional (Cray XT3 only)
-Bugzilla   : 7305
-Description: root not authorized to access files in CRAY_PORTALS environment
-Details    : The client process capabilities were not honoured on the MDS in
-	     a CRAY_PORTALS/CRAY_XT3 environment.  If the file had previously
-	     been accessed by an authorized user then root was able to access
-	     the file on the local client also.  The root user capabilities
-	     are now allowed on the MDS, as this environment has secure UID.
-
-Severity   : minor
-Frequency  : occasional
-Bugzilla   : 6449
-Description: ldiskfs "too long searching" message happens too often
-Details    : A debugging message (otherwise harmless) prints too often on
-	     the OST console.  This has been reduced to only happen when
-	     there are fragmentation problems on the filesystem.
-
-Severity   : minor
-Frequency  : rare
-Bugzilla   : 9598
-Description: Division by zero in statfs when all OSCs are inactive
-Details    : lov_get_stripecnt() returns zero due to incorrect order of checks,
-	     lov_statfs divides by value returned by lov_get_stripecnt().
-
-Severity   : minor
-Frequency  : common
-Bugzilla   : 9489, 3273
-Description: First write from each client to each OST was only 4kB in size,
-	     to initialize client writeback cache, which caused sub-optimal
-	     RPCs and poor layout on disk for the first writen file.
-Details    : Clients now request an initial cache grant at (re)connect time
-	     and so that they can start streaming writes to the cache right
-	     away and always do full-sized RPCs if there is enough data.
-	     If the OST is rebooted the client also re-establishes its grant
-	     so that client cached writes will be honoured under the grant.
-
-Severity   : minor
-Frequency  : common
-Bugzilla   : 7198
-Description: Slow ls (and stat(2) syscall) on files residing on IO-loaded OSTs
-Details    : Now I/O RPCs go to different portal number and (presumably) fast
-	     lock requests (and glimses) and other RPCs get their own service
-	     threads pool that should be able to service those RPCs
-	     immediatelly.
-
-Severity   : enhancement
-Bugzilla   : 7417
-Description: Ability to exchange lustre version between client and servers and
-	     issue warnings at client side if client is too old. Also for
-	     liblustre clients there is ability to refuse connection of too old
-	     clients.
-Details    : New 'version' field is added to connect data structure that is
-	     filled with version info. That info is later checked by server and
-	     by client.
-
-Severity   : minor
-Frequency  : rare, liblustre only.
-Bugzilla   : 9296, 9581
-Description: Two simultaneous writes from liblustre at offset within same page
-	     might proceed at the same time overwriting eachother with stale
-	     data.
-Details    : I/O lock withing llu_file_prwv was released too early, before data
-	     actually was hitting the wire. Extended lock-holding time until
-	     server acknowledges receiving data.
-
-Severity   : minor
-Frequency  : extremely rare. Never observed in practice.
-Bugzilla   : 9652
-Description: avoid generating lustre_handle cookie of 0.
-Details    : class_handle_hash() generates handle cookies by incrementing
-	     global counter, and can hit 0 occasionaly (this is unlikely, but
-	     not impossible, because initial value of cookie counter is
-	     selected randonly). Value of 0 is used as a sentinel meaning
-	     "unassigned handle" --- avoid it. Also coalesce two critical
-	     sections in this function into one.
-
-Severity   : enhancement
-Bugzilla   : 9528
-Description: allow liblustre clients to delegate truncate locking to OST
-Details    : To avoid overhead of locking, liblustre client instructs OST to
-	     take extent lock in ost_punch() on client's behalf. New connection
-	     flag is added to handle backward compatibility.
-
-Severity   : enhancement
-Bugzilla   : 4928, 7341, 9758
-Description: allow number of OST service threads to be specified
-Details    : a module parameter allows the number of OST service threads
-	     to be specified via "options ost ost_num_threads=X" in
-	     /etc/modules.conf or /etc/modutils.conf.
-
-Severity   : major
-Frequency  : rare
-Bugzilla   : 9635
-Description: servers crash with bad pointer in target_handle_connect()
-Details    : In rare cases when a client is reconnecting it was possible that
-	     the connection request was the last reference for that export.
-	     We would temporarily drop the export reference and get a new
-	     one, but this may have been the last reference and the export
-	     was just destroyed.  Get new reference before dropping old one.
-
-Severity   : enhancement
-Frequency  : if client is started with failover MDS
-Bugzilla   : 9818
-Description: Allow multiple MDS hostnames in the mount command
-Details    : Try to read the configuration from all specified MDS
-	     hostnames during a client mount in case the "primary"
-	     MDS is down.
-
-Severity   : minor
 Frequency  : echo_client brw_test command
 Bugzilla   : 9919
 Description: fix echo_client to work with OST preallocated code
@@ -655,20 +530,6 @@ Details    : OST preallocation code (5137) didn't take echo_client IO path
 	     OST thread and, hence, there is no per-thread preallocated
 	     pages and buffers to use. Solution: hijack pga pages for IO. As
 	     a byproduct, this avoids unnecessary data copying.
-
-Severity   : major
-Frequency  : rare, unless heavy write-truncate concurrency is continuous
-Bugzilla   : 4180, 6984, 7171, 9963
-Description: OST becomes very slow and/or deadlocked during object unlink
-Details    : filter_destroy() was holding onto the parent directory lock
-	     while truncating+unlinking objects.  For very large objects this
-	     may block other threads for a long time and slow overall OST
-	     responsiveness.  It may also be possible to get a lock ordering
-	     deadlock in this case, or run out of journal credits because of
-	     the combined truncate+unlink.  Solution is to do object truncate
-	     first in one transaction without parent lock, and then do the
-	     final unlink in a new transaction with the parent lock.  This
-	     reduces the lock hold time dramatically.
 
 Severity   : minor
 Frequency  : rare
