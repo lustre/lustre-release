@@ -882,8 +882,8 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
                 }
         }       
       
-        memcpy(mti->mti_failnids, ldd->ldd_failnid, sizeof(mti->mti_failnids));
         mti->mti_failnid_count = ldd->ldd_failnid_count;
+        memcpy(mti->mti_failnids, ldd->ldd_failnid, sizeof(mti->mti_failnids));
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;

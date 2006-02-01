@@ -619,7 +619,7 @@ int write_local_files(struct mkfs_opts *mop)
             == (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) {
                 char *term;
                 vprint("Copying old logs\n");
-                /* Copy the old logs to fsname-client, fsname-mdt */
+                /* Copy the old client log to fsname-client */
                 sprintf(filepnm, "%s/%s/%s-client", 
                         mntpt, MOUNT_CONFIGS_DIR, mop->mo_ldd.ldd_fsname);
                 sprintf(cmd, "cp %s/%s/client %s", mntpt, MDT_LOGS_DIR,
@@ -639,8 +639,8 @@ int write_local_files(struct mkfs_opts *mop)
                                 mop->mo_ldd.ldd_fsname);
                         goto out_umnt;
                 }
-                /* Copy the mdt log as well - name from mdt_UUID 
-                   to fsname-MDT0000 */
+                /* Copy the old mdt log to fsname-MDT0000 (get old
+                   name from mdt_UUID) */
                 ret = 1;
                 strcpy(filepnm, mop->mo_ldd.ldd_uuid);
                 term = strstr(filepnm, "_UUID");

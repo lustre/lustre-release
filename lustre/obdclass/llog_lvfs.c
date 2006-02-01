@@ -503,9 +503,6 @@ static struct file *llog_filp_open(char *dir, char *name, int flags, int mode)
         struct file *filp;
         int len;
 
-        //FIXME remove
-        CDEBUG(D_ERROR, "path %s/%s\n", dir, name);
-
         OBD_ALLOC(logname, PATH_MAX);
         if (logname == NULL)
                 return ERR_PTR(-ENOMEM);
@@ -664,8 +661,6 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         else
                 /* end COMPAT_146 */
                 dir = MOUNT_CONFIGS_DIR;
-        // FIXME remove
-        CDEBUG(D_ERROR, "using config dir %s\n", dir);
 
         fdentry = handle->lgh_file->f_dentry;
         if (strcmp(fdentry->d_parent->d_name.name, dir) == 0) {

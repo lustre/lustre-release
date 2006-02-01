@@ -498,7 +498,7 @@ static struct obd_ops mgs_obd_ops = {
         .o_precleanup      = mgs_precleanup,
         .o_cleanup         = mgs_cleanup,
         .o_destroy_export  = mgs_destroy_export,
-        .o_iocontrol       = mgs_iocontrol,
+        //.o_iocontrol       = mgs_iocontrol,
 };
 
 static int __init mgs_init(void)
