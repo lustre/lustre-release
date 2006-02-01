@@ -265,6 +265,9 @@ int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
+        /* Poison NAL -- pre 1.4.6 will LASSERT on 0 NAL, this way it 
+           doesn't work without crashing (bz 10130) */
+        lcfg->lcfg_nal = 0x5a;
 
 #if 0
         fprintf(stderr, "adding\tnid: %d\tuuid: %s\n",
@@ -601,7 +604,7 @@ int jt_lcfg_add_conn(int argc, char **argv)
                 fprintf(stderr, "%s: please use 'cfg_device name' to set the "
                         "device name for config commands.\n", 
                         jt_cmdname(argv[0])); 
-		return -EINVAL;
+                return -EINVAL;
         }
 
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);
@@ -634,7 +637,7 @@ int jt_lcfg_del_conn(int argc, char **argv)
                 fprintf(stderr, "%s: please use 'cfg_device name' to set the "
                         "device name for config commands.\n", 
                         jt_cmdname(argv[0])); 
-		return -EINVAL;
+                return -EINVAL;
         }
 
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);
