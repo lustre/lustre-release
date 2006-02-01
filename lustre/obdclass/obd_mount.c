@@ -1343,7 +1343,7 @@ static int server_fill_super(struct super_block *sb)
                lsi->lsi_ldd->ldd_svname, lsi->lsi_ldd->ldd_fsname, 
                lsi->lsi_lmd->lmd_dev);
 
-        /* append ldd nids to lmd nids */
+        /* append on-disk MGS nids to mount-line MGS nids */
         for (i = 0; (i < lsi->lsi_ldd->ldd_mgsnid_count) && 
               (lsi->lsi_lmd->lmd_mgsnid_count < MTI_NIDS_MAX); i++) {
                 lsi->lsi_lmd->lmd_mgsnid[lsi->lsi_lmd->lmd_mgsnid_count++] = 
@@ -1357,6 +1357,17 @@ static int server_fill_super(struct super_block *sb)
                         CERROR("ignoring Failed MGS start!!\n");
                         //GOTO(out_mnt, rc);
                 } else {
+                        /* add local nids (including LO) to MGS nids */
+                        lnet_process_id_t id;
+                        int j = lsi->lsi_lmd->lmd_mgsnid_count;
+                        i = 0;
+                        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+                                if (j >= MTI_NIDS_MAX) 
+                                        break;
+                                lsi->lsi_lmd->lmd_mgsnid[j++] = id.nid;
+                        }     
+                        lsi->lsi_lmd->lmd_mgsnid_count = j;
+
                         mgs_service++;
                 }
         }
@@ -1364,9 +1375,6 @@ static int server_fill_super(struct super_block *sb)
         rc = lustre_start_mgc(sb);
         if (rc) 
                 GOTO(out_mnt, rc);
-
-        /*Only start MGS/MGC on servers, no other services, even not
-         *actually mount the filesystem. */
 
         /* Set up all obd devices for service */
         if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) && 

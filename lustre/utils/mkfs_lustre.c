@@ -189,6 +189,7 @@ static void run_command_out()
         }
 }
 
+#if 0
 static int lnet_setup = 0;
 static int lnet_start()
 {
@@ -212,7 +213,7 @@ static void lnet_stop()
         if (--lnet_setup == 0)
                 jt_ptl_network(2, cmd);
 }
-
+#endif
 
 /*============ disk dev functions ===================*/
 
@@ -872,11 +873,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 case 'f': {
                         int i = 0;
                         char *s1 = optarg, *s2;
-                        if (IS_MGS(&mop->mo_ldd)) {
-                                badopt(long_opt[longidx].name, 
-                                       "non-MGMT MDT,OST");
-                                return 1;
-                        }
                         while ((s2 = strsep(&s1, ","))) {
                                 mop->mo_ldd.ldd_failnid[i++] =
                                         libcfs_str2nid(s2);
@@ -1085,6 +1081,7 @@ int main(int argc, char *const argv[])
                 mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGS;
         }
 
+#if 0
         if (IS_MGS(&mop.mo_ldd) && (mop.mo_ldd.ldd_mgsnid_count == 0)) {
                 int i;
                 __u64 *nids;
@@ -1110,7 +1107,21 @@ int main(int argc, char *const argv[])
                 }
         }
 
-        if (mop.mo_ldd.ldd_mgsnid_count == 0) {
+        if (IS_MGS(&mop.mo_ldd) && mop.mo_ldd.ldd_failnid_count) {
+                /* Add failover nids to mgsnids if we start an MGS
+                   (MDT must have all possible MGS nids for failover.) */
+                int i = 0, j = mop.mo_ldd.ldd_mgsnid_count;
+                while (i < mop.mo_ldd.ldd_failnid_count) {
+                        if (j >= MTI_NIDS_MAX) 
+                                break;
+                        mop.mo_ldd.ldd_mgsnid[j++] =
+                                mop.mo_ldd.ldd_failnid[i++];
+                }
+                mop.mo_ldd.ldd_mgsnid_count = j;
+        }
+#endif
+        
+        if (!IS_MGS(&mop.mo_ldd) && (mop.mo_ldd.ldd_mgsnid_count == 0)) {
                 fatal();
                 fprintf(stderr, "Must specify either --mgs or --mgsnid\n");
                 usage(stderr);
@@ -1229,7 +1240,5 @@ int main(int argc, char *const argv[])
 
 out:
         loop_cleanup(&mop);      
-        lnet_stop();
-
         return ret;
 }
