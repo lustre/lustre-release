@@ -1,6 +1,7 @@
-SERIESPATH=./series
-PATCHESPATH=./patches
-NOUSEPATH=./nousepatches
+BASEDIR=${BASEDIR:-lustre/kernel_patches}
+SERIESPATH=${SERIESPATH:-$BASEDIR/series}
+PATCHESPATH=${PATCHESPATH:-$BASEDIR/patches}
+NOUSEPATH=${NOUSEPATH:-$BASEDIR/unused}
 
 #mkdir -p $NOUSEPATH
 for PATCH in `ls $PATCHESPATH | grep -v CVS` ; do
