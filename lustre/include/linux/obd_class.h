@@ -1069,9 +1069,14 @@ static inline int obd_notify(struct obd_device *obd,
                              void *data)
 {
         OBD_CHECK_DEV(obd);
-        if (!obd->obd_set_up) {
-                CERROR("obd %s not set up\n", obd->obd_name);
-                return -EINVAL;
+
+        /* the check for async_recov is a complete hack - I'm hereby
+           overloading the meaning to also mean "this was called from
+           mds_postsetup".  I know that my mds is able to handle notifies
+           by this point, and it needs to get them to execute mds_postrecov. */ 
+        if (!obd->obd_set_up && !obd->obd_async_recov) {
+                CERROR("obd %s not set up, notifying anyhow\n", obd->obd_name);
+                return -EAGAIN;
         }
 
         if (!OBP(obd, notify)) {

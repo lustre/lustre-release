@@ -2115,10 +2115,11 @@ int mds_postrecov(struct obd_device *obd)
 
         /* FIXME Does target_finish_recovery really need this to block? */
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
+        /* This means that we have to fool obd_notify to think we're obd_set_up
+           during mds_lov_connect. */
         obd_notify(obd->u.mds.mds_osc_obd, NULL, 
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
                    OBD_NOTIFY_SYNC, NULL);
-        //mds_lov_start_synchronize(obd, NULL, NULL, obd->obd_async_recov);
 
         /* quota recovery */
         lquota_recovery(quota_interface, obd);

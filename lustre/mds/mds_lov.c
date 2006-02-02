@@ -368,7 +368,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
          * set_nextid().  The class driver can help us here, because
          * it can use the obd_recovering flag to determine when the
          * the OBD is full available. */
-        if (!obd->obd_recovering)
+        if (!obd->obd_recovering) 
                 rc = mds_postrecov(obd);
         RETURN(rc);
 
@@ -749,6 +749,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         ENTRY;
 
         switch (ev) {
+        /* We only handle these: */
         case OBD_NOTIFY_ACTIVE:
         case OBD_NOTIFY_SYNC:
         case OBD_NOTIFY_SYNC_NONBLOCK:
@@ -759,7 +760,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
 
         CDEBUG(D_WARNING, "notify %s ev=%d\n", watched->obd_name, ev);
 
-        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) != 0) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name, watched->obd_name);
                 RETURN(-EINVAL);

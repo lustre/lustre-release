@@ -69,7 +69,7 @@ static inline char *mt_str(enum ldd_mount_type mt)
 }
 
 #ifndef MTI_NIDS_MAX  /* match lustre_idl.h */
-#define MTI_NIDS_MAX 10
+#define MTI_NIDS_MAX 64
 #endif
 
 #define LDD_INCOMPAT_SUPP 0
@@ -91,7 +91,7 @@ struct lustre_disk_data {
                                            svname */
         __u16      ldd_mgsnid_count;
         __u16      ldd_failnid_count;   /* server failover nid count */
-        lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgmt nid list; lmd can 
+        lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgs nid list; lmd can 
                                                  override */
         lnet_nid_t ldd_failnid[MTI_NIDS_MAX]; /* server failover nids */
         char       ldd_mount_opts[2048]; /* target fs mount opts */
@@ -119,7 +119,7 @@ static inline int sv_make_name(__u32 flags, __u16 index, char *fs, char *name)
                         (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",  
                         index);
         } else if (flags & LDD_F_SV_TYPE_MGS) {
-                sprintf(name, "MGMT");
+                sprintf(name, "MGS");
         } else {
                 CERROR("unknown server type %#x\n", flags);
                 return 1;

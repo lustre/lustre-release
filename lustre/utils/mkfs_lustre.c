@@ -189,31 +189,6 @@ static void run_command_out()
         }
 }
 
-#if 0
-static int lnet_setup = 0;
-static int lnet_start()
-{
-        ptl_initialize(0, NULL);
-        if (access("/proc/sys/lnet", X_OK) != 0) {
-                fprintf(stderr, "%s: The LNET module must be loaded to "
-                        "determine local NIDs\n", progname);
-                return 1;
-        }
-        if (jt_ptl_get_nids(NULL) == -ENETDOWN) {
-                char *cmd[]={"network", "up"};
-                jt_ptl_network(2, cmd);
-                lnet_setup++;
-        }
-        return 0;
-}
-
-static void lnet_stop()
-{
-        char *cmd[]={"network", "down"};
-        if (--lnet_setup == 0)
-                jt_ptl_network(2, cmd);
-}
-#endif
 
 /*============ disk dev functions ===================*/
 
@@ -910,7 +885,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         char *s1 = optarg, *s2;
                         if (IS_MGS(&mop->mo_ldd)) {
                                 badopt(long_opt[longidx].name, 
-                                       "non-MGMT MDT,OST");
+                                       "non-MGS MDT,OST");
                                 return 1;
                         }
                         while ((s2 = strsep(&s1, ","))) {
@@ -1081,46 +1056,6 @@ int main(int argc, char *const argv[])
                 mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGS;
         }
 
-#if 0
-        if (IS_MGS(&mop.mo_ldd) && (mop.mo_ldd.ldd_mgsnid_count == 0)) {
-                int i;
-                __u64 *nids;
-                
-                vprint("No mgs nids specified, using all local nids\n");
-                ret = lnet_start();
-                if (ret)
-                        goto out;
-                i = jt_ptl_get_nids(&nids);
-                if (i < 0) {
-                        fprintf(stderr, "%s: Can't find local nids "
-                                "(is the lnet module loaded?)\n", progname);
-                } else {
-                        if (i > 0) {
-                                if (i > MTI_NIDS_MAX) 
-                                        i = MTI_NIDS_MAX;
-                                vprint("Adding %d local nids for MGS\n", i);
-                                memcpy(mop.mo_ldd.ldd_mgsnid, nids,
-                                       sizeof(mop.mo_ldd.ldd_mgsnid));
-                                free(nids);
-                        }
-                        mop.mo_ldd.ldd_mgsnid_count = i;
-                }
-        }
-
-        if (IS_MGS(&mop.mo_ldd) && mop.mo_ldd.ldd_failnid_count) {
-                /* Add failover nids to mgsnids if we start an MGS
-                   (MDT must have all possible MGS nids for failover.) */
-                int i = 0, j = mop.mo_ldd.ldd_mgsnid_count;
-                while (i < mop.mo_ldd.ldd_failnid_count) {
-                        if (j >= MTI_NIDS_MAX) 
-                                break;
-                        mop.mo_ldd.ldd_mgsnid[j++] =
-                                mop.mo_ldd.ldd_failnid[i++];
-                }
-                mop.mo_ldd.ldd_mgsnid_count = j;
-        }
-#endif
-        
         if (!IS_MGS(&mop.mo_ldd) && (mop.mo_ldd.ldd_mgsnid_count == 0)) {
                 fatal();
                 fprintf(stderr, "Must specify either --mgs or --mgsnid\n");

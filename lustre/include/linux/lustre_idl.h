@@ -990,7 +990,9 @@ typedef enum {
 
 #define MTI_NAME_MAXLEN 64
 #define MTI_UUID_MAXLEN MTI_NAME_MAXLEN + 5
-#define MTI_NIDS_MAX 10 /* match lustre_disk.h */
+/* each host can have multiple nids, and multiple failover hosts, and I don't
+   want to run out of room... */
+#define MTI_NIDS_MAX 64 /* match lustre_disk.h */
 
 struct mgs_target_info {
         char             mti_fsname[MTI_NAME_MAXLEN];
