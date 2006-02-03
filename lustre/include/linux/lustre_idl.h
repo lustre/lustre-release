@@ -119,7 +119,6 @@
 #define LUSTRE_OST_VERSION  0x00030000
 #define LUSTRE_DLM_VERSION  0x00040000
 #define LUSTRE_LOG_VERSION  0x00050000
-#define LUSTRE_PBD_VERSION  0x00060000
 
 struct lustre_handle {
         __u64 cookie;
