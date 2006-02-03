@@ -648,6 +648,12 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                 imp->imp_initial_recov_bk = *(int *)val;
                 CDEBUG(D_HA, "%s: set imp_initial_recov_bk = %d\n",
                        exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
+                if (imp->imp_invalid) {
+                        /* Resurrect if we previously died */
+                        CDEBUG(D_MGC, "Reactivate %s\n", 
+                               imp->imp_obd->obd_name);
+                        ptlrpc_activate_import(imp);
+                }
                 RETURN(0);
         }
         /* Hack alert */
