@@ -5,7 +5,7 @@ rhel-2.4.21        linux-2.4.21-20.3EL      RHEL3 2.4.21                all
 2.6-suse           linux-2.6-suse           already in SLES9 SP1 kernel all
 2.6-suse-newer     linux-2.6-suse           SLES9 SP1 kernel add-ons    all
 2.6-rhel4          linux-2.6-rhel4          RHEL4 2.6.9 kernel          all
-2.6.12-vanilla     linux-2.6.12.5           kernel.org 2.6.12.5         all
+2.6.12-vanilla     linux-2.6.12.6           kernel.org 2.6.12.6         all
 
 NB - The patches in the 2.6-suse series should already be in the SLES9 SP1
      kernel.  The patches in the 2.6-suse-newer series are patches that
