@@ -144,8 +144,11 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         rc = llog_read_header(handle);
         if (rc == 0) {
                 flags = llh->llh_flags;
-                if (uuid)
-                        LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
+                if (uuid && !obd_uuid_equals(uuid, &llh->llh_tgtuuid)) {
+                        CERROR("uuid mismatch: %s/%s\n", (char *)uuid->uuid,
+                               (char *)llh->llh_tgtuuid.uuid);
+                        rc = -EEXIST;
+                }
                 GOTO(out, rc);
         } else if (rc != LLOG_EEMPTY || !flags) {
                 /* set a pesudo flag for initialization */
@@ -324,7 +327,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
 }
 EXPORT_SYMBOL(llog_process);
 
-int llog_get_size(struct llog_handle *loghandle)
+inline int llog_get_size(struct llog_handle *loghandle)
 {
         if (loghandle && loghandle->lgh_hdr)
                 return loghandle->lgh_hdr->llh_count;

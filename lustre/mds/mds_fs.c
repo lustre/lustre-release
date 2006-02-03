@@ -477,6 +477,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         }
         mds->mds_pending_dir = dentry;
 
+        /* COMPAT_146 */
         dentry = simple_mkdir(current->fs->pwd, MDT_LOGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -485,6 +486,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_pending, rc);
         }
         mds->mds_logs_dir = dentry;
+        /* end COMPAT_146 */
 
         dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {

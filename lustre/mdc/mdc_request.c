@@ -886,7 +886,7 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
         struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
 
-        if (KEY_IS("initial_recov")) {
+        if (KEY_IS(KEY_INIT_RECOV)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
@@ -895,7 +895,7 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         /* Turn off initial_recov after we try all backup servers once */
-        if (KEY_IS("init_recov_bk")) {
+        if (KEY_IS(KEY_INIT_RECOV_BACKUP)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov_bk = *(int *)val;

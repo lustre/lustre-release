@@ -138,6 +138,7 @@ static int mgs_get_db_from_llog(struct obd_device *obd, char *logname,
         struct llog_handle *loghandle;
         struct lvfs_run_ctxt saved;
         int rc, rc2;
+        ENTRY;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 

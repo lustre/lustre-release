@@ -362,7 +362,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                 /* Don't retry if connect fails */
                 rc = 0;
                 obd_set_info(obd->obd_self_export,
-                             strlen("initial_recov"), "initial_recov",
+                             strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
                              sizeof(rc), &rc);
         }
 

@@ -3069,7 +3069,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("initial_recov")) {
+        if (KEY_IS(KEY_INIT_RECOV)) {
                 struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);

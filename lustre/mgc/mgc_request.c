@@ -228,7 +228,8 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
 
         cli->cl_mgc_vfsmnt = mnt;
         // FIXME which is the right SB? - filter_common_setup also 
-        CERROR("SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb, mnt->mnt_root->d_inode->i_sb);
+        CERROR("SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb,
+               mnt->mnt_root->d_inode->i_sb);
         fsfilt_setup(obd, mnt->mnt_root->d_inode->i_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
@@ -383,15 +384,15 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         switch (flag) {
         case LDLM_CB_BLOCKING:
                 /* mgs wants the lock, give it up... */
-                LDLM_ERROR(lock, "MGC blocking CB");
+                LDLM_DEBUG(lock, "MGC blocking CB");
                 ldlm_lock2handle(lock, &lockh);
                 rc = ldlm_cli_cancel(&lockh);
                 break;
         case LDLM_CB_CANCELING: {
                 /* We've given up the lock, prepare ourselves to update. */
-                LDLM_ERROR(lock, "MGC cancel CB");
+                LDLM_DEBUG(lock, "MGC cancel CB");
                 
-                CERROR("Lock res "LPX64" (%.8s)\n",
+                CDEBUG(D_MGC, "Lock res "LPX64" (%.8s)\n",
                        lock->l_resource->lr_name.name[0], 
                        (char *)&lock->l_resource->lr_name.name[0]);
 
@@ -403,7 +404,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         break;
                 }
                 if (lock->l_req_mode != lock->l_granted_mode) {
-                        CERROR("original grant failed, don't requeue\n");
+                        CERROR("original grant failed, won't requeue\n");
                         break;
                 }
 
@@ -412,7 +413,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 rc = kernel_thread(mgc_async_requeue, data,
                                    CLONE_VM | CLONE_FS);
                 if (rc < 0) 
-                        CERROR("Cannot reenque thread: %d\n", rc);
+                        CERROR("Cannot re-enqueue thread: %d\n", rc);
                 else 
                         rc = 0;
                 break;
@@ -624,7 +625,6 @@ out:
         RETURN(rc);
 }
 
-#define INIT_RECOV_BACKUP "init_recov_bk"
 int mgc_set_info(struct obd_export *exp, obd_count keylen,
                  void *key, obd_count vallen, void *val)
 {
@@ -633,8 +633,7 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
         ENTRY;
 
         /* Try to "recover" the initial connection; i.e. retry */
-        if (keylen == strlen("initial_recov") &&
-            memcmp(key, "initial_recov", keylen) == 0) {
+        if (KEY_IS(KEY_INIT_RECOV)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
@@ -643,8 +642,7 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         /* Turn off initial_recov after we try all backup servers once */
-        if (keylen == strlen(INIT_RECOV_BACKUP) &&
-            memcmp(key, INIT_RECOV_BACKUP, keylen) == 0) {
+        if (KEY_IS(KEY_INIT_RECOV_BACKUP)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov_bk = *(int *)val;
@@ -653,8 +651,7 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         /* Hack alert */
-        if (keylen == strlen("add_target") &&
-            memcmp(key, "add_target", keylen) == 0) {
+        if (KEY_IS("add_target")) {
                 struct mgs_target_info *mti;
                 if (vallen != sizeof(struct mgs_target_info))
                         RETURN(-EINVAL);
@@ -664,8 +661,7 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                 rc =  mgc_target_add(exp, mti);
                 RETURN(rc);
         }
-        if (keylen == strlen("set_fs") &&
-            memcmp(key, "set_fs", keylen) == 0) {
+        if (KEY_IS("set_fs")) {
                 struct super_block *sb = (struct super_block *)val;
                 struct lustre_sb_info *lsi;
                 if (vallen != sizeof(struct super_block))
@@ -677,8 +673,7 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                 }
                 RETURN(rc);
         }
-        if (keylen == strlen("clear_fs") &&
-            memcmp(key, "clear_fs", keylen) == 0) {
+        if (KEY_IS("clear_fs")) {
                 if (vallen != 0)
                         RETURN(-EINVAL);
                 rc = mgc_fs_cleanup(exp->exp_obd);
@@ -752,27 +747,78 @@ static int mgc_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
-/* Get the client export to the MGS */
-static struct obd_export *get_mgs_export(struct obd_device *mgc)
+static int mgc_copy_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
+                            void *data)
 {
-        struct obd_export *exp, *n;
+        struct llog_rec_hdr local_rec = *rec;
+        struct llog_handle *local_llh = (struct llog_handle *)data;
+        char *cfg_buf = (char*) (rec + 1);
+        struct lustre_cfg *lcfg;
+        int rc = 0;
+        ENTRY;
 
-        /* FIXME is this a Bad Idea?  Should I just store this export 
-           somewhere in the u.cli? */
+        lcfg = (struct lustre_cfg *)cfg_buf;
 
-        /* There should be exactly 2 exports in the mgc, the mgs export and 
-           the mgc self-export, in that order. So just return the list head. */
-        LASSERT(!list_empty(&mgc->obd_exports));
-        LASSERT(mgc->obd_num_exports == 2);
-        list_for_each_entry_safe(exp, n, &mgc->obd_exports, exp_obd_chain) {
-                LASSERT(exp != mgc->obd_self_export);
-                break;
+        /* FIXME we should always write to an empty log, so remove this check.*/
+        /* append new records */
+        if (rec->lrh_index >= llog_get_size(local_llh)) { 
+                rc = llog_write_rec(local_llh, &local_rec, NULL, 0, 
+                                    (void *)cfg_buf, -1);
+
+                CDEBUG(D_INFO, "idx=%d, rc=%d, len=%d, cmd %x %s %s\n", 
+                       rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command, 
+                       lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
+        } else {
+                CDEBUG(D_INFO, "skip idx=%d\n",  rec->lrh_index);
         }
-        /*FIXME there's clearly a better way, but I'm too confused to sort it 
-          out now...
-        exp = &list_entry(&mgc->obd_exports->head, export_obd, exp_obd_chain);
-        */
-        return exp;
+
+        RETURN(rc);
+}
+
+static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
+                         struct llog_ctxt *lctxt, char *logname)
+{
+        struct llog_handle *local_llh, *remote_llh;
+        struct obd_uuid *uuid;
+        int rc, rc2;
+        ENTRY;
+
+        CDEBUG(D_MGC, "Copy remote log %s\n", logname);
+
+        /* open local log */
+        rc = llog_create(lctxt, &local_llh, NULL, logname);
+        if (rc)
+                RETURN(rc);
+        /* set the log header uuid for fun */
+        OBD_ALLOC_PTR(uuid);
+        obd_str2uuid(uuid, logname);
+        rc = llog_init_handle(local_llh, LLOG_F_IS_PLAIN, uuid);
+        OBD_FREE_PTR(uuid);
+        if (rc)
+                GOTO(out_closel, rc);
+
+        /* FIXME write new log to a temp name, then vfs_rename over logname
+           upon successful completion. */
+
+        /* open remote log */
+        rc = llog_create(rctxt, &remote_llh, NULL, logname);
+        if (rc)
+                GOTO(out_closel, rc);
+        rc = llog_init_handle(remote_llh, LLOG_F_IS_PLAIN, NULL);
+        if (rc)
+                GOTO(out_closer, rc);
+
+        rc = llog_process(remote_llh, mgc_copy_handler,(void *)local_llh, NULL);
+
+out_closer:
+        rc2 = llog_close(remote_llh);
+        if (!rc)
+                rc = rc2;
+out_closel:
+        rc2 = llog_close(local_llh);
+        if (!rc)
+                rc = rc2;
+        RETURN(rc);
 }
 
 /* Get a config log from the MGS and process it.
@@ -780,40 +826,67 @@ static struct obd_export *get_mgs_export(struct obd_device *mgc)
 static int mgc_process_log(struct obd_device *mgc, 
                            struct config_llog_data *cld)
 {
-        struct llog_ctxt *rctxt;
+        struct llog_ctxt *ctxt, *lctxt;
         struct lustre_handle lockh;
-        int rc, rcl, flags = 0;
+        struct client_obd *cli = &mgc->u.cli;
+        struct lvfs_run_ctxt saved;
+        int rc, rcl, flags = 0, must_pop = 0;
         ENTRY;
 
         CDEBUG(D_MGC, "Process log %s:%s from %d\n", cld->cld_logname, 
                cld->cld_cfg.cfg_instance, cld->cld_cfg.cfg_last_idx + 1);
 
-        rctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
-        if (!rctxt) {
+        ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
+        if (!ctxt) {
                 CERROR("missing llog context\n");
                 RETURN(-EINVAL);
         }
 
         /* Get the cfg lock on the llog */
-        rcl = mgc_enqueue(get_mgs_export(mgc), NULL, LDLM_PLAIN, NULL, 
+        rcl = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, NULL, LDLM_PLAIN, NULL, 
                           LCK_CR, &flags, NULL, NULL, NULL, 
                           cld, 0, NULL, &lockh);
-        if (rcl) {
+        if (rcl) 
                 CERROR("Can't get cfg lock: %d\n", rcl);
-                config_log_put();
-                RETURN(rcl);
-        }
         
-        //FIXME Copy the mgs remote log to the local disk
+        /* Copy the setup log locally if we can. Don't mess around if we're 
+           running an MGS though (logs are already local). */
+        /* FIXME What if MGC has a disk set up but a client/another server gets
+           updated in the meantime?  We'll copy the other log onto the 
+           currently set-up disk. This won't hurt the current disk, but
+           the other server won't get his update written to disk. Next time it
+           starts it will update, so this isn't a huge deal... */
+        if (cli->cl_mgc_vfsmnt && 
+            ((lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT)) != NULL) &&
+            (class_name2obd(LUSTRE_MGS_OBDNAME) == NULL)) {
+                push_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
+                must_pop++;
+                if (!rcl) 
+                        /* Only try to copy log if we have the lock */
+                        rc = mgc_copy_llog(mgc, ctxt, lctxt, cld->cld_logname);
+                if (rcl || rc) 
+                        LCONSOLE_WARN("Failed to get MGS log %s, using local "
+                                      "copy.\n", cld->cld_logname);
+                /* Now, whether we copied or not, start using the local llog.
+                   If we failed to copy, we'll start using whatever the old 
+                   log has. */
+                ctxt = lctxt;
+        }
 
         /* logname and instance info should be the same, so use our 
-           copy for the update */
-        rc = class_config_parse_llog(rctxt, cld->cld_logname, &cld->cld_cfg);
+           copy of the instance for the update.  The cfg_last_idx will
+           be updated here. */
+        rc = class_config_parse_llog(ctxt, cld->cld_logname, &cld->cld_cfg);
         
+        if (must_pop) 
+                pop_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
+
         /* Now drop the lock so MGS can revoke it */ 
-        rcl = mgc_cancel(get_mgs_export(mgc), NULL, LCK_CR, &lockh);
-        if (rcl) {
-                CERROR("Can't drop cfg lock: %d\n", rcl);
+        if (!rcl) {
+                rcl = mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, NULL, 
+                                 LCK_CR, &lockh);
+                if (rcl) 
+                        CERROR("Can't drop cfg lock: %d\n", rcl);
         }
         
         if (rc) {
@@ -821,7 +894,7 @@ static int mgc_process_log(struct obd_device *mgc,
                                "(%d) from the MGS.\n",
                                mgc->obd_name, cld->cld_logname, rc);
         }
-
+        
         RETURN(rc);
 }
 
@@ -843,7 +916,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 mti = (struct mgs_target_info *)lustre_cfg_buf(lcfg, 1);
                 CDEBUG(D_MGC, "add_target %s %#x\n",    
                        mti->mti_svname, mti->mti_flags);
-                rc = mgc_target_add(get_mgs_export(obd), mti);
+                rc = mgc_target_add(obd->u.cli.cl_mgc_mgsexp, mti);
                 break;
         }
         case LCFG_LOV_DEL_OBD: 
@@ -865,9 +938,9 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
 
                 cld = config_log_get(logname, cfg);
                 if (IS_ERR(cld)) 
-                        GOTO(out, rc = PTR_ERR(cld));
-
-                rc = mgc_process_log(obd, cld);
+                        rc = PTR_ERR(cld);
+                else
+                        rc = mgc_process_log(obd, cld);
                 config_log_put();
                 break;       
         }

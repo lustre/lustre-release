@@ -366,6 +366,7 @@ struct client_obd {
         struct vfsmount         *cl_mgc_vfsmnt;
         struct dentry           *cl_mgc_configs_dir;
         atomic_t                 cl_mgc_refcount;
+        struct obd_export       *cl_mgc_mgsexp;
 
         /* Flags section */
         unsigned int             cl_checksum:1; /* debug checksums */
@@ -493,7 +494,7 @@ struct niobuf_local {
 };
 
 
-/* device types */
+/* device types (not names--FIXME) */
 /* FIXME all the references to these defines need to be updated */
 #define LUSTRE_MDS_NAME "mds"
 #define LUSTRE_MDT_NAME "mdt"
@@ -511,6 +512,9 @@ struct niobuf_local {
 #define LUSTRE_SANOST_NAME "sanost"
 #define LUSTRE_MGS_NAME "mgs"
 #define LUSTRE_MGC_NAME "mgc"
+
+#define LUSTRE_MGS_OBDNAME "MGS"
+#define LUSTRE_MGC_OBDNAME "MGC"
 
 
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
@@ -946,5 +950,7 @@ static inline void init_obd_quota_ops(quota_interface_t *interface,
 #define KEY_MDS_CONN "mds_conn"
 #define KEY_NEXT_ID  "next_id"
 #define KEY_LOVDESC  "lovdesc"
+#define KEY_INIT_RECOV "initial_recov"
+#define KEY_INIT_RECOV_BACKUP "init_recov_bk"
 
 #endif /* __OBD_H */

@@ -131,7 +131,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
 
         /* Disable initial recovery on this import */
         rc = obd_set_info(obd->obd_self_export,
-                          strlen("initial_recov"), "initial_recov",
+                          strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
                           sizeof(allow_recov), &allow_recov);
 
         rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
