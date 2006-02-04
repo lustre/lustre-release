@@ -316,15 +316,13 @@ static int lov_disconnect(struct obd_export *exp)
         int i, rc;
         ENTRY;
 
-        rc = class_disconnect(exp);
-
         if (!lov->tgts)
-                RETURN(rc);
+                goto out;
 
         /* Only disconnect the underlying layers on the final disconnect. */
         lov->connects--;
         if (lov->connects != 0)
-                RETURN(rc);
+                goto out;
 
         /* Let's hold another reference so lov_del_obd doesn't spin through
            putref every time */
@@ -337,6 +335,8 @@ static int lov_disconnect(struct obd_export *exp)
         }
         lov_putref(obd);
 
+out:
+        rc = class_disconnect(exp);
         RETURN(rc);
 }
 
