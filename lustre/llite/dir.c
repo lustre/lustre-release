@@ -531,6 +531,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ptlrpc_req_finished(request);
                 return rc;
         }
+        case LL_IOC_OBD_STATFS:
+                RETURN(ll_obd_statfs(inode, arg));
         case IOC_MDC_GETFILEINFO:
         case IOC_MDC_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;

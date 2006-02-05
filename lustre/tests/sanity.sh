@@ -2902,6 +2902,25 @@ test_103 () {
 }
 run_test 103 "==============acl test ============="
 
+test_104() {
+	tfile=$DIR/lfs_df_test
+	touch $tfile
+	lfs df || error "lfs df failed"
+	lfs df -ih || error "lfs df -ih failed"
+	lfs df $DIR || error "lfs df $DIR failed"
+	lfs df -ih $DIR || error "lfs df -ih $DIR failed"
+	lfs df $tfile || error "lfs df $tfile failed"
+	lfs df -ih $tfile || error "lfs df -ih $tfile failed"
+	
+	OSC=`lctl dl | awk '/OSC.*MNT/ {print $4}' | head -n 1`
+	lctl --device %$OSC deactivate
+	lfs df || error "lfs df with deactivated OSC failed"
+	lctl --device %$OSC recover
+	lfs df || error "lfs df with reactivated OSC failed"
+	rm -f $tfile
+}
+run_test 104 "lfs>df [-ih] [path] test ============"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

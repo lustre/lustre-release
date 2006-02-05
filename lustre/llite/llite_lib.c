@@ -493,7 +493,6 @@ void lustre_common_put_super(struct super_block *sb)
         obd_disconnect(sbi->ll_mdc_exp);
 
         lustre_throw_orphan_dentries(sb);
-
         EXIT;
 }
 
@@ -1787,4 +1786,70 @@ struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
         }
         LBUG();
         return NULL;
+}
+
+int ll_obd_statfs(struct inode *inode, void *arg)
+{
+        struct ll_sb_info *sbi = NULL;
+        struct obd_device *client_obd = NULL, *lov_obd = NULL;
+        struct lov_obd *lov = NULL;
+        struct obd_import *client_imp = NULL;
+        struct obd_statfs stat_buf = {0};
+        char *buf = NULL;
+        struct obd_ioctl_data *data = NULL;
+        __u32 type, index;
+        int len, rc, rc2;
+        
+        if (!inode || !(sbi = ll_i2sbi(inode)))
+                GOTO(out_statfs, rc = -EINVAL);
+
+        rc = obd_ioctl_getdata(&buf, &len, arg);
+        if (rc)
+                GOTO(out_statfs, rc);
+        
+        data = (void*)buf;
+        if (!data->ioc_inlbuf1 || !data->ioc_inlbuf2 ||
+            !data->ioc_pbuf1 || !data->ioc_pbuf2)
+                GOTO(out_statfs, rc = -EINVAL);
+        
+        memcpy(&type, data->ioc_inlbuf1, sizeof(__u32));
+        memcpy(&index, data->ioc_inlbuf2, sizeof(__u32));
+
+        if (type == LL_STATFS_MDC) {
+                if (index > 0)
+                        GOTO(out_statfs, rc = -ENODEV);
+                client_obd = class_exp2obd(sbi->ll_mdc_exp);
+                client_imp = class_exp2cliimp(sbi->ll_mdc_exp);
+        } else if (type == LL_STATFS_LOV) {
+                lov_obd = class_exp2obd(sbi->ll_osc_exp);
+                lov = &lov_obd->u.lov;
+                
+                if (index >= lov->desc.ld_tgt_count)
+                        GOTO(out_statfs, rc = -ENODEV);
+                
+                client_obd = class_exp2obd(lov->tgts[index].ltd_exp);
+                client_imp = class_exp2cliimp(lov->tgts[index].ltd_exp);
+                if (!lov->tgts[index].active)
+                        GOTO(out_uuid, rc = -ENODATA);
+        }
+        
+        if (!client_obd || !client_imp)
+                GOTO(out_statfs, rc = -EINVAL);
+
+        rc = obd_statfs(client_obd, &stat_buf, jiffies - 1);
+        if (rc)
+                GOTO(out_statfs, rc);
+        rc = copy_to_user(data->ioc_pbuf1, &stat_buf, data->ioc_plen1);
+        if (rc)
+                GOTO(out_statfs, rc = -EFAULT);
+out_uuid:
+        rc2 = copy_to_user(data->ioc_pbuf2, &client_imp->imp_target_uuid,
+                          data->ioc_plen2);
+        if (rc2)
+                rc = -EFAULT;
+
+out_statfs:
+        if (buf)
+                obd_ioctl_freedata(buf, len);
+        return rc;        
 }

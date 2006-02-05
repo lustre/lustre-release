@@ -696,6 +696,51 @@ out:
         return ret;
 }
 
+int llapi_obd_statfs(char *path, __u32 type, __u32 index,
+                     struct obd_statfs *stat_buf,
+                     struct obd_uuid *uuid_buf)
+{
+        int fd;
+        char raw[OBD_MAX_IOCTL_BUFFER] = {'\0'};
+        char *rawbuf = raw;
+        struct obd_ioctl_data data;
+        int rc = 0;
+        
+        data.ioc_inlbuf1 = (char *)&type;
+        data.ioc_inllen1 = sizeof(__u32);
+        data.ioc_inlbuf2 = (char *)&index;
+        data.ioc_inllen2 = sizeof(__u32);
+        data.ioc_pbuf1 = (char *)stat_buf;
+        data.ioc_plen1 = sizeof(struct obd_statfs);
+        data.ioc_pbuf2 = (char *)uuid_buf;
+        data.ioc_plen2 = sizeof(struct obd_uuid);
+        
+        if (obd_ioctl_pack(&data, &rawbuf, sizeof(raw))) {
+                rc = -errno;
+                fprintf(stderr,
+                        "ERROR: ioctl packing failed( %s )\n",
+                        strerror(errno));
+                return rc;
+        }
+
+        fd = open(path, O_RDONLY);
+        if (errno == EISDIR)
+                fd = open(path, O_DIRECTORY | O_RDONLY);
+        
+        if (fd < 0) {
+                rc = -errno;
+                fprintf(stderr, "ERROR: unable to open '%s' ( %s )\n",
+                        path, strerror(errno));
+                return rc;
+        }
+        rc = ioctl(fd, LL_IOC_OBD_STATFS, (void*)rawbuf);
+        if (rc)
+                rc = -errno;
+
+        close(fd);
+        return rc;
+}
+
 #define MAX_STRING_SIZE 128
 #define DEVICES_LIST "/proc/fs/lustre/devices"
 
