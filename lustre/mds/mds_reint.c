@@ -141,7 +141,13 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         transno = req->rq_reqmsg->transno;
         if (rc != 0) {
-                LASSERT(transno == 0);
+                if (transno != 0) {
+                        CERROR("%s: replay %s transno "LPU64" failed: rc %d\n",
+                               obd->obd_name,
+                               libcfs_nid2str(req->rq_export->exp_connection->c_peer.nid),
+                               transno, rc);
+                        transno = 0;
+                }
         } else if (transno == 0) {
                 spin_lock(&mds->mds_transno_lock);
                 transno = ++mds->mds_last_transno;

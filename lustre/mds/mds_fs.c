@@ -248,7 +248,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         } else {
                 rc = fsfilt_read_record(obd, file, msd, sizeof(*msd), &off);
                 if (rc) {
-                        CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD, rc);
+                        CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
                         GOTO(err_msd, rc);
                 }
                 if (strcmp(msd->msd_uuid, obd->obd_uuid.uuid) != 0) {

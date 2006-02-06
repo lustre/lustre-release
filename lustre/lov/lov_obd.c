@@ -2087,7 +2087,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                         struct ldlm_lock *lock;
                         struct lov_stripe_md *lsm;
                 } *data = key;
-                 struct ldlm_res_id *res_id = &data->lock->l_resource->lr_name;
+                struct ldlm_res_id *res_id = &data->lock->l_resource->lr_name;
                 struct lov_oinfo *loi;
                 __u32 *stripe = val;
 
