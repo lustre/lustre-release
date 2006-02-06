@@ -176,7 +176,7 @@ struct mkfs_opts {
         char  mo_device[128];           /* disk device name */
         char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
         char  mo_loopdev[128];          /* in case a loop dev is needed */
-        __u64 mo_device_sz;
+        __u64 mo_device_sz;             /* in KB */
         int   mo_flags; 
 };
 

@@ -49,18 +49,13 @@ command_t cmdlist[] = {
         { 0, 0, 0, NULL }
 };
 
-/* FIXME */
-#define MAX_LOOP_DEVICES 256
+#define MAX_LOOP_DEVICES 16
+#define L_BLOCK_SIZE 4096
 
 static char *progname;
 static int verbose = 1;
 static int print_only = 0;
 
-/* for running system() */
-static char cmd[128];
-static char cmd_out[32][128];
-static char *ret_file = "/tmp/mkfs.log";
-        
 
 void usage(FILE *out)
 {
@@ -76,7 +71,7 @@ void usage(FILE *out)
                 "\t\t--mgsnid=<nid>[,<...>] : NID(s) of a remote mgs node\n"
                 "\t\t\trequired for all targets other than the mgs node\n"
                 "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
-#if 0 /* FIXME implement */
+#if 0 /* FIXME implement 1.6.x */
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
                 "\t\t\tfor this device on an alternate device\n"
 #endif
@@ -150,43 +145,15 @@ int get_os_version()
 
 int run_command(char *cmd)
 {
-       int i = 0;
-       FILE *fp = NULL;
+       int rc;
 
        if (verbose > 1)
                printf("cmd: %s\n", cmd);
        
-       strcat(cmd, " >");
-       strcat(cmd, ret_file);
        strcat(cmd, " 2>&1");
   
-       fp = popen(cmd, "r");
-       if (!fp) {
-               fprintf(stderr, "%s: %s\n", progname, strerror(errno));
-               return -1;
-       }
-      
-       memset(cmd_out, 0, sizeof(cmd_out));
-       while (fgets(cmd_out[i], 128, fp) != NULL) {
-               if (verbose > 2) 
-                       printf("  _ %s", cmd_out[i]); 
-               i++;
-               if (i >= 32) 
-                       break;
-       }
-       pclose(fp);
-
-       return 0;
-}
-
-static void run_command_out()
-{
-        int i;
-        for (i = 0; i < 32; i++) {
-                if (strlen(cmd_out[i]) == 0)
-                        break;
-                fprintf(stderr, cmd_out[i]);
-        }
+       rc = system(cmd);
+       return rc;
 }
 
 
@@ -211,13 +178,12 @@ int loop_setup(struct mkfs_opts *mop)
 
         /* Find unused loop device */
         for (i = 0; i < MAX_LOOP_DEVICES; i++) {
+                char cmd[128];
                 sprintf(l_device, "%s%d", loop_base, i);
                 if (access(l_device, F_OK | R_OK)) 
                         break;
-                sprintf(cmd, "losetup %s > /dev/null 2>&1", l_device);
-                if (verbose > 1) 
-                        printf("cmd: %s\n", cmd);
-                ret = system(cmd);
+                sprintf(cmd, "losetup %s > /dev/null", l_device);
+                ret = run_command(cmd);
                 /* losetup gets 1 (ret=256) for non-set-up device */
                 if (ret) {
                         /* Set up a loopback device to our file */
@@ -233,12 +199,13 @@ int loop_setup(struct mkfs_opts *mop)
                 }
         }
         
-        fprintf(stderr,"%s: out of loop devices!\n", progname);
+        fprintf(stderr, "%s: out of loop devices!\n", progname);
         return EMFILE;
 }       
 
 int loop_cleanup(struct mkfs_opts *mop)
 {
+        char cmd[128];
         int ret = 1;
         if ((mop->mo_flags & MO_IS_LOOP) && *mop->mo_loopdev) {
                 sprintf(cmd, "losetup -d %s", mop->mo_loopdev);
@@ -269,15 +236,6 @@ __u64 get_device_size(char* device)
         int ret, fd;
         __u64 size = 0;
 
-#if 0
-        sprintf(cmd, "sfdisk -s %s", device);
-        ret = run_command(cmd);
-        if (ret == 0) {
-                size = atoll(cmd_out[0]);
-                return (size);
-        }
-#endif
-        /* bz5831 BLKGETSIZE64 */
         fd = open(device, O_RDONLY);
         if (fd < 0) {
                 fprintf(stderr, "%s: cannot open %s: %s\n", 
@@ -285,6 +243,7 @@ __u64 get_device_size(char* device)
                 return 0;
         }
 
+        /* size in bytes. bz5831 */
         ret = ioctl(fd, BLKGETSIZE64, (void*)&size);
         close(fd);
         if (ret < 0) {
@@ -293,7 +252,9 @@ __u64 get_device_size(char* device)
                 return 0;
         }
         
-        return size;
+        vprint("device size = "LPU64"MB\n", size >> 20);
+        /* return value in KB */
+        return size >> 10;
 }
 
 int loop_format(struct mkfs_opts *mop)
@@ -378,7 +339,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 progname, mop->mo_device_sz);
                         return EINVAL;
                 }
-                block_count = mop->mo_device_sz / 4; /* block size is 4096 */
+                block_count = mop->mo_device_sz / (L_BLOCK_SIZE >> 10);
         }       
         
         if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
@@ -392,13 +353,16 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 return ENODEV;
                 }
 
+                /* Journal size in MB */
                 if (strstr(mop->mo_mkfsopts, "-J") == NULL) {
                         /* Choose our own default journal size */
-                        long journal_sz = 0;
-                        if (device_sz > 1024 * 1024) 
+                        long journal_sz = 0, max_sz;
+                        if (device_sz > 1024 * 1024) /* 1GB */
                                 journal_sz = (device_sz / 102400) * 4;
-                        if (journal_sz > 400)
-                                journal_sz = 400;
+                        /* man mkfs.ext3 */
+                        max_sz = (102400 * L_BLOCK_SIZE) >> 20; /* 400MB */
+                        if (journal_sz > max_sz)
+                                journal_sz = max_sz;
                         if (journal_sz) {
                                 sprintf(buf, " -J size=%ld", journal_sz);
                                 strcat(mop->mo_mkfsopts, buf);
@@ -436,8 +400,12 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                         inode_size = 1024;
                                 else 
                                         inode_size = 512;
+                        } else if (IS_OST(&mop->mo_ldd)) {
+                                /* now as we store fids in EA on OST we need 
+                                   to make inode bigger */
+                                inode_size = 256;
                         }
-                        
+
                         if (inode_size > 0) {
                                 sprintf(buf, " -I %ld", inode_size);
                                 strcat(mop->mo_mkfsopts, buf);
@@ -445,13 +413,16 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         
                 }
 
-                /* Enable hashed b-tree directory lookup in large dirs bz6224 */
-                if (strstr(mop->mo_mkfsopts, "-O") == NULL) {
-                        sprintf(buf, " -O dir_index");
-                        strcat(mop->mo_mkfsopts, buf);
+                if (verbose < 2) {
+                        strcat(mop->mo_mkfsopts, " -q");
                 }
 
-                sprintf(mkfs_cmd, "mkfs.ext2 -j -b 4096 -L %s ",
+                /* Enable hashed b-tree directory lookup in large dirs bz6224 */
+                if (strstr(mop->mo_mkfsopts, "-O") == NULL) {
+                        strcat(mop->mo_mkfsopts, " -O dir_index");
+                }
+
+                sprintf(mkfs_cmd, "mkfs.ext2 -j -b %d -L %s ", L_BLOCK_SIZE,
                         mop->mo_ldd.ldd_svname);
 
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
@@ -493,8 +464,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         ret = run_command(mkfs_cmd);
         if (ret) {
                 fatal();
-                fprintf(stderr, "Unable to build fs: %s \n", dev);
-                run_command_out();
+                fprintf(stderr, "Unable to build fs %s (%d)\n", dev, ret);
                 goto out;
         }
 
@@ -559,8 +529,8 @@ int write_local_files(struct mkfs_opts *mop)
         
         ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
         if (ret) {
-                fprintf(stderr, "%s: Unable to mount %s: %s\n", 
-                        progname, mop->mo_device, strerror(ret));
+                fprintf(stderr, "%s: Unable to mount %s: %d\n", 
+                        progname, mop->mo_device, ret);
                 goto out_rmdir;
         }
 
@@ -593,6 +563,7 @@ int write_local_files(struct mkfs_opts *mop)
         /* Check for upgrade */
         if ((mop->mo_ldd.ldd_flags & (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) 
             == (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) {
+                char cmd[128];
                 char *term;
                 vprint("Copying old logs\n");
                 /* Copy the old client log to fsname-client */
@@ -602,7 +573,7 @@ int write_local_files(struct mkfs_opts *mop)
                         filepnm);
                 if (verbose > 1) 
                         printf("cmd: %s\n", cmd);
-                ret = system(cmd);
+                ret = run_command(cmd);
                 if (ret) {
                         fprintf(stderr, "%s: Can't copy 1.4 config %s/client "
                                 "(%d)\n", progname, MDT_LOGS_DIR, ret);
@@ -628,7 +599,7 @@ int write_local_files(struct mkfs_opts *mop)
                                 mop->mo_ldd.ldd_svname);
                         if (verbose > 1) 
                                 printf("cmd: %s\n", cmd);
-                        ret = system(cmd);
+                        ret = run_command(cmd);
                 }
                 if (ret) {
                         fprintf(stderr, "%s: Can't copy 1.4 config %s/%s "
@@ -1073,14 +1044,12 @@ int main(int argc, char *const argv[])
                                ",iopen_nopriv,user_xattr");
                 if ((get_os_version() == 24) && IS_OST(&mop.mo_ldd))
                         strcat(default_mountopts, ",asyncdel");
-#if 0
                 /* Files created while extents are enabled cannot be read if
                    mounted with a kernel that doesn't include the CFS patches.*/
-                if ((get_os_version() == 26) && IS_OST(&mop.mo_ldd) && 
+                if (IS_OST(&mop.mo_ldd) && 
                     mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
                         strcat(default_mountopts, ",extents,mballoc");
                 }
-#endif               
  
                 break;
         }
