@@ -348,7 +348,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2005-12-16 17:46:19.148560250 +0300
 +++ linux-2.6.9-full/fs/ext3/mballoc.c	2005-12-17 00:10:15.000000000 +0300
-@@ -0,0 +1,2434 @@
+@@ -0,0 +1,2429 @@
 +/*
 + * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -913,10 +913,12 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	SetPageUptodate(page);
 +
 +out:
-+	for (i = 0; i < groups_per_page && bh[i]; i++)
-+		brelse(bh[i]);
-+	if (bh && bh != &bhs)
-+		kfree(bh);
++	if (bh) {
++		for (i = 0; bh && i < groups_per_page && bh[i]; i++)
++			brelse(bh[i]);
++		if (bh != &bhs)
++			kfree(bh);
++	}
 +	return err;
 +}
 +
@@ -1678,8 +1680,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +			ext3_mb_release_desc(&e3b);
 +
-+			if (err)
-+				goto out_err;
 +			if (ac.ac_status != AC_STATUS_CONTINUE)
 +				break;
 +		}
@@ -1958,10 +1958,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		return -EIO;
 +	size = sizeof(struct ext3_mb_history) * sbi->s_mb_history_max;
 +	s->history = kmalloc(size, GFP_KERNEL);
-+	if (s == NULL) {
-+		kfree(s);
-+		return -EIO;
-+	}
 +
 +	spin_lock(&sbi->s_mb_history_lock);
 +	memcpy(s->history, sbi->s_mb_history, size);
@@ -2782,7 +2778,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	remove_proc_entry(EXT3_MB_MIN_TO_SCAN_NAME, proc_root_ext3);
 +	remove_proc_entry(EXT3_ROOT, proc_root_fs);
 +}
-+
 Index: linux-2.6.9-full/fs/ext3/Makefile
 ===================================================================
 --- linux-2.6.9-full.orig/fs/ext3/Makefile	2005-12-16 23:16:41.000000000 +0300
