@@ -975,11 +975,11 @@ reset_enospc() {
 
 exhaust_precreations() {
 	OSTIDX=$1
-	OST=$(head -n $((OSTIDX + 1)) $LPROC/lov/${LOVNAME}/target_obd |\
-		tail -n 1 | awk '{print $2}' | sed -e 's/_UUID$//')
+	OST=grep ${OSTIDX}": " $LPROC/lov/${LOVNAME}/target_obd | \
+	    awk '{print $2}' | sed -e 's/_UUID$//'
 
-	last_id=$(cat $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc_last_id)
-	next_id=$(cat $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc_next_id)
+	last_id=$(cat $LPROC/osc/${OST}-osc/prealloc_last_id)
+	next_id=$(cat $LPROC/osc/${OST}-osc/prealloc_next_id)
 
 	mkdir -p $DIR/d27/${OST}
 	$LSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
@@ -987,7 +987,7 @@ exhaust_precreations() {
 	sysctl -w lustre.fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
-	grep '[0-9]' $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc*
+	grep '[0-9]' $LPROC/osc/${OST}-osc/prealloc*
 	reset_enospc $2
 }
 
@@ -1083,19 +1083,19 @@ test_28() {
 run_test 28 "create/mknod/mkdir with bad file types ============"
 
 cancel_lru_locks() {
-	for d in $LPROC/ldlm/namespaces/$1*; do
+	for d in $LPROC/ldlm/namespaces/*-$1*; do
 		echo clear > $d/lru_size
 	done
 	grep "[0-9]" $LPROC/ldlm/namespaces/$1*/lock_unused_count /dev/null
 }
 
 test_29() {
-	cancel_lru_locks MDC
+	cancel_lru_locks mdc
 	mkdir $DIR/d29
 	touch $DIR/d29/foo
 	log 'first d29'
 	ls -l $DIR/d29
-	MDCDIR=${MDCDIR:-$LPROC/ldlm/namespaces/MDC_*}
+	MDCDIR=${MDCDIR:-$LPROC/ldlm/namespaces/*-mdc*}
 	LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
 	LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
 	log 'second d29'
@@ -1627,11 +1627,11 @@ setup_test42() {
 # file truncation, and file removal.
 test_42a() {
 	setup_test42
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
-	grep "[0-9]" $LPROC/osc/OSC*MNT*/cur_grant_bytes
+	grep "[0-9]" $LPROC/osc/*-osc-*/cur_grant_bytes
 	dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
@@ -1642,7 +1642,7 @@ run_test 42a "ensure that we don't flush on close =============="
 
 test_42b() {
 	setup_test42
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	stop_writeback
         sync
         dd if=/dev/zero of=$DIR/f42b bs=1024 count=100
@@ -1681,7 +1681,7 @@ trunc_test() {
         test=$1
         file=$DIR/$test
         offset=$2
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	stop_writeback
 	# prime the file with 0,EOF PW to match
 	touch $file
@@ -1691,7 +1691,7 @@ trunc_test() {
         dd if=/dev/zero of=$file bs=1024 count=100
         BEFOREWRITES=`count_ost_writes`
         $TRUNCATE $file $offset
-        cancel_lru_locks OSC
+        cancel_lru_locks osc
         AFTERWRITES=`count_ost_writes`
 	start_writeback
 }
@@ -1825,7 +1825,7 @@ test_45() {
 	[ $before -gt $after ] || error "writeback didn't lower dirty count"
 	do_dirty_record "echo blah > $f"
 	[ $before -eq $after ] && error "write wasn't cached"
-	do_dirty_record "cancel_lru_locks OSC"
+	do_dirty_record "cancel_lru_locks osc"
 	[ $before -gt $after ] || error "lock cancellation didn't lower dirty count"
 	start_writeback
 }
@@ -2054,9 +2054,9 @@ test_52b() {
 run_test 52b "immutable flag test (should return errors) ======="
 
 test_53() {
-        for i in `ls -d /proc/fs/lustre/osc/OSC*mds1 2> /dev/null` ; do
-                ostname=`echo $i | cut -d _ -f 3-4 | sed -e s/_mds1//`
-                ost_last=`cat /proc/fs/lustre/obdfilter/$ostname/last_id`
+        for i in `ls -d $LPROC/osc/*-osc 2> /dev/null` ; do
+                ostname=`basename $i | cut -d - -f 1-2`
+                ost_last=`cat $LPROC/obdfilter/$ostname/last_id`
                 mds_last=`cat $i/prealloc_last_id`
                 echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
                 if [ $ost_last != $mds_last ]; then
@@ -2213,7 +2213,7 @@ run_test 56 "check lfs find ===================================="
 
 test_57a() {
 	# note test will not do anything if MDS is not local
-	for DEV in `cat /proc/fs/lustre/mds/*/mntdev`; do
+	for DEV in `cat $LPROC/mds/*/mntdev`; do
 		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
 		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
@@ -2236,8 +2236,8 @@ test_57b() {
 	$LFIND $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$LFIND $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
-	MDSFREE="`cat /proc/fs/lustre/mds/*/kbytesfree`"
-	MDCFREE="`cat /proc/fs/lustre/mdc/*/kbytesfree`"
+	MDSFREE="`cat $LPROC/mds/*/kbytesfree`"
+	MDCFREE="`cat $LPROC/mdc/*/kbytesfree`"
 	echo "opening files to create objects/EAs"
 	for FILE in `seq -f $DIR/d57b/f%g 1 $FILECOUNT`; do
 		$OPENFILE -f O_RDWR $FILE > /dev/null || error "opening $FILE"
@@ -2248,8 +2248,8 @@ test_57b() {
 	$LFIND $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
 	sleep 1 # make sure we get new statfs data
-	MDSFREE2="`cat /proc/fs/lustre/mds/*/kbytesfree`"
-	MDCFREE2="`cat /proc/fs/lustre/mdc/*/kbytesfree`"
+	MDSFREE2="`cat $LPROC/mds/*/kbytesfree`"
+	MDCFREE2="`cat $LPROC/mdc/*/kbytesfree`"
 	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then
 			error "MDC before $MDCFREE != after $MDCFREE2"
@@ -2294,7 +2294,7 @@ run_test 60b "limit repeated messages from CERROR/CWARN ========"
 test_61() {
 	f="$DIR/f61"
 	dd if=/dev/zero of=$f bs=`page_size` count=1
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	multiop $f OSMWUc || error
 	sync
 }
@@ -2304,7 +2304,7 @@ run_test 61 "mmap() writes don't make sync hang ================"
 test_62() {
         f="$DIR/f62"
         echo foo > $f
-        cancel_lru_locks OSC
+        cancel_lru_locks osc
         echo 0x405 > /proc/sys/lustre/fail_loc
         cat $f && error "cat succeeded, expect -EIO"
         echo 0 > /proc/sys/lustre/fail_loc
@@ -2313,8 +2313,8 @@ run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 test_63() {
-	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -n 1`
-	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
+	MAX_DIRTY_MB=`cat $LPROC/osc/*/max_dirty_mb | head -n 1`
+	for i in $LPROC/osc/*/max_dirty_mb ; do
 		echo 0 > $i
 	done
 	for i in `seq 10` ; do
@@ -2324,7 +2324,7 @@ test_63() {
 		sleep 1
 	done
 
-	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
+	for i in $LPROC/osc/*/max_dirty_mb ; do
 		echo $MAX_DIRTY_MB > $i
 	done
 	rm -f $DIR/f63 || true
@@ -2347,7 +2347,7 @@ test_63b() {
 		$LCTL dk /tmp/test63b.debug && \
 		sysctl -w lnet.debug=$DBG_SAVE && \
 		error "sync didn't return ENOMEM"
-	grep -q locked /proc/fs/lustre/llite/fs*/dump_page_cache && \
+	grep -q locked $LPROC/llite/fs*/dump_page_cache && \
 		$LCTL dk /tmp/test63b.debug && \
 		sysctl -w lnet.debug=$DBG_SAVE && \
 		error "locked page left in cache after async error" || true
@@ -2357,7 +2357,7 @@ run_test 63b "async write errors should be returned to fsync ==="
 
 test_64a () {
 	df $DIR
-	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/cur*
+	grep "[0-9]" $LPROC/osc/*-osc*/cur*
 }
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
@@ -2472,7 +2472,7 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 	RC=$?
 	if [ "$MDS" ]; then
 		# can't tell which is correct otherwise
-		GROUP_UPCALL=`cat /proc/fs/lustre/mds/$MDS/group_upcall`
+		GROUP_UPCALL=`cat $LPROC/mds/$MDS/group_upcall`
 		[ "$GROUP_UPCALL" = "NONE" -a $RC -eq 0 ] && \
 			error "no-upcall passed" || true
 		[ "$GROUP_UPCALL" != "NONE" -a $RC -ne 0 ] && \
@@ -2543,7 +2543,7 @@ test_69() {
 	echo 0 > /proc/sys/lustre/fail_loc
 	$DIRECTIO write $f 0 2 || error "write error"
 
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	$DIRECTIO read $f 0 1 || error "read error"
 
 	echo 0x217 > /proc/sys/lustre/fail_loc
@@ -2595,7 +2595,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	# See if we are still setuid/sgid
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on write"
 	# Now test that MDS is updated too
-	cancel_lru_locks MDC
+	cancel_lru_locks mdc
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on MDS"
 	true
 }
@@ -2793,7 +2793,7 @@ test_101() {
 	local discard
 	local nreads
 
-	for s in $LPROC/osc/OSC_*/rpc_stats ;do
+	for s in $LPROC/osc/*-osc*/rpc_stats ;do
 		echo 0 > $s
 	done
 	for s in $LPROC/llite/*/read_ahead_stats ;do
@@ -2812,7 +2812,7 @@ test_101() {
 	done
 
 	if [ $(($discard * 10)) -gt $nreads ] ;then
-		cat $LPROC/osc/OSC_*/rpc_stats
+		cat $LPROC/osc/*-osc*/rpc_stats
 		cat $LPROC/llite/*/read_ahead_stats
 		error "too many ($discard) discarded pages" 
 	fi
@@ -2827,7 +2827,7 @@ test_102() {
         touch $testfile
 
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ -z "grep \<xattr\> /proc/fs/lustre/mdc/MDC*MNT*/connect_flags" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	[ -z "grep \<xattr\> $LPROC/mdc/*-mdc-*/connect_flags" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
@@ -2878,7 +2878,7 @@ test_103 () {
 
     [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
     [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
-    [ -z "`grep acl /proc/fs/lustre/mdc/MDC*MNT*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
+    [ -z "`grep acl $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
 
     echo "performing cp ..."
     run_acl_subtest cp || error

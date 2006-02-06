@@ -69,15 +69,6 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         if (data != NULL) {
                 data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
-                data->ocd_ibits_known &= MDS_INODELOCK_FULL;
-
-                /* If no known bits (which should not happen, probably,
-                   as everybody should support LOOKUP and UPDATE bits at least)
-                   revert to compat mode with plain locks. */
-                if (!data->ocd_ibits_known &&
-                    data->ocd_connect_flags & OBD_CONNECT_IBITS)
-                        data->ocd_connect_flags &= ~OBD_CONNECT_IBITS;
-
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }

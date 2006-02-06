@@ -789,7 +789,7 @@ static int server_stop_servers(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */

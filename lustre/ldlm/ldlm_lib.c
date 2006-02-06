@@ -602,8 +602,13 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 if (!data || (data->ocd_version < LUSTRE_VERSION_CODE -
                                LUSTRE_VERSION_ALLOWED_OFFSET)) {
-                        DEBUG_REQ(D_INFO, req, "Refusing old (%d.%d.%d.%d) "
-                                  "libclient connection attempt\n",
+                        if (!data) 
+                                DEBUG_REQ(D_WARNING, req, "Refusing old "
+                                          "libclient connection attempt\n");
+                        else
+                                DEBUG_REQ(D_WARNING, req,
+                                          "Refusing old (%d.%d.%d.%d) "
+                                          "libclient connection attempt\n",
                                   OBD_OCD_VERSION_MAJOR(data->ocd_version),
                                   OBD_OCD_VERSION_MINOR(data->ocd_version),
                                   OBD_OCD_VERSION_PATCH(data->ocd_version),
