@@ -1940,6 +1940,7 @@ static void filter_grant_discard(struct obd_export *exp)
                  "%s: tot_pending "LPU64" cli %s/%p fed_pending %ld\n",
                  obd->obd_name, filter->fo_tot_pending,
                  exp->exp_client_uuid.uuid, exp, fed->fed_pending);
+        /* fo_tot_pending is handled in filter_grant_commit as bulk finishes */
         LASSERTF(filter->fo_tot_dirty >= fed->fed_dirty,
                  "%s: tot_dirty "LPU64" cli %s/%p fed_dirty %ld\n",
                  obd->obd_name, filter->fo_tot_dirty,
@@ -2196,7 +2197,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         rc = filter_finish_transno(exp, oti, rc);
-        
+
         err = fsfilt_commit(exp->exp_obd, inode, handle, 0);
         if (err) {
                 CERROR("error on commit, err = %d\n", err);
@@ -2248,7 +2249,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
 
         res = ldlm_resource_get(exp->exp_obd->obd_namespace, NULL,
                                 res_id, LDLM_EXTENT, 0);
-        
+
         if (res != NULL) {
                 ns_lvbo = res->lr_namespace->ns_lvbo;
                 if (ns_lvbo && ns_lvbo->lvbo_update)
@@ -2257,7 +2258,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         }
 
         oa->o_valid = OBD_MD_FLID;
-        
+
         /* Quota release need uid/gid info */
         obdo_from_inode(oa, dentry->d_inode,
                         FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
@@ -2462,7 +2463,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct filter_obd *filter;
         struct obd_statfs *osfs;
         int err = 0, rc = 0, recreate_obj = 0, i;
-        unsigned long enough_time = jiffies + (obd_timeout * HZ) / 3;
+        unsigned long enough_time = jiffies + (obd_timeout * HZ) / 4;
         __u64 next_id;
         void *handle = NULL;
         ENTRY;
@@ -2479,8 +2480,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 rc = filter_statfs(obd, osfs, jiffies - HZ);
                 if (rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
                         CDEBUG(D_HA, "OST out of space! avail "LPU64"\n",
-                              osfs->os_bavail<<filter->fo_obt.obt_sb->s_blocksize_bits);
-                        *num=0;
+                               osfs->os_bavail <<
+                                       filter->fo_obt.obt_sb->s_blocksize_bits);
+                        *num = 0;
                         rc = -ENOSPC;
                 }
                 OBD_FREE(osfs, sizeof(*osfs));
@@ -2489,7 +2491,8 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 }
         }
 
-        CDEBUG(D_HA, "%s: precreating %d objects\n", obd->obd_name, *num);
+        CDEBUG(D_HA, "%s: precreating %d objects in group "LPU64" at "LPU64"\n",
+               obd->obd_name, *num, group, oa->o_id);
 
         down(&filter->fo_create_lock);
 
@@ -2552,6 +2555,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 cleanup_phase = 3;
 
+                /* We mark object SUID+SGID to flag it for accepting UID+GID
+                 * from client on first write.  Currently the permission bits
+                 * on the OST are never used, so this is OK. */
                 rc = ll_vfs_create(dparent->d_inode, dchild,
                                    S_IFREG |  S_ISUID | S_ISGID | 0666, NULL);
                 if (rc) {
@@ -2587,7 +2593,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 if (rc)
                         break;
                 if (time_after(jiffies, enough_time)) {
-                        CDEBUG(D_INODE,"%s: precreate slow - want %d got %d \n",
+                        CDEBUG(D_HA, "%s: precreate slow - want %d got %d \n",
                                obd->obd_name, *num, i);
                         break;
                 }
@@ -2596,11 +2602,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
         up(&filter->fo_create_lock);
 
-        CDEBUG(D_HA, "%s: server last_objid for group "LPU64": "LPU64"\n",
-               obd->obd_name, group, filter->fo_last_objids[group]);
+        CDEBUG(D_HA, "%s: created %d objects for group "LPU64": "LPU64"\n",
+               obd->obd_name, i, group, filter->fo_last_objids[group]);
 
-        CDEBUG(D_HA, "%s: filter_precreate() created %d objects\n",
-               obd->obd_name, i);
         RETURN(rc);
 }
 

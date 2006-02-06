@@ -115,7 +115,11 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         /* Update our accounting now so that statfs takes it into account.
          * Note that fed_dirty is only approximate and can become incorrect
          * if RPCs arrive out-of-order.  No important calculations depend
-         * on fed_dirty however. */
+         * on fed_dirty however, but we must check sanity to not assert. */
+        if ((long long)oa->o_dirty < 0)
+                oa->o_dirty = 0;
+        else if (oa->o_dirty > fed->fed_grant + 4 * FILTER_GRANT_CHUNK)
+                oa->o_dirty = fed->fed_grant + 4 * FILTER_GRANT_CHUNK;
         obd->u.filter.fo_tot_dirty += oa->o_dirty - fed->fed_dirty;
         if (fed->fed_grant < oa->o_dropped) {
                 CERROR("%s: cli %s/%p reports %u dropped > fed_grant %lu\n",
