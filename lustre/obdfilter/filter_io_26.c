@@ -44,7 +44,6 @@
 #define MAX_BLOCKS_PER_PAGE (PAGE_SIZE / 512)
 struct filter_iobuf {
         atomic_t          dr_numreqs;  /* number of reqs being processed */
-        struct bio       *dr_bios;     /* list of completed bios */
         wait_queue_head_t dr_wait;
         int               dr_max_pages;
         int               dr_npages;
@@ -139,8 +138,6 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         }
 
         spin_lock_irqsave(&iobuf->dr_lock, flags);
-        bio->bi_private = iobuf->dr_bios;
-        iobuf->dr_bios = bio;
         if (iobuf->dr_error == 0)
                 iobuf->dr_error = error;
         spin_unlock_irqrestore(&iobuf->dr_lock, flags);
@@ -148,6 +145,12 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         record_finish_io(iobuf, test_bit(BIO_RW, &bio->bi_rw) ?
                          OBD_BRW_WRITE : OBD_BRW_READ, error);
 
+        /* Completed bios used to be chained off iobuf->dr_bios and freed in
+         * filter_clear_dreq().  It was then possible to exhaust the biovec-256
+         * mempool when serious on-disk fragmentation was encountered,
+         * deadlocking the OST.  The bios are now released as soon as complete
+         * so the pool cannot be exhausted while IOs are competing. bug 10076 */
+        bio_put(bio);
         return 0;
 }
 
@@ -183,7 +186,6 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
                 goto failed_2;
 
         iobuf->dr_filter = filter;
-        iobuf->dr_bios = NULL;
         init_waitqueue_head(&iobuf->dr_wait);
         atomic_set(&iobuf->dr_numreqs, 0);
         spin_lock_init(&iobuf->dr_lock);
@@ -203,12 +205,6 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
 
 static void filter_clear_iobuf(struct filter_iobuf *iobuf)
 {
-        /* free all bios */
-        while (iobuf->dr_bios) {
-                struct bio *bio = iobuf->dr_bios;
-                iobuf->dr_bios = bio->bi_private;
-                bio_put(bio);
-        }
         iobuf->dr_npages = 0;
         atomic_set(&iobuf->dr_numreqs, 0);
 }

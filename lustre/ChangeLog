@@ -542,6 +542,16 @@ Details    : It was possible for the MDS to return an open request with no
 	     Simplify the client close codepath, and always return an error
 	     from the MDS in case the open is not successful.
 
+Severity   : major
+Frequency  : rare, 2.6 OSTs only
+Bugzilla   : 10076
+Description: OST may deadlock under high load on fragmented files
+Details    : If there was a heavy load and highly-fragmented OST filesystems
+	     it was possible to have all the OST threads deadlock waiting on
+	     allocation of biovecs, because the biovecs were not released
+	     until the entire RPC IO was completed.  Instead, release biovecs
+	     as soon as they are complete to ensure forward IO progress.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
