@@ -432,7 +432,7 @@ extern int libcfs_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_LIBCFS_LWT_SNAPSHOT            _IOWR('e', 34, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_LWT_LOOKUP_STRING       _IOWR('e', 35, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_MEMHOG                  _IOWR('e', 36, IOCTL_LIBCFS_TYPE)
-#define IOC_LIBCFS_PING                    _IOWR('e', 37, IOCTL_LIBCFS_TYPE)
+#define IOC_LIBCFS_PING_TEST               _IOWR('e', 37, IOCTL_LIBCFS_TYPE)
 /* lnet ioctls */
 #define IOC_LIBCFS_GET_NI                  _IOWR('e', 50, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_FAIL_NID                _IOWR('e', 51, IOCTL_LIBCFS_TYPE)
@@ -444,6 +444,8 @@ extern int libcfs_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_LIBCFS_PORTALS_COMPATIBILITY   _IOWR('e', 57, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_LNET_DIST               _IOWR('e', 58, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_CONFIGURE               _IOWR('e', 59, IOCTL_LIBCFS_TYPE)
+#define IOC_LIBCFS_TESTPROTOCOMPAT         _IOWR('e', 60, IOCTL_LIBCFS_TYPE)
+#define IOC_LIBCFS_PING                    _IOWR('e', 61, IOCTL_LIBCFS_TYPE)
 /* lnd ioctls */
 #define IOC_LIBCFS_REGISTER_MYNID          _IOWR('e', 70, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_LIBCFS_TYPE)

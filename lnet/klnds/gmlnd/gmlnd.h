@@ -83,7 +83,8 @@
 /* Default Tunable Values */
 #define GMNAL_PORT                 4            /* which port to use */
 #define GMNAL_NTX                  256          /* # tx descs */
-#define GMNAL_NTX_PEER             8            /* # concurrent sends per peer */
+#define GMNAL_CREDITS              128          /* # concurrent sends */
+#define GMNAL_PEER_CREDITS         8            /* # concurrent sends per peer */
 #define GMNAL_NRX_SMALL            128          /* # small receives to post */
 #define GMNAL_NRX_LARGE            64           /* # large receives to post */
 #define GMNAL_NLARGE_TX_BUFS       32           /* # large tx buffers */
@@ -113,7 +114,7 @@ typedef struct {
         }               gmm_u;
 } WIRE_ATTR gmnal_msg_t;
 
-#define GMNAL_MSG_MAGIC                 0x6d797269 /* 'myri'! */
+#define GMNAL_MSG_MAGIC                 LNET_PROTO_GM_MAGIC
 #define GMNAL_MSG_VERSION               1
 #define GMNAL_MSG_IMMEDIATE             1
 
@@ -186,7 +187,6 @@ typedef struct gmnal_ni {
         int               gmni_shutdown;	/* tell all threads to exit */
 
         struct list_head  gmni_idle_txs;        /* idle tx's */
-        wait_queue_head_t gmni_idle_tx_wait;    /* block here for idle tx */
         int               gmni_tx_credits;      /* # transmits still possible */
         struct list_head  gmni_idle_ltxbs;      /* idle large tx buffers */
         struct list_head  gmni_buf_txq;         /* tx's waiting for buffers */
@@ -200,7 +200,8 @@ typedef struct gmnal_ni {
 typedef struct {
         int              *gm_port;
         int              *gm_ntx;
-        int              *gm_ntx_peer;
+        int              *gm_credits;
+        int              *gm_peer_credits;
         int              *gm_nlarge_tx_bufs;
         int              *gm_nrx_small;
         int              *gm_nrx_large;

@@ -47,6 +47,8 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
                                                 gmni->gmni_small_msgsize;
         int          flip;
 
+        /* rc = 0:SUCCESS -ve:failure +ve:version mismatch */
+
         /* GM may not overflow our buffer */
         LASSERT (rx->rx_recv_nob <= buffnob);
 
@@ -61,6 +63,9 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
                 flip = 0;
         } else if (msg->gmm_magic == __swab32(GMNAL_MSG_MAGIC)) {
                 flip = 1;
+        } else if (msg->gmm_magic == LNET_PROTO_MAGIC ||
+                   msg->gmm_magic == __swab32(LNET_PROTO_MAGIC)) {
+                return EPROTO;
         } else {
                 CERROR("Bad magic from gmid %u: %08x\n", 
                        rx->rx_recv_gmid, msg->gmm_magic);
@@ -69,9 +74,7 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
 
         if (msg->gmm_version != 
             (flip ? __swab16(GMNAL_MSG_VERSION) : GMNAL_MSG_VERSION)) {
-                CERROR("Bad version from gmid %u: %d\n", 
-                       rx->rx_recv_gmid, msg->gmm_version);
-                return -EPROTO;
+                return EPROTO;
         }
 
         if (rx->rx_recv_nob < hdr_size) {
@@ -360,6 +363,43 @@ gmnal_post_rx(gmnal_ni_t *gmni, gmnal_rx_t *rx)
 	spin_unlock(&gmni->gmni_gm_lock);
 }
 
+void
+gmnal_version_reply (gmnal_ni_t *gmni, gmnal_rx_t *rx)
+{
+        /* Future protocol version compatibility support!  
+         * The next gmlnd-specific protocol rev will first send a message to
+         * check version; I reply with a stub message containing my current
+         * magic+version... */
+        gmnal_msg_t *msg;
+        gmnal_tx_t  *tx = gmnal_get_tx(gmni);
+
+        if (tx == NULL) {
+                CERROR("Can't allocate tx to send version info to %u\n",
+                       rx->rx_recv_gmid);
+                return;
+        }
+                
+        LASSERT (tx->tx_lntmsg == NULL);        /* no finalize */
+        
+        tx->tx_nid = LNET_NID_ANY;
+        tx->tx_gmlid = rx->rx_recv_gmid;
+
+        msg = GMNAL_NETBUF_MSG(&tx->tx_buf);
+        msg->gmm_magic   = GMNAL_MSG_MAGIC;
+        msg->gmm_version = GMNAL_MSG_VERSION;
+        
+        /* just send magic + version */
+        tx->tx_msgnob = offsetof(gmnal_msg_t, gmm_type);
+        tx->tx_large_nob = 0;
+        
+        spin_lock(&gmni->gmni_tx_lock);
+
+        list_add_tail(&tx->tx_list, &gmni->gmni_buf_txq);
+        gmnal_check_txqueues_locked(gmni);
+
+        spin_unlock(&gmni->gmni_tx_lock);
+}
+
 int
 gmnal_rx_thread(void *arg)
 {
@@ -426,6 +466,7 @@ gmnal_rx_thread(void *arg)
                 /* We're connectionless: simply drop packets with
                  * errors */
                 rc = gmnal_unpack_msg(gmni, rx);
+
                 if (rc == 0) {
                         gmnal_msg_t *msg = GMNAL_NETBUF_MSG(&rx->rx_buf);
                         
@@ -434,8 +475,11 @@ gmnal_rx_thread(void *arg)
                                          &msg->gmm_u.immediate.gmim_hdr,
                                          msg->gmm_srcnid,
                                          rx, 0);
+                } else if (rc > 0) {
+                        gmnal_version_reply(gmni, rx);
+                        rc = -EPROTO;           /* repost rx */
                 }
-
+                
                 if (rc < 0)                     /* parse failure */
                         gmnal_post_rx(gmni, rx);
 

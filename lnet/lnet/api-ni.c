@@ -1071,13 +1071,21 @@ lnet_startup_lndnis (void)
                 nicount++;
         }
 
-        if (nicount > 1 && the_lnet.ln_eqwaitni != NULL) {
-                lnd_type = the_lnet.ln_eqwaitni->ni_lnd->lnd_type;
-                LCONSOLE_ERROR("LND %s can only run single-network\n",
-                               libcfs_lnd2str(lnd_type));
-                goto failed;
+        if (nicount > 1) {
+                if (the_lnet.ln_eqwaitni != NULL) {
+                        lnd_type = the_lnet.ln_eqwaitni->ni_lnd->lnd_type;
+                        LCONSOLE_ERROR("LND %s can only run single-network\n",
+                                       libcfs_lnd2str(lnd_type));
+                        goto failed;
+                }
+                
+                if (the_lnet.ln_ptlcompat != 0) {
+                        LCONSOLE_ERROR("Can't run > 1 network when "
+                                       "portals_compatibility is set\n");
+                        goto failed;
+                }
         }
-
+        
         return 0;
 
  failed:
@@ -1190,10 +1198,19 @@ LNetNIInit(lnet_pid_t requested_pid)
         if (rc != 0)
                 goto failed3;
 
-        lnet_proc_init();
         the_lnet.ln_refcount = 1;
+        /* Now I may use my own API functions... */
+
+        rc = lnet_ping_target_init();
+        if (rc != 0)
+                goto failed4;
+        
+        lnet_proc_init();
         goto out;
 
+ failed4:
+        the_lnet.ln_refcount = 0;
+        lnet_acceptor_stop();
  failed3:
         lnet_destroy_routes();
  failed2:
@@ -1215,12 +1232,17 @@ LNetNIFini()
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
-        the_lnet.ln_refcount--;
-        if (the_lnet.ln_refcount == 0) {
-
+        if (the_lnet.ln_refcount != 1) {
+                the_lnet.ln_refcount--;
+        } else {
                 LASSERT (!the_lnet.ln_niinit_self);
 
                 lnet_proc_fini();
+                lnet_ping_target_fini();
+
+                /* Teardown fns that use my own API functions BEFORE here */
+                the_lnet.ln_refcount = 0;
+
                 lnet_acceptor_stop();
                 lnet_destroy_routes();
                 lnet_shutdown_lndnis();
@@ -1277,6 +1299,23 @@ LNetCtl(unsigned int cmd, void *arg)
                 
                 data->ioc_u32[0] = rc;
                 return 0;
+
+        case IOC_LIBCFS_TESTPROTOCOMPAT:
+                LNET_LOCK();
+                the_lnet.ln_testprotocompat = data->ioc_flags;
+                LNET_UNLOCK();
+                return 0;
+
+        case IOC_LIBCFS_PING:
+                rc = lnet_ping((lnet_process_id_t) {.nid = data->ioc_nid,
+                                                    .pid = data->ioc_u32[0]},
+                               data->ioc_u32[1], /* timeout */
+                               (lnet_process_id_t *)data->ioc_pbuf1,
+                               data->ioc_plen1/sizeof(lnet_process_id_t));
+                if (rc < 0)
+                        return rc;
+                data->ioc_count = rc;
+                return 0;
                 
         default:
                 ni = lnet_net2ni(data->ioc_net);
@@ -1330,3 +1369,190 @@ LNetSnprintHandle(char *str, int len, lnet_handle_any_t h)
 }
 
 
+int
+lnet_ping_target_init(void)
+{
+        static lnet_process_id_t my_ids[10];
+
+        lnet_handle_me_t  meh;
+        int               rc;
+        int               rc2;
+        int               n_ids;
+        
+        for (n_ids = 0; n_ids < sizeof(my_ids)/sizeof(my_ids[0]); n_ids++) {
+                rc = LNetGetId(n_ids, &my_ids[n_ids]);
+
+                if (rc == 0)
+                        continue;
+                
+                if (rc == -ENOENT)
+                        break;
+
+                CERROR("Error %d getting id %d\n", rc, n_ids);
+                return rc;
+        }
+        
+        rc = LNetMEAttach(LNET_RESERVED_PORTAL,
+                          (lnet_process_id_t){.nid = LNET_NID_ANY,
+                                              .pid = LNET_PID_ANY},
+                          LNET_PING_MATCHBITS, 0xffffffffffffffffLL,
+                          LNET_UNLINK, LNET_INS_AFTER,
+                          &meh);
+        if (rc != 0) {
+                CERROR("Can't create ping ME: %d\n", rc);
+                return rc;
+        }
+
+        rc = LNetMDAttach(meh,
+                          (lnet_md_t){.start = my_ids,
+                                      .length = n_ids * sizeof(my_ids[0]),
+                                      .threshold = LNET_MD_THRESH_INF,
+                                      .options = (LNET_MD_OP_GET |
+                                                  LNET_MD_TRUNCATE |
+                                                  LNET_MD_MANAGE_REMOTE),
+                                      .eq_handle = LNET_EQ_NONE},
+                          LNET_RETAIN,
+                          &the_lnet.ln_ping_target_md);
+        if (rc != 0) {
+                CERROR("Can't attach ping MD: %d\n", rc);
+                rc2 = LNetMEUnlink(meh);
+                LASSERT (rc2 == 0);
+                return rc;
+        }
+        
+        return 0;
+}
+
+void
+lnet_ping_target_fini(void)
+{
+        int      rc = LNetMDUnlink(the_lnet.ln_ping_target_md);
+        
+        if (rc != 0)
+                CERROR("Can't unlink the ping MD: %d\n", rc);
+
+        /* NB this MD may still be active: but since I have no EQ, I don't get
+         * to see the UNLINK event... */
+}
+
+int
+lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_ids)
+{
+        lnet_process_id_t   *tmp_ids;
+        lnet_handle_eq_t     eqh;
+        lnet_handle_md_t     mdh;
+        lnet_event_t         event;
+        int                  which;
+        int                  unlinked = 0;
+        int                  replied = 0;
+        const int            a_long_time = 60000; /* mS */
+        int                  rc;
+        int                  rc2;
+        
+        if (n_ids <= 0 ||
+            id.nid == LNET_NID_ANY ||
+            timeout_ms > 500000 ||              /* arbitrary limit! */
+            n_ids > 20)                         /* arbitrary limit! */
+                return -EINVAL;
+
+        if (id.pid == LNET_PID_ANY)
+                id.pid = LUSTRE_SRV_LNET_PID;
+        
+        LIBCFS_ALLOC(tmp_ids, n_ids * sizeof(*tmp_ids));
+        if (tmp_ids == NULL)
+                return -ENOMEM;
+
+        /* NB 2 events max (including any unlink event) */
+        rc = LNetEQAlloc(2, LNET_EQ_HANDLER_NONE, &eqh);
+        if (rc != 0) {
+                CERROR("Can't allocate EQ: %d\n", rc);
+                goto out_0;
+        }
+        
+        rc = LNetMDBind((lnet_md_t){.start = tmp_ids,
+                                    .length = n_ids * sizeof(*tmp_ids),
+                                    .threshold = 2, /* GET/REPLY */
+                                    .options = LNET_MD_TRUNCATE,
+                                    .eq_handle = eqh},
+                        LNET_UNLINK,
+                        &mdh);
+        if (rc != 0) {
+                CERROR("Can't bind MD: %d\n", rc);
+                goto out_1;
+        }
+
+        rc = LNetGet(LNET_NID_ANY, mdh, id, 
+                     LNET_RESERVED_PORTAL,
+                     LNET_PING_MATCHBITS, 0);
+        
+        if (rc != 0) {
+                /* Don't CERROR; this could be deliberate! */
+
+                rc2 = LNetMDUnlink(mdh);
+                LASSERT (rc2 == 0);
+
+                /* NB must wait for the UNLINK event below... */
+                unlinked = 1;
+                timeout_ms = a_long_time;
+        }
+        
+        do {
+                rc2 = LNetEQPoll(&eqh, 1, timeout_ms, &event, &which);
+
+                CDEBUG(D_NET, "poll %d(%d %d)%s\n", rc2, 
+                       (rc2 <= 0) ? -1 : event.type,
+                       (rc2 <= 0) ? -1 : event.status, 
+                       (rc2 > 0 && event.unlinked) ? " unlinked" : "");
+                
+                LASSERT (rc2 != -EOVERFLOW);     /* can't miss anything */
+
+                if (rc2 <= 0 || event.status != 0) {
+                        /* timeout or error */
+                        if (!replied && rc == 0)
+                                rc = (rc2 < 0) ? rc2 :
+                                     (rc2 == 0) ? -ETIMEDOUT :
+                                     event.status;
+
+                        if (!unlinked) {
+                                /* Ensure completion in finite time... */
+                                LNetMDUnlink(mdh);
+                                /* No assertion (racing with network) */
+                                unlinked = 1;
+                                timeout_ms = a_long_time;
+                        } else if (rc2 == 0) {
+                                /* timed out waiting for unlink */
+                                CWARN("ping %s: late network completion\n",
+                                      libcfs_id2str(id));
+                        }
+
+                } else if (event.type == LNET_EVENT_REPLY) {
+                        replied = 1;
+                        rc = event.mlength;
+                }
+
+        } while (rc2 <= 0 || !event.unlinked);
+
+        if (replied) {
+                rc = rc / sizeof(*tmp_ids);
+                LASSERT (rc >= 0 && rc <= n_ids);
+#ifdef __KERNEL__
+                if (copy_to_user(ids, tmp_ids, rc * sizeof(*tmp_ids)))
+                        rc = -EFAULT;
+#else
+                memcpy(ids, tmp_ids, rc * sizeof(*tmp_ids));
+#endif
+        } else if (rc >= 0) {
+                CWARN("Unexpected rc >= 0 but no reply!\n");
+                rc = -EIO;
+        }
+
+ out_1:
+        rc2 = LNetEQFree(eqh);
+        if (rc2 != 0)
+                CERROR("rc2 %d\n", rc2);
+        LASSERT (rc2 == 0);
+        
+ out_0:
+        LIBCFS_FREE(tmp_ids, n_ids * sizeof(*tmp_ids));
+        return rc;
+}

@@ -120,6 +120,9 @@ command_t cmdlist[] = {
          "Omitting the count means indefinitely, 0 means restore, "
          "otherwise fail 'count' messages.\n"
          "usage: fail nid|_all_ [count]"},
+        {"ping", jt_ptl_ping, 0, 
+         "Check LNET connectivity\n"
+         "usage: ping nid [timeout] [pid]"},
 
         /* Device selection commands */
         {"=== device selection ===", jt_noop, 0, "device selection"},

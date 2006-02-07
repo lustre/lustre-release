@@ -282,7 +282,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 }
                 break;
 
-        case IOC_LIBCFS_PING: {
+        case IOC_LIBCFS_PING_TEST: {
                 extern void (kping_client)(struct libcfs_ioctl_data *);
                 void (*ping)(struct libcfs_ioctl_data *);
 

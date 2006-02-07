@@ -78,8 +78,6 @@
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 
-#define KQSW_HDR_SIZE   (sizeof (lnet_hdr_t))
-
 /*
  * Performance Tuning defines
  * NB no mention of PAGE_SIZE for interoperability
@@ -100,29 +98,31 @@
 #define KQSW_OPTIMIZED_PUTS            (32<<10) /* optimize puts >= this size */
 
 /* fixed constants */
-#define KQSW_SMALLPAYLOAD               ((4<<10) - KQSW_HDR_SIZE) /* small/large ep receiver breakpoint */
+#define KQSW_SMALLMSG                  (4<<10)  /* small/large ep receiver breakpoint */
 #define KQSW_RESCHED                    100     /* # busy loops that forces scheduler to yield */
 
 /*
  * derived constants
  */
 
-#define KQSW_TX_BUFFER_SIZE     (KQSW_HDR_SIZE + *kqswnal_tunables.kqn_tx_maxcontig)
+#define KQSW_TX_BUFFER_SIZE     (offsetof(kqswnal_msg_t, \
+                                          kqm_u.immediate.kqim_payload[*kqswnal_tunables.kqn_tx_maxcontig]))
 /* The pre-allocated tx buffer (hdr + small payload) */
 
 #define KQSW_NTXMSGPAGES        (btopr(KQSW_TX_BUFFER_SIZE) + 1 + btopr(LNET_MTU) + 1)
 /* Reserve elan address space for pre-allocated and pre-mapped transmit
  * buffer and a full payload too.  Extra pages allow for page alignment */
 
-#define KQSW_NRXMSGPAGES_SMALL  (btopr(KQSW_HDR_SIZE + KQSW_SMALLPAYLOAD))
+#define KQSW_NRXMSGPAGES_SMALL  (btopr(KQSW_SMALLMSG))
 /* receive hdr/payload always contiguous and page aligned */
 #define KQSW_NRXMSGBYTES_SMALL  (KQSW_NRXMSGPAGES_SMALL * PAGE_SIZE)
 
-#define KQSW_NRXMSGPAGES_LARGE  (btopr(KQSW_HDR_SIZE + LNET_MTU))
+#define KQSW_NRXMSGPAGES_LARGE  (btopr(sizeof(lnet_msg_t) + LNET_MTU))
 /* receive hdr/payload always contiguous and page aligned */
 #define KQSW_NRXMSGBYTES_LARGE  (KQSW_NRXMSGPAGES_LARGE * PAGE_SIZE)
 /* biggest complete packet we can receive (or transmit) */
 
+/* Wire messages */
 /* Remote memory descriptor */
 typedef struct
 {
@@ -133,6 +133,36 @@ typedef struct
         EP_IOVEC         kqrmd_frag[0];         /* actual frags */
 #endif
 } kqswnal_remotemd_t;
+
+/* RDMA request */
+typedef struct
+{
+        lnet_hdr_t       kqim_hdr;              /* LNET header */
+        char             kqim_payload[0];       /* piggy-backed payload */
+} WIRE_ATTR kqswnal_immediate_msg_t;
+
+/* Immediate data */
+typedef struct
+{
+        lnet_hdr_t          kqrm_hdr;           /* LNET header */
+        kqswnal_remotemd_t  kqrm_rmd;           /* peer's buffer */
+} WIRE_ATTR kqswnal_rdma_msg_t;
+
+typedef struct
+{
+        __u32            kqm_magic;             /* I'm a qswlnd message */
+        __u16            kqm_version;           /* this is my version number */
+        __u16            kqm_type;              /* msg type */
+        union {
+                kqswnal_immediate_msg_t  immediate;
+                kqswnal_rdma_msg_t       rdma;
+        } WIRE_ATTR kqm_u;
+} WIRE_ATTR kqswnal_msg_t;
+
+#define QSWLND_PROTO_VERSION        1
+
+#define QSWLND_MSG_IMMEDIATE        0
+#define QSWLND_MSG_RDMA             1
 
 typedef struct kqswnal_rx
 {
@@ -147,7 +177,8 @@ typedef struct kqswnal_rx
 #endif
         int              krx_npages;            /* # pages in receive buffer */
         int              krx_nob;               /* Number Of Bytes received into buffer */
-        int              krx_rpc_reply_needed;  /* peer waiting for EKC RPC reply */
+        int              krx_rpc_reply_needed:1; /* peer waiting for EKC RPC reply */
+        int              krx_raw_lnet_hdr:1;    /* msg is a raw lnet hdr (portals compatible) */
         int              krx_rpc_reply_status;  /* what status to send */
         int              krx_state;             /* what this RX is doing */
         atomic_t         krx_refcount;          /* how to tell when rpc is done */
@@ -170,7 +201,7 @@ typedef struct kqswnal_tx
         int               ktx_npages;           /* pages reserved for mapping messages */
         int               ktx_nmappedpages;     /* # pages mapped for current message */
         int               ktx_port;             /* destination ep port */
-        lnet_nid_t         ktx_nid;              /* destination node */
+        lnet_nid_t        ktx_nid;              /* destination node */
         void             *ktx_args[3];          /* completion passthru */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
         unsigned long     ktx_launchtime;       /* when (in jiffies) the transmit was launched */
@@ -254,6 +285,8 @@ typedef struct
 
         EP_STATUSBLK       kqn_rpc_success;     /* preset RPC reply status blocks */
         EP_STATUSBLK       kqn_rpc_failed;
+        EP_STATUSBLK       kqn_rpc_version;     /* reply to future version query */
+        EP_STATUSBLK       kqn_rpc_magic;       /* reply to future version query */
 }  kqswnal_data_t;
 
 /* kqn_init state */

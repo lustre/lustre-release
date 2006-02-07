@@ -982,7 +982,7 @@ jt_ptl_print_active_txs (int argc, char **argv)
         return 0;
 }
 
-int jt_ptl_ping(int argc, char **argv)
+int jt_ptl_ping_test(int argc, char **argv)
 {
         int       rc;
         lnet_nid_t nid;
@@ -1025,12 +1025,64 @@ int jt_ptl_ping(int argc, char **argv)
         data.ioc_u32[0]  = size;
         data.ioc_u32[1]  = timeout;
         
-        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PING, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PING_TEST, &data);
         if (rc) {
                 fprintf(stderr, "failed to start pinger: %s\n",
                         strerror(errno));
                 return -1;
         }
+        return 0;
+}
+
+int jt_ptl_ping(int argc, char **argv)
+{
+        int                      rc;
+        int                      timeout;
+        lnet_process_id_t        id;
+        lnet_process_id_t        ids[16];
+        struct libcfs_ioctl_data data;
+        int                      i;
+
+        if (argc < 2) {
+                fprintf(stderr, "usage: %s nid [timeout (secs)] [pid]\n", argv[0]);
+                return 0;
+        }
+
+        id.nid = libcfs_str2nid(argv[1]);
+        if (id.nid == LNET_NID_ANY) {
+                fprintf (stderr, "Can't parse nid \"%s\"\n", argv[1]);
+                return -1;
+        }
+        
+        if (argc > 2)
+                timeout = 1000 * atol(argv[2]);
+        else
+                timeout = 1000;                 /* default 1 second timeout */
+
+        if (argc > 3)
+                id.pid = atol(argv[4]);
+        else
+                id.pid = LNET_PID_ANY;
+        
+        LIBCFS_IOC_INIT (data);
+        data.ioc_nid     = id.nid;
+        data.ioc_u32[0]  = id.pid;
+        data.ioc_u32[1]  = timeout;
+        data.ioc_plen1   = sizeof(ids);
+        data.ioc_pbuf1   = (char *)ids;
+        
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PING, &data);
+        if (rc != 0) {
+                fprintf(stderr, "failed to ping %s: %s\n",
+                        id.pid == LNET_PID_ANY ? 
+                        libcfs_nid2str(id.nid) : libcfs_id2str(id),
+                        strerror(errno));
+                return -1;
+        }
+
+        for (i = 0; i < data.ioc_count; i++)
+                printf("%s\n", libcfs_id2str(ids[i]));
+
         return 0;
 }
 
@@ -1685,4 +1737,37 @@ int jt_ptl_memhog(int argc, char **argv)
         printf("memhog %d OK\n", count);
         return 0;
 }
+
+int jt_ptl_testprotocompat(int argc, char **argv)
+{
+        struct libcfs_ioctl_data  data;
+        int                       rc;
+        int                       flags;
+        char                     *end;
+        
+        if (argc < 2)  {
+                fprintf(stderr, "usage: %s <number>\n", argv[0]);
+                return 0;
+        }
+
+        flags = strtol(argv[1], &end, 0);
+        if (flags < 0 || *end != 0) {
+                fprintf(stderr, "Can't parse flags '%s'\n", argv[1]);
+                return -1;
+        }
+
+        LIBCFS_IOC_INIT(data);
+        data.ioc_flags = flags;
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_TESTPROTOCOMPAT, &data);
+        
+        if (rc != 0) {
+                fprintf(stderr, "test proto compat %x failed: %s\n",
+                        flags, strerror(errno));
+                return -1;
+        }
+        
+        printf("test proto compat %x OK\n", flags);
+        return 0;
+}
+
 

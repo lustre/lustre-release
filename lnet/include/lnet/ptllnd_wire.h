@@ -76,7 +76,7 @@ typedef struct kptl_msg
 
 }kptl_msg_t;
 
-#define PTLLND_MSG_MAGIC                0x50746C4E  /* 'PtlN' unique magic */
+#define PTLLND_MSG_MAGIC                LNET_PROTO_PTL_MAGIC
 #define PTLLND_MSG_VERSION              0x01
 
 #define PTLLND_MSG_TYPE_INVALID         0x00

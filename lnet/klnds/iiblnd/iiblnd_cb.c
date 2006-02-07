@@ -2111,18 +2111,22 @@ kibnal_connreq_done (kib_conn_t *conn, int type, int status)
 void
 kibnal_reject (lnet_nid_t nid, IB_HANDLE cep, int why)
 {
-        /* CAVEAT EMPTOR: keep IBNAL_REJECT_xxx in sync */
-        static CM_REJECT_INFO msgs[3] = {
-                {.Reason = RC_NO_RESOURCES},    /* IBNAL_REJECT_NO_RESOURCES */
-                {.Reason = RC_USER_REJ,         /* IBNAL_REJECT_CONN_RACE */
-                 .PrivateData[0] = 0},
-                {.Reason = RC_USER_REJ,         /* IBNAL_REJECT_FATAL */
-                 .PrivateData[0] = 1}};
-
-        CM_REJECT_INFO *msg = &msgs[why];
-        FSTATUS         frc;
+        static CM_REJECT_INFO  msgs[3];
+        CM_REJECT_INFO        *msg = &msgs[why];
+        FSTATUS                frc;
 
         LASSERT (why >= 0 && why < sizeof(msgs)/sizeof(msgs[0]));
+
+        /* If I wasn't so lazy, I'd initialise this only once; it's effectively
+         * read-only... */
+        msg->Reason         = RC_USER_REJ;
+        msg->PrivateData[0] = (IBNAL_MSG_MAGIC) & 0xff;
+        msg->PrivateData[1] = (IBNAL_MSG_MAGIC >> 8) & 0xff;
+        msg->PrivateData[2] = (IBNAL_MSG_MAGIC >> 16) & 0xff;
+        msg->PrivateData[3] = (IBNAL_MSG_MAGIC >> 24) & 0xff;
+        msg->PrivateData[4] = (IBNAL_MSG_VERSION) & 0xff;
+        msg->PrivateData[5] = (IBNAL_MSG_VERSION >> 8) & 0xff;
+        msg->PrivateData[6] = why;
 
         frc = iba_cm_reject(cep, msg);
         if (frc != FSUCCESS)
@@ -2132,9 +2136,12 @@ kibnal_reject (lnet_nid_t nid, IB_HANDLE cep, int why)
 void
 kibnal_check_connreject(kib_conn_t *conn, int type, CM_REJECT_INFO *rej)
 {
-        kib_peer_t *peer = conn->ibc_peer;
-        unsigned    long flags;
-
+        kib_peer_t    *peer = conn->ibc_peer;
+        unsigned long  flags;
+        int            magic;
+        int            version;
+        int            why;
+        
         LASSERT (type == IBNAL_CONN_ACTIVE ||
                  type == IBNAL_CONN_PASSIVE);
 
@@ -2167,11 +2174,31 @@ kibnal_check_connreject(kib_conn_t *conn, int type, CM_REJECT_INFO *rej)
                 break;
 
         case RC_USER_REJ:
+                magic   = (rej->PrivateData[0]) |
+                          (rej->PrivateData[1] << 8) |
+                          (rej->PrivateData[2] << 16) |
+                          (rej->PrivateData[3] << 24);
+                version = (rej->PrivateData[4]) |
+                          (rej->PrivateData[5] << 8);
+                why     = (rej->PrivateData[6]);
+                
+                if (magic != IBNAL_MSG_MAGIC ||
+                    version != IBNAL_MSG_VERSION) {
+                        CERROR("%s connection with %s rejected "
+                               "(magic/ver %08x/%d why %d): "
+                               "incompatible protocol\n",
+                               (type == IBNAL_CONN_ACTIVE) ? 
+                               "Active" : "Passive",
+                               libcfs_nid2str(peer->ibp_nid), 
+                               magic, version, why);
+                        break;
+                }
+
                 if (type == IBNAL_CONN_ACTIVE && 
-                    rej->PrivateData[0] == 0) {
+                    why == IBNAL_REJECT_CONN_RACE) {
                         /* lost connection race */
-                        CWARN("Connection to %s rejected "
-                              "(lost connection race)\n",
+                        CWARN("Connection to %s rejected: "
+                              "lost connection race\n",
                               libcfs_nid2str(peer->ibp_nid));
 
                         write_lock_irqsave(&kibnal_data.kib_global_lock, 
@@ -2187,7 +2214,12 @@ kibnal_check_connreject(kib_conn_t *conn, int type, CM_REJECT_INFO *rej)
                                                 flags);
                         break;
                 }
-                /* fall through */
+
+                CERROR("%s connection with %s rejected: %d\n",
+                       (type == IBNAL_CONN_ACTIVE) ? "Active" : "Passive",
+                       libcfs_nid2str(peer->ibp_nid), why);
+                break;
+                
         default:
                 CERROR("%s connection with %s rejected: %d\n",
                        (type == IBNAL_CONN_ACTIVE) ? "Active" : "Passive",
@@ -2270,6 +2302,22 @@ kibnal_accept (kib_conn_t **connp, IB_HANDLE cep, kib_msg_t *msg, int nob)
         kib_peer_t    *peer2;
         unsigned long  flags;
         int            rc;
+
+        if ((msg->ibm_magic == LNET_PROTO_MAGIC ||
+             msg->ibm_magic == __swab32(LNET_PROTO_MAGIC)) ||
+            (msg->ibm_magic == IBNAL_MSG_MAGIC &&
+             msg->ibm_version != IBNAL_MSG_VERSION) ||
+            (msg->ibm_magic == __swab32(IBNAL_MSG_MAGIC) &&
+             msg->ibm_version != __swab16(IBNAL_MSG_VERSION))) {
+                /* Future protocol version compatibility support! 
+                 * If the iiblnd-specific protocol changes, or when LNET
+                 * unifies protocols over all LNDs, the initial connection will
+                 * negotiate a protocol version.  I trap this here to avoid
+                 * console errors; the reject tells the peer which protocol I
+                 * speak. */
+                kibnal_reject(LNET_NID_ANY, cep, IBNAL_REJECT_FATAL);
+                return -EPROTO;
+        }
 
         rc = kibnal_unpack_msg(msg, nob);
         if (rc != 0) {
@@ -2643,6 +2691,21 @@ kibnal_pathreq_callback (void *arg, QUERY *qry,
                             CM_REQUEST_INFO_USER_LEN,
                             IBNAL_MSG_CONNREQ, 
                             conn->ibc_peer->ibp_nid, 0);
+
+        if (the_lnet.ln_testprotocompat != 0) {
+                /* single-shot proto test */
+                LNET_LOCK();
+                if ((the_lnet.ln_testprotocompat & 1) != 0) {
+                        ((kib_msg_t *)req->PrivateData)->ibm_version++;
+                        the_lnet.ln_testprotocompat &= ~1;
+                }
+                if ((the_lnet.ln_testprotocompat & 2) != 0) {
+                        ((kib_msg_t *)req->PrivateData)->ibm_magic =
+                                LNET_PROTO_MAGIC;
+                        the_lnet.ln_testprotocompat &= ~2;
+                }
+                LNET_UNLOCK();
+        }
 
         /* Flag I'm getting involved with the CM... */
         kibnal_set_conn_state(conn, IBNAL_CONN_CONNECTING);

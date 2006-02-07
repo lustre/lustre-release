@@ -123,8 +123,8 @@ gmnal_startup(lnet_ni_t *ni)
 
         LASSERT (ni->ni_lnd == &the_gmlnd);
 
-        ni->ni_maxtxcredits = *gmnal_tunables.gm_ntx;
-        ni->ni_peertxcredits = *gmnal_tunables.gm_ntx_peer;
+        ni->ni_maxtxcredits = *gmnal_tunables.gm_credits;
+        ni->ni_peertxcredits = *gmnal_tunables.gm_peer_credits;
         
         if (the_gmni != NULL) {
                 CERROR("Only 1 instance supported\n");
@@ -143,7 +143,6 @@ gmnal_startup(lnet_ni_t *ni)
 	gmni->gmni_ni = ni;
         spin_lock_init(&gmni->gmni_tx_lock);
 	spin_lock_init(&gmni->gmni_gm_lock);
-        init_waitqueue_head(&gmni->gmni_idle_tx_wait);
         INIT_LIST_HEAD(&gmni->gmni_idle_txs);
         INIT_LIST_HEAD(&gmni->gmni_idle_ltxbs);
         INIT_LIST_HEAD(&gmni->gmni_buf_txq);

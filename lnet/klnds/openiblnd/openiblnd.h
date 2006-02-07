@@ -480,19 +480,6 @@ kibnal_wreqid_is_rx (__u64 wreqid)
         return (wreqid & 1) != 0;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
-# define sk_allocation  allocation
-# define sk_data_ready  data_ready
-# define sk_write_space write_space
-# define sk_user_data   user_data
-# define sk_prot        prot
-# define sk_sndbuf      sndbuf
-# define sk_socket      socket
-# define sk_wmem_queued wmem_queued
-# define sk_err         err
-# define sk_sleep       sleep
-#endif
-
 int kibnal_startup (lnet_ni_t *ni);
 void kibnal_shutdown (lnet_ni_t *ni);
 int kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);

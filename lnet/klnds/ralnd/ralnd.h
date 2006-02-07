@@ -341,19 +341,6 @@ typedef struct kra_peer
         unsigned long       rap_reconnect_interval; /* exponential backoff */
 } kra_peer_t;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
-# define sk_allocation  allocation
-# define sk_data_ready  data_ready
-# define sk_write_space write_space
-# define sk_user_data   user_data
-# define sk_prot        prot
-# define sk_sndbuf      sndbuf
-# define sk_socket      socket
-# define sk_wmem_queued wmem_queued
-# define sk_err         err
-# define sk_sleep       sleep
-#endif
-
 extern kra_data_t      kranal_data;
 extern kra_tunables_t  kranal_tunables;
 
@@ -478,3 +465,4 @@ extern void kranal_connect (kra_peer_t *peer);
 extern int kranal_conn_handshake (struct socket *sock, kra_peer_t *peer);
 extern int kranal_tunables_init(void);
 extern void kranal_tunables_fini(void);
+extern void kranal_init_msg(kra_msg_t *msg, int type);

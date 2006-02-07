@@ -751,9 +751,22 @@ kptllnd_peer_check_sends (
                                 goto failed_without_lock;
                         }
                         STAT_UPDATE(kps_posted_tx_bulk_mds);
+                        
+                } else if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_HELLO &&
+                           the_lnet.ln_testprotocompat != 0) {
+                        /* single-shot proto test */
+                        LNET_LOCK();
+                        if ((the_lnet.ln_testprotocompat & 1) != 0) {
+                                tx->tx_msg->ptlm_version++;
+                                the_lnet.ln_testprotocompat &= ~1;
+                        }
+                        if ((the_lnet.ln_testprotocompat & 2) != 0) {
+                                tx->tx_msg->ptlm_magic = LNET_PROTO_MAGIC;
+                                the_lnet.ln_testprotocompat &= ~2;
+                        }
+                        LNET_UNLOCK();
                 }
-
-
+                
                 /*
                  * Setup the MD
                  */
@@ -1391,7 +1404,6 @@ kptllnd_tx_launch (kptl_tx_t         *tx,
          * the tx will wait for a reply.
          */
         CDEBUG(D_NET, "TXHello=%p\n", hello_tx);
-
 
         spin_lock_irqsave(&peer->peer_lock, flags);
         kptllnd_peer_queue_tx_locked(peer, hello_tx);

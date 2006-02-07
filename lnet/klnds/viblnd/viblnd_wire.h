@@ -98,7 +98,7 @@ typedef struct
         } WIRE_ATTR ibm_u;
 } WIRE_ATTR kib_msg_t;
 
-#define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
+#define IBNAL_MSG_MAGIC LNET_PROTO_VIB_MAGIC	/* unique magic */
 
 #if IBNAL_USE_FMA				/* ensure version changes on FMA */
 #define IBNAL_MSG_VERSION           0x11
@@ -116,3 +116,8 @@ typedef struct
 #define IBNAL_MSG_PUT_DONE          0xd5        /* completion (src->sink) */
 #define IBNAL_MSG_GET_REQ           0xd6        /* getreq (sink->src) */
 #define IBNAL_MSG_GET_DONE          0xd7        /* completion (src->sink: all OK) */
+
+/* connection rejection reasons */
+#define IBNAL_REJECT_CONN_RACE       0          /* You lost connection race */
+#define IBNAL_REJECT_NO_RESOURCES    1          /* Out of memory/conns etc */
+#define IBNAL_REJECT_FATAL           2          /* Anything else */

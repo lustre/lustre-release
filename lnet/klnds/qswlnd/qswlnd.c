@@ -341,8 +341,12 @@ kqswnal_startup (lnet_ni_t *ni)
 	/* Leave kqn_rpc_success zeroed */
 #if MULTIRAIL_EKC
 	kqswnal_data.kqn_rpc_failed.Data[0] = -ECONNREFUSED;
+	kqswnal_data.kqn_rpc_version.Data[0] = QSWLND_PROTO_VERSION;
+	kqswnal_data.kqn_rpc_magic.Data[0] = LNET_PROTO_QSW_MAGIC;
 #else
 	kqswnal_data.kqn_rpc_failed.Status = -ECONNREFUSED;
+	kqswnal_data.kqn_rpc_version.Status = QSWLND_PROTO_VERSION;
+	kqswnal_data.kqn_rpc_magic.Status = LNET_PROTO_QSW_MAGIC;
 #endif
 
 	/* pointers/lists/locks initialised */

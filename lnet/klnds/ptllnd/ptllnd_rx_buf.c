@@ -614,6 +614,46 @@ kptllnd_rx_schedule (kptl_rx_t *rx)
         spin_unlock_irqrestore(&kptllnd_data->kptl_sched_lock, flags);
 }
 
+void
+kptllnd_version_nak (kptl_rx_t *rx)
+{
+        /* Fire-and-forget a stub message that will let the peer know my
+         * protocol magic/version */
+        static struct {
+                __u32      magic;
+                __u16      version;
+        } version_reply = {
+                .magic       = PTLLND_MSG_MAGIC,
+                .version     = PTLLND_MSG_VERSION};
+
+        static ptl_md_t md = {
+                .start        = &version_reply,
+                .length       = sizeof(version_reply),
+                .threshold    = 1,
+                .options      = 0,
+                .user_ptr     = NULL,
+                .eq_handle    = PTL_EQ_NONE};
+        
+        ptl_handle_md_t   mdh;
+        kptl_rx_buffer_t *rxb = rx->rx_rxb;
+        kptl_data_t      *kptllnd_data = rxb->rxb_po.po_kptllnd_data;
+        int               rc;
+        
+        rc = PtlMDBind(kptllnd_data->kptl_nih, md, PTL_UNLINK, &mdh);
+        if (rc != PTL_OK) {
+                CERROR("Can't version NAK "FMT_NID"/%d: bind failed %d\n",
+                       rx->rx_initiator.nid, rx->rx_initiator.pid, rc);
+                return;
+        }
+        
+        rc = PtlPut(mdh, PTL_NOACK_REQ, rx->rx_initiator,
+                    *kptllnd_tunables.kptl_portal, 0,
+                    LNET_MSG_MATCHBITS, 0, 0);
+        
+        if (rc != PTL_OK)
+                CERROR("Can't version NAK "FMT_NID"/%d: put failed %d\n",
+                       rx->rx_initiator.nid, rx->rx_initiator.pid, rc);
+}
 
 void
 kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
@@ -629,8 +669,20 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         CDEBUG(D_NET, ">>> RXRXRXRXRX rx=%p nob=%d "FMT_NID"/%d\n",
                rx, rx->rx_nob, rx->rx_initiator.nid, rx->rx_initiator.pid);
 
-        if (rx->rx_nob == 0) {
-                /* discard silently!!! */
+        if ((rx->rx_nob >= 4 &&
+             (msg->ptlm_magic == LNET_PROTO_MAGIC ||
+              msg->ptlm_magic == __swab32(LNET_PROTO_MAGIC))) ||
+            (rx->rx_nob >= 6 &&
+             ((msg->ptlm_magic == PTLLND_MSG_MAGIC &&
+               msg->ptlm_version != PTLLND_MSG_VERSION) ||
+              (msg->ptlm_magic == __swab32(PTLLND_MSG_MAGIC) &&
+               msg->ptlm_version != __swab16(PTLLND_MSG_VERSION))))) {
+                /* Future protocol compatibility support!
+                 * When LNET unifies protocols over all LNDs, or if the
+                 * ptllnd-specific protocol changes, it will expect "old" peers
+                 * to reply with a stub message containing their
+                 * magic/version. */
+                kptllnd_version_nak(rx);
                 goto out;
         }
         

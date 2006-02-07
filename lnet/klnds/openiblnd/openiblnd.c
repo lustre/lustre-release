@@ -228,6 +228,20 @@ kibnal_make_svcqry (kib_conn_t *conn)
         kibnal_init_msg(msg, IBNAL_MSG_SVCQRY, 0);
         kibnal_pack_msg(msg, 0, peer->ibp_nid, 0);
 
+        if (the_lnet.ln_testprotocompat != 0) {
+                /* single-shot proto test */
+                LNET_LOCK();
+                if ((the_lnet.ln_testprotocompat & 1) != 0) {
+                        msg->ibm_version++;
+                        the_lnet.ln_testprotocompat &= ~1;
+                }
+                if ((the_lnet.ln_testprotocompat & 2) != 0) {
+                        msg->ibm_magic = LNET_PROTO_MAGIC;
+                        the_lnet.ln_testprotocompat &= ~2;
+                }
+                LNET_UNLOCK();
+        }
+
         rc = lnet_connect(&sock, peer->ibp_nid,
                          0, peer->ibp_ip, peer->ibp_port);
         if (rc != 0)
@@ -302,6 +316,7 @@ kibnal_handle_svcqry (struct socket *sock)
         kib_msg_t           *msg;
         __u64                srcnid;
         __u64                srcstamp;
+        int                  version;
         int                  rc;
 
         rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
@@ -320,31 +335,88 @@ kibnal_handle_svcqry (struct socket *sock)
         rc = libcfs_sock_read(sock, &msg->ibm_magic, sizeof(msg->ibm_magic),
                               lnet_acceptor_timeout());
         if (rc != 0) {
-                CERROR("Error %d receiving svcqry from %u.%u.%u.%u/%d\n",
+                CERROR("Error %d receiving svcqry(1) from %u.%u.%u.%u/%d\n",
                        rc, HIPQUAD(peer_ip), peer_port);
                 goto out;
         }
 
-        if (msg->ibm_magic == IBNAL_MSG_MAGIC ||
-            msg->ibm_magic == __swab32(IBNAL_MSG_MAGIC)) {
-                /* it's my magic; read the rest in... */
-                rc = libcfs_sock_read(sock, &msg->ibm_version, 
-                                      offsetof(kib_msg_t, ibm_u) -
-                                      offsetof(kib_msg_t, ibm_version),
-                                      lnet_acceptor_timeout());
-        } else {
-                /* This might be a generic acceptor connection request... */
+        if (msg->ibm_magic != IBNAL_MSG_MAGIC &&
+            msg->ibm_magic != __swab32(IBNAL_MSG_MAGIC)) {
+                /* Unexpected magic! */
+                if (the_lnet.ln_ptlcompat == 0) {
+                        if (msg->ibm_magic == LNET_PROTO_MAGIC ||
+                            msg->ibm_magic == __swab32(LNET_PROTO_MAGIC)) {
+                                /* future protocol version compatibility!
+                                 * When LNET unifies protocols over all LNDs,
+                                 * the first thing sent will be a version
+                                 * query.  I send back a reply in my current
+                                 * protocol to tell her I'm "old" */
+                                kibnal_init_msg(msg, 0, 0);
+                                kibnal_pack_msg(msg, 0, LNET_NID_ANY, 0);
+                                goto reply;
+                        }
+
+                        CERROR ("Bad magic(1) %#08x (%#08x expected) from "
+                                "%u.%u.%u.%u/%d\n", msg->ibm_magic, 
+                                IBNAL_MSG_MAGIC, HIPQUAD(peer_ip), peer_port);
+                        goto out;
+                }
+                
+                /* When portals compatibility is set, I may be passed a new
+                 * connection "blindly" by the acceptor, and I have to
+                 * determine if my peer has sent an acceptor connection request
+                 * or not. */
                 rc = lnet_accept(kibnal_data.kib_ni, sock, msg->ibm_magic);
                 if (rc != 0)
                         goto out;
 
-                /* ...followed by my service query */
-                rc = libcfs_sock_read(sock, msg, offsetof(kib_msg_t, ibm_u),
+                /* It was an acceptor connection request! 
+                 * Now I should see my magic... */
+                rc = libcfs_sock_read(sock, &msg->ibm_magic, 
+                                      sizeof(msg->ibm_magic), 
                                       lnet_acceptor_timeout());
+                if (rc != 0) {
+                        CERROR("Error %d receiving svcqry(2) from %u.%u.%u.%u/%d\n",
+                               rc, HIPQUAD(peer_ip), peer_port);
+                        goto out;
+                }
+
+                if (msg->ibm_magic != IBNAL_MSG_MAGIC &&
+                    msg->ibm_magic != __swab32(IBNAL_MSG_MAGIC)) {
+                        CERROR ("Bad magic(2) %#08x (%#08x expected) from "
+                                "%u.%u.%u.%u/%d\n", msg->ibm_magic, 
+                                IBNAL_MSG_MAGIC, HIPQUAD(peer_ip), peer_port);
+                        goto out;
+                }
+        }
+
+        /* Now check version */
+
+        rc = libcfs_sock_read(sock, &msg->ibm_version, sizeof(msg->ibm_version),
+                              lnet_acceptor_timeout());
+        if (rc != 0) {
+                CERROR("Error %d receiving svcqry(3) from %u.%u.%u.%u/%d\n",
+                       rc, HIPQUAD(peer_ip), peer_port);
+                goto out;
+        }
+
+        version = (msg->ibm_magic == IBNAL_MSG_MAGIC) ?
+                  msg->ibm_version : __swab32(msg->ibm_version);
+        /* Peer is a different protocol version: reply in my current protocol
+         * to tell her I'm "old" */
+        if (version != IBNAL_MSG_VERSION) {
+                kibnal_init_msg(msg, 0, 0);
+                kibnal_pack_msg(msg, 0, LNET_NID_ANY, 0);
+                goto reply;
         }
         
+        /* Now read in all the rest */
+        rc = libcfs_sock_read(sock, &msg->ibm_type,
+                              offsetof(kib_msg_t, ibm_u) - 
+                              offsetof(kib_msg_t, ibm_type),
+                              lnet_acceptor_timeout());
         if (rc != 0) {
-                CERROR("Error %d receiving svcqry from %u.%u.%u.%u/%d\n",
+                CERROR("Error %d receiving svcqry(4) from %u.%u.%u.%u/%d\n",
                        rc, HIPQUAD(peer_ip), peer_port);
                 goto out;
         }
@@ -382,7 +454,8 @@ kibnal_handle_svcqry (struct socket *sock)
         msg->ibm_u.svcrsp.ibsr_svc_pkey = kibnal_data.kib_svc_pkey;
 
         kibnal_pack_msg(msg, 0, srcnid, srcstamp);
-        
+
+ reply:
         rc = libcfs_sock_write (sock, msg, msg->ibm_nob, 0);
         if (rc != 0) {
                 CERROR("Error %d replying to svcqry from %u.%u.%u.%u/%d\n",
