@@ -1106,8 +1106,14 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         mnt = do_kern_mount("ext3", s_flags, lmd->lmd_dev, 0);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
-                CERROR("premount failed: rc = %d\n", rc);
-                GOTO(out_free, rc);
+                CERROR("premount ext3 failed (%d), trying ldiskfs\n", rc);
+                /* If ext3 fails (bec. of mballoc, extents), try ldiskfs */
+                mnt = do_kern_mount("ldiskfs", s_flags, lmd->lmd_dev, 0);
+                if (IS_ERR(mnt)) {
+                        rc = PTR_ERR(mnt);
+                        CERROR("premount ldiskfs failed: rc = %d\n", rc);
+                        GOTO(out_free, rc);
+                }
         }
 
         OBD_SET_CTXT_MAGIC(&mount_ctxt);
