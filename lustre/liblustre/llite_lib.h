@@ -255,4 +255,14 @@ static inline struct ext2_dirent *ext2_next_entry(struct ext2_dirent *p)
         return (struct ext2_dirent*)((char*) p + le16_to_cpu(p->rec_len));
 }
 
+static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
+{
+        struct intnl_stat *st = llu_i2stat(inode);
+        lvb->lvb_size = st->st_size;
+        lvb->lvb_blocks = st->st_blocks;
+        lvb->lvb_mtime = st->st_mtime;
+        lvb->lvb_atime = st->st_atime;
+        lvb->lvb_ctime = st->st_ctime;
+}
+
 #endif

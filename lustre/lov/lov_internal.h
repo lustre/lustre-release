@@ -113,6 +113,8 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
 /* lov_merge.c */
 void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                      struct lov_stripe_md *lsm, int stripeno, int *set);
+int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
+                  struct ost_lvb *lvb, int kms_only);
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                    obd_off size, int shrink);
 

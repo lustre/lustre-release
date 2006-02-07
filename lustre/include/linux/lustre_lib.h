@@ -747,6 +747,20 @@ do {                                                                    \
 })
 
 #ifdef __KERNEL__
+/* initialize ost_lvb according to inode */
+static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
+{
+        lvb->lvb_size = inode->i_size;
+        lvb->lvb_blocks = inode->i_blocks;
+        lvb->lvb_mtime = LTIME_S(inode->i_mtime);
+        lvb->lvb_atime = LTIME_S(inode->i_atime);
+        lvb->lvb_ctime = LTIME_S(inode->i_ctime);
+}
+#else
+/* defined in liblustre/llite_lib.h */
+#endif
+
+#ifdef __KERNEL__
 #define LIBLUSTRE_CLIENT (0)
 #else
 #define LIBLUSTRE_CLIENT (1)

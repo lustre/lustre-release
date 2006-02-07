@@ -129,26 +129,24 @@ int lov_update_enqueue_set(struct lov_request_set *set,
          * can be addressed then. */
         if (rc == ELDLM_OK) {
                 struct ldlm_lock *lock = ldlm_handle2lock(lov_lockhp);
-                __u64 tmp = req->rq_md->lsm_oinfo->loi_rss;
+                __u64 tmp = req->rq_md->lsm_oinfo->loi_lvb.lvb_size;
 
                 LASSERT(lock != NULL);
                 lov_stripe_lock(set->set_md);
-                loi->loi_rss = tmp;
-                loi->loi_mtime = req->rq_md->lsm_oinfo->loi_mtime;
-                loi->loi_blocks = req->rq_md->lsm_oinfo->loi_blocks;
+                loi->loi_lvb = req->rq_md->lsm_oinfo->loi_lvb;
                 /* Extend KMS up to the end of this lock and no further
                  * A lock on [x,y] means a KMS of up to y + 1 bytes! */
                 if (tmp > lock->l_policy_data.l_extent.end)
                         tmp = lock->l_policy_data.l_extent.end + 1;
                 if (tmp >= loi->loi_kms) {
-                        LDLM_DEBUG(lock, "lock acquired, setting rss="
-                                   LPU64", kms="LPU64, loi->loi_rss, tmp);
+                        LDLM_DEBUG(lock, "lock acquired, setting rss="LPU64
+                                   ", kms="LPU64, loi->loi_lvb.lvb_size, tmp);
                         loi->loi_kms = tmp;
                         loi->loi_kms_valid = 1;
                 } else {
                         LDLM_DEBUG(lock, "lock acquired, setting rss="
                                    LPU64"; leaving kms="LPU64", end="LPU64,
-                                   loi->loi_rss, loi->loi_kms,
+                                   loi->loi_lvb.lvb_size, loi->loi_kms,
                                    lock->l_policy_data.l_extent.end);
                 }
                 lov_stripe_unlock(set->set_md);
@@ -157,12 +155,10 @@ int lov_update_enqueue_set(struct lov_request_set *set,
         } else if (rc == ELDLM_LOCK_ABORTED && flags & LDLM_FL_HAS_INTENT) {
                 memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                 lov_stripe_lock(set->set_md);
-                loi->loi_rss = req->rq_md->lsm_oinfo->loi_rss;
-                loi->loi_mtime = req->rq_md->lsm_oinfo->loi_mtime;
-                loi->loi_blocks = req->rq_md->lsm_oinfo->loi_blocks;
+                loi->loi_lvb = req->rq_md->lsm_oinfo->loi_lvb;
                 lov_stripe_unlock(set->set_md);
                 CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
-                       " kms="LPU64"\n", loi->loi_rss, loi->loi_kms);
+                       " kms="LPU64"\n", loi->loi_lvb.lvb_size, loi->loi_kms);
                 rc = ELDLM_OK;
         } else {
                 struct obd_export *exp = set->set_exp;
@@ -293,10 +289,8 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                 req->rq_md->lsm_object_id = loi->loi_id;
                 req->rq_md->lsm_stripe_count = 0;
                 req->rq_md->lsm_oinfo->loi_kms_valid = loi->loi_kms_valid;
-                req->rq_md->lsm_oinfo->loi_rss = loi->loi_rss;
                 req->rq_md->lsm_oinfo->loi_kms = loi->loi_kms;
-                req->rq_md->lsm_oinfo->loi_blocks = loi->loi_blocks;
-                req->rq_md->lsm_oinfo->loi_mtime = loi->loi_mtime;
+                req->rq_md->lsm_oinfo->loi_lvb = loi->loi_lvb;
 
                 lov_set_add_req(req, set);
         }
@@ -776,7 +770,7 @@ static int brw_done(struct lov_request_set *set)
                 loi = &lsm->lsm_oinfo[req->rq_stripe];
 
                 if (req->rq_oa->o_valid & OBD_MD_FLBLOCKS)
-                        loi->loi_blocks = req->rq_oa->o_blocks;
+                        loi->loi_lvb.lvb_blocks = req->rq_oa->o_blocks;
         }
 
         RETURN(0);
@@ -1141,6 +1135,7 @@ int lov_update_setattr_set(struct lov_request_set *set,
                            struct lov_request *req, int rc)
 {
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
+        struct lov_stripe_md *lsm = set->set_md;
         ENTRY;
 
         lov_update_set(set, req, rc);
@@ -1151,10 +1146,17 @@ int lov_update_setattr_set(struct lov_request_set *set,
 
         /* FIXME: LOV STACKING update loi data should be done by OSC *
          * when this is gone we can go back to using lov_update_common_set() */
-        if (rc == 0 && req->rq_oa->o_valid & OBD_MD_FLMTIME)
-                set->set_md->lsm_oinfo[req->rq_stripe].loi_mtime =
-                        req->rq_oa->o_mtime;
-        /* ditto loi_atime, loi_ctime when available */
+        if (rc == 0) {
+                if (req->rq_oa->o_valid & OBD_MD_FLMTIME)
+                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_ctime =
+                                req->rq_oa->o_ctime;
+                if (req->rq_oa->o_valid & OBD_MD_FLMTIME)
+                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_mtime =
+                                req->rq_oa->o_mtime;
+                if (req->rq_oa->o_valid & OBD_MD_FLATIME)
+                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_atime =
+                                req->rq_oa->o_atime;
+        }
 
         RETURN(rc);
 }

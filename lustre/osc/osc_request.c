@@ -1439,9 +1439,13 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
 
         if (rc == 0 && oa != NULL) {
                 if (oa->o_valid & OBD_MD_FLBLOCKS)
-                        oap->oap_loi->loi_blocks = oa->o_blocks;
+                        oap->oap_loi->loi_lvb.lvb_blocks = oa->o_blocks;
                 if (oa->o_valid & OBD_MD_FLMTIME)
-                        oap->oap_loi->loi_mtime = oa->o_mtime;
+                        oap->oap_loi->loi_lvb.lvb_mtime = oa->o_mtime;
+                if (oa->o_valid & OBD_MD_FLATIME)
+                        oap->oap_loi->loi_lvb.lvb_atime = oa->o_atime;
+                if (oa->o_valid & OBD_MD_FLCTIME)
+                        oap->oap_loi->loi_lvb.lvb_ctime = oa->o_ctime;
         }
 
         if (oap->oap_oig) {
@@ -2754,9 +2758,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc) {
                 CDEBUG(D_INODE,"got kms "LPU64" blocks "LPU64" mtime "LPU64"\n",
                        lvb.lvb_size, lvb.lvb_blocks, lvb.lvb_mtime);
-                lsm->lsm_oinfo->loi_rss = lvb.lvb_size;
-                lsm->lsm_oinfo->loi_mtime = lvb.lvb_mtime;
-                lsm->lsm_oinfo->loi_blocks = lvb.lvb_blocks;
+                lsm->lsm_oinfo->loi_lvb = lvb;
         }
 
         RETURN(rc);

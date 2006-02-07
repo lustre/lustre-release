@@ -2376,6 +2376,7 @@ struct obd_ops lov_obd_ops = {
         .o_queue_group_io      = lov_queue_group_io,
         .o_trigger_group_io    = lov_trigger_group_io,
         .o_teardown_async_page = lov_teardown_async_page,
+        .o_merge_lvb           = lov_merge_lvb,
         .o_adjust_kms          = lov_adjust_kms,
         .o_punch               = lov_punch,
         .o_sync                = lov_sync,

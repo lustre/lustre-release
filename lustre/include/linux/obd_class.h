@@ -863,10 +863,19 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-/* b1_4_bug5047 has changes to make this an obd_merge_lvb() method */
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms_only);
-__u64 lov_merge_blocks(struct lov_stripe_md *lsm);
-__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
+static inline int obd_merge_lvb(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                struct ost_lvb *lvb, int kms_only)
+{
+        int rc;
+        ENTRY;
+        
+        OBD_CHECK_OP(exp->exp_obd, merge_lvb, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, merge_lvb);
+
+        rc = OBP(exp->exp_obd, merge_lvb)(exp, lsm, lvb, kms_only);
+        RETURN(rc);
+}
 
 static inline int obd_adjust_kms(struct obd_export *exp,
                                  struct lov_stripe_md *lsm, obd_off size,

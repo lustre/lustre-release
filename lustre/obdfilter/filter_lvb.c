@@ -80,9 +80,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         if (dentry->d_inode == NULL)
                 GOTO(out_dentry, rc = -ENOENT);
 
-        lvb->lvb_size = dentry->d_inode->i_size;
-        lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
-        lvb->lvb_blocks = dentry->d_inode->i_blocks;
+        inode_init_lvb(dentry->d_inode, lvb);
 
         CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
                "mtime: "LPU64", blocks: "LPU64"\n",
