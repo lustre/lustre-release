@@ -60,7 +60,6 @@ static int print_only = 0;
 void usage(FILE *out)
 {
         fprintf(out, "usage: %s <target types> [options] <device>\n", progname);
-
         fprintf(out, 
                 "\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
                 "\ttarget types:\n"
@@ -71,10 +70,10 @@ void usage(FILE *out)
                 "\t\t--mgsnid=<nid>[,<...>] : NID(s) of a remote mgs node\n"
                 "\t\t\trequired for all targets other than the mgs node\n"
                 "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
-#if 0 /* FIXME implement 1.6.x */
+                /* FIXME implement 1.6.x
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
                 "\t\t\tfor this device on an alternate device\n"
-#endif
+                */
                 "\t\t--failover=<nid>[,<...>] : list of NIDs for the failover\n"
                 "\t\t\tpartners for this target\n" 
                 "\t\t--backfstype=<fstype> : backing fs type (ext3, ldiskfs)\n"

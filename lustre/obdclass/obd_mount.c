@@ -1469,19 +1469,27 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         while(*s1) {
                 while (*s1 == ' ' || *s1 == ',')
                         s1++;
-                /* FIXME do something with the RECOVER flag - see lconf */
-                if (strncmp(s1, "recov", 5) == 0)
-                        lmd->lmd_flags |= LMD_FLG_RECOVER;
-                if (strncmp(s1, "norecov", 7) == 0)
-                        lmd->lmd_flags &= ~LMD_FLG_RECOVER;
-                if (strncmp(s1, "nosvc", 5) == 0)
-                        lmd->lmd_flags |= LMD_FLG_NOSVC;
                 /* Client options are parsed in ll_options: eg. flock, 
                    user_xattr, acl */
+                
+                if (strncmp(s1, "recov", 5) == 0) 
+                        /* FIXME do something with the RECOVER flag - see lconf */
+                        lmd->lmd_flags |= LMD_FLG_RECOVER;
+                else if (strncmp(s1, "norecov", 7) == 0)
+                        lmd->lmd_flags &= ~LMD_FLG_RECOVER;
+                else if (strncmp(s1, "nosvc", 5) == 0)
+                        lmd->lmd_flags |= LMD_FLG_NOSVC;
+
+                else if (strncmp(s1, "exclude=", 8) == 0) {
+                        CERROR("Exclude: %s\n", s1);
+                        /* FIXME implement */
+                        /* store exlusion list in lmd_exclude, mdt & client
+                         must check */
+                }
 
                 /* Linux 2.4 doesn't pass the device, so we stuck it at the 
                    end of the options. */
-                if (strncmp(s1, "device=", 7) == 0) {
+                else if (strncmp(s1, "device=", 7) == 0) {
                         devname = s1 + 7;
                         /* terminate options right before device.  device
                            must be the last one. */

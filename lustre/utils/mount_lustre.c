@@ -46,17 +46,23 @@ static char *progname = NULL;
 void usage(FILE *out)
 {
         fprintf(out, "%s v2.0\n", progname);
-        fprintf(out, "usage: %s <mgmtnid>[:<altmgtnid>...]:/<filesystem>[/<cfgname>] <mountpt> "
-                "[-fhnv] [-o mntopt]\n", progname);
-        fprintf(out, "\t<mdsnode>: nid of MDS (config) node\n"
+        fprintf(out, "usage: %s [-fhnv] [-o <mntopt>] <device> <mountpt>\n", 
+                progname);
+        fprintf(out, 
+                "\t<device>: the disk device, or for a client:\n"
+                "\t\t<mgmtnid>[:<altmgtnid>...]:/<filesystem>-client\n"
                 "\t<filesystem>: name of the Lustre filesystem (e.g. lustre1)\n"
-                "\t<cfgname>: name of client config (e.g. client)\n"
                 "\t<mountpt>: filesystem mountpoint (e.g. /mnt/lustre)\n"
                 "\t-f|--fake: fake mount (updates /etc/mtab)\n"
                 "\t--force: force mount even if already in /etc/mtab\n"
                 "\t-h|--help: print this usage message\n"
                 "\t-n|--nomtab: do not update /etc/mtab after mount\n"
-                "\t-v|--verbose: print verbose config settings\n");
+                "\t-v|--verbose: print verbose config settings\n"
+                "\t<mntopt>: one or more comma separated of:\n"
+                "\t\t(no)flock,(no)user_xattr,(no)acl\n"
+                "\t\tnosvc: only start MGC/MGS obds\n"
+                "\t\texclude=<ost1>[:<ost2>] : colon-separated list of inactive OSTs\n"
+                );
         exit((out != stdout) ? EINVAL : 0);
 }
 
@@ -119,7 +125,7 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
         return rc;
 }
 
-/* Get rid of symbolic hostnames for tcp */
+/* Get rid of symbolic hostnames for tcp, since kernel can't do lookups */
 #define MAXNIDSTR 1024
 static char *convert_hostnames(char *s1)
 {
@@ -170,8 +176,8 @@ struct opt_map {
         int mask;               /* flag mask value */
 };
 
-/* These flags are parsed by mount, not lustre */
 static const struct opt_map opt_map[] = {
+  /* These flags are parsed by mount, not lustre */
   { "defaults", 0, 0, 0         },      /* default options */
   { "rw",       1, 1, MS_RDONLY },      /* read-write */
   { "ro",       0, 0, MS_RDONLY },      /* read-only */
@@ -183,7 +189,7 @@ static const struct opt_map opt_map[] = {
   { "nodev",    0, 0, MS_NODEV  },      /* don't interpret devices */
   { "async",    0, 1, MS_SYNCHRONOUS},  /* asynchronous I/O */
   { "auto",     0, 0, 0         },      /* Can be mounted using -a */
-  { "noauto",   0, 0, 0         },      /* Can  only be mounted explicitly */
+  { "noauto",   0, 0, 0         },      /* Can only be mounted explicitly */
   { "nousers",  0, 1, 0         },      /* Forbid ordinary user to mount */
   { "nouser",   0, 1, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  0, 1, 0         },      /* Device owner has no special privs */
@@ -196,10 +202,14 @@ static const struct opt_map opt_map[] = {
   { "acl",      0, 0, 0         },      /* Enable ACL support */
   { "noacl",    1, 1, 0         },      /* Disable ACL support */
   { "nosvc",    0, 0, 0         },      /* Only start MGS/MGC, no other services */
+  { "exclude",  0, 0, 0         },      /* OST exclusion list */
   { NULL,       0, 0, 0         }
 };
 /****************************************************************************/
 
+/* 1  = found, flag set
+   0  = found, no flag set
+   -1 = not found in above list */
 static int parse_one_option(const char *check, int *flagp)
 {
         const struct opt_map *opt;
@@ -207,7 +217,7 @@ static int parse_one_option(const char *check, int *flagp)
         for (opt = &opt_map[0]; opt->opt != NULL; opt++) {
                 if (strncmp(check, opt->opt, strlen(opt->opt)) == 0) {
                         if (!opt->mask) 
-                                return -1;
+                                return 0;
                         if (opt->inv)
                                 *flagp &= ~(opt->mask);
                         else
@@ -215,9 +225,9 @@ static int parse_one_option(const char *check, int *flagp)
                         return 1;
                 }
         }
-        fprintf(stderr, "%s: unknown option '%s', continuing\n", progname,
+        fprintf(stderr, "%s: ignoring unknown option '%s'\n", progname,
                 check);
-        return 0;
+        return -1;
 }
 
 int parse_options(char *orig_options, int *flagp)
@@ -231,12 +241,12 @@ int parse_options(char *orig_options, int *flagp)
                 if (!*opt) 
                         /* empty option */
                         continue;
-                if (parse_one_option(opt, flagp) > 0)
-                        continue;
-                /* no mount flags set, so pass this on as an option */
-                if (*options)
-                        strcat(options, ",");
-                strcat(options, opt);
+                if (parse_one_option(opt, flagp) == 0) {
+                        /* no mount flags set, so pass this on as an option */
+                        if (*options)
+                                strcat(options, ",");
+                        strcat(options, opt);
+                }
         }
         /* options will always be <= orig_options */
         strcpy(orig_options, options);

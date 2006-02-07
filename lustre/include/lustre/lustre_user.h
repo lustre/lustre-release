@@ -176,6 +176,11 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
 
+static inline char *obd_uuid2str(struct obd_uuid *uuid)
+{
+        return (char *)uuid->uuid;
+}
+
 #define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
 #define LUSTRE_Q_QUOTAOFF 0x800003     /* turn quotas off */
 #define LUSTRE_Q_GETINFO  0x800005     /* get information about quota files */

@@ -246,7 +246,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 lsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
                 lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
-                lsd->lsd_feature_incompat = cpu_to_le32(MDT_INCOMPAT_SUPP);
+                lsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT |
+                                                        OBD_INCOMPAT_COMMON_LR);
         } else {
                 rc = fsfilt_read_record(obd, file, lsd, sizeof(*lsd), &off);
                 if (rc) {

@@ -312,8 +312,8 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         RETURN(0);
 }
 
-static int lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp,
-                       int index, int gen);
+static int lov_del_target(struct obd_device *obd, struct obd_uuid *uuidp,
+                          int index, int gen);
 
 static int lov_disconnect(struct obd_export *exp)
 {
@@ -339,7 +339,7 @@ static int lov_disconnect(struct obd_export *exp)
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (tgt->ltd_exp) {
                         /* Disconnection is the last we know about an obd */
-                        lov_del_obd(obd, &tgt->uuid, i, tgt->ltd_gen);
+                        lov_del_target(obd, &tgt->uuid, i, tgt->ltd_gen);
                 }
         }
         lov_putref(obd);
@@ -458,8 +458,8 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         RETURN(rc);
 }
 
-static int
-lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
+static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
+                          int index, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
@@ -506,8 +506,8 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
 
         tgt = &lov->tgts[index];
         if (!obd_uuid_empty(&tgt->uuid)) {
-                CERROR("OBD already assigned at LOV target index %d\n",
-                       index);
+                CERROR("UUID %.40s already assigned at LOV target index %d\n",
+                       obd_uuid2str(&tgt->uuid), index);
                 RETURN(-EEXIST);
         }
 
@@ -555,14 +555,14 @@ out:
         if (rc) {
                 CERROR("add failed (%d), deleting %s\n", rc, 
                        (char *)tgt->uuid.uuid);
-                lov_del_obd(obd, &tgt->uuid, index, 0);
+                lov_del_target(obd, &tgt->uuid, index, 0);
         }
         RETURN(rc);
 }
 
 /* Schedule a target for deletion */
-static int
-lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
+static int lov_del_target(struct obd_device *obd, struct obd_uuid *uuidp, 
+                          int index, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
@@ -780,7 +780,7 @@ static int lov_cleanup(struct obd_device *obd)
                                        " deathrow=%d, lovrc=%d\n",
                                        i, lov->death_row, 
                                        atomic_read(&lov->refcount));
-                                lov_del_obd(obd, &tgt->uuid, i, 0);
+                                lov_del_target(obd, &tgt->uuid, i, 0);
                         }
                 }
                 OBD_FREE(lov->tgts, lov->bufsize);
@@ -812,9 +812,9 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                 if (sscanf(lustre_cfg_buf(lcfg, 3), "%d", &gen) != 1)
                         GOTO(out, rc = -EINVAL);
                 if (cmd == LCFG_LOV_ADD_OBD)
-                        rc = lov_add_obd(obd, &obd_uuid, index, gen);
+                        rc = lov_add_target(obd, &obd_uuid, index, gen);
                 else
-                        rc = lov_del_obd(obd, &obd_uuid, index, gen);
+                        rc = lov_del_target(obd, &obd_uuid, index, gen);
                 GOTO(out, rc);
         }
         case LCFG_PARAM: {

@@ -531,6 +531,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
                 RETURN(fl);
 }
 
+/* non-client-specific mount options are parsed in lmd_parse */
 void ll_options(char *options, int *flags)
 {
         int tmp;

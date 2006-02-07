@@ -72,8 +72,6 @@ static inline char *mt_str(enum ldd_mount_type mt)
 #define MTI_NIDS_MAX 64
 #endif
 
-#define LDD_SIZE 4096
-
 #define LDD_INCOMPAT_SUPP 0
 #define LDD_ROCOMPAT_SUPP 0
 
@@ -99,19 +97,20 @@ struct lustre_disk_data {
         /* COMPAT_146 */
         __u8       ldd_uuid[40];        /* server UUID */
         /* end COMPAT_146 */
-        char       ldd_mount_opts[2048]; /* target fs mount opts */
-        
-        /* Below here is required for writing mdt, ost,or client logs,
-           and is ignored after that. */
-        /* FIXME Everything should be removed from here and set via ioctls */
+/*1228*/        
+        /* These are required for writing mdt, ost,or client logs,
+           and are ignored after that. */
+        /* FIXME these should be removed from here and set via ioctls or proc */
         int   ldd_stripe_sz;
         int   ldd_stripe_count;
         int   ldd_stripe_pattern;
         int   ldd_stripe_offset;
         int   ldd_timeout;               /* obd timeout */
-        __u8  ldd_padding[LDD_SIZE - 3296];
+/*1248*/       
+        __u8       ldd_padding[4096 - 1248];
+        char       ldd_mount_opts[4096]; /* target fs mount opts */
 };
-        
+
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
 #define IS_OST(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_OST)
 #define IS_MGS(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGS)
