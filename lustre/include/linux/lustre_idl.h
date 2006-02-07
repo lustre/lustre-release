@@ -1021,6 +1021,7 @@ struct cfg_marker {
         __u32             cm_step;  /* aka config version */
         __u32             cm_flags;
         __u32             cm_timestamp;
+        char              cm_svname[16];
         char              cm_comment[40];
 };
 

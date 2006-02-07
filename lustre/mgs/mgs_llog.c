@@ -512,7 +512,8 @@ static inline int record_mount_opt(struct obd_device *obd,
 }                
 
 static int record_marker(struct obd_device *obd, struct llog_handle *llh,
-                         struct fs_db *db, __u32 flags, char *comment)
+                         struct fs_db *db, __u32 flags,
+                         char *svname, char *comment)
 {
         struct cfg_marker marker;
         struct lustre_cfg_bufs bufs;
@@ -525,6 +526,7 @@ static int record_marker(struct obd_device *obd, struct llog_handle *llh,
                 db->fd_gen++;
         marker.cm_step = db->fd_gen;
         marker.cm_flags = flags;
+        strncpy(marker.cm_svname, svname, sizeof(marker.cm_svname)); 
         strncpy(marker.cm_comment, comment, sizeof(marker.cm_comment)); 
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set(&bufs, 1, &marker, sizeof(marker));
@@ -535,6 +537,14 @@ static int record_marker(struct obd_device *obd, struct llog_handle *llh,
         lustre_cfg_free(lcfg);
         return rc;
 }
+
+static inline int record_param(struct obd_device *obd, struct llog_handle *llh,
+                               char *devname, 
+                               char *s1, char *s2, char *s3, char *s4)
+{
+        return record_base(obd,llh,devname,0,LCFG_PARAM,s1,s2,s3,s4);
+}
+
 
 static int record_start_log(struct obd_device *obd, 
                             struct llog_handle **llh, char *name)
@@ -639,10 +649,10 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *db,
         /* This should always be the first entry in a log.
         rc = mgs_clear_log(obd, logname); */
         rc = record_start_log(obd, &llh, logname);
-        rc = record_marker(obd, llh, db, CM_START, "lov setup"); 
+        rc = record_marker(obd, llh, db, CM_START, mti->mti_svname,"lov setup"); 
         rc = record_attach(obd, llh, lovname, "lov", uuid);
         rc = record_lov_setup(obd, llh, lovname, lovdesc);
-        rc = record_marker(obd, llh, db, CM_END, "lov setup"); 
+        rc = record_marker(obd, llh, db, CM_END, mti->mti_svname, "lov setup"); 
         rc = record_end_log(obd, &llh);
         
         OBD_FREE(lovdesc, sizeof(*lovdesc));
@@ -654,6 +664,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
 {
         struct llog_handle *llh = NULL;
         char *cliname, *mdcname, *lovname, *nodeuuid, *mdcuuid;
+        char *s1, *s2, *s3, *s4, *s5;
         lnet_nid_t nid;
         int rc, i, first_log = 0;
         ENTRY;
@@ -692,14 +703,35 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         setup /dev/loop2 ldiskfs mdsA errors=remount-ro,user_xattr
         */
         rc = record_start_log(obd, &llh, mti->mti_svname);
-        rc = record_marker(obd, llh, db, CM_START, "add mdt"); 
+        rc = record_marker(obd, llh, db, CM_START, mti->mti_svname, "add mdt"); 
+
+        /* FIXME this should just be added via a MGS ioctl 
+           OBD_IOC_LOV_SETSTRIPE / LL_IOC_LOV_SETSTRIPE */
+        if (!first_log) {
+                /* Fix lov settings if they were set by something other
+                   than the MDT */
+                OBD_ALLOC(s1, 256);
+                if (s1) {
+                        s2 = sprintf(s1, "default_stripe_size="LPU64,
+                                     mti->mti_stripe_size) + s1 + 1;
+                        s3 = sprintf(s2, "default_stripe_count=%u",
+                                     mti->mti_stripe_count) + s2 + 1;
+                        s4 = sprintf(s3, "default_stripe_offset="LPU64,
+                                     mti->mti_stripe_offset) + s3 + 1;
+                        s5 =  sprintf(s4, "default_stripe_pattern=%u",
+                                mti->mti_stripe_pattern) + s4 + 1;
+                        LASSERT(s5 - s1 < 256);
+                        record_param(obd, llh, lovname, s1, s2, s3, s4);
+                }
+        }
+        
         rc = record_mount_opt(obd, llh, mti->mti_svname, lovname, 0);
         rc = record_attach(obd, llh, mti->mti_svname, LUSTRE_MDS_NAME, 
                            mti->mti_uuid);
-        rc = record_setup(obd,llh,mti->mti_svname,
-                          "dev"/*ignored*/,"type"/*ignored*/,
+        rc = record_setup(obd, llh, mti->mti_svname,
+                          "dev"/*ignored*/, "type"/*ignored*/,
                           mti->mti_svname, 0/*options*/);
-        rc = record_marker(obd, llh, db, CM_END, "add mdt"); 
+        rc = record_marker(obd, llh, db, CM_END, mti->mti_svname, "add mdt"); 
         rc = record_end_log(obd, &llh);
 
         if (mti->mti_flags & LDD_F_UPGRADE14) 
@@ -727,7 +759,12 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         #14 L mount_option 0:  1:client  2:lov1  3:MDC_uml1_mdsA_MNT_client
         */
         rc = record_start_log(obd, &llh, cliname);
-        rc = record_marker(obd, llh, db, CM_START, "add mdc"); 
+        rc = record_marker(obd, llh, db, CM_START, mti->mti_svname, "add mdc");
+        if (!first_log && s1) {
+                /* Record new lov settings */
+                record_param(obd, llh, lovname, s1, s2, s3, s4);
+                OBD_FREE(s1, 256);
+        }
         for (i = 0; i < mti->mti_nid_count; i++) {
                 CDEBUG(D_MGS, "add nid %s\n", libcfs_nid2str(mti->mti_nids[i]));
                 rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
@@ -741,7 +778,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
                 rc = record_add_conn(obd, llh, mdcname, libcfs_nid2str(nid));
         }
         rc = record_mount_opt(obd, llh, cliname, lovname, mdcname);
-        rc = record_marker(obd, llh, db, CM_END, "add mdc"); 
+        rc = record_marker(obd, llh, db, CM_END, mti->mti_svname, "add mdc"); 
         rc = record_end_log(obd, &llh);
 
         name_destroy(mdcuuid);
@@ -786,7 +823,7 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
         #08 L lov_modify_tgts add 0:lov1  1:ost1_UUID  2(index):0  3(gen):1
         */
         rc = record_start_log(obd, &llh, logname);
-        rc = record_marker(obd, llh, db, CM_START, "add osc"); 
+        rc = record_marker(obd, llh, db, CM_START, mti->mti_svname, "add osc"); 
         for (i = 0; i < mti->mti_nid_count; i++) {
                 CDEBUG(D_MGS, "add nid %s\n", libcfs_nid2str(mti->mti_nids[i]));
                 rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
@@ -801,7 +838,7 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
         }
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
         rc = record_lov_add(obd, llh, lovname, mti->mti_uuid, index, "1");
-        rc = record_marker(obd, llh, db, CM_END, "add osc"); 
+        rc = record_marker(obd, llh, db, CM_END, mti->mti_svname, "add osc"); 
         rc = record_end_log(obd, &llh);
         
         name_destroy(lovuuid);
@@ -843,7 +880,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *db,
         setup /dev/loop2 ldiskfs f|n errors=remount-ro,user_xattr
         */
         rc = record_start_log(obd, &llh, mti->mti_svname);
-        rc = record_marker(obd, llh, db, CM_START, "add ost"); 
+        rc = record_marker(obd, llh, db, CM_START, mti->mti_svname, "add ost"); 
         if (*mti->mti_uuid == 0) 
                 snprintf(mti->mti_uuid, sizeof(mti->mti_uuid),
                          "%s_UUID", mti->mti_svname);
@@ -852,7 +889,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *db,
         rc = record_setup(obd,llh,mti->mti_svname,
                           "dev"/*ignored*/,"type"/*ignored*/,
                           "f", 0/*options*/);
-        rc = record_marker(obd, llh, db, CM_END, "add ost"); 
+        rc = record_marker(obd, llh, db, CM_END, mti->mti_svname, "add ost"); 
         rc = record_end_log(obd, &llh);
         
         if (mti->mti_flags & LDD_F_UPGRADE14) 
@@ -1008,12 +1045,15 @@ int mgs_upgrade_logs_14(struct obd_device *obd, struct fs_db *db,
 
                 /* Mark the client log so we know we updated (fd_gen == 1) */
                 rc = record_start_log(obd, &llh, cliname);
-                rc = record_marker(obd, llh, db, CM_START, "upgrade from 1.4"); 
+                rc = record_marker(obd, llh, db, CM_START, "client",
+                                   "upgrade from 1.4"); 
                 /* FIXME find the old lovname and mdcname */
                 /* old: mount_option 0:  1:client  2:lov1  3:MDC_uml1_mdsA_MNT_client */
                 /* new: mount_option 0:  1:lustre-client  2:lustre-clilov  3:lustre-MDT0000-mdc */
-                rc = record_mount_opt(obd, llh, cliname, "lov1", "MDC_uml1_mdsA_MNT_client");
-                rc = record_marker(obd, llh, db, CM_END, "upgrade to 1.6"); 
+                rc = record_mount_opt(obd, llh, cliname, "lov1", 
+                                      "MDC_uml1_mdsA_MNT_client");
+                rc = record_marker(obd, llh, db, CM_END, "client", 
+                                   "upgrade to 1.6"); 
                 rc = record_end_log(obd, &llh);
                 name_destroy(cliname);
         }

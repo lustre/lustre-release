@@ -326,8 +326,8 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
         }
         case(LCFG_MARKER):{
                 struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-                printf("marker %d (flags=%#x) '%s'", marker->cm_step,
-                       marker->cm_flags, marker->cm_comment);
+                printf("marker %d (flags=%#x) %.16s '%s'", marker->cm_step,
+                       marker->cm_flags, marker->cm_svname, marker->cm_comment);
                 break;
         }
         default:

@@ -246,7 +246,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 lsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
                 lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
-                lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_COMMON_LR);
+                lsd->lsd_feature_incompat = cpu_to_le32(MDT_INCOMPAT_SUPP);
         } else {
                 rc = fsfilt_read_record(obd, file, lsd, sizeof(*lsd), &off);
                 if (rc) {
@@ -275,13 +275,13 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 GOTO(err_msd, rc = -EINVAL);
         }
 
-        if (!(lsd->lsd_feature_compat & cpu_to_le32(OBD_COMPAT_COMMON_LR))) {
+        if (!(lsd->lsd_feature_incompat & cpu_to_le32(OBD_INCOMPAT_COMMON_LR))){
                 CDEBUG(D_WARNING, "using old last_rcvd format\n");
                 lsd->lsd_mount_count = lsd->lsd_last_transno;
                 lsd->lsd_last_transno = lsd->lsd_unused;
                 /* If we update the last_rcvd, we can never go back to 
                    an old install, so leave this in the old format for now.
-                lsd->lsd_feature_compat |= cpu_to_le32(LR_COMPAT_COMMON_LR);
+                lsd->lsd_feature_incompat |= cpu_to_le32(LR_INCOMPAT_COMMON_LR);
                 */
         }
 

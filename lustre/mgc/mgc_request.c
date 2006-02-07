@@ -47,8 +47,6 @@
 #include <linux/lustre_disk.h>
 #include <linux/lustre_mgs.h>
 
-#include "mgc_internal.h"
-
 
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
 {

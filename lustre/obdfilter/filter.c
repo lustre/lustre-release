@@ -399,7 +399,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 fsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
                 fsd->lsd_subdir_count = cpu_to_le16(FILTER_SUBDIR_COUNT);
                 filter->fo_subdir_count = FILTER_SUBDIR_COUNT;
-                fsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_COMMON_LR);
+                fsd->lsd_feature_incompat = cpu_to_le32(FILTER_INCOMPAT_SUPP);
         } else {
                 rc = fsfilt_read_record(obd, filp, fsd, sizeof(*fsd), &off);
                 if (rc) {

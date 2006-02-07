@@ -285,10 +285,12 @@ static int file_in_dev(char *file_name, char *dev_name)
         FILE *fp;
         char debugfs_cmd[256];
         unsigned int inode_num;
+        int i;
 
         /* Construct debugfs command line. */
         memset(debugfs_cmd, 0, sizeof(debugfs_cmd));
-        sprintf(debugfs_cmd, "debugfs -c -R 'stat %s' %s 2>&1 | egrep Inode",
+        sprintf(debugfs_cmd,
+                "debugfs -c -R 'stat %s' %s 2>&1 | egrep '(Inode|unsupported)'",
                 file_name, dev_name);
 
         fp = popen(debugfs_cmd, "r");
@@ -301,7 +303,16 @@ static int file_in_dev(char *file_name, char *dev_name)
                 pclose(fp);
                 return 1;
         }
-
+        i = fread(debugfs_cmd, 1, sizeof(debugfs_cmd), fp);
+        if (i) {
+                /* Filesystem has unsupported feature */
+                vprint("%.*s", i, debugfs_cmd);
+                /* in all likelihood, the "unsupported feature" is
+                  'extents', which older debugfs does not understand.  
+                  Use e2fsprogs-1.38-cfs1 or later, available from 
+                  ftp://ftp.lustre.org/pub/lustre/other/e2fsprogs/ */
+                return -1;
+        }
         pclose(fp);
         return 0;
 }
@@ -309,15 +320,18 @@ static int file_in_dev(char *file_name, char *dev_name)
 /* Check whether the device has already been fomatted by mkfs.lustre */
 static int is_lustre_target(struct mkfs_opts *mop)
 {
+        int rc;
         /* Check whether there exist MOUNT_DATA_FILE,
            LAST_RCVD or CATLIST in the device. */
         vprint("checking for existing Lustre data\n");
         
-        if (file_in_dev(MOUNT_DATA_FILE, mop->mo_device)
-            || file_in_dev(LAST_RCVD, mop->mo_device)
-            || file_in_dev(CATLIST, mop->mo_device)) { 
+        if ((rc = file_in_dev(MOUNT_DATA_FILE, mop->mo_device))
+            || (rc = file_in_dev(LAST_RCVD, mop->mo_device))
+            || (rc = file_in_dev(CATLIST, mop->mo_device))) { 
                 vprint("found Lustre data\n");
-                return 1; 
+                /* in the -1 case, 'extents' means this really IS a lustre
+                   target */
+                return rc; 
         }
 
         return 0; /* The device is not a lustre target. */

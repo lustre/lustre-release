@@ -300,6 +300,7 @@ static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
         rc = 0;
 
         if (ldd->ldd_magic != LDD_MAGIC) {
+                /* FIXME add swabbing support */
                 CERROR("Bad magic in %s: %x!=%x\n", MOUNT_DATA_FILE, 
                        ldd->ldd_magic, LDD_MAGIC);
                 GOTO(out_close, rc = -EINVAL);
@@ -1462,7 +1463,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         lmd->lmd_magic = LMD_MAGIC;
 
         /* default flags */
-        lmd->lmd_flags |= LMD_FLG_MNTCNF | LMD_FLG_RECOVER;
+        lmd->lmd_flags |= LMD_FLG_RECOVER;
 
         s1 = options;
         while(*s1) {
@@ -1504,7 +1505,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         }
 
         s1 = devname;
-        /* Get MGS nids if client mount */
+        /* Get MGS nids if client mount:  uml1@tcp:uml2@tcp:/fsname-client */
         while ((s2 = strchr(s1, ':'))) {
                 lnet_nid_t nid;
                 *s2 = 0;

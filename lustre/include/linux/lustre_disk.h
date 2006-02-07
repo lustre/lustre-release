@@ -72,6 +72,8 @@ static inline char *mt_str(enum ldd_mount_type mt)
 #define MTI_NIDS_MAX 64
 #endif
 
+#define LDD_SIZE 4096
+
 #define LDD_INCOMPAT_SUPP 0
 #define LDD_ROCOMPAT_SUPP 0
 
@@ -94,16 +96,20 @@ struct lustre_disk_data {
         lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgs nid list; lmd can 
                                                  override */
         lnet_nid_t ldd_failnid[MTI_NIDS_MAX]; /* server failover nids */
+        /* COMPAT_146 */
+        __u8       ldd_uuid[40];        /* server UUID */
+        /* end COMPAT_146 */
         char       ldd_mount_opts[2048]; /* target fs mount opts */
         
         /* Below here is required for writing mdt, ost,or client logs,
            and is ignored after that. */
-        __u8  ldd_uuid[40];        /* server UUID */
+        /* FIXME Everything should be removed from here and set via ioctls */
         int   ldd_stripe_sz;
         int   ldd_stripe_count;
         int   ldd_stripe_pattern;
         int   ldd_stripe_offset;
         int   ldd_timeout;               /* obd timeout */
+        __u8  ldd_padding[LDD_SIZE - 3296];
 };
         
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
@@ -153,16 +159,12 @@ struct lustre_mount_data {
                                          _device_ mount options) */
 };
 
-#define LMD_FLG_MNTCNF       0x0001  /* Mountconf compat */
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client only */
 #define LMD_FLG_RECOVER      0x0004  /* Allow recovery */
 #define LMD_FLG_NOSVC        0x0008  /* Only start MGS/MGC for servers, 
                                         no other services */
 
-/* 2nd half is for old clients */
-#define lmd_is_client(x) \
-        (((x)->lmd_flags & LMD_FLG_CLIENT) || \
-        (!((x)->lmd_flags & LMD_FLG_MNTCNF))) 
+#define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT) 
 
 /****************** mkfs command *********************/
 
@@ -191,19 +193,21 @@ struct mkfs_opts {
 #error "Can't have LR_CLIENT_START < LR_SERVER_SIZE"
 #endif
 /* This limit is arbitrary (32k clients on x86), but it is convenient to use
- * 2^n * PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */#define LR_MAX_CLIENTS (PAGE_SIZE * 8)
+ * 2^n * PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
 #define LR_MAX_CLIENTS (PAGE_SIZE * 8)
                                                                                 
+/* COMPAT_146 */
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
 #define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
-#define OBD_COMPAT_COMMON_LR    0x00000008 /* common last_rvcd format */
-                                                                                
+/* end COMPAT_146 */
+
 #define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
 #define OBD_ROCOMPAT_CROW       0x00000002 /* OST will CROW create objects */
                                                                                 
 #define OBD_INCOMPAT_GROUPS     0x00000001 /* OST handles group subdirs */
-#define OBD_INCOMPAT_OST        0x00000002 /* this is an OST (permanent) */
-#define OBD_INCOMPAT_MDT        0x00000004 /* this is an MDT (permanent) */
+#define OBD_INCOMPAT_OST        0x00000002 /* this is an OST */
+#define OBD_INCOMPAT_MDT        0x00000004 /* this is an MDT */
+#define OBD_INCOMPAT_COMMON_LR  0x00000008 /* common last_rvcd format */
 
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
@@ -230,7 +234,7 @@ struct lr_server_data {
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct lsd_client_data {
-        __u8 lcd_uuid[40];      /* client UUID */
+        __u8  lcd_uuid[40];      /* client UUID */
         __u64 lcd_last_transno; /* last completed transaction ID */
         __u64 lcd_last_xid;     /* xid for the last transaction */
         __u32 lcd_last_result;  /* result from last RPC */
@@ -240,14 +244,9 @@ struct lsd_client_data {
         __u64 lcd_last_close_xid;     /* xid for the last transaction */
         __u32 lcd_last_close_result;  /* result from last RPC */
         __u32 lcd_last_close_data;    /* per-op data */
-        __u8 lcd_padding[LR_CLIENT_SIZE - 88];
+        __u8  lcd_padding[LR_CLIENT_SIZE - 88];
 };
 
-/*
-#define MDS_ROCOMPAT_LOVOBJID   0x00000001
-#define MDS_ROCOMPAT_SUPP       (MDS_ROCOMPAT_LOVOBJID)
-#define MDS_INCOMPAT_SUPP       (0)
-*/
 
 #ifdef __KERNEL__
 /****************** superblock additional info *********************/

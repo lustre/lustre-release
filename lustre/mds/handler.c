@@ -1712,10 +1712,10 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
 
         lsd->lsd_last_transno = cpu_to_le64(mds->mds_last_transno);
 
-        if (!(lsd->lsd_feature_compat & cpu_to_le32(OBD_COMPAT_COMMON_LR))) {
+        if (!(lsd->lsd_feature_incompat & cpu_to_le32(OBD_INCOMPAT_COMMON_LR))){
                 /* Swap to the old mds_server_data format, in case
                    someone wants to revert to a pre-1.6 lustre */
-                CDEBUG(D_INFO, "writing old last_rcvd format\n");
+                CDEBUG(D_WARNING, "writing old last_rcvd format\n");
                 /* malloc new struct instead of swap in-place because 
                    we don't have a lock on the last_trasno or mount count -
                    someone may modify it while we're here, and we don't want

@@ -654,8 +654,8 @@ int class_process_config(struct lustre_cfg *lcfg)
         case LCFG_MARKER: {
                 struct cfg_marker *marker;
                 marker = lustre_cfg_buf(lcfg, 1);
-                CDEBUG(D_IOCTL, "marker %d (%#x) %s\n", marker->cm_step,
-                       marker->cm_flags, marker->cm_comment);
+                CDEBUG(D_IOCTL, "marker %d (%#x) %.16s %s\n", marker->cm_step,
+                       marker->cm_flags, marker->cm_svname, marker->cm_comment);
                 GOTO(out, err = 0);
         }
         }

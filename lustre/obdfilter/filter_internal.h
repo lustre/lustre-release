@@ -25,7 +25,8 @@
 
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
-#define FILTER_INCOMPAT_SUPP   (OBD_INCOMPAT_GROUPS)
+#define FILTER_INCOMPAT_SUPP (OBD_INCOMPAT_GROUPS | OBD_INCOMPAT_OST | \
+                              OBD_INCOMPAT_COMMON_LR)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
 #define GRANT_FOR_LLOG(obd) 16
