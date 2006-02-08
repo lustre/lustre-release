@@ -93660,14 +93660,14 @@ Index: linux-2.4.21/mm/mmap.c
  #include <linux/personality.h>
  #include <linux/compiler.h>
  #include <linux/profile.h>
-@@ -1459,6 +1460,7 @@
- 	mm->total_vm = 0;
- 	mm->locked_vm = 0;
- 
+@@ -1450,6 +1451,7 @@
+ 	release_segments(mm);
+  
+ 	spin_lock(&mm->page_table_lock);
 +	coproc_release(mm);
- 	flush_cache_mm(mm);
- 	while (mpnt) {
- 		struct vm_area_struct * next = mpnt->vm_next;
+ 	mpnt = mm->mmap;
+ 	mm->mmap = mm->mmap_cache = NULL;
+ 	mm->mm_rb = RB_ROOT;
 Index: linux-2.4.21/mm/mprotect.c
 ===================================================================
 --- linux-2.4.21.orig/mm/mprotect.c	2005-06-01 22:51:50.000000000 -0400
