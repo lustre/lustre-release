@@ -230,12 +230,8 @@ struct filter_obd {
         struct dentry       *fo_dentry_O;
         struct dentry      **fo_dentry_O_groups;
         struct dentry      **fo_dentry_O_sub;
-        spinlock_t           fo_objidlock;      /* protect fo_lastobjid
-                                                 * increment */
-        
-        spinlock_t           fo_translock;      /* protect fsd_last_rcvd
-                                                 * increment */
-        
+        spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
+        spinlock_t           fo_translock;      /* protect fsd_last_transno */
         struct file         *fo_rcvd_filp;
         struct file         *fo_health_check_filp;
         struct filter_server_data *fo_fsd;
@@ -244,10 +240,6 @@ struct filter_obd {
 
         int                  fo_destroy_in_progress;
         struct semaphore     fo_create_lock;
-
-        struct file_operations *fo_fop;
-        struct inode_operations *fo_iop;
-        struct address_space_operations *fo_aops;
 
         struct list_head     fo_export_list;
         int                  fo_subdir_count;
@@ -261,11 +253,9 @@ struct filter_obd {
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
         struct lustre_handle fo_mdc_conn;
-#if 0
-        struct ptlrpc_client fo_mdc_client;
-#endif
         struct file        **fo_last_objid_files;
-        __u64               *fo_last_objids; /* last created objid for groups */
+        __u64               *fo_last_objids; /* last created objid for groups,
+                                              * protected by fo_objidlock */
 
         struct semaphore     fo_alloc_lock;
 
