@@ -314,6 +314,15 @@ static inline int page_mapped(struct page *page)
 }
 #endif /* !HAVE_PAGE_MAPPED */
 
+static inline void file_accessed(struct file *file)
+{
+#ifdef O_NOATIME
+        if (file->f_flags & O_NOATIME)
+                return;
+#endif
+        update_atime(file->f_dentry->d_inode);
+}
+
 #endif /* end of 2.4 compat macros */
 
 #ifdef HAVE_PAGE_LIST

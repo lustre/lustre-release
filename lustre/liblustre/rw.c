@@ -787,6 +787,10 @@ static int llu_file_rwx(struct inode *ino,
 int llu_iop_read(struct inode *ino,
                  struct ioctx *ioctx)
 {
+        /* BUG: 5972 */
+        struct intnl_stat *st = llu_i2stat(ino);
+        st->st_atime = CURRENT_TIME;
+
         return llu_file_rwx(ino, ioctx, 1);
 }
 

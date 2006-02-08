@@ -1448,7 +1448,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;
-        if (body->valid & OBD_MD_FLATIME)
+        if (body->valid & OBD_MD_FLATIME &&
+            body->atime > LTIME_S(inode->i_atime))
                 LTIME_S(inode->i_atime) = body->atime;
         if (body->valid & OBD_MD_FLMTIME &&
             body->mtime > LTIME_S(inode->i_mtime)) {

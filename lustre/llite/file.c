@@ -908,6 +908,8 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
         bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
         ll_ra_read_in(file, &bead);
+        /* BUG: 5972 */
+        file_accessed(file);
         retval = generic_file_read(file, buf, count, ppos);
         ll_ra_read_ex(file, &bead);
 

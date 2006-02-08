@@ -698,7 +698,19 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 struct obd_trans_info *oti, int rc)
 {
         struct inode *inode = NULL;
+        struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
+        struct ldlm_resource *resource = NULL;
+        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         ENTRY;
+        /* If oa != NULL then filter_preprw_read updated the inode atime
+         * and we should update the lvb so that other glimpses will also
+         * get the updated value. bug 5972 */
+        if (ns && oa) {
+                resource = ldlm_resource_get(ns, NULL, res_id, LDLM_EXTENT, 0);
+                if (resource && ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
+                        ns->ns_lvbo->lvbo_update(resource, NULL, 0, 1);
+                ldlm_resource_putref(resource);
+        }
 
         if (res->dentry != NULL)
                 inode = res->dentry->d_inode;

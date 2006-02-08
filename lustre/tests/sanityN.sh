@@ -464,6 +464,32 @@ test_22() { # Bug 9926
 }
 run_test 22 " After joining in one dir,  open/close unlink file in anther dir" 
 
+test_23() { # Bug 5972
+	echo "others should see updated atime while another read" > $DIR1/f23
+	
+	# clear the lock(mode: LCK_PW) gotten from creating operation
+	cancel_lru_locks OSC
+	
+	time1=`date +%s`	
+	sleep 2
+	
+	multiop $DIR1/f23 or20_c &
+	MULTIPID=$!
+
+	sleep 2
+	time2=`stat -c "%X" $DIR2/f23`
+
+	if (( $time2 <= $time1 )); then
+		kill -USR1 $MULTIPID
+		error "atime doesn't update among nodes"
+	fi
+
+	kill -USR1 $MULTIPID || return 1
+	rm -f $DIR1/f23 || error "rm -f $DIR1/f23 failed"
+	true
+}
+run_test 23 " others should see updated atime while another read===="
+
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
 

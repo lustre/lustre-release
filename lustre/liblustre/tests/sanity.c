@@ -1035,6 +1035,48 @@ int t51(char *name)
         printf("\n");
         LEAVE();
 }
+/*
+ * check atime update during read
+ */
+int t52(char *name)
+{
+        char file[MAX_PATH_LENGTH] = "";
+        char buf[16];
+        struct stat statbuf;
+        time_t atime;
+        time_t diff;
+        int fd, i;
+
+        ENTRY("atime should be updated during read");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t52_file", lustre_path);
+
+        t_echo_create(file, "check atime update during read");
+        fd = open(file, O_RDONLY);
+        if (fd < 0) {
+                printf("\nerror open file: %s\n", strerror(errno));
+                return(-1);
+        }
+        stat(file, &statbuf);
+        printf("st_atime=%s", ctime(&statbuf.st_atime));
+        atime = statbuf.st_atime;
+        for (i = 0; i < 3; i++) {
+                sleep(2);
+                read(fd, buf, sizeof(buf));
+                stat(file, &statbuf);
+                printf("st_atime=%s", ctime(&statbuf.st_atime));
+                diff = statbuf.st_atime - atime;
+                if (diff <= 0) {
+                        printf("atime doesn't updated! failed!\n");
+                        close(fd);
+                        t_unlink(file);
+                        return -1;
+                }       
+                atime = statbuf.st_atime; 
+        }
+        close(fd);
+        t_unlink(file);
+        LEAVE();
+}
 
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
@@ -1079,6 +1121,7 @@ struct testlist {
         { t50, "50" },
         { t50b, "50b" },
         { t51, "51" },
+        { t52, "52" },
         { NULL, NULL }
 };
 
