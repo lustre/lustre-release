@@ -1089,9 +1089,10 @@ int main(int argc, char *const argv[])
 
 #ifndef TUNEFS /* mkfs.lustre */
         if (mountopts) 
-                /* Tack on user supplied opts */
-                sprintf(mop.mo_ldd.ldd_mount_opts, "%s,%s", 
-                        default_mountopts, mountopts);
+                /* If user specifies mount opts, assume no defaults */
+                strcpy(mop.mo_ldd.ldd_mount_opts, mountopts);
+                /* sprintf(mop.mo_ldd.ldd_mount_opts, "%s,%s", 
+                        default_mountopts, mountopts); */
         else
                 strcpy(mop.mo_ldd.ldd_mount_opts, default_mountopts);
 #else   /* tunefs.lustre - if mountopts are specified, they override 
