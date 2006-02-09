@@ -171,6 +171,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
         /* Internal mgs setup */
         mgs_init_db_list(obd);
+        sema_init(&mgs->mgs_log_sem, 1);
 
         /* Start the service threads */
         mgs->mgs_service =
@@ -294,18 +295,61 @@ static int mgs_put_cfg_lock(struct lustre_handle *lockh)
         return 0;
 }
 
+/* rc=0 means ok */
+static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
+{
+        int rc;
+        ENTRY;
+
+        rc = mgs_check_index(obd, mti);
+        if (rc == 0) {
+                LCONSOLE_ERROR("Index for %s has disappeared!  "
+                               "Regenerating this portion of the logs."
+                               "\n", mti->mti_svname);
+                mti->mti_flags |= LDD_F_NEED_REGISTER;
+                rc = 1;
+        } else if (rc == -1) {
+                LCONSOLE_ERROR("Client log %s-client has disappeared! "
+                               "Regenerating all logs.\n",
+                               mti->mti_fsname);
+                mti->mti_flags |= LDD_F_WRITECONF;
+                rc = 1;
+        } else {
+                 /* index is correctly marked used */
+                rc = 0;  
+        }
+
+        /* FIXME If the logs don't contain the mti_nids then add 
+           them all as failover nids */       
+
+        RETURN(rc);
+}
+
+/* Called whenever a target starts up.  Flags indicate first connect, etc. */
 static int mgs_handle_target_add(struct ptlrpc_request *req)
 {    
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lustre_handle lockh;
         struct mgs_target_info *mti, *rep_mti;
         int rep_size = sizeof(*mti);
-        int rc, lockrc;
+        int rc = 0, lockrc;
         ENTRY;
 
         mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
                                  lustre_swab_mgs_target_info);
         
+        if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
+                                LDD_F_NEED_REGISTER))) {
+                /* We're just here as a startup ping. */
+                CDEBUG(D_MGS, "Server %s has started on %s\n", mti->mti_svname,
+                       obd_export_nid2str(req->rq_export));
+                rc = mgs_check_target(obd, mti);
+                /* above will set appropriate mti flags */
+                if (!rc) 
+                        /* Nothing wrong, don't revoke lock */
+                        GOTO(out_nolock, rc);
+        }
+
         /* revoke the config lock so everyone will update */
         lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
         if (lockrc != ELDLM_OK) {
@@ -314,6 +358,23 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                                "anyhow; you might have to manually restart "
                                "other nodes to get the latest configuration.\n",
                                lockrc);
+        }
+
+        /* There can be only 1 server adding at a time - don't want log
+           writing contention. */
+        down(&obd->u.mgs.mgs_log_sem);
+
+        if (mti->mti_flags & LDD_F_WRITECONF) {
+                CERROR("regen all logs for fs %s\n", mti->mti_fsname);
+                rc = mgs_erase_logs(obd, mti->mti_fsname);
+                mti->mti_flags |= LDD_F_NEED_REGISTER;
+                /* FIXME regen the rest of the logs too.  Special lock revoke
+                flag? */
+                LCONSOLE_ERROR("All servers must be restarted in order to "
+                               "regenerate the configuration logs.\n");
+
+                mti->mti_flags &= ~LDD_F_WRITECONF;
+                mti->mti_flags |= LDD_F_REWRITE;
         }
 
         /* COMPAT_146 */
@@ -328,8 +389,9 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                         CERROR("Can't upgrade from 1.4 (%d)\n", rc);
                         GOTO(out, rc);
                 }
-
+                
                 mti->mti_flags &= ~LDD_F_UPGRADE14;
+                mti->mti_flags |= LDD_F_REWRITE;
         }
         /* end COMPAT_146 */
 
@@ -346,14 +408,16 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                         GOTO(out, rc);
                 }
 
-                mti->mti_flags &= ~LDD_F_NEED_REGISTER;
+                mti->mti_flags &= ~(LDD_F_NEED_REGISTER | LDD_F_NEED_INDEX);
+                mti->mti_flags |= LDD_F_REWRITE;
         }
 
 out:
+        up(&obd->u.mgs.mgs_log_sem);
         /* done with log update */
         if (lockrc == ELDLM_OK)
                 mgs_put_cfg_lock(&lockh);
-
+out_nolock:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname, 
                mti->mti_stripe_index, rc);
         lustre_pack_reply(req, 1, &rep_size, NULL); 

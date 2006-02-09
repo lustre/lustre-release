@@ -343,9 +343,8 @@ static int mgc_process_log(struct obd_device *mgc,
                            struct config_llog_data *cld);
 
 /* FIXME I don't want a thread for every cld; make a list of cld's to requeue
-   and use only 1 thread. And take an obd ref to the mgc so thread stops before
-   mgc (the current one is unsafe). */
-/* reenqueue and parse _all_ logs that match the lock */
+   and use only 1 thread. */
+/* reenqueue the lock, reparse the log */
 static int mgc_async_requeue(void *data)
 {
         struct config_llog_data *cld = (struct config_llog_data *)data;
@@ -366,7 +365,11 @@ static int mgc_async_requeue(void *data)
         CDEBUG(D_MGC, "requeue "LPX64" %s:%s\n", 
                cld->cld_resid.name[0], cld->cld_logname, 
                cld->cld_cfg.cfg_instance);
+        
+        LASSERT(the_mgc);
+        class_export_get(the_mgc->obd_self_export);
         rc = mgc_process_log(the_mgc, cld);
+        class_export_put(the_mgc->obd_self_export);
         
         RETURN(rc);
 }
@@ -648,9 +651,14 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
                 if (imp->imp_invalid) {
                         /* Resurrect if we previously died */
-                        CDEBUG(D_MGC, "Reactivate %s\n", 
-                               imp->imp_obd->obd_name);
+                        CDEBUG(D_MGC, "Reactivate %s %d:%d:%d\n", 
+                               imp->imp_obd->obd_name,
+                               imp->imp_deactive, imp->imp_invalid, 
+                               imp->imp_state);
                         ptlrpc_activate_import(imp);
+                        // lustre_reconnect_mgc(obd);
+                        ptlrpc_set_import_active(imp, 1);
+                        //ptlrpc_recover_import(imp);
                 }
                 RETURN(0);
         }
@@ -749,6 +757,26 @@ static int mgc_llog_finish(struct obd_device *obd, int count)
         rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
 
         RETURN(rc);
+}
+
+/* identical to mgs_log_is_empty */
+static int mgc_llog_is_empty(struct obd_device *obd, struct llog_ctxt *ctxt,
+                            char *name)
+{
+        struct lvfs_run_ctxt saved;
+        struct llog_handle *llh;
+        int rc = 0;
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = llog_create(ctxt, &llh, NULL, name);
+        if (rc == 0) {
+                llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
+                rc = llog_get_size(llh);
+                llog_close(llh);
+        }
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        /* header is record 1 */
+        return(rc <= 1);
 }
 
 static int mgc_copy_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
@@ -865,12 +893,19 @@ static int mgc_process_log(struct obd_device *mgc,
             (class_name2obd(LUSTRE_MGS_OBDNAME) == NULL)) {
                 push_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
                 must_pop++;
-                if (!rcl) 
-                        /* Only try to copy log if we have the lock */
+                if (rcl == 0) 
+                        /* Only try to copy log if we have the lock. */
                         rc = mgc_copy_llog(mgc, ctxt, lctxt, cld->cld_logname);
-                if (rcl || rc) 
-                        LCONSOLE_WARN("Failed to get MGS log %s, using local "
-                                      "copy.\n", cld->cld_logname);
+                if (rcl || rc) {
+                        if (mgc_llog_is_empty(mgc, lctxt, cld->cld_logname)) {
+                                LCONSOLE_ERROR("Failed to get MGS log %s "
+                                               "and no local copy.\n",
+                                               cld->cld_logname);
+                                GOTO(out_pop, rc = -ENOTCONN);
+                        }
+                        LCONSOLE_WARN("Failed to get MGS log %s, using "
+                                      "local copy.\n", cld->cld_logname);
+                }
                 /* Now, whether we copied or not, start using the local llog.
                    If we failed to copy, we'll start using whatever the old 
                    log has. */
@@ -882,6 +917,7 @@ static int mgc_process_log(struct obd_device *mgc,
            be updated here. */
         rc = class_config_parse_llog(ctxt, cld->cld_logname, &cld->cld_cfg);
         
+ out_pop:
         if (must_pop) 
                 pop_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
 
@@ -894,9 +930,9 @@ static int mgc_process_log(struct obd_device *mgc,
         }
         
         if (rc) {
-                LCONSOLE_ERROR("%s: the configuration '%s' could not be read "
-                               "(%d) from the MGS.\n",
-                               mgc->obd_name, cld->cld_logname, rc);
+                CERROR("%s: the configuration '%s' could not be read "
+                       "(%d) from the MGS.\n",
+                       mgc->obd_name, cld->cld_logname, rc);
         }
         
         RETURN(rc);

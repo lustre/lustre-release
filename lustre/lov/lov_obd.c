@@ -912,8 +912,7 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
                 if (ost_uuid && !obd_uuid_equals(ost_uuid, &lov->tgts[i].uuid))
                         continue;
 
-                // FIXME remove
-                CERROR("Clear orphans for %d:%s\n", i, ost_uuid->uuid);
+                CDEBUG(D_CONFIG,"Clear orphans for %d:%s\n", i, ost_uuid->uuid);
 
                 memcpy(tmp_oa, src_oa, sizeof(*tmp_oa));
 

@@ -8,16 +8,17 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_scripts = lconf lmc llanalyze llstat.pl llobdstat.pl lactive	\
+sbin_scripts = llanalyze llstat.pl llobdstat.pl lactive	\
 	load_ldap.sh lrun 
 bin_scripts = lfind lstripe
 
 if UTILS
-rootsbin_SCRIPTS =
+# mount only finds helpers in /sbin
+rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
-	mount_lustre mount.lustre mkfs_lustre mkfs.lustre \
-	tunefs_lustre tunefs.lustre l_getgroups 
-bin_PROGRAMS = lfs llog_reader
+	mount_lustre mkfs_lustre mkfs.lustre \
+	tunefs_lustre tunefs.lustre l_getgroups llog_reader
+bin_PROGRAMS = lfs
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
 bin_SCRIPTS = $(bin_scripts)
@@ -69,6 +70,7 @@ newwiretest: wirehdr.c wirecheck
 	cp wirehdr.c wiretest.c
 	./wirecheck >> wiretest.c
 
+# Apparently I can't use .'s in automake names
 mount.lustre$(EXEEXT): mount_lustre
 	cp $< $@
 

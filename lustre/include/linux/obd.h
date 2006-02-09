@@ -387,9 +387,9 @@ struct mgs_obd {
         struct super_block              *mgs_sb;
         struct dentry                   *mgs_configs_dir;
         struct dentry                   *mgs_fid_de;
-        struct llog_handle              *mgs_cfg_llh;
         spinlock_t                       mgs_fs_db_lock;
         struct list_head                 mgs_fs_db_list;
+        struct semaphore                 mgs_log_sem;
 };
 
 struct mds_obd {

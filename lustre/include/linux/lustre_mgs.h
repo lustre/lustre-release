@@ -22,6 +22,8 @@
 #include <linux/lustre_log.h>
 #include <linux/lustre_export.h>
 
+#define FSDB_EMPTY 0x0001
+
 struct fs_db {
         char              fd_name[8];
         struct list_head  fd_list;

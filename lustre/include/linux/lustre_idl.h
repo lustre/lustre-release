@@ -983,7 +983,7 @@ typedef enum {
         MGS_CONNECT = 250,
         MGS_DISCONNECT,
         MGS_EXCEPTION,         /* node died, etc. */
-        MGS_TARGET_ADD,
+        MGS_TARGET_ADD,        /* whenever target starts up */
         MGS_TARGET_DEL,
         MGS_LAST_OPC
 } mgs_cmd_t;

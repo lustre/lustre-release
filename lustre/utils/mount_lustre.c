@@ -323,7 +323,7 @@ int main(int argc, char *const argv[])
                 usage(stderr);
         }
 
-        if (verbose) {
+        if (verbose > 1) {
                 for (i = 0; i < argc; i++)
                         printf("arg[%d] = %s\n", i, argv[i]);
                 printf("source = %s, target = %s\n", source, target);

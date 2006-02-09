@@ -43,9 +43,11 @@
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
 #define LDD_F_SV_TYPE_MGS   0x0004
-#define LDD_F_NEED_INDEX    0x0010
-#define LDD_F_NEED_REGISTER 0x0020
+#define LDD_F_NEED_INDEX    0x0010 /* we need an index assignment */
+#define LDD_F_NEED_REGISTER 0x0020 /* we have never registered  */
 #define LDD_F_UPGRADE14     0x0040 /* COMPAT_14 */
+#define LDD_F_REWRITE       0x0080 /* rewrite the LDD */
+#define LDD_F_WRITECONF     0x0100 /* regenerate all logs for this fs */
 
 
 enum ldd_mount_type {

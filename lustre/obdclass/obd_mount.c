@@ -32,7 +32,6 @@
 #include <linux/obd.h>
 #include <linux/lvfs.h>
 #include <linux/lustre_fsfilt.h>
-//#include <linux/lustre_mgs.h>
 #include <linux/obd_class.h>
 #include <lustre/lustre_user.h>
 #include <linux/version.h> 
@@ -369,54 +368,6 @@ out:
         RETURN(rc);
 }
 
-#if 0
-int parse_last_rcvd(struct obd_device *obd, char *uuid, int *first_mount)
-{
-        struct lvfs_run_ctxt saved;
-        struct file *file;
-        struct lr_server_data *lsd;
-        loff_t off = 0;
-        int rc;
- 
-        OBD_ALLOC_WAIT(lsd, sizeof(*lsd));
-        if (!lsd)
-                return -ENOMEM;
- 
-        /* requires a mounted device */
-        LASSERT(obd);
-         /*setup llog ctxt*/
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        /* open and test the last rcvd file */
-        file = filp_open(LAST_RCVD, O_RDONLY, 0644);
-        if (IS_ERR(file)) {
-                rc = PTR_ERR(file);
-                CERROR("cannot open %s file: rc = %d\n", LAST_RCVD, rc);
-                goto out;
-        }
- 
-        CDEBUG(D_MOUNT, "Have last_rcvd, size %lu\n",
-               (unsigned long)file->f_dentry->d_inode->i_size);
-        rc = fsfilt_read_record(obd, file, lsd, sizeof(*lsd), &off);
-        if (rc) {
-                CERROR("error reading %s: rc %d\n", LAST_RCVD, rc);
-                goto out_close;
-        }
- 
-        strcpy(uuid, lsd->lsd_uuid);
-        *first_mount = (lsd->lsd_mount_count == 0);
-        CDEBUG(D_MOUNT, "UUID from %s: %s, init=%d\n",
-               LAST_RCVD, uuid, *first_mount);
- 
-out_close:
-        filp_close(file, 0);
-out:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        OBD_FREE(lsd, sizeof(*lsd));
-        return(rc);
-}
-#endif
-
 
 /**************** config llog ********************/
 
@@ -618,6 +569,20 @@ static int lustre_start_mgc(struct super_block *sb)
                                   KEY_INIT_RECOV_BACKUP,
                                   sizeof(recov_bk), &recov_bk);
 
+#if 0
+                /* induces a module loop with ptlrpc */
+                if (imp->imp_invalid) {
+                        /* Resurrect if we previously died */
+                        CDEBUG(D_MOUNT, "Reactivate %s %d:%d:%d\n", 
+                               imp->imp_obd->obd_name,
+                               imp->imp_deactive, imp->imp_invalid, 
+                               imp->imp_state);
+                        ptlrpc_activate_import(imp);
+                        // lustre_reconnect_mgc(obd);
+                        ptlrpc_set_import_active(imp, 1);
+                        //ptlrpc_recover_import(imp);
+                }
+#endif
                 GOTO(out, rc = 0);
         }
 
@@ -825,8 +790,9 @@ static int server_stop_servers(struct super_block *sb)
         RETURN(rc);
 }
 
-/* Add this target to the fs, get a new index if needed */
-static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
+/* Register an old or new target with the MGS. If needed MGS will construct
+   startup logs and assign index */
+static int server_register_target(struct super_block *sb, struct vfsmount *mnt)
 {       
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
@@ -839,9 +805,6 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
 
         LASSERT(mgc);
 
-        /* send MGS_TARGET_ADD rpc via MGC, MGS should reply with an 
-           index number. */
-        
         OBD_ALLOC(mti, sizeof(*mti));
         if (!mti) {
                 RETURN(-ENOMEM);
@@ -874,24 +837,25 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
         mti->mti_stripe_size = ldd->ldd_stripe_sz; 
         mti->mti_stripe_offset = ldd->ldd_stripe_offset;  
 
-        CDEBUG(D_MOUNT, "Initial registration %s, fs=%s, %s, index=%04x\n",
+        CDEBUG(D_MOUNT, "%sregistration %s, fs=%s, %s, index=%04x, flags=%#x\n",
+               mti->mti_flags & LDD_F_NEED_REGISTER ? "Initial " : "",
                mti->mti_svname, mti->mti_fsname,
-               libcfs_nid2str(mti->mti_nids[0]), mti->mti_stripe_index);
+               libcfs_nid2str(mti->mti_nids[0]), mti->mti_stripe_index,
+               mti->mti_flags);
 
         /* Register the target */
         /* FIXME use mdc_process_config instead */
         rc = obd_set_info(mgc->u.cli.cl_mgc_mgsexp,
                           strlen("add_target"), "add_target",
                           sizeof(*mti), mti);
-        CDEBUG(D_MOUNT, "disconnect");
         if (rc) {
-                CERROR("add_target failed %d\n", rc);
+                CERROR("registration with the MGS failed (%d)\n", rc);
                 GOTO(out, rc);
         }
 
-        /* If this flag is still set, it means we need to change our on-disk
-           index to what the mgs assigned us. */
-        if (mti->mti_flags & LDD_F_NEED_INDEX) {
+        /* If this flag is set, it means the MGS wants us to change our
+           on-disk data. (So far this means just the index.) */
+        if (mti->mti_flags & LDD_F_REWRITE) {
                 CDEBUG(D_MOUNT, "Must change on-disk index from %#x to %#x for "
                        " %s\n",
                        ldd->ldd_svindex, mti->mti_stripe_index, 
@@ -900,13 +864,11 @@ static int server_add_target(struct super_block *sb, struct vfsmount *mnt)
                 strncpy(ldd->ldd_svname, mti->mti_svname, 
                         sizeof(ldd->ldd_svname));
                 /* or ldd_make_sv_name(ldd); */
+                ldd->ldd_flags = mti->mti_flags & ~LDD_F_REWRITE;
+                ldd_write(&mgc->obd_lvfs_ctxt, ldd);
+                
                 /* FIXME write last_rcvd?, disk label? */
-                mti->mti_flags &= ~LDD_F_NEED_INDEX;
         }
-
-        /* Always write out the new flags */
-        ldd->ldd_flags = mti->mti_flags;
-        ldd_write(&mgc->obd_lvfs_ctxt, ldd);
 
 out:
         if (mti)        
@@ -958,16 +920,13 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
            to read and write configs locally. */
         server_mgc_set_fs(lsi->lsi_mgc, sb);
 
-        /* Register if needed */
-        if (lsi->lsi_ldd->ldd_flags & 
-            (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER | LDD_F_UPGRADE14)) {
-                CDEBUG(D_MOUNT, "Need new target index from MGS\n");
-                rc = server_add_target(sb, mnt);
-                if (rc) {
-                        CERROR("Initial connect failed for %s: %d\n", 
-                               lsi->lsi_ldd->ldd_svname, rc);
-                        GOTO(out, rc);
-                }
+        /* Register with MGS */
+        rc = server_register_target(sb, mnt);
+        if (rc && (lsi->lsi_ldd->ldd_flags & 
+                   (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER | LDD_F_UPGRADE14))){
+                CERROR("Required refistration failed for %s: %d\n", 
+                       lsi->lsi_ldd->ldd_svname, rc);
+                GOTO(out, rc);
         }
 
         if (class_name2obd(lsi->lsi_ldd->ldd_svname)) {

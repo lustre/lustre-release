@@ -87,6 +87,7 @@ void usage(FILE *out)
                 "\t\t--reformat: overwrite an existing disk\n"
 #else
                 "\t\t--nomgs: turn off MGS service on this MDT\n"
+                "\t\t--writeconf: erase all config logs for this fs.\n"
 #endif
                 "\t\t--print: just report what we would do; don't write to "
                 "disk\n"
@@ -788,6 +789,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"index", 1, 0, 'i'},
                 {"timeout", 1, 0, 't'},
                 {"verbose", 0, 0, 'v'},
+                {"writeconf", 1, 0, 'w'},
                 {0, 0, 0, 0}
         };
         char *optstring = "b:C:d:n:f:hI:MGm:k:No:Opqrw:c:s:i:t:v";
@@ -933,6 +935,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 case 'v':
                         verbose++;
+                        break;
+                case 'w':
+                        mop->mo_ldd.ldd_flags |= LDD_F_WRITECONF;
                         break;
                 default:
                         if (opt != '?') {

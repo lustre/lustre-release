@@ -151,6 +151,9 @@ static int mgs_get_db_from_llog(struct obd_device *obd, char *logname,
         if (rc)
                 GOTO(out_close, rc);
 
+        if (llog_get_size(loghandle) <= 1)
+                db->fd_flags |= FSDB_EMPTY;
+
         rc = llog_process(loghandle, mgsdb_handler, (void *)db, NULL);
         CDEBUG(D_MGS, "get_db = %d\n", rc);
 out_close:
@@ -315,6 +318,40 @@ static int mgs_find_or_make_db(struct obd_device *obd, char *name,
         
         return 0;
 }
+
+/* 1 = index in use
+   0 = index unused 
+   -1= empty client log */
+int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti)
+{
+        struct fs_db *db;
+        void *imap;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(!(mti->mti_flags & LDD_F_NEED_INDEX));
+
+        rc = mgs_find_or_make_db(obd, mti->mti_fsname, &db); 
+        if (rc) {
+                CERROR("Can't get db for %s\n", mti->mti_fsname);
+                RETURN(rc);
+        }
+
+        if (db->fd_flags & FSDB_EMPTY) 
+                RETURN(-1);
+
+        if (mti->mti_flags & LDD_F_SV_TYPE_OST) 
+                imap = db->fd_ost_index_map;
+        else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) 
+                imap = db->fd_mdt_index_map;
+        else
+                RETURN(-EINVAL);
+
+        if (test_bit(mti->mti_stripe_index, imap)) 
+                RETURN(1);
+        RETURN(0);
+}
+
 
 int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
 {
@@ -944,6 +981,10 @@ int mgs_write_log_target(struct obd_device *obd,
                 CERROR("Unknown target type %#x, can't create log for %s\n",
                        mti->mti_flags, mti->mti_svname);
         }
+        
+        if (!rc) 
+                db->fd_flags &= ~FSDB_EMPTY;
+
         return rc;
 }
 
@@ -1088,6 +1129,92 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 }
 /* end COMPAT_146 */
 
+static int mgs_clear_log(struct obd_device *obd, char *name)
+{
+        struct lvfs_run_ctxt saved;
+        struct llog_handle *llh;
+        int rc = 0;
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
+                         &llh, NULL, name);
+        if (rc == 0) {
+                llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
+                rc = llog_destroy(llh);
+                llog_free_handle(llh);
+        }
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        if (rc)
+                CERROR("failed to clear log %s: %d\n", name, rc);
+
+        return(rc);
+}
+
+static int dentry_readdir(struct obd_device *obd, struct dentry *dir,
+                          struct vfsmount *inmnt, 
+                          struct list_head *dentry_list){
+        /* see mds_cleanup_pending */
+        struct lvfs_run_ctxt saved;
+        struct file *file;
+        struct dentry *dentry;
+        struct vfsmount *mnt;
+        int rc = 0;
+        ENTRY;
+                                                                                
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        dentry = dget(dir);
+        if (IS_ERR(dentry))
+                GOTO(out_pop, rc = PTR_ERR(dentry));
+        mnt = mntget(inmnt);
+        if (IS_ERR(mnt)) {
+                l_dput(dentry);
+                GOTO(out_pop, rc = PTR_ERR(mnt));
+        }
+
+        file = dentry_open(dentry, mnt, O_RDONLY);
+        if (IS_ERR(file))
+                /* dentry_open_it() drops the dentry, mnt refs */
+                GOTO(out_pop, rc = PTR_ERR(file));
+                                                                                
+        INIT_LIST_HEAD(dentry_list);
+        rc = l_readdir(file, dentry_list);
+        filp_close(file, 0);
+        /*  filp_close->fput() drops the dentry, mnt refs */
+                                                                                
+out_pop:
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        RETURN(rc);
+}
+
+/* erase all logs for the given fs */
+int mgs_erase_logs(struct obd_device *obd, char *fsname)
+{
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct list_head dentry_list;
+        struct l_linux_dirent *dirent, *n;
+        int rc, len = strlen(fsname);
+        ENTRY;
+
+        /* Find all the logs in the CONFIGS directory */
+        rc = dentry_readdir(obd, mgs->mgs_configs_dir,
+                             mgs->mgs_vfsmnt, &dentry_list);
+        if (rc) {
+                CERROR("Can't read %s dir\n", MOUNT_CONFIGS_DIR);
+                RETURN(rc);
+        }
+                                                                                
+        list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
+                list_del(&dirent->lld_list);
+                if (strncmp(fsname, dirent->lld_name, len) == 0) {
+                        CDEBUG(D_MGS, "Removing log %s\n", dirent->lld_name);
+                        mgs_clear_log(obd, dirent->lld_name);
+                }
+                OBD_FREE(dirent, sizeof(*dirent));
+        }
+        RETURN(rc);
+}
+
 
 #if 0
 /******************** unused *********************/
@@ -1146,28 +1273,6 @@ out:
                 OBD_FREE(buf, count);
         OBD_FREE(logname, PATH_MAX);
         return rc;
-}
-
-static int mgs_clear_log(struct obd_device *obd, char *name)
-{
-        struct lvfs_run_ctxt saved;
-        struct llog_handle *llh;
-        int rc = 0;
-
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &llh, NULL, name);
-        if (rc == 0) {
-                llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
-                rc = llog_destroy(llh);
-                llog_free_handle(llh);
-        }
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        if (rc)
-                CERROR("failed to clear log %s: %d\n", name, rc);
-
-        return(rc);
 }
 
 /* from mdt_iocontrol */
