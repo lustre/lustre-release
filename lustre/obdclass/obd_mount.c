@@ -390,6 +390,7 @@ int lustre_process_log(struct super_block *sb, char *logname,
         lustre_cfg_bufs_reset(&bufs, mgc->obd_name);
         lustre_cfg_bufs_set_string(&bufs, 1, logname);
         lustre_cfg_bufs_set(&bufs, 2, cfg, sizeof(*cfg));
+        lustre_cfg_bufs_set(&bufs, 3, &sb, sizeof(sb));
         lcfg = lustre_cfg_new(LCFG_LOG_START, &bufs);
         rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
         lustre_cfg_free(lcfg);
@@ -568,21 +569,6 @@ static int lustre_start_mgc(struct super_block *sb)
                                   strlen(KEY_INIT_RECOV_BACKUP),
                                   KEY_INIT_RECOV_BACKUP,
                                   sizeof(recov_bk), &recov_bk);
-
-#if 0
-                /* induces a module loop with ptlrpc */
-                if (imp->imp_invalid) {
-                        /* Resurrect if we previously died */
-                        CDEBUG(D_MOUNT, "Reactivate %s %d:%d:%d\n", 
-                               imp->imp_obd->obd_name,
-                               imp->imp_deactive, imp->imp_invalid, 
-                               imp->imp_state);
-                        ptlrpc_activate_import(imp);
-                        // lustre_reconnect_mgc(obd);
-                        ptlrpc_set_import_active(imp, 1);
-                        //ptlrpc_recover_import(imp);
-                }
-#endif
                 GOTO(out, rc = 0);
         }
 
@@ -790,32 +776,26 @@ static int server_stop_servers(struct super_block *sb)
         RETURN(rc);
 }
 
-/* Register an old or new target with the MGS. If needed MGS will construct
-   startup logs and assign index */
-static int server_register_target(struct super_block *sb, struct vfsmount *mnt)
+static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
 {       
-        struct lustre_sb_info *lsi = s2lsi(sb);
-        struct obd_device *mgc = lsi->lsi_mgc;
+        struct lustre_sb_info   *lsi = s2lsi(sb);
         struct lustre_disk_data *ldd = lsi->lsi_ldd;
-        struct mgs_target_info *mti = NULL;
-        lnet_process_id_t         id;
+        lnet_process_id_t        id;
         int i = 0;
-        int rc;
         ENTRY;
 
-        LASSERT(mgc);
-
-        OBD_ALLOC(mti, sizeof(*mti));
-        if (!mti) {
+        if (!mti) 
                 RETURN(-ENOMEM);
-        }
+        if (!(lsi->lsi_flags & LSI_SERVER))
+                RETURN(-EINVAL);
+
         strncpy(mti->mti_fsname, ldd->ldd_fsname,
                 sizeof(mti->mti_fsname));
         strncpy(mti->mti_svname, ldd->ldd_svname,
                 sizeof(mti->mti_svname));
         
         mti->mti_nid_count = 0;
-        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+        while (LNetGetId(i++, &id) != -ENOENT) {
                 if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND) 
                         continue;
                 mti->mti_nids[mti->mti_nid_count] = id.nid;
@@ -836,6 +816,29 @@ static int server_register_target(struct super_block *sb, struct vfsmount *mnt)
         mti->mti_stripe_pattern = ldd->ldd_stripe_pattern;
         mti->mti_stripe_size = ldd->ldd_stripe_sz; 
         mti->mti_stripe_offset = ldd->ldd_stripe_offset;  
+        RETURN(0);
+}
+
+/* Register an old or new target with the MGS. If needed MGS will construct
+   startup logs and assign index */
+int server_register_target(struct super_block *sb)
+{       
+        struct lustre_sb_info *lsi = s2lsi(sb);
+        struct obd_device *mgc = lsi->lsi_mgc;
+        struct lustre_disk_data *ldd = lsi->lsi_ldd;
+        struct mgs_target_info *mti = NULL;
+        int rc;
+        ENTRY;
+
+        LASSERT(mgc);
+
+        if (!(lsi->lsi_flags & LSI_SERVER))
+                RETURN(-EINVAL);
+
+        OBD_ALLOC_PTR(mti);
+        rc = server_sb2mti(sb, mti);
+        if (rc) 
+                GOTO(out, rc);
 
         CDEBUG(D_MOUNT, "%sregistration %s, fs=%s, %s, index=%04x, flags=%#x\n",
                mti->mti_flags & LDD_F_NEED_REGISTER ? "Initial " : "",
@@ -872,7 +875,7 @@ static int server_register_target(struct super_block *sb, struct vfsmount *mnt)
 
 out:
         if (mti)        
-                OBD_FREE(mti, sizeof(*mti));
+                OBD_FREE_PTR(mti);
         RETURN(rc);
 }
 
@@ -921,7 +924,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         server_mgc_set_fs(lsi->lsi_mgc, sb);
 
         /* Register with MGS */
-        rc = server_register_target(sb, mnt);
+        rc = server_register_target(sb);
         if (rc && (lsi->lsi_ldd->ldd_flags & 
                    (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER | LDD_F_UPGRADE14))){
                 CERROR("Required refistration failed for %s: %d\n", 
@@ -1654,4 +1657,6 @@ EXPORT_SYMBOL(lustre_process_log);
 EXPORT_SYMBOL(lustre_end_log);
 EXPORT_SYMBOL(server_get_mount);
 EXPORT_SYMBOL(server_put_mount);
+EXPORT_SYMBOL(server_register_target);
+
 

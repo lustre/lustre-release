@@ -34,7 +34,7 @@
 #include <mntent.h>
 #include <getopt.h>
 #include <sys/utsname.h>
-
+#include <linux/lustre_ver.h>
 #include "obdctl.h"
 
 int          verbose = 0;
@@ -45,7 +45,7 @@ static char *progname = NULL;
 
 void usage(FILE *out)
 {
-        fprintf(out, "%s v2.0\n", progname);
+        fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
         fprintf(out, "usage: %s [-fhnv] [-o <mntopt>] <device> <mountpt>\n", 
                 progname);
         fprintf(out, 

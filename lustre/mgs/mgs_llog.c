@@ -140,8 +140,9 @@ static int mgs_get_db_from_llog(struct obd_device *obd, char *logname,
         int rc, rc2;
         ENTRY;
 
+        down(&db->fd_sem);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
+        
         rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                          &loghandle, NULL, logname);
         if (rc)
@@ -163,6 +164,7 @@ out_close:
 
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        up(&db->fd_sem);
 
         RETURN(rc);
 }
@@ -205,6 +207,7 @@ static struct fs_db *mgs_find_db(struct obd_device *obd, char *fsname)
 
 #define INDEX_MAP_SIZE 4096
 
+/* caller must hold the mgs->mgs_fs_db_lock */
 static struct fs_db *mgs_new_db(struct obd_device *obd, char *fsname)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
@@ -223,11 +226,8 @@ static struct fs_db *mgs_new_db(struct obd_device *obd, char *fsname)
         }
         
         strncpy(db->fd_name, fsname, sizeof(db->fd_name));
-        //INIT_LIST_HEAD(&db->ost_infos);
-
-        spin_lock(&mgs->mgs_fs_db_lock);
+        sema_init(&db->fd_sem, 1);
         list_add(&db->fd_list, &mgs->mgs_fs_db_list);
-        spin_unlock(&mgs->mgs_fs_db_lock);
 
         RETURN(db);
 err:
@@ -241,6 +241,8 @@ err:
 
 static void mgs_free_db(struct fs_db *db)
 {
+        /* wait for anyone with the sem */
+        down(&db->fd_sem);
         list_del(&db->fd_list);
         OBD_FREE(db->fd_ost_index_map, INDEX_MAP_SIZE);
         OBD_FREE(db->fd_mdt_index_map, INDEX_MAP_SIZE);
@@ -289,18 +291,22 @@ static inline void name_destroy(char *newname)
 static int mgs_find_or_make_db(struct obd_device *obd, char *name, 
                                struct fs_db **dbh)
 {
+        struct mgs_obd *mgs = &obd->u.mgs;
         struct fs_db *db;
         char *cliname;
         int rc = 0;
 
+        spin_lock(&mgs->mgs_fs_db_lock);
         db = mgs_find_db(obd, name);
         if (db) {
+                spin_unlock(&mgs->mgs_fs_db_lock);
                 *dbh = db;
                 return 0;
         }
 
         CDEBUG(D_MGS, "Creating new db\n");
         db = mgs_new_db(obd, name);
+        spin_unlock(&mgs->mgs_fs_db_lock);
         if (!db) 
                 return -ENOMEM;
 
@@ -398,15 +404,8 @@ int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
 
         if (test_bit(mti->mti_stripe_index, imap)) {
                 LCONSOLE_ERROR("Server %s requested index %d, but that "
-                               "index is already in use in the %s "
-                               "filesystem. This server "
-                               "may have been reformatted, or the "
-                               "index changed. (To reformat the entire "
-                               "filesystem, specify 'destroy_fs' "
-                               "when reformatting a MDT.)\n",
-                               mti->mti_svname, mti->mti_stripe_index,
-                               mti->mti_fsname);
-                /* FIXME implement destroy_fs! */
+                               "index is already in use\n",
+                               mti->mti_svname, mti->mti_stripe_index);
                 RETURN(-EADDRINUSE);
         }
          
@@ -973,6 +972,7 @@ int mgs_write_log_target(struct obd_device *obd,
                 return rc;
         }
 
+        down(&db->fd_sem);
         if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                 rc = mgs_write_log_mdt(obd, db, mti);
         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
@@ -981,6 +981,7 @@ int mgs_write_log_target(struct obd_device *obd,
                 CERROR("Unknown target type %#x, can't create log for %s\n",
                        mti->mti_flags, mti->mti_svname);
         }
+        up(&db->fd_sem);
         
         if (!rc) 
                 db->fd_flags &= ~FSDB_EMPTY;
@@ -1191,11 +1192,12 @@ out_pop:
 int mgs_erase_logs(struct obd_device *obd, char *fsname)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
+        static struct fs_db *db;
         struct list_head dentry_list;
         struct l_linux_dirent *dirent, *n;
         int rc, len = strlen(fsname);
         ENTRY;
-
+        
         /* Find all the logs in the CONFIGS directory */
         rc = dentry_readdir(obd, mgs->mgs_configs_dir,
                              mgs->mgs_vfsmnt, &dentry_list);
@@ -1204,6 +1206,13 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 RETURN(rc);
         }
                                                                                 
+        /* Delete the fs db */
+        spin_lock(&mgs->mgs_fs_db_lock);
+        db = mgs_find_db(obd, fsname);
+        if (db) 
+                mgs_free_db(db);
+        spin_unlock(&mgs->mgs_fs_db_lock);
+
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 list_del(&dirent->lld_list);
                 if (strncmp(fsname, dirent->lld_name, len) == 0) {
@@ -1212,6 +1221,7 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 }
                 OBD_FREE(dirent, sizeof(*dirent));
         }
+        
         RETURN(rc);
 }
 

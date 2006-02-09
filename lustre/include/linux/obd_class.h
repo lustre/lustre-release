@@ -118,6 +118,7 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
 /* list of active configuration logs  */
 struct config_llog_data {
         char               *cld_logname;
+        struct super_block *cld_sb;
         struct ldlm_res_id  cld_resid;
         struct config_llog_instance cld_cfg;
         struct list_head    cld_list_chain;

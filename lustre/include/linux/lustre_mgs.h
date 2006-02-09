@@ -27,11 +27,11 @@
 struct fs_db {
         char              fd_name[8];
         struct list_head  fd_list;
+        struct semaphore  fd_sem;
         void*             fd_ost_index_map;
         void*             fd_mdt_index_map;
         __u32             fd_flags;
         __u32             fd_gen;
-        //FIXME add a semaphore for locking the fs_db (and logs)
 };
 
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);

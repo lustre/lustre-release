@@ -341,8 +341,8 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_NEED_REGISTER))) {
                 /* We're just here as a startup ping. */
-                CDEBUG(D_MGS, "Server %s has started on %s\n", mti->mti_svname,
-                       obd_export_nid2str(req->rq_export));
+                CDEBUG(D_MGS, "Server %s is running on %s\n",
+                       mti->mti_svname, obd_export_nid2str(req->rq_export));
                 rc = mgs_check_target(obd, mti);
                 /* above will set appropriate mti flags */
                 if (!rc) 
@@ -365,14 +365,12 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         down(&obd->u.mgs.mgs_log_sem);
 
         if (mti->mti_flags & LDD_F_WRITECONF) {
-                CERROR("regen all logs for fs %s\n", mti->mti_fsname);
                 rc = mgs_erase_logs(obd, mti->mti_fsname);
                 mti->mti_flags |= LDD_F_NEED_REGISTER;
-                /* FIXME regen the rest of the logs too.  Special lock revoke
-                flag? */
-                LCONSOLE_ERROR("All servers must be restarted in order to "
-                               "regenerate the configuration logs.\n");
-
+                LCONSOLE_WARNING("Logs for fs %s were removed by user request. "
+                                 "All servers must re-register in order to "
+                                 "regenerate the client log.\n",
+                                 mti->mti_fsname);
                 mti->mti_flags &= ~LDD_F_WRITECONF;
                 mti->mti_flags |= LDD_F_REWRITE;
         }

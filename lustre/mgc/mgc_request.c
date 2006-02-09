@@ -119,7 +119,8 @@ static void config_log_put(void)
 /* Add this log to our list of active logs. 
    We have one active log per "mount" - client instance or servername.
    Each instance may be at a different point in the log. */
-static int config_log_add(char *logname, struct config_llog_instance *cfg)
+static int config_log_add(char *logname, struct config_llog_instance *cfg,
+                          struct super_block *sb)
 {
         struct config_llog_data *cld;
         int rc;
@@ -137,6 +138,7 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg)
                 GOTO(out, rc = -ENOMEM);
         }
         strcpy(cld->cld_logname, logname);
+        cld->cld_sb = sb;
         cld->cld_cfg = *cfg;
         cld->cld_cfg.cfg_last_idx = 0;
         if (cfg->cfg_instance != NULL) {
@@ -368,6 +370,12 @@ static int mgc_async_requeue(void *data)
         
         LASSERT(the_mgc);
         class_export_get(the_mgc->obd_self_export);
+        /* FIXME sleep a few seconds here to allow the server who caused
+           the lock revocation to finish its setup */
+        
+        /* re-send server info every time, in case MGS needs to regen its
+           logs */
+        server_register_target(cld->cld_sb);
         rc = mgc_process_log(the_mgc, cld);
         class_export_put(the_mgc->obd_self_export);
         
@@ -554,8 +562,8 @@ out:
 }
 #endif
 
-/* Get index and add to config llog, depending on flags */
-int mgc_target_add(struct obd_export *exp, struct mgs_target_info *mti)
+/* Send target_add message to MGS */
+static int mgc_target_add(struct obd_export *exp, struct mgs_target_info *mti)
 {
         struct ptlrpc_request *req;
         struct mgs_target_info *req_mti, *rep_mti;
@@ -591,41 +599,6 @@ int mgc_target_add(struct obd_export *exp, struct mgs_target_info *mti)
         RETURN(rc);
 }
 
-/* Remove from config llog */
-int mgc_target_del(struct obd_export *exp, struct mgs_target_info *mti)
-{
-        struct ptlrpc_request *req;
-        struct mgs_target_info *req_mti, *rep_mti;
-        int size = sizeof(*req_mti);
-        int rc;
-        ENTRY;
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
-                              MGS_TARGET_DEL, 1, &size, NULL);
-        if (!req)
-                RETURN(rc = -ENOMEM);
-
-        req_mti = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mti));
-        memcpy(req_mti, mti, sizeof(*req_mti));
-
-        rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                int index;
-                rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
-                                             lustre_swab_mgs_target_info);
-                index = rep_mti->mti_stripe_index;
-                if (index != mti->mti_stripe_index) {
-                        CERROR ("OST DEL failed. rc=%d\n", index);
-                        GOTO (out, rc = -EINVAL);
-                }
-                CERROR("OST DEL OK.(old index = %d)\n", index);
-        }
-out:
-        ptlrpc_req_finished(req);
-
-        RETURN(rc);
-}
-
 int mgc_set_info(struct obd_export *exp, obd_count keylen,
                  void *key, obd_count vallen, void *val)
 {
@@ -655,8 +628,10 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                                imp->imp_obd->obd_name,
                                imp->imp_deactive, imp->imp_invalid, 
                                imp->imp_state);
+                        /* can't put this in obdclass, module loop with ptlrpc*/
+                        /* remove 'invalid' flag */
                         ptlrpc_activate_import(imp);
-                        // lustre_reconnect_mgc(obd);
+                        /* reconnect */
                         ptlrpc_set_import_active(imp, 1);
                         //ptlrpc_recover_import(imp);
                 }
@@ -815,8 +790,6 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
         int rc, rc2;
         ENTRY;
 
-        CDEBUG(D_MGC, "Copy remote log %s\n", logname);
-
         /* open local log */
         rc = llog_create(lctxt, &local_llh, NULL, logname);
         if (rc)
@@ -850,6 +823,8 @@ out_closel:
         rc2 = llog_close(local_llh);
         if (!rc)
                 rc = rc2;
+
+        CDEBUG(D_MGC, "Copied remote log %s (%d)\n", logname, rc);
         RETURN(rc);
 }
 
@@ -862,6 +837,7 @@ static int mgc_process_log(struct obd_device *mgc,
         struct lustre_handle lockh;
         struct client_obd *cli = &mgc->u.cli;
         struct lvfs_run_ctxt saved;
+        struct lustre_sb_info *lsi = s2lsi(cld->cld_sb);
         int rc, rcl, flags = 0, must_pop = 0;
         ENTRY;
 
@@ -881,16 +857,13 @@ static int mgc_process_log(struct obd_device *mgc,
         if (rcl) 
                 CERROR("Can't get cfg lock: %d\n", rcl);
         
+        lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
+
         /* Copy the setup log locally if we can. Don't mess around if we're 
            running an MGS though (logs are already local). */
-        /* FIXME What if MGC has a disk set up but a client/another server gets
-           updated in the meantime?  We'll copy the other log onto the 
-           currently set-up disk. This won't hurt the current disk, but
-           the other server won't get his update written to disk. Next time it
-           starts it will update, so this isn't a huge deal... */
-        if (cli->cl_mgc_vfsmnt && 
-            ((lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT)) != NULL) &&
-            (class_name2obd(LUSTRE_MGS_OBDNAME) == NULL)) {
+        if (lctxt && lsi && (lsi->lsi_flags & LSI_SERVER) && 
+            (lsi->lsi_srv_mnt == cli->cl_mgc_vfsmnt) &&
+            !IS_MGS(lsi->lsi_ldd)) {
                 push_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
                 must_pop++;
                 if (rcl == 0) 
@@ -960,21 +933,23 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 break;
         }
         case LCFG_LOV_DEL_OBD: 
-                /* Unimplemented */
+                /* FIXME */
                 CERROR("lov_del_obd unimplemented\n");
                 rc = -ENOSYS;
                 break;
         case LCFG_LOG_START: {
                 struct config_llog_data *cld;
                 struct config_llog_instance *cfg;
+                struct super_block *sb;
                 char *logname = lustre_cfg_string(lcfg, 1);
-
                 cfg = (struct config_llog_instance *)lustre_cfg_buf(lcfg, 2);
+                sb = *(struct super_block **)lustre_cfg_buf(lcfg, 3);
+                
                 CDEBUG(D_MGC, "parse_log %s from %d\n", logname, 
                        cfg->cfg_last_idx);
 
                 /* We're only called through here on the initial mount */
-                config_log_add(logname, cfg);
+                config_log_add(logname, cfg, sb);
 
                 cld = config_log_get(logname, cfg);
                 if (IS_ERR(cld)) 

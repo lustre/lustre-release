@@ -41,6 +41,7 @@
 #include <linux/fs.h> // for BLKGETSIZE64
 #include <linux/lustre_disk.h>
 #include <lnet/lnetctl.h>
+#include <linux/lustre_ver.h>
 #include "obdctl.h"
 
 /* So obd.o will link */
@@ -59,6 +60,7 @@ static int print_only = 0;
 
 void usage(FILE *out)
 {
+        fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
         fprintf(out, "usage: %s <target types> [options] <device>\n", progname);
         fprintf(out, 
                 "\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
@@ -498,12 +500,13 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
         printf("Flags:      %#x\n", ldd->ldd_flags);
-        printf("              (%s%s%s%s%s%s)\n",
+        printf("              (%s%s%s%s%s%s%s)\n",
                IS_MDT(ldd) ? "MDT ":"", 
                IS_OST(ldd) ? "OST ":"",
                IS_MGS(ldd) ? "MGS ":"",
                ldd->ldd_flags & LDD_F_NEED_INDEX ? "needs_index ":"",
                ldd->ldd_flags & LDD_F_NEED_REGISTER ? "must_register ":"",
+               ldd->ldd_flags & LDD_F_WRITECONF ? "writeconf ":"",
                ldd->ldd_flags & LDD_F_UPGRADE14 ? "upgrade1.4 ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
         printf("MGS nids: ");
@@ -789,10 +792,10 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"index", 1, 0, 'i'},
                 {"timeout", 1, 0, 't'},
                 {"verbose", 0, 0, 'v'},
-                {"writeconf", 1, 0, 'w'},
+                {"writeconf", 0, 0, 'w'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "b:C:d:n:f:hI:MGm:k:No:Opqrw:c:s:i:t:v";
+        char *optstring = "b:C:d:n:f:hI:MGm:k:No:Opqrw:c:s:i:t:vw";
         char opt;
         int longidx;
 
@@ -962,7 +965,8 @@ int main(int argc, char *const argv[])
 {
         struct mkfs_opts mop;
         char *mountopts = NULL;
-        char default_mountopts[1024] = "";
+        char always_mountopts[512] = "";
+        char default_mountopts[512] = "";
         int  ret = 0;
 
         if ((progname = strrchr(argv[0], '/')) != NULL)
@@ -1056,24 +1060,25 @@ int main(int argc, char *const argv[])
         switch (mop.mo_ldd.ldd_mount_type) {
         case LDD_MT_EXT3:
         case LDD_MT_LDISKFS: {
-                sprintf(default_mountopts, "errors=remount-ro");
+                sprintf(always_mountopts, "errors=remount-ro");
                 if (IS_MDT(&mop.mo_ldd) || IS_MGS(&mop.mo_ldd))
-                        strcat(default_mountopts,
+                        strcat(always_mountopts,
                                ",iopen_nopriv,user_xattr");
                 if ((get_os_version() == 24) && IS_OST(&mop.mo_ldd))
-                        strcat(default_mountopts, ",asyncdel");
+                        strcat(always_mountopts, ",asyncdel");
+#if 0
                 /* Files created while extents are enabled cannot be read if
                    mounted with a kernel that doesn't include the CFS patches.*/
                 if (IS_OST(&mop.mo_ldd) && 
                     mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
                         strcat(default_mountopts, ",extents,mballoc");
                 }
- 
+#endif 
                 break;
         }
         case LDD_MT_SMFS: {
                 mop.mo_flags |= MO_IS_LOOP;
-                sprintf(default_mountopts, "type=ext3,dev=%s",
+                sprintf(always_mountopts, "type=ext3,dev=%s",
                         mop.mo_device);
                 break;
         }
@@ -1087,23 +1092,25 @@ int main(int argc, char *const argv[])
         }
         }               
 
-#ifndef TUNEFS /* mkfs.lustre */
-        if (mountopts) 
-                /* If user specifies mount opts, assume no defaults */
-                strcpy(mop.mo_ldd.ldd_mount_opts, mountopts);
-                /* sprintf(mop.mo_ldd.ldd_mount_opts, "%s,%s", 
-                        default_mountopts, mountopts); */
-        else
-                strcpy(mop.mo_ldd.ldd_mount_opts, default_mountopts);
-#else   /* tunefs.lustre - if mountopts are specified, they override 
-           whatever we had before, so no defaults. */
-        if (mountopts) 
-                strcpy(mop.mo_ldd.ldd_mount_opts, mountopts);
-        else if (*mop.mo_ldd.ldd_mount_opts == 0) 
-                /* no mount opts were set ever, use the defaults. */
-                strcpy(mop.mo_ldd.ldd_mount_opts, default_mountopts);
-        /* otherwise, use the old. */
+        if (mountopts) {
+                /* If user specifies mount opts, don't use defaults,
+                   but always use always_mountopts */
+                sprintf(mop.mo_ldd.ldd_mount_opts, "%s,%s", 
+                        always_mountopts, mountopts);
+        } else {
+#ifdef TUNEFS
+                if (*mop.mo_ldd.ldd_mount_opts == 0) 
+                        /* use the defaults unless old opts exist */
 #endif
+                {
+                        if (default_mountopts[0]) 
+                                sprintf(mop.mo_ldd.ldd_mount_opts, "%s,%s", 
+                                        always_mountopts, default_mountopts);
+                        else
+                                strcpy(mop.mo_ldd.ldd_mount_opts,
+                                       always_mountopts);
+                }
+        }
 
         ldd_make_sv_name(&(mop.mo_ldd));
 

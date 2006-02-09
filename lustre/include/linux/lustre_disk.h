@@ -302,6 +302,7 @@ int lustre_end_log(struct super_block *sb, char *logname,
                        struct config_llog_instance *cfg);
 struct lustre_mount_info *server_get_mount(char *name);
 int server_put_mount(char *name, struct vfsmount *mnt);
+int server_register_target(struct super_block *sb);
 
 /* mgc_request.c */
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id);
