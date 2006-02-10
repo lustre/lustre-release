@@ -224,12 +224,12 @@ static inline cfs_duration_t cfs_duration_build(int64_t nano)
 
 static inline cfs_duration_t cfs_time_seconds(int seconds)
 {
-        return seconds * HZ;
+        return ((cfs_duration_t)seconds) * HZ;
 }
 
 static inline cfs_time_t cfs_time_shift(int seconds)
 {
-        return jiffies + seconds * HZ;
+        return jiffies + ((cfs_duration_t)seconds) * HZ;
 }
 
 static inline time_t cfs_duration_sec(cfs_duration_t d)
@@ -240,23 +240,29 @@ static inline time_t cfs_duration_sec(cfs_duration_t d)
 static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
 {
 #if (BITS_PER_LONG == 32)
-        uint64_t t = (d - s->tv_sec * HZ) * ONE_MILLION;
+        uint64_t t;
+
+        s->tv_sec = d / HZ;
+        t = (d - s->tv_sec * HZ) * ONE_MILLION;
         s->tv_usec = do_div (t, HZ);
 #else
-        s->tv_usec = (d - s->tv_sec * HZ) * ONE_MILLION / HZ;
-#endif
         s->tv_sec = d / HZ;
+        s->tv_usec = ((d - s->tv_sec * HZ) * ONE_MILLION) / HZ;
+#endif
 }
 
 static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 {
 #if (BITS_PER_LONG == 32)
-        uint64_t t = (d - s->tv_sec * HZ) * ONE_BILLION;
+        uint64_t t;
+
+        s->tv_sec = d / HZ;
+        t = (d - s->tv_sec * HZ) * ONE_BILLION;
         s->tv_nsec = do_div (t, HZ);
 #else
-        s->tv_nsec = (d - s->tv_sec * HZ) * ONE_BILLION / HZ;
-#endif
         s->tv_sec = d / HZ;
+        s->tv_nsec = ((d - s->tv_sec * HZ) * ONE_BILLION) / HZ;
+#endif
 }
 
 static inline cfs_duration_t cfs_time_minimal_timeout(void)

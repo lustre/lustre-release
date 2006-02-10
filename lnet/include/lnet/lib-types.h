@@ -480,7 +480,7 @@ typedef struct
         struct list_head   ln_test_peers;       /* failure simulation */
 
         lnet_handle_md_t   ln_ping_target_md;
-        lnet_handle_me_t   ln_ping_target_me;
+        lnet_handle_eq_t   ln_ping_target_eq;
         
 #ifdef LNET_USE_LIB_FREELIST
         lnet_freelist_t    ln_free_mes;

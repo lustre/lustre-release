@@ -115,6 +115,7 @@ module_exit(fini)
 /*
  * Signal
  */
+typedef sigset_t                        cfs_sigset_t;
 #define cfs_sigmask_lock(t, f)          SIGNAL_MASK_LOCK(t, f)
 #define cfs_sigmask_unlock(t, f)        SIGNAL_MASK_UNLOCK(t, f)
 #define cfs_recalc_sigpending(t)        RECALC_SIGPENDING

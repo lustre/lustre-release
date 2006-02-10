@@ -143,7 +143,9 @@ lib_get_event (lnet_eq_t *eq, lnet_event_t *ev)
         if (eq->eq_deq_seq == new_event->sequence) {
                 rc = 1;
         } else {
-                CERROR("Event Queue Overflow: eq seq %lu ev seq %lu\n",
+                /* don't complain with CERROR: some EQs are sized small
+                 * anyway; if it's important, the caller should complain */
+                CDEBUG(D_NET, "Event Queue Overflow: eq seq %lu ev seq %lu\n",
                        eq->eq_deq_seq, new_event->sequence);
                 rc = -EOVERFLOW;
         }
@@ -201,6 +203,9 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
         for (;;) {
                 for (i = 0; i < neq; i++) {
                         lnet_eq_t *eq = lnet_handle2eq(&eventqs[i]);
+
+                        if (eq == NULL)
+                                RETURN(-ENOENT);
 
                         rc = lib_get_event (eq, event);
                         if (rc != 0) {

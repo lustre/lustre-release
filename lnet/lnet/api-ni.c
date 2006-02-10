@@ -1188,32 +1188,31 @@ LNetNIInit(lnet_pid_t requested_pid)
 
         rc = lnet_check_routes();
         if (rc != 0)
-                goto failed3;
+                goto failed2;
 
         rc = lnet_alloc_rtrpools(im_a_router);
         if (rc != 0)
-                goto failed3;
+                goto failed2;
         
         rc = lnet_acceptor_start();
         if (rc != 0)
-                goto failed3;
+                goto failed2;
 
         the_lnet.ln_refcount = 1;
         /* Now I may use my own API functions... */
 
         rc = lnet_ping_target_init();
         if (rc != 0)
-                goto failed4;
+                goto failed3;
         
         lnet_proc_init();
         goto out;
 
- failed4:
+ failed3:
         the_lnet.ln_refcount = 0;
         lnet_acceptor_stop();
- failed3:
-        lnet_destroy_routes();
  failed2:
+        lnet_destroy_routes();
         lnet_shutdown_lndnis();
  failed1:
         lnet_unprepare();
@@ -1391,6 +1390,14 @@ lnet_ping_target_init(void)
                 CERROR("Error %d getting id %d\n", rc, n_ids);
                 return rc;
         }
+
+        /* We can have a tiny EQ since we only need to see the unlink event on
+         * teardown, which by definition is the last one! */
+        rc = LNetEQAlloc(2, LNET_EQ_HANDLER_NONE, &the_lnet.ln_ping_target_eq);
+        if (rc != 0) {
+                CERROR("Can't allocate ping EQ: %d\n", rc);
+                return rc;
+        }
         
         rc = LNetMEAttach(LNET_RESERVED_PORTAL,
                           (lnet_process_id_t){.nid = LNET_NID_ANY,
@@ -1400,7 +1407,7 @@ lnet_ping_target_init(void)
                           &meh);
         if (rc != 0) {
                 CERROR("Can't create ping ME: %d\n", rc);
-                return rc;
+                goto failed_0;
         }
 
         rc = LNetMDAttach(meh,
@@ -1410,29 +1417,57 @@ lnet_ping_target_init(void)
                                       .options = (LNET_MD_OP_GET |
                                                   LNET_MD_TRUNCATE |
                                                   LNET_MD_MANAGE_REMOTE),
-                                      .eq_handle = LNET_EQ_NONE},
+                                      .eq_handle = the_lnet.ln_ping_target_eq},
                           LNET_RETAIN,
                           &the_lnet.ln_ping_target_md);
         if (rc != 0) {
                 CERROR("Can't attach ping MD: %d\n", rc);
-                rc2 = LNetMEUnlink(meh);
-                LASSERT (rc2 == 0);
-                return rc;
+                goto failed_1;
         }
         
         return 0;
+
+ failed_1:
+        rc2 = LNetMEUnlink(meh);
+        LASSERT (rc2 == 0);
+ failed_0:
+        rc2 = LNetEQFree(the_lnet.ln_ping_target_eq);
+        LASSERT (rc2 == 0);
+        return rc;
 }
 
 void
 lnet_ping_target_fini(void)
 {
-        int      rc = LNetMDUnlink(the_lnet.ln_ping_target_md);
+        lnet_event_t    event;
+        int             rc;
+        int             which;
+        int             timeout_ms = 1000;
+        cfs_sigset_t    blocked = libcfs_blockallsigs();
         
-        if (rc != 0)
-                CERROR("Can't unlink the ping MD: %d\n", rc);
+        LNetMDUnlink(the_lnet.ln_ping_target_md);
+        /* NB md could be busy; this just starts the unlink */
+        
+        do {
+                rc = LNetEQPoll(&the_lnet.ln_ping_target_eq, 1,
+                                timeout_ms, &event, &which);
 
-        /* NB this MD may still be active: but since I have no EQ, I don't get
-         * to see the UNLINK event... */
+                /* I expect overflow... */
+                LASSERT (rc >= 0 || rc == -EOVERFLOW);
+
+                if (rc == 0) {
+                        /* timed out: provide a diagnostic */
+                        CWARN("Still waiting for ping MD to unlink\n");
+                        timeout_ms *= 2;
+                        continue;
+                }
+                /* Got a valid event */
+        } while (!event.unlinked);
+
+        rc = LNetEQFree(the_lnet.ln_ping_target_eq);
+        LASSERT (rc == 0);
+
+        libcfs_restoresigs(blocked);
 }
 
 int
@@ -1448,6 +1483,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         const int            a_long_time = 60000; /* mS */
         int                  rc;
         int                  rc2;
+        cfs_sigset_t         blocked;
         
         if (n_ids <= 0 ||
             id.nid == LNET_NID_ANY ||
@@ -1497,7 +1533,14 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         }
         
         do {
+                /* MUST block for unlink to complete */
+                if (unlinked)
+                        blocked = libcfs_blockallsigs();
+
                 rc2 = LNetEQPoll(&eqh, 1, timeout_ms, &event, &which);
+
+                if (unlinked)
+                        libcfs_restoresigs(blocked);
 
                 CDEBUG(D_NET, "poll %d(%d %d)%s\n", rc2, 
                        (rc2 <= 0) ? -1 : event.type,

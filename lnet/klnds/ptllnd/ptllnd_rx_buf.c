@@ -513,10 +513,10 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
 #endif
 
         STAT_UPDATE(kps_rx_event);
-        if(unlinked)
+        if (unlinked)
                 STAT_UPDATE(kps_rx_unlink_event);
 
-        if(!rxbp->rxbp_shutdown){
+        if (!rxbp->rxbp_shutdown) {
                 CDEBUG(D_NET, "RXB Callback %s(%d) rxb=%p id="FMT_NID" unlink=%d\n",
                        get_ev_type_string(ev->type),ev->type,
                        rxb,ev->initiator.nid,unlinked);
@@ -533,7 +533,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
 
         nob = ev->mlength;
 
-        if(unlinked){
+        if (unlinked) {
                 spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
                 /*
@@ -545,7 +545,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
                 rxb->rxb_state = RXB_STATE_IDLE;
                 rxb->rxb_mdh = PTL_INVALID_HANDLE;
 
-                if( rxbp->rxbp_shutdown){
+                if (rxbp->rxbp_shutdown) {
                         spin_unlock_irqrestore(&rxbp->rxbp_lock, flags);
                         kptllnd_rx_buffer_decref(rxb,"portals");
                         return;
@@ -557,7 +557,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         /*
          * Handle failure by just dropping the path
          */
-        if(ev->ni_fail_type != PTL_NI_OK){
+        if (ev->ni_fail_type != PTL_NI_OK) {
                 CERROR("Message Dropped: ev status %d",ev->ni_fail_type);
                 if(unlinked)
                         kptllnd_rx_buffer_scheduled_post(rxb);
@@ -568,21 +568,23 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
          * Allocate an RX
          */
         rx = kptllnd_rx_alloc(rxb->rxb_po.po_kptllnd_data);
-        if(rx == 0){
+        if (rx == NULL) {
                 CERROR("Message Dropped: Memory allocation failure");
-                if(unlinked)
+                if (unlinked)
                         kptllnd_rx_buffer_scheduled_post(rxb);
                 return;
         }
 
         CDEBUG(D_NET, "New RX=%p\n",rx);
 
+        LASSERT (rx->rx_peer == NULL);
+
         /*
          * If we are unlinked we can just transfer the ref
          * that portals owned to the ref that this RX owns
          * otherwise we need to add a ref specifically for this RX
          */
-        if(!unlinked)
+        if (!unlinked)
                 kptllnd_rx_buffer_addref(rxb,"rx");
 
         rx->rx_msg = rxb->rxb_buffer + ev->offset;
@@ -594,7 +596,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
 #endif
         kptllnd_rx_schedule(rx);
 
-        if(!rxbp->rxbp_shutdown){
+        if (!rxbp->rxbp_shutdown) {
                 CDEBUG(D_NET, "<<< rx=%p rxb=%p\n",rx,rxb);
         }
 }
@@ -604,12 +606,12 @@ void
 kptllnd_rx_schedule (kptl_rx_t *rx)
 {
         unsigned long    flags;
-        kptl_data_t  *kptllnd_data = rx->rx_rxb->rxb_po.po_kptllnd_data;
+        kptl_data_t     *kptllnd_data = rx->rx_rxb->rxb_po.po_kptllnd_data;
 
         CDEBUG(D_NET, "RX Schedule %p\n",rx);
 
         spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
-        list_add_tail(&rx->rx_list,&kptllnd_data->kptl_sched_rxq);
+        list_add_tail(&rx->rx_list, &kptllnd_data->kptl_sched_rxq);
         wake_up(&kptllnd_data->kptl_sched_waitq);
         spin_unlock_irqrestore(&kptllnd_data->kptl_sched_lock, flags);
 }
@@ -665,6 +667,8 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         kptl_peer_t            *peer = NULL;
         int                     returned_credits = 0;
         unsigned long           flags;
+
+        LASSERT (rx->rx_peer == NULL);
 
         CDEBUG(D_NET, ">>> RXRXRXRXRX rx=%p nob=%d "FMT_NID"/%d\n",
                rx, rx->rx_nob, rx->rx_initiator.nid, rx->rx_initiator.pid);
@@ -892,15 +896,13 @@ kptllnd_rx_alloc(
         }
 
         rx = cfs_mem_cache_alloc(kptllnd_data->kptl_rx_cache , CFS_ALLOC_ATOMIC);
-        if(rx == 0 ){
+        if (rx == NULL) {
                 CERROR("Failed to allocate rx\n");
                 STAT_UPDATE(kps_rx_allocation_failed);
-
-        }else{
-
+        } else {
                 STAT_UPDATE(kps_rx_allocated);
 
-                memset(rx,0,sizeof(rx));
+                memset(rx, 0, sizeof(*rx));
 
                 CFS_INIT_LIST_HEAD(&rx->rx_list);
                 atomic_set(&rx->rx_refcount,1);
@@ -921,15 +923,15 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
 
         LASSERT(atomic_read(&rx->rx_refcount)==0);
 
-        if(rx->rx_rxb){
+        if (rx->rx_rxb) {
                 CDEBUG(D_NET, "Release rxb=%p\n",rx->rx_rxb);
                 kptllnd_rx_buffer_decref(rx->rx_rxb,"rx");
-                rx->rx_rxb = 0;
-        }else{
+                rx->rx_rxb = NULL;
+        } else {
                 CDEBUG(D_NET, "rxb already released\n");
         }
 
-        if(peer){
+        if (peer != NULL) {
 
                 /*
                  * Update credits
@@ -937,8 +939,8 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
                  */
                 spin_lock_irqsave(&peer->peer_lock, flags);
                 peer->peer_outstanding_credits++;
-                LASSERT( peer->peer_outstanding_credits <=
-                        *kptllnd_tunables.kptl_peercredits);
+                LASSERT (peer->peer_outstanding_credits <=
+                         *kptllnd_tunables.kptl_peercredits);
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
                 CDEBUG(D_NET, "Peer=%p Credits=%d Outstanding=%d\n",
@@ -947,7 +949,7 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
                 /* Have I received credits that will let me send? */
                 kptllnd_peer_check_sends(peer);
 
-                kptllnd_peer_decref(peer,"lookup");
+                kptllnd_peer_decref(peer, "lookup");
         }
 
         cfs_mem_cache_free(kptllnd_data->kptl_rx_cache,rx);
