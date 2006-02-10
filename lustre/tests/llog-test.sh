@@ -79,6 +79,7 @@ run_test 0 "Prepare fileset"
 test_1() {
     ./chownmany 1000 $DIR/llog-%d $LCOUNT
     sleep 5
+    $CHECKSTAT -u \#1000 $DIR/llog-* || return 4
 }
 run_test 1 "Do chowns"
 
@@ -88,13 +89,14 @@ test_2() {
     fail ost
     ./chownmany 500 $DIR/llog-%d $HALFCOUNT $LCOUNT
     sleep 5
+    $CHECKSTAT -u \#500 $DIR/llog-* || return 5
 }
-#run_test 2 "Fail OST during chown"
+run_test 2 "Fail OST during chown"
 
 test_3() {
     ./unlinkmany $DIR/llog-%d $LCOUNT
     sleep 2
-    $CHECKSTAT -t file $DIR/llog-* && return 1 || true
+    $CHECKSTAT -t file $DIR/llog-* && return 10 || true
 }
 run_test 3 "Remove testset"
 
