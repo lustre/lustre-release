@@ -14,13 +14,10 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 64b 71 101"
 
 case `uname -r` in
-2.4*) FSTYPE=${FSTYPE:-ext3} ;;
-2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 60 69";;
+2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 60 69" ;;
 *) error "unsupported kernel" ;;
 esac
-
-[ "$ALWAYS_EXCEPT$EXCEPT$SANITY_EXCEPT" ] && \
-	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITY_EXCEPT`"
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
@@ -107,16 +104,26 @@ check_kernel_version() {
 	return 1
 }
 
+_basetest() {
+    echo $*
+}
+
+basetest() {
+    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+}
+
 run_one() {
 	if ! mount | grep -q $DIR; then
 		$START
 	fi
+	testnum=$1
+	message=$2
 	BEFORE=`date +%s`
-	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
-	export TESTNAME=test_$1
+	log "== test $testnum: $message= `date +%H:%M:%S` ($BEFORE)"
+	export TESTNAME=test_$testnum
 	export tfile=f${testnum}
 	export tdir=d${base}
-	test_$1 || error "exit with rc=$?"
+	test_${testnum} || error "exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
@@ -124,6 +131,9 @@ run_one() {
 }
 
 build_test_filter() {
+	[ "$ALWAYS_EXCEPT$EXCEPT$SANITY_EXCEPT" ] && \
+	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITY_EXCEPT`"
+
         for O in $ONLY; do
             eval ONLY_${O}=true
         done
@@ -141,7 +151,7 @@ basetest() {
 }
 
 run_test() {
-         base=`basetest $1`
+         export base=`basetest $1`
          if [ "$ONLY" ]; then
                  testname=ONLY_$1
                  if [ ${!testname}x != x ]; then
@@ -217,7 +227,7 @@ rm -rf $DIR/[Rdfs][1-9]*
 
 build_test_filter
 
-echo preparing for tests involving mounts
+echo "preparing for tests involving mounts"
 EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
 touch $EXT2_DEV
 mke2fs -j -F $EXT2_DEV 8000 > /dev/null
@@ -2556,7 +2566,7 @@ run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_71() {
 	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
-	PATH=${PATH}:$DBENCH_LIB
+	PATH=${DBENCH_LIB}:${PATH}
 	cp `which dbench` $DIR
 
 	[ ! -f $DIR/dbench ] && echo "dbench not installed, skip this test" && return 0
@@ -2620,6 +2630,7 @@ test_75() {
 	F128k=${F}_128k
 	FHEAD=${F}_head
 	FTAIL=${F}_tail
+	echo "using F=$F, F128k=$F128k, FHEAD=$FHEAD, FTAIL=$FTAIL"
 	rm -f $F*
 
 	dd if=/dev/urandom of=${F}_128k bs=1024 count=128 || error "dd failed"
@@ -2675,7 +2686,7 @@ test_75() {
 	$LFS getstripe ${F}_join_10
 	$OPENUNLINK ${F}_join_10 ${F}_join_10 || error "files unlink open"
 
-	rm -f $F*
+	rm -f $F* || true
 }
 run_test 75 "TEST join file"
 

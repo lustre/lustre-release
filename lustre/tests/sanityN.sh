@@ -7,9 +7,6 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
-	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITYN_EXCEPT`"
-
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
@@ -67,38 +64,68 @@ run_one() {
 	if ! mount | grep -q $DIR1; then
 		$START
 	fi
+	testnum=$1
+	message=$2
 	BEFORE=`date +%s`
-	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
-	export TESTNAME=test_$1
+	log "== test $testnum: $message= `date +%H:%M:%S` ($BEFORE)"
+	export TESTNAME=test_$testnum
 	export tfile=f${testnum}
 	export tdir=d${base}
-	test_$1 || error "test_$1: exit with rc=$?"
+	test_$1 || error "exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
 	$CLEAN
 }
 
+build_test_filter() {
+	[ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
+	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITYN_EXCEPT`"
+
+        for O in $ONLY; do
+            eval ONLY_${O}=true
+        done
+        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_EXCEPT; do
+            eval EXCEPT_${E}=true
+        done
+}
+
+_basetest() {
+    echo $*
+}
+
+basetest() {
+    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+}
+
 run_test() {
-	for O in $ONLY; do
-		if [ "`echo $1 | grep '\<'$O'[a-z]*\>'`" ]; then
-			echo ""
-			run_one $1 "$2"
-			return $?
-		else
-			echo -n "."
-		fi
-	done
-	for X in $EXCEPT $ALWAYS_EXCEPT $SANITYN_EXCEPT; do
-		if [ "`echo $1 | grep '\<'$X'[a-z]*\>'`" ]; then
-			echo "skipping excluded test $1"
-			return 0
-		fi
-	done
-	if [ -z "$ONLY" ]; then
-		run_one $1 "$2"
-		return $?
-	fi
+         export base=`basetest $1`
+         if [ "$ONLY" ]; then
+                 testname=ONLY_$1
+                 if [ ${!testname}x != x ]; then
+ 			run_one $1 "$2"
+ 			return $?
+                 fi
+                 testname=ONLY_$base
+                 if [ ${!testname}x != x ]; then
+                         run_one $1 "$2"
+                         return $?
+                 fi
+                 echo -n "."
+                 return 0
+ 	fi
+        testname=EXCEPT_$1
+        if [ ${!testname}x != x ]; then
+                 echo "skipping excluded test $1"
+                 return 0
+        fi
+        testname=EXCEPT_$base
+        if [ ${!testname}x != x ]; then
+                 echo "skipping excluded test $1 (base $base)"
+                 return 0
+        fi
+        run_one $1 "$2"
+ 	return $?
 }
 
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
@@ -129,6 +156,8 @@ export DIR2=${DIR2:-$MOUNT2}
 [ -z "`echo $DIR2 | grep $MOUNT2`" ] && echo "$DIR2 not in $MOUNT2" && exit 95
 
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
+
+build_test_filter
 
 test_1a() {
 	touch $DIR1/f1
@@ -347,7 +376,7 @@ test_14c() { # bug 3430
 run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 
 test_15() {	# bug 974 - ENOSPC
-	echo $PATH
+	echo "PATH=$PATH"
 	sh oos2.sh $MOUNT1 $MOUNT2
 }
 run_test 15 "test out-of-space with multiple writers ==========="
