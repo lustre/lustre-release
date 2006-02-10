@@ -954,12 +954,12 @@ lnet_startup_lndnis (void)
         char              *nets = lnet_get_networks();
 
         INIT_LIST_HEAD(&nilist);
-        
+
         if (nets == NULL)
                 goto failed;
 
         rc = lnet_parse_networks(&nilist, nets);
-        if (rc != 0) 
+        if (rc != 0)
                 goto failed;
 
         while (!list_empty(&nilist)) {
@@ -1005,7 +1005,7 @@ lnet_startup_lndnis (void)
                 LNET_LOCK();
                 lnd->lnd_refcount++;
                 LNET_UNLOCK();
-                
+
                 ni->ni_lnd = lnd;
 
                 rc = (lnd->lnd_startup)(ni);
@@ -1022,7 +1022,7 @@ lnet_startup_lndnis (void)
                 }
 
                 list_del(&ni->ni_list);
-                
+
                 LNET_LOCK();
                 list_add_tail(&ni->ni_list, &the_lnet.ln_nis);
                 LNET_UNLOCK();
@@ -1059,10 +1059,16 @@ lnet_startup_lndnis (void)
                 }
 
                 ni->ni_txcredits = ni->ni_mintxcredits = ni->ni_maxtxcredits;
-                        
-                LCONSOLE(0, "Added LNI %s [%d/%d]\n", 
+
+#ifdef __KERNEL__
+#define LNI_MASK D_CONSOLE
+#else
+#define LNI_MASK D_CONFIG
+#endif
+                CDEBUG(LNI_MASK, "Added LNI %s [%d/%d]\n",
                          libcfs_nid2str(ni->ni_nid),
                          ni->ni_peertxcredits, ni->ni_txcredits);
+#undef LNI_MASK
 
                 /* Handle nidstrings for network 0 just like this one */
                 if (the_lnet.ln_ptlcompat > 0)
