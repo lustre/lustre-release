@@ -1179,7 +1179,7 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
 }
 
 static int ll_get_grouplock(struct inode *inode, struct file *file,
-                         unsigned long arg)
+                            unsigned long arg)
 {
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         ldlm_policy_data_t policy = { .l_extent = { .start = 0,
@@ -1210,7 +1210,7 @@ static int ll_get_grouplock(struct inode *inode, struct file *file,
 }
 
 static int ll_put_grouplock(struct inode *inode, struct file *file,
-                         unsigned long arg)
+                            unsigned long arg)
 {
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -1471,7 +1471,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
         case EXT3_IOC_GETVERSION_OLD:
         case EXT3_IOC_GETVERSION:
-                RETURN(put_user(inode->i_generation, (int *) arg));
+                RETURN(put_user(inode->i_generation, (int *)arg));
         case LL_IOC_JOIN: {
                 char *ftail;
                 int rc;
@@ -1488,7 +1488,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case LL_IOC_GROUP_UNLOCK:
                 RETURN(ll_put_grouplock(inode, file, arg));
         case LL_IOC_OBD_STATFS:
-                RETURN(ll_obd_statfs(inode, arg));
+                RETURN(ll_obd_statfs(inode, (void *)arg));
 
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
