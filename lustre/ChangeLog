@@ -459,6 +459,14 @@ Details    : If an OST is down, in some cases it was possible to create two
 	     than potential performance impact and spurious error messages.
 
 Severity   : minor
+Frequency  : rare
+Bugzilla   : 5681, 9562
+Description: Client may oops in ll_unhash_aliases
+Details    : Client dcache may become inconsistent in race condition.
+	     In some cases "getcwd" can fail if the current directory is
+	     modified.
+
+Severity   : minor
 Frequency  : always
 Bugzilla   : 9942
 Description: Inode refcounting problems in NFS export code
@@ -468,7 +476,7 @@ Details    : link_raw functions used to call d_instantiate without obtaining
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 9942, 9903
-Description: Referencing freed requests leading to crash, memleask with NFS.
+Description: Referencing freed requests leading to crash, memleaks with NFS.
 Details    : We used to require that call to ll_revalidate_it was always
 	     followed by ll_lookup_it. Also with revalidate_special() it is
 	     possible to call ll_revalidate_it() twice for the same dentry
