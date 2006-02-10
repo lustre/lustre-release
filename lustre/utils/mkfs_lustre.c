@@ -151,10 +151,23 @@ int run_command(char *cmd)
 
        if (verbose > 1)
                printf("cmd: %s\n", cmd);
-       
-       strcat(cmd, " 2>&1");
+
+       strcat(cmd, " >/tmp/mkfs.log 2>&1");
   
+       /* Can't use popen because we need the rv of the command */
        rc = system(cmd);
+       if (rc) {
+               char buf[128];
+               FILE *fp;
+               fp = fopen("/tmp/mkfs.log", "r");
+               if (fp) {
+                       while (fgets(buf, sizeof(buf), fp) != NULL) {
+                               if (rc || verbose > 2) 
+                                       printf("   %s", buf);
+                       }
+                       fclose(fp);
+               }
+       }
        return rc;
 }
 
@@ -184,8 +197,8 @@ int loop_setup(struct mkfs_opts *mop)
                 sprintf(l_device, "%s%d", loop_base, i);
                 if (access(l_device, F_OK | R_OK)) 
                         break;
-                sprintf(cmd, "losetup %s > /dev/null", l_device);
-                ret = run_command(cmd);
+                sprintf(cmd, "losetup %s > /dev/null 2>&1", l_device);
+                ret = system(cmd);
                 /* losetup gets 1 (ret=256) for non-set-up device */
                 if (ret) {
                         /* Set up a loopback device to our file */
@@ -342,7 +355,7 @@ static int is_lustre_target(struct mkfs_opts *mop)
 /* Build fs according to type */
 int make_lustre_backfs(struct mkfs_opts *mop)
 {
-        char mkfs_cmd[256];
+        char mkfs_cmd[512];
         char buf[40];
         char *dev;
         int ret = 0;

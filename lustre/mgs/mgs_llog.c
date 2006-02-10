@@ -696,13 +696,44 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *db,
         RETURN(rc);
 }
 
+static int mgs_write_log_failnids(struct obd_device *obd,
+                                  struct mgs_target_info *mti,
+                                  struct llog_handle *llh,
+                                  char *cliname)
+{
+        char *failnodeuuid;
+        lnet_nid_t nid;
+        int i, rc = 0;
+
+        if (!mti->mti_failnid_count) 
+                return 0;
+
+        /* Are these multiple nids for the same failover node, or 
+           multiple nodes?  In the former case, there should be only
+           one add_conn and a single nid uuid.  In the latter, 
+           multiple nid uuids and add_conns. Assuming the former here, 
+           since who uses more than 2 failover nodes? */
+        /* FWIW, it doesn't look like lconf correctly handles the former case */
+
+        name_create(libcfs_nid2str(mti->mti_failnids[0]), "", &failnodeuuid);
+        for (i = 0; i < mti->mti_failnid_count; i++) {
+                nid = mti->mti_failnids[i];
+                CDEBUG(D_MGS, "add nid %s for failover uuid %s\n", 
+                       libcfs_nid2str(nid), failnodeuuid);
+                rc = record_add_uuid(obd, llh, nid, failnodeuuid);
+        }
+        rc = record_add_conn(obd, llh, cliname, failnodeuuid);
+        name_destroy(failnodeuuid);
+
+        return rc;
+}
+
 static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
                              struct mgs_target_info *mti)
 {
         struct llog_handle *llh = NULL;
         char *cliname, *mdcname, *lovname, *nodeuuid, *mdcuuid;
         char *s1, *s2, *s3, *s4, *s5;
-        lnet_nid_t nid;
         int rc, i, first_log = 0;
         ENTRY;
 
@@ -743,7 +774,8 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         rc = record_marker(obd, llh, db, CM_START, mti->mti_svname, "add mdt"); 
 
         /* FIXME this should just be added via a MGS ioctl 
-           OBD_IOC_LOV_SETSTRIPE / LL_IOC_LOV_SETSTRIPE */
+           OBD_IOC_LOV_SETSTRIPE / LL_IOC_LOV_SETSTRIPE.
+           Or, heck, just make them use lfs setstripe on the root... */
         if (!first_log) {
                 /* Fix lov settings if they were set by something other
                    than the MDT */
@@ -808,12 +840,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *db,
         }
         rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, mdcuuid);
         rc = record_setup(obd, llh, mdcname, mti->mti_uuid,nodeuuid, 0, 0);
-        for (i = 0; i < mti->mti_failnid_count; i++) {
-                nid = mti->mti_failnids[i];
-                CDEBUG(D_MGS, "add failover nid %s\n", libcfs_nid2str(nid));
-                rc = record_add_uuid(obd, llh, nid, libcfs_nid2str(nid));
-                rc = record_add_conn(obd, llh, mdcname, libcfs_nid2str(nid));
-        }
+        rc = mgs_write_log_failnids(obd, mti, llh, mdcname);
         rc = record_mount_opt(obd, llh, cliname, lovname, mdcname);
         rc = record_marker(obd, llh, db, CM_END, mti->mti_svname, "add mdc"); 
         rc = record_end_log(obd, &llh);
@@ -835,7 +862,6 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
         struct llog_handle *llh = NULL;
         char *nodeuuid, *oscname, *oscuuid, *lovuuid;
         char index[5];
-        lnet_nid_t nid;
         int i, rc;
 
         if (mgs_log_is_empty(obd, logname)) {
@@ -846,15 +872,18 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
         CDEBUG(D_MGS, "adding osc for %s to log %s\n",
                mti->mti_svname, logname);
 
-        name_create(libcfs_nid2str(mti->mti_nids[0]), /*"_UUID"*/"", &nodeuuid);
+        name_create(libcfs_nid2str(mti->mti_nids[0]), "", &nodeuuid);
         name_create(mti->mti_svname, "-osc", &oscname);
         name_create(oscname, "_UUID", &oscuuid);
         name_create(lovname, "_UUID", &lovuuid);
 
         /*
         #03 L add_uuid nid=uml1@tcp(0x20000c0a80201) 0:  1:uml1_UUID
+        multihomed (#4)
+        #04 L add_uuid  nid=1@elan(0x1000000000001)  nal=90 0:  1:uml1_UUID
         #04 L attach   0:OSC_uml1_ost1_MNT_client  1:osc  2:89070_lov1_a41dff51a
         #05 L setup    0:OSC_uml1_ost1_MNT_client  1:ost1_UUID  2:uml1_UUID
+        failover (#6,7)
         #06 L add_uuid nid=uml2@tcp(0x20000c0a80202) 0:  1:uml2_UUID
         #07 L add_conn 0:OSC_uml1_ost1_MNT_client  1:uml2_UUID
         #08 L lov_modify_tgts add 0:lov1  1:ost1_UUID  2(index):0  3(gen):1
@@ -867,12 +896,7 @@ static int mgs_write_log_osc(struct obd_device *obd, struct fs_db *db,
         }
         rc = record_attach(obd, llh, oscname, LUSTRE_OSC_NAME, lovuuid);
         rc = record_setup(obd, llh, oscname, mti->mti_uuid, nodeuuid, 0, 0);
-        for (i = 0; i < mti->mti_failnid_count; i++) {
-                nid = mti->mti_failnids[i];
-                CDEBUG(D_MGS, "add failover nid %s\n", libcfs_nid2str(nid));
-                rc = record_add_uuid(obd, llh, nid, libcfs_nid2str(nid));
-                rc = record_add_conn(obd, llh, oscname, libcfs_nid2str(nid));
-        }
+        rc = mgs_write_log_failnids(obd, mti, llh, oscname);
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
         rc = record_lov_add(obd, llh, lovname, mti->mti_uuid, index, "1");
         rc = record_marker(obd, llh, db, CM_END, mti->mti_svname, "add osc"); 
