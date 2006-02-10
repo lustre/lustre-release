@@ -114,15 +114,15 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                                         &obd->obd_uuid);
         
         if (!tgt_obd) {
-                CERROR("Target %s not attached\n", tgt_uuid->uuid);
+                CERROR("Target %s not attached\n", obd_uuid2str(tgt_uuid));
                 RETURN(-EINVAL);
         }
         
-        CDEBUG(D_ERROR, "Connect tgt %s (%s)\n", (char *)tgt->uuid.uuid,
+        CDEBUG(D_CONFIG, "Connect tgt %s (%s)\n", obd_uuid2str(tgt_uuid),
                tgt_obd->obd_name);
 
         if (!tgt_obd->obd_set_up) {
-                CERROR("Target %s not set up\n", tgt_uuid->uuid);
+                CERROR("Target %s not set up\n", obd_uuid2str(tgt_uuid));
                 RETURN(-EINVAL);
         }
 
@@ -138,19 +138,20 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
 
         if (imp->imp_invalid) {
                 CERROR("not connecting OSC %s; administratively "
-                       "disabled\n", tgt_uuid->uuid);
+                       "disabled\n", obd_uuid2str(tgt_uuid));
                 rc = obd_register_observer(tgt_obd, obd);
                 if (rc) {
                         CERROR("Target %s register_observer error %d; "
                                "will not be able to reactivate\n",
-                               tgt_uuid->uuid, rc);
+                               obd_uuid2str(tgt_uuid), rc);
                 }
                 RETURN(0);
         }
 
         rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid, data);
         if (rc) {
-                CERROR("Target %s connect error %d\n", tgt_uuid->uuid, rc);
+                CERROR("Target %s connect error %d\n",
+                       obd_uuid2str(tgt_uuid), rc);
                 RETURN(rc);
         }
         tgt->ltd_exp = class_conn2export(&conn);
@@ -158,7 +159,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         rc = obd_register_observer(tgt_obd, obd);
         if (rc) {
                 CERROR("Target %s register_observer error %d\n",
-                       tgt_uuid->uuid, rc);
+                       obd_uuid2str(tgt_uuid), rc);
                 obd_disconnect(tgt->ltd_exp);
                 tgt->ltd_exp = NULL;
                 RETURN(rc);
@@ -506,7 +507,7 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 
         tgt = &lov->tgts[index];
         if (!obd_uuid_empty(&tgt->uuid)) {
-                CERROR("UUID %.40s already assigned at LOV target index %d\n",
+                CERROR("UUID %s already assigned at LOV target index %d\n",
                        obd_uuid2str(&tgt->uuid), index);
                 RETURN(-EEXIST);
         }

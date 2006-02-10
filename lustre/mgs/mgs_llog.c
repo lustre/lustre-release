@@ -2,9 +2,10 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  lustre/mgs/mgs_llog.c
- *  Lustre Management Server (mgs) llog controller
+ *  Lustre Management Server (mgs) config llog creation
  *
- *  Copyright (C) 2001-2005 Cluster File Systems, Inc.
+ *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Nathan Rutman <nathan@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -26,7 +27,7 @@
 #define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGS
-#define D_MGS D_CONFIG|D_ERROR
+#define D_MGS D_CONFIG|D_WARNING
 
 #ifdef __KERNEL__
 #include <linux/module.h>

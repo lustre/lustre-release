@@ -1,10 +1,10 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/lvfs/lvfs_mount.c
+ *  lustre/obdclass/obd_mount.c
  *  Client/server mount routines
  *
- *  Copyright (c) 2005 Cluster File Systems, Inc.
+ *  Copyright (c) 2006 Cluster File Systems, Inc.
  *   Author: Nathan Rutman <nathan@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org/
@@ -372,7 +372,10 @@ out:
 /**************** config llog ********************/
 
 /* Get a config log from the MGS and process it.
-   This func is called for both clients and servers. */
+   This func is called for both clients and servers.
+   Continue to process new statements appended to the logs
+   (whenever the config lock is revoked) until lustre_end_log
+   is called. */
 int lustre_process_log(struct super_block *sb, char *logname, 
                      struct config_llog_instance *cfg)
 {
@@ -404,7 +407,7 @@ int lustre_process_log(struct super_block *sb, char *logname,
         RETURN(rc);
 }
 
-
+/* Stop watching this config log for updates */
 int lustre_end_log(struct super_block *sb, char *logname, 
                        struct config_llog_instance *cfg)
 {
@@ -1146,26 +1149,31 @@ static void server_put_super(struct super_block *sb)
 
         CDEBUG(D_MOUNT, "server put_super %s\n", lsi->lsi_ldd->ldd_svname);
                                                                                        
-        /* tell the mgc to drop the config log */
-        lustre_end_log(sb, lsi->lsi_ldd->ldd_svname, NULL);
+        /* Stop the target */
+        if (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd)) {
 
-        obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
-        if (obd) {
-                CDEBUG(D_MOUNT, "stopping %s\n", obd->obd_name);
-                if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
+                /* tell the mgc to drop the config log */
+                lustre_end_log(sb, lsi->lsi_ldd->ldd_svname, NULL);
+                
+                obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
+                if (obd) {
+                        CDEBUG(D_MOUNT, "stopping %s\n", obd->obd_name);
+                        if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
+                                obd->obd_force = 1;
+                        if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
+                                obd->obd_fail = 1;
+                        /* We can't seem to give an error return code
+                           to .put_super, so we better make sure we clean up!
+                           FIXME is there a way to get around this? */
                         obd->obd_force = 1;
-                if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
-                        obd->obd_fail = 1;
-                /* We can't seem to give an error return code
-                   to .put_super, so we better make sure we clean up!
-                   FIXME is there a way to get around this? */
-                obd->obd_force = 1;
-                class_manual_cleanup(obd);
-        } else {
-                CERROR("no obd %s\n", lsi->lsi_ldd->ldd_svname);
-                server_deregister_mount(lsi->lsi_ldd->ldd_svname);
+                        class_manual_cleanup(obd);
+                } else {
+                        CERROR("no obd %s\n", lsi->lsi_ldd->ldd_svname);
+                        server_deregister_mount(lsi->lsi_ldd->ldd_svname);
+                }
         }
 
+        /* Stop the servers (MDS, OSS) if no longer needed */
         server_stop_servers(sb);
 
         /* If they wanted the mgs to stop separately from the mdt, they

@@ -652,7 +652,7 @@ int ll_fill_super(struct super_block *sb)
                 CERROR("No profile found: %s\n", profilenm);
                 GOTO(out_free, err = -EINVAL);
         }
-        CERROR("Found profile %s: mdc=%s osc=%s\n", profilenm, 
+        CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm, 
                lprof->lp_mdc, lprof->lp_osc);
 
         OBD_ALLOC(osc, strlen(lprof->lp_osc) +

@@ -72,8 +72,6 @@ static int mds_lov_read_objids(struct obd_device *obd)
            has fewer targets. Old targets not in the lov descriptor 
            during mds setup may still have valid objids. */
         size = mds->mds_lov_objid_filp->f_dentry->d_inode->i_size;
-
-        CERROR("objid file size: %d\n", size);
         if (size == 0)
                 RETURN(0);
 

@@ -1513,7 +1513,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         label = fsfilt_label(obd, obd->u.obt.obt_sb);
 
         if (obd->obd_recovering) {
-                LCONSOLE_WARN("OST %s now serving %s (%s%s%s), but will be in"
+                LCONSOLE_WARN("OST %s now serving %s (%s%s%s), but will be in "
                               "recovery until %d %s reconnect, or if no clients"
                               " reconnect for %d:%.02d; during that time new "
                               "clients will not be allowed to connect. "

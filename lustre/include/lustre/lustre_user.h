@@ -176,10 +176,11 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
 
-static inline char *obd_uuid2str(struct obd_uuid *uuid)
-{
-        return (char *)uuid->uuid;
-}
+/* If we're not null-terminated, crash here instead of in printf */
+#define obd_uuid2str(x) (                                            \
+        LASSERT((x)->uuid[sizeof(struct obd_uuid) - 1] == '\0'),     \
+        (char *)(x)->uuid                                            \
+)
 
 #define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
 #define LUSTRE_Q_QUOTAOFF 0x800003     /* turn quotas off */

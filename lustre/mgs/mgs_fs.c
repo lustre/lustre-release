@@ -1,12 +1,11 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  mgs/mgs_fs.c
+ *  lustre/mgs/mgs_fs.c
  *  Lustre Management Server (MGS) filesystem interface code
  *
- *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Nathan <nathan@clusterfs.com>
- *   Author: LinSongtao <lincent@clusterfs.com>
+ *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Nathan Rutman <nathan@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -187,15 +186,15 @@ int mgs_fs_cleanup(struct obd_device *obd)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if (mgs->mgs_configs_dir) {
-                CERROR("configs dir dcount=%d\n",
-                       atomic_read(&mgs->mgs_configs_dir->d_count));
+                /*CERROR("configs dir dcount=%d\n",
+                       atomic_read(&mgs->mgs_configs_dir->d_count));*/
                 l_dput(mgs->mgs_configs_dir);
                 mgs->mgs_configs_dir = NULL;
         }
 
         shrink_dcache_parent(mgs->mgs_fid_de);
-        CERROR("fid dir dcount=%d\n",
-               atomic_read(&mgs->mgs_fid_de->d_count));
+        /*CERROR("fid dir dcount=%d\n",
+               atomic_read(&mgs->mgs_fid_de->d_count));*/
         dput(mgs->mgs_fid_de);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

@@ -1,9 +1,11 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2005 Cluster File Systems, Inc.
- *   Author Nathan <nathan@clusterfs.com>
- *   Author LinSongTao <lincent@clusterfs.com>
+ *  lustre/mgc/mgc_request.c
+ *  Lustre Management Client config llog handling
+ *
+ *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author Nathan Rutman <nathan@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org
  *
@@ -25,11 +27,12 @@
  *  requests are coming * in over the wire, so object target modules
  *  do not have a full * method table.)
  */
+ 
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGC
-#define D_MGC D_CONFIG|D_ERROR
+#define D_MGC D_CONFIG|D_WARNING
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -211,6 +214,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         struct client_obd *cli = &obd->u.cli;
         struct dentry *dentry;
         int err = 0;
+        ENTRY;
 
         LASSERT(lsi);
         LASSERT(lsi->lsi_srv_mnt == mnt);
@@ -221,22 +225,22 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops)) {
-               CERROR("No fstype %s rc=%ld\n", MT_STR(lsi->lsi_ldd), 
-                      PTR_ERR(obd->obd_fsops));
-               return(PTR_ERR(obd->obd_fsops));
+                up(&cli->cl_mgc_sem);
+                CERROR("No fstype %s rc=%ld\n", MT_STR(lsi->lsi_ldd), 
+                       PTR_ERR(obd->obd_fsops));
+                RETURN(PTR_ERR(obd->obd_fsops));
         }
 
         cli->cl_mgc_vfsmnt = mnt;
         // FIXME which is the right SB? - filter_common_setup also 
-        CERROR("SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb,
+        CDEBUG(D_MGC, "SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb,
                mnt->mnt_root->d_inode->i_sb);
-        fsfilt_setup(obd, mnt->mnt_root->d_inode->i_sb);
+        fsfilt_setup(obd, mnt->mnt_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;
         obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
         obd->obd_lvfs_ctxt.fs = get_ds();
-        //obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = lookup_one_len(MOUNT_CONFIGS_DIR, current->fs->pwd,
@@ -246,25 +250,26 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
                 err = PTR_ERR(dentry);
                 CERROR("cannot lookup %s directory: rc = %d\n", 
                        MOUNT_CONFIGS_DIR, err);
-                goto err_ops;
+                GOTO(err_ops, err);
         }
         cli->cl_mgc_configs_dir = dentry;
 
         /* We keep the cl_mgc_sem until mgc_fs_cleanup */
-        return (0);
+        RETURN(0);
 
 err_ops:        
         fsfilt_put_ops(obd->obd_fsops);
         obd->obd_fsops = NULL;
         cli->cl_mgc_vfsmnt = NULL;
         up(&cli->cl_mgc_sem);
-        return(err);
+        RETURN(err);
 }
 
 static int mgc_fs_cleanup(struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
         int rc = 0;
+        ENTRY;
 
         LASSERT(cli->cl_mgc_vfsmnt != NULL);
 
@@ -276,20 +281,12 @@ static int mgc_fs_cleanup(struct obd_device *obd)
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         }
 
-        /* never got mount
-        rc = server_put_mount(obd->obd_name, cli->cl_mgc_vfsmnt);
-        if (rc)
-             CERROR("mount_put failed %d\n", rc);
-        */
-
         cli->cl_mgc_vfsmnt = NULL;
-        
         if (obd->obd_fsops) 
                 fsfilt_put_ops(obd->obd_fsops);
         
         up(&cli->cl_mgc_sem);
-        
-        return(rc);
+        RETURN(rc);
 }
 
 static int mgc_cleanup(struct obd_device *obd)

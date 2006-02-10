@@ -4,9 +4,8 @@
  *  lustre/mgs/mgs_handler.c
  *  Lustre Management Server (mgs) request handler
  *
- *  Copyright (C) 2001-2005 Cluster File Systems, Inc.
- *   Author Nathan <nathan@clusterfs.com>
- *   Author LinSongTao <lincent@clusterfs.com>
+ *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Nathan Rutman <nathan@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -28,7 +27,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGS
-#define D_MGS D_CONFIG|D_ERROR
+#define D_MGS D_CONFIG|D_WARNING
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -353,11 +352,11 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         /* revoke the config lock so everyone will update */
         lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
         if (lockrc != ELDLM_OK) {
-                LCONSOLE_ERROR("Can't signal other nodes to update "
+                LCONSOLE_ERROR("%s: Can't signal other nodes to update "
                                "their configuration (%d). Updating local logs "
                                "anyhow; you might have to manually restart "
                                "other nodes to get the latest configuration.\n",
-                               lockrc);
+                               obd->obd_name, lockrc);
         }
 
         /* There can be only 1 server adding at a time - don't want log
@@ -367,10 +366,10 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
         if (mti->mti_flags & LDD_F_WRITECONF) {
                 rc = mgs_erase_logs(obd, mti->mti_fsname);
                 mti->mti_flags |= LDD_F_NEED_REGISTER;
-                LCONSOLE_WARNING("Logs for fs %s were removed by user request. "
-                                 "All servers must re-register in order to "
-                                 "regenerate the client log.\n",
-                                 mti->mti_fsname);
+                LCONSOLE_WARN("%s: Logs for fs %s were removed by user request."
+                              " All servers must re-register in order to "
+                              "regenerate the client log.\n",
+                              obd->obd_name, mti->mti_fsname);
                 mti->mti_flags &= ~LDD_F_WRITECONF;
                 mti->mti_flags |= LDD_F_REWRITE;
         }
@@ -455,7 +454,6 @@ int mgs_handle(struct ptlrpc_request *req)
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
-
         case MGS_TARGET_ADD:
                 DEBUG_REQ(D_MGS, req, "target add\n");
                 rc = mgs_handle_target_add(req);
@@ -484,7 +482,6 @@ int mgs_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INFO, req, "ping");
                 rc = target_handle_ping(req);
                 break;
-
         case OBD_LOG_CANCEL:
                 DEBUG_REQ(D_MGS, req, "log cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);

@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2001-2006 Cluster File Systems, Inc.
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -841,7 +841,8 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
-        CDEBUG(D_CONFIG|D_ERROR, "Processed log %s gen %d-%d (%d)\n", name, 
+        // FIXME remove warning
+        CDEBUG(D_CONFIG|D_WARNING, "Processed log %s gen %d-%d (%d)\n", name, 
                cd.first_idx + 1, cd.last_idx, rc);
         if (cfg)
                 cfg->cfg_last_idx = cd.last_idx;
