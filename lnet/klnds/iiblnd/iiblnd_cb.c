@@ -2145,9 +2145,9 @@ kibnal_check_connreject(kib_conn_t *conn, int type, CM_REJECT_INFO *rej)
         LASSERT (type == IBNAL_CONN_ACTIVE ||
                  type == IBNAL_CONN_PASSIVE);
 
-        CDEBUG(D_NET, "%s connection with %s rejected: %d (%d)\n",
+        CDEBUG(D_NET, "%s connection with %s rejected: %d\n",
                (type == IBNAL_CONN_ACTIVE) ? "Active" : "Passive",
-               libcfs_nid2str(peer->ibp_nid), rej->Reason, rej->PrivateData[0]);
+               libcfs_nid2str(peer->ibp_nid), rej->Reason);
 
         switch (rej->Reason) {
         case RC_STALE_CONN:
