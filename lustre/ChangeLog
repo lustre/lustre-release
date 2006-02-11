@@ -560,6 +560,14 @@ Details    : If there was a heavy load and highly-fragmented OST filesystems
 	     until the entire RPC IO was completed.  Instead, release biovecs
 	     as soon as they are complete to ensure forward IO progress.
 
+Severity   : enhancement
+Bugzilla   : 9578
+Description: Support for specifying external journal device at mount
+Details    : If an OST or MDS device is formatted with an external journal
+	     device, this device major/minor is stored in the ext3 superblock
+	     and may not be valid for failover.  Allow detecting and
+	     specifying the external journal at mount time.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

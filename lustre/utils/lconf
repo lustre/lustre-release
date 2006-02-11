@@ -781,7 +781,7 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
-def def_mount_options(fstype, target):
+def def_mount_options(fstype, target, blkdev):
     """returns deafult mount options for passed fstype and target (mds, ost)"""
     if fstype == 'ext3' or fstype == 'ldiskfs':
         mountfsoptions = "errors=remount-ro"
@@ -795,6 +795,62 @@ def def_mount_options(fstype, target):
                 mountfsoptions = "%s,user_xattr" % (mountfsoptions)
             if config.acl:
                 mountfsoptions = "%s,acl" % (mountfsoptions)
+
+        if blkdev:
+            # grab superblock info
+            dumpe2fs="dumpe2fs -f -h"
+            (ret, sb) = run(dumpe2fs, blkdev)
+            if ret:
+                panic("unable to get superblock for ", blkdev)
+
+            # extract journal UUID
+            journal_UUID=''
+            journal_DEV=''
+            for line in sb:
+                lst = string.split(line, ":")
+                if lst[0] == 'Journal UUID':
+                    if len(lst[1]) < 3:
+                        panic("cannot retrieve journal UUID for ", blkdev)
+                    journal_UUID = string.split(lst[1])[0]
+                    debug(blkdev, 'has journal UUID', journal_UUID)
+                if lst[0] == 'Journal device':
+                    if len(lst[1]) < 3:
+                        panic("cannot retrieve journal UUID for ", blkdev)
+                    journal_DEV = string.split(lst[1])[0]
+                    debug(blkdev, 'has journal device', journal_DEV)
+                    break
+
+            if len(journal_UUID) == 0 or len(journal_DEV) == 0:
+                debug('no external journal found for', blkdev)
+                # use internal journal
+                return mountfsoptions
+        
+            # run blkid
+            blkid = "blkid -o device -t UUID=%s" % (journal_UUID)
+            (ret, devname) = run(blkid)
+            if ret or len(devname) == 0:
+                panic("cannot find external journal for ", blkdev)
+            debug('found', blkdev, 'journal UUID', journal_UUID, 'on',
+                  string.replace(devname[0], '\n', ''))
+
+            try: # sigh, python 1.5 does not support os.stat().st_rdev
+                jdevpath = my_realpath(string.replace(devname[0], '\n', ''))
+                ret, out = runcmd("ls -l %s" %jdevpath)
+                debug('ls -l:', out)
+                major = int(string.split(string.split(out[0])[4], ',')[0])
+                minor = int(string.split(out[0])[5])
+                debug('major', major, 'minor', minor)
+                rdev = major << 8 | minor
+            except OSError:
+                panic("cannot stat ", devname[0])
+
+            debug('found', blkdev, 'journal UUID', journal_UUID, 'on',
+                  jdevpath, 'rdev', rdev)
+
+            # add mount option
+            if string.atoi(journal_DEV, 0) != rdev:
+                mountfsoptions =  "%s,journal_dev=%#x" % (mountfsoptions,rdev)
+
         return mountfsoptions
     return ""
 
@@ -1241,7 +1297,7 @@ class MDSDEV(Module):
         if not is_prepared('MDT'):
             lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
         try:
-            mountfsoptions = def_mount_options(self.fstype, 'mds')
+            mountfsoptions = def_mount_options(self.fstype, 'mds', blkdev)
 
             if config.mountfsoptions:
                 if mountfsoptions:
@@ -1481,7 +1537,7 @@ class OSD(Module):
                                config.reformat, self.format, self.journal_size,
                                self.inode_size, self.mkfsoptions)
 
-        mountfsoptions = def_mount_options(self.fstype, 'ost')
+        mountfsoptions = def_mount_options(self.fstype, 'ost', blkdev)
 
         if config.mountfsoptions:
             if mountfsoptions:
