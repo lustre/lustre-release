@@ -22,22 +22,14 @@ _test_sysio_startup()
 	if (err)
 		return err;
 #if SYSIO_TRACING
+	/*
+	 * tracing
+	 */
 	arg = getenv("SYSIO_TRACING");
 	err = _sysio_boot("trace", arg);
 	if (err)
 		return err;
 #endif
-#if DEFER_INIT_CWD
-	arg = getenv("SYSIO_CWD");
-	if (!arg)
-		arg = "/";
-	err = _sysio_boot("cwd", arg);
-	if (err)
-		return err;
-#endif
-	/*
-	 * tracing
-	 */
 	/*
 	 * namespace
 	 */
@@ -51,6 +43,17 @@ _test_sysio_startup()
 	err = _sysio_boot("namespace", arg);
 	if (err)
 		return err;
+#if DEFER_INIT_CWD
+	/*
+	 * Current working directory.
+	 */
+	arg = getenv("SYSIO_CWD");
+	if (!arg)
+		arg = "/";
+	err = _sysio_boot("cwd", arg);
+	if (err)
+		return err;
+#endif
 	return 0;
 }
 
