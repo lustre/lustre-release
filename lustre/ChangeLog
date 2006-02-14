@@ -1,4 +1,4 @@
-01-31-2006  Cluster File Systems, Inc. <info@clusterfs.com>
+02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
 	 INTEROPERATE with older versions automatically.  Please read the 
@@ -7,6 +7,9 @@
 	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052
 	 for details.
        * bug fixes
+       * Support for newer kernels: 2.6.9-22.0.2.EL (RHEL 4),
+         2.6.5-7.244 (SLES 9) - same as 1.4.5.2.
+
 
 Severity   : enhancement
 Bugzilla   : 7981/8208
