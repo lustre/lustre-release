@@ -141,9 +141,10 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
                 GOTO(out, rc = -ENOMEM);
         }
         strcpy(cld->cld_logname, logname);
-        cld->cld_sb = sb;
         cld->cld_cfg = *cfg;
         cld->cld_cfg.cfg_last_idx = 0;
+        cld->cld_cfg.cfg_flags = 0;
+        cld->cld_cfg.cfg_sb = sb;
         if (cfg->cfg_instance != NULL) {
                 OBD_ALLOC(cld->cld_cfg.cfg_instance, 
                           strlen(cfg->cfg_instance) + 1);
@@ -372,7 +373,7 @@ static int mgc_async_requeue(void *data)
         
         /* re-send server info every time, in case MGS needs to regen its
            logs */
-        server_register_target(cld->cld_sb);
+        server_register_target(cld->cld_cfg.cfg_sb);
         rc = mgc_process_log(the_mgc, cld);
         class_export_put(the_mgc->obd_self_export);
         
@@ -834,7 +835,7 @@ static int mgc_process_log(struct obd_device *mgc,
         struct lustre_handle lockh;
         struct client_obd *cli = &mgc->u.cli;
         struct lvfs_run_ctxt saved;
-        struct lustre_sb_info *lsi = s2lsi(cld->cld_sb);
+        struct lustre_sb_info *lsi = s2lsi(cld->cld_cfg.cfg_sb);
         int rc, rcl, flags = 0, must_pop = 0;
         ENTRY;
 
@@ -949,10 +950,16 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 config_log_add(logname, cfg, sb);
 
                 cld = config_log_get(logname, cfg);
-                if (IS_ERR(cld)) 
+                if (IS_ERR(cld)) {
                         rc = PTR_ERR(cld);
-                else
+                } else {
+                        /* COMPAT_146 */
+                        /* For old logs, there was no start marker. */
+                        /* FIXME only set this for old logs! */
+                        cld->cld_cfg.cfg_flags |= CFG_F_MARKER;
+
                         rc = mgc_process_log(obd, cld);
+                }
                 config_log_put();
                 break;       
         }

@@ -47,18 +47,6 @@
 #include "mgs_internal.h"
 
 
-static inline int sv_name2index(char *svname, unsigned long *idx)
-{
-        char *dash = strchr(svname, '-');
-        if (!dash) {
-                CERROR("Can't understand server name %s\n", svname);
-                return(-EINVAL);
-        }
-        *idx = simple_strtoul(dash + 4, NULL, 16);
-        return 0;
-}
-
-
 /******************** DB functions *********************/
 
 /* from the (client) config log, figure out:
@@ -110,8 +98,9 @@ static int mgsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         /* attach   0:MDC_uml1_mdsA_MNT_client  1:mdc  2:1d834_MNT_client_03f */
         if ((lcfg->lcfg_command == LCFG_ATTACH) &&
             (strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_MDC_NAME) == 0)) {
-                rc = sv_name2index(lustre_cfg_string(lcfg, 0), &index);
-                if (rc) {
+                rc = server_name2index(lustre_cfg_string(lcfg, 0),
+                                       &index, NULL);
+                if (rc != LDD_F_SV_TYPE_MDT) {
                         CWARN("Unparsable MDC name %s, assuming index 0\n",
                               lustre_cfg_string(lcfg, 0));
                         index = 0;
@@ -411,8 +400,8 @@ int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
         }
          
         set_bit(mti->mti_stripe_index, imap);
-        sv_make_name(mti->mti_flags, mti->mti_stripe_index,
-                     mti->mti_fsname, mti->mti_svname);
+        server_make_name(mti->mti_flags, mti->mti_stripe_index,
+                         mti->mti_fsname, mti->mti_svname);
 
         CDEBUG(D_MGS, "Set new index for %s to %d\n", mti->mti_svname, 
                mti->mti_stripe_index);
@@ -686,10 +675,10 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *db,
         /* This should always be the first entry in a log.
         rc = mgs_clear_log(obd, logname); */
         rc = record_start_log(obd, &llh, logname);
-        rc = record_marker(obd, llh, db, CM_START, mti->mti_svname,"lov setup"); 
+        rc = record_marker(obd, llh, db, CM_START, lovname, "lov setup"); 
         rc = record_attach(obd, llh, lovname, "lov", uuid);
         rc = record_lov_setup(obd, llh, lovname, lovdesc);
-        rc = record_marker(obd, llh, db, CM_END, mti->mti_svname, "lov setup"); 
+        rc = record_marker(obd, llh, db, CM_END, lovname, "lov setup"); 
         rc = record_end_log(obd, &llh);
         
         OBD_FREE(lovdesc, sizeof(*lovdesc));
@@ -1059,8 +1048,8 @@ int mgs_upgrade_logs_14(struct obd_device *obd, struct fs_db *db,
                 CDEBUG(D_MGS, "Upgrade MDT\n");
                 /* Need to set the mdsuuid first */
                 mti->mti_stripe_index = 0;
-                sv_make_name(mti->mti_flags, mti->mti_stripe_index,
-                             mti->mti_fsname, mti->mti_svname);
+                server_make_name(mti->mti_flags, mti->mti_stripe_index,
+                                 mti->mti_fsname, mti->mti_svname);
                 sprintf(mti->mti_uuid, "mdsA_UUID");
                 if (mgs_log_is_empty(obd, mti->mti_svname)) {
                         CERROR("The MDT log %s is missing.\n", mti->mti_svname);
@@ -1081,8 +1070,8 @@ int mgs_upgrade_logs_14(struct obd_device *obd, struct fs_db *db,
                 omti.mti_flags |= LDD_F_SV_TYPE_OST;
                 omti.mti_flags &= ~(LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_MGS);
                 omti.mti_stripe_index = 0;
-                sv_make_name(omti.mti_flags, omti.mti_stripe_index,
-                             omti.mti_fsname, omti.mti_svname);
+                server_make_name(omti.mti_flags, omti.mti_stripe_index,
+                                 omti.mti_fsname, omti.mti_svname);
                 sprintf(omti.mti_uuid, "ost1_UUID");
                 if (!mgs_log_is_empty(obd, omti.mti_svname)) {
                         CERROR("The OST log %s already exists.\n",
@@ -1092,8 +1081,8 @@ int mgs_upgrade_logs_14(struct obd_device *obd, struct fs_db *db,
                 }
 
                 omti.mti_stripe_index = 1;
-                sv_make_name(omti.mti_flags, omti.mti_stripe_index,
-                             omti.mti_fsname, omti.mti_svname);
+                server_make_name(omti.mti_flags, omti.mti_stripe_index,
+                                 omti.mti_fsname, omti.mti_svname);
                 sprintf(omti.mti_uuid, "ost2_UUID");
                 if (!mgs_log_is_empty(obd, omti.mti_svname)) {
                         CERROR("The OST log %s already exists.\n",

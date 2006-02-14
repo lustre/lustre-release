@@ -37,6 +37,7 @@
 #include <linux/version.h> 
 #include <linux/lustre_log.h>
 #include <linux/lustre_disk.h>
+#include <linux/lustre_ver.h>
                       
 static int (*client_fill_super)(struct super_block *sb) = NULL;
 
@@ -970,7 +971,7 @@ out_servers:
         RETURN(rc);
 }
 
-/***************** mount **************/
+/***************** lustre superblock **************/
 
 struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 {
@@ -986,6 +987,7 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
                 RETURN(NULL);
         }
 
+        lsi->lsi_lmd->lmd_exclude_count = 0;
         s2lsi_nocast(sb) = lsi;
         /* we take 1 extra ref for our setup */
         atomic_set(&lsi->lsi_mounts, 1);
@@ -1015,6 +1017,10 @@ static int lustre_free_lsi(struct super_block *sb)
                 if (lsi->lsi_lmd->lmd_opts != NULL) 
                         OBD_FREE(lsi->lsi_lmd->lmd_opts, 
                                  strlen(lsi->lsi_lmd->lmd_opts) + 1);
+                if (lsi->lsi_lmd->lmd_exclude_count)
+                        OBD_FREE(lsi->lsi_lmd->lmd_exclude,
+                                 sizeof(lsi->lsi_lmd->lmd_exclude[0]) * 
+                                 lsi->lsi_lmd->lmd_exclude_count);
                 OBD_FREE(lsi->lsi_lmd, sizeof(*lsi->lsi_lmd));
         }
         
@@ -1365,6 +1371,28 @@ out:
         RETURN(rc);
 }
 
+/* Get the index from the obd name.
+   rc = server type, or
+   rc < 0  on error */
+int server_name2index(char *svname, unsigned long *idx, char **endptr)
+{
+        int rc;
+        char *dash = strchr(svname, '-');
+        if (!dash) {
+                CERROR("Can't understand server name %s\n", svname);
+                return(-EINVAL);
+        }
+
+        if (strncmp(dash + 1, "MDT", 3) == 0) 
+                rc = LDD_F_SV_TYPE_MDT;
+        else if (strncmp(dash + 1, "OST", 3) == 0) 
+                rc = LDD_F_SV_TYPE_OST;
+        else 
+                return(-EINVAL);
+
+        *idx = simple_strtoul(dash + 4, endptr, 16);
+        return rc;
+}
 
 /*************** mount common betweeen server and client ***************/
 
@@ -1408,12 +1436,94 @@ static void lmd_print(struct lustre_mount_data *lmd)
         PRINT_CMD(PRINT_MASK, "flags:   %x\n", lmd->lmd_flags);
         if (lmd->lmd_opts)
                 PRINT_CMD(PRINT_MASK, "options: %s\n", lmd->lmd_opts);
+        for (i = 0; i < lmd->lmd_exclude_count; i++) {
+                PRINT_CMD(PRINT_MASK, "exclude %d:  OST%04x\n", i, 
+                          lmd->lmd_exclude[i]);
+        }
 }
 
+/* Is this server on the exclusion list */
+int lustre_check_exclusion(struct super_block *sb, char *svname)
+{
+        struct lustre_sb_info *lsi = s2lsi(sb);
+        struct lustre_mount_data *lmd = lsi->lsi_lmd;
+        unsigned long index;
+        int i, rc;
+        ENTRY;
+
+        rc = server_name2index(svname, &index, NULL);
+        if (rc != LDD_F_SV_TYPE_OST) 
+                RETURN(0);
+
+        CDEBUG(D_MOUNT, "Check exclusion %s (%ld) in %d of %s\n", svname, 
+               index, lmd->lmd_exclude_count, lmd->lmd_dev);
+        
+        for(i = 0; i < lmd->lmd_exclude_count; i++) {
+                if (index == lmd->lmd_exclude[i]) {
+                        CWARN("Excluding %s (on exclusion list)\n", svname);
+                        RETURN(1);
+                }
+        }
+        RETURN(0);
+}
+
+/* mount -v  -o exclude=lustre-OST0001:lustre-OST0002 -t lustre ... */
+static int lmd_make_exclusion(struct lustre_mount_data *lmd, char *ptr)
+{
+        char *s1 = ptr, *s2;
+        unsigned long index, *exclude_list;
+        int rc = 0;
+        ENTRY;
+
+        /* temp storage until we figure out how many we have */
+        OBD_ALLOC(exclude_list, sizeof(index) * MAX_OBD_DEVICES);
+        if (!exclude_list)
+                RETURN(-ENOMEM);
+
+        /* we enter this fn pointing at the '=' */
+        while (*s1 && *s1 != ' ' && *s1 != ',') {
+                s1++;
+                rc = server_name2index(s1, &index, &s2);
+                if (rc < 0) {
+                        CERROR("Can't parse %s\n", s1);
+                        break;
+                }
+                if (rc == LDD_F_SV_TYPE_OST) 
+                        exclude_list[lmd->lmd_exclude_count++] = index;
+                else
+                        CDEBUG(D_MOUNT, "ignoring exclude %.7s\n", s1);
+                s1 = s2;
+                /* now we are pointing at ':' (next exclude) 
+                   or ',' (end of excludes) */
+                
+                if (lmd->lmd_exclude_count >= MAX_OBD_DEVICES)
+                        break;
+        }
+        if (rc >= 0) /* non-err */
+                rc = 0;
+
+        if (lmd->lmd_exclude_count) {
+                /* permanent, freed in lustre_free_lsi */
+                OBD_ALLOC(lmd->lmd_exclude, sizeof(index) * 
+                          lmd->lmd_exclude_count);
+                if (lmd->lmd_exclude) {
+                        memcpy(lmd->lmd_exclude, exclude_list, 
+                               sizeof(index) * lmd->lmd_exclude_count);
+                } else { 
+                        rc = -ENOMEM;
+                        lmd->lmd_exclude_count = 0;
+                }
+        }
+        OBD_FREE(exclude_list, sizeof(index) * MAX_OBD_DEVICES); 
+        RETURN(rc);
+}
+
+/* mount -v -t lustre uml1:uml2:/lustre-client /mnt/lustre */
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
         char *s1, *s2, *devname = NULL;
         struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
+        int rc = 0;
         ENTRY;
 
         LASSERT(lmd);
@@ -1426,8 +1536,8 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         /* Options should be a string - try to detect old lmd data */
         if ((raw->lmd_magic & 0xffffff00) == (LMD_MAGIC & 0xffffff00)) { 
                 LCONSOLE_ERROR("You're using an old version of "        
-                               "/sbin/mount.lustre.  Please install version "   
-                               "1.%d\n", LMD_MAGIC & 0xFF);     
+                               "/sbin/mount.lustre.  Please install version "
+                               "%s\n", LUSTRE_VERSION_STRING);     
                 RETURN(-EINVAL);
         }
         lmd->lmd_magic = LMD_MAGIC;
@@ -1436,9 +1546,11 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         lmd->lmd_flags |= LMD_FLG_RECOVER;
 
         s1 = options;
-        while(*s1) {
+        while (*s1) {
+                /* Skip whitespace and extra commas */
                 while (*s1 == ' ' || *s1 == ',')
                         s1++;
+
                 /* Client options are parsed in ll_options: eg. flock, 
                    user_xattr, acl */
                 
@@ -1450,11 +1562,11 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 else if (strncmp(s1, "nosvc", 5) == 0)
                         lmd->lmd_flags |= LMD_FLG_NOSVC;
 
+                /* ost exclusion list */
                 else if (strncmp(s1, "exclude=", 8) == 0) {
-                        CERROR("Exclude: %s\n", s1);
-                        /* FIXME implement */
-                        /* store exlusion list in lmd_exclude, mdt & client
-                         must check */
+                        rc = lmd_make_exclusion(lmd, s1 + 7);
+                        if (rc) 
+                                goto invalid;
                 }
 
                 /* Linux 2.4 doesn't pass the device, so we stuck it at the 
@@ -1465,7 +1577,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                            must be the last one. */
                         *s1 = 0;
                 }
-                s2 = strstr(s1, ",");
+
+                /* Find next opt */
+                s2 = strchr(s1, ',');
                 if (s2 == NULL) 
                         break;
                 s1 = s2 + 1;
@@ -1533,7 +1647,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         lmd->lmd_magic = LMD_MAGIC;
 
         lmd_print(lmd);
-        RETURN(0);
+        RETURN(rc);
 
 invalid:
         CERROR("Bad mount options %s\n", options);
@@ -1666,5 +1780,6 @@ EXPORT_SYMBOL(lustre_end_log);
 EXPORT_SYMBOL(server_get_mount);
 EXPORT_SYMBOL(server_put_mount);
 EXPORT_SYMBOL(server_register_target);
+EXPORT_SYMBOL(server_name2index);
 
 

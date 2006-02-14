@@ -86,11 +86,11 @@ struct lustre_disk_data {
         
         __u32      ldd_config_ver;      /* config rewrite count - not used */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
+        __u32      ldd_svindex;         /* server index (0001), must match 
+                                           svname */
         enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
         char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
-        __u16      ldd_svindex;         /* server index (0001), must match 
-                                           svname */
         __u16      ldd_mgsnid_count;
         __u16      ldd_failnid_count;   /* server failover nid count */
         lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgs nid list; lmd can 
@@ -119,7 +119,8 @@ struct lustre_disk_data {
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
-static inline int sv_make_name(__u32 flags, __u16 index, char *fs, char *name)
+static inline int server_make_name(__u32 flags, __u16 index, char *fs,
+                                   char *name)
 {
         if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
                 sprintf(name, "%.8s-%s%04x", fs,
@@ -134,11 +135,8 @@ static inline int sv_make_name(__u32 flags, __u16 index, char *fs, char *name)
         return 0;
 }
 
-static inline void ldd_make_sv_name(struct lustre_disk_data *ldd)
-{
-        sv_make_name(ldd->ldd_flags, ldd->ldd_svindex,
-                     ldd->ldd_fsname, ldd->ldd_svname);
-}
+/* Get the index from the obd name */
+int server_name2index(char *svname, unsigned long *idx, char **endptr);
 
 
 /****************** mount command *********************/
@@ -158,6 +156,8 @@ struct lustre_mount_data {
         char      *lmd_dev;           /* device or file system name */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
                                          _device_ mount options) */
+        __u32     *lmd_exclude;       /* array of OSTs to ignore */
+        int        lmd_exclude_count; /* number of valid entries in array */
 };
 
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client only */

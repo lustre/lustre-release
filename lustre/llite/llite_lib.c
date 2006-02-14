@@ -546,7 +546,7 @@ void ll_options(char *options, int *flags)
                 return;
         }
 
-        CERROR("Parsing opts %s\n", options);
+        CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         for (this_char = strtok (options, ",");
              this_char != NULL;

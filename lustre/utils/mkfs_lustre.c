@@ -147,29 +147,37 @@ int get_os_version()
 
 int run_command(char *cmd)
 {
-       int rc;
+        char log[] = "/tmp/mkfs_logXXXXXX";
+        int fd, rc;
+        
+        if (verbose > 1)
+                printf("cmd: %s\n", cmd);
+        
+        if ((fd = mkstemp(log)) >= 0) {
+                close(fd);
+                strcat(cmd, " >");
+                strcat(cmd, log);
+        }
+        strcat(cmd, " 2>&1");
 
-       if (verbose > 1)
-               printf("cmd: %s\n", cmd);
-
-       strcat(cmd, " >/tmp/mkfs.log 2>&1");
-  
-       /* Can't use popen because we need the rv of the command */
-       rc = system(cmd);
-       if (rc) {
-               char buf[128];
-               FILE *fp;
-               fp = fopen("/tmp/mkfs.log", "r");
-               if (fp) {
-                       while (fgets(buf, sizeof(buf), fp) != NULL) {
-                               if (rc || verbose > 2) 
-                                       printf("   %s", buf);
-                       }
-                       fclose(fp);
-               }
-       }
-       return rc;
-}
+        /* Can't use popen because we need the rv of the command */
+        rc = system(cmd);
+        if (rc && fd >= 0) {
+                char buf[128];
+                FILE *fp;
+                fp = fopen(log, "r");
+                if (fp) {
+                        while (fgets(buf, sizeof(buf), fp) != NULL) {
+                                if (rc || verbose > 2) 
+                                        printf("   %s", buf);
+                        }
+                        fclose(fp);
+                }
+        }
+        if (fd >= 0) 
+                remove(log);
+        return rc;
+}                                                       
 
 
 /*============ disk dev functions ===================*/
@@ -765,7 +773,7 @@ void set_defaults(struct mkfs_opts *mop)
         else 
                 mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
         
-        mop->mo_ldd.ldd_svindex = -1;
+        mop->mo_ldd.ldd_svindex = 0xFFFF;
         mop->mo_ldd.ldd_stripe_count = 1;
         mop->mo_ldd.ldd_stripe_sz = 1024 * 1024;
         mop->mo_ldd.ldd_stripe_pattern = 0;
@@ -871,7 +879,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         return 1;
                 case 'i':
                         if (IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd)) {
-                                mop->mo_ldd.ldd_svindex = atoi(optarg);
+                                mop->mo_ldd.ldd_svindex = atol(optarg);
                                 mop->mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
                         } else {
                                 badopt(long_opt[longidx].name, "MDT,OST");
@@ -977,6 +985,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 int main(int argc, char *const argv[])
 {
         struct mkfs_opts mop;
+        struct lustre_disk_data *ldd;
         char *mountopts = NULL;
         char always_mountopts[512] = "";
         char default_mountopts[512] = "";
@@ -1046,8 +1055,8 @@ int main(int argc, char *const argv[])
         if (ret) 
                 goto out;
 
-        if (!(IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd) || 
-              IS_MGS(&mop.mo_ldd))) {
+        ldd = &mop.mo_ldd;
+        if (!(IS_MDT(ldd) || IS_OST(ldd) || IS_MGS(ldd))) {
                 fatal();
                 fprintf(stderr, "must set target type :{mdt,ost,mgs}\n");
                 usage(stderr);
@@ -1055,14 +1064,13 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 
-        if (IS_MDT(&mop.mo_ldd) && !IS_MGS(&mop.mo_ldd) && 
-            mop.mo_ldd.ldd_mgsnid_count == 0) {
+        if (IS_MDT(ldd) && !IS_MGS(ldd) && ldd->ldd_mgsnid_count == 0) {
                 vprint("No management node specified, adding MGS to this "
                        "MDT\n");
-                mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGS;
+                ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
         }
 
-        if (!IS_MGS(&mop.mo_ldd) && (mop.mo_ldd.ldd_mgsnid_count == 0)) {
+        if (!IS_MGS(ldd) && (ldd->ldd_mgsnid_count == 0)) {
                 fatal();
                 fprintf(stderr, "Must specify either --mgs or --mgsnid\n");
                 usage(stderr);
@@ -1070,20 +1078,20 @@ int main(int argc, char *const argv[])
         }
 
         /* These are the permanent mount options (always included) */ 
-        switch (mop.mo_ldd.ldd_mount_type) {
+        switch (ldd->ldd_mount_type) {
         case LDD_MT_EXT3:
         case LDD_MT_LDISKFS: {
                 sprintf(always_mountopts, "errors=remount-ro");
-                if (IS_MDT(&mop.mo_ldd) || IS_MGS(&mop.mo_ldd))
+                if (IS_MDT(ldd) || IS_MGS(ldd))
                         strcat(always_mountopts,
                                ",iopen_nopriv,user_xattr");
-                if ((get_os_version() == 24) && IS_OST(&mop.mo_ldd))
+                if ((get_os_version() == 24) && IS_OST(ldd))
                         strcat(always_mountopts, ",asyncdel");
 #if 0
                 /* Files created while extents are enabled cannot be read if
                    mounted with a kernel that doesn't include the CFS patches.*/
-                if (IS_OST(&mop.mo_ldd) && 
-                    mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
+                if (IS_OST(ldd) && 
+                    ldd->ldd_mount_type == LDD_MT_LDISKFS) {
                         strcat(default_mountopts, ",extents,mballoc");
                 }
 #endif 
@@ -1098,8 +1106,8 @@ int main(int argc, char *const argv[])
         default: {
                 fatal();
                 fprintf(stderr, "unknown fs type %d '%s'\n",
-                        mop.mo_ldd.ldd_mount_type,
-                        MT_STR(&mop.mo_ldd));
+                        ldd->ldd_mount_type,
+                        MT_STR(ldd));
                 ret = EINVAL;
                 goto out;
         }
@@ -1108,27 +1116,28 @@ int main(int argc, char *const argv[])
         if (mountopts) {
                 /* If user specifies mount opts, don't use defaults,
                    but always use always_mountopts */
-                sprintf(mop.mo_ldd.ldd_mount_opts, "%s,%s", 
+                sprintf(ldd->ldd_mount_opts, "%s,%s", 
                         always_mountopts, mountopts);
         } else {
 #ifdef TUNEFS
-                if (*mop.mo_ldd.ldd_mount_opts == 0) 
+                if (ldd->ldd_mount_opts[0] == 0) 
                         /* use the defaults unless old opts exist */
 #endif
                 {
                         if (default_mountopts[0]) 
-                                sprintf(mop.mo_ldd.ldd_mount_opts, "%s,%s", 
+                                sprintf(ldd->ldd_mount_opts, "%s,%s", 
                                         always_mountopts, default_mountopts);
                         else
-                                strcpy(mop.mo_ldd.ldd_mount_opts,
+                                strcpy(ldd->ldd_mount_opts,
                                        always_mountopts);
                 }
         }
 
-        ldd_make_sv_name(&(mop.mo_ldd));
+        server_make_name(ldd->ldd_flags, ldd->ldd_svindex,
+                         ldd->ldd_fsname, ldd->ldd_svname);
 
         if (verbose > 0)
-                print_ldd("Permanent disk data", &(mop.mo_ldd));
+                print_ldd("Permanent disk data", ldd);
 
         if (print_only) {
                 printf("exiting before disk write.\n");

@@ -202,10 +202,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct lov_obd *lov = &obd->u.lov;
-        struct lov_tgt_desc *tgt;
-        struct obd_export *exp;
-        __u64 connect_flags = data ? data->ocd_connect_flags : 0;
-        int rc, rc2, i;
+        int rc;
         ENTRY;
 
         lov->ocd.ocd_connect_flags = OBD_CONNECT_EMPTY; 
@@ -213,49 +210,12 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 lov->ocd = *data;
 
         rc = class_connect(conn, obd, cluuid);
-        if (rc)
-                RETURN(rc);
+        if (!rc) 
+                lov->connects++;
+        CDEBUG(D_CONFIG, "connect #%d\n", lov->connects);
 
-        exp = class_conn2export(conn);
+        /* target connects are done in lov_add_target */
 
-        /* We don't want to actually do the underlying connections more than
-         * once, so keep track. */
-        lov->connects++;
-        if (lov->connects > 1) {
-                class_export_put(exp);
-                RETURN(0);
-        }
-
-        for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
-                if (obd_uuid_empty(&tgt->uuid))
-                        continue;
-                rc = lov_connect_obd(obd, tgt, 0, data);
-                if (rc)
-                        GOTO(out_disc, rc);
-                if (data)
-                        connect_flags &= data->ocd_connect_flags;
-        }
-
-        if (data)
-                data->ocd_connect_flags = connect_flags;
-
-        class_export_put(exp);
-        RETURN (0);
-
- out_disc:
-        while (i-- > 0) {
-                struct obd_uuid uuid;
-                --tgt;
-                --lov->desc.ld_active_tgt_count;
-                tgt->active = 0;
-                /* save for CERROR below; (we know it's terminated) */
-                uuid = tgt->uuid;
-                rc2 = obd_disconnect(tgt->ltd_exp);
-                if (rc2)
-                        CERROR("error: LOV target %s disconnect on OST idx %d: "
-                               "rc = %d\n", uuid.uuid, i, rc2);
-        }
-        class_disconnect(exp);
         RETURN (rc);
 }
 
@@ -331,8 +291,11 @@ static int lov_disconnect(struct obd_export *exp)
 
         /* Only disconnect the underlying layers on the final disconnect. */
         lov->connects--;
-        if (lov->connects != 0)
+        if (lov->connects != 0) {
+                /* why should there be more than 1 connect? */
+                CERROR("disconnect #%d\n", lov->connects);
                 RETURN(rc);
+        }
 
         /* Let's hold another reference so lov_del_obd doesn't spin through
            putref every time */
@@ -460,7 +423,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 }
 
 static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
-                          int index, int gen)
+                          int index, int gen, int active)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
@@ -469,8 +432,8 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         int rc;
         ENTRY;
 
-        CDEBUG(D_CONFIG, "uuid: %s idx: %d gen: %d\n",
-               uuidp->uuid, index, gen);
+        CDEBUG(D_CONFIG, "uuid:%s idx:%d gen:%d active:%d\n",
+               uuidp->uuid, index, gen, active);
 
         if (index < 0) {
                 CERROR("request to add OBD %s at invalid index: %d\n",
@@ -522,11 +485,6 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
                 index, tgt->ltd_gen, lov->desc.ld_tgt_count);
 
-        if (lov->connects == 0)
-                /* lov_connect hasn't been called yet. So we'll do the
-                   lov_connect_obd on this obd when that fn first runs. */
-                RETURN(0);
-
         if (tgt->ltd_exp) {
                 struct obd_device *osc_obd;
 
@@ -542,14 +500,15 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                         RETURN(-ENOMEM);
                 *ocd = lov->ocd;
         }
-        rc = lov_connect_obd(obd, tgt, 1, ocd);
+        rc = lov_connect_obd(obd, tgt, active, ocd);
         if (ocd)
                 OBD_FREE(ocd, sizeof(*ocd));
         if (rc)
                 GOTO(out, rc);
 
         idx = index;
-        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, OBD_NOTIFY_ACTIVE,
+        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, 
+                        active ? OBD_NOTIFY_ACTIVE : OBD_NOTIFY_INACTIVE,
                         (void *)&idx);
 
 out:
@@ -801,6 +760,7 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
 
         switch(cmd = lcfg->lcfg_command) {
         case LCFG_LOV_ADD_OBD:
+        case LCFG_LOV_ADD_INA:
         case LCFG_LOV_DEL_OBD: {
                 /* lov_modify_tgts add  0:lov_mdsA  1:ost1_UUID  2:0  3:1 */
                 if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(obd_uuid.uuid))
@@ -813,7 +773,9 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                 if (sscanf(lustre_cfg_buf(lcfg, 3), "%d", &gen) != 1)
                         GOTO(out, rc = -EINVAL);
                 if (cmd == LCFG_LOV_ADD_OBD)
-                        rc = lov_add_target(obd, &obd_uuid, index, gen);
+                        rc = lov_add_target(obd, &obd_uuid, index, gen, 1);
+                else if (cmd == LCFG_LOV_ADD_INA)
+                        rc = lov_add_target(obd, &obd_uuid, index, gen, 0);
                 else
                         rc = lov_del_target(obd, &obd_uuid, index, gen);
                 GOTO(out, rc);
@@ -1558,14 +1520,16 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_async_page *lap;
-        int rc;
+        int rc = 0;
         ENTRY;
 
-        if (!page)
+        if (!page) {
+                while (!lov->tgts[rc].ltd_exp) 
+                        rc++;
                 return size_round(sizeof(*lap)) +
-                       obd_prep_async_page(lov->tgts[0].ltd_exp, NULL, NULL,
+                       obd_prep_async_page(lov->tgts[rc].ltd_exp, NULL, NULL,
                                            NULL, 0, NULL, NULL, NULL);
-
+        }
         ASSERT_LSM_MAGIC(lsm);
         LASSERT(loi == NULL);
 

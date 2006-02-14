@@ -61,7 +61,8 @@ void usage(FILE *out)
                 "\t<mntopt>: one or more comma separated of:\n"
                 "\t\t(no)flock,(no)user_xattr,(no)acl\n"
                 "\t\tnosvc: only start MGC/MGS obds\n"
-                "\t\texclude=<ost1>[:<ost2>] : colon-separated list of inactive OSTs\n"
+                "\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
+                "inactive OSTs (e.g. lustre-OST0001)\n"
                 );
         exit((out != stdout) ? EINVAL : 0);
 }

@@ -711,6 +711,12 @@ out:
 int class_config_dump_handler(struct llog_handle * handle,
                               struct llog_rec_hdr *rec, void *data);
 
+#ifdef __KERNEL__
+extern int lustre_check_exclusion(struct super_block *sb, char *svname);
+#else
+#define lustre_check_exclusion(a,b)  0
+#endif
+
 static int class_config_llog_handler(struct llog_handle * handle,
                                      struct llog_rec_hdr *rec, void *data)
 {
@@ -739,16 +745,57 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 if (rc)
                         GOTO(out, rc);
 
-                /* FIXME check cm_flags for skip - must save state,
-                   probably in handle 
+                /* Figure out config state info */
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+                        CDEBUG(D_CONFIG|D_WARNING, "Marker, cfg_flg=%#x\n",
+                               cfg->cfg_flags);
+                        if (marker->cm_flags & CM_START) {
+                                /* all previous flags off */
+                                cfg->cfg_flags = CFG_F_MARKER;
+                                if (marker->cm_flags & CM_SKIP) { 
+                                        cfg->cfg_flags |= CFG_F_SKIP;
+                                        // FIXME warning
+                                        CDEBUG(D_CONFIG|D_WARNING, "SKIP %d\n",
+                                               marker->cm_step);
+                                }
+                                if (lustre_check_exclusion(cfg->cfg_sb, 
+                                                           marker->cm_svname)) {
+                                        cfg->cfg_flags |= CFG_F_EXCLUDE;
+                                        // FIXME warning
+                                        CDEBUG(D_CONFIG|D_WARNING, "EXCLUDE %d\n",
+                                               marker->cm_step);
+                                }
+                        } else if (marker->cm_flags & CM_END) {
+                                cfg->cfg_flags = 0;
+                        }
                 }
-                */
+                /* A config command without a start marker before it is 
+                   illegal (1.4.6. compat must set it artificially) */
+                if (!(cfg->cfg_flags & CFG_F_MARKER) && 
+                    (lcfg->lcfg_command != LCFG_MARKER)) {
+                        CWARN("Config not inside markers, ignoring! (%#x)\n", 
+                              cfg->cfg_flags);
+                        cfg->cfg_flags |= CFG_F_SKIP;
+                }
+                
+                if (cfg->cfg_flags & CFG_F_SKIP) {
+                        // FIXME warning
+                        CDEBUG(D_CONFIG|D_WARNING, "skipping %#x\n",
+                               cfg->cfg_flags);
+                        rc = 0;
+                        /* No processing! */
+                        break;
+                }
+
+                if ((cfg->cfg_flags & CFG_F_EXCLUDE) && 
+                    (lcfg->lcfg_command == LCFG_LOV_ADD_OBD))
+                        /* Add inactive instead */
+                        lcfg->lcfg_command = LCFG_LOV_ADD_INA;
 
                 lustre_cfg_bufs_init(&bufs, lcfg);
 
-                if (cfg && cfg->cfg_instance && LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
+                if (cfg && cfg->cfg_instance && LUSTRE_CFG_BUFLEN(lcfg, 0) > 0){
                         inst = 1;
                         inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
                                 strlen(cfg->cfg_instance) + 1;
@@ -896,9 +943,9 @@ int class_config_dump_handler(struct llog_handle * handle,
                 }
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-                        ptr += snprintf(ptr, end-ptr, "marker=%d(%#x)'%s'",
+                        ptr += snprintf(ptr, end-ptr, "marker=%d(%#x)%s '%s'",
                                         marker->cm_step, marker->cm_flags, 
-                                        marker->cm_comment);
+                                        marker->cm_svname, marker->cm_comment);
                 } else {
                         for (i = 0; i <  lcfg->lcfg_bufcount; i++) {
                                 ptr += snprintf(ptr, end-ptr, "%d:%s  ", i,
