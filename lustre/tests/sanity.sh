@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2108 3637 3561 5188/5749
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
+# bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 64b 71 101"
@@ -2640,16 +2640,14 @@ test_75() {
 	cat ${F128k} ${F128k} > ${F}_sim_sim
 
 	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	diff ${FHEAD} ${F}_sim_sim
-	diff -u ${FHEAD} ${F}_sim_sim || error "${FHEAD} ${F}_sim_sim differ"
+	cmp ${FHEAD} ${F}_sim_sim || error "${FHEAD} ${F}_sim_sim differ"
 	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
 
 	cp -p ${F128k} ${FTAIL}
 	cat ${F}_sim_sim >> ${F}_join_sim
 	cat ${F128k} >> ${F}_join_sim
 	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	diff -u ${FHEAD} ${F}_join_sim
-	diff -u ${FHEAD} ${F}_join_sim || \
+	cmp ${FHEAD} ${F}_join_sim || \
 		error "${FHEAD} ${F}_join_sim are different"
 	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
 
@@ -2657,7 +2655,7 @@ test_75() {
 	cat ${F128k} >> ${F}_sim_join
 	cat ${F}_join_sim >> ${F}_sim_join
 	$JOIN ${FTAIL} ${FHEAD} || error "join error"
-	diff -u ${FTAIL} ${F}_sim_join || \
+	cmp ${FTAIL} ${F}_sim_join || \
 		error "${FTAIL} ${F}_sim_join are different"
 	$CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
 
@@ -2667,7 +2665,7 @@ test_75() {
 	cat ${F}_sim_join >> ${F}_join_join
 	$JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
 	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	diff -u ${FHEAD} ${F}_join_join ||error "${FHEAD} ${F}_join_join differ"
+	cmp ${FHEAD} ${F}_join_join || error "${FHEAD} ${F}_join_join differ"
 	$CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
 	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
 
@@ -2681,7 +2679,7 @@ test_75() {
 			error "join ${F}_join_10 ${FTAIL} error"
 		$CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
 	done
-	diff -u ${F}_join_10 ${F}_join_10_compare || \
+	cmp ${F}_join_10 ${F}_join_10_compare || \
 		error "files ${F}_join_10 ${F}_join_10_compare are different"
 	$LFS getstripe ${F}_join_10
 	$OPENUNLINK ${F}_join_10 ${F}_join_10 || error "files unlink open"
