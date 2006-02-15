@@ -31,6 +31,7 @@ pingcli_LDADD := $(EXTRA_KLIBS)
 plist_DATA := Info.plist
 
 install_data_hook := fix-kext-ownership
+install-data-hook: $(install_data_hook)
 endif
 
 endif
