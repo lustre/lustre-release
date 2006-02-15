@@ -174,16 +174,19 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                         CERROR("No config buffer passed!\n");
                         GOTO(out, err = -EINVAL);
                 }
-
-                err = lustre_cfg_sanity_check(data->ioc_pbuf1,
-                                              data->ioc_plen1);
-                if (err)
-                        GOTO(out, err);
-
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 err = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-                if (!err)
-                        err = class_process_config(lcfg);
+                if (err) {
+                        GOTO(out, err);
+                        OBD_FREE(lcfg, data->ioc_plen1);
+                }
+                err = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
+                if (err) {
+                        GOTO(out, err);
+                        OBD_FREE(lcfg, data->ioc_plen1);
+                }
+                err = class_process_config(lcfg);
+
                 OBD_FREE(lcfg, data->ioc_plen1);
                 GOTO(out, err);
         }
