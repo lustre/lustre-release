@@ -84,6 +84,12 @@ case "$lustretag" in
         portalstag=b_ioprovement
         ;;
 
+    b_iam*)
+        snmptag="HEAD"
+        portalstag="b_hd_newconfig"
+        lnettag="b_hd_newconfig"
+        ;;
+
     b_newconfig_rdmarouting)
         portalstag="b_hd_newconfig"
         lnettag="b_newconfig_rdmarouting"
