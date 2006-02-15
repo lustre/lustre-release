@@ -173,18 +173,30 @@ void print_to_console(struct ptldebug_header *hdr, int mask, char *buf,
 /*
  * Sysctl handle of libcfs
  */
+#define MAX_TRACEFILE_PATH_LEN  256
 int cfs_trace_daemon SYSCTL_HANDLER_ARGS
 {
 	int error = 0;
 	char *name = NULL;
 
-	MALLOC(name, char *, req->newlen + 1, M_TEMP, M_WAITOK | M_ZERO);
+        if (req->newptr == USER_ADDR_NULL) {
+                /* a read */
+                if (tracefile)
+                        error = sysctl_handle_string(oidp, tracefile, 0, req);
+                else
+                        error = sysctl_handle_string(oidp, "NA", 0, req);
+
+                return error;
+        }
+        
+        /* now hanle write requests */
+	MALLOC(name, char *, MAX_TRACEFILE_PATH_LEN + 1, M_TEMP, M_WAITOK | M_ZERO);
 	if (name == NULL)
 		return -ENOMEM;
+        name[0] = '\0';
 	tracefile_write_lock();
-	error = sysctl_handle_string(oidp, name, req->newlen + 1, req);
-	if (!error && req->newptr != USER_ADDR_NULL) {
-		/* write */
+	error = sysctl_handle_string(oidp, name, MAX_TRACEFILE_PATH_LEN + 1, req);
+	if (!error) {
 		if (strcmp(name, "stop") == 0) {
 			/* stop tracefile daemon */
 			tracefile = NULL;
@@ -208,13 +220,10 @@ int cfs_trace_daemon SYSCTL_HANDLER_ARGS
 		tracefile = name;
 		name = NULL;
 		trace_start_thread();
-	} else if (req->newptr != USER_ADDR_NULL) {
+	} else {
 		/* Something was wrong with the write request */
 		printf("sysctl debug daemon failed: %d.\n", error);
 		goto out;
-	} else {
-		/* Read request */
-		SYSCTL_OUT(req, tracefile, sizeof(tracefile));
 	}
 out:
 	if (name != NULL)
@@ -222,6 +231,7 @@ out:
 	tracefile_write_unlock();
 	return error;
 }
+#undef MAX_TRACEFILE_PATH_LEN
 
 
 int cfs_debug_mb SYSCTL_HANDLER_ARGS
@@ -246,10 +256,8 @@ int cfs_debug_mb SYSCTL_HANDLER_ARGS
 	} else if (req->newptr != USER_ADDR_NULL) {
 		/* Something was wrong with the write request */
 		printf ("sysctl debug_mb fault: %d.\n", error);
-	} else {
-		/* Read request */
-		error = SYSCTL_OUT(req, &max_debug_mb, sizeof max_debug_mb);
 	}
+
 	return error;
 }
 
