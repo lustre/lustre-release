@@ -352,7 +352,7 @@ static void print_saved_records(struct list_head *list, FILE *out)
                 list_del(&line->chain);
 
                 hdr = line->hdr;
-                fprintf(out, "%07x:%06x:%u:%u.%06Lu:%u:%u:%u:(%s:%u:%s()) %s",
+                fprintf(out, "%07x:%06x:%u:%u."LPU64":%u:%u:%u:(%s:%u:%s()) %s",
                         hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
                         hdr->ph_sec, (unsigned long long)hdr->ph_usec,
                         hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
@@ -374,7 +374,7 @@ static int parse_buffer(FILE *in, FILE *out)
         CFS_INIT_LIST_HEAD(&chunk_list);
 
         while (1) {
-                rc = fread(buf, sizeof(hdr->ph_len), 1, in);
+                rc = fread(buf, sizeof(hdr->ph_len) + sizeof(hdr->ph_flags), 1, in);
                 if (rc <= 0)
                         break;
 
@@ -393,8 +393,8 @@ static int parse_buffer(FILE *in, FILE *out)
                         assert(list_empty(&chunk_list));
                 }
 
-                rc = fread(buf + sizeof(hdr->ph_len), 1,
-                           hdr->ph_len - sizeof(hdr->ph_len), in);
+                rc = fread(buf + sizeof(hdr->ph_len) + sizeof(hdr->ph_flags), 1,
+                           hdr->ph_len - sizeof(hdr->ph_len) - sizeof(hdr->ph_flags), in);
                 if (rc <= 0)
                         break;
 
