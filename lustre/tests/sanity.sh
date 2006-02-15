@@ -236,12 +236,12 @@ echo # add a newline after mke2fs.
 umask 077
 
 test_0() {
-	touch $DIR/f
-	$CHECKSTAT -t file $DIR/f || error
-	rm $DIR/f
-	$CHECKSTAT -a $DIR/f || error
+	touch $DIR/$tfile
+	$CHECKSTAT -t file $DIR/$tfile || error
+	rm $DIR/$tfile
+	$CHECKSTAT -a $DIR/$tfile || error
 }
-run_test 0 "touch .../f ; rm .../f ============================="
+run_test 0 "touch .../$tfile ; rm .../$tfile ====================="
 
 test_0b() {
 	chmod 0755 $DIR || error
@@ -845,18 +845,18 @@ run_test 26e "unlink multiple component recursive symlink ======"
 
 # recursive symlinks (bug 7022)
 test_26f() {
-	mkdir $DIR/foo         || error "mkdir $DIR/foo failed"
-	cd $DIR/foo            || error "cd $DIR/foo failed"
-	mkdir -p bar/bar1      || error "mkdir bar/bar1 failed"
-	mkdir foo              || error "mkdir foo failed"
-	cd foo                 || error "cd foo failed"
-	ln -s .. dotdot        || error "ln dotdot failed"
-	ln -s dotdot/bar bar   || error "ln bar failed"
-	cd ../..               || error "cd ../.. failed"
-	output=`ls foo/foo/bar/bar1`
+	mkdir $DIR/$tfile        || error "mkdir $DIR/$tfile failed"
+	cd $DIR/$tfile           || error "cd $DIR/$tfile failed"
+	mkdir -p $tdir/bar1      || error "mkdir $tdir/bar1 failed"
+	mkdir $tfile             || error "mkdir $tfile failed"
+	cd $tfile                || error "cd $tfile failed"
+	ln -s .. dotdot          || error "ln dotdot failed"
+	ln -s dotdot/$tdir $tdir || error "ln $tdir failed"
+	cd ../..                 || error "cd ../.. failed"
+	output=`ls $tfile/$tfile/$tdir/bar1`
 	[ "$output" = bar1 ] && error "unexpected output"
-	rm -r foo              || error "rm foo failed"
-	$CHECKSTAT -a $DIR/foo || error "foo not gone"
+	rm -r $tfile             || error "rm $tfile failed"
+	$CHECKSTAT -a $DIR/$tfile || error "$tfile not gone"
 }
 run_test 26f "rm -r of a directory which has recursive symlink ="
 
@@ -1418,13 +1418,13 @@ test_32r() {
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
 test_33() {
-	rm -f $DIR/test_33_file
-	touch $DIR/test_33_file
-	chmod 444 $DIR/test_33_file
-	chown $RUNAS_ID $DIR/test_33_file
-        log 33_1
-        $RUNAS $OPENFILE -f O_RDWR $DIR/test_33_file && error || true
-        log 33_2
+	rm -f $DIR/$tfile
+	touch $DIR/$tfile
+	chmod 444 $DIR/$tfile
+	chown $RUNAS_ID $DIR/$tfile
+	log 33_1
+	$RUNAS $OPENFILE -f O_RDWR $DIR/$tfile && error || true
+	log 33_2
 }
 run_test 33 "write file with mode 444 (should return error) ===="
 
@@ -1559,20 +1559,20 @@ test_38() {
 run_test 38 "open a regular file with O_DIRECTORY =============="
 
 test_39() {
-	touch $DIR/test_39_file
-	touch $DIR/test_39_file2
-#	ls -l  $DIR/test_39_file $DIR/test_39_file2
-#	ls -lu  $DIR/test_39_file $DIR/test_39_file2
-#	ls -lc  $DIR/test_39_file $DIR/test_39_file2
+	touch $DIR/$tfile
+	touch $DIR/${tfile}2
+#	ls -l  $DIR/$tfile $DIR/${tfile}2
+#	ls -lu  $DIR/$tfile $DIR/${tfile}2
+#	ls -lc  $DIR/$tfile $DIR/${tfile}2
 	sleep 2
-	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/test_39_file2
-	if [ ! $DIR/test_39_file2 -nt $DIR/test_39_file ]; then
+	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/${tfile}2
+	if [ ! $DIR/${tfile}2 -nt $DIR/$tfile ]; then
 		echo "mtime"
-		ls -l  $DIR/test_39_file $DIR/test_39_file2
+		ls -l  $DIR/$tfile $DIR/${tfile}2
 		echo "atime"
-		ls -lu  $DIR/test_39_file $DIR/test_39_file2
+		ls -lu  $DIR/$tfile $DIR/${tfile}2
 		echo "ctime"
-		ls -lc  $DIR/test_39_file $DIR/test_39_file2
+		ls -lc  $DIR/$tfile $DIR/${tfile}2
 		error "O_TRUNC didn't change timestamps"
 	fi
 }
@@ -2683,8 +2683,6 @@ test_75() {
 		error "files ${F}_join_10 ${F}_join_10_compare are different"
 	$LFS getstripe ${F}_join_10
 	$OPENUNLINK ${F}_join_10 ${F}_join_10 || error "files unlink open"
-
-	rm -f $F* || true
 }
 run_test 75 "TEST join file"
 
@@ -2834,7 +2832,7 @@ test_102() {
         touch $testfile
 
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ -z "grep \<xattr\> $LPROC/mdc/MDC*MNT*/connect_flags" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	[ -z "`grep \<xattr\> $LPROC/mdc/MDC*MNT*/connect_flags`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
