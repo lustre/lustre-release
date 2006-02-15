@@ -36,21 +36,19 @@
 #define _BLKID_TYPES_H
 #endif
 
-typedef u_int8_t  __u8;
-typedef u_int16_t __u16;
-typedef u_int32_t __u32;
-typedef u_int64_t __u64;
+typedef u_int8_t        __u8;
+typedef u_int16_t       __u16;
+typedef u_int32_t       __u32;
+typedef u_int64_t       __u64;
+typedef int8_t          __s8;
+typedef int16_t         __s16;
+typedef int32_t         __s32;
+typedef int64_t         __s64;
 
 #ifdef __KERNEL__
 
 #include <kern/kern_types.h>
 
-#ifndef __s32
-typedef __signed__ int			__s32;
-#endif
-#ifndef __s64
-typedef __signed__ long long		__s64;
-#endif
 
 typedef struct { int e; }		event_chan_t;
 typedef dev_t				kdev_t;
@@ -89,5 +87,6 @@ typedef off_t   			loff_t;
 typedef off_t   			loff_t;
 
 #endif	/* __KERNEL END */
+typedef unsigned short                  umode_t;
 
 #endif  /* __XNU_CFS_TYPES_H__ */

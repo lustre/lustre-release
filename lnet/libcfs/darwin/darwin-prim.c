@@ -475,7 +475,6 @@ cfs_duration_t  cfs_waitq_timedwait(struct cfs_waitlink *link,
                                     cfs_task_state_t state,
                                     cfs_duration_t timeout)
 {
-        CDEBUG(D_TRACE, "timeout: %llu\n", (long long unsigned)timeout);
         return ksleep_timedwait(&link->wl_waitq->wq_ksleep_chan, 
                                 state, timeout);
 }

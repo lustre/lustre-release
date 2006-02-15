@@ -104,7 +104,7 @@ kportal_memhog_alloc (struct libcfs_device_userstate *ldu, int npages, int flags
         while (ldu->ldu_memhog_pages < npages &&
                count1 < CFS_PAGE_SIZE/sizeof(cfs_page_t *)) {
 
-                if (cfs_signal_pending(cfs_current()))
+                if (cfs_signal_pending())
                         return (-EINTR);
 
                 *level1p = cfs_alloc_page(flags);
@@ -119,7 +119,7 @@ kportal_memhog_alloc (struct libcfs_device_userstate *ldu, int npages, int flags
                 while (ldu->ldu_memhog_pages < npages &&
                        count2 < CFS_PAGE_SIZE/sizeof(cfs_page_t *)) {
 
-                        if (cfs_signal_pending(cfs_current()))
+                        if (cfs_signal_pending())
                                 return (-EINTR);
 
                         *level2p = cfs_alloc_page(flags);
@@ -256,7 +256,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 data->ioc_u32[3] = offsetof(lwt_event_t, lwte_where);
 
                 if (err == 0 &&
-                    copy_to_user((char *)arg, data, sizeof (*data)))
+                    libcfs_ioctl_popdata(arg, data, sizeof (*data)))
                         err = -EFAULT;
                 break;
         }
@@ -265,7 +265,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 err = lwt_lookup_string (&data->ioc_count, data->ioc_pbuf1,
                                          data->ioc_pbuf2, data->ioc_plen2);
                 if (err == 0 &&
-                    copy_to_user((char *)arg, data, sizeof (*data)))
+                    libcfs_ioctl_popdata(arg, data, sizeof (*data)))
                         err = -EFAULT;
                 break;
 #endif
@@ -307,9 +307,8 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 list_for_each_entry(hand, &ioctl_list, item) {
                         err = hand->handle_ioctl(cmd, data);
                         if (err != -EINVAL) {
-                                if (copy_to_user((char *)arg, 
-                                                 data, sizeof (*data)))
-                                        err = -EFAULT;
+                                err = libcfs_ioctl_popdata(arg, data, 
+                                                           sizeof (*data));
                                 break;
                         }
                 }

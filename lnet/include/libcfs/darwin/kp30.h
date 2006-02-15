@@ -63,6 +63,7 @@
 # include <sys/types.h>
 #endif
 
+#define BITS_PER_LONG   LONG_BIT
 /******************************************************************************/
 /* Light-weight trace
  * Support for temporary event tracing with minimal Heisenberg effect. */
@@ -86,7 +87,7 @@ typedef struct {
 
 #define LPU64 "%llu"
 #define LPD64 "%lld"
-#define LPX64 "%llx"
+#define LPX64 "%#llx"
 #define LPSZ  "%lu"
 #define LPSSZ "%ld"
 # define LI_POISON ((int)0x5a5a5a5a)

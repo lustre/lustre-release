@@ -64,8 +64,6 @@
  *  int            cfs_fs_time_before (cfs_fs_time_t *, cfs_fs_time_t *);
  *  int            cfs_fs_time_beforeq(cfs_fs_time_t *, cfs_fs_time_t *);
  *
- *  cfs_duration_t cfs_time_minimal_timeout(void)
- *
  *  CFS_TIME_FORMAT
  *  CFS_DURATION_FORMAT
  *
@@ -167,12 +165,7 @@ static inline int cfs_fs_time_beforeq(cfs_fs_time_t *t1, cfs_fs_time_t *t2)
         return *t1 <= *t2;
 }
 
-static inline cfs_duration_t cfs_time_minimal_timeout(void)
-{
-        return 1;
-}
-
-#define CFS_MIN_DELAY           (1)
+#define CFS_TICK                (1)
 
 static inline cfs_time_t cfs_time_add(cfs_time_t t, cfs_duration_t d)
 {

@@ -88,13 +88,14 @@ int pingsrv_thread(void *arg)
         unsigned long magic;
         unsigned long ping_bulk_magic = __cpu_to_le32(0xcafebabe);
         
-        libcfs_daemonize ("pingsrv");
+        cfs_daemonize ("pingsrv");
         server->tsk =  cfs_current();
         
         while (running) {
-                set_current_state (TASK_INTERRUPTIBLE);
+                set_current_state (CFS_TASK_INTERRUPTIBLE);
                 if (atomic_read (&pkt) == 0) {
-                        schedule_timeout (MAX_SCHEDULE_TIMEOUT);
+                        cfs_schedule_timeout (CFS_TASK_INTERRUPTIBLE, 
+                                              MAX_SCHEDULE_TIMEOUT);
                         continue;
                 }
                
@@ -269,8 +270,8 @@ static void /*__exit*/ pingsrv_cleanup(void)
         running = 0;
         wake_up_process (server->tsk);
         while (running != 1) {
-                set_current_state (TASK_UNINTERRUPTIBLE);
-                schedule_timeout (cfs_time_seconds(1));
+                set_current_state (CFS_TASK_UNINT);
+                cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
         }
         
 } /* pingsrv_cleanup() */

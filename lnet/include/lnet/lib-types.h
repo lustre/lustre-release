@@ -312,7 +312,7 @@ typedef struct lnet_lnd
 
 #ifdef __KERNEL__
         /* accept a new connection */
-        int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
+        int (*lnd_accept)(struct lnet_ni *ni, cfs_socket_t *sock);
 #else
         /* wait for something to happen */
         void (*lnd_wait)(struct lnet_ni *ni, int milliseconds);

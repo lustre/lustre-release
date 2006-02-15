@@ -46,7 +46,7 @@ CFS_MODULE_PARM(accept_proto_version, "i", int, 0444,
 
 struct {
 	int               pta_shutdown;
-	struct socket    *pta_sock;
+	cfs_socket_t    *pta_sock;
 	struct semaphore  pta_signal;
 } lnet_acceptor_state;
 
@@ -124,11 +124,11 @@ lnet_connect_console_error (int rc, lnet_nid_t peer_nid,
 EXPORT_SYMBOL(lnet_connect_console_error);
 
 int
-lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
+lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
             __u32 local_ip, __u32 peer_ip, int peer_port)
 {
         lnet_acceptor_connreq_t  cr;
-        struct socket          *sock;
+        cfs_socket_t          *sock;
         int                     rc;
         int                     port;
         int                     fatal;
@@ -195,7 +195,7 @@ lnet_accept_magic(__u32 magic, __u32 constant)
 }
 
 int
-lnet_accept(lnet_ni_t *blind_ni, struct socket *sock, __u32 magic)
+lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
 {
         lnet_acceptor_connreq_t  cr;
         __u32                   peer_ip;
@@ -305,7 +305,7 @@ int
 lnet_acceptor(void *arg)
 {
 	char           name[16];
-	struct socket *newsock;
+	cfs_socket_t *newsock;
 	int            rc;
         int            n_acceptor_nis;
 	__u32          magic;

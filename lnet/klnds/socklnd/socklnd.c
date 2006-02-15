@@ -917,7 +917,7 @@ ksocknal_create_routes(ksock_peer_t *peer, int port,
 }
 
 int
-ksocknal_accept (lnet_ni_t *ni, struct socket *sock)
+ksocknal_accept (lnet_ni_t *ni, cfs_socket_t *sock)
 {
         ksock_connreq_t    *cr;
         int                 rc;
@@ -951,7 +951,7 @@ ksocknal_accept (lnet_ni_t *ni, struct socket *sock)
 
 int
 ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route, 
-                      struct socket *sock, int type)
+                      cfs_socket_t *sock, int type)
 {
         rwlock_t          *global_lock = &ksocknal_data.ksnd_global_lock;
         CFS_LIST_HEAD     (zombies);

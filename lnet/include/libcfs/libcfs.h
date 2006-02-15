@@ -162,7 +162,7 @@ do {                                                                          \
 do {                                                                          \
         static cfs_time_t cdebug_next = 0;                                    \
         static int cdebug_count = 0;                                          \
-        static cfs_duration_t cdebug_delay = CFS_MIN_DELAY;                   \
+        static cfs_duration_t cdebug_delay = CFS_TICK;                        \
                                                                               \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (cfs_time_after(cfs_time_current(), cdebug_next)) {                \
@@ -179,8 +179,8 @@ do {                                                                          \
                 if (cfs_time_after(cfs_time_current(),                        \
                                    cdebug_next +                              \
                                    cfs_time_seconds(CDEBUG_MAX_LIMIT+10)))    \
-                        cdebug_delay = cdebug_delay > (8 * CFS_MIN_DELAY)?    \
-                                       cdebug_delay/8 : CFS_MIN_DELAY;        \
+                        cdebug_delay = cdebug_delay > (8 * CFS_TICK)?         \
+                                       cdebug_delay/8 : CFS_TICK;             \
                 else                                                          \
                         cdebug_delay = cdebug_delay*2 >= cfs_time_seconds(CDEBUG_MAX_LIMIT)?\
                                        cfs_time_seconds(CDEBUG_MAX_LIMIT) :   \
@@ -326,18 +326,18 @@ int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
 int libcfs_ipif_enumerate(char ***names);
 void libcfs_ipif_free_enumeration(char **names, int n);
-int libcfs_sock_listen(struct socket **sockp, __u32 ip, int port, int backlog);
-int libcfs_sock_accept(struct socket **newsockp, struct socket *sock);
-void libcfs_sock_abort_accept(struct socket *sock);
-int libcfs_sock_connect(struct socket **sockp, int *fatal,
+int libcfs_sock_listen(cfs_socket_t **sockp, __u32 ip, int port, int backlog);
+int libcfs_sock_accept(cfs_socket_t **newsockp, cfs_socket_t *sock);
+void libcfs_sock_abort_accept(cfs_socket_t *sock);
+int libcfs_sock_connect(cfs_socket_t **sockp, int *fatal,
                         __u32 local_ip, int local_port,
                         __u32 peer_ip, int peer_port);
-int libcfs_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
-int libcfs_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
-int libcfs_sock_getaddr(struct socket *socket, int remote, __u32 *ip, int *port);
-int libcfs_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
-int libcfs_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
-void libcfs_sock_release(struct socket *sock);
+int libcfs_sock_setbuf(cfs_socket_t *socket, int txbufsize, int rxbufsize);
+int libcfs_sock_getbuf(cfs_socket_t *socket, int *txbufsize, int *rxbufsize);
+int libcfs_sock_getaddr(cfs_socket_t *socket, int remote, __u32 *ip, int *port);
+int libcfs_sock_write(cfs_socket_t *sock, void *buffer, int nob, int timeout);
+int libcfs_sock_read(cfs_socket_t *sock, void *buffer, int nob, int timeout);
+void libcfs_sock_release(cfs_socket_t *sock);
 
 /* libcfs watchdogs */
 struct lc_watchdog;
@@ -489,8 +489,8 @@ static inline void cfs_fs_timeval(struct timeval *tv)
  */
 static inline cfs_duration_t cfs_timeout_cap(cfs_duration_t timeout)
 {
-	if (timeout < cfs_time_minimal_timeout())
-		timeout = cfs_time_minimal_timeout();
+	if (timeout < CFS_TICK)
+		timeout = CFS_TICK;
 	return timeout;
 }
 

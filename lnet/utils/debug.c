@@ -93,6 +93,83 @@ static const struct debug_daemon_cmd libcfs_debug_daemon_cmd[] = {
         {0, 0}
 };
 
+#ifdef HAVE_PROC_FS
+
+#define DAEMON_CTL_NAME         "/proc/sys/lnet/daemon_file"
+#define SUBSYS_DEBUG_CTL_NAME   "/proc/sys/lnet/subsystem_debug"
+#define DEBUG_CTL_NAME          "/proc/sys/lnet/debug" 
+#define DUMP_KERNEL_CTL_NAME    "/proc/sys/lnet/dump_kernel"
+
+static int
+dbg_open_ctlhandle(const char *str)
+{
+        int fd;
+        fd = open(str, O_WRONLY);
+        if (fd < 0) {
+                fprintf(stderr, "open %s failed: %s\n", str,
+                        strerror(errno));
+                return -1;
+        }
+        return fd;
+}
+
+static void
+dbg_close_ctlhandle(int fd)
+{
+        close(fd);
+}
+
+static int
+dbg_write_cmd(int fd, char *str, int len)
+{
+        int    rc  = write(fd, str, len);
+        
+        return (rc == len ? 0 : 1);
+}
+
+#else /* !HAVE_PROC_FS */
+
+#define DAEMON_CTL_NAME         "lnet.trace_daemon"
+#define SUBSYS_DEBUG_CTL_NAME   "lnet.subsystem_debug"
+#define DEBUG_CTL_NAME          "lnet.debug"
+#define DUMP_KERNEL_CTL_NAME    "lnet.trace_dumpkernel"
+
+static char     sysctl_name[128];
+static int
+dbg_open_ctlhandle(const char *str)
+{
+
+        if (strlen(str)+1 > 128) {
+                fprintf(stderr, "sysctl name is too long: %s.\n", str);
+                return -1;
+        }
+        strcpy(sysctl_name, str);
+
+        return 0;
+}
+
+static void
+dbg_close_ctlhandle(int fd)
+{
+        sysctl_name[0] = '\0'; 
+        return;
+}
+
+static int
+dbg_write_cmd(int fd, char *str, int len)
+{
+        int     rc;
+
+        rc = sysctlbyname(sysctl_name, NULL, NULL, str, len+1);
+        if (rc != 0) {
+                fprintf(stderr, "sysctl %s with cmd (%s) error: %d\n", 
+                        sysctl_name, str, errno);
+        }
+        return (rc == 0 ? 0: 1);
+}
+
+#endif /* HAVE_PROC_FS */
+
 static int do_debug_mask(char *name, int enable)
 {
         int found = 0, i;
@@ -173,27 +250,27 @@ static int applymask(char* procpath, int value)
         char buf[64];
         int len = snprintf(buf, 64, "%d", value);
 
-        int fd = open(procpath, O_WRONLY);
+        int fd = dbg_open_ctlhandle(procpath);
         if (fd == -1) {
                 fprintf(stderr, "Unable to open %s: %s\n",
                         procpath, strerror(errno));
                 return fd;
         }
-        rc = write(fd, buf, len+1);
-        if (rc<0) {
+        rc = dbg_write_cmd(fd, buf, len+1);
+        if (rc != 0) {
                 fprintf(stderr, "Write to %s failed: %s\n",
                         procpath, strerror(errno));
                 return rc;
         }
-        close(fd);
+        dbg_close_ctlhandle(fd);
         return 0;
 }
 
 static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 {
         if (!dump_filename) {
-                applymask("/proc/sys/lnet/subsystem_debug", subs_mask);
-                applymask("/proc/sys/lnet/debug", debug_mask);
+                applymask(SUBSYS_DEBUG_CTL_NAME, subs_mask);
+                applymask(DEBUG_CTL_NAME, debug_mask);
         } else {
                 struct libcfs_debug_ioctl_data data;
 
@@ -394,21 +471,21 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);
 
-        fd = open("/proc/sys/lnet/dump_kernel", O_WRONLY);
+        fd = dbg_open_ctlhandle(DUMP_KERNEL_CTL_NAME);
         if (fd < 0) {
                 fprintf(stderr, "open(dump_kernel) failed: %s\n",
                         strerror(errno));
                 return 1;
         }
 
-        rc = write(fd, filename, strlen(filename));
-        if (rc != strlen(filename)) {
+        rc = dbg_write_cmd(fd, filename, strlen(filename));
+        if (rc != 0) {
                 fprintf(stderr, "write(%s) failed: %s\n", filename,
                         strerror(errno));
                 close(fd);
                 return 1;
         }
-        close(fd);
+        dbg_close_ctlhandle(fd);
 
         if (raw)
                 return 0;
@@ -504,17 +581,8 @@ int jt_dbg_debug_file(int argc, char **argv)
         return rc;
 }
 
-static int
-dbg_write_cmd(int fd, char *str)
-{
-        int    len = strlen(str);
-        int    rc  = write(fd, str, len);
-        
-        return (rc == len ? 0 : 1);
-}
-
 const char debug_daemon_usage[] = "usage: %s {start file [MB]|stop}\n";
-#define DAEMON_FILE "/proc/sys/lnet/daemon_file"
+
 int jt_dbg_debug_daemon(int argc, char **argv)
 {
         int  rc;
@@ -525,12 +593,9 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                 return 1;
         }
 
-        fd = open(DAEMON_FILE, O_WRONLY);
-        if (fd < 0) {
-                fprintf(stderr, "open %s failed: %s\n", DAEMON_FILE,
-                        strerror(errno));
+        fd = dbg_open_ctlhandle(DAEMON_CTL_NAME);
+        if (fd < 0)
                 return -1;
-        }
         
         rc = -1;
         if (strcasecmp(argv[1], "start") == 0) {
@@ -556,7 +621,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                                 goto out;
                         }
                         snprintf(buf, sizeof(buf), "size=%ld", size);
-                        rc = dbg_write_cmd(fd, buf);
+                        rc = dbg_write_cmd(fd, buf, strlen(buf));
 
                         if (rc != 0) {
                                 fprintf(stderr, "set %s failed: %s\n",
@@ -565,7 +630,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                         }
                 }
 
-                rc = dbg_write_cmd(fd, argv[2]);
+                rc = dbg_write_cmd(fd, argv[2], strlen(argv[2]));
                 if (rc != 0) {
                         fprintf(stderr, "start debug_daemon on %s failed: %s\n",
                                 argv[2], strerror(errno));
@@ -575,7 +640,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                 goto out;
         }
         if (strcasecmp(argv[1], "stop") == 0) {
-                rc = dbg_write_cmd(fd, "stop");
+                rc = dbg_write_cmd(fd, "stop", 4);
                 if (rc != 0) {
                         fprintf(stderr, "stopping debug_daemon failed: %s\n",
                                 strerror(errno));
@@ -589,7 +654,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
         fprintf(stderr, debug_daemon_usage, argv[0]);
         rc = -1;
 out:
-        close(fd);
+        dbg_close_ctlhandle(fd);
         return rc;
 }
 

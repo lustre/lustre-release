@@ -12,6 +12,27 @@ noinst_DATA += spingsrv$(KMODEXT) spingcli$(KMODEXT)
 #noinst_DATA += utsrv$(KMODEXT) utcli$(KMODEXT)
 endif
 
+if DARWIN
+macos_PROGRAMS := pingcli
+#macos_PROGRAMS := pingsrv
+
+pingcli_SOURCES := ping_cli.c
+
+pingcli_CFLAGS := $(EXTRA_KCFLAGS)
+pingcli_LDFLAGS := $(EXTRA_KLDFLAGS)
+pingcli_LDADD := $(EXTRA_KLIBS)
+
+#pingsrv_SOURCES := ping_srv.c
+
+#pingsrv_CFLAGS := $(EXTRA_KCFLAGS)
+#pingsrv_LDFLAGS := $(EXTRA_KLDFLAGS)
+#pingsrv_LDADD := $(EXTRA_KLIBS)
+
+plist_DATA := Info.plist
+
+install_data_hook := fix-kext-ownership
+endif
+
 endif
 endif
 

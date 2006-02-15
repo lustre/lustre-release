@@ -77,9 +77,9 @@ void cfs_unregister_sysctl_table (cfs_sysctl_table_header_t *table);
 /*
  * Proc file system APIs, no /proc fs support in OSX
  */
-typedef struct cfs_proc_dir_entry{
+typedef struct cfs_proc_dir_entry {
 	void		*data;
-}cfs_proc_dir_entry_t;
+} cfs_proc_dir_entry_t;
 
 cfs_proc_dir_entry_t * cfs_create_proc_entry(char *name, int mod,
 					  cfs_proc_dir_entry_t *parent);
@@ -243,7 +243,7 @@ static inline int cfs_schedule_timeout(int state, int64_t timeout)
 	return result;
 }
 
-#define cfs_schedule()	cfs_schedule_timeout(CFS_TASK_UNINT, CFS_JIFFY)
+#define cfs_schedule()	cfs_schedule_timeout(CFS_TASK_UNINT, CFS_TICK)
 #define cfs_pause(tick)	cfs_schedule_timeout(CFS_TASK_UNINT, tick)
 
 #define __wait_event(wq, condition)				\
@@ -348,7 +348,11 @@ int cfs_signal_pending(void);
 /*
  * Clear all pending signals.
  */
+#ifdef __DARWIN8__
+#define cfs_clear_sigpending()		do {} while (0)
+#else
 #define cfs_clear_sigpending()		clear_procsiglist(current_proc(), -1)
+#endif
 
 #define SIGNAL_MASK_ASSERT()
 
@@ -394,8 +398,6 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 #define __cacheline_aligned                     __attribute__((__aligned__(SMP_CACHE_BYTES)))
 #define NR_CPUS					2
 
-extern unsigned int cpu_number(void);
-#define smp_num_cpus				cpu_number()
 /* 
  * XXX Liang: patch xnu and export current_processor()?
  *
@@ -405,6 +407,7 @@ extern unsigned int cpu_number(void);
 /* XXX smp_call_function is not supported in xnu */
 #define smp_call_function(f, a, n, w)		do {} while(0)
 int cfs_online_cpus(void);
+#define smp_num_cpus				cfs_online_cpus()
 
 /*
  * Misc
@@ -424,8 +427,9 @@ extern int is_suser(void);
 #define exit_mm(t)				do {} while(0)
 #define exit_files(t)				do {} while(0)
 
-#define CAP_SYS_ADMIN                           0
-#define capable(a)		suser(current_proc()->p_ucred, &(current_proc()->p_acflag))
+#define CAP_SYS_BOOT				0
+#define CAP_SYS_ADMIN                           1
+#define capable(a)				((a) == CAP_SYS_BOOT ? is_suser(): is_suser1())
 
 #define USERMODEHELPER(path, argv, envp)	(0)
 
@@ -508,9 +512,9 @@ static inline long PTR_ERR(const void *ptr)
 
 #else	/* !__KERNEL__ */
 
-typedef struct cfs_proc_dir_entry{
+typedef struct cfs_proc_dir_entry {
 	void		*data;
-}cfs_proc_dir_entry_t;
+} cfs_proc_dir_entry_t;
 
 #include <libcfs/user-prim.h>
 #define __WORDSIZE	32

@@ -15,6 +15,12 @@
 # include <signal.h>
 # include <setjmp.h>
 # include <time.h>
+
+# ifdef HAVE_LIBREADLINE
+#  include <readline/readline.h>
+typedef VFunction	rl_vintfunc_t;
+typedef VFunction	rl_voidfunc_t;
+# endif
 #endif
 
 

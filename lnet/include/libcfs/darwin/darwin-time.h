@@ -215,7 +215,7 @@ static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
  * osfmk/kern/sched_prim.c
  * #define DEFAULT_PREEMPTION_RATE      100
  */
-#define CFS_JIFFY		(NSEC_PER_SEC / (u_int64_t)100)
+#define CFS_TICK		(NSEC_PER_SEC / (u_int64_t)100)
 
 #define LTIME_S(t)		(t)
 

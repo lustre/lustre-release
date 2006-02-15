@@ -726,6 +726,7 @@ AC_DEFUN([LN_CONFIGURE],
 [# lnet/utils/portals.c
 AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h endian.h sys/ioctl.h])
 AC_CHECK_FUNCS([gethostbyname socket connect])
+AC_CHECK_FILE(/proc/sys, [AC_DEFINE(HAVE_PROC_FS, 1, [proc filesystem is supported])])
 
 # lnet/utils/debug.c
 AC_CHECK_HEADERS([linux/version.h])

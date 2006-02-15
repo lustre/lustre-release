@@ -1366,7 +1366,7 @@ ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn, lnet_nid_t peer_nid,
 {
         /* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
         ksock_net_t         *net = (ksock_net_t *)ni->ni_data;
-        struct socket       *sock = conn->ksnc_sock;
+        cfs_socket_t        *sock = conn->ksnc_sock;
         lnet_hdr_t           hdr;
         lnet_magicversion_t *hmv = (lnet_magicversion_t *)&hdr.dest_nid;
         int                  i;
@@ -1438,7 +1438,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                      lnet_process_id_t *peerid, 
                      __u64 *incarnation, __u32 *ipaddrs)
 {
-        struct socket       *sock = conn->ksnc_sock;
+        cfs_socket_t        *sock = conn->ksnc_sock;
         int                  active;
         int                  timeout;
         int                  rc;
@@ -1635,7 +1635,7 @@ ksocknal_connect (ksock_route_t *route)
         ksock_peer_t     *peer = route->ksnr_peer;
         unsigned long     flags;
         int               type;
-        struct socket    *sock;
+        cfs_socket_t     *sock;
         cfs_time_t        deadline;
         int               rc = 0;
 
@@ -1826,15 +1826,19 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
         struct list_head  *ctmp;
 
         list_for_each (ctmp, &peer->ksnp_conns) {
+                int     error;
                 conn = list_entry (ctmp, ksock_conn_t, ksnc_list);
 
                 /* Don't need the {get,put}connsock dance to deref ksnc_sock... */
                 LASSERT (!conn->ksnc_closing);
 
-                if (SOCK_ERROR(conn->ksnc_sock) != 0) {
+                /* SOCK_ERROR will reset error code of socket in 
+                 * some platform (like Darwin8.x) */
+                error = SOCK_ERROR(conn->ksnc_sock);
+                if (error != 0) {
                         ksocknal_conn_addref(conn);
 
-                        switch (SOCK_ERROR(conn->ksnc_sock)) {
+                        switch (error) {
                         case ECONNRESET:
                                 LCONSOLE_WARN("A connection with %u.%u.%u.%u "
                                               "was reset; they may have "
@@ -1851,14 +1855,13 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                                 LCONSOLE_WARN("An unexpected network error "
                                               "occurred with %u.%u.%u.%u: %d\n",
                                               HIPQUAD(conn->ksnc_ipaddr),
-                                              SOCK_ERROR(conn->ksnc_sock));
+                                              error);
                                 break;
                         }
 
                         /* Something (e.g. failed keepalive) set the socket error */
                         CDEBUG(D_HA, "Socket error %d: %s %p %d.%d.%d.%d\n",
-                                SOCK_ERROR(conn->ksnc_sock), 
-                                libcfs_id2str(peer->ksnp_id),
+                                error, libcfs_id2str(peer->ksnp_id),
                                 conn, HIPQUAD(conn->ksnc_ipaddr));
 
                         return (conn);

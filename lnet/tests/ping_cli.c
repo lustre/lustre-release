@@ -240,8 +240,9 @@ pingcli_start(struct libcfs_ioctl_data *args)
                 }
                 CWARN ("Lustre: sent msg no %d.\n", count);
 
-                set_current_state (TASK_INTERRUPTIBLE);
-                rc = schedule_timeout (cfs_time_seconds(client->timeout));
+                set_current_state (CFS_TASK_INTERRUPTIBLE);
+                rc = cfs_schedule_timeout (CFS_TASK_INTERRUPTIBLE,
+                                           cfs_time_seconds(client->timeout));
                 if (rc == 0) {
                         CERROR ("timeout .....\n");
                 } else {

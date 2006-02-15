@@ -412,6 +412,7 @@ static inline int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf,
 #else
 
 extern int libcfs_ioctl_getdata(char *buf, char *end, void *arg);
+extern int libcfs_ioctl_popdata(void *arg, void *buf, int size);
 
 #endif
 

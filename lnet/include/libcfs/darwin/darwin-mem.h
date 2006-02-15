@@ -45,19 +45,11 @@
 #define CFS_PAGE_SHIFT	12
 #endif
 
-#ifdef PAGE_SIZE
-#define CFS_PAGE_SIZE	PAGE_SIZE
-#else
-#define CFS_PAGE_SIZE	(1 << CFS_PAGE_SHIFT)
-#endif
+#define CFS_PAGE_SIZE	(1UL << CFS_PAGE_SHIFT)
 
 #define PAGE_CACHE_SIZE CFS_PAGE_SIZE
 
-#ifdef PAGE_MASK
-#define CFS_PAGE_MASK	PAGE_MASK
-#else
 #define CFS_PAGE_MASK	(~(CFS_PAGE_SIZE - 1))
-#endif
 
 enum {
 	XNU_PAGE_RAW,

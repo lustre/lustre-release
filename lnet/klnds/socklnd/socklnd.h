@@ -67,7 +67,7 @@
 #define SOCKNAL_LARGE_FWD_NMSGS 64              /* # large messages I can be forwarding at any time */
 
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
-#define SOCKNAL_ENOMEM_RETRY    CFS_MIN_DELAY   /* jiffies between retries */
+#define SOCKNAL_ENOMEM_RETRY    CFS_TICK        /* jiffies between retries */
 
 #define SOCKNAL_ROUND_ROBIN     0               /* round robin / load balance */
 
@@ -251,7 +251,7 @@ typedef struct ksock_conn
         struct ksock_peer  *ksnc_peer;          /* owning peer */
         struct ksock_route *ksnc_route;         /* owning route */
         struct list_head    ksnc_list;          /* stash on peer's conn list */
-        struct socket      *ksnc_sock;          /* actual socket */
+        cfs_socket_t       *ksnc_sock;          /* actual socket */
         void               *ksnc_saved_data_ready; /* socket's original data_ready() callback */
         void               *ksnc_saved_write_space; /* socket's original write_space() callback */
         atomic_t            ksnc_conn_refcount; /* conn refcount */
@@ -342,7 +342,7 @@ typedef struct ksock_connreq
 {
         struct list_head    ksncr_list;         /* stash on ksnd_connd_connreqs */
         lnet_ni_t           *ksncr_ni;           /* chosen NI */
-        struct socket      *ksncr_sock;         /* accepted socket */
+        cfs_socket_t       *ksncr_sock;         /* accepted socket */
 } ksock_connreq_t;
 
 extern ksock_nal_data_t ksocknal_data;
@@ -442,14 +442,14 @@ int ksocknal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                   int delayed, unsigned int niov, 
                   struct iovec *iov, lnet_kiov_t *kiov,
                   unsigned int offset, unsigned int mlen, unsigned int rlen);
-int ksocknal_accept(lnet_ni_t *ni, struct socket *sock);
+int ksocknal_accept(lnet_ni_t *ni, cfs_socket_t *sock);
 
 extern int ksocknal_add_peer(lnet_ni_t *ni, lnet_process_id_t id, __u32 ip, int port);
 extern ksock_peer_t *ksocknal_find_peer_locked (lnet_ni_t *ni, lnet_process_id_t id);
 extern ksock_peer_t *ksocknal_find_peer (lnet_ni_t *ni, lnet_process_id_t id);
 extern void ksocknal_peer_failed (ksock_peer_t *peer);
 extern int ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
-                                 struct socket *sock, int type);
+                                 cfs_socket_t *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
 extern void ksocknal_destroy_conn (ksock_conn_t *conn);
@@ -475,15 +475,15 @@ extern int ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                                 lnet_process_id_t *id, 
                                 __u64 *incarnation, __u32 *ipaddrs);
 
-extern void ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn);
-extern void ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn);
-extern void ksocknal_lib_act_callback(struct socket *sock, ksock_conn_t *conn);
-extern void ksocknal_lib_reset_callback(struct socket *sock, ksock_conn_t *conn);
+extern void ksocknal_lib_save_callback(cfs_socket_t *sock, ksock_conn_t *conn);
+extern void ksocknal_lib_set_callback(cfs_socket_t *sock,  ksock_conn_t *conn);
+extern void ksocknal_lib_act_callback(cfs_socket_t *sock, ksock_conn_t *conn);
+extern void ksocknal_lib_reset_callback(cfs_socket_t *sock, ksock_conn_t *conn);
 extern void ksocknal_lib_push_conn (ksock_conn_t *conn);
 extern void ksocknal_lib_bind_irq (unsigned int irq);
 extern int ksocknal_lib_get_conn_addrs (ksock_conn_t *conn);
-extern unsigned int ksocknal_lib_sock_irq (struct socket *sock);
-extern int ksocknal_lib_setup_sock (struct socket *so);
+extern unsigned int ksocknal_lib_sock_irq (cfs_socket_t *sock);
+extern int ksocknal_lib_setup_sock (cfs_socket_t *so);
 extern int ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx);
 extern int ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx);
 extern void ksocknal_lib_eager_ack (ksock_conn_t *conn);

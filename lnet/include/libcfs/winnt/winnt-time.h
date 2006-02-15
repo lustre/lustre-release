@@ -63,8 +63,6 @@
  *  int            cfs_fs_time_before (cfs_fs_time_t *, cfs_fs_time_t *);
  *  int            cfs_fs_time_beforeq(cfs_fs_time_t *, cfs_fs_time_t *);
  *
- *  cfs_duration_t cfs_time_minimal_timeout(void)
- *
  *  CFS_TIME_FORMAT
  *  CFS_DURATION_FORMAT
  *
@@ -213,11 +211,6 @@ static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
         s->tv_sec = (suseconds_t) (d / HZ);
 }
 
-static inline cfs_duration_t cfs_time_minimal_timeout(void)
-{
-        return 1;
-}
-
 static inline void cfs_fs_time_usec(cfs_fs_time_t *t, struct timeval *v)
 {
         *v = *t;
@@ -229,10 +222,10 @@ static inline void cfs_fs_time_nsec(cfs_fs_time_t *t, struct timespec *s)
         s->tv_nsec = t->tv_usec * 1000;
 }
 
-
-/* inline function cfs_time_minimal_timeout() can not be used
- * to initiallize static variable */
-#define CFS_MIN_DELAY           (1)
+/*
+ * One jiffy
+ */
+#define CFS_TICK                (1)
 
 #define LTIME_S(t)		        (t)
 

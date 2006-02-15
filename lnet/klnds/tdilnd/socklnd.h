@@ -69,7 +69,7 @@
 #define SOCKNAL_LARGE_FWD_NMSGS 64              /* # large messages I can be forwarding at any time */
 
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
-#define SOCKNAL_ENOMEM_RETRY    CFS_MIN_DELAY   /* jiffies between retries */
+#define SOCKNAL_ENOMEM_RETRY    CFS_TICK        /* jiffies between retries */
 
 #define SOCKNAL_ROUND_ROBIN     0               /* round robin / load balance */
 

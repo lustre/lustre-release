@@ -609,12 +609,12 @@ void lnet_unregister_lnd(lnd_t *lnd);
 int lnet_set_ip_niaddr (lnet_ni_t *ni);
 
 #ifdef __KERNEL__
-int lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
+int lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
                  __u32 local_ip, __u32 peer_ip, int peer_port);
 void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
                                 __u32 peer_ip, int port);
 int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
-int lnet_accept(lnet_ni_t *blind_ni, struct socket *sock, __u32 magic);
+int lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
 #endif

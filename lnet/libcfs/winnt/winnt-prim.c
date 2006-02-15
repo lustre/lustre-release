@@ -526,12 +526,12 @@ cfs_sigset_t cfs_get_blocked_sigs(cfs_task_t *t)
         return 0;
 }
 
-void cfs_block_allsigs(cfs_task_t *t)
+void cfs_block_allsigs()
 {
         return;
 }
 
-void cfs_block_sigs(cfs_task_t *t, sigset_t bit)
+void cfs_block_sigs(sigset_t bit)
 {
         return;
 }
