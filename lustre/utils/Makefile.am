@@ -37,7 +37,7 @@ wirecheck_SOURCES = wirecheck.c
 wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
 wiretest_SOURCES = wiretest.c
 
-lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h 
+lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
 lload_SOURCES = lload.c 
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h

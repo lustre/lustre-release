@@ -137,7 +137,7 @@ static struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
                 /* If we cannot get anything for some long time, we better
                    bail out instead of waiting infinitely */
-                lwi = LWI_TIMEOUT(10 * HZ, NULL, NULL);
+                lwi = LWI_TIMEOUT(cfs_time_seconds(10), NULL, NULL);
                 rc = l_wait_event(svc->srv_free_rs_waitq,
                                   !list_empty(&svc->srv_free_rs_list), &lwi);
                 if (rc)

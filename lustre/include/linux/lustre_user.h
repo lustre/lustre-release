@@ -15,16 +15,19 @@
 #include <lustre/types.h>
 #endif
 
-#ifdef HAVE_QUOTA_SUPPORT
-#include <linux/quota.h>
-#endif
 
 #ifndef __KERNEL__
-#define NEED_QUOTA_DEFS
+# define NEED_QUOTA_DEFS
+# ifdef HAVE_QUOTA_SUPPORT
+#  include <sys/quota.h>
+# endif
 #else
 # include <linux/version.h>
 # if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,21)
 #  define NEED_QUOTA_DEFS
+# endif
+# ifdef HAVE_QUOTA_SUPPORT
+#  include <linux/quota.h>
 # endif
 #endif
 

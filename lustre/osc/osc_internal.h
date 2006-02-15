@@ -57,10 +57,6 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 void oscc_init(struct obd_device *obd);
 void osc_wake_cache_waiters(struct client_obd *cli);
 
-
-/* Quota stuff */
-extern quota_interface_t *quota_interface;
-
 #ifdef LPROCFS
 int lproc_osc_attach_seqstat(struct obd_device *dev);
 #else

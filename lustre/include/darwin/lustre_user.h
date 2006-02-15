@@ -25,23 +25,14 @@
 # include <string.h>
 #endif
 
-#if defined(__KERNEL__)
 typedef struct stat     lstat_t;
 #define HAVE_LOV_USER_MDS_DATA
-#endif
 
 #ifndef LPU64
-/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
-#if defined(__x86_64__) && defined(__KERNEL__)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
+#if (BITS_PER_LONG == 32 || __WORDSIZE == 32)
+# define LPU64 "%llu"
+# define LPD64 "%lld"
+# define LPX64 "%#llx"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
 #elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)

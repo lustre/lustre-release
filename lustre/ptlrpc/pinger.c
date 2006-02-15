@@ -192,7 +192,7 @@ static int ptlrpc_pinger_main(void *arg)
                             /* if the next ping is within, say, 5 jiffies from
                                now, go ahead and ping. See note below. */
                             cfs_time_aftereq(this_ping, 
-                                             imp->imp_next_ping - 5 * CFS_MIN_DELAY)) {
+                                             imp->imp_next_ping - 5 * CFS_TICK)) {
                                 if (level == LUSTRE_IMP_DISCON &&
                                     !imp->imp_deactive) {
                                         /* wait at least a timeout before
@@ -447,7 +447,7 @@ static int pinger_check_rpcs(void *arg)
                 unsigned long flags;
 
                 if (cfs_time_aftereq(pd->pd_this_ping, 
-                                     imp->imp_next_ping - 5 * CFS_MIN_DELAY)) {
+                                     imp->imp_next_ping - 5 * CFS_TICK)) {
                         /* Add a ping. */
                         spin_lock_irqsave(&imp->imp_lock, flags);
                         generation = imp->imp_generation;

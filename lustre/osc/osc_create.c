@@ -180,7 +180,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n",
                                oscc);
 
-                        lwi = LWI_TIMEOUT(MAX(obd_timeout*HZ/4, 1), NULL, NULL);
+                        lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout/4)),
+                                          NULL, NULL);
                         rc = l_wait_event(oscc->oscc_waitq,
                                           !oscc_recovering(oscc), &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);

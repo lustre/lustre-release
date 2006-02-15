@@ -57,6 +57,9 @@
 #include <lustre_debug.h>
 #include "osc_internal.h"
 
+static quota_interface_t *quota_interface = NULL;
+extern quota_interface_t osc_quota_interface;
+
 /* Pack OSC object metadata for disk storage (LE byte order). */
 static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                       struct lov_stripe_md *lsm)
@@ -558,7 +561,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
                        cli->cl_dirty, cli->cl_dirty_max);
                 oa->o_undirty = 0;
         } else {
-                long max_in_flight = (cli->cl_max_pages_per_rpc << PAGE_SHIFT)*
+                long max_in_flight = (cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT)*
                                 (cli->cl_max_rpcs_in_flight + 1);
                 oa->o_undirty = max(cli->cl_dirty_max, max_in_flight);
         }
@@ -574,10 +577,10 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 static void osc_consume_write_grant(struct client_obd *cli,
                                     struct osc_async_page *oap)
 {
-        cli->cl_dirty += PAGE_SIZE;
-        cli->cl_avail_grant -= PAGE_SIZE;
+        cli->cl_dirty += CFS_PAGE_SIZE;
+        cli->cl_avail_grant -= CFS_PAGE_SIZE;
         oap->oap_brw_flags |= OBD_BRW_FROM_GRANT;
-        CDEBUG(D_CACHE, "using %lu grant credits for oap %p\n", PAGE_SIZE, oap);
+        CDEBUG(D_CACHE, "using %lu grant credits for oap %p\n", CFS_PAGE_SIZE, oap);
         LASSERT(cli->cl_avail_grant >= 0);
 }
 
@@ -595,7 +598,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
         ENTRY;
         list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
                 /* if we can't dirty more, we must wait until some is written */
-                if (cli->cl_dirty + PAGE_SIZE > cli->cl_dirty_max) {
+                if (cli->cl_dirty + CFS_PAGE_SIZE > cli->cl_dirty_max) {
                         CDEBUG(D_CACHE, "no dirty room: dirty: %ld max %ld\n",
                                cli->cl_dirty, cli->cl_dirty_max);
                         return;
@@ -603,7 +606,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
                 /* if still dirty cache but no grant wait for pending RPCs that
                  * may yet return us some grant before doing sync writes */
-                if (cli->cl_w_in_flight && cli->cl_avail_grant < PAGE_SIZE) {
+                if (cli->cl_w_in_flight && cli->cl_avail_grant < CFS_PAGE_SIZE) {
                         CDEBUG(D_CACHE, "%u BRW writes in flight, no grant\n",
                                cli->cl_w_in_flight);
                         return;
@@ -611,7 +614,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
                 ocw = list_entry(l, struct osc_cache_waiter, ocw_entry);
                 list_del_init(&ocw->ocw_entry);
-                if (cli->cl_avail_grant < PAGE_SIZE) {
+                if (cli->cl_avail_grant < CFS_PAGE_SIZE) {
                         /* no more RPCs in flight to return grant, do sync IO */
                         ocw->ocw_rc = -EDQUOT;
                         CDEBUG(D_INODE, "wake oap %p for sync\n", ocw->ocw_oap);
@@ -649,7 +652,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
                 if (pga->count > nob_read) {
                         /* EOF inside this page */
-                        ptr = cfs_kmap(pga->pg) + (pga->off & ~PAGE_MASK);
+                        ptr = cfs_kmap(pga->pg) + (pga->off & ~CFS_PAGE_MASK);
                         memset(ptr + nob_read, 0, pga->count - nob_read);
                         cfs_kunmap(pga->pg);
                         page_count--;
@@ -664,7 +667,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
         /* zero remaining pages */
         while (page_count-- > 0) {
-                ptr = cfs_kmap(pga->pg) + (pga->off & ~PAGE_MASK);
+                ptr = cfs_kmap(pga->pg) + (pga->off & ~CFS_PAGE_MASK);
                 memset(ptr, 0, pga->count);
                 cfs_kunmap(pga->pg);
                 pga++;
@@ -732,7 +735,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
         LASSERT (pg_count > 0);
         while (nob > 0 && pg_count > 0) {
                 char *ptr = cfs_kmap(pga->pg);
-                int off = pga->off & ~PAGE_MASK;
+                int off = pga->off & ~CFS_PAGE_MASK;
                 int count = pga->count > nob ? nob : pga->count;
 
                 cksum = crc32_le(cksum, ptr + off, count);
@@ -809,7 +812,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                 struct brw_page *pg_prev = pg - 1;
 
                 LASSERT(pg->count > 0);
-                LASSERTF((pg->off & ~PAGE_MASK) + pg->count <= PAGE_SIZE,
+                LASSERTF((pg->off & ~CFS_PAGE_MASK) + pg->count <= CFS_PAGE_SIZE,
                          "i: %d pg: %p off: "LPU64", count: %u\n", i, pg,
                          pg->off, pg->count);
 #ifdef __LINUX__
@@ -827,7 +830,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                 LASSERT((pga[0].flag & OBD_BRW_SRVLOCK) ==
                         (pg->flag & OBD_BRW_SRVLOCK));
 
-                ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~PAGE_MASK,
+                ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~CFS_PAGE_MASK,
                                       pg->count);
                 requested_nob += pg->count;
 
@@ -1136,18 +1139,18 @@ static obd_count max_unfragmented_pages(struct brw_page *pg, obd_count pages)
         int offset;
 
 	LASSERT (pages > 0);
-        offset = pg->off & (PAGE_SIZE - 1);
+        offset = pg->off & (CFS_PAGE_SIZE - 1);
 
 	for (;;) {
 		pages--;
 		if (pages == 0)         /* that's all */
                         return count;
 
-                if (offset + pg->count < PAGE_SIZE)
+                if (offset + pg->count < CFS_PAGE_SIZE)
 			return count;   /* doesn't end on page boundary */
 
 		pg++;
-                offset = pg->off & (PAGE_SIZE - 1);
+                offset = pg->off & (CFS_PAGE_SIZE - 1);
 		if (offset != 0)        /* doesn't start on page boundary */
 			return count;
 
@@ -1666,7 +1669,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 /* If there is a gap at the end of this page, it can't merge
                  * with any subsequent pages, so we'll hand the network a
                  * "fragmented" page array that it can't transfer in 1 RDMA */
-                if (oap->oap_page_off + oap->oap_count < PAGE_SIZE)
+                if (oap->oap_page_off + oap->oap_count < CFS_PAGE_SIZE)
                         break;
         }
 
@@ -1721,13 +1724,13 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
                 lprocfs_oh_tally_log2(&cli->cl_read_offset_hist,
-                                      starting_offset/PAGE_SIZE + 1);
+                                      starting_offset/CFS_PAGE_SIZE + 1);
         } else {
                 lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_write_rpc_hist,
                                  cli->cl_w_in_flight);
                 lprocfs_oh_tally_log2(&cli->cl_write_offset_hist,
-                                      starting_offset/PAGE_SIZE + 1);
+                                      starting_offset/CFS_PAGE_SIZE + 1);
         }
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
@@ -1894,13 +1897,13 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
 
         /* force the caller to try sync io.  this can jump the list
          * of queued writes and create a discontiguous rpc stream */
-        if (cli->cl_dirty_max < PAGE_SIZE || cli->cl_ar.ar_force_sync ||
+        if (cli->cl_dirty_max < CFS_PAGE_SIZE || cli->cl_ar.ar_force_sync ||
             loi->loi_ar.ar_force_sync)
                 RETURN(-EDQUOT);
 
         /* Hopefully normal case - cache space and write credits available */
-        if (cli->cl_dirty + PAGE_SIZE <= cli->cl_dirty_max &&
-            cli->cl_avail_grant >= PAGE_SIZE) {
+        if (cli->cl_dirty + CFS_PAGE_SIZE <= cli->cl_dirty_max &&
+            cli->cl_avail_grant >= CFS_PAGE_SIZE) {
                 /* account for ourselves */
                 osc_consume_write_grant(cli, oap);
                 RETURN(0);
@@ -1948,24 +1951,24 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
         }
 
         oap->oap_brw_flags &= ~OBD_BRW_FROM_GRANT;
-        cli->cl_dirty -= PAGE_SIZE;
+        cli->cl_dirty -= CFS_PAGE_SIZE;
         if (!sent) {
-                cli->cl_lost_grant += PAGE_SIZE;
+                cli->cl_lost_grant += CFS_PAGE_SIZE;
                 CDEBUG(D_CACHE, "lost grant: %lu avail grant: %lu dirty: %lu\n",
                        cli->cl_lost_grant, cli->cl_avail_grant, cli->cl_dirty);
-        } else if (PAGE_SIZE != blocksize && oap->oap_count != PAGE_SIZE) {
+        } else if (CFS_PAGE_SIZE != blocksize && oap->oap_count != CFS_PAGE_SIZE) {
                 /* For short writes we shouldn't count parts of pages that
                  * span a whole block on the OST side, or our accounting goes
                  * wrong.  Should match the code in filter_grant_check. */
-                int offset = (oap->oap_obj_off +oap->oap_page_off) & ~PAGE_MASK;
+                int offset = (oap->oap_obj_off +oap->oap_page_off) & ~CFS_PAGE_MASK;
                 int count = oap->oap_count + (offset & (blocksize - 1));
                 int end = (offset + oap->oap_count) & (blocksize - 1);
                 if (end)
                         count += blocksize - end;
 
-                cli->cl_lost_grant += PAGE_SIZE - count;
+                cli->cl_lost_grant += CFS_PAGE_SIZE - count;
                 CDEBUG(D_CACHE, "lost %lu grant: %lu avail: %lu dirty: %lu\n",
-                       PAGE_SIZE - count, cli->cl_lost_grant,
+                       CFS_PAGE_SIZE - count, cli->cl_lost_grant,
                        cli->cl_avail_grant, cli->cl_dirty);
         }
 
@@ -1973,7 +1976,7 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
 }
 
 int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
-                        struct lov_oinfo *loi, struct page *page,
+                        struct lov_oinfo *loi, cfs_page_t *page,
                         obd_off offset, struct obd_async_page_ops *ops,
                         void *data, void **res)
 {
@@ -2384,12 +2387,12 @@ static int sanosc_brw_read(struct obd_export *exp, struct obdo *oa,
                         CDEBUG(D_PAGE, "hole at ino %lu; index %ld\n",
                                         page->mapping->host->i_ino,
                                         page->index);
-                        memset(page_address(page), 0, PAGE_SIZE);
+                        memset(page_address(page), 0, CFS_PAGE_SIZE);
                         continue;
                 }
 
                 if (!page->buffers) {
-                        create_empty_buffers(page, dev, PAGE_SIZE);
+                        create_empty_buffers(page, dev, CFS_PAGE_SIZE);
                         bh = page->buffers;
 
                         clear_bit(BH_New, &bh->b_state);
@@ -2501,7 +2504,7 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
                 dev = exp->exp_obd->u.cli.cl_sandev;
 
                 if (!page->buffers) {
-                        create_empty_buffers(page, dev, PAGE_SIZE);
+                        create_empty_buffers(page, dev, CFS_PAGE_SIZE);
                 } else {
                         /* checking */
                         LASSERT(!test_bit(BH_New, &page->buffers->b_state));
@@ -2634,8 +2637,8 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother.  */
-        policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
-        policy->l_extent.end |= ~PAGE_MASK;
+        policy->l_extent.start -= policy->l_extent.start & ~CFS_PAGE_MASK;
+        policy->l_extent.end |= ~CFS_PAGE_MASK;
 
         if (lsm->lsm_oinfo->loi_kms_valid == 0)
                 goto no_match;
@@ -2733,8 +2736,8 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother */
-        policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
-        policy->l_extent.end |= ~PAGE_MASK;
+        policy->l_extent.start -= policy->l_extent.start & ~CFS_PAGE_MASK;
+        policy->l_extent.end |= ~CFS_PAGE_MASK;
 
         /* Next, search for already existing extent locks that will cover us */
         rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
@@ -3359,9 +3362,6 @@ struct obd_ops sanosc_obd_ops = {
         .o_llog_finish          = osc_llog_finish,
 };
 #endif
-
-static quota_interface_t *quota_interface = NULL;
-extern quota_interface_t osc_quota_interface;
 
 int __init osc_init(void)
 {

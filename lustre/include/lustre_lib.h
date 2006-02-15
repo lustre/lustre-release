@@ -587,7 +587,7 @@ do {                                                                           \
             }                                                                  \
             if (condition)                                                     \
                     break;                                                     \
-            if (cfs_signal_pending(cfs_current())) {                           \
+            if (cfs_signal_pending()) {                                        \
                     if (!info->lwi_timeout || __timed_out) {                   \
                             break;                                             \
                     } else {                                                   \
@@ -598,9 +598,9 @@ do {                                                                           \
                             /* -EINTR when the RPC actually succeeded.      */ \
                             /* the RECALC_SIGPENDING below will deliver the */ \
                             /* signal properly.                             */ \
-                            cfs_sigmask_lock(cfs_current(), irqflags);         \
-                            cfs_clear_sigpending(cfs_current());               \
-                            cfs_sigmask_unlock(cfs_current(), irqflags);       \
+                            cfs_sigmask_lock(irqflags);                        \
+                            cfs_clear_sigpending();                            \
+                            cfs_sigmask_unlock(irqflags);                      \
                     }                                                          \
             }                                                                  \
         }                                                                      \
@@ -608,7 +608,7 @@ do {                                                                           \
         cfs_block_sigs(blocked);                                               \
                                                                                \
         if ((!info->lwi_timeout || __timed_out) &&                             \
-            cfs_signal_pending(cfs_current())) {                               \
+            cfs_signal_pending()) {                                            \
                 if (info->lwi_on_signal)                                       \
                         info->lwi_on_signal(info->lwi_cb_data);                \
                 ret = -EINTR;                                                  \

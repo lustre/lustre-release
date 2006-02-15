@@ -82,10 +82,10 @@ int proc_fail_loc SYSCTL_HANDLER_ARGS
 	int old_fail_loc = obd_fail_loc;
 	
 	error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req); 
-	if (!error && req->newptr != NULL) {
+	if (!error && req->newptr != USER_ADDR_NULL) {
 		if (old_fail_loc != obd_fail_loc) 
 			cfs_waitq_signal(&obd_race_waitq);
-	} else  if (req->newptr != NULL) { 
+	} else  if (req->newptr != USER_ADDR_NULL) { 
 		/* Something was wrong with the write request */ 
 		printf ("sysctl fail loc fault: %d.\n", error);
 	} else { 

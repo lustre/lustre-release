@@ -28,7 +28,6 @@
 #endif
 
 #include <libcfs/libcfs.h>
-#include <netat/sysglue.h>
 
 #undef WITH_GROUP_INFO
 

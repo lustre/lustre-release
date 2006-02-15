@@ -50,6 +50,9 @@ static inline int32_t ext2_clear_bit(int nr, void *a)
 	return old;
 }
 
+struct nameidata;
+
+#if !defined(__DARWIN8__)
 static inline int ll_path_lookup(const char *path, unsigned int flags, struct nameidata *nd)
 {
 	int ret = 0;
@@ -59,6 +62,7 @@ static inline int ll_path_lookup(const char *path, unsigned int flags, struct na
 	}
 	return ret;
 }
+#endif
 
 #define to_kdev_t(dev)                  (dev)
 #define kdev_t_to_nr(dev)               (dev)
@@ -66,6 +70,6 @@ static inline int ll_path_lookup(const char *path, unsigned int flags, struct na
 
 #define ext2_test_bit	test_bit
 
-#endif	/* !__KERNEL__ */
+#endif	/* __KERNEL__ */
 
 #endif

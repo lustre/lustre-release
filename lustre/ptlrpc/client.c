@@ -1560,7 +1560,7 @@ restart:
         rc = ptl_send_rpc(req);
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); recovering", rc);
-                timeout = cfs_time_minimal_timeout();
+                timeout = CFS_TICK;
         } else {
                 timeout = cfs_timeout_cap(cfs_time_seconds(req->rq_timeout));
                 DEBUG_REQ(D_NET, req, 

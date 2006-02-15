@@ -448,8 +448,8 @@ int obd_init_checks(void)
                 CWARN("LPD64 wrong length! strlen(%s)=%d != 2\n", buf, len);
                 ret = -EINVAL;
         }
-        if ((u64val & ~PAGE_MASK) >= PAGE_SIZE) {
-                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,PAGE_SIZE);
+        if ((u64val & ~CFS_PAGE_MASK) >= CFS_PAGE_SIZE) {
+                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,CFS_PAGE_SIZE);
                 ret = -EINVAL;
         }
 

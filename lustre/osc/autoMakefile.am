@@ -29,10 +29,13 @@ osc_LDADD := $(EXTRA_KLIBS)
 
 plist_DATA := Info.plist
 
-#install-data-hook: fix-kext-ownership
+install_data_hook := fix-kext-ownership
+
 endif # Darwin
 
 endif
+
+install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 DIST_SOURCES = $(osc-objs:%.o=%.c) osc_internal.h

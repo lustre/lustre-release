@@ -288,7 +288,7 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
         for (;;) {
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT (300 * HZ, NULL, NULL);
+                lwi = LWI_TIMEOUT (cfs_time_seconds(300), NULL, NULL);
                 rc = l_wait_event(*wq, !ptlrpc_bulk_active(desc), &lwi);
                 if (rc == 0)
                         return;

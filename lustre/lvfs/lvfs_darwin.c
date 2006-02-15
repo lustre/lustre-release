@@ -21,23 +21,10 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
 	LBUG();
 }
 
-int lvfs_arch_init(void)
-{
-	return 0;
-}
-
-void lvfs_arch_exit(void)
-{
-	return;
-}
-
-
 static int __init lvfs_init(void)
 {
 	int ret = 0;
 	ENTRY;
-
-	ret = lvfs_arch_init();
 
 	RETURN(ret);
 }
@@ -47,7 +34,6 @@ static void __exit lvfs_exit(void)
 	int leaked;
 	ENTRY;
 	
-	lvfs_arch_exit();
 	leaked = atomic_read(&obd_memory);
 	CDEBUG(leaked ? D_ERROR : D_INFO,
 	       "obd mem max: %d leaked: %d\n", obd_memmax, leaked);

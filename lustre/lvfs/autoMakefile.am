@@ -59,7 +59,7 @@ lvfs_LDADD := $(EXTRA_KLIBS)
 
 plist_DATA := Info.plist
 
-#install-data-hook: fix-kext-ownership
+install_data_hook := fix-kext-ownership
 
 endif # DARWIN
 
@@ -68,6 +68,8 @@ else # MODULES
 sources:
 
 endif # MODULES
+
+install-data-hook: $(install_data_hook)
 
 DIST_SOURCES = fsfilt.c fsfilt_ext3.c fsfilt_reiserfs.c lvfs_common.c \
 	lvfs_internal.h lvfs_linux.c lvfs_userfs.c \

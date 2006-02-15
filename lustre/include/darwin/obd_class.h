@@ -27,6 +27,8 @@
 #error Do not #include this file directly. #include <obd_class.h> instead
 #endif
 
-#define to_kdev_t(dev) dev
+#if !defined(__KERNEL__)
+#define to_kdev_t(dev)          (dev)
+#endif
 
 #endif /* __XNU_OBD_CLASS_H */

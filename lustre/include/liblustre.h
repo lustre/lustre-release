@@ -57,7 +57,9 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <sys/vfs.h>
+#ifdef HAVE_SYS_VFS_H
+# include <sys/vfs.h>
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -820,13 +822,6 @@ typedef struct file_lock {
 /* quota */
 #define QUOTA_OK 0
 #define NO_QUOTA 1
-
-/* proc */
-#define proc_symlink(...)                       \
-({                                              \
-        void *result = NULL;                    \
-        result;                                 \
-})
 
 /* ACL */
 struct posix_acl_entry {

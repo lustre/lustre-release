@@ -586,7 +586,7 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "jiffies + HZ" to guarantee freshness. */
 static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                             unsigned long max_age)
+                             cfs_time_t max_age)
 {
         int rc = 0;
         ENTRY;
@@ -597,8 +597,9 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         OBD_CHECK_OP(obd, statfs, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
-        CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
-        if (time_before(obd->obd_osfs_age, max_age)) {
+        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n", 
+               obd->obd_osfs_age, max_age);
+        if (cfs_time_before(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs)(obd, osfs, max_age);
                 if (rc == 0) {
                         spin_lock(&obd->obd_osfs_lock);
@@ -688,7 +689,7 @@ static inline int obd_brw_async(int cmd, struct obd_export *exp,
 static inline  int obd_prep_async_page(struct obd_export *exp,
                                        struct lov_stripe_md *lsm,
                                        struct lov_oinfo *loi,
-                                       struct page *page, obd_off offset,
+                                       cfs_page_t *page, obd_off offset,
                                        struct obd_async_page_ops *ops,
                                        void *data, void **res)
 {

@@ -22,16 +22,16 @@
 	<string>1.0.0</string>
 	<key>OSBundleLibraries</key>
 	<dict> 
-		<key>com.apple.kernel.bsd</key> 
-		<string>1.1</string> 
-		<key>com.apple.kernel.iokit</key> 
-		<string>1.0.0b1</string> 
-		<key>com.apple.kernel.mach</key> 
-		<string>1.0.0b1</string> 
+		<key>com.apple.kpi.bsd</key>
+		<string>8.0.0b1</string>
+		<key>com.apple.kpi.libkern</key>
+		<string>8.0.0b1</string>
+		<key>com.apple.kpi.mach</key>
+		<string>8.0.0b1</string>
+                <key>com.apple.kpi.unsupported</key>
+		<string>8.0.0b1</string>
 		<key>com.clusterfs.lustre.libcfs</key> 
-		<string>1.0.0</string> 
-		<key>com.clusterfs.lustre.lnet</key> 
-		<string>1.0.0</string> 
+		<string>1.0.0</string>
 		<key>com.clusterfs.lustre.lvfs</key> 
 		<string>1.0.0</string>
 		<key>com.clusterfs.lustre.obdclass</key> 

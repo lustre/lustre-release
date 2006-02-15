@@ -117,7 +117,7 @@ obd_class_ioctl(dev_t dev, u_long cmd, caddr_t arg, int flag, struct proc *p)
 	int err = 0;
 	ENTRY;
 
-	if (suser(p->p_ucred, &p->p_acflag))
+	if (!is_suser())
 		RETURN (-EPERM);
 	if (obd_psdev_ops.p_ioctl != NULL)
 		err = obd_psdev_ops.p_ioctl(NULL, cmd, (void *)arg);

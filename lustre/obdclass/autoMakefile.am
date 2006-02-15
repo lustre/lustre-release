@@ -40,10 +40,13 @@ obdclass_LDADD := $(EXTRA_KLIBS)
 
 plist_DATA := Info.plist
 
-#install-data-hook: fix-kext-ownership
+install_data_hook := fix-kext-ownership
+
 endif # DARWIN
 
 endif # MODULES
+
+install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  llog-test.c
 MOSTLYCLEANFILES += linux/*.o darwin/*.o
