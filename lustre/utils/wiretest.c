@@ -195,8 +195,8 @@ void lustre_assert_wire_constants(void)
                  (long long)MGS_DISCONNECT);
         LASSERTF(MGS_EXCEPTION == 252, " found %lld\n",
                  (long long)MGS_EXCEPTION);
-        LASSERTF(MGS_TARGET_ADD == 253, " found %lld\n",
-                 (long long)MGS_TARGET_ADD);
+        LASSERTF(MGS_TARGET_REG == 253, " found %lld\n",
+                 (long long)MGS_TARGET_REG);
         LASSERTF(MGS_TARGET_DEL == 254, " found %lld\n",
                  (long long)MGS_TARGET_DEL);
         LASSERTF(OBD_PING == 400, " found %lld\n",

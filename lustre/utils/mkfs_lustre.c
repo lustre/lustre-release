@@ -52,6 +52,7 @@ command_t cmdlist[] = {
 
 #define MAX_LOOP_DEVICES 16
 #define L_BLOCK_SIZE 4096
+#define INDEX_UNASSIGNED 0xFFFF
 
 static char *progname;
 static int verbose = 1;
@@ -516,19 +517,23 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
         int i = 0;
         printf("\n   %s:\n", str);
         printf("Target:     %s\n", ldd->ldd_svname);
-        printf("Index:      %d\n", ldd->ldd_svindex);
+        if (ldd->ldd_svindex == INDEX_UNASSIGNED) 
+                printf("Index:      unassigned\n");
+        else
+                printf("Index:      %d\n", ldd->ldd_svindex);
         printf("UUID:       %s\n", (char *)ldd->ldd_uuid);
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
         printf("Flags:      %#x\n", ldd->ldd_flags);
-        printf("              (%s%s%s%s%s%s%s)\n",
+        printf("              (%s%s%s%s%s%s%s%s)\n",
                IS_MDT(ldd) ? "MDT ":"", 
                IS_OST(ldd) ? "OST ":"",
                IS_MGS(ldd) ? "MGS ":"",
                ldd->ldd_flags & LDD_F_NEED_INDEX ? "needs_index ":"",
-               ldd->ldd_flags & LDD_F_NEED_REGISTER ? "must_register ":"",
-               ldd->ldd_flags & LDD_F_WRITECONF ? "writeconf ":"",
-               ldd->ldd_flags & LDD_F_UPGRADE14 ? "upgrade1.4 ":"");
+               ldd->ldd_flags & LDD_F_VIRGIN     ? "first_time ":"",
+               ldd->ldd_flags & LDD_F_UPDATE     ? "update ":"",
+               ldd->ldd_flags & LDD_F_WRITECONF  ? "writeconf ":"",
+               ldd->ldd_flags & LDD_F_UPGRADE14  ? "upgrade1.4 ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
         printf("MGS nids: ");
         for (i = 0; i < ldd->ldd_mgsnid_count; i++) {
@@ -711,8 +716,13 @@ int read_local_files(struct mkfs_opts *mop)
                         goto out_umnt;
                 }
                 vprint("Reading %s\n", LAST_RCVD);
-                fread(&lsd, sizeof(lsd), 1, filep);
-
+                ret = fread(&lsd, sizeof(lsd), 1, filep);
+                if (ret < sizeof(lsd)) {
+                        fprintf(stderr, "%s: Short read (%d of %d)\n",
+                                progname, ret, sizeof(lsd));
+                        ret = ferror(filep);
+                        goto out_umnt;
+                }
                 if (lsd.lsd_feature_compat & OBD_COMPAT_OST) {
                         mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
                         mop->mo_ldd.ldd_svindex = lsd.lsd_ost_index;
@@ -730,6 +740,7 @@ int read_local_files(struct mkfs_opts *mop)
                                 mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
                                 mop->mo_ldd.ldd_svindex = lsd.lsd_ost_index;
                         } else {
+                                /* If there's a LOGS dir, it's an MDT */
                                 if ((ret = access(filepnm, F_OK)) == 0) {
                                         mop->mo_ldd.ldd_flags =
                                         LDD_F_SV_TYPE_MDT | 
@@ -765,7 +776,7 @@ void set_defaults(struct mkfs_opts *mop)
 {
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
         mop->mo_ldd.ldd_config_ver = 1;
-        mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER;
+        mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_VIRGIN;
         mop->mo_ldd.ldd_mgsnid_count = 0;
         strcpy(mop->mo_ldd.ldd_fsname, "lustre");
         if (get_os_version() == 24) 
@@ -773,7 +784,7 @@ void set_defaults(struct mkfs_opts *mop)
         else 
                 mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
         
-        mop->mo_ldd.ldd_svindex = 0xFFFF;
+        mop->mo_ldd.ldd_svindex = INDEX_UNASSIGNED;
         mop->mo_ldd.ldd_stripe_count = 1;
         mop->mo_ldd.ldd_stripe_sz = 1024 * 1024;
         mop->mo_ldd.ldd_stripe_pattern = 0;
@@ -869,6 +880,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 }
                         }
                         mop->mo_ldd.ldd_failnid_count = i;
+                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
                         break;
                 }
                 case 'G':
@@ -956,6 +968,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 case 't':
                         mop->mo_ldd.ldd_timeout = atol(optarg);
+                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
                         break;
                 case 'v':
                         verbose++;
