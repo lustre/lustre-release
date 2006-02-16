@@ -862,6 +862,7 @@ kptllnd_watchdog(void *arg)
                 set_current_state (TASK_INTERRUPTIBLE);
                 cfs_waitq_add(&kptllnd_data->kptl_sched_waitq, &waitlink);
                 cfs_waitq_timedwait(&waitlink,
+                                    CFS_TASK_INTERRUPTIBLE,
                                     cfs_time_seconds(PTLLND_TIMEOUT_SEC));
                 set_current_state (TASK_RUNNING);
                 cfs_waitq_del (&kptllnd_data->kptl_sched_waitq, &waitlink);
@@ -941,6 +942,7 @@ kptllnd_scheduler(void *arg)
                 set_current_state (TASK_INTERRUPTIBLE);
                 cfs_waitq_add_exclusive(&kptllnd_data->kptl_sched_waitq, &waitlink);
                 cfs_waitq_timedwait(&waitlink,
+                                    CFS_TASK_INTERRUPTIBLE,
                                     cfs_time_seconds(PTLLND_TIMEOUT_SEC));
                 set_current_state (TASK_RUNNING);
                 cfs_waitq_del (&kptllnd_data->kptl_sched_waitq, &waitlink);

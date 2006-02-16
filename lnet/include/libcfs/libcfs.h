@@ -310,10 +310,10 @@ struct libcfs_ioctl_handler {
         int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_data *data);
 };
 
-#define DECLARE_IOCTL_HANDLER(ident, func)              \
-        struct libcfs_ioctl_handler ident = {           \
-                /* .item = */ CFS_LIST_HEAD_INIT(ident.item),     \
-                /* .handle_ioctl = */ func                    \
+#define DECLARE_IOCTL_HANDLER(ident, func)                      \
+        struct libcfs_ioctl_handler ident = {                   \
+                /* .item = */ CFS_LIST_HEAD_INIT(ident.item),   \
+                /* .handle_ioctl = */ func                      \
         }
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);

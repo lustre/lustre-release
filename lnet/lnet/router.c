@@ -73,8 +73,6 @@ kpr_do_upcall (void *arg)
 
         libcfs_run_upcall (argv);
 
-        libcfs_run_upcall (argv);
-
 #endif /* __WINNT__ */
 
         LIBCFS_FREE(u, sizeof(*u));
@@ -514,7 +512,7 @@ lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp)
         rb->rb_pool = rbp;
 
         for (i = 0; i < npages; i++) {
-                page = cfs_alloc_page(CFS_ALLOC_ZERO /*GFP_KERNEL*/); /* HIGH? */
+                page = cfs_alloc_page(CFS_ALLOC_ZERO | CFS_ALLOC_STD);
                 if (page == NULL) {
                         while (--i >= 0)
                                 cfs_free_page(rb->rb_kiov[i].kiov_page);
