@@ -31,11 +31,11 @@ pingcli_LDADD := $(EXTRA_KLIBS)
 plist_DATA := Info.plist
 
 install_data_hook := fix-kext-ownership
-install-data-hook: $(install_data_hook)
-endif
+endif # Darwin
 
-endif
-endif
+endif # TEST 
+endif # MODULE
+install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ pingsrv.c pingcli.c spingsrv.c spingcli.c
 DIST_SOURCES = ping_srv.c ping_cli.c sping_srv.c sping_cli.c ping.h 
