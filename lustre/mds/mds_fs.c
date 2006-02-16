@@ -275,6 +275,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
         mds->mds_last_transno = le64_to_cpu(msd->msd_last_transno);
 
+        msd->msd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
                obd->obd_name, mds->mds_last_transno);
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
