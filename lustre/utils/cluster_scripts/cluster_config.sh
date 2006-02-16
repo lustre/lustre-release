@@ -133,7 +133,7 @@ EOF
 
 # Global variables
 # Some scripts to be called
-SCRIPTS_PATH=$"./"
+SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"./"}
 MODULE_CONFIG=${SCRIPTS_PATH}$"module_config.sh"
 VERIFY_CLUSTER_NET=${SCRIPTS_PATH}$"verify_cluster_net.sh"
 GEN_HB_CONFIG=${SCRIPTS_PATH}$"gen_hb_config.sh"
@@ -185,7 +185,7 @@ shift  `expr $OPTIND - 1`
 
 # Here we expect the csv file
 if [ $# -eq 0 ]; then
-	echo >&2 $"`basename $0`: Lack csv file!"
+	echo >&2 $"`basename $0`: Missing csv file"
 	usage
 fi
 
@@ -632,7 +632,7 @@ mass_config() {
 		fi
 
 		# Execute pdsh command to add lnet options lines to modprobe.conf/modules.conf
-		verbose_output "Adding lnet options to ${HOST_NAME}..."
+		verbose_output "Adding module options to ${HOST_NAME}..."
 		COMMAND=$"echo \"${NETWORKS}\"|${MODULE_CONFIG}"
 		pdsh -w ${HOST_NAME} ${COMMAND} >&2 &
 		PDSH_PID[${pid_num}]=$!

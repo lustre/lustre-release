@@ -110,13 +110,13 @@ local_check() {
 	HOST_IPADDRS[$2]=`egrep "[[:space:]]$1([[:space:]]|$)" /etc/hosts \
 		     | awk '{print $1}'`
 	if [ -z "${HOST_IPADDRS[$2]}" ]; then
-		echo >&2 "`basename $0`: local_cleck() error: $1 does not" \
+		echo >&2 "`basename $0`: local_check() error: $1 does not" \
 			 "exist in the local /etc/hosts table!"
 		return 1
 	fi
 
 	if [ ${#HOST_IPADDRS[$2]} -gt 15 ]; then
-		echo >&2 "`basename $0`: local_cleck() error: More than one" \
+		echo >&2 "`basename $0`: local_check() error: More than one" \
 			 "IP address line according to $1 in the local" \
 			 "/etc/hosts table!"
 		return 1
@@ -125,14 +125,14 @@ local_check() {
 	# Execute pdsh command to get the real host name
 	RET_STR=`pdsh -w ${HOST_IPADDRS[$2]} hostname 2>&1`
 	if [ $? -ne 0 ] || [ "${RET_STR}" != "${RET_STR#*connect:*}" ]; then
-		echo >&2 "`basename $0`: local_cleck() error: pdsh error:" \
+		echo >&2 "`basename $0`: local_check() error: pdsh error:" \
 			 "${RET_STR}"
 		return 1
 	fi
 
 	if [ -z "${RET_STR}" ]; then
-		echo >&2 "`basename $0`: local_cleck() error: pdsh error:" \
-			 "Nothing get from pdsh! Check the network connectivity"\
+		echo >&2 "`basename $0`: local_check() error: pdsh error:" \
+			 "No results from pdsh! Check the network connectivity"\
 			 "between the local host and ${HOST_IPADDRS[$2]}" \
 			 "or check the two hosts' rcmd module!"
 		return 1
@@ -140,7 +140,7 @@ local_check() {
 
 	REAL_NAME=`echo ${RET_STR} | awk '{print $2}'`
 	if [ "$1" != "${REAL_NAME}" ]; then
-		echo >&2 "`basename $0`: local_cleck() error: The real hostname"\
+		echo >&2 "`basename $0`: local_check() error: The real hostname"\
 			 "according to ${HOST_IPADDRS[$2]} is ${REAL_NAME}," \
 			 "not $1! Check the local /etc/hosts table!"
 		return 1

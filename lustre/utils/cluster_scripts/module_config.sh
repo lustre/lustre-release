@@ -16,7 +16,7 @@ else
 fi
 
 read -r NETWORKS
-MODLINES_FILE=$"/tmp/modlines.txt"
+MODLINES_FILE=/tmp/modlines$$.txt
 START_MARKER=$"# start lustre config"
 END_MARKER=$"# end lustre config"
 
