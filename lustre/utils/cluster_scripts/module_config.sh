@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-# add_lnet_options.sh - add lnet options lines into modprobe.conf or modules.conf
+# module_config.sh - add lustre options lines into modprobe.conf or 
+#   modules.conf
 #
 #################################################################################
 
