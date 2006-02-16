@@ -12,8 +12,8 @@
 
 extern struct lvfs_callback_ops mgs_lvfs_ops;
 
-int mgs_init_db_list(struct obd_device *obd);
-int mgs_cleanup_db_list(struct obd_device *obd);
+int mgs_init_fsdb_list(struct obd_device *obd);
+int mgs_cleanup_fsdb_list(struct obd_device *obd);
 int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti);

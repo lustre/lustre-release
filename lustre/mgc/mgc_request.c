@@ -560,8 +560,9 @@ out:
 }
 #endif
 
-/* Send target_add message to MGS */
-static int mgc_target_add(struct obd_export *exp, struct mgs_target_info *mti)
+/* Send target_reg message to MGS */
+static int mgc_target_register(struct obd_export *exp,
+                               struct mgs_target_info *mti)
 {
         struct ptlrpc_request *req;
         struct mgs_target_info *req_mti, *rep_mti;
@@ -571,7 +572,7 @@ static int mgc_target_add(struct obd_export *exp, struct mgs_target_info *mti)
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
-                              MGS_TARGET_ADD, 1, &size, NULL);
+                              MGS_TARGET_REG, 1, &size, NULL);
         if (!req)
                 RETURN(rc = -ENOMEM);
 
@@ -636,14 +637,14 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         /* Hack alert */
-        if (KEY_IS("add_target")) {
+        if (KEY_IS("register_target")) {
                 struct mgs_target_info *mti;
                 if (vallen != sizeof(struct mgs_target_info))
                         RETURN(-EINVAL);
                 mti = (struct mgs_target_info *)val;
-                CDEBUG(D_MGC, "add_target %s %#x\n",
+                CDEBUG(D_MGC, "register_target %s %#x\n",
                        mti->mti_svname, mti->mti_flags);
-                rc =  mgc_target_add(exp, mti);
+                rc =  mgc_target_register(exp, mti);
                 RETURN(rc);
         }
         if (KEY_IS("set_fs")) {
@@ -927,7 +928,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 mti = (struct mgs_target_info *)lustre_cfg_buf(lcfg, 1);
                 CDEBUG(D_MGC, "add_target %s %#x\n",    
                        mti->mti_svname, mti->mti_flags);
-                rc = mgc_target_add(obd->u.cli.cl_mgc_mgsexp, mti);
+                rc = mgc_target_register(obd->u.cli.cl_mgc_mgsexp, mti);
                 break;
         }
         case LCFG_LOV_DEL_OBD: 

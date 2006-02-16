@@ -8,8 +8,7 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_scripts = llanalyze llstat.pl llobdstat.pl lactive	\
-	load_ldap.sh lrun 
+sbin_scripts = llanalyze llstat.pl llobdstat.pl lactive	lrun 
 bin_scripts = lfind lstripe
 
 if UTILS

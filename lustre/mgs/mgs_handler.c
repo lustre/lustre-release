@@ -169,7 +169,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_fs, rc);
 
         /* Internal mgs setup */
-        mgs_init_db_list(obd);
+        mgs_init_fsdb_list(obd);
         sema_init(&mgs->mgs_log_sem, 1);
 
         /* Start the service threads */
@@ -223,7 +223,7 @@ static int mgs_precleanup(struct obd_device *obd, int stage)
 
         switch (stage) {
         case OBD_CLEANUP_SELF_EXP:
-                mgs_cleanup_db_list(obd);
+                mgs_cleanup_fsdb_list(obd);
                 llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
                 rc = obd_llog_finish(obd, 0);
         }
@@ -305,7 +305,7 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
                 LCONSOLE_ERROR("Index for %s has disappeared!  "
                                "Regenerating this portion of the logs."
                                "\n", mti->mti_svname);
-                mti->mti_flags |= LDD_F_NEED_REGISTER;
+                mti->mti_flags |= LDD_F_UPDATE;
                 rc = 1;
         } else if (rc == -1) {
                 LCONSOLE_ERROR("Client log %s-client has disappeared! "
@@ -325,7 +325,7 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
 }
 
 /* Called whenever a target starts up.  Flags indicate first connect, etc. */
-static int mgs_handle_target_add(struct ptlrpc_request *req)
+static int mgs_handle_target_reg(struct ptlrpc_request *req)
 {    
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lustre_handle lockh;
@@ -338,7 +338,7 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                                  lustre_swab_mgs_target_info);
         
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
-                                LDD_F_NEED_REGISTER))) {
+                                LDD_F_UPDATE))) {
                 /* We're just here as a startup ping. */
                 CDEBUG(D_MGS, "Server %s is running on %s\n",
                        mti->mti_svname, obd_export_nid2str(req->rq_export));
@@ -365,22 +365,16 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
 
         if (mti->mti_flags & LDD_F_WRITECONF) {
                 rc = mgs_erase_logs(obd, mti->mti_fsname);
-                mti->mti_flags |= LDD_F_NEED_REGISTER;
+                mti->mti_flags |= LDD_F_UPDATE;
                 LCONSOLE_WARN("%s: Logs for fs %s were removed by user request."
                               " All servers must re-register in order to "
                               "regenerate the client log.\n",
                               obd->obd_name, mti->mti_fsname);
                 mti->mti_flags &= ~LDD_F_WRITECONF;
-                mti->mti_flags |= LDD_F_REWRITE;
         }
 
         /* COMPAT_146 */
         if (mti->mti_flags & LDD_F_UPGRADE14) {
-                CDEBUG(D_MGS, "upgrading fs %s from pre-1.6\n", 
-                       mti->mti_fsname); 
-                /* nobody else should be running 1.6 yet, since we're going
-                   to rewrite logs.  
-                   FIXME We should set a "must restart" flag in the lock */
                 rc = mgs_upgrade_sv_14(obd, mti);
                 if (rc) {
                         CERROR("Can't upgrade from 1.4 (%d)\n", rc);
@@ -388,11 +382,11 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                 }
                 
                 mti->mti_flags &= ~LDD_F_UPGRADE14;
-                mti->mti_flags |= LDD_F_REWRITE;
+                //mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
         /* end COMPAT_146 */
 
-        if (mti->mti_flags & LDD_F_NEED_REGISTER) {
+        if (mti->mti_flags & LDD_F_UPDATE) {
                 CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 
                        mti->mti_stripe_index);
                 
@@ -405,8 +399,9 @@ static int mgs_handle_target_add(struct ptlrpc_request *req)
                         GOTO(out, rc);
                 }
 
-                mti->mti_flags &= ~(LDD_F_NEED_REGISTER | LDD_F_NEED_INDEX);
-                mti->mti_flags |= LDD_F_REWRITE;
+                mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE | 
+                                    LDD_F_NEED_INDEX);
+                mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
 
 out:
@@ -454,9 +449,9 @@ int mgs_handle(struct ptlrpc_request *req)
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
-        case MGS_TARGET_ADD:
+        case MGS_TARGET_REG:
                 DEBUG_REQ(D_MGS, req, "target add\n");
-                rc = mgs_handle_target_add(req);
+                rc = mgs_handle_target_reg(req);
                 break;
         case MGS_TARGET_DEL:
                 DEBUG_REQ(D_MGS, req, "target del\n");

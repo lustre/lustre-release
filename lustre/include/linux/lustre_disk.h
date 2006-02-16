@@ -43,11 +43,12 @@
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
 #define LDD_F_SV_TYPE_MGS   0x0004
-#define LDD_F_NEED_INDEX    0x0010 /* we need an index assignment */
-#define LDD_F_NEED_REGISTER 0x0020 /* we have never registered  */
-#define LDD_F_UPGRADE14     0x0040 /* COMPAT_14 */
-#define LDD_F_REWRITE       0x0080 /* rewrite the LDD */
+#define LDD_F_NEED_INDEX    0x0010 /* need an index assignment */
+#define LDD_F_VIRGIN        0x0020 /* never registered */
+#define LDD_F_UPDATE        0x0040 /* update the config logs for this server*/
+#define LDD_F_REWRITE_LDD   0x0080 /* rewrite the LDD */
 #define LDD_F_WRITECONF     0x0100 /* regenerate all logs for this fs */
+#define LDD_F_UPGRADE14     0x0200 /* COMPAT_14 */
 
 
 enum ldd_mount_type {
@@ -303,6 +304,7 @@ int lustre_end_log(struct super_block *sb, char *logname,
 struct lustre_mount_info *server_get_mount(char *name);
 int server_put_mount(char *name, struct vfsmount *mnt);
 int server_register_target(struct super_block *sb);
+int server_mti_print(char *title, struct mgs_target_info *mti);
 
 /* mgc_request.c */
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id);

@@ -55,7 +55,7 @@ command_t cmdlist[] = {
 #define INDEX_UNASSIGNED 0xFFFF
 
 static char *progname;
-static int verbose = 1;
+static int verbose = 0;
 static int print_only = 0;
 
 
@@ -572,8 +572,8 @@ int write_local_files(struct mkfs_opts *mop)
         
         ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
         if (ret) {
-                fprintf(stderr, "%s: Unable to mount %s: %d\n", 
-                        progname, mop->mo_device, ret);
+                fprintf(stderr, "%s: Unable to mount %s: %s\n", 
+                        progname, dev, strerror(errno));
                 goto out_rmdir;
         }
 
@@ -609,6 +609,10 @@ int write_local_files(struct mkfs_opts *mop)
                 char cmd[128];
                 char *term;
                 vprint("Copying old logs\n");
+#if 0
+ /* Generate new client log as servers upgrade.  Starting a new client 
+    may end up with short lov's, so will be degraded until all servers
+    upgrade */
                 /* Copy the old client log to fsname-client */
                 sprintf(filepnm, "%s/%s/%s-client", 
                         mntpt, MOUNT_CONFIGS_DIR, mop->mo_ldd.ldd_fsname);
@@ -629,6 +633,10 @@ int write_local_files(struct mkfs_opts *mop)
                                 mop->mo_ldd.ldd_fsname);
                         goto out_umnt;
                 }
+ #endif
+                /* We need to use the old mdt log because otherwise mdt won't
+                   have complete lov if old clients connect before all 
+                   servers upgrade. */
                 /* Copy the old mdt log to fsname-MDT0000 (get old
                    name from mdt_UUID) */
                 ret = 1;
@@ -692,7 +700,7 @@ int read_local_files(struct mkfs_opts *mop)
         ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
         if (ret) {
                 fprintf(stderr, "%s: Unable to mount %s: %s\n", 
-                        progname, mop->mo_device, strerror(ret));
+                        progname, dev, strerror(errno));
                 goto out_rmdir;
         }
 
@@ -705,23 +713,24 @@ int read_local_files(struct mkfs_opts *mop)
                 /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */
                 struct lr_server_data lsd;
-                fprintf(stderr, "%s: Unable to read %s, trying last_rcvd\n",
-                        progname, MOUNT_DATA_FILE);
+                vprint("%s: Unable to read %s, trying last_rcvd\n",
+                       progname, MOUNT_DATA_FILE);
                 sprintf(filepnm, "%s/%s", mntpt, LAST_RCVD);
                 filep = fopen(filepnm, "r");
                 if (!filep) {
                         fprintf(stderr, "%s: Unable to read old data\n",
                                 progname);
-                        ret = errno;
+                        ret = -errno;
                         goto out_umnt;
                 }
                 vprint("Reading %s\n", LAST_RCVD);
-                ret = fread(&lsd, sizeof(lsd), 1, filep);
+                ret = fread(&lsd, 1, sizeof(lsd), filep);
                 if (ret < sizeof(lsd)) {
                         fprintf(stderr, "%s: Short read (%d of %d)\n",
                                 progname, ret, sizeof(lsd));
-                        ret = ferror(filep);
-                        goto out_umnt;
+                        ret = -ferror(filep);
+                        if (ret) 
+                                goto out_close;
                 }
                 if (lsd.lsd_feature_compat & OBD_COMPAT_OST) {
                         mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
@@ -761,6 +770,7 @@ int read_local_files(struct mkfs_opts *mop)
                 mop->mo_ldd.ldd_flags |= LDD_F_UPGRADE14;
         }
         /* end COMPAT_146 */
+out_close:        
         fclose(filep);
         
 out_umnt:
@@ -1149,7 +1159,7 @@ int main(int argc, char *const argv[])
         server_make_name(ldd->ldd_flags, ldd->ldd_svindex,
                          ldd->ldd_fsname, ldd->ldd_svname);
 
-        if (verbose > 0)
+        if (verbose >= 0)
                 print_ldd("Permanent disk data", ldd);
 
         if (print_only) {

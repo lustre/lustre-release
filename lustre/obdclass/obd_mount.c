@@ -780,6 +780,17 @@ static int server_stop_servers(struct super_block *sb)
         RETURN(rc);
 }
 
+int server_mti_print(char *title, struct mgs_target_info *mti)
+{
+        PRINT_CMD(PRINT_MASK, "mti %s\n", title); 
+        PRINT_CMD(PRINT_MASK, "server: %s\n", mti->mti_svname); 
+        PRINT_CMD(PRINT_MASK, "fs:     %s\n", mti->mti_fsname); 
+        PRINT_CMD(PRINT_MASK, "uuid:   %s\n", mti->mti_uuid); 
+        PRINT_CMD(PRINT_MASK, "ver: %d  flags: %#x\n",
+                  mti->mti_config_ver, mti->mti_flags);
+        return(0);
+}
+
 static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
 {       
         struct lustre_sb_info   *lsi = s2lsi(sb);
@@ -813,6 +824,7 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
       
         mti->mti_failnid_count = ldd->ldd_failnid_count;
         memcpy(mti->mti_failnids, ldd->ldd_failnid, sizeof(mti->mti_failnids));
+        memcpy(mti->mti_uuid, ldd->ldd_uuid, sizeof(mti->mti_uuid));
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;
@@ -844,8 +856,7 @@ int server_register_target(struct super_block *sb)
         if (rc) 
                 GOTO(out, rc);
 
-        CDEBUG(D_MOUNT, "%sregistration %s, fs=%s, %s, index=%04x, flags=%#x\n",
-               mti->mti_flags & LDD_F_NEED_REGISTER ? "Initial " : "",
+        CDEBUG(D_MOUNT, "Registration %s, fs=%s, %s, index=%04x, flags=%#x\n",
                mti->mti_svname, mti->mti_fsname,
                libcfs_nid2str(mti->mti_nids[0]), mti->mti_stripe_index,
                mti->mti_flags);
@@ -853,7 +864,7 @@ int server_register_target(struct super_block *sb)
         /* Register the target */
         /* FIXME use mdc_process_config instead */
         rc = obd_set_info(mgc->u.cli.cl_mgc_mgsexp,
-                          strlen("add_target"), "add_target",
+                          strlen("register_target"), "register_target",
                           sizeof(*mti), mti);
         if (rc) {
                 CERROR("registration with the MGS failed (%d)\n", rc);
@@ -862,7 +873,7 @@ int server_register_target(struct super_block *sb)
 
         /* If this flag is set, it means the MGS wants us to change our
            on-disk data. (So far this means just the index.) */
-        if (mti->mti_flags & LDD_F_REWRITE) {
+        if (mti->mti_flags & LDD_F_REWRITE_LDD) {
                 CDEBUG(D_MOUNT, "Must change on-disk index from %#x to %#x for "
                        " %s\n",
                        ldd->ldd_svindex, mti->mti_stripe_index, 
@@ -871,7 +882,7 @@ int server_register_target(struct super_block *sb)
                 strncpy(ldd->ldd_svname, mti->mti_svname, 
                         sizeof(ldd->ldd_svname));
                 /* or ldd_make_sv_name(ldd); */
-                ldd->ldd_flags = mti->mti_flags & ~LDD_F_REWRITE;
+                ldd->ldd_flags = mti->mti_flags & ~LDD_F_REWRITE_LDD;
                 ldd_write(&mgc->obd_lvfs_ctxt, ldd);
                 
                 /* FIXME write last_rcvd?, disk label? */
@@ -930,8 +941,8 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         /* Register with MGS */
         rc = server_register_target(sb);
         if (rc && (lsi->lsi_ldd->ldd_flags & 
-                   (LDD_F_NEED_INDEX | LDD_F_NEED_REGISTER | LDD_F_UPGRADE14))){
-                CERROR("Required refistration failed for %s: %d\n", 
+                   (LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_UPGRADE14))){
+                CERROR("Required registration failed for %s: %d\n", 
                        lsi->lsi_ldd->ldd_svname, rc);
                 GOTO(out, rc);
         }
@@ -1781,5 +1792,7 @@ EXPORT_SYMBOL(server_get_mount);
 EXPORT_SYMBOL(server_put_mount);
 EXPORT_SYMBOL(server_register_target);
 EXPORT_SYMBOL(server_name2index);
+EXPORT_SYMBOL(server_mti_print);
+
 
 

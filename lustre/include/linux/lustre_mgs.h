@@ -25,13 +25,13 @@
 #define FSDB_EMPTY 0x0001
 
 struct fs_db {
-        char              fd_name[8];
-        struct list_head  fd_list;
-        struct semaphore  fd_sem;
-        void*             fd_ost_index_map;
-        void*             fd_mdt_index_map;
-        __u32             fd_flags;
-        __u32             fd_gen;
+        char              fsdb_name[8];
+        struct list_head  fsdb_list;
+        struct semaphore  fsdb_sem;
+        void*             fsdb_ost_index_map;
+        void*             fsdb_mdt_index_map;
+        __u32             fsdb_flags;
+        __u32             fsdb_gen;
 };
 
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
