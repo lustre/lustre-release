@@ -224,19 +224,21 @@ void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
         for (i = 0; i < num_rq; i++) {
                 struct ptlrpc_request *req;
                 struct lustre_msg *msg;
+
+                spin_unlock(&pool->prp_lock);
                 OBD_ALLOC(req, sizeof(struct ptlrpc_request));
                 if (!req)
-                        goto out;
+                        return;
                 OBD_ALLOC_GFP(msg, size, CFS_ALLOC_STD);
                 if (!msg) {
                         OBD_FREE(req, sizeof(struct ptlrpc_request));
-                        goto out;
+                        return;
                 }
                 req->rq_reqmsg = msg;
                 req->rq_pool = pool;
+                spin_lock(&pool->prp_lock);
                 list_add_tail(&req->rq_list, &pool->prp_req_list);
         }
-out:
         spin_unlock(&pool->prp_lock);
         return;
 }
