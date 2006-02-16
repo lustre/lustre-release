@@ -44,8 +44,9 @@
 #include <sys/mman.h>
 #include <libcfs/list.h>
 #include <libcfs/user-time.h>
+#include <signal.h>
+#include <stdlib.h>
 
-typedef sigset_t        cfs_sigset_t;
 /*
  * Wait Queue. No-op implementation.
  */
@@ -160,6 +161,33 @@ typedef int (cfs_read_proc_t)(char *page, char **start, off_t off,
 struct file; /* forward ref */
 typedef int (cfs_write_proc_t)(struct file *file, const char *buffer,
                                unsigned long count, void *data);
+
+/*
+ * Signal
+ */
+typedef sigset_t                        cfs_sigset_t;
+
+static inline cfs_sigset_t libcfs_blockallsigs(void)
+{
+        cfs_sigset_t   all;
+        cfs_sigset_t   old;
+        int            rc;
+
+        sigfillset(&all);
+        rc = sigprocmask(SIG_SETMASK, &all, &old);
+        if (rc != 0)        /* I'd rather LASSERT but that requires */
+                abort();    /* too much code re-org fttb  */
+
+        return old;
+}
+
+static inline void libcfs_restoresigs(cfs_sigset_t old)
+{
+        int   rc = sigprocmask(SIG_SETMASK, &old, NULL);
+
+        if (rc != 0)        /* I'd rather LASSERT but that requires */
+                abort();    /* too much code re-org fttb  */
+}
 
 /*
  * Timer

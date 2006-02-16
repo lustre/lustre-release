@@ -114,10 +114,22 @@ typedef struct {
         __u16   version_minor;                  /* increment on compatible change */
 } WIRE_ATTR lnet_magicversion_t;
 
-/* PROTO MAGIC for LNDs that once used their own private acceptor */
+/* PROTO MAGIC for LNDs */
 #define LNET_PROTO_OPENIB_MAGIC             0x0be91b91
+#define LNET_PROTO_IIB_MAGIC                0x0be91b91
+#define LNET_PROTO_VIB_MAGIC                0x0be91b91
 #define LNET_PROTO_RA_MAGIC                 0x0be91b92
+#define LNET_PROTO_QSW_MAGIC                0x0be91b93
 #define LNET_PROTO_TCP_MAGIC                0xeebc0ded
+#define LNET_PROTO_PTL_MAGIC                0x50746C4E /* 'PtlN' unique magic */
+#define LNET_PROTO_GM_MAGIC                 0x6d797269 /* 'myri'! */
+#define LNET_PROTO_ACCEPTOR_MAGIC           0xacce7100
+
+/* Placeholder for a future "unified" protocol across all LNDs */
+/* Current LNDs that receive a request with this magic will respond with a
+ * "stub" reply using their current protocol */
+#define LNET_PROTO_MAGIC                    0x45726963 /* ! */
+
 
 #define LNET_PROTO_TCP_VERSION_MAJOR        1
 #define LNET_PROTO_TCP_VERSION_MINOR        0
@@ -129,7 +141,6 @@ typedef struct {
         __u64       acr_nid;                    /* target NID */
 } WIRE_ATTR lnet_acceptor_connreq_t;
 
-#define LNET_PROTO_ACCEPTOR_MAGIC         0xacce7100
 #define LNET_PROTO_ACCEPTOR_VERSION       1
 
 /* forward refs */
@@ -457,6 +468,8 @@ typedef struct
         char              *ln_network_tokens;   /* space for network names */
         int                ln_network_tokens_nob;
 
+        int                ln_testprotocompat;  /* test protocol compatibility flags */
+
         struct list_head   ln_finalizeq;        /* msgs waiting to complete finalizing */
 #ifdef __KERNEL__
         void             **ln_finalizers;       /* threads doing finalization */
@@ -465,6 +478,9 @@ typedef struct
         int                ln_finalizing;
 #endif
         struct list_head   ln_test_peers;       /* failure simulation */
+
+        lnet_handle_md_t   ln_ping_target_md;
+        lnet_handle_eq_t   ln_ping_target_eq;
         
 #ifdef LNET_USE_LIB_FREELIST
         lnet_freelist_t    ln_free_mes;
@@ -478,5 +494,7 @@ typedef struct
 
         lnet_counters_t    ln_counters;
 } lnet_t;
+
+#define LNET_PING_MATCHBITS   0x6666666666666666LL
 
 #endif

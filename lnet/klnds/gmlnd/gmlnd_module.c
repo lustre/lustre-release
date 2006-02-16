@@ -30,8 +30,12 @@ static int ntx = GMNAL_NTX;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
                 "# tx descriptors");
 
-static int ntx_peer = GMNAL_NTX_PEER;
-CFS_MODULE_PARM(ntx_peer, "i", int, 0444,
+static int credits = GMNAL_CREDITS;
+CFS_MODULE_PARM(credits, "i", int, 0444,
+                "# concurrent sends");
+
+static int peer_credits = GMNAL_PEER_CREDITS;
+CFS_MODULE_PARM(peer_credits, "i", int, 0444,
                 "# concurrent sends per peer");
 
 static int nlarge_tx_bufs = GMNAL_NLARGE_TX_BUFS;
@@ -49,7 +53,8 @@ CFS_MODULE_PARM(nrx_large, "i", int, 0444,
 gmnal_tunables_t gmnal_tunables = {
         .gm_port            = &port,
         .gm_ntx             = &ntx,
-        .gm_ntx_peer        = &ntx_peer,
+        .gm_credits         = &credits,
+        .gm_peer_credits    = &peer_credits,
         .gm_nlarge_tx_bufs  = &nlarge_tx_bufs,
         .gm_nrx_small       = &nrx_small,
         .gm_nrx_large       = &nrx_large,
@@ -61,13 +66,15 @@ static ctl_table gmnal_ctl_table[] = {
 	 sizeof (int), 0444, NULL, &proc_dointvec},
 	{2, "ntx", &ntx, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{3, "ntx_peer", &ntx_peer, 
+	{3, "credits", &credits,
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{4, "nlarge_tx_bufs", &nlarge_tx_bufs, 
+	{4, "peer_credits", &peer_credits,
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{5, "nrx_small", &nrx_small, 
+	{5, "nlarge_tx_bufs", &nlarge_tx_bufs,
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{6, "nrx_large", &nrx_large, 
+	{6, "nrx_small", &nrx_small,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{7, "nrx_large", &nrx_large,
 	 sizeof (int), 0444, NULL, &proc_dointvec},
 	{0}
 };

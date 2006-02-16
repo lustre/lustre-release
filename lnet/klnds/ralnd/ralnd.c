@@ -46,6 +46,10 @@ kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, lnet_nid_t dstnid)
 
         connreq->racr_magic     = RANAL_MSG_MAGIC;
         connreq->racr_version   = RANAL_MSG_VERSION;
+
+        if (conn == NULL)                       /* prepping a "stub" reply */
+                return;
+
         connreq->racr_devid     = conn->rac_device->rad_id;
         connreq->racr_srcnid    = lnet_ptlcompat_srcnid(kranal_data.kra_ni->ni_nid,
                                                         dstnid);
@@ -63,37 +67,97 @@ kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
 {
         int         timeout = active ? *kranal_tunables.kra_timeout :
                                         lnet_acceptor_timeout();
+        int         swab;
         int         rc;
+
+        /* return 0 on success, -ve on error, +ve to tell the peer I'm "old" */
 
         rc = libcfs_sock_read(sock, &connreq->racr_magic, 
                               sizeof(connreq->racr_magic), timeout);
         if (rc != 0) {
-                CERROR("Read failed: %d\n", rc);
-                return rc;
+                CERROR("Read(magic) failed(1): %d\n", rc);
+                return -EIO;
         }
 
-        if (!active &&
-            connreq->racr_magic != RANAL_MSG_MAGIC &&
+        if (connreq->racr_magic != RANAL_MSG_MAGIC &&
             connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
-                /* Is this a generic acceptor connection request? */
+                /* Unexpected magic! */
+                if (!active &&
+                    the_lnet.ln_ptlcompat == 0 &&
+                    (connreq->racr_magic == LNET_PROTO_MAGIC ||
+                     connreq->racr_magic == __swab32(LNET_PROTO_MAGIC))) {
+                        /* future protocol version compatibility!
+                         * When LNET unifies protocols over all LNDs, the first
+                         * thing sent will be a version query.  +ve rc means I
+                         * reply with my current magic/version */
+                        return EPROTO;
+                }
+
+                if (active ||
+                    the_lnet.ln_ptlcompat == 0) {
+                        CERROR("Unexpected magic %08x (1)\n",
+                               connreq->racr_magic);
+                        return -EPROTO;
+                }
+
+                /* When portals compatibility is set, I may be passed a new
+                 * connection "blindly" by the acceptor, and I have to
+                 * determine if my peer has sent an acceptor connection request
+                 * or not.  This isn't a connreq, so I'll get the acceptor to
+                 * look at it... */
                 rc = lnet_accept(kranal_data.kra_ni, sock, connreq->racr_magic);
-                if (rc != 0)               /* nope */
+                if (rc != 0)
                         return -EPROTO;
 
+                /* ...and if it's OK I'm back to looking for a connreq... */
                 rc = libcfs_sock_read(sock, &connreq->racr_magic,
                                       sizeof(connreq->racr_magic), timeout);
                 if (rc != 0) {
-                        CERROR("Read failed: %d\n", rc);
-                        return rc;
-                }
-        }
-        
-        if (connreq->racr_magic != RANAL_MSG_MAGIC) {
-                if (__swab32(connreq->racr_magic) != RANAL_MSG_MAGIC) {
-                        CERROR("Unexpected magic %08x\n", connreq->racr_magic);
-                        return -EPROTO;
+                        CERROR("Read(magic) failed(2): %d\n", rc);
+                        return -EIO;
                 }
 
+                if (connreq->racr_magic != RANAL_MSG_MAGIC &&
+                    connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
+                        CERROR("Unexpected magic %08x(2)\n",
+                               connreq->racr_magic);
+                        return -EPROTO;
+                }
+        }
+
+        swab = (connreq->racr_magic == __swab32(RANAL_MSG_MAGIC));
+
+        rc = libcfs_sock_read(sock, &connreq->racr_version,
+                              sizeof(connreq->racr_version), timeout);
+        if (rc != 0) {
+                CERROR("Read(version) failed: %d\n", rc);
+                return -EIO;
+        }
+
+        if (swab)
+                __swab16s(&connreq->racr_version);
+        
+        if (connreq->racr_version != RANAL_MSG_VERSION) {
+                if (active) {
+                        CERROR("Unexpected version %d\n", connreq->racr_version);
+                        return -EPROTO;
+                }
+                /* If this is a future version of the ralnd protocol, and I'm
+                 * passive (accepted the connection), tell my peer I'm "old"
+                 * (+ve rc) */
+                return EPROTO;
+        }
+
+        rc = libcfs_sock_read(sock, &connreq->racr_devid,
+                              sizeof(connreq->racr_version) -
+                              offsetof(kra_connreq_t, racr_devid),
+                              timeout);
+        if (rc != 0) {
+                CERROR("Read(body) failed: %d\n", rc);
+                return -EIO;
+        }
+
+        if (swab) {
                 __swab32s(&connreq->racr_magic);
                 __swab16s(&connreq->racr_version);
                 __swab16s(&connreq->racr_devid);
@@ -107,11 +171,6 @@ kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
                 __swab32s(&connreq->racr_riparams.FmaDomainHndl);
                 __swab32s(&connreq->racr_riparams.PTag);
                 __swab32s(&connreq->racr_riparams.CompletionCookie);
-        }
-
-        if (connreq->racr_version != RANAL_MSG_VERSION) {
-                CERROR("Unexpected version %d\n", connreq->racr_version);
-                return -EPROTO;
         }
 
         if (connreq->racr_srcnid == LNET_NID_ANY ||
@@ -442,10 +501,24 @@ kranal_passive_conn_handshake (struct socket *sock, lnet_nid_t *src_nidp,
         }
 
         rc = kranal_recv_connreq(sock, &rx_connreq, 0);
-        if (rc != 0) {
+
+        if (rc < 0) {
                 CERROR("Can't rx connreq from %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer_ip), peer_port, rc);
                 return rc;
+        }
+
+        if (rc > 0) {
+                /* Request from "new" peer: send reply with my MAGIC/VERSION to
+                 * tell her I'm old... */
+                kranal_pack_connreq(&tx_connreq, NULL, LNET_NID_ANY);
+
+                rc = libcfs_sock_write(sock, &tx_connreq, sizeof(tx_connreq), 0);
+                if (rc != 0)
+                        CERROR("Can't tx stub connreq to %u.%u.%u.%u/%d: %d\n",
+                               HIPQUAD(peer_ip), peer_port, rc);
+
+                return -EPROTO;
         }
 
         for (i = 0;;i++) {
@@ -506,6 +579,20 @@ kranal_active_conn_handshake(kra_peer_t *peer,
                 return rc;
 
         kranal_pack_connreq(&connreq, conn, peer->rap_nid);
+
+        if (the_lnet.ln_testprotocompat != 0) {
+                /* single-shot proto test */
+                LNET_LOCK();
+                if ((the_lnet.ln_testprotocompat & 1) != 0) {
+                        connreq.racr_version++;
+                        the_lnet.ln_testprotocompat &= ~1;
+                }
+                if ((the_lnet.ln_testprotocompat & 2) != 0) {
+                        connreq.racr_magic = LNET_PROTO_MAGIC;
+                        the_lnet.ln_testprotocompat &= ~2;
+                }
+                LNET_UNLOCK();
+        }
 
         rc = lnet_connect(&sock, peer->rap_nid,
                          0, peer->rap_ip, peer->rap_port);

@@ -1382,6 +1382,20 @@ ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn, lnet_nid_t peer_nid,
         hmv->version_major = cpu_to_le16 (LNET_PROTO_TCP_VERSION_MAJOR);
         hmv->version_minor = cpu_to_le16 (LNET_PROTO_TCP_VERSION_MINOR);
 
+        if (the_lnet.ln_testprotocompat != 0) {
+                /* single-shot proto check */
+                LNET_LOCK();
+                if ((the_lnet.ln_testprotocompat & 1) != 0) {
+                        hmv->version_major++;   /* just different! */
+                        the_lnet.ln_testprotocompat &= ~1;
+                }
+                if ((the_lnet.ln_testprotocompat & 2) != 0) {
+                        hmv->magic = LNET_PROTO_MAGIC;
+                        the_lnet.ln_testprotocompat &= ~2;
+                }
+                LNET_UNLOCK();
+        }
+
         srcnid = lnet_ptlcompat_srcnid(ni->ni_nid, peer_nid);
         
         hdr.src_nid        = cpu_to_le64 (srcnid);
@@ -1464,15 +1478,40 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 return (rc);
         }
 
-        if (!active && 
-            hmv->magic != le32_to_cpu (LNET_PROTO_TCP_MAGIC)) {
-                /* Is this a generic acceptor connection request? */
+        if (hmv->magic != le32_to_cpu (LNET_PROTO_TCP_MAGIC)) {
+                /* Unexpected magic! */
+                if (!active &&
+                    the_lnet.ln_ptlcompat == 0 &&
+                    (hmv->magic == LNET_PROTO_MAGIC ||
+                     hmv->magic == __swab32(LNET_PROTO_MAGIC))) {
+                        /* future protocol version compatibility!
+                         * When LNET unifies protocols over all LNDs, the first
+                         * thing sent will be a version query.  I send back a
+                         * 'hello' in my current format to tell her I'm
+                         * "old" */
+                        ksocknal_send_hello(ni, conn, ni->ni_nid, NULL, 0);
+                        return -EPROTO;
+                }
+
+                if (active ||
+                    the_lnet.ln_ptlcompat == 0) {
+                        CERROR ("Bad magic(1) %#08x (%#08x expected) from "
+                                "%u.%u.%u.%u\n", __cpu_to_le32 (hmv->magic),
+                                LNET_PROTO_TCP_MAGIC,
+                                HIPQUAD(conn->ksnc_ipaddr));
+                        return -EPROTO;
+                }
+
+                /* When portals compatibility is set, I may be passed a new
+                 * connection "blindly" by the acceptor, and I have to
+                 * determine if my peer has sent an acceptor connection request
+                 * or not.  This isn't a 'hello', so I'll get the acceptor to
+                 * look at it... */
                 rc = lnet_accept(ni, sock, hmv->magic);
                 if (rc != 0)
                         return -EPROTO;
 
-                /* Yes it is! Start over again now I've skipping the generic
-                 * request */
+                /* ...and if it's OK I'm back to looking for a 'hello'... */
                 rc = libcfs_sock_read(sock, &hmv->magic, 
                                       sizeof (hmv->magic), timeout);
                 if (rc != 0) {
@@ -1481,13 +1520,14 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                         LASSERT (rc < 0 && rc != -EALREADY);
                         return (rc);
                 }
-        }
         
-        if (hmv->magic != le32_to_cpu (LNET_PROTO_TCP_MAGIC)) {
-                CERROR ("Bad magic %#08x (%#08x expected) from %u.%u.%u.%u\n",
-                        __cpu_to_le32 (hmv->magic), LNET_PROTO_TCP_MAGIC,
-                        HIPQUAD(conn->ksnc_ipaddr));
-                return (-EPROTO);
+                if (hmv->magic != le32_to_cpu (LNET_PROTO_TCP_MAGIC)) {
+                        CERROR ("Bad magic(2) %#08x (%#08x expected) from "
+                                "%u.%u.%u.%u\n", __cpu_to_le32 (hmv->magic),
+                                LNET_PROTO_TCP_MAGIC,
+                                HIPQUAD(conn->ksnc_ipaddr));
+                        return -EPROTO;
+                }
         }
 
         rc = libcfs_sock_read(sock, &hmv->magic + 1,
@@ -1501,14 +1541,22 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         
         if (hmv->version_major != cpu_to_le16 (LNET_PROTO_TCP_VERSION_MAJOR) ||
             hmv->version_minor != cpu_to_le16 (LNET_PROTO_TCP_VERSION_MINOR)) {
-                CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
-                        " from %u.%u.%u.%u\n",
-                        le16_to_cpu (hmv->version_major),
-                        le16_to_cpu (hmv->version_minor),
-                        LNET_PROTO_TCP_VERSION_MAJOR,
-                        LNET_PROTO_TCP_VERSION_MINOR,
-                        HIPQUAD(conn->ksnc_ipaddr));
-                return (-EPROTO);
+                if (active) {
+                        CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
+                                " from %u.%u.%u.%u\n",
+                                le16_to_cpu (hmv->version_major),
+                                le16_to_cpu (hmv->version_minor),
+                                LNET_PROTO_TCP_VERSION_MAJOR,
+                                LNET_PROTO_TCP_VERSION_MINOR,
+                                HIPQUAD(conn->ksnc_ipaddr));
+                        return -EPROTO;
+                }
+
+                /* If this is a future version of the socklnd protocol, and I'm
+                 * passive (accepted the connection), send back a 'hello' to
+                 * tell my peer I'm "old" */
+                ksocknal_send_hello(ni, conn, ni->ni_nid, NULL, 0);
+                return -EPROTO;
         }
 
 #if (LNET_PROTO_TCP_VERSION_MAJOR != 1)

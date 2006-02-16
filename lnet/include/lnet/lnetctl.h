@@ -54,6 +54,7 @@ int jt_ptl_disconnect(int argc, char **argv);
 int jt_ptl_push_connection(int argc, char **argv);
 int jt_ptl_print_active_txs(int argc, char **argv);
 int jt_ptl_ping(int argc, char **argv);
+int jt_ptl_ping_test(int argc, char **argv);
 int jt_ptl_mynid(int argc, char **argv);
 int jt_ptl_add_uuid(int argc, char **argv);
 int jt_ptl_add_uuid_old(int argc, char **argv); /* backwards compatibility  */
@@ -65,6 +66,7 @@ int jt_ptl_notify_router (int argc, char **argv);
 int jt_ptl_print_routes (int argc, char **argv);
 int jt_ptl_fail_nid (int argc, char **argv);
 int jt_ptl_lwt(int argc, char **argv);
+int jt_ptl_testprotocompat(int argc, char **argv);
 int jt_ptl_memhog(int argc, char **argv);
 
 int dbg_initialize(int argc, char **argv);

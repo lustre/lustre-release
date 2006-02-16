@@ -108,6 +108,21 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         GMNAL_NETBUF_MSG(&tx->tx_buf)->gmm_u.immediate.gmim_hdr = *hdr;
         tx->tx_msgnob = offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0]);
 
+        if (the_lnet.ln_testprotocompat != 0) {
+                /* single-shot proto test */
+                LNET_LOCK();
+                if ((the_lnet.ln_testprotocompat & 1) != 0) {
+                        GMNAL_NETBUF_MSG(&tx->tx_buf)->gmm_version++;
+                        the_lnet.ln_testprotocompat &= ~1;
+                }
+                if ((the_lnet.ln_testprotocompat & 2) != 0) {
+                        GMNAL_NETBUF_MSG(&tx->tx_buf)->gmm_magic =
+                                LNET_PROTO_MAGIC;
+                        the_lnet.ln_testprotocompat &= ~2;
+                }
+                LNET_UNLOCK();
+        }
+
         if (tx->tx_msgnob + len <= gmni->gmni_small_msgsize) {
                 /* whole message fits in tx_buf */
                 char *buffer = &(GMNAL_NETBUF_MSG(&tx->tx_buf)->gmm_u.immediate.gmim_payload[0]);

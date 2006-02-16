@@ -165,8 +165,15 @@ libcfs_daemonize (char *str)
 	return;
 }
 
-void 
+cfs_sigset_t
 libcfs_blockallsigs(void)
 {
-	return;
+        static cfs_sigset_t dummy;
+
+        return dummy;
+}
+
+void
+libcfs_restoresigs(cfs_sigset_t sigs)
+{
 }

@@ -16,13 +16,28 @@ libcfs_daemonize (char *str)
 #endif
 }
 
-void
+cfs_sigset_t
 libcfs_blockallsigs ()
+{
+	sigset_t       old;
+	unsigned long  flags;
+
+	SIGNAL_MASK_LOCK(current, flags);
+	old = current->blocked;
+	sigfillset(&current->blocked);
+	RECALC_SIGPENDING;
+	SIGNAL_MASK_UNLOCK(current, flags);
+
+	return old;
+}
+
+void
+libcfs_restoresigs (cfs_sigset_t old)
 {
 	unsigned long  flags;
 
 	SIGNAL_MASK_LOCK(current, flags);
-	sigfillset(&current->blocked);
+	current->blocked = old;
 	RECALC_SIGPENDING;
 	SIGNAL_MASK_UNLOCK(current, flags);
 }
@@ -171,6 +186,7 @@ cfs_psdev_t libcfs_dev = {
 };
 
 EXPORT_SYMBOL(libcfs_blockallsigs);
+EXPORT_SYMBOL(libcfs_restoresigs);
 EXPORT_SYMBOL(libcfs_daemonize);
 
 

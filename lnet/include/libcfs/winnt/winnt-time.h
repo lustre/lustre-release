@@ -201,14 +201,16 @@ static inline cfs_time_t cfs_duration_sec(cfs_duration_t d)
 
 static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
 {
-        s->tv_usec = (time_t)((d - s->tv_sec * HZ) * ONE_MILLION / HZ);
+#error "XXX Overflow on 32 bit machines? types?"
         s->tv_sec = (suseconds_t) (d / HZ);
+        s->tv_usec = (time_t)((d - s->tv_sec * HZ) * ONE_MILLION / HZ);
 }
 
 static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 {
-        s->tv_nsec = (time_t)((d - s->tv_sec * HZ) * ONE_BILLION / HZ);
+#error "XXX Overflow on 32 bit machines? types?"
         s->tv_sec = (suseconds_t) (d / HZ);
+        s->tv_nsec = (time_t)((d - s->tv_sec * HZ) * ONE_BILLION / HZ);
 }
 
 static inline void cfs_fs_time_usec(cfs_fs_time_t *t, struct timeval *v)

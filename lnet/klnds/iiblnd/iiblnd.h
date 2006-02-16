@@ -327,7 +327,7 @@ typedef struct
         } WIRE_ATTR ibm_u;
 } WIRE_ATTR kib_msg_t;
 
-#define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
+#define IBNAL_MSG_MAGIC LNET_PROTO_IIB_MAGIC    /* unique magic */
 #define IBNAL_MSG_VERSION              1        /* current protocol version */
 
 #define IBNAL_MSG_CONNREQ           0xc0        /* connection request */
@@ -340,6 +340,11 @@ typedef struct
 #define IBNAL_MSG_PUT_DONE          0xd5        /* completion (src->sink) */
 #define IBNAL_MSG_GET_REQ           0xd6        /* getreq (sink->src) */
 #define IBNAL_MSG_GET_DONE          0xd7        /* completion (src->sink: all OK) */
+
+/* connection rejection reasons */
+#define IBNAL_REJECT_CONN_RACE       0          /* You lost connection race */
+#define IBNAL_REJECT_NO_RESOURCES    1          /* Out of memory/conns etc */
+#define IBNAL_REJECT_FATAL           2          /* Anything else */
 
 /***********************************************************************/
 
@@ -421,11 +426,6 @@ typedef struct kib_conn
 #define IBNAL_CONN_ESTABLISHED       3          /* connection established */
 #define IBNAL_CONN_DISCONNECTING     4          /* to send disconnect req */
 #define IBNAL_CONN_DISCONNECTED      5          /* no more QP or CM traffic */
-
-/* CAVEAT EMPTOR: keep in sync with kibnal_reject() */
-#define IBNAL_REJECT_NO_RESOURCES    0          /* Out of memory/conns etc */
-#define IBNAL_REJECT_CONN_RACE       1          /* You lost connection race */
-#define IBNAL_REJECT_FATAL           2          /* Anything else */
 
 /* types of connection */
 #define IBNAL_CONN_ACTIVE            0          /* active connect */

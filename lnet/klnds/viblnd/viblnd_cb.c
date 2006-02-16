@@ -1991,10 +1991,30 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active)
 }
 
 void
+kibnal_reject(cm_cep_handle_t cep, int why)
+{
+        static cm_reject_data_t   rejs[3];
+        cm_reject_data_t         *rej = &rejs[why];
+
+        LASSERT (why >= 0 && why < sizeof(rejs)/sizeof(rejs[0]));
+
+        /* If I wasn't so lazy, I'd initialise this only once; it's effective
+         * read-only */
+        rej->reason = cm_rej_code_usr_rej;
+        rej->priv_data[0] = (IBNAL_MSG_MAGIC) & 0xff;
+        rej->priv_data[1] = (IBNAL_MSG_MAGIC >> 8) & 0xff;
+        rej->priv_data[2] = (IBNAL_MSG_MAGIC >> 16) & 0xff;
+        rej->priv_data[3] = (IBNAL_MSG_MAGIC >> 24) & 0xff;
+        rej->priv_data[4] = (IBNAL_MSG_VERSION) & 0xff;
+        rej->priv_data[5] = (IBNAL_MSG_VERSION >> 8) & 0xff;
+        rej->priv_data[6] = why;
+
+        cm_reject(cep, rej);
+}
+
+void
 kibnal_connreq_done(kib_conn_t *conn, int active, int status)
 {
-        static cm_reject_data_t   rej;
-
         struct list_head   txs;
         kib_peer_t        *peer = conn->ibc_peer;
         kib_peer_t        *peer2;
@@ -2026,9 +2046,7 @@ kibnal_connreq_done(kib_conn_t *conn, int active, int status)
                 case IBNAL_CONN_ACTIVE_CHECK_REPLY:
                         /* got a connection reply but failed checks */
                         LASSERT (active);
-                        memset(&rej, 0, sizeof(rej));
-                        rej.reason = cm_rej_code_usr_rej;
-                        cm_reject(conn->ibc_cep, &rej);
+                        kibnal_reject(conn->ibc_cep, IBNAL_REJECT_FATAL);
                         break;
 
                 case IBNAL_CONN_ACTIVE_CONNECT:
@@ -2246,10 +2264,10 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         static kib_msg_t        txmsg;
         static kib_msg_t        rxmsg;
         static cm_reply_data_t  reply;
-        static cm_reject_data_t reject;
 
         kib_conn_t         *conn = NULL;
         int                 rc = 0;
+        int                 reason;
         int                 rxmsgnob;
         kib_connvars_t     *cv;
         kib_peer_t         *tmp_peer;
@@ -2264,6 +2282,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         if (cmreq->sid != (__u64)(*kibnal_tunables.kib_service_number)) {
                 CERROR(LPX64" != IBNAL_SERVICE_NUMBER("LPX64")\n",
                        cmreq->sid, (__u64)(*kibnal_tunables.kib_service_number));
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
 
@@ -2271,15 +2290,33 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         rxmsgnob = MIN(cm_REQ_priv_data_len, sizeof(rxmsg));
         memcpy(&rxmsg, cmreq->priv_data, rxmsgnob);
 
+        if ((rxmsg.ibm_magic == LNET_PROTO_MAGIC ||
+             rxmsg.ibm_magic == __swab32(LNET_PROTO_MAGIC)) ||
+            (rxmsg.ibm_magic == IBNAL_MSG_MAGIC &&
+             rxmsg.ibm_version != IBNAL_MSG_VERSION) ||
+            (rxmsg.ibm_magic == __swab32(IBNAL_MSG_MAGIC) &&
+             rxmsg.ibm_version != __swab16(IBNAL_MSG_VERSION))) {
+                /* Future protocol version compatibility support!
+                 * If the viblnd-specific protocol changes, or when LNET
+                 * unifies protocols over all LNDs, the initial connection will
+                 * negotiate a protocol version.  I trap this here to avoid
+                 * console errors; the reject tells the peer which protocol I
+                 * speak. */
+                reason = IBNAL_REJECT_FATAL;
+                goto reject;
+        }
+
         rc = kibnal_unpack_msg(&rxmsg, rxmsgnob);
         if (rc != 0) {
                 CERROR("Can't parse connection request: %d\n", rc);
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
 
         if (rxmsg.ibm_type != IBNAL_MSG_CONNREQ) {
                 CERROR("Unexpected connreq msg type: %x from %s\n",
                        rxmsg.ibm_type, libcfs_nid2str(rxmsg.ibm_srcnid));
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
 
@@ -2288,6 +2325,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                 CERROR("Can't accept %s: bad dst nid %s\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid), 
                        libcfs_nid2str(rxmsg.ibm_dstnid));
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
 
@@ -2296,6 +2334,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                        libcfs_nid2str(rxmsg.ibm_srcnid), 
                        rxmsg.ibm_u.connparams.ibcp_queue_depth, 
                        IBNAL_MSG_QUEUE_SIZE);
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
 
@@ -2304,6 +2343,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                        libcfs_nid2str(rxmsg.ibm_srcnid), 
                        rxmsg.ibm_u.connparams.ibcp_max_msg_size, 
                        IBNAL_MSG_SIZE);
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
                 
@@ -2312,6 +2352,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                        libcfs_nid2str(rxmsg.ibm_srcnid), 
                        rxmsg.ibm_u.connparams.ibcp_max_frags, 
                        IBNAL_MAX_RDMA_FRAGS);
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
                 
@@ -2319,6 +2360,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         if (conn == NULL) {
                 CERROR("Can't create conn for %s\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid));
+                reason = IBNAL_REJECT_NO_RESOURCES;
                 goto reject;
         }
         
@@ -2329,6 +2371,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                        libcfs_nid2str(rxmsg.ibm_srcnid));
                 kibnal_conn_decref(conn);
                 conn = NULL;
+                reason = IBNAL_REJECT_NO_RESOURCES;
                 goto reject;
         }
 
@@ -2351,6 +2394,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                 CERROR("gid2gid_index failed for %s: %d\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid), vvrc);
                 rc = -EIO;
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
         
@@ -2360,23 +2404,29 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                 CERROR("pkey2pkey_index failed for %s: %d\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid), vvrc);
                 rc = -EIO;
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
 
         rc = kibnal_set_qp_state(conn, vv_qp_state_init);
-        if (rc != 0)
+        if (rc != 0) {
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
+        }
 
         rc = kibnal_post_receives(conn);
         if (rc != 0) {
                 CERROR("Can't post receives for %s\n", 
                        libcfs_nid2str(rxmsg.ibm_srcnid));
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
         }
 
         rc = kibnal_set_qp_state(conn, vv_qp_state_rtr);
-        if (rc != 0)
+        if (rc != 0) {
+                reason = IBNAL_REJECT_FATAL;
                 goto reject;
+        }
         
         memset(&reply, 0, sizeof(reply));
         reply.qpn                 = cv->cv_local_qpn;
@@ -2412,13 +2462,13 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         /* back out state change (no callback happening) */
         kibnal_set_conn_state(conn, IBNAL_CONN_INIT);
         rc = -EIO;
+        reason = IBNAL_REJECT_FATAL;
                 
  reject:
-        CERROR("Rejected connreq from %s\n", libcfs_nid2str(rxmsg.ibm_srcnid));
+        CDEBUG(D_NET, "Rejecting connreq from %s\n",
+               libcfs_nid2str(rxmsg.ibm_srcnid));
 
-        memset(&reject, 0, sizeof(reject));
-        reject.reason = cm_rej_code_usr_rej;
-        cm_reject(cep, &reject);
+        kibnal_reject(cep, reason);
 
         if (conn != NULL) {
                 LASSERT (rc != 0);
@@ -2447,8 +2497,7 @@ kibnal_listen_callback(cm_cep_handle_t cep, cm_conn_data_t *data, void *arg)
         if (pcr == NULL) {
                 CERROR("Can't allocate passive connreq\n");
 
-                cm_reject(cep, &((cm_reject_data_t) /* NB RO struct */
-                                 {.reason = cm_rej_code_no_res,}));
+                kibnal_reject(cep, IBNAL_REJECT_NO_RESOURCES);
                 cm_destroy_cep(cep);
                 return;
         }
@@ -2520,6 +2569,20 @@ kibnal_connect_conn (kib_conn_t *conn)
         msg.ibm_u.connparams.ibcp_max_msg_size = IBNAL_MSG_SIZE;
         msg.ibm_u.connparams.ibcp_max_frags = IBNAL_MAX_RDMA_FRAGS;
         kibnal_pack_msg(&msg, 0, peer->ibp_nid, 0, 0);
+
+        if (the_lnet.ln_testprotocompat != 0) {
+                /* single-shot proto check */
+                LNET_LOCK();
+                if ((the_lnet.ln_testprotocompat & 1) != 0) {
+                        msg.ibm_version++;
+                        the_lnet.ln_testprotocompat &= ~1;
+                }
+                if ((the_lnet.ln_testprotocompat & 2) != 0) {
+                        msg.ibm_magic = LNET_PROTO_MAGIC;
+                        the_lnet.ln_testprotocompat &= ~2;
+                }
+                LNET_UNLOCK();
+        }
 
         /* ...and copy into cmreq to avoid alignment issues */
         memcpy(&cmreq.priv_data, &msg, msg.ibm_nob);
@@ -2679,8 +2742,34 @@ kibnal_check_connreply (kib_conn_t *conn)
 
         if (cv->cv_conndata.status == cm_event_conn_reject) {
 
+                if (cv->cv_conndata.data.reject.reason == cm_rej_code_usr_rej) {
+                        unsigned char *bytes =
+                                cv->cv_conndata.data.reject.priv_data;
+                        int   magic   = (bytes[0]) |
+                                        (bytes[1] << 8) |
+                                        (bytes[2] << 16) |
+                                        (bytes[3] << 24);
+                        int   version = (bytes[4]) |
+                                        (bytes[5] << 8);
+                        int   why     = (bytes[6]);
+
+                        if (magic != IBNAL_MSG_MAGIC ||
+                            version != IBNAL_MSG_VERSION)
+                                CERROR("conn -> %s rejected "
+                                       "(magic/ver %08x/%d why %d): "
+                                       "incompatible protocol\n",
+                                       libcfs_nid2str(peer->ibp_nid),
+                                       magic, version, why);
+                        else
+                                CERROR("conn -> %s rejected: fatal error %d\n",
+                                       libcfs_nid2str(peer->ibp_nid), why);
+
+                        kibnal_connreq_done(conn, 1, -ECONNREFUSED);
+                        return;
+                }
+
                 if (cv->cv_conndata.data.reject.reason != cm_rej_code_stale_conn) {
-                        CERROR("conn -> %s rejected: %d\n", 
+                        CERROR("conn -> %s rejected: reason %d\n",
                                libcfs_nid2str(peer->ibp_nid),
                                cv->cv_conndata.data.reject.reason);
                         kibnal_connreq_done(conn, 1, -ECONNREFUSED);

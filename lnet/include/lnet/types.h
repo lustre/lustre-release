@@ -3,6 +3,8 @@
 
 #include <libcfs/libcfs.h>
 
+#define LNET_RESERVED_PORTAL      0		/* portals reserved for lnet's own use */
+
 typedef __u64 lnet_nid_t;
 typedef __u32 lnet_pid_t;
 

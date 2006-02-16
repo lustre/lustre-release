@@ -48,6 +48,7 @@ typedef struct socket   cfs_socket_t;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
 # define sk_wmem_queued wmem_queued
 # define sk_err         err
+# define sk_route_caps  route_caps
 #endif
 
 #define SOCK_SNDBUF(so)         ((so)->sk->sk_sndbuf)

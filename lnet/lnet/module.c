@@ -170,7 +170,6 @@ EXPORT_SYMBOL(lnet_copy_kiov2kiov);
 EXPORT_SYMBOL(lnet_finalize);
 EXPORT_SYMBOL(lnet_parse);
 EXPORT_SYMBOL(lnet_create_reply_msg);
-EXPORT_SYMBOL(lnet_net2ni);
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");

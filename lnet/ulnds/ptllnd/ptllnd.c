@@ -427,7 +427,6 @@ ptllnd_startup (lnet_ni_t *ni)
                 rc = -ENODEV;
                 goto failed2;
         }
-        CDEBUG(D_NET, "plni->plni_nih=%x\n",plni->plni_nih);
 
         rc = PtlEQAlloc(plni->plni_nih, plni->plni_eq_size,
                         PTL_EQ_HANDLER_NONE, &plni->plni_eqh);
@@ -436,7 +435,6 @@ ptllnd_startup (lnet_ni_t *ni)
                 rc = -ENODEV;
                 goto failed3;
         }
-        CDEBUG(D_NET, "plni->plni_eqh=%x\n",plni->plni_eqh);
 
         /*
          * Fetch the Portals NID

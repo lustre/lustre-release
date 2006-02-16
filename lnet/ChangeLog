@@ -1,6 +1,16 @@
+2006-02-15  Cluster File Systems, Inc. <info@clusterfs.com>
+	* version 1.4.6
+	- quiet LNET startup LNI message for liblustre b=10128
+	- Better console error messages if 'ip2nets' can't match an IP address
+	- Fixed overflow/use-before-set bugs in linux-time.h
+	- Fixed ptllnd bug that wasn't initialising rx descriptors completely
+	- LNET teardown failed an assertion about the route table being empty
+	- Fixed a crash in LNetEQPoll(<invalid handle>)
+	- Future protocol compatibility work (b_rls146_lnetprotovrsn)
+
 2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
 	* Configuration change for the XT3
-             The PTLLND is now used to run Lustre over Portals on the XT3.
+	     The PTLLND is now used to run Lustre over Portals on the XT3.
 	     The configure option(s) --with-cray-portals are no longer
 	     used.  Rather --with-portals=<path-to-portals-includes> is
 	     used to enable building on the XT3.  In addition to enable
@@ -9,7 +19,7 @@
 
 2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
 	* Portals has been removed, replaced by LNET.
-  	   LNET is new networking infrastructure for Lustre, it includes a
+	   LNET is new networking infrastructure for Lustre, it includes a
 	   reorganized network configuration mode (see the user
 	   documentation for full details) as well as support for routing
 	   between different network fabrics.  Lustre Networking Devices

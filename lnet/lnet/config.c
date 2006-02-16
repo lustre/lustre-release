@@ -1010,6 +1010,7 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
         __u32               net1;
         __u32               net2;
         int                 len;
+        int                 count;
         int                 dup;
         int                 rc;
 
@@ -1023,6 +1024,7 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 
         CFS_INIT_LIST_HEAD(&matched);
         networks[0] = 0;
+        count = 0;
         len = 0;
         rc = 0;
 
@@ -1073,6 +1075,8 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
                         rc = -E2BIG;
                         break;
                 }
+
+                count++;
         }
         
         lnet_free_text_bufs(&raw);
@@ -1082,11 +1086,8 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
         if (rc < 0)
                 return rc;
         
-        if (len == 0)
-                return -ENOENT;
-
         *networksp = networks;
-        return 0;
+        return count;
 }
 
 #ifdef __KERNEL__
@@ -1169,26 +1170,33 @@ lnet_parse_ip2nets (char **networksp, char *ip2nets)
         int        nip = lnet_ipaddr_enumerate(&ipaddrs);
         int        rc;
 
-        if (nip <=0) {
-                if (nip < 0) {
-                        rc = nip;
-                        CERROR("Can't enumerate IP interfaces: %d\n", nip);
-                } else {
-                        rc = -ENOENT;
-                        CERROR("No local IP interfaces\n");
-                }
-                
-                LCONSOLE_ERROR("Can't match networks in ip2nets\n");
+        if (nip < 0) {
+                LCONSOLE_ERROR("Error %d enumerating local IP interfaces "
+                               "for ip2nets to match\n", nip);
                 return nip;
         }
 
-        rc = lnet_match_networks (networksp, ip2nets, ipaddrs, nip);
+        if (nip == 0) {
+                LCONSOLE_ERROR("No local IP interfaces "
+                               "for ip2nets to match\n");
+                return -ENOENT;
+        }
+
+        rc = lnet_match_networks(networksp, ip2nets, ipaddrs, nip);
         lnet_ipaddr_free_enumeration(ipaddrs, nip);
 
-        if (rc != 0)
+        if (rc < 0) {
                 LCONSOLE_ERROR("Error %d parsing ip2nets\n", rc);
+                return rc;
+        }
 
-        return rc;
+        if (rc == 0) {
+                LCONSOLE_ERROR("ip2nets does not match "
+                               "any local IP interfaces\n");
+                return -ENOENT;
+        }
+
+        return 0;
 }
 
 int

@@ -40,10 +40,6 @@ static int accept_timeout = 5;
 CFS_MODULE_PARM(accept_timeout, "i", int, 0644,
 		"Acceptor's timeout (seconds)");
 
-static int accept_proto_version = LNET_PROTO_ACCEPTOR_VERSION;
-CFS_MODULE_PARM(accept_proto_version, "i", int, 0444,
-                "Acceptor protocol version (outgoing connection requests)");
-
 struct {
 	int               pta_shutdown;
 	cfs_socket_t    *pta_sock;
@@ -150,7 +146,7 @@ lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
                 }
 
                 /* Ensure writing connection requests don't block.  PAGE_SIZE
-                 * isn't excessive and easily big enough for all the NALs */
+                 * isn't excessive and easily big enough for all the LNDs */
                 rc = libcfs_sock_setbuf(sock, PAGE_SIZE, PAGE_SIZE);
                 if (rc != 0) {
                         CERROR("Error %d setting buffer sizes\n", rc);
@@ -159,13 +155,29 @@ lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
 
                 CLASSERT (LNET_PROTO_ACCEPTOR_VERSION == 1);
 
-                if (accept_proto_version == LNET_PROTO_ACCEPTOR_VERSION) {
-
-                        LASSERT (the_lnet.ln_ptlcompat < 2); /* no portals peers */
-                                
+                if (the_lnet.ln_ptlcompat != 2) {
+                        /* When portals compatibility is "strong", simply
+                         * connect (i.e. send no acceptor connection request).
+                         * Othewise send an acceptor connection request. I can
+                         * have no portals peers so everyone else should
+                         * understand my protocol. */
                         cr.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
                         cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
                         cr.acr_nid     = peer_nid;
+
+                        if (the_lnet.ln_testprotocompat != 0) {
+                                /* single-shot proto check */
+                                LNET_LOCK();
+                                if ((the_lnet.ln_testprotocompat & 4) != 0) {
+                                        cr.acr_version++;
+                                        the_lnet.ln_testprotocompat &= ~4;
+                                }
+                                if ((the_lnet.ln_testprotocompat & 8) != 0) {
+                                        cr.acr_magic = LNET_PROTO_MAGIC;
+                                        the_lnet.ln_testprotocompat &= ~8;
+                                }
+                                LNET_UNLOCK();
+                        }
 
                         rc = libcfs_sock_write(sock, &cr, sizeof(cr), 0);
                         if (rc != 0)
@@ -197,7 +209,7 @@ lnet_accept_magic(__u32 magic, __u32 constant)
 int
 lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
 {
-        lnet_acceptor_connreq_t  cr;
+        lnet_acceptor_connreq_t cr;
         __u32                   peer_ip;
         int                     peer_port;
         int                     rc;
@@ -205,8 +217,8 @@ lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
         lnet_ni_t              *ni;
         char                   *str;
 
-        /* CAVEAT EMPTOR: I may be called by a NAL in any thread's context if I
-         * passed the new socket "blindly" to the single NI that needed an
+        /* CAVEAT EMPTOR: I may be called by an LND in any thread's context if
+         * I passed the new socket "blindly" to the single NI that needed an
          * acceptor.  If so, blind_ni != NULL... */
 
         LASSERT (sizeof(cr) <= 16);             /* not too big for the stack */
@@ -215,6 +227,24 @@ lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
         LASSERT (rc == 0);                      /* we succeeded before */
 
         if (!lnet_accept_magic(magic, LNET_PROTO_ACCEPTOR_MAGIC)) {
+
+                if (lnet_accept_magic(magic, LNET_PROTO_MAGIC)) {
+                        /* future version compatibility!
+                         * When LNET unifies protocols over all LNDs, the first
+                         * thing sent will be a version query.  I send back
+                         * LNET_PROTO_ACCEPTOR_MAGIC to tell her I'm "old" */
+
+                        memset (&cr, 0, sizeof(cr));
+                        cr.acr_magic = LNET_PROTO_ACCEPTOR_MAGIC;
+                        cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
+                        rc = libcfs_sock_write(sock, &cr, sizeof(cr), 0);
+
+                        if (rc != 0)
+                                CERROR("Error sending magic+version in response"
+                                       "to LNET magic from %u.%u.%u.%u: %d\n",
+                                       HIPQUAD(peer_ip), rc);
+                        return -EPROTO;
+                }
 
                 if (magic == le32_to_cpu(LNET_PROTO_TCP_MAGIC))
                         str = "'old' socknal/tcpnal";
@@ -231,14 +261,43 @@ lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
                 return -EPROTO;
         }
 
-        flip = magic != LNET_PROTO_ACCEPTOR_MAGIC;
+        flip = (magic != LNET_PROTO_ACCEPTOR_MAGIC);
 
-        /* FTTB, we only have 1 acceptor protocol version.  When this changes,
-         * we'll have to read the version number first before we know how much
-         * more to read... */
         rc = libcfs_sock_read(sock, &cr.acr_version, 
-                              sizeof(cr) - 
-                              offsetof(lnet_acceptor_connreq_t, acr_version),
+                              sizeof(cr.acr_version),
+                              accept_timeout);
+        if (rc != 0) {
+                CERROR("Error %d reading connection request version from "
+                       "%u.%u.%u.%u\n", rc, HIPQUAD(peer_ip));
+                return -EIO;
+        }
+
+        if (flip)
+                __swab32s(&cr.acr_version);
+        
+        if (cr.acr_version != LNET_PROTO_ACCEPTOR_VERSION) {
+                /* future version compatibility!
+                 * An acceptor-specific protocol rev will first send a version
+                 * query.  I send back my current version to tell her I'm
+                 * "old". */
+                int peer_version = cr.acr_version;
+
+                memset (&cr, 0, sizeof(cr));
+                cr.acr_magic = LNET_PROTO_ACCEPTOR_MAGIC;
+                cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
+
+                rc = libcfs_sock_write(sock, &cr, sizeof(cr), 0);
+
+                if (rc != 0)
+                        CERROR("Error sending magic+version in response"
+                               "to version %d from %u.%u.%u.%u: %d\n",
+                               peer_version, HIPQUAD(peer_ip), rc);
+                return -EPROTO;
+        }
+
+        rc = libcfs_sock_read(sock, &cr.acr_nid,
+                              sizeof(cr) -
+                              offsetof(lnet_acceptor_connreq_t, acr_nid),
                               accept_timeout);
         if (rc != 0) {
                 CERROR("Error %d reading connection request from "
@@ -246,21 +305,12 @@ lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
                 return -EIO;
         }
 
-        if (flip) {
-                __swab32s(&cr.acr_version);
+        if (flip)
                 __swab64s(&cr.acr_nid);
-        }
-        
-        if (cr.acr_version != LNET_PROTO_ACCEPTOR_VERSION) {
-                LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u: "
-                               " unrecognised protocol version %d\n",
-                               HIPQUAD(peer_ip), cr.acr_version);
-                return -EPROTO;
-        }
 
         ni = lnet_net2ni(LNET_NIDNET(cr.acr_nid));
-        if (ni == NULL ||             /* no matching net */
-            ni->ni_nid != cr.acr_nid) /* right NET, but wrong NID! */ {
+        if (ni == NULL ||               /* no matching net */
+            ni->ni_nid != cr.acr_nid) { /* right NET, wrong NID! */
                 if (ni != NULL)
                         lnet_ni_decref(ni);
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
@@ -270,28 +320,25 @@ lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
         }
 
         if (ni->ni_lnd->lnd_accept == NULL) {
+                /* This catches a request for the loopback LND */
                 lnet_ni_decref(ni);
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
                                " NI doesn not accept IP connections\n",
                                HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
                 return -EPERM;
         }
-                
+
         CDEBUG(D_NET, "Accept %s from %u.%u.%u.%u%s\n",
                libcfs_nid2str(cr.acr_nid), HIPQUAD(peer_ip),
                blind_ni == NULL ? "" : " (blind)");
 
         if (blind_ni == NULL) {
+                /* called by the acceptor: call into the requested NI... */
                 rc = ni->ni_lnd->lnd_accept(ni, sock);
-                if (rc != 0)
-                        CERROR("NI %s refused connection from %u.%u.%u.%u\n",
-                               libcfs_nid2str(ni->ni_nid), HIPQUAD(peer_ip));
         } else {
-                /* blind_ni is the only NI that needs me and it was given the
-                 * chance to handle this connection request itself in case it
-                 * was sent by an "old" socknal.  But this connection request
-                 * uses the new acceptor protocol and I'm just being called to
-                 * verify and skip it */
+                /* portals_compatible set and the (only) NI called me to verify
+                 * and skip the connection request... */
+                LASSERT (the_lnet.ln_ptlcompat != 0);
                 LASSERT (ni == blind_ni);
                 rc = 0;
         }
@@ -311,20 +358,20 @@ lnet_acceptor(void *arg)
 	__u32          magic;
 	__u32          peer_ip;
 	int            peer_port;
-        lnet_ni_t     *blind_ni;
+        lnet_ni_t     *blind_ni = NULL;
         int            secure = (int)((unsigned long)arg);
 
 	LASSERT (lnet_acceptor_state.pta_sock == NULL);
 
-        /* If there is only a single NI that needs me, I'll pass her
-         * connections "blind".  Otherwise I'll have to read the bytestream to
-         * see which NI the connection is for.  NB I don't get to run at all if
-         * there are 0 acceptor_nis... */
-        n_acceptor_nis = lnet_count_acceptor_nis(&blind_ni);
-        LASSERT (n_acceptor_nis > 0);
-        if (n_acceptor_nis > 1) {
-                lnet_ni_decref(blind_ni);
-                blind_ni = NULL;
+        if (the_lnet.ln_ptlcompat != 0) {
+                /* When portals_compatibility is enabled, peers may connect
+                 * without sending an acceptor connection request.  There is no
+                 * ambiguity about which network the peer wants to connect to
+                 * since there can only be 1 network, so I pass connections
+                 * "blindly" to it. */
+                n_acceptor_nis = lnet_count_acceptor_nis(&blind_ni);
+                LASSERT (n_acceptor_nis == 1);
+                LASSERT (blind_ni != NULL);
         }
 
 	snprintf(name, sizeof(name), "acceptor_%03d", accept_port);
@@ -440,11 +487,6 @@ lnet_acceptor_start(void)
 	long   pid;
         long   secure;
 
-        /* If we're talking to any portals (pre-LNET) nodes we force the old
-         * acceptor protocol on outgoing connections */
-        if (the_lnet.ln_ptlcompat > 1)
-                accept_proto_version = 0;
-        
 	LASSERT (lnet_acceptor_state.pta_sock == NULL);
 	init_mutex_locked(&lnet_acceptor_state.pta_signal);
 

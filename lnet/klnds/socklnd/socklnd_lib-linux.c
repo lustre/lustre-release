@@ -241,8 +241,8 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
 
 #if (SOCKNAL_ZC && SOCKNAL_VADDR_ZC)
         if (zcsize >= ksocknal_data.ksnd_zc_min_frag &&
-            (sock->sk->route_caps & NETIF_F_SG) &&
-            (sock->sk->route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM)) &&
+            (sock->sk->sk_route_caps & NETIF_F_SG) &&
+            (sock->sk->sk_route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM)) &&
             (page = ksocknal_kvaddr_to_page (vaddr)) != NULL) {
                 int msgflg = MSG_DONTWAIT;
 
@@ -306,8 +306,8 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 
 #if SOCKNAL_ZC
         if (kiov->kiov_len >= *ksocknal_tunables.ksnd_zc_min_frag &&
-            (sock->sk->route_caps & NETIF_F_SG) &&
-            (sock->sk->route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM))) {
+            (sock->sk->sk_route_caps & NETIF_F_SG) &&
+            (sock->sk->sk_route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM))) {
                 struct page   *page = kiov->kiov_page;
                 int            offset = kiov->kiov_offset;
                 int            fragsize = kiov->kiov_len;

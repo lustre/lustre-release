@@ -154,6 +154,10 @@ main (int argc, char **argv)
         CHECK_DEFINE (IBNAL_MSG_GET_REQ);
         CHECK_DEFINE (IBNAL_MSG_GET_DONE);
 
+        CHECK_DEFINE (IBNAL_REJECT_CONN_RACE);
+        CHECK_DEFINE (IBNAL_REJECT_NO_RESOURCES);
+        CHECK_DEFINE (IBNAL_REJECT_FATAL);
+
         CHECK_STRUCT (kib_connparams_t);
         CHECK_MEMBER (kib_connparams_t, ibcp_queue_depth);
         CHECK_MEMBER (kib_connparams_t, ibcp_max_msg_size);

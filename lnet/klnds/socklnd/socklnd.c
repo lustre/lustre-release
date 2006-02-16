@@ -974,10 +974,6 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
         LASSERT ((route == NULL) == (type == SOCKLND_CONN_NONE));
 
-        rc = ksocknal_lib_setup_sock (sock);
-        if (rc != 0)
-                return (rc);
-
         irq = ksocknal_lib_sock_irq (sock);
 
         rc = -ENOMEM;
@@ -1051,7 +1047,16 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                 /* additional routes after interface exchange? */
                 ksocknal_create_routes(peer, conn->ksnc_port,
                                        ipaddrs, nipaddrs);
-                rc = 0;
+
+                /* setup the socket AFTER I've received hello (it disables
+                 * SO_LINGER).  I might call back to the acceptor who may want
+                 * to send a protocol version response and then close the
+                 * socket; this ensures the socket only tears down after the
+                 * response has been sent. */
+                rc = ksocknal_lib_setup_sock(sock);
+                if (rc != 0)
+                        goto failed_1;
+
                 write_lock_irqsave (global_lock, flags);
         } else {
                 rc = ksocknal_create_peer(&peer, ni, peerid);
@@ -1103,12 +1108,18 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                         /* set CONN_NONE makes returned HELLO acknowledge I
                          * lost a connection race */
                         conn->ksnc_type = SOCKLND_CONN_NONE;
-                        ksocknal_send_hello (ni, conn, peerid.nid,
-                                             ipaddrs, 0);
+                        ksocknal_send_hello(ni, conn, peerid.nid, NULL, 0);
                 } else {
                         nipaddrs = ksocknal_select_ips(peer, ipaddrs, nipaddrs);
-                        rc = ksocknal_send_hello (ni, conn, peerid.nid,
-                                                  ipaddrs, nipaddrs);
+                        rc = ksocknal_send_hello(ni, conn, peerid.nid,
+                                                 ipaddrs, nipaddrs);
+
+                        /* Setup the socket (it disables SO_LINGER).  I don't
+                         * do it if I'm sending a negative response to ensure
+                         * the response isn't discarded when I close the socket
+                         * immediately after sending it. */
+                        if (rc == 0)
+                                rc = ksocknal_lib_setup_sock(sock);
                 }
                 
                 write_lock_irqsave(global_lock, flags);
