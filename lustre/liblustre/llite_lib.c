@@ -308,9 +308,9 @@ void __liblustre_setup_(void)
                 printf("LibLustre: no mount target specified\n");
                 exit(1);
         }
-        printf("LibLustre: mount point %s, target %s\n",
-                lustre_path, target);
 
+        CDEBUG(D_CONFIG, "LibLustre: mount point %s, target %s\n",
+               lustre_path, target);
 
 #ifdef INIT_SYSIO
         /* initialize libsysio & mount rootfs */
