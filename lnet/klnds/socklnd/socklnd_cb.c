@@ -1397,9 +1397,9 @@ ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn, lnet_nid_t peer_nid,
         }
 
         srcnid = lnet_ptlcompat_srcnid(ni->ni_nid, peer_nid);
-        
+
         hdr.src_nid        = cpu_to_le64 (srcnid);
-        hdr.src_pid        = cpu_to_le64 (the_lnet.ln_pid);
+        hdr.src_pid        = cpu_to_le32 (the_lnet.ln_pid);
         hdr.type           = cpu_to_le32 (LNET_MSG_HELLO);
         hdr.payload_length = cpu_to_le32 (nipaddrs * sizeof(*ipaddrs));
 
