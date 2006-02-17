@@ -363,7 +363,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
                 nob += scratchiov[i].iov_len = kiov[i].kiov_len;
         }
         LASSERT (nob <= conn->ksnc_rx_nob_wanted);
-        rc = sock_receive(C2B_SOCK(conn->ksnc_sock), &msg, MSG_DONTWAIT, &rcvlen); 
+        rc = -sock_receive(C2B_SOCK(conn->ksnc_sock), &msg, MSG_DONTWAIT, &rcvlen); 
         for (i = 0; i < niov; i++)
                 cfs_kunmap(kiov[i].kiov_page); 
         if (rc == 0)
