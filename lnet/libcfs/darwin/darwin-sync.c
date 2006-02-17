@@ -220,14 +220,17 @@ void krw_spin_done(struct krw_spin *rwspin)
 
 void krw_spin_down_r(struct krw_spin *rwspin)
 {
+        int i;
 	SLASSERT(rwspin != NULL);
 	SLASSERT(rwspin->magic == KRW_SPIN_MAGIC);
 
-        while(1) {
-	        kspin_lock(&rwspin->guard);
-                if (rwspin->count >= 0)
-                        break;
-                kspin_unlock(&rwspin->guard);
+	kspin_lock(&rwspin->guard);
+        while(rwspin->count < 0) {
+                i = -1;
+	        kspin_unlock(&rwspin->guard);
+                while (--i != 0 && rwspin->count < 0)
+                        continue;
+                kspin_lock(&rwspin->guard);
         }
 	++ rwspin->count;
 	kspin_unlock(&rwspin->guard);
@@ -235,14 +238,17 @@ void krw_spin_down_r(struct krw_spin *rwspin)
 
 void krw_spin_down_w(struct krw_spin *rwspin)
 {
+        int i;
 	SLASSERT(rwspin != NULL);
 	SLASSERT(rwspin->magic == KRW_SPIN_MAGIC);
 
-        while (1) {
-	        kspin_lock(&rwspin->guard);
-                if (rwspin->count == 0)
-                        break;
+	kspin_lock(&rwspin->guard);
+        while (rwspin->count != 0) {
+                i = -1;
 	        kspin_unlock(&rwspin->guard);
+                while (--i != 0 && rwspin->count != 0)
+                        continue;
+	        kspin_lock(&rwspin->guard);
         }
 	rwspin->count = -1;
 	kspin_unlock(&rwspin->guard);
