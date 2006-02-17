@@ -245,10 +245,13 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
         return;
 }
 
-void print_lustre_cfg(struct lustre_cfg *lcfg)
+void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
 {
         enum lcfg_command_type cmd = le32_to_cpu(lcfg->lcfg_command);
         
+        if (*skip > 0)
+                printf("SKIP ");
+
         switch(cmd){
         case(LCFG_ATTACH):{
                 printf("attach    ");
@@ -326,6 +329,12 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
         }
         case(LCFG_MARKER):{
                 struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+                if (marker->cm_flags & CM_SKIP) {
+                        if (marker->cm_flags & CM_START) 
+                                (*skip)++;
+                        if (marker->cm_flags & CM_END)
+                                (*skip)--;
+                }
                 printf("marker %d (flags=%#x) %.16s '%s'", marker->cm_step,
                        marker->cm_flags, marker->cm_svname, marker->cm_comment);
                 break;
@@ -340,9 +349,9 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
 void print_records(struct llog_rec_hdr** recs,int rec_number)
 {
         __u32 lopt;
-        int i;
+        int i, skip = 0;
         
-        for(i=0;i<rec_number;i++){
+        for(i = 0; i < rec_number; i++){
         
                 printf("#%.2d ", le32_to_cpu(recs[i]->lrh_index));
 
@@ -353,7 +362,7 @@ void print_records(struct llog_rec_hdr** recs,int rec_number)
                         printf("L "); 
                         lcfg = (struct lustre_cfg *)
                                 ((char*)(recs[i]) + sizeof(struct llog_rec_hdr));
-                        print_lustre_cfg(lcfg);
+                        print_lustre_cfg(lcfg, &skip);
                 }
 
                 if (lopt == PTL_CFG_REC){

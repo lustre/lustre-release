@@ -382,7 +382,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 }
                 
                 mti->mti_flags &= ~LDD_F_UPGRADE14;
-                //mti->mti_flags |= LDD_F_REWRITE_LDD;
+                /* Turn off the upgrade flag permanently */
+                mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
         /* end COMPAT_146 */
 

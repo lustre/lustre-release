@@ -352,6 +352,9 @@ static int mgc_async_requeue(void *data)
         int rc;
         ENTRY;
 
+        if (!data) 
+                RETURN(-EINVAL);
+
         lock_kernel();
         ptlrpc_daemonize();
         SIGNAL_MASK_LOCK(current, flags);
@@ -412,6 +415,11 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 }
                 if (lock->l_req_mode != lock->l_granted_mode) {
                         CERROR("original grant failed, won't requeue\n");
+                        break;
+                }
+
+                if (!data) {
+                        CERROR("missing data, won't requeue\n");
                         break;
                 }
 

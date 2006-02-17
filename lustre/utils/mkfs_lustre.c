@@ -55,7 +55,7 @@ command_t cmdlist[] = {
 #define INDEX_UNASSIGNED 0xFFFF
 
 static char *progname;
-static int verbose = 0;
+static int verbose = 1;
 static int print_only = 0;
 
 
@@ -559,7 +559,6 @@ int write_local_files(struct mkfs_opts *mop)
         int ret = 0;
 
         /* Mount this device temporarily in order to write these files */
-        vprint("mounting backing device\n");
         if (!mkdtemp(mntpt)) {
                 fprintf(stderr, "%s: Can't create temp mount point %s: %s\n",
                         progname, mntpt, strerror(errno));
@@ -670,7 +669,6 @@ int write_local_files(struct mkfs_opts *mop)
 
 
 out_umnt:
-        vprint("unmounting backing device\n");
         umount(mntpt);    
 out_rmdir:
         rmdir(mntpt);
@@ -686,7 +684,6 @@ int read_local_files(struct mkfs_opts *mop)
         int ret = 0;
 
         /* Mount this device temporarily in order to read these files */
-        vprint("mounting backing device\n");
         if (!mkdtemp(mntpt)) {
                 fprintf(stderr, "%s: Can't create temp mount point %s: %s\n",
                         progname, mntpt, strerror(errno));
@@ -732,6 +729,7 @@ int read_local_files(struct mkfs_opts *mop)
                         if (ret) 
                                 goto out_close;
                 }
+                ret = 0;
                 if (lsd.lsd_feature_compat & OBD_COMPAT_OST) {
                         mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
                         mop->mo_ldd.ldd_svindex = lsd.lsd_ost_index;
@@ -774,7 +772,6 @@ out_close:
         fclose(filep);
         
 out_umnt:
-        vprint("unmounting backing device\n");
         umount(mntpt);    
 out_rmdir:
         rmdir(mntpt);
@@ -1159,7 +1156,7 @@ int main(int argc, char *const argv[])
         server_make_name(ldd->ldd_flags, ldd->ldd_svindex,
                          ldd->ldd_fsname, ldd->ldd_svname);
 
-        if (verbose >= 0)
+        if (verbose > 0)
                 print_ldd("Permanent disk data", ldd);
 
         if (print_only) {

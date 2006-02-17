@@ -756,15 +756,14 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                 if (marker->cm_flags & CM_SKIP) { 
                                         cfg->cfg_flags |= CFG_F_SKIP;
                                         // FIXME warning
-                                        CDEBUG(D_CONFIG|D_WARNING, "SKIP %d\n",
+                                        CDEBUG(D_CONFIG|D_WARNING, "SKIP #%d\n",
                                                marker->cm_step);
-                                }
-                                if (lustre_check_exclusion(cfg->cfg_sb, 
-                                                           marker->cm_svname)) {
+                                } else if (lustre_check_exclusion(cfg->cfg_sb, 
+                                                          marker->cm_svname)) {
                                         cfg->cfg_flags |= CFG_F_EXCLUDE;
                                         // FIXME warning
-                                        CDEBUG(D_CONFIG|D_WARNING, "EXCLUDE %d\n",
-                                               marker->cm_step);
+                                        CDEBUG(D_CONFIG|D_WARNING,
+                                               "EXCLUDE %d\n", marker->cm_step);
                                 }
                         } else if (marker->cm_flags & CM_END) {
                                 cfg->cfg_flags = 0;

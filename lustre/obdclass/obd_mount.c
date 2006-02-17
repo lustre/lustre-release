@@ -871,6 +871,9 @@ int server_register_target(struct super_block *sb)
                 GOTO(out, rc);
         }
 
+        /* Always update our flags */
+        ldd->ldd_flags = mti->mti_flags & ~LDD_F_REWRITE_LDD;
+
         /* If this flag is set, it means the MGS wants us to change our
            on-disk data. (So far this means just the index.) */
         if (mti->mti_flags & LDD_F_REWRITE_LDD) {
@@ -882,7 +885,6 @@ int server_register_target(struct super_block *sb)
                 strncpy(ldd->ldd_svname, mti->mti_svname, 
                         sizeof(ldd->ldd_svname));
                 /* or ldd_make_sv_name(ldd); */
-                ldd->ldd_flags = mti->mti_flags & ~LDD_F_REWRITE_LDD;
                 ldd_write(&mgc->obd_lvfs_ctxt, ldd);
                 
                 /* FIXME write last_rcvd?, disk label? */

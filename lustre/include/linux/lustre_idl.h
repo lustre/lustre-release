@@ -1013,9 +1013,10 @@ struct mgs_target_info {
 
 extern void lustre_swab_mgs_target_info(struct mgs_target_info *oinfo);
 
-#define CM_START 0x01
-#define CM_END   0x02
-#define CM_SKIP  0x04
+#define CM_START       0x01
+#define CM_END         0x02
+#define CM_SKIP        0x04
+#define CM_UPGRADE146  0x08
 #define CM_START_SKIP (CM_START | CM_SKIP)
 
 struct cfg_marker {
