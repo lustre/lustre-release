@@ -271,7 +271,7 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
-        struct obd_import *imp= failed_req->rq_import;
+        struct obd_import *imp = failed_req->rq_import;
         unsigned long flags;
         ENTRY;
 

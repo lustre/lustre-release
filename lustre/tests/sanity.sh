@@ -2772,7 +2772,9 @@ test_100() {
 		RPORT=`echo $REMOTE | cut -d: -f2`
 		[ "$RPORT" != "$ACCEPTOR_PORT" ] && continue
 		LPORT=`echo $LOCAL | cut -d: -f2`
-		[ $LPORT -ge 1024 ] && error "local port: $LPORT > 1024" || true
+		[ $LPORT -ge 1024 ] && \
+			error "local: $LPORT > 1024, remote: $ACCEPTOR_PORT" ||\
+			true
 	done
 }
 run_test 100 "check local port using privileged port ==========="

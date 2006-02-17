@@ -501,9 +501,8 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
         }
 
         conn->cookie = exp->exp_handle.h_cookie;
-        CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n",
-               cluuid->uuid, exp);
-        CDEBUG(D_IOCTL, "connect: cookie "LPX64"\n", conn->cookie);
+        CDEBUG(D_HA, "connect export for UUID '%s' at %p, cookie "LPX64"\n",
+               cluuid->uuid, exp, conn->cookie);
         RETURN(0);
 }
 
@@ -803,7 +802,6 @@ static void target_release_saved_req(struct ptlrpc_request *req)
 static void target_finish_recovery(struct obd_device *obd)
 {
         struct list_head *tmp, *n;
-        int rc;
 
         CWARN("%s: sending delayed replies to recovered clients\n",
               obd->obd_name);
@@ -812,12 +810,9 @@ static void target_finish_recovery(struct obd_device *obd)
 
         /* when recovery finished, cleanup orphans on mds and ost */
         if (OBT(obd) && OBP(obd, postrecov)) {
-                rc = OBP(obd, postrecov)(obd);
-                if (rc >= 0)
-                        CWARN("%s: all clients recovered, %d MDS "
-                              "orphans deleted\n", obd->obd_name, rc);
-                else
-                        CWARN("postrecov failed %d\n", rc);
+                int rc = OBP(obd, postrecov)(obd);
+                CWARN("%s: recovery %s: rc %d\n", obd->obd_name,
+                      rc < 0 ? "failed" : "complete", rc);
         }
 
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {

@@ -803,8 +803,6 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_RECOVER) {
-                char   *nidstr;
-
                 CDEBUG(D_HA, "reconnected to %s@%s\n",
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
@@ -817,15 +815,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
                 deuuidify(imp->imp_target_uuid.uuid, NULL,
                           &target_start, &target_len);
-                nidstr = libcfs_nid2str(imp->imp_connection->c_peer.nid);
-
-                LCONSOLE_INFO("Connection restored to service %.*s using nid "
-                              "%s.\n", target_len, target_start, nidstr);
-
-                CWARN("%s: connection restored to %s@%s\n",
-                      imp->imp_obd->obd_name,
-                      imp->imp_target_uuid.uuid,
-                      imp->imp_connection->c_remote_uuid.uuid);
+                LCONSOLE_INFO("%s: Connection restored to service %.*s "
+                              "using nid %s.\n", imp->imp_obd->obd_name,
+                              target_len, target_start,
+                              libcfs_nid2str(imp->imp_connection->c_peer.nid));
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {

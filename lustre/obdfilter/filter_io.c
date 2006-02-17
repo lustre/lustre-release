@@ -122,7 +122,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
                 oa->o_dirty = fed->fed_grant + 4 * FILTER_GRANT_CHUNK;
         obd->u.filter.fo_tot_dirty += oa->o_dirty - fed->fed_dirty;
         if (fed->fed_grant < oa->o_dropped) {
-                CERROR("%s: cli %s/%p reports %u dropped > fed_grant %lu\n",
+                CDEBUG(D_HA,"%s: cli %s/%p reports %u dropped > fedgrant %lu\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        oa->o_dropped, fed->fed_grant);
                 oa->o_dropped = 0;
@@ -702,14 +702,17 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
         struct ldlm_resource *resource = NULL;
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         ENTRY;
+
         /* If oa != NULL then filter_preprw_read updated the inode atime
          * and we should update the lvb so that other glimpses will also
          * get the updated value. bug 5972 */
-        if (ns && oa) {
+        if (oa && ns && ns->ns_lvbo && ns->ns_lvbo->lvbo_update) {
                 resource = ldlm_resource_get(ns, NULL, res_id, LDLM_EXTENT, 0);
-                if (resource && ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
+
+                if (resource != NULL) {
                         ns->ns_lvbo->lvbo_update(resource, NULL, 0, 1);
-                ldlm_resource_putref(resource);
+                        ldlm_resource_putref(resource);
+                }
         }
 
         if (res->dentry != NULL)

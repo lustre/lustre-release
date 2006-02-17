@@ -2031,7 +2031,7 @@ err_llog:
 
 int mds_postrecov(struct obd_device *obd)
 {
-        int rc, item = 0;
+        int rc;
         ENTRY;
 
         if (obd->obd_fail)
@@ -2047,14 +2047,11 @@ int mds_postrecov(struct obd_device *obd)
                        obd->obd_name);
                 GOTO(out, rc);
         }
-        
+
         /* clean PENDING dir */
         rc = mds_cleanup_pending(obd);
-        if (rc < 0) {
+        if (rc < 0)
                 GOTO(out, rc);
-        } else {
-                item = rc;
-        }
 
         /* Does anyone need this to be synchronous ever? */
         mds_lov_start_synchronize(obd, NULL, obd->obd_async_recov);
@@ -2063,7 +2060,7 @@ int mds_postrecov(struct obd_device *obd)
         lquota_recovery(quota_interface, obd);
 
 out:
-        RETURN(rc < 0 ? rc : item);
+        RETURN(rc);
 }
 
 /* We need to be able to stop an mds_lov_synchronize */
@@ -2519,7 +2516,6 @@ static int mdt_health_check(struct obd_device *obd)
         return rc;
 }
 
-
 static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
                                           void *data)
 {
@@ -2529,7 +2525,8 @@ static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
         fid.generation = gen;
         return mds_fid2dentry(&obd->u.mds, &fid, NULL);
 }
-static int mds_health_check(struct obd_device *obd) 
+
+static int mds_health_check(struct obd_device *obd)
 {
         struct obd_device_target *odt = &obd->u.obt;
         struct mds_obd *mds = &obd->u.mds;
@@ -2540,7 +2537,7 @@ static int mds_health_check(struct obd_device *obd)
 
         LASSERT(mds->mds_health_check_filp != NULL);
         rc |= !!lvfs_check_io_health(obd, mds->mds_health_check_filp);
-        
+
         return rc;
 }
 

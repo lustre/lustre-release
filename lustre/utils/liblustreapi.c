@@ -99,8 +99,8 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
         }
         if (stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
                 errno = rc = -EINVAL;
-                err_msg("error: stripe_size must be an even "
-                        "multiple of %d bytes", page_size);
+                err_msg("error: bad stripe_size %lu, must be an even "
+                        "multiple of %d bytes", stripe_size, page_size);
                 goto out;
         }
         if (stripe_offset < -1 || stripe_offset > 2048) {
@@ -705,7 +705,7 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
         char *rawbuf = raw;
         struct obd_ioctl_data data;
         int rc = 0;
-        
+
         data.ioc_inlbuf1 = (char *)&type;
         data.ioc_inllen1 = sizeof(__u32);
         data.ioc_inlbuf2 = (char *)&index;
@@ -714,28 +714,28 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
         data.ioc_plen1 = sizeof(struct obd_statfs);
         data.ioc_pbuf2 = (char *)uuid_buf;
         data.ioc_plen2 = sizeof(struct obd_uuid);
-        
+
         if (obd_ioctl_pack(&data, &rawbuf, sizeof(raw))) {
-                rc = -errno;
-                fprintf(stderr,
-                        "ERROR: ioctl packing failed( %s )\n",
-                        strerror(errno));
+                rc = -EINVAL;
+                fprintf(stderr, "error packing ioctl data: %s\n", strerror(rc));
                 return rc;
         }
 
         fd = open(path, O_RDONLY);
         if (errno == EISDIR)
                 fd = open(path, O_DIRECTORY | O_RDONLY);
-        
+
         if (fd < 0) {
                 rc = -errno;
-                fprintf(stderr, "ERROR: unable to open '%s' ( %s )\n",
-                        path, strerror(errno));
+                fprintf(stderr,"error opening '%s': %s\n",path,strerror(errno));
                 return rc;
         }
         rc = ioctl(fd, LL_IOC_OBD_STATFS, (void*)rawbuf);
-        if (rc)
+        if (rc) {
                 rc = -errno;
+                fprintf(stderr, "error statfs '%s': %s\n", uuid_buf->uuid,
+                        strerror(errno));
+        }
 
         close(fd);
         return rc;

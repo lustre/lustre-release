@@ -571,6 +571,15 @@ Details    : If an OST or MDS device is formatted with an external journal
 	     and may not be valid for failover.  Allow detecting and
 	     specifying the external journal at mount time.
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 10235
+Description: Mounting an MDS with pending unlinked files may cause oops
+Details    : target_finish_recovery() calls mds_postrecov() which returned
+	     the number of orphans unlinked. mds_lov_connect->mds_postsetup()
+	     considers this an error and immediately begins cleaning up the
+	     lov, just after starting the mds_lov process
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
