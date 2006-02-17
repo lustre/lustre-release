@@ -38,7 +38,16 @@
 #include <stdarg.h>
 #include <sys/time.h>
 #include <libcfs/libcfs.h>
+
+#ifdef HAVE_CATAMOUNT_DATA_H
+#include <catamount/data.h>
+#include <catamount/lputs.h>
+
+static int source_tag;
+static int toconsole;
 #endif
+
+#endif  /* !__KERNEL__ */
 
 #ifdef __KERNEL__
 unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
@@ -240,6 +249,11 @@ int libcfs_debug_init(unsigned long bufsize)
          */
         debug_file_fd = stdout;
 
+#ifdef HAVE_CATAMOUNT_DATA_H
+        source_tag = _my_pnid;
+        if (getenv("LIBLUSTRE_DEBUG_CONSOLE") != NULL)
+               toconsole = 1;
+#endif
         return 0;
 }
 
@@ -273,13 +287,32 @@ libcfs_debug_msg (int subsys, int mask, char *file, const char *fn,
         struct timeval tv;
         int nob;
 
+#ifdef HAVE_CATAMOUNT_DATA_H
+        if (toconsole) {
+                char buf[256];
+                nob = snprintf(buf, sizeof(buf),"(%s:%d:%s()): ",
+                               file, line, fn);
+
+                va_start (ap, format);
+                vsnprintf(&buf[nob], sizeof(buf) - nob, format, ap);
+                va_end (ap);
+
+                lputs(buf);
+                return;
+       }
+#endif
         if (debug_file_fd == NULL)
                 return;
 
         gettimeofday(&tv, NULL);
 
+#ifdef HAVE_CATAMOUNT_DATA_H
+        nob += fprintf(debug_file_fd, "%lu.%06lu:%d:(%s:%d:%s()): ",
+                       tv.tv_sec, tv.tv_usec, source_tag, file, line, fn);
+#else
         nob += fprintf(debug_file_fd, "%lu.%06lu:(%s:%d:%s()): ",
                        tv.tv_sec, tv.tv_usec, file, line, fn);
+#endif
 
         va_start (ap, format);
         nob += vfprintf(debug_file_fd, format, ap);
