@@ -2417,7 +2417,7 @@ test_65e() {
 	mkdir -p $DIR/d65
 
 	$LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
-        $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || error "no stripe info failed"
+        $LFS find -v $DIR/d65 | grep "has no stripe info" || error "no stripe info failed"
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
@@ -2433,7 +2433,7 @@ test_65g() {
         mkdir -p $DIR/d65
         $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
         $LSTRIPE -d $DIR/d65 || error "setstripe"
-        $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || \
+        $LFS find -v $DIR/d65 | grep "has no stripe info" || \
 		error "delete default stripe failed"
 }
 run_test 65g "directory setstripe -d ==========================="
