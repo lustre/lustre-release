@@ -100,7 +100,7 @@ command_t cmdlist[] = {
          "join two lustre files into one - join A, B, will be like cat B >> A & del B\n"
          "usage: join <filename_A> <filename_B>\n"},
         {"osts", lfs_osts, 0, "osts"},
-        {"df", lfs_df, 0, 
+        {"df", lfs_df, 0,
          "report filesystem disk space usage or inodes usage"
          "of each MDS/OSD.\n"
          "Usage: df [-i] [-h] [path]"},
@@ -317,7 +317,7 @@ static int lfs_osts(int argc, char **argv)
         fp = setmntent(MOUNTED, "r");
 
         if (fp == NULL) {
-                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
+                 fprintf(stderr, "%s: setmntent(%s): %s:", argv[0], MOUNTED,
                         strerror (errno));
         } else {
                 mnt = getmntent(fp);
@@ -326,8 +326,8 @@ static int lfs_osts(int argc, char **argv)
                                 rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0);
                                 if (rc)
                                         fprintf(stderr,
-                                               "error: lfs osts failed on %s\n",
-                                               mnt->mnt_dir);
+                                               "error: %s: failed on %s\n",
+                                               argv[0], mnt->mnt_dir);
                         }
                         mnt = getmntent(fp);
                 }
@@ -362,10 +362,11 @@ static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
 
         if (!realpath(path, rpath)) {
                 rc = -errno;
-                fprintf(stderr, "ERROR: invalid path( %s )\n", path);
+                fprintf(stderr, "error: lfs df: invalid path '%s': %s\n",
+                        path, strerror(-rc));
                 return rc;
         }
-        
+
         len = 0;
         mnt = getmntent(fp);
         while (feof(fp) == 0 && ferror(fp) == 0) {
@@ -379,25 +380,25 @@ static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
                 }
                 mnt = getmntent(fp);
         }
-        
+
         if (out_len > 0) {
                 strncpy(mntdir, out_mnt.mnt_dir, dir_len);
                 return 0;
         }
-        
+
         return -EINVAL;
 }
 
 static int showdf(char *mntdir, struct obd_statfs *stat,
-                  struct obd_uuid *uuid, int ishow, int cooked, 
+                  struct obd_uuid *uuid, int ishow, int cooked,
                   char *type, int index, int rc)
 {
         __u64 avail, used, total;
         double ratio = 0;
         int obd_type;
         char *suffix = "KMGTPEZY";
-        char tbuf[10], ubuf[10], abuf[10], rbuf[10];        
-        
+        char tbuf[10], ubuf[10], abuf[10], rbuf[10];
+
         if (!uuid || !stat || !type)
                 return -EINVAL;
         if (!strncmp(type, "MDT", 3)) {
@@ -405,10 +406,10 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
         } else if(!strncmp(type, "OST", 3)){
                 obd_type = 1;
         } else {
-                fprintf(stderr, "Invalid type( %s )\n", type);
+                fprintf(stderr, "error: lfs df: invalid type '%s'\n", type);
                 return -EINVAL;
         }
-        
+
         if (rc == 0) {
                 if (ishow) {
                         avail = stat->os_ffree;
@@ -420,7 +421,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                         used = used * stat->os_bsize / 1024;
                         total = stat->os_blocks * stat->os_bsize / 1024;
                 }
-                
+
                 if (total > 0)
                         ratio = (double)used / (double)total;
 
@@ -437,7 +438,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                                 sprintf(ubuf, HDF"%c", used, suffix[i - 1]);
                         else
                                 sprintf(ubuf, CDF, used);
-                        
+
                         i = COOK(avail);
                         if (i > 0)
                                 sprintf(abuf, HDF"%c", avail, suffix[i - 1]);
@@ -448,9 +449,9 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                         sprintf(ubuf, CDF, used);
                         sprintf(abuf, CDF, avail);
                 }
-                
+
                 sprintf(rbuf, RDF, (int)(ratio * 100));
-                if (obd_type == 0) 
+                if (obd_type == 0)
                         printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s[MDT:%d]\n",
                                (char *)uuid, tbuf, ubuf, abuf, rbuf,
                                mntdir, index);
@@ -458,19 +459,19 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                         printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s[OST:%d]\n",
                                (char *)uuid, tbuf, ubuf, abuf, rbuf,
                                mntdir, index);
-                        
+
                 return 0;
         }
         switch (rc) {
         case -ENODATA:
-                printf(UUF":%s\n", (char *)uuid, "inactive OST");
+                printf(UUF": inactive OST\n", (char *)uuid);
                 break;
         default:
-                printf(UUF":%s\n", (char *)uuid, strerror(-rc));
+                printf(UUF": %s\n", (char *)uuid, strerror(-rc));
                 break;
         }
 
-        return 0; 
+        return 0;
 }
 
 static int mntdf(char *mntdir, int ishow, int cooked)
@@ -479,32 +480,32 @@ static int mntdf(char *mntdir, int ishow, int cooked)
         struct obd_uuid uuid_buf;
         __u32 index;
         int rc;
-      
+
         if (ishow)
                 printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
-                       "UUID", "Inodes", "IUsed", "IFree", 
+                       "UUID", "Inodes", "IUsed", "IFree",
                        "IUse%", "Mounted on");
         else
                 printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
-                       "UUID", "1K-blocks", "Used", "Available", 
+                       "UUID", "1K-blocks", "Used", "Available",
                        "Use%", "Mounted on");
-         
-        for (index = 0;;index++) {
+
+        for (index = 0; ; index++) {
                 memset(&stat_buf, 0, sizeof(struct obd_statfs));
                 memset(&uuid_buf, 0, sizeof(struct obd_uuid));
                 rc = llapi_obd_statfs(mntdir, LL_STATFS_MDC, index,
                                       &stat_buf, &uuid_buf);
                 if (rc == -ENODEV)
                         break;
-                
+
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
                         showdf(mntdir, &stat_buf, &uuid_buf, ishow, cooked,
                                "MDT", index, rc);
                 } else {
-                        fprintf(stderr, 
-                                "ERROR: llapi_obd_statfs failed( %s %d )\n",
-                                strerror(-rc), rc);
+                        fprintf(stderr,
+                                "error: llapi_obd_statfs(%s): %s (%d)\n",
+                                uuid_buf.uuid, strerror(-rc), rc);
                         return rc;
                 }
         }
@@ -516,21 +517,21 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                                       &stat_buf, &uuid_buf);
                 if (rc == -ENODEV)
                         break;
-                
+
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
                         showdf(mntdir, &stat_buf, &uuid_buf, ishow, cooked,
                                "OST", index, rc);
                 } else {
-                        fprintf(stderr, 
-                                "ERROR: llapi_obd_statfs failed( %s  %d)\n",
+                        fprintf(stderr,
+                                "error: llapi_obd_statfs failed: %s (%d)\n",
                                 strerror(-rc), rc);
                         return rc;
                 }
         }
         return 0;
 }
- 
+
 static int lfs_df(int argc, char **argv)
 {
         FILE *fp;
@@ -539,7 +540,7 @@ static int lfs_df(int argc, char **argv)
         char mntdir[PATH_MAX] = {'\0'};
         int ishow = 0, cooked = 0;
         int c, rc = 0;
-        
+
         optind = 0;
         while ((c = getopt(argc, argv, "ih")) != -1) {
                 switch (c) {
@@ -559,17 +560,17 @@ static int lfs_df(int argc, char **argv)
         fp = setmntent(MOUNTED, "r");
         if (fp == NULL) {
                 rc = -errno;
-                fprintf(stderr, "ERROR: open %s failed( %s )\n",
-                        MOUNTED, strerror(errno));
+                fprintf(stderr, "error: %s: open %s failed( %s )\n",
+                        argv[0], MOUNTED, strerror(errno));
                 return rc;
-        } 
+        }
         if (path) {
                 rc = path2mnt(path, fp, mntdir, sizeof(mntdir));
                 if (rc) {
                         endmntent(fp);
                         return rc;
                 }
-                
+
                 rc = mntdf(mntdir, ishow, cooked);
                 printf("\n");
                 endmntent(fp);
@@ -586,7 +587,7 @@ static int lfs_df(int argc, char **argv)
                 }
                 endmntent(fp);
         }
-        
+
         return rc;
 }
 
@@ -1165,20 +1166,20 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
                                 printf("%s\n%15s", mnt, "");
                         else
                                 printf("%15s", mnt);
-                        
+
                         if (bover)
                                 diff2str(dqb->dqb_btime, timebuf, now);
-                        
+
                         sprintf(numbuf[0], "%llu", toqb(dqb->dqb_curspace));
                         sprintf(numbuf[1], "%llu", dqb->dqb_bsoftlimit);
                         sprintf(numbuf[2], "%llu", dqb->dqb_bhardlimit);
                         printf(" %7s%c %6s %7s %7s",
                                numbuf[0], bover ? '*' : ' ', numbuf[1],
                                numbuf[2], bover > 1 ? timebuf : "");
-                        
+
                         if (iover)
                                 diff2str(dqb->dqb_itime, timebuf, now);
-                        
+
                         sprintf(numbuf[0], "%llu", dqb->dqb_curinodes);
                         sprintf(numbuf[1], "%llu", dqb->dqb_isoftlimit);
                         sprintf(numbuf[2], "%llu", dqb->dqb_ihardlimit);

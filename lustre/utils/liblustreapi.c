@@ -174,7 +174,7 @@ static int prepare_find(struct find_param *param)
 {
         param->lumlen = lov_mds_md_size(MAX_LOV_UUID_COUNT);
         if ((param->lmd = malloc(sizeof(lstat_t) + param->lumlen)) == NULL) {
-                err_msg("unable to allocate %d bytes of memory for ioctl",
+                err_msg("error: allocation of %d bytes for ioctl",
                         sizeof(lstat_t) + param->lumlen);
                 return ENOMEM;
         }
@@ -209,7 +209,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 
         obdgens = malloc(size_round(max_ost_count * sizeof(*obdgens)));
         if (!obdgens) {
-                err_msg("no memory for %d generation #'s", max_ost_count);
+                err_msg("error: %d generation #'s", max_ost_count);
                 return(-ENOMEM);
         }
 
@@ -223,21 +223,22 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         desc.ld_tgt_count = max_ost_count;
 
         if (obd_ioctl_pack(&data, &buf, OBD_MAX_IOCTL_BUFFER)) {
-                fprintf(stderr, "internal buffer error packing\n");
+                fprintf(stderr, "error: %s: internal packing error\n",
+                        __FUNCTION__);
                 rc = EINVAL;
                 goto out;
         }
 
         rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
         if (rc) {
-                err_msg("error getting LOV config");
+                err_msg("error: %s: getting LOV config", __FUNCTION__);
                 rc = errno;
                 goto out;
         }
 
         if (obd_ioctl_unpack(&data, buf, OBD_MAX_IOCTL_BUFFER)) {
-                fprintf(stderr, "invalid reply from ioctl");
-                rc = EINVAL;
+                rc = errno = EINVAL;
+                err_msg("error: %s: internal ioctl unpack", __FUNCTION__);
                 goto out;
         }
 
@@ -261,8 +262,12 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
         /* Get the lov name */
         rc = ioctl(dirfd(dir), OBD_IOC_GETNAME, (void *)uuid);
         if (rc) {
-                fprintf(stderr, "error: can't get lov name: %s\n",
-                        strerror(rc = errno));
+                rc = errno;
+                if (rc == -ENOTTY)
+                        fprintf(stderr, "error: %s does not appear to be in "
+                                "a Lustre filesystem\n", dname);
+                else
+                        err_msg("error: can't get lov name: %s");
                 return rc;
         }
 
@@ -271,8 +276,7 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
                  uuid);
         fp = fopen(buf, "r");
         if (fp == NULL) {
-                fprintf(stderr, "error: %s opening %s\n",
-                        strerror(rc = errno), buf);
+                err_msg("error: opening '%s'", buf);
                 return rc;
         }
 
@@ -298,8 +302,9 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
         fclose(fp);
 
         if (param->obduuid && (param->obdindex == OBD_NOT_FOUND)) {
-                printf("unknown obduuid: %s\n", param->obduuid->uuid);
-                rc =  EINVAL;
+                fprintf(stderr, "error: %s: unknown obduuid: %s\n",
+                        __FUNCTION__, param->obduuid->uuid);
+                rc = EINVAL;
         }
 
         return (rc);
@@ -505,17 +510,19 @@ static int find_process_file(DIR *dir, char *dname, char *fname,
         if (rc) {
                 if (errno == ENODATA) {
                         if (!param->obduuid && !param->quiet)
-                                fprintf(stderr,
-                                        "%s/%s has no stripe info\n",
+                                fprintf(stderr, "%s/%s has no stripe info\n",
                                         dname, fname);
                         rc = 0;
-                } else if (errno == EISDIR) {
-                        fprintf(stderr, "process_file on directory %s/%s!\n",
+                } else if (errno == ENOTTY) {
+                        fprintf(stderr, "error: %s/%s is not a Lustre fs?\n",
                                 dname, fname);
+                } else if (errno == EISDIR) {
+                        err_msg("error: %s: directory %s/%s",
+                                __FUNCTION__, dname, fname);
                         /* add fname to directory list; */
                         rc = errno;
                 } else {
-                        err_msg("IOC_MDC_GETSTRIPE ioctl failed for '%s/%s'",
+                        err_msg("error: IOC_MDC_GETSTRIPE failed for '%s/%s'",
                                 dname, fname);
                         rc = errno;
                 }
@@ -567,10 +574,14 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
         if (rc) {
                 if (errno == ENODATA) {
                         if (!param->obduuid && param->verbose)
-                                printf("%s/%s has no stripe info\n", dname, "");
+                                printf("%s has no stripe info\n", dname);
                         rc = 0;
+                } else if (errno == ENOTTY) {
+                        fprintf(stderr, "error: %s: %s not on a Lustre fs?\n",
+                                __FUNCTION__, dname);
                 } else {
-                        err_msg("GETSTRIPE failed for %s", dname);
+                        err_msg("error: %s: LL_IOC_LOV_GETSTRIPE failed for %s",
+                                __FUNCTION__, dname);
                 }
         } else {
                llapi_lov_dump_user_lmm(param, dname, "");
@@ -586,8 +597,8 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
 
                 switch (dirp->d_type) {
                 case DT_UNKNOWN:
-                        err_msg("\"%s\" is UNKNOWN type %d", dirp->d_name,
-                                dirp->d_type);
+                        fprintf(stderr, "error: %s: '%s' is UNKNOWN type %d",
+                                __FUNCTION__, dirp->d_name, dirp->d_type);
                         /* If we cared we could stat the file to determine
                          * type and continue on here, but we don't since we
                          * know d_type should be valid for lustre and this
@@ -601,7 +612,8 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
                         strcat(path, dirp->d_name);
                         subdir = opendir(path);
                         if (subdir == NULL) {
-                                err_msg("\"%.40s\" opendir failed", path);
+                                err_msg("error: %s: opendir '%.40s'",
+                                        __FUNCTION__, path);
                                 return errno;
                         }
                         rc = process_dir(subdir, path, param);
@@ -627,10 +639,12 @@ static int process_path(char *path, struct find_param *param)
         fname = strrchr(path, '/');
         if (fname != NULL && fname[1] == '\0') {
                 /* Trailing '/', it must be a dir */
-                *fname = '\0';
+                if (strlen(path) > 1)
+                        *fname = '\0';
+
                 dir = opendir(path);
                 if (dir == NULL) {
-                        err_msg("\"%.40s\" opendir failed", path);
+                        err_msg("error: %s: '%.40s' opendir",__FUNCTION__,path);
                         rc = errno;
                 } else {
                         rc = process_dir(dir, path, param);
@@ -649,10 +663,13 @@ static int process_path(char *path, struct find_param *param)
                         *fname = '\0';
                         fname++;
                         dname = path;
+                        if (dname[0] == '\0')
+                                dname = "/";
                 }
                 dir = opendir(dname);
                 if (dir == NULL) {
-                        err_msg("\"%.40s\" opendir failed", dname);
+                        err_msg("error: %s: '%.40s' open failed",
+                                __FUNCTION__, dname);
                         rc = errno;
                 } else {
                         if (!param->got_uuids)
@@ -716,8 +733,7 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
         data.ioc_plen2 = sizeof(struct obd_uuid);
 
         if (obd_ioctl_pack(&data, &rawbuf, sizeof(raw))) {
-                rc = -EINVAL;
-                fprintf(stderr, "error packing ioctl data: %s\n", strerror(rc));
+                fprintf(stderr, "llapi_obd_statfs: error packing ioctl data\n");
                 return rc;
         }
 
@@ -727,15 +743,12 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
 
         if (fd < 0) {
                 rc = -errno;
-                fprintf(stderr,"error opening '%s': %s\n",path,strerror(errno));
+                err_msg("error: %s: opening '%s'", __FUNCTION__, path);
                 return rc;
         }
-        rc = ioctl(fd, LL_IOC_OBD_STATFS, (void*)rawbuf);
-        if (rc) {
+        rc = ioctl(fd, LL_IOC_OBD_STATFS, (void *)rawbuf);
+        if (rc)
                 rc = -errno;
-                fprintf(stderr, "error statfs '%s': %s\n", uuid_buf->uuid,
-                        strerror(errno));
-        }
 
         close(fd);
         return rc;
@@ -822,8 +835,7 @@ static void do_target_check(char *obd_type_name, char *obd_name,
 
         rc = llapi_ping(obd_type_name, obd_name);
         if (rc) {
-                fprintf(stderr, "error: check %s: %s\n",
-                        obd_name, strerror(rc = errno));
+                err_msg("error: check '%s'", obd_name);
         } else {
                 printf("%s active.\n", obd_name);
         }
@@ -973,8 +985,8 @@ static int quotachown_process_file(DIR *dir, char *dname, char *fname,
          * invoke syscall directly. */
         rc = syscall(SYS_chown, pathname, st->st_uid, st->st_gid);
         if (rc)
-                fprintf(stderr, "chown %s (%u,%u) fail: %s\n",
-                        pathname, st->st_uid, st->st_gid, strerror(errno));
+                err_msg("error: chown %s (%u,%u)",
+                        pathname, st->st_uid, st->st_gid);
         return rc;
 }
 

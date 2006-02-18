@@ -131,16 +131,16 @@ init_options(struct lustre_mount_data *lmd)
 }
 
 int
-print_options(struct lustre_mount_data *lmd, const char *options)
+print_options(FILE *out, struct lustre_mount_data *lmd, const char *options)
 {
         int i;
         for (i = 0; i < lmd->lmd_nid_count; i++) {
-                printf("mds nid %d:       %s\n", i, 
-                       libcfs_nid2str(lmd->lmd_nid[i]));
+                fprintf(out, "mds nid %d:       %s\n", i,
+                        libcfs_nid2str(lmd->lmd_nid[i]));
         }
-        printf("mds name:        %s\n", lmd->lmd_mds);
-        printf("profile:         %s\n", lmd->lmd_profile);
-        printf("options:         %s\n", options);
+        fprintf(out, "mds name:        %s\n", lmd->lmd_mds);
+        fprintf(out, "profile:         %s\n", lmd->lmd_profile);
+        fprintf(out, "options:         %s\n", options);
 
         return 0;
 }
@@ -150,17 +150,18 @@ static int parse_nids(struct lustre_mount_data *lmd, char *nids)
         int i = 0;
         char *tmp = 0;
         lnet_nid_t nid;
-        
+
         while ((tmp = strsep(&nids, ",:"))) {
                 nid = libcfs_str2nid(tmp);
                 if (nid == LNET_NID_ANY) {
-                        fprintf(stderr, "%s: Can't parse NID '%s'\n", 
+                        fprintf(stderr, "%s: Can't parse NID '%s'\n",
                                 progname, tmp);
                         continue;
                 }
                 lmd->lmd_nid[lmd->lmd_nid_count++] = nid;
                 if (lmd->lmd_nid_count >= MAX_FAILOVER_NIDS) {
-                        fprintf(stderr, "%s: Too many: ignoring nids after %s\n", 
+                        fprintf(stderr, "%s: Too many target NIDs: "
+                                "ignoring nids after %s\n",
                                 progname, tmp);
                         break;
                 }
@@ -417,7 +418,7 @@ int main(int argc, char *const argv[])
         }
 
         if (verbose)
-                print_options(&lmd, options);
+                print_options(stdout, &lmd, options);
 
         rc = access(target, F_OK);
         if (rc) {
@@ -432,6 +433,7 @@ int main(int argc, char *const argv[])
         if (rc) {
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname,
                         source, target, strerror(errno));
+                print_options(stderr, &lmd, options);
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");
