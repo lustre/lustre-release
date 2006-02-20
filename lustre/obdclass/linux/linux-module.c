@@ -144,7 +144,18 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
         return 0;
 }
 
+int obd_ioctl_popdata(void *arg, void *data, int len)
+{
+        int err; 
+        
+        err = copy_to_user(arg, data, len);
+        if (err)
+                err = -EFAULT;
+        return err;
+}
+
 EXPORT_SYMBOL(obd_ioctl_getdata);
+EXPORT_SYMBOL(obd_ioctl_popdata);
 
 #define OBD_MINOR 241
 extern struct cfs_psdev_ops          obd_psdev_ops;

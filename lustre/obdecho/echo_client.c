@@ -280,8 +280,10 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd,
         spin_lock (&ec->ec_lock);
         eco = echo_find_object_locked (obd, oa->o_id);
         if (eco != NULL) {
-                if (eco->eco_deleted)           /* being deleted */
+                if (eco->eco_deleted) {          /* being deleted */
+                        spin_unlock (&ec->ec_lock);
                         return (-EAGAIN);       /* (see comment in cleanup) */
+                }
 
                 eco->eco_refcount++;
                 spin_unlock (&ec->ec_lock);

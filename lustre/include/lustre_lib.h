@@ -300,6 +300,7 @@ static inline int obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf,
 #ifdef __KERNEL__
 /* function defined in lustre/obdclass/<platform>/<platform>-module.c */
 int obd_ioctl_getdata(char **buf, int *len, void *arg);
+int obd_ioctl_popdata(void *arg, void *data, int len);
 #else
 /* buffer MUST be at least the size of obd_ioctl_hdr */
 static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
@@ -374,6 +375,14 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
         EXIT;
         return 0;
+}
+
+static inline int obd_ioctl_popdata(void *arg, void *data, int len)
+{
+        int err = copy_to_user(arg, data, len);
+        if (err)
+                err = -EFAULT;
+        return err;
 }
 #endif
 
@@ -545,7 +554,6 @@ struct l_wait_info {
 do {                                                                           \
         cfs_waitlink_t __wait;                                                 \
         cfs_duration_t __timed_out = 0;                                        \
-        unsigned long irqflags;                                                \
         cfs_sigset_t blocked;                                                  \
         cfs_time_t timeout_remaining;                                          \
                                                                                \
@@ -598,9 +606,7 @@ do {                                                                           \
                             /* -EINTR when the RPC actually succeeded.      */ \
                             /* the RECALC_SIGPENDING below will deliver the */ \
                             /* signal properly.                             */ \
-                            cfs_sigmask_lock(irqflags);                        \
                             cfs_clear_sigpending();                            \
-                            cfs_sigmask_unlock(irqflags);                      \
                     }                                                          \
             }                                                                  \
         }                                                                      \

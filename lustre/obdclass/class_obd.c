@@ -205,7 +205,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 memcpy(data->ioc_bulk, BUILD_VERSION,
                        strlen(BUILD_VERSION) + 1);
 
-                err = copy_to_user((void *)arg, data, len);
+                err = obd_ioctl_popdata((void *)arg, data, len);
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -222,7 +222,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (dev < 0)
                         GOTO(out, err = -EINVAL);
 
-                err = copy_to_user((void *)arg, data, sizeof(*data));
+                err = obd_ioctl_popdata((void *)arg, data, sizeof(*data));
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -256,7 +256,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
-                err = copy_to_user((void *)arg, data, sizeof(*data));
+                err = obd_ioctl_popdata((void *)arg, data, sizeof(*data));
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -299,7 +299,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (err)
                         GOTO(out, err);
 
-                err = copy_to_user((void *)arg, data, len);
+                err = obd_ioctl_popdata((void *)arg, data, len);
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);

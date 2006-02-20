@@ -55,8 +55,8 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
         *len = hdr->ioc_len;
         data = (struct obd_ioctl_data *)*buf;
 
-	bzero(*buf, hdr->ioc_len);
-	memcpy(*buf, (void *)arg, sizeof(struct obd_ioctl_data));
+	bzero(data, hdr->ioc_len);
+	memcpy(data, (void *)arg, sizeof(struct obd_ioctl_data));
 	if (data->ioc_inlbuf1)
 		err = copy_from_user(&data->ioc_bulk[0], (void *)data->ioc_inlbuf1,
 				     hdr->ioc_len - ((void *)&data->ioc_bulk[0] - (void *)data));
@@ -89,6 +89,23 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
         return 0;
 }
 
+int obd_ioctl_popdata(void *arg, void *data, int len)
+{
+	/* 
+	 * Xnu ioctl copyout(uaddr, arg, sizeof(struct obd_ioctl_data)),
+	 * we have to copy out data by ourself only if 
+	 * len > sizeof(struct obd_ioctl_data)
+	 */
+	if (len <= sizeof(struct obd_ioctl_data)) {
+		memcpy(arg, data, len);
+		return 0;
+	} else {
+		struct obd_ioctl_data *u = (struct obd_ioctl_data *)arg;
+		struct obd_ioctl_data *k = (struct obd_ioctl_data *)data;
+		return copy_to_user((void *)u->ioc_inlbuf1, &k->ioc_bulk[0],
+				    len -((void *)&k->ioc_bulk[0] -(void *)k));
+	}
+}
 /*
  * cfs pseudo device
  */
