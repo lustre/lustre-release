@@ -129,19 +129,6 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
-int obd_record(enum cfg_record_type type, int len, void *ptr)
-{
-        struct obd_ioctl_data data;
-
-        IOC_INIT(data);
-        data.ioc_type = type;
-        data.ioc_plen1 = len;
-        data.ioc_pbuf1 = ptr;
-        IOC_PACK("obd_record", data);
-
-        return  l_ioctl(OBD_DEV_ID, OBD_IOC_DORECORD, &data);
-}
-
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg)
 {
         int opc;
@@ -161,6 +148,37 @@ int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg)
                 opc = OBD_IOC_PROCESS_CFG;
         }
         rc =  l_ioctl(dev_id, opc, buf);
+
+        return rc;
+}
+
+int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
+{
+        struct obd_ioctl_data data;
+        static int mgs_device = -1;
+        int rc;
+
+        /* Always operates on MGS dev */
+        if (mgs_device == -1) {
+                static int do_device(char *func, char *devname);
+                do_disconnect(NULL, 1);
+                rc = do_device("mgsioc", "MGS");
+                if (rc) {
+                        errno = ENODEV;
+                        return -1;
+                }
+                mgs_device = cur_device;
+        }
+
+        IOC_INIT(data);
+        data.ioc_dev = mgs_device;
+        data.ioc_type = LUSTRE_CFG_TYPE;
+        data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
+                                        lcfg->lcfg_buflens);
+        data.ioc_pbuf1 = (void *)lcfg;
+        IOC_PACK(func, data);
+
+        rc =  l_ioctl(dev_id, OBD_IOC_PARAM, buf);
 
         return rc;
 }

@@ -69,32 +69,30 @@ void usage(FILE *out)
                 "\t\t--ost: object storage, mutually exclusive with mdt\n"
                 "\t\t--mdt: metadata storage, mutually exclusive with ost\n"
                 "\t\t--mgs: configuration management service - one per site\n"
-                "\toptions:\n"
+                "\toptions (in order of popularity):\n"
                 "\t\t--mgsnid=<nid>[,<...>] : NID(s) of a remote mgs node\n"
                 "\t\t\trequired for all targets other than the mgs node\n"
                 "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
+                "\t\t--failover=<nid>[,<...>] : list of NIDs for the failover\n"
+                "\t\t\tpartners for this target\n" 
+                "\t\t--index=#N : target index\n"
                 /* FIXME implement 1.6.x
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
                 "\t\t\tfor this device on an alternate device\n"
                 */
-                "\t\t--failover=<nid>[,<...>] : list of NIDs for the failover\n"
-                "\t\t\tpartners for this target\n" 
+                "\t\t--mountfsoptions=<opts> : permanent mount options\n"
                 "\t\t--backfstype=<fstype> : backing fs type (ext3, ldiskfs)\n"
                 "\t\t--device-size=#N(KB) : device size for loop devices\n"
-                "\t\t--stripe-count=#N : default number of stripes\n"
-                "\t\t--stripe-size=#N(KB) : default stripe size\n"
-                "\t\t--index=#N : target index\n"
-                "\t\t--mountfsoptions=<opts> : permanent mount options\n"
 #ifndef TUNEFS
                 "\t\t--mkfsoptions=<opts> : format options\n"
                 "\t\t--reformat: overwrite an existing disk\n"
+                "\t\t--stripe-count-hint=#N : used for optimizing MDT inode size\n"
 #else
                 "\t\t--nomgs: turn off MGS service on this MDT\n"
                 "\t\t--writeconf: erase all config logs for this fs.\n"
 #endif
                 "\t\t--print: just report what we would do; don't write to "
                 "disk\n"
-                "\t\t--timeout=<secs> : system timeout period\n"
                 "\t\t--verbose\n"
                 "\t\t--quiet\n");
         return;
@@ -430,11 +428,12 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 if (strstr(mop->mo_mkfsopts, "-I") == NULL) {
                         long inode_size = 0;
                         if (IS_MDT(&mop->mo_ldd)) {
-                                if (mop->mo_ldd.ldd_stripe_count > 77)
+                                if (mop->mo_stripe_count > 77)
                                         inode_size = 512; /* bz 7241 */
-                                else if (mop->mo_ldd.ldd_stripe_count > 34)
+                                /* cray stripes across all osts (>60) */
+                                else if (mop->mo_stripe_count > 34)
                                         inode_size = 2048;
-                                else if (mop->mo_ldd.ldd_stripe_count > 13)
+                                else if (mop->mo_stripe_count > 13)
                                         inode_size = 1024;
                                 else 
                                         inode_size = 512;
@@ -792,9 +791,7 @@ void set_defaults(struct mkfs_opts *mop)
                 mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
         
         mop->mo_ldd.ldd_svindex = INDEX_UNASSIGNED;
-        mop->mo_ldd.ldd_stripe_count = 1;
-        mop->mo_ldd.ldd_stripe_sz = 1024 * 1024;
-        mop->mo_ldd.ldd_stripe_pattern = 0;
+        mop->mo_stripe_count = 1;
 }
 
 static inline void badopt(const char *opt, char *type)
@@ -809,32 +806,28 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 {
         static struct option long_opt[] = {
                 {"backfstype", 1, 0, 'b'},
+                {"stripe-count-hint", 1, 0, 'c'},
                 {"configdev", 1, 0, 'C'},
                 {"device-size", 1, 0, 'd'},
-                {"fsname",1, 0, 'n'},
                 {"failover", 1, 0, 'f'},
-                {"help", 0, 0, 'h'},
-                {"mdt", 0, 0, 'M'},
                 {"mgs", 0, 0, 'G'},
-                {"mgsnid", 1, 0, 'm'},
+                {"help", 0, 0, 'h'},
+                {"index", 1, 0, 'i'},
                 {"mkfsoptions", 1, 0, 'k'},
-                {"mountfsoptions", 1, 0, 'o'},
+                {"mgsnid", 1, 0, 'm'},
+                {"mdt", 0, 0, 'M'},
+                {"fsname",1, 0, 'n'},
                 {"nomgs", 0, 0, 'N'},
+                {"mountfsoptions", 1, 0, 'o'},
                 {"ost", 0, 0, 'O'},
                 {"print", 0, 0, 'p'},
                 {"quiet", 0, 0, 'q'},
                 {"reformat", 0, 0, 'r'},
-                {"startupwait", 1, 0, 'w'},
-                {"stripe-count", 1, 0, 'c'},
-                {"stripe-size", 1, 0, 's'},
-                {"stripe-index", 1, 0, 'i'},
-                {"index", 1, 0, 'i'},
-                {"timeout", 1, 0, 't'},
                 {"verbose", 0, 0, 'v'},
                 {"writeconf", 0, 0, 'w'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "b:C:d:n:f:hI:MGm:k:No:Opqrw:c:s:i:t:vw";
+        char *optstring = "b:c:C:d:f:Ghi:k:m:Mn:No:Opqrvw";
         char opt;
         int longidx;
 
@@ -860,7 +853,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                                 "%d\n", progname, stripe_count);
                                         return 1;
                                 }
-                                mop->mo_ldd.ldd_stripe_count = stripe_count;
+                                mop->mo_stripe_count = stripe_count;
                         } else {
                                 badopt(long_opt[longidx].name, "MDT");
                                 return 1;
@@ -964,18 +957,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 case 'r':
                         mop->mo_flags |= MO_FORCEFORMAT;
-                        break;
-                case 's':
-                        if (IS_MDT(&mop->mo_ldd)) {
-                                mop->mo_ldd.ldd_stripe_sz = atol(optarg) * 1024;
-                        } else {
-                                badopt(long_opt[longidx].name, "MDT");
-                                return 1;
-                        }
-                        break;
-                case 't':
-                        mop->mo_ldd.ldd_timeout = atol(optarg);
-                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
                         break;
                 case 'v':
                         verbose++;

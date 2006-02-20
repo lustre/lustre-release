@@ -349,7 +349,10 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         GOTO(out_nolock, rc);
         }
 
-        /* revoke the config lock so everyone will update */
+        /* Revoke the config lock to make sure nobody is reading. */
+        /* Although actually I think it should be alright if
+           someone was reading while we were updating the logs - if we 
+           revoke at the end they will just update from where they left off. */
         lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
         if (lockrc != ELDLM_OK) {
                 LCONSOLE_ERROR("%s: Can't signal other nodes to update "
@@ -361,7 +364,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 
         /* There can be only 1 server adding at a time - don't want log
            writing contention. */
-        down(&obd->u.mgs.mgs_log_sem);
+        /* Actually this should be okay because of the per-fs fsdb sem */
+        //down(&obd->u.mgs.mgs_log_sem);
 
         if (mti->mti_flags & LDD_F_WRITECONF) {
                 rc = mgs_erase_logs(obd, mti->mti_fsname);
@@ -406,7 +410,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         }
 
 out:
-        up(&obd->u.mgs.mgs_log_sem);
+        //up(&obd->u.mgs.mgs_log_sem);
         /* done with log update */
         if (lockrc == ELDLM_OK)
                 mgs_put_cfg_lock(&lockh);
@@ -534,6 +538,124 @@ static inline int mgs_destroy_export(struct obd_export *exp)
         RETURN(0);
 }
 
+/* from mdt_iocontrol */
+int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+                  void *karg, void *uarg)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct obd_ioctl_data *data = karg;
+        struct lvfs_run_ctxt saved;
+        int rc = 0;
+
+        ENTRY;
+        CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
+
+        switch (cmd) {
+
+        case OBD_IOC_DORECORD: 
+        case OBD_IOC_PARAM: {
+                struct lustre_handle lockh;
+                struct lustre_cfg *lcfg;
+                struct llog_rec_hdr rec;
+                char fsname[32], *devname, *ptr;
+                int lockrc;
+
+                CERROR("MGS param\n");
+
+                rec.lrh_len = llog_data_len(data->ioc_plen1);
+
+                if (data->ioc_type == LUSTRE_CFG_TYPE) {
+                        rec.lrh_type = OBD_CFG_REC;
+                } else {
+                        CERROR("unknown cfg record type:%d \n", data->ioc_type);
+                        RETURN(-EINVAL);
+                }
+
+                OBD_ALLOC(lcfg, data->ioc_plen1);
+                if (lcfg == NULL)
+                        RETURN(-ENOMEM);
+                rc = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
+                if (rc) {
+                        OBD_FREE(lcfg, data->ioc_plen1);
+                        RETURN(rc);
+                }
+
+                if (lcfg->lcfg_bufcount < 1)
+                        RETURN(-EINVAL);
+
+                /* Extract fsname */
+                /* FIXME COMPAT_146 this won't work with old names */
+                memset(fsname, 0, sizeof(fsname));
+                devname = lustre_cfg_string(lcfg, 0);
+                if (!devname) {
+                        LCONSOLE_ERROR("No device specified\n");
+                        GOTO(out_free, rc = -ENODEV);
+                }
+                ptr = strchr(devname, '-');
+                if (!ptr) {
+                        /* assume devname is the fsname */
+                        //strncpy(fsname, devname, sizeof(fsname));
+                        LCONSOLE_ERROR("Unrecognized device %s\n", devname);
+                        GOTO(out_free, rc = -ENODEV);
+                } else {  
+                        strncpy(fsname, devname, ptr - devname);
+                }
+
+                CDEBUG(D_MGS, "set param on fs %s device %s\n", 
+                       fsname, devname);
+
+                //down(&obd->u.mgs.mgs_log_sem);
+                rc = mgs_setparam(obd, fsname, lcfg);
+                //up(&obd->u.mgs.mgs_log_sem);
+
+                if (rc) {
+                        CERROR("setparam err %d\n", rc);
+                        GOTO(out_free, rc);
+                }
+
+                /* Revoke lock so everyone updates.  Should be alright if
+                   someone was reading while we were updating the logs. */
+                lockrc = mgs_get_cfg_lock(obd, fsname, &lockh);
+                if (lockrc != ELDLM_OK) 
+                        CERROR("lock error %d for fs %s\n", lockrc, fsname);
+                else
+                        mgs_put_cfg_lock(&lockh);
+out_free:
+                OBD_FREE(lcfg, data->ioc_plen1);
+                RETURN(rc);
+        }
+
+        case OBD_IOC_DUMP_LOG: {
+                struct llog_ctxt *ctxt =
+                        llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                if (rc)
+                        RETURN(rc);
+
+                RETURN(rc);
+        }
+
+        case OBD_IOC_LLOG_CHECK:
+        case OBD_IOC_LLOG_INFO:
+        case OBD_IOC_LLOG_PRINT: {
+                struct llog_ctxt *ctxt =
+                        llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+
+                push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+                rc = llog_ioctl(ctxt, cmd, data);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+
+                RETURN(rc);
+        }
+
+        default:
+                CDEBUG(D_INFO, "unknown command %x\n", cmd);
+                RETURN(-EINVAL);
+        }
+        RETURN(0);
+}
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mgs_obd_ops = {
@@ -544,7 +666,7 @@ static struct obd_ops mgs_obd_ops = {
         .o_precleanup      = mgs_precleanup,
         .o_cleanup         = mgs_cleanup,
         .o_destroy_export  = mgs_destroy_export,
-        //.o_iocontrol       = mgs_iocontrol,
+        .o_iocontrol       = mgs_iocontrol,
 };
 
 static int __init mgs_init(void)

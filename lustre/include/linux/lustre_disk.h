@@ -100,17 +100,8 @@ struct lustre_disk_data {
         /* COMPAT_146 */
         __u8       ldd_uuid[40];        /* server UUID */
         /* end COMPAT_146 */
-/*1228*/        
-        /* These are required for writing mdt, ost,or client logs,
-           and are ignored after that. */
-        /* FIXME these should be removed from here and set via ioctls or proc */
-        int   ldd_stripe_sz;
-        int   ldd_stripe_count;
-        int   ldd_stripe_pattern;
-        int   ldd_stripe_offset;
-        int   ldd_timeout;               /* obd timeout */
-/*1248*/       
-        __u8       ldd_padding[4096 - 1248];
+   
+        __u8       ldd_padding[4096 - 1228];
         char       ldd_mount_opts[4096]; /* target fs mount opts */
 };
 
@@ -181,6 +172,7 @@ struct mkfs_opts {
         char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
         char  mo_loopdev[128];          /* in case a loop dev is needed */
         __u64 mo_device_sz;             /* in KB */
+        int   mo_stripe_count;
         int   mo_flags; 
 };
 

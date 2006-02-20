@@ -828,10 +828,6 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;
-        mti->mti_stripe_count = ldd->ldd_stripe_count;
-        mti->mti_stripe_pattern = ldd->ldd_stripe_pattern;
-        mti->mti_stripe_size = ldd->ldd_stripe_sz; 
-        mti->mti_stripe_offset = ldd->ldd_stripe_offset;  
         RETURN(0);
 }
 
@@ -946,6 +942,10 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                    (LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_UPGRADE14))){
                 CERROR("Required registration failed for %s: %d\n", 
                        lsi->lsi_ldd->ldd_svname, rc);
+                if (rc == -EIO) {
+                        LCONSOLE_ERROR("Communication error with the MGS.  Is "
+                                       "the MGS running?\n");
+                }
                 GOTO(out, rc);
         }
 

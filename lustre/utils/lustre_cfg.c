@@ -645,6 +645,7 @@ int jt_lcfg_del_conn(int argc, char **argv)
         return rc;
 }
 
+/* Param set locally, directly on target */
 int jt_lcfg_param(int argc, char **argv)
 {
         int i, rc;
@@ -670,4 +671,57 @@ int jt_lcfg_param(int argc, char **argv)
         }
         return rc;
 }
+
+/* Param set in config log on MGS */
+/* conf_param <cfg_device> key1=value1 [key2=value2...] */
+int jt_lcfg_mgsparam(int argc, char **argv)
+{
+        int i, rc, index_offset = 0;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+
+        if ((argc >= LUSTRE_CFG_MAX_BUFCOUNT) || (argc <= 1))
+                return CMD_HELP;
+
+        if (!strchr(argv[1], '=')) {
+                /* Not key=val, assume <cfg_device> */
+                rc = jt_lcfg_device(2, argv);
+                if (rc) 
+                        return rc;
+                index_offset = 1;
+        }
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+                return -EINVAL;
+        }
+
+        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+
+        for (i = 1; i < (argc - index_offset); i++) {
+                lustre_cfg_bufs_set_string(&bufs, i, argv[i + index_offset]);
+        }
+
+        /* We could put other opcodes here. */
+        lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+
+        rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        lustre_cfg_free(lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+                if (rc == ENODEV) 
+                        fprintf(stderr, "Is the MGS running on this node?\n");
+                if (rc == ENOSYS) 
+                        fprintf(stderr, "Make sure cfg_device is set first.\n");
+                if (rc == EINVAL) 
+                        fprintf(stderr, "cfg_device should be of the form "
+                                "'lustre-MDT0000'\n");
+        }
+        
+        return rc;
+}
+
 

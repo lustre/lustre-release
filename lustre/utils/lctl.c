@@ -170,6 +170,9 @@ command_t cmdlist[] = {
          "usage: dump_log config-uuid-name"},
         {"clear_log", jt_cfg_clear_log, 0, "delete current config log of recorded commands\n"
          "usage: clear_log config-name"},
+        {"conf_param", jt_lcfg_mgsparam, 0, "set a permanent config param\n"
+         "usage: conf_param <keyword=val> ...\n"},
+
 
         /* Device operations */
         {"=== device operations ==", jt_noop, 0, "device operations"},
@@ -236,8 +239,8 @@ command_t cmdlist[] = {
          "usage: add_conn <conn_uuid> [priority]\n"},
         {"del_conn ", jt_lcfg_del_conn, 0,
          "usage: del_conn <conn_uuid> \n"},
-        {"param", jt_lcfg_param, 0,
-         "usage: param <keyword=val> ...\n"},
+        {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
+         "usage: local_param <keyword=val> ...\n"},
        
         /* Llog operations */ 
         {"llog_catlist", jt_llog_catlist, 0, 

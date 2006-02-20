@@ -202,7 +202,7 @@ static const struct opt_map opt_map[] = {
   { "nouser_xattr", 1, 1, 0     },      /* Disable user xattr */
   { "acl",      0, 0, 0         },      /* Enable ACL support */
   { "noacl",    1, 1, 0         },      /* Disable ACL support */
-  { "nosvc",    0, 0, 0         },      /* Only start MGS/MGC, no other services */
+  { "nosvc",    0, 0, 0         },      /* Only start MGS/MGC, nothing else */
   { "exclude",  0, 0, 0         },      /* OST exclusion list */
   { NULL,       0, 0, 0         }
 };

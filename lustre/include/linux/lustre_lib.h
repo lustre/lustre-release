@@ -453,7 +453,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_PROCESS_CFG            _IOWR('f', 184, long)
 #define OBD_IOC_DUMP_LOG               _IOWR('f', 185, long)
 #define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, long)
-#define OBD_IOC_START                  _IOWR('f', 187, long)
+#define OBD_IOC_PARAM                  _IOW ('f', 187, long)
 
 #define OBD_IOC_CATLOGLIST             _IOWR('f', 190, long)
 #define OBD_IOC_LLOG_INFO              _IOWR('f', 191, long)

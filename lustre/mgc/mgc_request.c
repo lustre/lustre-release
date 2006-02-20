@@ -539,20 +539,6 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 GOTO(out, rc);
         }
-        case OBD_IOC_START: {
-                char *name = data->ioc_inlbuf1;
-                CERROR("getting config log %s\n", name);
-                /* FIXME Get llog from MGS */
-
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-                rc = class_config_parse_llog(ctxt, name, NULL);
-                if (rc < 0)
-                        CERROR("Unable to process log: %s\n", name);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-                GOTO(out, rc);
-        }
         default:
                 CERROR("mgc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, rc = -ENOTTY);
@@ -589,17 +575,17 @@ static int mgc_target_register(struct obd_export *exp,
 
         req->rq_replen = lustre_msg_size(1, &rep_size);
 
-        CDEBUG(D_MGC, "requesting add for %s\n", mti->mti_svname);
+        CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
         
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 rep_mti = lustre_swab_repbuf(req, 0, sizeof(*rep_mti),
                                              lustre_swab_mgs_target_info);
                 memcpy(mti, rep_mti, sizeof(*rep_mti));
-                CDEBUG(D_MGC, "target_add %s got index = %d\n",
+                CDEBUG(D_MGC, "register %s got index = %d\n",
                        mti->mti_svname, mti->mti_stripe_index);
         } else {
-                CERROR("target_add failed. rc=%d\n", rc);
+                CERROR("register failed. rc=%d\n", rc);
         }
         ptlrpc_req_finished(req);
 
