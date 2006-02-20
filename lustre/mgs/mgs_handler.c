@@ -288,10 +288,9 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
 
 static int mgs_put_cfg_lock(struct lustre_handle *lockh)
 {
-        CERROR("mgs_unlock\n");
-        
+        ENTRY;
         ldlm_lock_decref(lockh, LCK_EX);
-        return 0;
+        RETURN(0);
 }
 
 /* rc=0 means ok */
@@ -362,10 +361,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                                obd->obd_name, lockrc);
         }
 
-        /* There can be only 1 server adding at a time - don't want log
-           writing contention. */
-        /* Actually this should be okay because of the per-fs fsdb sem */
-        //down(&obd->u.mgs.mgs_log_sem);
+        /* Log writing contention is handled by the fsdb_sem */
 
         if (mti->mti_flags & LDD_F_WRITECONF) {
                 rc = mgs_erase_logs(obd, mti->mti_fsname);
@@ -410,7 +406,6 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         }
 
 out:
-        //up(&obd->u.mgs.mgs_log_sem);
         /* done with log update */
         if (lockrc == ELDLM_OK)
                 mgs_put_cfg_lock(&lockh);
@@ -604,10 +599,7 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 CDEBUG(D_MGS, "set param on fs %s device %s\n", 
                        fsname, devname);
 
-                //down(&obd->u.mgs.mgs_log_sem);
                 rc = mgs_setparam(obd, fsname, lcfg);
-                //up(&obd->u.mgs.mgs_log_sem);
-
                 if (rc) {
                         CERROR("setparam err %d\n", rc);
                         GOTO(out_free, rc);

@@ -329,14 +329,18 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
         }
         case(LCFG_MARKER):{
                 struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+
                 if (marker->cm_flags & CM_SKIP) {
                         if (marker->cm_flags & CM_START) 
                                 (*skip)++;
                         if (marker->cm_flags & CM_END)
                                 (*skip)--;
                 }
-                printf("marker %d (flags=%#x) %.16s '%s'", marker->cm_step,
-                       marker->cm_flags, marker->cm_svname, marker->cm_comment);
+                printf("marker %d (flags=%#x) %.16s '%s' %s:%s", marker->cm_step,
+                       marker->cm_flags, marker->cm_svname, 
+                       marker->cm_comment, ctime(&marker->cm_createtime),
+                       marker->cm_canceltime ? 
+                       ctime(&marker->cm_canceltime) : "");
                 break;
         }
         default:

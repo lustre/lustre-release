@@ -1425,7 +1425,7 @@ int lustre_common_put_super(struct super_block *sb)
                 }
                 /* BUSY just means that there's some other obd that
                    needs the mgc.  Let him clean it up. */
-                CDEBUG(D_MOUNT, "MGC busy, will stop later\n");
+                CDEBUG(D_MOUNT, "MGC still in use\n");
         }
         lustre_put_lsi(sb);
         RETURN(rc);

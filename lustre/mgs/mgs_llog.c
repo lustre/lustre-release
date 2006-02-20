@@ -543,11 +543,10 @@ static int record_marker(struct obd_device *obd, struct llog_handle *llh,
                          char *svname, char *comment)
 {
         struct cfg_marker marker;
+        struct timeval tv;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
         int rc;
-
-        CDEBUG(D_MGS, "marker %#x %s\n", flags, comment);
 
         if (flags & CM_START) 
                 fsdb->fsdb_gen++;
@@ -555,6 +554,9 @@ static int record_marker(struct obd_device *obd, struct llog_handle *llh,
         marker.cm_flags = flags;
         strncpy(marker.cm_svname, svname, sizeof(marker.cm_svname)); 
         strncpy(marker.cm_comment, comment, sizeof(marker.cm_comment)); 
+        do_gettimeofday(&tv);
+        marker.cm_createtime = tv.tv_sec;
+        marker.cm_canceltime = 0;
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set(&bufs, 1, &marker, sizeof(marker));
         lcfg = lustre_cfg_new(LCFG_MARKER, &bufs);
@@ -1340,7 +1342,15 @@ int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
                 name_destroy(logname);
                 name_create(fsname, "-client", &logname);
                 name_create(fsname, "-clilov", &lovname);
-                rc = mgs_write_log_direct(obd, fsdb, logname, lovname, lcfg);
+                /* Now, we still have to fix the devname (from the mdtlov
+                   to the clilov) within the lcfg.  We could copy the whole
+                   lcfg... */
+                devname = lustre_cfg_string(lcfg, 0);
+                if (strlen(devname) == strlen(lovname)) {
+                        strcpy(devname, lovname); /* ...or just hack it! */
+                        rc = mgs_write_log_direct(obd, fsdb, logname,
+                                                  lovname, lcfg);
+                }
                 name_destroy(lovname);
                 up(&fsdb->fsdb_sem);
         }

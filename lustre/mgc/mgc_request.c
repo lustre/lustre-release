@@ -374,12 +374,16 @@ static int mgc_async_requeue(void *data)
         /* FIXME sleep a few seconds here to allow the server who caused
            the lock revocation to finish its setup */
         
-        /* re-send server info every time, in case MGS needs to regen its
-           logs */
+#if 0
+        /* Re-send server info every time, in case MGS needs to regen its
+           logs (for write_conf).  Do we need this?  It's extra RPCs for
+           every server at every update. */
         server_register_target(cld->cld_cfg.cfg_sb);
+#endif 
+       
         rc = mgc_process_log(the_mgc, cld);
+
         class_export_put(the_mgc->obd_self_export);
-        
         RETURN(rc);
 }
 
@@ -417,13 +421,12 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         CERROR("original grant failed, won't requeue\n");
                         break;
                 }
-
                 if (!data) {
                         CERROR("missing data, won't requeue\n");
                         break;
                 }
 
-                /* Reenque the lock in a separate thread, because we must
+                /* Re-enqueue the lock in a separate thread, because we must
                    return from this fn before that lock can be taken. */
                 rc = kernel_thread(mgc_async_requeue, data,
                                    CLONE_VM | CLONE_FS);
@@ -445,7 +448,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(rc);
 }
 
-/* based on ll_get_dir_page and osc_enqueue. */
+/* Take a config lock so we can get cancel notifications */
 static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                        __u32 type, ldlm_policy_data_t *policy, __u32 mode,
                        int *flags, void *bl_cb, void *cp_cb, void *gl_cb,
@@ -460,24 +463,13 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         CDEBUG(D_MGC, "Enqueue for %s (res "LPX64")\n", cld->cld_logname,
                cld->cld_resid.name[0]);
 
-        /* Search for already existing locks.*/
-        rc = ldlm_lock_match(obd->obd_namespace, 0, &cld->cld_resid, type, 
-                             NULL, mode, lockh);
-        if (rc == 1) 
-                RETURN(ELDLM_OK);
-
+        /* We need a callback for every lockholder, so don't try to
+           ldlm_lock_match (see rev 1.1.2.11.2.47) */
 
         rc = ldlm_cli_enqueue(exp, NULL, obd->obd_namespace, cld->cld_resid,
                               type, NULL, mode, flags, 
                               mgc_blocking_ast, ldlm_completion_ast, NULL,
                               data, NULL, 0, NULL, lockh);
-        if (rc == 0) {
-                /* Allow matches for other clients mounted on this host */
-                struct ldlm_lock *lock = ldlm_handle2lock(lockh);
-                LASSERT(lock);
-                ldlm_lock_allow_match(lock);
-                LDLM_LOCK_PUT(lock);
-        }
 
         RETURN(rc);
 }
