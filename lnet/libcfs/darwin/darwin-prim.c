@@ -159,7 +159,14 @@ cfs_symbol_unregister(const char *name)
 }
 
 void
-cfs_symbol_clean()
+cfs_symbol_init()
+{
+        CFS_INIT_LIST_HEAD(&cfs_symbol_list);
+        init_rwsem(&cfs_symbol_lock);
+}
+
+void
+cfs_symbol_fini()
 {
         struct list_head    *walker;
         struct cfs_symbol   *sym = NULL;
@@ -172,6 +179,8 @@ cfs_symbol_clean()
                 FREE(sym, M_TEMP);
         }
         up_write(&cfs_symbol_lock);
+
+        fini_rwsem(&cfs_symbol_lock);
         return;
 }
 
@@ -326,7 +335,48 @@ void cfs_daemonize(char *str)
         return;
 }
 
+/*
+ * XXX Liang: kexts cannot access sigmask in Darwin8.
+ * it's almost impossible for us to get/set signal mask
+ * without patching kernel.
+ * Should we provide these functions in xnu?
+ *
+ * These signal functions almost do nothing now, we 
+ * need to investigate more about signal in Darwin.
+ */
+cfs_sigset_t cfs_get_blockedsigs()
+{
+        return (cfs_sigset_t)0;
+}
+
+extern int block_procsigmask(struct proc *p,  int bit);
+
+cfs_sigset_t cfs_block_allsigs()
+{
+        cfs_sigset_t    old = 0;
+#ifdef __DARWIN8__
+#else
+        block_procsigmask(current_proc(), -1);
+#endif
+        return old;
+}
+
+cfs_sigset_t cfs_block_sigs(sigset_t bit)
+{
+        cfs_sigset_t    old = 0;
+#ifdef __DARWIN8__
+#else
+        block_procsigmask(current_proc(), bit);
+#endif
+        return old;
+}
+
+void cfs_restore_sigs(cfs_sigset_t old)
+{
+}
+
 int cfs_signal_pending(void)
+
 {
 #ifdef __DARWIN8__
         extern int thread_issignal(proc_t, thread_t, sigset_t);
@@ -336,34 +386,11 @@ int cfs_signal_pending(void)
 #endif
 }
 
-/*
- * XXX Liang: kexts cannot access sigmask in Darwin8.
- * it's almost impossible for us to get/set signal mask
- * without patching kernel.
- * Should we provide these functions in xnu?
- *
- * There are several functions/MACRO which are very 
- * confusing for me:
- *
- * proc_pendingsignals()
- * thread_issignal()
- * SHOULDissignal()
- */
-extern int block_procsigmask(struct proc *p,  int bit);
-
-void cfs_block_allsigs()
+void cfs_clear_sigpending(void)
 {
 #ifdef __DARWIN8__
 #else
-        block_procsigmask(current_proc(), -1);
-#endif
-}
-
-void cfs_block_sigs(sigset_t bit)
-{
-#ifdef __DARWIN8__
-#else
-        block_procsigmask(current_proc(), bit);
+        clear_procsiglist(current_proc(), -1);
 #endif
 }
 

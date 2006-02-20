@@ -580,31 +580,7 @@ module_exit(fini)
 /*
  * Signal
  */
-
-#define cfs_sigmask_lock(f)		    do { f = 0; } while(0)
-#define cfs_sigmask_unlock(f)	    do { f = 0; } while(0)
-#define cfs_signal_pending()		(0)
-
-#define cfs_recalc_sigpending()     do { } while(0)
-
-#define cfs_siginitset(m, s)        do { } while(0)
-#define cfs_sigfillset(s)           do { } while(0)
-#define cfs_siginitsetinv(m,f)      do { } while(0)
-
-#define cfs_set_sig_blocked(t, b)   do { } while(0)
-#define cfs_get_sig_blocked(t)      (0)
-
 #define SIGNAL_MASK_ASSERT()
-
-cfs_sigset_t cfs_get_blocked_sigs(void);
-void cfs_block_allsigs(void);
-void cfs_block_sigs(sigset_t bit);
-
-/*
- * Clear all pending signals.
- */
-#define cfs_clear_sigpending(ut)    do {} while (0)
-
 
 /*
  * Timer

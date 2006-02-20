@@ -521,19 +521,33 @@ void cfs_daemonize(char *str)
  *  routine related with sigals
  */
 
-cfs_sigset_t cfs_get_blocked_sigs(cfs_task_t *t)
+cfs_sigset_t cfs_get_blockedsigs()
 {
         return 0;
 }
 
-void cfs_block_allsigs()
+cfs_sigset_t cfs_block_allsigs()
 {
-        return;
+        return 0;
 }
 
-void cfs_block_sigs(sigset_t bit)
+cfs_sigset_t cfs_block_sigs(sigset_t bit)
 {
-        return;
+        return 0;
+}
+
+void cfs_restore_sigs(cfs_sigset_t old)
+{
+}
+
+int cfs_signal_pending(void)
+{
+    return 0;
+}
+
+void cfs_clear_sigpending(void)
+{
+    return;
 }
 
 /**

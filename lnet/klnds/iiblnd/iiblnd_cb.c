@@ -2986,8 +2986,8 @@ kibnal_connd (void *arg)
         int                peer_index = 0;
         unsigned long      deadline = jiffies;
         
-        libcfs_daemonize ("kibnal_connd");
-        libcfs_blockallsigs ();
+        cfs_daemonize ("kibnal_connd");
+        cfs_block_allsigs ();
 
         init_waitqueue_entry (&wait, current);
 
@@ -3127,8 +3127,8 @@ kibnal_scheduler(void *arg)
         int                busy_loops = 0;
 
         snprintf(name, sizeof(name), "kibnal_sd_%02ld", id);
-        libcfs_daemonize(name);
-        libcfs_blockallsigs();
+        cfs_daemonize(name);
+        cfs_block_allsigs();
 
         init_waitqueue_entry(&wait, current);
 

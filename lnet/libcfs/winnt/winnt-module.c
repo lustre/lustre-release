@@ -158,22 +158,3 @@ cfs_psdev_t libcfs_dev = {
 	&libcfs_fops
 };
 
-void
-libcfs_daemonize (char *str)
-{
-	printk("Daemonize request: %s.\n", str);
-	return;
-}
-
-cfs_sigset_t
-libcfs_blockallsigs(void)
-{
-        static cfs_sigset_t dummy;
-
-        return dummy;
-}
-
-void
-libcfs_restoresigs(cfs_sigset_t sigs)
-{
-}

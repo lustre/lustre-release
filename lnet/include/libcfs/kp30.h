@@ -175,10 +175,6 @@ int libcfs_debug_mark_buffer(char *text);
 
 void libcfs_debug_set_level(unsigned int debug_level);
 
-extern void libcfs_daemonize (char *name);
-extern cfs_sigset_t libcfs_blockallsigs (void);
-extern void libcfs_restoresigs(cfs_sigset_t old);
-
 #else  /* !__KERNEL__ */
 # ifdef LIBCFS_DEBUG
 #  undef NDEBUG

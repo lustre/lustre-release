@@ -5,43 +5,6 @@
 
 #define LNET_MINOR 240
 
-void
-libcfs_daemonize (char *str)
-{
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,63))
-	daemonize(str);
-#else
-	daemonize();
-	snprintf (current->comm, sizeof (current->comm), "%s", str);
-#endif
-}
-
-cfs_sigset_t
-libcfs_blockallsigs ()
-{
-	sigset_t       old;
-	unsigned long  flags;
-
-	SIGNAL_MASK_LOCK(current, flags);
-	old = current->blocked;
-	sigfillset(&current->blocked);
-	RECALC_SIGPENDING;
-	SIGNAL_MASK_UNLOCK(current, flags);
-
-	return old;
-}
-
-void
-libcfs_restoresigs (cfs_sigset_t old)
-{
-	unsigned long  flags;
-
-	SIGNAL_MASK_LOCK(current, flags);
-	current->blocked = old;
-	RECALC_SIGPENDING;
-	SIGNAL_MASK_UNLOCK(current, flags);
-}
-
 int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
 {
         struct libcfs_ioctl_hdr   *hdr;
@@ -184,9 +147,5 @@ cfs_psdev_t libcfs_dev = {
 	"lnet", 
 	&libcfs_fops
 };
-
-EXPORT_SYMBOL(libcfs_blockallsigs);
-EXPORT_SYMBOL(libcfs_restoresigs);
-EXPORT_SYMBOL(libcfs_daemonize);
 
 

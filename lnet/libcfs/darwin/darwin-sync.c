@@ -70,24 +70,26 @@ extern int get_preemption_level(void);
 #ifdef __DARWIN8__
 
 static lck_grp_t       *cfs_lock_grp = NULL;
+#warning "Verify definition of lck_spin_t hasn't been changed while building!"
 
 /* hw_lock_* are not exported by Darwin8 */
 static inline void xnu_spin_init(xnu_spin_t *s)
 {
         SLASSERT(cfs_lock_grp != NULL);
-        *s = lck_spin_alloc_init(cfs_lock_grp, LCK_ATTR_NULL);
+        //*s = lck_spin_alloc_init(cfs_lock_grp, LCK_ATTR_NULL);
+        lck_spin_init((lck_spin_t *)s, cfs_lock_grp, LCK_ATTR_NULL);
 }
 
 static inline void xnu_spin_done(xnu_spin_t *s)
 {
         SLASSERT(cfs_lock_grp != NULL);
-        *s = lck_spin_alloc_init(cfs_lock_grp, LCK_ATTR_NULL);
-        lck_spin_free(*s, cfs_lock_grp);
-        *s = NULL;
+        //lck_spin_free(*s, cfs_lock_grp);
+        //*s = NULL;
+        lck_spin_destroy((lck_spin_t *)s, cfs_lock_grp);
 }
 
-#define xnu_spin_lock(s)        lck_spin_lock(*(s))
-#define xnu_spin_unlock(s)      lck_spin_unlock(*(s))
+#define xnu_spin_lock(s)        lck_spin_lock((lck_spin_t *)(s))
+#define xnu_spin_unlock(s)      lck_spin_unlock((lck_spin_t *)(s))
 
 #warning "Darwin8 does not export lck_spin_try_lock"
 #define xnu_spin_try(s)         (1)
@@ -781,8 +783,6 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan,
 	SLASSERT(chan->magic == KSLEEP_CHAN_MAGIC);
 	SLASSERT(get_preemption_level() == 0);
 
-	CDEBUG(D_TRACE, "timeout: %llu\n", (long long unsigned)timeout);
-
 	event = current_thread();
 	kspin_lock(&chan->guard);
 	if (!has_hits(chan, event)) {
@@ -1005,9 +1005,12 @@ void cfs_sync_init(void)
 void cfs_sync_fini(void)
 {
 #ifdef __DARWIN8__
-        /* destroy lock group */
+        /* 
+         * XXX Liang: destroy lock group. As we haven't called lock_done
+         * for all locks, cfs_lock_grp may not be freed by kernel(reference 
+         * count > 1).
+         */
         lck_grp_free(cfs_lock_grp);
-        /* XXX Liang: check reference count of lock group */
         cfs_lock_grp = NULL;
 #endif
 }

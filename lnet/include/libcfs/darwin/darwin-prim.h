@@ -332,34 +332,13 @@ static inline void sleep_on(cfs_waitq_t *waitq)
 
 /*
  * Signal
- * We don't use signal_lock/signal_unlock in cfs_sigmask_lock()
- * and cfs_sigmask_unlock() because they will be called in 
- * signal kernel APIs by xnu.
  */
 typedef sigset_t	cfs_sigset_t;
-#define cfs_sigmask_lock(f)		do { f = 0; } while (0)
-#define cfs_sigmask_unlock(f)		do { f = 0; } while (0)
-int cfs_signal_pending(void);
-/*
- * We don't need to recalc_sigpending because xnu always
- * call SHOULDissignal to checking if there are pending signals.
- */
-#define cfs_recalc_sigpending()		do {} while (0)
-/*
- * Clear all pending signals.
- */
-#ifdef __DARWIN8__
-#define cfs_clear_sigpending()		do {} while (0)
-#else
-#define cfs_clear_sigpending()		clear_procsiglist(current_proc(), -1)
-#endif
 
 #define SIGNAL_MASK_ASSERT()
-
 /*
  * Timer
  */
-
 typedef struct cfs_timer {
 	struct ktimer t;
 } cfs_timer_t;

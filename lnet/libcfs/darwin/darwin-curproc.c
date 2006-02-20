@@ -129,7 +129,8 @@ char  *cfs_curproc_comm(void)
         /*
          * Writing to proc->p_comm is not permited in Darwin8,
          * because proc_selfname() only return a copy of proc->p_comm,
-         * so this function is not really working.
+         * so this function is not really working while user try to 
+         * change comm of current process.
          */
         static char     pcomm[MAXCOMLEN+1];
 

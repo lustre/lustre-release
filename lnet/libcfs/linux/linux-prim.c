@@ -25,7 +25,8 @@ void cfs_daemonize(char *str) {
 #endif
 }
 
-sigset_t cfs_get_blocked_sigs(void)
+sigset_t
+cfs_get_blockedsigs(void)
 {
 	unsigned long  	flags; 
 	sigset_t	old;
@@ -36,23 +37,59 @@ sigset_t cfs_get_blocked_sigs(void)
 	return old;
 }
 
-void cfs_block_allsigs(void)
+sigset_t
+cfs_block_allsigs(void)
 {
 	unsigned long  	flags; 
+	sigset_t	old;
 	
 	SIGNAL_MASK_LOCK(current, flags);
+	old = current->blocked;
 	sigfillset(&current->blocked);
 	RECALC_SIGPENDING;
 	SIGNAL_MASK_UNLOCK(current, flags);
+
+	return old;
 }
 
-void cfs_block_sigs(sigset_t bits)
+sigset_t
+cfs_block_sigs(sigset_t bits)
+{
+	unsigned long  flags;
+	sigset_t	old;
+
+	SIGNAL_MASK_LOCK(current, flags);
+	old = current->blocked;
+	current->blocked = bits;
+	RECALC_SIGPENDING;
+	SIGNAL_MASK_UNLOCK(current, flags);
+	return old;
+}
+
+void
+cfs_restore_sigs (cfs_sigset_t old)
 {
 	unsigned long  flags;
 
 	SIGNAL_MASK_LOCK(current, flags);
-	current->blocked = bits;
+	current->blocked = old;
 	RECALC_SIGPENDING;
+	SIGNAL_MASK_UNLOCK(current, flags);
+}
+
+int
+cfs_signal_pending(void)
+{
+	return signal_pending(current);
+}
+
+void
+cfs_clear_sigpending(void)
+{
+	unsigned long flags;
+
+	SIGNAL_MASK_LOCK(current, flags);
+	CLEAR_SIGPENDING;
 	SIGNAL_MASK_UNLOCK(current, flags);
 }
 
@@ -73,4 +110,7 @@ EXPORT_SYMBOL(libcfs_arch_cleanup);
 EXPORT_SYMBOL(cfs_daemonize);
 EXPORT_SYMBOL(cfs_block_allsigs);
 EXPORT_SYMBOL(cfs_block_sigs);
-EXPORT_SYMBOL(cfs_get_blocked_sigs);
+EXPORT_SYMBOL(cfs_get_blockedsigs);
+EXPORT_SYMBOL(cfs_restore_sigs);
+EXPORT_SYMBOL(cfs_signal_pending);
+EXPORT_SYMBOL(cfs_clear_sigpending);

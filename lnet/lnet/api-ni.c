@@ -1449,7 +1449,7 @@ lnet_ping_target_fini(void)
         int             rc;
         int             which;
         int             timeout_ms = 1000;
-        cfs_sigset_t    blocked = libcfs_blockallsigs();
+        cfs_sigset_t    blocked = cfs_block_allsigs();
 
         LNetMDUnlink(the_lnet.ln_ping_target_md);
         /* NB md could be busy; this just starts the unlink */
@@ -1473,7 +1473,7 @@ lnet_ping_target_fini(void)
         rc = LNetEQFree(the_lnet.ln_ping_target_eq);
         LASSERT (rc == 0);
 
-        libcfs_restoresigs(blocked);
+        cfs_restore_sigs(blocked);
 }
 
 int
@@ -1541,12 +1541,12 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         do {
                 /* MUST block for unlink to complete */
                 if (unlinked)
-                        blocked = libcfs_blockallsigs();
+                        blocked = cfs_block_allsigs();
 
                 rc2 = LNetEQPoll(&eqh, 1, timeout_ms, &event, &which);
 
                 if (unlinked)
-                        libcfs_restoresigs(blocked);
+                        cfs_restore_sigs(blocked);
 
                 CDEBUG(D_NET, "poll %d(%d %d)%s\n", rc2,
                        (rc2 <= 0) ? -1 : event.type,

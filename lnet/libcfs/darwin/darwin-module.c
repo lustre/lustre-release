@@ -152,57 +152,40 @@ cfs_psdev_t libcfs_dev = {
 	NULL
 };
 
+extern spinlock_t trace_cpu_serializer;
 extern void cfs_sync_init(void);
 extern void cfs_sync_fini(void);
 extern int cfs_sysctl_init(void);
 extern void cfs_sysctl_fini(void);
-extern int cfs_mem_cache_init(void);
-extern int cfs_mem_cache_fini(void);
-extern spinlock_t trace_cpu_serializer;
-extern struct list_head page_death_row;
-extern spinlock_t page_death_row_phylax;
+extern int cfs_mem_init(void);
+extern int cfs_mem_fini(void);
 extern void raw_page_death_row_clean(void);
 extern void cfs_thread_agent_init(void);
 extern void cfs_thread_agent_fini(void);
-extern void cfs_symbol_clean(void);
-extern struct rw_semaphore cfs_symbol_lock;
-extern struct list_head cfs_symbol_list;
+extern void cfs_symbol_init(void);
+extern void cfs_symbol_fini(void);
 
 int libcfs_arch_init(void)
 {
 	cfs_sync_init();
-
 	cfs_sysctl_init();
-	cfs_mem_cache_init();
-
-	init_rwsem(&cfs_symbol_lock);
-	CFS_INIT_LIST_HEAD(&cfs_symbol_list);
-
+	cfs_mem_init();
 	cfs_thread_agent_init();
+	cfs_symbol_init();
 
 	spin_lock_init(&trace_cpu_serializer);
 
-	CFS_INIT_LIST_HEAD(&page_death_row);
-	spin_lock_init(&page_death_row_phylax);
 	return 0;
 }
 
 void libcfs_arch_cleanup(void)
 {
-	cfs_symbol_clean();
-
 	spin_lock_done(&trace_cpu_serializer);
 
+	cfs_symbol_fini();
 	cfs_thread_agent_fini();
-
-	raw_page_death_row_clean();
-	spin_lock_done(&page_death_row_phylax);
-
-	fini_rwsem(&cfs_symbol_lock);
-
-	cfs_mem_cache_fini();
+	cfs_mem_fini();
 	cfs_sysctl_fini();
-
 	cfs_sync_fini();
 }
 

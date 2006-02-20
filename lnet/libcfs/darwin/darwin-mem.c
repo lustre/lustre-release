@@ -252,7 +252,7 @@ static void raw_page_finish(struct xnu_raw_page *pg)
 {
         -- raw_pages;
         if (pg->virtual != NULL)
-                cfs_mem_cache_free(pg->virtual, raw_page_cache);
+                cfs_mem_cache_free(raw_page_cache, pg->virtual);
         cfs_free(pg);
 }
 
@@ -309,8 +309,10 @@ cfs_page_t *cfs_alloc_page(u_int32_t flags)
                         ++ raw_pages;
                         page->header.type = XNU_PAGE_RAW;
                         atomic_set(&page->count, 1);
-                } else
+                } else {
                         cfs_free(page);
+                        page = NULL;
+                }
         }
         return page != NULL ? &page->header : NULL;
 }
@@ -432,7 +434,7 @@ void  cfs_free_large(void *addr)
  * found (first load of * libcfs since boot), allocate 
  * sysctl libcfs.zone.
  */
-int cfs_mem_cache_init(void)
+int cfs_mem_init(void)
 {
 #if     CFS_INDIVIDUAL_ZONE
         int     rc;
@@ -464,12 +466,16 @@ int cfs_mem_cache_init(void)
         }
         spin_lock_init(&cfs_zone_guard);
 #endif
+        CFS_INIT_LIST_HEAD(&page_death_row);
+        spin_lock_init(&page_death_row_phylax);
         raw_page_cache = cfs_mem_cache_create("raw-page", CFS_PAGE_SIZE, 0, 0);
         return 0;
 }
 
-void cfs_mem_cache_fini(void)
+void cfs_mem_fini(void)
 {
+        raw_page_death_row_clean();
+        spin_lock_done(&page_death_row_phylax);
         cfs_mem_cache_destroy(raw_page_cache);
 
 #if     CFS_INDIVIDUAL_ZONE

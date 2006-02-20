@@ -40,6 +40,7 @@
 #endif
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
@@ -249,19 +250,54 @@ void cfs_daemonize(char *str)
         return;
 }
 
-void cfs_block_allsigs()
+cfs_sigset_t cfs_block_allsigs(void)
 {
+        cfs_sigset_t   all;
+        cfs_sigset_t   old;
+        int            rc;
+
+        sigfillset(&all);
+        rc = sigprocmask(SIG_SETMASK, &all, &old);
+        if (rc != 0)        /* I'd rather LASSERT but that requires */
+                abort();    /* too much code re-org fttb  */
+
+        return old;
 }
 
-cfs_sigset_t cfs_get_blocked_sigs()
+cfs_sigset_t cfs_block_sigs(cfs_sigset_t blocks)
 {
-        cfs_sigset_t    s;
-        memset(&s, 0, sizeof(s));
-        return s;
+        cfs_sigset_t   old;
+        int   rc;
+        
+        rc = sigprocmask(SIG_SETMASK, &blocks, &old);
+        if (rc != 0)       
+                abort();    
+
+        return old;
 }
 
-void cfs_block_sigs(cfs_sigset_t blocks)
+void cfs_restore_sigs(cfs_sigset_t old)
 {
+        int   rc = sigprocmask(SIG_SETMASK, &old, NULL);
+
+        if (rc != 0)        /* I'd rather LASSERT but that requires */
+                abort();    /* too much code re-org fttb  */
+}
+
+int cfs_signal_pending(void)
+{
+        cfs_sigset_t    set;
+        int  rc;
+
+        rc = sigpending(&set);
+        if (rc != 0)
+                abort();
+        return sigisemptyset(&set);
+}
+
+void cfs_clear_sigpending(void)
+{
+        return;
 }
 
 #ifdef __LINUX__

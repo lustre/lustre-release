@@ -2244,8 +2244,8 @@ kibnal_reaper (void *arg)
         int                peer_index = 0;
         unsigned long      deadline = jiffies;
         
-        libcfs_daemonize ("kibnal_reaper");
-        libcfs_blockallsigs ();
+        cfs_daemonize ("kibnal_reaper");
+        cfs_block_allsigs ();
 
         init_waitqueue_entry (&wait, current);
 
@@ -2345,8 +2345,8 @@ kibnal_connd (void *arg)
         int                did_something;
 
         snprintf(name, sizeof(name), "kibnal_connd_%02ld", id);
-        libcfs_daemonize(name);
-        libcfs_blockallsigs();
+        cfs_daemonize(name);
+        cfs_block_allsigs();
 
         init_waitqueue_entry (&wait, current);
 
@@ -2418,8 +2418,8 @@ kibnal_scheduler(void *arg)
         int             did_something;
 
         snprintf(name, sizeof(name), "kibnal_sd_%02ld", id);
-        libcfs_daemonize(name);
-        libcfs_blockallsigs();
+        cfs_daemonize(name);
+        cfs_block_allsigs();
 
         spin_lock_irqsave(&kibnal_data.kib_sched_lock, flags);
 

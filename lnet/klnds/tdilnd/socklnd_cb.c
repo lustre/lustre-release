@@ -1218,8 +1218,8 @@ int ksocknal_scheduler (void *arg)
         char               name[16];
 
         snprintf (name, sizeof (name),"socknal_sd%02d", id);
-        libcfs_daemonize (name);
-        libcfs_blockallsigs ();
+        cfs_daemonize (name);
+        cfs_block_allsigs ();
 
 #if (CONFIG_SMP && CPU_AFFINITY)
         id = ksocknal_sched2cpu(id);
@@ -1826,8 +1826,8 @@ ksocknal_connd (void *arg)
         int                did_something;
 
         snprintf (name, sizeof (name), "socknal_cd%02ld", id);
-        libcfs_daemonize (name);
-        libcfs_blockallsigs ();
+        cfs_daemonize (name);
+        cfs_block_allsigs ();
 
         spin_lock_irqsave (&ksocknal_data.ksnd_connd_lock, flags);
 
@@ -1985,8 +1985,8 @@ ksocknal_reaper (void *arg)
         int                peer_index = 0;
         cfs_time_t         deadline = cfs_time_current();
 
-        libcfs_daemonize ("socknal_reaper");
-        libcfs_blockallsigs ();
+        cfs_daemonize ("socknal_reaper");
+        cfs_block_allsigs ();
 
         CFS_INIT_LIST_HEAD(&enomem_conns);
         cfs_waitlink_init (&wait);

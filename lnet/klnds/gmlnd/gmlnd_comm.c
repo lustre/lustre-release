@@ -409,7 +409,7 @@ gmnal_rx_thread(void *arg)
         gmnal_rx_t      *rx;
         int              rc;
 
-	libcfs_daemonize("gmnal_rxd");
+	cfs_daemonize("gmnal_rxd");
 
         down(&gmni->gmni_rx_mutex);
 

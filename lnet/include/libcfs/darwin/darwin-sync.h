@@ -73,15 +73,23 @@ enum {
 
 /*
  * hw_lock is not available in Darwin8 (hw_lock_* are not exported at all), 
- * so use lck_spin_t. we can hack out lck_spin_t easily:
+ * so use lck_spin_t. we can hack out lck_spin_t easily, it's the only 
+ * hacking in Darwin8.x. We did so because it'll take a lot of time to 
+ * add lock_done for all locks, maybe it should be done in the future.
+ * If lock_done for all locks were added, we can:
  *
- * typedef struct {
- *      unsigned int             opaque[3];
- * } lck_spin_t;
- *
- * But it's not very necessory.
+ * typedef lck_spin_t      *xnu_spin_t;
  */
-typedef lck_spin_t      *xnu_spin_t;
+#if defined (__ppc__)
+typedef struct {
+        unsigned int    opaque[3];
+} xnu_spin_t;
+#elif defined (__i386__)
+typedef struct {
+        unsigned int    opaque[10];
+} xnu_spin_t;
+#endif
+
 /* 
  * wait_queue is not available in Darwin8 (wait_queue_* are not exported), 
  * use assert_wait/wakeup/wake_one (wait_queue in kernel hash).
@@ -95,7 +103,7 @@ typedef void * xnu_wait_queue_t;
 #include <sys/types.h>
 #include <kern/simple_lock.h>
 
-typedef hw_lock_data_t  xnu_spin_t;
+typedef hw_lock_data_t          xnu_spin_t;
 typedef struct wait_queue       xnu_wait_queue_t;
 
 /* DARWIN8 */

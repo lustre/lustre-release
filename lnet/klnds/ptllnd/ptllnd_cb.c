@@ -846,7 +846,7 @@ kptllnd_watchdog(void *arg)
          * Daemonize
          */
         snprintf(name, sizeof(name), "kptllnd_wd_%02d", id);
-        libcfs_daemonize(name);
+        cfs_daemonize(name);
 
         cfs_waitlink_init(&waitlink);
 
@@ -926,7 +926,7 @@ kptllnd_scheduler(void *arg)
          * Daemonize
          */
         snprintf(name, sizeof(name), "kptllnd_sd_%02d", id);
-        libcfs_daemonize(name);
+        cfs_daemonize(name);
 
         cfs_waitlink_init(&waitlink);
 

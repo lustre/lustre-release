@@ -562,11 +562,21 @@ void cfs_enter_debugger(void);
  * Defined by platform
  */
 void cfs_daemonize(char *str);
-#ifdef __KERNEL__
-void cfs_block_allsigs(void);
-void cfs_block_sigs(cfs_sigset_t bits);
 cfs_sigset_t cfs_get_blocked_sigs(void);
-#endif
+cfs_sigset_t cfs_block_allsigs(void);
+cfs_sigset_t cfs_block_sigs(cfs_sigset_t bits);
+void cfs_restore_sigs(cfs_sigset_t);
+int cfs_signal_pending(void);
+void cfs_clear_sigpending(void);
+/*
+ * XXX Liang: 
+ * these macros should be removed in the future, 
+ * we keep them just for keeping libcfs compatible
+ * with other branches.
+ */
+#define libcfs_daemonize(s)     cfs_daemonize(s)
+#define cfs_sigmask_lock(f)     do { f= 0; } while (0)
+#define cfs_sigmask_unlock(f)   do { f= 0; } while (0)
 
 int convert_server_error(__u64 ecode);
 int convert_client_oflag(int cflag, int *result);

@@ -1030,8 +1030,8 @@ kranal_connd (void *arg)
         int                did_something;
 
         snprintf(name, sizeof(name), "kranal_connd_%02ld", id);
-        libcfs_daemonize(name);
-        libcfs_blockallsigs();
+        cfs_daemonize(name);
+        cfs_block_allsigs();
 
         init_waitqueue_entry(&wait, current);
 
@@ -1123,8 +1123,8 @@ kranal_reaper (void *arg)
         long               next_min_timeout = MAX_SCHEDULE_TIMEOUT;
         long               current_min_timeout = 1;
 
-        libcfs_daemonize("kranal_reaper");
-        libcfs_blockallsigs();
+        cfs_daemonize("kranal_reaper");
+        cfs_block_allsigs();
 
         init_waitqueue_entry(&wait, current);
 
@@ -1899,8 +1899,8 @@ kranal_scheduler (void *arg)
         int               busy_loops = 0;
 
         snprintf(name, sizeof(name), "kranal_sd_%02d", dev->rad_idx);
-        libcfs_daemonize(name);
-        libcfs_blockallsigs();
+        cfs_daemonize(name);
+        cfs_block_allsigs();
 
         dev->rad_scheduler = current;
         init_waitqueue_entry(&wait, current);

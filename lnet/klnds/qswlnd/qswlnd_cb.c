@@ -1676,8 +1676,8 @@ kqswnal_scheduler (void *arg)
         int              counter = 0;
         int              did_something;
 
-        libcfs_daemonize ("kqswnal_sched");
-        libcfs_blockallsigs ();
+        cfs_daemonize ("kqswnal_sched");
+        cfs_block_allsigs ();
         
         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
