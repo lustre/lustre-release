@@ -207,7 +207,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 child = ctgt->ltd_exp->exp_obd;
                 rc = obd_llog_init(child, tgt, 1, logid + i);
                 if (rc) {
-                        CERROR("error osc_llog_init %d\n", i);
+                        CERROR("error osc_llog_init %d (%d)\n", i, rc);
                         break;
                 }
         }
