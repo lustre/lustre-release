@@ -2773,6 +2773,7 @@ test_100() {
 		[ "$RPORT" != "$ACCEPTOR_PORT" ] && continue
 		LPORT=`echo $LOCAL | cut -d: -f2`
 		[ $LPORT -ge 1024 ] && \
+			echo "netstat: $PROT $SND $RCV $LOCAL $REMOTE $STAT" &&\
 			error "local: $LPORT > 1024, remote: $ACCEPTOR_PORT" ||\
 			true
 	done
