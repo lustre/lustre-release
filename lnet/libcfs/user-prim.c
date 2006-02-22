@@ -46,8 +46,8 @@
 #include <sys/vfs.h>
 
 #include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 
-#define LASSERT(a)      do {} while (0)
 /*
  * Sleep channel. No-op implementation.
  */
@@ -258,8 +258,7 @@ cfs_sigset_t cfs_block_allsigs(void)
 
         sigfillset(&all);
         rc = sigprocmask(SIG_SETMASK, &all, &old);
-        if (rc != 0)        /* I'd rather LASSERT but that requires */
-                abort();    /* too much code re-org fttb  */
+        LASSERT(rc == 0);
 
         return old;
 }
@@ -270,8 +269,7 @@ cfs_sigset_t cfs_block_sigs(cfs_sigset_t blocks)
         int   rc;
         
         rc = sigprocmask(SIG_SETMASK, &blocks, &old);
-        if (rc != 0)       
-                abort();    
+        LASSERT (rc == 0);
 
         return old;
 }
@@ -280,19 +278,21 @@ void cfs_restore_sigs(cfs_sigset_t old)
 {
         int   rc = sigprocmask(SIG_SETMASK, &old, NULL);
 
-        if (rc != 0)        /* I'd rather LASSERT but that requires */
-                abort();    /* too much code re-org fttb  */
+        LASSERT (rc == 0);
 }
 
 int cfs_signal_pending(void)
 {
+        cfs_sigset_t    empty;
         cfs_sigset_t    set;
         int  rc;
 
         rc = sigpending(&set);
-        if (rc != 0)
-                abort();
-        return sigisemptyset(&set);
+        LASSERT (rc == 0);
+
+        sigemptyset(&empty);
+
+        return !memcmp(&empty, &set, sizeof(set));
 }
 
 void cfs_clear_sigpending(void)
