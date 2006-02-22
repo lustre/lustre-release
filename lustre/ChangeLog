@@ -94,6 +94,13 @@ Details    : sending a glimpse AST to a liblustre client waits for every AST
 	     to time out, as liblustre clients will not respond.  Since they
 	     cannot cache data we refresh the OST lock LVB from disk instead.
 
+Severity   : enhancement
+Bugzilla   : 7198
+Description: doing an ls at the same time as file IO can be slow
+Details    : enqueue and other "small" requests can be blocked behind many
+	     large IO requests.  Create a new OST IO portal for non-IO
+	     requests so they can be processed faster.
+
 Severity   : minor
 Frequency  : rare (only HPUX clients mounting unsupported re-exported NFS vol)
 Bugzilla   : 5781
@@ -262,6 +269,12 @@ Description: Unmmap pages before throwing them away from read cache.
 Details    : llap_shrink cache now attempts to unmap pages before discarding
 	     them (if unmapping failed - do not discard).  SLES9 kernel has
 	     extra checks that trigger if this unmapping is not done first.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 6034
+Description: lconf didn't resolve symlinks before checking to see whether a
+	     given mountpoint was already in use
 
 Severity   : minor
 Frequency  : when migrating failover services
