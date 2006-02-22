@@ -1352,6 +1352,7 @@ int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
                                                   lovname, lcfg);
                 }
                 name_destroy(lovname);
+                name_destroy(logname);
                 up(&fsdb->fsdb_sem);
         }
 

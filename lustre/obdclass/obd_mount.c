@@ -741,42 +741,36 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
 }
 
 /* Stop MDS/OSS if nobody is using them */
-static int server_stop_servers(struct super_block *sb)
+static int server_stop_servers(int lddflags, int lsiflags)
 {
-        struct lustre_sb_info *lsi = s2lsi(sb);
-        struct obd_device *obd;
+        struct obd_device *obd = NULL;
+        struct obd_type *type;
         int rc = 0;
         ENTRY;
 
+        /* Either an MDT or an OST or neither  */
+
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */
-        if (IS_MDT(lsi->lsi_ldd) && (obd = class_name2obd("MDS"))) {
+        if ((lddflags & LDD_F_SV_TYPE_MDT) && (obd = class_name2obd("MDS"))) {
                 //FIXME pre-rename, should eventually be LUSTRE_MDT_NAME
-                struct obd_type *type = class_search_type(LUSTRE_MDS_NAME);
-                if (!type || !type->typ_refcnt) {
-                        /* nobody is using the MDT type, clean the MDS */
-                        if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
-                                obd->obd_force = 1;
-                        if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
-                                obd->obd_fail = 1;
-                        rc = class_manual_cleanup(obd);
-                }
+                type = class_search_type(LUSTRE_MDS_NAME);
+        } 
+        /* if this was an OST, and there are no more OST's, clean up the OSS */
+        if ((lddflags & LDD_F_SV_TYPE_OST) && (obd = class_name2obd("OSS"))) {
+                type = class_search_type(LUSTRE_OST_NAME);
         }
 
-        /* if this was an OST, and there are no more OST's, clean up the OSS */
-        if (IS_OST(lsi->lsi_ldd) && (obd = class_name2obd("OSS"))) {
-                struct obd_type *type = class_search_type(LUSTRE_OST_NAME);
-                if (!type || !type->typ_refcnt) {
-                        int err;
-                        /* nobody is using the OST type, clean the OSS */
-                        if (lsi->lsi_flags & LSI_UMOUNT_FORCE)
-                                obd->obd_force = 1;
-                        if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
-                                obd->obd_fail = 1;
-                        err = class_manual_cleanup(obd);
-                        if (!rc) 
-                                rc = err;
-                }
+        if (obd && (!type || !type->typ_refcnt)) {
+                int err;
+                if (lsiflags & LSI_UMOUNT_FORCE)
+                        obd->obd_force = 1;
+                if (lsiflags & LSI_UMOUNT_FAILOVER)
+                        obd->obd_fail = 1;
+                err = class_manual_cleanup(obd);
+                if (!rc) 
+                        rc = err;
         }
+
         RETURN(rc);
 }
 
@@ -1158,13 +1152,38 @@ out_free:
         RETURN(ERR_PTR(rc));
 }
                       
+static void server_wait_finished(struct vfsmount *mnt)
+{
+        wait_queue_head_t   waitq;
+        struct l_wait_info  lwi;
+        int                 retries = 10;
+        
+        init_waitqueue_head(&waitq);
+
+        while ((atomic_read(&mnt->mnt_count) > 0) && retries--) {
+                CWARN("Mount still busy with %d refs\n",
+                       atomic_read(&mnt->mnt_count));
+
+                /* Wait for a bit */
+                lwi = LWI_TIMEOUT(2 * HZ, NULL, NULL);
+                l_wait_event(waitq, 0, &lwi);
+        }
+        if (atomic_read(&mnt->mnt_count)) {
+                CERROR("Mount is still busy, giving up.\n");
+        }
+}
+
 static void server_put_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device     *obd;
         struct vfsmount       *mnt = lsi->lsi_srv_mnt;
+        int lddflags = lsi->lsi_ldd->ldd_flags;
+        int lsiflags = lsi->lsi_flags;
         int rc;
         ENTRY;
+
+        LASSERT(lsiflags & LSI_SERVER);
 
         CDEBUG(D_MOUNT, "server put_super %s\n", lsi->lsi_ldd->ldd_svname);
                                                                                        
@@ -1192,9 +1211,6 @@ static void server_put_super(struct super_block *sb)
                 }
         }
 
-        /* Stop the servers (MDS, OSS) if no longer needed */
-        server_stop_servers(sb);
-
         /* If they wanted the mgs to stop separately from the mdt, they
            should have put it on a different device. */ 
         if (IS_MGS(lsi->lsi_ldd)) {
@@ -1210,6 +1226,15 @@ static void server_put_super(struct super_block *sb)
 
         /* drop the One True Mount */
         unlock_mntput(mnt);
+
+        /* Wait for the targets to really clean up - can't exit (and let the
+           sb get destroyed) while the mount is still in use */
+        server_wait_finished(mnt);
+        
+        /* Stop the servers (MDS, OSS) if no longer needed.  We must wait
+           until the target is really gone so that our type refcount check
+           is right. */
+        server_stop_servers(lddflags, lsiflags);
 
         CDEBUG(D_MOUNT, "umount done\n");
         EXIT;

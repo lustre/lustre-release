@@ -283,8 +283,12 @@ static int mds_lov_add_ost(struct obd_device *obd, struct obd_device *watched,
         CWARN("last object "LPU64" from OST %d\n",
               mds->mds_lov_objids[idx], idx);
         
+
+        /* These two must be atomic */
+        down(&mds->mds_orphan_recovery_sem);
         obd_llog_finish(obd, old_count);
         llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
+        up(&mds->mds_orphan_recovery_sem);
         
         RETURN(rc);
 }

@@ -570,13 +570,11 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (lcfg == NULL)
                         RETURN(-ENOMEM);
                 rc = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-                if (rc) {
-                        OBD_FREE(lcfg, data->ioc_plen1);
-                        RETURN(rc);
-                }
+                if (rc) 
+                        GOTO(out_free, rc);
 
                 if (lcfg->lcfg_bufcount < 1)
-                        RETURN(-EINVAL);
+                        GOTO(out_free, rc = -EINVAL);
 
                 /* Extract fsname */
                 /* FIXME COMPAT_146 this won't work with old names */
@@ -606,7 +604,9 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 }
 
                 /* Revoke lock so everyone updates.  Should be alright if
-                   someone was reading while we were updating the logs. */
+                   someone was already reading while we were updating the logs,
+                   so we don't really need to hold the lock while we're
+                   writing (above). */
                 lockrc = mgs_get_cfg_lock(obd, fsname, &lockh);
                 if (lockrc != ELDLM_OK) 
                         CERROR("lock error %d for fs %s\n", lockrc, fsname);
