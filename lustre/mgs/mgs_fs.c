@@ -35,7 +35,6 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
 #endif
-#include <linux/lustre_mgs.h>
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
 #include <linux/lustre_disk.h>

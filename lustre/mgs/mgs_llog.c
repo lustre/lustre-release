@@ -43,7 +43,6 @@
 #include <linux/lvfs.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_disk.h>
-#include <linux/lustre_mgs.h>
 #include "mgs_internal.h"
 
 
