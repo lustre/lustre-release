@@ -128,7 +128,7 @@ pass() {
 }
 
 mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre") { print $2 }' /proc/mounts
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
 MOUNT="`mounted_lustre_filesystems`"
 if [ -z "$MOUNT" ]; then

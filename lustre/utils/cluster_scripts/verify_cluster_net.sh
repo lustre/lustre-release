@@ -123,7 +123,7 @@ local_check() {
 	fi
 
 	# Execute pdsh command to get the real host name
-	RET_STR=`pdsh -w ${HOST_IPADDRS[$2]} hostname 2>&1`
+	RET_STR=`${PDSH} -w ${HOST_IPADDRS[$2]} hostname 2>&1`
 	if [ $? -ne 0 ] || [ "${RET_STR}" != "${RET_STR#*connect:*}" ]; then
 		echo >&2 "`basename $0`: local_check() error: pdsh error:" \
 			 "${RET_STR}"
@@ -166,7 +166,7 @@ remote_check() {
 
 	# Execute pdsh command to check remote /etc/hosts tables
 	for ((i = 0; i < ${#HOST_NAMES[@]}; i++)); do
-		RET_STR=`pdsh -w ${HOST_NAMES[i]} ${COMMAND} 2>&1`
+		RET_STR=`${PDSH} -w ${HOST_NAMES[i]} ${COMMAND} 2>&1`
 		if [ $? -ne 0 ] || [ "${RET_STR}" != "${RET_STR#*connect:*}" ]
 		then
 			echo >&2 "`basename $0`: remote_check() error:" \
@@ -208,8 +208,8 @@ network_check () {
 
 	# Execute pdsh command to check network connectivity
 	for ((i = 0; i < ${#HOST_NAMES[@]}; i++)); do
-		COMMAND=$"pdsh -w ${HOST_NAMES[i]} hostname"
-		RET_STR=`pdsh -w $1 ${COMMAND} 2>&1`
+		COMMAND=$"${PDSH} -w ${HOST_NAMES[i]} hostname"
+		RET_STR=`${PDSH} -w $1 ${COMMAND} 2>&1`
 		if [ $? -ne 0 ] || [ "${RET_STR}" != "${RET_STR#*connect:*}" ]
 		then
 			echo >&2 "`basename $0`: network_check() error:" \

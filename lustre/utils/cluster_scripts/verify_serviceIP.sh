@@ -130,7 +130,7 @@ findInterface() {
 	    		done
 	  	done
 	done
-	} < <(pdsh -w $hostname /sbin/ifconfig)
+	} < <(${PDSH} -w $hostname /sbin/ifconfig)
 
 	echo >&2 "`basename $0`: Cannot find the interface in which" \
 		  "$target is configured in the host $hostname!"
@@ -162,7 +162,7 @@ findNetmask() {
  	    		esac
 	    		shift
 	  	done
-	done < <(pdsh -w $hostname /sbin/ifconfig $target)
+	done < <(${PDSH} -w $hostname /sbin/ifconfig $target)
 
 	echo >&2 "`basename $0`: Cannot find the netmask associated with" \
 		  "the interface $target in the host $hostname!"

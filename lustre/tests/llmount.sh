@@ -29,13 +29,16 @@ fi
 [ "$DEBUG" ] && debug_opt="--ptldebug=$DEBUG"
 [ "$PTLDEBUG" ] && debug_opt="--ptldebug=$PTLDEBUG"
 
-${LCONF} $NOMOD $portals_opt $lustre_opt $debug_opt $node_opt ${REFORMAT:---reformat} $@ \
-	$conf_opt  || {
-    # maybe acceptor error, dump tcp port usage
-    netstat -tpn
-    exit 2
-}
+echo FIXME use the utils/cluster_scripts/cluster_config.sh to parse config csv files.
 
-if [ "$MOUNT2" ]; then
-	$LLMOUNT -v -o user_xattr,acl `hostname`:/mds1/client $MOUNT2 || exit 3
-fi
+exit 1
+
+#${LCONF} $NOMOD $portals_opt $lustre_opt $debug_opt $node_opt ${REFORMAT:---reformat} $@ $conf_opt  || {
+    # maybe acceptor error, dump tcp port usage
+#    netstat -tpn
+#    exit 2
+#}
+
+#if [ "$MOUNT2" ]; then
+#	$LLMOUNT -v -o user_xattr,acl `hostname`:/mds1/client $MOUNT2 || exit 3
+#fi

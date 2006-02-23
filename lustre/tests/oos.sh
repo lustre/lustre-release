@@ -52,7 +52,7 @@ fi
 # flush cache to OST(s) so avail numbers are correct
 sync; sleep 1 ; sync
 
-for OSC in /proc/fs/lustre/osc/OSC*MNT*; do
+for OSC in /proc/fs/lustre/osc/*-osc-*; do
 	AVAIL=`cat $OSC/kbytesavail`
 	GRANT=`cat $OSC/cur_grant_bytes`
 	[ $(($AVAIL - $GRANT / 1024)) -lt 400 ] && OSCFULL=full
@@ -60,7 +60,7 @@ done
 
 if [ -z "$OSCFULL" ]; then
 	echo "no OSTs are close to full"
-	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*}
+	grep "[0-9]" /proc/fs/lustre/osc/*-osc-*/{kbytesavail,cur*}
 	SUCCESS=0
 fi
 

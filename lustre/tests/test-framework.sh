@@ -36,9 +36,6 @@ init_test_env() {
     export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
-    export LLMOUNT=${LLMOUNT:-"llmount"}
-    export LCONF=${LCONF:-"lconf"}
-    export LMC=${LMC:-"lmc"}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
@@ -109,13 +106,9 @@ zconf_mount() {
 
     if [ -x /sbin/mount.lustre ] ; then
 	do_node $client mount -t lustre $OPTIONS \
-		`facet_nid mds`:/mds_svc/client_facet $mnt || return 1
+		`facet_nid mgs`:/lustre-client $mnt || return 1
     else
-	# this is so cheating
-	do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG > \
-		/dev/null || return 2
-	do_node $client $LLMOUNT $OPTIONS \
-		`facet_nid mds`:/mds_svc/client_facet $mnt || return 4
+	return 4
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -348,22 +341,11 @@ do_facet() {
     do_node $HOST $@
 }
 
-add_facet() {
-    local facet=$1
-    shift
-    echo "add facet $facet: `facet_host $facet`"
-    do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
-        --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
-    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
-        --nettype lnet $PORT_OPT
-}
-
 add_mds() {
     local MOUNT_OPTS
     local facet=$1
     shift
     rm -f ${facet}active
-    add_facet $facet
     [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
     do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc \
     	--fstype $FSTYPE $* $MOUNT_OPTS

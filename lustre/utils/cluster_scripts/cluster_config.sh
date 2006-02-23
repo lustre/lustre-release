@@ -132,6 +132,8 @@ EOF
 }
 
 # Global variables
+PDSH=${PDSH:-"pdsh -R ssh"}
+export PDSH
 # Some scripts to be called
 SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"./"}
 MODULE_CONFIG=${SCRIPTS_PATH}$"module_config.sh"
@@ -309,7 +311,7 @@ check_element() {
 
         # Check mgmtnid
         if [ "${DEVICE_TYPE}" = "ost" ]&&[ -z "${MGMT_NID}" ]; then
-                echo >&2 $"`basename $0`: check_element() error: OST's mgmtnid"\
+                echo >&2 $"`basename $0`: check_element() error: OST's mgsnid"\
 			  "element has null value!"
                 return 1
         fi
@@ -632,19 +634,20 @@ mass_config() {
 		fi
 
 		# Execute pdsh command to add lnet options lines to modprobe.conf/modules.conf
-		verbose_output "Adding module options to ${HOST_NAME}..."
 		COMMAND=$"echo \"${NETWORKS}\"|${MODULE_CONFIG}"
-		pdsh -w ${HOST_NAME} ${COMMAND} >&2 &
+		verbose_output "Adding module options to ${HOST_NAME}"
+		verbose_output ${COMMAND}
+		${PDSH} -w ${HOST_NAME} ${COMMAND} >&2 &
 		PDSH_PID[${pid_num}]=$!
-		PDSH_CMD[${pid_num}]="pdsh -w ${HOST_NAME} ${COMMAND}"
+		PDSH_CMD[${pid_num}]="${PDSH} -w ${HOST_NAME} ${COMMAND}"
 		pid_num=${pid_num}+1
 
 		# Execute pdsh command to format Lustre target
 		verbose_output "Formatting Lustre target on ${HOST_NAME}..."
 		verbose_output "Format command line is: ${MKFS_CMD}"
-		pdsh -w ${HOST_NAME} ${MKFS_CMD} >&2 &  
+		${PDSH} -w ${HOST_NAME} ${MKFS_CMD} >&2 &  
 		PDSH_PID[${pid_num}]=$!
-		PDSH_CMD[${pid_num}]="pdsh -w ${HOST_NAME} ${MKFS_CMD}"
+		PDSH_CMD[${pid_num}]="${PDSH} -w ${HOST_NAME} ${MKFS_CMD}"
 		pid_num=${pid_num}+1
 
 		line_num=${line_num}+1

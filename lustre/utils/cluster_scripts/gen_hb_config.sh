@@ -203,7 +203,7 @@ stop_heartbeat() {
 		nodename_str=${nodename_str}$","${NODE_NAMES[idx]}
 	done
 
-	pdsh -w ${nodename_str} /sbin/service heartbeat stop
+	${PDSH} -w ${nodename_str} /sbin/service heartbeat stop
 	if [ $? -ne 0 ]; then
 		echo >&2 "`basename $0`: stop_heartbeat() error:"\
 			 "Fail to execute pdsh command!"

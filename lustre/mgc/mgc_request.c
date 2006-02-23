@@ -346,6 +346,8 @@ static int mgc_process_log(struct obd_device *mgc,
 /* reenqueue the lock, reparse the log */
 static int mgc_async_requeue(void *data)
 {
+        wait_queue_head_t   waitq;
+        struct l_wait_info  lwi;
         struct config_llog_data *cld = (struct config_llog_data *)data;
         unsigned long flags;
         int rc;
@@ -368,21 +370,26 @@ static int mgc_async_requeue(void *data)
                cld->cld_resid.name[0], cld->cld_logname, 
                cld->cld_cfg.cfg_instance);
         
+        /* Sleep a few seconds to allow the server who caused
+           the lock revocation to finish its setup, plus some random
+           so everyone doesn't try to reconnect at once. */
+        init_waitqueue_head(&waitq);
+        lwi = LWI_TIMEOUT(3 * HZ + (ll_rand() & 0x7f), NULL, NULL);
+        l_wait_event(waitq, 0, &lwi);
+
         LASSERT(the_mgc);
+
         class_export_get(the_mgc->obd_self_export);
-        /* FIXME sleep a few seconds here to allow the server who caused
-           the lock revocation to finish its setup */
-        
 #if 0
         /* Re-send server info every time, in case MGS needs to regen its
            logs (for write_conf).  Do we need this?  It's extra RPCs for
-           every server at every update. */
+           every server at every update.  Turning it off until I'm sure
+           it's needed. */
         server_register_target(cld->cld_cfg.cfg_sb);
 #endif 
-       
         rc = mgc_process_log(the_mgc, cld);
-
         class_export_put(the_mgc->obd_self_export);
+
         RETURN(rc);
 }
 

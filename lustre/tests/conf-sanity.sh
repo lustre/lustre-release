@@ -20,6 +20,7 @@ PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
 MOUNTLUSTRE=${MOUNTLUSTRE:-/sbin/mount.lustre}
+MKFSLUSTRE=${MKFSLUSTRE:-/usr/sbin/mkfs.lustre}
 HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh

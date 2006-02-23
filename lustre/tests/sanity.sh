@@ -188,7 +188,7 @@ pass() {
 }
 
 mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre") { print $2 }' /proc/mounts
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
 MOUNT="`mounted_lustre_filesystems`"
 if [ -z "$MOUNT" ]; then
@@ -2357,7 +2357,7 @@ run_test 63b "async write errors should be returned to fsync ==="
 
 test_64a () {
 	df $DIR
-	grep "[0-9]" $LPROC/osc/*-osc*/cur*
+	grep "[0-9]" $LPROC/osc/*-osc-*/cur*
 }
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
