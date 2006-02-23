@@ -333,6 +333,7 @@ char * readline(char * prompt)
         char *line = malloc(size);
         char *ptr = line;
         int c;
+        int eof = 0;
 
         if (line == NULL)
                 return NULL;
@@ -358,6 +359,7 @@ char * readline(char * prompt)
                                 line = tmp;
                         }
                 } else {
+                        eof = 1;
                         if (ferror(stdin))
                                 goto outfree;
                         goto out;
@@ -365,6 +367,10 @@ char * readline(char * prompt)
         }
 out:
         *ptr = 0;
+        if (eof && (strlen(line) == 0)) {
+                free(line);
+                line = NULL;
+        }
         return line;
 outfree:
         free(line);
