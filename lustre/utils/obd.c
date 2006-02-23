@@ -55,6 +55,7 @@
 #include <obd_class.h>
 #include <lnet/lnetctl.h>
 #include "parser.h"
+#include "platform.h"
 #include <stdio.h>
 
 #define MAX_STRING_SIZE 128
@@ -72,8 +73,8 @@ struct shared_data {
         __u64 offsets[MAX_THREADS];
         int   running;
         int   barrier;
-        pthread_mutex_t mutex;
-        pthread_cond_t  cond;
+        l_mutex_t mutex;
+        l_cond_t  cond;
 };
 
 static struct shared_data *shared_data;
@@ -460,12 +461,12 @@ static void shmem_setup(void)
 
 static inline void shmem_lock(void)
 { 
-        pthread_mutex_lock(&shared_data->mutex);
+        l_mutex_lock(&shared_data->mutex);
 }
 
 static inline void shmem_unlock(void)
 { 
-        pthread_mutex_unlock(&shared_data->mutex);
+        l_mutex_unlock(&shared_data->mutex);
 }
 
 static inline void shmem_reset(int total_threads)
@@ -474,8 +475,8 @@ static inline void shmem_reset(int total_threads)
                 return;
 
         memset(shared_data, 0, sizeof(*shared_data));
-        pthread_mutex_init(&shared_data->mutex, NULL);
-        pthread_cond_init(&shared_data->cond, NULL);
+        l_mutex_init(&shared_data->mutex);
+        l_cond_init(&shared_data->cond);
         memset(counter_snapshot, 0, sizeof(counter_snapshot));
         prev_valid = 0;
         shared_data->barrier = total_threads;
@@ -1559,9 +1560,9 @@ int jt_obd_test_brw(int argc, char **argv)
 
                 shared_data->barrier--;
                 if (shared_data->barrier == 0)
-                        pthread_cond_broadcast(&shared_data->cond);
+                        l_cond_broadcast(&shared_data->cond);
                 else
-                        pthread_cond_wait(&shared_data->cond,
+                        l_cond_wait(&shared_data->cond,
                                           &shared_data->mutex);
 
                 shmem_unlock ();
