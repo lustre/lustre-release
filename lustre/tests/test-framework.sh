@@ -2,6 +2,7 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
+#set -vx
 
 export REFORMAT=""
 export VERBOSE=false
@@ -71,10 +72,15 @@ init_test_env() {
 start() {
     facet=$1
     shift
+    device=$1
+    shift
     active=`facet_active $facet`
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
-        --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
-        $@ $XMLCONFIG
+    echo "mount active=${active}, facet=${facet}"
+    mkdir -p /mnt/${facet}
+    do_facet ${facet} mount -t lustre $@ ${device} /mnt/${facet} 
+    #do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
+    #    --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
+    #    $@ $XMLCONFIG
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
         # maybe acceptor error, dump tcp port usage
@@ -87,9 +93,12 @@ stop() {
     facet=$1
     active=`facet_active $facet`
     shift
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
-        --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
-        $@ --cleanup $XMLCONFIG
+    echo "mount active=${active}, facet=${facet}"
+    do_facet ${facet} umount $@ /mnt/${facet}
+    #do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
+    #    --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
+    #    $@ --cleanup $XMLCONFIG
+    return 0
 }
 
 zconf_mount() {
@@ -104,12 +113,8 @@ zconf_mount() {
         OPTIONS="-o $MOUNTOPT"
     fi
 
-    if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre $OPTIONS \
-		`facet_nid mgs`:/lustre-client $mnt || return 1
-    else
-	return 4
-    fi
+    do_node $client mount -t lustre $OPTIONS \
+	`facet_nid mgs`:/lustre-client $mnt || return 1
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
     return 0
@@ -118,9 +123,9 @@ zconf_mount() {
 zconf_umount() {
     client=$1
     mnt=$2
-    [ "$3" ] && force=-f
-    do_node $client umount $force  $mnt || :
-    do_node $client $LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null || :
+    [ "$3" ] && failover=-f
+    # force is the default for umount 
+    do_node $client umount $mnt
 }
 
 shutdown_facet() {
@@ -129,7 +134,7 @@ shutdown_facet() {
        $POWER_DOWN `facet_active_host $facet`
        sleep 2 
     elif [ "$FAILURE_MODE" = SOFT ]; then
-       stop $facet --force --failover --nomod
+       stop $facet -f
     fi
 }
 
@@ -176,7 +181,7 @@ facet_failover() {
     facet=$1
     echo "Failing $facet node `facet_active_host $facet`"
     shutdown_facet $facet
-    reboot_facet $facet
+    reboot_facet $*
     client_df &
     DFPID=$!
     echo "df pid is $DFPID"
@@ -213,7 +218,7 @@ mds_evict_client() {
 
 fail() {
     local facet=$1
-    facet_failover $facet
+    facet_failover $*
     df $MOUNT || error "post-failover df: $?"
 }
 
@@ -229,7 +234,8 @@ fail_abort() {
 }
 
 do_lmc() {
-    $LMC -m ${XMLCONFIG} $@
+    echo There is no lmc.  This is mountconf, baby.
+    exit 1
 }
 
 h2gm () {
@@ -341,48 +347,22 @@ do_facet() {
     do_node $HOST $@
 }
 
-add_mds() {
-    local MOUNT_OPTS
+add_facet() {
     local facet=$1
     shift
-    rm -f ${facet}active
-    [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
-    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc \
-    	--fstype $FSTYPE $* $MOUNT_OPTS
+    echo "add facet $facet: `facet_host $facet`"
+    do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
+        --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
+    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
+        --nettype lnet $PORT_OPT
 }
 
-add_mdsfailover() {
-    local MOUNT_OPTS
+add() {
     local facet=$1
     shift
-    add_facet ${facet}failover  --lustre_upcall $UPCALL
-    [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
-    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc \
-    	--fstype $FSTYPE $* $MOUNT_OPTS
-}
-
-add_ost() {
-    facet=$1
-    shift
+    umount /mnt/${facet} || true
     rm -f ${facet}active
-    add_facet $facet
-    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc \
-    	--fstype $FSTYPE $* $OSTOPT
-}
-
-add_ostfailover() {
-    facet=$1
-    shift
-    add_facet ${facet}failover
-    do_lmc --add ost --failover --node ${facet}failover_facet \
-    	--ost ${facet}_svc --fstype $FSTYPE $* $OSTOPT
-}
-
-add_lov() {
-    lov=$1
-    mds_facet=$2
-    shift; shift
-    do_lmc --add lov --mds ${mds_facet}_svc --lov $lov $* $LOVOPT
+    mkfs.lustre $*
 }
 
 add_client() {

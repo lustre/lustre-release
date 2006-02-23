@@ -802,7 +802,7 @@ static inline void badopt(const char *opt, char *type)
 }
 
 int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
-               char *mountopts)
+               char **mountopts)
 {
         static struct option long_opt[] = {
                 {"backfstype", 1, 0, 'b'},
@@ -944,7 +944,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         mop->mo_ldd.ldd_flags &= ~LDD_F_SV_TYPE_MGS;
                         break;
                 case 'o':
-                        mountopts = optarg;
+                        *mountopts = optarg;
                         break;
                 case 'O':
                         mop->mo_ldd.ldd_flags |= LDD_F_SV_TYPE_OST;
@@ -1052,7 +1052,7 @@ int main(int argc, char *const argv[])
                 print_ldd("Read previous values", &(mop.mo_ldd));
 #endif
 
-        ret = parse_opts(argc, argv, &mop, mountopts);
+        ret = parse_opts(argc, argv, &mop, &mountopts);
         if (ret) 
                 goto out;
 

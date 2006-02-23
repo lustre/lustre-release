@@ -91,7 +91,7 @@ done
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
 
 sh llmountcleanup.sh || exit 19
-sh llrmount.sh $OPTS || exit 20
+sh llmount.sh $OPTS || exit 20
 
 log "comparing previously copied files"
 for f in $FILES; do
@@ -102,7 +102,7 @@ done
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
 sh llmountcleanup.sh || exit 19
-sh llrmount.sh $OPTS || exit 20
+sh llmount.sh $OPTS || exit 20
 
 log "removing $DST"
 rm -r $V $DST || fail "can't remove $DST" 37

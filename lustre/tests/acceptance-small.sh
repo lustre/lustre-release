@@ -51,13 +51,13 @@ for NAME in $CONFIGS; do
 		sh rundbench 1
 		$DEBUG_ON
 		sh llmountcleanup.sh
-		sh llrmount.sh
+		sh llmount.sh
 		if [ $DB_THREADS -gt 1 ]; then
 			$DEBUG_OFF
 			sh rundbench $DB_THREADS
 			$DEBUG_ON
 			sh llmountcleanup.sh
-			sh llrmount.sh
+			sh llmount.sh
 		fi
 		rm -f /mnt/lustre/`hostname`/client.txt
 	fi
@@ -68,7 +68,7 @@ for NAME in $CONFIGS; do
 		bonnie++ -f -r 0 -s $(($SIZE / 1024)) -n 10 -u $UID -d $MOUNT
 		$DEBUG_ON
 		sh llmountcleanup.sh
-		sh llrmount.sh
+		sh llmount.sh
 	fi
 
 	IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
@@ -79,14 +79,14 @@ for NAME in $CONFIGS; do
 		iozone $IOZONE_OPTS $IOZFILE
 		$DEBUG_ON
 		sh llmountcleanup.sh
-		sh llrmount.sh
+		sh llmount.sh
 
 		if [ "$O_DIRECT" != "no" -a "$IOZONE_DIR" != "no" ]; then
 			$DEBUG_OFF
 			iozone -I $IOZONE_OPTS $IOZFILE.odir
 			$DEBUG_ON
 			sh llmountcleanup.sh
-			sh llrmount.sh
+			sh llmount.sh
 		fi
 
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
@@ -104,7 +104,7 @@ for NAME in $CONFIGS; do
 			iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE
 			$DEBUG_ON
 			sh llmountcleanup.sh
-			sh llrmount.sh
+			sh llmount.sh
 		elif [ $IOZVER -lt 3145 ]; then
 			VER=`iozone -v | awk '/Revision:/ { print $3 }'`
 			echo "iozone $VER too old for multi-thread test"
@@ -117,7 +117,7 @@ for NAME in $CONFIGS; do
 			-N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
 		sh llmountcleanup.sh
-		sh llrmount.sh
+		sh llmount.sh
 	fi	
 
 	mkdir -p $MOUNT2
@@ -146,7 +146,7 @@ for NAME in $CONFIGS; do
 
 		$DEBUG_ON
 		sh llmountcleanup.sh
-		sh llrmount.sh
+		sh llmount.sh
 	fi
 
 	if [ "$LIBLUSTRE" != "no" ]; then
@@ -159,7 +159,7 @@ for NAME in $CONFIGS; do
 			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 		fi
 		sh llmountcleanup.sh
-		#sh llrmount.sh
+		#sh llmount.sh
 	fi
 
 	mount | grep $MOUNT && sh llmountcleanup.sh

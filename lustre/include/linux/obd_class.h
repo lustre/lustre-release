@@ -130,6 +130,8 @@ struct config_llog_data {
         struct ldlm_res_id  cld_resid;
         struct config_llog_instance cld_cfg;
         struct list_head    cld_list_chain;
+        atomic_t            cld_refcount;
+        unsigned int        cld_stopping:1;
 };
 
 struct lustre_profile {

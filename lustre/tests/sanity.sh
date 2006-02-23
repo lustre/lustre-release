@@ -77,7 +77,7 @@ CLEAN=${CLEAN:-:}
 
 start() {
 	echo -n "mnt.."
-	sh llrmount.sh > /dev/null || exit 10
+	sh llmount.sh > /dev/null || exit 10
 	echo "done"
 }
 START=${START:-:}

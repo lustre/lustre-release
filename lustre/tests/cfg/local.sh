@@ -3,33 +3,44 @@ MDSNODE=${MDSNODE:-`hostname`}
 OSTNODE=${OSTNODE:-`hostname`}
 CLIENT=${CLIENT:-client}
 
+FSNAME=lustre
 mds_HOST=${mds_HOST:-$MDSNODE}
 mdsfailover_HOST=${mdsfailover_HOST}
+mgs_HOST=${mgs_HOST:-$MDSNODE}
 ost_HOST=${ost_HOST:-$OSTNODE}
 ost2_HOST=${ost2_HOST:-$ost_HOST}
 client_HOST=${client_HOST:-$CLIENT}
 NETTYPE=${NETTYPE:-tcp}
+MGSNID=`h2$NETTYPE $HOSTNAME`
 
-MOUNT=${MOUNT:-"/mnt/lustre"}
+MDSDEV=${MDSDEV:-$ROOT/tmp/${FSNAME}-mdt}
+MDSSIZE=${MDSSIZE:-100000}
+MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
+OSTDEV=${OSTDEV:-$ROOT/tmp/${FSNAME}-ost0}
+OSTSIZE=${OSTSIZE:-200000}
+OSTDEV2=${OSTDEV2:-$ROOT/tmp/${FSNAME}-ost1}
+FSTYPE=${FSTYPE:-ext3}
+
+MDS_MKFS_OPTS="--mgs --mdt --device-size=$MDSSIZE $MDSOPT"
+OST_MKFS_OPTS="--ost --device-size=$OSTSIZE --mgsnid=`h2$NETTYPE $HOSTNAME` $OSTOPT"
+OST2_MKFS_OPTS="--ost --device-size=$OSTSIZE --mgsnid=`h2$NETTYPE $HOSTNAME` $OSTOPT"
+
+MDS_MOUNT_OPTS="-o loop"
+OST_MOUNT_OPTS="-o loop"
+OST2_MOUNT_OPTS="-o loop"
+
+MOUNT=${MOUNT:-/mnt/${FSNAME}}
 MOUNT1=${MOUNT1:-$MOUNT}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT1}
+MOUNTOPT=${MOUNTOPT:-"user_xattr,acl"}
+
+TIMEOUT=${TIMEOUT:-20}
+UPCALL=${UPCALL:-DEFAULT}
 PTLDEBUG=${PTLDEBUG:-0x3f0400}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 PDSH=${PDSH:-no_dsh}
-
-MDSDEV=${MDSDEV:-$ROOT/tmp/mds1-`hostname`}
-MDSSIZE=${MDSSIZE:-100000}
-OSTDEV=${OSTDEV:-$ROOT/tmp/ost1-`hostname`}
-OSTSIZE=${OSTSIZE:-200000}
-FSTYPE=${FSTYPE:-ext3}
-TIMEOUT=${TIMEOUT:-20}
-UPCALL=${UPCALL:-DEFAULT}
-
-MDSOPT=${MDSOPT:-"user_xattr,acl"}
-CLIENTOPT=${CLIENTOPT:-"user_xattr,acl"}
-MOUNTOPT=${MOUNTOPT:-"user_xattr,acl"}
 
 STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
