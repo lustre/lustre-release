@@ -939,7 +939,7 @@ ptllnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
 
         /* Shouldn't get here; recvs only block for router buffers */
         LBUG();
-        
+
         CDEBUG(D_NET, "rx=%p (stack)\n", stackrx);
 
         /* Don't ++plni_nrxs: heaprx replaces stackrx */

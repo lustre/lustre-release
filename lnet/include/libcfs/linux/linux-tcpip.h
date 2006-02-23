@@ -36,7 +36,7 @@ typedef struct socket   cfs_socket_t;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
 # define sk_allocation  allocation
-# define sk_data_ready	data_ready
+# define sk_data_ready  data_ready
 # define sk_write_space write_space
 # define sk_user_data   user_data
 # define sk_prot        prot
@@ -54,7 +54,7 @@ typedef struct socket   cfs_socket_t;
 #define SOCK_SNDBUF(so)         ((so)->sk->sk_sndbuf)
 #define SOCK_WMEM_QUEUED(so)    ((so)->sk->sk_wmem_queued)
 #define SOCK_ERROR(so)          ((so)->sk->sk_err)
-#define SOCK_TEST_NOSPACE(so)	test_bit(SOCK_NOSPACE, &(so)->flags)
+#define SOCK_TEST_NOSPACE(so)   test_bit(SOCK_NOSPACE, &(so)->flags)
 
 #endif
 

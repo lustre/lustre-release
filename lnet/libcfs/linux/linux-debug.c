@@ -139,26 +139,26 @@ void lbug_with_loc(char *file, const char *func, const int line)
 
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
-#if defined(__arch_um__) 
-        if (tsk != NULL) 
-                CWARN("stack dump for pid %d (%d) requested; wake up gdb.\n", 
-                      tsk->pid, UML_PID(tsk)); 
-        asm("int $3");
-#elif defined(HAVE_SHOW_TASK) 
-        /* this is exported by lustre kernel version 42 */ 
-        extern void show_task(struct task_struct *); 
+#if defined(__arch_um__)
+        if (tsk != NULL)
+                CWARN("stack dump for pid %d (%d) requested; wake up gdb.\n",
+                      tsk->pid, UML_PID(tsk));
+        //asm("int $3");
+#elif defined(HAVE_SHOW_TASK)
+        /* this is exported by lustre kernel version 42 */
+        extern void show_task(struct task_struct *);
 
-        if (tsk == NULL) 
-                tsk = current; 
-        CWARN("showing stack for process %d\n", tsk->pid); 
-        show_task(tsk); 
-#else 
+        if (tsk == NULL)
+                tsk = current;
+        CWARN("showing stack for process %d\n", tsk->pid);
+        show_task(tsk);
+#else
         CWARN("can't show stack: kernel doesn't export show_task\n");
 #endif
 }
 
 cfs_task_t *libcfs_current(void)
-{ 
+{
         CWARN("current task struct is %p\n", current);
         return current;
 }

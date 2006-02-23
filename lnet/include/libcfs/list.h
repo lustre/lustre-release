@@ -128,6 +128,8 @@ static inline void list_del_init(struct list_head *entry)
  * list_move - delete from one list and add as another's head
  * @list: the entry to move
  * @head: the head that will precede our entry
+ *
+ * This is not safe to use if @list is already on the same list as @head.
  */
 static inline void list_move(struct list_head *list, struct list_head *head)
 {
@@ -139,6 +141,8 @@ static inline void list_move(struct list_head *list, struct list_head *head)
  * list_move_tail - delete from one list and add as another's tail
  * @list: the entry to move
  * @head: the head that will follow our entry
+ *
+ * This is not safe to use if @list is already on the same list as @head.
  */
 static inline void list_move_tail(struct list_head *list,
 				  struct list_head *head)

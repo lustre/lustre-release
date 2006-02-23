@@ -788,7 +788,7 @@ AC_SUBST(LIBWRAP)
 AC_MSG_CHECKING([whether to use libpthread for lnet library])
 AC_ARG_ENABLE([libpthread],
        	AC_HELP_STRING([--disable-libpthread],
-               	[disable libpthread for liblustre]),
+               	[disable libpthread]),
        	[],[enable_libpthread=yes])
 if test "$enable_libpthread" = "yes" ; then
 	AC_CHECK_LIB([pthread], [pthread_create],
@@ -796,9 +796,13 @@ if test "$enable_libpthread" = "yes" ; then
 		[ENABLE_LIBPTHREAD="no"])
 	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
 		AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
+		PTHREAD_LIBS="-lpthread"
+		AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
 	else
+		PTHREAD_LIBS=""
 		AC_MSG_RESULT([no libpthread is found])
 	fi
+	AC_SUBST(PTHREAD_LIBS)
 else
 	AC_MSG_RESULT([no (disabled explicitly)])
 	ENABLE_LIBPTHREAD="no"
@@ -828,7 +832,7 @@ if test x$enable_urandom != xno ; then
 	AC_DEFINE([LIBLUSTRE_USE_URANDOM], 1, [use /dev/urandom for random data])
 fi
 
-# -------- check for -lcap and -lpthread ----
+# -------- check for -lcap support ----
 if test x$enable_liblustre = xyes ; then
 	AC_CHECK_LIB([cap], [cap_get_proc],
 		[
@@ -840,13 +844,6 @@ if test x$enable_liblustre = xyes ; then
 		])
 	AC_SUBST(CAP_LIBS)
 
-	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
-		PTHREAD_LIBS="-lpthread"
-		AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
-	else
-		PTHREAD_LIBS=""
-	fi
-	AC_SUBST(PTHREAD_LIBS)
 fi
 
 LN_CONFIG_UPTLLND

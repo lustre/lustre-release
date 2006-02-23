@@ -20,7 +20,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
-#include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
 typedef struct {                                /* tmp struct for parsing routes */

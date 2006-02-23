@@ -40,7 +40,7 @@
 #else
 #define LASSERT(e)
 #define LASSERTF(cond, fmt...) do { } while (0)
-#endif
+#endif /* LIBCFS_DEBUG */
 
 /* LBUG_WITH_LOC defined in lnet/<os>/kp30.h */
 #define LBUG() LBUG_WITH_LOC(__FILE__, __FUNCTION__, __LINE__)
@@ -194,7 +194,10 @@ do {                                                                           \
 # define printk(format, args...) printf (format, ## args)
 # define LIBCFS_ALLOC(ptr, size) do { (ptr) = calloc(1,size); } while (0);
 # define LIBCFS_FREE(a, b) do { free(a); } while (0);
+
 void libcfs_debug_dumplog(void);
+int libcfs_debug_init(unsigned long bufsize);
+int libcfs_debug_cleanup(void);
 #endif
 
 /*

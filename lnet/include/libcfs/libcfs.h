@@ -196,23 +196,24 @@ do {                                                                          \
         }                                                                     \
 } while (0)
 
-#elif defined(LUSTRE_UTILS)
-
-#define CDEBUG(mask, format, a...)                                      \
-do {                                                                    \
-        if ((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE))       \
-                fprintf(stderr, "(%s:%d:%s()) " format,                 \
-                        __FILE__, __LINE__, __FUNCTION__, ## a);        \
-} while (0)
-#define CDEBUG_LIMIT CDEBUG
-
-#else  /* !__KERNEL__ && !LUSTRE_UTILS*/
+#elif defined(__arch_lib__) && !defined(LUSTRE_UTILS)
 
 #define CDEBUG(mask, format, a...)                                      \
 do {                                                                    \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||   \
             (libcfs_debug & (mask) &&                                   \
-             libcfs_subsystem_debug & DEBUG_SUBSYSTEM))                 \
+             libcfs_subsystem_debug & DEBUG_SUBSYSTEM)) {               \
+                libcfs_debug_msg(DEBUG_SUBSYSTEM, mask, __FILE__,       \
+                                __FUNCTION__, __LINE__, 0, format, ## a);\
+        }                                                               \
+} while (0)
+#define CDEBUG_LIMIT CDEBUG
+
+#else
+
+#define CDEBUG(mask, format, a...)                                      \
+do {                                                                    \
+        if ((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE))       \
                 fprintf(stderr, "(%s:%d:%s()) " format,                 \
                         __FILE__, __LINE__, __FUNCTION__, ## a);        \
 } while (0)

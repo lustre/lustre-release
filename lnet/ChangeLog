@@ -1,5 +1,7 @@
 2006-02-15  Cluster File Systems, Inc. <info@clusterfs.com>
 	* version 1.4.6
+	- fix use of portals/lnet pid to avoid dropping RPCs b=10074
+	- iiblnd wasn't mapping all memory, resulting in comms errors b=9776
 	- quiet LNET startup LNI message for liblustre b=10128
 	- Better console error messages if 'ip2nets' can't match an IP address
 	- Fixed overflow/use-before-set bugs in linux-time.h
@@ -7,6 +9,7 @@
 	- LNET teardown failed an assertion about the route table being empty
 	- Fixed a crash in LNetEQPoll(<invalid handle>)
 	- Future protocol compatibility work (b_rls146_lnetprotovrsn)
+	- improve debug message for liblustre/Catamount nodes (b=10116)
 
 2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
 	* Configuration change for the XT3
