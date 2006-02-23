@@ -1,5 +1,5 @@
 # Lustre test Makefile
-AM_CPPFLAGS = $(LLCPPFLAGS) -I/opt/lam/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
+AM_CPPFLAGS = $(LLCPPFLAGS) -I/opt/lam/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS
 AM_CFLAGS = $(LLCFLAGS)
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
