@@ -69,7 +69,8 @@ gid_t  cfs_curproc_fsgid(void)
 pid_t  cfs_curproc_pid(void)
 {
 #ifdef __DARWIN8__
-        return proc_pid(current_proc());
+        /* no pid for each thread, return address of thread struct */
+        return (pid_t)current_thread();
 #else
         return current_proc()->p_pid;
 #endif

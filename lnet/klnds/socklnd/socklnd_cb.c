@@ -594,6 +594,7 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
 {
         unsigned long  flags;
         ksock_sched_t *sched = conn->ksnc_scheduler;
+        int            bufnob = 0;
 
         /* called holding global lock (read or irq-write) and caller may
          * not have dropped this lock between finding conn and calling me,
@@ -615,10 +616,15 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         /* NB this sets 1 ref on zccd, so the callback can only occur after
          * I've released this ref. */
 #endif
+        /* 
+         * NB Darwin: SOCK_WMEM_QUEUED()->sock_getsockopt() will take
+         * a blockable lock(socket lock), so SOCK_WMEM_QUEUED can't be
+         * put in spinlock. 
+         */
+        bufnob = SOCK_WMEM_QUEUED(conn->ksnc_sock);
         spin_lock_irqsave (&sched->kss_lock, flags);
 
-        if (list_empty(&conn->ksnc_tx_queue) &&
-            SOCK_WMEM_QUEUED(conn->ksnc_sock) == 0) {
+        if (list_empty(&conn->ksnc_tx_queue) && bufnob == 0) {
                 /* First packet starts the timeout */
                 conn->ksnc_tx_deadline = 
                         cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
