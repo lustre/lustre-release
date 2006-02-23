@@ -24,47 +24,37 @@ case "$lustretag" in
         portalstag="b1_2"
         ;;
 
-    b1_4_next_recovery_transno)
-        snmptag="HEAD"
-        portalstag="b_hd_newconfig"
-        lnettag="b_release_1_4_6"
-        libsysiotag="b_release_1_4_6"
-	;;
-
-    b1_4_lfs_df)
-        snmptag="HEAD"
-        portalstag="b_hd_newconfig"
-        lnettag="b_release_1_4_6"
-        libsysiotag="b_release_1_4_6"
-	;;
-    
     b1_4_atime_update)
         snmptag="HEAD"
         portalstag="b_hd_newconfig"
-        lnettag="b_release_1_4_6"
-        libsysiotag="b_release_1_4_6"
+        lnettag="b_hd_newconfig"
 	;;
 
-    b1_4_lov_lvb_cleanup)
-        snmptag="HEAD"
-        portalstag="b_hd_newconfig"
-        lnettag="b_release_1_4_6"
-        libsysiotag="b_release_1_4_6"
-	;;
-	
-    b1_4_rhel4_22)
-        snmptag="HEAD"
-        portalstag="b_release_1_4_6"
-        lnettag="b_release_1_4_6"
-        ;;
-
-    b1_4 | b1_4_*)
+    b1_4_join)
         snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
         ;;
 
-    b1_4_join)
+    b1_4_lfs_df)
+        snmptag="HEAD"
+        portalstag="b_hd_newconfig"
+        lnettag="b_hd_newconfig"
+	;;
+
+    b1_4_lov_lvb_cleanup)
+        snmptag="HEAD"
+        portalstag="b_hd_newconfig"
+        lnettag="b_hd_newconfig"
+	;;
+
+    b1_4_next_recovery_transno)
+        snmptag="HEAD"
+        portalstag="b_hd_newconfig"
+        lnettag="b_hd_newconfig"
+	;;
+	
+    b1_4 | b1_4_*)
         snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
@@ -80,14 +70,14 @@ case "$lustretag" in
         portalstag="$lustretag"
         ;;
 
-    b_ioprovement)
-        portalstag=b_ioprovement
-        ;;
-
     b_iam*)
         snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
+        ;;
+
+    b_ioprovement)
+        portalstag="b_ioprovement"
         ;;
 
     b_newconfig_rdmarouting)
@@ -123,18 +113,22 @@ case "$lustretag" in
         portalstag="b_ptlrpc_cleanup"
         ;;
 
-    b_release_*)
-        portalstag=$lustretag
+    # starting with 1_4_6, we have a tagged lnet too
+    b_release_1_4_[6-9]*)
+        portalstag="$lustretag"
+        libsysiotag="$lustretag"
+        lnettag="$lustretag"
         ;;
 
-    RELEASE_1_4_6_B1_4_JOIN_LAND_PARENT_20051208_1641)
-        lnettag="b_hd_newconfig"
-        portalstag="b_hd_newconfig"
+    b_release_*)
+        portalstag="$lustretag"
+        libsysiotag="$lustretag"
         ;;
 
     # v1.0-v1.3, v1.4.0-v1.4.2
     v1_[0-3]_*|v1_4_[0-2]*)
         portalstag="$lustretag"
+        libsysiotag="$lustretag"
         ;;
 
     # v1.4.3-v1.4.5, v1.4.5.1 - v1.4.5.9

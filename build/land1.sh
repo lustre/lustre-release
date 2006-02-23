@@ -93,7 +93,7 @@ $CVS tag ${PARENT}_${CHILD}_LAND_PARENT_$date $dir
 echo "done"
 
 echo -n "Create land point on ${child} ${PARENT}_${CHILD}_LAND_CHILD_$date ..."
-$CVS rtag -r ${child} ${PARENT}_${CHILD}_LAND_CHILD_$date $module $dir
+$CVS tag -r ${child} ${PARENT}_${CHILD}_LAND_CHILD_$date $dir
 echo "done"
 
 echo -n "Preserve old base tag ${CHILD}_BASE as ${CHILD}_BASE_PREV ..."
