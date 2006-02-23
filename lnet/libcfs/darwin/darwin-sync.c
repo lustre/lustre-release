@@ -815,7 +815,7 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan,
                                 timeout = 0;
 		}
 	} else  {
-                timeout = 0;
+                /* just return timeout, because I've got event and don't need to wait */
 		kspin_unlock(&chan->guard);
         }
 
