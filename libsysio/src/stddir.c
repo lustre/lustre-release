@@ -57,7 +57,7 @@ SYSIO_INTERFACE_NAME(opendir)(const char *name)
 	if (!dir)
 		SYSIO_INTERFACE_RETURN(NULL, -ENOMEM);
 
-	dir->fd = open(name, O_RDONLY);
+	dir->fd = SYSIO_INTERFACE_NAME(open)(name, O_RDONLY);
 	if (dir->fd < 0) {
 		free(dir);
 		SYSIO_INTERFACE_RETURN(NULL, -errno);
@@ -65,7 +65,8 @@ SYSIO_INTERFACE_NAME(opendir)(const char *name)
 	return dir;
 }
 
-sysio_sym_weak_alias(opendir, __opendir)
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(opendir),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(opendir)))
 
 int
 SYSIO_INTERFACE_NAME(closedir)(DIR *dir)

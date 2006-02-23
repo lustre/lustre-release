@@ -80,11 +80,11 @@ extern const struct inode_ops _sysio_nodev_ops;
 		 struct inode *, \
 		 unsigned , \
 		 struct intnl_stat *))_sysio_do_ebadf
-#define _sysio_nodev_getdirentries \
+#define _sysio_nodev_filldirentries \
 	(ssize_t (*)(struct inode *, \
+		     _SYSIO_OFF_T *, \
 		     char *, \
-		     size_t , \
-		     _SYSIO_OFF_T *))_sysio_do_illop
+		     size_t))_sysio_do_illop
 #define _sysio_nodev_inop_mkdir \
 	(int (*)(struct pnode *, \
 		 mode_t))_sysio_do_illop

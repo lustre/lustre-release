@@ -55,6 +55,9 @@
 #include <sys/uio.h>
 #include <sys/queue.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -149,7 +152,7 @@ listit(const char *path)
 	off_t	base;
 	ssize_t	cc;
 
-	fd = open(path, O_RDONLY);
+	fd = SYSIO_INTERFACE_NAME(open)(path, O_RDONLY);
 	if (fd < 0) {
 		perror(path);
 		return -1;
@@ -163,8 +166,10 @@ listit(const char *path)
 		goto out;
 	}
 
-	base = 0;
-	while ((cc = getdirentries(fd, (char *)buf, n, &base)) > 0) {
+	while ((cc = SYSIO_INTERFACE_NAME(getdirentries)(fd,
+							 (char *)buf,
+							 n,
+							 &base)) > 0) {
 		dp = buf;
 		while (cc > 0) {
 			(void )printf("\t%s: ino %llu type %u\n",
@@ -174,8 +179,6 @@ listit(const char *path)
 			cc -= dp->d_reclen;
 			dp = (struct dirent *)((char *)dp + dp->d_reclen);
 		}
-		if (!base)
-			break;
 	}
 
 out:
@@ -186,7 +189,7 @@ out:
 	{
 		int	oerrno = errno;
 
-		if (close(fd) != 0) {
+		if (SYSIO_INTERFACE_NAME(close)(fd) != 0) {
 			perror(path);
 			if (cc < 0)
 				errno = oerrno;

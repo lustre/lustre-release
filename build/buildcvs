@@ -64,6 +64,8 @@ case "$lustretag" in
         snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
+	# XXX temorary tag until b1_5* is updated from b1_4 liblustre
+	libsysiotag="HEAD_RELEASE_1_4_6_LAND_PARENT_20060223_1455"
         ;;
 
     b_cmd*)
@@ -74,6 +76,8 @@ case "$lustretag" in
         snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
+	# XXX temorary tag until b_iam* is updated from b1_4 liblustre
+	libsysiotag="HEAD_RELEASE_1_4_6_LAND_PARENT_20060223_1455"
         ;;
 
     b_ioprovement)

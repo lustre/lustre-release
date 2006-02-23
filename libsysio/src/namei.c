@@ -186,19 +186,22 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 	if (!parent) {
 		const char *icwd;
 
-		if (!_sysio_init_cwd)
+		if (!_sysio_init_cwd && !nd->nd_root)
 			abort();
 
 		/*
-		 * Finally have to set the curretn working directory. We can
+		 * Finally have to set the current working directory. We can
 		 * not tolerate errors here or else risk leaving the process
 		 * in a very unexpected location. We abort then unless all goes
 		 * well.
 		 */
 		icwd = _sysio_init_cwd;
 		_sysio_init_cwd = NULL;
-		if (_sysio_namei(NULL, icwd, 0, NULL, &parent) != 0 ||
-		    _sysio_p_chdir(parent) != 0)
+		parent = nd->nd_root;
+		if (!parent)
+			abort();
+		(void )_sysio_namei(nd->nd_root, icwd, 0, NULL, &parent);
+		if (_sysio_p_chdir(parent) != 0)
 			abort();
 	}
 #endif
@@ -257,8 +260,6 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 			lpath[cc] = '\0';			/* NUL term */
 			/*
 			 * Handle symbolic links with recursion. Yuck!
-			 * Pass the NULL intent for recursive symlink
-			 * except the last component.
 			 */
 			ND_INIT(&nameidata,
 				(nd->nd_flags | ND_NEGOK),

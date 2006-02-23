@@ -54,6 +54,9 @@
 #include <sys/uio.h>
 #include <sys/queue.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -106,11 +109,11 @@ main(int argc, char *const argv[])
 
 		old = argv[optind++];
 		new = argv[optind++];
-		if ((err = link(old, new)) != 0) {
+		if ((err = SYSIO_INTERFACE_NAME(link)(old, new)) != 0) {
 			perror("link");
 			break;
 		}
-		if ((err = lstat(new, &stbuf)) != 0) {
+		if ((err = SYSIO_INTERFACE_NAME(lstat)(new, &stbuf)) != 0) {
 			perror(new);
 			break;
 		}

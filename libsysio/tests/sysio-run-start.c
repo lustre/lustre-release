@@ -17,10 +17,10 @@ _sysio_startup()
 	if (err) {
 		errno = -err;
 		perror("sysio startup");
-		exit(1);
+		abort();
 	}
 	if (atexit(_test_sysio_shutdown) != 0) {
 		perror("atexit");
-		exit(1);
+		abort();
 	}
 }

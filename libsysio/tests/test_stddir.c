@@ -49,6 +49,9 @@
 #include <dirent.h>
 #include <sys/types.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -139,17 +142,17 @@ testit(const char *path)
 
 	printf("testing directory functions on %s\n", path);
 
-	if ((d = opendir(path)) == NULL) {
+	if ((d = SYSIO_INTERFACE_NAME(opendir)(path)) == NULL) {
 		perror(path);	
 		return errno;
 	}
 
-	while ((de = readdir(d)) != NULL)
+	while ((de = SYSIO_INTERFACE_NAME(readdir)(d)) != NULL)
 		printf("\t %s: ino %lu off %lu type %u\n",
 			de->d_name, (unsigned long )de->d_ino, 
 			(unsigned long )de->d_off, (int )de->d_type);
 
-	if (closedir(d)) {
+	if (SYSIO_INTERFACE_NAME(closedir)(d)) {
 		perror("closedir");
 		return errno;
 	}

@@ -75,7 +75,8 @@ _sysio_fnew(struct inode *ino, int flags)
 		return NULL;
 
 	_SYSIO_FINIT(fil, ino, flags);
-	I_REF(ino);
+	F_REF(fil);
+	I_REF(fil->f_ino);
 
 	return fil;
 }
@@ -92,6 +93,7 @@ _sysio_fgone(struct file *fil)
 	assert(fil->f_ino);
 	err = (*fil->f_ino->i_ops.inop_close)(fil->f_ino);
 	assert(!err);
+	I_RELE(fil->f_ino);
 	free(fil);
 }
 
@@ -272,7 +274,7 @@ _sysio_fd_dup(int oldfd, int newfd, int force)
 	struct file *fil;
 	int	fd;
 
-	if (oldfd == newfd)
+	if (oldfd == newfd && oldfd >= 0)
 		return newfd;
 
 	fil = _sysio_fd_find(oldfd);

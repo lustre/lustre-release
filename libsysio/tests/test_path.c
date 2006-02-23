@@ -52,6 +52,9 @@
 #include <unistd.h>
 #include <sys/uio.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -149,7 +152,7 @@ statit(const char *path)
 	/*
 	 * Get file attrs.
 	 */
-	err = lstat(path, &stbuf);
+	err = SYSIO_INTERFACE_NAME(lstat)(path, &stbuf);
 	if (err) {
 		perror(path);
 		return -1;
@@ -197,7 +200,7 @@ statit(const char *path)
 	 * Print path and type.
 	 */
 	if (S_ISLNK(stbuf.st_mode)) {
-		cc = readlink(path, buf, sizeof(buf));
+		cc = SYSIO_INTERFACE_NAME(readlink)(path, buf, sizeof(buf));
 		if (cc < 0) {
 			perror(path);
 			return -1;

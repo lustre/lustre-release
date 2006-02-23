@@ -4,17 +4,16 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 
-#include "xtio.h"
 #include "test.h"
 
 #include "sysio.h"
+#include "xtio.h"
 
 int
 _test_sysio_startup()
 {
 	int	err;
-	const char *cwd;
-	const char *s;
+	char	*arg;
 
 	err = _sysio_init();
 	if (err)
@@ -22,30 +21,39 @@ _test_sysio_startup()
 	err = drv_init_all();
 	if (err)
 		return err;
-	s = getenv("SYSIO_NAMESPACE");
-	if (!(s || (s = getenv("SYSIO_MANUAL")))) {
+#if SYSIO_TRACING
+	/*
+	 * tracing
+	 */
+	arg = getenv("SYSIO_TRACING");
+	err = _sysio_boot("trace", arg);
+	if (err)
+		return err;
+#endif
+	/*
+	 * namespace
+	 */
+	arg = getenv("SYSIO_NAMESPACE");
+	if (!(arg || (arg = getenv("SYSIO_MANUAL")))) {
 		/*
-		 * Assume a native mount at root.
+		 * Assume a native mount at root with automounts enabled.
 		 */
-		s = "{mnt,dev=\"native:/\",dir=/,fl=0}";
+		arg = "{mnt,dev=\"native:/\",dir=/,fl=2}";
 	}
-	cwd = getenv("SYSIO_CWD");
+	err = _sysio_boot("namespace", arg);
+	if (err)
+		return err;
 #if DEFER_INIT_CWD
-	err = _sysio_boot(s, cwd ? cwd : "/");
-#else
-	err = _sysio_boot(s);
-#endif
-	if (err)
-		return err;
-
-#if !DEFER_INIT_CWD
-	if (!cwd)
-		s = "/";
-	err = chdir(s);
+	/*
+	 * Current working directory.
+	 */
+	arg = getenv("SYSIO_CWD");
+	if (!arg)
+		arg = "/";
+	err = _sysio_boot("cwd", arg);
 	if (err)
 		return err;
 #endif
-
 	return 0;
 }
 

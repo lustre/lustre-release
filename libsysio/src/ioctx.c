@@ -44,14 +44,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sched.h>
 #include <assert.h>
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/queue.h>
 
-#include "xtio.h"
 #include "sysio.h"
+#include "xtio.h"
 #include "inode.h"
 
 #if defined(REDSTORM)
@@ -175,6 +176,21 @@ _sysio_ioctx_find(void *id)
 }
 
 /*
+ * Check if asynchronous IO operation is complete.
+ */
+int
+_sysio_ioctx_done(struct ioctx *ioctx)
+{
+
+	if (ioctx->ioctx_done)
+		return 1;
+	if (!(*ioctx->ioctx_ino->i_ops.inop_iodone)(ioctx))
+		return 0;
+	ioctx->ioctx_done = 1;
+	return 1;
+}
+
+/*
  * Wait for asynchronous IO operation to complete, return status
  * and dispose of the context.
  *
@@ -189,9 +205,11 @@ _sysio_ioctx_wait(struct ioctx *ioctx)
 	/*
 	 * Wait for async operation to complete.
 	 */
-	while (!(ioctx->ioctx_done ||
-		 (*ioctx->ioctx_ino->i_ops.inop_iodone)(ioctx)))
-		;
+	while (!_sysio_ioctx_done(ioctx)) {
+#ifdef POSIX_PRIORITY_SCHEDULING
+		(void )sched_yield();
+#endif
+	}
 
 	/*
 	 * Get status.
@@ -228,7 +246,7 @@ _sysio_ioctx_complete(struct ioctx *ioctx)
 
 
 	/* update IO stats */
-	_SYSIO_UPDACCT(ioctx->ioctx_write, ioctx);
+	_SYSIO_UPDACCT(ioctx->ioctx_write, ioctx->ioctx_cc);
 
 	/*
 	 * Run the call-back queue.

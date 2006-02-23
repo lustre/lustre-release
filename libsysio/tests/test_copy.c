@@ -53,6 +53,9 @@
 #include <sys/uio.h>
 #include <sys/queue.h>
 
+#if defined(SYSIO_LABEL_NAMES)
+#include "sysio.h"
+#endif
 #include "xtio.h"
 #include "test.h"
 
@@ -136,7 +139,7 @@ open_file(const char *path, int flags, mode_t mode)
 {
 	int	fd;
 
-	fd = open(path, flags, mode);
+	fd = SYSIO_INTERFACE_NAME(open)(path, flags, mode);
 	if (fd < 0)
 		perror(path);
 
@@ -149,11 +152,14 @@ copy_file(const char *spath, const char *dpath)
 	int	sfd, dfd;
 	int	flags;
 	int	rtn;
-	static char buf[1024];
+	struct stat stat;
+	char	*buf;
+	size_t	bufsiz;
 	ssize_t	cc, wcc;
 
 	sfd = dfd = -1;
 	rtn = -1;
+	buf = NULL;
 
 	sfd = open_file(spath, O_RDONLY, 0);
 	if (sfd < 0)
@@ -165,8 +171,23 @@ copy_file(const char *spath, const char *dpath)
 	if (dfd < 0)
 		goto out;
 
-	while ((cc = read(sfd, buf, sizeof(buf))) > 0)
-		if ((wcc = write(dfd, buf, cc)) != cc) {
+	rtn = SYSIO_INTERFACE_NAME(fstat)(dfd, &stat);
+	if (rtn != 0) {
+		perror(dpath);
+		goto out;
+	}
+	bufsiz = stat.st_blksize;
+	if (bufsiz < (64 * 1024))
+		bufsiz =
+		    (((64 * 1024) / stat.st_blksize - 1) + 1) * (64 * 1024);
+	buf = malloc(bufsiz);
+	if (!buf) {
+		perror(dpath);
+		goto out;
+	}
+
+	while ((cc = SYSIO_INTERFACE_NAME(read)(sfd, buf, bufsiz)) > 0)
+		if ((wcc = SYSIO_INTERFACE_NAME(write)(dfd, buf, cc)) != cc) {
 			if (wcc < 0) {
 				perror(dpath);
 				break;
@@ -178,14 +199,20 @@ copy_file(const char *spath, const char *dpath)
 				       (unsigned )cc);
 			break;
 		}
-	if (cc < 0)
+	if (cc < 0) {
 		perror(spath);
+		rtn = -1;
+	}
 
 out:
-	if (sfd >= 0 && close(sfd) != 0)
+	if (buf)
+		free(buf);
+	if (sfd >= 0 && SYSIO_INTERFACE_NAME(close)(sfd) != 0)
 		perror(spath);
-	if (dfd >= 0 && (fsync(dfd) != 0 || close(dfd) != 0))
+	if (dfd >= 0 &&
+	    (SYSIO_INTERFACE_NAME(fsync)(dfd) != 0 ||
+	     SYSIO_INTERFACE_NAME(close)(dfd) != 0))
 		perror(dpath);
 
-	return 0;
+	return rtn;
 }

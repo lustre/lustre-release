@@ -59,16 +59,6 @@ SYSIO_INTERFACE_NAME(dup2)(int oldfd, int newfd)
 	SYSIO_INTERFACE_ENTER;
 	if (newfd < 0)
 		SYSIO_INTERFACE_RETURN(-1, -EBADF);
-
-	if (oldfd == newfd) {
-		struct file *fil;
-
-		fil = _sysio_fd_find(oldfd);
-		if (!(fil && fil->f_ino))
-			SYSIO_INTERFACE_RETURN(-1, -EBADF);
-		SYSIO_INTERFACE_RETURN(newfd, 0);
-	}
-
 	fd = _sysio_fd_dup(oldfd, newfd, 1);
 	SYSIO_INTERFACE_RETURN(fd < 0 ? -1 : fd, fd < 0 ? fd : 0);
 }

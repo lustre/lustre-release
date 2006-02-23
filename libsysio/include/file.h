@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -46,6 +46,28 @@
  */
 
 /*
+ * Test whether large file support on this file.
+ */
+#ifdef O_LARGEFILE
+#define _F_LARGEFILE(fil) \
+	((fil)->f_flags & O_LARGEFILE)
+#else
+#define _F_LARGEFILE(fil) \
+	(1)
+#endif
+/*
+ * Return max seek value for this file.
+ */
+#define _SEEK_MAX(fil) \
+	(_F_LARGEFILE(fil) ? _SYSIO_OFF_T_MAX : LONG_MAX)
+
+#if _LARGEFILE64_SOURCE
+#define	_SYSIO_FLOCK	flock64
+#else
+#define	_SYSIO_FLOCK	flock
+#endif
+
+/*
  * A file record is maintained for each open file in the system. It holds
  * all the info necessary to track the context and parameters for the
  * operations that may be performed.
@@ -64,7 +86,6 @@ struct file {
 	do { \
 		(fil)->f_ref++; \
 		assert((fil)->f_ref); \
-		I_REF((fil)->f_ino); \
 	} while (0)
 
 /*
@@ -72,14 +93,10 @@ struct file {
  */
 #define F_RELE(fil) \
 	do { \
-		struct inode *ino; \
-		\
 		assert((fil)->f_ref); \
 		(fil)->f_ref--; \
-		ino = (fil)->f_ino; \
 		if (!(fil)->f_ref) \
 			_sysio_fgone(fil); \
-		I_RELE(ino); \
 	} while (0)
 
 /*
@@ -91,7 +108,7 @@ struct file {
 	do { \
 		(fil)->f_ino = (ino); \
 		(fil)->f_pos = 0; \
-		(fil)->f_ref = 1; \
+		(fil)->f_ref = 0; \
 		(fil)->f_flags = (flags); \
 	} while (0)
 
@@ -108,3 +125,7 @@ extern int _sysio_fd_close_all(void);
 #if ZERO_SUM_MEMORY
 extern void _sysio_fd_shutdown(void);
 #endif
+extern _SYSIO_OFF_T _sysio_lseek_prepare(struct file *fil,
+					 _SYSIO_OFF_T offset,
+					 int whence,
+					 _SYSIO_OFF_T max);

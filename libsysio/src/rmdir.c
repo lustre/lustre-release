@@ -68,6 +68,10 @@ SYSIO_INTERFACE_NAME(rmdir)(const char *path)
 	err = _sysio_namei(_sysio_cwd, path, 0, &intent, &pno);
 	if (err)
 		goto out;
+	if (!S_ISDIR(pno->p_base->pb_ino->i_stbuf.st_mode)) {
+		err = -ENOTDIR;
+		goto error;
+	}
 	if (IS_RDONLY(pno, pno->p_base->pb_ino)) {
 		err = -EROFS;
 		goto error;
@@ -76,7 +80,12 @@ SYSIO_INTERFACE_NAME(rmdir)(const char *path)
 		err = -EBUSY;
 		goto error;
 	}
-	err = pno->p_base->pb_ino->i_ops.inop_rmdir(pno);
+	/*
+	 * Use the parent node operations to request the task in case the
+	 * driver is implemented using differentiated inode operations based
+	 * on file type, such as incore does.
+	 */
+	err = pno->p_parent->p_base->pb_ino->i_ops.inop_rmdir(pno);
 	if (err)
 		goto error;
 	/*

@@ -61,8 +61,8 @@
 #endif
 #include <sys/queue.h>
 
-#include "xtio.h"
 #include "sysio.h"
+#include "xtio.h"
 #include "fs.h"
 #include "mount.h"
 #include "inode.h"
@@ -131,10 +131,10 @@ static int _sysio_incore_inop_setattr(struct pnode *pno,
 				      struct inode *ino,
 				      unsigned mask,
 				      struct intnl_stat *stbuf);
-static ssize_t _sysio_incore_dirop_getdirentries(struct inode *ino,
-					   char *buf,
-					   size_t nbytes,
-					   _SYSIO_OFF_T *basep);
+static ssize_t _sysio_incore_dirop_filldirentries(struct inode *ino,
+						  _SYSIO_OFF_T *posp,
+						  char *buf,
+						  size_t nbytes);
 static int _sysio_incore_dirop_mkdir(struct pnode *pno, mode_t mode);
 static int _sysio_incore_dirop_rmdir(struct pnode *pno);
 static int _sysio_incore_inop_open(struct pnode *pno, int flags, mode_t mode);
@@ -187,7 +187,7 @@ static struct inode_ops _sysio_incore_dir_ops = {
 	_sysio_incore_dirop_lookup,
 	_sysio_incore_inop_getattr,
 	_sysio_incore_inop_setattr,
-	_sysio_incore_dirop_getdirentries,
+	_sysio_incore_dirop_filldirentries,
 	_sysio_incore_dirop_mkdir,
 	_sysio_incore_dirop_rmdir,
 	_sysio_incore_dirop_symlink,
@@ -217,11 +217,11 @@ static struct inode_ops _sysio_incore_dir_ops = {
 		 struct inode **, \
 		 struct intent *, \
 		 const char *))_sysio_do_illop
-#define _sysio_incore_filop_getdirentries \
+#define _sysio_incore_filop_filldirentries \
 	(ssize_t (*)(struct inode *, \
-		 char *, \
-		 size_t, \
-		 _SYSIO_OFF_T *))_sysio_do_illop
+		     _SYSIO_OFF_T *, \
+		     char *, \
+		     size_t))_sysio_do_illop
 #define _sysio_incore_filop_mkdir \
 	(int (*)(struct pnode *, mode_t))_sysio_do_illop
 #define _sysio_incore_filop_rmdir \
@@ -243,7 +243,7 @@ static struct inode_ops _sysio_incore_file_ops = {
 	_sysio_incore_filop_lookup,
 	_sysio_incore_inop_getattr,
 	_sysio_incore_inop_setattr,
-	_sysio_incore_filop_getdirentries,
+	_sysio_incore_filop_filldirentries,
 	_sysio_incore_filop_mkdir,
 	_sysio_incore_filop_rmdir,
 	_sysio_incore_filop_symlink,
@@ -272,7 +272,7 @@ static struct inode_ops _sysio_incore_dev_ops = {
 	_sysio_incore_filop_lookup,
 	_sysio_incore_inop_getattr,
 	_sysio_incore_inop_setattr,
-	_sysio_incore_filop_getdirentries,
+	_sysio_incore_filop_filldirentries,
 	_sysio_incore_filop_mkdir,
 	_sysio_incore_filop_rmdir,
 	_sysio_incore_filop_symlink,
@@ -955,31 +955,30 @@ incore_directory_enumerate(struct intnl_dirent *de,
 }
 
 static ssize_t
-_sysio_incore_dirop_getdirentries(struct inode *ino,
-				 char *buf,
-				 size_t nbytes,
-				 _SYSIO_OFF_T *basep)
+_sysio_incore_dirop_filldirentries(struct inode *ino,
+				   _SYSIO_OFF_T *posp,
+				   char *buf,
+				   size_t nbytes)
 {
 	struct incore_inode *icino = I2IC(ino);
 	off_t	off;
 	struct intnl_dirent *de;
 	struct copy_info copy_info;
 
-	if (*basep > icino->ici_st.st_size)
+	if (*posp >= icino->ici_st.st_size)
 		return 0;
 
 	de =
 	    incore_directory_probe(icino->ici_data,
 				   icino->ici_st.st_size,
-				   *basep,
+				   *posp,
 				   (probe_ty )incore_directory_position,
 				   NULL,
-				   (char *)icino->ici_data + *basep);
+				   (char *)icino->ici_data + *posp);
 	if (!de) {
 		/*
 		 * Past EOF.
 		 */
-		*basep = 0;
 		return 0;
 	}
 
@@ -997,7 +996,7 @@ _sysio_incore_dirop_getdirentries(struct inode *ino,
 	icino->ici_st.st_atime = time(NULL);
 	if (!nbytes)
 		return -EOVERFLOW;
-	*basep = nbytes;
+	*posp += nbytes;
 	return (ssize_t )nbytes;
 }
 

@@ -9,7 +9,7 @@
  *    terms of the GNU Lesser General Public License
  *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
+ *    Cplant(TM) Copyright 1998-2005 Sandia Corporation. 
  *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  *    license for use of this work by or on behalf of the US Government.
  *    Export of this program may require a license from the United States
@@ -41,8 +41,11 @@
  * lee@sandia.gov
  */
 
+#include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <errno.h>
+#include <assert.h>
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sys/queue.h>
@@ -56,9 +59,11 @@
 #ifdef HAVE_LUSTRE_HACK
 #include <syscall.h>
 #include <native.h>
+#endif
 
+#ifdef HAVE_LUSTRE_HACK
 static int
-_sysio_fcntl(int fd, int cmd, va_list ap, int *rtn)
+_sysio_lustre_fcntl(int fd, int cmd, va_list ap, int *rtn)
 {
 	long arg = va_arg(ap, long);
 
@@ -67,13 +72,92 @@ _sysio_fcntl(int fd, int cmd, va_list ap, int *rtn)
 }
 #endif
 
-int
-SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...)
+static int
+_sysio_fcntl_raw_call(struct inode *ino, int *r, int cmd, ...)
+{
+	va_list	ap;
+	int	err;
+
+	va_start(ap, cmd);
+	err = ino->i_ops.inop_fcntl(ino, cmd, ap, r);
+	va_end(ap);
+	return err;
+}
+
+/*
+ * Convert offsets to absolute, when appropriate, and call appropriate driver
+ * to complete the fcntl lock function. If successful, convert
+ * returned values back to appropriate form.
+ */
+static int
+_sysio_fcntl_lock(struct file *fil, int cmd, struct _SYSIO_FLOCK *fl)
+{
+	struct _SYSIO_FLOCK flock;
+	_SYSIO_OFF_T pos;
+	int	err;
+	int	rtn;
+
+	/*
+	 * The drivers will not have a clue as to the
+	 * current position of the file pointer. We need to
+	 * convert relative whence values to absolute
+	 * file adresses for them, then.
+	 */
+	flock = *fl;
+	switch (flock.l_whence) {
+	case SEEK_SET:
+		/*
+		 * At least parameter check this one, too.
+		 */
+	case SEEK_CUR:
+	case SEEK_END:
+		pos =
+		    _sysio_lseek_prepare(fil,
+					 flock.l_start,
+					 flock.l_whence,
+					 _SEEK_MAX(fil));
+		if (pos < 0)
+			return (int )pos;
+		flock.l_start = pos;
+		flock.l_whence = SEEK_SET;
+		break;
+	default:
+		return -EINVAL;
+	}
+	err =
+	    _sysio_fcntl_raw_call(fil->f_ino, &rtn, cmd, &flock);
+	if (err)
+		return err;
+	/*
+	 * Ugh, convert back to relative form.
+	 */
+	switch (fl->l_whence) {
+	case SEEK_SET:
+		break;
+	case SEEK_CUR:
+		fl->l_start = flock.l_start;
+		fl->l_start -= fil->f_pos;
+		break;
+	case SEEK_END:
+		fl->l_start = flock.l_start;
+		fl->l_start -=
+		    fil->f_ino->i_stbuf.st_size;
+		break;
+	default:
+		abort();
+	}
+	/*
+	 * Return success.
+	 */
+	return 0;
+}
+
+static int
+_sysio_vfcntl(int fd, int cmd, va_list ap)
 {
 	int	err;
 	int	rtn;
 	struct file *fil;
-	va_list	ap;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
@@ -81,12 +165,9 @@ SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...)
 	fil = _sysio_fd_find(fd);
 	if (!fil) {
 #ifdef HAVE_LUSTRE_HACK
-		va_start(ap, cmd);
-		err = _sysio_fcntl(fd, cmd, ap, &rtn);
-		va_end(ap);
+		err = _sysio_lustre_fcntl(fd, cmd, ap, &rtn);
 		goto out;
 #else
-
 		rtn = -1;
 		err = -EBADF;
 		goto out;
@@ -99,9 +180,7 @@ SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...)
 		{
 			long	newfd;
 
-			va_start(ap, cmd);
 			newfd = va_arg(ap, long);
-			va_end(ap);
 			if (newfd != (int )newfd || newfd < 0) {
 				rtn = -1;
 				err = -EBADF;
@@ -114,16 +193,100 @@ SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...)
 			}
 		}
 		break;
+#if !(_LARGEFILE64_SOURCE || F_GETLK64 == F_GETLK)
+	    case F_GETLK:
+	    case F_SETLK:
+	    case F_SETLKW:
+		{
+			struct intnl_stat buf;
+			struct flock *fl;
+#if _LARGEFILE64_SOURCE
+			struct _SYSIO_FLOCK flock64;
+#endif
+
+			/*
+			 * Refresh the cached attributes.
+			 */
+			err =
+			    fil->f_ino->i_ops.inop_getattr(NULL,
+							   fil->f_ino,
+							   &buf);
+			if (err) {
+				rtn = -1;
+				break;
+			}
+			/*
+			 * Copy args to a temp and normalize.
+			 */
+			fl = va_arg(ap, struct flock *);
+#if _LARGEFILE64_SOURCE
+			flock64.l_type = fl->l_type;
+			flock64.l_whence = fl->l_whence;
+			flock64.l_start = fl->l_start;
+			flock64.l_len = fl->l_len;
+			flock64.l_pid = fl->l_pid;
+			err = _sysio_fcntl_lock(fil, cmd, &flock64);
+#else
+			err = _sysio_fcntl_lock(fil, cmd, fl);
+#endif
+			if (err < 0) {
+				rtn = -1;
+				break;
+			}
+#if _LARGEFILE64_SOURCE
+			/*
+			 * Copy back. Note that the fcntl_lock call
+			 * should have ensured that no overflow was possible.
+			 */
+			fl->l_type = flock64.l_type;
+			fl->l_whence = flock64.l_whence;
+			fl->l_start = flock64.l_start;
+			assert(fl->l_start == flock64.l_start);
+			fl->l_len = flock64.l_len;
+			assert(fl->l_len == flock64.l_len);
+			fl->l_pid = flock64.l_pid;
+#endif
+			rtn = 0;
+		}
+		break;
+#endif /* !(_LARGEFILE64_SOURCE || F_GETLK64 == F_GETLK) */
+#if _LARGEFILE64_SOURCE
+	    case F_GETLK64:
+	    case F_SETLK64:
+	    case F_SETLKW64:
+			{
+				struct flock64 *fl64;
+
+				fl64 = va_arg(ap, struct flock64 *);
+				err = _sysio_fcntl_lock(fil, cmd, fl64);
+				if (err)
+					rtn = -1;
+			}
+		break;
+#endif
 	    default:
-		va_start(ap, cmd);
 		err = fil->f_ino->i_ops.inop_fcntl(fil->f_ino, cmd, ap, &rtn);
-		va_end(ap);
 		break;
 	}
 
 out:
 	SYSIO_INTERFACE_RETURN(rtn, err);
 }
+
+int
+SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...)
+{
+	va_list	ap;
+	int	err;
+
+	va_start(ap, cmd);
+	err = _sysio_vfcntl(fd, cmd, ap);
+	va_end(ap);
+	return err;
+}
+
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(fcntl),
+		     SYSIO_INTERFACE_NAME(fcntl64))
 
 #ifdef __GLIBC__
 #undef __fcntl
