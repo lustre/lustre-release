@@ -3,7 +3,7 @@
 portalstag="HEAD"
 lnettag="HEAD"
 libsysiotag="HEAD"
-snmptag=""
+snmptag="HEAD"
 
 export LC_COLLATE=C
 
@@ -22,50 +22,46 @@ case "$lustretag" in
     # keep this list sorted alphabetically!
     b1_2)
         portalstag="b1_2"
+        lnettag=""
+        libsysiotag=""
+        snmptag=""
         ;;
 
     b1_4_atime_update)
-        snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
-	;;
+        ;;
 
     b1_4_join)
-        snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
         ;;
 
     b1_4_lfs_df)
-        snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
-	;;
+        ;;
 
     b1_4_lov_lvb_cleanup)
-        snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
-	;;
+        ;;
 
     b1_4_next_recovery_transno)
-        snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
-	;;
-	
+        ;;
+
     b1_4 | b1_4_*)
-        snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
         ;;
 
     b1_5 | b1_5_*)
-        snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
-	# XXX temorary tag until b1_5* is updated from b1_4 liblustre
-	libsysiotag="HEAD_RELEASE_1_4_6_LAND_PARENT_20060223_1455"
+        # XXX temorary tag until b1_5* is updated from b1_4 liblustre
+        libsysiotag="HEAD_RELEASE_1_4_6_LAND_PARENT_20060223_1455"
         ;;
 
     b_cmd*)
@@ -73,11 +69,10 @@ case "$lustretag" in
         ;;
 
     b_iam*)
-        snmptag="HEAD"
         portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
-	# XXX temorary tag until b_iam* is updated from b1_4 liblustre
-	libsysiotag="HEAD_RELEASE_1_4_6_LAND_PARENT_20060223_1455"
+        # XXX temorary tag until b_iam* is updated from b1_4 liblustre
+        libsysiotag="HEAD_RELEASE_1_4_6_LAND_PARENT_20060223_1455"
         ;;
 
     b_ioprovement)
@@ -117,28 +112,36 @@ case "$lustretag" in
         portalstag="b_ptlrpc_cleanup"
         ;;
 
-    # starting with 1_4_6, we have a tagged lnet too
-    b_release_1_4_[6-9]*)
+    # before 1_4_6, we didn't have lnet or snmp
+    b_release_1_2_*|b_release_1_4_[0-5])
         portalstag="$lustretag"
+        lnettag=""
         libsysiotag="$lustretag"
-        lnettag="$lustretag"
+        snmptag=""
         ;;
 
+    # all later b_release_* tags
     b_release_*)
         portalstag="$lustretag"
+        lnettag="$lustretag"
         libsysiotag="$lustretag"
+        snmptag="$lustretag"
         ;;
 
     # v1.0-v1.3, v1.4.0-v1.4.2
-    v1_[0-3]_*|v1_4_[0-2]*)
+    v1_[0-3]_*|v1_4_[0-2]|v1_4_[0-2]_*)
         portalstag="$lustretag"
+        lnettag=""
         libsysiotag="$lustretag"
+        snmptag=""
         ;;
 
     # v1.4.3-v1.4.5, v1.4.5.1 - v1.4.5.9
     v1_4_[3-5]|v1_4_[3-4]_*|v1_4_5_[1-9]|cray_2005*)
         portalstag="$lustretag"
+        lnettag=""
         libsysiotag="$lustretag"
+        snmptag="$lustretag"
         ;;
 
     # all later v* tags
@@ -146,6 +149,7 @@ case "$lustretag" in
         portalstag="$lustretag"
         lnettag="$lustretag"
         libsysiotag="$lustretag"
+        snmptag="$lustretag"
         ;;
 esac
 
