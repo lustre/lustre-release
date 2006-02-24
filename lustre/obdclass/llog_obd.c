@@ -77,7 +77,8 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
            setup does, because the lov/osc must clean up only when they are
            done, not when the mdt is done. So instead, we just assume that
            if the lov llogs are already set up then we must cleanup first. */
-                CERROR("obd %s ctxt %d already set up\n", obd->obd_name, index);
+                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
+                       obd->obd_name, index);
                 llog_cleanup(obd->obd_llog_ctxt[index]);
         }
 

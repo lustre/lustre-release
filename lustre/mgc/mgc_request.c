@@ -82,7 +82,7 @@ static spinlock_t       config_list_lock = SPIN_LOCK_UNLOCKED;
 static int config_log_get(struct config_llog_data *cld)
 {
         ENTRY;
-        CDEBUG(D_MGC, "log %s refs %d\n", cld->cld_logname,
+        CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
                atomic_read(&cld->cld_refcount));
         atomic_inc(&cld->cld_refcount);
         if (cld->cld_stopping) {
@@ -95,7 +95,7 @@ static int config_log_get(struct config_llog_data *cld)
 static void config_log_put(struct config_llog_data *cld)
 {
         ENTRY;
-        CDEBUG(D_MGC, "log %s refs %d\n", cld->cld_logname,
+        CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
                atomic_read(&cld->cld_refcount));
         if (atomic_dec_and_test(&cld->cld_refcount)) {
                 CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
@@ -663,11 +663,13 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
                                imp->imp_deactive, imp->imp_invalid, 
                                imp->imp_state);
                         /* can't put this in obdclass, module loop with ptlrpc*/
-                        /* remove 'invalid' flag */
+                        /* This seems to be necessary when restarting a 
+                           combo mgs/mdt while the mgc is alive */
+                        ptlrpc_invalidate_import(imp);
+                        /* Remove 'invalid' flag */
                         ptlrpc_activate_import(imp);
-                        /* reconnect */
-                        ptlrpc_set_import_active(imp, 1);
-                        //ptlrpc_recover_import(imp);
+                        /* Attempt a new connect */
+                        ptlrpc_recover_import(imp, NULL);
                 }
                 RETURN(0);
         }
@@ -714,6 +716,7 @@ static int mgc_import_event(struct obd_device *obd,
         int rc = 0;
 
         LASSERT(imp->imp_obd == obd);
+        CDEBUG(D_MGC, "import event %d\n", event);
 
         switch (event) {
         case IMP_EVENT_INVALIDATE: {

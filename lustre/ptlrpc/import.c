@@ -206,6 +206,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 }
 
+/* unset imp_invalid */
 void ptlrpc_activate_import(struct obd_import *imp)
 {
         struct obd_device *obd = imp->imp_obd;

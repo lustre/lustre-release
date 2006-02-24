@@ -128,6 +128,8 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
 
         if (activate) {
                 tgt_obd->obd_no_recov = 0;
+                /* FIXME this is probably supposed to be 
+                   ptlrpc_set_import_active.  Horrible naming. */
                 ptlrpc_activate_import(tgt_obd->u.cli.cl_import);
         }
 
