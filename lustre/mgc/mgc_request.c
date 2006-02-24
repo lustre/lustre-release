@@ -113,34 +113,37 @@ static struct config_llog_data *config_log_find(char *logname,
 {
         struct list_head *tmp;
         struct config_llog_data *cld;
+        char *logid = logname;
         int match_instance = 0;
+        ENTRY;
 
-        if (cfg) {
-                CDEBUG(D_MGC, "get log %s:%s\n", logname ? logname : "-",
-                       cfg->cfg_instance ? cfg->cfg_instance : "-");
-                if (cfg->cfg_instance)
-                        match_instance++;
+        if (cfg && cfg->cfg_instance) {
+                match_instance++;
+                logid = cfg->cfg_instance;
+        }
+        if (!logid) {
+                CERROR("No log specified\n");
+                RETURN(ERR_PTR(-EINVAL));
         }
 
         spin_lock(&config_list_lock);
         list_for_each(tmp, &config_llog_list) {
                 cld = list_entry(tmp, struct config_llog_data, cld_list_chain);
-                if (match_instance && 
-                    strcmp(cfg->cfg_instance, cld->cld_cfg.cfg_instance) == 0) 
+                if (match_instance && cld->cld_cfg.cfg_instance && 
+                    strcmp(logid, cld->cld_cfg.cfg_instance) == 0)
                         goto out_found;
-                
-                if (!match_instance && 
-                    strcmp(logname, cld->cld_logname) == 0) 
+                if (!match_instance &&  
+                    strcmp(logid, cld->cld_logname) == 0)
                         goto out_found;
         }
         spin_unlock(&config_list_lock);
 
-        CERROR("can't get log %s\n", logname);
-        return(ERR_PTR(-ENOENT));
+        CERROR("can't get log %s\n", logid);
+        RETURN(ERR_PTR(-ENOENT));
 out_found:
         atomic_inc(&cld->cld_refcount);
         spin_unlock(&config_list_lock);
-        return(cld);
+        RETURN(cld);
 }
 
 /* Add this log to our list of active logs. 
@@ -716,7 +719,7 @@ static int mgc_import_event(struct obd_device *obd,
         int rc = 0;
 
         LASSERT(imp->imp_obd == obd);
-        CDEBUG(D_MGC, "import event %d\n", event);
+        CDEBUG(D_MGC, "import event %d\n", (int)event);
 
         switch (event) {
         case IMP_EVENT_INVALIDATE: {

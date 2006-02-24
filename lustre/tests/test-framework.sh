@@ -69,6 +69,7 @@ init_test_env() {
 }
 
 # Facet functions
+# start facet device options 
 start() {
     facet=$1
     shift
@@ -91,10 +92,10 @@ start() {
 
 stop() {
     facet=$1
+    force=$2
     active=`facet_active $facet`
-    shift
-    echo "mount active=${active}, facet=${facet}"
-    do_facet ${facet} umount $@ /mnt/${facet}
+    echo "umount active=${active}, facet=${facet}"
+    do_facet ${facet} umount -d $force /mnt/${facet}
     #do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
     #    --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
     #    $@ --cleanup $XMLCONFIG
@@ -123,9 +124,8 @@ zconf_mount() {
 zconf_umount() {
     client=$1
     mnt=$2
-    [ "$3" ] && failover=-f
-    # force is the default for umount 
-    do_node $client umount $mnt
+    [ "$3" ] && force=-f
+    do_node $client umount $force $mnt
 }
 
 shutdown_facet() {
@@ -181,7 +181,7 @@ facet_failover() {
     facet=$1
     echo "Failing $facet node `facet_active_host $facet`"
     shutdown_facet $facet
-    reboot_facet $*
+    reboot_facet $facet
     client_df &
     DFPID=$!
     echo "df pid is $DFPID"
@@ -189,7 +189,7 @@ facet_failover() {
     TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
     wait_for $facet
-    start $facet
+    start $*
 }
 
 replay_barrier() {
@@ -226,7 +226,7 @@ fail_abort() {
     local facet=$1
     stop $facet --force --failover --nomod
     change_active $facet
-    start $facet
+    start $*
     do_facet $facet lctl --device %${facet}_svc abort_recovery
     df $MOUNT || echo "first df failed: $?"
     sleep 1
@@ -360,7 +360,8 @@ add_facet() {
 add() {
     local facet=$1
     shift
-    umount /mnt/${facet} || true
+    # failsafe
+    umount -d /mnt/${facet} || true
     rm -f ${facet}active
     mkfs.lustre $*
 }

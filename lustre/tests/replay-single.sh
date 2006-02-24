@@ -1,7 +1,7 @@
 #!/bin/sh
 
 set -e
-set -v
+#set -v
 
 #
 # This test needs to be run on the client
@@ -28,14 +28,17 @@ cleanup() {
         fail mds $MDS_MOUNT_OPTS
     fi
     zconf_umount `hostname` $MOUNT
-    stop mds ${FORCE} $MDSLCONFARGS
+    stop mds ${FORCE}
     stop ost2 ${FORCE}
-    stop ost ${FORCE} --dump $TMP/replay-single-`hostname`.log
+    stop ost ${FORCE}
+    #no dump option in mountconf...
+    #stop ost ${FORCE} --dump $TMP/replay-single-`hostname`.log
 }
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0 || true
-    FORCE=--force cleanup
+    # force is the default, '-f' is failover
+    FORCE=""
     exit
 fi
 
@@ -43,9 +46,10 @@ SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
 
 setup() {
-    stop mds || 1
+    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
     stop ost || 1
     stop ost2 || 1
+    stop mds || 1
     add mds $MDS_MKFS_OPTS --reformat $MDSDEV
     add ost $OST_MKFS_OPTS --reformat $OSTDEV
     add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2
@@ -70,14 +74,14 @@ mkdir -p $DIR
 
 test_0() {
     replay_barrier mds
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
 }
 run_test 0 "empty replay"
 
 test_0b() {
     # this test attempts to trigger a race in the precreation code, 
     # and must run before any other objects are created on the filesystem
-    fail ost $OST_MOUNT_OPTS
+    fail ost $OSTDEV $OST_MOUNT_OPTS
     createmany -o $DIR/$tfile 20 || return 1
     unlinkmany $DIR/$tfile 20 || return 2
 }
@@ -86,7 +90,7 @@ run_test 0b "ensure object created after recover exists. (3284)"
 test_1() {
     replay_barrier mds
     mcreate $DIR/$tfile
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t file $DIR/$tfile || return 1
     rm $DIR/$tfile
 }
@@ -139,7 +143,7 @@ test_1a() {
 test_2a() {
     replay_barrier mds
     touch $DIR/$tfile
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t file $DIR/$tfile || return 1
     rm $DIR/$tfile
 }
@@ -149,7 +153,7 @@ test_2b() {
     ./mcreate $DIR/$tfile
     replay_barrier mds
     touch $DIR/$tfile
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t file $DIR/$tfile || return 1
     rm $DIR/$tfile
 }
@@ -159,7 +163,7 @@ test_3a() {
     replay_barrier mds
     mcreate $DIR/$tfile
     o_directory $DIR/$tfile
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t file $DIR/$tfile || return 2
     rm $DIR/$tfile
 }
@@ -171,7 +175,7 @@ test_3b() {
     do_facet mds "sysctl -w lustre.fail_loc=0x80000114"
     touch $DIR/$tfile
     do_facet mds "sysctl -w lustre.fail_loc=0"
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t file $DIR/$tfile && return 2
     return 0
 }
@@ -183,7 +187,7 @@ test_3c() {
     do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
     touch $DIR/$tfile
     do_facet mds "sysctl -w lustre.fail_loc=0"
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
 
     $CHECKSTAT -t file $DIR/$tfile && return 2
     return 0
@@ -195,7 +199,7 @@ test_4() {
     for i in `seq 10`; do
         echo "tag-$i" > $DIR/$tfile-$i
     done 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     for i in `seq 10`; do
       grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
     done 
@@ -205,7 +209,7 @@ run_test 4 "|x| 10 open(O_CREAT)s"
 test_4b() {
     replay_barrier mds
     rm -rf $DIR/$tfile-*
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
 }
 run_test 4b "|x| rm 10 files"
@@ -217,7 +221,7 @@ test_5() {
     for i in `seq 220`; do
         echo "tag-$i" > $DIR/$tfile-$i
     done 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     for i in `seq 220`; do
       grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
     done 
@@ -232,7 +236,7 @@ test_6() {
     replay_barrier mds
     mkdir $DIR/$tdir
     mcreate $DIR/$tdir/$tfile
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t dir $DIR/$tdir || return 1
     $CHECKSTAT -t file $DIR/$tdir/$tfile || return 2
     sleep 2
@@ -243,7 +247,7 @@ run_test 6 "mkdir + contained create"
 test_6b() {
     replay_barrier mds
     rm -rf $DIR/$tdir
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t dir $DIR/$tdir && return 1 || true 
 }
 run_test 6b "|X| rmdir"
@@ -252,7 +256,7 @@ test_7() {
     mkdir $DIR/$tdir
     replay_barrier mds
     mcreate $DIR/$tdir/$tfile
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT -t dir $DIR/$tdir || return 1
     $CHECKSTAT -t file $DIR/$tdir/$tfile || return 2
     rm -fr $DIR/$tdir
@@ -264,7 +268,7 @@ test_8() {
     multiop $DIR/$tfile mo_c &
     MULTIPID=$!
     sleep 1
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     ls $DIR/$tfile
     $CHECKSTAT -t file $DIR/$tfile || return 1
     kill -USR1 $MULTIPID || return 2
@@ -277,7 +281,7 @@ test_9() {
     replay_barrier mds
     mcreate $DIR/$tfile
     local old_inum=`ls -i $DIR/$tfile | awk '{print $1}'`
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     local new_inum=`ls -i $DIR/$tfile | awk '{print $1}'`
 
     echo " old_inum == $old_inum, new_inum == $new_inum"
@@ -297,7 +301,7 @@ test_10() {
     replay_barrier mds
     mv $DIR/$tfile $DIR/$tfile-2
     rm -f $DIR/$tfile
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     $CHECKSTAT $DIR/$tfile && return 1
     $CHECKSTAT $DIR/$tfile-2 ||return 2
     rm $DIR/$tfile-2
@@ -313,7 +317,7 @@ test_11() {
     echo "new" > $DIR/$tfile
     grep new $DIR/$tfile 
     grep old $DIR/$tfile-2
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     grep new $DIR/$tfile || return 1
     grep old $DIR/$tfile-2 || return 2
 }
@@ -330,7 +334,7 @@ test_12() {
     kill -USR1 $pid
     wait $pid || return 1
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     [ -e $DIR/$tfile ] && return 2
     return 0
 }
@@ -348,7 +352,7 @@ test_13() {
     chmod 0 $DIR/$tfile
     $CHECKSTAT -p 0 $DIR/$tfile
     replay_barrier mds
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid
     wait $pid || return 1
 
@@ -367,7 +371,7 @@ test_14() {
     kill -USR1 $pid || return 1
     wait $pid || return 2
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     [ -e $DIR/$tfile ] && return 3
     return 0
 }
@@ -384,7 +388,7 @@ test_15() {
     kill -USR1 $pid
     wait $pid || return 2
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     [ -e $DIR/$tfile ] && return 3
     touch $DIR/h11 || return 4
     return 0
@@ -397,7 +401,7 @@ test_16() {
     mcreate $DIR/$tfile
     munlink $DIR/$tfile
     mcreate $DIR/$tfile-2
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     [ -e $DIR/$tfile ] && return 1
     [ -e $DIR/$tfile-2 ] || return 2
     munlink $DIR/$tfile-2 || return 3
@@ -410,7 +414,7 @@ test_17() {
     pid=$!
     # give multiop a chance to open
     sleep 1 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid || return 1
     wait $pid || return 2
     $CHECKSTAT -t file $DIR/$tfile || return 3
@@ -430,7 +434,7 @@ test_18() {
     kill -USR1 $pid
     wait $pid || return 2
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     [ -e $DIR/$tfile ] && return 3
     [ -e $DIR/$tfile-2 ] || return 4
     # this touch frequently fails
@@ -448,7 +452,7 @@ test_19() {
     echo "old" > $DIR/$tfile
     mv $DIR/$tfile $DIR/$tfile-2
     grep old $DIR/$tfile-2
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     grep old $DIR/$tfile-2 || return 2
 }
 run_test 19 "|X| mcreate, open, write, rename "
@@ -461,7 +465,7 @@ test_20() {
     sleep 1 
     rm -f $DIR/$tfile
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid
     wait $pid || return 1
     [ -e $DIR/$tfile ] && return 2
@@ -478,7 +482,7 @@ test_21() {
     rm -f $DIR/$tfile
     touch $DIR/g11 || return 1
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid
     wait $pid || return 2
     [ -e $DIR/$tfile ] && return 3
@@ -496,7 +500,7 @@ test_22() {
     replay_barrier mds
     rm -f $DIR/$tfile
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid
     wait $pid || return 1
     [ -e $DIR/$tfile ] && return 2
@@ -514,7 +518,7 @@ test_23() {
     rm -f $DIR/$tfile
     touch $DIR/g11 || return 1
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid
     wait $pid || return 2
     [ -e $DIR/$tfile ] && return 3
@@ -530,7 +534,7 @@ test_24() {
     sleep 1 
 
     replay_barrier mds
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     rm -f $DIR/$tfile
     kill -USR1 $pid
     wait $pid || return 1
@@ -547,7 +551,7 @@ test_25() {
     rm -f $DIR/$tfile
 
     replay_barrier mds
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid
     wait $pid || return 1
     [ -e $DIR/$tfile ] && return 2
@@ -568,7 +572,7 @@ test_26() {
     kill -USR1 $pid2
     wait $pid2 || return 1
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid1
     wait $pid1 || return 2
     [ -e $DIR/$tfile-1 ] && return 3
@@ -588,7 +592,7 @@ test_27() {
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid1
     wait $pid1 || return 1
     kill -USR1 $pid2
@@ -612,7 +616,7 @@ test_28() {
     kill -USR1 $pid2
     wait $pid2 || return 1
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid1
     wait $pid1 || return 2
     [ -e $DIR/$tfile-1 ] && return 3
@@ -632,7 +636,7 @@ test_29() {
     rm -f $DIR/$tfile-1
     rm -f $DIR/$tfile-2
 
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid1
     wait $pid1 || return 1
     kill -USR1 $pid2
@@ -654,7 +658,7 @@ test_30() {
     rm -f $DIR/$tfile-2
 
     replay_barrier mds
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid1
     wait $pid1 || return 1
     kill -USR1 $pid2
@@ -676,7 +680,7 @@ test_31() {
 
     replay_barrier mds
     rm -f $DIR/$tfile-2
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     kill -USR1 $pid1
     wait $pid1 || return 1
     kill -USR1 $pid2
@@ -788,7 +792,7 @@ test_38() {
     createmany -o $DIR/$tfile-%d 800
     unlinkmany $DIR/$tfile-%d 0 400
     replay_barrier mds
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     unlinkmany $DIR/$tfile-%d 400 400
     sleep 2
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
@@ -799,7 +803,7 @@ test_39() { # bug 4176
     createmany -o $DIR/$tfile-%d 800
     replay_barrier mds
     unlinkmany $DIR/$tfile-%d 0 400
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     unlinkmany $DIR/$tfile-%d 400 400
     sleep 2
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
@@ -897,7 +901,7 @@ test_43() { # bug 2530
 
     # OBD_FAIL_OST_CREATE_NET 0x204
     do_facet ost "sysctl -w lustre.fail_loc=0x80000204"
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     sleep 10
     do_facet ost "sysctl -w lustre.fail_loc=0"
 
@@ -943,7 +947,7 @@ run_test 45 "Handle failed close"
 test_46() {
     dmesg -c >/dev/null
     drop_reply "touch $DIR/$tfile"
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     # ironically, the previous test, 45, will cause a real forced close,
     # so just look for one for this test
     dmesg | grep -i "force closing client file handle for $tfile" && return 1
@@ -957,7 +961,7 @@ test_47() { # bug 2824
     createmany -o $DIR/$tfile 20  || return 1
 
     # OBD_FAIL_OST_CREATE_NET 0x204
-    fail ost $OST_MOUNT_OPTS
+    fail ost $OSTDEV $OST_MOUNT_OPTS
     do_facet ost "sysctl -w lustre.fail_loc=0x80000204"
     df $MOUNT || return 2
 
@@ -978,7 +982,7 @@ test_48() {
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     do_facet ost "sysctl -w lustre.fail_loc=0x80000216"
     df $MOUNT || return 2
 
@@ -1007,7 +1011,7 @@ test_52() {
     multiop $DIR/$tfile s
     replay_barrier mds
     do_facet mds "sysctl -w lustre.fail_loc=0x8000030c"
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     do_facet mds "sysctl -w lustre.fail_loc=0x0"
 
     $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
@@ -1035,7 +1039,7 @@ test_56() {
     ln -s foo $DIR/$tfile
     replay_barrier mds
     #drop_reply "cat $DIR/$tfile"
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     sleep 10
 }
 run_test 56 "don't replay a symlink open request (3440)"
@@ -1046,7 +1050,7 @@ test_57() {
     do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
     touch $DIR/$tfile
     replay_barrier mds
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     sleep 1
     $CHECKSTAT -t file $DIR/$tfile || return 1
     do_facet mds "sysctl -w lustre.fail_loc=0x0"
@@ -1061,7 +1065,7 @@ test_58() {
     mkdir $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 2500
     replay_barrier mds
-    fail mds $MDS_MOUNT_OPTS
+    fail mds $MDSDEV $MDS_MOUNT_OPTS
     sleep 2
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* || return 1
     do_facet mds "sysctl -w lustre.fail_loc=0x0"
@@ -1071,4 +1075,4 @@ test_58() {
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 
 equals_msg test complete, cleaning up
-FORCE=--force $CLEANUP
+FORCE=$CLEANUP

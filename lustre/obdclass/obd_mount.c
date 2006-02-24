@@ -429,7 +429,7 @@ int lustre_end_log(struct super_block *sb, char *logname,
         lcfg = lustre_cfg_new(LCFG_LOG_END, &bufs);
         rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
         lustre_cfg_free(lcfg);
-        RETURN(0);
+        RETURN(rc);
 }
 
 /**************** obd start *******************/
@@ -762,10 +762,10 @@ static int server_stop_servers(int lddflags, int lsiflags)
 
         if (obd && (!type || !type->typ_refcnt)) {
                 int err;
-                if (lsiflags & LSI_UMOUNT_FORCE)
-                        obd->obd_force = 1;
-                if (lsiflags & LSI_UMOUNT_FAILOVER)
-                        obd->obd_fail = 1;
+                /* If the targets have stopped, I can force/fail the servers
+                   with no ill effects */
+                obd->obd_force = 1;
+                obd->obd_fail = 1;
                 err = class_manual_cleanup(obd);
                 if (!rc) 
                         rc = err;
