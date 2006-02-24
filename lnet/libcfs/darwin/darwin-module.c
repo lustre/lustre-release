@@ -74,12 +74,12 @@ libcfs_psdev_open(dev_t dev, int flags, int devtype, struct proc *p)
 	int	devid;
 	devid = minor(dev);
 
-	if (devid > 16) return (-ENXIO);
+	if (devid > 16) return (ENXIO);
 
 	if (libcfs_psdev_ops.p_open != NULL)
-		rc = libcfs_psdev_ops.p_open(0, &mstat);
+		rc = -libcfs_psdev_ops.p_open(0, &mstat);
 	else
-		rc = -EPERM;
+		rc = EPERM;
 	if (rc == 0)
 		mdev_state[devid] = mstat;
 	return rc;
@@ -92,12 +92,12 @@ libcfs_psdev_close(dev_t dev, int flags, int mode, struct proc *p)
 	devid = minor(dev);
 	int	rc = 0;
 
-	if (devid > 16) return (-ENXIO);
+	if (devid > 16) return (ENXIO);
 
 	if (libcfs_psdev_ops.p_close != NULL)
-		rc = libcfs_psdev_ops.p_close(0, mdev_state[devid]);
+		rc = -libcfs_psdev_ops.p_close(0, mdev_state[devid]);
 	else
-		rc = -EPERM;
+		rc = EPERM;
 	if (rc == 0)
 		mdev_state[devid] = NULL;
 	return rc;
@@ -111,18 +111,18 @@ libcfs_ioctl (dev_t dev, u_long cmd, caddr_t arg, int flag, struct proc *p)
 	int     devid;
 	devid = minor(dev);
 	
-	if (devid > 16) return (-ENXIO);
+	if (devid > 16) return (ENXIO);
 
 	if (!is_suser())
-		return (-EPERM);
+		return (EPERM);
 	
 	pfile.off = 0;
 	pfile.private_data = mdev_state[devid];
 
 	if (libcfs_psdev_ops.p_ioctl != NULL)
-		rc = libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void *)arg);
+		rc = -libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void *)arg);
 	else
-		rc = -EPERM;
+		rc = EPERM;
 	return rc;
 }
 

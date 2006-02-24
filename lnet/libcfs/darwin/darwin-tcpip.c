@@ -407,8 +407,13 @@ libcfs_sock_accept (cfs_socket_t **newsockp, cfs_socket_t *sock)
         rc = -sock_accept(C2B_SOCK(sock), NULL, 0, 0, 
                           libcfs_sock_upcall, newsock, &C2B_SOCK(newsock));
         if (rc) {
-                if (C2B_SOCK(newsock) != NULL) sock_close(C2B_SOCK(newsock));
+                if (C2B_SOCK(newsock) != NULL) 
+                        sock_close(C2B_SOCK(newsock));
                 FREE(newsock, M_TEMP);
+                if ((sock->s_flags & CFS_SOCK_DOWN) != 0)
+                        /* shutdown by libcfs_sock_abort_accept(), fake 
+                         * error number for lnet_acceptor() */
+                        rc = -EAGAIN;
                 return rc;
         }
         *newsockp = newsock;
@@ -439,6 +444,7 @@ libcfs_sock_abort_accept (cfs_socket_t *sock)
          * tcp_close()->soisdisconnected(), it will wakeup thread by
          * wakeup((caddr_t)&so->so_timeo);
          */
+        sock->s_flags |= CFS_SOCK_DOWN;
         sock_shutdown(C2B_SOCK(sock), SHUT_RDWR);
 }
 

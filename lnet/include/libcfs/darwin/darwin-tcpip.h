@@ -35,6 +35,8 @@ struct socket;
 typedef void    (*so_upcall)(socket_t sock, void* arg, int waitf);
 
 #define CFS_SOCK_UPCALL         0x1
+#define CFS_SOCK_DOWN           0x2
+
 #define CFS_SOCK_MAGIC          0xbabeface
 
 typedef struct cfs_socket {
