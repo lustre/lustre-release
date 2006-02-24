@@ -850,6 +850,7 @@ int jt_get_version(int argc, char **argv)
         memset(buf, 0, sizeof(buf));
         data->ioc_version = OBD_IOCTL_VERSION;
         data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
+        data->ioc_inlbuf1 = buf + size_round(sizeof(*data));
         data->ioc_len = obd_ioctl_packlen(data);
 
         rc = l2_ioctl(OBD_DEV_ID, OBD_GET_VERSION, buf);
@@ -867,6 +868,7 @@ int jt_get_version(int argc, char **argv)
 int jt_obd_list(int argc, char **argv)
 {
         int rc;
+#if HAVE_PROC_FS
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
 
@@ -883,8 +885,40 @@ int jt_obd_list(int argc, char **argv)
                 printf("%s", buf);
 
         fclose(fp);
-
         return 0;
+#else
+        /* No /proc filesystem, get device list by ioctl */
+        int index;
+        char buf[8192];
+        struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
+
+        if (argc != 1)
+                return CMD_HELP;
+
+        for (index = 0;; index++) {
+                memset(buf, 0, sizeof(buf));
+                data->ioc_version = OBD_IOCTL_VERSION;
+                data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
+                data->ioc_inlbuf1 = buf + size_round(sizeof(*data));
+                data->ioc_len = obd_ioctl_packlen(data);
+                data->ioc_count = index;
+
+                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETDEVICE, buf);
+                if (rc != 0)
+                        break;
+                printf("%s\n", (char *)data->ioc_bulk);
+        }
+        if (rc != 0) {
+                if (errno == ENOENT) 
+                        /* no device or the last device */
+                        rc = 0;
+                else 
+                        fprintf(stderr, "Error getting device list: %s: "
+                                        "check dmesg.\n",
+                                        strerror(errno));
+        }
+        return rc;
+#endif
 }
 
 /* Get echo client's stripe meta-data for the given object

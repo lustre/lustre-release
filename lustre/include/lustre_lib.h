@@ -424,6 +424,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, OBD_IOC_DATA_TYPE)
 
+
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
 #define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_SET_READONLY           _IOW ('f', 141, OBD_IOC_DATA_TYPE)
@@ -432,6 +433,8 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_GET_VERSION                _IOWR ('f', 144, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, OBD_IOC_DATA_TYPE)
+
+#define OBD_IOC_GETDEVICE              _IOWR ('f', 149, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, OBD_IOC_DATA_TYPE)

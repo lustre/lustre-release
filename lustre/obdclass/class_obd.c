@@ -262,10 +262,46 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 GOTO(out, err);
         }
 
-
         case OBD_IOC_CLOSE_UUID: {
                 CDEBUG(D_IOCTL, "closing all connections to uuid %s (NOOP)\n",
                        data->ioc_inlbuf1);
+                GOTO(out, err = 0);
+        }
+
+        case OBD_IOC_GETDEVICE: {
+                int     index = data->ioc_count;
+                char    *status, *str;
+
+                if (!data->ioc_inlbuf1) {
+                        CERROR("No buffer passed in ioctl\n");
+                        GOTO(out, err = -EINVAL);
+                } 
+                if (data->ioc_inllen1 < 128) {
+                        CERROR("ioctl buffer too small to hold version\n");
+                        GOTO(out, err = -EINVAL);
+                }
+                                
+                if (index >= MAX_OBD_DEVICES)
+                        GOTO(out, err = -ENOENT);
+                obd = &obd_dev[index];
+                if (!obd->obd_type)
+                        GOTO(out, err = -ENOENT);
+                
+                if (obd->obd_stopping)
+                        status = "ST";
+                else if (obd->obd_set_up)
+                        status = "UP";
+                else if (obd->obd_attached)
+                        status = "AT";
+                else
+                        status = "--"; 
+                str = (char *)data->ioc_bulk;
+                snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
+                         (int)index, status, obd->obd_type->typ_name,
+                         obd->obd_name, obd->obd_uuid.uuid,
+                         atomic_read(&obd->obd_refcount));
+                err = obd_ioctl_popdata((void *)arg, data, len);
+
                 GOTO(out, err = 0);
         }
 

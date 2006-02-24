@@ -115,8 +115,8 @@ static int
 obd_class_open(dev_t dev, int flags, int devtype, struct proc *p)
 {
 	if (obd_psdev_ops.p_open != NULL)
-		return obd_psdev_ops.p_open(0, NULL);
-	return -EPERM;
+		return -obd_psdev_ops.p_open(0, NULL);
+	return EPERM;
 }
 
 /*  closing /dev/obd */
@@ -124,8 +124,8 @@ static int
 obd_class_release(dev_t dev, int flags, int mode, struct proc *p)
 {
 	if (obd_psdev_ops.p_close != NULL)
-		return obd_psdev_ops.p_close(0, NULL);
-	return -EPERM;
+		return -obd_psdev_ops.p_close(0, NULL);
+	return EPERM;
 }
 
 static int
@@ -135,11 +135,11 @@ obd_class_ioctl(dev_t dev, u_long cmd, caddr_t arg, int flag, struct proc *p)
 	ENTRY;
 
 	if (!is_suser())
-		RETURN (-EPERM);
+		RETURN (EPERM);
 	if (obd_psdev_ops.p_ioctl != NULL)
-		err = obd_psdev_ops.p_ioctl(NULL, cmd, (void *)arg);
+		err = -obd_psdev_ops.p_ioctl(NULL, cmd, (void *)arg);
 	else
-		err = -EPERM;
+		err = EPERM;
 
 	RETURN(err);
 }
