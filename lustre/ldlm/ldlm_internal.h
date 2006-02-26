@@ -20,7 +20,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock, void *data, int datalen,
 struct ldlm_lock *
 ldlm_lock_create(struct ldlm_namespace *ns,
                  struct lustre_handle *parent_lock_handle, struct ldlm_res_id,
-                 __u32 type, ldlm_mode_t, ldlm_blocking_callback,
+                 ldlm_type_t type, ldlm_mode_t, ldlm_blocking_callback,
                  ldlm_completion_callback, ldlm_glimpse_callback, void *data,
                  __u32 lvb_len);
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *, struct ldlm_lock **,

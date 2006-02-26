@@ -18,7 +18,7 @@ SUCCESS=1
 
 rm -f $OOS $OOS2 $LOG $LOG2
 
-sleep 1	# to ensure we get up-to-date statfs info
+sync; sleep 1; sync	# to ensure we get up-to-date statfs info
 
 STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -n 1`
 ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -n 1`

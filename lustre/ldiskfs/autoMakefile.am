@@ -38,7 +38,8 @@ sources: $(ext3_sources) $(ext3_headers) $(linux_headers) $(series)
 	cp $(ext3_sources) $(ext3_headers) $(ext3_extra) linux-stage/fs/ext3
 	cp $(linux_headers) linux-stage/include/linux
 if USE_QUILT
-	cd linux-stage && quilt setup -d ../$(patches) ../$(series)
+	ln -s ../$(patches) linux-stage/patches
+	ln -s ../$(series) linux-stage/series
 	cd linux-stage && quilt push -a -q
 else
 	@echo -n "Applying ext3 patches:"

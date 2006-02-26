@@ -13,9 +13,9 @@ LOG=$TMP/ooslog
 
 SUCCESS=1
 
-rm -f $OOS
+rm -f $OOS $LOG
 
-sleep 1	# to ensure we get up-to-date statfs info
+sync; sleep 1; sync	# to ensure we get up-to-date statfs info
 
 #echo -1 > /proc/sys/lnet/debug
 #echo 0x40a8 > /proc/sys/lnet/subsystem_debug
@@ -34,7 +34,6 @@ fi
 
 export LANG=C LC_LANG=C # for "No space left on device" message
 
-rm -f $LOG >/dev/null 2>&1
 [ -f $LOG ] && echo "ERROR: log file wasn't removed?" && exit 1
 
 # make sure we stripe over all OSTs to avoid OOS on only a subset of OSTs
@@ -45,7 +44,8 @@ if dd if=/dev/zero of=$OOS count=$(($ORIGFREE + 100)) bs=1k 2> $LOG; then
 fi
 
 if [ "`grep -c 'No space left on device' $LOG`" -ne 1 ]; then
-        echo "ERROR: dd not return ENOSPC"
+	echo "ERROR: dd not return ENOSPC"
+	sed "s/^/LOG: /" $LOG
 	SUCCESS=0
 fi
 
@@ -65,11 +65,14 @@ if [ -z "$OSCFULL" ]; then
 fi
 
 RECORDSOUT=`grep "records out" $LOG | cut -d + -f1`
-
 FILESIZE=`ls -l $OOS | awk '{ print $5 }'`
-if [ "$RECORDSOUT" -ne $((FILESIZE / 1024)) ]; then
-        echo "ERROR: blocks written by dd not equal to the size of file"
-        SUCCESS=0
+if [ -z "$RECORDSOUT" ]; then
+	echo "ERROR: no blocks written by dd?"
+	sed "s/^/LOG: /" $LOG
+	SUCCESS=0
+elif [ "$RECORDSOUT" -ne $((FILESIZE / 1024)) ]; then
+	echo "ERROR: blocks written by dd not equal to the size of file"
+	SUCCESS=0
 fi
 
 #lctl debug_daemon stop

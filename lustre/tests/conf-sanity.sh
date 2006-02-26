@@ -11,10 +11,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
@@ -54,6 +52,7 @@ start_mds() {
 	echo "start mds service on `facet_active_host mds`"
 	start mds --reformat $MDSLCONFARGS  || return 94
 }
+
 stop_mds() {
 	echo "stop mds service on `facet_active_host mds`"
 	stop mds $@  || return 97
@@ -268,11 +267,9 @@ test_5d() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST://mds_svc/client_facet $MOUNT  || return 1 
+	llmount -o nettype=$NETTYPE,$MOUNTOPT `facet_nid mds`://mds_svc/client_facet $MOUNT  || return 1 
 
-	umount $MOUNT || return 2
-	# cleanup client modules
-	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
+	umount_client $MOUNT || return 2
 	
 	stop_mds || return 3
 
@@ -620,8 +617,8 @@ test_15() {
 	do_node `hostname` mkdir -p $MOUNT 2> /dev/null
 	# load llite module on the client if it isn't in /lib/modules
 	do_node `hostname` lconf --nosetup --node client_facet $XMLCONFIG
-	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
-		`facet_active_host mds`:/mds_svc/client_facet $MOUNT ||return $?
+	do_node `hostname` mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
+		`facet_nid mds`:/mds_svc/client_facet $MOUNT ||return $?
 	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
 	[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
 	check_mount || return 41
@@ -629,8 +626,8 @@ test_15() {
 
 	[ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
 	echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
-	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
-		`facet_active_host mds`:/mds_svc/client_facet $MOUNT &&return $?
+	do_node `hostname` mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
+		`facet_nid mds`:/mds_svc/client_facet $MOUNT &&return $?
 	echo "mount lustre on $MOUNT without $MOUNTLUSTRE failed as expected"
 	cleanup || return $?
 	cleanup_15
@@ -745,5 +742,16 @@ test_18() {
         gen_config
 }
 run_test 18 "check lconf creates large journals"
+
+test_19() {
+        # first format the ost/mdt
+        start_ost
+	start_mds
+	stop_mds
+	stop_ost
+	start mds $MDSLCONFARGS || return 1
+	stop mds --force || return 2
+}
+run_test 19 "start/stop MDS without OSTs"
 
 equals_msg "Done"

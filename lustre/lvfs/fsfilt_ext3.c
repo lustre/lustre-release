@@ -53,6 +53,7 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
 #endif
+#include <linux/lustre_compat25.h>
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #include <linux/ext3_extents.h>
@@ -71,6 +72,16 @@ struct fsfilt_cb_data {
 #ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
+
+static char *fsfilt_ext3_label(struct super_block *sb)
+{
+        return EXT3_SB(sb)->s_es->s_volume_name;
+}
+
+static char *fsfilt_ext3_uuid(struct super_block *sb)
+{
+        return EXT3_SB(sb)->s_es->s_uuid;
+}
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -152,6 +163,19 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                  * blocks for catalog header bitmap update + unlink of logs */
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
                         EXT3_DELETE_TRANS_BLOCKS * logs;
+                break;
+        case FSFILT_OP_JOIN:
+                /* delete 2 file(file + array id) + create 1 file (array id) 
+                 * create/update logs for each stripe */
+                nblocks += 2 * EXT3_DELETE_TRANS_BLOCKS;
+               
+                /*create array log for head file*/ 
+                nblocks += 3;
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS);
+                /*update head file array */
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                        EXT3_DATA_TRANS_BLOCKS;
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
                 LBUG();
@@ -414,13 +438,15 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                 /* make sure _something_ gets set - so new inode
                  * goes to disk (probably won't work over XFS */
                 if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
-                        iattr->ia_valid |= ATTR_MODE;
-                        iattr->ia_mode = inode->i_mode;
+                        iattr->ia_valid |= ATTR_MTIME;
+                        iattr->ia_mtime = inode->i_mtime;
                 }
         }
 
         /* Don't allow setattr to change file type */
-        iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
+        if (iattr->ia_valid & ATTR_MODE)
+                iattr->ia_mode = (inode->i_mode & S_IFMT) |
+                                 (iattr->ia_mode & ~S_IFMT);
 
         /* We set these flags on the client, but have already checked perms
          * so don't confuse inode_change_ok. */
@@ -435,7 +461,6 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         }
 
         unlock_kernel();
-
         return rc;
 }
 
@@ -444,6 +469,12 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
 {
         int rc = 0;
         ENTRY;
+
+        /* FIXME: Can't do this because of nested transaction deadlock */
+        if (cmd == EXT3_IOC_SETFLAGS && (*(int *)arg) & EXT3_JOURNAL_DATA_FL) {
+                CERROR("can't set data journal flag on file\n");
+                RETURN(-EPERM);
+        }
 
         if (inode->i_fop->ioctl)
                 rc = inode->i_fop->ioctl(inode, file, cmd, arg);
@@ -454,11 +485,11 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
 }
 
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
-                              void *lmm, int lmm_size)
+                              void *lmm, int lmm_size, const char *name)
 {
         int rc;
 
-        LASSERT(down_trylock(&inode->i_sem) != 0);
+        LASSERT_SEM_LOCKED(&inode->i_sem);
 
         if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
                 CWARN("setting EA on %lu/%u again... interesting\n",
@@ -466,7 +497,7 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 
         lock_24kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
-                                   XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size, 0);
+                                   name, lmm, lmm_size, 0);
 
         unlock_24kernel();
 
@@ -477,15 +508,16 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 }
 
 /* Must be called with i_sem held */
-static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
+static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size,
+                              const char *name)
 {
         int rc;
 
-        LASSERT(down_trylock(&inode->i_sem) != 0);
+        LASSERT_SEM_LOCKED(&inode->i_sem);
         lock_24kernel();
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
-                            XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size);
+                            name, lmm, lmm_size);
         unlock_24kernel();
 
         /* This gives us the MD size */
@@ -494,7 +526,7 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
-                       EXT3_XATTR_INDEX_TRUSTED, XATTR_LUSTRE_MDS_LOV_EA,
+                       EXT3_XATTR_INDEX_TRUSTED, name,
                        inode->i_ino, rc);
                 memset(lmm, 0, lmm_size);
                 return (rc == -ENODATA) ? 0 : rc;
@@ -737,6 +769,26 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
         return bg_start + colour + block;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/locks.h>
+static void ll_unmap_underlying_metadata(struct super_block *sb,
+                                         unsigned long blocknr)
+{
+        struct buffer_head *old_bh;
+
+        old_bh = get_hash_table(sb->s_dev, blocknr, sb->s_blocksize);
+        if (old_bh) {
+                mark_buffer_clean(old_bh);
+                wait_on_buffer(old_bh);
+                clear_bit(BH_Req, &old_bh->b_state);
+                __brelse(old_bh);
+        }
+}
+#else
+#define ll_unmap_underlying_metadata(sb, blocknr) \
+        unmap_underlying_metadata((sb)->s_bdev, blocknr)
+#endif
+
 static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                                   struct ext3_ext_path *path,
                                   struct ext3_ext_cache *cex)
@@ -844,8 +896,6 @@ out:
         unlock_24kernel();
 map:
         if (err >= 0) {
-                struct block_device *bdev = inode->i_sb->s_bdev;
-
                 /* map blocks */
                 if (bp->num == 0) {
                         CERROR("hmm. why do we find this extent?\n");
@@ -868,10 +918,9 @@ map:
                         } else {
                                 *(bp->created) = 1;
                                 /* unmap any possible underlying metadata from
-                                 * the block device mapping.  bug 6998.
-                                 * This only compiles on 2.6, but there are
-                                 * no users of mballoc on 2.4. */
-                                unmap_underlying_metadata(bdev, *(bp->blocks));
+                                 * the block device mapping.  bug 6998. */
+                                ll_unmap_underlying_metadata(inode->i_sb,
+                                                             *(bp->blocks));
                         }
                         bp->created++;
                         bp->blocks++;
@@ -958,7 +1007,7 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
 cleanup:
         return rc;
 }
-#endif
+#endif /* EXT3_MULTIBLOCK_ALLOCATOR */
 
 extern int ext3_map_inode_page(struct inode *inode, struct page *page,
                                unsigned long *blocks, int *created, int create);
@@ -1161,6 +1210,8 @@ static int fsfilt_ext3_setup(struct super_block *sb)
         set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
+        if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
+                CWARN("filesystem doesn't have dir_index feature enabled\n");
         return 0;
 }
 
@@ -1739,6 +1790,41 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                 brelse(bitmap_bh);
         }
 
+        /* read old quota limits from old quota file. (only for the user
+         * has limits but hasn't file) */
+#ifdef HAVE_QUOTA_SUPPORT
+        for (i = 0; i < MAXQUOTAS; i++) {
+                struct list_head id_list;
+                struct dquot_id *dqid, *tmp;
+
+                if (!Q_TYPESET(oqc, i))
+                        continue;
+
+                if (qctxt->qckt_first_check[i])
+                        continue;
+
+
+                LASSERT(sb_dqopt(sb)->files[i] != NULL);
+                INIT_LIST_HEAD(&id_list);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
+                rc = lustre_get_qids(sb_dqopt(sb)->files[i], NULL, i, &id_list);
+#else
+                rc = lustre_get_qids(NULL, sb_dqopt(sb)->files[i], i, &id_list);
+#endif
+                if (rc)
+                        CERROR("read old limits failed. (rc:%d)\n", rc);
+
+                list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
+                        list_del_init(&dqid->di_link);
+
+                        if (!rc)
+                                cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list,
+                                      dqid->di_id, i,
+                                      qctxt->qckt_first_check[i]);
+                        kfree(dqid);
+                }
+        }
+#endif
         /* turn off quota cause we are to dump chk_dqblk to files */
         quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
 
@@ -1766,7 +1852,7 @@ out:
 
 #ifdef HAVE_QUOTA_SUPPORT
 static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type, 
-                                 int cmd, struct list_head *list)
+                                 int cmd)
 {
         int rc = 0;
         ENTRY;
@@ -1789,15 +1875,18 @@ static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
         case QFILE_INIT_INFO:
                 rc = lustre_init_quota_info(lqi, type);
                 break;
-        case QFILE_GET_QIDS:
-                rc = lustre_get_qids(lqi, type, list);
-                break;
         default:
                 CERROR("Unsupported admin quota file cmd %d\n", cmd);
                 LBUG();
                 break;
         }
         RETURN(rc);
+}
+
+static int fsfilt_ext3_qids(struct file *file, struct inode *inode, int type,
+                            struct list_head *list)
+{
+        return lustre_get_qids(file, inode, type, list);
 }
 
 static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
@@ -1839,6 +1928,8 @@ static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
 static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_type                = "ext3",
         .fs_owner               = THIS_MODULE,
+        .fs_label               = fsfilt_ext3_label,
+        .fs_uuid                = fsfilt_ext3_uuid,
         .fs_start               = fsfilt_ext3_start,
         .fs_brw_start           = fsfilt_ext3_brw_start,
         .fs_commit              = fsfilt_ext3_commit,
@@ -1863,6 +1954,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_quotacheck          = fsfilt_ext3_quotacheck,
 #ifdef HAVE_QUOTA_SUPPORT
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
+        .fs_qids                = fsfilt_ext3_qids,
         .fs_dquot               = fsfilt_ext3_dquot,
 #endif
 };

@@ -204,7 +204,7 @@ do_getxattr:
 
         if (size < body->eadatasize) {
                 CERROR("server bug: replied size %u > %u\n",
-                       body->eadatasize, size);
+                       body->eadatasize, (int)size);
                 GOTO(out, rc = -ERANGE);
         }
 

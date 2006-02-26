@@ -226,6 +226,7 @@ int llu_glimpse_size(struct inode *inode)
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
+        struct ost_lvb lvb;
         int rc, flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 
@@ -240,9 +241,13 @@ int llu_glimpse_size(struct inode *inode)
                 RETURN(rc > 0 ? -EIO : rc);
         }
 
-        st->st_size = lov_merge_size(lli->lli_smd, 0);
-        st->st_blocks = lov_merge_blocks(lli->lli_smd);
-        st->st_mtime = lov_merge_mtime(lli->lli_smd, st->st_mtime);
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
+        st->st_size = lvb.lvb_size;
+        st->st_blocks = lvb.lvb_blocks;
+        st->st_mtime = lvb.lvb_mtime;
+        st->st_atime = lvb.lvb_atime;
+        st->st_ctime = lvb.lvb_ctime;
 
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
                (long long)st->st_size, (long long)st->st_blocks);
@@ -259,10 +264,11 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
 {
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
+        struct ost_lvb lvb;
         int rc;
         ENTRY;
 
-        LASSERT(lockh->cookie == 0);
+        LASSERT(!lustre_handle_is_used(lockh));
         CLASSERT(ELDLM_OK == 0);
 
         /* XXX phil: can we do this?  won't it screw the file size up? */
@@ -281,12 +287,17 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
         if (rc > 0)
                 rc = -EIO;
 
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(sbi->ll_osc_exp, lsm, &lvb, 1);
         if (policy->l_extent.start == 0 &&
             policy->l_extent.end == OBD_OBJECT_EOF)
-                st->st_size = lov_merge_size(lsm, 1);
+                st->st_size = lvb.lvb_size;
 
-        if (rc == 0)
-                st->st_mtime = lov_merge_mtime(lsm, st->st_mtime);
+        if (rc == 0) {
+                st->st_mtime = lvb.lvb_mtime;
+                st->st_atime = lvb.lvb_atime;
+                st->st_ctime = lvb.lvb_ctime;
+        }
 
         RETURN(rc);
 }
@@ -459,7 +470,7 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
                          * The root of the problem is that
                          *
                          * kms = lov_merge_size(lsm, 1);
-                         * if (end > kms)
+                         * if (end >= kms)
                          *         glimpse_size(inode);
                          * else
                          *         st->st_size = kms;
@@ -566,6 +577,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         struct obd_export *exp = NULL;
         struct llu_io_group *iogroup;
         struct lustre_rw_params p;
+        struct ost_lvb lvb;
         __u64 kms;
         int err, is_read, iovidx, ret;
         int local_lock;
@@ -587,7 +599,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                 RETURN(-ERANGE);
 
         lustre_build_lock_params(session->lis_cmd, lli->lli_open_flags,
-                                 lli->lli_sbi->ll_connect_flags,
+                                 lli->lli_sbi->ll_lco.lco_flags,
                                  pos, len, &p);
 
         iogroup = get_io_group(inode, max_io_pages(len, iovlen), &p);
@@ -608,8 +620,11 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                  * date, and, hence, cannot be used for short-read
                  * detection. Rely in OST to handle short reads in that case.
                  */
-                kms = lov_merge_size(lsm, 1);
-                if (p.lrp_policy.l_extent.end > kms) {
+                inode_init_lvb(inode, &lvb);
+                obd_merge_lvb(exp, lsm, &lvb, 1);
+                kms = lvb.lvb_size;
+                /* extent.end is last byte of the range */
+                if (p.lrp_policy.l_extent.end >= kms) {
                         /* A glimpse is necessary to determine whether
                          * we return a short read or some zeroes at
                          * the end of the buffer
@@ -620,14 +635,14 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                          * comment.
                          */
                         if ((err = llu_glimpse_size(inode))) {
-                                llu_extent_unlock(fd, inode, lsm,
-                                                  p.lrp_lock_mode, &lockh);
-                                GOTO(err_put, err);
+                                GOTO(err_unlock, err);
                         }
-                } else
+                } else {
                         st->st_size = kms;
-        } else if (lli->lli_open_flags & O_APPEND)
+                }
+        } else if (lli->lli_open_flags & O_APPEND) {
                 pos = st->st_size;
+        }
 
         for (iovidx = 0; iovidx < iovlen; iovidx++) {
                 char *buf = (char *) iovec[iovidx].iov_base;
@@ -638,9 +653,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                 if (len < count)
                         count = len;
                 if (IS_BAD_PTR(buf) || IS_BAD_PTR(buf + count)) {
-                        llu_extent_unlock(fd, inode,
-                                          lsm, p.lrp_lock_mode, &lockh);
-                        GOTO(err_put, err = -EFAULT);
+                        GOTO(err_unlock, err = -EFAULT);
                 }
 
                 if (is_read) {
@@ -648,9 +661,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                                 break;
                 } else {
                         if (pos >= lli->lli_maxbytes) {
-                                llu_extent_unlock(fd, inode, lsm,
-                                                  p.lrp_lock_mode, &lockh);
-                                GOTO(err_put, err = -EFBIG);
+                                GOTO(err_unlock, err = -EFBIG);
                         }
                         if (pos + count >= lli->lli_maxbytes)
                                 count = lli->lli_maxbytes - pos;
@@ -658,9 +669,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
 
                 ret = llu_queue_pio(session->lis_cmd, iogroup, buf, count, pos);
                 if (ret < 0) {
-                        llu_extent_unlock(fd, inode,
-                                          lsm, p.lrp_lock_mode, &lockh);
-                        GOTO(err_put, err = ret);
+                        GOTO(err_unlock, err = ret);
                 } else {
                         pos += ret;
                         if (!is_read) {
@@ -677,19 +686,25 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         }
         LASSERT(len == 0 || is_read); /* libsysio should guarantee this */
 
-        /*
-         * BUG: lock is released too early. Fix is in bug 9296.
-         */
-        err = llu_extent_unlock(fd, inode, lsm, p.lrp_lock_mode, &lockh);
-        if (err)
-                CERROR("extent unlock error %d\n", err);
-
         err = obd_trigger_group_io(exp, lsm, NULL, iogroup->lig_oig);
         if (err)
-                GOTO(err_put, err);
+                GOTO(err_unlock, err);
+
+        err = oig_wait(iogroup->lig_oig);
+        if (err) {
+                CERROR("sync error %d, data corruption possible\n", err);
+                GOTO(err_unlock, err);
+        }
+
+        ret = llu_extent_unlock(fd, inode, lsm, p.lrp_lock_mode, &lockh);
+        if (ret)
+                CERROR("extent unlock error %d\n", ret);
 
         session->lis_groups[session->lis_ngroups++] = iogroup;
         RETURN(0);
+
+err_unlock:
+        llu_extent_unlock(fd, inode, lsm, p.lrp_lock_mode, &lockh);
 err_put:
         put_io_group(iogroup);
         RETURN((ssize_t)err);
@@ -772,6 +787,10 @@ static int llu_file_rwx(struct inode *ino,
 int llu_iop_read(struct inode *ino,
                  struct ioctx *ioctx)
 {
+        /* BUG: 5972 */
+        struct intnl_stat *st = llu_i2stat(ino);
+        st->st_atime = CURRENT_TIME;
+
         return llu_file_rwx(ino, ioctx, 1);
 }
 

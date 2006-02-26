@@ -135,33 +135,38 @@ restart() {
 
 status() {
 	STATE="stopped"
+	RETVAL=1
 	egrep -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
 
 	# check for any routes - on a portals router this is the only thing
-	[ "`cat /proc/sys/lnet/routes 2> /dev/null`" ] && STATE="running"
+	[ "`cat /proc/sys/lnet/routes 2> /dev/null`" ] && STATE="running" && RETVAL=0
 	
 	# check for any configured devices (may indicate partial startup)
-	[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial"
+	[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial" && RETVAL=1
 
 	# check for either a server or a client filesystem
 	MDS="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
 	OST="`ls /proc/fs/lustre/obdfilter/*/recovery_status 2> /dev/null`"
 	LLITE="`ls /proc/fs/lustre/llite/fs* 2> /dev/null`"
-	[ "$MDS" -o "$OST" -o "$LLITE" ] && STATE="running"
+	[ "$MDS" -o "$OST" -o "$LLITE" ] && STATE="running" && RETVAL=0
 
 	# check for server disconnections 
 	DISCON="`grep -v FULL /proc/fs/lustre/*c/*/*server_uuid 2> /dev/null`"
-	[ "$DISCON" ] && STATE="disconnected"
+	[ "$DISCON" ] && STATE="disconnected" && RETVAL=0
 
 	# check for servers in recovery
-	[ "$MDS$OST" ] && grep -q RECOV $MDS $OST && STATE="recovery"
+	[ "$MDS$OST" ] && grep -q RECOV $MDS $OST && STATE="recovery" && RETVAL=0
 
-        # check for error in health_check
-        HEALTH="/proc/fs/lustre/health_check"
-        [ -f "$HEALTH" ] && grep -q "NOT HEALTHY" $HEALTH && STATE="unhealthy"
+	# check for error in health_check
+	HEALTH="/proc/fs/lustre/health_check"
+	[ -f "$HEALTH" ] && grep -q "NOT HEALTHY" $HEALTH && STATE="unhealthy" && RETVAL=2
 
-        # check for LBUG
-        [ -f  "$HEALTH" ] && grep -q "LBUG" $HEALTH && STATE="LBUG"
+	# check for LBUG
+	[ -f  "$HEALTH" ] && grep -q "LBUG" $HEALTH && STATE="LBUG" && RETVAL=3
+
+	# Check if the service really exists
+	DUMMY=`lctl dl | grep $SERVICE`
+	[ $? -ne 0 ] && STATE="not_found" && RETVAL=5
 
 	echo $STATE
 }

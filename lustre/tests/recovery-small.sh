@@ -3,8 +3,7 @@
 set -e
 
 #         bug  2986 5494 7288
-ALWAYS_EXCEPT="20b  24   27"
-
+ALWAYS_EXCEPT="20b  24   27 $RECOVERY_SMALL_EXCEPT"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 
@@ -137,7 +136,7 @@ run_test 9 "pause bulk on OST (bug 1420)"
 #bug 1521
 test_10() {
     do_facet client mcreate $MOUNT/$tfile        || return 1
-    drop_bl_callback "chmod 0777 $MOUNT/$tfile"  || return 2
+    drop_bl_callback "chmod 0777 $MOUNT/$tfile"  || echo "evicted as expected"
     # wait for the mds to evict the client
     #echo "sleep $(($TIMEOUT*2))"
     #sleep $(($TIMEOUT*2))
@@ -156,8 +155,7 @@ test_11(){
     cancel_lru_locks OSC
 
     do_facet client multiop $MOUNT/$tfile or  || return 3
-    drop_bl_callback multiop $MOUNT/$tfile Ow  || 
-        echo "client evicted, as expected"
+    drop_bl_callback multiop $MOUNT/$tfile Ow || echo "evicted as expected"
 
     do_facet client munlink $MOUNT/$tfile  || return 4
 }
@@ -317,7 +315,7 @@ run_test 18b "eviction and reconnect clears page cache (2766)"
 test_19a() {
     f=$MOUNT/$tfile
     do_facet client mcreate $f        || return 1
-    drop_ldlm_cancel "chmod 0777 $f"  || echo evicted
+    drop_ldlm_cancel "chmod 0777 $f"  || echo "evicted as expected"
 
     do_facet client checkstat -v -p 0777 $f  || echo evicted
     # let the client reconnect
@@ -447,8 +445,8 @@ test_27() {
 run_test 27 "fail LOV while using OSC's"
 
 test_28() {      # bug 6086 - error adding new clients
-	do_facet client mcreate $MOUNT/$tfile        || return 1
-	drop_bl_callback "chmod 0777 $MOUNT/$tfile"  || return 2
+	do_facet client mcreate $MOUNT/$tfile       || return 1
+	drop_bl_callback "chmod 0777 $MOUNT/$tfile" ||echo "evicted as expected"
 	#define OBD_FAIL_MDS_ADD_CLIENT 0x12f
 	do_facet mds sysctl -w lustre.fail_loc=0x8000012f
 	# fail once (evicted), reconnect fail (fail_loc), ok

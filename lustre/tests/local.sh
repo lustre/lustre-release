@@ -14,6 +14,7 @@ FSTYPE=${FSTYPE:-ext3}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 NETTYPE=${NETTYPE:-tcp}
+[ "$ACCEPTOR_PORT" ] && PORT_OPT="--port $ACCEPTOR_PORT"
 
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-400000}
@@ -59,8 +60,9 @@ h2iib () {
 
 # create nodes
 ${LMC} --add node --node $HOSTNAME || exit 10
-${LMC} --add net --node $HOSTNAME --nid `h2$NETTYPE $HOSTNAME` --nettype $NETTYPE || exit 11
-${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
+${LMC} --add net --node $HOSTNAME --nid `h2$NETTYPE $HOSTNAME` \
+    --nettype $NETTYPE $PORT_OPT || exit 11
+${LMC} --add net --node client --nid '*' --nettype $NETTYPE $PORT_OPT|| exit 12
 
 # configure mds server
 [ "x$MDS_MOUNT_OPTS" != "x" ] &&

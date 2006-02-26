@@ -16,6 +16,9 @@ extern int llapi_file_create(char *name, long stripe_size, int stripe_offset,
 extern int llapi_file_get_stripe(char *path, struct lov_user_md *lum);
 extern int llapi_find(char *path, struct obd_uuid *obduuid, int recursive,
                       int verbose, int quiet);
+extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
+                     struct obd_statfs *stat_buf,
+                     struct obd_uuid *uuid_buf);
 extern int llapi_ping(char *obd_type, char *obd_name);
 extern int llapi_target_check(int num_types, char **obd_types, char *dir);
 extern int llapi_catinfo(char *dir, char *keyword, char *node_name);

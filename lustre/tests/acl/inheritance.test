@@ -88,10 +88,12 @@ might be distributed around MDS's.
 	$ echo i > tree/dir1/f
 	$ ls -l tree/dir1/f | awk -- '{ print $1 }'
 	> -rw-r--r--+
-	$ su bin
-	$ echo i > tree/dir6/dir2/f
-	> tree/dir6/dir2/f: No such file or directory
-	$ su
+in following item, the error message is dependant on distributions.
+success on FC3, but not on FC2 and SLES3 etc. comment out by CFS.
+#	$ su bin
+#	$ echo i > tree/dir6/dir2/f
+#	> tree/dir6/dir2/f: No such file or directory
+#	$ su
 
         $ rm -rf tree
 

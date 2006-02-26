@@ -128,7 +128,7 @@ struct file_system_type lustre_fs_type = {
 
 static int __init init_lustre_lite(void)
 {
-        int rc;
+        int rc, seed[2];
         printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
                "info@clusterfs.com\n");
         rc = ll_init_inodecache();
@@ -155,6 +155,9 @@ static int __init init_lustre_lite(void)
                 unregister_filesystem(&lustre_lite_fs_type);
                 ll_unregister_cache(&ll_cache_definition);
         }
+
+        get_random_bytes(seed, sizeof(seed));
+        ll_srand(seed[0], seed[1]);
 
         return rc;
 }

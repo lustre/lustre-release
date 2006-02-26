@@ -32,7 +32,7 @@
 #include "../lutil.h"
 
 
-#ifdef CRAY_XT3
+#if CRAY_XT3
 int _sysio_lustre_init(void)
 {
         /*

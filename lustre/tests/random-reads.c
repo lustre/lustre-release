@@ -148,13 +148,15 @@ int main(int argc, char **argv)
 	nblocks = size / bsize;
 	buf = malloc(bsize);
 	if (buf == NULL) {
-		LOG(LOG_CRIT, "malloc(%i) failure: %m\n", bsize);
+		LOG(LOG_CRIT, "malloc(%lu) failure: %s\n", (long)bsize,
+		    strerror(errno));
 		return RR_MALLOC;
 	}
 
 	fd = open(fname, (preclean ? O_RDWR : O_RDONLY) | O_CREAT, 0700);
 	if (fd == -1) {
-		LOG(LOG_CRIT, "malloc(\"%s\") failure: %m\n", fname);
+		LOG(LOG_CRIT, "malloc(\"%s\") failure: %s\n", fname,
+		    strerror(errno));
 		return RR_OPEN;
 	}
 	if (preclean) {
@@ -167,7 +169,8 @@ int main(int argc, char **argv)
 			memset(buf, bsize, seed + i++);
 			ret = write(fd, buf, count);
 			if (ret < 0) {
-				LOG(LOG_CRIT, "write() failure: %m\n");
+				LOG(LOG_CRIT, "write() failure: %s\n",
+				    strerror(errno));
 				return RR_PRECLEAN;
 			}
 		}
@@ -188,8 +191,8 @@ int main(int argc, char **argv)
 			ret = pread(fd, buf, bsize, (block_nr + j) * bsize);
 			if (ret != bsize) {
 				LOG(LOG_CRIT,
-				    "pread(...%zi, %li) got: %zi, %m\n",
-				    bsize, block_nr * bsize, ret);
+				    "pread(...%zi, %li) got: %zi, %s\n", bsize,
+				    block_nr * bsize, ret, strerror(errno));
 				return RR_READ;
 			}
 		}

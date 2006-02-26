@@ -81,12 +81,6 @@ struct ll_rpc_opcode {
         { LDLM_BL_CALLBACK, "ldlm_bl_callback" },
         { LDLM_CP_CALLBACK, "ldlm_cp_callback" },
         { LDLM_GL_CALLBACK, "ldlm_gl_callback" },
-        { PTLBD_QUERY,      "ptlbd_query" },
-        { PTLBD_READ,       "ptlbd_read" },
-        { PTLBD_WRITE,      "ptlbd_write" },
-        { PTLBD_FLUSH,      "ptlbd_flush" },
-        { PTLBD_CONNECT,    "ptlbd_connect" },
-        { PTLBD_DISCONNECT, "ptlbd_disconnect" },
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel"},
 };
@@ -482,7 +476,8 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(obd->u.cli.cl_import, OBD_PING, 0, NULL, NULL);
+        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
+                              OBD_PING, 0, NULL, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 

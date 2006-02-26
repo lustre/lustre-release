@@ -113,6 +113,8 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
 /* lov_merge.c */
 void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                      struct lov_stripe_md *lsm, int stripeno, int *set);
+int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
+                  struct ost_lvb *lvb, int kms_only);
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                    obd_off size, int shrink);
 
@@ -198,8 +200,6 @@ int lov_fini_cancel_set(struct lov_request_set *set);
 
 /* lov_obd.c */
 int lov_get_stripecnt(struct lov_obd *lov, int stripe_count);
-int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern);
-void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
@@ -217,7 +217,20 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
               struct lov_user_md *lump);
 int lov_getstripe(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct lov_user_md *lump);
+int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, 
+                      int pattern, int magic);
+void lov_free_memmd(struct lov_stripe_md **lsmp);
 
+void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
+void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj);
+/* lov_ea.c */
+int lov_unpackmd_join(struct lov_obd *lov, struct lov_stripe_md *lsm,
+                      struct lov_mds_md *lmm);
+
+struct lov_extent *lovea_idx2le(struct lov_stripe_md *lsm, int stripe_no);
+struct lov_extent *lovea_off2le(struct lov_stripe_md *lsm, obd_off lov_off);
+int lovea_destroy_object(struct lov_obd *lov, struct lov_stripe_md *lsm, 
+                         struct obdo *oa, void *data);
 /* lproc_lov.c */
 extern struct file_operations lov_proc_target_fops;
 

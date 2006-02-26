@@ -3179,7 +3179,7 @@ Index: linux-2.4.21/drivers/scsi/libata-core.c
  	sg->page = virt_to_page(buf);
  	sg->offset = (unsigned long) buf & ~PAGE_MASK;
 +#endif /* !SMALL_SCATTERLIST */
- 	sg_dma_len(sg) = buflen;
+ 	sg->length = buflen;
  }
  
 @@ -2297,8 +2302,13 @@
@@ -3197,9 +3197,9 @@ Index: linux-2.4.21/drivers/scsi/libata-core.c
  	/* get the current page and offset */
  	page = nth_page(page, (offset >> PAGE_SHIFT));
 @@ -2339,8 +2349,13 @@
+ next_sg:
  	sg = &qc->sg[qc->cursg];
  
- next_page:
 +#if SMALL_SCATTERLIST
 +	page = sg->u.page.page;
 +	offset = sg->u.page.offset + qc->cursg_ofs;

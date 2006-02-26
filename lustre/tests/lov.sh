@@ -16,6 +16,7 @@ FSTYPE=${FSTYPE:-ext3}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 NETTYPE=${NETTYPE:-tcp}
+[ "$ACCEPTOR_PORT" ] && PORT_OPT="--port $ACCEPTOR_PORT"
 
 OSTCOUNT=${OSTCOUNT:-5}
 # OSTDEVN will still override the device for OST N
@@ -39,8 +40,9 @@ rm -f $config
 
 # create nodes
 ${LMC} --add node --node $HOSTNAME || exit 10
-${LMC} --add net --node $HOSTNAME --nid $HOSTNAME --nettype $NETTYPE || exit 11
-${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
+${LMC} --add net --node $HOSTNAME --nid $HOSTNAME \
+    --nettype $NETTYPE $PORT_OPT || exit 11
+${LMC} --add net --node client --nid '*' --nettype $NETTYPE $PORT_OPT || exit 12
 
 [ "x$QUOTA_OPTS" != "x" ] &&
     QUOTA_OPTS="--quota $QUOTA_OPTS"

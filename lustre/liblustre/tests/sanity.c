@@ -48,6 +48,7 @@
 
 void *buf_alloc;
 int buf_size;
+int opt_verbose;
 
 extern char *lustre_path;
 
@@ -88,6 +89,9 @@ int t1(char *name)
         char path[MAX_PATH_LENGTH] = "";
 
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t1", lustre_path);
+
+        if (opt_verbose)
+                printf("touch+unlink %s\n", path);
 
         t_touch(path);
         t_unlink(path);
@@ -365,7 +369,11 @@ int t14(char *name)
         ENTRY(">1 block(4k) directory readdir");
         snprintf(dir, MAX_PATH_LENGTH, "%s/test_t14_dir/", lustre_path);
 
-        t_mkdir(dir);
+        rc = mkdir(dir, 0755);
+        if (rc < 0 && errno != EEXIST) {
+                printf("mkdir(%s) error: %s\n", dir, strerror(errno));
+                exit(1);
+        }
         printf("Creating %d files...\n", nfiles);
         for (i = 0; i < nfiles; i++) {
                 sprintf(path, "%s%s%05d", dir, prefix, i);
@@ -532,7 +540,7 @@ static int check_file_size(char *file, off_t size)
 {
         struct stat statbuf;
 
-        if(stat(file, &statbuf) != 0) {
+        if (stat(file, &statbuf) != 0) {
                 printf("Error stat(%s)\n", file);
                 return(1);
         }
@@ -948,6 +956,7 @@ int t50(char *name)
         ENTRY("4k aligned i/o sanity");
         while (np <= _npages) {
                 printf("%3d per xfer(total %d)...\t", np, _npages);
+                fflush(stdout);
                 pages_io(np, offset);
                 np += np;
         }
@@ -990,12 +999,12 @@ int t51(char *name)
         int result;
 
         ENTRY("truncate() should truncate file to proper length");
-        snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t51_file", lustre_path);
 
         for (size = 0; size < T51_NR * T51_STEP; size += T51_STEP) {
                 t_echo_create(file, "");
                 if (truncate(file, size) != 0) {
-                        printf("error truncating file: %s\n", strerror(errno));
+                        printf("\nerror truncating file: %s\n",strerror(errno));
                         return(-1);
                 }
                 result = check_file_size(file, size);
@@ -1006,11 +1015,11 @@ int t51(char *name)
                 t_echo_create(file, "");
                 fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
                 if (fd < 0) {
-                        printf("error open file: %s\n", strerror(errno));
+                        printf("\nerror open file: %s\n", strerror(errno));
                         return(-1);
                 }
                 if (ftruncate(fd, size) != 0) {
-                        printf("error ftruncating file: %s\n", strerror(errno));
+                        printf("\nerror ftruncating file:%s\n",strerror(errno));
                         return(-1);
                 }
                 close(fd);
@@ -1018,7 +1027,54 @@ int t51(char *name)
                 if (result != 0)
                         return result;
                 t_unlink(file);
+                if (size % (T51_STEP * (T51_NR / 75)) == 0) {
+                        printf(".");
+                        fflush(stdout);
+                }
         }
+        printf("\n");
+        LEAVE();
+}
+/*
+ * check atime update during read
+ */
+int t52(char *name)
+{
+        char file[MAX_PATH_LENGTH] = "";
+        char buf[16];
+        struct stat statbuf;
+        time_t atime;
+        time_t diff;
+        int fd, i;
+
+        ENTRY("atime should be updated during read");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t52_file", lustre_path);
+
+        t_echo_create(file, "check atime update during read");
+        fd = open(file, O_RDONLY);
+        if (fd < 0) {
+                printf("\nerror open file: %s\n", strerror(errno));
+                return(-1);
+        }
+        stat(file, &statbuf);
+        printf("st_atime=%s", ctime(&statbuf.st_atime));
+        atime = statbuf.st_atime;
+        for (i = 0; i < 3; i++) {
+                sleep(2);
+                read(fd, buf, sizeof(buf));
+                stat(file, &statbuf);
+                printf("st_atime=%s", ctime(&statbuf.st_atime));
+                diff = statbuf.st_atime - atime;
+                if (diff <= 0) {
+                        printf("atime doesn't updated! failed!\n");
+                        close(fd);
+                        t_unlink(file);
+                        return -1;
+                }       
+                atime = statbuf.st_atime; 
+        }
+        close(fd);
+        t_unlink(file);
         LEAVE();
 }
 
@@ -1077,10 +1133,11 @@ int main(int argc, char * const argv[])
                 {"dumpfile", 1, 0, 'd'},
                 {"only", 1, 0, 'o'},
                 {"target", 1, 0, 't'},
+                {"verbose", 1, 0, 'v'},
                 {0, 0, 0, 0}
         };
 
-        while ((c = getopt_long(argc, argv, "d:o:t:", long_opts, &opt_index)) != -1) {
+        while ((c = getopt_long(argc, argv, "d:o:t:v", long_opts, &opt_index)) != -1) {
                 switch (c) {
                 case 'd':
                         setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
@@ -1093,6 +1150,9 @@ int main(int argc, char * const argv[])
                         break;
                 case 't':
                         setenv(ENV_LUSTRE_MNTTGT, optarg, 1);
+                        break;
+                case 'v':
+                        opt_verbose++;
                         break;
                 default:
                         usage(argv[0]);
@@ -1112,7 +1172,13 @@ int main(int argc, char * const argv[])
         __liblustre_setup_();
 
         buf_size = _npages * PAGE_SIZE;
-        buf_alloc = malloc(buf_size);
+        if (opt_verbose)
+                printf("allocating %d bytes buffer\n", buf_size);
+        buf_alloc = calloc(1, buf_size);
+        if (buf_alloc == NULL) {
+                fprintf(stderr, "error allocating %d\n", buf_size);
+                exit(-ENOMEM);
+        }
 
         for (test = testlist; test->test != NULL; test++) {
                 int run = 1, i;

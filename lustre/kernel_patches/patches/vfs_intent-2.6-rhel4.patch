@@ -1,8 +1,8 @@
-Index: linux-2.6.9-5.0.3.EL/fs/exec.c
+Index: linux-2.6.9-22.0.2.EL/fs/exec.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/exec.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/exec.c	2005-02-26 23:29:02.000000000 +0200
-@@ -124,9 +124,10 @@
+--- linux-2.6.9-22.0.2.EL.orig/fs/exec.c	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/fs/exec.c	2006-01-26 18:46:33.000000000 -0500
+@@ -125,9 +125,10 @@
  	struct file * file;
  	struct nameidata nd;
  	int error;
@@ -15,7 +15,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/exec.c
  	if (error)
  		goto out;
  
-@@ -138,7 +139,7 @@
+@@ -139,7 +140,7 @@
  	if (error)
  		goto exit;
  
@@ -24,7 +24,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/exec.c
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -487,8 +488,9 @@
+@@ -488,8 +489,9 @@
  	int err;
  	struct file *file;
  
@@ -36,7 +36,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/exec.c
  	file = ERR_PTR(err);
  
  	if (!err) {
-@@ -501,7 +503,7 @@
+@@ -502,7 +504,7 @@
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -45,11 +45,11 @@ Index: linux-2.6.9-5.0.3.EL/fs/exec.c
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
-Index: linux-2.6.9-5.0.3.EL/fs/namei.c
+Index: linux-2.6.9-22.0.2.EL/fs/namei.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/namei.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/namei.c	2005-04-01 18:15:29.743029208 +0300
-@@ -272,8 +272,19 @@
+--- linux-2.6.9-22.0.2.EL.orig/fs/namei.c	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/fs/namei.c	2006-01-26 18:46:33.000000000 -0500
+@@ -274,8 +274,19 @@
  	return 0;
  }
  
@@ -69,7 +69,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	dput(nd->dentry);
  	mntput(nd->mnt);
  }
-@@ -363,7 +374,10 @@
+@@ -367,7 +378,10 @@
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
@@ -80,7 +80,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	down(&dir->i_sem);
  	/*
  	 * First re-do the cached lookup just in case it was created
-@@ -402,7 +416,10 @@
+@@ -406,7 +420,10 @@
  	if (result->d_op && result->d_op->d_revalidate) {
  		if (!result->d_op->d_revalidate(result, nd) && !d_invalidate(result)) {
  			dput(result);
@@ -92,7 +92,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  		}
  	}
  	return result;
-@@ -432,7 +449,9 @@
+@@ -436,7 +453,9 @@
  static inline int __vfs_follow_link(struct nameidata *nd, const char *link)
  {
  	int res = 0;
@@ -102,7 +102,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	if (IS_ERR(link))
  		goto fail;
  
-@@ -442,6 +461,9 @@
+@@ -446,6 +465,9 @@
  			/* weird __emul_prefix() stuff did it */
  			goto out;
  	}
@@ -112,7 +112,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	res = link_path_walk(link, nd);
  out:
  	if (nd->depth || res || nd->last_type!=LAST_NORM)
-@@ -650,6 +672,33 @@
+@@ -654,6 +676,33 @@
  	return PTR_ERR(dentry);
  }
  
@@ -145,8 +145,8 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
 +
  /*
   * Name resolution.
-  *
-@@ -751,8 +800,12 @@
+  * This is the basic name resolution function, turning a pathname into
+@@ -755,8 +804,12 @@
  			goto out_dput;
  
  		if (inode->i_op->follow_link) {
@@ -159,7 +159,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  			dput(next.dentry);
  			mntput(next.mnt);
  			if (err)
-@@ -791,14 +844,34 @@
+@@ -795,14 +848,34 @@
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
@@ -174,8 +174,8 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
 +				}
 +				if (lookup_flags & LOOKUP_DIRECTORY) {
 +					err = -ENOTDIR;
-+					if(!nd->dentry->d_inode->i_op ||
-+					  !nd->dentry->d_inode->i_op->lookup) {
++					if (!nd->dentry->d_inode->i_op ||
++					    !nd->dentry->d_inode->i_op->lookup){
 +						path_release(nd);
 +						goto return_err;
 +					}
@@ -194,7 +194,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  		if (err)
  			break;
  		follow_mount(&next.mnt, &next.dentry);
-@@ -1016,7 +1089,7 @@
+@@ -1053,7 +1126,7 @@
  }
  
  /* SMP-safe */
@@ -203,7 +203,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  {
  	unsigned long hash;
  	struct qstr this;
-@@ -1036,11 +1109,16 @@
+@@ -1073,11 +1146,16 @@
  	}
  	this.hash = end_name_hash(hash);
  
@@ -221,7 +221,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  /*
   *	namei()
   *
-@@ -1052,7 +1130,7 @@
+@@ -1089,7 +1167,7 @@
   * that namei follows links, while lnamei does not.
   * SMP-safe
   */
@@ -230,7 +230,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  {
  	char *tmp = getname(name);
  	int err = PTR_ERR(tmp);
-@@ -1064,6 +1142,12 @@
+@@ -1101,6 +1179,12 @@
  	return err;
  }
  
@@ -243,7 +243,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -1347,8 +1431,8 @@
+@@ -1387,8 +1471,8 @@
  		acc_mode |= MAY_APPEND;
  
  	/* Fill in the open() intent data */
@@ -254,7 +254,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  
  	/*
  	 * The simplest case - just a plain lookup.
-@@ -1363,6 +1447,7 @@
+@@ -1403,6 +1487,7 @@
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -262,7 +262,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	error = path_lookup(pathname, LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE, nd);
  	if (error)
  		return error;
-@@ -1379,7 +1464,9 @@
+@@ -1419,7 +1504,9 @@
  	dir = nd->dentry;
  	nd->flags &= ~LOOKUP_PARENT;
  	down(&dir->d_inode->i_sem);
@@ -272,20 +272,20 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1492,7 +1579,9 @@
+@@ -1532,7 +1619,9 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
 +	nd->flags |= LOOKUP_LAST;
  	dentry = __lookup_hash(&nd->last, nd->dentry, nd);
 +	nd->flags &= ~LOOKUP_LAST;
- 	putname(nd->last.name);
+ 	__putname(nd->last.name);
  	goto do_last;
  }
-Index: linux-2.6.9-5.0.3.EL/fs/namespace.c
+Index: linux-2.6.9-22.0.2.EL/fs/namespace.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/namespace.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/namespace.c	2005-02-26 23:29:02.000000000 +0200
+--- linux-2.6.9-22.0.2.EL.orig/fs/namespace.c	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/fs/namespace.c	2006-01-26 18:46:32.000000000 -0500
 @@ -61,6 +61,7 @@
  		INIT_LIST_HEAD(&mnt->mnt_mounts);
  		INIT_LIST_HEAD(&mnt->mnt_list);
@@ -306,9 +306,9 @@ Index: linux-2.6.9-5.0.3.EL/fs/namespace.c
  {
  	struct super_block *sb = mnt->mnt_sb;
  	dput(mnt->mnt_root);
-+        spin_lock(&dcache_lock);
-+        list_del(&mnt->mnt_lustre_list);
-+        spin_unlock(&dcache_lock);
++	spin_lock(&dcache_lock);
++	list_del(&mnt->mnt_lustre_list);
++	spin_unlock(&dcache_lock);
  	free_vfsmnt(mnt);
  	deactivate_super(sb);
  }
@@ -317,7 +317,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/namespace.c
  
  	lock_kernel();
 +	if (sb->s_op->umount_lustre)
-+              sb->s_op->umount_lustre(sb);
++		sb->s_op->umount_lustre(sb);
  	if( (flags&MNT_FORCE) && sb->s_op->umount_begin)
  		sb->s_op->umount_begin(sb);
  	unlock_kernel();
@@ -345,11 +345,11 @@ Index: linux-2.6.9-5.0.3.EL/fs/namespace.c
  	/* Discard magic */
  	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
  		flags &= ~MS_MGC_MSK;
-Index: linux-2.6.9-5.0.3.EL/fs/open.c
+Index: linux-2.6.9-22.0.2.EL/fs/open.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/open.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/open.c	2005-02-26 23:29:02.000000000 +0200
-@@ -215,12 +215,12 @@
+--- linux-2.6.9-22.0.2.EL.orig/fs/open.c	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/fs/open.c	2006-01-26 18:46:33.000000000 -0500
+@@ -216,12 +216,12 @@
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
@@ -364,7 +364,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	if (error)
  		goto out;
  	inode = nd.dentry->d_inode;
-@@ -474,6 +474,7 @@
+@@ -475,6 +475,7 @@
  	int old_fsuid, old_fsgid;
  	kernel_cap_t old_cap;
  	int res;
@@ -372,7 +372,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -498,13 +499,14 @@
+@@ -499,13 +500,14 @@
  	else
  		current->cap_effective = current->cap_permitted;
  
@@ -388,7 +388,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  		path_release(&nd);
  	}
  
-@@ -519,8 +521,9 @@
+@@ -520,8 +522,9 @@
  {
  	struct nameidata nd;
  	int error;
@@ -399,7 +399,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	if (error)
  		goto out;
  
-@@ -572,8 +575,9 @@
+@@ -573,8 +576,9 @@
  {
  	struct nameidata nd;
  	int error;
@@ -410,7 +410,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	if (error)
  		goto out;
  
-@@ -754,27 +758,8 @@
+@@ -755,27 +759,8 @@
   * for the internal routines (ie open_namei()/follow_link() etc). 00 is
   * used by symlinks.
   */
@@ -440,7 +440,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  {
  	struct file * f;
  	struct inode *inode;
-@@ -786,6 +771,7 @@
+@@ -787,6 +772,7 @@
  		goto cleanup_dentry;
  	f->f_flags = flags;
  	f->f_mode = ((flags+1) & O_ACCMODE) | FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE;
@@ -448,7 +448,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	inode = dentry->d_inode;
  	if (f->f_mode & FMODE_WRITE) {
  		error = get_write_access(inode);
-@@ -804,6 +790,7 @@
+@@ -805,6 +791,7 @@
  		error = f->f_op->open(inode,f);
  		if (error)
  			goto cleanup_all;
@@ -456,7 +456,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	}
  	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
  
-@@ -829,6 +816,7 @@
+@@ -830,6 +817,7 @@
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -464,7 +464,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  	dput(dentry);
  	mntput(mnt);
  	return ERR_PTR(error);
-@@ -836,6 +824,36 @@
+@@ -837,6 +825,36 @@
  
  EXPORT_SYMBOL(dentry_open);
  
@@ -501,10 +501,10 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
-Index: linux-2.6.9-5.0.3.EL/fs/stat.c
+Index: linux-2.6.9-22.0.2.EL/fs/stat.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/stat.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/stat.c	2005-02-26 23:29:02.000000000 +0200
+--- linux-2.6.9-22.0.2.EL.orig/fs/stat.c	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/fs/stat.c	2006-01-25 23:40:55.000000000 -0500
 @@ -37,7 +37,7 @@
  
  EXPORT_SYMBOL(generic_fillattr);
@@ -574,11 +574,11 @@ Index: linux-2.6.9-5.0.3.EL/fs/stat.c
  		fput(f);
  	}
  	return error;
-Index: linux-2.6.9-5.0.3.EL/fs/nfs/dir.c
+Index: linux-2.6.9-22.0.2.EL/fs/nfs/dir.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/nfs/dir.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/nfs/dir.c	2005-04-01 18:10:28.924760536 +0300
-@@ -718,7 +718,7 @@
+--- linux-2.6.9-22.0.2.EL.orig/fs/nfs/dir.c	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/fs/nfs/dir.c	2006-01-26 18:46:32.000000000 -0500
+@@ -726,7 +726,7 @@
  		return 0;
  	if (!nd || (nd->flags & LOOKUP_CONTINUE) || !(nd->flags & LOOKUP_CREATE))
  		return 0;
@@ -587,7 +587,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/nfs/dir.c
  }
  
  static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *nd)
-@@ -1043,7 +1043,7 @@
+@@ -1057,7 +1057,7 @@
  	attr.ia_valid = ATTR_MODE;
  
  	if (nd && (nd->flags & LOOKUP_CREATE))
@@ -596,11 +596,11 @@ Index: linux-2.6.9-5.0.3.EL/fs/nfs/dir.c
  
  	/*
  	 * The 0 argument passed into the create function should one day
-Index: linux-2.6.9-5.0.3.EL/fs/inode.c
+Index: linux-2.6.9-22.0.2.EL/fs/inode.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/inode.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/inode.c	2005-02-26 23:29:02.000000000 +0200
-@@ -233,6 +233,7 @@
+--- linux-2.6.9-22.0.2.EL.orig/fs/inode.c	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/fs/inode.c	2006-01-25 23:40:55.000000000 -0500
+@@ -235,6 +235,7 @@
  	inodes_stat.nr_unused--;
  }
  
@@ -608,10 +608,10 @@ Index: linux-2.6.9-5.0.3.EL/fs/inode.c
  /**
   * clear_inode - clear an inode
   * @inode: inode to clear
-Index: linux-2.6.9-5.0.3.EL/include/linux/dcache.h
+Index: linux-2.6.9-22.0.2.EL/include/linux/dcache.h
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/include/linux/dcache.h	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/include/linux/dcache.h	2005-02-26 23:29:02.000000000 +0200
+--- linux-2.6.9-22.0.2.EL.orig/include/linux/dcache.h	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/include/linux/dcache.h	2006-01-26 18:46:32.000000000 -0500
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -629,11 +629,11 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/dcache.h
  struct dentry_stat_t {
  	int nr_dentry;
  	int nr_unused;
-Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
+Index: linux-2.6.9-22.0.2.EL/include/linux/fs.h
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/include/linux/fs.h	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/include/linux/fs.h	2005-02-26 23:29:02.000000000 +0200
-@@ -74,6 +74,7 @@
+--- linux-2.6.9-22.0.2.EL.orig/include/linux/fs.h	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/include/linux/fs.h	2006-01-26 18:46:33.000000000 -0500
+@@ -75,6 +75,7 @@
  
  #define FMODE_READ 1
  #define FMODE_WRITE 2
@@ -641,7 +641,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  
  /* Internal kernel extensions */
  #define FMODE_LSEEK	4
-@@ -258,6 +259,8 @@
+@@ -259,6 +260,8 @@
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
  #define ATTR_KILL_SGID	4096
@@ -650,7 +650,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -456,6 +459,7 @@
+@@ -457,6 +460,7 @@
  	struct block_device	*i_bdev;
  	struct cdev		*i_cdev;
  	int			i_cindex;
@@ -658,7 +658,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  
  	__u32			i_generation;
  
-@@ -589,6 +593,7 @@
+@@ -590,6 +594,7 @@
  	spinlock_t		f_ep_lock;
  #endif /* #ifdef CONFIG_EPOLL */
  	struct address_space	*f_mapping;
@@ -666,7 +666,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  };
  extern spinlock_t files_lock;
  #define file_list_lock() spin_lock(&files_lock);
-@@ -934,7 +939,9 @@
+@@ -960,7 +965,9 @@
  	void (*truncate) (struct inode *);
  	int (*permission) (struct inode *, int, struct nameidata *);
  	int (*setattr) (struct dentry *, struct iattr *);
@@ -676,7 +676,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
-@@ -974,6 +981,7 @@
+@@ -1000,6 +1007,7 @@
  	int (*remount_fs) (struct super_block *, int *, char *);
  	void (*clear_inode) (struct inode *);
  	void (*umount_begin) (struct super_block *);
@@ -684,7 +684,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  
  	int (*show_options)(struct seq_file *, struct vfsmount *);
  };
-@@ -1164,6 +1172,7 @@
+@@ -1192,6 +1200,7 @@
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount_tree(struct vfsmount *);
  extern int may_umount(struct vfsmount *);
@@ -692,7 +692,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
  extern int vfs_statfs(struct super_block *, struct kstatfs *);
-@@ -1228,6 +1237,7 @@
+@@ -1256,6 +1265,7 @@
  extern int do_truncate(struct dentry *, loff_t start);
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
@@ -700,10 +700,10 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char __user *);
  
-Index: linux-2.6.9-5.0.3.EL/include/linux/namei.h
+Index: linux-2.6.9-22.0.2.EL/include/linux/namei.h
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/include/linux/namei.h	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/include/linux/namei.h	2005-02-26 23:29:02.000000000 +0200
+--- linux-2.6.9-22.0.2.EL.orig/include/linux/namei.h	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/include/linux/namei.h	2006-01-25 23:40:55.000000000 -0500
 @@ -2,14 +2,48 @@
  #define _LINUX_NAMEI_H
  
@@ -768,16 +768,16 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/namei.h
  };
  
  /*
-@@ -46,6 +77,8 @@
- #define LOOKUP_PARENT		16
+@@ -47,6 +78,8 @@
  #define LOOKUP_NOALT		32
  #define LOOKUP_ATOMIC		64
-+#define LOOKUP_LAST            (0x1000)
-+#define LOOKUP_LINK_NOTLAST    (0x2000)
+ #define LOOKUP_REVAL		128
++#define LOOKUP_LAST		(0x1000)
++#define LOOKUP_LINK_NOTLAST	(0x2000)
  
  /*
   * Intent data
-@@ -55,6 +88,12 @@
+@@ -56,6 +89,12 @@
  #define LOOKUP_ACCESS		(0x0400)
  
  extern int FASTCALL(__user_walk(const char __user *, unsigned, struct nameidata *));
@@ -790,7 +790,7 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/namei.h
  #define user_path_walk(name,nd) \
  	__user_walk(name, LOOKUP_FOLLOW, nd)
  #define user_path_walk_link(name,nd) \
-@@ -67,7 +106,6 @@
+@@ -68,7 +107,6 @@
  
  extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
@@ -798,10 +798,10 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/namei.h
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
  
-Index: linux-2.6.9-5.0.3.EL/include/linux/mount.h
+Index: linux-2.6.9-22.0.2.EL/include/linux/mount.h
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/include/linux/mount.h	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/include/linux/mount.h	2005-02-26 23:29:02.000000000 +0200
+--- linux-2.6.9-22.0.2.EL.orig/include/linux/mount.h	2006-01-25 23:40:13.000000000 -0500
++++ linux-2.6.9-22.0.2.EL/include/linux/mount.h	2006-01-25 23:40:55.000000000 -0500
 @@ -34,6 +34,8 @@
  	struct list_head mnt_list;
  	struct list_head mnt_fslink;	/* link in fs-specific expiry list */
@@ -811,25 +811,3 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/mount.h
  };
  
  static inline struct vfsmount *mntget(struct vfsmount *mnt)
-Index: linux-2.6.9-5.0.3.EL/kernel/exit.c
-===================================================================
---- linux-2.6.9-5.0.3.EL.orig/kernel/exit.c	2005-02-26 14:28:01.000000000 +0200
-+++ linux-2.6.9-5.0.3.EL/kernel/exit.c	2005-02-26 23:29:02.000000000 +0200
-@@ -244,6 +244,8 @@
- 	write_unlock_irq(&tasklist_lock);
- }
- 
-+EXPORT_SYMBOL(reparent_to_init);
-+
- void __set_special_pids(pid_t session, pid_t pgrp)
- {
- 	struct task_struct *curr = current;
-@@ -428,6 +430,8 @@
- 	__exit_files(tsk);
- }
- 
-+EXPORT_SYMBOL(exit_files);
-+
- static inline void __put_fs_struct(struct fs_struct *fs)
- {
- 	/* No need to hold fs->lock if we are killing it */

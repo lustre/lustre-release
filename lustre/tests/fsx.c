@@ -531,7 +531,10 @@ check_trunc_hack(void)
 
 	ftruncate(fd, (off_t)0);
 	ftruncate(fd, (off_t)100000);
-	fstat(fd, &statbuf);
+	if (fstat(fd, &statbuf)) {
+		prterr("trunc_hack: fstat");
+		statbuf.st_size = -1;
+	}
 	if (statbuf.st_size != (off_t)100000) {
 		prt("no extend on truncate! not posix!\n");
 		exit(130);

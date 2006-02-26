@@ -394,6 +394,70 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
 }
 EXPORT_SYMBOL(llog_cat_process);
 
+static int llog_cat_reverse_process_cb(struct llog_handle *cat_llh,
+                                       struct llog_rec_hdr *rec, void *data)
+{
+        struct llog_process_data *d = data;
+        struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+        struct llog_handle *llh;
+        int rc;
+
+        if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
+                CERROR("invalid record in catalog\n");
+                RETURN(-EINVAL);
+        }
+        CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n",
+               lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
+               le32_to_cpu(rec->lrh_index), cat_llh->lgh_id.lgl_oid);
+
+        rc = llog_cat_id2handle(cat_llh, &llh, &lir->lid_id);
+        if (rc) {
+                CERROR("Cannot find handle for log "LPX64"\n",
+                       lir->lid_id.lgl_oid);
+                RETURN(rc);
+        }
+
+        rc = llog_reverse_process(llh, d->lpd_cb, d->lpd_data, NULL);
+        RETURN(rc);
+}
+
+int llog_cat_reverse_process(struct llog_handle *cat_llh,
+                             llog_cb_t cb, void *data)
+{
+        struct llog_process_data d;
+        struct llog_process_cat_data cd;
+        struct llog_log_hdr *llh = cat_llh->lgh_hdr;
+        int rc;
+        ENTRY;
+
+        LASSERT(llh->llh_flags &cpu_to_le32(LLOG_F_IS_CAT));
+        d.lpd_data = data;
+        d.lpd_cb = cb;
+
+        if (llh->llh_cat_idx > cat_llh->lgh_last_idx) {
+                CWARN("catalog "LPX64" crosses index zero\n",
+                      cat_llh->lgh_id.lgl_oid);
+
+                cd.first_idx = 0;
+                cd.last_idx = cat_llh->lgh_last_idx;
+                rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
+                                          &d, &cd);
+                if (rc != 0)
+                        RETURN(rc);
+
+                cd.first_idx = le32_to_cpu(llh->llh_cat_idx);
+                cd.last_idx = 0;
+                rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
+                                          &d, &cd);
+        } else {
+                rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
+                                          &d, NULL);
+        }
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_cat_reverse_process);
+
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int index)
 {
         struct llog_log_hdr *llh = cathandle->lgh_hdr;

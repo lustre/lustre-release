@@ -10,7 +10,7 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
 
-ALWAYS_EXCEPT="10"
+ALWAYS_EXCEPT="10 $INSANITY_EXCEPT"
 
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
@@ -152,7 +152,7 @@ cleanup() {
 
     stop mds ${FORCE} $MDSLCONFARGS || :
     for i in `seq $NUMOST`; do
-	stop ost$i ${REFORMAT} ${FORCE} $OSTLCONFARGS  || :
+        stop ost$i ${FORCE} $OSTLCONFARGS  || :
     done
 }
 

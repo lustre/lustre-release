@@ -44,10 +44,13 @@ struct fsfilt_objinfo {
 
 #define XATTR_LUSTRE_MDS_LOV_EA         "lov"
 
+struct lustre_dquot;
 struct fsfilt_operations {
         struct list_head fs_list;
         struct module *fs_owner;
         char   *fs_type;
+        char   *(* fs_label)(struct super_block *sb);
+        char   *(* fs_uuid)(struct super_block *sb);
         void   *(* fs_start)(struct inode *inode, int op, void *desc_private,
                              int logs);
         void   *(* fs_brw_start)(int objcount, struct fsfilt_objinfo *fso,
@@ -62,8 +65,9 @@ struct fsfilt_operations {
         int     (* fs_iocontrol)(struct inode *inode, struct file *file,
                                  unsigned int cmd, unsigned long arg);
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
-                              int size);
-        int     (* fs_get_md)(struct inode *inode, void *md, int size);
+                              int size, const char *name);
+        int     (* fs_get_md)(struct inode *inode, void *md, int size,
+                              const char *name);
         /*
          * this method is needed to make IO operation fsfilt nature depend.
          *
@@ -98,7 +102,9 @@ struct fsfilt_operations {
         int     (* fs_quotactl)(struct super_block *sb,
                                 struct obd_quotactl *oqctl);
         int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
-                                 int cmd, struct list_head *list);
+                                 int cmd);
+        int     (* fs_qids)(struct file *file, struct inode *inode, int type,
+                            struct list_head *list);
         int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
 };
 
@@ -106,6 +112,24 @@ extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
 extern void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops);
 extern struct fsfilt_operations *fsfilt_get_ops(const char *type);
 extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
+
+static inline char *fsfilt_label(struct obd_device *obd, struct super_block *sb)
+{
+        if (obd->obd_fsops->fs_label == NULL)
+                return NULL;
+        if (obd->obd_fsops->fs_label(sb)[0] == '\0')
+                return NULL;
+
+        return obd->obd_fsops->fs_label(sb);
+}
+
+static inline __u8 *fsfilt_uuid(struct obd_device *obd, struct super_block *sb)
+{
+        if (obd->obd_fsops->fs_uuid == NULL)
+                return NULL;
+
+        return obd->obd_fsops->fs_uuid(sb);
+}
 
 #define FSFILT_OP_UNLINK         1
 #define FSFILT_OP_RMDIR          2
@@ -117,6 +141,8 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 #define FSFILT_OP_SETATTR        8
 #define FSFILT_OP_LINK           9
 #define FSFILT_OP_CANCEL_UNLINK 10
+#define FSFILT_OP_JOIN          11
+#define FSFILT_OP_NOOP          15
 
 #define fsfilt_check_slow(start, timeout, msg)                          \
 do {                                                                    \
@@ -252,15 +278,16 @@ static inline int fsfilt_iocontrol(struct obd_device *obd, struct inode *inode,
 }
 
 static inline int fsfilt_set_md(struct obd_device *obd, struct inode *inode,
-                                void *handle, void *md, int size)
+                                void *handle, void *md, int size,
+                                const char *name)
 {
-        return obd->obd_fsops->fs_set_md(inode, handle, md, size);
+        return obd->obd_fsops->fs_set_md(inode, handle, md, size, name);
 }
 
 static inline int fsfilt_get_md(struct obd_device *obd, struct inode *inode,
-                                void *md, int size)
+                                void *md, int size, const char *name)
 {
-        return obd->obd_fsops->fs_get_md(inode, md, size);
+        return obd->obd_fsops->fs_get_md(inode, md, size, name);
 }
 
 static inline int fsfilt_send_bio(int rw, struct obd_device *obd,
@@ -331,10 +358,19 @@ static inline int fsfilt_quotactl(struct obd_device *obd,
 
 static inline int fsfilt_quotainfo(struct obd_device *obd,
                                    struct lustre_quota_info *lqi,
-                                   int type, int cmd, struct list_head *list)
+                                   int type, int cmd)
 {
         if (obd->obd_fsops->fs_quotainfo)
-                return obd->obd_fsops->fs_quotainfo(lqi, type, cmd, list);
+                return obd->obd_fsops->fs_quotainfo(lqi, type, cmd);
+        return -ENOTSUPP;
+}
+
+static inline int fsfilt_qids(struct obd_device *obd, struct file *file,
+                              struct inode *inode, int type, 
+                              struct list_head *list)
+{
+        if (obd->obd_fsops->fs_qids)
+                return obd->obd_fsops->fs_qids(file, inode, type, list);
         return -ENOTSUPP;
 }
 

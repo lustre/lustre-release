@@ -1,4 +1,5 @@
 #!/bin/bash
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
 
@@ -31,7 +32,7 @@ init_test_env() {
     export XMLCONFIG=${XMLCONFIG:-${TESTSUITE}.xml}
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
-    [ -d /r ] && export ROOT=/r
+    [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
@@ -41,6 +42,10 @@ init_test_env() {
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
+
+    if [ "$ACCEPTOR_PORT" ]; then
+        export PORT_OPT="--port $ACCEPTOR_PORT"
+    fi
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
@@ -73,6 +78,12 @@ start() {
     do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
         --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
         $@ $XMLCONFIG
+    RC=${PIPESTATUS[0]}
+    if [ $RC -ne 0 ]; then
+        # maybe acceptor error, dump tcp port usage
+        netstat -tpn
+    fi
+    return $RC
 }
 
 stop() {
@@ -268,12 +279,12 @@ facet_nid() {
    facet=$1
    HOST=`facet_host $facet`
    if [ -z "$HOST" ]; then
-	echo "The env variable ${facet}_HOST must be set."
-	exit 1
+	    echo "The env variable ${facet}_HOST must be set."
+	    exit 1
    fi
    if [ -z "$NETTYPE" ]; then
-	echo "The env variable NETTYPE must be set."
-	exit 1
+	    echo "The env variable NETTYPE must be set."
+	    exit 1
    fi
    echo `h2$NETTYPE $HOST`
 }
@@ -343,7 +354,8 @@ add_facet() {
     echo "add facet $facet: `facet_host $facet`"
     do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
         --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
-    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` --nettype lnet
+    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
+        --nettype lnet $PORT_OPT
 }
 
 add_mds() {
@@ -549,7 +561,7 @@ build_test_filter() {
             eval ONLY_${O}=true
         done
         [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-		log "skipping test `echo $EXCEPT $ALWAYS_EXCEPT`"
+		log "skipping tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
         for E in $EXCEPT $ALWAYS_EXCEPT; do
             eval EXCEPT_${E}=true
         done

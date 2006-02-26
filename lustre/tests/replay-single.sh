@@ -14,8 +14,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-# bug number: 2766 4176
-ALWAYS_EXCEPT="0b 39 48"
+# bug number: 2766 9930
+ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -100,9 +100,9 @@ run_test 1 "simple create"
 test_1a() {
     do_facet ost "sysctl -w lustre.fail_loc=0"
 
-    rm -fr $DIR/1a0
+    rm -fr $DIR/$tfile
     local old_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
-    createmany -o /mnt/lustre/1a 1
+    touch -o $DIR/$tfile 1
     sync
     local new_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
     
@@ -112,7 +112,7 @@ test_1a() {
     }
     
     old_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
-    echo "data" > $DIR/1a0
+    echo "data" > $DIR/$tfile
     sync
     new_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
     test "$old_last_id" = "$new_last_id "&& {
@@ -120,7 +120,7 @@ test_1a() {
 	return 1
     }
     
-    rm -fr $DIR/1a0
+    rm -fr $DIR/$tfile
 
 #define OBD_FAIL_OST_CROW_EIO | OBD_FAIL_ONCE
     do_facet ost "sysctl -w lustre.fail_loc=0x80000801"
@@ -139,7 +139,7 @@ test_1a() {
     
     do_facet ost "sysctl -w lustre.fail_loc=0"
 }
-run_test 1a "CROW object create (check OST last_id)"
+#CROW run_test 1a "CROW object create (check OST last_id)"
 
 test_2a() {
     replay_barrier mds

@@ -194,8 +194,10 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
                atomic_read(&current->fs->pwdmnt->mnt_count));
         */
 
-        LASSERT(current->fs->pwd == new_ctx->pwd);
-        LASSERT(current->fs->pwdmnt == new_ctx->pwdmnt);
+        LASSERTF(current->fs->pwd == new_ctx->pwd, "%p != %p\n",
+                 current->fs->pwd, new_ctx->pwd);
+        LASSERTF(current->fs->pwdmnt == new_ctx->pwdmnt, "%p != %p\n",
+                 current->fs->pwdmnt, new_ctx->pwdmnt);
 
         set_fs(saved->fs);
         set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
@@ -468,6 +470,26 @@ void lvfs_clear_rdonly(lvfs_sbdev_type dev)
 EXPORT_SYMBOL(lvfs_set_rdonly);
 EXPORT_SYMBOL(lvfs_check_rdonly);
 EXPORT_SYMBOL(lvfs_clear_rdonly);
+
+int lvfs_check_io_health(struct obd_device *obd, struct file *file)
+{
+        char *write_page = NULL;
+        loff_t offset = 0;
+        int rc = 0;
+        ENTRY;
+
+        OBD_ALLOC(write_page, PAGE_SIZE);
+        if (!write_page)
+                RETURN(-ENOMEM);
+        
+        rc = fsfilt_write_record(obd, file, write_page, PAGE_SIZE, &offset, 1);
+       
+        OBD_FREE(write_page, PAGE_SIZE);
+
+        CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
+        RETURN(rc); 
+}
+EXPORT_SYMBOL(lvfs_check_io_health);
 
 static int __init lvfs_linux_init(void)
 {

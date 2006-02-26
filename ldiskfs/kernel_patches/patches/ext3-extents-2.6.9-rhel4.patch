@@ -2466,12 +2466,13 @@ Index: linux-stage/fs/ext3/Makefile
 ===================================================================
 --- linux-stage.orig/fs/ext3/Makefile	2005-02-25 14:49:42.168561008 +0200
 +++ linux-stage/fs/ext3/Makefile	2005-02-25 15:39:28.384587168 +0200
-@@ -5,7 +5,7 @@
+@@ -5,7 +5,8 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
- ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o\
+ ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
 -	   ioctl.o namei.o super.o symlink.o hash.o resize.o
-+	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o
++	   ioctl.o namei.o super.o symlink.o hash.o resize.o \
++	   extents.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
@@ -2496,19 +2497,18 @@ Index: linux-stage/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -589,7 +594,7 @@
- 	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
+@@ -589,6 +594,7 @@
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0,
+ 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
--	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
-+	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_extents, Opt_extdebug,
++	Opt_extents, Opt_extdebug,
  };
  
  static match_table_t tokens = {
 @@ -639,6 +644,8 @@
- 	{Opt_iopen,  "iopen"},
- 	{Opt_noiopen,  "noiopen"},
- 	{Opt_iopen_nopriv,  "iopen_nopriv"},
+ 	{Opt_iopen, "iopen"},
+ 	{Opt_noiopen, "noiopen"},
+ 	{Opt_iopen_nopriv, "iopen_nopriv"},
 +	{Opt_extents, "extents"},
 +	{Opt_extdebug, "extdebug"},
  	{Opt_barrier, "barrier=%u"},
@@ -2578,10 +2578,10 @@ Index: linux-stage/include/linux/ext3_fs.h
   * Structure of an inode on the disk
 @@ -359,6 +363,8 @@
  #define EXT3_MOUNT_RESERVATION		0x20000	/* Preallocation */
- #define EXT3_MOUNT_IOPEN		0x40000 /* Allow access via iopen */
- #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000 /* Make iopen world-readable */
-+#define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
-+#define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
+ #define EXT3_MOUNT_IOPEN		0x80000	/* Allow access via iopen */
+ #define EXT3_MOUNT_IOPEN_NOPRIV		0x100000/* Make iopen world-readable */
++#define EXT3_MOUNT_EXTENTS		0x200000/* Extents support */
++#define EXT3_MOUNT_EXTDEBUG		0x400000/* Extents debug */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H

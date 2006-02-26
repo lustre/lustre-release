@@ -31,7 +31,7 @@ typedef char *dqbuf_t;
 #define GETIDINDEX(id, depth) (((id) >> ((LUSTRE_DQTREEDEPTH-(depth)-1)*8)) & 0xff)
 #define GETENTRIES(buf) ((struct lustre_disk_dqblk *)(((char *)buf)+sizeof(struct lustre_disk_dqdbheader)))
 
-static int check_quota_file(struct file *f, int type)
+static int check_quota_file(struct file *f, struct inode *inode, int type)
 {
         struct lustre_disk_dqheader dqhead;
         mm_segment_t fs;
@@ -40,11 +40,22 @@ static int check_quota_file(struct file *f, int type)
         static const uint quota_magics[] = LUSTRE_INITQMAGICS;
         static const uint quota_versions[] = LUSTRE_INITQVERSIONS;
 
-        fs = get_fs();
-        set_fs(KERNEL_DS);
-        size = f->f_op->read(f, (char *)&dqhead,
-                             sizeof(struct lustre_disk_dqheader), &offset);
-        set_fs(fs);
+        if (f) {
+                fs = get_fs();
+                set_fs(KERNEL_DS);
+                size = f->f_op->read(f, (char *)&dqhead,
+                                     sizeof(struct lustre_disk_dqheader), 
+                                     &offset);
+                set_fs(fs);
+        } else { 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
+                size = 0;
+#else
+                struct super_block *sb = inode->i_sb;
+                size = sb->s_op->quota_read(sb, type, (char *)&dqhead, 
+                                            sizeof(struct lustre_disk_dqheader), 0);
+#endif
+        }
         if (size != sizeof(struct lustre_disk_dqheader))
                 return 0;
         if (le32_to_cpu(dqhead.dqh_magic) != quota_magics[type] ||
@@ -57,7 +68,7 @@ static int check_quota_file(struct file *f, int type)
 int lustre_check_quota_file(struct lustre_quota_info *lqi, int type)
 {
         struct file *f = lqi->qi_files[type];
-        return check_quota_file(f, type);
+        return check_quota_file(f, NULL, type);
 }
 
 /* Read information header from quota file */
@@ -801,8 +812,26 @@ struct dqblk {
         uint blk;
 };
 
-static int walk_block_dqentry(struct file *filp, uint blk,
-                              struct list_head *list)
+static ssize_t quota_read(struct file *file, struct inode *inode, int type,
+                          uint blk, dqbuf_t buf)
+{
+        if (file) {
+                return read_blk(file, blk, buf);
+        } else {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
+                return -ENOTSUPP;
+#else
+                struct super_block *sb = inode->i_sb;
+                memset(buf, 0, LUSTRE_DQBLKSIZE);
+                return sb->s_op->quota_read(sb, type, (char *)buf,
+                                            LUSTRE_DQBLKSIZE, 
+                                            blk << LUSTRE_DQBLKSIZE_BITS);
+#endif
+        }
+}
+
+static int walk_block_dqentry(struct file *filp, struct inode *inode, int type,
+                              uint blk, struct list_head *list)
 {
         dqbuf_t buf = getdqbuf();
         loff_t ret = 0;
@@ -814,7 +843,7 @@ static int walk_block_dqentry(struct file *filp, uint blk,
 
         if (!buf)
                 return -ENOMEM;
-        if ((ret = read_blk(filp, blk, buf)) < 0) {
+        if ((ret = quota_read(filp, inode, type, blk, buf)) < 0) {
                 printk(KERN_ERR "VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
@@ -852,8 +881,8 @@ out_buf:
         return ret;
 }
 
-static int walk_tree_dqentry(struct file *filp, uint blk, int depth,
-                             struct list_head *list)
+static int walk_tree_dqentry(struct file *filp, struct inode *inode, int type, 
+                             uint blk, int depth, struct list_head *list)
 {
         dqbuf_t buf = getdqbuf();
         loff_t ret = 0;
@@ -862,7 +891,7 @@ static int walk_tree_dqentry(struct file *filp, uint blk, int depth,
 
         if (!buf)
                 return -ENOMEM;
-        if ((ret = read_blk(filp, blk, buf)) < 0) {
+        if ((ret = quota_read(filp, inode, type, blk, buf)) < 0) {
                 printk(KERN_ERR "VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
@@ -874,9 +903,10 @@ static int walk_tree_dqentry(struct file *filp, uint blk, int depth,
                         continue;
 
                 if (depth < LUSTRE_DQTREEDEPTH - 1)
-                        ret = walk_tree_dqentry(filp, blk, depth + 1, list);
+                        ret = walk_tree_dqentry(filp, inode, type, blk, 
+                                                depth + 1, list);
                 else
-                        ret = walk_block_dqentry(filp, blk, list);
+                        ret = walk_block_dqentry(filp, inode, type, blk, list);
         }
 out_buf:
         freedqbuf(buf);
@@ -884,17 +914,16 @@ out_buf:
 }
 
 /* Walk through the quota file (v2 format) to get all ids with quota limit */
-int lustre_get_qids(struct lustre_quota_info *lqi, int type,
+int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                     struct list_head *list)
 {
-        struct file *fp = lqi->qi_files[type];
         struct list_head blk_list;
         struct dqblk *blk_item, *tmp;
         dqbuf_t buf = NULL;
         struct lustre_disk_dqblk *ddquot;
         int rc;
 
-        if (!check_quota_file(fp, type)) {
+        if (!check_quota_file(fp, inode, type)) {
                 printk(KERN_ERR "unknown quota file format!\n");
                 return -EINVAL;
         }
@@ -904,7 +933,7 @@ int lustre_get_qids(struct lustre_quota_info *lqi, int type,
         }
 
         INIT_LIST_HEAD(&blk_list);
-        rc = walk_tree_dqentry(fp, LUSTRE_DQTREEOFF, 0, &blk_list);
+        rc = walk_tree_dqentry(fp, inode, type, LUSTRE_DQTREEOFF, 0, &blk_list);
         if (rc) {
                 printk(KERN_ERR "walk through quota file failed!(%d)\n", rc);
                 goto out_free;
@@ -923,7 +952,7 @@ int lustre_get_qids(struct lustre_quota_info *lqi, int type,
                 struct lustre_disk_dqblk fakedquot;
 
                 memset(buf, 0, LUSTRE_DQBLKSIZE);
-                if ((ret = read_blk(fp, blk_item->blk, buf)) < 0) {
+                if ((ret = quota_read(fp, inode, type, blk_item->blk, buf))<0) {
                         printk(KERN_ERR
                                "VFS: Can't read quota tree block %u.\n",
                                blk_item->blk);

@@ -27,7 +27,7 @@ Index: linux-stage/fs/ext3/inode.c
  				struct ext3_iloc *iloc, int in_mem)
  {
  	unsigned long block;
-@@ -2484,6 +2484,11 @@
+@@ -2484,6 +2484,11 @@ void ext3_read_inode(struct inode * inod
  		ei->i_data[block] = raw_inode->i_block[block];
  	INIT_LIST_HEAD(&ei->i_orphan);
  
@@ -39,7 +39,7 @@ Index: linux-stage/fs/ext3/inode.c
  	if (S_ISREG(inode->i_mode)) {
  		inode->i_op = &ext3_file_inode_operations;
  		inode->i_fop = &ext3_file_operations;
-@@ -2619,6 +2624,9 @@
+@@ -2619,6 +2624,9 @@ static int ext3_do_update_inode(handle_t
  	} else for (block = 0; block < EXT3_N_BLOCKS; block++)
  		raw_inode->i_block[block] = ei->i_data[block];
  
@@ -49,7 +49,7 @@ Index: linux-stage/fs/ext3/inode.c
  	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
  	rc = ext3_journal_dirty_metadata(handle, bh);
  	if (!err)
-@@ -2849,7 +2857,8 @@
+@@ -2849,7 +2857,8 @@ ext3_reserve_inode_write(handle_t *handl
  {
  	int err = 0;
  	if (handle) {

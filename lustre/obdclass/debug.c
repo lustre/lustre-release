@@ -151,24 +151,24 @@ int block_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
         ne_off = le64_to_cpu (off);
         id = le64_to_cpu (id);
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-                CERROR("%s: id "LPX64" offset "LPU64" off: "LPX64" != "
+                CDEBUG(D_ERROR, "%s: id "LPX64" offset "LPU64" off: "LPX64" != "
                        LPX64"\n", who, id, off, *(__u64 *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-                CERROR("%s: id "LPX64" offset "LPU64" id: "LPX64" != "LPX64"\n",
+                CDEBUG(D_ERROR, "%s: id "LPX64" offset "LPU64" id: "LPX64" != "LPX64"\n",
                        who, id, off, *(__u64 *)(addr + LPDS), id);
                 err = -EINVAL;
         }
 
         addr += end - LPDS - LPDS;
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-                CERROR("%s: id "LPX64" offset "LPU64" end off: "LPX64" != "
+                CDEBUG(D_ERROR, "%s: id "LPX64" offset "LPU64" end off: "LPX64" != "
                        LPX64"\n", who, id, off, *(__u64 *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-                CERROR("%s: id "LPX64" offset "LPU64" end id: "LPX64" != "
+                CDEBUG(D_ERROR, "%s: id "LPX64" offset "LPU64" end id: "LPX64" != "
                        LPX64"\n", who, id, off, *(__u64 *)(addr + LPDS), id);
                 err = -EINVAL;
         }

@@ -43,7 +43,6 @@
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
         struct ost_lvb *lvb = NULL;
-        struct filter_obd *filter;
         struct obd_device *obd;
         struct dentry *dentry;
         int rc = 0;
@@ -68,35 +67,32 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         res->lr_lvb_len = sizeof(*lvb);
 
         obd = res->lr_namespace->ns_lvbp;
-        filter = &obd->u.filter;
         LASSERT(obd != NULL);
 
         dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
-        if (IS_ERR(dentry))
-                RETURN(PTR_ERR(dentry));
-
-        if (dentry->d_inode == NULL) {
-                lvb->lvb_size = 0;
-                lvb->lvb_blocks = 0;
-
-                /* making client use MDS mtime as this one is zero, bigger one
-                 * will be taken and this does not break POSIX */
-                lvb->lvb_mtime = 0;
-        } else {
-                lvb->lvb_size = dentry->d_inode->i_size;
-                lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
-                lvb->lvb_blocks = dentry->d_inode->i_blocks;
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("%s: bad object "LPU64"/"LPU64": rc %d\n", obd->obd_name,
+                       res->lr_name.name[0], res->lr_name.name[1], rc);
+                RETURN(rc);
         }
+
+        if (dentry->d_inode == NULL)
+                GOTO(out_dentry, rc = -ENOENT);
+
+        inode_init_lvb(dentry->d_inode, lvb);
 
         CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
                "mtime: "LPU64", blocks: "LPU64"\n",
                res->lr_name.name[0], lvb->lvb_size,
                lvb->lvb_mtime, lvb->lvb_blocks);
 
+        EXIT;
+out_dentry:
         f_dput(dentry);
 
         /* Don't free lvb data on lookup error */
-        RETURN(rc);
+        return rc;
 }
 
 /* This will be called in two ways:

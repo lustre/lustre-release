@@ -129,7 +129,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 struct obd_export *export = NULL;
 
                 l_lock(&ns->ns_lock);
-                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
+                LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing it.");
                 LASSERT(lock->l_destroyed);
                 LASSERT(list_empty(&lock->l_res_link));
 
@@ -380,11 +380,48 @@ struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *ns,
 
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
 {
-        ldlm_res2desc(lock->l_resource, &desc->l_resource);
-        desc->l_req_mode = lock->l_req_mode;
-        desc->l_granted_mode = lock->l_granted_mode;
-        memcpy(&desc->l_policy_data, &lock->l_policy_data,
-               sizeof(desc->l_policy_data));
+        struct obd_export *exp = lock->l_export?:lock->l_conn_export;
+        /* INODEBITS_INTEROP: If the other side does not support
+         * inodebits, reply with a plain lock descriptor.
+         */
+        if ((lock->l_resource->lr_type == LDLM_IBITS) &&
+            (exp && !(exp->exp_connect_flags & OBD_CONNECT_IBITS))) {
+                struct ldlm_resource res = *lock->l_resource;
+
+                /* Make sure all the right bits are set in this lock we
+                   are going to pass to client */
+                LASSERTF(lock->l_policy_data.l_inodebits.bits ==
+                         (MDS_INODELOCK_LOOKUP|MDS_INODELOCK_UPDATE),
+                         "Inappropriate inode lock bits during "
+                         "conversion " LPU64 "\n",
+                         lock->l_policy_data.l_inodebits.bits);
+                res.lr_type = LDLM_PLAIN;
+                ldlm_res2desc(&res, &desc->l_resource);
+                /* Convert "new" lock mode to something old client can
+                   understand */
+                if ((lock->l_req_mode == LCK_CR) ||
+                    (lock->l_req_mode == LCK_CW))
+                        desc->l_req_mode = LCK_PR;
+                else
+                        desc->l_req_mode = lock->l_req_mode;
+                if ((lock->l_granted_mode == LCK_CR) ||
+                    (lock->l_granted_mode == LCK_CW)) {
+                        desc->l_granted_mode = LCK_PR;
+                } else {
+                        /* We never grant PW/EX locks to clients */
+                        LASSERT((lock->l_granted_mode != LCK_PW) &&
+                                (lock->l_granted_mode != LCK_EX));
+                        desc->l_granted_mode = lock->l_granted_mode;
+                }
+
+                /* We do not copy policy here, because there is no
+                   policy for plain locks */
+        } else {
+                ldlm_res2desc(lock->l_resource, &desc->l_resource);
+                desc->l_req_mode = lock->l_req_mode;
+                desc->l_granted_mode = lock->l_granted_mode;
+                desc->l_policy_data = lock->l_policy_data;
+        }
 }
 
 void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
@@ -512,7 +549,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
 {
         struct ldlm_lock *lock = __ldlm_handle2lock(lockh, 0);
-        LASSERT(lock != NULL);
+        LASSERTF(lock != NULL, "Non-existing lock: "LPX64"\n", lockh->cookie);
         ldlm_lock_decref_internal(lock, mode);
         LDLM_LOCK_PUT(lock);
 }
@@ -724,19 +761,19 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         if (rc) {
                 l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "matched ("LPU64" "LPU64")",
-                           type == LDLM_PLAIN ? res_id->name[2] :
-                                policy->l_extent.start,
-                           type == LDLM_PLAIN ? res_id->name[3] :
-                                policy->l_extent.end);
+                           (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                res_id->name[2] : policy->l_extent.start,
+                           (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                res_id->name[3] : policy->l_extent.end);
                 l_unlock(&ns->ns_lock);
         } else if (!(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
                                   LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
                                   type, mode, res_id->name[0], res_id->name[1],
-                                  type == LDLM_PLAIN ? res_id->name[2] :
-                                        policy->l_extent.start,
-                                  type == LDLM_PLAIN ? res_id->name[3] :
-                                        policy->l_extent.end);
+                                  (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                        res_id->name[2] :policy->l_extent.start,
+                                (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                        res_id->name[3] : policy->l_extent.end);
         }
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
@@ -808,6 +845,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         ldlm_error_t rc = ELDLM_OK;
         ENTRY;
 
+        do_gettimeofday(&lock->l_enqueued_time);
         /* policies are not executed on the client or during replay */
         if ((*flags & (LDLM_FL_HAS_INTENT|LDLM_FL_REPLAY)) == LDLM_FL_HAS_INTENT
             && !local && ns->ns_policy) {
@@ -843,7 +881,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
 
         /* Some flags from the enqueue want to make it into the AST, via the
          * lock's l_flags. */
-        lock->l_flags |= (*flags & (LDLM_AST_DISCARD_DATA|LDLM_INHERIT_FLAGS));
+        lock->l_flags |= *flags & LDLM_AST_DISCARD_DATA;
 
         /* This distinction between local lock trees is very important; a client
          * namespace only has information about locks taken by that client, and
@@ -1191,15 +1229,15 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                 return;
         }
 
-        CDEBUG(level, "  -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
+        CDEBUG(level," -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
                lock, lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                pos, lock->l_pid);
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {
                 CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
-                       libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid),
-                       lock->l_remote_handle.cookie);
+                     libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid),
+                     lock->l_remote_handle.cookie);
         } else if (obd == NULL) {
                 CDEBUG(level, "  Node: local\n");
         } else {
@@ -1212,9 +1250,10 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                lock->l_resource->lr_name.name[0],
                lock->l_resource->lr_name.name[1]);
         CDEBUG(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
-               "write: %d\n", ldlm_lockname[lock->l_req_mode],
+               "write: %d flags: %#x\n", ldlm_lockname[lock->l_req_mode],
                ldlm_lockname[lock->l_granted_mode],
-               atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers);
+               atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers,
+               lock->l_flags);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
                 CDEBUG(level, "  Extent: "LPU64" -> "LPU64
                        " (req "LPU64"-"LPU64")\n",

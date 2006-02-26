@@ -56,8 +56,12 @@ void groups_free(struct group_info *ginfo);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
+#define lock_dentry(___dentry)          spin_lock(&(___dentry)->d_lock)
+#define unlock_dentry(___dentry)        spin_unlock(&(___dentry)->d_lock)
+
 #define lock_24kernel()         do {} while (0)
 #define unlock_24kernel()       do {} while (0)
+#define ll_kernel_locked()      kernel_locked()
 
 /*
  * OBD need working random driver, thus all our
@@ -147,8 +151,12 @@ static inline int cleanup_group_info(void)
 
 #else /* 2.4.. */
 
+#define lock_dentry(___dentry)
+#define unlock_dentry(___dentry)
+
 #define lock_24kernel()         lock_kernel()
 #define unlock_24kernel()       unlock_kernel()
+#define ll_kernel_locked()      (current->lock_depth >= 0)
 
 #ifdef HAVE_MM_INLINE
 #include <linux/mm_inline.h>
@@ -172,10 +180,16 @@ static inline int cleanup_group_info(void)
 #define hlist_node                      list_head
 #define HLIST_HEAD                      LIST_HEAD
 #define INIT_HLIST_HEAD                 INIT_LIST_HEAD
-#define INIT_HLIST_NODE(p)              (p)                 
 #define hlist_del_init                  list_del_init
 #define hlist_add_head                  list_add
+#endif
+#ifndef INIT_HLIST_NODE
+#define INIT_HLIST_NODE(p)              ((p)->next = NULL, (p)->prev = NULL)
+#endif
+#ifndef hlist_for_each
 #define hlist_for_each                  list_for_each
+#endif
+#ifndef hlist_for_each_safe
 #define hlist_for_each_safe             list_for_each_safe
 #endif
 #define KDEVT_INIT(val)                 (val)
@@ -299,6 +313,15 @@ static inline int page_mapped(struct page *page)
         return page_count(page) - !!page->mapping - !!page->buffers - 1;
 }
 #endif /* !HAVE_PAGE_MAPPED */
+
+static inline void file_accessed(struct file *file)
+{
+#ifdef O_NOATIME
+        if (file->f_flags & O_NOATIME)
+                return;
+#endif
+        update_atime(file->f_dentry->d_inode);
+}
 
 #endif /* end of 2.4 compat macros */
 

@@ -43,13 +43,14 @@
 
 #include "mds_internal.h"
 
-static int mds_osc_destroy_orphan(struct mds_obd *mds,
+static int mds_osc_destroy_orphan(struct obd_device *obd,
                                   struct inode *inode,
                                   struct lov_mds_md *lmm,
                                   int lmm_size,
                                   struct llog_cookie *logcookies,
                                   int log_unlink)
 {
+        struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa;
@@ -68,6 +69,10 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                 rc = 0;
         }
 
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                GOTO(out_free_memmd, rc);
+
         oa = obdo_alloc();
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
@@ -79,8 +84,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
         }
-
-        rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
+        rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export);
         obdo_free(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
@@ -96,7 +100,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         struct mds_obd *mds = &obd->u.mds;
         struct lov_mds_md *lmm = NULL;
         struct llog_cookie *logcookies = NULL;
-        int lmm_size, log_unlink = 0;
+        int lmm_size, log_unlink = 0, cookie_size = 0;
         void *handle = NULL;
         int rc, err;
         ENTRY;
@@ -136,11 +140,12 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 CERROR("error %d unlinking orphan %.*s from PENDING\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
         } else if (lmm_size) {
-                OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
+                cookie_size = mds_get_cookie_size(obd, lmm); 
+                OBD_ALLOC(logcookies, cookie_size);
                 if (logcookies == NULL)
                         rc = -ENOMEM;
                 else if (mds_log_op_unlink(obd, inode, lmm,lmm_size,logcookies,
-                                           mds->mds_max_cookiesize) > 0)
+                                           cookie_size) > 0)
                         log_unlink = 1;
         }
 
@@ -150,12 +155,12 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 if (!rc)
                         rc = err;
         } else if (!rc) {
-                rc = mds_osc_destroy_orphan(mds, inode, lmm, lmm_size,
+                rc = mds_osc_destroy_orphan(obd, inode, lmm, lmm_size,
                                             logcookies, log_unlink);
         }
 
         if (logcookies != NULL)
-                OBD_FREE(logcookies, mds->mds_max_cookiesize);
+                OBD_FREE(logcookies, cookie_size);
 out_free_lmm:
         OBD_FREE(lmm, mds->mds_max_mdsize);
         RETURN(rc);
@@ -223,13 +228,14 @@ int mds_cleanup_pending(struct obd_device *obd)
                         GOTO(err_out, rc = PTR_ERR(dchild));
                 }
                 if (!dchild->d_inode) {
-                        CERROR("orphan %s has been removed\n", d_name);
+                        CWARN("%s: orphan %s has already been removed\n",
+                              obd->obd_name, d_name);
                         GOTO(next, rc = 0);
                 }
 
                 if (is_bad_inode(dchild->d_inode)) {
-                        CERROR("bad orphan inode found %lu/%u\n",
-                               dchild->d_inode->i_ino,
+                        CERROR("%s: bad orphan inode found %lu/%u\n",
+                               obd->obd_name, dchild->d_inode->i_ino,
                                dchild->d_inode->i_generation);
                         GOTO(next, rc = -ENOENT);
                 }
@@ -239,7 +245,8 @@ int mds_cleanup_pending(struct obd_device *obd)
                 if (mds_inode_is_orphan(child_inode) &&
                     mds_orphan_open_count(child_inode)) {
                         MDS_UP_READ_ORPHAN_SEM(child_inode);
-                        CWARN("orphan %s re-opened during recovery\n", d_name);
+                        CWARN("%s: orphan %s re-opened during recovery\n",
+                              obd->obd_name, d_name);
                         GOTO(next, rc = 0);
                 }
                 MDS_UP_READ_ORPHAN_SEM(child_inode);
@@ -247,16 +254,18 @@ int mds_cleanup_pending(struct obd_device *obd)
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
                 if (rc == 0) {
                         item ++;
-                        CWARN("removed orphan %s from MDS and OST\n", d_name);
+                        CDEBUG(D_HA, "%s: removed orphan %s\n",
+                               obd->obd_name, d_name);
                 } else {
-                        CDEBUG(D_INODE, "removed orphan %s from MDS/OST failed,"
-                               " rc = %d\n", d_name, rc);
+                        CDEBUG(D_INODE, "%s: removed orphan %s failed,"
+                               " rc = %d\n", obd->obd_name, d_name, rc);
                         rc = 0;
                 }
 next:
                 l_dput(dchild);
                 up(&pending_dir->i_sem);
         }
+        rc = 0;
 err_out:
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 list_del(&dirent->lld_list);
@@ -264,8 +273,9 @@ err_out:
         }
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (rc == 0)
-                rc = item;
+        if (item > 0)
+                CWARN("%s: removed %d pending open-unlinked files\n",
+                      obd->obd_name, item);
         RETURN(rc);
 
 err_mntget:

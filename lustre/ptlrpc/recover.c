@@ -268,7 +268,7 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
-        struct obd_import *imp= failed_req->rq_import;
+        struct obd_import *imp = failed_req->rq_import;
         unsigned long flags;
         ENTRY;
 
@@ -286,7 +286,9 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                                imp->imp_obd->obd_name);
                         ptlrpc_deactivate_import(imp);
                 }
-                ptlrpc_connect_import(imp, NULL);
+                /* to control recovery via lctl {disable|enable}_recovery */
+                if (imp->imp_deactive == 0)
+                        ptlrpc_connect_import(imp, NULL);
         }
 
         /* Wait for recovery to complete and resend. If evicted, then

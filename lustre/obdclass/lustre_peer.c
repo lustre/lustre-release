@@ -84,7 +84,6 @@ int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index)
 int class_add_uuid(char *uuid, __u64 nid)
 {
         struct uuid_nid_data *data;
-        int rc;
         int nob = strnlen (uuid, PAGE_SIZE) + 1;
 
         LASSERT(nid != 0);  /* valid newconfig NID is never zero */
@@ -92,7 +91,6 @@ int class_add_uuid(char *uuid, __u64 nid)
         if (nob > PAGE_SIZE)
                 return -EINVAL;
 
-        rc = -ENOMEM;
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 return -ENOMEM;
@@ -151,6 +149,7 @@ int class_del_uuid (char *uuid)
                 data = list_entry(deathrow.next, struct uuid_nid_data, un_list);
 
                 list_del (&data->un_list);
+                CDEBUG(D_INFO, "del uuid %s\n", data->un_uuid);
 
                 OBD_FREE(data->un_uuid, strlen(data->un_uuid) + 1);
                 OBD_FREE(data, sizeof(*data));

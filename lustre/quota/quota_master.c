@@ -301,29 +301,27 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         switch (opc) {
         case FSFILT_OP_RENAME:
                 /* acquire/release block quota on owner of original parent */
-                rc = qctxt_adjust_qunit(obd, qctxt, qpids[2], qpids[3], 1, 0);
+                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[2], qpids[3], 1, 0);
+                /* fall-through */
+        case FSFILT_OP_SETATTR:
+                /* acquire/release file quota on original owner */
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0);
                 /* fall-through */
         case FSFILT_OP_CREATE:
         case FSFILT_OP_UNLINK:
-                /* acquire/release file quota on owner of child, acquire/release
-                 * block quota on owner of parent */
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0);
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0);
-                break;
-        case FSFILT_OP_SETATTR:
-                /* acquire/release file quota on original & current owner 
-                 * of child*/
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0);
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0);
+                /* acquire/release file/block quota on owner of child (or current owner) */
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0);
+                /* acquire/release block quota on owner of parent (or original owner) */
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0);
                 break;
         default:
                 LBUG();
                 break;
         }
 
-        if (rc || rc2)
-                CERROR("mds adjust qunit failed! (opc:%d rc:%d)\n", 
-                       opc, rc ?: rc2);
+        if (rc2)
+                CERROR("mds adjust qunit failed! (opc:%d rc:%d)\n", opc, rc2);
         RETURN(0);
 }
 
@@ -430,7 +428,7 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
                 }
 
                 qinfo->qi_files[i] = fp;
-                rc = fsfilt_quotainfo(obd, qinfo, i, QFILE_INIT_INFO, NULL);
+                rc = fsfilt_quotainfo(obd, qinfo, i, QFILE_INIT_INFO);
                 filp_close(fp, 0);
                 qinfo->qi_files[i] = NULL;
 
@@ -500,7 +498,7 @@ int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 }
                 qinfo->qi_files[i] = fp;
 
-                rc = fsfilt_quotainfo(obd, qinfo, i, QFILE_RD_INFO, NULL);
+                rc = fsfilt_quotainfo(obd, qinfo, i, QFILE_RD_INFO);
                 if (rc) {
                         CERROR("error read quotainfo of %s! (rc:%d)\n",
                                name, rc);
@@ -589,7 +587,7 @@ int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl)
         qinfo->qi_info[oqctl->qc_type].dqi_igrace = dqinfo->dqi_igrace;
         qinfo->qi_info[oqctl->qc_type].dqi_flags = dqinfo->dqi_flags;
 
-        rc = fsfilt_quotainfo(obd, qinfo, oqctl->qc_type, QFILE_WR_INFO, NULL);
+        rc = fsfilt_quotainfo(obd, qinfo, oqctl->qc_type, QFILE_WR_INFO);
 
 out:
         up(&mds->mds_qonoff_sem);
@@ -1042,8 +1040,8 @@ static int qmaster_recovery_main(void *arg)
                         continue;
                 }
                 INIT_LIST_HEAD(&id_list);
-                rc = fsfilt_quotainfo(obd, qinfo, type, QFILE_GET_QIDS, 
-                                      &id_list);
+                rc = fsfilt_qids(obd, qinfo->qi_files[type], NULL, type, 
+                                 &id_list);
                 up(&mds->mds_qonoff_sem);
 
                 if (rc)
@@ -1072,13 +1070,13 @@ int mds_quota_recovery(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        spin_lock(&lov->lov_lock);
+        down(&lov->lov_lock);
         if (lov->desc.ld_tgt_count != lov->desc.ld_active_tgt_count) {
                 CWARN("Not all osts are active, abort quota recovery\n");
-                spin_unlock(&lov->lov_lock);
+                up(&lov->lov_lock);
                 RETURN(rc);
         }
-        spin_unlock(&lov->lov_lock);
+        up(&lov->lov_lock);
 
         data.obd = obd;
         init_completion(&data.comp);

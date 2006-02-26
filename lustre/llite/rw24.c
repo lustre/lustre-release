@@ -91,6 +91,7 @@ static int ll_direct_IO_24(int rw,
         flags = 0 /* | OBD_BRW_DIRECTIO */;
         offset = ((obd_off)blocknr << inode->i_blkbits);
         length = iobuf->length;
+        rw = rw ? OBD_BRW_WRITE : OBD_BRW_READ;
 
         for (i = 0, length = iobuf->length; length > 0;
              length -= pga[i].count, offset += pga[i].count, i++) { /*i last!*/
@@ -100,21 +101,20 @@ static int ll_direct_IO_24(int rw,
                 pga[i].count = min_t(int, PAGE_SIZE - (offset & ~PAGE_MASK),
                                      length);
                 pga[i].flag = flags;
-                if (rw == READ)
+                if (rw == OBD_BRW_READ)
                         POISON_PAGE(iobuf->maplist[i], 0x0d);
         }
 
         ll_inode_fill_obdo(inode, rw, &oa);
 
-        if (rw == WRITE)
+        if (rw == OBD_BRW_WRITE)
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_WRITE, iobuf->length);
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, iobuf->length);
-        rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdexp(inode), &oa, lsm, iobuf->nr_pages, pga,
-                           set, NULL);
+        rc = obd_brw_async(rw, ll_i2obdexp(inode), &oa, lsm, iobuf->nr_pages,
+                           pga, set, NULL);
         if (rc) {
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error from obd_brw_async: rc = %d\n", rc);
@@ -126,7 +126,7 @@ static int ll_direct_IO_24(int rw,
         ptlrpc_set_destroy(set);
         if (rc == 0) {
                 rc = iobuf->length;
-                if (rw == WRITE) {
+                if (rw == OBD_BRW_WRITE) {
                         lov_stripe_lock(lsm);
                         obd_adjust_kms(ll_i2obdexp(inode), lsm, offset, 0);
                         lov_stripe_unlock(lsm);

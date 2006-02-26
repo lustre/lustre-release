@@ -33,6 +33,7 @@
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,        0 },
+        { "connect_flags",   lprocfs_rd_connect_flags, 0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
         { "kbytestotal",     lprocfs_rd_kbytestotal, 0, 0 },
         { "kbytesfree",      lprocfs_rd_kbytesfree,  0, 0 },

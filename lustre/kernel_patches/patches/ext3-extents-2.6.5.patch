@@ -2471,12 +2471,13 @@ Index: linux-2.6.5-sles9/fs/ext3/Makefile
 ===================================================================
 --- linux-2.6.5-sles9.orig/fs/ext3/Makefile	2005-02-23 01:01:46.501172896 +0300
 +++ linux-2.6.5-sles9/fs/ext3/Makefile	2005-02-23 01:02:37.405434272 +0300
-@@ -5,7 +5,7 @@
+@@ -5,7 +5,8 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
 -	   ioctl.o namei.o super.o symlink.o hash.o
-+	   ioctl.o namei.o super.o symlink.o hash.o extents.o
++	   ioctl.o namei.o super.o symlink.o hash.o \
++	   extents.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
@@ -2501,12 +2502,11 @@ Index: linux-2.6.5-sles9/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -537,7 +540,7 @@
- 	Opt_commit, Opt_journal_update, Opt_journal_inum,
- 	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
- 	Opt_ignore, Opt_barrier, Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
--	Opt_err,
-+	Opt_err, Opt_extents, Opt_extdebug
+@@ -537,6 +540,7 @@
+ 	Opt_ignore, Opt_barrier,
+ 	Opt_err,
+ 	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
++	Opt_extents, Opt_extdebug,
  };
  
  static match_table_t tokens = {
@@ -2516,9 +2516,9 @@ Index: linux-2.6.5-sles9/fs/ext3/super.c
  	{Opt_iopen_nopriv, "iopen_nopriv"},
 +	{Opt_extents, "extents"},
 +	{Opt_extdebug, "extdebug"},
+ 	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL}
  };
- 
 @@ -797,6 +802,12 @@
  			break;
  		case Opt_ignore:
@@ -2583,10 +2583,10 @@ Index: linux-2.6.5-sles9/include/linux/ext3_fs.h
   * Structure of an inode on the disk
 @@ -333,6 +337,8 @@
  #define EXT3_MOUNT_BARRIER		0x20000 /* Use block barriers */
- #define EXT3_MOUNT_IOPEN		0x40000	/* Allow access via iopen */
- #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
-+#define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
-+#define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
+ #define EXT3_MOUNT_IOPEN		0x80000	/* Allow access via iopen */
+ #define EXT3_MOUNT_IOPEN_NOPRIV		0x100000/* Make iopen world-readable */
++#define EXT3_MOUNT_EXTENTS		0x200000/* Extents support */
++#define EXT3_MOUNT_EXTDEBUG		0x400000/* Extents debug */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef clear_opt

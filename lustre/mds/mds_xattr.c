@@ -62,8 +62,7 @@ static int mds_getxattr_pack_msg(struct ptlrpc_request *req,
                         return -EFAULT;
                 }
 
-                if (!(req->rq_export->exp_connect_flags &
-                      OBD_CONNECT_USER_XATTR) &&
+                if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
                     (strncmp(xattr_name, "user.", 5) == 0))
                         return -EOPNOTSUPP;
 
@@ -226,10 +225,6 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         lockpart = MDS_INODELOCK_UPDATE;
 
-/*
-        de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
-                                   &lockh, NULL, 0);
-*/
         de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
                                    &lockh, NULL, 0, lockpart);
         if (IS_ERR(de))
@@ -251,11 +246,11 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                   xattr_name);
 
         if (strncmp(xattr_name, "trusted.", 8) == 0) {
-                if (!strcmp(xattr_name, "trusted."XATTR_LUSTRE_MDS_LOV_EA))
+                if (strcmp(xattr_name + 8, XATTR_LUSTRE_MDS_LOV_EA) == 0)
                         GOTO(out_dput, rc = -EACCES);
         }
 
-        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_USER_XATTR) &&
+        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
             (strncmp(xattr_name, "user.", 5) == 0)) {
                 GOTO(out_dput, rc = -EOPNOTSUPP);
         }

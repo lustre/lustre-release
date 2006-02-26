@@ -320,8 +320,19 @@ AC_MSG_RESULT([$enable_ldiskfs])
 if test x$enable_ldiskfs = xyes ; then
 	BACKINGFS="ldiskfs"
 
+	AC_MSG_CHECKING([whether to enable quilt for making ldiskfs])
+	AC_ARG_ENABLE([quilt],
+			AC_HELP_STRING([--disable-quilt],[disable use of quilt for ldiskfs]),
+			[],[enable_quilt='yes'])
+	AC_MSG_RESULT([$enable_quilt])
+
 	AC_PATH_PROG(PATCH, patch, [no])
-	AC_PATH_PROG(QUILT, quilt, [no])
+
+	if test x$enable_quilt = xno ; then
+	    QUILT="no"
+	else
+	    AC_PATH_PROG(QUILT, quilt, [no])
+	fi
 
 	if test x$enable_ldiskfs$PATCH$QUILT = xyesnono ; then
 		AC_MSG_ERROR([Quilt or patch are needed to build the ldiskfs module (for Linux 2.6)])
@@ -348,11 +359,15 @@ case $BACKINGFS in
 		])
 		;;
 	ldiskfs)
-		LC_FSHOOKS([
-			LDISKFS_SERIES="2.6-suse.series"
-		],[
-			LDISKFS_SERIES="2.6-rhel4.series"
-		])
+		AC_MSG_CHECKING([which ldiskfs series to use])
+		case $LINUXRELEASE in
+		2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
+		2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
+		2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
+		2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
+		*) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix lustre/autoconf/lustre-core.m4])
+		esac
+		AC_MSG_RESULT([$LDISKFS_SERIES])
 		AC_SUBST(LDISKFS_SERIES)
 		;;
 esac # $BACKINGFS
@@ -601,6 +616,7 @@ lustre/conf/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/linux/Makefile
+lustre/include/linux/lustre_ver.h
 lustre/include/lustre/Makefile
 lustre/kernel_patches/targets/2.6-suse.target
 lustre/kernel_patches/targets/2.6-vanilla.target

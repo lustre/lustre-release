@@ -139,7 +139,7 @@ static inline void *kmalloc(int size, int prot)
 #define GFP_HIGHUSER 1
 #define GFP_ATOMIC 1
 #define GFP_NOFS 1
-#define IS_ERR(a) (((a) && abs((long)(a)) < 500) ? 1 : 0)
+#define IS_ERR(a) ((unsigned long)(a) < 1000)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
@@ -293,6 +293,7 @@ typedef __u64 kdev_t;
 
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { }
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
+#define LASSERT_SEM_LOCKED(sem) do {} while(0)
 
 static inline void spin_lock(spinlock_t *l) {return;}
 static inline void spin_unlock(spinlock_t *l) {return;}
@@ -330,8 +331,8 @@ void get_random_bytes(void *ptr, int size);
 
 /* memory */
 
-/* FIXME */
-#define num_physpages (16 * 1024)
+/* memory size: used for some client tunables */
+#define num_physpages (256 * 1024) /* 1GB */
 
 static inline int copy_from_user(void *a,void *b, int c)
 {

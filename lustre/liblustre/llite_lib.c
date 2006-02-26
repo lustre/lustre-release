@@ -40,14 +40,6 @@
 #include <file.h>
 #endif
 
-/* env variables */
-#define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
-#define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
-#define ENV_LUSTRE_TIMEOUT              "LIBLUSTRE_TIMEOUT"
-#define ENV_LUSTRE_DUMPFILE             "LIBLUSTRE_DUMPFILE"
-#define ENV_LUSTRE_DEBUG_MASK           "LIBLUSTRE_DEBUG_MASK"
-#define ENV_LUSTRE_DEBUG_SUBSYS         "LIBLUSTRE_DEBUG_SUBSYS"
-
 /* both sys/queue.h (libsysio require it) and portals/lists.h have definition
  * of 'LIST_HEAD'. undef it to suppress warnings
  */
@@ -56,12 +48,13 @@
 
 #include "lutil.h"
 #include "llite_lib.h"
+#include <linux/lustre_ver.h>
 
 static int lllib_init(void)
 {
         if (liblustre_init_current("liblustre") ||
-            init_obdclass() ||
             init_lib_portals() ||
+            init_obdclass() ||
             ptlrpc_init() ||
             mdc_init() ||
             lov_init() ||
@@ -87,6 +80,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         struct llog_ctxt *ctxt;
         lnet_nid_t nid = 0;
         int err, rc = 0;
+        struct obd_connect_data *ocd = NULL;
         ENTRY;
 
         generate_random_uuid(uuid);
@@ -129,12 +123,18 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         if (obd == NULL)
                 GOTO(out_cleanup, rc = -EINVAL);
 
+        OBD_ALLOC(ocd, sizeof(*ocd));
+        if (ocd == NULL)
+                GOTO(out_cleanup, rc = -ENOMEM);
+
+        ocd->ocd_version = LUSTRE_VERSION_CODE;
+
         /* Disable initial recovery on this import */
         rc = obd_set_info(obd->obd_self_export,
                           strlen("initial_recov"), "initial_recov",
                           sizeof(allow_recov), &allow_recov);
 
-        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /*connect_flags*/);
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", mdsname, rc);
                 GOTO(out_cleanup, rc);
@@ -155,6 +155,9 @@ int liblustre_process_log(struct config_llog_instance *cfg,
                 CERROR("obd_disconnect failed: rc = %d\n", err);
 
 out_cleanup:
+        if (ocd)
+                OBD_FREE(ocd, sizeof(*ocd));
+
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
         err = class_process_config(lcfg);
@@ -257,7 +260,7 @@ int _sysio_lustre_init(void)
                 perror("init llite driver");
                 return err;
         }
-        timeout = getenv(ENV_LUSTRE_TIMEOUT);
+        timeout = getenv("LIBLUSTRE_TIMEOUT");
         if (timeout) {
                 obd_timeout = (unsigned int) strtol(timeout, NULL, 0);
                 printf("LibLustre: set obd timeout as %u seconds\n",
@@ -265,11 +268,11 @@ int _sysio_lustre_init(void)
         }
 
         /* debug masks */
-        debug_mask = getenv(ENV_LUSTRE_DEBUG_MASK);
+        debug_mask = getenv("LIBLUSTRE_DEBUG_MASK");
         if (debug_mask)
                 libcfs_debug = (unsigned int) strtol(debug_mask, NULL, 0);
 
-        debug_subsys = getenv(ENV_LUSTRE_DEBUG_SUBSYS);
+        debug_subsys = getenv("LIBLUSTRE_DEBUG_SUBSYS");
         if (debug_subsys)
                 libcfs_subsystem_debug =
                                 (unsigned int) strtol(debug_subsys, NULL, 0);
@@ -294,20 +297,20 @@ void __liblustre_setup_(void)
         unsigned mntflgs = 0;
         int err;
 
-        lustre_path = getenv(ENV_LUSTRE_MNTPNT);
+        lustre_path = getenv("LIBLUSTRE_MOUNT_POINT");
         if (!lustre_path) {
                 lustre_path = "/mnt/lustre";
         }
 
         /* mount target */
-        target = getenv(ENV_LUSTRE_MNTTGT);
+        target = getenv("LIBLUSTRE_MOUNT_TARGET");
         if (!target) {
                 printf("LibLustre: no mount target specified\n");
                 exit(1);
         }
-        printf("LibLustre: mount point %s, target %s\n",
-                lustre_path, target);
 
+        CDEBUG(D_CONFIG, "LibLustre: mount point %s, target %s\n",
+               lustre_path, target);
 
 #ifdef INIT_SYSIO
         /* initialize libsysio & mount rootfs */
@@ -360,8 +363,8 @@ void __liblustre_cleanup_(void)
          * liblutre. this dilema lead to another hack in
          * libsysio/src/file_hack.c FIXME
          */
-        _sysio_shutdown();
 #ifdef INIT_SYSIO
+        _sysio_shutdown();
         cleanup_lib_portals();
         LNetFini();
 #endif

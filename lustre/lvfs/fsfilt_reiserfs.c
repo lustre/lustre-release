@@ -125,7 +125,7 @@ static int fsfilt_reiserfs_setattr(struct dentry *dentry, void *handle,
 }
 
 static int fsfilt_reiserfs_set_md(struct inode *inode, void *handle,
-                                  void *lmm, int lmm_size)
+                                  void *lmm, int lmm_size, const char *name)
 {
         /* XXX write stripe data into MDS file itself */
         CERROR("not implemented yet\n");
@@ -133,7 +133,8 @@ static int fsfilt_reiserfs_set_md(struct inode *inode, void *handle,
         return -ENOSYS;
 }
 
-static int fsfilt_reiserfs_get_md(struct inode *inode, void *lmm, int lmm_size)
+static int fsfilt_reiserfs_get_md(struct inode *inode, void *lmm, int lmm_size,
+                                  const char *name)
 {
         if (lmm == NULL)
                 return inode->i_size;

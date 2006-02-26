@@ -13,7 +13,7 @@ ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 
 # Skip these tests
 # BUG NUMBER: 2766?
-ALWAYS_EXCEPT="5"
+ALWAYS_EXCEPT="5 $REPLAY_OST_SINGLE_EXCEPT"
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -154,6 +154,7 @@ test_6() {
     sync && sleep 2 && sync	# wait for delete thread
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f
+    lfs getstripe $f
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
     do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
     sync
@@ -166,7 +167,7 @@ test_6() {
     $CHECKSTAT -t file $f && return 2 || true
     sync
     # let the delete happen
-    sleep 2
+    sleep 5
     after=`kbytesfree`
     log "before: $before after: $after"
     (( $before <= $after + 40 )) || return 3	# take OST logs into account
@@ -180,6 +181,7 @@ test_7() {
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f
     sync
+    sleep 1					# ensure we have a fresh statfs
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1

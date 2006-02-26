@@ -38,15 +38,24 @@
 
 #include "lov_internal.h"
 
-/* Merge rss if kms == 0
+/* Merge the lock value block(&lvb) attributes from each of the stripes in a
+ * file into a single lvb. It is expected that the caller initializes the
+ * current atime, mtime, ctime to avoid regressing a more uptodate time on 
+ * the local client.
  *
- * Even when merging RSS, we will take the KMS value if it's larger.
- * This prevents getattr from stomping on dirty cached pages which
- * extend the file size. */
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
+ * If @kms_only is set then we do not consider the recently seen size (rss)
+ * when updating the known minimum size (kms).  Even when merging RSS, we will
+ * take the KMS value if it's larger.  This prevents getattr from stomping on
+ * dirty cached pages which extend the file size. */
+int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
+                  struct ost_lvb *lvb, int kms_only)
 {
         struct lov_oinfo *loi;
         __u64 size = 0;
+        __u64 blocks = 0;
+        __u64 current_mtime = lvb->lvb_mtime;
+        __u64 current_atime = lvb->lvb_atime;
+        __u64 current_ctime = lvb->lvb_ctime;
         int i;
 
         LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
@@ -59,42 +68,29 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
                 obd_size lov_size, tmpsize;
 
                 tmpsize = loi->loi_kms;
-                if (kms == 0 && loi->loi_rss > tmpsize)
-                        tmpsize = loi->loi_rss;
+                if (kms_only == 0 && loi->loi_lvb.lvb_size > tmpsize)
+                        tmpsize = loi->loi_lvb.lvb_size;
 
                 lov_size = lov_stripe_size(lsm, tmpsize, i);
                 if (lov_size > size)
                         size = lov_size;
+                /* merge blocks, mtime, atime */ 
+                blocks += loi->loi_lvb.lvb_blocks;
+                if (loi->loi_lvb.lvb_mtime > current_mtime)
+                        current_mtime = loi->loi_lvb.lvb_mtime;
+                if (loi->loi_lvb.lvb_atime > current_atime)
+                        current_atime = loi->loi_lvb.lvb_atime;
+                if (loi->loi_lvb.lvb_ctime > current_ctime)
+                        current_ctime = loi->loi_lvb.lvb_ctime;
         }
 
-        return size;
+        lvb->lvb_size = size;
+        lvb->lvb_blocks = blocks;
+        lvb->lvb_mtime = current_mtime; 
+        lvb->lvb_atime = current_atime; 
+        lvb->lvb_ctime = current_ctime; 
+        RETURN(0);
 }
-EXPORT_SYMBOL(lov_merge_size);
-
-/* Merge blocks */
-__u64 lov_merge_blocks(struct lov_stripe_md *lsm)
-{
-        struct lov_oinfo *loi;
-        __u64 blocks = 0;
-        int i;
-
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++)
-                blocks += loi->loi_blocks;
-        return blocks;
-}
-EXPORT_SYMBOL(lov_merge_blocks);
-
-__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time)
-{
-        struct lov_oinfo *loi;
-        int i;
-
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++)
-                if (loi->loi_mtime > current_time)
-                        current_time = loi->loi_mtime;
-        return current_time;
-}
-EXPORT_SYMBOL(lov_merge_mtime);
 
 /* Must be called under the lov_stripe_lock() */
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -115,7 +111,7 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                 for (loi = lsm->lsm_oinfo; stripe < lsm->lsm_stripe_count;
                      stripe++, loi++) {
                         kms = lov_size_to_stripe(lsm, size, stripe);
-                        loi->loi_kms = loi->loi_rss = kms;
+                        loi->loi_kms = loi->loi_lvb.lvb_size = kms;
                         CDEBUG(D_INODE,
                                "stripe %d KMS %sing "LPU64"->"LPU64"\n",
                                stripe, kms > loi->loi_kms ? "increas":"shrink",

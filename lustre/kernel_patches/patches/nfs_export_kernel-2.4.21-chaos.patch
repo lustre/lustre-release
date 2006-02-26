@@ -299,7 +299,7 @@ Index: linux-2.4.21-chaos/fs/nfsd/vfs.c
 ===================================================================
 --- linux-2.4.21-chaos.orig/fs/nfsd/vfs.c	2003-09-19 03:49:54.000000000 +0400
 +++ linux-2.4.21-chaos/fs/nfsd/vfs.c	2003-12-12 16:19:25.000000000 +0300
-@@ -78,6 +78,126 @@
+@@ -78,6 +78,127 @@
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -312,6 +312,7 @@ Index: linux-2.4.21-chaos/fs/nfsd/vfs.c
 +	struct nameidata nd = { .dentry = ddir, .last = dnew->d_name };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->link_raw(&old_nd, &nd);
++	igrab(dold->d_inode);
 +	d_instantiate(dnew, dold->d_inode);
 +	if (dold->d_inode->i_op && dold->d_inode->i_op->revalidate_it)
 +		dold->d_inode->i_op->revalidate_it(dnew, NULL);
