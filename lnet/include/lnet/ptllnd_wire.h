@@ -45,7 +45,7 @@ typedef struct
 {
         lnet_hdr_t        kptlrm_hdr;             /* portals header */
         __u64             kptlrm_matchbits;       /* matchbits */
-} WIRE_ATTR kptl_request_msg_t;
+} WIRE_ATTR kptl_rdma_msg_t;
 
 typedef struct
 {
@@ -53,7 +53,7 @@ typedef struct
         __u32             kptlhm_max_msg_size;    /* max message size */
 } WIRE_ATTR kptl_hello_msg_t;
 
-typedef struct kptl_msg
+typedef struct
 {
         /* First 2 fields fixed FOR ALL TIME */
         __u32           ptlm_magic;     /* I'm a Portals LND message */
@@ -70,14 +70,17 @@ typedef struct kptl_msg
 
          union {
                 kptl_immediate_msg_t    immediate;
-                kptl_request_msg_t      req;
+                kptl_rdma_msg_t         rdma;
                 kptl_hello_msg_t        hello;
         } WIRE_ATTR ptlm_u;
 
-}kptl_msg_t;
+} kptl_msg_t;
 
 #define PTLLND_MSG_MAGIC                LNET_PROTO_PTL_MAGIC
 #define PTLLND_MSG_VERSION              0x01
+
+#define PTLLND_RDMA_OK                  0x00
+#define PTLLND_RDMA_FAIL                0x01
 
 #define PTLLND_MSG_TYPE_INVALID         0x00
 #define PTLLND_MSG_TYPE_PUT             0x01

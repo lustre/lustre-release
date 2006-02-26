@@ -77,12 +77,12 @@
 #define PTLLND_CKSUM            0          /* checksum kptl_msg_t? 0 = Diabled */
 #define PTLLND_TIMEOUT          50         /* default comms timeout (seconds) */
 #define PTLLND_RXB_NPAGES       1          /* Number of pages for a single RX Buffer */
+#define PTLLND_RXB_SPARES       8          /* Number of spare buffers (account inuse) */
 #define PTLLND_CREDITS          128        /* concurrent sends */
 #define PTLLND_PEER_HASH_SIZE   101        /* # of buckets in peer hash table */
 
 /* tunables fixed at compile time */
 #define PTLLND_CREDIT_HIGHWATER ((*kptllnd_tunables.kptl_peercredits)-1)  /* when to eagerly return credits */
-#define PTLLND_TIMEOUT_SEC      3          /* How often we check a subset of the peer hash table for timeout*/
 
 typedef struct
 {
@@ -93,6 +93,7 @@ typedef struct
         int             *kptl_portal;           /* portal number */
         int             *kptl_pid;              /* portals PID (self + kernel peers) */
         int             *kptl_rxb_npages;       /* number of pages for rx buffer */
+        int             *kptl_rxb_nspare;       /* number of spare rx buffers */
         int             *kptl_credits;          /* number of credits */
         int             *kptl_peercredits;      /* number of credits */
         int             *kptl_max_msg_size;     /* max immd message size*/
@@ -107,8 +108,6 @@ typedef struct
 #endif
 } kptl_tunables_t;
 
-
-
 #include "lnet/ptllnd_wire.h"
 
 /***********************************************************************/
@@ -117,94 +116,65 @@ typedef struct kptl_data kptl_data_t;
 typedef struct kptl_rx_buffer kptl_rx_buffer_t;
 typedef struct kptl_peer kptl_peer_t;
 
-#define POSTED_OBJECT_TYPE_RESERVED     0
-#define POSTED_OBJECT_TYPE_TX           1
-#define POSTED_OBJECT_TYPE_RXB          2
+typedef struct {
+        char      eva_type;
+} kptl_eventarg_t;
 
-typedef struct
-{
-        __u32 pof_type : 2;
-}kptl_posted_object_flags_t;
-
-typedef struct kptl_posted_object
-{
-        kptl_data_t                    *po_kptllnd_data; /* LND Instance Data */
-        kptl_posted_object_flags_t      po_flags;        /* flags and state   */
-} kptl_posted_object_t;
+#define PTLLND_EVENTARG_TYPE_MSG    0x1
+#define PTLLND_EVENTARG_TYPE_RDMA   0x2
+#define PTLLND_EVENTARG_TYPE_BUF    0x3
 
 typedef struct kptl_rx                          /* receive message */
 {
         struct list_head        rx_list;        /* queue for attention */
-        atomic_t                rx_refcount;
         kptl_rx_buffer_t       *rx_rxb;         /* the rx buffer pointer */
-        kptl_msg_t             *rx_msg;
-        int                     rx_nob;         /* the number of bytes rcvd */
+        kptl_msg_t             *rx_msg;         /* received message */
+        int                     rx_nob;         /* received message size */
         ptl_process_id_t        rx_initiator;   /* sender's address */
 #if CRAY_XT3
         ptl_uid_t               rx_uid;         /* sender's uid */
 #endif
         kptl_peer_t            *rx_peer;        /* pointer to peer */
-        size_t                  rx_payload[0];  /* payload */
+        char                    rx_space[0];    /* copy of incoming request */
 } kptl_rx_t;
 
 typedef struct kptl_rx_buffer_pool
 {
         spinlock_t              rxbp_lock;
-        struct list_head        rxbp_list;
-        int                     rxbp_count;     /* the number of elements in the list   */
-        int                     rxbp_reserved;  /* the number currently reserved        */
-        int                     rxbp_shutdown;  /* the shutdown flag for the pool       */
-        int                     rxbp_posted;    /* the number of elements posted        */
+        struct list_head        rxbp_list;      /* all allocated buffers */
+        int                     rxbp_count;     /* # allocated buffers */
+        int                     rxbp_reserved;  /* # requests to buffer */
+        int                     rxbp_shutdown;  /* shutdown flag */
 } kptl_rx_buffer_pool_t;
-
-enum kptl_rxb_state
-{
-        RXB_STATE_UNINITIALIZED  = 0,
-        RXB_STATE_IDLE           = 1,
-        RXB_STATE_POSTED         = 2,
-};
 
 struct kptl_rx_buffer
 {
-        /* NB - becuase this buffer is assigned to a MD's usr_ptr
-         * It MUST have kptl_posted_object_t as the first member
-         * so that the real type of the element can be determined
-         */
-        kptl_posted_object_t    rxb_po;
         kptl_rx_buffer_pool_t  *rxb_pool;
         struct list_head        rxb_list;       /* for the rxb_pool list */
-        struct list_head        rxb_repost_list;/* for the kptl_sched_rxbq list*/
-        enum kptl_rxb_state     rxb_state;      /* the state of this rx buffer*/
-        atomic_t                rxb_refcount;   /* outstanding rx */
+        struct list_head        rxb_repost_list;/* for the kptl_sched_rxbq list */
+        int                     rxb_posted:1;   /* on the net */
+        int                     rxb_idle:1;     /* all done */
+        kptl_eventarg_t         rxb_eventarg;   /* event->md.user_ptr */
+        int                     rxb_refcount;   /* reference count */
         ptl_handle_md_t         rxb_mdh;        /* the portals memory descriptor (MD) handle */
-        void                   *rxb_buffer;     /* the buffer */
+        char                   *rxb_buffer;     /* the buffer */
 
-};
-
-enum kptl_tx_state
-{
-        TX_STATE_UNINITIALIZED          = 0,
-        TX_STATE_ON_IDLE_QUEUE          = 1,
-        TX_STATE_ALLOCATED              = 2,
-        TX_STATE_WAITING_CREDITS        = 3,
-        TX_STATE_WAITING_RESPONSE       = 4
 };
 
 enum kptl_tx_type
 {
         TX_TYPE_RESERVED                = 0,
         TX_TYPE_SMALL_MESSAGE           = 1,
-        TX_TYPE_LARGE_PUT               = 2,
-        TX_TYPE_LARGE_GET               = 3,
-        TX_TYPE_LARGE_PUT_RESPONSE      = 4,
-        TX_TYPE_LARGE_GET_RESPONSE      = 5,
+        TX_TYPE_PUT_REQUEST             = 2,
+        TX_TYPE_GET_REQUEST             = 3,
+        TX_TYPE_PUT_RESPONSE            = 4,
+        TX_TYPE_GET_RESPONSE            = 5,
 };
 
-/*  */
 typedef union {
 #ifdef _USING_LUSTRE_PORTALS_
         struct iovec iov[PTL_MD_MAX_IOV];
-        ptl_kiov_t kiov[PTL_MD_MAX_IOV];
+        lnet_kiov_t kiov[PTL_MD_MAX_IOV];
 #else /* _USING_CRAY_PORTALS_ */
         ptl_md_iovec_t iov[PTL_MD_MAX_IOV];
 #endif
@@ -212,45 +182,33 @@ typedef union {
 
 typedef struct kptl_tx                           /* transmit message */
 {
-        /* NB - becuase this buffer is assigned to a MD's usr_ptr
-         * It MUST have kptl_posted_object_t as the first member
-         * so that the real type of the element can be determined
-         */
-        kptl_posted_object_t    tx_po;
-        struct list_head        tx_list;      /* queue on idle_txs ibc_tx_queue etc. */
-        struct list_head        tx_schedlist; /* queue on idle_txs ibc_tx_queue etc. */
-        atomic_t                tx_refcount;  /* Posted Buffer refrences count*/
-        enum kptl_tx_state      tx_state;     /* the state of this tx descriptor */
-        int                     tx_seen_send_end; /* if we've seen a SEND_END event */
-        int                     tx_seen_reply_end; /* if we've seen a REPLY_END event */
-        enum kptl_tx_type       tx_type;      /* type of transfer */
+        struct list_head        tx_list;      /* queue on idle_txs etc */
+        atomic_t                tx_refcount;  /* reference count*/
+        enum kptl_tx_type       tx_type;      /* small msg/{put,get}{req,resp} */
+        int                     tx_active:1;  /* queued on the peer */
+        int                     tx_idle:1;    /* on the free list */
+        kptl_eventarg_t         tx_msg_eventarg; /* event->md.user_ptr */
+        kptl_eventarg_t         tx_rdma_eventarg; /* event->md.user_ptr */
         int                     tx_status;    /* the status of this tx descriptor */
-        ptl_handle_md_t         tx_mdh;       /* the portals memory descriptor (MD) handle */
-        ptl_handle_md_t         tx_mdh_msg;   /* the portals MD handle for the initial message */
-        lnet_msg_t             *tx_ptlmsg;    /* the cookie for finalize */
-        lnet_msg_t             *tx_ptlmsg_reply; /* the cookie for the reply message */
+        ptl_handle_md_t         tx_rdma_mdh;  /* RDMA buffer */
+        ptl_handle_md_t         tx_msg_mdh;   /* the portals MD handle for the initial message */
+        lnet_msg_t             *tx_lnet_msg;  /* LNET message to finalize */
+        lnet_msg_t             *tx_lnet_replymsg; /* LNET reply message to finalize */
         kptl_msg_t             *tx_msg;       /* the message data */
         kptl_peer_t            *tx_peer;      /* the peer this is waiting on */
         unsigned long           tx_deadline;  /* deadline */
-        kptl_rx_t              *tx_associated_rx; /* Associated RX for Bulk RDMA */
-        kptl_fragvec_t         *tx_frags;     /* buffer fragments for buld RDMA */
-
-        unsigned int            tx_payload_niov;
-        struct iovec           *tx_payload_iov;
-        lnet_kiov_t            *tx_payload_kiov;
-        unsigned int            tx_payload_offset;
-        int                     tx_payload_nob;
-
+        ptl_md_t                tx_rdma_md;   /* rdma buffer */
+        kptl_fragvec_t         *tx_rdma_frags; /* buffer fragments */
 } kptl_tx_t;
-
 
 enum kptllnd_peer_state
 {
         PEER_STATE_UNINITIALIZED        = 0,
-        PEER_STATE_ALLOCATED            = 1,    //QQQ
+        PEER_STATE_ALLOCATED            = 1,
         PEER_STATE_WAITING_HELLO        = 2,
         PEER_STATE_ACTIVE               = 3,
-        PEER_STATE_CANCELED             = 4,
+        PEER_STATE_CLOSING              = 4,
+        PEER_STATE_ZOMBIE               = 5,
 };
 
 struct kptl_peer
@@ -258,11 +216,9 @@ struct kptl_peer
         struct list_head        peer_list;
         atomic_t                peer_refcount;          /* The current refrences */
         enum kptllnd_peer_state peer_state;
-        kptl_data_t            *peer_kptllnd_data;      /* LND Instance Data */
         spinlock_t              peer_lock;              /* serialize */
-        struct list_head        peer_pending_txs;       /* queue of pending txs */
-        struct list_head        peer_active_txs;        /* queue of activce txs */
-        int                     peer_active_txs_change_counter;/* updated when peer_active_txs changes*/
+        struct list_head        peer_sendq;             /* txs waiting for mh handles */
+        struct list_head        peer_activeq;           /* txs awaiting completion */
         lnet_nid_t              peer_nid;               /* Peer's LNET NID */
         ptl_process_id_t        peer_ptlid;             /* Peer's portals id */
         __u64                   peer_incarnation;       /* peer's incarnation */
@@ -272,8 +228,6 @@ struct kptl_peer
         __u64                   peer_next_matchbits;    /* Next value to use for tx desc matchbits */
         __u64                   peer_last_matchbits_seen; /* last matchbits seen*/
 };
-
-
 
 struct kptl_data
 {
@@ -292,6 +246,8 @@ struct kptl_data
         struct list_head        kptl_sched_rxq;        /* rx requiring attention */
         struct list_head        kptl_sched_rxbq;       /* rxb requiring reposting */
 
+        wait_queue_head_t       kptl_watchdog_waitq;   /* watchdog sleeps here */
+
         kptl_rx_buffer_pool_t   kptl_rx_buffer_pool;   /* rx buffer pool */
         cfs_mem_cache_t*        kptl_rx_cache;         /* rx descripter cache */
 
@@ -301,369 +257,253 @@ struct kptl_data
 
         rwlock_t                kptl_peer_rw_lock;     /* lock for peer table */
         struct list_head       *kptl_peers;            /* hash table of all my known peers */
-        struct list_head        kptl_canceled_peers;   /* peers in the canceld state */
-        int                     kptl_canceled_peers_counter; /* updated when canceled_peers is modified*/
+        struct list_head        kptl_closing_peers;    /* peers being closed */
         int                     kptl_peer_hash_size;   /* size of kptl_peers */
-        atomic_t                kptl_npeers;           /* # peers extant */
+        int                     kptl_npeers;           /* # peers extant */
 };
 
-typedef struct kptl_stats
+enum 
 {
-        int                     kps_incoming_checksums_calculated;
-        int                     kps_incoming_checksums_invalid;
-        int                     kps_cleaning_caneled_peers;     /* MP Safe*/
-        int                     kps_checking_buckets;
-        int                     kps_too_many_peers;             /* MP Safe*/
-        int                     kps_peers_created;              /* MP Safe*/
-        int                     kps_no_credits;
-        int                     kps_sending_credits_back_noop_msg;
-        int                     kps_saving_last_credit;
-        int                     kps_rx_allocated;
-        int                     kps_rx_released;
-        int                     kps_rx_allocation_failed;
-        int                     kps_tx_allocated;
-        int                     kps_tx_released;               /* MP Safe*/
-        int                     kps_tx_allocation_failed;
-        int                     kps_recv_delayed;
-        int                     kps_send_routing;
-        int                     kps_send_target_is_router;
-        int                     kps_send_put;
-        int                     kps_send_get;
-        int                     kps_send_immd;
-        int                     kps_send_reply;
-        int                     kps_rx_event;
-        int                     kps_rx_unlink_event;
-        int                     kps_tx_event;
-        int                     kps_tx_unlink_event;
-        int                     kps_posted_tx_msg_mds;
-        int                     kps_posted_tx_bulk_mds;
-}kptl_stats_t;
-
-/*
- * Note: Stats update are not atomic (for performance reasons)
- * and therefore not MP safe.  They are more an indiciation of
- * things that are going on, as opposed to a actual count.
- *
- * (e.g. if kps_checking_buckets wasn't incrementing at some
- *  number per second, that would be an indication that the
- *  scheduler thread is stuck or stopped)
- *
- * However where possible the update of the stats are placed inside
- * a spinlock to make them consistent, these are marked MP Safe above.
- *
- */
-#define STAT_UPDATE(n) do{ ++kptllnd_stats.n; }while(0)
-
-
-enum
-{
-    PTLLND_INIT_NOTHING     = 0,
-    PTLLND_INIT_DATA        = 1,
-    PTLLND_INIT_TXD         = 2,
-    PTLLND_INIT_RXD         = 3,
-    PTLLND_INIT_ALL         = 4,
+        PTLLND_INIT_NOTHING = 0,
+        PTLLND_INIT_DATA,
+        PTLLND_INIT_TXD,
+        PTLLND_INIT_RXD,
+        PTLLND_INIT_ALL,
 };
-
 
 extern kptl_tunables_t  kptllnd_tunables;
-extern kptl_stats_t     kptllnd_stats;
+extern kptl_data_t      kptllnd_data;
 
-int kptllnd_startup (
-        lnet_ni_t *ni);
+static inline lnet_nid_t 
+kptllnd_ptl2lnetnid(ptl_nid_t portals_nid)
+{
+#ifdef _USING_LUSTRE_PORTALS_
+        return LNET_MKNID(LNET_NIDNET(kptllnd_data.kptl_ni->ni_nid), 
+                          LNET_NIDADDR(portals_nid));
+#endif
+#ifdef _USING_CRAY_PORTALS_ 
+	return LNET_MKNID(LNET_NIDNET(kptllnd_data.kptl_ni->ni_nid), 
+                          portals_nid);
+#endif
+}
 
-void kptllnd_shutdown (
-        lnet_ni_t *ni);
+static inline ptl_nid_t kptllnd_lnet2ptlnid(lnet_nid_t lnet_nid)
+{
+#ifdef _USING_LUSTRE_PORTALS_
+        return LNET_MKNID(LNET_NIDNET(kptllnd_data.kptl_portals_id.nid), 
+                          LNET_NIDADDR(lnet_nid));
+#endif
+#ifdef _USING_CRAY_PORTALS_
+	return LNET_NIDADDR(lnet_nid);
+#endif
+}
 
-int kptllnd_ctl(
-        lnet_ni_t *ni,
-        unsigned int cmd,
-        void *arg);
-
-int kptllnd_send (
-        lnet_ni_t *ni,
-        void *private,
-        lnet_msg_t *lntmsg);
-
-int kptllnd_recv (
-        lnet_ni_t *ni,
-        void *private,
-        lnet_msg_t *lntmsg,
-        int delayed,
-        unsigned int niov,
-        struct iovec *iov,
-        lnet_kiov_t *kiov,
-        unsigned int offset,
-        unsigned int mlen,
-        unsigned int rlen);
-
-int kptllnd_eager_recv(
-        struct lnet_ni *ni,
-        void *private,
-        lnet_msg_t *msg,
-        void **new_privatep);
-
-void kptllnd_eq_callback(
-        ptl_event_t *evp);
-
-int  kptllnd_scheduler(
-        void *arg);
-int  kptllnd_watchdog(
-        void *arg);
-
-int  kptllnd_thread_start(
-        int (*fn)(void *arg),
-        int id,
-        kptl_data_t *kptllnd_data);
-
+int  kptllnd_startup(lnet_ni_t *ni);
+void kptllnd_shutdown(lnet_ni_t *ni);
+int  kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
+int  kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
+int  kptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
+                  int delayed, unsigned int niov, 
+                  struct iovec *iov, lnet_kiov_t *kiov,
+                  unsigned int offset, unsigned int mlen, unsigned int rlen);
+int  kptllnd_eager_recv(struct lnet_ni *ni, void *private, 
+                        lnet_msg_t *msg, void **new_privatep);
+void kptllnd_eq_callback(ptl_event_t *evp);
+int  kptllnd_scheduler(void *arg);
+int  kptllnd_watchdog(void *arg);
+int  kptllnd_thread_start(int (*fn)(void *arg), void *arg);
 int  kptllnd_tunables_init(void);
 void kptllnd_tunables_fini(void);
-void kptllnd_proc_init(void);
-void kptllnd_proc_fini(void);
 
-const char *get_ev_type_string(
-        int evtype);
+const char *kptllnd_evtype2str(int evtype);
+const char *kptllnd_msgtype2str(int msgtype);
 
-const char *get_msg_type_string(
-        int type);
-
-kptl_stats_t* kpttllnd_get_stats(void);
-
-void
-kptllnd_posted_object_setup(
-        kptl_posted_object_t* posted_obj,
-        kptl_data_t *kptllnd_data,
-        int type);
+static inline void *
+kptllnd_eventarg2obj (kptl_eventarg_t *eva)
+{
+        switch (eva->eva_type) {
+        default:
+                LBUG();
+        case PTLLND_EVENTARG_TYPE_BUF:
+                return list_entry(eva, kptl_rx_buffer_t, rxb_eventarg);
+        case PTLLND_EVENTARG_TYPE_RDMA:
+                return list_entry(eva, kptl_tx_t, tx_rdma_eventarg);
+        case PTLLND_EVENTARG_TYPE_MSG:
+                return list_entry(eva, kptl_tx_t, tx_msg_eventarg);
+        }
+}
 
 /*
  * RX BUFFER SUPPORT FUNCTIONS
  */
+void kptllnd_rx_buffer_pool_init(kptl_rx_buffer_pool_t *rxbp);
+void kptllnd_rx_buffer_pool_fini(kptl_rx_buffer_pool_t *rxbp);
+int  kptllnd_rx_buffer_pool_reserve(kptl_rx_buffer_pool_t *rxbp, int count);
+void kptllnd_rx_buffer_pool_unreserve(kptl_rx_buffer_pool_t *rxbp, int count);
+void kptllnd_rx_buffer_callback(ptl_event_t *ev);
+void kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb);
 
-void
-kptllnd_rx_buffer_pool_init(
-        kptl_rx_buffer_pool_t *rxbp);
+static inline int
+kptllnd_rx_buffer_size(void)
+{
+        return PAGE_SIZE * (*kptllnd_tunables.kptl_rxb_npages);
+}
 
-void
-kptllnd_rx_buffer_pool_fini(
-        kptl_rx_buffer_pool_t *rxbp);
+static inline void
+kptllnd_rx_buffer_addref(kptl_rx_buffer_t *rxb)
+{
+        unsigned long flags;
+        
+        spin_lock_irqsave(&rxb->rxb_pool->rxbp_lock, flags);
+        rxb->rxb_refcount++;
+        spin_unlock_irqrestore(&rxb->rxb_pool->rxbp_lock, flags);
+}
 
-int
-kptllnd_rx_buffer_pool_reserve(
-        kptl_rx_buffer_pool_t *rxbp,
-        kptl_data_t *kptllnd_data,
-        int count);
+static inline void
+kptllnd_rx_buffer_decref_locked(kptl_rx_buffer_t *rxb)
+{
+        if (--(rxb->rxb_refcount) == 0) {
+                list_add_tail(&rxb->rxb_repost_list, 
+                              &kptllnd_data.kptl_sched_rxbq);
+                wake_up(&kptllnd_data.kptl_sched_waitq);
+        }
+}
 
-void
-kptllnd_rx_buffer_pool_unreserve(
-        kptl_rx_buffer_pool_t *rxbp,
-        int count);
-
-void
-kptllnd_rx_buffer_callback(
-        ptl_event_t *ev);
-
-void
-kptllnd_rx_buffer_scheduled_post(
-        kptl_rx_buffer_t *rxb);
-
-void
-kptllnd_rx_buffer_post_handle_error(
-        kptl_rx_buffer_t *rxb);
-
-void
-kptllnd_rx_buffer_decref(
-        kptl_rx_buffer_t *rxb,
-        const char *owner);
+static inline void
+kptllnd_rx_buffer_decref(kptl_rx_buffer_t *rxb)
+{
+        unsigned long flags;
+        
+        spin_lock_irqsave(&rxb->rxb_pool->rxbp_lock, flags);
+        kptllnd_rx_buffer_decref_locked(rxb);
+        spin_unlock_irqrestore(&rxb->rxb_pool->rxbp_lock, flags);
+}
 
 /*
  * RX SUPPORT FUNCTIONS
  */
-void
-kptllnd_rx_scheduler_handler(
-        kptl_rx_t *rx);
-
-void
-kptllnd_rx_addref(
-        kptl_rx_t *rx,
-        const char *owner);
-
-void
-kptllnd_rx_decref(
-        kptl_rx_t *rx,
-        const char *owner,
-        kptl_data_t *kptllnd_data);
+void kptllnd_rx_done(kptl_rx_t *rx);
+void kptllnd_rx_parse(kptl_rx_t *rx);
 
 /*
  * PEER SUPPORT FUNCTIONS
  */
-void
-kptllnd_peer_decref (
-        kptl_peer_t *peer,
-        const char *owner);
-void
-kptllnd_peer_addref (
-        kptl_peer_t *peer,
-        const char *owner);
+void kptllnd_peer_destroy(kptl_peer_t *peer);
+int  kptllnd_peer_del(lnet_nid_t nid);
+void kptllnd_peer_close(kptl_peer_t *peer);
+void kptllnd_handle_closing_peers(void);
+int  kptllnd_peer_connect(kptl_tx_t *tx, lnet_nid_t nid);
+void kptllnd_peer_check_sends(kptl_peer_t *peer);
+void kptllnd_peer_check_bucket(int idx);
+void kptllnd_tx_launch(kptl_tx_t *tx, lnet_process_id_t target);
+kptl_peer_t *kptllnd_peer_handle_hello(ptl_process_id_t initiator,
+                                       kptl_msg_t *msg);
+kptl_peer_t *kptllnd_ptlnid2peer_locked(ptl_nid_t nid);
 
-int
-kptllnd_peer_del (
-        kptl_data_t *kptllnd_data,
-        lnet_nid_t nid);
+static inline void
+kptllnd_peer_addref (kptl_peer_t *peer)
+{
+        atomic_inc(&peer->peer_refcount);
+}
 
-void
-kptllnd_peer_cancel(
-        kptl_peer_t *peer);
+static inline void
+kptllnd_peer_decref (kptl_peer_t *peer)
+{
+        if (atomic_dec_and_test(&peer->peer_refcount))
+                kptllnd_peer_destroy(peer);
+}
 
-void
-kptllnd_peer_queue_bulk_rdma_tx_locked(
-        kptl_peer_t *peer,
-        kptl_tx_t *tx);
-
-void
-kptllnd_peer_dequeue_tx(
-        kptl_peer_t *peer,
-        kptl_tx_t *tx);
-void
-kptllnd_peer_dequeue_tx_locked(
-        kptl_peer_t *peer,
-        kptl_tx_t *tx);
-
-int
-kptllnd_peer_connect (
-        kptl_tx_t *tx,
-        lnet_nid_t nid );
-
-void
-kptllnd_peer_check_sends (
-        kptl_peer_t *peer );
-void
-kptllnd_peer_check_bucket (
-        int idx,
-        kptl_data_t *kptllnd_data);
-
-void
-kptllnd_tx_launch (
-        kptl_tx_t *tx,
-        lnet_process_id_t target,
-        lnet_msg_t *ptlmsg );
-
-kptl_peer_t *
-kptllnd_nid2peer (kptl_data_t *kptllnd_data, lnet_nid_t nid);
-
-kptl_peer_t *
-kptllnd_ptlnid2peer (kptl_data_t *kptllnd_data, ptl_nid_t ptlnid);
-
-kptl_peer_t *
-kptllnd_peer_handle_hello (kptl_data_t      *kptllnd_data,
-                           ptl_process_id_t  initiator,
-                           kptl_msg_t       *msg);
+static inline void
+kptllnd_set_tx_peer(kptl_tx_t *tx, kptl_peer_t *peer) 
+{
+        LASSERT (tx->tx_peer == NULL);
+        
+        kptllnd_peer_addref(peer);
+        tx->tx_peer = peer;
+}
 
 static inline struct list_head *
-kptllnd_ptlnid2peerlist (kptl_data_t *kptllnd_data, ptl_nid_t nid)
+kptllnd_ptlnid2peerlist(ptl_nid_t nid)
 {
-        unsigned int hash = ((unsigned int)nid) % kptllnd_data->kptl_peer_hash_size;
+        unsigned int hash = ((unsigned int)nid) %
+                            kptllnd_data.kptl_peer_hash_size;
 
-        return (&kptllnd_data->kptl_peers [hash]);
+        return &kptllnd_data.kptl_peers[hash];
+}
+
+static inline kptl_peer_t *
+kptllnd_nid2peer_locked(lnet_nid_t nid)
+{
+        return kptllnd_ptlnid2peer_locked(kptllnd_lnet2ptlnid(nid));
+}
+
+static inline kptl_peer_t *
+kptllnd_ptlnid2peer(ptl_nid_t nid)
+{
+        kptl_peer_t   *peer;
+        unsigned long  flags;
+
+        read_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
+        peer = kptllnd_ptlnid2peer_locked(nid);
+        read_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock, flags);
+
+        return peer;
+}
+
+static inline kptl_peer_t *
+kptllnd_nid2peer(lnet_nid_t nid)
+{
+        return kptllnd_ptlnid2peer(kptllnd_lnet2ptlnid(nid));
 }
 
 /*
  * TX SUPPORT FUNCTIONS
  */
-int
-kptllnd_setup_tx_descs (
-        kptl_data_t *kptllnd_data);
+int  kptllnd_setup_tx_descs(void);
+void kptllnd_cleanup_tx_descs(void);
+void kptllnd_tx_fini(kptl_tx_t *tx);
+kptl_tx_t *kptllnd_get_idle_tx(enum kptl_tx_type purpose);
+void kptllnd_tx_callback(ptl_event_t *ev);
 
-void
-kptllnd_cleanup_tx_descs(
-        kptl_data_t *kptllnd_data);
+static inline void
+kptllnd_tx_addref(kptl_tx_t *tx)
+{
+        atomic_inc(&tx->tx_refcount);
+}
 
-void
-kptllnd_tx_addref(
-        kptl_tx_t *tx);
-void
-kptllnd_tx_decref(
-        kptl_tx_t *tx);
-void
-kptllnd_tx_scheduled_decref(
-        kptl_tx_t *tx);
-void
-kptllnd_tx_done (
-        kptl_tx_t *tx);
-kptl_tx_t *
-kptllnd_get_idle_tx(
-        kptl_data_t *kptllnd_data,
-        enum kptl_tx_type purpose);
+static inline void 
+kptllnd_tx_decref(kptl_tx_t *tx)
+{
+        LASSERT (!in_interrupt());        /* Thread context only */
 
-void
-kptllnd_tx_callback(
-        ptl_event_t *ev);
+        if (atomic_dec_and_test(&tx->tx_refcount))
+                kptllnd_tx_fini(tx);
+}
 
 /*
  * MESSAGE SUPPORT FUNCTIONS
  */
-void
-kptllnd_init_msg(
-        kptl_msg_t *msg,
-        int type,
-        int body_nob);
-
-void
-kptllnd_msg_pack(
-        kptl_msg_t *msgp,
-        int credits,
-        lnet_nid_t dstnid,
-        __u64 dststamp,
-        __u64 seq,
-        kptl_data_t *kptllnd_data);
-
-int
-kptllnd_msg_unpack(
-        kptl_msg_t *msg,
-        int nob,
-        kptl_data_t *kptllnd_data);
+void kptllnd_init_msg(kptl_msg_t *msg, int type, int body_nob);
+void kptllnd_msg_pack(kptl_msg_t *msgp, int credits, lnet_nid_t dstnid,
+                      __u64 dststamp, __u64 seq);
+int  kptllnd_msg_unpack(kptl_msg_t *msg, int nob);
 
 /*
  * MISC SUPPORT FUNCTIONS
  */
-
-void
-kptllnd_setup_md(
-        kptl_data_t     *kptllnd_data,
-        ptl_md_t        *md,
-        unsigned int     op,
-        kptl_tx_t       *tx,
-        unsigned int     payload_niov,
-        struct iovec    *payload_iov,
-        lnet_kiov_t     *payload_kiov,
-        unsigned int     payload_offset,
-        int              payload_nob);
-
-static inline lnet_nid_t ptl2lnetnid(kptl_data_t *kptllnd_data,ptl_nid_t portals_nid)
-{
-#ifdef _USING_LUSTRE_PORTALS_
-        return LNET_MKNID(LNET_NIDNET(kptllnd_data->kptl_ni->ni_nid), LNET_NIDADDR(portals_nid));
-#else /* _USING_CRAY_PORTALS_ */
-	return LNET_MKNID(LNET_NIDNET(kptllnd_data->kptl_ni->ni_nid), portals_nid);
-#endif
-}
-
-static inline ptl_nid_t lnet2ptlnid(kptl_data_t *kptllnd_data,lnet_nid_t lnet_nid)
-{
-#ifdef _USING_LUSTRE_PORTALS_
-        return LNET_MKNID(LNET_NIDNET(kptllnd_data->kptl_portals_id.nid), LNET_NIDADDR(lnet_nid));
-#else /* _USING_CRAY_PORTALS_ */
-	return LNET_NIDADDR(lnet_nid);
-#endif
-}
+void kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
+                          struct iovec *iov, lnet_kiov_t *kiov,
+                          unsigned int offset, unsigned int nob);
 
 #ifdef PJK_DEBUGGING
-#define SIMULATION_FAIL_BLOCKING_TX_PUT_ALLOC   0       /* 0x00000001 */
-#define SIMULATION_FAIL_BLOCKING_TX_GET_ALLOC   1       /* 0x00000002 */
-#define SIMULATION_FAIL_BLOCKING_TX             2       /* 0x00000004 */
-#define SIMULATION_FAIL_BLOCKING_RX_ALLOC       3       /* 0x00000008 */
+#define SIMULATION_FAIL_TX_PUT_ALLOC   0       /* 0x00000001 */
+#define SIMULATION_FAIL_TX_GET_ALLOC   1       /* 0x00000002 */
+#define SIMULATION_FAIL_TX             2       /* 0x00000004 */
+#define SIMULATION_FAIL_RX_ALLOC       3       /* 0x00000008 */
 
 #define IS_SIMULATION_ENABLED(x) \
         (((*kptllnd_tunables.kptl_simulation_bitmap) & 1<< SIMULATION_##x) != 0)
 #else
-#define IS_SIMULATION_ENABLED(x)                0
+#define IS_SIMULATION_ENABLED(x)       0
 #endif
 

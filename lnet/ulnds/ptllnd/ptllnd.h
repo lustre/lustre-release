@@ -173,8 +173,8 @@ void ptllnd_abort_txs(lnet_ni_t *ni);
 void ptllnd_close_peer(ptllnd_peer_t *peer);
 int ptllnd_post_buffer(ptllnd_buffer_t *buf);
 int ptllnd_grow_buffers (lnet_ni_t *ni);
-const char *get_ev_type_string(int type);
-const char *get_msg_type_string(int type);
+const char *ptllnd_evtype2str(int type);
+const char *ptllnd_msgtype2str(int type);
 
 static inline void
 ptllnd_peer_addref (ptllnd_peer_t *peer)
@@ -202,13 +202,13 @@ ptllnd_post_tx(ptllnd_tx_t *tx)
 }
 
 static inline lnet_nid_t
-ptl2lnetnid(lnet_ni_t *ni,ptl_nid_t portals_nid)
+ptllnd_ptl2lnetnid(lnet_ni_t *ni, ptl_nid_t portals_nid)
 {
 	return LNET_MKNID(LNET_NIDNET(ni->ni_nid), portals_nid);
 }
 
 static inline ptl_nid_t
-lnet2ptlnid(lnet_nid_t lnet_nid)
+ptllnd_lnet2ptlnid(lnet_nid_t lnet_nid)
 {
 	return LNET_NIDADDR(lnet_nid);
 }

@@ -45,7 +45,11 @@ CFS_MODULE_PARM(pid, "i", int, 0444,
 
 static int rxb_npages = PTLLND_RXB_NPAGES;
 CFS_MODULE_PARM(rxb_npages, "i", int, 0444,
-		"# of pages for rx buffers");
+		"# of pages per rx buffer");
+
+static int rxb_nspare = PTLLND_RXB_SPARES;
+CFS_MODULE_PARM(rxb_nspare, "i", int, 0444,
+                "# of spare rx buffers");
 
 static int credits = PTLLND_CREDITS;
 CFS_MODULE_PARM(credits, "i", int, 0444,
@@ -78,6 +82,7 @@ kptl_tunables_t kptllnd_tunables = {
         .kptl_pid                    = &pid,
         .kptl_timeout                = &timeout,
         .kptl_rxb_npages             = &rxb_npages,
+        .kptl_rxb_nspare             = &rxb_nspare,
         .kptl_credits                = &credits,
         .kptl_peercredits            = &peercredits,
         .kptl_max_msg_size           = &max_msg_size,
@@ -109,13 +114,13 @@ static ctl_table kptllnd_ctl_table[] = {
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{9, "peercredits", &peercredits,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{10,"max_msg_size", &max_msg_size,
+	{10, "max_msg_size", &max_msg_size,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{11,"peer_hash_table_size,", &peer_hash_table_size,
+	{11, "peer_hash_table_size", &peer_hash_table_size,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 
 #ifdef PJK_DEBUGGING
-	{12, "simulation_bitmap,", &simulation_bitmap,
+	{12, "simulation_bitmap", &simulation_bitmap,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 #endif
 

@@ -183,9 +183,9 @@ main (int argc, char **argv)
         CHECK_MEMBER (kptl_immediate_msg_t, kptlim_hdr);
         CHECK_MEMBER (kptl_immediate_msg_t, kptlim_payload[13]);
 
-        CHECK_STRUCT (kptl_request_msg_t);
-        CHECK_MEMBER (kptl_request_msg_t, kptlrm_hdr);
-        CHECK_MEMBER (kptl_request_msg_t, kptlrm_matchbits);
+        CHECK_STRUCT (kptl_rdma_msg_t);
+        CHECK_MEMBER (kptl_rdma_msg_t, kptlrm_hdr);
+        CHECK_MEMBER (kptl_rdma_msg_t, kptlrm_matchbits);
 
         CHECK_STRUCT (kptl_hello_msg_t);
         CHECK_MEMBER (kptl_hello_msg_t, kptlhm_matchbits);

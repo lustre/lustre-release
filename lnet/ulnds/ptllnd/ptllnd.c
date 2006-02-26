@@ -179,7 +179,6 @@ ptllnd_grow_buffers (lnet_ni_t *ni)
         CDEBUG(D_NET, "nposted_buffers = %d (before)\n",plni->plni_nposted_buffers);
         CDEBUG(D_NET, "nbuffers = %d (before)\n",plni->plni_nbuffers);
 
-
         nmsgs = plni->plni_npeers * plni->plni_peer_credits +
                 plni->plni_msgs_spare;
 
@@ -451,7 +450,7 @@ ptllnd_startup (lnet_ni_t *ni)
          * Create the new NID.  Based on the LND network type
          * and the lower ni's address data.
          */
-        ni->ni_nid = ptl2lnetnid(ni,plni->plni_portals_id.nid);
+        ni->ni_nid = ptllnd_ptl2lnetnid(ni, plni->plni_portals_id.nid);
 
         CDEBUG(D_NET, "ptl  pid=" FMT_PID "\n",plni->plni_portals_id.pid);
         CDEBUG(D_NET, "ptl  nid=" FMT_NID "\n",plni->plni_portals_id.nid);
@@ -479,10 +478,9 @@ ptllnd_startup (lnet_ni_t *ni)
         return rc;
 }
 
-#define DO_TYPE(x) case x: return #x;
-
-const char *get_ev_type_string(int type)
+const char *ptllnd_evtype2str(int type)
 {
+#define DO_TYPE(x) case x: return #x;
         switch(type)
         {
                 DO_TYPE(PTL_EVENT_GET_START);
@@ -498,10 +496,12 @@ const char *get_ev_type_string(int type)
         default:
                 return "";
         }
+#undef DO_TYPE
 }
 
 const char *get_msg_type_string(int type)
 {
+#define DO_TYPE(x) case x: return #x;
         switch(type)
         {
                 DO_TYPE(PTLLND_MSG_TYPE_INVALID);
@@ -513,4 +513,5 @@ const char *get_msg_type_string(int type)
         default:
                 return "";
         }
+#undef DO_TYPE
 }

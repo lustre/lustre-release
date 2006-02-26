@@ -19,13 +19,8 @@
  #include "ptllnd.h"
 
 
-void
-kptllnd_tx_schedule (kptl_tx_t *tx);
-
-
-
 int
-kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
+kptllnd_setup_tx_descs ()
 {
         kptl_tx_t       *tx;
         int             i;
@@ -35,52 +30,42 @@ kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
         /*
          * First initialize the tx descriptors
          */
-        memset(kptllnd_data->kptl_tx_descs, 0,
+        memset(kptllnd_data.kptl_tx_descs, 0,
                (*kptllnd_tunables.kptl_ntx) * sizeof(kptl_tx_t));
 
         for (i = 0; i < (*kptllnd_tunables.kptl_ntx); i++) {
-                tx = &kptllnd_data->kptl_tx_descs[i];
+                tx = &kptllnd_data.kptl_tx_descs[i];
 
-
-                kptllnd_posted_object_setup(&tx->tx_po,
-                                          kptllnd_data,
-                                          POSTED_OBJECT_TYPE_TX);
-
-                CFS_INIT_LIST_HEAD(&tx->tx_list);
-                CFS_INIT_LIST_HEAD(&tx->tx_schedlist);
-
-                /*
-                 * Set the state
-                 */
-                tx->tx_state = TX_STATE_ON_IDLE_QUEUE;
-
+                tx->tx_idle = 1;
+                tx->tx_rdma_mdh = PTL_INVALID_HANDLE;
+                tx->tx_msg_mdh = PTL_INVALID_HANDLE;
+                tx->tx_rdma_eventarg.eva_type = PTLLND_EVENTARG_TYPE_RDMA;
+                tx->tx_msg_eventarg.eva_type = PTLLND_EVENTARG_TYPE_MSG;
+                
                 LIBCFS_ALLOC(tx->tx_msg, *kptllnd_tunables.kptl_max_msg_size);
                 if (tx->tx_msg == NULL) {
                         CERROR("Failed to allocate TX payload\n");
                         goto failed;
                 }
 
-                LIBCFS_ALLOC(tx->tx_frags, sizeof(*tx->tx_frags));
-                if (tx->tx_frags == NULL) {
+                LIBCFS_ALLOC(tx->tx_rdma_frags, sizeof(*tx->tx_rdma_frags));
+                if (tx->tx_rdma_frags == NULL) {
                         CERROR("Failed to allocate TX frags\n");
                         goto failed;
                 }
-                
-                /*
-                 * Add this to the queue
-                 */
-                list_add (&tx->tx_list,&kptllnd_data->kptl_idle_txs);
+
+                list_add (&tx->tx_list, &kptllnd_data.kptl_idle_txs);
         }
 
         return 0;
 
  failed:
-        kptllnd_cleanup_tx_descs(kptllnd_data);
+        kptllnd_cleanup_tx_descs();
         return -ENOMEM;
 }
 
 void
-kptllnd_cleanup_tx_descs(kptl_data_t *kptllnd_data)
+kptllnd_cleanup_tx_descs()
 {
         kptl_tx_t       *tx;
         int             i;
@@ -88,409 +73,348 @@ kptllnd_cleanup_tx_descs(kptl_data_t *kptllnd_data)
         CDEBUG(D_NET, "\n");
 
         for (i = 0; i < (*kptllnd_tunables.kptl_ntx); i++) {
-                tx = &kptllnd_data->kptl_tx_descs[i];
+                tx = &kptllnd_data.kptl_tx_descs[i];
 
                 if (tx->tx_msg != NULL)
                         LIBCFS_FREE(tx->tx_msg, 
                                     *kptllnd_tunables.kptl_max_msg_size);
                         
-                if (tx->tx_frags != NULL)
-                        LIBCFS_FREE(tx->tx_frags, sizeof(*tx->tx_frags));
-
-                LASSERT( tx->tx_state == TX_STATE_ON_IDLE_QUEUE );
+                if (tx->tx_rdma_frags != NULL)
+                        LIBCFS_FREE(tx->tx_rdma_frags, 
+                                    sizeof(*tx->tx_rdma_frags));
         }
 }
 
 kptl_tx_t *
-kptllnd_get_idle_tx(kptl_data_t *kptllnd_data,
-                    enum kptl_tx_type purpose)
+kptllnd_get_idle_tx(enum kptl_tx_type type)
 {
         kptl_tx_t      *tx = NULL;
 
-        CDEBUG(D_NET, ">>> purpose=%d\n",purpose);
-
-        if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX_PUT_ALLOC ) && purpose == TX_TYPE_LARGE_PUT){
-                CERROR ("FAIL_BLOCKING_TX_PUT_ALLOC SIMULATION triggered\n");
-                tx = NULL;
-                STAT_UPDATE(kps_tx_allocation_failed);
-                goto exit;
-        }
-        if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX_GET_ALLOC ) && purpose == TX_TYPE_LARGE_GET){
-                CERROR ("FAIL_BLOCKING_TX_GET_ALLOC SIMULATION triggered\n");
-                tx = NULL;
-                STAT_UPDATE(kps_tx_allocation_failed);
-                goto exit;
-        }
-        if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX )){
-                CERROR ("FAIL_BLOCKING_TX SIMULATION triggered\n");
-                tx = NULL;
-                STAT_UPDATE(kps_tx_allocation_failed);
-                goto exit;
+        if (IS_SIMULATION_ENABLED(FAIL_TX_PUT_ALLOC) && 
+            type == TX_TYPE_PUT_REQUEST) {
+                CERROR("FAIL_TX_PUT_ALLOC SIMULATION triggered\n");
+                return NULL;
         }
 
-        spin_lock(&kptllnd_data->kptl_tx_lock);
-
-        if (!list_empty (&kptllnd_data->kptl_idle_txs)) {
-                tx = list_entry (kptllnd_data->kptl_idle_txs.next,
-                                 kptl_tx_t, tx_list);
-                /*
-                 * Remove it from the idle queue
-                 */
-                list_del_init (&tx->tx_list);
+        if (IS_SIMULATION_ENABLED(FAIL_TX_GET_ALLOC) && 
+            type == TX_TYPE_GET_REQUEST) {
+                CERROR ("FAIL_TX_GET_ALLOC SIMULATION triggered\n");
+                return NULL;
         }
 
-        spin_unlock(&kptllnd_data->kptl_tx_lock);
-
-        if (tx != NULL) {
-
-                /*
-                 * Check the state
-                 */
-                LASSERT(tx->tx_state == TX_STATE_ON_IDLE_QUEUE);
-
-                /*
-                 * Reference is now owned by caller
-                 */
-                LASSERT(atomic_read(&tx->tx_refcount)== 0);
-                atomic_set(&tx->tx_refcount,1);
-
-
-
-                /*
-                 * Set the state and type
-                 */
-                tx->tx_state = TX_STATE_ALLOCATED;
-                tx->tx_type = purpose;
-
-                /*
-                 * Initialize the TX descriptor so that cleanup can be
-                 * handled easily even with a partially initialized descriptor
-                 */
-                tx->tx_mdh              = PTL_INVALID_HANDLE;
-                tx->tx_mdh_msg          = PTL_INVALID_HANDLE;
-                tx->tx_ptlmsg           = NULL;
-                tx->tx_ptlmsg_reply     = NULL;
-                tx->tx_peer             = NULL;
-                tx->tx_associated_rx    = NULL;
-
-                /*
-                 * These must be re-initialized
-                 */
-                tx->tx_status           = -EINVAL;
-                tx->tx_seen_send_end    = 0;
-                tx->tx_seen_reply_end   = 0;
-                tx->tx_payload_niov     = 0;
-                tx->tx_payload_iov      = NULL;
-                tx->tx_payload_kiov     = NULL;
-                tx->tx_payload_offset   = 0;
-                tx->tx_payload_nob      = 0;
-
-                STAT_UPDATE(kps_tx_allocated);
-        }else{
-                STAT_UPDATE(kps_tx_allocation_failed);
+        if (IS_SIMULATION_ENABLED(FAIL_TX)) {
+                CERROR ("FAIL_TX SIMULATION triggered\n");
+                return NULL;
         }
 
+        spin_lock(&kptllnd_data.kptl_tx_lock);
 
-exit:
-        CDEBUG(D_NET, "<<< tx=%p\n",tx);
+        if (list_empty (&kptllnd_data.kptl_idle_txs)) {
+                spin_unlock(&kptllnd_data.kptl_tx_lock);
+
+                CERROR("TX descs exhausted\n");
+                return NULL;
+        }
+        
+        tx = list_entry(kptllnd_data.kptl_idle_txs.next, kptl_tx_t, tx_list);
+        list_del(&tx->tx_list);
+
+        spin_unlock(&kptllnd_data.kptl_tx_lock);
+
+        LASSERT (atomic_read(&tx->tx_refcount)== 0);
+        LASSERT (tx->tx_idle);
+        LASSERT (!tx->tx_active);
+        LASSERT (tx->tx_lnet_msg == NULL);
+        LASSERT (tx->tx_lnet_replymsg == NULL);
+        LASSERT (tx->tx_peer == NULL);
+        LASSERT (PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE));
+        LASSERT (PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE));
+        
+        tx->tx_type = type;
+        atomic_set(&tx->tx_refcount, 1);
+        tx->tx_status = 0;
+
+        CDEBUG(D_NET, "tx=%p\n", tx);
         return tx;
 }
 
-void
-kptllnd_tx_done (kptl_tx_t *tx)
+#ifdef LUSTRE_PORTALS_UNLINK_SEMANTICS
+int
+kptllnd_tx_abort_netio(kptl_tx_t *tx)
 {
-        lnet_msg_t  *lnetmsg[2];
-        int          status = tx->tx_status;
-        kptl_data_t *kptllnd_data = tx->tx_po.po_kptllnd_data;
-
-        LASSERT (!in_interrupt());
-
-        CDEBUG(D_NET, ">>> tx=%p\n",tx);
-
-        LASSERT(tx->tx_state != TX_STATE_ON_IDLE_QUEUE);
-        LASSERT(PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
-        LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
-        LASSERT(atomic_read(&tx->tx_refcount) == 0);
-        LASSERT(list_empty(&tx->tx_schedlist)); /*not any the scheduler list*/
-
-        /* stash lnet msgs for finalize AFTER I free this tx desc */
-        lnetmsg[0] = tx->tx_ptlmsg; tx->tx_ptlmsg = NULL;
-        lnetmsg[1] = tx->tx_ptlmsg_reply; tx->tx_ptlmsg_reply = NULL;
-
-        /*
-         * Release the associated RX if there is one
-         */
-        if(tx->tx_associated_rx){
-                CDEBUG(D_NET, "tx=%p destroy associated rx %p\n",tx,tx->tx_associated_rx);
-                kptllnd_rx_decref(tx->tx_associated_rx,"tx",kptllnd_data);
-                tx->tx_associated_rx = NULL;
-        }
-
-        /*
-         * Cleanup resources associate with the peer
-         */
-        if(tx->tx_peer){
-                CDEBUG(D_NET, "tx=%p detach from peer=%p\n",tx,tx->tx_peer);
-                kptllnd_peer_dequeue_tx(tx->tx_peer,tx);
-                kptllnd_peer_decref(tx->tx_peer,"tx");
-                tx->tx_peer = NULL;
-        }
-
-        LASSERT(list_empty(&tx->tx_list)); /* removed from any peer list*/
-
-        /*
-         * state = back on idle queue
-         */
-        tx->tx_state = TX_STATE_ON_IDLE_QUEUE;
-
-        /*
-         * Put this tx descriptor back on the idle queue
-         */
-        spin_lock(&kptllnd_data->kptl_tx_lock);
-        list_add (&tx->tx_list, &kptllnd_data->kptl_idle_txs);
-        STAT_UPDATE(kps_tx_released);
-        spin_unlock(&kptllnd_data->kptl_tx_lock);
-        
-        if (lnetmsg[0] != NULL)
-                lnet_finalize(kptllnd_data->kptl_ni, lnetmsg[0], status);
-
-        if (lnetmsg[1] != NULL)
-                lnet_finalize(kptllnd_data->kptl_ni, lnetmsg[1], status);
-
-        CDEBUG(D_NET, "<<< tx=%p\n",tx);
-}
-
-void
-kptllnd_tx_schedule (kptl_tx_t *tx)
-{
-        kptl_data_t *kptllnd_data = tx->tx_po.po_kptllnd_data;
+        kptl_peer_t     *peer = tx->tx_peer;
+        ptl_handle_md_t  msg_mdh;
+        ptl_handle_md_t  rdma_mdh;
         unsigned long    flags;
 
-        CDEBUG(D_NET, "tx=%p\n",tx);
+        LASSERT (atomic_read(&tx->tx_refcount) == 0);
+        LASSERT (!tx->tx_active);
 
-        spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
-        LASSERT(list_empty(&tx->tx_schedlist));
-        list_add_tail(&tx->tx_schedlist,&kptllnd_data->kptl_sched_txq);
-        wake_up(&kptllnd_data->kptl_sched_waitq);
-        spin_unlock_irqrestore(&kptllnd_data->kptl_sched_lock, flags);
+        spin_lock_irqsave(&peer->peer_lock, flags);
+
+        msg_mdh = tx->tx_msg_mdh;
+        rdma_mdh = tx->tx_rdma_mdh;
+
+        if (PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE) &&
+            PtlHandleIsEqual(rdma_mdh, PTL_INVALID_HANDLE)) {
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
+                return 0;
+        }
+        
+        /* Uncompleted comms: there must have been some error and it must be
+         * propagated to LNET... */
+        LASSERT (tx->tx_status != 0 ||
+                 (tx->tx_lnet_msg == NULL && 
+                  tx->tx_lnet_replymsg == NULL));
+
+        /* stash the tx on its peer until it completes */
+        atomic_set(&tx->tx_refcount, 1);
+        tx->tx_active = 1;
+        list_add_tail(&tx->tx_list, &peer->peer_activeq);
+        
+        spin_unlock_irqrestore(&peer->peer_lock, flags);
+
+        /* These unlinks will ensure completion events (normal or unlink) will
+         * happen ASAP */
+
+        if (!PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE))
+                PtlMDUnlink(msg_mdh);
+        
+        if (!PtlHandleIsEqual(rdma_mdh, PTL_INVALID_HANDLE))
+                PtlMDUnlink(rdma_mdh);
+
+        return -EAGAIN;
+}
+#else
+int
+kptllnd_tx_abort_netio(kptl_tx_t *tx)
+{
+        ptl_peer_t      *peer = tx->tx_peer;
+        ptl_handle_md_t  msg_mdh;
+        ptl_handle_md_t  rdma_mdh;
+        unsigned long    flags;
+        ptl_err_t        prc;
+
+        LASSERT (atomic_read(&tx->tx_refcount) == 0);
+        LASSERT (!tx->tx_active);
+
+        spin_lock_irqsave(&peer->peer_lock, flags);
+
+        msg_mdh = tx->tx_msg_mdh;
+        rdma_mdh = tx->tx_rdma_mdh;
+
+        if (PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE) &&
+            PtlHandleIsEqual(rdma_mdh, PTL_INVALID_HANDLE)) {
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
+                return 0;
+        }
+        
+        /* Uncompleted comms: there must have been some error and it must be
+         * propagated to LNET... */
+        LASSERT (tx->tx_status != 0 ||
+                 (tx->tx_lnet_msg == NULL && 
+                  tx->tx_replymsg == NULL));
+
+        spin_unlock_irqrestore(&peer->peer_lock, flags);
+
+        if (!PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE)) {
+                prc = PtlMDUnlink(msg_mdh);
+                if (prc == PTL_OK)
+                        msg_mdh = PTL_INVALID_HANDLE;
+        }
+
+        if (!PtlHandleIsEqual(rdma_mdh, PTL_INVALID_HANDLE)) {
+                prc = PtlMDUnlink(rdma_mdh);
+                if (prc == PTL_OK)
+                        rdma_mdh = PTL_INVALID_HANDLE;
+        }
+
+        spin_lock_irqsave(&peer->peer_lock, flags);
+
+        /* update tx_???_mdh if callback hasn't fired */
+        if (PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE))
+                msg_mdh = PTL_INVALID_HANDLE;
+        else
+                tx->tx_msg_mdh = msg_mdh;
+        
+        if (PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE))
+                rdma_mdh = PTL_INVALID_HANDLE;
+        else
+                tx->tx_rdma_mdh = rdma_mdh;
+
+        if (PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE) &&
+            PtlHandleIsEqual(rdma_mdh, PTL_INVALID_HANDLE)) {
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
+                return 0;
+        }
+
+        /* stash the tx on its peer until it completes */
+        atomic_set(&tx->tx_refcount, 1);
+        tx->tx_active = 1;
+        list_add_tail(&tx->tx_list, &peer->peer_activeq);
+
+        kptllnd_peer_addref(peer);              /* extra ref for me... */
+
+        spin_unlock_irqrestore(&peer->peer_lock, flags);
+
+        /* This will get the watchdog thread to try aborting all the peer's
+         * comms again.  NB, this deems it fair that 1 failing tx which can't
+         * be aborted immediately (i.e. its MDs are still busy) is valid cause
+         * to nuke everything to the same peer! */
+        kptllnd_peer_close(peer);
+        kptllnd_peer_decref(peer);
+
+        return -EAGAIN;
+}
+#endif
+
+void
+kptllnd_tx_fini (kptl_tx_t *tx)
+{
+        lnet_msg_t     *replymsg = tx->tx_lnet_replymsg;
+        lnet_msg_t     *msg      = tx->tx_lnet_msg;
+        kptl_peer_t    *peer     = tx->tx_peer;
+        int             status   = tx->tx_status;
+        int             rc;
+
+        LASSERT (!in_interrupt());
+        LASSERT (atomic_read(&tx->tx_refcount) == 0);
+        LASSERT (!tx->tx_idle);
+        LASSERT (!tx->tx_active);
+
+        /* TX has completed or failed */
+
+        if (peer != NULL) {
+                rc = kptllnd_tx_abort_netio(tx);
+                if (rc != 0)
+                        return;
+        }
+
+        LASSERT (PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE));
+        LASSERT (PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE));
+
+        tx->tx_lnet_msg = tx->tx_lnet_replymsg = NULL;
+        tx->tx_peer = NULL;
+        tx->tx_idle = 1;
+
+        spin_lock(&kptllnd_data.kptl_tx_lock);
+        list_add_tail(&tx->tx_list, &kptllnd_data.kptl_idle_txs);
+        spin_unlock(&kptllnd_data.kptl_tx_lock);
+
+        /* Must finalize AFTER freeing 'tx' */
+        if (msg != NULL)
+                lnet_finalize(kptllnd_data.kptl_ni, msg, status);
+
+        if (replymsg != NULL)
+                lnet_finalize(kptllnd_data.kptl_ni, replymsg, status);
+
+        if (peer != NULL)
+                kptllnd_peer_decref(peer);
 }
 
 void
 kptllnd_tx_callback(ptl_event_t *ev)
 {
-        kptl_tx_t       *tx = ev->md.user_ptr;
-        kptl_peer_t     *peer;
-        int              rc;
-        int              do_decref = 0;
+        kptl_eventarg_t *eva = ev->md.user_ptr;
+        int              ismsg = (eva->eva_type == PTLLND_EVENTARG_TYPE_MSG);
+        kptl_tx_t       *tx = kptllnd_eventarg2obj(eva);
+        kptl_peer_t     *peer = tx->tx_peer;
+        int              ok = (ev->ni_fail_type == PTL_OK);
+        int              unlinked;
         unsigned long    flags;
 
-        CDEBUG(D_NET, ">>> %s(%d) tx=%p fail=%d\n",
-                get_ev_type_string(ev->type),ev->type,tx,ev->ni_fail_type);
-
-        STAT_UPDATE(kps_tx_event);
+        LASSERT (peer != NULL);
+        LASSERT (eva->eva_type == PTLLND_EVENTARG_TYPE_MSG ||
+                 eva->eva_type == PTLLND_EVENTARG_TYPE_RDMA);
+        LASSERT (!PtlHandleIsEqual(ismsg ? tx->tx_msg_mdh : tx->tx_rdma_mdh, 
+                                   PTL_INVALID_HANDLE));
 
 #ifdef LUSTRE_PORTALS_UNLINK_SEMANTICS
-        CDEBUG(D_NET, "ev->unlinked=%d\n",ev->unlinked);
-        if(ev->unlinked)
-                STAT_UPDATE(kps_tx_unlink_event);
-#endif
-
-        if(ev->type == PTL_EVENT_UNLINK ){
-#ifndef LUSTRE_PORTALS_UNLINK_SEMANTICS
-                STAT_UPDATE(kps_tx_unlink_event);
-                /*
-                 * Ignore unlink events if we don't
-                 * have lustre semantics as these only occur
-                 * in one-to-one correspondence with OPXXX_END
-                 * event's and we've already cleaned up in
-                 * those cases.
-                 */
-                CDEBUG(D_NET, "<<<\n");
-                return;
+        unlinked = ev->unlinked;
 #else
-                /*
-                 * Clear the handles
-                 */
-                if(PtlHandleIsEqual(ev->md_handle,tx->tx_mdh))
-                        tx->tx_mdh = PTL_INVALID_HANDLE;
-                else if (PtlHandleIsEqual(ev->md_handle,tx->tx_mdh_msg))
-                        tx->tx_mdh_msg = PTL_INVALID_HANDLE;
-
-                tx->tx_status = -EINVAL;
-                kptllnd_tx_scheduled_decref(tx);
-                CDEBUG(D_NET, "<<<\n");
-                return;
+        unlinked = (ev->type == PTL_EVENT_UNLINK);
 #endif
-        }
+        CDEBUG(D_NET, "%s(%d) tx=%p(%s) fail=%d unlinked=%d\n",
+               kptllnd_evtype2str(ev->type), ev->type, 
+               tx, libcfs_nid2str(peer->peer_nid), 
+               ev->ni_fail_type, unlinked);
 
-        LASSERT(tx->tx_peer != NULL);
-        peer = tx->tx_peer;
-
-        spin_lock_irqsave(&peer->peer_lock, flags);
-
-        /*
-         * Save the status flag
-         */
-        tx->tx_status = ev->ni_fail_type == PTL_NI_OK ? 0 : -EINVAL;
-
-        switch(ev->type)
-        {
-        case PTL_EVENT_SEND_END:
-
-                /*
-                 * Mark that we've seen an SEND END
-                 */
-                tx->tx_seen_send_end = 1;
-
-                switch(tx->tx_type)
-                {
-                default:
-                        LBUG();
-                        break;
-
-                case TX_TYPE_SMALL_MESSAGE:
-                        CDEBUG(D_NET, "TX_TYPE_SMALL_MESSAGE\n");
-                        LASSERT(PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
-
-                        /*
-                         * Success or failure we are done with the Message MD
-                         */
-                        tx->tx_mdh_msg = PTL_INVALID_HANDLE;
-                        do_decref = 1;
-                        break;
-
-                case TX_TYPE_LARGE_PUT:
-                case TX_TYPE_LARGE_GET:
-                        CDEBUG(D_NET, "TX_TYPE_LARGE_%s\n",
-                                tx->tx_type == TX_TYPE_LARGE_PUT ?
-                                "PUT" : "GET");
-                        /*
-                         * Success or failure we are done with the Message MD
-                         */
-                        tx->tx_mdh_msg = PTL_INVALID_HANDLE;
-
-                        /*
-                         * There was an error, and we're not going to make any more
-                         *    progress (obviously) and the
-                         *    PUT_END or GET_END is never going to come.
-                         */
-                        if(ev->ni_fail_type != PTL_NI_OK ){
-
-                                /*
-                                 * There was a error in the message
-                                 * we can safely unlink the MD
-                                 *
-                                 */
-                                if(!PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE)){
-                                        LASSERT(atomic_read(&tx->tx_refcount)>1);
-                                        rc = PtlMDUnlink(tx->tx_mdh);
-                                        LASSERT(rc == 0);
-#ifndef LUSTRE_PORTALS_UNLINK_SEMANTICS
-                                        tx->tx_mdh = PTL_INVALID_HANDLE;
-                                        /*
-                                         * We are holding another reference
-                                         * so this is not going to do anything
-                                         * but decrement the tx->ref_count
-                                         */
-                                        kptllnd_tx_decref(tx);
-#endif
-                                }
-                        }
-
-                        do_decref = 1;
-                        break;
-
-                case TX_TYPE_LARGE_PUT_RESPONSE:
-                        CDEBUG(D_NET, "TX_TYPE_LARGE_PUT_RESPONSE\n");
-                        LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
-
-                        /*
-                         * If'we've already seen the reply end
-                         * or if this is a failure and we're NEVER going
-                         * to see the reply end, release our reference here
-                         */
-                        if(tx->tx_seen_reply_end || ev->ni_fail_type != PTL_NI_OK){
-                                tx->tx_mdh = PTL_INVALID_HANDLE;
-                                do_decref = 1;
-                        }
-                        break;
-
-                case TX_TYPE_LARGE_GET_RESPONSE:
-                        CDEBUG(D_NET, "TX_TYPE_LARGE_GET_RESPONSE\n");
-                        LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
-
-                        /*
-                         * Success or failure we are done with the MD
-                         */
-                        tx->tx_mdh = PTL_INVALID_HANDLE;
-                        do_decref = 1;
-                        break;
-                }
-                break;
-
-        case PTL_EVENT_GET_END:
-                LASSERT(tx->tx_type == TX_TYPE_LARGE_PUT);
-                tx->tx_mdh = PTL_INVALID_HANDLE;
-                do_decref = 1;
-                break;
-        case PTL_EVENT_PUT_END:
-                LASSERT(tx->tx_type == TX_TYPE_LARGE_GET);
-                tx->tx_mdh = PTL_INVALID_HANDLE;
-                do_decref = 1;
-                break;
-        case PTL_EVENT_REPLY_END:
-                LASSERT(tx->tx_type == TX_TYPE_LARGE_PUT_RESPONSE);
-                tx->tx_seen_reply_end = 1;
-                if(tx->tx_seen_send_end){
-                        tx->tx_mdh = PTL_INVALID_HANDLE;
-                        do_decref = 1;
-                }
-                break;
+        switch (tx->tx_type) {
         default:
                 LBUG();
+                
+        case TX_TYPE_SMALL_MESSAGE:
+                LASSERT (ismsg);
+                LASSERT (ev->type == PTL_EVENT_UNLINK ||
+                         ev->type == PTL_EVENT_SEND_END);
+                break;
+
+        case TX_TYPE_PUT_REQUEST:
+                LASSERT (ev->type == PTL_EVENT_UNLINK ||
+                         (ismsg && ev->type == PTL_EVENT_SEND_END) ||
+                         (!ismsg && ev->type == PTL_EVENT_GET_END));
+                break;
+
+        case TX_TYPE_GET_REQUEST:
+                LASSERT (ev->type == PTL_EVENT_UNLINK ||
+                         (ismsg && ev->type == PTL_EVENT_SEND_END) ||
+                         (!ismsg && ev->type == PTL_EVENT_PUT_END));
+
+                if (!ismsg && ev->type == PTL_EVENT_PUT_END) {
+                        tx->tx_lnet_replymsg->msg_ev.mlength = ev->mlength;
+                        /* Check GET matched */
+                        if (ev->hdr_data != PTLLND_RDMA_OK)
+                                ok = 0;
+                }
+                break;
+
+        case TX_TYPE_PUT_RESPONSE:
+                LASSERT (!ismsg);
+                LASSERT (ev->type == PTL_EVENT_UNLINK ||
+                         ev->type == PTL_EVENT_SEND_END ||
+                         ev->type == PTL_EVENT_REPLY_END);
+                break;
+
+        case TX_TYPE_GET_RESPONSE:
+                LASSERT (!ismsg);
+                LASSERT (ev->type == PTL_EVENT_UNLINK ||
+                         ev->type == PTL_EVENT_SEND_END);
+                break;
         }
+
+        if (!ok)
+                kptllnd_peer_close(peer);
+
+        if (!unlinked)
+                return;
+
+        spin_lock_irqsave(&peer->peer_lock, flags);
+                
+        if (ismsg)
+                tx->tx_msg_mdh = PTL_INVALID_HANDLE;
+        else
+                tx->tx_rdma_mdh = PTL_INVALID_HANDLE;
+
+        if (!PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE) ||
+            !PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE) ||
+            !tx->tx_active) {
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
+                return;
+        }
+
+        list_del(&tx->tx_list);
+        tx->tx_active = 0;
 
         spin_unlock_irqrestore(&peer->peer_lock, flags);
 
-        if(do_decref)
-                kptllnd_tx_scheduled_decref(tx);
-        CDEBUG(D_NET, "<<< decref=%d\n",do_decref);
-}
+        /* drop peer's ref, but if it was the last one... */
+        if (atomic_dec_and_test(&tx->tx_refcount)) {
+                /* ...finalize it in thread context! */
+                spin_lock_irqsave(&kptllnd_data.kptl_sched_lock, flags);
 
-void
-kptllnd_tx_addref(
-        kptl_tx_t *tx)
-{
-        atomic_inc(&tx->tx_refcount);
-}
+                list_add_tail(&tx->tx_list, &kptllnd_data.kptl_sched_txq);
+                wake_up(&kptllnd_data.kptl_sched_waitq);
 
-void
-kptllnd_tx_decref(
-        kptl_tx_t *tx)
-{
-        if( !atomic_dec_and_test(&tx->tx_refcount)){
-                return;
+                spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock, flags);
         }
-
-        CDEBUG(D_NET, "tx=%p LAST REF\n",tx);
-        kptllnd_tx_done(tx);
-}
-
-void
-kptllnd_tx_scheduled_decref(
-        kptl_tx_t *tx)
-{
-        if( !atomic_dec_and_test(&tx->tx_refcount)){
-                /*
-                 * The below message could actually be out of sync
-                 * with the real ref count, and is for informational purposes
-                 * only
-                 */
-                CDEBUG(D_NET, "tx=%p count=%d\n",tx,
-                        atomic_read(&tx->tx_refcount));
-                return;
-        }
-
-        CDEBUG(D_NET, "tx=%p LAST REF\n",tx);
-        kptllnd_tx_schedule(tx);
 }

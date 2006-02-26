@@ -76,8 +76,6 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
         ptllnd_tx_t       *tx;
         int                rc;
 
-        CDEBUG(D_NET, ">>> nid=%s\n",libcfs_nid2str(nid));
-
         LASSERT (LNET_NIDNET(nid) == LNET_NIDNET(ni->ni_nid));
 
         list_for_each(tmp, &plni->plni_peer_hash[hash]) {
@@ -85,7 +83,6 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
 
                 if (plp->plp_nid == nid) {
                         ptllnd_peer_addref(plp);
-                        CDEBUG(D_NET, "<<< peer=%p FOUND\n",plp);
                         return plp;
                 }
         }
@@ -143,7 +140,6 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
 
         ptllnd_post_tx(tx);
 
-        CDEBUG(D_NET, "<<< peer=%p NEW\n",plp);
         return plp;
 }
 
@@ -192,8 +188,8 @@ ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
         case PTLLND_MSG_TYPE_PUT:
         case PTLLND_MSG_TYPE_GET:
                 LASSERT (payload_nob == 0);
-                msgsize = offsetof(kptl_msg_t, ptlm_u) +
-                          sizeof(kptl_request_msg_t);
+                msgsize = offsetof(kptl_msg_t, ptlm_u) + 
+                          sizeof(kptl_rdma_msg_t);
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
@@ -289,13 +285,6 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
          * events for this tx until it's unlinked.  So I set tx_completing to
          * flag the tx is getting handled */
 
-        CDEBUG(D_NET, ">>> tx=%p peer=%p\n",tx,peer);
-        CDEBUG(D_NET, "completing=%d\n",tx->tx_completing);
-        CDEBUG(D_NET, "status=%d\n",tx->tx_status);
-        CDEBUG(D_NET, "niov=%d\n",tx->tx_niov);
-        CDEBUG(D_NET, "lnetreplymsg=%p\n",tx->tx_lnetreplymsg);
-        CDEBUG(D_NET, "lnetmsg=%p\n",tx->tx_lnetmsg);
-
         if (tx->tx_completing)
                 return;
 
@@ -331,8 +320,6 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
         LASSERT (plni->plni_ntxs > 0);
         plni->plni_ntxs--;
         LIBCFS_FREE(tx, offsetof(ptllnd_tx_t, tx_msg) + tx->tx_msgsize);
-
-        CDEBUG(D_NET, "<<< tx=%p\n",tx);
 }
 
 void
@@ -507,7 +494,6 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
         ptl_handle_md_t mdh;
         int             rc;
 
-        CDEBUG(D_NET, ">>> peer=%p\n",peer);
         CDEBUG(D_NET, "plp_outstanding_credits=%d\n",peer->plp_outstanding_credits);
 
         if (list_empty(&peer->plp_txq) &&
@@ -549,7 +535,7 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                 list_del_init(&tx->tx_list);
 
                 CDEBUG(D_NET, "Sending at TX=%p type=%s (%d)\n",tx,
-                        get_msg_type_string(tx->tx_type),tx->tx_type);
+                        ptllnd_msgtype2str(tx->tx_type),tx->tx_type);
 
                 if (tx->tx_type == PTLLND_MSG_TYPE_NOOP &&
                     (!list_empty(&peer->plp_txq) ||
@@ -610,8 +596,6 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
 
                 list_add_tail(&tx->tx_list, &plni->plni_active_txs);
         }
-
-        CDEBUG(D_NET, "<<< peer=%p\n",peer);
 }
 
 int
@@ -629,8 +613,6 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
         int             rc;
         int             rc2;
 
-        CDEBUG(D_NET, ">>> peer=%p type=%s(%d) tx=%p\n",peer,
-                type == PTLLND_MSG_TYPE_GET ? "GET" : "PUT/REPLY",type,tx);
         CDEBUG(D_NET, "niov=%d offset=%d len=%d\n",niov,offset,len);
 
         LASSERT (type == PTLLND_MSG_TYPE_GET ||
@@ -671,7 +653,7 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
                 ptllnd_wait(ni, -1);
         }
 
-        if(peer->plp_match < PTL_RESERVED_MATCHBITS)
+        if (peer->plp_match < PTL_RESERVED_MATCHBITS)
                 peer->plp_match = PTL_RESERVED_MATCHBITS;
         matchbits = peer->plp_match++;
         CDEBUG(D_NET, "matchbits " LPX64 "\n",matchbits);
@@ -711,8 +693,8 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
          */
         tx->tx_msg.ptlm_dststamp = peer->plp_stamp;
 
-        tx->tx_msg.ptlm_u.req.kptlrm_hdr = msg->msg_hdr;
-        tx->tx_msg.ptlm_u.req.kptlrm_matchbits = matchbits;
+        tx->tx_msg.ptlm_u.rdma.kptlrm_hdr = msg->msg_hdr;
+        tx->tx_msg.ptlm_u.rdma.kptlrm_matchbits = matchbits;
 
         if (type == PTLLND_MSG_TYPE_GET) {
                 tx->tx_lnetreplymsg = lnet_create_reply_msg(ni, msg);
@@ -726,12 +708,10 @@ ptllnd_passive_rdma(ptllnd_peer_t *peer, int type, lnet_msg_t *msg,
 
         tx->tx_lnetmsg = msg;
         ptllnd_post_tx(tx);
-        CDEBUG(D_NET, "<<<\n");
         return 0;
 
  failed:
         ptllnd_tx_done(tx);
-        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;
 }
 
@@ -747,10 +727,6 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
         ptl_md_t         md;
         ptl_handle_md_t  mdh;
         int              rc;
-
-        CDEBUG(D_NET, ">>> peer=%p type=%d tx=%p\n",peer,type,tx);
-        CDEBUG(D_NET, "niov=%u offset=%u len=%u\n",niov,offset,len);
-        CDEBUG(D_NET, "matchbits " LPX64 "\n",matchbits);
 
         LASSERT (type == PTLLND_RDMA_READ ||
                  type == PTLLND_RDMA_WRITE);
@@ -773,16 +749,10 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
 
         md.user_ptr = ptllnd_obj2eventarg(tx, PTLLND_EVENTARG_TYPE_TX);
         md.eq_handle = plni->plni_eqh;
-        md.threshold = 1;
         md.max_size = 0;
         md.options = PTLLND_MD_OPTIONS;
-        if(type == PTLLND_RDMA_READ){
-                md.options |= PTL_MD_OP_GET;
-                md.threshold ++;
-        }
-        else{
-                md.options |= PTL_MD_OP_PUT | PTL_MD_ACK_DISABLE;
-        }
+        md.threshold = (type == PTLLND_RDMA_READ) ? 2 : 1;
+
         ptllnd_set_md_buffer(&md, tx);
 
         rc = PtlMDBind(plni->plni_nih, md, LNET_UNLINK, &mdh);
@@ -801,17 +771,16 @@ ptllnd_active_rdma(ptllnd_peer_t *peer, int type,
                             plni->plni_portal, 0, matchbits, 0);
         else
                 rc = PtlPut(mdh, PTL_NOACK_REQ, peer->plp_ptlid,
-                            plni->plni_portal, 0, matchbits, 0, 0);
-        if (rc == 0){
-                CDEBUG(D_NET, "<<<\n");
+                            plni->plni_portal, 0, matchbits, 0, 
+                            (msg == NULL) ? PTLLND_RDMA_FAIL : PTLLND_RDMA_OK);
+
+        if (rc == PTL_OK)
                 return 0;
-        }
 
         tx->tx_lnetmsg = NULL;
  failed:
         tx->tx_status = rc;
         ptllnd_tx_done(tx);    /* this will close peer */
-        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;
 }
 
@@ -866,7 +835,6 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
                                          msg->msg_md->md_iov.iov,
                                          0, msg->msg_md->md_length);
                 ptllnd_peer_decref(plp);
-                CDEBUG(D_NET, "<<< rc=%d\n",rc);
                 return rc;
 
         case LNET_MSG_REPLY:
@@ -882,7 +850,6 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
                                          msg->msg_niov, msg->msg_iov,
                                          msg->msg_offset, msg->msg_len);
                 ptllnd_peer_decref(plp);
-                CDEBUG(D_NET, "<<< rc=%d\n",rc);
                 return rc;
         }
 
@@ -907,7 +874,6 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
         tx->tx_lnetmsg = msg;
         ptllnd_post_tx(tx);
         ptllnd_peer_decref(plp);
-        CDEBUG(D_NET, "<<<\n");
         return 0;
 }
 
@@ -971,12 +937,6 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
         LASSERT (kiov == NULL);
         LASSERT (niov <= PTL_MD_MAX_IOV);       /* !!! */
 
-        CDEBUG(D_NET, ">>> msg=%p\n",msg);
-        CDEBUG(D_NET, "rx=%p rx_nob=%d\n",rx,rx->rx_nob);
-        CDEBUG(D_NET, "niov=%d\n",niov);
-        CDEBUG(D_NET, "offset=%d\n",offset);
-        CDEBUG(D_NET, "mlen=%d rlen=%d\n",mlen,rlen);
-
         switch (rx->rx_msg->ptlm_type) {
         default:
                 LBUG();
@@ -1001,31 +961,25 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
         case PTLLND_MSG_TYPE_PUT:
                 CDEBUG(D_NET, "PTLLND_MSG_TYPE_PUT offset=%d mlen=%d\n",offset,mlen);
                 rc = ptllnd_active_rdma(rx->rx_peer, PTLLND_RDMA_READ, msg,
-                                        rx->rx_msg->ptlm_u.req.kptlrm_matchbits,
+                                        rx->rx_msg->ptlm_u.rdma.kptlrm_matchbits,
                                         niov, iov, offset, mlen);
                 break;
 
         case PTLLND_MSG_TYPE_GET:
                 CDEBUG(D_NET, "PTLLND_MSG_TYPE_GET\n");
-                if (msg != NULL) {
-                        /* matched! */
-                        CDEBUG(D_NET, "matchbits="LPX64"\n",
-                                   rx->rx_msg->ptlm_u.req.kptlrm_matchbits);
-
+                if (msg != NULL)
                         rc = ptllnd_active_rdma(rx->rx_peer, PTLLND_RDMA_WRITE, msg,
-                                                rx->rx_msg->ptlm_u.req.kptlrm_matchbits,
+                                                rx->rx_msg->ptlm_u.rdma.kptlrm_matchbits,
                                                 msg->msg_niov, msg->msg_iov,
                                                 msg->msg_offset, msg->msg_len);
-                        CDEBUG(D_NET, "<<< rc=%d\n",rc);
-                        break;
-                } else {
-                        ptllnd_close_peer(rx->rx_peer);
-                }
+                else
+                        rc = ptllnd_active_rdma(rx->rx_peer, PTLLND_RDMA_WRITE, NULL,
+                                                rx->rx_msg->ptlm_u.rdma.kptlrm_matchbits,
+                                                0, NULL, 0, 0);
                 break;
         }
 
         ptllnd_rx_done(rx);
-        CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;
 }
 
@@ -1039,9 +993,6 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         int            flip;
         ptllnd_peer_t *plp;
         int            rc;
-
-
-        CDEBUG(D_NET, ">>> initiator=%s nob=%d\n",ptllnd_ptlid2str(initiator),nob);
 
         if (nob < basenob) {
                 CERROR("Short receive from %s\n",
@@ -1100,14 +1051,14 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         case PTLLND_MSG_TYPE_GET:
                 CDEBUG(D_NET, "PTLLND_MSG_TYPE_%s\n",
                         msg->ptlm_type==PTLLND_MSG_TYPE_PUT ? "PUT" : "GET");
-                if (nob < basenob + sizeof(kptl_request_msg_t)) {
+                if (nob < basenob + sizeof(kptl_rdma_msg_t)) {
                         CERROR("Short rdma request from %s(%s)\n",
                                libcfs_nid2str(msg->ptlm_srcnid),
                                ptllnd_ptlid2str(initiator));
                         return;
                 }
                 if (flip)
-                        __swab64s(&msg->ptlm_u.req.kptlrm_matchbits);
+                        __swab64s(&msg->ptlm_u.rdma.kptlrm_matchbits);
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
@@ -1228,7 +1179,7 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         case PTLLND_MSG_TYPE_GET:
                 CDEBUG(D_NET, "PTLLND_MSG_TYPE_%s\n",
                         msg->ptlm_type==PTLLND_MSG_TYPE_PUT ? "PUT" : "GET");
-                rc = lnet_parse(ni, &msg->ptlm_u.req.kptlrm_hdr,
+                rc = lnet_parse(ni, &msg->ptlm_u.rdma.kptlrm_hdr,
                                 msg->ptlm_srcnid, &rx, 1);
                 CDEBUG(D_NET, "lnet_parse rc=%d\n",rc);
                 if (rc < 0)
@@ -1246,8 +1197,6 @@ ptllnd_parse_request(lnet_ni_t *ni, ptl_process_id_t initiator,
         }
 
         ptllnd_peer_decref(plp);
-
-        CDEBUG(D_NET, "<<<\n");
 }
 
 void
@@ -1308,7 +1257,7 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
         LASSERT (!PtlHandleIsEqual(event->md_handle, PTL_INVALID_HANDLE));
 
         CDEBUG(D_NET, "tx=%p type=%s (%d)\n",tx,
-                get_msg_type_string(tx->tx_type),tx->tx_type);
+                ptllnd_msgtype2str(tx->tx_type),tx->tx_type);
         CDEBUG(D_NET, "unlinked=%d\n",unlinked);
         CDEBUG(D_NET, "error=%d\n",error);
 
@@ -1343,12 +1292,13 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
         case PTLLND_MSG_TYPE_GET:
                 LASSERT (event->type == PTL_EVENT_UNLINK ||
                          (isreq && event->type == PTL_EVENT_SEND_END) ||
-                         (isbulk && event->type == PTL_EVENT_REPLY_END));
+                         (isbulk && event->type == PTL_EVENT_PUT_END));
 
-                if (isbulk && event->type == PTL_EVENT_REPLY_END) {
+                if (isbulk && event->type == PTL_EVENT_PUT_END) {
                         LASSERT (tx->tx_lnetreplymsg != NULL);
-                        tx->tx_lnetreplymsg->msg_ev.mlength =
-                                event->mlength;
+                        tx->tx_lnetreplymsg->msg_ev.mlength = event->mlength;
+                        /* Check GET matched */
+                        error |= (event->hdr_data != PTLLND_RDMA_OK);
                 }
                 break;
 
@@ -1371,7 +1321,7 @@ ptllnd_tx_event (lnet_ni_t *ni, ptl_event_t *event)
                 LASSERT (isbulk);
         }
 
-        /* Schedule ptllnd_tx_done() on error last completion event */
+        /* Schedule ptllnd_tx_done() on error or last completion event */
         if (error ||
             (PtlHandleIsEqual(tx->tx_bulkmdh, PTL_INVALID_HANDLE) &&
              PtlHandleIsEqual(tx->tx_reqmdh, PTL_INVALID_HANDLE))) {
@@ -1395,8 +1345,6 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
         int            found = 0;
         int            timeout = 0;
 
-        CDEBUG(D_NET, ">>> ms=%d\n",milliseconds);
-
         /* Handle any currently queued events, returning immediately if any.
          * Otherwise block for the timeout and handle all events queued
          * then. */
@@ -1409,10 +1357,8 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                 if (rc == PTL_EQ_EMPTY) {
                         if (found ||            /* handled some events */
                             milliseconds == 0 || /* just checking */
-                            blocked){            /* blocked already */
-                                CDEBUG(D_NET, "found=%d blocked=%d\n",found,blocked);
+                            blocked)            /* blocked already */
                                 break;
-                            }
 
                         blocked = 1;
                         timeout = milliseconds;
@@ -1426,7 +1372,7 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                                plni->plni_eq_size);
 
                 CDEBUG(D_NET, "event.type=%s(%d)\n",
-                        get_ev_type_string(event.type),event.type);
+                       ptllnd_evtype2str(event.type),event.type);
 
                 found = 1;
                 switch (ptllnd_eventarg2type(event.md.user_ptr)) {
@@ -1449,6 +1395,4 @@ ptllnd_wait (lnet_ni_t *ni, int milliseconds)
                 CDEBUG(D_NET, "Process ZOMBIE tx=%p\n",tx);
                 ptllnd_tx_done(tx);
         }
-
-        CDEBUG(D_NET, "<<<\n");
 }
