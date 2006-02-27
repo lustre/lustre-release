@@ -53,7 +53,6 @@
 
 #include <lustre_ha.h>
 #include <lprocfs_status.h>
-#include <lustre_mds.h>
 #include <lustre_log.h>
 #include <lustre_debug.h>
 #include "osc_internal.h"

@@ -40,7 +40,6 @@
 #endif
 
 #include <obd_class.h>
-#include <lustre_mds.h>
 #include <lustre_log.h>
 #include <libcfs/list.h>
 

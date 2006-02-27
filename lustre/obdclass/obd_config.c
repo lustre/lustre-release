@@ -33,7 +33,6 @@
 #include <obd_class.h>
 #include <obd.h>
 #endif
-#include <lustre_mds.h>
 #include <lustre_log.h>
 #include <lprocfs_status.h>
 #include <libcfs/list.h>

@@ -45,7 +45,6 @@
 #include <obd_class.h>
 #include <lustre_lib.h>
 #include <lustre_idl.h>
-#include <lustre_mds.h>
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
 #include "llite_internal.h"

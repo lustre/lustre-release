@@ -2403,7 +2403,7 @@ int __init lov_init(void)
         init_obd_quota_ops(quota_interface, &lov_obd_ops);
 
         rc = class_register_type(&lov_obd_ops, lvars.module_vars,
-                                 OBD_LOV_DEVICENAME);
+                                 LUSTRE_LOV_NAME);
         if (rc && quota_interface)
                 PORTAL_SYMBOL_PUT(osc_quota_interface);
 
@@ -2416,7 +2416,7 @@ static void /*__exit*/ lov_exit(void)
         if (quota_interface)
                 PORTAL_SYMBOL_PUT(lov_quota_interface);
 
-        class_unregister_type(OBD_LOV_DEVICENAME);
+        class_unregister_type(LUSTRE_LOV_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

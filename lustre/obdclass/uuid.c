@@ -18,8 +18,6 @@
 
 #include <obd_support.h>
 #include <obd_class.h>
-#include <obd_ost.h> /* for LUSTRE_OST_NAME */
-#include <lustre_mds.h> /* for LUSTRE_MDC_NAME */
 
 struct uuid {
 	__u32	time_low;

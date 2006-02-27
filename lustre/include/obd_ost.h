@@ -13,12 +13,6 @@
 
 #include <obd_class.h>
 
-#define LUSTRE_FILTER_NAME "obdfilter"
-#define LUSTRE_OST_NAME "ost"
-#define LUSTRE_OSC_NAME "osc"
-#define LUSTRE_SANOSC_NAME "sanosc"
-#define LUSTRE_SANOST_NAME "sanost"
-
 struct osc_brw_async_args {
         struct obdo     *aa_oa;
         int              aa_requested_nob;

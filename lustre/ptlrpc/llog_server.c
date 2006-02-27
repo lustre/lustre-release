@@ -37,7 +37,6 @@
 #endif
 
 #include <obd_class.h>
-#include <lustre_mds.h>
 #include <lustre_log.h>
 #include <lustre_net.h>
 #include <libcfs/list.h>

@@ -25,7 +25,6 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <lustre_mds.h>
 #include <lustre_lite.h>
 #include "llite_internal.h"
 

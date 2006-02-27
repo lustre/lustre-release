@@ -1456,10 +1456,10 @@ int echo_client_init(void)
 
         lprocfs_init_vars(echo, &lvars);
         return class_register_type(&echo_obd_ops, lvars.module_vars,
-                                   OBD_ECHO_CLIENT_DEVICENAME);
+                                   LUSTRE_ECHO_CLIENT_NAME);
 }
 
 void echo_client_exit(void)
 {
-        class_unregister_type(OBD_ECHO_CLIENT_DEVICENAME);
+        class_unregister_type(LUSTRE_ECHO_CLIENT_NAME);
 }

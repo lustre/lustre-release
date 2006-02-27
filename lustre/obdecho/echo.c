@@ -590,7 +590,7 @@ static int __init obdecho_init(void)
                 goto failed_0;
 
         rc = class_register_type(&echo_obd_ops, lvars.module_vars,
-                                 OBD_ECHO_DEVICENAME);
+                                 LUSTRE_ECHO_NAME);
         if (rc != 0)
                 goto failed_1;
 
@@ -598,7 +598,7 @@ static int __init obdecho_init(void)
         if (rc == 0)
                 RETURN (0);
 
-        class_unregister_type(OBD_ECHO_DEVICENAME);
+        class_unregister_type(LUSTRE_ECHO_NAME);
  failed_1:
         echo_persistent_pages_fini ();
  failed_0:
@@ -608,7 +608,7 @@ static int __init obdecho_init(void)
 static void /*__exit*/ obdecho_exit(void)
 {
         echo_client_exit();
-        class_unregister_type(OBD_ECHO_DEVICENAME);
+        class_unregister_type(LUSTRE_ECHO_NAME);
         echo_persistent_pages_fini ();
 }
 

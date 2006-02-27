@@ -7,7 +7,5 @@
 
 #ifdef __KERNEL__
 
-#define OBD_CACHE_DEVICENAME "cobd"
-
 #endif
 #endif

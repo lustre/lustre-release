@@ -44,7 +44,6 @@
 
 #include <libcfs/kp30.h>
 #include <obd_class.h>
-#include <lustre_mds.h>
 #include <lustre_commit_confd.h>
 #include <obd_support.h>
 #include <obd_class.h>

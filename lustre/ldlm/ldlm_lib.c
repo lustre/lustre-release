@@ -33,8 +33,7 @@
 # include <liblustre.h>
 #endif
 #include <obd.h>
-#include <obd_ost.h> /* for LUSTRE_OSC_NAME */
-#include <lustre_mds.h> /* for LUSTRE_MDC_NAME */
+#include <lustre_mds.h>
 #include <lustre_dlm.h>
 #include <lustre_net.h>
 #include <lustre_ver.h>

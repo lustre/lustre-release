@@ -5,9 +5,6 @@
 #ifndef _OBD_ECHO_H
 #define _OBD_ECHO_H
 
-#define OBD_ECHO_DEVICENAME "obdecho"
-#define OBD_ECHO_CLIENT_DEVICENAME "echo_client"
-
 /* The persistent object (i.e. actually stores stuff!) */
 #define ECHO_PERSISTENT_OBJID    1ULL
 #define ECHO_PERSISTENT_SIZE     ((__u64)(1<<20))

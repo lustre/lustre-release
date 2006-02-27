@@ -10,10 +10,6 @@
 #ifndef _LUSTRE_MDS_H
 #define _LUSTRE_MDS_H
 
-#define LUSTRE_MDS_NAME "mds"
-#define LUSTRE_MDT_NAME "mdt"
-#define LUSTRE_MDC_NAME "mdc"
-
 #include <lustre_handles.h>
 #include <libcfs/kp30.h>
 #include <lustre_idl.h>

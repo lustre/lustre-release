@@ -29,7 +29,6 @@
 #endif
 #include <lustre_idl.h>
 #include <lustre_net.h>
-#include <lustre_mds.h>
 #include "mdc_internal.h"
 
 #ifndef __KERNEL__

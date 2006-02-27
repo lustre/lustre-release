@@ -8,9 +8,9 @@
 #ifdef __KERNEL__
 # include <linux/spinlock.h>
 #endif
+#include <linux/lustre_disk.h>
 #include <lustre_handles.h>
 #include <lustre_debug.h>
-#include <linux/lustre_disk.h>
 #include <obd.h>
 
 #define FILTER_LAYOUT_VERSION "2"

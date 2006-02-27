@@ -34,7 +34,6 @@
 #include <linux/init.h>
 
 #include <obd_class.h>
-#include <lustre_mds.h> /* for LUSTRE_MDC_NAME */
 #include <lustre_log.h>
 
 static int llog_test_rand;

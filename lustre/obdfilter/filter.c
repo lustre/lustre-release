@@ -52,7 +52,6 @@
 #include <lustre_dlm.h>
 #include <lustre_fsfilt.h>
 #include <lprocfs_status.h>
-#include <lustre_mds.h>
 #include <lustre_log.h>
 #include <lustre_commit_confd.h>
 #include <libcfs/list.h>

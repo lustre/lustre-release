@@ -29,7 +29,6 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #endif
-#include <lustre_mds.h>
 #include <obd_ost.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>

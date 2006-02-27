@@ -477,6 +477,20 @@ struct niobuf_local {
         int rc;
 };
 
+/* obd device type names */
+#define LUSTRE_MDS_NAME         "mds"
+#define LUSTRE_MDT_NAME         "mdt"
+#define LUSTRE_MDC_NAME         "mdc"
+#define LUSTRE_FILTER_NAME      "obdfilter"
+#define LUSTRE_OST_NAME         "ost"
+#define LUSTRE_OSC_NAME         "osc"
+#define LUSTRE_SANOSC_NAME      "sanosc"
+#define LUSTRE_SANOST_NAME      "sanost"
+#define LUSTRE_LOV_NAME         "lov"
+#define LUSTRE_CACHEOBD_NAME    "cobd"
+#define LUSTRE_ECHO_NAME        "obdecho"
+#define LUSTRE_ECHO_CLIENT_NAME "echo_client"
+
 
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
 #define N_LOCAL_TEMP_PAGE 0x10000000

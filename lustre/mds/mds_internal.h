@@ -5,7 +5,7 @@
 #ifndef _MDS_INTERNAL_H
 #define _MDS_INTERNAL_H
 
-#include <linux/lustre_disk.h>  /* XXX */
+#include <linux/lustre_disk.h>
 #include <lustre_mds.h>
 
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
