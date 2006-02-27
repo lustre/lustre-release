@@ -640,8 +640,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (!export) {
                 spin_unlock(&target->obd_dev_lock);
         } else if (req->rq_reqmsg->conn_cnt == 1) {
-                CERROR("%s reconnected with 1 conn_cnt; cookies not random?\n",
-                       cluuid.uuid);
+                CERROR("%s reconnected with 1 conn_cnt; cookies not "
+                       "random?\n", cluuid.uuid);
                 GOTO(out, rc = -EALREADY);
         }
 

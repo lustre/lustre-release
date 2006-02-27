@@ -685,6 +685,28 @@ static int lustre_stop_mgc(struct super_block *sb)
                 RETURN(-EBUSY); 
         }
 
+        obd->obd_force = 1;
+        /* Without the fail, we wait for locks to be dropped, so if the
+           MGS is down, we might wait for an obd timeout.  With the fail,
+           if the MGS is up, we don't tell it we're disconnecting, so 
+           we must wait until the MGS evicts the dead client before the 
+           client can reconnect. So it's either slow disconnect, or a 
+           slow reconnect. This could probably be fixed on the server side 
+           by ignoring handle mismatches in target_handle_reconnect. */
+        if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER) {
+                obd->obd_fail = 1;
+                /* client_disconnect_export uses this flag to decide whether it
+                   should disconnect or just invalidate.  (The MGC has no
+                   recoverable data in any case.) */
+                obd->obd_no_recov = 1;
+        }
+
+        /* see ll_umount_begin 
+        obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_mdc_exp, sizeof ioc_data,
+                      &ioc_data, NULL);
+        */
+        //rc = ptlrpc_set_import_active(obd->u.cli.cl_import, 0);
+
         if (obd->u.cli.cl_mgc_mgsexp)
                 obd_disconnect(obd->u.cli.cl_mgc_mgsexp);
 
@@ -762,10 +784,11 @@ static int server_stop_servers(int lddflags, int lsiflags)
 
         if (obd && (!type || !type->typ_refcnt)) {
                 int err;
-                /* If the targets have stopped, I can force/fail the servers
-                   with no ill effects */
                 obd->obd_force = 1;
-                obd->obd_fail = 1;
+                /* This doesn't mean much on a server obd; could probably 
+                   drop it */
+                if (lsiflags & LSI_UMOUNT_FAILOVER)
+                        obd->obd_fail = 1;
                 err = class_manual_cleanup(obd);
                 if (!rc) 
                         rc = err;
@@ -1246,9 +1269,9 @@ static void server_umount_begin(struct super_block *sb)
         ENTRY;
 
         CDEBUG(D_MOUNT, "umount -f\n");
-        /* umount = normal
+        /* umount = force
            umount -f = failover
-           no third way to do LSI_UMOUNT_FORCE */
+           no third way to do non-force, non-failover */
         lsi->lsi_flags |= LSI_UMOUNT_FAILOVER;
         EXIT;
 }

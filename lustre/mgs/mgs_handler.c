@@ -81,6 +81,22 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
         RETURN(rc);
 }
 
+static int mgs_reconnect(struct obd_export *exp, struct obd_device *obd,
+                         struct obd_uuid *cluuid,
+                         struct obd_connect_data *data)
+{
+        int rc = -ENOSYS;
+        ENTRY;
+
+        if (exp == NULL || obd == NULL || cluuid == NULL)
+                RETURN(-EINVAL);
+
+        CERROR("Reconnect FIXME\n");
+        //rc = mds_connect_internal(exp, data);
+
+        RETURN(rc);
+}
+
 static int mgs_disconnect(struct obd_export *exp)
 {
         unsigned long irqflags;
@@ -653,6 +669,7 @@ out_free:
 static struct obd_ops mgs_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_connect         = mgs_connect,
+        .o_reconnect       = mgs_reconnect,
         .o_disconnect      = mgs_disconnect,
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,

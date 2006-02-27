@@ -1454,10 +1454,15 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
 void ll_umount_begin(struct super_block *sb)
 {
+        struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct obd_ioctl_data ioc_data = { 0 };
         ENTRY;
+
+        /* Make the MGC not try to cancel locks */
+        lsi->lsi_flags |= LSI_UMOUNT_FAILOVER;
+
         CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
                sb->s_count, atomic_read(&sb->s_active));
 
@@ -1479,7 +1484,6 @@ void ll_umount_begin(struct super_block *sb)
                 EXIT;
                 return;
         }
-
         obd->obd_no_recov = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_osc_exp, sizeof ioc_data,
                       &ioc_data, NULL);
