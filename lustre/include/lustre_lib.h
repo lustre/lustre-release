@@ -38,6 +38,10 @@
 #error Unsupported operating system.
 #endif
 
+/* prng.c */
+unsigned int ll_rand(void);        /* returns a random 32-bit integer */
+void ll_srand(unsigned int, unsigned int);     /* seed the generator */
+
 /* target.c */
 struct ptlrpc_request;
 struct recovd_data;
@@ -66,7 +70,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 
 void target_cancel_recovery_timer(struct obd_device *obd);
 
-#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2) /* *waves hands* */
+#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler);
 void target_abort_recovery(void *data);
 void target_cleanup_recovery(struct obd_device *obd);
@@ -312,7 +316,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if ( err ) 
+        if (err) 
                 RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
@@ -343,7 +347,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         data = (struct obd_ioctl_data *)*buf;
 
         err = copy_from_user(*buf, (void *)arg, hdr.ioc_len);
-        if ( err ) {
+        if (err) {
                 OBD_VFREE(*buf, hdr.ioc_len);
                 RETURN(err);
         }
@@ -373,8 +377,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
                 data->ioc_inlbuf4 = &data->ioc_bulk[0] + offset;
         }
 
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 
 static inline int obd_ioctl_popdata(void *arg, void *data, int len)
@@ -395,77 +398,76 @@ static inline void obd_ioctl_freedata(char *buf, int len)
         return;
 }
 
-#define OBD_IOC_CREATE                 _IOR ('f', 101, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_DESTROY                _IOW ('f', 104, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_PREALLOCATE            _IOWR('f', 105, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CREATE                 _IOR ('f', 101, long)
+#define OBD_IOC_DESTROY                _IOW ('f', 104, long)
+#define OBD_IOC_PREALLOCATE            _IOWR('f', 105, long)
 
-#define OBD_IOC_SETATTR                _IOW ('f', 107, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_GETATTR                _IOR ('f', 108, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_READ                   _IOWR('f', 109, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_WRITE                  _IOWR('f', 110, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_SETATTR                _IOW ('f', 107, long)
+#define OBD_IOC_GETATTR                _IOR ('f', 108, long)
+#define OBD_IOC_READ                   _IOWR('f', 109, long)
+#define OBD_IOC_WRITE                  _IOWR('f', 110, long)
 
 
-#define OBD_IOC_STATFS                 _IOWR('f', 113, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_SYNC                   _IOW ('f', 114, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_READ2                  _IOWR('f', 115, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_FORMAT                 _IOWR('f', 116, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_PARTITION              _IOWR('f', 117, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_COPY                   _IOWR('f', 120, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_MIGR                   _IOWR('f', 121, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_PUNCH                  _IOWR('f', 122, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_STATFS                 _IOWR('f', 113, long)
+#define OBD_IOC_SYNC                   _IOW ('f', 114, long)
+#define OBD_IOC_READ2                  _IOWR('f', 115, long)
+#define OBD_IOC_FORMAT                 _IOWR('f', 116, long)
+#define OBD_IOC_PARTITION              _IOWR('f', 117, long)
+#define OBD_IOC_COPY                   _IOWR('f', 120, long)
+#define OBD_IOC_MIGR                   _IOWR('f', 121, long)
+#define OBD_IOC_PUNCH                  _IOWR('f', 122, long)
 
-#define OBD_IOC_MODULE_DEBUG           _IOWR('f', 124, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_BRW_READ               _IOWR('f', 125, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_BRW_WRITE              _IOWR('f', 126, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_NAME2DEV               _IOWR('f', 127, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_UUID2DEV               _IOWR('f', 130, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_GETNAME                _IOR ('f', 131, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_MODULE_DEBUG           _IOWR('f', 124, long)
+#define OBD_IOC_BRW_READ               _IOWR('f', 125, long)
+#define OBD_IOC_BRW_WRITE              _IOWR('f', 126, long)
+#define OBD_IOC_NAME2DEV               _IOWR('f', 127, long)
+#define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
+#define OBD_IOC_GETNAME                _IOR ('f', 131, long)
 
-#define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, OBD_IOC_DATA_TYPE)
-
+#define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, long)
+#define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
-#define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_SET_READONLY           _IOW ('f', 141, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_ABORT_RECOVERY         _IOR ('f', 142, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, long)
+#define OBD_IOC_SET_READONLY           _IOW ('f', 141, long)
+#define OBD_IOC_ABORT_RECOVERY         _IOR ('f', 142, long)
 
-#define OBD_GET_VERSION                _IOWR ('f', 144, OBD_IOC_DATA_TYPE)
+#define OBD_GET_VERSION                _IOWR ('f', 144, long)
 
-#define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, long)
 
-#define OBD_IOC_GETDEVICE              _IOWR ('f', 149, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GETDEVICE              _IOWR ('f', 149, long)
 
-#define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_LOV_SETEA              _IOW ('f', 156, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, long)
+#define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, long)
+#define OBD_IOC_LOV_SETEA              _IOW ('f', 156, long)
 
 #define OBD_IOC_QUOTACHECK             _IOW ('f', 160, int)
 #define OBD_IOC_POLL_QUOTACHECK        _IOR ('f', 161, struct if_quotacheck *)
 #define OBD_IOC_QUOTACTL               _IOWR('f', 162, struct if_quotactl *)
 
-#define OBD_IOC_MOUNTOPT               _IOWR('f', 170, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_MOUNTOPT               _IOWR('f', 170, long)
 
-#define OBD_IOC_RECORD                 _IOWR('f', 180, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_ENDRECORD              _IOWR('f', 181, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_PARSE                  _IOWR('f', 182, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_DORECORD               _IOWR('f', 183, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_PROCESS_CFG            _IOWR('f', 184, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_DUMP_LOG               _IOWR('f', 185, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_RECORD                 _IOWR('f', 180, long)
+#define OBD_IOC_ENDRECORD              _IOWR('f', 181, long)
+#define OBD_IOC_PARSE                  _IOWR('f', 182, long)
+#define OBD_IOC_DORECORD               _IOWR('f', 183, long)
+#define OBD_IOC_PROCESS_CFG            _IOWR('f', 184, long)
+#define OBD_IOC_DUMP_LOG               _IOWR('f', 185, long)
+#define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, long)
 
-#define OBD_IOC_CATLOGLIST             _IOWR('f', 190, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_LLOG_INFO              _IOWR('f', 191, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_LLOG_PRINT             _IOWR('f', 192, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_LLOG_CANCEL            _IOWR('f', 193, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_LLOG_REMOVE            _IOWR('f', 194, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_LLOG_CHECK             _IOWR('f', 195, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_LLOG_CATINFO           _IOWR('f', 196, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CATLOGLIST             _IOWR('f', 190, long)
+#define OBD_IOC_LLOG_INFO              _IOWR('f', 191, long)
+#define OBD_IOC_LLOG_PRINT             _IOWR('f', 192, long)
+#define OBD_IOC_LLOG_CANCEL            _IOWR('f', 193, long)
+#define OBD_IOC_LLOG_REMOVE            _IOWR('f', 194, long)
+#define OBD_IOC_LLOG_CHECK             _IOWR('f', 195, long)
+#define OBD_IOC_LLOG_CATINFO           _IOWR('f', 196, long)
 
-#define ECHO_IOC_GET_STRIPE            _IOWR('f', 200, OBD_IOC_DATA_TYPE)
-#define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, OBD_IOC_DATA_TYPE)
-#define ECHO_IOC_ENQUEUE               _IOWR('f', 202, OBD_IOC_DATA_TYPE)
-#define ECHO_IOC_CANCEL                _IOWR('f', 203, OBD_IOC_DATA_TYPE)
+#define ECHO_IOC_GET_STRIPE            _IOWR('f', 200, long)
+#define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, long)
+#define ECHO_IOC_ENQUEUE               _IOWR('f', 202, long)
+#define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
 
 /* XXX _IOWR('f', 250, long) has been defined in
  * lnet/include/libcfs/kp30.h for debug, don't use it
@@ -477,237 +479,273 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define POISON_BULK 0
 
-static inline int ll_insecure_random_int(void)
-{
-        struct timeval t;
-        do_gettimeofday(&t);
-        return (int)(t.tv_usec);
-}
-
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller
  * configuration of interrupt and timeout sensitivity along with actions to
  * be performed in the event of either exception.
  *
- * Common usage looks like this:
+ * The first form of usage looks like this:
  *
  * struct l_wait_info lwi = LWI_TIMEOUT_INTR(timeout, timeout_handler,
  *                                           intr_handler, callback_data);
  * rc = l_wait_event(waitq, condition, &lwi);
  *
- * (LWI_TIMEOUT and LWI_INTR macros are available for timeout- and
- * interrupt-only variants, respectively.)
+ * l_wait_event() makes the current process wait on 'waitq' until 'condition'
+ * is TRUE or a "killable" signal (SIGTERM, SIKGILL, SIGINT) is pending.  It
+ * returns 0 to signify 'condition' is TRUE, but if a signal wakes it before
+ * 'condition' becomes true, it optionally calls the specified 'intr_handler'
+ * if not NULL, and returns -EINTR.
  *
- * If a timeout is specified, the timeout_handler will be invoked in the event
- * that the timeout expires before the process is awakened.  (Note that any
- * waking of the process will restart the timeout, even if the condition is
- * not satisfied and the process immediately returns to sleep.  This might be
- * considered a bug.)  If the timeout_handler returns non-zero, l_wait_event
- * will return -ETIMEDOUT and the caller will continue.  If the handler returns
- * zero instead, the process will go back to sleep until it is awakened by the
- * waitq or some similar mechanism, or an interrupt occurs (if the caller has
- * asked for interrupts to be detected).  The timeout will only fire once, so
- * callers should take care that a timeout_handler which returns zero will take
- * future steps to awaken the process.  N.B. that these steps must include
- * making the provided condition become true.
+ * If a non-zero timeout is specified, signals are ignored until the timeout
+ * has expired.  At this time, if 'timeout_handler' is not NULL it is called.
+ * If it returns FALSE l_wait_event() continues to wait as described above with
+ * signals enabled.  Otherwise it returns -ETIMEDOUT.
  *
- * If the interrupt flag (lwi_signals) is non-zero, then the process will be
- * interruptible, and will be awakened by any "killable" signal (SIGTERM,
- * SIGKILL or SIGINT).  If a timeout is also specified, then the process will
- * only become interruptible _after_ the timeout has expired, though it can be
- * awakened by a signal that was delivered before the timeout and is still
- * pending when the timeout expires.  If a timeout is not specified, the process
- * will be interruptible at all times during l_wait_event.
+ * LWI_INTR(intr_handler, callback_data) is shorthand for
+ * LWI_TIMEOUT_INTR(0, NULL, intr_handler, callback_data)
+ *
+ * The second form of usage looks like this:
+ *
+ * struct l_wait_info lwi = LWI_TIMEOUT(timeout, timeout_handler);
+ * rc = l_wait_event(waitq, condition, &lwi);
+ *
+ * This form is the same as the first except that it COMPLETELY IGNORES
+ * SIGNALS.  The caller must therefore beware that if 'timeout' is zero, or if
+ * 'timeout_handler' is not NULL and returns FALSE, then the ONLY thing that
+ * can unblock the current process is 'condition' becoming TRUE.
+ *
+ * Another form of usage is:
+ * struct l_wait_info lwi = LWI_TIMEOUT_INTERVAL(timeout, interval,
+ *                                               timeout_handler);
+ * rc = l_wait_event(waitq, condition, &lwi);
+ * This is the same as previous case, but condition is checked once every
+ * 'interval' jiffies (if non-zero).
+ *
+ * Subtle synchronization point: this macro does *not* necessary takes
+ * wait-queue spin-lock before returning, and, hence, following idiom is safe
+ * ONLY when caller provides some external locking:
+ *
+ *             Thread1                            Thread2
+ *
+ *   l_wait_event(&obj->wq, ....);                                       (1)
+ *
+ *                                    wake_up(&obj->wq):                 (2)
+ *                                         spin_lock(&q->lock);          (2.1)
+ *                                         __wake_up_common(q, ...);     (2.2)
+ *                                         spin_unlock(&q->lock, flags); (2.3)
+ *
+ *   OBD_FREE_PTR(obj);                                                  (3)
+ *
+ * As l_wait_event() may "short-cut" execution and return without taking
+ * wait-queue spin-lock, some additional synchronization is necessary to
+ * guarantee that step (3) can begin only after (2.3) finishes.
+ *
+ * XXX nikita: some ptlrpc daemon threads have races of that sort.
+ *
  */
+
+#define LWI_ON_SIGNAL_NOOP ((void (*)(void *))(-1))
 
 struct l_wait_info {
         cfs_duration_t lwi_timeout;
+        cfs_duration_t lwi_interval;
         int  (*lwi_on_timeout)(void *);
-        long   lwi_signals;
         void (*lwi_on_signal)(void *);
         void  *lwi_cb_data;
 };
 
-#define LWI_TIMEOUT(time, cb, data)                                            \
-((struct l_wait_info) {                                                        \
-        lwi_timeout:    time,                                                  \
-        lwi_on_timeout: cb,                                                    \
-        lwi_cb_data:    data                                                   \
+/* NB: LWI_TIMEOUT ignores signals completely */
+#define LWI_TIMEOUT(time, cb, data)             \
+((struct l_wait_info) {                         \
+        .lwi_timeout    = time,                 \
+        .lwi_on_timeout = cb,                   \
+        .lwi_cb_data    = data,                 \
+        .lwi_interval   = 0                     \
 })
 
-#define LWI_INTR(cb, data)                                                     \
-((struct l_wait_info) {                                                        \
-        lwi_signals:   1,                                                      \
-        lwi_on_signal: cb,                                                     \
-        lwi_cb_data:   data                                                    \
+#define LWI_TIMEOUT_INTERVAL(time, interval, cb, data)  \
+((struct l_wait_info) {                                 \
+        .lwi_timeout    = time,                         \
+        .lwi_on_timeout = cb,                           \
+        .lwi_cb_data    = data,                         \
+        .lwi_interval   = interval                      \
 })
 
 #define LWI_TIMEOUT_INTR(time, time_cb, sig_cb, data)                          \
 ((struct l_wait_info) {                                                        \
-        lwi_timeout:    time,                                                  \
-        lwi_on_timeout: time_cb,                                               \
-        lwi_signals:    1,                                                     \
-        lwi_on_signal:  sig_cb,                                                \
-        lwi_cb_data:    data                                                   \
+        .lwi_timeout    = time,                                                \
+        .lwi_on_timeout = time_cb,                                             \
+        .lwi_on_signal = (sig_cb == NULL) ? LWI_ON_SIGNAL_NOOP : sig_cb,       \
+        .lwi_cb_data    = data,                                                \
+        .lwi_interval    = 0                                                   \
 })
+
+#define LWI_INTR(cb, data)  LWI_TIMEOUT_INTR(0, NULL, cb, data)
+
+#define LUSTRE_FATAL_SIGS (sigmask(SIGKILL) | sigmask(SIGINT) |                \
+                           sigmask(SIGTERM) | sigmask(SIGQUIT) |               \
+                           sigmask(SIGALRM))
 
 #ifdef __KERNEL__
 
+/*
+ * wait for @condition to become true, but no longer than timeout, specified
+ * by @info.
+ */
 #define __l_wait_event(wq, condition, info, ret, excl)                         \
 do {                                                                           \
         cfs_waitlink_t __wait;                                                 \
-        cfs_duration_t __timed_out = 0;                                        \
-        cfs_sigset_t blocked;                                                  \
-        cfs_time_t timeout_remaining;                                          \
+        cfs_duration_t __timeout = info->lwi_timeout;                          \
+        unsigned long  __irqflags;                                             \
+        cfs_sigset_t   __blocked;                                              \
+                                                                               \
+        ret = 0;                                                               \
+        if (condition)                                                         \
+                break;                                                         \
                                                                                \
         cfs_waitlink_init(&__wait);                                            \
         if (excl)                                                              \
-            cfs_waitq_add_exclusive(&wq, &__wait);                             \
+                cfs_waitq_add_exclusive(&wq, &__wait);                         \
         else                                                                   \
-            cfs_waitq_add(&wq, &__wait);                                       \
+                cfs_waitq_add(&wq, &__wait);                                   \
                                                                                \
         /* Block all signals (just the non-fatal ones if no timeout). */       \
-        if (info->lwi_signals && !info->lwi_timeout)                           \
-            blocked = l_w_e_set_sigs(LUSTRE_FATAL_SIGS);                       \
+        if (info->lwi_on_signal != NULL && __timeout == 0)                     \
+                __blocked = l_w_e_set_sigs(LUSTRE_FATAL_SIGS);                 \
         else                                                                   \
-            blocked = l_w_e_set_sigs(0);                                       \
-                                                                               \
-        timeout_remaining = info->lwi_timeout;                                 \
+                __blocked = l_w_e_set_sigs(0);                                 \
                                                                                \
         for (;;) {                                                             \
-            set_current_state(TASK_INTERRUPTIBLE);                             \
-            if (condition)                                                     \
-                    break;                                                     \
-            if (info->lwi_timeout && !__timed_out) {                           \
-                timeout_remaining = cfs_waitq_timedwait(&__wait,               \
-                                                        CFS_TASK_INTERRUPTIBLE,\
-                                                        timeout_remaining);    \
-                if (timeout_remaining == 0) {                                  \
-                    __timed_out = 1;                                           \
-                    if (!info->lwi_on_timeout ||                               \
-                        info->lwi_on_timeout(info->lwi_cb_data)) {             \
-                        ret = -ETIMEDOUT;                                      \
+                set_current_state(TASK_INTERRUPTIBLE);                         \
+                                                                               \
+                if (condition)                                                 \
                         break;                                                 \
-                    }                                                          \
-                    /* We'll take signals after a timeout. */                  \
-                    if (info->lwi_signals)                                     \
-                        (void)l_w_e_set_sigs(LUSTRE_FATAL_SIGS);               \
+                                                                               \
+                if (__timeout == 0) {                                          \
+                        schedule();                                            \
+                } else {                                                       \
+                        unsigned long interval = info->lwi_interval?           \
+                                             min_t(unsigned long,              \
+                                                 info->lwi_interval,__timeout):\
+                                             __timeout;                        \
+                        __timeout -= interval - schedule_timeout(interval);    \
+                        if (__timeout == 0) {                                  \
+                                if (info->lwi_on_timeout == NULL ||            \
+                                    info->lwi_on_timeout(info->lwi_cb_data)) { \
+                                        ret = -ETIMEDOUT;                      \
+                                        break;                                 \
+                                }                                              \
+                                /* Take signals after the timeout expires. */  \
+                                if (info->lwi_on_signal != NULL)               \
+                                    (void)l_w_e_set_sigs(LUSTRE_FATAL_SIGS);   \
+                        }                                                      \
                 }                                                              \
-            } else {                                                           \
-                cfs_waitq_wait(&__wait, CFS_TASK_INTERRUPTIBLE);;              \
-            }                                                                  \
-            if (condition)                                                     \
-                    break;                                                     \
-            if (cfs_signal_pending()) {                                        \
-                    if (!info->lwi_timeout || __timed_out) {                   \
-                            break;                                             \
-                    } else {                                                   \
-                            /* We have to do this here because some signals */ \
-                            /* are not blockable - ie from strace(1).       */ \
-                            /* In these cases we want to schedule_timeout() */ \
-                            /* again, because we don't want that to return  */ \
-                            /* -EINTR when the RPC actually succeeded.      */ \
-                            /* the RECALC_SIGPENDING below will deliver the */ \
-                            /* signal properly.                             */ \
-                            cfs_clear_sigpending();                            \
-                    }                                                          \
-            }                                                                  \
+                                                                               \
+                if (condition)                                                 \
+                        break;                                                 \
+                if (cfs_signal_pending()) {                                    \
+                        if (info->lwi_on_signal != NULL && __timeout == 0) {   \
+                                if (info->lwi_on_signal != LWI_ON_SIGNAL_NOOP) \
+                                        info->lwi_on_signal(info->lwi_cb_data);\
+                                ret = -EINTR;                                  \
+                                break;                                         \
+                        }                                                      \
+                        /* We have to do this here because some signals */     \
+                        /* are not blockable - ie from strace(1).       */     \
+                        /* In these cases we want to schedule_timeout() */     \
+                        /* again, because we don't want that to return  */     \
+                        /* -EINTR when the RPC actually succeeded.      */     \
+                        /* the RECALC_SIGPENDING below will deliver the */     \
+                        /* signal properly.                             */     \
+                        cfs_sigmask_lock(__irqflags);                          \
+                        cfs_clear_sigpending();                                \
+                        cfs_sigmask_unlock(__irqflags);                        \
+                }                                                              \
         }                                                                      \
                                                                                \
-        cfs_block_sigs(blocked);                                               \
-                                                                               \
-        if ((!info->lwi_timeout || __timed_out) &&                             \
-            cfs_signal_pending()) {                                            \
-                if (info->lwi_on_signal)                                       \
-                        info->lwi_on_signal(info->lwi_cb_data);                \
-                ret = -EINTR;                                                  \
-        }                                                                      \
+        cfs_sigmask_lock(__irqflags);                                          \
+        cfs_block_sigs(__blocked);                                             \
+        RECALC_SIGPENDING; /*XXX cfs_recalc_sigpending();*/                    \
+        cfs_sigmask_unlock(__irqflags);                                        \
                                                                                \
         set_current_state(TASK_RUNNING);                                       \
         cfs_waitq_del(&wq, &__wait);                                           \
-} while(0)
+} while (0)
 
 #else /* !__KERNEL__ */
 #define __l_wait_event(wq, condition, info, ret, excl)                         \
-do {                                                                           \
-        long timeout = info->lwi_timeout, elapse, last = 0;                    \
-        int __timed_out = 0;                                                   \
-                                                                               \
-        if (info->lwi_timeout == 0)                                            \
-            timeout = 1000000000;                                              \
-        else                                                                   \
-            last = time(NULL);                                                 \
-                                                                               \
-        for (;;) {                                                             \
-            if (condition)                                                     \
-                break;                                                         \
-            if (liblustre_wait_event(timeout)) {                               \
-                if (timeout == 0 || info->lwi_timeout == 0)                    \
-                        continue;                                              \
-                elapse = time(NULL) - last;                                    \
-                if (elapse) {                                                  \
-                        last += elapse;                                        \
-                        timeout -= elapse;                                     \
-                        if (timeout < 0)                                       \
-                                timeout = 0;                                   \
-                }                                                              \
-                continue;                                                      \
-            }                                                                  \
-            if (info->lwi_timeout && !__timed_out) {                           \
-                __timed_out = 1;                                               \
-                if (info->lwi_on_timeout == NULL ||                            \
-                    info->lwi_on_timeout(info->lwi_cb_data)) {                 \
-                    ret = -ETIMEDOUT;                                          \
-                    break;                                                     \
-                }                                                              \
-            }                                                                  \
-        }                                                                      \
+do {                                                                    \
+        long __timeout = info->lwi_timeout;                             \
+        long __now;                                                     \
+        long __then = 0;                                                \
+        int  __timed_out = 0;                                           \
+                                                                        \
+        ret = 0;                                                        \
+        if (condition)                                                  \
+                break;                                                  \
+                                                                        \
+        if (__timeout == 0)                                             \
+                __timeout = 1000000000;                                 \
+        else                                                            \
+                __then = time(NULL);                                    \
+                                                                        \
+        while (!(condition)) {                                          \
+                if (liblustre_wait_event(info->lwi_interval?:__timeout) || \
+                    (info->lwi_interval && info->lwi_interval < __timeout)) {\
+                        if (__timeout != 0 && info->lwi_timeout != 0) { \
+                                __now = time(NULL);                     \
+                                __timeout -= __now - __then;            \
+                                if (__timeout < 0)                      \
+                                        __timeout = 0;                  \
+                                __then = __now;                         \
+                        }                                               \
+                        continue;                                       \
+                }                                                       \
+                                                                        \
+                if (info->lwi_timeout != 0 && !__timed_out) {           \
+                        __timed_out = 1;                                \
+                        if (info->lwi_on_timeout == NULL ||             \
+                            info->lwi_on_timeout(info->lwi_cb_data)) {  \
+                                ret = -ETIMEDOUT;                       \
+                                break;                                  \
+                        }                                               \
+                }                                                       \
+        }                                                               \
 } while (0)
 
 #endif /* __KERNEL__ */
 
-#define l_wait_event(wq, condition, info)                                      \
-({                                                                             \
-        int __ret = 0;                                                         \
-        struct l_wait_info *__info = (info);                                   \
-        if (!(condition))                                                      \
-                __l_wait_event(wq, condition, __info, __ret, 0);               \
-        __ret;                                                                 \
+#define l_wait_event(wq, condition, info)                       \
+({                                                              \
+        int                 __ret;                              \
+        struct l_wait_info *__info = (info);                    \
+                                                                \
+        __l_wait_event(wq, condition, __info, __ret, 0);        \
+        __ret;                                                  \
 })
 
-#define l_wait_event_exclusive(wq, condition, info)                            \
-({                                                                             \
-        int __ret = 0;                                                         \
-        struct l_wait_info *__info = (info);                                   \
-        if (!(condition))                                                      \
-                __l_wait_event(wq, condition, __info, __ret, 1);               \
-        __ret;                                                                 \
+#define l_wait_event_exclusive(wq, condition, info)             \
+({                                                              \
+        int                 __ret;                              \
+        struct l_wait_info *__info = (info);                    \
+                                                                \
+        __l_wait_event(wq, condition, __info, __ret, 1);        \
+        __ret;                                                  \
 })
 
-#define LMD_MAGIC_R1 0xbdacbdac
-#define LMD_MAGIC    0xbdacbd02
-
-#define lmd_bad_magic(LMDP)                                             \
-({                                                                      \
-        struct lustre_mount_data *_lmd__ = (LMDP);                      \
-        int _ret__ = 0;                                                 \
-        if (!_lmd__) {                                                  \
-                LCONSOLE_ERROR("Missing mount data: "                   \
-                       "check that /sbin/mount.lustre is installed.\n");\
-                _ret__ = 1;                                             \
-        } else if (_lmd__->lmd_magic == LMD_MAGIC_R1) {                 \
-                LCONSOLE_ERROR("You're using an old version of "        \
-                       "/sbin/mount.lustre.  Please install version "   \
-                       "1.%d\n", LMD_MAGIC & 0xFF);                     \
-                _ret__ = 1;                                             \
-        } else if (_lmd__->lmd_magic != LMD_MAGIC) {                    \
-                LCONSOLE_ERROR("Invalid mount data (%#x != %#x): "      \
-                       "check that /sbin/mount.lustre is installed\n",  \
-                       _lmd__->lmd_magic, LMD_MAGIC);                   \
-                _ret__ = 1;                                             \
-        }                                                               \
-        _ret__;                                                         \
-})
+#ifdef __KERNEL__
+/* initialize ost_lvb according to inode */
+static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
+{
+        lvb->lvb_size = inode->i_size;
+        lvb->lvb_blocks = inode->i_blocks;
+        lvb->lvb_mtime = LTIME_S(inode->i_mtime);
+        lvb->lvb_atime = LTIME_S(inode->i_atime);
+        lvb->lvb_ctime = LTIME_S(inode->i_ctime);
+}
+#else
+/* defined in liblustre/llite_lib.h */
+#endif
 
 #ifdef __KERNEL__
 #define LIBLUSTRE_CLIENT (0)

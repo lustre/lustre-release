@@ -62,10 +62,7 @@ struct lov_oinfo {                 /* per-stripe data structure */
 
         unsigned loi_kms_valid:1;
         __u64 loi_kms;             /* known minimum size */
-        __u64 loi_rss;             /* recently seen size */
-        __u64 loi_mtime;           /* recently seen mtime */
-        __u64 loi_blocks;          /* recently seen blocks */
-
+        struct ost_lvb loi_lvb;
         struct osc_async_rc     loi_ar;
 };
 
@@ -82,30 +79,61 @@ static inline void loi_init(struct lov_oinfo *loi)
         CFS_INIT_LIST_HEAD(&loi->loi_read_item);
 }
 
+/*extent array item for describing the joined file extent info*/
+struct lov_extent {
+        __u64 le_start;            /* extent start */
+        __u64 le_len;              /* extent length */
+        int   le_loi_idx;          /* extent #1 loi's index in lsm loi array */
+        int   le_stripe_count;     /* extent stripe count*/
+};
+
+/*Lov array info for describing joined file array EA info*/
+struct lov_array_info {
+        struct llog_logid    lai_array_id;    /* MDS med llog object id */
+        unsigned             lai_ext_count; /* number of extent count */
+        struct lov_extent    *lai_ext_array; /* extent desc array */
+};
+
 struct lov_stripe_md {
         spinlock_t       lsm_lock;
         void            *lsm_lock_owner; /* debugging */
 
-        /* Public members. */
-        __u64 lsm_object_id;        /* lov object id */
-        __u64 lsm_object_gr;        /* lov object id */
-        __u64 lsm_maxbytes;         /* maximum possible file size */
-        unsigned long lsm_xfersize; /* optimal transfer size */
+        struct {
+                /* Public members. */
+                __u64 lw_object_id;        /* lov object id */
+                __u64 lw_object_gr;        /* lov object id */
+                __u64 lw_maxbytes;         /* maximum possible file size */
+                unsigned long lw_xfersize; /* optimal transfer size */
 
-        /* LOV-private members start here -- only for use in lov/. */
-        __u32 lsm_magic;
-        __u32 lsm_stripe_size;      /* size of the stripe */
-        __u32 lsm_pattern;          /* striping pattern (RAID0, RAID1) */
-        unsigned lsm_stripe_count;  /* number of objects being striped over */
+                /* LOV-private members start here -- only for use in lov/. */
+                __u32 lw_magic;
+                __u32 lw_stripe_size;      /* size of the stripe */
+                __u32 lw_pattern;          /* striping pattern (RAID0, RAID1) */
+                unsigned lw_stripe_count;  /* number of objects being striped over */
+        } lsm_wire;
+
+        struct lov_array_info *lsm_array; /*Only for joined file array info*/
         struct lov_oinfo lsm_oinfo[0];
 };
 
-/* compare all fields except for semaphore */
+#define lsm_object_id    lsm_wire.lw_object_id
+#define lsm_object_gr    lsm_wire.lw_object_gr
+#define lsm_maxbytes     lsm_wire.lw_maxbytes
+#define lsm_xfersize     lsm_wire.lw_xfersize
+#define lsm_magic        lsm_wire.lw_magic
+#define lsm_stripe_size  lsm_wire.lw_stripe_size
+#define lsm_pattern      lsm_wire.lw_pattern
+#define lsm_stripe_count lsm_wire.lw_stripe_count
+
+/* compare all relevant fields. */
 static inline int lov_stripe_md_cmp(struct lov_stripe_md *m1,
                                     struct lov_stripe_md *m2)
 {
-        return memcmp(&m1->lsm_object_id, &m2->lsm_object_id,
-                      (char *)&m2->lsm_oinfo[0] - (char *)&m2->lsm_object_id);
+        /*
+         * ->lsm_wire contains padding, but it should be zeroed out during
+         * allocation.
+         */
+        return memcmp(&m1->lsm_wire, &m2->lsm_wire, sizeof m1->lsm_wire);
 }
 
 void lov_stripe_lock(struct lov_stripe_md *md);
@@ -135,7 +163,7 @@ enum async_flags {
                                      or cancel the size of the io */
         ASYNC_GROUP_SYNC = 0x8,  /* ap_completion will not be called, instead
                                     the page is accounted for in the
-                                    obd_io_group given to 
+                                    obd_io_group given to
                                     obd_queue_group_io */
 };
 
@@ -163,7 +191,7 @@ struct obd_io_group {
 struct oig_callback_context {
         struct list_head occ_oig_item;
         /* called when the caller has received a signal while sleeping.
-         * callees of this method are encouraged to abort their state 
+         * callees of this method are encouraged to abort their state
          * in the oig.  This may be called multiple times. */
         void (*occ_interrupted)(struct oig_callback_context *occ);
         unsigned int interrupted:1;
@@ -203,22 +231,16 @@ struct filter_obd {
         cfs_dentry_t        *fo_dentry_O;
         cfs_dentry_t       **fo_dentry_O_groups;
         cfs_dentry_t       **fo_dentry_O_sub;
-        spinlock_t           fo_objidlock;      /* protect fo_lastobjid
-                                                 * increment */
-        
-        spinlock_t           fo_translock;      /* protect fsd_last_rcvd
-                                                 * increment */
-        
+        spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
+        spinlock_t           fo_translock;      /* protect fsd_last_transno */
         struct file         *fo_rcvd_filp;
+        struct file         *fo_health_check_filp;
         struct filter_server_data *fo_fsd;
         unsigned long       *fo_last_rcvd_slots;
         __u64                fo_mount_count;
 
         int                  fo_destroy_in_progress;
-
-        struct file_operations *fo_fop;
-        struct inode_operations *fo_iop;
-        struct address_space_operations *fo_aops;
+        struct semaphore     fo_create_lock;
 
         struct list_head     fo_export_list;
         int                  fo_subdir_count;
@@ -232,11 +254,9 @@ struct filter_obd {
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
         struct lustre_handle fo_mdc_conn;
-#if 0
-        struct ptlrpc_client fo_mdc_client;
-#endif
         struct file        **fo_last_objid_files;
-        __u64               *fo_last_objids; /* last created objid for groups */
+        __u64               *fo_last_objids; /* last created objid for groups,
+                                              * protected by fo_objidlock */
 
         struct semaphore     fo_alloc_lock;
 
@@ -255,11 +275,8 @@ struct filter_obd {
          *
          * Locking: none, each OST thread uses only one element, determined by
          * its "ordinal number", ->t_id.
-         *
-         * This is (void *) array, because 2.4 and 2.6 use different iobuf
-         * structures.
          */
-        void                   **fo_iobuf_pool;
+        struct filter_iobuf    **fo_iobuf_pool;
         int                      fo_iobuf_count;
 
         struct obd_histogram     fo_r_pages;
@@ -278,19 +295,14 @@ struct filter_obd {
         struct lustre_quota_ctxt fo_quota_ctxt;
         spinlock_t               fo_quotacheck_lock;
         atomic_t                 fo_quotachecking;
-
-        /* objids black list stuff. See for detailed comment in
-         * filter_clear_orphans() */
-        struct filter_ext       *fo_blacklist;
-        spinlock_t               fo_blacklist_lock;
 };
 
 struct mds_server_data;
 
 #define OSC_MAX_RIF_DEFAULT       8
-#define OSC_MAX_RIF_MAX          64
-#define OSC_MAX_DIRTY_DEFAULT    32
-#define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
+#define OSC_MAX_RIF_MAX         256
+#define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
+#define OSC_MAX_DIRTY_MB_MAX   2048     /* totally arbitrary */
 
 struct mdc_rpc_lock;
 struct client_obd {
@@ -399,6 +411,7 @@ struct mds_obd {
         obd_id                          *mds_lov_objids;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
+        struct file                     *mds_health_check_filp;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
         struct upcall_cache             *mds_group_hash;
@@ -419,37 +432,10 @@ struct echo_obd {
         atomic_t             eo_prep;
 };
 
-/*
- * this struct does double-duty acting as either a client or
- * server instance .. maybe not wise.
- */
-struct ptlbd_obd {
-        /* server's */
-        struct ptlrpc_service *ptlbd_service;
-        struct file *filp;
-        /* client's */
-        struct ptlrpc_client    bd_client;
-        struct obd_import       *bd_import;
-        struct obd_uuid         bd_server_uuid;
-        struct obd_export       *bd_exp;
-        int refcount; /* XXX sigh */
-};
-
-struct recovd_obd {
-        spinlock_t            recovd_lock;
-        struct list_head      recovd_managed_items; /* items managed  */
-        struct list_head      recovd_troubled_items; /* items in recovery */
-
-        cfs_waitq_t           recovd_recovery_waitq;
-        cfs_waitq_t           recovd_ctl_waitq;
-        cfs_waitq_t           recovd_waitq;
-        cfs_task_t           *recovd_thread;
-        __u32                 recovd_state;
-};
-
 struct ost_obd {
         struct ptlrpc_service *ost_service;
         struct ptlrpc_service *ost_create_service;
+        struct ptlrpc_service *ost_io_service;
         struct semaphore       ost_health_sem;
 };
 
@@ -461,27 +447,23 @@ struct echo_client_obd {
         __u64                ec_unique;
 };
 
-struct cache_obd {
-        struct obd_export *cobd_target_exp;/* local connection to target obd */
-        struct obd_export *cobd_cache_exp; /* local connection to cache obd */
-};
-
 struct lov_tgt_desc {
         struct obd_uuid          uuid;
         __u32                    ltd_gen;
         struct obd_export       *ltd_exp;
-        int                      active; /* is this target up for requests */
-        int                      index;  /* index of target array in lov_obd */
-        struct list_head         qos_bavail_list; /* link entry to lov_obd */
+        unsigned int             active:1, /* is this target up for requests */
+                                 reap:1;   /* should this target be deleted */
 };
 
 struct lov_obd {
-        spinlock_t lov_lock;
+        struct semaphore lov_lock;
+        atomic_t refcount;
         struct lov_desc desc;
         int bufsize;
-        int refcount;
+        int connects;
+        int death_row;      /* Do we have tgts scheduled to be deleted?
+                               (Make this a linked list?) */
         unsigned int lo_catalog_loaded:1;
-        struct list_head qos_bavail_list; /* tgts list, sorted by available space, protected by lov_lock */
         struct lov_tgt_desc *tgts;
 };
 
@@ -513,8 +495,23 @@ struct obd_trans_info {
         int                      oti_numcookies;
 
         /* initial thread handling transaction */
-        struct ptlrpc_thread    *oti_thread; 
+        int                      oti_thread_id;
 };
+
+static inline void oti_init(struct obd_trans_info *oti,
+                            struct ptlrpc_request *req)
+{
+        if (oti == NULL)
+                return;
+        memset(oti, 0, sizeof *oti);
+
+        if (req == NULL)
+                return;
+
+        if (req->rq_repmsg && req->rq_reqmsg != 0)
+                oti->oti_transno = req->rq_repmsg->transno;
+        oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
+}
 
 static inline void oti_alloc_cookies(struct obd_trans_info *oti,int num_cookies)
 {
@@ -558,9 +555,33 @@ enum llog_ctxt_id {
         LLOG_RD1_REPL_CTXT     =  9,
         LLOG_TEST_ORIG_CTXT    = 10,
         LLOG_TEST_REPL_CTXT    = 11,
+        LLOG_LOVEA_ORIG_CTXT   = 12,
+        LLOG_LOVEA_REPL_CTXT   = 13,
         LLOG_MAX_CTXTS
 };
 
+/*
+ * Events signalled through obd_notify() upcall-chain.
+ */
+enum obd_notify_event {
+        /* Device activated */
+        OBD_NOTIFY_ACTIVE,
+        /* Device deactivated */
+        OBD_NOTIFY_INACTIVE,
+        /* Connect data for import were changed */
+        OBD_NOTIFY_OCD
+};
+
+/*
+ * Data structure used to pass obd_notify()-event to non-obd listeners (llite
+ * and liblustre being main examples).
+ */
+struct obd_notify_upcall {
+        int (*onu_upcall)(struct obd_device *host, struct obd_device *watched,
+                          enum obd_notify_event ev, void *owner);
+        /* Opaque datum supplied by upper layer listener */
+        void *onu_owner;
+};
 
 /* corresponds to one of the obd's */
 struct obd_device {
@@ -592,6 +613,7 @@ struct obd_device {
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
+        struct obd_notify_upcall obd_upcall;
         struct obd_export       *obd_self_export;
         /* list of exports in LRU order, for ping evictor, with obd_dev_lock */
         struct list_head        obd_exports_timed;
@@ -624,12 +646,9 @@ struct obd_device {
                 struct ost_obd ost;
                 struct echo_client_obd echo_client;
                 struct echo_obd echo;
-                struct recovd_obd recovd;
                 struct lov_obd lov;
-                struct cache_obd cobd;
-                struct ptlbd_obd ptlbd;
         } u;
-       /* Fields used by LProcFS */
+        /* Fields used by LProcFS */
         unsigned int           obd_cntr_base;
         struct lprocfs_stats  *obd_stats;
         cfs_proc_dir_entry_t  *obd_svc_procroot;
@@ -640,6 +659,18 @@ struct obd_device {
 #define OBD_OPT_FAILOVER        0x0002
 
 #define OBD_LLOG_FL_SENDNOW     0x0001
+
+/* Special case hack for MDS LOVs */
+#define OBD_CLEANUP_EARLY       0
+/* Precleanup stage 1, we must make sure all exports (other than the
+   self-export) get destroyed. */
+#define OBD_CLEANUP_EXPORTS     1
+/* Precleanup stage 2,  do other type-specific cleanup requiring the
+   self-export. */
+#define OBD_CLEANUP_SELF_EXP    2
+/* FIXME we should eliminate the "precleanup" function and make them stages
+   of the "cleanup" function. */
+#define OBD_CLEANUP_OBD         3
 
 struct obd_ops {
         struct module *o_owner;
@@ -666,6 +697,9 @@ struct obd_ops {
          * asked for. If @ocd == NULL, use default parameters. */
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, struct obd_connect_data *ocd);
+        int (*o_reconnect)(struct obd_export *exp, struct obd_device *src,
+                           struct obd_uuid *cluuid,
+                           struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
@@ -674,12 +708,15 @@ struct obd_ops {
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
                           struct lov_mds_md *disk_src, int disk_len);
+        int (*o_checkmd)(struct obd_export *exp, struct obd_export *md_exp,
+                         struct lov_stripe_md *mem_tgt);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *ea, struct obd_trans_info *oti);
+                         struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                         struct obd_export *md_exp);
         int (*o_setattr)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti);
         int (*o_setattr_async)(struct obd_export *exp, struct obdo *oa,
@@ -696,26 +733,26 @@ struct obd_ops {
                            struct lov_stripe_md *ea, obd_count oa_bufs,
                            struct brw_page *pgarr, struct ptlrpc_request_set *,
                            struct obd_trans_info *oti);
-        int (*o_prep_async_page)(struct obd_export *exp, 
+        int (*o_prep_async_page)(struct obd_export *exp,
                                  struct lov_stripe_md *lsm,
-                                 struct lov_oinfo *loi, 
+                                 struct lov_oinfo *loi,
                                  cfs_page_t *page, obd_off offset, 
                                  struct obd_async_page_ops *ops, void *data,
                                  void **res);
-        int (*o_queue_async_io)(struct obd_export *exp, 
-                                struct lov_stripe_md *lsm, 
-                                struct lov_oinfo *loi, void *cookie, 
-                                int cmd, obd_off off, int count, 
+        int (*o_queue_async_io)(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                struct lov_oinfo *loi, void *cookie,
+                                int cmd, obd_off off, int count,
                                 obd_flag brw_flags, obd_flag async_flags);
-        int (*o_queue_group_io)(struct obd_export *exp, 
-                                struct lov_stripe_md *lsm, 
-                                struct lov_oinfo *loi, 
-                                struct obd_io_group *oig, 
-                                void *cookie, int cmd, obd_off off, int count, 
+        int (*o_queue_group_io)(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                struct lov_oinfo *loi,
+                                struct obd_io_group *oig,
+                                void *cookie, int cmd, obd_off off, int count,
                                 obd_flag brw_flags, obd_flag async_flags);
-        int (*o_trigger_group_io)(struct obd_export *exp, 
-                                  struct lov_stripe_md *lsm, 
-                                  struct lov_oinfo *loi, 
+        int (*o_trigger_group_io)(struct obd_export *exp,
+                                  struct lov_stripe_md *lsm,
+                                  struct lov_oinfo *loi,
                                   struct obd_io_group *oig);
         int (*o_set_async_flags)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
@@ -724,6 +761,8 @@ struct obd_ops {
         int (*o_teardown_async_page)(struct obd_export *exp,
                                      struct lov_stripe_md *lsm,
                                      struct lov_oinfo *loi, void *cookie);
+        int (*o_merge_lvb)(struct obd_export *exp, struct lov_stripe_md *lsm,
+                           struct ost_lvb *lvb, int kms_only);
         int (*o_adjust_kms)(struct obd_export *exp, struct lov_stripe_md *lsm,
                             obd_off size, int shrink);
         int (*o_punch)(struct obd_export *exp, struct obdo *oa,
@@ -762,7 +801,7 @@ struct obd_ops {
                         __u32 mode, struct lustre_handle *);
         int (*o_cancel_unused)(struct obd_export *, struct lov_stripe_md *,
                                int flags, void *opaque);
-        int (*o_join_lru)(struct obd_export *, struct lov_stripe_md *, 
+        int (*o_join_lru)(struct obd_export *, struct lov_stripe_md *,
                          int join);
         int (*o_san_preprw)(int cmd, struct obd_export *exp,
                             struct obdo *oa, int objcount,
@@ -785,7 +824,7 @@ struct obd_ops {
                               enum obd_import_event);
 
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
-                        int active);
+                        enum obd_notify_event ev);
 
         int (*o_health_check)(struct obd_device *);
 
@@ -793,7 +832,7 @@ struct obd_ops {
         int (*o_quotacheck)(struct obd_export *, struct obd_quotactl *);
         int (*o_quotactl)(struct obd_export *, struct obd_quotactl *);
 
-        /* 
+        /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
          * Also, add a wrapper function in include/linux/obd_class.h.
@@ -804,6 +843,39 @@ struct obd_ops {
          */
 };
 
+struct lsm_operations {
+        void (*lsm_free)(struct lov_stripe_md *);
+        int (*lsm_destroy)(struct lov_stripe_md *, struct obdo *oa,
+                           struct obd_export *md_exp);
+        void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, obd_off *,
+                                     unsigned long *);
+        void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
+                                     unsigned long *);
+        obd_off (*lsm_stripe_offset_by_index)(struct lov_stripe_md *, int);
+        int (*lsm_stripe_index_by_offset)(struct lov_stripe_md *, obd_off);
+        int (*lsm_revalidate) (struct lov_stripe_md *, struct obd_device *obd);
+        int (*lsm_lmm_verify) (struct lov_mds_md *lmm, int lmm_bytes,
+                               int *stripe_count);
+        int (*lsm_unpackmd) (struct lov_obd *lov, struct lov_stripe_md *lsm,
+                             struct lov_mds_md *lmm);
+};
+
+extern struct lsm_operations lsm_plain_ops;
+extern struct lsm_operations lsm_join_ops;
+static inline struct lsm_operations *lsm_op_find(int magic)
+{
+        switch(magic) {
+        case LOV_MAGIC:
+               return &lsm_plain_ops;
+        case LOV_MAGIC_JOIN:
+               return &lsm_join_ops;
+        default:
+               CERROR("Cannot recognize lsm_magic %d", magic);
+               return NULL;
+        }
+}
+
+int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 
 static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                                          int error)

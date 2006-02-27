@@ -14,16 +14,21 @@ struct mds_export_data {
         struct list_head        med_open_head;
         spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
         struct mds_client_data *med_mcd;
+        __u64                   med_ibits_known;
         loff_t                  med_lr_off;
         int                     med_lr_idx;
 };
 
 struct osc_creator {
         spinlock_t              oscc_lock;
+        struct list_head        oscc_list;
         struct obd_device       *oscc_obd;
+        obd_id                  oscc_last_id;//last available pre-created object
+        obd_id                  oscc_next_id;// what object id to give out next
+        int                     oscc_grow_count;
+        struct obdo             oscc_oa;
         int                     oscc_flags;
-        obd_id                  oscc_next_id;
-        cfs_waitq_t             oscc_waitq;
+        cfs_waitq_t             oscc_waitq; /* creating procs wait on this */
 };
 
 struct ldlm_export_data {

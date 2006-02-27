@@ -36,6 +36,7 @@
 #include <libcfs/list.h>
 #include <obd_class.h>
 #include <lustre_fsfilt.h>
+#include <lustre_mds.h>
 #include <lustre_commit_confd.h>
 #include <lustre_log.h>
 

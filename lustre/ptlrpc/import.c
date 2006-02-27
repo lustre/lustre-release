@@ -35,6 +35,7 @@
 #include <lustre_export.h>
 #include <obd.h>
 #include <obd_class.h>
+#include <linux/lustre_ver.h>
 
 #include "ptlrpc_internal.h"
 
@@ -126,14 +127,13 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
                                "service will %s.\n",
                                target_len, target_start,
                                libcfs_nid2str(imp->imp_connection->c_peer.nid),
-                               imp->imp_replayable 
-                               ? "wait for recovery to complete"
-                               : "fail");
+                               imp->imp_replayable ?
+                               "wait for recovery to complete" : "fail");
 
                 if (obd_dump_on_timeout)
                         libcfs_debug_dumplog();
 
-                CWARN("%s: connection lost to %s@%s\n",
+                CDEBUG(D_HA, "%s: connection lost to %s@%s\n",
                       imp->imp_obd->obd_name,
                       imp->imp_target_uuid.uuid,
                       imp->imp_connection->c_remote_uuid.uuid);
@@ -330,11 +330,10 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         imp->imp_conn_cnt++;
         imp->imp_resend_replay = 0;
 
-        if (imp->imp_remote_handle.cookie == 0) {
+        if (!lustre_handle_is_used(&imp->imp_remote_handle))
                 initial_connect = 1;
-        } else {
+        else
                 committed_before_reconnect = imp->imp_peer_committed_transno;
-        }
 
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
@@ -351,7 +350,25 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         if (rc)
                 GOTO(out, rc);
 
-        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 4, size, tmp);
+        if (imp->imp_initial_recov_bk && initial_connect &&
+            /* last in list */
+            (imp->imp_conn_current->oic_item.next == &imp->imp_conn_list)) {
+                CDEBUG(D_HA, "Last connection attempt (%d) for %s\n",
+                       imp->imp_conn_cnt, imp->imp_target_uuid.uuid);
+                /* Don't retry if connect fails */
+                rc = 0;
+                obd_set_info(obd->obd_self_export,
+                             strlen("initial_recov"), "initial_recov",
+                             sizeof(rc), &rc);
+        }
+
+        rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
+                           &obd->obd_uuid, &imp->imp_connect_data);
+        if (rc)
+                GOTO(out, rc);
+
+        request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, imp->imp_connect_op,
+                                  4, size, tmp);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
@@ -365,7 +382,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         request->rq_replen = lustre_msg_size(1, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
-        LASSERT (sizeof (*aa) <= sizeof (request->rq_async_args));
+        CLASSERT(sizeof (*aa) <= sizeof (request->rq_async_args));
         aa = (struct ptlrpc_connect_async_args *)&request->rq_async_args;
         memset(aa, 0, sizeof *aa);
 
@@ -374,7 +391,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         if (aa->pcaa_initial_connect) {
                 imp->imp_replayable = 1;
-                /* On an initial connect, we don't know which one of a 
+                /* On an initial connect, we don't know which one of a
                    failover server pair is up.  Don't wait long. */
                 request->rq_timeout = max((int)(obd_timeout / 20), 5);
         }
@@ -537,6 +554,7 @@ finish:
                 }
         } else {
                 struct obd_connect_data *ocd;
+                struct obd_export *exp;
 
                 ocd = lustre_swab_repbuf(request, 0,
                                          sizeof *ocd, lustre_swab_connect);
@@ -555,11 +573,39 @@ finish:
                         ocd->ocd_connect_flags);
 
                 imp->imp_connect_data = *ocd;
-                
-                if (IMP_CROW_ABLE(imp)) {
-                        CDEBUG(D_HA, "connected to CROW capable target: %s\n",
-                               imp->imp_target_uuid.uuid);
+                if (!ocd->ocd_ibits_known &&
+                    ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
+                        CERROR("Inodebits aware server returned zero compatible"
+                               " bits?\n");
+
+                exp = class_conn2export(&imp->imp_dlm_handle);
+                LASSERT(exp);
+                exp->exp_connect_flags = ocd->ocd_connect_flags;
+                class_export_put(exp);
+
+                obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
+
+                if ((ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
+                    (ocd->ocd_version > LUSTRE_VERSION_CODE +
+                    LUSTRE_VERSION_OFFSET_WARN)) {
+                        /* Sigh, some compilers do not like #ifdef in the middle
+                           of macro arguments */
+#ifdef __KERNEL__
+                        char *action = "upgrading this client";
+#else
+                        char *action = "recompiling this application";
+#endif
+
+                        CWARN("Server %s version (%d.%d.%d.%d) is much newer. "
+                              "Consider %s (%s).\n",
+                              imp->imp_target_uuid.uuid,
+                              OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
+                              OBD_OCD_VERSION_MINOR(ocd->ocd_version),
+                              OBD_OCD_VERSION_PATCH(ocd->ocd_version),
+                              OBD_OCD_VERSION_FIX(ocd->ocd_version),
+                              action, LUSTRE_VERSION_STRING);
                 }
+
                 if (imp->imp_conn_current != NULL) {
                         list_del(&imp->imp_conn_current->oic_item);
                         list_add(&imp->imp_conn_current->oic_item,
@@ -579,8 +625,33 @@ finish:
  out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                if (aa->pcaa_initial_connect && !imp->imp_initial_recov) {
+                if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
                         ptlrpc_deactivate_import(imp);
+
+                if (rc == -EPROTO) {
+                        struct obd_connect_data *ocd;
+                        ocd = lustre_swab_repbuf(request, 0,
+                                                 sizeof *ocd,
+                                                 lustre_swab_connect);
+                        if (ocd &&
+                            (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
+                            (ocd->ocd_version != LUSTRE_VERSION_CODE)) {
+                           /* Actually servers are only supposed to refuse
+                              connection from liblustre clients, so we should
+                              never see this from VFS context */
+                                CERROR("Server %s version (%d.%d.%d.%d) "
+                                       "refused connection from this client "
+                                       "as too old version (%s).  Client must "
+                                       "be recompiled\n",
+                                      imp->imp_target_uuid.uuid,
+                                      OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
+                                      OBD_OCD_VERSION_MINOR(ocd->ocd_version),
+                                      OBD_OCD_VERSION_PATCH(ocd->ocd_version),
+                                      OBD_OCD_VERSION_FIX(ocd->ocd_version),
+                                      LUSTRE_VERSION_STRING);
+                                IMPORT_SET_STATE(imp, LUSTRE_IMP_CLOSED);
+                        }
+                        RETURN(-EPROTO);
                 }
 
                 ptlrpc_maybe_ping_import_soon(imp);
@@ -619,7 +690,8 @@ static int signal_completed_replay(struct obd_import *imp)
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
         atomic_inc(&imp->imp_replay_inflight);
 
-        req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING,
+                              0, NULL, NULL);
         if (!req) {
                 atomic_dec(&imp->imp_replay_inflight);
                 RETURN(-ENOMEM);
@@ -726,8 +798,6 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_RECOVER) {
-                char   *nidstr;
-
                 CDEBUG(D_HA, "reconnected to %s@%s\n",
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
@@ -740,15 +810,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
                 deuuidify(imp->imp_target_uuid.uuid, NULL,
                           &target_start, &target_len);
-                nidstr = libcfs_nid2str(imp->imp_connection->c_peer.nid);
-
-                LCONSOLE_INFO("Connection restored to service %.*s using nid "
-                              "%s.\n", target_len, target_start, nidstr);
-
-                CWARN("%s: connection restored to %s@%s\n",
-                      imp->imp_obd->obd_name,
-                      imp->imp_target_uuid.uuid,
-                      imp->imp_connection->c_remote_uuid.uuid);
+                LCONSOLE_INFO("%s: Connection restored to service %.*s "
+                              "using nid %s.\n", imp->imp_obd->obd_name,
+                              target_len, target_start,
+                              libcfs_nid2str(imp->imp_connection->c_peer.nid));
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
@@ -797,7 +862,8 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
 
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-        request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
+        request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, rq_opc,
+                                  0, NULL, NULL);
         if (request) {
                 /* We are disconnecting, do not retry a failed DISCONNECT rpc if
                  * it fails.  We can get through the above with a down server

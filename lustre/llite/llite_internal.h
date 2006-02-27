@@ -5,8 +5,13 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+#ifdef CONFIG_FS_POSIX_ACL
+# include <linux/fs.h>
+# include <linux/xattr_acl.h>
+#endif
+
 #include <lustre_debug.h>
-#include <linux/lustre_version.h>
+#include <linux/lustre_ver.h>
 
 /*
 struct lustre_intent_data {
@@ -79,6 +84,8 @@ struct ll_inode_info {
 
         struct posix_acl       *lli_posix_acl;
 
+        struct list_head        lli_dead_list;
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
@@ -136,6 +143,7 @@ struct ll_ra_info {
 #define LL_SBI_FLOCK            0x04
 #define LL_SBI_USER_XATTR       0x08 /* support user xattr */
 #define LL_SBI_ACL              0x10 /* support ACL */
+#define LL_SBI_JOIN             0x20 /* support JOIN */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -152,7 +160,7 @@ struct ll_sb_info {
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
-        __u64                     ll_connect_flags;
+        struct lustre_client_ocd  ll_lco;
 
         struct hlist_head         ll_orphan_dentry_list; /*please don't ask -p*/
         struct ll_close_queue    *ll_lcq;
@@ -167,6 +175,9 @@ struct ll_sb_info {
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
         struct file_operations   *ll_fop;
+
+        struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
+        spinlock_t                ll_deathrow_lock;
 };
 
 struct ll_ra_read {
@@ -239,10 +250,6 @@ struct lov_stripe_md;
 extern spinlock_t inode_lock;
 
 extern struct proc_dir_entry *proc_lustre_fs_root;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# define hlist_del_init list_del_init
-#endif
 
 static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 {
@@ -389,6 +396,7 @@ extern void ll_set_dd(struct dentry *de);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
+int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name);
 
 /* llite/llite_lib.c */
 
@@ -420,6 +428,8 @@ void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);
 struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
                                              struct list_head *list);
+int ll_obd_statfs(struct inode *inode, void *arg);
+int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 
 /* llite/llite_nfs.c */
 __u32 get_uuid2int(const char *name, int len);

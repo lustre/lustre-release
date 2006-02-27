@@ -10,6 +10,10 @@
 #ifndef _LUSTRE_MDS_H
 #define _LUSTRE_MDS_H
 
+#define LUSTRE_MDS_NAME "mds"
+#define LUSTRE_MDT_NAME "mdt"
+#define LUSTRE_MDC_NAME "mdc"
+
 #include <lustre_handles.h>
 #include <libcfs/kp30.h>
 #include <lustre_idl.h>
@@ -37,14 +41,12 @@ struct ptlrpc_request;
 struct obd_device;
 struct ll_file_data;
 
-#define LUSTRE_MDS_NAME "mds"
-#define LUSTRE_MDT_NAME "mdt"
-#define LUSTRE_MDC_NAME "mdc"
-
 struct lustre_md {
         struct mds_body         *body;
         struct lov_stripe_md    *lsm;
+#ifdef CONFIG_FS_POSIX_ACL
         struct posix_acl        *posix_acl;
+#endif
 };
 
 struct mdc_op_data {
@@ -78,51 +80,6 @@ struct mds_update_record {
         struct lvfs_grp_hash_entry *ur_grp_entry;
 };
 
-#define MDS_LR_SERVER_SIZE    512
-
-#define MDS_LR_CLIENT_START  8192
-#define MDS_LR_CLIENT_SIZE    128
-#if MDS_LR_CLIENT_START < MDS_LR_SERVER_SIZE
-#error "Can't have MDS_LR_CLIENT_START < MDS_LR_SERVER_SIZE"
-#endif
-
-#define MDS_CLIENT_SLOTS 17
-
-#define MDS_ROCOMPAT_LOVOBJID   0x00000001
-#define MDS_ROCOMPAT_SUPP       (MDS_ROCOMPAT_LOVOBJID)
-
-#define MDS_INCOMPAT_SUPP       (0)
-
-/* Data stored per server at the head of the last_rcvd file.  In le32 order.
- * Try to keep this the same as fsd_server_data so we might one day merge. */
-struct mds_server_data {
-        __u8  msd_uuid[40];        /* server UUID */
-        __u64 msd_last_transno;    /* last completed transaction ID */
-        __u64 msd_mount_count;     /* MDS incarnation number */
-        __u64 msd_unused;
-        __u32 msd_feature_compat;  /* compatible feature flags */
-        __u32 msd_feature_rocompat;/* read-only compatible feature flags */
-        __u32 msd_feature_incompat;/* incompatible feature flags */
-        __u32 msd_server_size;     /* size of server data area */
-        __u32 msd_client_start;    /* start of per-client data area */
-        __u16 msd_client_size;     /* size of per-client data area */
-        __u16 msd_subdir_count;    /* number of subdirectories for objects */
-        __u64 msd_catalog_oid;     /* recovery catalog object id */
-        __u32 msd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  msd_peeruuid[40];    /* UUID of LOV/OSC associated with MDS */
-        __u8  msd_padding[MDS_LR_SERVER_SIZE - 140];
-};
-
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mds_client_data {
-        __u8 mcd_uuid[40];      /* client UUID */
-        __u64 mcd_last_transno; /* last completed transaction ID */
-        __u64 mcd_last_xid;     /* xid for the last transaction */
-        __u32 mcd_last_result;  /* result from last RPC */
-        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 64];
-};
-
 /* file data for open files on MDS */
 struct mds_file_data {
         struct portals_handle mfd_handle; /* must be first */
@@ -134,9 +91,13 @@ struct mds_file_data {
 };
 
 /* ACL */
+#ifdef CONFIG_FS_POSIX_ACL
 #define LUSTRE_POSIX_ACL_MAX_ENTRIES    (32)
 #define LUSTRE_POSIX_ACL_MAX_SIZE       \
                 (xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
+#else
+#define LUSTRE_POSIX_ACL_MAX_SIZE       0
+#endif
 
 /* mds/mds_reint.c */
 int mds_reint_rec(struct mds_update_record *r, int offset,
@@ -149,7 +110,7 @@ int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
 void mdc_set_lock_data(__u64 *lockh, void *data);
-int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
                       ldlm_iterator_t it, void *data);
 int mdc_intent_lock(struct obd_export *exp,
                     struct mdc_op_data *,
@@ -179,7 +140,7 @@ int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 obd_valid valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
 int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
-                     char *filename, int namelen, unsigned long valid,
+                     const char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,

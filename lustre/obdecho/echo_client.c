@@ -194,7 +194,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                 if (lsm->lsm_stripe_size == 0)
                         lsm->lsm_stripe_size = CFS_PAGE_SIZE;
 
-                idx = ll_insecure_random_int();
+                idx = ll_rand();
 
                 /* setup stripes: indices + default ids if required */
                 for (i = 0; i < lsm->lsm_stripe_count; i++) {
@@ -239,7 +239,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                         oa->o_id, on_target ? " (undoing create)" : "");
 
                 if (on_target)
-                        obd_destroy(ec->ec_exp, oa, lsm, oti);
+                        obd_destroy(ec->ec_exp, oa, lsm, oti, NULL);
 
                 rc = -EEXIST;
                 goto failed;
@@ -280,11 +280,11 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd,
         spin_lock (&ec->ec_lock);
         eco = echo_find_object_locked (obd, oa->o_id);
         if (eco != NULL) {
-                if (eco->eco_deleted) {          /* being deleted */
-                        spin_unlock (&ec->ec_lock);
-                        return (-EAGAIN);       /* (see comment in cleanup) */
+                if (eco->eco_deleted) {            /* being deleted */
+                        spin_unlock(&ec->ec_lock); /* (see comment in cleanup) */
+                        return (-EAGAIN);
                 }
-
+                
                 eco->eco_refcount++;
                 spin_unlock (&ec->ec_lock);
                 *ecop = eco;
@@ -509,11 +509,11 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         gfp_mask = ((oa->o_id & 2) == 0) ? CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
 
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
+        LASSERT(lsm != NULL);
+        LASSERT(lsm->lsm_object_id == oa->o_id);
 
         if (count <= 0 ||
-            (count & (CFS_PAGE_SIZE - 1)) != 0 ||
-            (lsm != NULL &&
-             lsm->lsm_object_id != oa->o_id))
+            (count & (CFS_PAGE_SIZE - 1)) != 0)
                 return (-EINVAL);
 
         /* XXX think again with misaligned I/O */
@@ -936,9 +936,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                         rnb[i].len = CFS_PAGE_SIZE;
                 }
 
-                /* XXX this can't be the best.. */
-                memset(oti, 0, sizeof(*oti));
                 ioo.ioo_bufcnt = npages;
+                oti->oti_transno = 0;
 
                 ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti);
                 if (ret != 0)
@@ -986,7 +985,7 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_trans_info dummy_oti;
+        struct obd_trans_info dummy_oti = { .oti_thread_id = -1 };
         struct ec_object *eco;
         int rc;
         ENTRY;
@@ -994,8 +993,6 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
         rc = echo_get_object(&eco, obd, &data->ioc_obdo1);
         if (rc)
                 RETURN(rc);
-
-        memset(&dummy_oti, 0, sizeof(dummy_oti));
 
         data->ioc_obdo1.o_valid &= ~OBD_MD_FLHANDLE;
         data->ioc_obdo1.o_valid |= OBD_MD_FLGROUP;
@@ -1223,7 +1220,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                         oa->o_gr = FILTER_GROUP_ECHO;
                         oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eco_lsm, 
-                                         &dummy_oti);
+                                         &dummy_oti, NULL);
                         if (rc == 0)
                                 eco->eco_deleted = 1;
                         echo_put_object(eco);

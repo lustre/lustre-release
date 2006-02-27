@@ -38,6 +38,7 @@ enum obd_import_event {
         IMP_EVENT_INACTIVE   = 0x808002,
         IMP_EVENT_INVALIDATE = 0x808003,
         IMP_EVENT_ACTIVE     = 0x808004,
+        IMP_EVENT_OCD        = 0x808005,
 };
 
 struct obd_import_conn {
@@ -53,7 +54,6 @@ struct obd_import {
         struct lustre_handle      imp_dlm_handle; /* client's ldlm export */
         struct ptlrpc_connection *imp_connection;
         struct ptlrpc_client     *imp_client;
-        struct list_head          imp_observers;
         struct list_head          imp_pinger_chain;
 
         /* Lists of requests that are retained for replay, waiting for a reply,
@@ -87,15 +87,13 @@ struct obd_import {
         /* flags */
         unsigned int              imp_invalid:1, imp_replayable:1,
                                   imp_dlm_fake:1, imp_server_timeout:1,
-                                  imp_initial_recov:1, imp_force_verify:1,
-                                  imp_pingable:1, imp_resend_replay:1,
-                                  imp_deactive:1;
+                                  imp_initial_recov:1, imp_initial_recov_bk:1,
+                                  imp_force_verify:1, imp_pingable:1,
+                                  imp_resend_replay:1, imp_deactive:1;
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
+        __u64                     imp_connect_flags_orig;
 };
-
-#define IMP_CROW_ABLE(imp) \
-        ((imp)->imp_connect_data.ocd_connect_flags & OBD_CONNECT_CROW)
 
 typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,
                                     int event, void *event_arg, void *cb_data);

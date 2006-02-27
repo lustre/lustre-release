@@ -5,7 +5,44 @@
 #ifndef _MDS_INTERNAL_H
 #define _MDS_INTERNAL_H
 
+#include <linux/lustre_disk.h>  /* XXX */
 #include <lustre_mds.h>
+
+#define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
+
+#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT)
+
+/* Data stored per server at the head of the last_rcvd file.  In le32 order.
+ * Try to keep this the same as fsd_server_data so we might one day merge. */
+struct mds_server_data {
+        __u8  msd_uuid[40];        /* server UUID */
+        __u64 msd_last_transno;    /* last completed transaction ID */
+        __u64 msd_mount_count;     /* MDS incarnation number */
+        __u64 msd_mount_count_new; /* future MDS incarnation number */
+        __u32 msd_feature_compat;  /* compatible feature flags */
+        __u32 msd_feature_rocompat;/* read-only compatible feature flags */
+        __u32 msd_feature_incompat;/* incompatible feature flags */
+        __u32 msd_server_size;     /* size of server data area */
+        __u32 msd_client_start;    /* start of per-client data area */
+        __u16 msd_client_size;     /* size of per-client data area */
+        __u16 msd_subdir_count;    /* number of subdirectories for objects */
+        __u64 msd_catalog_oid;     /* recovery catalog object id */
+        __u32 msd_catalog_ogen;    /* recovery catalog inode generation */
+        __u8  msd_peeruuid[40];    /* UUID of LOV/OSC associated with MDS */
+        __u32 msd_ost_index;       /* index number of OST in LOV */
+        __u32 msd_mds_index;       /* index number of MDS in LMV */
+        __u8  msd_padding[LR_SERVER_SIZE - 148];
+};
+
+/* Data stored per client in the last_rcvd file.  In le32 order. */
+struct mds_client_data {
+        __u8 mcd_uuid[40];      /* client UUID */
+        __u64 mcd_last_transno; /* last completed transaction ID */
+        __u64 mcd_last_xid;     /* xid for the last transaction */
+        __u32 mcd_last_result;  /* result from last RPC */
+        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
+        __u8 mcd_padding[LR_CLIENT_SIZE - 64];
+};
 
 #define MDS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
@@ -127,6 +164,23 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                           struct lov_mds_md *lmm, int lmm_size,
                           struct llog_cookie *logcookies, struct ll_fid *fid);
 
+int mds_get_parents_children_locked(struct obd_device *obd,
+                                    struct mds_obd *mds,
+                                    struct ll_fid *p1_fid,
+                                    struct dentry **de_srcdirp,
+                                    struct ll_fid *p2_fid,
+                                    struct dentry **de_tgtdirp,
+                                    int parent_mode,
+                                    const char *old_name, int old_len,
+                                    struct dentry **de_oldp,
+                                    const char *new_name, int new_len,
+                                    struct dentry **de_newp,
+                                    struct lustre_handle *dlm_handles,
+                                    int child_mode);
+
+void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
+                      struct mds_body *body);
+int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm);
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
@@ -152,7 +206,6 @@ int mds_llog_finish(struct obd_device *obd, int count);
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd, char * lov_name);
 int mds_lov_disconnect(struct obd_device *obd);
-void mds_lov_set_cleanup_flags(struct obd_device *);
 int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
@@ -160,23 +213,28 @@ int mds_lov_set_nextid(struct obd_device *obd);
 int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
                               int nonblock);
 int mds_post_mds_lovconf(struct obd_device *obd);
-int mds_notify(struct obd_device *obd, struct obd_device *watched, int active);
+int mds_notify(struct obd_device *obd, struct obd_device *watched,
+               enum obd_notify_event ev);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
 void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
                          struct lov_desc *desc);
+int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp);
 
 /* mds/mds_open.c */
 int mds_query_write_access(struct inode *inode);
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *);
-int mds_pin(struct ptlrpc_request *req);
+int mds_pin(struct ptlrpc_request *req, int offset);
 void mds_mfd_unlink(struct mds_file_data *mfd, int decref);
-int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
+int mds_mfd_close(struct ptlrpc_request *req, int offset, struct obd_device *obd,
                   struct mds_file_data *mfd, int unlink_orphan);
-int mds_close(struct ptlrpc_request *req);
-int mds_done_writing(struct ptlrpc_request *req);
+int mds_close(struct ptlrpc_request *req, int offset);
+int mds_done_writing(struct ptlrpc_request *req, int offset);
 
+/*mds/mds_join.c*/
+int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req, 
+                  struct dentry *dchild, struct lustre_handle *lockh);
 
 /* mds/mds_fs.c */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
@@ -185,11 +243,11 @@ int mds_client_free(struct obd_export *exp);
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *ea, struct obd_trans_info *oti);
+                    struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                    struct obd_export *md_exp);
 
 /* mds/handler.c */
 extern struct lvfs_callback_ops mds_lvfs_ops;
-int mds_lov_clean(struct obd_device *obd);
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 int mds_postrecov(struct obd_device *obd);
@@ -206,6 +264,7 @@ int mds_pack_acl(struct mds_export_data *med, struct inode *inode,
                  int repoff);
 
 /* quota stuff */
+extern quota_interface_t mds_quota_interface;
 extern quota_interface_t *quota_interface;
 
 /* mds/mds_xattr.c */

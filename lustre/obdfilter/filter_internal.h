@@ -10,6 +10,7 @@
 #endif
 #include <lustre_handles.h>
 #include <lustre_debug.h>
+#include <linux/lustre_disk.h>
 #include <obd.h>
 
 #define FILTER_LAYOUT_VERSION "2"
@@ -22,34 +23,26 @@
 # define OBD_FILTER_SAN_DEVICENAME "sanobdfilter"
 #endif
 
-#define LAST_RCVD "last_rcvd"
+#define HEALTH_CHECK "health_check"
 #define FILTER_INIT_OBJID 0
-
-#define FILTER_LR_SERVER_SIZE    512
-
-#define FILTER_LR_CLIENT_START   8192
-#define FILTER_LR_CLIENT_SIZE    128
-
-/* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
-#define FILTER_LR_MAX_CLIENTS (PAGE_SIZE * 8)
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 #define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
+#define FILTER_ROCOMPAT_SUPP (0)
+
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
-#define FILTER_ROCOMPAT_SUPP   (0)
-
-#define FILTER_INCOMPAT_GROUPS 0x00000001
-#define FILTER_INCOMPAT_SUPP   (FILTER_INCOMPAT_GROUPS)
+#define FILTER_INCOMPAT_SUPP   (OBD_INCOMPAT_GROUPS)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
+#define GRANT_FOR_LLOG(obd) 16
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as mds_server_data so we might one day merge. */
 struct filter_server_data {
         __u8  fsd_uuid[40];        /* server UUID */
-        __u64 fsd_unused;          /* was fsd_last_objid - don't use for now */
+        __u64 fsd_last_transno_new;/* future last completed transaction ID */
         __u64 fsd_last_transno;    /* last completed transaction ID */
         __u64 fsd_mount_count;     /* FILTER incarnation number */
         __u32 fsd_feature_compat;  /* compatible feature flags */
@@ -62,7 +55,9 @@ struct filter_server_data {
         __u64 fsd_catalog_oid;     /* recovery catalog object id */
         __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
         __u8  fsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
+        __u32 fsd_ost_index;       /* index number of OST in LOV */
+        __u32 fsd_mds_index;       /* index number of MDS in LMV */
+        __u8  fsd_padding[LR_SERVER_SIZE - 148];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -70,16 +65,19 @@ struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 56];
+        __u8  fcd_padding[LR_CLIENT_SIZE - 56];
 };
-
-#define FILTER_DENTRY_MAGIC 0x9efba101
-#define FILTER_FLAG_DESTROY 0x0001      /* destroy dentry on last file close */
 
 /* Limit the returned fields marked valid to those that we actually might set */
 #define FILTER_VALID_FLAGS (OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLGENER  |\
                             OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ|\
                             OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
+
+struct filter_fid {
+        struct ll_fid   ff_fid;
+        __u64           ff_objid;
+        __u64           ff_group;
+};
 
 enum {
         LPROC_FILTER_READ_BYTES = 0,
@@ -102,19 +100,20 @@ struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
 struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
                                   const char *what, int quiet);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 0)
-#define filter_oa2dentry_quiet(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 1)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
-__u64 filter_last_id(struct filter_obd *, int group);
+__u64 filter_next_id(struct filter_obd *, struct obdo *);
+__u64 filter_last_id(struct filter_obd *, struct obdo *);
+int filter_update_fidea(struct obd_export *exp, struct inode *inode,
+                        void *handle, struct obdo *oa);
 int filter_update_server_data(struct obd_device *, struct file *,
                               struct filter_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *);
-struct dentry *filter_crow_object(struct obd_device *obd, struct obdo *oa);
-
+                   struct lov_stripe_md *md, struct obd_trans_info *,
+                   struct obd_export *);
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
 int filter_setattr(struct obd_export *exp, struct obdo *oa,
@@ -139,6 +138,7 @@ int filter_brw(int cmd, struct obd_export *, struct obdo *,
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
 
 /* filter_io_*.c */
+struct filter_iobuf;
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
                           struct niobuf_local *res, struct obd_trans_info *oti,
@@ -148,13 +148,15 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                   obd_size want, obd_size fs_space_left);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
-int filter_alloc_iobuf(struct filter_obd *, int rw, int num_pages, void **ret);
-void filter_free_iobuf(void *iobuf);
-int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
+struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *, int rw,
+                                        int num_pages);
+void filter_free_iobuf(struct filter_iobuf *iobuf);
+int filter_iobuf_add_page(struct obd_device *obd, struct filter_iobuf *iobuf,
                           struct inode *inode, struct page *page);
-void *filter_iobuf_get(struct ptlrpc_thread *thread, struct filter_obd *filter);
-void filter_iobuf_put(void *iobuf);
-int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
+void *filter_iobuf_get(struct filter_obd *filter, struct obd_trans_info *oti);
+void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
+                      struct obd_trans_info *oti);
+int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle);
 

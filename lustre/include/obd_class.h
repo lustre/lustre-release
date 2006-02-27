@@ -405,6 +405,20 @@ static inline int obd_free_memmd(struct obd_export *exp,
         return obd_unpackmd(exp, mem_tgt, NULL, 0);
 }
 
+static inline int obd_checkmd(struct obd_export *exp,
+                              struct obd_export *md_exp,
+                              struct lov_stripe_md *mem_tgt)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, checkmd);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, checkmd);
+
+        rc = OBP(exp->exp_obd, checkmd)(exp, md_exp, mem_tgt);
+        RETURN(rc);
+}
+
 static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
                              struct lov_stripe_md **ea,
                              struct obd_trans_info *oti)
@@ -421,7 +435,8 @@ static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
 
 static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
                               struct lov_stripe_md *ea,
-                              struct obd_trans_info *oti)
+                              struct obd_trans_info *oti,
+                              struct obd_export *md_exp)
 {
         int rc;
         ENTRY;
@@ -429,7 +444,7 @@ static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_OP(exp, destroy);
         OBD_COUNTER_INCREMENT(exp->exp_obd, destroy);
 
-        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti);
+        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti, md_exp);
         RETURN(rc);
 }
 
@@ -531,6 +546,26 @@ static inline int obd_connect(struct lustre_handle *conn, struct obd_device *obd
         OBD_COUNTER_INCREMENT(obd, connect);
 
         rc = OBP(obd, connect)(conn, obd, cluuid, d);
+        /* check that only subset is granted */
+        LASSERT(ergo(d != NULL,
+                     (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
+        RETURN(rc);
+}
+
+static inline int obd_reconnect(struct obd_export *exp,
+                                struct obd_device *obd,
+                                struct obd_uuid *cluuid,
+                                struct obd_connect_data *d)
+{
+        int rc;
+        __u64 ocf = d ? d->ocd_connect_flags : 0; /* for post-condition check */
+        ENTRY;
+
+        OBD_CHECK_DEV_ACTIVE(obd);
+        OBD_CHECK_OP(obd, reconnect, 0);
+        OBD_COUNTER_INCREMENT(obd, reconnect);
+
+        rc = OBP(obd, reconnect)(exp, obd, cluuid, d);
         /* check that only subset is granted */
         LASSERT(ergo(d != NULL,
                      (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
@@ -820,10 +855,19 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-/* b1_4_bug5047 has changes to make this an obd_merge_lvb() method */
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms_only);
-__u64 lov_merge_blocks(struct lov_stripe_md *lsm);
-__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
+static inline int obd_merge_lvb(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                struct ost_lvb *lvb, int kms_only)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, merge_lvb, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, merge_lvb);
+
+        rc = OBP(exp->exp_obd, merge_lvb)(exp, lsm, lvb, kms_only);
+        RETURN(rc);
+}
 
 static inline int obd_adjust_kms(struct obd_export *exp,
                                  struct lov_stripe_md *lsm, obd_off size,
@@ -1003,7 +1047,7 @@ static inline void obd_import_event(struct obd_device *obd,
 
 static inline int obd_notify(struct obd_device *obd,
                              struct obd_device *watched,
-                             int active)
+                             enum obd_notify_event ev)
 {
         ENTRY;
         OBD_CHECK_DEV(obd);
@@ -1018,8 +1062,33 @@ static inline int obd_notify(struct obd_device *obd,
         }
 
         OBD_COUNTER_INCREMENT(obd, notify);
-        RETURN(OBP(obd, notify)(obd, watched, active));
+        RETURN(OBP(obd, notify)(obd, watched, ev));
 }
+
+static inline int obd_notify_observer(struct obd_device *observer,
+                                      struct obd_device *observed,
+                                      enum obd_notify_event ev)
+{
+        int rc1;
+        int rc2;
+
+        struct obd_notify_upcall *onu;
+
+        if (observer->obd_observer)
+                rc1 = obd_notify(observer->obd_observer, observed, ev);
+        else
+                rc1 = 0;
+        /*
+         * Also, call non-obd listener, if any
+         */
+        onu = &observer->obd_upcall;
+        if (onu->onu_upcall != NULL)
+                rc2 = onu->onu_upcall(observer, observed, ev, onu->onu_owner);
+        else
+                rc2 = 0;
+
+        return rc1 ?: rc2;
+ }
 
 static inline int obd_quotacheck(struct obd_export *exp,
                                  struct obd_quotactl *oqctl)

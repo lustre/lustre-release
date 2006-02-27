@@ -129,26 +129,24 @@ int lov_update_enqueue_set(struct lov_request_set *set,
          * can be addressed then. */
         if (rc == ELDLM_OK) {
                 struct ldlm_lock *lock = ldlm_handle2lock(lov_lockhp);
-                __u64 tmp = req->rq_md->lsm_oinfo->loi_rss;
+                __u64 tmp = req->rq_md->lsm_oinfo->loi_lvb.lvb_size;
 
                 LASSERT(lock != NULL);
                 lov_stripe_lock(set->set_md);
-                loi->loi_rss = tmp;
-                loi->loi_mtime = req->rq_md->lsm_oinfo->loi_mtime;
-                loi->loi_blocks = req->rq_md->lsm_oinfo->loi_blocks;
+                loi->loi_lvb = req->rq_md->lsm_oinfo->loi_lvb;
                 /* Extend KMS up to the end of this lock and no further
                  * A lock on [x,y] means a KMS of up to y + 1 bytes! */
                 if (tmp > lock->l_policy_data.l_extent.end)
                         tmp = lock->l_policy_data.l_extent.end + 1;
                 if (tmp >= loi->loi_kms) {
-                        LDLM_DEBUG(lock, "lock acquired, setting rss="
-                                   LPU64", kms="LPU64, loi->loi_rss, tmp);
+                        LDLM_DEBUG(lock, "lock acquired, setting rss="LPU64
+                                   ", kms="LPU64, loi->loi_lvb.lvb_size, tmp);
                         loi->loi_kms = tmp;
                         loi->loi_kms_valid = 1;
                 } else {
                         LDLM_DEBUG(lock, "lock acquired, setting rss="
                                    LPU64"; leaving kms="LPU64", end="LPU64,
-                                   loi->loi_rss, loi->loi_kms,
+                                   loi->loi_lvb.lvb_size, loi->loi_kms,
                                    lock->l_policy_data.l_extent.end);
                 }
                 lov_stripe_unlock(set->set_md);
@@ -157,12 +155,10 @@ int lov_update_enqueue_set(struct lov_request_set *set,
         } else if (rc == ELDLM_LOCK_ABORTED && flags & LDLM_FL_HAS_INTENT) {
                 memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                 lov_stripe_lock(set->set_md);
-                loi->loi_rss = req->rq_md->lsm_oinfo->loi_rss;
-                loi->loi_mtime = req->rq_md->lsm_oinfo->loi_mtime;
-                loi->loi_blocks = req->rq_md->lsm_oinfo->loi_blocks;
+                loi->loi_lvb = req->rq_md->lsm_oinfo->loi_lvb;
                 lov_stripe_unlock(set->set_md);
                 CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
-                       " kms="LPU64"\n", loi->loi_rss, loi->loi_kms);
+                       " kms="LPU64"\n", loi->loi_lvb.lvb_size, loi->loi_kms);
                 rc = ELDLM_OK;
         } else {
                 struct obd_export *exp = set->set_exp;
@@ -202,7 +198,7 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
 
                 lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
                 LASSERT(lov_lockhp);
-                if (lov_lockhp->cookie == 0)
+                if (!lustre_handle_is_used(lov_lockhp))
                         continue;
 
                 rc = obd_cancel(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,
@@ -293,10 +289,8 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                 req->rq_md->lsm_object_id = loi->loi_id;
                 req->rq_md->lsm_stripe_count = 0;
                 req->rq_md->lsm_oinfo->loi_kms_valid = loi->loi_kms_valid;
-                req->rq_md->lsm_oinfo->loi_rss = loi->loi_rss;
                 req->rq_md->lsm_oinfo->loi_kms = loi->loi_kms;
-                req->rq_md->lsm_oinfo->loi_blocks = loi->loi_blocks;
-                req->rq_md->lsm_oinfo->loi_mtime = loi->loi_mtime;
+                req->rq_md->lsm_oinfo->loi_lvb = loi->loi_lvb;
 
                 lov_set_add_req(req, set);
         }
@@ -417,10 +411,10 @@ int lov_fini_cancel_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
 
+        LASSERT(set->set_exp);
         if (set->set_lockh)
                 lov_llh_put(set->set_lockh);
 
@@ -458,7 +452,7 @@ int lov_prep_cancel_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                 struct lustre_handle *lov_lockhp;
 
                 lov_lockhp = set->set_lockh->llh_handles + i;
-                if (lov_lockhp->cookie == 0) {
+                if (!lustre_handle_is_used(lov_lockhp)) {
                         CDEBUG(D_HA, "lov idx %d subobj "LPX64" no lock?\n",
                                loi->loi_ost_idx, loi->loi_id);
                         continue;
@@ -567,7 +561,7 @@ cleanup:
                         continue;
 
                 sub_exp = lov->tgts[req->rq_idx].ltd_exp;
-                err = obd_destroy(sub_exp, req->rq_oa, NULL, oti);
+                err = obd_destroy(sub_exp, req->rq_oa, NULL, oti, NULL);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
@@ -594,11 +588,13 @@ int lov_fini_create_set(struct lov_request_set *set,struct lov_stripe_md **lsmp)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
-        if (set->set_completes) 
+        LASSERT(set->set_exp);
+        if (set->set_completes) {
                 rc = create_done(set->set_exp, set, lsmp);
+                /* FIXME update qos data here */
+        }
 
         if (atomic_dec_and_test(&set->set_refcount))
                 lov_finish_set(set);
@@ -653,8 +649,9 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **lsmp,
                         struct obdo *src_oa, struct obd_trans_info *oti,
                         struct lov_request_set **reqset)
 {
+        struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_request_set *set;
-        int rc = 0;
+        int rc = 0, newea = 0;
         ENTRY;
 
         OBD_ALLOC(set, sizeof(*set));
@@ -666,14 +663,54 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **lsmp,
         set->set_md = *lsmp;
         set->set_oa = src_oa;
         set->set_oti = oti;
-        
-        rc = qos_prep_create(exp, set);
+
+        if (set->set_md == NULL) {
+                int stripes, stripe_cnt;
+                stripe_cnt = lov_get_stripecnt(lov, 0);
+
+                /* If the MDS file was truncated up to some size, stripe over
+                 * enough OSTs to allow the file to be created at that size. */
+                if (src_oa->o_valid & OBD_MD_FLSIZE) {
+                        stripes=((src_oa->o_size+LUSTRE_STRIPE_MAXBYTES)>>12)-1;
+                        do_div(stripes, (__u32)(LUSTRE_STRIPE_MAXBYTES >> 12));
+
+                        if (stripes > lov->desc.ld_active_tgt_count)
+                                GOTO(out_set, rc = -EFBIG);
+                        if (stripes < stripe_cnt)
+                                stripes = stripe_cnt;
+                } else {
+                        stripes = stripe_cnt;
+                }
+
+                rc = lov_alloc_memmd(&set->set_md, stripes,
+                                     lov->desc.ld_pattern ?
+                                     lov->desc.ld_pattern : LOV_PATTERN_RAID0, 
+                                     LOV_MAGIC);
+                if (rc < 0)
+                        goto out_set;
+                newea = 1;
+        }
+
+        rc = qos_prep_create(lov, set, newea);
         if (rc)
-                lov_fini_create_set(set, lsmp);
-        else
-                *reqset = set;
+                goto out_lsm;
+
+        if (oti && (src_oa->o_valid & OBD_MD_FLCOOKIE)) {
+                oti_alloc_cookies(oti, set->set_count);
+                if (!oti->oti_logcookies)
+                        goto out_lsm;
+                set->set_cookies = oti->oti_logcookies;
+        }
+        *reqset = set;
         RETURN(rc);
-}                                                
+
+out_lsm:
+        if (*lsmp == NULL)
+                obd_free_memmd(exp, &set->set_md);
+out_set:
+        lov_fini_create_set(set, lsmp);
+        RETURN(rc);
+}
 
 static int common_attr_done(struct lov_request_set *set)
 {
@@ -733,7 +770,7 @@ static int brw_done(struct lov_request_set *set)
                 loi = &lsm->lsm_oinfo[req->rq_stripe];
 
                 if (req->rq_oa->o_valid & OBD_MD_FLBLOCKS)
-                        loi->loi_blocks = req->rq_oa->o_blocks;
+                        loi->loi_lvb.lvb_blocks = req->rq_oa->o_blocks;
         }
 
         RETURN(0);
@@ -744,9 +781,9 @@ int lov_fini_brw_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 rc = brw_done(set);
                 /* FIXME update qos data here */
@@ -874,9 +911,9 @@ int lov_fini_getattr_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes)
                 rc = common_attr_done(set);
 
@@ -942,9 +979,9 @@ int lov_fini_destroy_set(struct lov_request_set *set)
 {
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 /* FIXME update qos data here */
         }
@@ -1021,9 +1058,9 @@ int lov_fini_setattr_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 rc = common_attr_done(set);
                 /* FIXME update qos data here */
@@ -1098,6 +1135,7 @@ int lov_update_setattr_set(struct lov_request_set *set,
                            struct lov_request *req, int rc)
 {
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
+        struct lov_stripe_md *lsm = set->set_md;
         ENTRY;
 
         lov_update_set(set, req, rc);
@@ -1108,10 +1146,17 @@ int lov_update_setattr_set(struct lov_request_set *set,
 
         /* FIXME: LOV STACKING update loi data should be done by OSC *
          * when this is gone we can go back to using lov_update_common_set() */
-        if (rc == 0 && req->rq_oa->o_valid & OBD_MD_FLMTIME)
-                set->set_md->lsm_oinfo[req->rq_stripe].loi_mtime =
-                        req->rq_oa->o_mtime;
-        /* ditto loi_atime, loi_ctime when available */
+        if (rc == 0) {
+                if (req->rq_oa->o_valid & OBD_MD_FLMTIME)
+                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_ctime =
+                                req->rq_oa->o_ctime;
+                if (req->rq_oa->o_valid & OBD_MD_FLMTIME)
+                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_mtime =
+                                req->rq_oa->o_mtime;
+                if (req->rq_oa->o_valid & OBD_MD_FLATIME)
+                        lsm->lsm_oinfo[req->rq_stripe].loi_lvb.lvb_atime =
+                                req->rq_oa->o_atime;
+        }
 
         RETURN(rc);
 }
@@ -1134,9 +1179,9 @@ int lov_fini_punch_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 if (!set->set_success)
                         rc = -EIO;
@@ -1215,9 +1260,9 @@ int lov_fini_sync_set(struct lov_request_set *set)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 if (!set->set_success)
                         rc = -EIO;

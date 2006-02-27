@@ -72,6 +72,8 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
         cfs_waitq_signal(&pc->pc_waitq);
 }
 
+/* requests that are added to the ptlrpcd queue are sent via
+ * ptlrpcd_check->ptlrpc_check_set() */
 void ptlrpcd_add_req(struct ptlrpc_request *req)
 {
         struct ptlrpcd_ctl *pc;
@@ -187,8 +189,11 @@ int ptlrpcd_check_async_rpcs(void *arg)
         /* single threaded!! */
         pc->pc_recurred++;
 
-        if (pc->pc_recurred == 1)
+        if (pc->pc_recurred == 1) {
                 rc = ptlrpcd_check(pc);
+                if (!rc)
+                        ptlrpc_expired_set(pc->pc_set);
+        }
 
         pc->pc_recurred--;
         return rc;
@@ -197,7 +202,7 @@ int ptlrpcd_check_async_rpcs(void *arg)
 
 static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
-        int rc = 0;
+        int rc;
 
         ENTRY;
         memset(pc, 0, sizeof(*pc));
@@ -211,21 +216,22 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
 #ifdef __KERNEL__
-        if (cfs_kernel_thread(ptlrpcd, pc, 0) < 0)  {
+        rc = cfs_kernel_thread(ptlrpcd, pc, 0);
+        if (rc < 0)  {
                 ptlrpc_set_destroy(pc->pc_set);
-                GOTO(out, rc = -ECHILD);
+                RETURN(rc);
         }
 
         wait_for_completion(&pc->pc_starting);
 #else
         pc->pc_callback =
                 liblustre_register_wait_callback(&ptlrpcd_check_async_rpcs, pc);
+        (void)rc;
 #endif
-out:
-        RETURN(rc);
+        RETURN(0);
 }
 
 static void ptlrpcd_stop(struct ptlrpcd_ctl *pc)

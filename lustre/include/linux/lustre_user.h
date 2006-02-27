@@ -45,7 +45,8 @@
 #include <sys/stat.h>
 #endif
 
-#if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__)
+#if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
+    defined(__craynv)
 typedef struct stat     lstat_t;
 #define HAVE_LOV_USER_MDS_DATA
 #elif defined(__USE_LARGEFILE64) || defined(__KERNEL__)

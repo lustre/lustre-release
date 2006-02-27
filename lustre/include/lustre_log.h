@@ -46,6 +46,7 @@
 #endif
 
 #include <obd.h>
+#include <obd_ost.h>
 #include <lustre_idl.h>
 
 #define LOG_NAME_LIMIT(logname, name)                   \
@@ -87,6 +88,8 @@ int llog_init_handle(struct llog_handle *handle, int flags,
 extern void llog_free_handle(struct llog_handle *handle);
 int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                  void *data, void *catdata);
+int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
+                         void *data, void *catdata);
 extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
 extern int llog_close(struct llog_handle *cathandle);
 
@@ -108,6 +111,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
 int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
+int llog_cat_reverse_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 
 /* llog_obd.c */
@@ -165,6 +169,8 @@ struct llog_operations {
         int (*lop_destroy)(struct llog_handle *handle);
         int (*lop_next_block)(struct llog_handle *h, int *curr_idx,
                               int next_idx, __u64 *offset, void *buf, int len);
+        int (*lop_prev_block)(struct llog_handle *h,
+                              int prev_idx, void *buf, int len);
         int (*lop_create)(struct llog_ctxt *ctxt, struct llog_handle **,
                           struct llog_logid *logid, char *name);
         int (*lop_close)(struct llog_handle *handle);
@@ -195,7 +201,7 @@ struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
         struct llog_gen          loc_gen;
         struct obd_device       *loc_obd; /* points back to the containing obd*/
-        struct obd_export       *loc_exp;
+        struct obd_export       *loc_exp; /* parent "disk" export (e.g. MDS) */
         struct obd_import       *loc_imp; /* to use in RPC's: can be backward
                                              pointing import */
         struct llog_operations  *loc_logops;
@@ -209,9 +215,9 @@ static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
         struct obd_device *obd = ctxt->loc_exp->exp_obd;
 
-        if (!strcmp(obd->obd_type->typ_name, "mds"))
+        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
                 ctxt->loc_gen.mnt_cnt = obd->u.mds.mds_mount_count;
-        else if (!strstr(obd->obd_type->typ_name, "filter"))
+        else if (!strstr(obd->obd_type->typ_name, LUSTRE_FILTER_NAME))
                 ctxt->loc_gen.mnt_cnt = obd->u.filter.fo_mount_count;
         else
                 ctxt->loc_gen.mnt_cnt = 0;
@@ -226,8 +232,9 @@ static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
         return(a.conn_cnt < b.conn_cnt ? 1 : 0);
 }
 
-#define LLOG_GEN_INC(gen)  ((gen).conn_cnt) ++
+#define LLOG_GEN_INC(gen)  ((gen).conn_cnt ++)
 #define LLOG_PROC_BREAK 0x0001
+#define LLOG_DEL_RECORD 0x0002
 
 static inline int llog_obd2ops(struct llog_ctxt *ctxt,
                                struct llog_operations **lop)
@@ -359,6 +366,23 @@ static inline int llog_next_block(struct llog_handle *loghandle, int *cur_idx,
 
         rc = lop->lop_next_block(loghandle, cur_idx, next_idx, cur_offset, buf,
                                  len);
+        RETURN(rc);
+}
+
+static inline int llog_prev_block(struct llog_handle *loghandle,
+                                  int prev_idx, void *buf, int len)
+{
+        struct llog_operations *lop;
+        int rc;
+        ENTRY;
+
+        rc = llog_handle2ops(loghandle, &lop);
+        if (rc)
+                RETURN(rc);
+        if (lop->lop_prev_block == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        rc = lop->lop_prev_block(loghandle, prev_idx, buf, len);
         RETURN(rc);
 }
 

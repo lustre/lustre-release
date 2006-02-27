@@ -43,12 +43,18 @@
 #define LL_IOC_QUOTACHECK               _IOW ('f', 160, int)
 #define LL_IOC_POLL_QUOTACHECK          _IOR ('f', 161, struct if_quotacheck *)
 #define LL_IOC_QUOTACTL                 _IOWR('f', 162, struct if_quotactl *)
+#define LL_IOC_JOIN                     _IOW ('f', 163, long)
+#define LL_IOC_OBD_STATFS               _IOWR('f', 164, struct obd_statfs *)
+
+#define LL_STATFS_MDC           1
+#define LL_STATFS_LOV           2
 
 #define IOC_MDC_TYPE            'i'
 #define IOC_MDC_GETSTRIPE       _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
 #define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_mds_data *)
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
+#define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002
@@ -56,6 +62,8 @@
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
+
+#define LOV_USER_MAGIC_JOIN 0x0BD20BD0
 
 #define LOV_PATTERN_RAID0 0x001
 #define LOV_PATTERN_RAID1 0x002
