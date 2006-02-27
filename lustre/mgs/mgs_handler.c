@@ -92,6 +92,7 @@ static int mgs_reconnect(struct obd_export *exp, struct obd_device *obd,
                 RETURN(-EINVAL);
 
         CERROR("Reconnect FIXME\n");
+        class_fail_export(exp);
         //rc = mds_connect_internal(exp, data);
 
         RETURN(rc);

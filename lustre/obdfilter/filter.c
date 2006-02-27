@@ -1671,8 +1671,8 @@ static int filter_cleanup(struct obd_device *obd)
         ENTRY;
 
         if (obd->obd_fail)
-                CERROR("%s: shutting down for failover; client state will"
-                       " be preserved.\n", obd->obd_name);
+                LCONSOLE_WARN("%s: shutting down for failover; client state "
+                              "will be preserved.\n", obd->obd_name);
 
         if (!list_empty(&obd->obd_exports)) {
                 CERROR("%s: still has clients!\n", obd->obd_name);

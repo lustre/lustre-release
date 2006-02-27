@@ -346,8 +346,8 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 obd->obd_force = 1;
                                 break;
                         case 'A':
-                                LCONSOLE_WARN("Failing %s by user command\n",
-                                       obd->obd_name);
+                                LCONSOLE_WARN("Failing over %s\n", 
+                                              obd->obd_name);
                                 obd->obd_fail = 1;
                                 obd->obd_no_transno = 1;
                                 obd->obd_no_recov = 1;

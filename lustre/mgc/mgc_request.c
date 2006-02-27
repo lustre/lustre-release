@@ -511,7 +511,7 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         CDEBUG(D_MGC, "Enqueue for %s (res "LPX64")\n", cld->cld_logname,
                cld->cld_resid.name[0]);
                 
-        /* We can only drop this when we drop the lock */
+        /* We can only drop this config log ref when we drop the lock */
         if (config_log_get(cld))
                 RETURN(ELDLM_LOCK_ABORTED);
 

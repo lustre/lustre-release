@@ -1452,6 +1452,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         RETURN(0);
 }
 
+/* umount -f client means force down, don't save state */
 void ll_umount_begin(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
@@ -1460,8 +1461,8 @@ void ll_umount_begin(struct super_block *sb)
         struct obd_ioctl_data ioc_data = { 0 };
         ENTRY;
 
-        /* Make the MGC not try to cancel locks */
-        lsi->lsi_flags |= LSI_UMOUNT_FAILOVER;
+        /* Tell the MGC we got umount -f */
+        lsi->lsi_flags |= LSI_UMOUNT_FORCE;
 
         CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
                sb->s_count, atomic_read(&sb->s_active));

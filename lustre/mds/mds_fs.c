@@ -583,8 +583,8 @@ int mds_fs_cleanup(struct obd_device *obd)
         int rc = 0;
 
         if (obd->obd_fail)
-                CWARN("%s: shutting down for failover; client state will "
-                      "be preserved.\n", obd->obd_name);
+                LCONSOLE_WARN("%s: shutting down for failover; client state "
+                              "will be preserved.\n", obd->obd_name);
 
         class_disconnect_exports(obd); /* cleans up client info too */
         mds_server_free_data(mds);
