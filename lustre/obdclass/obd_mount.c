@@ -701,8 +701,6 @@ static int lustre_stop_mgc(struct super_block *sb)
                 /* FIXME maybe always set this? */
                 obd->obd_no_recov = 1;
         }
-        CERROR("force:%d fail:%d no_recov:%d\n", obd->obd_force, obd->obd_fail,
-               obd->obd_no_recov);
 
         if (obd->u.cli.cl_mgc_mgsexp)
                 obd_disconnect(obd->u.cli.cl_mgc_mgsexp);
@@ -1256,7 +1254,7 @@ static void server_put_super(struct super_block *sb)
            is right. */
         server_stop_servers(lddflags, lsiflags);
 
-        CDEBUG(D_MOUNT, "umount done\n");
+        CDEBUG(D_MOUNT|D_WARNING, "umount done\n");
         EXIT;
 }
 

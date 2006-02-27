@@ -564,12 +564,11 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         switch (cmd) {
 
-        case OBD_IOC_DORECORD: 
         case OBD_IOC_PARAM: {
                 struct lustre_handle lockh;
                 struct lustre_cfg *lcfg;
                 struct llog_rec_hdr rec;
-                char fsname[32], *devname, *ptr;
+                char fsname[32], *devname;
                 int lockrc;
 
                 CERROR("MGS param\n");
@@ -594,25 +593,21 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         GOTO(out_free, rc = -EINVAL);
 
                 /* Extract fsname */
-                /* FIXME COMPAT_146 this won't work with old names */
                 memset(fsname, 0, sizeof(fsname));
                 devname = lustre_cfg_string(lcfg, 0);
-                if (!devname) {
-                        LCONSOLE_ERROR("No device specified\n");
-                        GOTO(out_free, rc = -ENODEV);
+                if (devname) {
+                        char *ptr = strchr(devname, '-');
+                        if (!ptr) {
+                                /* assume devname is the fsname */
+                                strncpy(fsname, devname, sizeof(fsname));
+                        } else {  
+                                strncpy(fsname, devname, ptr - devname);
+                        }
+                        CDEBUG(D_MGS, "set param on fs %s device %s\n", 
+                               fsname, devname);
+                } else {
+                        CDEBUG(D_MGS, "set global param\n");
                 }
-                ptr = strchr(devname, '-');
-                if (!ptr) {
-                        /* assume devname is the fsname */
-                        //strncpy(fsname, devname, sizeof(fsname));
-                        LCONSOLE_ERROR("Unrecognized device %s\n", devname);
-                        GOTO(out_free, rc = -ENODEV);
-                } else {  
-                        strncpy(fsname, devname, ptr - devname);
-                }
-
-                CDEBUG(D_MGS, "set param on fs %s device %s\n", 
-                       fsname, devname);
 
                 rc = mgs_setparam(obd, fsname, lcfg);
                 if (rc) {
@@ -624,11 +619,14 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                    someone was already reading while we were updating the logs,
                    so we don't really need to hold the lock while we're
                    writing (above). */
-                lockrc = mgs_get_cfg_lock(obd, fsname, &lockh);
-                if (lockrc != ELDLM_OK) 
-                        CERROR("lock error %d for fs %s\n", lockrc, fsname);
-                else
-                        mgs_put_cfg_lock(&lockh);
+                if (fsname) {
+                        lockrc = mgs_get_cfg_lock(obd, fsname, &lockh);
+                        if (lockrc != ELDLM_OK) 
+                                CERROR("lock error %d for fs %s\n", lockrc, 
+                                       fsname);
+                        else
+                                mgs_put_cfg_lock(&lockh);
+                }
 out_free:
                 OBD_FREE(lcfg, data->ioc_plen1);
                 RETURN(rc);

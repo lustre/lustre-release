@@ -247,9 +247,6 @@ static int mds_lov_add_ost(struct obd_device *obd, struct obd_device *watched,
         int rc = 0;
         ENTRY;
 
-        //FIXME remove D_WARNING
-        CDEBUG(D_CONFIG|D_WARNING, "Updating mds lov for OST idx %d\n", idx);
-
         old_count = mds->mds_lov_desc.ld_tgt_count;
         rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
         if (rc)
@@ -271,8 +268,6 @@ static int mds_lov_add_ost(struct obd_device *obd, struct obd_device *watched,
                 if (rc)
                         RETURN(rc);
                 mds->mds_lov_objids[idx] = lastid;
-                CWARN("got last object "LPU64" from OST %d\n",
-                      mds->mds_lov_objids[idx], idx);
                 mds->mds_lov_objids_dirty = 1;
                 mds_lov_write_objids(obd);
         } else {
@@ -280,9 +275,8 @@ static int mds_lov_add_ost(struct obd_device *obd, struct obd_device *watched,
                 rc = mds_lov_set_nextid(obd);
         }
 
-        CWARN("last object "LPU64" from OST %d\n",
+        CDEBUG(D_CONFIG, "last object "LPU64" from OST %d\n",
               mds->mds_lov_objids[idx], idx);
-        
 
         /* These two must be atomic */
         down(&mds->mds_orphan_recovery_sem);

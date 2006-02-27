@@ -20,7 +20,7 @@ build_test_filter
 # setting SETUP=" " and CLEANUP=" "
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
-FORCE=${FORCE:-"--force"}
+FORCE=${FORCE:-"-f"}
 
 make_config() {
     rm -f $XMLCONFIG

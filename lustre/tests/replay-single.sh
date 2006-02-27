@@ -37,8 +37,8 @@ cleanup() {
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0 || true
-    # force is the default, '-f' is failover
-    FORCE=""
+    # failover is the default, '-f' is force
+    FORCE="-f"
     exit
 fi
 
@@ -47,9 +47,9 @@ CLEANUP=${CLEANUP:-"cleanup"}
 
 setup() {
     grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
-    stop ost || 1
-    stop ost2 || 1
-    stop mds || 1
+    stop ost -f || 1
+    stop ost2 -f || 1
+    stop mds -f || 1
     add mds $MDS_MKFS_OPTS --reformat $MDSDEV
     add ost $OST_MKFS_OPTS --reformat $OSTDEV
     add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2

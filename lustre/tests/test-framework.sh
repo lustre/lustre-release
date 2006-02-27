@@ -92,10 +92,10 @@ start() {
 
 stop() {
     facet=$1
-    force=$2
+    shift
     active=`facet_active $facet`
     echo "umount active=${active}, facet=${facet}"
-    do_facet ${facet} umount -d $force /mnt/${facet}
+    do_facet ${facet} umount -d $@ /mnt/${facet}
     #do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
     #    --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
     #    $@ --cleanup $XMLCONFIG
@@ -134,7 +134,7 @@ shutdown_facet() {
        $POWER_DOWN `facet_active_host $facet`
        sleep 2 
     elif [ "$FAILURE_MODE" = SOFT ]; then
-       stop $facet -f
+       stop $facet
     fi
 }
 
@@ -224,7 +224,7 @@ fail() {
 
 fail_abort() {
     local facet=$1
-    stop $facet --force --failover --nomod
+    stop $facet
     change_active $facet
     start $*
     do_facet $facet lctl --device %${facet}_svc abort_recovery
@@ -361,7 +361,7 @@ add() {
     local facet=$1
     shift
     # failsafe
-    umount -d /mnt/${facet} || true
+    umount -d -f /mnt/${facet} || true
     rm -f ${facet}active
     mkfs.lustre $*
 }

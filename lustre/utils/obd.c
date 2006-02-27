@@ -180,6 +180,14 @@ int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 
         rc =  l_ioctl(dev_id, OBD_IOC_PARAM, buf);
 
+        if (rc == ENODEV) 
+                fprintf(stderr, "Is the MGS running on this node?\n");
+        if (rc == ENOSYS) 
+                fprintf(stderr, "Make sure cfg_device is set first.\n");
+        if (rc == EINVAL) 
+                fprintf(stderr, "cfg_device should be of the form "
+                        "'lustre-MDT0000'\n");
+
         return rc;
 }
 

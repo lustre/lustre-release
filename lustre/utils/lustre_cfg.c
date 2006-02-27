@@ -540,7 +540,9 @@ int jt_lcfg_set_timeout(int argc, char **argv)
         lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
         lcfg->lcfg_num = atoi(argv[1]);
         
-        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        //rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
+
         lustre_cfg_free(lcfg);
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
@@ -712,13 +714,6 @@ int jt_lcfg_mgsparam(int argc, char **argv)
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(rc = errno));
-                if (rc == ENODEV) 
-                        fprintf(stderr, "Is the MGS running on this node?\n");
-                if (rc == ENOSYS) 
-                        fprintf(stderr, "Make sure cfg_device is set first.\n");
-                if (rc == EINVAL) 
-                        fprintf(stderr, "cfg_device should be of the form "
-                                "'lustre-MDT0000'\n");
         }
         
         return rc;

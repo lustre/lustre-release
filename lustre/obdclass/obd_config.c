@@ -726,8 +726,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
         int rc = 0;
         ENTRY;
         
-        // FIXME remove
-        class_config_dump_handler(handle, rec, data);
+        //class_config_dump_handler(handle, rec, data);
 
         switch (rec->lrh_type) {
         case OBD_CFG_REC: {
@@ -748,22 +747,20 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 /* Figure out config state info */
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-                        CDEBUG(D_CONFIG|D_WARNING, "Marker, cfg_flg=%#x\n",
+                        CDEBUG(D_CONFIG, "Marker, cfg_flg=%#x\n",
                                cfg->cfg_flags);
                         if (marker->cm_flags & CM_START) {
                                 /* all previous flags off */
                                 cfg->cfg_flags = CFG_F_MARKER;
                                 if (marker->cm_flags & CM_SKIP) { 
                                         cfg->cfg_flags |= CFG_F_SKIP;
-                                        // FIXME warning
-                                        CDEBUG(D_CONFIG|D_WARNING, "SKIP #%d\n",
+                                        CDEBUG(D_CONFIG, "SKIP #%d\n",
                                                marker->cm_step);
                                 } else if (lustre_check_exclusion(cfg->cfg_sb, 
                                                           marker->cm_svname)) {
                                         cfg->cfg_flags |= CFG_F_EXCLUDE;
-                                        // FIXME warning
-                                        CDEBUG(D_CONFIG|D_WARNING,
-                                               "EXCLUDE %d\n", marker->cm_step);
+                                        CDEBUG(D_CONFIG, "EXCLUDE %d\n",
+                                               marker->cm_step);
                                 }
                         } else if (marker->cm_flags & CM_END) {
                                 cfg->cfg_flags = 0;
