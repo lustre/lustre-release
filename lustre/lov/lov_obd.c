@@ -1882,7 +1882,7 @@ static int lov_join_lru(struct obd_export *exp,
         } while(0)
 
 static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      unsigned long max_age)
+                      cfs_time_t max_age)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_statfs lov_sfs;

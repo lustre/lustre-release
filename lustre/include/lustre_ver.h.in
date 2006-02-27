@@ -1,8 +1,6 @@
 #ifndef _LUSTRE_VER_H_
 #define _LUSTRE_VER_H_
 
-#include <linux/lustre_idl.h>
-
 #define LUSTRE_MAJOR @AC_LUSTRE_MAJOR@
 #define LUSTRE_MINOR @AC_LUSTRE_MINOR@
 #define LUSTRE_PATCH @AC_LUSTRE_PATCH@

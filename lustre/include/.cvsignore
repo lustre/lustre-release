@@ -11,3 +11,4 @@ Makefile
 Makefile.in
 .deps
 TAGS
+lustre_ver.h

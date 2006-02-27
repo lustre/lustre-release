@@ -38,7 +38,7 @@
 #include <obd_lov.h>
 #include <lustre_lib.h>
 #include <lustre_fsfilt.h>
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 
 #include "mds_internal.h"
 

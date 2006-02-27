@@ -11,7 +11,7 @@
 #endif
 
 #include <lustre_debug.h>
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 
 /*
 struct lustre_intent_data {

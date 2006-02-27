@@ -57,7 +57,7 @@
 #include <lprocfs_status.h>
 #include <lustre_commit_confd.h>
 #include <lustre_quota.h>
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 
 #include "mds_internal.h"
 

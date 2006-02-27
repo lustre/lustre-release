@@ -35,7 +35,7 @@
 #include <lustre_export.h>
 #include <obd.h>
 #include <obd_class.h>
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 
 #include "ptlrpc_internal.h"
 

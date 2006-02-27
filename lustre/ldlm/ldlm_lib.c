@@ -37,7 +37,7 @@
 #include <lustre_mds.h> /* for LUSTRE_MDC_NAME */
 #include <lustre_dlm.h>
 #include <lustre_net.h>
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 
 /* @priority: if non-zero, move the selected to the list head
  * @create: if zero, only search in existed connections

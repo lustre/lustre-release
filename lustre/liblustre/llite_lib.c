@@ -48,7 +48,6 @@
 
 #include "lutil.h"
 #include "llite_lib.h"
-#include <linux/lustre_ver.h>
 
 static int lllib_init(void)
 {

@@ -615,8 +615,8 @@ lustre/autoconf/Makefile
 lustre/conf/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile
+lustre/include/lustre_ver.h
 lustre/include/linux/Makefile
-lustre/include/linux/lustre_ver.h
 lustre/include/lustre/Makefile
 lustre/kernel_patches/targets/2.6-suse.target
 lustre/kernel_patches/targets/2.6-vanilla.target

@@ -51,7 +51,6 @@
 #undef LIST_HEAD
 
 #include "llite_lib.h"
-#include <linux/lustre_ver.h>
 
 #ifndef MAY_EXEC
 #define MAY_EXEC        1

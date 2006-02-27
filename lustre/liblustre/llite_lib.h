@@ -10,6 +10,7 @@
 #include <obd_class.h>
 #include <lustre_mds.h>
 #include <lustre_lite.h>
+#include <lustre_ver.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>

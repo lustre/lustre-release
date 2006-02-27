@@ -41,9 +41,9 @@
 #include <lprocfs_status.h>
 #ifdef __KERNEL__
 #include <linux/lustre_build_version.h>
-#include <linux/lustre_ver.h>
 #endif
 #include <libcfs/list.h>
+#include <lustre_ver.h>
 #include "llog_internal.h"
 
 #ifndef __KERNEL__

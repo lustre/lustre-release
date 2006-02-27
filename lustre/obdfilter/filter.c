@@ -57,7 +57,7 @@
 #include <lustre_commit_confd.h>
 #include <libcfs/list.h>
 #include <lustre_quota.h>
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 
 #include "filter_internal.h"
 
