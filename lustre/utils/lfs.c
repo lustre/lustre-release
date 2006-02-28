@@ -350,14 +350,14 @@ static int lfs_osts(int argc, char **argv)
 #define CSF     "%9s"
 #define CDF     "%9llu"
 #define HSF     "%8s"
-#define HDF     "%8llu"
+#define HDF     "%6.1f"
 #define RSF     "%5s"
 #define RDF     "%5d"
 
 static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
 {
         char rpath[PATH_MAX] = {'\0'};
-        struct mntent *mnt, out_mnt = {0};
+        struct mntent *mnt;
         int rc, len, out_len = 0;
 
         if (!realpath(path, rpath)) {
@@ -375,17 +375,17 @@ static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
                         if (len > out_len &&
                             !strncmp(rpath, mnt->mnt_dir, len)) {
                                 out_len = len;
-                                memcpy(&out_mnt, mnt, sizeof(out_mnt));
+                                memset(mntdir, 0, dir_len);
+                                strncpy(mntdir, mnt->mnt_dir, dir_len);
                         }
                 }
                 mnt = getmntent(fp);
         }
 
-        if (out_len > 0) {
-                strncpy(mntdir, out_mnt.mnt_dir, dir_len);
+        if (out_len > 0)
                 return 0;
-        }
-
+        
+        fprintf(stderr, "error: lfs df: %s isn't mounted on lustre\n", path);
         return -EINVAL;
 }
 
@@ -427,21 +427,26 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 
                 if (cooked) {
                         int i;
-                        i = COOK(total);
+                        double total_d, used_d, avail_d;
+                        
+                        total_d = (double)total;
+                        i = COOK(total_d);
                         if (i > 0)
-                                sprintf(tbuf, HDF"%c", total, suffix[i - 1]);
+                                sprintf(tbuf, HDF"%c", total_d, suffix[i - 1]);
                         else
                                 sprintf(tbuf, CDF, total);
 
-                        i = COOK(used);
+                        used_d = (double)used;
+                        i = COOK(used_d);
                         if (i > 0)
-                                sprintf(ubuf, HDF"%c", used, suffix[i - 1]);
+                                sprintf(ubuf, HDF"%c", used_d, suffix[i - 1]);
                         else
                                 sprintf(ubuf, CDF, used);
 
-                        i = COOK(avail);
+                        avail_d = (double)avail;
+                        i = COOK(avail_d);
                         if (i > 0)
-                                sprintf(abuf, HDF"%c", avail, suffix[i - 1]);
+                                sprintf(abuf, HDF"%c", avail_d, suffix[i - 1]);
                         else
                                 sprintf(abuf, CDF, avail);
                 } else {
@@ -479,6 +484,9 @@ static int mntdf(char *mntdir, int ishow, int cooked)
         struct obd_statfs stat_buf;
         struct obd_uuid uuid_buf;
         __u32 index;
+        __u64 avail_sum, used_sum, total_sum;
+        char tbuf[10], ubuf[10], abuf[10], rbuf[10];        
+        double ratio_sum;
         int rc;
 
         if (ishow)
@@ -490,6 +498,7 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                        "UUID", "1K-blocks", "Used", "Available",
                        "Use%", "Mounted on");
 
+        avail_sum = total_sum = 0; 
         for (index = 0; ; index++) {
                 memset(&stat_buf, 0, sizeof(struct obd_statfs));
                 memset(&uuid_buf, 0, sizeof(struct obd_uuid));
@@ -507,6 +516,10 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                                 "error: llapi_obd_statfs(%s): %s (%d)\n",
                                 uuid_buf.uuid, strerror(-rc), rc);
                         return rc;
+                }
+                if (!rc && ishow) {
+                        avail_sum += stat_buf.os_ffree;
+                        total_sum += stat_buf.os_files;
                 }
         }
 
@@ -528,7 +541,55 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                                 strerror(-rc), rc);
                         return rc;
                 }
+                if (!rc && !ishow) {
+                        __u64 avail, total;
+                        avail = stat_buf.os_bavail * stat_buf.os_bsize;
+                        avail /= 1024;
+                        total = stat_buf.os_blocks * stat_buf.os_bsize;
+                        total /= 1024;
+                        
+                        avail_sum += avail;
+                        total_sum += total;
+                }
         }
+
+        used_sum = total_sum - avail_sum;
+        ratio_sum = (double)(total_sum - avail_sum) / (double)total_sum;
+        sprintf(rbuf, RDF, (int)(ratio_sum * 100));
+        if (cooked) {
+                int i;
+                char *suffix = "KMGTPEZY";
+                double total_sum_d, used_sum_d, avail_sum_d;
+
+                total_sum_d = (double)total_sum;
+                i = COOK(total_sum_d);
+                if (i > 0)
+                        sprintf(tbuf, HDF"%c", total_sum_d, suffix[i - 1]);
+                else
+                        sprintf(tbuf, CDF, total_sum);
+                
+                used_sum_d = (double)used_sum;
+                i = COOK(used_sum_d);
+                if (i > 0)
+                        sprintf(ubuf, HDF"%c", used_sum_d, suffix[i - 1]);
+                else
+                        sprintf(ubuf, CDF, used_sum);
+                        
+                avail_sum_d = (double)avail_sum;
+                i = COOK(avail_sum_d);
+                if (i > 0)
+                        sprintf(abuf, HDF"%c", avail_sum_d, suffix[i - 1]);
+                else
+                        sprintf(abuf, CDF, avail_sum);
+        } else {
+                sprintf(tbuf, CDF, total_sum);
+                sprintf(ubuf, CDF, used_sum);
+                sprintf(abuf, CDF, avail_sum);
+        }
+       
+        printf("\n"UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
+               "filesystem summary:", tbuf, ubuf, abuf, rbuf, mntdir);
+
         return 0;
 }
 
