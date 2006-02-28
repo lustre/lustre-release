@@ -529,7 +529,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 obd->obd_recovery_start = CURRENT_SECONDS;
                 /* Only used for lprocfs_status */
                 obd->obd_recovery_end = obd->obd_recovery_start +
-                        OBD_RECOVERY_TIMEOUT / HZ;
+                        OBD_RECOVERY_TIMEOUT;
         }
 
 out:
@@ -1506,8 +1506,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1)
                               ? "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) / 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) % 60,
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "

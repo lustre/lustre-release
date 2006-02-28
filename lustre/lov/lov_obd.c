@@ -58,9 +58,9 @@ static void lov_getref(struct obd_device *obd)
         struct lov_obd *lov = &obd->u.lov;
 
         /* nobody gets through here until lov_putref is done */
-        down(&lov->lov_lock);
+        mutex_down(&lov->lov_lock);
         atomic_inc(&lov->refcount);
-        up(&lov->lov_lock);
+        mutex_up(&lov->lov_lock);
         return;
 }
 
@@ -69,7 +69,7 @@ static void __lov_del_obd(struct obd_device *obd, struct lov_tgt_desc *tgt);
 static void lov_putref(struct obd_device *obd)
 {
         struct lov_obd *lov = &obd->u.lov;
-        down(&lov->lov_lock);
+        mutex_down(&lov->lov_lock);
         /* ok to dec to 0 more than once -- ltd_exp's will be null */
         if (atomic_dec_and_test(&lov->refcount) && lov->death_row) {
                 struct lov_tgt_desc *tgt;
@@ -84,7 +84,7 @@ static void lov_putref(struct obd_device *obd)
                         lov->death_row--;
                 }
         }
-        up(&lov->lov_lock);
+        mutex_up(&lov->lov_lock);
 }
 
 #define MAX_STRING_SIZE 128
@@ -1456,7 +1456,7 @@ static struct obd_async_page_ops lov_async_page_ops = {
 };
 
 int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
-                           struct lov_oinfo *loi, struct page *page,
+                           struct lov_oinfo *loi, cfs_page_t *page,
                            obd_off offset, struct obd_async_page_ops *ops,
                            void *data, void **res)
 {
@@ -2423,6 +2423,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver");
 MODULE_LICENSE("GPL");
 
-module_init(lov_init);
-module_exit(lov_exit);
+cfs_module(lov, "1.0.0", lov_init, lov_exit);
 #endif

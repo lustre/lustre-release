@@ -244,7 +244,7 @@ struct ldlm_lock {
         cfs_waitq_t           l_waitq;
         struct timeval        l_enqueued_time;
 
-        unsigned long         l_last_used;      /* jiffies */
+        cfs_time_t            l_last_used;      /* jiffies */
         struct ldlm_extent    l_req_extent;
 
         /* Client-side-only members */

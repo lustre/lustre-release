@@ -98,7 +98,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         CDEBUG(D_HA, "preallocated through id "LPU64" (last used "LPU64")\n",
                oscc->oscc_last_id, oscc->oscc_next_id);
 
-        wake_up(&oscc->oscc_waitq);
+        cfs_waitq_signal(&oscc->oscc_waitq);
         RETURN(rc);
 }
 
@@ -364,8 +364,8 @@ void oscc_init(struct obd_device *obd)
         oscc = &obd->u.cli.cl_oscc;
 
         memset(oscc, 0, sizeof(*oscc));
-        INIT_LIST_HEAD(&oscc->oscc_list);
-        init_waitqueue_head(&oscc->oscc_waitq);
+        CFS_INIT_LIST_HEAD(&oscc->oscc_list);
+        cfs_waitq_init(&oscc->oscc_waitq);
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_obd = obd;
         oscc->oscc_grow_count = OST_MIN_PRECREATE;
@@ -373,7 +373,6 @@ void oscc_init(struct obd_device *obd)
         oscc->oscc_next_id = 2;
         oscc->oscc_last_id = 1;
         oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
-        cfs_waitq_init(&oscc->oscc_waitq);
         /* XXX the export handle should give the oscc the last object */
         /* oed->oed_oscc.oscc_last_id = exph->....; */
 }

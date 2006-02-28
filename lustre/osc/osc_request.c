@@ -620,9 +620,9 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
 static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 {
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_avail_grant = ocd->ocd_grant;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         CDEBUG(D_CACHE, "setting cl_avail_grant: %ld cl_lost_grant: %ld\n",
                cli->cl_avail_grant, cli->cl_lost_grant);
@@ -3200,12 +3200,12 @@ static int osc_reconnect(struct obd_export *exp, struct obd_device *obd,
         if (data != NULL && (data->ocd_connect_flags & OBD_CONNECT_GRANT)) {
                 long lost_grant;
 
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 data->ocd_grant = cli->cl_avail_grant ?:
                                 2 * cli->cl_max_pages_per_rpc << PAGE_SHIFT;
                 lost_grant = cli->cl_lost_grant;
                 cli->cl_lost_grant = 0;
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 CDEBUG(D_CACHE, "request ocd_grant: %d cl_avail_grant: %ld "
                        "cl_lost_grant: %ld\n", data->ocd_grant,

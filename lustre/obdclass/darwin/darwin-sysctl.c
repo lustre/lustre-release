@@ -100,10 +100,10 @@ int proc_obd_timeout SYSCTL_HANDLER_ARGS
 	int error = 0;
 
 	error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req); 
-	if (!error && req->newptr != NULL) {
+	if (!error && req->newptr != USER_ADDR_NULL) {
 		if (ldlm_timeout >= obd_timeout)
 			ldlm_timeout = max(obd_timeout / 3, 1U);
-	} else  if (req->newptr != NULL) { 
+	} else  if (req->newptr != USER_ADDR_NULL) { 
 		printf ("sysctl fail obd_timeout: %d.\n", error);
 	} else {
 		/* Read request */ 
@@ -117,7 +117,7 @@ int read_build_version SYSCTL_HANDLER_ARGS
 	int error = 0;
 
 	error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req); 
-	if ( req->newptr != NULL) {
+	if ( req->newptr != USER_ADDR_NULL) {
 		printf("sysctl read_build_version is read-only!\n");
 	} else {
 		error = SYSCTL_OUT(req, BUILD_VERSION, strlen(BUILD_VERSION));

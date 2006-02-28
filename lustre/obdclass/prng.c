@@ -13,11 +13,10 @@
 # define EXPORT_SYMTAB
 #endif
 
-#ifdef __KERNEL__
-#include <linux/module.h>
-#else
+#ifndef __KERNEL__
 #include <liblustre.h>
 #endif
+#include <obd_class.h>
 
 /*
 From: George Marsaglia <geo@stat.fsu.edu>

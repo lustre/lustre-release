@@ -67,9 +67,9 @@ void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc)
         
         for (i = 0; i < desc->bd_iov_count ; i++) {
                 lnet_kiov_t *kiov = &desc->bd_iov[i];
-                memset(kmap(kiov->kiov_page)+kiov->kiov_offset, 0xab,
-                                    kiov->kiov_len);
-                kunmap(kiov->kiov_page);
+                memset(cfs_kmap(kiov->kiov_page)+kiov->kiov_offset, 0xab,
+                       kiov->kiov_len);
+                cfs_kunmap(kiov->kiov_page);
         }
 }
 

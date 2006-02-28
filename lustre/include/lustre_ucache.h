@@ -35,8 +35,8 @@ struct upcall_cache_entry {
         atomic_t                ue_refcount;
         int                     ue_flags;
         cfs_waitq_t             ue_waitq;
-        unsigned long           ue_acquire_expire;
-        unsigned long           ue_expire;
+        cfs_time_t              ue_acquire_expire;
+        cfs_time_t              ue_expire;
 };
 
 #define UC_CACHE_HASH_SIZE        (128)
@@ -49,8 +49,8 @@ struct upcall_cache {
 
         char                    uc_name[40];            /* for upcall */
         char                    uc_upcall[UC_CACHE_UPCALL_MAXPATH];
-        unsigned long           uc_acquire_expire;      /* jiffies */
-        unsigned long           uc_entry_expire;        /* jiffies */
+        cfs_time_t              uc_acquire_expire;      /* jiffies */
+        cfs_time_t              uc_entry_expire;        /* jiffies */
 };
 
 struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *hash,

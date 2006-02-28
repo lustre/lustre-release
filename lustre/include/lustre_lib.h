@@ -70,7 +70,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 
 void target_cancel_recovery_timer(struct obd_device *obd);
 
-#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
+#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2) /* *waves hands* */
 void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler);
 void target_abort_recovery(void *data);
 void target_cleanup_recovery(struct obd_device *obd);
@@ -398,76 +398,76 @@ static inline void obd_ioctl_freedata(char *buf, int len)
         return;
 }
 
-#define OBD_IOC_CREATE                 _IOR ('f', 101, long)
-#define OBD_IOC_DESTROY                _IOW ('f', 104, long)
-#define OBD_IOC_PREALLOCATE            _IOWR('f', 105, long)
+#define OBD_IOC_CREATE                 _IOR ('f', 101, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_DESTROY                _IOW ('f', 104, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PREALLOCATE            _IOWR('f', 105, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_SETATTR                _IOW ('f', 107, long)
-#define OBD_IOC_GETATTR                _IOR ('f', 108, long)
-#define OBD_IOC_READ                   _IOWR('f', 109, long)
-#define OBD_IOC_WRITE                  _IOWR('f', 110, long)
+#define OBD_IOC_SETATTR                _IOW ('f', 107, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GETATTR                _IOR ('f', 108, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_READ                   _IOWR('f', 109, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_WRITE                  _IOWR('f', 110, OBD_IOC_DATA_TYPE)
 
 
-#define OBD_IOC_STATFS                 _IOWR('f', 113, long)
-#define OBD_IOC_SYNC                   _IOW ('f', 114, long)
-#define OBD_IOC_READ2                  _IOWR('f', 115, long)
-#define OBD_IOC_FORMAT                 _IOWR('f', 116, long)
-#define OBD_IOC_PARTITION              _IOWR('f', 117, long)
-#define OBD_IOC_COPY                   _IOWR('f', 120, long)
-#define OBD_IOC_MIGR                   _IOWR('f', 121, long)
-#define OBD_IOC_PUNCH                  _IOWR('f', 122, long)
+#define OBD_IOC_STATFS                 _IOWR('f', 113, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_SYNC                   _IOW ('f', 114, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_READ2                  _IOWR('f', 115, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_FORMAT                 _IOWR('f', 116, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PARTITION              _IOWR('f', 117, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_COPY                   _IOWR('f', 120, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_MIGR                   _IOWR('f', 121, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PUNCH                  _IOWR('f', 122, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_MODULE_DEBUG           _IOWR('f', 124, long)
-#define OBD_IOC_BRW_READ               _IOWR('f', 125, long)
-#define OBD_IOC_BRW_WRITE              _IOWR('f', 126, long)
-#define OBD_IOC_NAME2DEV               _IOWR('f', 127, long)
-#define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
-#define OBD_IOC_GETNAME                _IOR ('f', 131, long)
+#define OBD_IOC_MODULE_DEBUG           _IOWR('f', 124, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_BRW_READ               _IOWR('f', 125, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_BRW_WRITE              _IOWR('f', 126, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_NAME2DEV               _IOWR('f', 127, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_UUID2DEV               _IOWR('f', 130, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GETNAME                _IOR ('f', 131, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, long)
-#define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, long)
+#define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
-#define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, long)
-#define OBD_IOC_SET_READONLY           _IOW ('f', 141, long)
-#define OBD_IOC_ABORT_RECOVERY         _IOR ('f', 142, long)
+#define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_SET_READONLY           _IOW ('f', 141, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_ABORT_RECOVERY         _IOR ('f', 142, OBD_IOC_DATA_TYPE)
 
-#define OBD_GET_VERSION                _IOWR ('f', 144, long)
+#define OBD_GET_VERSION                _IOWR ('f', 144, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, long)
+#define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_GETDEVICE              _IOWR ('f', 149, long)
+#define OBD_IOC_GETDEVICE              _IOWR ('f', 149, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, long)
-#define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, long)
-#define OBD_IOC_LOV_SETEA              _IOW ('f', 156, long)
+#define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LOV_SETEA              _IOW ('f', 156, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_QUOTACHECK             _IOW ('f', 160, int)
 #define OBD_IOC_POLL_QUOTACHECK        _IOR ('f', 161, struct if_quotacheck *)
 #define OBD_IOC_QUOTACTL               _IOWR('f', 162, struct if_quotactl *)
 
-#define OBD_IOC_MOUNTOPT               _IOWR('f', 170, long)
+#define OBD_IOC_MOUNTOPT               _IOWR('f', 170, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_RECORD                 _IOWR('f', 180, long)
-#define OBD_IOC_ENDRECORD              _IOWR('f', 181, long)
-#define OBD_IOC_PARSE                  _IOWR('f', 182, long)
-#define OBD_IOC_DORECORD               _IOWR('f', 183, long)
-#define OBD_IOC_PROCESS_CFG            _IOWR('f', 184, long)
-#define OBD_IOC_DUMP_LOG               _IOWR('f', 185, long)
-#define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, long)
+#define OBD_IOC_RECORD                 _IOWR('f', 180, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_ENDRECORD              _IOWR('f', 181, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PARSE                  _IOWR('f', 182, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_DORECORD               _IOWR('f', 183, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PROCESS_CFG            _IOWR('f', 184, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_DUMP_LOG               _IOWR('f', 185, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_CATLOGLIST             _IOWR('f', 190, long)
-#define OBD_IOC_LLOG_INFO              _IOWR('f', 191, long)
-#define OBD_IOC_LLOG_PRINT             _IOWR('f', 192, long)
-#define OBD_IOC_LLOG_CANCEL            _IOWR('f', 193, long)
-#define OBD_IOC_LLOG_REMOVE            _IOWR('f', 194, long)
-#define OBD_IOC_LLOG_CHECK             _IOWR('f', 195, long)
-#define OBD_IOC_LLOG_CATINFO           _IOWR('f', 196, long)
+#define OBD_IOC_CATLOGLIST             _IOWR('f', 190, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LLOG_INFO              _IOWR('f', 191, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LLOG_PRINT             _IOWR('f', 192, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LLOG_CANCEL            _IOWR('f', 193, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LLOG_REMOVE            _IOWR('f', 194, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LLOG_CHECK             _IOWR('f', 195, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LLOG_CATINFO           _IOWR('f', 196, OBD_IOC_DATA_TYPE)
 
-#define ECHO_IOC_GET_STRIPE            _IOWR('f', 200, long)
-#define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, long)
-#define ECHO_IOC_ENQUEUE               _IOWR('f', 202, long)
-#define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
+#define ECHO_IOC_GET_STRIPE            _IOWR('f', 200, OBD_IOC_DATA_TYPE)
+#define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, OBD_IOC_DATA_TYPE)
+#define ECHO_IOC_ENQUEUE               _IOWR('f', 202, OBD_IOC_DATA_TYPE)
+#define ECHO_IOC_CANCEL                _IOWR('f', 203, OBD_IOC_DATA_TYPE)
 
 /* XXX _IOWR('f', 250, long) has been defined in
  * lnet/include/libcfs/kp30.h for debug, don't use it
@@ -596,7 +596,6 @@ struct l_wait_info {
 do {                                                                           \
         cfs_waitlink_t __wait;                                                 \
         cfs_duration_t __timeout = info->lwi_timeout;                          \
-        unsigned long  __irqflags;                                             \
         cfs_sigset_t   __blocked;                                              \
                                                                                \
         ret = 0;                                                               \
@@ -622,13 +621,17 @@ do {                                                                           \
                         break;                                                 \
                                                                                \
                 if (__timeout == 0) {                                          \
-                        schedule();                                            \
+                        cfs_waitq_wait(&__wait, CFS_TASK_INTERRUPTIBLE);       \
                 } else {                                                       \
-                        unsigned long interval = info->lwi_interval?           \
-                                             min_t(unsigned long,              \
+                        cfs_duration_t interval = info->lwi_interval?          \
+                                             min_t(cfs_duration_t,             \
                                                  info->lwi_interval,__timeout):\
                                              __timeout;                        \
-                        __timeout -= interval - schedule_timeout(interval);    \
+                        cfs_duration_t remaining = cfs_waitq_timedwait(&__wait,\
+                                                   CFS_TASK_INTERRUPTIBLE,     \
+                                                   interval);                  \
+                        __timeout = cfs_time_sub(__timeout,                    \
+                                            cfs_time_sub(interval, remaining));\
                         if (__timeout == 0) {                                  \
                                 if (info->lwi_on_timeout == NULL ||            \
                                     info->lwi_on_timeout(info->lwi_cb_data)) { \
@@ -657,16 +660,11 @@ do {                                                                           \
                         /* -EINTR when the RPC actually succeeded.      */     \
                         /* the RECALC_SIGPENDING below will deliver the */     \
                         /* signal properly.                             */     \
-                        cfs_sigmask_lock(__irqflags);                          \
                         cfs_clear_sigpending();                                \
-                        cfs_sigmask_unlock(__irqflags);                        \
                 }                                                              \
         }                                                                      \
                                                                                \
-        cfs_sigmask_lock(__irqflags);                                          \
         cfs_block_sigs(__blocked);                                             \
-        RECALC_SIGPENDING; /*XXX cfs_recalc_sigpending();*/                    \
-        cfs_sigmask_unlock(__irqflags);                                        \
                                                                                \
         set_current_state(TASK_RUNNING);                                       \
         cfs_waitq_del(&wq, &__wait);                                           \
@@ -732,20 +730,6 @@ do {                                                                    \
         __l_wait_event(wq, condition, __info, __ret, 1);        \
         __ret;                                                  \
 })
-
-#ifdef __KERNEL__
-/* initialize ost_lvb according to inode */
-static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
-{
-        lvb->lvb_size = inode->i_size;
-        lvb->lvb_blocks = inode->i_blocks;
-        lvb->lvb_mtime = LTIME_S(inode->i_mtime);
-        lvb->lvb_atime = LTIME_S(inode->i_atime);
-        lvb->lvb_ctime = LTIME_S(inode->i_ctime);
-}
-#else
-/* defined in liblustre/llite_lib.h */
-#endif
 
 #ifdef __KERNEL__
 #define LIBLUSTRE_CLIENT (0)
