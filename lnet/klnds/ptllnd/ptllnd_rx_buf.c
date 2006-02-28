@@ -97,6 +97,7 @@ kptllnd_rx_buffer_pool_reserve(kptl_rx_buffer_pool_t *rxbp, int count)
                 rxb->rxb_pool = rxbp;
                 rxb->rxb_idle = 0;
                 rxb->rxb_posted = 0;
+                rxb->rxb_buffer = buffer;
                 rxb->rxb_mdh = PTL_INVALID_HANDLE;
 
                 spin_lock_irqsave(&rxbp->rxbp_lock, flags);
@@ -154,8 +155,6 @@ kptllnd_rx_buffer_pool_fini(kptl_rx_buffer_pool_t *rxbp)
         struct list_head       *tmp;
         struct list_head       *nxt;
         ptl_handle_md_t         mdh;
-
-        CDEBUG(D_NET, "kptllnd_rx_buffer_pool_fini\n");
 
         spin_lock_irqsave(&rxbp->rxbp_lock, flags);
         rxbp->rxbp_shutdown = 1;
@@ -426,7 +425,7 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
                 }
         }
 
-        if (!unlinked) {
+        if (unlinked) {
                 spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
                 rxb->rxb_posted = 0;

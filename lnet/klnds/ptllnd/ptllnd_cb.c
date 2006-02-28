@@ -18,16 +18,113 @@
 
 #include "ptllnd.h"
 
+#ifndef _USING_LUSTRE_PORTALS_
+int
+kptllnd_extract_iov (int dst_niov, ptl_md_iovec_t *dst,
+                     int src_niov, struct iovec *src,
+                     unsigned int offset, unsigned int len)
+{
+        /* Initialise 'dst' to the subset of 'src' starting at 'offset',
+         * for exactly 'len' bytes, and return the number of entries.
+         * NB not destructive to 'src' */
+        unsigned int    frag_len;
+        unsigned int    niov;
+
+        if (len == 0)                           /* no data => */
+                return (0);                     /* no frags */
+
+        LASSERT (src_niov > 0);
+        while (offset >= src->iov_len) {      /* skip initial frags */
+                offset -= src->iov_len;
+                src_niov--;
+                src++;
+                LASSERT (src_niov > 0);
+        }
+
+        niov = 1;
+        for (;;) {
+                LASSERT (src_niov > 0);
+                LASSERT (niov <= dst_niov);
+
+                frag_len = src->iov_len - offset;
+                dst->iov_base = ((char *)src->iov_base) + offset;
+
+                if (len <= frag_len) {
+                        dst->iov_len = len;
+                        return (niov);
+                }
+
+                dst->iov_len = frag_len;
+
+                len -= frag_len;
+                dst++;
+                src++;
+                niov++;
+                src_niov--;
+                offset = 0;
+        }
+}
+
+int
+kptllnd_extract_phys (int dst_niov, ptl_md_iovec_t *dst,
+                      int src_niov, lnet_kiov_t *src,
+                      unsigned int offset, unsigned int len)
+{
+        /* Initialise 'dst' to the physical addresses of the subset of 'src'
+         * starting at 'offset', for exactly 'len' bytes, and return the number
+         * of entries.  NB not destructive to 'src' */
+        unsigned int    frag_len;
+        unsigned int    niov;
+        __u64           phys_page;
+        __u64           phys;
+
+        if (len == 0)                           /* no data => */
+                return (0);                     /* no frags */
+
+        LASSERT (src_niov > 0);
+        while (offset >= src->kiov_len) {      /* skip initial frags */
+                offset -= src->kiov_len;
+                src_niov--;
+                src++;
+                LASSERT (src_niov > 0);
+        }
+
+        niov = 1;
+        for (;;) {
+                LASSERT (src_niov > 0);
+                LASSERT (niov <= dst_niov);
+
+                frag_len = min(src->kiov_len - offset, len);
+                phys_page = lnet_page2phys(src->kiov_page);
+                phys = phys_page + src->kiov_offset + offset;
+
+                LASSERT (sizeof(void *) > 4 || 
+                         (phys <= 0xffffffffULL &&
+                          phys + (frag_len - 1) <= 0xffffffffULL));
+
+                dst->iov_base = (void *)((unsigned long)phys);
+                dst->iov_len = frag_len;
+                
+                if (frag_len == len)
+                        return niov;
+
+                len -= frag_len;
+                dst++;
+                src++;
+                niov++;
+                src_niov--;
+                offset = 0;
+        }
+}
+#endif
+
 void
 kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
                      struct iovec *iov, lnet_kiov_t *kiov,
                      unsigned int offset, unsigned int nob)
 {
-#if defined(_USING_CRAY_PORTALS_)
-        struct iovec *fragiov;
-        int           nfragiov;
-#endif
-
+        LASSERT (iov == NULL || kiov == NULL);
+        
         memset(&tx->tx_rdma_md, 0, sizeof(tx->tx_rdma_md));
 
         tx->tx_rdma_md.start     = tx->tx_rdma_frags;
@@ -62,10 +159,9 @@ kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
                 tx->tx_rdma_md.length = 0;
                 return;
         }
-        
+
+#ifdef _USING_LUSTRE_PORTALS_
         if (iov != NULL) {
-                LASSERT (kiov == NULL);
-                
                 tx->tx_rdma_md.options |= PTL_MD_IOVEC;
                 tx->tx_rdma_md.length = 
                         lnet_extract_iov(PTL_MD_MAX_IOV, tx->tx_rdma_frags->iov,
@@ -73,9 +169,6 @@ kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
                 return;
         }
 
-        LASSERT (kiov != NULL);
-
-#if defined(_USING_LUSTRE_PORTALS_)
         /* Cheating OK since ptl_kiov_t == lnet_kiov_t */
         CLASSERT(sizeof(ptl_kiov_t) == sizeof(lnet_kiov_t));
         CLASSERT(offsetof(ptl_kiov_t, kiov_offset) ==
@@ -89,54 +182,19 @@ kptllnd_init_rdma_md(kptl_tx_t *tx, unsigned int niov,
         tx->tx_rdma_md.length = 
                 lnet_extract_kiov(PTL_MD_MAX_IOV, tx->tx_rdma_frags->kiov,
                                   niov, kiov, offset, nob);
-#elif defined(_USING_CRAY_PORTALS_)
-/* CRAY PORTALS doesn't support PTL_MD_KIOV */
-# ifdef PTL_MD_KIOV
-#  error "Conflicting compilation directives"
-# endif
-        tx->tx_rdma_md.options |= PTL_MD_IOVEC | PTL_MD_PHYS;
-
-        fragiov = tx->tx_rdma_frags->iov;
-        nfragiov = 0;
-
-        while (offset >= kiov->kiov_len) {
-                offset -= kiov->kiov_len;
-                kiov++;
-                niov--;
-                LASSERT (niov > 0);
-        }
-
-        while (nob > 0) {
-                __u64 phys_page;
-                __u64 phys;
-                int   fragnob;
-
-                LASSERT (nkiov > 0);
-                LASSERT (offset < kiov->kiov_len);
-                LASSERT (nfragiov < PTL_MD_MAX_IOV);
-                        
-                fragnob   = min((int)(kiov->kiov_len - offset), (int)nob);
-                phys_page = lnet_page2phys(kiov->kiov_page);
-                phys      = phys_page + kiov->kiov_offset + offset;
-
-                LASSERT (sizeof(void *) > 4 || 
-                         (phys <= 0xffffffffULL &&
-                          phys + (fragnob - 1) <= 0xffffffffULL));
-
-                fragiov->iov_base = (void *)((unsigned long)phys);
-                fragiov->iov_len  = fragnob;
-
-                offset = 0;
-                nob -= fragnob;
-                kiov++;
-                niov--;
-                fragiov++;
-                nfragiov++;
-        }
-        
-        tx->tx_rdma_md.length = nfragiov;
 #else
-# error "_USING_?_PORTALS_"
+        if (iov != NULL) {
+                tx->tx_rdma_md.options |= PTL_MD_IOVEC;
+                tx->tx_rdma_md.length = 
+                        kptllnd_extract_iov(PTL_MD_MAX_IOV, tx->tx_rdma_frags->iov,
+                                            niov, iov, offset, nob);
+                return;
+        }
+
+        tx->tx_rdma_md.options |= PTL_MD_IOVEC | PTL_MD_PHYS;
+        tx->tx_rdma_md.length =
+                kptllnd_extract_phys(PTL_MD_MAX_IOV, tx->tx_rdma_frags->iov,
+                                     niov, kiov, offset, nob);
 #endif
 }
 

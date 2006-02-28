@@ -175,7 +175,7 @@ typedef union {
 #ifdef _USING_LUSTRE_PORTALS_
         struct iovec iov[PTL_MD_MAX_IOV];
         lnet_kiov_t kiov[PTL_MD_MAX_IOV];
-#else /* _USING_CRAY_PORTALS_ */
+#else
         ptl_md_iovec_t iov[PTL_MD_MAX_IOV];
 #endif
 } kptl_fragvec_t;
@@ -280,8 +280,7 @@ kptllnd_ptl2lnetnid(ptl_nid_t portals_nid)
 #ifdef _USING_LUSTRE_PORTALS_
         return LNET_MKNID(LNET_NIDNET(kptllnd_data.kptl_ni->ni_nid), 
                           LNET_NIDADDR(portals_nid));
-#endif
-#ifdef _USING_CRAY_PORTALS_ 
+#else
 	return LNET_MKNID(LNET_NIDNET(kptllnd_data.kptl_ni->ni_nid), 
                           portals_nid);
 #endif
@@ -292,8 +291,7 @@ static inline ptl_nid_t kptllnd_lnet2ptlnid(lnet_nid_t lnet_nid)
 #ifdef _USING_LUSTRE_PORTALS_
         return LNET_MKNID(LNET_NIDNET(kptllnd_data.kptl_portals_id.nid), 
                           LNET_NIDADDR(lnet_nid));
-#endif
-#ifdef _USING_CRAY_PORTALS_
+#else
 	return LNET_NIDADDR(lnet_nid);
 #endif
 }

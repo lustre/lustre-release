@@ -37,6 +37,8 @@ lnd_t kptllnd_lnd = {
         .lnd_eager_recv = kptllnd_eager_recv,
 };
 
+kptl_data_t kptllnd_data;
+
 void ptllnd_assert_wire_constants (void)
 {
         /* TBD - auto generated */
@@ -318,8 +320,7 @@ kptllnd_startup (lnet_ni_t *ni)
         ptl_rc = PtlNIInit(
 #ifdef _USING_LUSTRE_PORTALS_
                 PTL_IFACE_DEFAULT,
-#endif
-#ifdef _USING_CRAY_PORTALS_
+#else
                 CRAY_KERN_NAL,
 #endif
                 *kptllnd_tunables.kptl_pid, NULL, NULL,
@@ -551,6 +552,8 @@ kptllnd_shutdown (lnet_ni_t *ni)
                 /* no new peers possible now */
                 write_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock, 
                                         flags);
+
+                CDEBUG(D_NET, "!!\n");
 
                 /* nuke all existing peers */
                 kptllnd_peer_del(LNET_NID_ANY);

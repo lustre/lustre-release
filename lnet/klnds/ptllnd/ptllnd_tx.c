@@ -133,6 +133,7 @@ kptllnd_get_idle_tx(enum kptl_tx_type type)
         tx->tx_type = type;
         atomic_set(&tx->tx_refcount, 1);
         tx->tx_status = 0;
+        tx->tx_idle = 0;
 
         CDEBUG(D_NET, "tx=%p\n", tx);
         return tx;
@@ -326,8 +327,8 @@ kptllnd_tx_callback(ptl_event_t *ev)
         LASSERT (peer != NULL);
         LASSERT (eva->eva_type == PTLLND_EVENTARG_TYPE_MSG ||
                  eva->eva_type == PTLLND_EVENTARG_TYPE_RDMA);
-        LASSERT (!PtlHandleIsEqual(ismsg ? tx->tx_msg_mdh : tx->tx_rdma_mdh, 
-                                   PTL_INVALID_HANDLE));
+        LASSERT (!ismsg || !PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE));
+        LASSERT (ismsg || !PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE));
 
 #ifdef LUSTRE_PORTALS_UNLINK_SEMANTICS
         unlinked = ev->unlinked;
