@@ -969,12 +969,6 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 GOTO(out, rc);
         }
 
-        if (class_name2obd(lsi->lsi_ldd->ldd_svname)) {
-                LCONSOLE_ERROR("The target named %s is already running\n",
-                               lsi->lsi_ldd->ldd_svname);
-                GOTO(out, rc = -EBUSY);
-        }
-
         /* Let the target look up the mount using the target's name 
            (we can't pass the sb or mnt through class_process_config.) */
         rc = server_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
@@ -1374,6 +1368,15 @@ static int server_fill_super(struct super_block *sb)
         CDEBUG(D_MOUNT, "Found service %s for fs '%s' on device %s\n",
                lsi->lsi_ldd->ldd_svname, lsi->lsi_ldd->ldd_fsname, 
                lsi->lsi_lmd->lmd_dev);
+
+        if (class_name2obd(lsi->lsi_ldd->ldd_svname)) {
+                LCONSOLE_ERROR("The target named %s is already running. "
+                               "Double-mount may have compromised the disk "
+                               "journal.\n", lsi->lsi_ldd->ldd_svname);
+                unlock_mntput(mnt);
+                lustre_put_lsi(sb);
+                GOTO(out, rc = -EALREADY);
+        }
 
         /* append on-disk MGS nids to mount-line MGS nids */
         for (i = 0; (i < lsi->lsi_ldd->ldd_mgsnid_count) && 
