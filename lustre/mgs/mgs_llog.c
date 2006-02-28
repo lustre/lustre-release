@@ -390,20 +390,26 @@ int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
                                INDEX_MAP_SIZE * 8);
                 RETURN(-ERANGE);
         }
-
-        if (test_bit(mti->mti_stripe_index, imap)) {
-                LCONSOLE_ERROR("Server %s requested index %d, but that "
-                               "index is already in use\n",
-                               mti->mti_svname, mti->mti_stripe_index);
-                RETURN(-EADDRINUSE);
-        }
          
+        if (test_bit(mti->mti_stripe_index, imap)) {
+                if (mti->mti_flags & LDD_F_VIRGIN) {
+                        LCONSOLE_ERROR("Server %s requested index %d, but that "
+                                       "index is already in use\n",
+                                       mti->mti_svname, mti->mti_stripe_index);
+                        RETURN(-EADDRINUSE);
+                } else {
+                        CERROR("Server %s updating index %d\n",
+                               mti->mti_svname, mti->mti_stripe_index);
+                        RETURN(EALREADY);
+                }
+        }
+
         set_bit(mti->mti_stripe_index, imap);
         fsdb->fsdb_flags &= ~FSDB_EMPTY;
         server_make_name(mti->mti_flags, mti->mti_stripe_index,
                          mti->mti_fsname, mti->mti_svname);
 
-        CDEBUG(D_MGS, "Set new index for %s to %d\n", mti->mti_svname, 
+        CDEBUG(D_MGS, "Set index for %s to %d\n", mti->mti_svname, 
                mti->mti_stripe_index);
 
         RETURN(0);
@@ -707,6 +713,7 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *fsdb,
         RETURN(rc);
 }
 
+/* add failnids to open log */
 static int mgs_write_log_failnids(struct obd_device *obd,
                                   struct mgs_target_info *mti,
                                   struct llog_handle *llh,
@@ -725,6 +732,11 @@ static int mgs_write_log_failnids(struct obd_device *obd,
            multiple nid uuids and add_conns. Assuming the former here, 
            since who uses more than 2 failover nodes? */
         /* FWIW, it doesn't look like lconf correctly handles the former case */
+
+        /*
+        #12 L add_uuid nid=uml2@tcp(0x20000c0a80202) 0:  1:192.168.2.2@tcp
+        #13 L add_conn 0:lustre-OST0000-osc  1:uml2_UUID
+        */
 
         name_create(libcfs_nid2str(mti->mti_failnids[0]), "", &failnodeuuid);
         for (i = 0; i < mti->mti_failnid_count; i++) {
@@ -927,9 +939,9 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         if (!mgs_log_is_empty(obd, mti->mti_svname)) {
                 LCONSOLE_ERROR("The config log for %s already exists, yet the "
                                "server claims it never registered.  It may have"
-                               " been reformatted, or the index changed. This "
-                               "must be resolved before this server can be "
-                               "added.\n", mti->mti_svname);
+                               " been reformatted, or the index changed. Use "
+                               " tunefs.lustre --writeconf to regenerate "
+                               " all logs.\n", mti->mti_svname);
                 return -EALREADY;
         }
         /*
@@ -975,17 +987,75 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         RETURN(rc);
 }
 
+/* Add standalone failnids.  The mdc/osc must have been added to logs first */
+static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
+                                     struct mgs_target_info *mti)
+{
+        char *logname, *cliname;
+        struct llog_handle *llh = NULL;
+        int rc;
+        ENTRY;
+
+        if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+                name_create(mti->mti_svname, "-mdc", &cliname);
+        } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+                name_create(mti->mti_svname, "-osc", &cliname);
+        } else {
+                RETURN(-EINVAL);
+        }
+        
+        /* Verify that we know about this target */
+        if (mgs_log_is_empty(obd, mti->mti_svname)) {
+                CERROR("Missing target log for %s\n", mti->mti_svname);
+                GOTO(out, rc = -ENOENT);
+        }
+        
+        /* Add failover nids to client log */
+        name_create(mti->mti_fsname, "-client", &logname);
+        rc = record_start_log(obd, &llh, logname);
+        rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,
+                           "add failnid");
+        rc = mgs_write_log_failnids(obd, mti, llh, cliname);
+        rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname,
+                           "add failnid"); 
+        rc = record_end_log(obd, &llh);
+        name_destroy(logname);
+
+        if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+                /* Add OST failover nids to the MDT log as well */
+                name_create(mti->mti_fsname, "-MDT0000", &logname);
+                rc = record_start_log(obd, &llh, logname);
+                rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,
+                                   "add failnid");
+                rc = mgs_write_log_failnids(obd, mti, llh, cliname);
+                rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname,
+                                   "add failnid"); 
+                rc = record_end_log(obd, &llh);
+                name_destroy(logname);
+        }
+
+out:
+        name_destroy(cliname);
+        RETURN(rc);
+}
+
 int mgs_write_log_target(struct obd_device *obd,
                          struct mgs_target_info *mti)
 {
         struct fs_db *fsdb;
-        int rc = -EINVAL;
+        int rc = -EINVAL, addfail = 0;
 
         /* set/check the new target index */
         rc = mgs_set_index(obd, mti);
-        if (rc) {
+        if (rc < 0) {
                 CERROR("Can't get index (%d)\n", rc);
                 return rc;
+        }
+        if (rc == EALREADY) {
+                // FIXME mark old log sections as invalid, add new.
+                CERROR("%s: Adding failnids only\n", mti->mti_svname);
+                /* Assume for now we're just updating failover nids */
+                addfail++;
         }
 
         rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb); 
@@ -995,7 +1065,9 @@ int mgs_write_log_target(struct obd_device *obd,
         }
 
         down(&fsdb->fsdb_sem);
-        if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+        if (addfail) {
+                rc = mgs_write_log_add_failnid(obd, fsdb, mti);
+        } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                 rc = mgs_write_log_mdt(obd, fsdb, mti);
         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                 rc = mgs_write_log_ost(obd, fsdb, mti);
@@ -1334,8 +1406,15 @@ int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
         
         /* It's all special cases */
 
-        /* lustre-mdtlov, old lov_mdsA. */
-        if (strstr(devname, "-mdtlov")) {
+        /* obd timeout */
+        if (lcfg->lcfg_command == LCFG_SET_TIMEOUT) {
+                CDEBUG(D_MGS, "timeout, mod MDT, OSTs, client\n");
+                rc = mgs_setparam_all_logs(obd, fsdb, fsname, lcfg); 
+                GOTO(out, rc);
+        }
+
+        /* lov default stripe params */
+        if (strstr(devname, "-mdtlov") && (lcfg->lcfg_command == LCFG_PARAM)) {
                 char *lovname, *logname;
                 CDEBUG(D_MGS, "lov param, mod MDT and client\n");
                 name_create(fsname, "-MDT0000", &logname);
@@ -1363,14 +1442,12 @@ int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
                         strcpy(devname, lovname); /* ...or just hack it! */
                         rc = mgs_write_log_direct(obd, fsdb, logname,
                                                   lovname, lcfg);
+                } else {
+                        rc = -EINVAL;
                 }
                 name_destroy(lovname);
                 name_destroy(logname);
-        }
-
-        if (lcfg->lcfg_command == LCFG_SET_TIMEOUT) {
-                CDEBUG(D_MGS, "timeout, mod MDT, OSTs, client\n");
-                rc = mgs_setparam_all_logs(obd, fsdb, fsname, lcfg); 
+                GOTO(out, rc);
         }
 
 out:
