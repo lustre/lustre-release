@@ -840,6 +840,8 @@ static int lfs_quotacheck(int argc, char **argv)
 
         if (check_type)
                 check_type--;
+        else /* check both user & group quota by default */
+                check_type = 0x02;
 
         if (argc == optind)
                 return CMD_HELP;
