@@ -12,6 +12,7 @@
 
 #include <lustre_debug.h>
 #include <lustre_ver.h>
+#include <linux/lustre_version.h>
 
 /*
 struct lustre_intent_data {

@@ -270,7 +270,7 @@ class LCTLInterface:
         if config.noexec: return (0, [])
 
         child = popen2.Popen3(cmd_line, 1) # Capture stdout and stderr from command
-        child.tochild.write(cmds + "\n")
+        child.tochild.write(cmds + "\nq\n")
         child.tochild.close()
 
         # From "Python Cookbook" from O'Reilly
@@ -599,6 +599,32 @@ def is_block(path):
         return 0
     return stat.S_ISBLK(s[stat.ST_MODE])
 
+def my_realpath(path):
+    try:
+        if os.path.islink(path):
+            # get the realpath of the mount point path
+            if 'realpath' in dir(os.path):
+                real_path = os.path.realpath(path)
+            else:
+                real_path = path
+                link_count = 0
+                while os.path.islink(real_path) and (link_count < 20):
+                    link_count = link_count + 1
+                    path_link = os.readlink(real_path)
+                    if os.path.isabs(path_link):
+                        real_path = path_link
+                    else:
+                        real_path = os.path.join(os.path.dirname(real_path), path_link)
+                    if link_count > 19:
+                        panic("Encountered too many symbolic links resolving path:", path)
+        else:
+            real_path = path
+
+        return real_path
+    except:
+        panic("Fatal error realpath()ing path:", path)
+
+
 # build fs according to type
 # fixme: dangerous
 def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
@@ -631,20 +657,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
                         # get the realpath of the device
                         # it may be the real device, such as /dev/hda7
                         # or the hardlink created via mknod for a device
-                        if 'realpath' in dir(os.path):
-                            real_dev = os.path.realpath(dev)
-                        else:
-                            real_dev = dev
-                            link_count = 0
-                            while os.path.islink(real_dev) and (link_count < 20):
-                                link_count = link_count + 1
-                                dev_link = os.readlink(real_dev)
-                                if os.path.isabs(dev_link):
-                                    real_dev = dev_link
-                                else:
-                                    real_dev = os.path.join(os.path.dirname(real_dev), dev_link)
-                                if link_count > 19:
-                                    panic("Encountered too many symbolic links resolving block device:", dev)
+                        real_dev = my_realpath(dev)
 
                         # get the major and minor number of the realpath via ls
                         # it seems python(os.stat) does not return
@@ -787,7 +800,7 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
-def def_mount_options(fstype, target):
+def def_mount_options(fstype, target, blkdev):
     """returns deafult mount options for passed fstype and target (mds, ost)"""
     if fstype == 'ext3' or fstype == 'ldiskfs':
         mountfsoptions = "errors=remount-ro"
@@ -801,6 +814,64 @@ def def_mount_options(fstype, target):
                 mountfsoptions = "%s,user_xattr" % (mountfsoptions)
             if config.acl:
                 mountfsoptions = "%s,acl" % (mountfsoptions)
+
+        if blkdev:
+            # grab superblock info
+            dumpe2fs="dumpe2fs -f -h"
+            (ret, sb) = run(dumpe2fs, blkdev)
+            if ret:
+                panic("unable to get superblock for ", blkdev)
+
+            # extract journal UUID
+            journal_UUID=''
+            journal_DEV=''
+            for line in sb:
+                lst = string.split(line, ":")
+                if lst[0] == 'Journal UUID':
+                    if len(lst[1]) < 3:
+                        panic("cannot retrieve journal UUID for ", blkdev)
+                    if string.split(lst[1])[0] != '<none>':
+                        journal_UUID = string.split(lst[1])[0]
+                        debug(blkdev, 'has journal UUID', journal_UUID)
+                if lst[0] == 'Journal device':
+                    if len(lst[1]) < 3:
+                        panic("cannot retrieve journal device for ", blkdev)
+                    if string.split(lst[1])[0] != '0x0000':
+                        journal_DEV = string.split(lst[1])[0]
+                        debug(blkdev, 'has journal device', journal_DEV)
+                    break
+
+            if len(journal_UUID) == 0 or len(journal_DEV) == 0:
+                debug('no external journal found for', blkdev)
+                # use internal journal
+                return mountfsoptions
+        
+            # run blkid
+            blkid = "blkid -o device -t UUID='%s'" % (journal_UUID)
+            (ret, devname) = run(blkid)
+            if ret or len(devname) == 0:
+                panic("cannot find external journal for ", blkdev)
+            debug('found', blkdev, 'journal UUID', journal_UUID, 'on',
+                  string.replace(devname[0], '\n', ''))
+
+            try: # sigh, python 1.5 does not support os.stat().st_rdev
+                jdevpath = my_realpath(string.replace(devname[0], '\n', ''))
+                ret, out = runcmd("ls -l %s" %jdevpath)
+                debug('ls -l:', out)
+                major = int(string.split(string.split(out[0])[4], ',')[0])
+                minor = int(string.split(out[0])[5])
+                debug('major', major, 'minor', minor)
+                rdev = major << 8 | minor
+            except OSError:
+                panic("cannot stat ", devname[0])
+
+            debug('found', blkdev, 'journal UUID', journal_UUID, 'on',
+                  jdevpath, 'rdev', rdev)
+
+            # add mount option
+            if string.atoi(journal_DEV, 0) != rdev:
+                mountfsoptions =  "%s,journal_dev=%#x" % (mountfsoptions,rdev)
+
         return mountfsoptions
     return ""
 
@@ -857,12 +928,14 @@ def is_network_prepared():
 def fs_is_mounted(path):
     """Return true if path is a mounted lustre filesystem"""
     try:
+        real_path = my_realpath(path)
+
         fp = open('/proc/mounts')
         lines = fp.readlines()
         fp.close()
         for l in lines:
             a = string.split(l)
-            if a[1] == path and a[2] == 'lustre_lite':
+            if a[1] == real_path and a[2] == 'lustre_lite':
                 return 1
     except IOError, e:
         log(e)
@@ -890,15 +963,18 @@ class kmod:
                 continue
             log ('loading module:', mod, 'srcdir', src_dir, 'devdir', dev_dir)
             if PLATFORM == 'LINUX':
+                options = ''
                 if mod == 'lnet':
                     #For LNET we really need modprobe to load defined LNDs
                     run('/sbin/modprobe lnet')
-                    #But if that fails, try insmod anyhow
+                    #But if that fails, try insmod anyhow with dev option
+                    #accept=all for dev liblustre testing
+                    options = 'accept=all'
                 if src_dir:
                     module = find_module(src_dir, dev_dir, mod)
                     if not module:
                         panic('module not found:', mod)
-                    (rc, out) = run('/sbin/insmod', module)
+                    (rc, out) = run('/sbin/insmod', module, options)
                     if rc and not mod_loaded(mod):
                         if rc == 1:
                             print("Bad module options? Check dmesg.") 
@@ -911,6 +987,7 @@ class kmod:
                         raise CommandError('modprobe', out, rc)
             elif PLATFORM == 'DARWIN':
                 run('/sbin/kextload', KEXTPATH + mod + '.kext');
+
     def cleanup_module(self):
         """Unload the modules in the list in reverse order."""
 
@@ -927,6 +1004,7 @@ class kmod:
                 # remove any self-ref portals created
                 lctl.unconfigure_network()
                 if config.dump:
+                    debug('dumping debug log to', config.dump)
                     # debug hack
                     lctl.dump(config.dump)
                 log('unloading the network')
@@ -1198,6 +1276,7 @@ class MDSDEV(Module):
             self.active = 0
 
         self.inode_size = self.db.get_val_int('inodesize', 0)
+        debug('original inode_size ', self.inode_size)
         if self.inode_size == 0:
             # find the LOV for this MDS
             lovconfig_uuid = mds.get_first_ref('lovconfig')
@@ -1224,8 +1303,7 @@ class MDSDEV(Module):
             #    self.inode_size = 256
             else:
                 self.inode_size = 512
-            debug('stripe_count %d, inode_size %d',
-                  stripe_count, self.inode_size)
+            debug('stripe_count ', stripe_count,' inode_size ',self.inode_size)
 
         self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
@@ -1263,7 +1341,7 @@ class MDSDEV(Module):
         if not is_prepared('MDT'):
             lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
         try:
-            mountfsoptions = def_mount_options(self.fstype, 'mds')
+            mountfsoptions = def_mount_options(self.fstype, 'mds', blkdev)
 
             if config.mountfsoptions:
                 if mountfsoptions:
@@ -1344,7 +1422,7 @@ class MDSDEV(Module):
                         noexec_opt = ('', '-n')
                         ret, out = run (sys.argv[0],
                                         noexec_opt[old_noexec == 1],
-                                        " -v --record --nomod",
+                                        " -v --record --nomod --old_conf",
                                         "--record_log", client_name,
                                         "--record_device", self.name,
                                         "--node", client_name,
@@ -1369,18 +1447,22 @@ class MDSDEV(Module):
 
         #change the mtime of LLOG to match the XML creation time
         if toplustreDB.get_mtime():
-            mtime = string.atof(toplustreDB.get_mtime())
-            runcmd("mkdir /tmp/lustre-XXXX/")
-            if is_block(self.devpath):
-                ret, out = runcmd("mount %s /tmp/lustre-XXXX/" %self.devpath)
-            else:
-                ret, out = runcmd("mount -o loop %s /tmp/lustre-XXXX/" %self.devpath)
+            mtime = toplustreDB.get_mtime()
+            debug("changing mtime of LOGS to %s" %mtime)
+            ret, mktemp = runcmd("mktemp /tmp/lustre-cmd.XXXXXXXX")
             if ret:
-                print out[0]
-            os.utime("/tmp/lustre-XXXX/LOGS", (mtime, mtime))
-            runcmd("umount -f /tmp/lustre-XXXX/")
-        else:
-            print "XML file does not contain mtime, skip mtime checking."
+                log(self.module_name, "create mtime LOGS cmdfile failed: ", self.name)
+            else:
+                mtimecmdfile = string.split(mktemp[0])[0]
+                #mtimecmdfile="/tmp/lustre-cmd.XXXXXXXX"
+                fd = os.open(mtimecmdfile, os.O_RDWR | os.O_CREAT)
+                os.write(fd, "\n\n\n\n\n%s\n\n" %mtime)
+                os.close(fd)
+                cmd = "debugfs -w -R \"mi /LOGS\" <%s %s" %(mtimecmdfile, self.devpath)
+                ret, outs = runcmd(cmd)
+                os.remove(mtimecmdfile)
+                if ret:
+                    print "Can not change mtime of LOGS by debugfs."
 
     def mds_remaining(self):
         out = lctl.device_list()
@@ -1499,7 +1581,7 @@ class OSD(Module):
                                config.reformat, self.format, self.journal_size,
                                self.inode_size, self.mkfsoptions)
 
-        mountfsoptions = def_mount_options(self.fstype, 'ost')
+        mountfsoptions = def_mount_options(self.fstype, 'ost', blkdev)
 
         if config.mountfsoptions:
             if mountfsoptions:
@@ -1586,7 +1668,7 @@ class Client(Module):
             self.name = self_name
         self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
-	self.lookup_backup_targets()
+        self.lookup_backup_targets()
         self.fs_name = fs_name
         if not module_dir:
             module_dir = module
@@ -2111,38 +2193,28 @@ def doCheckMtime(lustreDB, hosts):
                if s[1].get_class() == 'mdsdev':
                   mdsdb = s[1]
                   break
-    if mdsdb:
-        if lustreDB.get_mtime():
-            if config.verbose:
-                print "Checking XML modification time"
-            devpath = mdsdb.get_val('devpath','')
-            xmtime = int(lustreDB.get_mtime())
-            runcmd("mkdir /tmp/lustre-XXXX/")
-            # mounting ro causes confusing syslog errors 
-            if is_block(devpath):
-                ret, out = runcmd("mount %s /tmp/lustre-XXXX/" %devpath)
-            else:
-                ret, out = runcmd("mount -o loop %s /tmp/lustre-XXXX/" %devpath)
-            if ret:
-                print out[0]
-            else:
-                try:
-                    out = os.stat("/tmp/lustre-XXXX/LOGS")
-                except OSError:
-                    runcmd("umount -f /tmp/lustre-XXXX")
-                    panic("Warning: Can't read Lustre logs." 
-                          " Please run --write_conf to update.")
-                runcmd("umount -f /tmp/lustre-XXXX")
-                try:
-                    kmtime = int(out[8])
-                except ValueError:
-                    kmtime = xmtime
-                if xmtime > kmtime :
-                    debug('xmtime ', xmtime, '> kmtime', kmtime)
-                    panic("Warning: the startup logs are older than the XML file." 
-                          " Please run --write_conf to update.")
+
+    if mdsdb and lustreDB.get_mtime():
+        debug("Checking XML modification time")
+        devpath = mdsdb.get_val('devpath','')
+        xmtime = string.atol(lustreDB.get_mtime())
+        cmd = "debugfs -c -R 'stat /LOGS' %s 2>&1 | grep mtime" %devpath
+        ret, kmtimes = runcmd(cmd)
+        if ret:
+            log("Can not get mtime info of MDS LOGS directory")
         else:
-            print "XML file does not contain mtime, skip mtime checking."
+            kmtime = string.atoi(string.split(kmtimes[0])[1], 0)
+            if xmtime > kmtime:
+                debug('xmtime ', xmtime, '> kmtime', kmtime)
+                if config.old_conf:
+                    log("Warning: MDS startup logs are older than config %s."
+                        " Please run --write_conf on stopped MDS to update."
+                        %CONFIG_FILE)
+                else:
+                    panic("Error: MDS startup logs are older than config %s."
+                          " Please run --write_conf on stopped MDS to update."
+                          " Use '--old_conf' to start anyways." %CONFIG_FILE)
+    return
 
 #
 # Load profile for
@@ -2623,6 +2695,7 @@ lconf_options = [
     ('dump',  "Dump the kernel debug log to file before portals is unloaded",
                PARAM),
     ('write_conf', "Save all the client config information on mds."),
+    ('old_conf', "Start up service even though config logs appear outdated."),
     ('record', "Write config information on mds."),
     ('record_log', "Name of config record log.", PARAM),
     ('record_device', "MDS device name that will record the config commands",
@@ -2803,7 +2876,10 @@ if __name__ == "__main__":
         sys.exit(1)
     except CommandError, e:
         e.dump()
-        sys.exit(e.rc)
+        rc = e.rc
+        if rc == 0:
+            rc = 1
+        sys.exit(rc)
 
     if first_cleanup_error:
         sys.exit(first_cleanup_error)
