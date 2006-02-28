@@ -48,31 +48,6 @@ extern struct address_space_operations ll_dir_aops;
 #define log2(n) ffz(~(n))
 #endif
 
-/* We need to have some extra twiddling here because some systems have
- * no random state when they start up. */
-static void
-lustre_generate_random_uuid(class_uuid_t uuid)
-{
-        struct timeval t;
-        int *i, j, k;
-
-        ENTRY;
-        LASSERT(sizeof(class_uuid_t) % sizeof(*i) == 0);
-
-        j = jiffies;
-        do_gettimeofday(&t);
-        k = t.tv_usec;
-
-        generate_random_uuid(uuid);
-
-        for (i = (int *)uuid; (char *)i < (char *)uuid + sizeof(class_uuid_t); i++) {
-                *i ^= j ^ k;
-                j = ((j << 8) & 0xffffff00) | ((j >> 24) & 0x000000ff);
-                k = ((k >> 8) & 0x00ffffff) | ((k << 24) & 0xff000000);
-        }
-
-        EXIT;
-}
 
 struct ll_sb_info *ll_init_sbi(void)
 {
@@ -98,7 +73,7 @@ struct ll_sb_info *ll_init_sbi(void)
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
 
-        lustre_generate_random_uuid(uuid);
+        class_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
         CDEBUG(D_HA, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 

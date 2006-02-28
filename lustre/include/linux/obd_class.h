@@ -144,6 +144,7 @@ struct lustre_profile {
 struct lustre_profile *class_get_profile(char * prof);
 void class_del_profile(char *prof);
 
+/* genops.c */
 #define class_export_get(exp)                                                  \
 ({                                                                             \
         struct obd_export *exp_ = exp;                                         \
@@ -1227,7 +1228,7 @@ extern void obd_sysctl_clean (void);
 
 /* uuid.c  */
 typedef __u8 class_uuid_t[16];
-//int class_uuid_parse(struct obd_uuid in, class_uuid_t out);
+void class_generate_random_uuid(class_uuid_t uuid);
 void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
 
 /* lustre_peer.c    */

@@ -47,7 +47,6 @@
 #include <linux/lustre_ver.h>
 #include "mgs_internal.h"
 
-static int mgs_cleanup(struct obd_device *obd);
 
 /* Establish a connection to the MGS.*/
 static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
@@ -77,23 +76,6 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
         } else {
                 class_export_put(exp);
         }
-
-        RETURN(rc);
-}
-
-static int mgs_reconnect(struct obd_export *exp, struct obd_device *obd,
-                         struct obd_uuid *cluuid,
-                         struct obd_connect_data *data)
-{
-        int rc = -ENOSYS;
-        ENTRY;
-
-        if (exp == NULL || obd == NULL || cluuid == NULL)
-                RETURN(-EINVAL);
-
-        CERROR("Reconnect FIXME\n");
-        class_fail_export(exp);
-        //rc = mds_connect_internal(exp, data);
 
         RETURN(rc);
 }
@@ -130,6 +112,7 @@ static int mgs_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+static int mgs_cleanup(struct obd_device *obd);
 static int mgs_handle(struct ptlrpc_request *req);
 
 /* Start the MGS obd */
@@ -335,7 +318,7 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         }
 
         /* FIXME If the logs don't contain the mti_nids then add 
-           them all as failover nids */       
+           them all as failover nids? */       
 
         RETURN(rc);
 }
@@ -668,7 +651,6 @@ out_free:
 static struct obd_ops mgs_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_connect         = mgs_connect,
-        .o_reconnect       = mgs_reconnect,
         .o_disconnect      = mgs_disconnect,
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,

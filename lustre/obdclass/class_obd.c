@@ -411,6 +411,7 @@ EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
 
 /* uuid.c */
+EXPORT_SYMBOL(class_generate_random_uuid);
 EXPORT_SYMBOL(class_uuid_unparse);
 EXPORT_SYMBOL(lustre_uuid_to_peer);
 

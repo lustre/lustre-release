@@ -545,9 +545,9 @@ static int lustre_start_mgc(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
         struct obd_export *exp;
-        char *uuid;
+        struct obd_uuid *uuid;
+        class_uuid_t uuidc;
         lnet_nid_t nid;
-        lnet_process_id_t id;
         int recov_bk;
         int rc = 0, i;
         ENTRY;
@@ -590,19 +590,30 @@ static int lustre_start_mgc(struct super_block *sb)
         if (rc < 0)
                 RETURN(rc);
 
-        /* Generate a unique uuid for each MGC - use the 1st non-loopback nid */
+        /* Generate a unique uuid for each MGC */
+        OBD_ALLOC_PTR(uuid);
+#if 0
+        /* use the 1st non-loopback nid */
+        lnet_process_id_t id;
         i = 0;
         while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
                 if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND) 
                         continue;
                 break;
         }
-        OBD_ALLOC(uuid, sizeof(struct obd_uuid));
-        sprintf(uuid, "mgc_"LPX64, id.nid);
+        sprintf(uuid->uuid, "mgc_"LPX64, id.nid);
+#else
+        /* random makes reconnect easier */
+        class_generate_random_uuid(uuidc);
+        class_uuid_unparse(uuidc, uuid);
+#endif        
+        CDEBUG(D_MOUNT, "generated uuid: %s\n", uuid->uuid);
+
         /* Start the MGC */
         rc = lustre_start_simple(LUSTRE_MGC_OBDNAME, LUSTRE_MGC_NAME, 
-                                 uuid, LUSTRE_MGS_OBDNAME, libcfs_nid2str(nid));
-        OBD_FREE(uuid, sizeof(struct obd_uuid));
+                                 (char *)uuid->uuid, LUSTRE_MGS_OBDNAME,
+                                 libcfs_nid2str(nid));
+        OBD_FREE_PTR(uuid);
         if (rc) 
                 RETURN(rc);
         
