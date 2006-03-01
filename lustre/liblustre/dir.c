@@ -46,8 +46,8 @@
 
 #undef LIST_HEAD
 
-#ifdef HAVE_LINUX_TYPES_H
-#include <linux/types.h>
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
 #elif defined(HAVE_SYS_TYPES_H)
 #include <sys/types.h>
 #endif

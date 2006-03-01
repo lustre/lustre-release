@@ -22,19 +22,21 @@
 #ifndef __LUSTRE_UTILS_PLATFORM_H
 #define __LUSTRE_UTILS_PLATFORM_H
 
+#ifdef __linux__
+
 #ifdef HAVE_LIBREADLINE
-# define READLINE_LIBRARY
-# include <readline/readline.h>
+#define READLINE_LIBRARY
+#include <readline/readline.h>
 
 /* completion_matches() is #if 0-ed out in modern glibc */
-# ifdef __linux__
 
-# ifndef completion_matches
-#   define completion_matches rl_completion_matches
-# endif
+#ifndef completion_matches
+#  define completion_matches rl_completion_matches
+#endif
 extern void using_history(void);
 extern void stifle_history(int);
 extern void add_history(char *);
+#endif /* HAVE_LIBREADLINE */
 
 #include <errno.h>
 #include <string.h>
@@ -53,9 +55,14 @@ typedef pthread_cond_t	l_cond_t;
 #define l_cond_wait(c, s)	pthread_cond_wait(c, s)
 #endif
 
-# elif __APPLE__
+#elif __APPLE__
+
+#ifdef HAVE_LIBREADLINE
+#define READLINE_LIBRARY
+#include <readline/readline.h>
 typedef VFunction       rl_vintfunc_t;
 typedef VFunction       rl_voidfunc_t;
+#endif /* HAVE_LIBREADLINE */
 
 #include <stdlib.h>
 #include <errno.h>
@@ -213,9 +220,29 @@ static inline void l_cond_broadcast(l_cond_t *cond)
 	l_mutex_unlock(&cond->c_guard);
 }
 
-# else
-# endif /* __APPLE__ */
+#else /* other platform */
 
+#ifdef HAVE_LIBREADLINE
+#define READLINE_LIBRARY
+#include <readline/readline.h>
 #endif /* HAVE_LIBREADLINE */
+#include <errno.h>
+#include <string.h>
+#if HAVE_LIBPTHREAD
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <pthread.h>
+
+typedef pthread_mutex_t	l_mutex_t;
+typedef pthread_cond_t	l_cond_t;
+#define l_mutex_init(s)		pthread_mutex_init(s, NULL)
+#define l_mutex_lock(s)		pthread_mutex_lock(s)
+#define l_mutex_unlock(s)	pthread_mutex_unlock(s)
+#define l_cond_init(c)		pthread_cond_init(c, NULL)
+#define l_cond_broadcast(c)	pthread_cond_broadcast(c)
+#define l_cond_wait(c, s)	pthread_cond_wait(c, s)
+#endif /* HAVE_LIBPTHREAD */
+
+#endif /* __linux__  */
 
 #endif

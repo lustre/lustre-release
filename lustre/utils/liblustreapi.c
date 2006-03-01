@@ -40,8 +40,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#ifdef HAVE_LINUX_TYPES_H
-#include <linux/types.h>
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
 #endif
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
