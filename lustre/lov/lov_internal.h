@@ -132,8 +132,8 @@ int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
 
 /* lov_qos.c */
 void qos_shrink_lsm(struct lov_request_set *set);
-int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set,
-                    int newea);
+int qos_prep_create(struct obd_export *exp, struct lov_request_set *set);
+void qos_update(struct lov_obd *lov, int idx, struct obd_statfs *osfs);
 int qos_remedy_create(struct lov_request_set *set, struct lov_request *req);
 
 /* lov_request.c */

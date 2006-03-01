@@ -832,10 +832,10 @@ struct lov_desc {
         __u32 ld_pattern;                  /* PATTERN_RAID0, PATTERN_RAID1 */
         __u64 ld_default_stripe_size;      /* in bytes */
         __u64 ld_default_stripe_offset;    /* in bytes */
+        __u32 ld_qos_threshold;            /* in MB */
+        __u32 ld_qos_maxage;               /* in second */
         __u32 ld_padding_1;                /* also fix lustre_swab_lov_desc */
         __u32 ld_padding_2;                /* also fix lustre_swab_lov_desc */
-        __u32 ld_padding_3;                /* also fix lustre_swab_lov_desc */
-        __u32 ld_padding_4;                /* also fix lustre_swab_lov_desc */
         struct obd_uuid ld_uuid;
 };
 

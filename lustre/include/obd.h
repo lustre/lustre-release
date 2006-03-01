@@ -453,6 +453,8 @@ struct lov_tgt_desc {
         struct obd_export       *ltd_exp;
         unsigned int             active:1, /* is this target up for requests */
                                  reap:1;   /* should this target be deleted */
+        int                      index;  /* index of target array in lov_obd */
+        struct list_head         qos_bavail_list; /* link entry to lov_obd */
 };
 
 struct lov_obd {
@@ -464,6 +466,8 @@ struct lov_obd {
         int death_row;      /* Do we have tgts scheduled to be deleted?
                                (Make this a linked list?) */
         unsigned int lo_catalog_loaded:1;
+        struct list_head qos_bavail_list; /* tgts list, sorted by available
+                                             space, protected by lov_lock */
         struct lov_tgt_desc *tgts;
 };
 

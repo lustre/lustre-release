@@ -479,6 +479,13 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define POISON_BULK 0
 
+static inline int ll_insecure_random_int(void)
+{
+        struct timeval t;
+        do_gettimeofday(&t);
+        return (int)(t.tv_usec);
+}
+
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller
  * configuration of interrupt and timeout sensitivity along with actions to

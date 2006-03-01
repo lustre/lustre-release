@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 101"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 77 101"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;
@@ -2706,6 +2706,11 @@ test_76() { # bug 1443
 	true
 }
 run_test 76 "destroy duplicate inodes in client inode cache"
+
+test_77() {
+       sh qos.sh
+}
+run_test 77 "qos test ============================================"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
