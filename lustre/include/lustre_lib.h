@@ -403,7 +403,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_PREALLOCATE            _IOWR('f', 105, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_SETATTR                _IOW ('f', 107, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_GETATTR                _IOR ('f', 108, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GETATTR                _IOWR ('f', 108, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_READ                   _IOWR('f', 109, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_WRITE                  _IOWR('f', 110, OBD_IOC_DATA_TYPE)
 
