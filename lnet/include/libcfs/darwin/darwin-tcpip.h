@@ -73,6 +73,9 @@ static inline int get_sock_intopt(socket_t so, int opt)
 /* XXX Liang: no reliable way to get it in Darwin8.x */
 #define SOCK_TEST_NOSPACE(s)    (0)
 
+void libcfs_sock_set_cb(cfs_socket_t *sock, so_upcall callback, void *arg);
+void libcfs_sock_reset_cb(cfs_socket_t *sock);
+
 #else /* !__DARWIN8__ */
 
 #define SOCK_WMEM_QUEUED(so)    ((so)->so_snd.sb_cc)

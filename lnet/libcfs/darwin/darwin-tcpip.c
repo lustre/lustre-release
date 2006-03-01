@@ -184,9 +184,10 @@ libcfs_ipif_enumerate (char ***namesp)
 #if 1
                 /*
                  * XXX Liang:
-                 * sock_ioctl(..., SIOCGIFCONF, ...) is not usable for calling in kernel,
-                 * it always use copyout(...) to copy ifreq to userspace. 
+                 * sock_ioctl(..., SIOCGIFCONF, ...) is not supposed to be used in
+                 * kernel space because it always try to copy result to userspace. 
                  * So we can't get interfaces name by sock_ioctl(...,SIOCGIFCONF,...).
+                 * I've created a bug for Apple, let's wait...
                  */
                 nfound = 0;
                 for (i = 0; i < 16; i++) {

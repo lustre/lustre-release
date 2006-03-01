@@ -28,7 +28,8 @@ pingcli_LDADD := $(EXTRA_KLIBS)
 #pingsrv_LDFLAGS := $(EXTRA_KLDFLAGS)
 #pingsrv_LDADD := $(EXTRA_KLIBS)
 
-plist_DATA := Info.plist
+plist_DATA := ping_cli/Info.plist
+#plist_DATA := ping_srv/Info.plist
 
 install_data_hook := fix-kext-ownership
 endif # Darwin
