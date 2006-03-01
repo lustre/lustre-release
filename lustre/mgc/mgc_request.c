@@ -719,7 +719,7 @@ static int mgc_import_event(struct obd_device *obd,
         int rc = 0;
 
         LASSERT(imp->imp_obd == obd);
-        CDEBUG(D_MGC, "import event %d\n", (int)event);
+        CDEBUG(D_MGC, "import event %#x\n", event);
 
         switch (event) {
         case IMP_EVENT_INVALIDATE: {

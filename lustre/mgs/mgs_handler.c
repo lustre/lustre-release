@@ -168,6 +168,9 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_fs, rc);
 
+        /* Allow reconnect attempts */
+        obd->obd_replayable = 1;
+
         /* Internal mgs setup */
         mgs_init_fsdb_list(obd);
         sema_init(&mgs->mgs_log_sem, 1);
@@ -442,6 +445,11 @@ int mgs_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_MGS, req, "connect");
                 OBD_FAIL_RETURN(OBD_FAIL_MGS_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mgs_handle);
+                if (!rc && (req->rq_reqmsg->conn_cnt > 1))
+                        /* Make clients trying to reconnect after a MGS restart
+                           happy; also requires obd_replayable */
+                        lustre_msg_add_op_flags(req->rq_repmsg,
+                                                MSG_CONNECT_RECONNECT);
                 break;
         case MGS_DISCONNECT:
                 DEBUG_REQ(D_MGS, req, "disconnect");

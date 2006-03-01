@@ -112,9 +112,6 @@ void class_unobserve_import(struct obd_import *imp, obd_import_callback cb,
 void class_notify_import_observers(struct obd_import *imp, int event,
                                    void *event_arg);
 
-#define IMP_EVENT_ACTIVE   1
-#define IMP_EVENT_INACTIVE 2
-
 /* genops.c */
 struct obd_export;
 extern struct obd_import *class_exp2cliimp(struct obd_export *);

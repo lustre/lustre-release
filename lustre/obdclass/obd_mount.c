@@ -700,18 +700,8 @@ static int lustre_stop_mgc(struct super_block *sb)
         obd->obd_force = 1;
         /* client_disconnect_export uses the no_recov flag to decide whether it
            should disconnect or just invalidate.  (The MGC has no
-           recoverable data in any case.) 
-           Without no_recov, we wait for locks to be dropped, so if the
-           MGS is down, we might wait for an obd timeout.  With no-recov,
-           if the MGS is up, we don't tell it we're disconnecting, so 
-           we must wait until the MGS evicts the dead client before the 
-           client can reconnect. So it's either slow disconnect, or a 
-           slow reconnect. This could probably be fixed on the server side 
-           by ignoring handle mismatches in target_handle_reconnect. */
-        if (lsi->lsi_flags & LSI_UMOUNT_FORCE) {
-                /* FIXME maybe always set this? */
-                obd->obd_no_recov = 1;
-        }
+           recoverable data in any case.) */
+        obd->obd_no_recov = 1;
 
         if (obd->u.cli.cl_mgc_mgsexp)
                 obd_disconnect(obd->u.cli.cl_mgc_mgsexp);

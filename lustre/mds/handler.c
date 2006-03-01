@@ -2100,8 +2100,8 @@ int mds_postrecov(struct obd_device *obd)
         /* set nextid first, so we are sure it happens */
         rc = mds_lov_set_nextid(obd);
         if (rc) {
-                CERROR("%s: mds_lov_set_nextid failed\n",
-                       obd->obd_name);
+                CERROR("%s: mds_lov_set_nextid failed %d\n",
+                       obd->obd_name, rc);
                 GOTO(out, rc);
         }
         

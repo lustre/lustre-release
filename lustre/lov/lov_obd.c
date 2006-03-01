@@ -2206,7 +2206,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         ENTRY;
 
         if (KEY_IS(KEY_NEXT_ID)) {
-                if (vallen != lov->desc.ld_tgt_count)
+                if (vallen > lov->desc.ld_tgt_count)
                         RETURN(-EINVAL);
                 vallen = sizeof(obd_id);
         }
