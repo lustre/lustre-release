@@ -307,8 +307,9 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 list_for_each_entry(hand, &ioctl_list, item) {
                         err = hand->handle_ioctl(cmd, data);
                         if (err != -EINVAL) {
-                                err = libcfs_ioctl_popdata(arg, data, 
-                                                           sizeof (*data));
+                                if (err == 0)
+                                        err = libcfs_ioctl_popdata(arg, 
+                                                        data, sizeof (*data));
                                 break;
                         }
                 }
