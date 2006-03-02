@@ -315,9 +315,9 @@ cleanup:
 
         if (dlm_handles[0].cookie != 0) {
                 if (rc)
-                        ldlm_lock_decref(&dlm_handles[0], LCK_PW);
+                        ldlm_lock_decref(&dlm_handles[0], LCK_EX);
                 else
-                        ptlrpc_save_lock(req, &dlm_handles[0], LCK_PW);
+                        ptlrpc_save_lock(req, &dlm_handles[0], LCK_EX);
         }
         if (de_tail)
                 l_dput(de_tail);
