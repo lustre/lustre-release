@@ -265,7 +265,7 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
 
         rc = mds_get_parents_children_locked(obd, mds, &join_rec->jr_fid,
                                              &de_tailparent, &head_fid,
-                                             &de_head, LCK_PW, rec->ur_name,
+                                             &de_head, LCK_EX, rec->ur_name,
                                              rec->ur_namelen, &de_tail,
                                              NULL, 0, NULL, dlm_handles,
                                              LCK_EX);
