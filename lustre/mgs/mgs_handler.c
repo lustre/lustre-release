@@ -316,12 +316,13 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
                 mti->mti_flags |= LDD_F_WRITECONF;
                 rc = 1;
         } else {
-                 /* index is correctly marked used */
-                rc = 0;  
+                /* Index is correctly marked as used */
+
+                /* If the logs don't contain the mti_nids then add 
+                   them as failover nids */
+                rc = mgs_check_failnid(obd, mti);
         }
 
-        /* FIXME If the logs don't contain the mti_nids then add 
-           them all as failover nids? */       
 
         RETURN(rc);
 }

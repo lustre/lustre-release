@@ -61,7 +61,7 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         struct lustre_cfg *lcfg;
-        unsigned long index;
+        __u32 index;
         int rc = 0;
         ENTRY;
 
@@ -87,7 +87,7 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
             lcfg->lcfg_command == LCFG_LOV_DEL_OBD) {
                 index = simple_strtoul(lustre_cfg_string(lcfg, 2),
                                        NULL, 10);
-                CDEBUG(D_MGS, "OST index for %s is %lu (%s)\n",
+                CDEBUG(D_MGS, "OST index for %s is %u (%s)\n",
                        lustre_cfg_string(lcfg, 1), index, 
                        lustre_cfg_string(lcfg, 2));
                 set_bit(index, fsdb->fsdb_ost_index_map);
@@ -105,7 +105,7 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                         index = 0;
                 }
                 rc = 0;
-                CDEBUG(D_MGS, "MDT index is %lu\n", index);
+                CDEBUG(D_MGS, "MDT index is %u\n", index);
                 set_bit(index, fsdb->fsdb_mdt_index_map);
         }
 
@@ -114,8 +114,6 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                 struct cfg_marker *marker;
                 marker = lustre_cfg_buf(lcfg, 1);
                 fsdb->fsdb_gen = max(fsdb->fsdb_gen, marker->cm_step);
-                CDEBUG(D_MGS, "marker %d %s\n", marker->cm_step, 
-                       marker->cm_comment);
         }
 
         RETURN(rc);
@@ -721,28 +719,36 @@ static int mgs_write_log_failnids(struct obd_device *obd,
 {
         char *failnodeuuid;
         lnet_nid_t nid;
-        int i, rc = 0;
+        int i, j = 0, rc = 0;
 
         if (!mti->mti_failnid_count) 
                 return 0;
 
-        /* Are these multiple nids for the same failover node, or 
-           multiple nodes?  In the former case, there should be only
-           one add_conn and a single nid uuid.  In the latter, 
-           multiple nid uuids and add_conns. Assuming the former here, 
-           since who uses more than 2 failover nodes? */
-        /* FWIW, it doesn't look like lconf correctly handles the former case */
-
         /*
-        #12 L add_uuid nid=uml2@tcp(0x20000c0a80202) 0:  1:192.168.2.2@tcp
-        #13 L add_conn 0:lustre-OST0000-osc  1:uml2_UUID
+        #03 L add_uuid  nid=uml1@tcp(0x20000c0a80201) nal=90 0:  1:uml1_UUID
+        #04 L add_uuid  nid=1@elan(0x1000000000001)   nal=90 0:  1:uml1_UUID
+        #05 L setup    0:OSC_uml1_ost1_mdsA  1:ost1_UUID  2:uml1_UUID
+        #06 L add_uuid  nid=uml2@tcp(0x20000c0a80202) nal=90 0:  1:uml2_UUID
+        #0x L add_uuid  nid=2@elan(0x1000000000002)   nal=90 0:  1:uml2_UUID
+        #07 L add_conn 0:OSC_uml1_ost1_mdsA  1:uml2_UUID
         */
-
+        
+        /* We don't know the failover node name, so just use the first nid
+           as the uuid */
         name_create(libcfs_nid2str(mti->mti_failnids[0]), "", &failnodeuuid);
         for (i = 0; i < mti->mti_failnid_count; i++) {
                 nid = mti->mti_failnids[i];
-                CDEBUG(D_MGS, "add nid %s for failover uuid %s\n", 
-                       libcfs_nid2str(nid), failnodeuuid);
+                if (mti->mti_failnodes[j] && (i >= mti->mti_failnodes[j])) {
+                        /* This is the first nid of a new failover node.  
+                           add_conn the old uuid, and start a new one. */
+                        rc = record_add_conn(obd, llh, cliname, failnodeuuid);
+                        name_destroy(failnodeuuid);
+                        name_create(libcfs_nid2str(mti->mti_failnids[i]),
+                                    "", &failnodeuuid);
+                        j++;
+                }
+                CDEBUG(D_MGS, "add nid %s for failover uuid %s, client %s\n", 
+                       libcfs_nid2str(nid), failnodeuuid, cliname);
                 rc = record_add_uuid(obd, llh, nid, failnodeuuid);
         }
         rc = record_add_conn(obd, llh, cliname, failnodeuuid);
@@ -996,6 +1002,15 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
         int rc;
         ENTRY;
 
+        /* Verify that we know about this target */
+        if (mgs_log_is_empty(obd, mti->mti_svname)) {
+                LCONSOLE_ERROR("The target %s has not registered yet. "
+                               "It must be started before failnids can "
+                               "be added.\n", mti->mti_svname);
+                RETURN(-ENOENT);
+        }
+
+        /* Create mdc/osc client name (e.g. lustre-OST0001-osc) */
         if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                 name_create(mti->mti_svname, "-mdc", &cliname);
         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
@@ -1004,11 +1019,6 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
                 RETURN(-EINVAL);
         }
         
-        /* Verify that we know about this target */
-        if (mgs_log_is_empty(obd, mti->mti_svname)) {
-                CERROR("Missing target log for %s\n", mti->mti_svname);
-                GOTO(out, rc = -ENOENT);
-        }
         
         /* Add failover nids to client log */
         name_create(mti->mti_fsname, "-client", &logname);
@@ -1034,40 +1044,73 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
                 name_destroy(logname);
         }
 
-out:
         name_destroy(cliname);
         RETURN(rc);
+}
+
+int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti)
+{
+        /* Not implementing automatic failover nid addition at this time. */
+        return 0;
+#if 0
+        struct fs_db *fsdb;
+        int rc;
+        ENTRY;
+
+        rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb); 
+        if (rc) 
+                RETURN(rc);
+
+        if (mgs_log_is_empty(obd, mti->mti_svname)) 
+                /* should never happen */
+                RETURN(-ENOENT);
+
+        CDEBUG(D_MGS, "Checking for new failnids for %s\n", mti->mti_svname);
+        // FIXME check logs
+        /* FIXME we need a real database lookup.  Create on-disk db of known 
+           size, lookup by index */
+        /* Check each nid, or check only nid0 and add all if nid0 is missing?
+           What if someone adds a net to a node? Better check everything. */
+        /* if nid 0 is missing, mgs_write_log_add_failnid.
+           if just one nid is missing, add uuid for nodeuuid[nid0]).
+        */
+
+
+        down(&fsdb->fsdb_sem);
+        rc = mgs_write_log_add_failnid(obd, fsdb, mti);
+        up(&fsdb->fsdb_sem);
+
+        RETURN(rc);
+#endif
 }
 
 int mgs_write_log_target(struct obd_device *obd,
                          struct mgs_target_info *mti)
 {
         struct fs_db *fsdb;
-        int rc = -EINVAL, addfail = 0;
+        int rc = -EINVAL;
+        ENTRY;
 
         /* set/check the new target index */
         rc = mgs_set_index(obd, mti);
         if (rc < 0) {
                 CERROR("Can't get index (%d)\n", rc);
-                return rc;
+                RETURN(rc);
         }
         if (rc == EALREADY) {
                 // FIXME mark old log sections as invalid, add new.
-                CERROR("%s: Adding failnids only\n", mti->mti_svname);
-                /* Assume for now we're just updating failover nids */
-                addfail++;
+                CERROR("updates not yet implemented\n");
+                RETURN(-EALREADY);
         }
 
         rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb); 
         if (rc) {
                 CERROR("Can't get db for %s\n", mti->mti_fsname);
-                return rc;
+                RETURN(rc);
         }
 
         down(&fsdb->fsdb_sem);
-        if (addfail) {
-                rc = mgs_write_log_add_failnid(obd, fsdb, mti);
-        } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+        if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                 rc = mgs_write_log_mdt(obd, fsdb, mti);
         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                 rc = mgs_write_log_ost(obd, fsdb, mti);
@@ -1077,7 +1120,7 @@ int mgs_write_log_target(struct obd_device *obd,
         }
         up(&fsdb->fsdb_sem);
         
-        return rc;
+        RETURN(rc);
 }
 
 
@@ -1373,11 +1416,34 @@ static void print_lustre_cfg(struct lustre_cfg *lcfg)
         EXIT;
 }
 
+/* returns 1 if key matches, else 0 */
+static int class_match_key(char *key, char *buf, char **valh)
+{
+        char *val;
+        *valh = NULL;
+
+        if (strncmp(key, buf, strlen(key)) != 0) 
+                return 0;
+
+        val = strchr(buf, '=');
+        if (!val || (*(++val) == 0)) {
+                CERROR("Key has no value %s\n", buf);
+                return 0;
+        }
+        if (val - buf > strlen(key) + 1) {
+                /* We didn't match the entire key */
+                return 0;
+        }
+
+        *valh = val;
+        return 1;
+}
+
 /* Set a permanent (config log) param for a target or fs */
 int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
 {
         struct fs_db *fsdb;
-        char *devname;
+        char *devname, *val;
         int rc = 0;
         ENTRY;
 
@@ -1413,10 +1479,36 @@ int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
                 GOTO(out, rc);
         }
 
+        /* add failover nidlist */
+        if ((lcfg->lcfg_command == LCFG_PARAM) && 
+            class_match_key("failnid", lustre_cfg_string(lcfg, 1), &val)) {
+                struct mgs_target_info *mti;
+                CDEBUG(D_MGS, "failnid, mod MDT, client\n");
+                OBD_ALLOC_PTR(mti);
+                strcpy(mti->mti_fsname, fsname);
+                strcpy(mti->mti_svname, devname);
+                rc = server_name2index(devname, &mti->mti_stripe_index, NULL);
+                if (rc < 0) {
+                        OBD_FREE_PTR(mti);
+                        GOTO(out, rc);
+                }
+                mti->mti_flags = rc;
+                /* FIXME add to lctl.  nids must be in lnet_nid_t
+                   form, not ascii - we can't resolve hostnames from the 
+                   kernel. */
+                mti->mti_failnid_count = simple_strtoul(val, NULL, 10);
+                memcpy(mti->mti_failnids, lustre_cfg_string(lcfg, 2), 
+                       mti->mti_failnid_count * sizeof(mti->mti_failnids[0]));
+                /* assume these are nids for a single node. */
+                rc = mgs_write_log_add_failnid(obd, fsdb, mti); 
+                OBD_FREE_PTR(mti);
+                GOTO(out, rc);
+        }
+        
         /* lov default stripe params */
-        if (strstr(devname, "-mdtlov") && (lcfg->lcfg_command == LCFG_PARAM)) {
+        if ((lcfg->lcfg_command == LCFG_PARAM) && strstr(devname, "-mdtlov")) {
                 char *lovname, *logname;
-                CDEBUG(D_MGS, "lov param, mod MDT and client\n");
+                CDEBUG(D_MGS, "lov param, mod MDT, client\n");
                 name_create(fsname, "-MDT0000", &logname);
                 name_create(fsname, "-mdtlov", &lovname);
                 if (strcmp(lovname, devname) != 0) {

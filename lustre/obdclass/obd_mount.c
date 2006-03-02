@@ -830,10 +830,12 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
                               mti->mti_nid_count, mti->mti_svname);
                         break;
                 }
-        }       
-      
+        }    
+
         mti->mti_failnid_count = ldd->ldd_failnid_count;
         memcpy(mti->mti_failnids, ldd->ldd_failnid, sizeof(mti->mti_failnids));
+        memcpy(mti->mti_failnodes, ldd->ldd_failnode, 
+               sizeof(mti->mti_failnodes));
         memcpy(mti->mti_uuid, ldd->ldd_uuid, sizeof(mti->mti_uuid));
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
@@ -1434,9 +1436,11 @@ out:
 
 /* Get the index from the obd name.
    rc = server type, or
-   rc < 0  on error */
-int server_name2index(char *svname, unsigned long *idx, char **endptr)
+   rc < 0  on error 
+   if endptr isn't NULL it is set to end of name */
+int server_name2index(char *svname, __u32 *idx, char **endptr)
 {
+        unsigned long index;
         int rc;
         char *dash = strchr(svname, '-');
         if (!dash) {
@@ -1451,7 +1455,8 @@ int server_name2index(char *svname, unsigned long *idx, char **endptr)
         else 
                 return(-EINVAL);
 
-        *idx = simple_strtoul(dash + 4, endptr, 16);
+        index = simple_strtoul(dash + 4, endptr, 16);
+        *idx = index;
         return rc;
 }
 
@@ -1508,7 +1513,7 @@ int lustre_check_exclusion(struct super_block *sb, char *svname)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct lustre_mount_data *lmd = lsi->lsi_lmd;
-        unsigned long index;
+        __u32 index;
         int i, rc;
         ENTRY;
 
@@ -1516,7 +1521,7 @@ int lustre_check_exclusion(struct super_block *sb, char *svname)
         if (rc != LDD_F_SV_TYPE_OST) 
                 RETURN(0);
 
-        CDEBUG(D_MOUNT, "Check exclusion %s (%ld) in %d of %s\n", svname, 
+        CDEBUG(D_MOUNT, "Check exclusion %s (%d) in %d of %s\n", svname, 
                index, lmd->lmd_exclude_count, lmd->lmd_dev);
         
         for(i = 0; i < lmd->lmd_exclude_count; i++) {
@@ -1532,7 +1537,7 @@ int lustre_check_exclusion(struct super_block *sb, char *svname)
 static int lmd_make_exclusion(struct lustre_mount_data *lmd, char *ptr)
 {
         char *s1 = ptr, *s2;
-        unsigned long index, *exclude_list;
+        __u32 index, *exclude_list;
         int rc = 0;
         ENTRY;
 

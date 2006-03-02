@@ -70,11 +70,10 @@ void usage(FILE *out)
                 "\t\t--mdt: metadata storage, mutually exclusive with ost\n"
                 "\t\t--mgs: configuration management service - one per site\n"
                 "\toptions (in order of popularity):\n"
-                "\t\t--mgsnid=<nid>[,<...>] : NID(s) of a remote mgs node\n"
+                "\t\t--mgsnode=<nid>[,<...>] : NID(s) of a remote mgs node\n"
                 "\t\t\trequired for all targets other than the mgs node\n"
                 "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
-                "\t\t--failover=<nid>[,<...>] : list of NIDs for the failover\n"
-                "\t\t\tpartners for this target\n" 
+                "\t\t--failnode=<nid>[,<...>] : NID(s) of a failover partner\n"
                 "\t\t--index=#N : target index\n"
                 /* FIXME implement 1.6.x
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
@@ -513,7 +512,7 @@ out:
 
 void print_ldd(char *str, struct lustre_disk_data *ldd)
 {
-        int i = 0;
+        int i = 0, j= 0;
         printf("\n   %s:\n", str);
         printf("Target:     %s\n", ldd->ldd_svname);
         if (ldd->ldd_svindex == INDEX_UNASSIGNED) 
@@ -534,18 +533,28 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
                ldd->ldd_flags & LDD_F_WRITECONF  ? "writeconf ":"",
                ldd->ldd_flags & LDD_F_UPGRADE14  ? "upgrade1.4 ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
-        printf("MGS nids: ");
+        printf("MGS");
+        j = 0;
         for (i = 0; i < ldd->ldd_mgsnid_count; i++) {
-                printf("%c %s", (i == 0) ? ' ' : ',',
-                       libcfs_nid2str(ldd->ldd_mgsnid[i]));
+                if (i == 0 || i == ldd->ldd_mgsnode[j]) {
+                        if (i) 
+                                j++;
+                        printf("\n    node %d:", j + 1);
+                }
+                printf(" %s", libcfs_nid2str(ldd->ldd_mgsnid[i]));
         }
-        printf("\nFailover nids: ");
+        printf("\nFailover");
+        j = 0;
         for (i = 0; i < ldd->ldd_failnid_count; i++) {
-                printf("%c %s", (i == 0) ? ' ' : ',',
-                       libcfs_nid2str(ldd->ldd_failnid[i]));
+                if (i == 0 || i == ldd->ldd_failnode[j]) {
+                        if (i) 
+                                j++;
+                        printf("\n    node %d:", j + 1);
+                }
+                printf(" %s", libcfs_nid2str(ldd->ldd_failnid[i]));
         }
 
-        printf("\n\n");
+        printf("\n");
 }
 
 /* Write the server config files */
@@ -801,6 +810,52 @@ static inline void badopt(const char *opt, char *type)
         usage(stderr);
 }
 
+
+static int parse_nids(int first_spec, char *buf, __u16 *count,
+                      lnet_nid_t *nids, __u16 *nodes)
+{                                                 
+        int j, i = *count;
+        char *s1 = buf, *s2;
+
+        if (first_spec == 1) {
+                /* for the first nid spec in a tunefs, we erase all old nid
+                   info */
+                *count = 0; i = 0;
+                for (j = 0; j < 8; j++) 
+                        nodes[j] = 0;
+        }
+
+        while ((s2 = strsep(&s1, ","))) {
+                nids[i] = libcfs_str2nid(s2);
+                if (nids[i] == LNET_NID_ANY) {
+                        fprintf(stderr, "%s: malformed nid %s\n", 
+                                progname, s2);
+                        return 1;
+                }
+                i++;
+                if (i >= MTI_NIDS_MAX) {
+                        fprintf(stderr, "%s: too many nids (%s...)\n", 
+                                progname, s1);
+                        return 1;
+                }
+        }
+        if (i == *count) 
+                return 0;
+
+        /* mark the last nid index in the node array */
+        j = 0;
+        while (nodes[j] && (j < 8)) 
+                j++;
+        if (j >= 8) {
+                fprintf(stderr, "%s: too many nodes (%s...)\n", 
+                        progname, buf);
+                return 1;
+        }
+        *count = i;
+        nodes[j] = i;
+        return 0;
+}
+
 int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                char **mountopts)
 {
@@ -809,11 +864,13 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"stripe-count-hint", 1, 0, 'c'},
                 {"configdev", 1, 0, 'C'},
                 {"device-size", 1, 0, 'd'},
+                {"failnode", 1, 0, 'f'},
                 {"failover", 1, 0, 'f'},
                 {"mgs", 0, 0, 'G'},
                 {"help", 0, 0, 'h'},
                 {"index", 1, 0, 'i'},
                 {"mkfsoptions", 1, 0, 'k'},
+                {"mgsnode", 1, 0, 'm'},
                 {"mgsnid", 1, 0, 'm'},
                 {"mdt", 0, 0, 'M'},
                 {"fsname",1, 0, 'n'},
@@ -867,20 +924,19 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         mop->mo_device_sz = atol(optarg); 
                         break;
                 case 'f': {
-                        int i = 0;
-                        char *s1 = optarg, *s2;
-                        while ((s2 = strsep(&s1, ","))) {
-                                mop->mo_ldd.ldd_failnid[i++] =
-                                        libcfs_str2nid(s2);
-                                if (i >= MTI_NIDS_MAX) {
-                                        fprintf(stderr, "%s: too many failover "
-                                                "nids, ignoring %s...\n", 
-                                                progname, s1);
-                                        break;
-                                }
+                        int rc;
+                        static int first_fail_spec = 1;
+                        rc = parse_nids(first_fail_spec, optarg, 
+                                        &mop->mo_ldd.ldd_failnid_count,
+                                        mop->mo_ldd.ldd_failnid,
+                                        mop->mo_ldd.ldd_failnode);
+                        if (rc) {
+                                fprintf(stderr, "%s: bad failover nids\n",
+                                        progname);
+                                return 1;
                         }
-                        mop->mo_ldd.ldd_failnid_count = i;
                         mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
+                        first_fail_spec++;
                         break;
                 }
                 case 'G':
@@ -903,24 +959,23 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 sizeof(mop->mo_mkfsopts) - 1);
                         break;
                 case 'm': {
-                        int i = 0;
-                        char *s1 = optarg, *s2;
+                        int rc;
+                        static int first_mgs_spec = 1;
                         if (IS_MGS(&mop->mo_ldd)) {
                                 badopt(long_opt[longidx].name, 
                                        "non-MGS MDT,OST");
                                 return 1;
                         }
-                        while ((s2 = strsep(&s1, ","))) {
-                                mop->mo_ldd.ldd_mgsnid[i++] =
-                                        libcfs_str2nid(s2);
-                                if (i >= MTI_NIDS_MAX) {
-                                        fprintf(stderr, "%s: too many MGS nids,"
-                                                " ignoring %s...\n", 
-                                                progname, s1);
-                                        break;
-                                }
+                        rc = parse_nids(first_mgs_spec, optarg, 
+                                        &mop->mo_ldd.ldd_mgsnid_count,
+                                        mop->mo_ldd.ldd_mgsnid,
+                                        mop->mo_ldd.ldd_mgsnode);
+                        if (rc) {
+                                fprintf(stderr, "%s: bad MGS nids\n",
+                                        progname);
+                                return 1;
                         }
-                        mop->mo_ldd.ldd_mgsnid_count = i;
+                        first_mgs_spec++;
                         break;
                 }
                 case 'M':
@@ -992,6 +1047,8 @@ int main(int argc, char *const argv[])
         char default_mountopts[512] = "";
         int  ret = 0;
 
+        assert(offsetof(struct lustre_disk_data, ldd_padding) == 1260);
+        
         if ((progname = strrchr(argv[0], '/')) != NULL)
                 progname++;
         else

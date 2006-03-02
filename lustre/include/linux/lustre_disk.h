@@ -38,8 +38,6 @@
 #define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"/mountdata"
 #define MDT_LOGS_DIR      "LOGS"  /* COMPAT_146 */
 
-#define LDD_MAGIC 0x1dd00001
-
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
 #define LDD_F_SV_TYPE_MGS   0x0004
@@ -78,6 +76,8 @@ static inline char *mt_str(enum ldd_mount_type mt)
 #define LDD_INCOMPAT_SUPP 0
 #define LDD_ROCOMPAT_SUPP 0
 
+#define LDD_MAGIC 0x1dd00001
+
 /* FIXME does on-disk ldd have to be a fixed endianness? (like last_rcvd) */
 struct lustre_disk_data {
         __u32      ldd_magic;
@@ -89,20 +89,20 @@ struct lustre_disk_data {
         __u32      ldd_flags;           /* LDD_SV_TYPE */
         __u32      ldd_svindex;         /* server index (0001), must match 
                                            svname */
-        enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
-        char       ldd_fsname[64];      /* filesystem this server is part of */
+/*28*/  char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
+        enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
         __u16      ldd_mgsnid_count;
         __u16      ldd_failnid_count;   /* server failover nid count */
-        lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgs nid list; lmd can 
-                                                 override */
+/*164*/ lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgs nids; lmd can override */
         lnet_nid_t ldd_failnid[MTI_NIDS_MAX]; /* server failover nids */
-        /* COMPAT_146 */
-        __u8       ldd_uuid[40];        /* server UUID */
-        /* end COMPAT_146 */
+        __u16      ldd_mgsnode[8];      /* nid count of each node in... */
+        __u16      ldd_failnode[8];     /* ...the nid arrays */
+
+/*1220*/__u8       ldd_uuid[40];        /* server UUID (COMPAT_146) */
    
-        __u8       ldd_padding[4096 - 1228];
-        char       ldd_mount_opts[4096]; /* target fs mount opts */
+/*1260*/__u8       ldd_padding[4096 - 1260];
+/*4096*/char       ldd_mount_opts[4094]; /* target fs mount opts */
 };
 
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
@@ -128,7 +128,7 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
 }
 
 /* Get the index from the obd name */
-int server_name2index(char *svname, unsigned long *idx, char **endptr);
+int server_name2index(char *svname, __u32 *idx, char **endptr);
 
 
 /****************** mount command *********************/
@@ -142,14 +142,14 @@ int server_name2index(char *svname, unsigned long *idx, char **endptr);
 struct lustre_mount_data {
         __u32      lmd_magic;
         __u32      lmd_flags;         /* lustre mount flags */
-        __u16      lmd_mgsnid_count;  /* how many failover nids we have for 
+        int        lmd_mgsnid_count;  /* how many failover nids we have for 
                                          the MGS */
-        lnet_nid_t lmd_mgsnid[MTI_NIDS_MAX];/* who to contact at startup */
+        int        lmd_exclude_count;
         char      *lmd_dev;           /* device or file system name */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
-        int        lmd_exclude_count; /* number of valid entries in array */
+        lnet_nid_t lmd_mgsnid[MTI_NIDS_MAX];/* who to contact at startup */
 };
 
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client only */

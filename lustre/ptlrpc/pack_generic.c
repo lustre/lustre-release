@@ -636,6 +636,9 @@ void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
                 __swab64s(&mti->mti_nids[i]);
                 __swab64s(&mti->mti_failnids[i]);
         }
+        for (i = 0; i < 8; i++) {
+                __swab16s(&mti->mti_failnodes[i]);
+        }
         __swab32s(&mti->mti_stripe_index);
         __swab32s(&mti->mti_nid_count);
         __swab32s(&mti->mti_failnid_count);

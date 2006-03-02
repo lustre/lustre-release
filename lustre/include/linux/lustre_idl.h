@@ -1000,6 +1000,7 @@ struct mgs_target_info {
         char             mti_uuid[sizeof(struct obd_uuid)];
         lnet_nid_t       mti_nids[MTI_NIDS_MAX];     /* host nids */
         lnet_nid_t       mti_failnids[MTI_NIDS_MAX]; /* partner nids */
+        __u16            mti_failnodes[8];  /* last nid index of each partner */
         __u32            mti_stripe_index;
         __u32            mti_nid_count;
         __u32            mti_failnid_count;
