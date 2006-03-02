@@ -122,6 +122,12 @@ case "$lustretag" in
         lnettag=b_release_1_4_6
         ;;
     
+    b_release_1_4_6-patchless)
+        portalstag=b_release_1_4_6
+        lnettag=b_release_1_4_6
+        libsysiotag=b_release_1_4_6
+        ;;
+
     b_release_1_4_6)
         portalstag=b_release_1_4_6
         lnettag=b_release_1_4_6
