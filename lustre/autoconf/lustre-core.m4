@@ -575,6 +575,10 @@ AC_CHECK_FUNCS([inet_ntoa])
 # llite/xattr.c
 AC_CHECK_HEADERS([linux/xattr_acl.h])
 
+# use universal lustre headers 
+# i.e: include/obd.h instead of include/linux/obd.h
+AC_CHECK_FILE($PWD/lustre/include/obd.h, [AC_DEFINE(UNIV_LUSTRE_HEADERS, 1, [Use universal lustre headers])])
+
 # Super safe df
 AC_ARG_ENABLE([mindf],
       AC_HELP_STRING([--enable-mindf],

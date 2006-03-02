@@ -5,6 +5,13 @@
 # See the file COPYING in this distribution
 
 SUBDIRS = linux lustre
+
+linuxdir = $(includedir)
+
+if UTILS
+linux_HEADERS = lustre_idl.h
+endif
+
 EXTRA_DIST = ioctl.h liblustre.h lprocfs_status.h lustre_cfg.h \
 	     lustre_commit_confd.h lustre_debug.h lustre_dlm.h \
 	     lustre_export.h lustre_fsfilt.h lustre_ha.h       \
