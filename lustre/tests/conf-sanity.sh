@@ -520,6 +520,8 @@ test_13() {
                        | sed "s/ /\n\r/g" | awk -F"'" '/uuid=/{print $2}'`
         FOUNDMDS2UUID=`awk -F"'" '/<mds .*uuid=/' $XMLCONFIG | sed -n '2p' \
                        | sed "s/ /\n\r/g" | awk -F"'" '/uuid=/{print $2}'`
+	[ -z "$FOUNDMDS1UUID" ] && echo "MDS1 UUID empty" && return 1
+	[ -z "$FOUNDMDS2UUID" ] && echo "MDS2 UUID empty" && return 1
         if ([ $EXPECTEDMDS1UUID = $FOUNDMDS1UUID ] && [ $EXPECTEDMDS2UUID = $FOUNDMDS2UUID ]) || \
            ([ $EXPECTEDMDS1UUID = $FOUNDMDS2UUID ] && [ $EXPECTEDMDS2UUID = $FOUNDMDS1UUID ]); then
                 echo "Success:long uuid truncated successfully and being unique."

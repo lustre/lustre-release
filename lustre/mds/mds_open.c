@@ -1294,7 +1294,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
                  * */
                 LTIME_S(iattr.ia_atime) = request_body->atime;
                 if ((LTIME_S(iattr.ia_atime) >
-                     LTIME_S(inode->i_atime) + MAX_ATIME_DIFF) ||
+                     LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
                     (iattr.ia_valid != 0 &&
                      LTIME_S(iattr.ia_atime) > LTIME_S(inode->i_atime)))
                         iattr.ia_valid |= ATTR_ATIME;

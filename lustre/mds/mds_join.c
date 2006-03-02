@@ -265,7 +265,7 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
 
         rc = mds_get_parents_children_locked(obd, mds, &join_rec->jr_fid,
                                              &de_tailparent, &head_fid,
-                                             &de_head, LCK_PW, rec->ur_name,
+                                             &de_head, LCK_EX, rec->ur_name,
                                              rec->ur_namelen, &de_tail,
                                              NULL, 0, NULL, dlm_handles,
                                              LCK_EX);
@@ -315,9 +315,9 @@ cleanup:
 
         if (dlm_handles[0].cookie != 0) {
                 if (rc)
-                        ldlm_lock_decref(&dlm_handles[0], LCK_PW);
+                        ldlm_lock_decref(&dlm_handles[0], LCK_EX);
                 else
-                        ptlrpc_save_lock(req, &dlm_handles[0], LCK_PW);
+                        ptlrpc_save_lock(req, &dlm_handles[0], LCK_EX);
         }
         if (de_tail)
                 l_dput(de_tail);

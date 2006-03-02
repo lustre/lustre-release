@@ -41,23 +41,23 @@
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as mds_server_data so we might one day merge. */
 struct filter_server_data {
-        __u8  fsd_uuid[40];        /* server UUID */
-        __u64 fsd_last_transno_new;/* future last completed transaction ID */
-        __u64 fsd_last_transno;    /* last completed transaction ID */
+/* 00*/ __u8  fsd_uuid[40];        /* server UUID */
+/* 28*/ __u64 fsd_last_transno_new;/* future last completed transaction ID */
+/* 30*/ __u64 fsd_last_transno;    /* last completed transaction ID */
         __u64 fsd_mount_count;     /* FILTER incarnation number */
-        __u32 fsd_feature_compat;  /* compatible feature flags */
+/* 40*/ __u32 fsd_feature_compat;  /* compatible feature flags */
         __u32 fsd_feature_rocompat;/* read-only compatible feature flags */
         __u32 fsd_feature_incompat;/* incompatible feature flags */
         __u32 fsd_server_size;     /* size of server data area */
-        __u32 fsd_client_start;    /* start of per-client data area */
+/* 50*/ __u32 fsd_client_start;    /* start of per-client data area */
         __u16 fsd_client_size;     /* size of per-client data area */
         __u16 fsd_subdir_count;    /* number of subdirectories for objects */
         __u64 fsd_catalog_oid;     /* recovery catalog object id */
-        __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
+/* 60*/ __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
         __u8  fsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u32 fsd_ost_index;       /* index number of OST in LOV */
+/* 8c*/ __u32 fsd_ost_index;       /* index number of OST in LOV */
         __u32 fsd_mds_index;       /* index number of MDS in LMV */
-        __u8  fsd_padding[LR_SERVER_SIZE - 148];
+/* 94*/ __u8  fsd_padding[LR_SERVER_SIZE - 148];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */

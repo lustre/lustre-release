@@ -179,23 +179,23 @@ run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 
 # Bug 113, check that readdir lost recv timeout works.
 test_13() {
-    mkdir /mnt/lustre/readdir || return 1
-    touch /mnt/lustre/readdir/newentry || return
+    mkdir $MOUNT/readdir || return 1
+    touch $MOUNT/readdir/newentry || return
 # OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
     do_facet mds "sysctl -w lustre.fail_loc=0x80000104"
-    ls /mnt/lustre/readdir || return 3
+    ls $MOUNT/readdir || return 3
     do_facet mds "sysctl -w lustre.fail_loc=0"
-    rm -rf /mnt/lustre/readdir || return 4
+    rm -rf $MOUNT/readdir || return 4
 }
 run_test 13 "mdc_readpage restart test (bug 1138)"
 
 # Bug 113, check that readdir lost send timeout works.
 test_14() {
-    mkdir /mnt/lustre/readdir
-    touch /mnt/lustre/readdir/newentry
+    mkdir $MOUNT/readdir
+    touch $MOUNT/readdir/newentry
 # OBD_FAIL_MDS_SENDPAGE|OBD_FAIL_ONCE
     do_facet mds "sysctl -w lustre.fail_loc=0x80000106"
-    ls /mnt/lustre/readdir || return 1
+    ls $MOUNT/readdir || return 1
     do_facet mds "sysctl -w lustre.fail_loc=0"
 }
 run_test 14 "mdc_readpage resend test (bug 1138)"

@@ -1819,6 +1819,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
+        mds->mds_atime_diff = MAX_ATIME_DIFF;
 
         sprintf(ns_name, "mds-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);

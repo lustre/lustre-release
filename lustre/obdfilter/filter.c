@@ -1744,19 +1744,19 @@ static int filter_connect_internal(struct obd_export *exp,
                 struct filter_obd *filter = &exp->exp_obd->u.filter;
                 struct filter_server_data *fsd = filter->fo_fsd;
                 int index = le32_to_cpu(fsd->fsd_ost_index);
-                
+
                 if (!(fsd->fsd_feature_compat &
                       cpu_to_le32(OBD_COMPAT_OST))) {
                         /* this will only happen on the first connect */
-                        fsd->fsd_ost_index = le32_to_cpu(data->ocd_index);
+                        fsd->fsd_ost_index = cpu_to_le32(data->ocd_index);
                         fsd->fsd_feature_compat |= cpu_to_le32(OBD_COMPAT_OST);
-                        filter_update_server_data(exp->exp_obd, 
+                        filter_update_server_data(exp->exp_obd,
                                                   filter->fo_rcvd_filp, fsd, 1);
                 } else if (index != data->ocd_index) {
                         LCONSOLE_ERROR("Connection from %s to index "
                                        "%u doesn't match actual OST "
                                        "index %u, bad configuration?\n",
-                                       obd_export_nid2str(exp), index, 
+                                       obd_export_nid2str(exp), index,
                                        data->ocd_index);
                         RETURN(-EBADF);
                 }

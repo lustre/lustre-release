@@ -394,6 +394,7 @@ struct mds_obd {
         __u64                            mds_last_transno;
         __u64                            mds_mount_count;
         __u64                            mds_io_epoch;
+        unsigned long                    mds_atime_diff;
         struct semaphore                 mds_epoch_sem;
         struct ll_fid                    mds_rootfid;
         struct mds_server_data          *mds_server_data;

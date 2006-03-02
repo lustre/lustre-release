@@ -196,7 +196,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if (err)
                 GOTO(out_mdc, err);
 
-        /* async connect is surely finished by now */
+        /* MDC connect is surely finished by now */
         *data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
 
         LASSERT(osfs.os_bsize);
@@ -1618,10 +1618,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
                                  &attr, NULL, 0, NULL, 0, &req);
-                if (rc) {
+                if (rc || lsm == NULL) {
                         ptlrpc_req_finished(req);
-                        if (rc != -EPERM && rc != -EACCES)
-                                CERROR("mdc_setattr fails: rc = %d\n", rc);
                         obdo_free(oa);
                         RETURN(rc);
                 }

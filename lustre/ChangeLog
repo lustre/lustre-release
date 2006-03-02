@@ -12,6 +12,13 @@
 
 
 Severity   : enhancement
+Bugzilla   : 9461
+Description: Implement 'lfs df' to report actual free space on per-OST basis
+Details    : Add sub-command 'df' on 'lfs' to report the disk space usage of
+	     MDS/OSDs. Usage: lfs df [-i][-h]. Command Options: '-i' to report
+	     usage of objects; '-h' to report in human readable format.
+
+Severity   : enhancement
 Bugzilla   : 7981/8208
 Description: Introduced Lustre Networking (LNET)
 Details    : LNET is new networking infrastructure for Lustre, it includes
