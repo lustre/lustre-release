@@ -1,7 +1,6 @@
 #ifndef _LUSTRE_LINUX_TYPES_H
 #define _LUSTRE_LINUX_TYPES_H
 
-
 #if (!defined(_LINUX_TYPES_H) && !defined(_BLKID_TYPES_H) && \
      !defined(_EXT2_TYPES_H) && !defined(_I386_TYPES_H) && \
      !defined(_X86_64_TYPES_H))

@@ -6,10 +6,10 @@
 
 SUBDIRS = linux lustre
 
-linuxdir = $(includedir)
+lustredir = $(includedir)
 
 if UTILS
-linux_HEADERS = lustre_idl.h
+lustre_HEADERS = lustre_idl.h
 endif
 
 EXTRA_DIST = ioctl.h liblustre.h lprocfs_status.h lustre_cfg.h \

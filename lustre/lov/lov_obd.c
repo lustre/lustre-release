@@ -922,7 +922,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                  RETURN(rc);
         }
 
-        maxage = jiffies - lov->desc.ld_qos_maxage * HZ;
+        maxage = cfs_time_shift(-lov->desc.ld_qos_maxage);
         obd_statfs(exp->exp_obd, &osfs, maxage);
 
         rc = lov_prep_create_set(exp, ea, src_oa, oti, &set);
