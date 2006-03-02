@@ -915,15 +915,15 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
 
-        maxage = jiffies - lov->desc.ld_qos_maxage * HZ;
-        obd_statfs(exp->exp_obd, &osfs, maxage);
-
         /* Recreate a specific object id at the given OST index */
         if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
             (src_oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                  rc = lov_recreate(exp, src_oa, ea, oti);
                  RETURN(rc);
         }
+
+        maxage = jiffies - lov->desc.ld_qos_maxage * HZ;
+        obd_statfs(exp->exp_obd, &osfs, maxage);
 
         rc = lov_prep_create_set(exp, ea, src_oa, oti, &set);
         if (rc)

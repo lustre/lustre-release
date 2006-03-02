@@ -84,19 +84,21 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
         int stripe, i, rc = -EIO;
         ENTRY;
 
-        ost_idx = (req->rq_idx + 1) % ost_count; 
+        ost_idx = (req->rq_idx + lsm->lsm_stripe_count) % ost_count;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 if (lov->tgts[ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
                         continue;
                 }
                 /* check if objects has been created on this ost */
-                for (stripe = req->rq_stripe; stripe >= 0; stripe--) {
+                for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
+                        if (stripe == req->rq_stripe)
+                                continue;
                         if (ost_idx == lsm->lsm_oinfo[stripe].loi_ost_idx)
                                 break;
                 }
 
-                if (stripe < 0) {
+                if (stripe >= lsm->lsm_stripe_count) {
                         req->rq_idx = ost_idx;
                         rc = obd_create(lov->tgts[ost_idx].ltd_exp, req->rq_oa, 
                                         &req->rq_md, set->set_oti);
@@ -119,7 +121,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
         ENTRY;
         
         if (--ost_start_count <= 0) {
-                ost_start_idx = ll_insecure_random_int();
+                ost_start_idx = ll_rand();
                 ost_start_count = 
                         (LOV_CREATE_RESEED_MIN / max(ost_active_count, 1U) +
                          LOV_CREATE_RESEED_MULT) * max(ost_active_count, 1U);
@@ -291,10 +293,10 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         /* search enough OSTs with free space weighted random allocation */
         while (nfound < *stripe_cnt) {
                 cur_bavail = 0;
-                
-                get_random_bytes(&rand, sizeof(rand));
+
+                rand = (shift < 32 ? 0ULL : (__u64)ll_rand() << 32) | ll_rand();
                 if (shift < 64)
-                        rand &= ((1 << shift) - 1);
+                        rand &= ((1ULL << shift) - 1);
                 while (rand > total_bavail)
                         rand -= total_bavail;
                 
