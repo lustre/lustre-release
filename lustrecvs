@@ -59,7 +59,9 @@ case "$lustretag" in
     v1_2_8|v1_4_0) 
         buildtag="HEAD"
         ;;
-        
+    
+    b_release_1_4_6-patchless) buildtag=b_release_1_4_6 ;;
+
     v* | b_release*) buildtag=$lustretag ;;
 
     # this is the branch table
