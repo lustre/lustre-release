@@ -4,7 +4,7 @@
 # customize per survey
 
 # the SCSI devices to measure
-scsidevs="/dev/sde /dev/sdh"
+#scsidevs="/dev/sde /dev/sdh"
 
 # result file prefix.  date/time+hostname makes unique
 # NB ensure the path exists if it includes subdirs
