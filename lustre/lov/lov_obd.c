@@ -1526,11 +1526,19 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         ENTRY;
 
         if (!page) {
-                while (!lov->tgts[rc].ltd_exp) 
-                        rc++;
-                return size_round(sizeof(*lap)) +
-                       obd_prep_async_page(lov->tgts[rc].ltd_exp, NULL, NULL,
-                                           NULL, 0, NULL, NULL, NULL);
+                int i = 0;
+                /* Find an existing osc so we can get it's stupid sizeof(*oap).
+                   Only because of this layering limitation will a client 
+                   mount with no osts fail */
+                while (!lov->tgts[i].ltd_exp) {
+                        i++;
+                        if (i >= lov->desc.ld_tgt_count) 
+                                RETURN(-ENOTBLK);
+                }
+                rc = size_round(sizeof(*lap)) +
+                        obd_prep_async_page(lov->tgts[i].ltd_exp, NULL, NULL,
+                                            NULL, 0, NULL, NULL, NULL);
+                RETURN(rc);
         }
         ASSERT_LSM_MAGIC(lsm);
         LASSERT(loi == NULL);

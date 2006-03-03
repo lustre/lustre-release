@@ -242,11 +242,18 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
+        err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
+                                  0, NULL, NULL, NULL);
+        if (err < 0) {
+                LCONSOLE_ERROR("There are no OST's in this filesystem. "
+                               "There must be at least one active OST for "
+                               "a client to start.\n");
+                GOTO(out_osc, err);
+        }
+
         if (!ll_async_page_slab) {
                 ll_async_page_slab_size =
-                        size_round(sizeof(struct ll_async_page)) +
-                        obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
-                                            0, NULL, NULL, NULL);
+                        size_round(sizeof(struct ll_async_page)) + err;
                 ll_async_page_slab = kmem_cache_create("ll_async_page",
                                                        ll_async_page_slab_size,
                                                        0, 0, NULL, NULL);
