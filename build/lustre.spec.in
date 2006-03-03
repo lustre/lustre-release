@@ -134,9 +134,8 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
 fi
 
 # Have universal lustre headers 
-if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/lustre_idl.h ] ; then
-  echo '%attr(-, root, root) /usr/include/lustre_idl.h' >>lustre.files
-  echo '%attr(-, root, root) /usr/include/linux/lustre_idl.h' >>lustre.files
+if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/lustre/lustre_idl.h ] ; then
+  echo '%attr(-, root, root) /usr/include/lustre/lustre_idl.h' >>lustre.files
   echo '%attr(-, root, root) /usr/include/linux/lustre_types.h' >>lustre.files
   echo '%attr(-, root, root) /usr/include/linux/lustre_user.h' >>lustre.files
 else
