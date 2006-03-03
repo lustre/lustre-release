@@ -36,7 +36,7 @@
 #include <libcfs/kp30.h>
 // #include <obd.h>
 #include <lnet/lnet.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_ha.h>
 #include <lustre_import.h>
 #include <lprocfs_status.h>

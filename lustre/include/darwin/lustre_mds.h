@@ -17,10 +17,6 @@
  *   You should have received a copy of the GNU General Public License
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * MDS data structures.
- * See also lustre_idl.h for wire formats of requests.
- *
  */
 
 #ifndef _DARWIN_LUSTRE_MDS_H

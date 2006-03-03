@@ -34,7 +34,7 @@
 #include <obd_class.h>
 #include <obd.h>
 #include <lustre_lib.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_mds.h>
 #include <lustre_dlm.h>
 #include <lustre_log.h>

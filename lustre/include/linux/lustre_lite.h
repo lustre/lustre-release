@@ -69,7 +69,7 @@ enum {
 };
 
 #else
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #endif /* __KERNEL__ */
 
 #endif

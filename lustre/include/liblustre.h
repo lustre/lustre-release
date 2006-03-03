@@ -875,7 +875,7 @@ void posix_acl_release(struct posix_acl *acl)
 #endif
 
 #include <obd_support.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_import.h>
 #include <lustre_export.h>

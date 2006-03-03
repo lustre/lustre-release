@@ -14,7 +14,7 @@
 #error Unsupported operating system.
 #endif
 
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_net.h>
 #include <lvfs.h>
 

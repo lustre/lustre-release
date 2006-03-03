@@ -6,7 +6,7 @@
 #define __IMPORT_H
 
 #include <lustre_handles.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 
 enum lustre_imp_state {
         LUSTRE_IMP_CLOSED     = 1,

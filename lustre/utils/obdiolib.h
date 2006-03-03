@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 
 #include <lustre_lib.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <obd_class.h>
 
 struct obdio_conn {

@@ -93,17 +93,20 @@ int obd_ioctl_popdata(void *arg, void *data, int len)
 {
 	/* 
 	 * Xnu ioctl copyout(uaddr, arg, sizeof(struct obd_ioctl_data)),
-	 * we have to copy out data by ourself only if 
-	 * len > sizeof(struct obd_ioctl_data)
+	 * we have to copyout data exceed sizeof(struct obd_ioctl_data)
+	 * by ourself.
 	 */
 	if (len <= sizeof(struct obd_ioctl_data)) {
 		memcpy(arg, data, len);
 		return 0;
 	} else {
+		int err;
 		struct obd_ioctl_data *u = (struct obd_ioctl_data *)arg;
 		struct obd_ioctl_data *k = (struct obd_ioctl_data *)data;
-		return copy_to_user((void *)u->ioc_inlbuf1, &k->ioc_bulk[0],
+		err = copy_to_user((void *)u->ioc_inlbuf1, &k->ioc_bulk[0],
 				    len -((void *)&k->ioc_bulk[0] -(void *)k));
+		memcpy(arg, data, sizeof(struct obd_ioctl_data));
+		return err;
 	}
 }
 /*

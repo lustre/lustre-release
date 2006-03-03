@@ -36,7 +36,7 @@
 #include <liblustre.h>
 #else
 #include <obd_class.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #endif
 
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)

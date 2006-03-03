@@ -1,6 +1,23 @@
 #ifndef _LUSTRE_LINUX_TYPES_H
 #define _LUSTRE_LINUX_TYPES_H
 
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#endif
+
+#ifdef __KERNEL__
+# include <linux/types.h>
+# include <linux/fs.h>    /* to check for FMODE_EXEC, dev_t, lest we redefine */
+#else
+#ifdef __CYGWIN__
+# include <sys/types.h>
+#elif defined(_AIX)
+# include <inttypes.h>
+#else
+# include <stdint.h>
+#endif
+#endif
+
 #if (!defined(_LINUX_TYPES_H) && !defined(_BLKID_TYPES_H) && \
      !defined(_EXT2_TYPES_H) && !defined(_I386_TYPES_H) && \
      !defined(_X86_64_TYPES_H))

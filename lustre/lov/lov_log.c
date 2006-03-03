@@ -38,7 +38,7 @@
 #include <obd_support.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
 #include <lustre_mds.h>
 #include <obd_class.h>

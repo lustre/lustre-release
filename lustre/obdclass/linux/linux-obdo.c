@@ -37,7 +37,7 @@
 #else
 #include <linux/module.h>
 #include <obd_class.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #endif
 
 #ifdef __KERNEL__

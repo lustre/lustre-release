@@ -35,7 +35,7 @@
 #endif
 #include <lustre_lib.h>
 #include <lustre_cfg.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
 #include <obd.h>          /* for struct lov_stripe_md */
 #include <obd_lov.h>

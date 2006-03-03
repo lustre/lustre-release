@@ -28,7 +28,7 @@
 #define IOC_MDC_MAX_NR       50
 
 #include <lustre_lib.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_export.h>
 #include <lustre_quota.h>
 

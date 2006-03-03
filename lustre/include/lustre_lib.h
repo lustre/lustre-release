@@ -26,7 +26,7 @@
 #define _LUSTRE_LIB_H
 
 #include <libcfs/kp30.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_cfg.h>
 #if defined(__linux__)
 #include <linux/lustre_lib.h>
@@ -398,7 +398,23 @@ static inline void obd_ioctl_freedata(char *buf, int len)
         return;
 }
 
-#define OBD_IOC_CREATE                 _IOR ('f', 101, OBD_IOC_DATA_TYPE)
+/*
+ * BSD ioctl description:
+ * #define IOC_V1       _IOR(g, n1, long)
+ * #define IOC_V2       _IOW(g, n2, long)
+ *
+ * ioctl(f, IOC_V1, arg);
+ * arg will be treated as a long value,
+ *
+ * ioctl(f, IOC_V2, arg)
+ * arg will be treated as a pointer, bsd will call
+ * copyin(buf, arg, sizeof(long))
+ *
+ * To make BSD ioctl handles argument correctly and simplely, 
+ * we change _IOR to _IOWR so BSD will copyin obd_ioctl_data 
+ * for us. Does this change affect Linux?  (XXX Liang)
+ */
+#define OBD_IOC_CREATE                 _IOWR('f', 101, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_DESTROY                _IOW ('f', 104, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PREALLOCATE            _IOWR('f', 105, OBD_IOC_DATA_TYPE)
 
@@ -422,7 +438,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 126, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 127, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_GETNAME                _IOR ('f', 131, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GETNAME                _IOWR('f', 131, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, OBD_IOC_DATA_TYPE)
@@ -581,10 +597,6 @@ struct l_wait_info {
 })
 
 #define LWI_INTR(cb, data)  LWI_TIMEOUT_INTR(0, NULL, cb, data)
-
-#define LUSTRE_FATAL_SIGS (sigmask(SIGKILL) | sigmask(SIGINT) |                \
-                           sigmask(SIGTERM) | sigmask(SIGQUIT) |               \
-                           sigmask(SIGALRM))
 
 #ifdef __KERNEL__
 
