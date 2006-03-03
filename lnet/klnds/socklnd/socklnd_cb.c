@@ -1873,7 +1873,7 @@ ksocknal_connd (void *arg)
 }
 
 ksock_conn_t *
-ksocknal_find_timed_out_conn (ksock_peer_t *peer) 
+ksocknal_find_timed_out_conn (ksock_peer_t *peer)
 {
         /* We're called with a shared lock on ksnd_global_lock */
         ksock_conn_t      *conn;
@@ -1883,10 +1883,10 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                 int     error;
                 conn = list_entry (ctmp, ksock_conn_t, ksnc_list);
 
-                /* Don't need the {get,put}connsock dance to deref ksnc_sock... */
+                /* Don't need the {get,put}connsock dance to deref ksnc_sock */
                 LASSERT (!conn->ksnc_closing);
 
-                /* SOCK_ERROR will reset error code of socket in 
+                /* SOCK_ERROR will reset error code of socket in
                  * some platform (like Darwin8.x) */
                 error = SOCK_ERROR(conn->ksnc_sock);
                 if (error != 0) {
@@ -1894,64 +1894,61 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
 
                         switch (error) {
                         case ECONNRESET:
-                                LCONSOLE_WARN("A connection with %u.%u.%u.%u "
-                                              "was reset; they may have "
-                                              "rebooted.\n",
-                                              HIPQUAD(conn->ksnc_ipaddr));
+                                LCONSOLE_WARN("A connection with %s "
+                                              "(%u.%u.%u.%u:%d) was reset; "
+                                              "it may have rebooted.\n",
+                                              libcfs_id2str(peer->ksnp_id),
+                                              HIPQUAD(conn->ksnc_ipaddr),
+                                              conn->ksnc_port);
                                 break;
                         case ETIMEDOUT:
-                                LCONSOLE_WARN("A connection with %u.%u.%u.%u "
-                                              "timed out; the network or that "
-                                              "node may be down.\n",
-                                              HIPQUAD(conn->ksnc_ipaddr));
+                                LCONSOLE_WARN("A connection with %s "
+                                              "(%u.%u.%u.%u:%d) timed out; the "
+                                              "network or node may be down.\n",
+                                              libcfs_id2str(peer->ksnp_id),
+                                              HIPQUAD(conn->ksnc_ipaddr),
+                                              conn->ksnc_port);
                                 break;
                         default:
-                                LCONSOLE_WARN("An unexpected network error "
-                                              "occurred with %u.%u.%u.%u: %d\n",
+                                LCONSOLE_WARN("An unexpected network error %d "
+                                              "occurred with %s "
+                                              "(%u.%u.%u.%u:%d\n", error,
+                                              libcfs_id2str(peer->ksnp_id),
                                               HIPQUAD(conn->ksnc_ipaddr),
-                                              error);
+                                              conn->ksnc_port);
                                 break;
                         }
-
-                        /* Something (e.g. failed keepalive) set the socket error */
-                        CDEBUG(D_HA, "Socket error %d: %s %p %d.%d.%d.%d\n",
-                                error, libcfs_id2str(peer->ksnp_id),
-                                conn, HIPQUAD(conn->ksnc_ipaddr));
 
                         return (conn);
                 }
 
                 if (conn->ksnc_rx_started &&
-                    cfs_time_aftereq (cfs_time_current(), 
-                                      conn->ksnc_rx_deadline)) {
+                    cfs_time_aftereq(cfs_time_current(),
+                                     conn->ksnc_rx_deadline)) {
                         /* Timed out incomplete incoming message */
                         ksocknal_conn_addref(conn);
-                        LCONSOLE_ERROR("A timeout occurred receiving data from "
-                                       "%u.%u.%u.%u; the network or that node "
-                                       "may be down.\n",
-                                       HIPQUAD(conn->ksnc_ipaddr));
-                        CERROR ("Timed out RX from %s %p %d.%d.%d.%d\n",
-                                libcfs_id2str(peer->ksnp_id),
-                                conn, HIPQUAD(conn->ksnc_ipaddr));
+                        LCONSOLE_ERROR("A timeout occurred receiving from %s "
+                                       "(%u.%u.%u.%u:%d) the network or that "
+                                       "node may be down.\n",
+                                       libcfs_id2str(peer->ksnp_id),
+                                       HIPQUAD(conn->ksnc_ipaddr),
+                                       conn->ksnc_port);
                         return (conn);
                 }
 
-                if ((!list_empty (&conn->ksnc_tx_queue) ||
+                if ((!list_empty(&conn->ksnc_tx_queue) ||
                      SOCK_WMEM_QUEUED(conn->ksnc_sock) != 0) &&
-                    cfs_time_aftereq (cfs_time_current(), 
-                                      conn->ksnc_tx_deadline)) {
+                    cfs_time_aftereq(cfs_time_current(),
+                                     conn->ksnc_tx_deadline)) {
                         /* Timed out messages queued for sending or
                          * buffered in the socket's send buffer */
                         ksocknal_conn_addref(conn);
-                        LCONSOLE_ERROR("A timeout occurred sending data to "
-                                       "%u.%u.%u.%u; the network or that node "
-                                       "may be down.\n",
-                                       HIPQUAD(conn->ksnc_ipaddr));
-                        CERROR ("Timed out TX to %s %s%d %p %d.%d.%d.%d\n",
-                                libcfs_id2str(peer->ksnp_id),
-                                list_empty (&conn->ksnc_tx_queue) ? "" : "Q ",
-                                SOCK_WMEM_QUEUED(conn->ksnc_sock), conn,
-                                HIPQUAD(conn->ksnc_ipaddr));
+                        LCONSOLE_ERROR("A timeout occurred sending data to %s "
+                                       "(%u.%u.%u.%u:%d) the network or that "
+                                       "node may be down.\n",
+                                       libcfs_id2str(peer->ksnp_id),
+                                       HIPQUAD(conn->ksnc_ipaddr),
+                                       conn->ksnc_port);
                         return (conn);
                 }
         }
@@ -1976,16 +1973,12 @@ ksocknal_check_peer_timeouts (int idx)
         list_for_each (ptmp, peers) {
                 peer = list_entry (ptmp, ksock_peer_t, ksnp_list);
                 conn = ksocknal_find_timed_out_conn (peer);
-                
+
                 if (conn != NULL) {
                         read_unlock (&ksocknal_data.ksnd_global_lock);
 
-                        CERROR ("Timeout out conn->%s ip %d.%d.%d.%d:%d\n",
-                                libcfs_id2str(peer->ksnp_id),
-                                HIPQUAD(conn->ksnc_ipaddr),
-                                conn->ksnc_port);
                         ksocknal_close_conn_and_siblings (conn, -ETIMEDOUT);
-                        
+
                         /* NB we won't find this one again, but we can't
                          * just proceed with the next peer, since we dropped
                          * ksnd_global_lock and it might be dead already! */
