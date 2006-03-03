@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+
+<scamodule>
+	<build>
+		<step type="setup.py" />
+	</build>
+
+	<packaging>
+		<package />
+	</packaging>
+</scamodule>

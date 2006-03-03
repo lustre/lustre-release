@@ -1,0 +1,72 @@
+Lustre IO-Kit is a collection of benchmark-tools for a cluster with
+the lustre filesystem.
+
+Currently only a Object Block Device-survey are included, but the kit may
+be extended with blockdevice- and filesystem- survey in the future.
+
+Copyright (c) 2005 Scali AS. All Rights Reserved.
+
+= Prerequisites
+
+- python2.2 or newer, available at /usr/bin/python2
+- the "logging"-module from python2.3
+- Passwordless remote access to nodes in the system, through
+  ScaSH (The Scali parallel shell) or SSH.
+
+
+= Interfaces
+
+Two interfaces to OBD-survey; a python library interface and a command 
+line interface.
+
+The python library interface is documented in pydoc. Use 
+"pydoc lustre_obdsurveylib" for information about the interface.
+
+The command line interface is accessed through the "lustre_obdsurvey" 
+application. Running the application with "--help" will list the 
+various options.
+
+lustre_obdsurvey implements 3 seperate test-modes:
+
+- Disk IO
+
+This testmode will set up a echo_client connected to existing obdfilters, 
+and test the local disk-io performance on the fileservers. You need to list
+the names of the obdfilters you wish to test, and what nodes they are on, 
+like this:
+    lustre_obdsurvey --diskio server1:test_ost00 server2:test_ost01 ....
+
+- Network IO
+
+This testmode will set up pairs of obdecho and echo_clients, to test the 
+network bandwith between pairs of nodes in the cluster. You need to list the
+pairs of nodes to test, like this:
+    lustre_obdsurvey --networkio server1:client1 server2:client2 ....
+
+- Remote Disk IO
+
+This testmode will set up a echo_client that accesses a remote obdfilter-
+device, basically combining the two previous tests. The test assumes that the
+client already have a OSC-device configured for the remote obdfilter. You
+need to specify the names of the osc-devices and the nodes they are on like 
+this:
+    lustre_obdsurvey --networkdiskio client1:osc_server1_ost00 client2:osc_server2_ost00 ...
+
+
+lustre_obdsurvey will then run a benchmark in parallel across all listed
+devices, and list the results. The following options apply to all test-modes:
+
+--pagesize=PAGESIZE: Set the pagesize for your nodes. Defaults to 4 KB.
+
+--size=SIZE: Set the size of the dataset to use for the tests. Defaults to 100 MB.
+    Make sure the size of the dataset is larger than the cache of your storage-devices.
+
+--minrecordsize=MINRECORDSIZE
+--maxrecordsize=MAXRECORDSIZE
+    Test performance with recordsizes in the range [MINRECORDSIZE, MAXRECORDSIZE]. By
+    default only 1 MB recordsizes are used.
+
+--minthreads=MINTHREADS
+--maxthreads=MAXTHREADS
+    Test performance with [MINTHREADS, MAXTHREADS] number of threads for each client.
+    By default the range [1, 16] is tested.
