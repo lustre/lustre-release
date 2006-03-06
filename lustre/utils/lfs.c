@@ -1302,6 +1302,8 @@ static void print_lov_quota(char *mnt, struct if_quotactl *qctl)
         for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++) {
                 memcpy(&qctl->obd_uuid, uuidp, sizeof(*uuidp));
 
+                /* XXX clear this flag to get quota from osts */
+                qctl->qc_dqblk.dqb_valid = 0;
                 rc = llapi_quotactl(mnt, qctl);
                 if (rc) {
                         fprintf(stderr, "%s quotactl failed: %s\n",
