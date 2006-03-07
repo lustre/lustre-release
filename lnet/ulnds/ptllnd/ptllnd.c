@@ -499,7 +499,7 @@ const char *ptllnd_evtype2str(int type)
 #undef DO_TYPE
 }
 
-const char *get_msg_type_string(int type)
+const char *ptllnd_msgtype2str(int type)
 {
 #define DO_TYPE(x) case x: return #x;
         switch(type)

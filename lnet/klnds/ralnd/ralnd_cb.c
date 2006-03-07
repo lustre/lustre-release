@@ -742,11 +742,12 @@ kranal_reply(lnet_ni_t *ni, kra_conn_t *conn, lnet_msg_t *lntmsg)
                 goto failed_1;
 
         tx->tx_conn = conn;
-        tx->tx_lntmsg[0] = lntmsg;
 
         rc = kranal_map_buffer(tx);
         if (rc != 0)
                 goto failed_1;
+
+        tx->tx_lntmsg[0] = lntmsg;
 
         kranal_rdma(tx, RANAL_MSG_GET_DONE,
                     &rxmsg->ram_u.get.ragm_desc, nob,

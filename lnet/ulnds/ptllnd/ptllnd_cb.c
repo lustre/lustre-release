@@ -798,11 +798,11 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
 
         LASSERT (msg->msg_niov <= PTL_MD_MAX_IOV); /* !!! */
 
-        CDEBUG(D_NET, "msg=%p nid=%s\n",msg,libcfs_nid2str(msg->msg_target.nid));
-        CDEBUG(D_NET, "is_target_router=%d\n",msg->msg_target_is_router);
-        CDEBUG(D_NET, "msg_niov=%d\n",msg->msg_niov);
-        CDEBUG(D_NET, "msg_offset=%d\n",msg->msg_offset);
-        CDEBUG(D_NET, "msg_len=%d\n",msg->msg_len);
+        CDEBUG(D_NET, "%s [%d]+%d,%d -> %s%s\n", 
+               lnet_msgtyp2str(msg->msg_type),
+               msg->msg_niov, msg->msg_offset, msg->msg_len,
+               libcfs_nid2str(msg->msg_target.nid),
+               msg->msg_target_is_router ? "(rtr)" : "");
 
         plp = ptllnd_find_peer(ni, msg->msg_target.nid, 1);
         if (plp == NULL)

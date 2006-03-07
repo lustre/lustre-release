@@ -448,8 +448,9 @@ kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         int           nob;
         int           rc;
 
-        CDEBUG(D_NET, "niov=%d offset=%d mlen=%d rlen=%d\n",
-                niov, offset, mlen, rlen);
+        CDEBUG(D_NET, "%s niov=%d offset=%d mlen=%d rlen=%d\n",
+               kptllnd_msgtype2str(rxmsg->ptlm_type),
+               niov, offset, mlen, rlen);
 
         LASSERT (mlen <= rlen);
         LASSERT (mlen >= 0);
@@ -479,7 +480,7 @@ kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 break;
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE %d,%d\n", mlen, rlen);
 
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[rlen]);
                 if (nob > rx->rx_nob) {
@@ -510,7 +511,7 @@ kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 break;
 
         case PTLLND_MSG_TYPE_GET:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_GET\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_GET %d,%d\n", mlen, rlen);
 
                 /* NB always send RDMA so the peer can complete.  I send
                  * success/failure in the portals 'hdr_data' */
@@ -530,7 +531,7 @@ kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 break;
 
         case PTLLND_MSG_TYPE_PUT:
-                CDEBUG(D_NET, "PTLLND_MSG_TYPE_PUT\n");
+                CDEBUG(D_NET, "PTLLND_MSG_TYPE_PUT %d,%d\n", mlen, rlen);
 
                 /* NB always send RDMA so the peer can complete; it'll be 0
                  * bytes if there was no match (lntmsg == NULL). I have no way
@@ -729,11 +730,10 @@ kptllnd_scheduler (void *arg)
                 if (did_something)
                         continue;
 
-                spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock, flags);
-
                 set_current_state(TASK_INTERRUPTIBLE);
                 add_wait_queue_exclusive(&kptllnd_data.kptl_sched_waitq,
                                          &waitlink);
+                spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock, flags);
 
                 schedule();
 

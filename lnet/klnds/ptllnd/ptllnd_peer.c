@@ -490,6 +490,8 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                         break;
                 }
 
+                list_del(&tx->tx_list);
+
                 /* Discard any NOOP I queued if I'm not at the high-water mark
                  * any more or more messages have been queued */
                 if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_NOOP &&
@@ -524,7 +526,6 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                 peer->peer_outstanding_credits = 0;
                 peer->peer_credits--;
 
-                list_del(&tx->tx_list);
                 list_add_tail(&tx->tx_list, &peer->peer_activeq);
 
                 kptllnd_tx_addref(tx);          /* 1 ref for me... */
@@ -612,7 +613,7 @@ kptllnd_peer_check_bucket (int idx)
         unsigned long      flags;
 
 
-        CDEBUG(D_INFO, "Bucket=%d\n", idx);
+        CDEBUG(D_NET, "Bucket=%d\n", idx);
 
  again:
         /* NB. Shared lock while I just look */
@@ -621,8 +622,9 @@ kptllnd_peer_check_bucket (int idx)
         list_for_each (ptmp, peers) {
                 peer = list_entry (ptmp, kptl_peer_t, peer_list);
 
-                CDEBUG(D_NET, "Peer=%p Credits=%d Outstanding=%d\n",
-                       peer, peer->peer_credits, peer->peer_outstanding_credits);
+                CDEBUG(D_NET, "Peer=%s Credits=%d Outstanding=%d\n",
+                       libcfs_nid2str(peer->peer_nid),
+                       peer->peer_credits, peer->peer_outstanding_credits);
 
                 /* In case we have enough credits to return via a
                  * NOOP, but there were no non-blocking tx descs
@@ -637,8 +639,10 @@ kptllnd_peer_check_bucket (int idx)
                 read_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock,
                                        flags);
 
-                CERROR("Timing out communications with %s\n",
-                       libcfs_nid2str(peer->peer_nid));
+                CERROR("Timing out communications with %s: "
+                       "cred %d outstanding %d \n",
+                       libcfs_nid2str(peer->peer_nid),
+                       peer->peer_credits, peer->peer_outstanding_credits);
 
                 kptllnd_peer_close(peer);
                 kptllnd_peer_decref(peer); /* ...until here */
@@ -734,18 +738,14 @@ kptllnd_peer_handle_hello (ptl_process_id_t  initiator,
                         if (peer->peer_next_matchbits < PTL_RESERVED_MATCHBITS)
                                 peer->peer_next_matchbits = PTL_RESERVED_MATCHBITS;
 
-                } else if (peer->peer_incarnation != msg->ptlm_srcstamp ||
-                           peer->peer_ptlid.pid != initiator.pid) {
-
-                        /* If the incarnation or PID have changed, assume the
-                         * peer has rebooted and resend the hello */
-
-                        CDEBUG(D_WARNING, "Peer %s reconnecting with pid,stamp: "
-                               "%d,"LPX64" (old %d,"LPX64"\n",
+                } else {
+                        CDEBUG(D_NET, "Peer %s reconnecting:"
+                               "pid,stamp %d,"LPX64" (old %d,"LPX64")\n",
                                libcfs_nid2str(peer->peer_nid),
                                initiator.pid, msg->ptlm_srcstamp,
-                               peer->peer_ptlid.pid, peer->peer_incarnation);
-
+                               peer->peer_ptlid.pid, 
+                               peer->peer_incarnation);
+                                
                         safe_matchbits_to_peer =
                                 peer->peer_last_matchbits_seen + 1 +
                                 *kptllnd_tunables.kptl_peercredits;
@@ -753,9 +753,6 @@ kptllnd_peer_handle_hello (ptl_process_id_t  initiator,
                         peer_to_cancel = peer;
                         peer = NULL;
 
-                } else {
-                        CERROR("Received HELLO from already connected peer %s\n",
-                               libcfs_nid2str(peer->peer_nid));
                 }
         }
 
