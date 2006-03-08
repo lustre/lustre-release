@@ -167,7 +167,7 @@ cfs_alloc_sysctl(struct sysctl_oid_list *parent, int nbr, int access,
         oid->oid_handler = handler;
         oid->oid_fmt = sfmt;
 
-        if (access & CTLTYPE_NODE != 0) {
+        if ((access & CTLTYPE) == CTLTYPE_NODE){
                 /* It's a sysctl node */
                 struct sysctl_oid_list *link;
 
@@ -334,6 +334,7 @@ cfs_sysctl_init(void)
                                LIBCFS_SYSCTL_MAGIC);
                         return -1;
                 }
+                assert(libcfs_sysctl_sprite.ss_link != NULL);
                 printf("libcfs: registered libcfs.sprite found.\n");
                 return 0;
         }
