@@ -1071,25 +1071,23 @@ lnet_startup_lndnis (void)
 #undef LNI_MASK
 
                 /* Handle nidstrings for network 0 just like this one */
-                if (the_lnet.ln_ptlcompat > 0)
+                if (the_lnet.ln_ptlcompat > 0) {
+                        if (nicount > 0) {
+                                LCONSOLE_ERROR("Can't run > 1 network when "
+                                               "portals_compatibility is set\n");
+                                goto failed;
+                        }
                         libcfs_setnet0alias(lnd->lnd_type);
-
+                }
+                
                 nicount++;
         }
 
-        if (nicount > 1) {
-                if (the_lnet.ln_eqwaitni != NULL) {
-                        lnd_type = the_lnet.ln_eqwaitni->ni_lnd->lnd_type;
-                        LCONSOLE_ERROR("LND %s can only run single-network\n",
-                                       libcfs_lnd2str(lnd_type));
-                        goto failed;
-                }
-
-                if (the_lnet.ln_ptlcompat != 0) {
-                        LCONSOLE_ERROR("Can't run > 1 network when "
-                                       "portals_compatibility is set\n");
-                        goto failed;
-                }
+        if (the_lnet.ln_eqwaitni != NULL && nicount > 1) {
+                lnd_type = the_lnet.ln_eqwaitni->ni_lnd->lnd_type;
+                LCONSOLE_ERROR("LND %s can only run single-network\n",
+                               libcfs_lnd2str(lnd_type));
+                goto failed;
         }
 
         return 0;
