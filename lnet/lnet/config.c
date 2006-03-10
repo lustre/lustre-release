@@ -980,7 +980,8 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
         return 1;
 }
 
-__u32 lnet_netspec2net(char *netspec)
+__u32 
+lnet_netspec2net(char *netspec)
 {
         char   *bracket = strchr(netspec, '(');
         __u32   net;
@@ -997,13 +998,96 @@ __u32 lnet_netspec2net(char *netspec)
 }
 
 int
+lnet_splitnets(char *source, struct list_head *nets)
+{
+        int               offset = 0;
+        int               offset2;
+        int               len;
+        lnet_text_buf_t  *tb;
+        lnet_text_buf_t  *tb2;
+        struct list_head *t;
+        char             *sep;
+        char             *bracket;
+        __u32             net;
+
+        LASSERT (!list_empty(nets));
+        LASSERT (nets->next == nets->prev);     /* single entry */
+        
+        tb = list_entry(nets->next, lnet_text_buf_t, ltb_list);
+
+        for (;;) {
+                sep = strchr(tb->ltb_text, ',');
+                bracket = strchr(tb->ltb_text, '(');
+
+                if (sep != NULL && 
+                    bracket != NULL && 
+                    bracket < sep) {
+                        /* netspec lists interfaces... */
+
+                        offset2 = offset + (bracket - tb->ltb_text);
+                        len = strlen(bracket);
+
+                        bracket = strchr(bracket + 1, ')');
+
+                        if (bracket == NULL ||
+                            !(bracket[1] == ',' || bracket[1] == 0)) {
+                                lnet_syntax("ip2nets", source, offset2, len);
+                                return -EINVAL;
+                        }
+
+                        sep = (bracket[1] == 0) ? NULL : bracket + 1;
+                }
+
+                if (sep != NULL)
+                        *sep++ = 0;
+
+                net = lnet_netspec2net(tb->ltb_text);
+                if (net == LNET_NIDNET(LNET_NID_ANY)) {
+                        lnet_syntax("ip2nets", source, offset,
+                                    strlen(tb->ltb_text));
+                        return -EINVAL;
+                }
+
+                list_for_each(t, nets) {
+                        tb2 = list_entry(t, lnet_text_buf_t, ltb_list);
+
+                        if (tb2 == tb)
+                                continue;
+                        
+                        if (net == lnet_netspec2net(tb2->ltb_text)) {
+                                /* duplicate network */
+                                lnet_syntax("ip2nets", source, offset,
+                                            strlen(tb->ltb_text));
+                                return -EINVAL;
+                        }
+                }
+                
+                if (sep == NULL)
+                        return 0;
+
+                offset += sep - tb->ltb_text;
+                tb2 = lnet_new_text_buf(strlen(sep));
+                if (tb2 == NULL)
+                        return -ENOMEM;
+                        
+                strcpy(tb2->ltb_text, sep);
+                list_add_tail(&tb2->ltb_list, nets);
+
+                tb = tb2;
+        }
+}
+
+int
 lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 {
         static char  networks[LNET_SINGLE_TEXTBUF_NOB];
+        static char  source[LNET_SINGLE_TEXTBUF_NOB];
 
-        struct list_head    raw;
-        struct list_head    matched;
+        struct list_head    raw_entries;
+        struct list_head    matched_nets;
+        struct list_head    current_nets;
         struct list_head   *t;
+        struct list_head   *t2;
         lnet_text_buf_t    *tb;
         lnet_text_buf_t    *tb2;
         __u32               net1;
@@ -1013,23 +1097,27 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
         int                 dup;
         int                 rc;
 
-        CFS_INIT_LIST_HEAD(&raw);
-        
-        if (lnet_str2tbs_sep(&raw, ip2nets) < 0) {
+        CFS_INIT_LIST_HEAD(&raw_entries);
+        if (lnet_str2tbs_sep(&raw_entries, ip2nets) < 0) {
                 CERROR("Error parsing ip2nets\n");
                 LASSERT (lnet_tbnob == 0);
                 return -EINVAL;
         }
 
-        CFS_INIT_LIST_HEAD(&matched);
+        CFS_INIT_LIST_HEAD(&matched_nets);
+        CFS_INIT_LIST_HEAD(&current_nets);
         networks[0] = 0;
         count = 0;
         len = 0;
         rc = 0;
 
-        while (!list_empty(&raw)) {
-                tb = list_entry(raw.next, lnet_text_buf_t, ltb_list);
-                        
+        while (!list_empty(&raw_entries)) {
+                tb = list_entry(raw_entries.next, lnet_text_buf_t, ltb_list);
+
+                strncpy(source, tb->ltb_text, sizeof(source)-1);
+                source[sizeof(source)-1] = 0;
+
+                /* replace ltb_text with the network(s) add on match */
                 rc = lnet_match_network_tokens(tb->ltb_text, ipaddrs, nip);
                 if (rc < 0)
                         break;
@@ -1041,45 +1129,63 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
                         continue;
                 }
 
-                dup = 0;
-                net1 = lnet_netspec2net(tb->ltb_text);
-                if (net1 == LNET_NIDNET(LNET_NID_ANY)) {
-                        lnet_syntax("ip2nets", tb->ltb_text,
-                                    0, strlen(tb->ltb_text));
-                        return -EINVAL;
-                }
-                
-                list_for_each(t, &matched) {
-                        tb2 = list_entry(t, lnet_text_buf_t, ltb_list);
-                        net2 = lnet_netspec2net(tb2->ltb_text);
+                /* split into separate networks */
+                CFS_INIT_LIST_HEAD(&current_nets);
+                list_add(&tb->ltb_list, &current_nets);
+                rc = lnet_splitnets(source, &current_nets);
+                if (rc < 0)
+                        break;
 
-                        if (net1 == net2) {
-                                dup = 1;
+                dup = 0;
+                list_for_each (t, &current_nets) {
+                        tb = list_entry(t, lnet_text_buf_t, ltb_list);
+                        net1 = lnet_netspec2net(tb->ltb_text);
+                        LASSERT (net1 != LNET_NIDNET(LNET_NID_ANY));
+
+                        list_for_each(t2, &matched_nets) {
+                                tb2 = list_entry(t2, lnet_text_buf_t, ltb_list);
+                                net2 = lnet_netspec2net(tb2->ltb_text);
+                                LASSERT (net2 != LNET_NIDNET(LNET_NID_ANY));
+
+                                if (net1 == net2) {
+                                        dup = 1;
+                                        break;
+                                }
+                        }
+
+                        if (dup)
                                 break;
+                }
+
+                if (dup) {
+                        lnet_free_text_bufs(&current_nets);
+                        continue;
+                }
+
+                list_for_each_safe(t, t2, &current_nets) {
+                        tb = list_entry(t, lnet_text_buf_t, ltb_list);
+                        
+                        list_del(&tb->ltb_list);
+                        list_add_tail(&tb->ltb_list, &matched_nets);
+
+                        len += snprintf(networks + len, sizeof(networks) - len,
+                                        "%s%s", (len == 0) ? "" : ",", 
+                                        tb->ltb_text);
+                
+                        if (len >= sizeof(networks)) {
+                                CERROR("Too many matched networks\n");
+                                rc = -E2BIG;
+                                goto out;
                         }
                 }
                 
-                if (dup) {
-                        lnet_free_text_buf(tb);
-                        continue;
-                }
-                
-                list_add_tail(&tb->ltb_list, &matched);
-
-                len += snprintf(networks + len, sizeof(networks) - len,
-                                "%s%s", (len == 0) ? "" : ",", tb->ltb_text);
-                
-                if (len >= sizeof(networks)) {
-                        CERROR("Too many matched networks\n");
-                        rc = -E2BIG;
-                        break;
-                }
-
                 count++;
         }
-        
-        lnet_free_text_bufs(&raw);
-        lnet_free_text_bufs(&matched);
+
+ out:
+        lnet_free_text_bufs(&raw_entries);
+        lnet_free_text_bufs(&matched_nets);
+        lnet_free_text_bufs(&current_nets);
         LASSERT (lnet_tbnob == 0);
 
         if (rc < 0)
