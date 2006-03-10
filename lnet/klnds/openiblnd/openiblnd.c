@@ -1526,7 +1526,7 @@ kibnal_get_ipoibidx(void)
         }
 
         LBUG();
-        return -1
+        return -1;
 }
 
 int
