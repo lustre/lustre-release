@@ -73,6 +73,7 @@
 
 
 /* defaults for modparams/tunables */
+#define IBNAL_IPIF_BASENAME          "ib"       /* IPoIB interface basename */
 #define IBNAL_N_CONND                4          /* # connection daemons */
 #define IBNAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry... */
 #define IBNAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this (seconds) */
@@ -118,6 +119,7 @@
 
 typedef struct
 {
+        char    **kib_ipif_basename;            /* IPoIB interface base name */
         int      *kib_n_connd;                  /* # connection daemons */
         int      *kib_min_reconnect_interval;   /* min connect retry seconds... */
         int      *kib_max_reconnect_interval;   /* max connect retry seconds */
@@ -186,6 +188,7 @@ typedef struct
         __u64             kib_next_tx_cookie;   /* RDMA completion cookie */
         spinlock_t        kib_tx_lock;          /* serialise */
 
+        int               kib_hca_idx;          /* my HCA number */
         struct ib_device *kib_device;           /* "the" device */
         struct ib_device_properties kib_device_props; /* its properties */
         int               kib_port;             /* port on the device */

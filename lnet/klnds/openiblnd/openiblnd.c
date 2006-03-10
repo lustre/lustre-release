@@ -1494,11 +1494,54 @@ kibnal_shutdown (lnet_ni_t *ni)
 }
 
 int
+kibnal_get_ipoibidx(void)
+{
+        /* NB single threaded! */
+        static struct ib_port_properties port_props;
+
+        int               ipoibidx = 0;
+        int               devidx;
+        int               port;
+        int               rc;
+        struct ib_device *device;
+
+        for (devidx = 0; devidx <= kibnal_data.kib_hca_idx; devidx++) {
+                device = ib_device_get_by_index(devidx);
+                
+                if (device == NULL) {
+                        CERROR("Can't get IB device %d\n", devidx);
+                        return -1;
+                }
+                
+                for (port = 1; port <= 2; port++) {
+                        if (devidx == kibnal_data.kib_hca_idx &&
+                            port == kibnal_data.kib_port)
+                                return ipoibidx;
+                        
+                        rc = ib_port_properties_get(device, port,
+                                                    &port_props);
+                        if (rc == 0)
+                                ipoibidx++;
+                }
+        }
+
+        LBUG();
+        return -1
+}
+
+int
 kibnal_startup (lnet_ni_t *ni)
 {
+        char              ipif_name[32];
+        __u32             ip;
+        __u32             netmask;
+        int               up;
         struct timeval    tv;
         int               rc;
+        int               hca;
+        int               port;
         int               i;
+        int               nob;
 
         LASSERT (ni->ni_lnd == &the_kiblnd);
 
@@ -1508,9 +1551,10 @@ kibnal_startup (lnet_ni_t *ni)
                 return -EPERM;
         }
 
-        if (lnet_set_ip_niaddr(ni) != 0) {
-                CERROR("Can't determine my NID\n");
-                return -EPERM;
+        if (IBNAL_CREDITS > IBNAL_NTX) {
+                CERROR ("Can't set credits(%d) > ntx(%d)\n",
+                        IBNAL_CREDITS, IBNAL_NTX);
+                return -EINVAL;
         }
         
         if (*kibnal_tunables.kib_credits > *kibnal_tunables.kib_ntx) {
@@ -1519,18 +1563,51 @@ kibnal_startup (lnet_ni_t *ni)
                         *kibnal_tunables.kib_ntx);
                 return -EINVAL;
         }
-        
+
+        memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
+
         ni->ni_maxtxcredits = *kibnal_tunables.kib_credits;
         ni->ni_peertxcredits = *kibnal_tunables.kib_peercredits;
 
-        PORTAL_MODULE_USE;
-        memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
+        CLASSERT (LNET_MAX_INTERFACES > 1);
 
+
+        kibnal_data.kib_hca_idx = 0;            /* default: first HCA */
+        kibnal_data.kib_port = 0;               /* any port */
+
+        if (ni->ni_interfaces[0] != NULL) {
+                /* hca.port specified in 'networks=openib(h.p)' */
+                if (ni->ni_interfaces[1] != NULL) {
+                        CERROR("Multiple interfaces not supported\n");
+                        return -EPERM;
+                }
+                
+                nob = strlen(ni->ni_interfaces[0]);
+                i = sscanf(ni->ni_interfaces[0], "%d.%d%n", &hca, &port, &nob);
+                if (i >= 2 && nob == strlen(ni->ni_interfaces[0])) {
+                        kibnal_data.kib_hca_idx = hca;
+                        kibnal_data.kib_port = port;
+                } else {
+                        nob = strlen(ni->ni_interfaces[0]);
+                        i = sscanf(ni->ni_interfaces[0], "%d%n", &hca, &nob);
+
+                        if (i >= 1 && nob == strlen(ni->ni_interfaces[0])) {
+                                kibnal_data.kib_hca_idx = hca;
+                        } else {
+                                CERROR("Can't parse interface '%s'\n",
+                                       ni->ni_interfaces[0]);
+                                return -EINVAL;
+                        }
+                }
+        }
+        
         kibnal_data.kib_ni = ni;
         ni->ni_data = &kibnal_data;
         
         do_gettimeofday(&tv);
         kibnal_data.kib_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+
+        PORTAL_MODULE_USE;
 
         rwlock_init(&kibnal_data.kib_global_lock);
 
@@ -1597,9 +1674,10 @@ kibnal_startup (lnet_ni_t *ni)
                 goto failed;
         }
 
-        kibnal_data.kib_device = ib_device_get_by_index(0);
+        kibnal_data.kib_device = ib_device_get_by_index(kibnal_data.kib_hca_idx);
         if (kibnal_data.kib_device == NULL) {
-                CERROR ("Can't open ib device 0\n");
+                CERROR ("Can't open ib device %d\n",
+                        kibnal_data.kib_hca_idx);
                 goto failed;
         }
         
@@ -1614,19 +1692,54 @@ kibnal_startup (lnet_ni_t *ni)
                kibnal_data.kib_device_props.max_initiator_per_qp,
                kibnal_data.kib_device_props.max_responder_per_qp);
 
-        kibnal_data.kib_port = 0;
-        for (i = 1; i <= 2; i++) {
-                rc = ib_port_properties_get(kibnal_data.kib_device, i,
+        if (kibnal_data.kib_port != 0) {
+                rc = ib_port_properties_get(kibnal_data.kib_device, 
+                                            kibnal_data.kib_port,
                                             &kibnal_data.kib_port_props);
-                if (rc == 0) {
-                        kibnal_data.kib_port = i;
-                        break;
+                if (rc != 0) {
+                        CERROR("Error %d open port %d on HCA %d\n", rc,
+                               kibnal_data.kib_port,
+                               kibnal_data.kib_hca_idx);
+                        goto failed;
+                }
+        } else {
+                for (i = 1; i <= 2; i++) {
+                        rc = ib_port_properties_get(kibnal_data.kib_device, i,
+                                                    &kibnal_data.kib_port_props);
+                        if (rc == 0) {
+                                kibnal_data.kib_port = i;
+                                break;
+                        }
+                }
+                if (kibnal_data.kib_port == 0) {
+                        CERROR ("Can't find a port\n");
+                        goto failed;
                 }
         }
-        if (kibnal_data.kib_port == 0) {
-                CERROR ("Can't find a port\n");
+
+        i = kibnal_get_ipoibidx();
+        if (i < 0)
+                goto failed;
+        
+        snprintf(ipif_name, sizeof(ipif_name), "%s%d",
+                 *kibnal_tunables.kib_ipif_basename, i);
+        if (strlen(ipif_name) == sizeof(ipif_name - 1)) {
+                CERROR("IPoIB interface name %s truncated\n", ipif_name);
+                return -EINVAL;
+        }
+        
+        rc = libcfs_ipif_query(ipif_name, &up, &ip, &netmask);
+        if (rc != 0) {
+                CERROR("Can't query IPoIB interface %s: %d\n", ipif_name, rc);
                 goto failed;
         }
+        
+        if (!up) {
+                CERROR("Can't query IPoIB interface %s: it's down\n", ipif_name);
+                goto failed;
+        }
+        
+        ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ip);
 
         rc = ib_pd_create(kibnal_data.kib_device,
                           NULL, &kibnal_data.kib_pd);

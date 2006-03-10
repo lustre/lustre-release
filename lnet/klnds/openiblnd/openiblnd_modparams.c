@@ -23,6 +23,10 @@
 
 #include "openiblnd.h"
 
+static char *ipif_basename = IBNAL_IPIF_BASENAME;
+CFS_MODULE_PARM(ipif_basename, "s", charp, 0444,
+                "IPoIB interface base name");
+
 static int n_connd = IBNAL_N_CONND;
 CFS_MODULE_PARM(n_connd, "i", int, 0444,
                 "# of connection daemons");
@@ -60,6 +64,7 @@ CFS_MODULE_PARM(peer_credits, "i", int, 0444,
 		"# concurrent sends to 1 peer");
 
 kib_tunables_t kibnal_tunables = {
+        .kib_ipif_basename          = &ipif_basename,
 	.kib_n_connd                = &n_connd,
         .kib_min_reconnect_interval = &min_reconnect_interval,
         .kib_max_reconnect_interval = &max_reconnect_interval,
@@ -74,23 +79,25 @@ kib_tunables_t kibnal_tunables = {
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 
 static ctl_table kibnal_ctl_table[] = {
-	{1, "n_connd", &n_connd, 
+	{1, "ipif_basename", &ipif_basename, 
+         1024, 0444, NULL, &proc_dostring},
+	{2, "n_connd", &n_connd, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{2, "min_reconnect_interval", &min_reconnect_interval, 
+	{3, "min_reconnect_interval", &min_reconnect_interval, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{3, "max_reconnect_interval", &max_reconnect_interval, 
+	{4, "max_reconnect_interval", &max_reconnect_interval, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{4, "concurrent_peers", &concurrent_peers, 
+	{5, "concurrent_peers", &concurrent_peers, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{5, "cksum", &cksum, 
+	{6, "cksum", &cksum, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{6, "timeout", &timeout, 
+	{7, "timeout", &timeout, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{7, "ntx", &ntx, 
+	{8, "ntx", &ntx, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{8, "credits", &credits, 
+	{9, "credits", &credits, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{9, "peer_credits", &peer_credits, 
+	{10, "peer_credits", &peer_credits, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{0}
 };
