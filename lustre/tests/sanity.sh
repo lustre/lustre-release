@@ -68,7 +68,7 @@ SAVE_PWD=$PWD
 
 clean() {
 	echo -n "cln.."
-	sh llmountcleanup.sh ${FORCE} > /dev/null || exit 20
+	sh llmountcleanup.sh ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
 }
 CLEAN=${CLEAN:-:}
 
@@ -2896,6 +2896,7 @@ test_103 () {
     [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
     [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
     [ -z "`grep acl $LPROC/mdc/MDC*MNT*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
+    $(which setfacl 2>/dev/null) || echo "skipping $TESTNAME (could not find setfacl)" && return
 
     echo "performing cp ..."
     run_acl_subtest cp || error

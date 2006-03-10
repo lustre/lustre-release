@@ -199,11 +199,9 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_starting = 1;
         spin_unlock(&obd->obd_dev_lock);
 
-        exp = class_new_export(obd);
-        if (exp == NULL)
-                RETURN(err);
-        memcpy(&exp->exp_client_uuid, &obd->obd_uuid,
-               sizeof(exp->exp_client_uuid));
+        exp = class_new_export(obd, &obd->obd_uuid);
+        if (IS_ERR(exp))
+                RETURN(PTR_ERR(exp));
         obd->obd_self_export = exp;
         list_del_init(&exp->exp_obd_chain_timed);
         class_export_put(exp);

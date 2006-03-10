@@ -160,6 +160,9 @@ extern cfs_waitq_t obd_race_waitq;
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701
+#define OBD_FAIL_TGT_FORCE_RECONNECT     0x702
+#define OBD_FAIL_TGT_DELAY_CONNECT       0x703
+#define OBD_FAIL_TGT_DELAY_RECONNECT     0x704
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 

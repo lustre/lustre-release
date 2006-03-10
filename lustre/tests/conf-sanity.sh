@@ -325,15 +325,16 @@ test_9() {
         start_ost
         start_mds
         mount_client $MOUNT
-        CHECK_PTLDEBUG="`cat /proc/sys/lnet/debug`"
-        if [ $CHECK_PTLDEBUG = "1" ]; then
+        CHECK_PTLDEBUG="`do_facet mds sysctl lnet.debug | sed -e 's/.* = //'`"
+        if [ "$CHECK_PTLDEBUG" = "1" ]; then
            echo "lmc --debug success"
         else
            echo "lmc --debug: want 1, have $CHECK_PTLDEBUG"
            return 1
         fi
-        CHECK_SUBSYSTEM="`cat /proc/sys/lnet/subsystem_debug`"
-        if [ $CHECK_SUBSYSTEM = "2" ]; then
+	# again with the pdsh prefix
+        CHECK_SUBSYSTEM="`do_facet mds sysctl lnet.subsystem_debug | cut -d= -f2`"
+        if [ "$CHECK_SUBSYSTEM" = "2" ]; then
            echo "lmc --subsystem success"
         else
            echo "lmc --subsystem: want 2, have $CHECK_SUBSYSTEM"
@@ -356,7 +357,7 @@ test_9() {
            echo "lconf --debug: want 3, have $CHECK_PTLDEBUG"
            return 1
         fi
-        CHECK_SUBSYS="`do_facet mds sysctl lnet.subsystem_debug|cut -d= -f2`"
+        CHECK_SUBSYS="`do_facet mds sysctl lnet.subsystem_debug | cut -d= -f2`"
         if [ $CHECK_SUBSYS = "20" ]; then
            echo "lconf --subsystem success"
         else
@@ -574,7 +575,7 @@ test_14() {
 
         FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
         EXPECTEDSTRING="mkfsoptions>-Llabel_conf_14"
-        if [ $EXPECTEDSTRING != $FOUNDSTRING ]; then
+        if [ "$EXPECTEDSTRING" != "$FOUNDSTRING" ]; then
                 echo "Error: expected: $EXPECTEDSTRING; found: $FOUNDSTRING"
                 return 1
         fi
@@ -585,7 +586,7 @@ test_14() {
         start_ost
         start_mds
         mount_client $MOUNT || return $?
-        if [ -z "`dumpe2fs -h $OSTDEV | grep label_conf_14`" ]; then
+        if [ -z "`do_facet ost dumpe2fs -h $OSTDEV | grep label_conf_14`" ]; then
                 echo "Error: the mkoptions not applied to mke2fs of ost."
                 return 1
         fi
@@ -616,11 +617,11 @@ test_15() {
 	[ -f "$MOUNTLUSTRE" ] && echo "can't move $MOUNTLUSTRE" && return 40
 	trap cleanup_15 EXIT INT
 	[ ! `cp $(which llmount) $MOUNTLUSTRE` ] || return $?
-	do_node `hostname` mkdir -p $MOUNT 2> /dev/null
+	do_facet client "mkdir -p $MOUNT 2> /dev/null"
 	# load llite module on the client if it isn't in /lib/modules
-	do_node `hostname` lconf --nosetup --node client_facet $XMLCONFIG
-	do_node `hostname` mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
-		`facet_nid mds`:/mds_svc/client_facet $MOUNT ||return $?
+	do_facet client "$LCONF --nosetup --node client_facet $XMLCONFIG"
+	do_facet client "mount -t lustre -o $MOUNTOPT \
+		`facet_nid mds`:/mds_svc/client_facet $MOUNT" ||return $?
 	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
 	[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
 	check_mount || return 41
@@ -649,13 +650,11 @@ test_16() {
         fi
                                                                                                                              
         echo "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
-        [ -d $TMPMTPT ] || mkdir -p $TMPMTPT
-        mount -o loop -t ext3 $MDSDEV $TMPMTPT || return $?
-        chmod 555 $TMPMTPT/OBJECTS || return $?
-        chmod 555 $TMPMTPT/LOGS || return $?
-        chmod 555 $TMPMTPT/PENDING || return $?
-        umount $TMPMTPT || return $?
-                                                                                                                             
+        do_facet mds "[ -d $TMPMTPT ] || mkdir -p $TMPMTPT;
+                      mount -o loop -t ext3 $MDSDEV $TMPMTPT || return \$?;
+                      chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} || return \$?;
+                      umount $TMPMTPT || return \$?" || return $?
+
         echo "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
         start_ost
         start_mds
@@ -664,9 +663,9 @@ test_16() {
         cleanup || return $?
                                                                                                                              
         echo "read the mode of OBJECTS/LOGS/PENDING and check if they has been changed properly"
-        EXPECTEDOBJECTSMODE=`debugfs -R "stat OBJECTS" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
-        EXPECTEDLOGSMODE=`debugfs -R "stat LOGS" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
-        EXPECTEDPENDINGMODE=`debugfs -R "stat PENDING" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
+        EXPECTEDOBJECTSMODE=`do_facet mds "debugfs -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | awk '/Mode: /{print $NF}'`
+        EXPECTEDLOGSMODE=`do_facet mds "debugfs -R 'stat LOGS' $MDSDEV 2> /dev/null" | awk '/Mode: /{print $NF}'`
+        EXPECTEDPENDINGMODE=`do_facet mds "debugfs -R 'stat PENDING' $MDSDEV 2> /dev/null" | awk '/Mode: /{print $NF}'`
 
         if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
                 echo "Success:Lustre change the mode of OBJECTS correctly"
@@ -704,10 +703,7 @@ test_17() {
         fi
 
         echo "Remove mds config log"
-        [ -d $TMPMTPT ] || mkdir -p $TMPMTPT
-        mount -o loop -t ext3 $MDSDEV $TMPMTPT || return $?
-        rm -f $TMPMTPT/LOGS/mds_svc || return $?
-        umount $TMPMTPT || return $?
+        do_facet mds "debugfs -w -R 'unlink LOGS/mds_svc' $MDSDEV || return \$?" || return $?
 
         start_ost
 	start mds $MDSLCONFARGS && return 42
@@ -729,7 +725,7 @@ test_18() {
         check_mount || return 41
                                                                                                                              
         echo "check journal size..."
-        FOUNDJOURNALSIZE=`debugfs -R "stat <8>" $MDSDEV | awk '/Size: / { print $6; exit;}'`
+        FOUNDJOURNALSIZE=`do_facet mds "debugfs -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ "$FOUNDJOURNALSIZE" = "79691776" ]; then
                 echo "Success:lconf creates large journals"
         else

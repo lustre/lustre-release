@@ -298,6 +298,14 @@ free:
         return 0;
 }
 
+static int filter_init_export(struct obd_export *exp)
+{
+        spin_lock_init(&exp->exp_filter_data.fed_lock);
+        exp->exp_connecting = 1;
+
+        return 0;
+}
+
 static int filter_free_server_data(struct filter_obd *filter)
 {
         OBD_FREE(filter->fo_fsd, sizeof(*filter->fo_fsd));
@@ -483,25 +491,22 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 /* These exports are cleaned up by filter_disconnect(), so they
                  * need to be set up like real exports as filter_connect() does.
                  */
-                exp = class_new_export(obd);
+                exp = class_new_export(obd, (struct obd_uuid *)fcd->fcd_uuid);
                 CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
                        " srv lr: "LPU64"\n", fcd->fcd_uuid, cl_idx,
                        last_rcvd, le64_to_cpu(fsd->fsd_last_transno));
-                if (exp == NULL)
-                        GOTO(err_client, rc = -ENOMEM);
+                if (IS_ERR(exp))
+                        GOTO(err_client, rc = PTR_ERR(exp));
 
-                memcpy(&exp->exp_client_uuid.uuid, fcd->fcd_uuid,
-                       sizeof exp->exp_client_uuid.uuid);
                 fed = &exp->exp_filter_data;
                 fed->fed_fcd = fcd;
                 rc = filter_client_add(obd, filter, fed, cl_idx);
                 LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 
-                /* create helper if export init gets more complex */
-                spin_lock_init(&fed->fed_lock);
 
                 fcd = NULL;
                 exp->exp_replay_needed = 1;
+                exp->exp_connecting = 0;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
                 class_export_put(exp);
@@ -3053,6 +3058,8 @@ static struct obd_ops filter_obd_ops = {
         .o_connect        = filter_connect,
         .o_reconnect      = filter_reconnect,
         .o_disconnect     = filter_disconnect,
+        .o_init_export    = filter_init_export,
+        .o_destroy_export = filter_destroy_export,
         .o_statfs         = filter_statfs,
         .o_getattr        = filter_getattr,
         .o_unpackmd       = filter_unpackmd,
@@ -3064,7 +3071,6 @@ static struct obd_ops filter_obd_ops = {
         .o_sync           = filter_sync,
         .o_preprw         = filter_preprw,
         .o_commitrw       = filter_commitrw,
-        .o_destroy_export = filter_destroy_export,
         .o_llog_init      = filter_llog_init,
         .o_llog_finish    = filter_llog_finish,
         .o_iocontrol      = filter_iocontrol,
@@ -3081,6 +3087,8 @@ static struct obd_ops filter_sanobd_ops = {
         .o_connect        = filter_connect,
         .o_reconnect      = filter_reconnect,
         .o_disconnect     = filter_disconnect,
+        .o_init_export    = filter_init_export,
+        .o_destroy_export = filter_destroy_export,
         .o_statfs         = filter_statfs,
         .o_getattr        = filter_getattr,
         .o_unpackmd       = filter_unpackmd,
@@ -3093,7 +3101,6 @@ static struct obd_ops filter_sanobd_ops = {
         .o_preprw         = filter_preprw,
         .o_commitrw       = filter_commitrw,
         .o_san_preprw     = filter_san_preprw,
-        .o_destroy_export = filter_destroy_export,
         .o_llog_init      = filter_llog_init,
         .o_llog_finish    = filter_llog_finish,
         .o_iocontrol      = filter_iocontrol,

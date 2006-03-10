@@ -479,15 +479,14 @@ EXPORT_SYMBOL(__class_export_put);
 /* Creates a new export, adds it to the hash table, and returns a
  * pointer to it. The refcount is 2: one for the hash reference, and
  * one for the pointer returned by this function. */
-struct obd_export *class_new_export(struct obd_device *obd)
+struct obd_export *class_new_export(struct obd_device *obd,
+                                    struct obd_uuid *cluuid)
 {
-        struct obd_export *export;
+        struct obd_export *export, *tmp;
 
         OBD_ALLOC(export, sizeof(*export));
-        if (!export) {
-                CERROR("no memory! (minor %d)\n", obd->obd_minor);
-                return NULL;
-        }
+        if (!export)
+                return ERR_PTR(-ENOMEM);
 
         export->exp_conn_cnt = 0;
         atomic_set(&export->exp_refcount, 2);
@@ -501,7 +500,22 @@ struct obd_export *class_new_export(struct obd_device *obd)
         export->exp_last_request_time = CURRENT_SECONDS;
         spin_lock_init(&export->exp_lock);
 
+        export->exp_client_uuid = *cluuid;
+        obd_init_export(export);
+
         spin_lock(&obd->obd_dev_lock);
+        if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
+                list_for_each_entry(tmp, &obd->obd_exports, exp_obd_chain) {
+                        if (obd_uuid_equals(cluuid, &tmp->exp_client_uuid)) {
+                                spin_unlock(&obd->obd_dev_lock);
+                                CWARN("%s: denying duplicate export for %s\n",
+                                      obd->obd_name, cluuid->uuid);
+                                class_handle_unhash(&export->exp_handle);
+                                OBD_FREE_PTR(export);
+                                return ERR_PTR(-EALREADY);
+                        }
+                }
+        }
         LASSERT(!obd->obd_stopping); /* shouldn't happen, but might race */
         atomic_inc(&obd->obd_refcount);
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
@@ -510,7 +524,6 @@ struct obd_export *class_new_export(struct obd_device *obd)
         export->exp_obd->obd_num_exports++;
         spin_unlock(&obd->obd_dev_lock);
 
-        obd_init_export(export);
         return export;
 }
 EXPORT_SYMBOL(class_new_export);
@@ -640,13 +653,11 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(cluuid != NULL);
         ENTRY;
 
-        export = class_new_export(obd);
-        if (export == NULL)
-                RETURN(-ENOMEM);
+        export = class_new_export(obd, cluuid);
+        if (IS_ERR(export))
+                RETURN(PTR_ERR(export));
 
         conn->cookie = export->exp_handle.h_cookie;
-        memcpy(&export->exp_client_uuid, cluuid,
-               sizeof(export->exp_client_uuid));
         class_export_put(export);
 
         CDEBUG(D_IOCTL, "connect: client %s, cookie "LPX64"\n",

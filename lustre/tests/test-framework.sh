@@ -110,6 +110,7 @@ zconf_mount() {
     if [ -x /sbin/mount.lustre ] ; then
 	do_node $client mount -t lustre $OPTIONS \
 		`facet_nid mds`:/mds_svc/client_facet $mnt || return 1
+        do_node $client "sysctl -w lnet.debug=$PTLDEBUG; sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }"
     else
 	# this is so cheating
 	do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG > \
@@ -334,11 +335,15 @@ change_active() {
 do_node() {
     HOST=$1
     shift
+    local myPDSH=$PDSH
+    if [ "$HOST" = "$(hostname)" ]; then
+        myPDSH="no_dsh"
+    fi
     if $VERBOSE; then
         echo "CMD: $HOST $@"
-        $PDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
+        $myPDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
-    $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
 }
 
 do_facet() {
@@ -549,7 +554,7 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
-	sysctl -w lustre.fail_loc=0
+	sysctl -w lustre.fail_loc=0 || true
 	echo "${TESTSUITE}: **** FAIL:" $@
 	log "FAIL: $@"
 	exit 1

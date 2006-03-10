@@ -372,7 +372,7 @@ static int lprocfs_rd_atime_diff(char *page, char **start, off_t off,
         struct mds_obd *mds = &obd->u.mds;
 
         *eof = 1;
-        return snprintf(page, count, "%u\n", mds->mds_atime_diff);
+        return snprintf(page, count, "%lu\n", mds->mds_atime_diff);
 }
 
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {

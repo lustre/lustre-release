@@ -226,7 +226,7 @@ test_16() {
     stop_read_ahead
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
-    sysctl -w lustre.fail_loc=0x80000504
+    do_facet ost sysctl -w lustre.fail_loc=0x80000504
     cancel_lru_locks OSC
     # will get evicted here
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1

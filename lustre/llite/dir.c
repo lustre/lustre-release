@@ -547,9 +547,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(PTR_ERR(filename));
 
                 ll_inode2fid(&fid, inode);
-                
+
                 rc = ll_get_max_mdsize(sbi, &lmmsize);
-                if (rc) 
+                if (rc)
                         RETURN(rc);
 
                 rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, filename,
@@ -594,39 +594,39 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         int lmj_size, i, aindex = 0, rc;
  
                         rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
-                        if (rc < 0) 
+                        if (rc < 0)
                                 GOTO(out_req, rc = -ENOMEM);
                         rc = obd_checkmd(sbi->ll_osc_exp, sbi->ll_mdc_exp, lsm);
-                        if (rc) 
-                                GOTO(out_free_memmd, rc); 
-                        
+                        if (rc)
+                                GOTO(out_free_memmd, rc);
+
                         lmj_size = sizeof(struct lov_user_md_join) +
                                    lsm->lsm_stripe_count *
                                    sizeof(struct lov_user_ost_data_join);
                         OBD_ALLOC(lmj, lmj_size);
-                        if (!lmj) 
+                        if (!lmj)
                                 GOTO(out_free_memmd, rc = -ENOMEM);
-                        
+
                         memcpy(lmj, lmm, sizeof(struct lov_user_md_join));
-                        for(i = 0; i < lsm->lsm_stripe_count; i++) {
+                        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                                 struct lov_array_info *lai = lsm->lsm_array;
                                 if ((lai->lai_ext_array[aindex].le_loi_idx +
                                      lai->lai_ext_array[aindex].le_stripe_count)<=i){
                                         aindex ++;
                                 }
-                                CDEBUG(D_INFO, "aindex %d i %d l_extent_start"LPU64""
-                                               "len %d \n", aindex, i, 
-                                               lai->lai_ext_array[aindex].le_start,
-                                               (int)lai->lai_ext_array[aindex].le_len);
+                                CDEBUG(D_INFO, "aindex %d i %d l_extent_start"
+                                       LPU64"len %d \n", aindex, i,
+                                       lai->lai_ext_array[aindex].le_start,
+                                       (int)lai->lai_ext_array[aindex].le_len);
                                 lmj->lmm_objects[i].l_extent_start =
                                         lai->lai_ext_array[aindex].le_start;
- 
+
                                 if ((int)lai->lai_ext_array[aindex].le_len == -1) {
                                         lmj->lmm_objects[i].l_extent_end = -1;
                                 } else {
-                                        lmj->lmm_objects[i].l_extent_end =  
-                                        lai->lai_ext_array[aindex].le_start + 
-                                        lai->lai_ext_array[aindex].le_len;
+                                        lmj->lmm_objects[i].l_extent_end =
+                                          lai->lai_ext_array[aindex].le_start +
+                                          lai->lai_ext_array[aindex].le_len;
                                 }
                                 lmj->lmm_objects[i].l_object_id =
                                         lsm->lsm_oinfo[i].loi_id;

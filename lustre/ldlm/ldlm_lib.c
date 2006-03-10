@@ -258,14 +258,14 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         spin_lock_init(&cli->cl_write_page_hist.oh_lock);
         spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
         spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
-        if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
-                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
-                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
-        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 256) { /* <= 256 MB */
-                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 2;
-                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 2;
+        cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
+        if (num_physpages >> (20 - PAGE_SHIFT) <= 128 /* MB */) {
+                cli->cl_max_rpcs_in_flight = 2;
+        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 256 /* MB */) {
+                cli->cl_max_rpcs_in_flight = 3;
+        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 512 /* MB */) {
+                cli->cl_max_rpcs_in_flight = 4;
         } else {
-                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
                 cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
         }
 
@@ -477,12 +477,13 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                             struct obd_uuid *cluuid)
 {
         ENTRY;
-        if (exp->exp_connection) {
+        if (exp->exp_connection && exp->exp_imp_reverse) {
                 struct lustre_handle *hdl;
                 hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 /* Might be a re-connect after a partition. */
                 if (!memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
-                        CWARN("%s reconnecting\n", cluuid->uuid);
+                        CWARN("%s: %s reconnecting\n", exp->exp_obd->obd_name,
+                              cluuid->uuid);
                         conn->cookie = exp->exp_handle.h_cookie;
                         /* target_handle_connect() treats EALREADY and
                          * -EALREADY differently.  EALREADY means we are
@@ -621,6 +622,14 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         list_for_each(p, &target->obd_exports) {
                 export = list_entry(p, struct obd_export, exp_obd_chain);
                 if (obd_uuid_equals(&cluuid, &export->exp_client_uuid)) {
+                        if (export->exp_connecting) { /* bug 9635, et. al. */
+                                CWARN("%s: exp %p already connecting\n",
+                                      export->exp_obd->obd_name, export);
+                                export = NULL;
+                                rc = -EALREADY;
+                                break;
+                        }
+                        export->exp_connecting = 1;
                         spin_unlock(&target->obd_dev_lock);
                         LASSERT(export->exp_obd == target);
 
@@ -632,17 +641,23 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* If we found an export, we already unlocked. */
         if (!export) {
                 spin_unlock(&target->obd_dev_lock);
+                OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_CONNECT, 2 * obd_timeout);
         } else if (req->rq_reqmsg->conn_cnt == 1) {
                 CERROR("%s: NID %s (%s) reconnected with 1 conn_cnt; "
                        "cookies not random?\n", target->obd_name,
                        libcfs_nid2str(req->rq_peer.nid), cluuid.uuid);
                 GOTO(out, rc = -EALREADY);
+        } else {
+                OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_RECONNECT, 2 * obd_timeout);
         }
 
-        /* We indicate the reconnection in a flag, not an error code. */
+        /* We want to handle EALREADY but *not* -EALREADY from
+         * target_handle_reconnect(), return reconnection state in a flag */
         if (rc == EALREADY) {
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
                 rc = 0;
+        } else if (rc) {
+                GOTO(out, rc);
         }
 
         /* Tell the client if we're in recovery. */
@@ -674,9 +689,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 rc = obd_reconnect(export, target, &cluuid, data);
         }
 
-        /* we want to handle EALREADY but *not* -EALREADY from
-         * target_handle_reconnect() */
-        if (rc && rc != EALREADY)
+        if (rc)
                 GOTO(out, rc);
 
         /* Return only the parts of obd_connect_data that we understand, so the
@@ -753,6 +766,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         revimp->imp_state = LUSTRE_IMP_FULL;
         class_import_put(revimp);
 out:
+        if (export)
+                export->exp_connecting = 0;
         if (rc)
                 req->rq_status = rc;
         RETURN(rc);

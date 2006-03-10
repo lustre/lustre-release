@@ -618,17 +618,20 @@ out:
 }
 
 static int mds_init_slave_ilimits(struct obd_device *obd,
-                                  struct obd_quotactl *oqctl)
+                                  struct obd_quotactl *oqctl, int set)
 {
         /* XXX: for file limits only adjust local now */
         unsigned int uid = 0, gid = 0;
-        struct obd_quotactl *ioqc;
+        struct obd_quotactl *ioqc = NULL;
         int rc;
         ENTRY;
 
         /* if we are going to set zero limit, needn't init slaves */
         if (!oqctl->qc_dqblk.dqb_ihardlimit && !oqctl->qc_dqblk.dqb_isoftlimit)
                 RETURN(0);
+        
+        if (!set)
+                goto acquire;
 
         OBD_ALLOC_PTR(ioqc);
         if (!ioqc)
@@ -644,7 +647,7 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, ioqc);
         if (rc)
                 GOTO(out, rc);
-
+acquire:
         /* trigger local qunit pre-acquire */
         if (oqctl->qc_type == USRQUOTA)
                 uid = oqctl->qc_id;
@@ -659,12 +662,13 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         /* FIXME initialize all slaves in CMD */
         EXIT;
 out:
-        OBD_FREE_PTR(ioqc);
+        if (ioqc)
+                OBD_FREE_PTR(ioqc);
         return rc;
 }
 
 static int mds_init_slave_blimits(struct obd_device *obd,
-                                  struct obd_quotactl *oqctl)
+                                  struct obd_quotactl *oqctl, int set)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_quotactl *ioqc;
@@ -684,12 +688,14 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         ioqc->qc_id = oqctl->qc_id;
         ioqc->qc_type = oqctl->qc_type;
         ioqc->qc_dqblk.dqb_valid = QIF_BLIMITS;
-        ioqc->qc_dqblk.dqb_bhardlimit = MIN_QLIMIT;
+        ioqc->qc_dqblk.dqb_bhardlimit = set ? MIN_QLIMIT : 0;
 
         /* set local limit to MIN_QLIMIT */
-        rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, ioqc);
-        if (rc)
-                GOTO(out, rc);
+        if (set) {
+                rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, ioqc);
+                if (rc)
+                        GOTO(out, rc);
+        }
 
         /* trigger local qunit pre-acquire */
         if (oqctl->qc_type == USRQUOTA)
@@ -719,7 +725,7 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         time_t btime, itime;
         struct lustre_dquot *dquot;
         struct obd_dqblk *dqblk = &oqctl->qc_dqblk;
-        int rc;
+        int set, rc;
         ENTRY;
 
         down(&mds->mds_qonoff_sem);
@@ -797,16 +803,18 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         }
 
         up(&mds->mds_qonoff_sem);
-        if (dqblk->dqb_valid & QIF_ILIMITS && !(ihardlimit || isoftlimit)) {
-                rc = mds_init_slave_ilimits(obd, oqctl);
+        if (dqblk->dqb_valid & QIF_ILIMITS) {
+                set = !(ihardlimit || isoftlimit);
+                rc = mds_init_slave_ilimits(obd, oqctl, set);
                 if (rc) {
                         CERROR("init slave ilimits failed! (rc:%d)\n", rc);
                         goto revoke_out;
                 }
         }
 
-        if (dqblk->dqb_valid & QIF_BLIMITS && !(bhardlimit || bsoftlimit)) {
-                rc = mds_init_slave_blimits(obd, oqctl);
+        if (dqblk->dqb_valid & QIF_BLIMITS) {
+                set = !(bhardlimit || bsoftlimit);
+                rc = mds_init_slave_blimits(obd, oqctl, set);
                 if (rc) {
                         CERROR("init slave blimits failed! (rc:%d)\n", rc);
                         goto revoke_out;

@@ -144,7 +144,7 @@
  	/* Offset between the two in bytes */
  	offset = data - skb->head;
 --- linux-2.6.9-org/net/ipv4/tcp.c	2005-05-20 10:09:34.000000000 +0100
-+++ ./linux-2.6.9/net/ipv4/tcp.c	2005-05-20 10:22:14.000000000 +0100
++++ linux-2.6.9/net/ipv4/tcp.c	2005-05-20 10:22:14.000000000 +0100
 @@ -628,8 +628,9 @@
  	}
  }

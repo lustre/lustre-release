@@ -122,21 +122,17 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
                 deuuidify(imp->imp_target_uuid.uuid, NULL,
                           &target_start, &target_len);
 
-                LCONSOLE_ERROR("Connection to service %.*s via nid %s was "
+                LCONSOLE_ERROR("%s: Connection to service %.*s via nid %s was "
                                "lost; in progress operations using this "
-                               "service will %s.\n",
+                               "service will %s.\n", imp->imp_obd->obd_name,
                                target_len, target_start,
                                libcfs_nid2str(imp->imp_connection->c_peer.nid),
                                imp->imp_replayable ?
-                               "wait for recovery to complete" : "fail");
+                                      "wait for recovery to complete" : "fail");
 
                 if (obd_dump_on_timeout)
                         libcfs_debug_dumplog();
 
-                CDEBUG(D_HA, "%s: connection lost to %s@%s\n",
-                      imp->imp_obd->obd_name,
-                      imp->imp_target_uuid.uuid,
-                      imp->imp_connection->c_remote_uuid.uuid);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
@@ -591,9 +587,9 @@ finish:
                         /* Sigh, some compilers do not like #ifdef in the middle
                            of macro arguments */
 #ifdef __KERNEL__
-                        char *action = "upgrading this client";
+                        const char *action = "upgrading this client";
 #else
-                        char *action = "recompiling this application";
+                        const char *action = "recompiling this application";
 #endif
 
                         CWARN("Server %s version (%d.%d.%d.%d) is much newer. "
@@ -649,6 +645,7 @@ finish:
                                       OBD_OCD_VERSION_PATCH(ocd->ocd_version),
                                       OBD_OCD_VERSION_FIX(ocd->ocd_version),
                                       LUSTRE_VERSION_STRING);
+                                ptlrpc_deactivate_import(imp);
                                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CLOSED);
                         }
                         RETURN(-EPROTO);

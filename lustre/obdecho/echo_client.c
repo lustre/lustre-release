@@ -33,6 +33,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <obd_echo.h>
+#include <lustre_ver.h>
 #include <lustre_debug.h>
 #include <lprocfs_status.h>
 
@@ -1326,6 +1327,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_device *tgt;
         struct lustre_handle conn = {0, };
         struct obd_uuid echo_uuid = { "ECHO_UUID" };
+        struct obd_connect_data *ocd = NULL;
         int rc;
         ENTRY;
 
@@ -1345,8 +1347,20 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         CFS_INIT_LIST_HEAD (&ec->ec_objects);
         ec->ec_unique = 0;
 
-        rc = obd_connect(&conn, tgt, &echo_uuid, NULL /* obd_connect_data */);
-        if (rc) {
+        OBD_ALLOC(ocd, sizeof(*ocd));
+        if (ocd == NULL) {
+                CERROR("Can't alloc ocd connecting to %s\n",
+                       lustre_cfg_string(lcfg, 1));
+                return -ENOMEM;
+        }
+        
+        ocd->ocd_version = LUSTRE_VERSION_CODE;
+
+        rc = obd_connect(&conn, tgt, &echo_uuid, ocd);
+
+        OBD_FREE(ocd, sizeof(*ocd));
+
+        if (rc != 0) {
                 CERROR("fail to connect to device %s\n",
                        lustre_cfg_string(lcfg, 1));
                 return (rc);

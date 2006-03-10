@@ -139,7 +139,8 @@ do {                                                                           \
         __class_export_put(exp);                                               \
 } while (0)
 void __class_export_put(struct obd_export *);
-struct obd_export *class_new_export(struct obd_device *obddev);
+struct obd_export *class_new_export(struct obd_device *obddev,
+                                    struct obd_uuid *cluuid);
 void class_unlink_export(struct obd_export *exp);
 void class_update_export_timer(struct obd_export *exp, time_t extra_delay);
 

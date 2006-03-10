@@ -1,3 +1,21 @@
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.7
+       * bug fixes
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 5719, 9635, 9792, 9684, 
+Description: OST (or MDS) trips assertions in (re)connection under heavy load
+Details    : If a server is under heavy load and cannot reply to new
+	     connection requests before the client resends the (re)connect,
+	     the connection handling code can behave badly if two service
+	     threads are concurrently handing separate (re)connections from
+	     the same client.  Add better locking to the connection handling
+	     code, and ensure that only a single connection will be processed
+	     for a given client UUID, even if the lock is dropped.
+
+------------------------------------------------------------------------------
+
 02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
@@ -9,14 +27,8 @@
        * bug fixes
        * Support for newer kernels: 2.6.9-22.0.2.EL (RHEL 4),
          2.6.5-7.244 (SLES 9) - same as 1.4.5.2.
+	 2.6.12.6 vanilla (kernel.org)
 
-
-Severity   : enhancement
-Bugzilla   : 9461
-Description: Implement 'lfs df' to report actual free space on per-OST basis
-Details    : Add sub-command 'df' on 'lfs' to report the disk space usage of
-	     MDS/OSDs. Usage: lfs df [-i][-h]. Command Options: '-i' to report
-	     usage of objects; '-h' to report in human readable format.
 
 Severity   : enhancement
 Bugzilla   : 7981/8208
@@ -599,6 +611,13 @@ Details    : target_finish_recovery() calls mds_postrecov() which returned
 	     the number of orphans unlinked. mds_lov_connect->mds_postsetup()
 	     considers this an error and immediately begins cleaning up the
 	     lov, just after starting the mds_lov process
+
+Severity   : enhancement
+Bugzilla   : 9461
+Description: Implement 'lfs df' to report actual free space on per-OST basis
+Details    : Add sub-command 'df' on 'lfs' to report the disk space usage of
+	     MDS/OSDs. Usage: lfs df [-i][-h]. Command Options: '-i' to report
+	     usage of objects; '-h' to report in human readable format.
 
 ------------------------------------------------------------------------------
 

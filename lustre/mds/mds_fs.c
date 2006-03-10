@@ -336,23 +336,19 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        last_transno, le64_to_cpu(msd->msd_last_transno),
                        le64_to_cpu(mcd->mcd_last_xid));
 
-                exp = class_new_export(obd);
-                if (exp == NULL)
-                        GOTO(err_client, rc = -ENOMEM);
+                exp = class_new_export(obd, (struct obd_uuid *)mcd->mcd_uuid);
+                if (IS_ERR(exp))
+                        GOTO(err_client, rc = PTR_ERR(exp));
 
-                memcpy(&exp->exp_client_uuid.uuid, mcd->mcd_uuid,
-                       sizeof exp->exp_client_uuid.uuid);
                 med = &exp->exp_mds_data;
                 med->med_mcd = mcd;
                 rc = mds_client_add(obd, mds, med, cl_idx);
                 LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 
-                /* create helper if export init gets more complex */
-                INIT_LIST_HEAD(&med->med_open_head);
-                spin_lock_init(&med->med_open_lock);
 
                 mcd = NULL;
                 exp->exp_replay_needed = 1;
+                exp->exp_connecting = 0;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
                 class_export_put(exp);

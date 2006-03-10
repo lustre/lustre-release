@@ -148,10 +148,10 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
 
         if (body->valid & OBD_MD_FLID)
                 st->st_ino = body->ino;
-        if (body->valid & OBD_MD_FLATIME &&
+        if (body->valid & OBD_MD_FLMTIME &&
             body->mtime > LTIME_S(st->st_mtime))
                 LTIME_S(st->st_mtime) = body->mtime;
-        if (body->valid & OBD_MD_FLMTIME &&
+        if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = body->atime;
         if (body->valid & OBD_MD_FLCTIME &&
