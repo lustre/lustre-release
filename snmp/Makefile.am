@@ -10,7 +10,7 @@ lustresnmp_so_SOURCES := \
 	lustre-snmp-util.h
 
 lustresnmp_so_LDADD := $(NET_SNMP_LIBS)
-lustresnmp_so_CFLAGS := $(NET_SNMP_CFLAGS)
+lustresnmp_so_CFLAGS := -fPIC $(NET_SNMP_CFLAGS)
 lustresnmp_so_LDFLAGS := -fPIC -shared
 
 SUBDIRS :=
