@@ -1,6 +1,7 @@
 @BUILD_GMLND_TRUE@subdir-m += gmlnd
 @BUILD_RALND_TRUE@subdir-m += ralnd
 @BUILD_OPENIBLND_TRUE@subdir-m += openiblnd
+@BUILD_CIBLND_TRUE@subdir-m += ciblnd
 @BUILD_IIBLND_TRUE@subdir-m += iiblnd
 @BUILD_VIBLND_TRUE@subdir-m += viblnd
 @BUILD_QSWLND_TRUE@subdir-m += qswlnd

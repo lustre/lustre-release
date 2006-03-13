@@ -3,4 +3,12 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-SUBDIRS = socklnd qswlnd gmlnd openiblnd iiblnd viblnd ralnd ptllnd ciblnd
+if MODULES
+if BUILD_CIBLND
+modulenet_DATA = kciblnd$(KMODEXT)
+endif
+endif
+
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES =
+

@@ -224,7 +224,7 @@ kibnal_post_rx (kib_rx_t *rx, int do_credits)
         if (conn->ibc_state != IBNAL_CONN_ESTABLISHED)
                 rc = -ECONNABORTED;
         else
-                rc = ib_receive (conn->ibc_qp, &rx->rx_sp, 1);
+                rc = kibnal_ib_receive(conn->ibc_qp, &rx->rx_sp, 1);
 
         if (rc == 0) {
                 if (do_credits) {
@@ -424,7 +424,7 @@ kibnal_kvaddr_to_phys (unsigned long vaddr, __u64 *physp)
 #endif
 
 int
-kibnal_map_iov (kib_tx_t *tx, enum ib_memory_access access,
+kibnal_map_iov (kib_tx_t *tx, int access,
                 unsigned int niov, struct iovec *iov, int offset, int nob)
                  
 {
@@ -467,7 +467,7 @@ kibnal_map_iov (kib_tx_t *tx, enum ib_memory_access access,
 }
 
 int
-kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
+kibnal_map_kiov (kib_tx_t *tx, int access,
                   int nkiov, lnet_kiov_t *kiov,
                   int offset, int nob)
 {
@@ -693,7 +693,7 @@ kibnal_check_sends (kib_conn_t *conn)
                         tx->tx_status = 0;
                         /* Driver only accepts 1 item at a time */
                         for (i = 0; i < tx->tx_nsp; i++) {
-                                rc = ib_send (conn->ibc_qp, &tx->tx_sp[i], 1);
+                                rc = kibnal_ib_send(conn->ibc_qp, &tx->tx_sp[i], 1);
                                 if (rc != 0)
                                         break;
                                 nwork++;
@@ -796,7 +796,7 @@ kibnal_tx_callback (struct ib_cq_entry *e)
 }
 
 void
-kibnal_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
+kibnal_callback (ib_cq_t *cq, struct ib_cq_entry *e, void *arg)
 {
         if (kibnal_wreqid_is_rx(e->work_request_id))
                 kibnal_rx_callback (e);

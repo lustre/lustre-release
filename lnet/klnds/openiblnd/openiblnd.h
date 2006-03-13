@@ -61,6 +61,47 @@
 #include <ts_ib_cm.h>
 #include <ts_ib_sa_client.h>
 
+#ifndef USING_TSAPI
+
+/* OpenIB Gen1 */
+typedef struct ib_qp       ib_qp_t;
+typedef struct ib_mr       ib_mr_t;
+typedef struct ib_fmr      ib_fmr_t;
+typedef struct ib_pd       ib_pd_t;
+typedef struct ib_cq       ib_cq_t;
+typedef struct ib_fmr_pool ib_fmr_pool_t;
+
+#else
+
+/* Cisco (topspin) */
+typedef void                 ib_qp_t;
+typedef void                 ib_mr_t;
+typedef void                 ib_fmr_t;
+typedef void                 ib_pd_t;
+typedef void                 ib_cq_t;
+typedef void                 ib_fmr_pool_t;
+
+#define IB_ACCESS_LOCAL_WRITE              TS_IB_ACCESS_LOCAL_WRITE
+#define IB_WQ_SIGNAL_SELECTABLE            TS_IB_ACCESS_LOCAL_WRITE
+#define IB_TRANSPORT_RC                    TS_IB_TRANSPORT_RC
+#define IB_QP_STATE_INIT                   TS_IB_QP_STATE_INIT
+#define IB_QP_ATTRIBUTE_STATE              TS_IB_QP_ATTRIBUTE_STATE
+#define IB_QP_ATTRIBUTE_PORT               TS_IB_QP_ATTRIBUTE_PORT
+#define IB_QP_ATTRIBUTE_PKEY_INDEX         TS_IB_QP_ATTRIBUTE_PKEY_INDEX
+#define IB_QP_ATTRIBUTE_RDMA_ATOMIC_ENABLE TS_IB_QP_ATTRIBUTE_RDMA_ATOMIC_ENABLE
+#define IB_ACCESS_LOCAL_WRITE              TS_IB_ACCESS_LOCAL_WRITE
+#define IB_ACCESS_REMOTE_WRITE             TS_IB_ACCESS_REMOTE_WRITE
+#define IB_ACCESS_REMOTE_READ              TS_IB_ACCESS_REMOTE_READ
+#define IB_CQ_CALLBACK_INTERRU             TS_IB_CQ_CALLBACK_INTERRUPTPT
+#define IB_CQ_PROVIDER_REARM               TS_IB_CQ_PROVIDER_REARM
+#define IB_CQ_CALLBACK_INTERRUPT           TS_IB_CQ_CALLBACK_INTERRUPT
+#define IB_COMPLETION_STATUS_SUCCESS       TS_IB_COMPLETION_STATUS_SUCCESS
+#define IB_OP_SEND                         TS_IB_OP_SEND
+#define IB_OP_RDMA_WRITE                   TS_IB_OP_RDMA_WRITE
+#define IB_OP_RDMA_READ                    TS_IB_OP_RDMA_READ
+
+#endif
+
 #if CONFIG_SMP
 # define IBNAL_N_SCHED      num_online_cpus()   /* # schedulers */
 #else
@@ -140,7 +181,7 @@ typedef struct
         __u64             ibp_vaddr;            /* mapped region vaddr */
         __u32             ibp_lkey;             /* mapped region lkey */
         __u32             ibp_rkey;             /* mapped region rkey */
-        struct ib_mr     *ibp_handle;           /* mapped region handle */
+        ib_mr_t          *ibp_handle;           /* mapped region handle */
         struct page      *ibp_pages[0];
 } kib_pages_t;
 
@@ -193,11 +234,11 @@ typedef struct
         struct ib_device_properties kib_device_props; /* its properties */
         int               kib_port;             /* port on the device */
         struct ib_port_properties kib_port_props; /* its properties */
-        struct ib_pd     *kib_pd;               /* protection domain */
+        ib_pd_t          *kib_pd;               /* protection domain */
 #if IBNAL_FMR
-        struct ib_fmr_pool *kib_fmr_pool;       /* fast memory region pool */
+        ib_fmr_pool_t    *kib_fmr_pool;       /* fast memory region pool */
 #endif
-        struct ib_cq     *kib_cq;               /* completion queue */
+        ib_cq_t          *kib_cq;               /* completion queue */
 
 } kib_data_t;
 
@@ -238,8 +279,8 @@ typedef struct kib_connparams
 typedef struct
 {
         union {
-                struct ib_mr    *mr;
-                struct ib_fmr   *fmr;
+                ib_mr_t         *mr;
+                ib_fmr_t        *fmr;
         }                 md_handle;
         __u32             md_lkey;
         __u32             md_rkey;
@@ -373,7 +414,7 @@ typedef struct kib_conn
         spinlock_t          ibc_lock;           /* serialise */
         kib_rx_t           *ibc_rxs;            /* the rx descs */
         kib_pages_t        *ibc_rx_pages;       /* premapped rx msg pages */
-        struct ib_qp       *ibc_qp;             /* queue pair */
+        ib_qp_t            *ibc_qp;             /* queue pair */
         __u32               ibc_qpn;            /* queue pair number */
         tTS_IB_CM_COMM_ID   ibc_comm_id;        /* connection ID? */
         kib_connreq_t      *ibc_connreq;        /* connection request state */
@@ -483,6 +524,34 @@ kibnal_wreqid_is_rx (__u64 wreqid)
         return (wreqid & 1) != 0;
 }
 
+#if (IB_NTXRXPARAMS == 3)
+static inline int
+kibnal_ib_send(ib_qp_t *qp, struct ib_send_param *p, int nwrk)
+{
+        return ib_send(qp, p, nwrk);
+}
+
+static inline int
+kibnal_ib_receive(ib_qp_t *qp, struct ib_receive_param *p, int nwrk)
+{
+        return ib_receive(qp, p, nwrk);
+}
+#elif (IB_NTXRXPARAMS == 4)
+static inline int
+kibnal_ib_send(ib_qp_t *qp, struct ib_send_param *p, int nwrk)
+{
+        return ib_send(qp, p, nwrk, NULL);
+}
+
+static inline int
+kibnal_ib_receive(ib_qp_t *qp, struct ib_receive_param *p, int nwrk)
+{
+        return ib_receive(qp, p, nwrk, NULL);
+}
+#else
+ #error "IB_NTXRXPARAMS not set correctly"
+#endif
+
 int kibnal_startup (lnet_ni_t *ni);
 void kibnal_shutdown (lnet_ni_t *ni);
 int kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
@@ -532,7 +601,7 @@ extern int  kibnal_thread_start (int (*fn)(void *arg), void *arg);
 extern int  kibnal_scheduler(void *arg);
 extern int  kibnal_connd (void *arg);
 extern int  kibnal_reaper (void *arg);
-extern void kibnal_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg);
+extern void kibnal_callback (ib_cq_t *cq, struct ib_cq_entry *e, void *arg);
 extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
 extern int  kibnal_close_conn (kib_conn_t *conn, int why);
 extern void kibnal_start_active_rdma (int type, int status,

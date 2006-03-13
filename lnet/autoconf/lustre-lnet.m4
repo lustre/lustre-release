@@ -332,6 +332,7 @@ else
 	*)   AC_MSG_RESULT([no])
 	     AC_MSG_ERROR([internal error]);;
 	esac
+	OPENIBCPPFLAGS="$OPENIBCPPFLAGS -DIB_NTXRXPARAMS=4"
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $OPENIBCPPFLAGS"
 	LB_LINUX_TRY_COMPILE([
@@ -365,6 +366,61 @@ else
 fi
 AC_SUBST(OPENIBCPPFLAGS)
 AC_SUBST(OPENIBLND)
+])
+
+#
+# LN_CONFIG_CIBLND
+#
+AC_DEFUN([LN_CONFIG_CIB],[
+AC_MSG_CHECKING([whether to enable Cisco/TopSpin IB support])
+# set default
+CIBPATH=""
+CIBLND=""
+AC_ARG_WITH([cib],
+	AC_HELP_STRING([--with-cib=path],
+	               [build ciblnd against path]),
+	[
+		case $with_cib in
+		no)     AC_MSG_RESULT([no]);;
+		*)      CIBPATH="$with_cib"
+	                if test -d "$CIBPATH"; then
+	                 	AC_MSG_RESULT([yes])
+                        else
+				AC_MSG_RESULT([no])
+				AC_MSG_ERROR([No directory $CIBPATH])
+			fi;;
+		esac
+	],[
+		AC_MSG_RESULT([no])
+	])
+if test -n "$CIBPATH"; then
+	CIBCPPFLAGS="-I${CIBPATH}/ib/ts_api_ng/include -I${CIBPATH}/all/kernel_services/include -DUSING_TSAPI"
+	CIBCPPFLAGS="$CIBCPPFLAGS -DIB_NTXRXPARAMS=3"
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $CIBCPPFLAGS"
+	LB_LINUX_TRY_COMPILE([
+		#include <ts_ib_core.h>
+		#include <ts_ib_cm.h>
+	        #include <ts_ib_sa_client.h>
+	],[
+       	        struct ib_device_properties dev_props;
+	        struct ib_cm_active_param   cm_active_params;
+	        tTS_IB_CLIENT_QUERY_TID     tid;
+	        int                         enum1 = TS_IB_QP_ATTRIBUTE_STATE;
+		int                         enum2 = TS_IB_ACCESS_LOCAL_WRITE;
+		int                         enum3 = TS_IB_CQ_CALLBACK_INTERRUPT;
+		int                         enum4 = TS_IB_CQ_PROVIDER_REARM;
+		return 0;
+	],[
+		CIBLND="ciblnd"
+	],[
+		AC_MSG_ERROR([can't compile ciblnd with given path])
+	        CIBCPPFLAGS=""
+	])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+fi
+AC_SUBST(CIBCPPFLAGS)
+AC_SUBST(CIBLND)
 ])
 
 #
@@ -689,6 +745,7 @@ LN_CONFIG_AFFINITY
 LN_CONFIG_QUADRICS
 LN_CONFIG_GM
 LN_CONFIG_OPENIB
+LN_CONFIG_CIB
 LN_CONFIG_VIB
 LN_CONFIG_IIB
 LN_CONFIG_RALND
@@ -859,6 +916,7 @@ AC_DEFUN([LN_CONDITIONALS],
 [AM_CONDITIONAL(BUILD_QSWLND, test x$QSWLND = "xqswlnd")
 AM_CONDITIONAL(BUILD_GMLND, test x$GMLND = "xgmlnd")
 AM_CONDITIONAL(BUILD_OPENIBLND, test x$OPENIBLND = "xopeniblnd")
+AM_CONDITIONAL(BUILD_CIBLND, test x$CIBLND = "xciblnd")
 AM_CONDITIONAL(BUILD_IIBLND, test x$IIBLND = "xiiblnd")
 AM_CONDITIONAL(BUILD_VIBLND, test x$VIBLND = "xviblnd")
 AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
@@ -890,6 +948,8 @@ lnet/klnds/gmlnd/Makefile
 lnet/klnds/gmlnd/autoMakefile
 lnet/klnds/openiblnd/Makefile
 lnet/klnds/openiblnd/autoMakefile
+lnet/klnds/ciblnd/Makefile
+lnet/klnds/ciblnd/autoMakefile
 lnet/klnds/iiblnd/Makefile
 lnet/klnds/iiblnd/autoMakefile
 lnet/klnds/viblnd/Makefile
