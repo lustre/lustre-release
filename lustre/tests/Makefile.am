@@ -8,7 +8,7 @@ pkgexample_scripts = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh
 pkgexample_scripts += local.sh echo.sh uml.sh lov.sh
 noinst_DATA =
 noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh
-noinst_SCRIPTS += llrmount.sh runfailure-mds runvmstat runfailure-net
+noinst_SCRIPTS += runfailure-mds runvmstat runfailure-net
 noinst_SCRIPTS += runfailure-ost runiozone runregression-net.sh runtests
 noinst_SCRIPTS += sanity.sh rundbench
 
