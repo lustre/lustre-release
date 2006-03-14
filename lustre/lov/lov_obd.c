@@ -52,6 +52,7 @@
 #include <linux/obd_lov.h>
 #include <linux/obd_ost.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_param.h>
 
 #include "lov_internal.h"
 
@@ -804,13 +805,13 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                         }
                         *sval = 0;
                         val = simple_strtol(sval + 1, NULL, 0);
-                        if (strcmp(key, "default_stripe_size") == 0)
+                        if (strcmp(key, PARAM_D_STRIPE_SIZE) == 0)
                                 desc->ld_default_stripe_size = val;
-                        else if (strcmp(key, "default_stripe_count") == 0)
+                        else if (strcmp(key, PARAM_D_STRIPE_COUNT) == 0)
                                 desc->ld_default_stripe_count = val;
-                        else if (strcmp(key, "default_stripe_offset") == 0)
+                        else if (strcmp(key, PARAM_D_STRIPE_OFFSET) == 0)
                                 desc->ld_default_stripe_offset = val;
-                        else if (strcmp(key, "default_stripe_pattern") == 0)
+                        else if (strcmp(key, PARAM_D_STRIPE_PATTERN) == 0)
                                 desc->ld_pattern = val;
                         else {
                                 CERROR("Unknown param %s\n", key);

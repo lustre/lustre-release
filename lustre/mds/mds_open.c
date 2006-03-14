@@ -478,12 +478,13 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         }
 
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
-        lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
-        lmm_bufsize = req->rq_repmsg->buflens[offset];
-        LASSERT(lmm_buf);
-        LASSERT(lmm_bufsize >= lmm_size);
-
-        memcpy(lmm_buf, lmm, lmm_size);
+        lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
+        if (!lmm_buf) {
+                CERROR("Can't allocate reply buffer size=%d\n", lmm_size);
+                rc = -ENOMEM;
+        } else {
+                memcpy(lmm_buf, lmm, lmm_size);
+        }
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);

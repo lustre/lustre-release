@@ -89,20 +89,14 @@ struct lustre_disk_data {
         __u32      ldd_flags;           /* LDD_SV_TYPE */
         __u32      ldd_svindex;         /* server index (0001), must match 
                                            svname */
-/*28*/  char       ldd_fsname[64];      /* filesystem this server is part of */
+        __u32      ldd_mount_type;      /* target fs type LDD_MT_* */
+        char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
-        enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
-        __u16      ldd_mgsnid_count;
-        __u16      ldd_failnid_count;   /* server failover nid count */
-/*164*/ lnet_nid_t ldd_mgsnid[MTI_NIDS_MAX];  /* mgs nids; lmd can override */
-        lnet_nid_t ldd_failnid[MTI_NIDS_MAX]; /* server failover nids */
-        __u16      ldd_mgsnode[8];      /* nid count of each node in... */
-        __u16      ldd_failnode[8];     /* ...the nid arrays */
-
-/*1220*/__u8       ldd_uuid[40];        /* server UUID (COMPAT_146) */
+        __u8       ldd_uuid[40];        /* server UUID (COMPAT_146) */
    
-/*1260*/__u8       ldd_padding[4096 - 1260];
-/*4096*/char       ldd_mount_opts[4094]; /* target fs mount opts */
+/*200*/ __u8       ldd_padding[4096 - 200];
+/*4096*/char       ldd_mount_opts[4096]; /* target fs mount opts */
+/*8192*/char       ldd_params[4096];     /* key=value pairs */
 };
 
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
@@ -142,14 +136,13 @@ int server_name2index(char *svname, __u32 *idx, char **endptr);
 struct lustre_mount_data {
         __u32      lmd_magic;
         __u32      lmd_flags;         /* lustre mount flags */
-        int        lmd_mgsnid_count;  /* how many failover nids we have for 
-                                         the MGS */
+        int        lmd_mgs_failnodes; /* mgs failover node count */
         int        lmd_exclude_count;
-        char      *lmd_dev;           /* device or file system name */
+        char      *lmd_dev;           /* device name */
+        char      *lmd_fs;            /* file system name (client only) */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
-        lnet_nid_t lmd_mgsnid[MTI_NIDS_MAX];/* who to contact at startup */
 };
 
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client only */
@@ -174,6 +167,7 @@ struct mkfs_opts {
         __u64 mo_device_sz;             /* in KB */
         int   mo_stripe_count;
         int   mo_flags; 
+        int   mo_mgs_failnodes;
 };
 
 /****************** last_rcvd file *********************/
@@ -268,7 +262,7 @@ struct lustre_sb_info {
 # define    s2lsi_nocast(sb) ((sb)->u.generic_sbp)
 #endif
 
-#define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_dev)
+#define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_fs)
 
 #endif /* __KERNEL__ */
 
@@ -302,6 +296,5 @@ int server_mti_print(char *title, struct mgs_target_info *mti);
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id);
 
 #endif
-
 
 #endif // _LUSTRE_DISK_H

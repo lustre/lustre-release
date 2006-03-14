@@ -131,36 +131,40 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 static char *convert_hostnames(char *s1)
 {
         char *converted, *s2 = 0, *c;
+        char sep;
         int left = MAXNIDSTR;
         lnet_nid_t nid;
         
         converted = malloc(left);
         c = converted;
-        while ((left > 0) && ((s2 = strsep(&s1, ",:")))) {
-                nid = libcfs_str2nid(s2);
-                if (nid == LNET_NID_ANY) {
-                        if (*s2 == '/') 
-                                /* end of nids */
-                                break;
-                        fprintf(stderr, "%s: Can't parse NID '%s'\n", 
-                                progname, s2);
-                        free(converted);
-                        return NULL;
-                }
+        while ((left > 0) && (*s1 != '/')) {
+                s2 = strpbrk(s1, ",:");
+                if (!s2)
+                        goto out_free;
+                sep = *s2;
+                *s2 = '\0';     
+                nid = libcfs_str2nid(s1);
+                if (nid == LNET_NID_ANY)
+                        goto out_free;
                 if (LNET_NETTYP(LNET_NIDNET(nid)) == SOCKLND) {
                         __u32 addr = LNET_NIDADDR(nid);
-                        c += snprintf(c, left, "%u.%u.%u.%u@%s%u:",
+                        c += snprintf(c, left, "%u.%u.%u.%u@%s%u%c",
                                       (addr >> 24) & 0xff, (addr >> 16) & 0xff,
                                       (addr >> 8) & 0xff, addr & 0xff,
                                       libcfs_lnd2str(SOCKLND), 
-                                      LNET_NETNUM(LNET_NIDNET(nid)));
+                                      LNET_NETNUM(LNET_NIDNET(nid)), sep);
                 } else {
-                        c += snprintf(converted, left, "%s:", s2);
+                        c += snprintf(c, left, "%s%c", s1, sep);
                 }
                 left = converted + MAXNIDSTR - c;
+                s1 = s2 + 1;
         }
-        snprintf(c, left, "%s", s2);
+        snprintf(c, left, "%s", s1);
         return converted;
+out_free:
+        fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
+        free(converted);
+        return NULL;
 }
 
 /*****************************************************************************
@@ -374,7 +378,12 @@ int main(int argc, char *const argv[])
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");
-                rc = 32;
+                if (errno == ENOTBLK)
+                        fprintf(stderr,"Does this filesystem have any OSTs?\n");
+                if (errno == ENOENT)
+                        fprintf(stderr,"Is the mgs specification correct? "
+                                "(%s)\n", source);
+                rc = errno;
         } else if (!nomtab) {
                 rc = update_mtab_entry(source, target, "lustre", options,0,0,0);
         }

@@ -58,12 +58,15 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
         
         /* fsname is at most 8 chars long at the beginning of the logname
            e.g. "lustre-MDT0001" or "lustre" */
-        name_end = strchr(logname, '-');
+        name_end = strrchr(logname, '-');
         if (name_end)
                 len = name_end - logname;
         else
                 len = strlen(logname);
-        LASSERT(len <= 8);
+        if (len > 8) {
+                CERROR("fsname too long: %s\n", logname);
+                return -EINVAL;
+        }
         memcpy(&resname, logname, len);
 
         memset(res_id, 0, sizeof(*res_id));
@@ -177,7 +180,11 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
                           strlen(cfg->cfg_instance) + 1);
                 strcpy(cld->cld_cfg.cfg_instance, cfg->cfg_instance);
         }
-        mgc_logname2resid(logname, &cld->cld_resid);
+        rc = mgc_logname2resid(logname, &cld->cld_resid);
+        if (rc) {
+                config_log_put(cld);
+                RETURN(rc);
+        }
         spin_lock(&config_list_lock);
         list_add(&cld->cld_list_chain, &config_llog_list);
         spin_unlock(&config_list_lock);
@@ -612,9 +619,11 @@ static int mgc_target_register(struct obd_export *exp,
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
                               MGS_TARGET_REG, 1, &size, NULL);
         if (!req)
-                RETURN(rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         req_mti = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_mti));
+        if (!req_mti) 
+                RETURN(-ENOMEM);
         memcpy(req_mti, mti, sizeof(*req_mti));
 
         req->rq_replen = lustre_msg_size(1, &rep_size);
@@ -1009,20 +1018,23 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                        cfg->cfg_last_idx);
 
                 /* We're only called through here on the initial mount */
-                config_log_add(logname, cfg, sb);
-
+                rc = config_log_add(logname, cfg, sb);
+                if (rc) 
+                        break;
                 cld = config_log_find(logname, cfg);
                 if (IS_ERR(cld)) {
                         rc = PTR_ERR(cld);
-                } else {
-                        /* COMPAT_146 */
-                        /* For old logs, there was no start marker. */
-                        /* FIXME only set this for old logs! */
-                        cld->cld_cfg.cfg_flags |= CFG_F_MARKER;
-
-                        rc = mgc_process_log(obd, cld);
-                        config_log_put(cld);
+                        break;
                 }
+                
+                /* COMPAT_146 */
+                /* For old logs, there was no start marker. */
+                /* FIXME only set this for old logs! */
+                cld->cld_cfg.cfg_flags |= CFG_F_MARKER;
+                
+                rc = mgc_process_log(obd, cld);
+                config_log_put(cld);
+                
                 break;       
         }
         case LCFG_LOG_END: {

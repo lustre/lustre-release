@@ -1006,6 +1006,7 @@ struct mgs_target_info {
         __u32            mti_failnid_count;
         __u32            mti_config_ver;
         __u32            mti_flags;
+        char             mti_params[2048];
 };
 
 extern void lustre_swab_mgs_target_info(struct mgs_target_info *oinfo);

@@ -277,14 +277,13 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
         ENTRY;
 
         rc = mgc_logname2resid(fsname, &res_id);
-
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_PLAIN, NULL, LCK_EX, &flags,
-                              ldlm_blocking_ast, ldlm_completion_ast, 
-                              NULL, fsname, NULL, 0, NULL, lockh);
-        if (rc) {
-                CERROR("can't take cfg lock %d\n", rc);
-        }
+        if (!rc) 
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
+                                      LDLM_PLAIN, NULL, LCK_EX, &flags,
+                                      ldlm_blocking_ast, ldlm_completion_ast, 
+                                      NULL, fsname, NULL, 0, NULL, lockh);
+        if (rc) 
+                CERROR("can't take cfg lock for %s (%d)\n", fsname, rc);
         
         RETURN(rc);
 }

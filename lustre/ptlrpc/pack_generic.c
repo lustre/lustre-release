@@ -408,7 +408,7 @@ void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
 
         bufcount = m->bufcount;
         if (n >= bufcount) {
-                CDEBUG(D_INFO, "msg %p buffer[%d] not present (count %d)\n",
+                CERROR("msg %p buffer[%d] not present (count %d)\n",
                        m, n, bufcount);
                 return NULL;
         }

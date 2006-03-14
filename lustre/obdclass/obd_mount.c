@@ -37,10 +37,65 @@
 #include <linux/version.h> 
 #include <linux/lustre_log.h>
 #include <linux/lustre_disk.h>
+#include <linux/lustre_param.h>
 #include <linux/lustre_ver.h>
                       
 static int (*client_fill_super)(struct super_block *sb) = NULL;
 
+/*********** string parsing utils *********/
+
+/* returns 0 if key matches as far as keylen, else 1 */
+int class_find_param(char *buf, char *key, char **valp)
+{
+        char *ptr;
+
+        if (!buf) 
+                return 1;
+
+        if ((ptr = strstr(buf, key)) == NULL) 
+                return 1;
+
+        if (valp) 
+                *valp = ptr + strlen(key);
+        
+        return 0;
+}
+
+/* 0 is good nid, 
+   1 not found
+   < 0 error
+   endh is set to next separator */
+int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
+{
+        char tmp, *endp;
+
+        if (!buf) 
+                return 1;
+        while (*buf == ',' || *buf == ':') 
+                buf++;
+        if (*buf == ' ' || *buf == '/' || *buf == '\0') 
+                return 1;
+
+        /* nid separators or end of nids */
+        endp = strpbrk(buf, ",: /");
+        if (endp == NULL) 
+                endp = buf + strlen(buf);
+
+        tmp = *endp;
+        *endp = '\0';
+        *nid = libcfs_str2nid(buf);
+        if (*nid == LNET_NID_ANY) {
+                LCONSOLE_ERROR("Can't parse NID '%s'\n", buf);
+                *endp = tmp;
+                return -EINVAL;
+        }
+        *endp = tmp;
+
+        if (endh) 
+                *endh = endp;
+        CDEBUG(D_WARNING, "Nid %s\n", libcfs_nid2str(*nid));
+        return 0;
+}
 
 /*********** mount lookup *********/
 
@@ -240,8 +295,6 @@ int server_put_mount(char *name, struct vfsmount *mnt)
 
 static void ldd_print(struct lustre_disk_data *ldd)
 {
-        int i;
-
         PRINT_CMD(PRINT_MASK, "  disk data:\n"); 
         PRINT_CMD(PRINT_MASK, "config:  %d\n", ldd->ldd_config_ver);
         PRINT_CMD(PRINT_MASK, "fs:      %s\n", ldd->ldd_fsname);
@@ -250,18 +303,7 @@ static void ldd_print(struct lustre_disk_data *ldd)
         PRINT_CMD(PRINT_MASK, "flags:   %#x\n", ldd->ldd_flags);
         PRINT_CMD(PRINT_MASK, "diskfs:  %s\n", MT_STR(ldd));
         PRINT_CMD(PRINT_MASK, "options: %s\n", ldd->ldd_mount_opts);
-        if (!ldd->ldd_mgsnid_count) 
-                PRINT_CMD(PRINT_MASK, "no MGS nids\n");
-        else for (i = 0; i < ldd->ldd_mgsnid_count; i++) {
-                PRINT_CMD(PRINT_MASK, "mgs nid %d:  %s\n", i, 
-                       libcfs_nid2str(ldd->ldd_mgsnid[i]));
-        }
-        if (!ldd->ldd_failnid_count)
-                PRINT_CMD(PRINT_MASK, "no failover nids\n");
-        else for (i = 0; i < ldd->ldd_failnid_count; i++) {
-                PRINT_CMD(PRINT_MASK, "failover nid %d:  %s\n", i,
-                          libcfs_nid2str(ldd->ldd_failnid[i]));
-        }
+        PRINT_CMD(PRINT_MASK, "params: %s\n", ldd->ldd_params);
 }
 
 static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt, 
@@ -419,7 +461,8 @@ int lustre_end_log(struct super_block *sb, char *logname,
         int rc;
         ENTRY;
 
-        LASSERT(mgc);
+        if (!mgc)
+                RETURN(-ENOENT);
 
         /* mgc_process_config */
         lustre_cfg_bufs_reset(&bufs, mgc->obd_name);
@@ -441,7 +484,9 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         struct lustre_cfg    * lcfg = NULL;
         int rc;
                
-        CDEBUG(D_TRACE, "lcfg %s %#x %s %s %s %s\n", cfgname,
+
+        CDEBUG((cmd==LCFG_ADD_UUID)?D_WARNING:D_TRACE,
+               "lcfg %s %#x %s %s %s %s\n", cfgname,
                cmd, s1, s2, s3, s4); 
 
         lustre_cfg_bufs_reset(&bufs, cfgname);
@@ -548,8 +593,10 @@ static int lustre_start_mgc(struct super_block *sb)
         struct obd_uuid *uuid;
         class_uuid_t uuidc;
         lnet_nid_t nid;
+        char niduuid[10];
+        char *ptr;
         int recov_bk;
-        int rc = 0, i;
+        int rc = 0, i = 0, j;
         ENTRY;
 
         LASSERT(lsi->lsi_lmd);
@@ -576,63 +623,84 @@ static int lustre_start_mgc(struct super_block *sb)
                 GOTO(out, rc = 0);
         }
 
-        if (lsi->lsi_lmd->lmd_mgsnid_count == 0) {
-                LCONSOLE_ERROR("No NIDs for the MGS were given.\n");
-                RETURN(-EINVAL);
-        }
-
         CDEBUG(D_MOUNT, "Start MGC '%s'\n", LUSTRE_MGC_OBDNAME);
 
-        /* Add the first uuid for the MGS */
-        nid = lsi->lsi_lmd->lmd_mgsnid[0];
-        rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid, LCFG_ADD_UUID, 
-                     libcfs_nid2str(nid), 0,0,0);
-        if (rc < 0)
-                RETURN(rc);
-
-        /* Generate a unique uuid for each MGC */
-        OBD_ALLOC_PTR(uuid);
-#if 0
-        /* use the 1st non-loopback nid */
-        lnet_process_id_t id;
-        i = 0;
-        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
-                if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND) 
-                        continue;
-                break;
+        /* Add the primary nids for the MGS */
+        if (lsi->lsi_flags & LSI_SERVER) {
+                ptr = lsi->lsi_ldd->ldd_params;
+                if (IS_MGS(lsi->lsi_ldd)) {
+                        /* Use local nids (including LO) */
+                        lnet_process_id_t id;
+                        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+                                rc = do_lcfg(LUSTRE_MGC_OBDNAME, id.nid,
+                                             LCFG_ADD_UUID, "mgsnid0", 0,0,0);
+                        }
+                } else {
+                        /* Use mgsnode= nids */
+                        if (class_find_param(ptr, PARAM_MGSNODE, &ptr) != 0) {
+                                CERROR("No MGS nids given.\n");
+                                RETURN(-EINVAL);
+                        }
+                        while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+                                rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid,
+                                             LCFG_ADD_UUID, "mgsnid0", 0,0,0);
+                                i++;
+                        }
+                }
+        } else { /* client */
+                /* use nids from mount line: uml1,1@elan:uml2,2@elan:/lustre */
+                ptr = lsi->lsi_lmd->lmd_dev;
+                while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+                        rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid,
+                                     LCFG_ADD_UUID, "mgsnid0", 0,0,0);
+                        i++;
+                        if (*ptr == ':') 
+                                break;
+                }
         }
-        sprintf(uuid->uuid, "mgc_"LPX64, id.nid);
-#else
-        /* random makes reconnect easier */
+        if (i == 0) {
+                CERROR("No valid MGS nids found.\n");
+                RETURN(-EINVAL);
+        }
+        lsi->lsi_lmd->lmd_mgs_failnodes = 1;
+
+        /* Random uuid for MGC allows easier reconnects */
+        OBD_ALLOC_PTR(uuid);
         class_generate_random_uuid(uuidc);
         class_uuid_unparse(uuidc, uuid);
-#endif        
-        CDEBUG(D_MOUNT, "generated uuid: %s\n", uuid->uuid);
 
         /* Start the MGC */
         rc = lustre_start_simple(LUSTRE_MGC_OBDNAME, LUSTRE_MGC_NAME, 
                                  (char *)uuid->uuid, LUSTRE_MGS_OBDNAME,
-                                 libcfs_nid2str(nid));
+                                 "mgsnid0");
         OBD_FREE_PTR(uuid);
         if (rc) 
                 RETURN(rc);
         
-        /* Add the redundant MGS nids */
-        for (i = 1; i < lsi->lsi_lmd->lmd_mgsnid_count; i++) {
-                nid = lsi->lsi_lmd->lmd_mgsnid[i];
-                rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid, LCFG_ADD_UUID, 
-                             libcfs_nid2str(nid), 0, 0, 0);
-                if (rc) {
-                        CERROR("Add uuid for %s failed %d\n", 
-                               libcfs_nid2str(nid), rc);
-                        continue;
+        /* Add any failover MGS nids */
+        i = 1;
+        while ((*ptr == ':' || 
+                class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0)) {
+                /* New failover node */
+                sprintf(niduuid, "mgsnid%d", i);
+                j = 0;
+                while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+                        j++;
+                        rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid,
+                                     LCFG_ADD_UUID, niduuid, 0,0,0);
+                        if (*ptr == ':') 
+                                break;
                 }
-                rc = do_lcfg(LUSTRE_MGC_OBDNAME, 0, LCFG_ADD_CONN,
-                             libcfs_nid2str(nid), 0, 0, 0);
-                if (rc) 
-                        CERROR("Add conn for %s failed %d\n", 
-                               libcfs_nid2str(nid), rc);
+                if (j > 0) {
+                        rc = do_lcfg(LUSTRE_MGC_OBDNAME, 0, LCFG_ADD_CONN,
+                                     niduuid, 0, 0, 0);
+                        i++;
+                } else {
+                        /* at ":/fsname" */
+                        break;
+                }
         }
+        lsi->lsi_lmd->lmd_mgs_failnodes = i;
         
         obd = class_name2obd(LUSTRE_MGC_OBDNAME);
         if (!obd) {
@@ -677,7 +745,7 @@ static int lustre_stop_mgc(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
-        lnet_nid_t nid;
+        char niduuid[10];
         int i, rc;
         ENTRY;
 
@@ -710,15 +778,13 @@ static int lustre_stop_mgc(struct super_block *sb)
         if (rc)
                 RETURN(rc);
         
-        /* class_add_uuid adds a nid even if the same uuid exists; we might
-           delete any copy here.  So they all better match. */
-        for (i = 0; i < lsi->lsi_lmd->lmd_mgsnid_count; i++) {
-                nid = lsi->lsi_lmd->lmd_mgsnid[i];
-                rc = do_lcfg(obd->obd_name, nid, LCFG_DEL_UUID, 
-                              libcfs_nid2str(nid), 0, 0, 0);
+        for (i = 0; i < lsi->lsi_lmd->lmd_mgs_failnodes; i++) {
+                sprintf(niduuid, "mgsnid%d", i);
+                rc = do_lcfg(obd->obd_name, 0, LCFG_DEL_UUID, 
+                             niduuid, 0, 0, 0);
                 if (rc)
                         CERROR("del MDC UUID %s failed: rc = %d\n", 
-                               libcfs_nid2str(nid), rc);
+                               niduuid, rc);
         }
         /* class_import_put will get rid of the additional connections */
 
@@ -809,8 +875,6 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
         int i = 0;
         ENTRY;
 
-        if (!mti) 
-                RETURN(-ENOMEM);
         if (!(lsi->lsi_flags & LSI_SERVER))
                 RETURN(-EINVAL);
 
@@ -832,14 +896,16 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
                 }
         }    
 
-        mti->mti_failnid_count = ldd->ldd_failnid_count;
-        memcpy(mti->mti_failnids, ldd->ldd_failnid, sizeof(mti->mti_failnids));
-        memcpy(mti->mti_failnodes, ldd->ldd_failnode, 
-               sizeof(mti->mti_failnodes));
-        memcpy(mti->mti_uuid, ldd->ldd_uuid, sizeof(mti->mti_uuid));
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;
+        memcpy(mti->mti_uuid, ldd->ldd_uuid, sizeof(mti->mti_uuid));
+        if (strlen(ldd->ldd_params) > sizeof(mti->mti_params)) {
+                CERROR("params too big for mti\n");
+                RETURN(-ENOMEM);
+                /* FIXME we can't send a msg much bigger than 4k - use bulk? */
+        }
+        memcpy(mti->mti_params, ldd->ldd_params, sizeof(mti->mti_params));
         RETURN(0);
 }
 
@@ -860,6 +926,8 @@ int server_register_target(struct super_block *sb)
                 RETURN(-EINVAL);
 
         OBD_ALLOC_PTR(mti);
+        if (!mti) 
+                RETURN(-ENOMEM);
         rc = server_sb2mti(sb, mti);
         if (rc) 
                 GOTO(out, rc);
@@ -1343,7 +1411,7 @@ static int server_fill_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct vfsmount *mnt;
-        int mgs_service = 0, i = 0, rc;
+        int rc;
         ENTRY;
 
         /* the One True Mount */
@@ -1370,32 +1438,12 @@ static int server_fill_super(struct super_block *sb)
                 GOTO(out, rc = -EALREADY);
         }
 
-        /* append on-disk MGS nids to mount-line MGS nids */
-        for (i = 0; (i < lsi->lsi_ldd->ldd_mgsnid_count) && 
-              (lsi->lsi_lmd->lmd_mgsnid_count < MTI_NIDS_MAX); i++) {
-                lsi->lsi_lmd->lmd_mgsnid[lsi->lsi_lmd->lmd_mgsnid_count++] = 
-                        lsi->lsi_ldd->ldd_mgsnid[i];
-        }
-
         /* start MGS before MGC */
         if (IS_MGS(lsi->lsi_ldd)) {
                 rc = server_start_mgs(sb);
                 if (rc) {
                         CERROR("ignoring Failed MGS start!!\n");
                         //GOTO(out_mnt, rc);
-                } else {
-                        /* add local nids (including LO) to MGS nids */
-                        lnet_process_id_t id;
-                        int j = lsi->lsi_lmd->lmd_mgsnid_count;
-                        i = 0;
-                        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
-                                if (j >= MTI_NIDS_MAX) 
-                                        break;
-                                lsi->lsi_lmd->lmd_mgsnid[j++] = id.nid;
-                        }     
-                        lsi->lsi_lmd->lmd_mgsnid_count = j;
-
-                        mgs_service++;
                 }
         }
 
@@ -1489,16 +1537,9 @@ static void lmd_print(struct lustre_mount_data *lmd)
         int i;
 
         PRINT_CMD(PRINT_MASK, "  mount data:\n"); 
-        if (!lmd->lmd_mgsnid_count) 
-                PRINT_CMD(PRINT_MASK, "no MGS nids\n");
-        else for (i = 0; i < lmd->lmd_mgsnid_count; i++) {
-                PRINT_CMD(PRINT_MASK, "nid %d:  %s\n", i, 
-                       libcfs_nid2str(lmd->lmd_mgsnid[i]));
-        }
         if (lmd_is_client(lmd)) 
-                PRINT_CMD(PRINT_MASK, "fsname:  %s\n", lmd->lmd_dev);
-        else
-                PRINT_CMD(PRINT_MASK, "device:  %s\n", lmd->lmd_dev);
+                PRINT_CMD(PRINT_MASK, "fsname:  %s\n", lmd->lmd_fs);
+        PRINT_CMD(PRINT_MASK, "device:  %s\n", lmd->lmd_dev);
         PRINT_CMD(PRINT_MASK, "flags:   %x\n", lmd->lmd_flags);
         if (lmd->lmd_opts)
                 PRINT_CMD(PRINT_MASK, "options: %s\n", lmd->lmd_opts);
@@ -1522,7 +1563,7 @@ int lustre_check_exclusion(struct super_block *sb, char *svname)
                 RETURN(0);
 
         CDEBUG(D_MOUNT, "Check exclusion %s (%d) in %d of %s\n", svname, 
-               index, lmd->lmd_exclude_count, lmd->lmd_dev);
+               index, lmd->lmd_exclude_count, lmd->lmd_fs);
         
         for(i = 0; i < lmd->lmd_exclude_count; i++) {
                 if (index == lmd->lmd_exclude[i]) {
@@ -1642,6 +1683,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         /* terminate options right before device.  device
                            must be the last one. */
                         *s1 = 0;
+                        break;
                 }
 
                 /* Find next opt */
@@ -1657,46 +1699,21 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 goto invalid;
         }
 
-        if (strchr(devname, ',')) {
-                LCONSOLE_ERROR("Device name must be the final option\n");
-                goto invalid;
-        }
-
-        s1 = devname;
-        /* Get MGS nids if client mount:  uml1@tcp:uml2@tcp:/fsname-client */
-        while ((s2 = strchr(s1, ':'))) {
-                lnet_nid_t nid;
-                *s2 = 0;
+        s1 = strrchr(devname, ':');
+        if (s1) {
                 lmd->lmd_flags = LMD_FLG_CLIENT;
-                nid = libcfs_str2nid(s1);
-                if (nid == LNET_NID_ANY) {
-                        LCONSOLE_ERROR("Can't parse NID '%s'\n", s1);
-                        goto invalid;
-                }
-                if (lmd->lmd_mgsnid_count >= MTI_NIDS_MAX) {
-                        LCONSOLE_ERROR("Too many NIDs: '%s'\n", s1);
-                        goto invalid;
-                }
-                lmd->lmd_mgsnid[lmd->lmd_mgsnid_count++] = nid;
-                s1 = s2 + 1;
-        }
-
-        if (lmd_is_client(lmd)) {
                 /* Remove leading /s from fsname */
-                while (*++s1 == '/')
-                        ;
-        }
-
-        if (*s1 == 0) {
-                LCONSOLE_ERROR("No filesytem specified\n");
-                goto invalid;
-        }
+                while (*++s1 == '/') ;
+        } else
+                s1 = devname;
 
         /* freed in lustre_free_lsi */
-        OBD_ALLOC(lmd->lmd_dev, strlen(s1) + 1);
+        OBD_ALLOC(lmd->lmd_dev, strlen(devname) + 1);
         if (!lmd->lmd_dev) 
                 RETURN(-ENOMEM);
-        strcpy(lmd->lmd_dev, s1);
+        strcpy(lmd->lmd_dev, devname);
+        /* fsname is last part of devname for clients (mgsnid:/fsname) */
+        lmd->lmd_fs = lmd->lmd_dev + (s1 - devname);
         
         /* save mount options */
         s1 = options + strlen(options) - 1;
@@ -1743,11 +1760,11 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         if (lmd_is_client(lmd)) {
-                CDEBUG(D_MOUNT, "Mounting client for fs %s\n", lmd->lmd_dev);
+                CDEBUG(D_MOUNT, "Mounting client for fs %s\n", lmd->lmd_fs);
                 if (!client_fill_super) {
                         LCONSOLE_ERROR("Nothing registered for client mount!"
                                " Is llite module loaded?\n");
-                        rc = -ENOSYS;
+                        rc = -ENODEV;
                 } else {
                         rc = lustre_start_mgc(sb);
                         if (rc) 
@@ -1773,7 +1790,7 @@ out:
                 CERROR("Unable to mount %s\n", 
                        s2lsi(sb) ? lmd->lmd_dev : "");
         } else {
-                CDEBUG(D_MOUNT, "Successfully mounted %s\n", lmd->lmd_dev);
+                CDEBUG(D_MOUNT, "Successfully mounted %s\n", lmd->lmd_fs);
         }
         RETURN(rc);
 } 
@@ -1848,6 +1865,7 @@ EXPORT_SYMBOL(server_put_mount);
 EXPORT_SYMBOL(server_register_target);
 EXPORT_SYMBOL(server_name2index);
 EXPORT_SYMBOL(server_mti_print);
-
+EXPORT_SYMBOL(class_find_param);
+EXPORT_SYMBOL(class_parse_nid);
 
 
