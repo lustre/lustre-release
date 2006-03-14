@@ -1451,19 +1451,19 @@ int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
         
         /* It's all special cases */
 
-        /* obd timeout */
+        /* Change obd timeout */
         if (lcfg->lcfg_command == LCFG_SET_TIMEOUT) {
                 CDEBUG(D_MGS, "timeout, mod MDT, OSTs, client\n");
                 rc = mgs_setparam_all_logs(obd, fsdb, fsname, lcfg); 
                 GOTO(out, rc);
         }
 
-        /* add failover nidlist */
+        /* Add a failover nidlist */
         if ((lcfg->lcfg_command == LCFG_PARAM) && 
             class_find_param(lustre_cfg_string(lcfg, 1), 
-                           PARAM_FAILNODE, &val)) {
+                             PARAM_FAILNODE, &val) == 0) {
                 struct mgs_target_info *mti;
-                CDEBUG(D_MGS, "failnode, mod MDT, client\n");
+                CDEBUG(D_MGS, "failnode\n");
                 OBD_ALLOC_PTR(mti);
                 if (!mti) 
                         GOTO(out, rc = -ENOMEM);
@@ -1477,19 +1477,19 @@ int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
                 mti->mti_flags = rc;
                 strncpy(mti->mti_params, lustre_cfg_string(lcfg, 1), 
                         sizeof(mti->mti_params));
-                /* FIXME add to lctl.  nids must be in dotted-quad ascii -
+                /* Nids must be in dotted-quad ascii -
                    we can't resolve hostnames from the kernel. */
                 rc = mgs_write_log_add_failnid(obd, fsdb, mti); 
                 OBD_FREE_PTR(mti);
                 GOTO(out, rc);
         }
         
-        /* lov default stripe params */
+        /* Change lov default stripe params */
         if ((lcfg->lcfg_command == LCFG_PARAM) && 
             class_find_param(lustre_cfg_string(lcfg, 1),
-                           PARAM_DEFAULT_STRIPE, &val)) {
+                           PARAM_DEFAULT_STRIPE, &val) == 0) {
                 char *lovname, *logname;
-                CDEBUG(D_MGS, "lov param, mod MDT, client\n");
+                CDEBUG(D_MGS, "lov param\n");
                 name_create(fsname, "-MDT0000", &logname);
                 name_create(fsname, "-mdtlov", &lovname);
                 if (strcmp(lovname, devname) != 0) {
