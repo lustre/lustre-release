@@ -60,6 +60,7 @@ endif # MODULES
 dist-hook:
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
+			-name .svn -o \
 			-name .#* | xargs rm -rf
 
 build/lustre.spec: build/lustre.spec.in config.status
