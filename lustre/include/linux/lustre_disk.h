@@ -139,7 +139,7 @@ struct lustre_mount_data {
         int        lmd_mgs_failnodes; /* mgs failover node count */
         int        lmd_exclude_count;
         char      *lmd_dev;           /* device name */
-        char      *lmd_fs;            /* file system name (client only) */
+        char      *lmd_profile;       /* client only */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
@@ -262,7 +262,7 @@ struct lustre_sb_info {
 # define    s2lsi_nocast(sb) ((sb)->u.generic_sbp)
 #endif
 
-#define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_fs)
+#define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 
 #endif /* __KERNEL__ */
 

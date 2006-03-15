@@ -1104,6 +1104,9 @@ static int lustre_free_lsi(struct super_block *sb)
                 if (lsi->lsi_lmd->lmd_dev != NULL) 
                         OBD_FREE(lsi->lsi_lmd->lmd_dev, 
                                  strlen(lsi->lsi_lmd->lmd_dev) + 1);
+                if (lsi->lsi_lmd->lmd_profile != NULL) 
+                        OBD_FREE(lsi->lsi_lmd->lmd_profile, 
+                                 strlen(lsi->lsi_lmd->lmd_profile) + 1);
                 if (lsi->lsi_lmd->lmd_opts != NULL) 
                         OBD_FREE(lsi->lsi_lmd->lmd_opts, 
                                  strlen(lsi->lsi_lmd->lmd_opts) + 1);
@@ -1538,7 +1541,7 @@ static void lmd_print(struct lustre_mount_data *lmd)
 
         PRINT_CMD(PRINT_MASK, "  mount data:\n"); 
         if (lmd_is_client(lmd)) 
-                PRINT_CMD(PRINT_MASK, "fsname:  %s\n", lmd->lmd_fs);
+                PRINT_CMD(PRINT_MASK, "profile: %s\n", lmd->lmd_profile);
         PRINT_CMD(PRINT_MASK, "device:  %s\n", lmd->lmd_dev);
         PRINT_CMD(PRINT_MASK, "flags:   %x\n", lmd->lmd_flags);
         if (lmd->lmd_opts)
@@ -1563,7 +1566,7 @@ int lustre_check_exclusion(struct super_block *sb, char *svname)
                 RETURN(0);
 
         CDEBUG(D_MOUNT, "Check exclusion %s (%d) in %d of %s\n", svname, 
-               index, lmd->lmd_exclude_count, lmd->lmd_fs);
+               index, lmd->lmd_exclude_count, lmd->lmd_dev);
         
         for(i = 0; i < lmd->lmd_exclude_count; i++) {
                 if (index == lmd->lmd_exclude[i]) {
@@ -1649,7 +1652,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         }
         lmd->lmd_magic = LMD_MAGIC;
 
-        /* default flags */
+        /* Default flags */
         lmd->lmd_flags |= LMD_FLG_RECOVER;
 
         s1 = options;
@@ -1704,23 +1707,25 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 lmd->lmd_flags = LMD_FLG_CLIENT;
                 /* Remove leading /s from fsname */
                 while (*++s1 == '/') ;
-        } else
-                s1 = devname;
+                /* Freed in lustre_free_lsi */
+                OBD_ALLOC(lmd->lmd_profile, strlen(s1) + 8);
+                if (!lmd->lmd_profile) 
+                        RETURN(-ENOMEM);
+                sprintf(lmd->lmd_profile, "%s-client", s1);
+        }
 
-        /* freed in lustre_free_lsi */
+        /* Freed in lustre_free_lsi */
         OBD_ALLOC(lmd->lmd_dev, strlen(devname) + 1);
         if (!lmd->lmd_dev) 
                 RETURN(-ENOMEM);
         strcpy(lmd->lmd_dev, devname);
-        /* fsname is last part of devname for clients (mgsnid:/fsname) */
-        lmd->lmd_fs = lmd->lmd_dev + (s1 - devname);
         
-        /* save mount options */
+        /* Save mount options */
         s1 = options + strlen(options) - 1;
         while (s1 >= options && (*s1 == ',' || *s1 == ' ')) 
                 *s1-- = 0;
         if (*options != 0) {
-                /* freed in lustre_free_lsi */
+                /* Freed in lustre_free_lsi */
                 OBD_ALLOC(lmd->lmd_opts, strlen(options) + 1);
                 if (!lmd->lmd_opts) 
                         RETURN(-ENOMEM);
@@ -1760,7 +1765,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         if (lmd_is_client(lmd)) {
-                CDEBUG(D_MOUNT, "Mounting client for fs %s\n", lmd->lmd_fs);
+                CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
                 if (!client_fill_super) {
                         LCONSOLE_ERROR("Nothing registered for client mount!"
                                " Is llite module loaded?\n");
@@ -1790,7 +1795,7 @@ out:
                 CERROR("Unable to mount %s\n", 
                        s2lsi(sb) ? lmd->lmd_dev : "");
         } else {
-                CDEBUG(D_MOUNT, "Successfully mounted %s\n", lmd->lmd_fs);
+                CDEBUG(D_MOUNT, "Successfully mounted %s\n", lmd->lmd_dev);
         }
         RETURN(rc);
 } 
