@@ -468,7 +468,7 @@ int t18(char *name)
         char buf[128];
         int fd, i;
         struct stat statbuf[3];
-        ENTRY("write should change mtime/atime");
+        ENTRY("write should change mtime/ctime");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t18_file", lustre_path);
 
         for (i = 0; i < 3; i++) {
@@ -486,13 +486,13 @@ int t18(char *name)
                         printf("Error stat\n");
                         return(1);
                 }
-                printf("atime %lu, mtime %lu\n",
-                        statbuf[i].st_atime, statbuf[i].st_mtime);
+                printf("ctime %lu, mtime %lu\n",
+                        statbuf[i].st_ctime, statbuf[i].st_mtime);
                 sleep(2);
         }
 
         for (i = 1; i < 3; i++) {
-                if ((statbuf[i].st_atime <= statbuf[i-1].st_atime) ||
+                if ((statbuf[i].st_ctime <= statbuf[i-1].st_ctime) ||
                     (statbuf[i].st_mtime <= statbuf[i-1].st_mtime)) {
                         printf("time error\n");
                         return(-1);

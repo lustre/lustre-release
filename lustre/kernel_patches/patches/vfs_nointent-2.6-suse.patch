@@ -304,7 +304,7 @@ Index: linux-2.6.5-12.1/fs/open.c
 +	
 +	if (inode->i_op->setattr_raw) {
 +		struct inode_operations *op = dentry->d_inode->i_op;
-+		
++
 +		newattrs.ia_mode = mode;
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;

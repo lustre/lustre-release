@@ -10,7 +10,7 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 
+# bug number for skipped test:
 ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
@@ -267,7 +267,7 @@ test_5d() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE,$MOUNTOPT `facet_nid mds`://mds_svc/client_facet $MOUNT  || return 1 
+	llmount -o nettype=$NETTYPE,$MOUNTOPT `facet_nid mds`://mds_svc/client_facet $MOUNT  || return 1
 
 	umount_client $MOUNT || return 2
 	
@@ -326,18 +326,18 @@ test_9() {
         start_mds
         mount_client $MOUNT
         CHECK_PTLDEBUG="`do_facet mds sysctl lnet.debug | sed -e 's/.* = //'`"
-        if [ "$CHECK_PTLDEBUG" = "1" ]; then
+        if [ "$CHECK_PTLDEBUG" ] && [ $CHECK_PTLDEBUG -eq 1 ]; then
            echo "lmc --debug success"
         else
            echo "lmc --debug: want 1, have $CHECK_PTLDEBUG"
            return 1
         fi
 	# again with the pdsh prefix
-        CHECK_SUBSYSTEM="`do_facet mds sysctl lnet.subsystem_debug | cut -d= -f2`"
-        if [ "$CHECK_SUBSYSTEM" = "2" ]; then
+        CHECK_SUBSYS="`do_facet mds sysctl lnet.subsystem_debug|cut -d= -f2`"
+        if [ "$CHECK_SUBSYS" ] && [ $CHECK_SUBSYS -eq 2 ]; then
            echo "lmc --subsystem success"
         else
-           echo "lmc --subsystem: want 2, have $CHECK_SUBSYSTEM"
+           echo "lmc --subsystem: want 2, have $CHECK_SUBSYS"
            return 1
         fi
         check_mount || return 41
@@ -351,14 +351,14 @@ test_9() {
         start_ost
         start_mds
         CHECK_PTLDEBUG="`do_facet mds sysctl lnet.debug | cut -d= -f2`"
-        if [ $CHECK_PTLDEBUG = "3" ]; then
+        if [ "$CHECK_PTLDEBUG" ] && [ $CHECK_PTLDEBUG -eq 3 ]; then
            echo "lconf --debug success"
         else
            echo "lconf --debug: want 3, have $CHECK_PTLDEBUG"
            return 1
         fi
         CHECK_SUBSYS="`do_facet mds sysctl lnet.subsystem_debug | cut -d= -f2`"
-        if [ $CHECK_SUBSYS = "20" ]; then
+        if [ "$CHECK_SUBSYS" ] && [ $CHECK_SUBSYS -eq 20 ]; then
            echo "lconf --subsystem success"
         else
            echo "lconf --subsystem: want 20, have $CHECK_SUBSYS"
@@ -639,7 +639,7 @@ run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 
 test_16() {
         TMPMTPT="/mnt/conf16"
-                                                                                                                             
+
         if [ ! -f "$MDSDEV" ]; then
             echo "no $MDSDEV existing, so mount Lustre to create one"
             start_ost
@@ -648,7 +648,7 @@ test_16() {
             check_mount || return 41
             cleanup || return $?
         fi
-                                                                                                                             
+
         echo "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
         do_facet mds "[ -d $TMPMTPT ] || mkdir -p $TMPMTPT;
                       mount -o loop -t ext3 $MDSDEV $TMPMTPT || return \$?;
@@ -661,30 +661,30 @@ test_16() {
         mount_client $MOUNT
         check_mount || return 41
         cleanup || return $?
-                                                                                                                             
+
         echo "read the mode of OBJECTS/LOGS/PENDING and check if they has been changed properly"
-        EXPECTEDOBJECTSMODE=`do_facet mds "debugfs -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | awk '/Mode: /{print $NF}'`
-        EXPECTEDLOGSMODE=`do_facet mds "debugfs -R 'stat LOGS' $MDSDEV 2> /dev/null" | awk '/Mode: /{print $NF}'`
-        EXPECTEDPENDINGMODE=`do_facet mds "debugfs -R 'stat PENDING' $MDSDEV 2> /dev/null" | awk '/Mode: /{print $NF}'`
+        EXPECTEDOBJECTSMODE=`do_facet mds "debugfs -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
+        EXPECTEDLOGSMODE=`do_facet mds "debugfs -R 'stat LOGS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
+        EXPECTEDPENDINGMODE=`do_facet mds "debugfs -R 'stat PENDING' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
 
         if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
                 echo "Success:Lustre change the mode of OBJECTS correctly"
         else
-                echo "Error: Lustre does not change the mode of OBJECTS properly"
+                echo "Error: Lustre does not change mode of OBJECTS properly"
                 return 1
         fi
-                                                                                                                             
+
         if [ "$EXPECTEDLOGSMODE" = "0777" ]; then
                 echo "Success:Lustre change the mode of LOGS correctly"
         else
-                echo "Error: Lustre does not change the mode of LOGS properly"
+                echo "Error: Lustre does not change mode of LOGS properly"
                 return 1
         fi
-                                                                                                                             
+
         if [ "$EXPECTEDPENDINGMODE" = "0777" ]; then
                 echo "Success:Lustre change the mode of PENDING correctly"
         else
-                echo "Error: Lustre does not change the mode of PENDING properly"
+                echo "Error: Lustre does not change mode of PENDING properly"
                 return 1
         fi
 }
@@ -717,13 +717,13 @@ test_18() {
         OLDMDSSIZE=$MDSSIZE
         MDSSIZE=2000000
         gen_config
-                                                                                                                             
+
         echo "mount lustre system..."
         start_ost
         start_mds
         mount_client $MOUNT
         check_mount || return 41
-                                                                                                                             
+
         echo "check journal size..."
         FOUNDJOURNALSIZE=`do_facet mds "debugfs -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ "$FOUNDJOURNALSIZE" = "79691776" ]; then
@@ -733,9 +733,9 @@ test_18() {
                 echo "expected journal size: 79691776(76M), found journal size: $FOUNDJOURNALSIZE"
                 return 1
         fi
-                                                                                                                             
+
         cleanup || return $?
-                                                                                                                             
+
         MDSSIZE=$OLDMDSSIZE
         gen_config
 }

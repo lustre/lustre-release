@@ -534,7 +534,7 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
         RETURN(rc);
 }
 
-static inline int obd_connect(struct lustre_handle *conn, struct obd_device *obd,
+static inline int obd_connect(struct lustre_handle *conn,struct obd_device *obd,
                               struct obd_uuid *cluuid,
                               struct obd_connect_data *d)
 {
@@ -1053,7 +1053,7 @@ static inline int obd_notify(struct obd_device *obd,
         ENTRY;
         OBD_CHECK_DEV(obd);
         if (!obd->obd_set_up) {
-                CERROR("obd %s not set up\n", obd->obd_name);
+                CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
                 RETURN(-EINVAL);
         }
 

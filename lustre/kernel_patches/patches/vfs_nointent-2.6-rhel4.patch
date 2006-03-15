@@ -325,7 +325,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
 +		error = op->setattr_raw(inode, &newattrs);
-+		/* the file system wants to use normal vfs path now */
++		/* the file system wants to use the normal vfs path now */
 +		if (error != -EOPNOTSUPP)
 +			goto out;
 +	}

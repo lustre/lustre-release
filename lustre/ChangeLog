@@ -14,6 +14,33 @@ Details    : If a server is under heavy load and cannot reply to new
 	     code, and ensure that only a single connection will be processed
 	     for a given client UUID, even if the lock is dropped.
 
+Severity   : enhancement
+Bugzilla   : 3627
+Description: add TCP zero-copy support to kernel
+Details    : Add support to the kernel TCP stack to allow zero-copy bulk
+	     sends if the hardware supports scatter-gather and checksumming.
+	     This allows socklnd to do client-write and server-read more
+	     efficiently and reduce CPU utilization from skbuf copying.
+
+Severity   : minor
+Frequency  : only if NFS exporting from client
+Bugzilla   : 10258
+Description: NULL pointer deref in ll_iocontrol() if chattr mknod file
+Details    : If setting attributes on a file created under NFS that had
+	     never been opened it would be possible to oops the client
+	     if the file had no objects.
+
+Severity   : minor
+Frequency  : always for liblustre
+Bugzilla   : 10290
+Description: liblustre client does MDS+OSTs setattr RPC for each write
+Details    : When doing a write from a liblustre client, the client
+	     incorrectly issued an RPC to the MDS and each OST the file was
+	     striped over in order to update the timestamps.  When writing
+	     with small chunks and many clients this could overwhelm the MDS
+	     with RPCs.  In all cases it would slow down the write because
+	     these RPCs are unnecessary.
+
 ------------------------------------------------------------------------------
 
 02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>

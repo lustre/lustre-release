@@ -42,15 +42,6 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/ext2_fs_sb.h
  /*
   * second extended-fs super-block data in memory
   */
-Index: linux-2.6.9-5.0.3.EL/kernel/kallsyms.c
-===================================================================
---- linux-2.6.9-5.0.3.EL.orig/kernel/kallsyms.c	2005-02-26 13:24:35.479811840 +0200
-+++ linux-2.6.9-5.0.3.EL/kernel/kallsyms.c	2005-02-26 13:53:13.799587528 +0200
-@@ -310,3 +310,4 @@
- __initcall(kallsyms_init);
- 
- EXPORT_SYMBOL(__print_symbol);
-+EXPORT_SYMBOL(kernel_text_address);
 Index: linux-2.6.9-5.0.3.EL/net/core/sock.c
 ===================================================================
 --- linux-2.6.9-5.0.3.EL.orig/net/core/sock.c	2005-02-26 13:24:35.490810168 +0200

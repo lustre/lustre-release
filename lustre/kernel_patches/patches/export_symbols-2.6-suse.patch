@@ -64,12 +64,3 @@ Index: linux-2.6.5-12.1/kernel/exit.c
  static inline void __put_fs_struct(struct fs_struct *fs)
  {
  	/* No need to hold fs->lock if we are killing it */
-Index: linux-2.6.4-51.0/kernel/kallsyms.c
-===================================================================
---- linux-2.6.4-51.0.orig/kernel/kallsyms.c	2004-04-05 12:42:08.000000000 -0400
-+++ linux-2.6.4-51.0/kernel/kallsyms.c	2004-04-15 15:00:56.000000000 -0400
-@@ -329,3 +329,4 @@
- 
- EXPORT_SYMBOL(kallsyms_lookup);
- EXPORT_SYMBOL(__print_symbol);
-+EXPORT_SYMBOL(kernel_text_address);

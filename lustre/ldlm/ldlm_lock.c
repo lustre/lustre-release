@@ -745,6 +745,10 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                                           LDLM_FL_WAIT_NOREPROC,
                                                                  NULL);
                                 if (err) {
+                                        if (flags & LDLM_FL_TEST_LOCK)
+                                                LDLM_LOCK_PUT(lock);
+                                        else
+                                                ldlm_lock_decref_internal(lock, mode);
                                         rc = 0;
                                         goto out2;
                                 }

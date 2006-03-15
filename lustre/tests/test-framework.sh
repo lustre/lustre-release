@@ -554,7 +554,7 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
-	sysctl -w lustre.fail_loc=0 || true
+	sysctl -w lustre.fail_loc=0 2> /dev/null || true
 	echo "${TESTSUITE}: **** FAIL:" $@
 	log "FAIL: $@"
 	exit 1
