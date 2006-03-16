@@ -232,7 +232,7 @@ command_t cmdlist[] = {
         {"del_mount_option", jt_lcfg_del_mount_option, 0,
          "usage: del_mount_option profile\n"},
         {"set_timeout", jt_lcfg_set_timeout, 0,
-         "usage: set_timeout <secs>\n"},
+         "usage: conf_param obd_timeout=<secs>\n"},
         {"set_lustre_upcall", jt_lcfg_set_lustre_upcall, 0,
          "usage: set_lustre_upcall </full/path/to/upcall> \n"},
         {"add_conn ", jt_lcfg_add_conn, 0,

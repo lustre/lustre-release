@@ -533,6 +533,12 @@ int jt_lcfg_set_timeout(int argc, char **argv)
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
 
+        fprintf(stderr, "%s has been deprecated. Use conf_param instead.\n"
+                "e.g. conf_param lustre-MDT0000 obd_timeout=50\n",
+                jt_cmdname(argv[0]));
+        return CMD_HELP;
+
+
         if (argc != 2)
                 return CMD_HELP;
 
@@ -540,8 +546,8 @@ int jt_lcfg_set_timeout(int argc, char **argv)
         lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
         lcfg->lcfg_num = atoi(argv[1]);
         
-        //rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
-        rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        //rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
 
         lustre_cfg_free(lcfg);
         if (rc < 0) {

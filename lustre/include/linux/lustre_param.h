@@ -28,6 +28,7 @@
 
 /* obd_mount.c */
 int class_find_param(char *buf, char *key, char **valp);
+int class_match_param(char *buf, char *key, char **valp);
 int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh);
 
 

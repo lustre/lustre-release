@@ -44,7 +44,7 @@ static int (*client_fill_super)(struct super_block *sb) = NULL;
 
 /*********** string parsing utils *********/
 
-/* returns 0 if key matches as far as keylen, else 1 */
+/* returns 0 if we find this key in the buffer, else 1 */
 int class_find_param(char *buf, char *key, char **valp)
 {
         char *ptr;
@@ -57,6 +57,21 @@ int class_find_param(char *buf, char *key, char **valp)
 
         if (valp) 
                 *valp = ptr + strlen(key);
+        
+        return 0;
+}
+
+/* returns 0 if this is the first key in the buffer, else 1 */
+int class_match_param(char *buf, char *key, char **valp)
+{
+        if (!buf) 
+                return 1;
+
+        if (memcmp(buf, key, strlen(key)) != 0) 
+                return 1;
+
+        if (valp) 
+                *valp = buf + strlen(key);
         
         return 0;
 }
@@ -1871,6 +1886,7 @@ EXPORT_SYMBOL(server_register_target);
 EXPORT_SYMBOL(server_name2index);
 EXPORT_SYMBOL(server_mti_print);
 EXPORT_SYMBOL(class_find_param);
+EXPORT_SYMBOL(class_match_param);
 EXPORT_SYMBOL(class_parse_nid);
 
 
