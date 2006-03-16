@@ -2027,43 +2027,10 @@ static int mds_postsetup(struct obd_device *obd)
 
         if (mds->mds_profile) {
                 struct lustre_profile *lprof;
-#if 0
-                /* This will no longer be used.  mgc should have already
-                   parsed the mds setup log.  The last steps in the log must be
-                        attach mds mdsA mdsA_UUID
-                        setup /dev/loop2 ldiskfs mdsA errors=remount-ro,user_xattr
-                   or, better,
-                        setup mountconf mountconf mdsA
-                   then we can decide if we're using old or new methods. */
-                struct lvfs_run_ctxt saved;
-                struct config_llog_instance cfg;
-                cfg.cfg_instance = NULL;
-                cfg.cfg_uuid = mds->mds_lov_uuid;
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                             mds->mds_profile, &cfg);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                switch (rc) {
-                case 0:
-                        break;
-                case -EINVAL:
-                        LCONSOLE_ERROR("%s: the profile %s could not be read. "
-                                       "If you recently installed a new "
-                                       "version of Lustre, you may need to "
-                                       "re-run 'lconf --write_conf "
-                                       "<yourconfig>.xml' command line before "
-                                       "restarting the MDS.\n",
-                                       obd->obd_name, mds->mds_profile);
-                        /* fall through */
-                default:
-                        GOTO(err_llog, rc);
-                        break;
-                }
-#endif
-
                 /* The profile defines which osc and mdc to connect to, for a 
-                   client.  We reuse that here, ignoring lprof->lp_mdc.
-                   The profile is set in the config log with 
+                   client.  We reuse that here to figure out the name of the
+                   lov to use (and ignore lprof->lp_mdc).
+                   The profile was set in the config log with 
                    LCFG_MOUNTOPT profilenm oscnm mdcnm */
                 lprof = class_get_profile(mds->mds_profile);
                 if (lprof == NULL) {
@@ -2079,7 +2046,6 @@ static int mds_postsetup(struct obd_device *obd)
 
 err_cleanup:
         mds_lov_clean(obd);
-//err_llog:
         llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
         llog_cleanup(llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT));
         RETURN(rc);
@@ -2115,7 +2081,7 @@ int mds_postrecov(struct obd_device *obd)
 
         /* FIXME Does target_finish_recovery really need this to block? */
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
-        /* This means that we have to fool obd_notify to think we're obd_set_up
+        /* This means that we have to hack obd_notify to think we're obd_set_up
            during mds_lov_connect. */
         obd_notify(obd->u.mds.mds_osc_obd, NULL, 
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
