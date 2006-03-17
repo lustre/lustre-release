@@ -18,9 +18,9 @@ Index: linux-2.6.9-full/include/linux/ext3_fs.h
   * Special inodes numbers
   */
 @@ -365,6 +373,7 @@ struct ext3_inode {
- #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000 /* Make iopen world-readable */
- #define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
- #define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
+ #define EXT3_MOUNT_IOPEN_NOPRIV		0x100000/* Make iopen world-readable */
+ #define EXT3_MOUNT_EXTENTS		0x200000/* Extents support */
+ #define EXT3_MOUNT_EXTDEBUG		0x400000/* Extents debug */
 +#define EXT3_MOUNT_MBALLOC		0x800000/* Buddy allocation support */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
@@ -123,16 +123,17 @@ Index: linux-2.6.9-full/fs/ext3/super.c
  	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
-@@ -596,6 +597,7 @@ enum {
+@@ -596,7 +597,7 @@ enum {
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0,
+ 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
- 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_extents, Opt_extdebug,
-+	Opt_mballoc,
+-	Opt_extents, Opt_extdebug,
++	Opt_extents, Opt_extdebug, Opt_mballoc,
  };
  
  static match_table_t tokens = {
 @@ -647,6 +649,7 @@ static match_table_t tokens = {
- 	{Opt_iopen_nopriv,  "iopen_nopriv"},
+ 	{Opt_iopen_nopriv, "iopen_nopriv"},
  	{Opt_extents, "extents"},
  	{Opt_extdebug, "extdebug"},
 +	{Opt_mballoc, "mballoc"},
@@ -347,7 +348,7 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2005-12-16 17:46:19.148560250 +0300
 +++ linux-2.6.9-full/fs/ext3/mballoc.c	2005-12-17 00:10:15.000000000 +0300
-@@ -0,0 +1,2434 @@
+@@ -0,0 +1,2429 @@
 +/*
 + * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -912,10 +913,12 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	SetPageUptodate(page);
 +
 +out:
-+	for (i = 0; i < groups_per_page && bh[i]; i++)
-+		brelse(bh[i]);
-+	if (bh && bh != &bhs)
-+		kfree(bh);
++	if (bh) {
++		for (i = 0; bh && i < groups_per_page && bh[i]; i++)
++			brelse(bh[i]);
++		if (bh != &bhs)
++			kfree(bh);
++	}
 +	return err;
 +}
 +
@@ -1677,8 +1680,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +
 +			ext3_mb_release_desc(&e3b);
 +
-+			if (err)
-+				goto out_err;
 +			if (ac.ac_status != AC_STATUS_CONTINUE)
 +				break;
 +		}
@@ -1957,10 +1958,6 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +		return -EIO;
 +	size = sizeof(struct ext3_mb_history) * sbi->s_mb_history_max;
 +	s->history = kmalloc(size, GFP_KERNEL);
-+	if (s == NULL) {
-+		kfree(s);
-+		return -EIO;
-+	}
 +
 +	spin_lock(&sbi->s_mb_history_lock);
 +	memcpy(s->history, sbi->s_mb_history, size);
@@ -2781,18 +2778,16 @@ Index: linux-2.6.9-full/fs/ext3/mballoc.c
 +	remove_proc_entry(EXT3_MB_MIN_TO_SCAN_NAME, proc_root_ext3);
 +	remove_proc_entry(EXT3_ROOT, proc_root_fs);
 +}
-+
 Index: linux-2.6.9-full/fs/ext3/Makefile
 ===================================================================
 --- linux-2.6.9-full.orig/fs/ext3/Makefile	2005-12-16 23:16:41.000000000 +0300
 +++ linux-2.6.9-full/fs/ext3/Makefile	2005-12-16 23:16:42.000000000 +0300
-@@ -5,7 +5,8 @@
- obj-$(CONFIG_EXT3_FS) += ext3.o
+@@ -6,7 +6,7 @@
  
- ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o\
--	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o
-+	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
-+	   mballoc.o
+ ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+ 	   ioctl.o namei.o super.o symlink.o hash.o resize.o \
+-	   extents.o
++	   extents.o mballoc.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o

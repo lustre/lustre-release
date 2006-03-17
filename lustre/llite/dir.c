@@ -488,11 +488,11 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 int rc, lmmsize;
 
                 ll_inode2fid(&fid, inode);
-                
+
                 rc = ll_get_max_mdsize(sbi, &lmmsize);
-                if (rc) 
-                        RETURN(rc); 
-                
+                if (rc)
+                        RETURN(rc);
+
                 rc = mdc_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_FLDIREA,
                                  lmmsize, &request);
                 if (rc < 0) {
@@ -531,6 +531,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ptlrpc_req_finished(request);
                 return rc;
         }
+        case LL_IOC_OBD_STATFS:
+                RETURN(ll_obd_statfs(inode, (void *)arg));
         case IOC_MDC_GETFILEINFO:
         case IOC_MDC_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;

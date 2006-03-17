@@ -201,19 +201,20 @@ lmc_options = [
     ('mdsuuid', "Optional argument to specify MDS UUID", PARAM,""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
-    ('quota', "quotaon:enable quota, only u|g|ug is supported now. \
-               iunit: the unit for slave to acquire/release inode quota from/to masteri.\
-                      Int type (>0), default value in Lustre is 5000 inodes.\
-               bunit: the unit for slave to acquire/release block quota from/to master.\
-                      Mbytes (>0), default value in Lustre is 100(Mbytes).\
-               itune: used to tune the threthold. When inode quota usage reach the threthold,\
-                      slave should acquire/release inode quota from/to master.\
-                      Int type (100 > btune > 0), default value in Lustre is 50 (percentge).\
-                      inode threthold = iunit * itune / 100.\
-               btune: used to tune the threthold. When block quota usage reach the threthold,\
-                      slave should acquire/release block quota from/to master.\
-                      Int type (100 > btune > 0), default value in Lustre is 50 (percentage).\
-                      block threthold = bunit * btune / 100.", PARAM,""),
+    ('quota', """
+    quotaon: enable quota, only u|g|ug is supported now.
+      iunit: the unit for slave to acquire/release inode quota from/to master.
+             Int type (>0), default value in Lustre is 5000 inodes.
+      bunit: the unit for slave to acquire/release block quota from/to master.
+             Mbytes (>0), default value in Lustre is 100(Mbytes).
+      itune: used to tune the threthold. When inode quota usage reach the threthold,
+             slave should acquire/release inode quota from/to master.
+             Int type (100 > btune > 0), default value in Lustre is 50 (percentge).
+             inode threthold = iunit * itune / 100.
+      btune: used to tune the threthold. When block quota usage reach the threthold,
+             slave should acquire/release block quota from/to master.
+             Int type (100 > btune > 0), default value in Lustre is 50 (percentage).
+             block threthold = bunit * btune / 100.""", PARAM,""),
     # clients: mountpoint and echo
     ('echo_client', "", PARAM),
     ('path', "Specify the mountpoint for Lustre.", PARAM),
@@ -693,12 +694,12 @@ def add_net(gen, lustre, options):
     # testing network
     if options.nonet:
         if options.verbose:
-            print "Skip the remote host networking test."
-    elif (node_name != 'client') and (real_net_type == 'tcp'):
+            print "Skipping the remote host networking test."
+    elif (real_net_type == 'tcp') and (nid != '*'):
         if options.verbose:
             print "Testing network on", node_name
         target = string.split(nid,'@')[0]
-        out = runcmd("ping -c 1 -w 10 %s" %target)
+        out = runcmd("ping -c 1 -w 5 %s" %target)
         if out != 0:
             print "Could not connect to", node_name,", Please check network."
             

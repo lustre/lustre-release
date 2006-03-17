@@ -52,13 +52,13 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
-+ 		if (nd.dentry->d_inode->i_op->mkdir_raw) {
-+ 			struct inode_operations *op = nd.dentry->d_inode->i_op;
-+ 			error = op->mkdir_raw(&nd, mode);
-+ 			/* the file system wants to use normal vfs path now */
-+ 			if (error != -EOPNOTSUPP)
-+ 				goto out2;
-+ 		}
++		if (nd.dentry->d_inode->i_op->mkdir_raw) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->mkdir_raw(&nd, mode);
++			/* the file system wants to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
  		dentry = lookup_create(&nd, 1);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
@@ -82,16 +82,16 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  			error = -EBUSY;
  			goto exit1;
  	}
-+ 
-+ 	if (nd.dentry->d_inode->i_op->rmdir_raw) {
-+ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+ 
-+ 		error = op->rmdir_raw(&nd);
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit1;
-+ 	}
-+ 
++
++	if (nd.dentry->d_inode->i_op->rmdir_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++
++		error = op->rmdir_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
++
  	down(&nd.dentry->d_inode->i_sem);
  	dentry = lookup_hash(&nd.last, nd.dentry);
  	error = PTR_ERR(dentry);
@@ -107,13 +107,13 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
-+ 	if (nd.dentry->d_inode->i_op->unlink_raw) {
-+ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+ 		error = op->unlink_raw(&nd);
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit1;
-+ 	}
++	if (nd.dentry->d_inode->i_op->unlink_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->unlink_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
  	down(&nd.dentry->d_inode->i_sem);
  	dentry = lookup_hash(&nd.last, nd.dentry);
  	error = PTR_ERR(dentry);
@@ -180,12 +180,12 @@ Index: linux-2.6.9-5.0.3.EL/fs/namei.c
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
-+ 	if (old_dir->d_inode->i_op->rename_raw) {
-+ 		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit2;
-+ 	}
++	if (old_dir->d_inode->i_op->rename_raw) {
++		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit2;
++	}
 +
  	trap = lock_rename(new_dir, old_dir);
  
@@ -325,7 +325,7 @@ Index: linux-2.6.9-5.0.3.EL/fs/open.c
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
 +		error = op->setattr_raw(inode, &newattrs);
-+		/* the file system wants to use normal vfs path now */
++		/* the file system wants to use the normal vfs path now */
 +		if (error != -EOPNOTSUPP)
 +			goto out;
 +	}

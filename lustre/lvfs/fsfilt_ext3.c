@@ -485,7 +485,7 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
 }
 
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
-                              void *lmm, int lmm_size)
+                              void *lmm, int lmm_size, const char *name)
 {
         int rc;
 
@@ -497,7 +497,7 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 
         lock_24kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
-                                   XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size, 0);
+                                   name, lmm, lmm_size, 0);
 
         unlock_24kernel();
 
@@ -508,7 +508,8 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 }
 
 /* Must be called with i_sem held */
-static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
+static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size,
+                              const char *name)
 {
         int rc;
 
@@ -516,7 +517,7 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
         lock_24kernel();
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
-                            XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size);
+                            name, lmm, lmm_size);
         unlock_24kernel();
 
         /* This gives us the MD size */
@@ -525,7 +526,7 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
-                       EXT3_XATTR_INDEX_TRUSTED, XATTR_LUSTRE_MDS_LOV_EA,
+                       EXT3_XATTR_INDEX_TRUSTED, name,
                        inode->i_ino, rc);
                 memset(lmm, 0, lmm_size);
                 return (rc == -ENODATA) ? 0 : rc;

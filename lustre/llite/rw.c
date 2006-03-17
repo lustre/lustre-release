@@ -111,6 +111,7 @@ void ll_truncate(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
+        struct ost_lvb lvb;
         struct obdo oa;
         int rc;
         ENTRY;
@@ -133,7 +134,9 @@ void ll_truncate(struct inode *inode)
         /* XXX I'm pretty sure this is a hack to paper over a more fundamental
          * race condition. */
         lov_stripe_lock(lsm);
-        if (lov_merge_size(lsm, 0) == inode->i_size) {
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 0);
+        if (lvb.lvb_size == inode->i_size) {
                 CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
                        lsm->lsm_object_id, inode->i_size, inode->i_size);
                 lov_stripe_unlock(lsm);
@@ -195,7 +198,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         struct brw_page pga;
         struct obdo oa;
-        __u64 kms;
+        struct ost_lvb lvb;
         int rc = 0;
         ENTRY;
 
@@ -235,11 +238,12 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
          * locking will have updated the KMS, and for our purposes here we can
          * treat it like i_size. */
         lov_stripe_lock(lsm);
-        kms = lov_merge_size(lsm, 1);
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 0);
         lov_stripe_unlock(lsm);
-        if (kms <= offset) {
+        if (lvb.lvb_size <= offset) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "kms "LPU64" <= offset "LPU64"\n",
-                               kms, offset);
+                               lvb.lvb_size, offset);
                 memset(kmap(page), 0, PAGE_SIZE);
                 kunmap(page);
                 GOTO(prepare_done, rc = 0);
@@ -270,7 +274,8 @@ static int ll_ap_make_ready(void *data, int cmd)
         llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
 
-        LASSERT(!(cmd & OBD_BRW_READ));
+        LASSERTF(!(cmd & OBD_BRW_READ), "cmd %x page %p ino %lu index %lu\n", cmd, page,
+                 page->mapping->host->i_ino, page->index);
 
         /* we're trying to write, but the page is locked.. come back later */
         if (TryLockPage(page))
@@ -312,6 +317,7 @@ static int ll_ap_refresh_count(void *data, int cmd)
         struct lov_stripe_md *lsm;
         struct page *page;
         struct inode *inode;
+        struct ost_lvb lvb;
         __u64 kms;
         ENTRY;
 
@@ -325,7 +331,9 @@ static int ll_ap_refresh_count(void *data, int cmd)
         lsm = lli->lli_smd;
 
         lov_stripe_lock(lsm);
-        kms = lov_merge_size(lsm, 1);
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
+        kms = lvb.lvb_size;
         lov_stripe_unlock(lsm);
 
         /* catch race with truncate */
@@ -1037,13 +1045,16 @@ static int ll_readahead(struct ll_readahead_state *ras,
         struct inode *inode;
         struct lov_stripe_md *lsm;
         struct ll_ra_read *bead;
+        struct ost_lvb lvb;
         ENTRY;
 
         inode = mapping->host;
         lsm = ll_i2info(inode)->lli_smd;
 
         lov_stripe_lock(lsm);
-        kms = lov_merge_size(lsm, 1);
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
+        kms = lvb.lvb_size;
         lov_stripe_unlock(lsm);
         if (kms == 0) {
                 ll_ra_stats_inc(mapping, RA_STAT_ZERO_LEN);

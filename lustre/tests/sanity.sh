@@ -7,20 +7,17 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2108 3637 3561 5188/5749
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
+# bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 64b 71 101"
 
 case `uname -r` in
-2.4*) FSTYPE=${FSTYPE:-ext3} ;;
-2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 60 69";;
+2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 60 69" ;;
 *) error "unsupported kernel" ;;
 esac
-
-[ "$ALWAYS_EXCEPT$EXCEPT$SANITY_EXCEPT" ] && \
-	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITY_EXCEPT`"
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
@@ -71,7 +68,7 @@ SAVE_PWD=$PWD
 
 clean() {
 	echo -n "cln.."
-	sh llmountcleanup.sh ${FORCE} > /dev/null || exit 20
+	sh llmountcleanup.sh ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
 }
 CLEAN=${CLEAN:-:}
 
@@ -107,16 +104,26 @@ check_kernel_version() {
 	return 1
 }
 
+_basetest() {
+    echo $*
+}
+
+basetest() {
+    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+}
+
 run_one() {
 	if ! mount | grep -q $DIR; then
 		$START
 	fi
+	testnum=$1
+	message=$2
 	BEFORE=`date +%s`
-	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
-	export TESTNAME=test_$1
+	log "== test $testnum: $message= `date +%H:%M:%S` ($BEFORE)"
+	export TESTNAME=test_$testnum
 	export tfile=f${testnum}
 	export tdir=d${base}
-	test_$1 || error "exit with rc=$?"
+	test_${testnum} || error "exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
@@ -124,6 +131,9 @@ run_one() {
 }
 
 build_test_filter() {
+	[ "$ALWAYS_EXCEPT$EXCEPT$SANITY_EXCEPT" ] && \
+	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITY_EXCEPT`"
+
         for O in $ONLY; do
             eval ONLY_${O}=true
         done
@@ -141,7 +151,7 @@ basetest() {
 }
 
 run_test() {
-         base=`basetest $1`
+         export base=`basetest $1`
          if [ "$ONLY" ]; then
                  testname=ONLY_$1
                  if [ ${!testname}x != x ]; then
@@ -217,7 +227,7 @@ rm -rf $DIR/[Rdfs][1-9]*
 
 build_test_filter
 
-echo preparing for tests involving mounts
+echo "preparing for tests involving mounts"
 EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
 touch $EXT2_DEV
 mke2fs -j -F $EXT2_DEV 8000 > /dev/null
@@ -226,12 +236,12 @@ echo # add a newline after mke2fs.
 umask 077
 
 test_0() {
-	touch $DIR/f
-	$CHECKSTAT -t file $DIR/f || error
-	rm $DIR/f
-	$CHECKSTAT -a $DIR/f || error
+	touch $DIR/$tfile
+	$CHECKSTAT -t file $DIR/$tfile || error
+	rm $DIR/$tfile
+	$CHECKSTAT -a $DIR/$tfile || error
 }
-run_test 0 "touch .../f ; rm .../f ============================="
+run_test 0 "touch .../$tfile ; rm .../$tfile ====================="
 
 test_0b() {
 	chmod 0755 $DIR || error
@@ -835,18 +845,18 @@ run_test 26e "unlink multiple component recursive symlink ======"
 
 # recursive symlinks (bug 7022)
 test_26f() {
-	mkdir $DIR/foo         || error "mkdir $DIR/foo failed"
-	cd $DIR/foo            || error "cd $DIR/foo failed"
-	mkdir -p bar/bar1      || error "mkdir bar/bar1 failed"
-	mkdir foo              || error "mkdir foo failed"
-	cd foo                 || error "cd foo failed"
-	ln -s .. dotdot        || error "ln dotdot failed"
-	ln -s dotdot/bar bar   || error "ln bar failed"
-	cd ../..               || error "cd ../.. failed"
-	output=`ls foo/foo/bar/bar1`
+	mkdir $DIR/$tfile        || error "mkdir $DIR/$tfile failed"
+	cd $DIR/$tfile           || error "cd $DIR/$tfile failed"
+	mkdir -p $tdir/bar1      || error "mkdir $tdir/bar1 failed"
+	mkdir $tfile             || error "mkdir $tfile failed"
+	cd $tfile                || error "cd $tfile failed"
+	ln -s .. dotdot          || error "ln dotdot failed"
+	ln -s dotdot/$tdir $tdir || error "ln $tdir failed"
+	cd ../..                 || error "cd ../.. failed"
+	output=`ls $tfile/$tfile/$tdir/bar1`
 	[ "$output" = bar1 ] && error "unexpected output"
-	rm -r foo              || error "rm foo failed"
-	$CHECKSTAT -a $DIR/foo || error "foo not gone"
+	rm -r $tfile             || error "rm $tfile failed"
+	$CHECKSTAT -a $DIR/$tfile || error "$tfile not gone"
 }
 run_test 26f "rm -r of a directory which has recursive symlink ="
 
@@ -1408,13 +1418,13 @@ test_32r() {
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
 test_33() {
-	rm -f $DIR/test_33_file
-	touch $DIR/test_33_file
-	chmod 444 $DIR/test_33_file
-	chown $RUNAS_ID $DIR/test_33_file
-        log 33_1
-        $RUNAS $OPENFILE -f O_RDWR $DIR/test_33_file && error || true
-        log 33_2
+	rm -f $DIR/$tfile
+	touch $DIR/$tfile
+	chmod 444 $DIR/$tfile
+	chown $RUNAS_ID $DIR/$tfile
+	log 33_1
+	$RUNAS $OPENFILE -f O_RDWR $DIR/$tfile && error || true
+	log 33_2
 }
 run_test 33 "write file with mode 444 (should return error) ===="
 
@@ -1549,20 +1559,20 @@ test_38() {
 run_test 38 "open a regular file with O_DIRECTORY =============="
 
 test_39() {
-	touch $DIR/test_39_file
-	touch $DIR/test_39_file2
-#	ls -l  $DIR/test_39_file $DIR/test_39_file2
-#	ls -lu  $DIR/test_39_file $DIR/test_39_file2
-#	ls -lc  $DIR/test_39_file $DIR/test_39_file2
+	touch $DIR/$tfile
+	touch $DIR/${tfile}2
+#	ls -l  $DIR/$tfile $DIR/${tfile}2
+#	ls -lu  $DIR/$tfile $DIR/${tfile}2
+#	ls -lc  $DIR/$tfile $DIR/${tfile}2
 	sleep 2
-	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/test_39_file2
-	if [ ! $DIR/test_39_file2 -nt $DIR/test_39_file ]; then
+	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/${tfile}2
+	if [ ! $DIR/${tfile}2 -nt $DIR/$tfile ]; then
 		echo "mtime"
-		ls -l  $DIR/test_39_file $DIR/test_39_file2
+		ls -l  $DIR/$tfile $DIR/${tfile}2
 		echo "atime"
-		ls -lu  $DIR/test_39_file $DIR/test_39_file2
+		ls -lu  $DIR/$tfile $DIR/${tfile}2
 		echo "ctime"
-		ls -lc  $DIR/test_39_file $DIR/test_39_file2
+		ls -lc  $DIR/$tfile $DIR/${tfile}2
 		error "O_TRUNC didn't change timestamps"
 	fi
 }
@@ -2305,9 +2315,9 @@ test_62() {
         f="$DIR/f62"
         echo foo > $f
         cancel_lru_locks osc
-        echo 0x405 > /proc/sys/lustre/fail_loc
+        sysctl -w lustre.fail_loc=0x405
         cat $f && error "cat succeeded, expect -EIO"
-        echo 0 > /proc/sys/lustre/fail_loc
+        sysctl -w lustre.fail_loc=0
 }
 run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
@@ -2338,12 +2348,12 @@ test_63b() {
 	sysctl -w lnet.debug=-1
 
 	# ensure we have a grant to do async writes
-	dd if=/dev/zero of=/mnt/lustre/f63b bs=4k count=1
-	rm /mnt/lustre/f63b
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1
+	rm $DIR/$tfile
 
 	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
 	sysctl -w lustre.fail_loc=0x80000406
-	multiop /mnt/lustre/f63b Owy && \
+	multiop $DIR/$tfile Owy && \
 		$LCTL dk /tmp/test63b.debug && \
 		sysctl -w lnet.debug=$DBG_SAVE && \
 		error "sync didn't return ENOMEM"
@@ -2407,7 +2417,7 @@ test_65e() {
 	mkdir -p $DIR/d65
 
 	$LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
-        $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || error "no stripe info failed"
+        $LFS find -v $DIR/d65 | grep "has no stripe info" || error "no stripe info failed"
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
@@ -2423,7 +2433,7 @@ test_65g() {
         mkdir -p $DIR/d65
         $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
         $LSTRIPE -d $DIR/d65 || error "setstripe"
-        $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || \
+        $LFS find -v $DIR/d65 | grep "has no stripe info" || \
 		error "delete default stripe failed"
 }
 run_test 65g "directory setstripe -d ==========================="
@@ -2536,27 +2546,27 @@ test_69() {
 	f="$DIR/f69"
 	touch $f
 
-	echo 0x217 > /proc/sys/lustre/fail_loc
+	sysctl -w lustre.fail_loc=0x217
 	truncate $f 1 # vmtruncate() will ignore truncate() error.
 	$DIRECTIO write $f 0 2 && error "write succeeded, expect -ENOENT"
 
-	echo 0 > /proc/sys/lustre/fail_loc
+	sysctl -w lustre.fail_loc=0
 	$DIRECTIO write $f 0 2 || error "write error"
 
 	cancel_lru_locks osc
 	$DIRECTIO read $f 0 1 || error "read error"
 
-	echo 0x217 > /proc/sys/lustre/fail_loc
+	sysctl -w lustre.fail_loc=0x217
 	$DIRECTIO read $f 1 1 && error "read succeeded, expect -ENOENT"
 
-	echo 0 > /proc/sys/lustre/fail_loc
+	sysctl -w lustre.fail_loc=0
 	rm -f $f
 }
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_71() {
 	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
-	PATH=${PATH}:$DBENCH_LIB
+	PATH=${DBENCH_LIB}:${PATH}
 	cp `which dbench` $DIR
 
 	[ ! -f $DIR/dbench ] && echo "dbench not installed, skip this test" && return 0
@@ -2569,7 +2579,7 @@ test_71() {
 
 	echo "copying necessary lib to $DIR"
 	[ -d /lib64 ] && LIB71=/lib64 || LIB71=/lib
-	mkdir $DIR$LIB71 || error "can't create $DIR$LIB71"
+	mkdir -p $DIR$LIB71 || error "can't create $DIR$LIB71"
 	cp $LIB71/libc* $DIR$LIB71 || error "can't copy $LIB71/libc*"
 	cp $LIB71/ld-* $DIR$LIB71 || error "can't create $LIB71/ld-*"
 
@@ -2577,9 +2587,7 @@ test_71() {
 	chroot $DIR /dbench -c client.txt 2
 	RC=$?
 
-	rm -f $DIR/dbench
-	rm -f $TGT
-	rm -fr $DIR$LIB71
+	rm -rf $DIR/dbench $TGT $DIR$LIB71
 
 	return $RC
 }
@@ -2622,6 +2630,7 @@ test_75() {
 	F128k=${F}_128k
 	FHEAD=${F}_head
 	FTAIL=${F}_tail
+	echo "using F=$F, F128k=$F128k, FHEAD=$FHEAD, FTAIL=$FTAIL"
 	rm -f $F*
 
 	dd if=/dev/urandom of=${F}_128k bs=1024 count=128 || error "dd failed"
@@ -2631,16 +2640,14 @@ test_75() {
 	cat ${F128k} ${F128k} > ${F}_sim_sim
 
 	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	diff ${FHEAD} ${F}_sim_sim
-	diff -u ${FHEAD} ${F}_sim_sim || error "${FHEAD} ${F}_sim_sim differ"
+	cmp ${FHEAD} ${F}_sim_sim || error "${FHEAD} ${F}_sim_sim differ"
 	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
 
 	cp -p ${F128k} ${FTAIL}
 	cat ${F}_sim_sim >> ${F}_join_sim
 	cat ${F128k} >> ${F}_join_sim
 	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	diff -u ${FHEAD} ${F}_join_sim
-	diff -u ${FHEAD} ${F}_join_sim || \
+	cmp ${FHEAD} ${F}_join_sim || \
 		error "${FHEAD} ${F}_join_sim are different"
 	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
 
@@ -2648,7 +2655,7 @@ test_75() {
 	cat ${F128k} >> ${F}_sim_join
 	cat ${F}_join_sim >> ${F}_sim_join
 	$JOIN ${FTAIL} ${FHEAD} || error "join error"
-	diff -u ${FTAIL} ${F}_sim_join || \
+	cmp ${FTAIL} ${F}_sim_join || \
 		error "${FTAIL} ${F}_sim_join are different"
 	$CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
 
@@ -2658,7 +2665,7 @@ test_75() {
 	cat ${F}_sim_join >> ${F}_join_join
 	$JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
 	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	diff -u ${FHEAD} ${F}_join_join ||error "${FHEAD} ${F}_join_join differ"
+	cmp ${FHEAD} ${F}_join_join || error "${FHEAD} ${F}_join_join differ"
 	$CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
 	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
 
@@ -2672,12 +2679,10 @@ test_75() {
 			error "join ${F}_join_10 ${FTAIL} error"
 		$CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
 	done
-	diff -u ${F}_join_10 ${F}_join_10_compare || \
+	cmp ${F}_join_10 ${F}_join_10_compare || \
 		error "files ${F}_join_10 ${F}_join_10_compare are different"
 	$LFS getstripe ${F}_join_10
 	$OPENUNLINK ${F}_join_10 ${F}_join_10 || error "files unlink open"
-
-	rm -f $F*
 }
 run_test 75 "TEST join file"
 
@@ -2767,8 +2772,13 @@ test_100() {
 		RPORT=`echo $REMOTE | cut -d: -f2`
 		[ "$RPORT" != "$ACCEPTOR_PORT" ] && continue
 		LPORT=`echo $LOCAL | cut -d: -f2`
-		[ $LPORT -ge 1024 ] && error "local port: $LPORT > 1024" || true
+		if [ $LPORT -ge 1024 ]; then
+			echo "bad: $PROT $SND $RCV $LOCAL $REMOTE $STAT"
+			netstat -tna
+			error "local: $LPORT > 1024, remote: $RPORT"
+		fi
 	done
+	true
 }
 run_test 100 "check local port using privileged port ==========="
 
@@ -2827,7 +2837,7 @@ test_102() {
         touch $testfile
 
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ -z "grep \<xattr\> $LPROC/mdc/*-mdc-*/connect_flags" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	[ -z "`grep \<xattr\> $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
@@ -2879,6 +2889,7 @@ test_103 () {
     [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
     [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
     [ -z "`grep acl $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
+    $(which setfacl 2>/dev/null) || echo "skipping $TESTNAME (could not find setfacl)" && return
 
     echo "performing cp ..."
     run_acl_subtest cp || error
@@ -2903,6 +2914,23 @@ test_103 () {
     umask $SAVE_UMASK
 }
 run_test 103 "==============acl test ============="
+
+test_104() {
+	touch $DIR/$tfile
+	lfs df || error "lfs df failed"
+	lfs df -ih || error "lfs df -ih failed"
+	lfs df $DIR || error "lfs df $DIR failed"
+	lfs df -ih $DIR || error "lfs df -ih $DIR failed"
+	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
+	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
+	
+	OSC=`lctl dl | awk '/OSC.*MNT/ {print $4}' | head -n 1`
+	lctl --device %$OSC deactivate
+	lfs df || error "lfs df with deactivated OSC failed"
+	lctl --device %$OSC recover
+	lfs df || error "lfs df with reactivated OSC failed"
+}
+run_test 104 "lfs>df [-ih] [path] test ============"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

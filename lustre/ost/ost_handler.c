@@ -767,7 +767,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 target_committed_to_req(req);
                 ptlrpc_reply(req);
         } else if (!comms_error) {
-                /* only reply if comms OK */
+                /* Only reply if there was no comms problem with bulk */
                 target_committed_to_req(req);
                 req->rq_status = rc;
                 ptlrpc_error(req);
@@ -778,8 +778,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         req->rq_reply_state = NULL;
                 }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
-                        CERROR("bulk IO comms error: "
-                               "evicting %s@%s id %s\n",
+                        CERROR("%s: bulk IO comm error evicting %s@%s id %s\n",
+                               req->rq_export->exp_obd->obd_name,
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
                                libcfs_id2str(req->rq_peer));

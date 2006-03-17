@@ -120,7 +120,6 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 
                 /* Initialize quota limit to MIN_QLIMIT */
                 LASSERT(oqctl->qc_dqblk.dqb_valid == QIF_BLIMITS);
-                LASSERT(oqctl->qc_dqblk.dqb_bhardlimit == MIN_QLIMIT);
                 LASSERT(oqctl->qc_dqblk.dqb_bsoftlimit == 0);
 
                 /* There might be a pending dqacq/dqrel (which is going to
@@ -129,6 +128,10 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt, 
                                          oqctl->qc_id, oqctl->qc_type, 1);
 
+                if (!oqctl->qc_dqblk.dqb_bhardlimit)
+                        goto adjust;
+                
+                LASSERT(oqctl->qc_dqblk.dqb_bhardlimit == MIN_QLIMIT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
 
@@ -143,7 +146,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 
                 if (rc)
                         RETURN(rc);
-
+adjust:
                 /* Trigger qunit pre-acquire */
                 if (oqctl->qc_type == USRQUOTA)
                         uid = oqctl->qc_id;

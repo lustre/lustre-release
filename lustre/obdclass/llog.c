@@ -342,7 +342,6 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
         struct llog_process_cat_data *cd = catdata;
         void *buf;
         int rc = 0, first_index = 1, index, idx;
-        struct llog_rec_tail *tail;
         ENTRY;
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
@@ -358,6 +357,7 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
 
         while (rc == 0) {
                 struct llog_rec_hdr *rec;
+                struct llog_rec_tail *tail;
 
                 /* skip records not set in bitmap */
                 while (index >= first_index &&
@@ -382,9 +382,13 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                         rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
                         idx ++;
                 }
+                tail = (void *)rec + le32_to_cpu(rec->lrh_len) - sizeof(*tail);
 
                 /* process records in buffer, starting where we found one */
-                while ((void *)rec >= buf) {
+                while ((void *)tail > buf) {
+                        rec = (void *)tail - le32_to_cpu(tail->lrt_len) +
+                                sizeof(*tail);
+
                         if (rec->lrh_index == 0)
                                 GOTO(out, 0); /* no more records */
 
@@ -406,8 +410,7 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                         --index;
                         if (index < first_index)
                                 GOTO(out, rc = 0);
-                        tail = (void *)rec - sizeof(struct llog_rec_tail);
-                        rec = ((void *)rec - le32_to_cpu(tail->lrt_len));
+                        tail = (void *)rec - sizeof(*tail);
                 }
         }
 

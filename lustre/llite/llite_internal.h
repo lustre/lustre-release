@@ -426,6 +426,7 @@ void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);
 struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
                                              struct list_head *list);
+int ll_obd_statfs(struct inode *inode, void *arg);
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 
 /* llite/llite_nfs.c */

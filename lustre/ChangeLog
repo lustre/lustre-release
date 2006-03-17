@@ -1,12 +1,20 @@
-01-31-2006  Cluster File Systems, Inc. <info@clusterfs.com>
+03-16-2006  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.6.1
+       * Support for newer kernels: 2.6.9-34.EL (RHEL 4), 2.6.5-7.252 (SLES 9)
+
+
+02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
 	 INTEROPERATE with older versions automatically.  Please read the 
 	 user documentation before upgrading any part of a live system.
        * WARNING: Lustre networking configuration changes are required with
-	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052	 
+	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052
 	 for details.
        * bug fixes
+       * Support for newer kernels: 2.6.9-22.0.2.EL (RHEL 4),
+         2.6.5-7.244 (SLES 9) - same as 1.4.5.2.
+
 
 Severity   : enhancement
 Bugzilla   : 7981/8208
@@ -90,6 +98,13 @@ Description: doing an ls when liblustre clients are running is slow
 Details    : sending a glimpse AST to a liblustre client waits for every AST
 	     to time out, as liblustre clients will not respond.  Since they
 	     cannot cache data we refresh the OST lock LVB from disk instead.
+
+Severity   : enhancement
+Bugzilla   : 7198
+Description: doing an ls at the same time as file IO can be slow
+Details    : enqueue and other "small" requests can be blocked behind many
+	     large IO requests.  Create a new OST IO portal for non-IO
+	     requests so they can be processed faster.
 
 Severity   : minor
 Frequency  : rare (only HPUX clients mounting unsupported re-exported NFS vol)
@@ -206,7 +221,7 @@ Details    : Having an LWI_INTR() wait event (interruptible, but no timeout)
 	     request was interrupted, and we also didn't break out of the
 	     event loop if there was no timeout
 
-Severity   : minor
+Severity   : major
 Frequency  : rare
 Bugzilla   : 5047
 Description: data loss during non-page-aligned writes to a single file from
@@ -259,6 +274,12 @@ Description: Unmmap pages before throwing them away from read cache.
 Details    : llap_shrink cache now attempts to unmap pages before discarding
 	     them (if unmapping failed - do not discard).  SLES9 kernel has
 	     extra checks that trigger if this unmapping is not done first.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 6034
+Description: lconf didn't resolve symlinks before checking to see whether a
+	     given mountpoint was already in use
 
 Severity   : minor
 Frequency  : when migrating failover services
@@ -374,7 +395,7 @@ Details    : a module parameter allows the number of OST service threads
 
 Severity   : major
 Frequency  : rare
-Bugzilla   : 9635
+Bugzilla   : 6146, 9635, 9895
 Description: servers crash with bad pointer in target_handle_connect()
 Details    : In rare cases when a client is reconnecting it was possible that
 	     the connection request was the last reference for that export.
@@ -459,6 +480,14 @@ Details    : If an OST is down, in some cases it was possible to create two
 	     than potential performance impact and spurious error messages.
 
 Severity   : minor
+Frequency  : rare
+Bugzilla   : 5681, 9562
+Description: Client may oops in ll_unhash_aliases
+Details    : Client dcache may become inconsistent in race condition.
+	     In some cases "getcwd" can fail if the current directory is
+	     modified.
+
+Severity   : minor
 Frequency  : always
 Bugzilla   : 9942
 Description: Inode refcounting problems in NFS export code
@@ -468,7 +497,7 @@ Details    : link_raw functions used to call d_instantiate without obtaining
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 9942, 9903
-Description: Referencing freed requests leading to crash, memleask with NFS.
+Description: Referencing freed requests leading to crash, memleaks with NFS.
 Details    : We used to require that call to ll_revalidate_it was always
 	     followed by ll_lookup_it. Also with revalidate_special() it is
 	     possible to call ll_revalidate_it() twice for the same dentry
@@ -486,16 +515,6 @@ Details    : If a client is repeatedly creating and unlinking files it
 	     If there is no other client load running this can cause the
 	     client node to run out of memory.  Instead flush old inodes
 	     from client cache that have the same inode number as a new inode.
-
-Severity   : minor
-Frequency  : echo_client brw_test command
-Bugzilla   : 9919
-Description: fix echo_client to work with OST preallocated code
-Details    : OST preallocation code (5137) didn't take echo_client IO path
-	     into account: echo_client calls filter methods outside of any
-	     OST thread and, hence, there is no per-thread preallocated
-	     pages and buffers to use. Solution: hijack pga pages for IO. As
-	     a byproduct, this avoids unnecessary data copying.
 
 Severity   : major
 Frequency  : rare, unless heavy write-truncate concurrency is continuous
@@ -520,6 +539,72 @@ Details    : mds_cleanup() and filter_cleanup() need to drop the kernel lock
 	     The kernel_locked() function in 2.4 kernels only checks whether
 	     the kernel lock is held, not whether it is this process that is
 	     holding it as 2.6 kernels do.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 9635
+Description: MDS or OST may oops/LBUG if a client is connecting multiple times
+Details    : The client ptlrpc code may be trying to reconnect to a down
+	     server before a previous connection attempt has timed out.
+	     Increase the reconnect interval to be longer than the connection
+	     timeout interval to avoid sending duplicate connections to
+	     servers.
+
+Severity   : minor
+Frequency  : echo_client brw_test command
+Bugzilla   : 9919
+Description: fix echo_client to work with OST preallocated code
+Details    : OST preallocation code (5137) didn't take echo_client IO path
+	     into account: echo_client calls filter methods outside of any
+	     OST thread and, hence, there is no per-thread preallocated
+	     pages and buffers to use. Solution: hijack pga pages for IO. As
+	     a byproduct, this avoids unnecessary data copying.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 3555, 5962, 6025, 6155, 6296, 9574
+Description: Client can oops in mdc_commit_close() after open replay
+Details    : It was possible for the MDS to return an open request with no
+	     transaction number in mds_finish_transno() if the client was
+	     evicted, but without actually returning an error.  Clients
+	     would later try to replay that open and may trip an assertion
+	     Simplify the client close codepath, and always return an error
+	     from the MDS in case the open is not successful.
+
+Severity   : major
+Frequency  : rare, 2.6 OSTs only
+Bugzilla   : 10076
+Description: OST may deadlock under high load on fragmented files
+Details    : If there was a heavy load and highly-fragmented OST filesystems
+	     it was possible to have all the OST threads deadlock waiting on
+	     allocation of biovecs, because the biovecs were not released
+	     until the entire RPC IO was completed.  Instead, release biovecs
+	     as soon as they are complete to ensure forward IO progress.
+
+Severity   : enhancement
+Bugzilla   : 9578
+Description: Support for specifying external journal device at mount
+Details    : If an OST or MDS device is formatted with an external journal
+	     device, this device major/minor is stored in the ext3 superblock
+	     and may not be valid for failover.  Allow detecting and
+	     specifying the external journal at mount time.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 10235
+Description: Mounting an MDS with pending unlinked files may cause oops
+Details    : target_finish_recovery() calls mds_postrecov() which returned
+	     the number of orphans unlinked. mds_lov_connect->mds_postsetup()
+	     considers this an error and immediately begins cleaning up the
+	     lov, just after starting the mds_lov process
+
+Severity   : enhancement
+Bugzilla   : 9461
+Description: Implement 'lfs df' to report actual free space on per-OST basis
+Details    : Add sub-command 'df' on 'lfs' to report the disk space usage of
+	     MDS/OSDs. Usage: lfs df [-i][-h]. Command Options: '-i' to report
+	     usage of objects; '-h' to report in human readable format.
+
 
 ------------------------------------------------------------------------------
 
@@ -640,14 +725,14 @@ Frequency  : rare (only unsupported configurations with a node running as an
 Bugzilla   : 6514, 5137
 Description: Mounting a Lustre file system on a node running as an OST could
 	     lead to deadlocks
-Details    : OSTs now allocate memory needed to write out data at
-             startup, instead of when needed, to avoid having to
-             allocate memory in possibly low memory situations.
-             Specifically, if the file system is mounted on on OST,
-             memory pressure could force it to try to write out data,
-             which it needed to allocate memory to do.  Due to the low
-             memory, it would be unable to do so and the node would
-             become unresponsive.
+Details    : OSTs now preallocates memory needed to write out data at
+	     startup, instead of when needed, to avoid having to
+	     allocate memory in possibly low memory situations.
+	     Specifically, if the file system is mounted on on OST,
+	     memory pressure could force it to try to write out data,
+	     which it needed to allocate memory to do.  Due to the low
+	     memory, it would be unable to do so and the node would
+	     become unresponsive.
 
 Severity   : enhancement
 Bugzilla   : 7015
@@ -685,6 +770,16 @@ Description: Network or server problems during mount may cause partially
 Details    : The config llog parsing code may overwrite the error return
              code during mount error handling, returning success instead
              of an error.
+
+Severity   : minor
+Bugzilla   : 6422
+Frequency  : rare
+Description: MDS can fail to allocate large reply buffers
+Details    : After long uptimes the MDS can fail to allocate large reply
+	     buffers (e.g. zconf client mount config records) due to memory
+	     fragmentation or consumption by the buffer cache.  Preallocate
+	     some large reply buffers so that these replies can be sent even
+	     under memory pressure.
 
 Severity   : minor
 Bugzilla   : 6266
@@ -781,7 +876,7 @@ Severity:  : enhancement
 Bugzilla   : 3262, 6359
 Description: Attempts to reconnect to servers are now more aggressive.
 Details    : This builds on the enhanced upcall-less recovery that was added
-             in 1.4.2.  When trying to reconnect to servers,  clients will
+             in 1.4.2.  When trying to reconnect to servers, clients will
              now try each server in the failover group every 10 seconds.  By
              default, clients would previously try one server every 25 seconds.
 

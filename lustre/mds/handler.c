@@ -493,7 +493,7 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
 
         if (lock)
                 down(&inode->i_sem);
-        rc = fsfilt_get_md(obd, inode, md, *size);
+        rc = fsfilt_get_md(obd, inode, md, *size, "lov");
 
         if (rc < 0) {
                 CERROR("Error %d reading eadata for ino %lu\n",
@@ -708,7 +708,8 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         if ((S_ISREG(inode->i_mode) && (body->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))) {
                 down(&inode->i_sem);
-                rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0);
+                rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0,
+                                   "lov");
                 up(&inode->i_sem);
                 CDEBUG(D_INODE, "got %d bytes MD data for inode %lu\n",
                        rc, inode->i_ino);
@@ -1856,6 +1857,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
+        mds->mds_atime_diff = MAX_ATIME_DIFF;
 
         sprintf(ns_name, "mds-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
@@ -2053,7 +2055,7 @@ err_cleanup:
 
 int mds_postrecov(struct obd_device *obd)
 {
-        int rc, item = 0;
+        int rc;
         ENTRY;
 
         if (obd->obd_fail)
@@ -2070,14 +2072,11 @@ int mds_postrecov(struct obd_device *obd)
                        obd->obd_name, rc);
                 GOTO(out, rc);
         }
-        
+
         /* clean PENDING dir */
         rc = mds_cleanup_pending(obd);
-        if (rc < 0) {
+        if (rc < 0)
                 GOTO(out, rc);
-        } else {
-                item = rc;
-        }
 
         /* FIXME Does target_finish_recovery really need this to block? */
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
@@ -2091,7 +2090,7 @@ int mds_postrecov(struct obd_device *obd)
         lquota_recovery(quota_interface, obd);
 
 out:
-        RETURN(rc < 0 ? rc : item);
+        RETURN(rc);
 }
 
 /* We need to be able to stop an mds_lov_synchronize */
@@ -2545,7 +2544,6 @@ static int mdt_health_check(struct obd_device *obd)
         return rc;
 }
 
-
 static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
                                           void *data)
 {
@@ -2555,7 +2553,8 @@ static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
         fid.generation = gen;
         return mds_fid2dentry(&obd->u.mds, &fid, NULL);
 }
-static int mds_health_check(struct obd_device *obd) 
+
+static int mds_health_check(struct obd_device *obd)
 {
         struct obd_device_target *odt = &obd->u.obt;
         struct mds_obd *mds = &obd->u.mds;
@@ -2566,7 +2565,7 @@ static int mds_health_check(struct obd_device *obd)
 
         LASSERT(mds->mds_health_check_filp != NULL);
         rc |= !!lvfs_check_io_health(obd, mds->mds_health_check_filp);
-        
+
         return rc;
 }
 

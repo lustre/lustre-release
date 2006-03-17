@@ -13,7 +13,11 @@ noinst_SCRIPTS += runfailure-ost runiozone runregression-net.sh runtests
 noinst_SCRIPTS += sanity.sh rundbench
 
 EXTRA_DIST = $(pkgexample_scripts) $(noinst_SCRIPTS) $(noinst_DATA) \
-	sanity.sh rundbench
+             sanity.sh rundbench \
+             acl/run acl/make-tree acl/getfacl-noacl.test acl/cp.test \
+             acl/setfacl.test acl/permissions.test acl/misc.test \
+             acl/inheritance.test
+
 if TESTS
 pkgexample_SCRIPTS = $(pkgexample_scripts)
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme

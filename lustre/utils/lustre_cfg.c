@@ -256,6 +256,9 @@ int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
+        /* Poison NAL -- pre 1.4.6 will LASSERT on 0 NAL, this way it 
+           doesn't work without crashing (bz 10130) */
+        lcfg->lcfg_nal = 0x5a;
 
 #if 0
         fprintf(stderr, "adding\tnid: %d\tuuid: %s\n",

@@ -694,6 +694,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, trigger_group_io);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_async_flags);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, teardown_async_page);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, merge_lvb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, adjust_kms);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, punch);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, sync);

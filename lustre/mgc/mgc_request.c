@@ -2,10 +2,10 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  lustre/mgc/mgc_request.c
- *  Lustre Management Client config llog handling
+ *  Lustre Management Client
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author Nathan Rutman <nathan@clusterfs.com>
+ *   Author: Nathan Rutman <nathan@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org
  *
@@ -22,10 +22,6 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- *  For testing and management it is treated as an obd_device,
- *  although * it does not export a full OBD method table (the
- *  requests are coming * in over the wire, so object target modules
- *  do not have a full * method table.)
  */
  
 #ifndef EXPORT_SYMTAB

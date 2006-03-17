@@ -251,7 +251,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         } else {
                 rc = fsfilt_read_record(obd, file, lsd, sizeof(*lsd), &off);
                 if (rc) {
-                        CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD, rc);
+                        CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
                         GOTO(err_msd, rc);
                 }
                 if (strcmp(lsd->lsd_uuid, obd->obd_uuid.uuid) != 0) {
@@ -288,6 +288,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
 
+        lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
                obd->obd_name, mds->mds_last_transno);
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",

@@ -115,10 +115,14 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         /* Update our accounting now so that statfs takes it into account.
          * Note that fed_dirty is only approximate and can become incorrect
          * if RPCs arrive out-of-order.  No important calculations depend
-         * on fed_dirty however. */
+         * on fed_dirty however, but we must check sanity to not assert. */
+        if ((long long)oa->o_dirty < 0)
+                oa->o_dirty = 0;
+        else if (oa->o_dirty > fed->fed_grant + 4 * FILTER_GRANT_CHUNK)
+                oa->o_dirty = fed->fed_grant + 4 * FILTER_GRANT_CHUNK;
         obd->u.filter.fo_tot_dirty += oa->o_dirty - fed->fed_dirty;
         if (fed->fed_grant < oa->o_dropped) {
-                CERROR("%s: cli %s/%p reports %u dropped > fed_grant %lu\n",
+                CDEBUG(D_HA,"%s: cli %s/%p reports %u dropped > fedgrant %lu\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        oa->o_dropped, fed->fed_grant);
                 oa->o_dropped = 0;
@@ -694,7 +698,22 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 struct obd_trans_info *oti, int rc)
 {
         struct inode *inode = NULL;
+        struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
+        struct ldlm_resource *resource = NULL;
+        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         ENTRY;
+
+        /* If oa != NULL then filter_preprw_read updated the inode atime
+         * and we should update the lvb so that other glimpses will also
+         * get the updated value. bug 5972 */
+        if (oa && ns && ns->ns_lvbo && ns->ns_lvbo->lvbo_update) {
+                resource = ldlm_resource_get(ns, NULL, res_id, LDLM_EXTENT, 0);
+
+                if (resource != NULL) {
+                        ns->ns_lvbo->lvbo_update(resource, NULL, 0, 1);
+                        ldlm_resource_putref(resource);
+                }
+        }
 
         if (res->dentry != NULL)
                 inode = res->dentry->d_inode;

@@ -115,8 +115,7 @@
 #define LUSTRE_OST_VERSION  0x00030000
 #define LUSTRE_DLM_VERSION  0x00040000
 #define LUSTRE_LOG_VERSION  0x00050000
-#define LUSTRE_PBD_VERSION  0x00060000
-#define LUSTRE_MGS_VERSION  0x00070000
+#define LUSTRE_MGS_VERSION  0x00060000
 
 
 struct lustre_handle {
@@ -241,7 +240,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
-                                OBD_CONNECT_TRUNCLOCK)
+                                OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 

@@ -1169,6 +1169,8 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, obd_count page_count,
                    struct brw_page *pga, struct obd_trans_info *oti)
 {
+        struct obdo *saved_oa = NULL;
+        int          rc;
         ENTRY;
 
         if (cmd & OBD_BRW_CHECK) {
@@ -1181,9 +1183,10 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 RETURN(0);
         }
 
+        rc = 0;
+
         while (page_count) {
                 obd_count pages_per_brw;
-                int rc;
 
                 if (page_count > PTLRPC_MAX_BRW_PAGES)
                         pages_per_brw = PTLRPC_MAX_BRW_PAGES;
@@ -1193,15 +1196,32 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 sort_brw_pages(pga, pages_per_brw);
                 pages_per_brw = max_unfragmented_pages(pga, pages_per_brw);
 
+                if (saved_oa != NULL) {
+                        /* restore previously saved oa */
+                        *oa = *saved_oa;
+                } else if (page_count > pages_per_brw) {
+                        /* save a copy of oa (brw will clobber it) */
+                        OBD_ALLOC(saved_oa, sizeof(*saved_oa));
+                        if (saved_oa == NULL) {
+                                CERROR("Can't save oa (ENOMEM)\n");
+                                RETURN(-ENOMEM);
+                        }
+                        *saved_oa = *oa;
+                }
+                
                 rc = osc_brw_internal(cmd, exp, oa, md, pages_per_brw, pga);
 
                 if (rc != 0)
-                        RETURN(rc);
+                        break;
 
                 page_count -= pages_per_brw;
                 pga += pages_per_brw;
         }
-        RETURN(0);
+
+        if (saved_oa != NULL)
+                OBD_FREE(saved_oa, sizeof(*saved_oa));
+
+        RETURN(rc);
 }
 
 static int osc_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -1419,9 +1439,13 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
 
         if (rc == 0 && oa != NULL) {
                 if (oa->o_valid & OBD_MD_FLBLOCKS)
-                        oap->oap_loi->loi_blocks = oa->o_blocks;
+                        oap->oap_loi->loi_lvb.lvb_blocks = oa->o_blocks;
                 if (oa->o_valid & OBD_MD_FLMTIME)
-                        oap->oap_loi->loi_mtime = oa->o_mtime;
+                        oap->oap_loi->loi_lvb.lvb_mtime = oa->o_mtime;
+                if (oa->o_valid & OBD_MD_FLATIME)
+                        oap->oap_loi->loi_lvb.lvb_atime = oa->o_atime;
+                if (oa->o_valid & OBD_MD_FLCTIME)
+                        oap->oap_loi->loi_lvb.lvb_ctime = oa->o_ctime;
         }
 
         if (oap->oap_oig) {
@@ -2734,9 +2758,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc) {
                 CDEBUG(D_INODE,"got kms "LPU64" blocks "LPU64" mtime "LPU64"\n",
                        lvb.lvb_size, lvb.lvb_blocks, lvb.lvb_mtime);
-                lsm->lsm_oinfo->loi_rss = lvb.lvb_size;
-                lsm->lsm_oinfo->loi_mtime = lvb.lvb_mtime;
-                lsm->lsm_oinfo->loi_blocks = lvb.lvb_blocks;
+                lsm->lsm_oinfo->loi_lvb = lvb;
         }
 
         RETURN(rc);

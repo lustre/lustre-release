@@ -115,7 +115,9 @@ zconf_mount() {
     fi
 
     do_node $client mount -t lustre $OPTIONS \
-	`facet_nid mgs`:/lustre-client $mnt || return 1
+	`facet_nid mgs`:/lustre $mnt || return 1
+
+    do_node $client "sysctl -w lnet.debug=$PTLDEBUG; sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }"
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
     return 0
@@ -278,12 +280,12 @@ facet_nid() {
    facet=$1
    HOST=`facet_host $facet`
    if [ -z "$HOST" ]; then
-	echo "The env variable ${facet}_HOST must be set."
-	exit 1
+	    echo "The env variable ${facet}_HOST must be set."
+	    exit 1
    fi
    if [ -z "$NETTYPE" ]; then
-	echo "The env variable NETTYPE must be set."
-	exit 1
+	    echo "The env variable NETTYPE must be set."
+	    exit 1
    fi
    echo `h2$NETTYPE $HOST`
 }
@@ -333,11 +335,15 @@ change_active() {
 do_node() {
     HOST=$1
     shift
+    local myPDSH=$PDSH
+    if [ "$HOST" = "$(hostname)" ]; then
+        myPDSH="no_dsh"
+    fi
     if $VERBOSE; then
         echo "CMD: $HOST $@"
-        $PDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
+        $myPDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
-    $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
 }
 
 do_facet() {
@@ -512,7 +518,7 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
-	sysctl -w lustre.fail_loc=0
+	sysctl -w lustre.fail_loc=0 || true
 	echo "${TESTSUITE}: **** FAIL:" $@
 	log "FAIL: $@"
 	exit 1

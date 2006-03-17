@@ -390,7 +390,7 @@ static int llog_test_5(struct obd_device *obd)
         llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
 
         CWARN("5b: print the catalog entries.. we expect 2\n");
-        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5", NULL);
+        rc = llog_process(llh, cat_print_cb, "test 5", NULL);
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
@@ -412,7 +412,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CWARN("5b: print the catalog entries.. we expect 1\n");
-        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5", NULL);
+        rc = llog_process(llh, cat_print_cb, "test 5", NULL);
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
@@ -482,11 +482,11 @@ static int llog_test_6(struct obd_device *obd, char *name)
                 GOTO(parse_out, rc);
         }
 
-        rc = llog_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
+        rc = llog_process(llh, plain_print_cb, NULL, NULL);
         if (rc)
                 CERROR("6: llog_process failed %d\n", rc);
 
-        rc = llog_reverse_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
+        rc = llog_reverse_process(llh, plain_print_cb, NULL, NULL);
         if (rc)
                 CERROR("6: llog_reverse_process failed %d\n", rc);
 

@@ -165,12 +165,17 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
 
                 req->rq_buflen = sizeof(*req->rq_md);
                 OBD_ALLOC(req->rq_md, req->rq_buflen);
-                if (req->rq_md == NULL)
+                if (req->rq_md == NULL) {
+                        OBD_FREE_PTR(req);
                         GOTO(out, rc = -ENOMEM);
+                }
 
                 req->rq_oa = obdo_alloc();
-                if (req->rq_oa == NULL)
+                if (req->rq_oa == NULL) {
+                        OBD_FREE_PTR(req->rq_md);
+                        OBD_FREE_PTR(req);
                         GOTO(out, rc = -ENOMEM);
+                }
 
                 req->rq_idx = ost_idx;
                 req->rq_stripe = i;
@@ -217,5 +222,6 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
                 rc = 0;
         }
 out:
+
         RETURN(rc);
 }

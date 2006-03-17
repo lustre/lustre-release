@@ -216,6 +216,8 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
         if (lcfg->lcfg_nid)
                 printf("nid=%s("LPX64")  ", libcfs_nid2str(lcfg->lcfg_nid),
                        lcfg->lcfg_nid);
+        if (lcfg->lcfg_nal)
+                printf("nal=%d ", lcfg->lcfg_nal);
         for (i = 0; i <  lcfg->lcfg_bufcount; i++)
                 printf("%d:%.*s  ", i, lcfg->lcfg_buflens[i], 
                        (char*)lustre_cfg_buf(lcfg, i));

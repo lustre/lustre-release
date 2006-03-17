@@ -62,10 +62,7 @@ struct lov_oinfo {                 /* per-stripe data structure */
 
         unsigned loi_kms_valid:1;
         __u64 loi_kms;             /* known minimum size */
-        __u64 loi_rss;             /* recently seen size */
-        __u64 loi_mtime;           /* recently seen mtime */
-        __u64 loi_blocks;          /* recently seen blocks */
-
+        struct ost_lvb loi_lvb;
         struct osc_async_rc     loi_ar;
 };
 
@@ -233,12 +230,8 @@ struct filter_obd {
         struct dentry       *fo_dentry_O;
         struct dentry      **fo_dentry_O_groups;
         struct dentry      **fo_dentry_O_sub;
-        spinlock_t           fo_objidlock;      /* protect fo_lastobjid
-                                                 * increment */
-        
-        spinlock_t           fo_translock;      /* protect fsd_last_rcvd
-                                                 * increment */
-        
+        spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
+        spinlock_t           fo_translock;      /* protect fsd_last_transno */
         struct file         *fo_rcvd_filp;
         struct file         *fo_health_check_filp;
         struct lr_server_data *fo_fsd;
@@ -247,10 +240,6 @@ struct filter_obd {
 
         int                  fo_destroy_in_progress;
         struct semaphore     fo_create_lock;
-
-        struct file_operations *fo_fop;
-        struct inode_operations *fo_iop;
-        struct address_space_operations *fo_aops;
 
         struct list_head     fo_export_list;
         int                  fo_subdir_count;
@@ -264,11 +253,9 @@ struct filter_obd {
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
         struct lustre_handle fo_mdc_conn;
-#if 0
-        struct ptlrpc_client fo_mdc_client;
-#endif
         struct file        **fo_last_objid_files;
-        __u64               *fo_last_objids; /* last created objid for groups */
+        __u64               *fo_last_objids; /* last created objid for groups,
+                                              * protected by fo_objidlock */
 
         struct semaphore     fo_alloc_lock;
 
@@ -407,6 +394,7 @@ struct mds_obd {
         __u64                            mds_last_transno;
         __u64                            mds_mount_count;
         __u64                            mds_io_epoch;
+        unsigned long                    mds_atime_diff;
         struct semaphore                 mds_epoch_sem;
         struct ll_fid                    mds_rootfid;
         struct lr_server_data           *mds_server_data;
@@ -805,6 +793,8 @@ struct obd_ops {
         int (*o_teardown_async_page)(struct obd_export *exp,
                                      struct lov_stripe_md *lsm,
                                      struct lov_oinfo *loi, void *cookie);
+        int (*o_merge_lvb)(struct obd_export *exp, struct lov_stripe_md *lsm,
+                           struct ost_lvb *lvb, int kms_only);
         int (*o_adjust_kms)(struct obd_export *exp, struct lov_stripe_md *lsm,
                             obd_off size, int shrink);
         int (*o_punch)(struct obd_export *exp, struct obdo *oa,

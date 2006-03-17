@@ -609,43 +609,6 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         spin_unlock(&open_req->rq_lock);
 }
 
-static int mdc_close_interpret(struct ptlrpc_request *req, void *data, int rc)
-{
-        union ptlrpc_async_args *aa = data;
-        struct mdc_rpc_lock *rpc_lock;
-        struct obd_device *obd = aa->pointer_arg[1];
-        unsigned long flags;
-
-        spin_lock_irqsave(&req->rq_lock, flags);
-        rpc_lock = aa->pointer_arg[0];
-        aa->pointer_arg[0] = NULL;
-        spin_unlock_irqrestore(&req->rq_lock, flags);
-
-        if (rpc_lock == NULL) {
-                CERROR("called with NULL rpc_lock\n");
-        } else {
-                LASSERTF(rpc_lock == obd->u.cli.cl_rpc_lock, "%p != %p\n",
-                         rpc_lock, obd->u.cli.cl_rpc_lock);
-                mdc_put_rpc_lock(rpc_lock, NULL);
-        }
-        wake_up(&req->rq_reply_waitq);
-        RETURN(rc);
-}
-
-/* We can't use ptlrpc_check_reply, because we don't want to wake up for
- * anything but a reply or an error. */
-static int mdc_close_check_reply(struct ptlrpc_request *req)
-{
-        int rc = 0;
-        unsigned long flags;
-
-        spin_lock_irqsave(&req->rq_lock, flags);
-        if (req->rq_async_args.pointer_arg[0] == NULL)
-                rc = 1;
-        spin_unlock_irqrestore (&req->rq_lock, flags);
-        return rc;
-}
-
 int mdc_close(struct obd_export *exp, struct obdo *oa,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
@@ -656,7 +619,6 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                               obd->u.cli.cl_max_mds_cookiesize};
         struct ptlrpc_request *req;
         struct mdc_open_data *mod;
-        struct l_wait_info lwi;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -690,21 +652,10 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         LASSERT(req->rq_cb_data == NULL);
         req->rq_cb_data = mod;
 
-        CDEBUG(D_HA, "close req->rep_len %d mdsize %d cookiesize %d\n",
-               req->rq_replen,
-               obd->u.cli.cl_max_mds_easize, obd->u.cli.cl_max_mds_cookiesize);
-
-        /* We hand a ref to the rpcd here, so we need another one of our own. */
-        ptlrpc_request_addref(req);
-
         mdc_get_rpc_lock(obd->u.cli.cl_rpc_lock, NULL);
-        req->rq_interpret_reply = mdc_close_interpret;
-        req->rq_async_args.pointer_arg[0] = obd->u.cli.cl_rpc_lock;
-        req->rq_async_args.pointer_arg[1] = obd;
-        ptlrpcd_add_req(req);
-        lwi = LWI_TIMEOUT_INTR(MAX(req->rq_timeout * HZ, 1), NULL, NULL, NULL);
-        rc = l_wait_event(req->rq_reply_waitq, mdc_close_check_reply(req),
-                          &lwi);
+        rc = ptlrpc_queue_wait(req);
+        mdc_put_rpc_lock(obd->u.cli.cl_rpc_lock, NULL);
+
         if (req->rq_repmsg == NULL) {
                 CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
                        req->rq_status);
@@ -727,14 +678,10 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                         rc = -EPROTO;
                 }
         }
-        if (req->rq_async_args.pointer_arg[0] != NULL) {
-                CERROR("returned without dropping rpc_lock: rc %d\n", rc);
-                mdc_close_interpret(req, &req->rq_async_args, rc);
-        }
 
         EXIT;
- out:
         *request = req;
+ out:
         return rc;
 }
 

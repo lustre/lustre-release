@@ -41,6 +41,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_echo.h>
+#include <linux/lustre_ver.h>
 #include <linux/lustre_debug.h>
 #include <linux/lprocfs_status.h>
 
@@ -515,11 +516,11 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         gfp_mask = ((oa->o_id & 2) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
 
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
+        LASSERT(lsm != NULL);
+        LASSERT(lsm->lsm_object_id == oa->o_id);
 
         if (count <= 0 ||
-            (count & (PAGE_SIZE - 1)) != 0 ||
-            (lsm != NULL &&
-             lsm->lsm_object_id != oa->o_id))
+            (count & (PAGE_SIZE - 1)) != 0)
                 return (-EINVAL);
 
         /* XXX think again with misaligned I/O */
@@ -1328,6 +1329,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_device *tgt;
         struct lustre_handle conn = {0, };
         struct obd_uuid echo_uuid = { "ECHO_UUID" };
+        struct obd_connect_data *ocd = NULL;
         int rc;
         ENTRY;
 
@@ -1347,8 +1349,20 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD (&ec->ec_objects);
         ec->ec_unique = 0;
 
-        rc = obd_connect(&conn, tgt, &echo_uuid, NULL /* obd_connect_data */);
-        if (rc) {
+        OBD_ALLOC(ocd, sizeof(*ocd));
+        if (ocd == NULL) {
+                CERROR("Can't alloc ocd connecting to %s\n",
+                       lustre_cfg_string(lcfg, 1));
+                return -ENOMEM;
+        }
+        
+        ocd->ocd_version = LUSTRE_VERSION_CODE;
+
+        rc = obd_connect(&conn, tgt, &echo_uuid, ocd);
+
+        OBD_FREE(ocd, sizeof(*ocd));
+
+        if (rc != 0) {
                 CERROR("fail to connect to device %s\n",
                        lustre_cfg_string(lcfg, 1));
                 return (rc);

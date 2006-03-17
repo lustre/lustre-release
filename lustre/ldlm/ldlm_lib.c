@@ -419,8 +419,8 @@ out_sem:
 int client_disconnect_export(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct client_obd *cli = &obd->u.cli;
-        struct obd_import *imp = cli->cl_import;
+        struct client_obd *cli;
+        struct obd_import *imp;
         int rc = 0, err;
         ENTRY;
 
@@ -429,6 +429,9 @@ int client_disconnect_export(struct obd_export *exp)
                        exp, exp ? exp->exp_handle.h_cookie : -1);
                 RETURN(-EINVAL);
         }
+
+        cli = &obd->u.cli;
+        imp = cli->cl_import;
 
         down(&cli->cl_sem);
         if (!cli->cl_conn_count) {
@@ -503,9 +506,8 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
         }
 
         conn->cookie = exp->exp_handle.h_cookie;
-        CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n",
-               cluuid->uuid, exp);
-        CDEBUG(D_IOCTL, "connect: cookie "LPX64"\n", conn->cookie);
+        CDEBUG(D_HA, "connect export for UUID '%s' at %p, cookie "LPX64"\n",
+               cluuid->uuid, exp, conn->cookie);
         RETURN(0);
 }
 
@@ -538,16 +540,14 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         obd_str2uuid (&tgtuuid, str);
         target = class_uuid2obd(&tgtuuid);
         /* COMPAT_146 */
-        if (!target) {
-                target = class_name2obd(str);
-        }
         /* old (pre 1.6) lustre_process_log tries to connect to mdsname
-           (eg. mdsA) instead of uuid.  Since 1.6 changes names, the above
-           hack fails. */
+           (eg. mdsA) instead of uuid. */
         if (!target) {
                 snprintf((char *)tgtuuid.uuid, sizeof(tgtuuid), "%s_UUID", str);
                 target = class_uuid2obd(&tgtuuid);
         }
+        if (!target)
+                target = class_name2obd(str);
         /* end COMPAT_146 */
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
@@ -600,22 +600,26 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 GOTO(out, rc);
 
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
-                if (!data || (data->ocd_version < LUSTRE_VERSION_CODE -
-                               LUSTRE_VERSION_ALLOWED_OFFSET)) {
-                        if (!data) 
-                                DEBUG_REQ(D_WARNING, req, "Refusing old "
-                                          "libclient connection attempt\n");
-                        else
-                                DEBUG_REQ(D_WARNING, req,
-                                          "Refusing old (%d.%d.%d.%d) "
-                                          "libclient connection attempt\n",
+                if (!data) {
+                        DEBUG_REQ(D_WARNING, req, "Refusing old (unversioned) "
+                                  "libclient connection attempt\n");
+                        GOTO(out, rc = -EPROTO);
+                } else if (data->ocd_version < LUSTRE_VERSION_CODE -
+                                               LUSTRE_VERSION_ALLOWED_OFFSET) {
+                        DEBUG_REQ(D_WARNING, req, "Refusing old (%d.%d.%d.%d) "
+                                  "libclient connection attempt\n",
                                   OBD_OCD_VERSION_MAJOR(data->ocd_version),
                                   OBD_OCD_VERSION_MINOR(data->ocd_version),
                                   OBD_OCD_VERSION_PATCH(data->ocd_version),
                                   OBD_OCD_VERSION_FIX(data->ocd_version));
-                        data = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data));
-                        data->ocd_connect_flags = OBD_CONNECT_VERSION;
-                        data->ocd_version = LUSTRE_VERSION_CODE;
+                        data = lustre_msg_buf(req->rq_repmsg, 0,
+                                              offsetof(typeof(*data),
+                                                       ocd_version) +
+                                              sizeof(data->ocd_version));
+                        if (data) {
+                                data->ocd_connect_flags = OBD_CONNECT_VERSION;
+                                data->ocd_version = LUSTRE_VERSION_CODE;
+                        }
                         GOTO(out, rc = -EPROTO);
                 }
         }
@@ -640,8 +644,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (!export) {
                 spin_unlock(&target->obd_dev_lock);
         } else if (req->rq_reqmsg->conn_cnt == 1) {
-                CERROR("%s reconnected with 1 conn_cnt; cookies not "
-                       "random?\n", cluuid.uuid);
+                CERROR("%s: NID %s (%s) reconnected with 1 conn_cnt; "
+                       "cookies not random?\n", target->obd_name,
+                       libcfs_nid2str(req->rq_peer.nid), cluuid.uuid);
                 GOTO(out, rc = -EALREADY);
         }
 
@@ -664,9 +669,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (export == NULL) {
                 if (target->obd_recovering) {
-                        CERROR("%s: denying connection for new client %s: "
+                        CERROR("%s: denying connection for new client %s (%s): "
                                "%d clients in recovery for %lds\n",
-                               target->obd_name, cluuid.uuid,
+                               target->obd_name,
+                               libcfs_nid2str(req->rq_peer.nid), cluuid.uuid,
                                target->obd_recoverable_clients,
                                (target->obd_recovery_timer.expires-jiffies)/HZ);
                         rc = -EBUSY;
@@ -714,9 +720,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         spin_lock_irqsave(&export->exp_lock, flags);
         if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
-                CERROR("%s: already connected at a higher conn_cnt: %d > %d\n",
-                       cluuid.uuid, export->exp_conn_cnt,
-                       req->rq_reqmsg->conn_cnt);
+                CERROR("%s: %s already connected at higher conn_cnt: %d > %d\n",
+                       cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
+                       export->exp_conn_cnt, req->rq_reqmsg->conn_cnt);
                 spin_unlock_irqrestore(&export->exp_lock, flags);
                 GOTO(out, rc = -EALREADY);
         }
@@ -764,7 +770,6 @@ out:
 
 int target_handle_disconnect(struct ptlrpc_request *req)
 {
-        struct obd_export *exp;
         int rc;
         ENTRY;
 
@@ -773,8 +778,7 @@ int target_handle_disconnect(struct ptlrpc_request *req)
                 RETURN(rc);
 
         /* keep the rq_export around so we can send the reply */
-        exp = class_export_get(req->rq_export);
-        req->rq_status = obd_disconnect(exp);
+        req->rq_status = obd_disconnect(class_export_get(req->rq_export));
         RETURN(0);
 }
 
@@ -811,7 +815,6 @@ static void target_release_saved_req(struct ptlrpc_request *req)
 static void target_finish_recovery(struct obd_device *obd)
 {
         struct list_head *tmp, *n;
-        int rc;
 
         CWARN("%s: sending delayed replies to recovered clients\n",
               obd->obd_name);
@@ -820,12 +823,9 @@ static void target_finish_recovery(struct obd_device *obd)
 
         /* when recovery finished, cleanup orphans on mds and ost */
         if (OBT(obd) && OBP(obd, postrecov)) {
-                rc = OBP(obd, postrecov)(obd);
-                if (rc >= 0)
-                        CWARN("%s: all clients recovered, %d MDS "
-                              "orphans deleted\n", obd->obd_name, rc);
-                else
-                        CWARN("postrecov failed %d\n", rc);
+                int rc = OBP(obd, postrecov)(obd);
+                CWARN("%s: recovery %s: rc %d\n", obd->obd_name,
+                      rc < 0 ? "failed" : "complete", rc);
         }
 
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {

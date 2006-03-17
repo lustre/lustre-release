@@ -364,7 +364,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 LASSERT(lmm_buf);
                 LASSERT(lmm_bufsize >= lmm_size);
                 memcpy(lmm_buf, lmm, lmm_size);
-                rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
+                rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
                 if (rc)
                         CERROR("open replay failed to set md:%d\n", rc);
                 RETURN(0);
@@ -477,14 +477,12 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 GOTO(out_oa, rc);
         }
 
-        rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
+        rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
-        if (!lmm_buf) {
-                CERROR("Can't allocate reply buffer size=%d\n", lmm_size);
+        if (!lmm_buf) 
                 rc = -ENOMEM;
-        } else {
+        else 
                 memcpy(lmm_buf, lmm, lmm_size);
-        }
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
@@ -778,31 +776,25 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
 
         if (dchild->d_inode != NULL) {
                 mds_inode_set_orphan(dchild->d_inode);
-                mds_pack_inode2fid(&body->fid1, dchild->d_inode);
-                mds_pack_inode2body(body, dchild->d_inode);
-                intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-                intent_set_disposition(rep, DISP_LOOKUP_POS);
                 CWARN("Orphan %s found and opened in PENDING directory\n",
                        fidname);
-                goto open;
-        }
-        l_dput(dchild);
+        } else {
+                l_dput(dchild);
 
-        /* We didn't find it in PENDING so it isn't an orphan.  See
-         * if it was a regular inode that was previously created. */
-        dchild = mds_fid2dentry(mds, fid, NULL);
-        if (IS_ERR(dchild))
-                RETURN(PTR_ERR(dchild));
+                /* We didn't find it in PENDING so it isn't an orphan.  See
+                 * if it was a regular inode that was previously created. */
+                dchild = mds_fid2dentry(mds, fid, NULL);
+                if (IS_ERR(dchild))
+                        RETURN(PTR_ERR(dchild));
+        }
 
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
- open:
-        rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep,
-                             NULL);
-        rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
+        rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
+        rc = mds_finish_transno(mds, dchild->d_inode, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
 
@@ -1301,7 +1293,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
                  * */
                 LTIME_S(iattr.ia_atime) = request_body->atime;
                 if ((LTIME_S(iattr.ia_atime) >
-                     LTIME_S(inode->i_atime) + MAX_ATIME_DIFF) ||
+                     LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
                     (iattr.ia_valid != 0 &&
                      LTIME_S(iattr.ia_atime) > LTIME_S(inode->i_atime)))
                         iattr.ia_valid |= ATTR_ATIME;

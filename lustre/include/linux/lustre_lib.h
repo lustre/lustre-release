@@ -500,7 +500,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * If it returns FALSE l_wait_event() continues to wait as described above with
  * signals enabled.  Otherwise it returns -ETIMEDOUT.
  *
- * LWI_INTR(intr_handler, callback_data) is shorthand for 
+ * LWI_INTR(intr_handler, callback_data) is shorthand for
  * LWI_TIMEOUT_INTR(0, NULL, intr_handler, callback_data)
  *
  * The second form of usage looks like this:
@@ -519,6 +519,27 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * rc = l_wait_event(waitq, condition, &lwi);
  * This is the same as previous case, but condition is checked once every
  * 'interval' jiffies (if non-zero).
+ *
+ * Subtle synchronization point: this macro does *not* necessary takes
+ * wait-queue spin-lock before returning, and, hence, following idiom is safe
+ * ONLY when caller provides some external locking:
+ *
+ *             Thread1                            Thread2
+ *
+ *   l_wait_event(&obj->wq, ....);                                       (1)
+ *
+ *                                    wake_up(&obj->wq):                 (2)
+ *                                         spin_lock(&q->lock);          (2.1)
+ *                                         __wake_up_common(q, ...);     (2.2)
+ *                                         spin_unlock(&q->lock, flags); (2.3)
+ *
+ *   OBD_FREE_PTR(obj);                                                  (3)
+ *
+ * As l_wait_event() may "short-cut" execution and return without taking
+ * wait-queue spin-lock, some additional synchronization is necessary to
+ * guarantee that step (3) can begin only after (2.3) finishes.
+ *
+ * XXX nikita: some ptlrpc daemon threads have races of that sort.
  *
  */
 
@@ -580,6 +601,10 @@ static inline sigset_t l_w_e_set_sigs(int sigs)
         return old;
 }
 
+/*
+ * wait for @condition to become true, but no longer than timeout, specified
+ * by @info.
+ */
 #define __l_wait_event(wq, condition, info, ret, excl)                         \
 do {                                                                           \
         wait_queue_t  __wait;                                                  \
@@ -721,6 +746,20 @@ do {                                                                    \
         __l_wait_event(wq, condition, __info, __ret, 1);        \
         __ret;                                                  \
 })
+
+#ifdef __KERNEL__
+/* initialize ost_lvb according to inode */
+static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
+{
+        lvb->lvb_size = inode->i_size;
+        lvb->lvb_blocks = inode->i_blocks;
+        lvb->lvb_mtime = LTIME_S(inode->i_mtime);
+        lvb->lvb_atime = LTIME_S(inode->i_atime);
+        lvb->lvb_ctime = LTIME_S(inode->i_ctime);
+}
+#else
+/* defined in liblustre/llite_lib.h */
+#endif
 
 #ifdef __KERNEL__
 #define LIBLUSTRE_CLIENT (0)

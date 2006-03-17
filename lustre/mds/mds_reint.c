@@ -115,8 +115,10 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         /* if the export has already been failed, we have no last_rcvd slot */
         if (req->rq_export->exp_failed) {
-                CWARN("committing transaction for disconnected client %s\n",
-                      req->rq_export->exp_client_uuid.uuid);
+                CWARN("commit transaction for disconnected client %s: rc %d\n",
+                      req->rq_export->exp_client_uuid.uuid, rc);
+                if (rc == 0)
+                        rc = -ENOTCONN;
                 if (handle)
                         GOTO(commit, rc);
                 RETURN(rc);
@@ -139,7 +141,13 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         transno = req->rq_reqmsg->transno;
         if (rc != 0) {
-                LASSERT(transno == 0);
+                if (transno != 0) {
+                        CERROR("%s: replay %s transno "LPU64" failed: rc %d\n",
+                               obd->obd_name,
+                               libcfs_nid2str(req->rq_export->exp_connection->c_peer.nid),
+                               transno, rc);
+                        transno = 0;
+                }
         } else if (transno == 0) {
                 spin_lock(&mds->mds_transno_lock);
                 transno = ++mds->mds_last_transno;
@@ -334,8 +342,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                 ptlrpc_schedule_difficult_reply (oldrep);
 
                 spin_unlock (&svc->srv_lock);
-                spin_unlock_irqrestore (&exp->exp_lock, flags);
-                return;
+                break;
         }
         spin_unlock_irqrestore (&exp->exp_lock, flags);
 }
@@ -577,7 +584,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                       lum->lmm_stripe_count == 0) ||
                     /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
                     lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1))){
-                        rc = fsfilt_set_md(obd, inode, handle, NULL, 0);
+                        rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
                 } else {
@@ -590,7 +597,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         obd_free_memmd(mds->mds_osc_exp, &lsm);
 
                         rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
-                                           rec->ur_eadatalen);
+                                           rec->ur_eadatalen, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
                 }
@@ -865,7 +872,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         if (rc > 0) {
                                 down(&inode->i_sem);
                                 rc = fsfilt_set_md(obd, inode, handle,
-                                                   &lmm, lmm_size);
+                                                   &lmm, lmm_size, "lov");
                                 up(&inode->i_sem);
                         }
                         if (rc)

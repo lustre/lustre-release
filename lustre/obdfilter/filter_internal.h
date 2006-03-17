@@ -13,8 +13,6 @@
 #include <linux/obd.h>
 #include <linux/lustre_disk.h>
 
-#define FILTER_LAYOUT_VERSION "2"
-
 #define HEALTH_CHECK "health_check"
 #define FILTER_INIT_OBJID 0
 
@@ -38,9 +36,6 @@ struct filter_client_data {
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
         __u8  fcd_padding[LR_CLIENT_SIZE - 56];
 };
-
-#define FILTER_DENTRY_MAGIC 0x9efba101
-#define FILTER_FLAG_DESTROY 0x0001      /* destroy dentry on last file close */
 
 /* Limit the returned fields marked valid to those that we actually might set */
 #define FILTER_VALID_FLAGS (OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLGENER  |\

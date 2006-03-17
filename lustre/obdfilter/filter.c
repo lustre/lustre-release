@@ -801,7 +801,7 @@ static int filter_prep(struct obd_device *obd)
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
                 CERROR("OBD filter: cannot open/create %s rc = %d\n",
-                        HEALTH_CHECK, rc);
+                       HEALTH_CHECK, rc);
                 GOTO(err_filp, rc);
         }
         filter->fo_health_check_filp = file;
@@ -1734,32 +1734,59 @@ static int filter_cleanup(struct obd_device *obd)
 static int filter_connect_internal(struct obd_export *exp,
                                    struct obd_connect_data *data)
 {
-        if (data != NULL) {
-                CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
-                       " ocd_version: %x ocd_grant: %d\n",
-                       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
-                       data->ocd_connect_flags, data->ocd_version,
-                       data->ocd_grant);
+        if (!data) 
+                RETURN(0);
+        
+        CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
+               " ocd_version: %x ocd_grant: %d\n",
+               exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
+               data->ocd_connect_flags, data->ocd_version,
+               data->ocd_grant);
 
-                data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
-                exp->exp_connect_flags = data->ocd_connect_flags;
-                data->ocd_version = LUSTRE_VERSION_CODE;
+        data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
+        exp->exp_connect_flags = data->ocd_connect_flags;
+        data->ocd_version = LUSTRE_VERSION_CODE;
 
-                if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
-                        obd_size left, want;
+        if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
+                obd_size left, want;
 
-                        spin_lock(&exp->exp_obd->obd_osfs_lock);
-                        left = filter_grant_space_left(exp);
-                        want = data->ocd_grant;
-                        data->ocd_grant = filter_grant(exp, 0, want, left);
-                        spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                spin_lock(&exp->exp_obd->obd_osfs_lock);
+                left = filter_grant_space_left(exp);
+                want = data->ocd_grant;
+                data->ocd_grant = filter_grant(exp, 0, want, left);
+                spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
-                        CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "
-                               "%lld left: %lld\n", exp->exp_obd->obd_name,
-                               exp->exp_client_uuid.uuid, exp,
-                               data->ocd_grant, want, left);
+                CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "
+                       "%lld left: %lld\n", exp->exp_obd->obd_name,
+                       exp->exp_client_uuid.uuid, exp,
+                       data->ocd_grant, want, left);
+        }
+
+        if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
+                struct filter_obd *filter = &exp->exp_obd->u.filter;
+                struct lr_server_data *lsd = filter->fo_fsd;
+                int index = le32_to_cpu(lsd->lsd_ost_index);
+                
+                if (!(lsd->lsd_feature_compat &
+                      cpu_to_le32(OBD_COMPAT_OST))) {
+                        /* this will only happen on the first connect */
+                        lsd->lsd_ost_index = le32_to_cpu(data->ocd_index);
+                        lsd->lsd_feature_compat |= cpu_to_le32(OBD_COMPAT_OST);
+                        filter_update_server_data(exp->exp_obd, 
+                                                  filter->fo_rcvd_filp, lsd, 1);
+                } else if (index != data->ocd_index) {
+                        LCONSOLE_ERROR("Connection from %s to index "
+                                       "%u doesn't match actual OST "
+                                       "index %u, bad configuration?\n",
+                                       obd_export_nid2str(exp), index, 
+                                       data->ocd_index);
+                        RETURN(-EBADF);
                 }
         }
+        /* FIXME: Do the same with the MDS UUID and fsd_peeruuid.
+         * FIXME: We don't strictly need the COMPAT flag for that,
+         * FIXME: as fsd_peeruuid[0] will tell us if that is set.
+         * FIXME: We needed it for the index, as index 0 is valid. */
 
         RETURN(0);
 }
@@ -1781,7 +1808,8 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
 
 /* nearly identical to mds_connect */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid, struct obd_connect_data *data)
+                          struct obd_uuid *cluuid,
+                          struct obd_connect_data *data)
 {
         struct obd_export *exp;
         struct filter_export_data *fed;
@@ -1932,6 +1960,7 @@ static void filter_grant_discard(struct obd_export *exp)
                  "%s: tot_pending "LPU64" cli %s/%p fed_pending %ld\n",
                  obd->obd_name, filter->fo_tot_pending,
                  exp->exp_client_uuid.uuid, exp, fed->fed_pending);
+        /* fo_tot_pending is handled in filter_grant_commit as bulk finishes */
         LASSERTF(filter->fo_tot_dirty >= fed->fed_dirty,
                  "%s: tot_dirty "LPU64" cli %s/%p fed_dirty %ld\n",
                  obd->obd_name, filter->fo_tot_dirty,
@@ -2081,7 +2110,7 @@ int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                        LPU64"/"LPU64")\n", oa->o_fid, oa->o_stripe_idx,
                        oa->o_generation, oa->o_id, group);
 
-                rc = fsfilt_set_md(obd, inode, handle, &ff, sizeof(ff));
+                rc = fsfilt_set_md(obd, inode, handle, &ff, sizeof(ff), "fid");
                 if (rc)
                         CERROR("store fid in object failed! rc: %d\n", rc);
         } else {
@@ -2188,7 +2217,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         rc = filter_finish_transno(exp, oti, rc);
-        
+
         err = fsfilt_commit(exp->exp_obd, inode, handle, 0);
         if (err) {
                 CERROR("error on commit, err = %d\n", err);
@@ -2228,7 +2257,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
                                     __FUNCTION__, 1);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
-                        
+
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         lock_kernel();
@@ -2240,7 +2269,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
 
         res = ldlm_resource_get(exp->exp_obd->obd_namespace, NULL,
                                 res_id, LDLM_EXTENT, 0);
-        
+
         if (res != NULL) {
                 ns_lvbo = res->lr_namespace->ns_lvbo;
                 if (ns_lvbo && ns_lvbo->lvbo_update)
@@ -2249,7 +2278,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         }
 
         oa->o_valid = OBD_MD_FLID;
-        
+
         /* Quota release need uid/gid info */
         obdo_from_inode(oa, dentry->d_inode,
                         FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
@@ -2454,7 +2483,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct filter_obd *filter;
         struct obd_statfs *osfs;
         int err = 0, rc = 0, recreate_obj = 0, i;
-        unsigned long enough_time = jiffies + (obd_timeout * HZ) / 3;
+        unsigned long enough_time = jiffies + (obd_timeout * HZ) / 4;
         __u64 next_id;
         void *handle = NULL;
         ENTRY;
@@ -2471,8 +2500,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 rc = filter_statfs(obd, osfs, jiffies - HZ);
                 if (rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
                         CDEBUG(D_HA, "OST out of space! avail "LPU64"\n",
-                              osfs->os_bavail<<filter->fo_obt.obt_sb->s_blocksize_bits);
-                        *num=0;
+                               osfs->os_bavail <<
+                                       filter->fo_obt.obt_sb->s_blocksize_bits);
+                        *num = 0;
                         rc = -ENOSPC;
                 }
                 OBD_FREE(osfs, sizeof(*osfs));
@@ -2481,7 +2511,8 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 }
         }
 
-        CDEBUG(D_HA, "%s: precreating %d objects\n", obd->obd_name, *num);
+        CDEBUG(D_HA, "%s: precreating %d objects in group "LPU64" at "LPU64"\n",
+               obd->obd_name, *num, group, oa->o_id);
 
         down(&filter->fo_create_lock);
 
@@ -2544,6 +2575,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 cleanup_phase = 3;
 
+                /* We mark object SUID+SGID to flag it for accepting UID+GID
+                 * from client on first write.  Currently the permission bits
+                 * on the OST are never used, so this is OK. */
                 rc = ll_vfs_create(dparent->d_inode, dchild,
                                    S_IFREG |  S_ISUID | S_ISGID | 0666, NULL);
                 if (rc) {
@@ -2579,7 +2613,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 if (rc)
                         break;
                 if (time_after(jiffies, enough_time)) {
-                        CDEBUG(D_INODE,"%s: precreate slow - want %d got %d \n",
+                        CDEBUG(D_HA, "%s: precreate slow - want %d got %d \n",
                                obd->obd_name, *num, i);
                         break;
                 }
@@ -2588,11 +2622,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
         up(&filter->fo_create_lock);
 
-        CDEBUG(D_HA, "%s: server last_objid for group "LPU64": "LPU64"\n",
-               obd->obd_name, group, filter->fo_last_objids[group]);
+        CDEBUG(D_HA, "%s: created %d objects for group "LPU64": "LPU64"\n",
+               obd->obd_name, i, group, filter->fo_last_objids[group]);
 
-        CDEBUG(D_HA, "%s: filter_precreate() created %d objects\n",
-               obd->obd_name, i);
         RETURN(rc);
 }
 

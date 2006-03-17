@@ -339,11 +339,15 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
         req->rq_repmsg->status = req->rq_status;
         req->rq_repmsg->opc    = req->rq_reqmsg->opc;
 
-        if (req->rq_export == NULL) 
+        if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
                 conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);
         else
                 conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 
+        if (conn == NULL) {
+                CERROR("not replying on NULL connection\n"); /* bug 9635 */
+                return -ENOTCONN;
+        }
         atomic_inc (&svc->srv_outstanding_replies);
         ptlrpc_rs_addref(rs);                   /* +1 ref for the network */
 

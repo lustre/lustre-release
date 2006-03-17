@@ -287,7 +287,17 @@ struct ptlrpc_request {
         spinlock_t rq_lock;
         /* client-side flags */
         unsigned int rq_intr:1, rq_replied:1, rq_err:1,
-                rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
+                rq_timedout:1, rq_resend:1, rq_restart:1,
+                /*
+                 * when ->rq_replay is set, request is kept by the client even
+                 * after server commits corresponding transaction. This is
+                 * used for operations that require sequence of multiple
+                 * requests to be replayed. The only example currently is file
+                 * open/close. When last request in such a sequence is
+                 * committed, ->rq_replay is cleared on all requests in the
+                 * sequence.
+                 */
+                rq_replay:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1;
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
@@ -520,7 +530,10 @@ struct ptlrpc_service {
         struct list_head  srv_active_replies;   /* all the active replies */
         struct list_head  srv_reply_queue;      /* replies waiting for service */
 
-        wait_queue_head_t srv_waitq; /* all threads sleep on this */
+        wait_queue_head_t srv_waitq; /* all threads sleep on this. This
+                                      * wait-queue is signalled when new
+                                      * incoming request arrives and when
+                                      * difficult reply has to be handled. */
 
         struct list_head   srv_threads;
         svc_handler_t      srv_handler;

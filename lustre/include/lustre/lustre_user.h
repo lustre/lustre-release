@@ -58,7 +58,10 @@
 #define LL_IOC_POLL_QUOTACHECK          _IOR ('f', 161, struct if_quotacheck *)
 #define LL_IOC_QUOTACTL                 _IOWR('f', 162, struct if_quotactl *)
 #define LL_IOC_JOIN                     _IOW ('f', 163, long)
+#define LL_IOC_OBD_STATFS               _IOWR('f', 164, struct obd_statfs *)
 
+#define LL_STATFS_MDC           1
+#define LL_STATFS_LOV           2
 
 #define IOC_MDC_TYPE            'i'
 #define IOC_MDC_GETSTRIPE       _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)

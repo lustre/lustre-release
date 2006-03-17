@@ -1,7 +1,7 @@
 m4_define([LUSTRE_MAJOR],[1])
 m4_define([LUSTRE_MINOR],[4])
-m4_define([LUSTRE_PATCH],[5])
-m4_define([LUSTRE_FIX],[95])
+m4_define([LUSTRE_PATCH],[6])
+m4_define([LUSTRE_FIX],[0])
 
 dnl # 288 stands for 0.0.1.32 , next version with fixes is ok, but next after
 dnl # next release candidate/beta would spill this warning already.
@@ -11,8 +11,7 @@ m4_define([LUSTRE_VER_OFFSET_WARN],[288])
 dnl # User editable part ends here. -----------------------------------------
 
 m4_pattern_allow(AC_LUSTRE)
-m4_define([LUSTRE_VERSION],m4_if(LUSTRE_FIX,[0],LUSTRE_MAJOR.LUSTRE_MINOR.LUSTR
-E_PATCH,LUSTRE_MAJOR.LUSTRE_MINOR.LUSTRE_PATCH.LUSTRE_FIX))
+m4_define([LUSTRE_VERSION],m4_if(LUSTRE_FIX,[0],LUSTRE_MAJOR.LUSTRE_MINOR.LUSTRE_PATCH,LUSTRE_MAJOR.LUSTRE_MINOR.LUSTRE_PATCH.LUSTRE_FIX))
 
 [AC_LUSTRE_MAJOR]=LUSTRE_MAJOR
 [AC_LUSTRE_MINOR]=LUSTRE_MINOR

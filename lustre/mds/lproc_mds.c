@@ -341,6 +341,40 @@ static int lprocfs_mds_wr_itune(struct file *file, const char *buffer,
 }
 #endif
 
+static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+        char kernbuf[20], *end;
+        unsigned long diff = 0;
+
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+
+        kernbuf[count] = '\0';
+
+        diff = simple_strtoul(kernbuf, &end, 0);
+        if (kernbuf == end)
+                return -EINVAL;
+
+        mds->mds_atime_diff = diff;
+        return count;
+}
+
+static int lprocfs_rd_atime_diff(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+
+        *eof = 1;
+        return snprintf(page, count, "%lu\n", mds->mds_atime_diff);
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
@@ -368,6 +402,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
                              lprocfs_wr_group_upcall, 0},
         { "group_flush",     0, lprocfs_wr_group_flush, 0},
         { "group_info",      0, lprocfs_wr_group_info, 0 },
+        { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
         { 0 }
 };
 

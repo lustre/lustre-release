@@ -386,7 +386,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                          sizeof(*body), "buflen[%d] = %d, not %d\n",
                          MDS_REQ_INTENT_LOCKREQ_OFF,
                          req->rq_reqmsg->buflens[MDS_REQ_INTENT_LOCKREQ_OFF],
-                         sizeof(*body));
+                         (int)sizeof(*body));
         }
 
         lock->l_conn_export = exp;
@@ -985,13 +985,14 @@ int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
         struct list_head *tmp, *next;
         struct ldlm_lock *lock;
         int rc = LDLM_ITER_CONTINUE;
-        struct ldlm_namespace *ns = res->lr_namespace;
+        struct ldlm_namespace *ns;
 
         ENTRY;
 
         if (!res)
                 RETURN(LDLM_ITER_CONTINUE);
 
+        ns = res->lr_namespace;
         l_lock(&ns->ns_lock);
         list_for_each_safe(tmp, next, &res->lr_granted) {
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);

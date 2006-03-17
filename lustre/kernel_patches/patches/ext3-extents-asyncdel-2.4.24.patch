@@ -16,13 +16,15 @@ Index: linux-2.4.24/fs/ext3/inode.c
  	if (S_ISREG(inode->i_mode)) {
  		inode->i_op = &ext3_file_inode_operations;
  		inode->i_fop = &ext3_file_operations;
-@@ -2659,6 +2665,10 @@
+@@ -2659,6 +2665,12 @@
  
  	memcpy(nei->i_data, oei->i_data, sizeof(nei->i_data));
  	memset(oei->i_data, 0, sizeof(oei->i_data));
 +	if (EXT3_I(old_inode)->i_flags & EXT3_EXTENTS_FL) {
 +		EXT3_I(new_inode)->i_flags |= EXT3_EXTENTS_FL;
 +		ext3_extents_initialize_blockmap(handle, old_inode);
++	} else {
++		EXT3_I(new_inode)->i_flags &= ~EXT3_EXTENTS_FL;
 +	}
  
  	nei->i_disksize = oei->i_disksize;

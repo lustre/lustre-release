@@ -149,11 +149,14 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
 
         if (body->valid & OBD_MD_FLID)
                 st->st_ino = body->ino;
-        if (body->valid & OBD_MD_FLATIME)
-                LTIME_S(st->st_atime) = body->atime;
-        if (body->valid & OBD_MD_FLMTIME)
+        if (body->valid & OBD_MD_FLATIME &&
+            body->mtime > LTIME_S(st->st_mtime))
                 LTIME_S(st->st_mtime) = body->mtime;
-        if (body->valid & OBD_MD_FLCTIME)
+        if (body->valid & OBD_MD_FLMTIME &&
+            body->atime > LTIME_S(st->st_atime))
+                LTIME_S(st->st_atime) = body->atime;
+        if (body->valid & OBD_MD_FLCTIME &&
+            body->ctime > LTIME_S(st->st_ctime))
                 LTIME_S(st->st_ctime) = body->ctime;
         if (body->valid & OBD_MD_FLMODE)
                 st->st_mode = (st->st_mode & S_IFMT)|(body->mode & ~S_IFMT);
@@ -1887,8 +1890,7 @@ static struct inode_ops llu_inode_ops = {
         inop_lookup:    llu_iop_lookup,
         inop_getattr:   llu_iop_getattr,
         inop_setattr:   llu_iop_setattr,
-      //FIXME corresponding libsysio is tagged b_release_1_4_6
-        //  inop_filldirentries:     llu_iop_filldirentries,
+        inop_filldirentries:     llu_iop_filldirentries,
         inop_mkdir:     llu_iop_mkdir_raw,
         inop_rmdir:     llu_iop_rmdir_raw,
         inop_symlink:   llu_iop_symlink_raw,

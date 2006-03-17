@@ -368,6 +368,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         struct page *page = NULL;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm;
+        struct ost_lvb lvb;
         __u64 kms, old_mtime;
         unsigned long pgoff, size, rand_read, seq_read;
         int rc = 0;
@@ -397,7 +398,9 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                 CWARN("binary changed. inode %lu\n", inode->i_ino);
 
         lov_stripe_lock(lsm);
-        kms = lov_merge_size(lsm, 1);
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
+        kms = lvb.lvb_size;
 
         pgoff = ((address - vma->vm_start) >> PAGE_CACHE_SHIFT) + vma->vm_pgoff;
         size = (kms + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;

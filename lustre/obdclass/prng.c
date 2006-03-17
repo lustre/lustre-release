@@ -53,6 +53,12 @@ unsigned int ll_rand(void)
 }
 EXPORT_SYMBOL(ll_rand);
 
+/* Note that if the input seeds are not completely random, then there is
+ * a preferred location for the entropy in the two seeds, in order to avoid
+ * the initial values from the PRNG to be the same each time.
+ *
+ * seed1 (seed_x) should have the most entropy in the low bits of the word
+ * seed2 (seed_y) should have the most entropy in the high bits of the word */
 void ll_srand(unsigned int seed1, unsigned int seed2)
 {
 	if (seed1)

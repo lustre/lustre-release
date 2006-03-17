@@ -228,13 +228,14 @@ int mds_cleanup_pending(struct obd_device *obd)
                         GOTO(err_out, rc = PTR_ERR(dchild));
                 }
                 if (!dchild->d_inode) {
-                        CERROR("orphan %s has been removed\n", d_name);
+                        CWARN("%s: orphan %s has already been removed\n",
+                              obd->obd_name, d_name);
                         GOTO(next, rc = 0);
                 }
 
                 if (is_bad_inode(dchild->d_inode)) {
-                        CERROR("bad orphan inode found %lu/%u\n",
-                               dchild->d_inode->i_ino,
+                        CERROR("%s: bad orphan inode found %lu/%u\n",
+                               obd->obd_name, dchild->d_inode->i_ino,
                                dchild->d_inode->i_generation);
                         GOTO(next, rc = -ENOENT);
                 }
@@ -244,7 +245,8 @@ int mds_cleanup_pending(struct obd_device *obd)
                 if (mds_inode_is_orphan(child_inode) &&
                     mds_orphan_open_count(child_inode)) {
                         MDS_UP_READ_ORPHAN_SEM(child_inode);
-                        CWARN("orphan %s re-opened during recovery\n", d_name);
+                        CWARN("%s: orphan %s re-opened during recovery\n",
+                              obd->obd_name, d_name);
                         GOTO(next, rc = 0);
                 }
                 MDS_UP_READ_ORPHAN_SEM(child_inode);
@@ -252,16 +254,18 @@ int mds_cleanup_pending(struct obd_device *obd)
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
                 if (rc == 0) {
                         item ++;
-                        CWARN("removed orphan %s from MDS and OST\n", d_name);
+                        CDEBUG(D_HA, "%s: removed orphan %s\n",
+                               obd->obd_name, d_name);
                 } else {
-                        CDEBUG(D_INODE, "removed orphan %s from MDS/OST failed,"
-                               " rc = %d\n", d_name, rc);
+                        CDEBUG(D_INODE, "%s: removed orphan %s failed,"
+                               " rc = %d\n", obd->obd_name, d_name, rc);
                         rc = 0;
                 }
 next:
                 l_dput(dchild);
                 up(&pending_dir->i_sem);
         }
+        rc = 0;
 err_out:
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 list_del(&dirent->lld_list);
@@ -269,8 +273,9 @@ err_out:
         }
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (rc == 0)
-                rc = item;
+        if (item > 0)
+                CWARN("%s: removed %d pending open-unlinked files\n",
+                      obd->obd_name, item);
         RETURN(rc);
 
 err_mntget:

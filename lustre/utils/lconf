@@ -781,7 +781,7 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
-def def_mount_options(fstype, target):
+def def_mount_options(fstype, target, blkdev):
     """returns deafult mount options for passed fstype and target (mds, ost)"""
     if fstype == 'ext3' or fstype == 'ldiskfs':
         mountfsoptions = "errors=remount-ro"
@@ -795,6 +795,64 @@ def def_mount_options(fstype, target):
                 mountfsoptions = "%s,user_xattr" % (mountfsoptions)
             if config.acl:
                 mountfsoptions = "%s,acl" % (mountfsoptions)
+
+        if blkdev:
+            # grab superblock info
+            dumpe2fs="dumpe2fs -f -h"
+            (ret, sb) = run(dumpe2fs, blkdev)
+            if ret:
+                panic("unable to get superblock for ", blkdev)
+
+            # extract journal UUID
+            journal_UUID=''
+            journal_DEV=''
+            for line in sb:
+                lst = string.split(line, ":")
+                if lst[0] == 'Journal UUID':
+                    if len(lst[1]) < 3:
+                        panic("cannot retrieve journal UUID for ", blkdev)
+                    if string.split(lst[1])[0] != '<none>':
+                        journal_UUID = string.split(lst[1])[0]
+                        debug(blkdev, 'has journal UUID', journal_UUID)
+                if lst[0] == 'Journal device':
+                    if len(lst[1]) < 3:
+                        panic("cannot retrieve journal device for ", blkdev)
+                    if string.split(lst[1])[0] != '0x0000':
+                        journal_DEV = string.split(lst[1])[0]
+                        debug(blkdev, 'has journal device', journal_DEV)
+                    break
+
+            if len(journal_UUID) == 0 or len(journal_DEV) == 0:
+                debug('no external journal found for', blkdev)
+                # use internal journal
+                return mountfsoptions
+        
+            # run blkid
+            blkid = "blkid -o device -t UUID='%s'" % (journal_UUID)
+            (ret, devname) = run(blkid)
+            if ret or len(devname) == 0:
+                panic("cannot find external journal for ", blkdev)
+            debug('found', blkdev, 'journal UUID', journal_UUID, 'on',
+                  string.replace(devname[0], '\n', ''))
+
+            try: # sigh, python 1.5 does not support os.stat().st_rdev
+                jdevpath = my_realpath(string.replace(devname[0], '\n', ''))
+                ret, out = runcmd("ls -l %s" %jdevpath)
+                debug('ls -l:', out)
+                major = int(string.split(string.split(out[0])[4], ',')[0])
+                minor = int(string.split(out[0])[5])
+                debug('major', major, 'minor', minor)
+                rdev = major << 8 | minor
+            except OSError:
+                panic("cannot stat ", devname[0])
+
+            debug('found', blkdev, 'journal UUID', journal_UUID, 'on',
+                  jdevpath, 'rdev', rdev)
+
+            # add mount option
+            if string.atoi(journal_DEV, 0) != rdev:
+                mountfsoptions =  "%s,journal_dev=%#x" % (mountfsoptions,rdev)
+
         return mountfsoptions
     return ""
 
@@ -1153,7 +1211,10 @@ class MDSDEV(Module):
         self.nspath = self.db.get_val('nspath', '')
         self.mkfsoptions = '-i 4096 ' + self.db.get_val('mkfsoptions', '')
         self.mountfsoptions = self.db.get_val('mountfsoptions', '')
-        self.quota = self.db.get_val('quota', '')
+        if config.quota:
+            self.quota = config.quota
+        else:
+            self.quota = self.db.get_val('quota', '')
         # overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
         target_uuid = self.db.get_first_ref('target')
         mds = self.db.lookup(target_uuid)
@@ -1241,7 +1302,7 @@ class MDSDEV(Module):
         if not is_prepared('MDT'):
             lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
         try:
-            mountfsoptions = def_mount_options(self.fstype, 'mds')
+            mountfsoptions = def_mount_options(self.fstype, 'mds', blkdev)
 
             if config.mountfsoptions:
                 if mountfsoptions:
@@ -1417,7 +1478,10 @@ class OSD(Module):
         if self.size > 1000000:
                 self.mkfsoptions = '-i 16384 ' + self.mkfsoptions
         self.mountfsoptions = self.db.get_val('mountfsoptions', '')
-        self.quota = self.db.get_val('quota', '')
+        if config.quota:
+            self.quota = config.quota
+        else:
+            self.quota = self.db.get_val('quota', '')
 
         self.fstype = self.db.get_val('fstype', '')
         if sys_get_branch() == '2.4' and self.fstype == 'ldiskfs':
@@ -1480,7 +1544,7 @@ class OSD(Module):
                                config.reformat, self.format, self.journal_size,
                                self.inode_size, self.mkfsoptions)
 
-        mountfsoptions = def_mount_options(self.fstype, 'ost')
+        mountfsoptions = def_mount_options(self.fstype, 'ost', blkdev)
 
         if config.mountfsoptions:
             if mountfsoptions:
@@ -1686,8 +1750,10 @@ class COBD(Module):
 
 # virtual interface for  OSC and LOV
 class VOSC(Module):
-    def __init__(self, db, uuid, fs_name, name_override = None):
+    def __init__(self, db, uuid, fs_name, name_override = None, quota = None):
         Module.__init__(self, 'VOSC', db)
+        if quota:
+            self.add_lustre_module('quota', 'lquota')
         if db.get_class() == 'lov':
             self.osc = LOV(db, uuid, fs_name, name_override)
         else:
@@ -1701,9 +1767,11 @@ class VOSC(Module):
     def cleanup(self):
         self.osc.cleanup()
     def load_module(self):
+        Module.load_module(self)
         self.osc.load_module()
     def cleanup_module(self):
         self.osc.cleanup_module()
+        Module.cleanup_module(self)
 
 
 class ECHO_CLIENT(Module):
@@ -1773,16 +1841,17 @@ class Mountpoint(Module):
         self.fs_uuid = self.db.get_first_ref('filesystem')
         fs = self.db.lookup(self.fs_uuid)
         self.mds_uuid = fs.get_first_ref('mds')
+        mds_db = self.db.lookup(self.mds_uuid)
+        if config.quota:
+            quota = config.quota
+        else:
+            quota = mds_db.get_val('quota', config.quota)
         self.obd_uuid = fs.get_first_ref('obd')
         obd = self.db.lookup(self.obd_uuid)
         client_uuid = generate_client_uuid(self.name)
-        self.vosc = VOSC(obd, client_uuid, self.name)
+        self.vosc = VOSC(obd, client_uuid, self.name, quota=quota)
         self.mdc = get_mdc(db, client_uuid, self.name, self.mds_uuid)
 
-        mds_db = self.db.lookup(self.mds_uuid)
-        quota = mds_db.get_val('quota', '')
-        if quota:
-                self.add_lustre_module('quota', 'lquota')
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('llite', 'llite')
 
@@ -2638,6 +2707,7 @@ lconf_options = [
                 PARAMLIST),
     ('user_xattr', """Enable user_xattr support on MDS""", FLAG, 0),
     ('acl', """Enable ACL support on MDS""", FLAG, 0),
+    ('quota', "Enable quota support for client file system", PARAM), 
     ]
 
 def main():
@@ -2775,7 +2845,7 @@ if __name__ == "__main__":
         rc = e.rc
         if rc == 0:
             rc = 1
-        sys.exit(e.rc)
+        sys.exit(rc)
 
     if first_cleanup_error:
         sys.exit(first_cleanup_error)

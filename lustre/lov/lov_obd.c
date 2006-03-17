@@ -287,17 +287,15 @@ static int lov_disconnect(struct obd_export *exp)
         int i, rc;
         ENTRY;
 
-        rc = class_disconnect(exp);
-
         if (!lov->tgts)
-                RETURN(rc);
+                goto out;
 
         /* Only disconnect the underlying layers on the final disconnect. */
         lov->connects--;
         if (lov->connects != 0) {
                 /* why should there be more than 1 connect? */
                 CERROR("disconnect #%d\n", lov->connects);
-                RETURN(rc);
+                goto out;
         }
 
         /* Let's hold another reference so lov_del_obd doesn't spin through
@@ -311,6 +309,8 @@ static int lov_disconnect(struct obd_export *exp)
         }
         lov_putref(obd);
 
+out:
+        rc = class_disconnect(exp); /* bz 9811 */
         RETURN(rc);
 }
 
@@ -2152,7 +2152,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                         struct ldlm_lock *lock;
                         struct lov_stripe_md *lsm;
                 } *data = key;
-                 struct ldlm_res_id *res_id = &data->lock->l_resource->lr_name;
+                struct ldlm_res_id *res_id = &data->lock->l_resource->lr_name;
                 struct lov_oinfo *loi;
                 __u32 *stripe = val;
 
@@ -2442,6 +2442,7 @@ struct obd_ops lov_obd_ops = {
         .o_queue_group_io      = lov_queue_group_io,
         .o_trigger_group_io    = lov_trigger_group_io,
         .o_teardown_async_page = lov_teardown_async_page,
+        .o_merge_lvb           = lov_merge_lvb,
         .o_adjust_kms          = lov_adjust_kms,
         .o_punch               = lov_punch,
         .o_sync                = lov_sync,

@@ -90,7 +90,6 @@ int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index)
 int class_add_uuid(char *uuid, __u64 nid)
 {
         struct uuid_nid_data *data;
-        int rc;
         int nob = strnlen (uuid, PAGE_SIZE) + 1;
 
         LASSERT(nid != 0);  /* valid newconfig NID is never zero */
@@ -98,7 +97,6 @@ int class_add_uuid(char *uuid, __u64 nid)
         if (nob > PAGE_SIZE)
                 return -EINVAL;
 
-        rc = -ENOMEM;
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 return -ENOMEM;

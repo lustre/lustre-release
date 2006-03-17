@@ -671,7 +671,7 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         return rc;
 }
 
-/* NB: lov_merge_size will prefer locally cached writes if they extend the
+/* NB: obd_merge_lvb will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
 int ll_glimpse_size(struct inode *inode, int ast_flags)
 {
@@ -679,6 +679,7 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
+        struct ost_lvb lvb;
         int rc;
         ENTRY;
 
@@ -705,11 +706,14 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         }
 
         ll_inode_size_lock(inode, 1);
-        inode->i_size = lov_merge_size(lli->lli_smd, 0);
-        inode->i_blocks = lov_merge_blocks(lli->lli_smd);
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
+        inode->i_size = lvb.lvb_size;
+        inode->i_blocks = lvb.lvb_blocks;
+        LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
+        LTIME_S(inode->i_atime) = lvb.lvb_atime;
+        LTIME_S(inode->i_ctime) = lvb.lvb_ctime;
         ll_inode_size_unlock(inode, 1);
-        LTIME_S(inode->i_mtime) =
-                lov_merge_mtime(lli->lli_smd, LTIME_S(inode->i_mtime));
 
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
                inode->i_size, inode->i_blocks);
@@ -725,6 +729,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                    int ast_flags)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ost_lvb lvb;
         int rc;
         ENTRY;
 
@@ -750,6 +755,10 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         if (rc > 0)
                 rc = -EIO;
 
+        ll_inode_size_lock(inode, 1);
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(sbi->ll_osc_exp, lsm, &lvb, 0);
+
         if (policy->l_extent.start == 0 &&
             policy->l_extent.end == OBD_OBJECT_EOF) {
                 /* vmtruncate()->ll_truncate() first sets the i_size and then
@@ -762,14 +771,16 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                  * cancel the result of the truncate.  Getting the
                  * ll_inode_size_lock() after the enqueue maintains the DLM
                  * -> ll_inode_size_lock() acquiring order. */
-                ll_inode_size_lock(inode, 1);
-                inode->i_size = lov_merge_size(lsm, 1);
-                ll_inode_size_unlock(inode, 1);
+                inode->i_size = lvb.lvb_size;
         }
 
-        if (rc == 0)
-                LTIME_S(inode->i_mtime) =
-                        lov_merge_mtime(lsm, LTIME_S(inode->i_mtime));
+        if (rc == 0) {
+                LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
+                LTIME_S(inode->i_atime) = lvb.lvb_atime;
+                LTIME_S(inode->i_ctime) = lvb.lvb_ctime;
+        }
+        ll_inode_size_unlock(inode, 1);
+
         RETURN(rc);
 }
 
@@ -799,6 +810,7 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_lock_tree tree;
         struct ll_lock_tree_node *node;
+        struct ost_lvb lvb;
         struct ll_ra_read bead;
         int rc;
         ssize_t retval;
@@ -868,7 +880,9 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
          * ll_inode_size_lock(). This guarantees that short reads are handled
          * correctly in the face of concurrent writes and truncates.
          */
-        kms = lov_merge_size(lsm, 1);
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(ll_i2sbi(inode)->ll_osc_exp, lsm, &lvb, 1);
+        kms = lvb.lvb_size;
         if (*ppos + count - 1 > kms) {
                 /* A glimpse is necessary to determine whether we return a
                  * short read (B) or some zeroes at the end of the buffer (C) */
@@ -894,6 +908,8 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
         bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
         ll_ra_read_in(file, &bead);
+        /* BUG: 5972 */
+        file_accessed(file);
         retval = generic_file_read(file, buf, count, ppos);
         ll_ra_read_ex(file, &bead);
 
@@ -1163,7 +1179,7 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
 }
 
 static int ll_get_grouplock(struct inode *inode, struct file *file,
-                         unsigned long arg)
+                            unsigned long arg)
 {
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         ldlm_policy_data_t policy = { .l_extent = { .start = 0,
@@ -1194,7 +1210,7 @@ static int ll_get_grouplock(struct inode *inode, struct file *file,
 }
 
 static int ll_put_grouplock(struct inode *inode, struct file *file,
-                         unsigned long arg)
+                            unsigned long arg)
 {
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -1455,7 +1471,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
         case EXT3_IOC_GETVERSION_OLD:
         case EXT3_IOC_GETVERSION:
-                RETURN(put_user(inode->i_generation, (int *) arg));
+                RETURN(put_user(inode->i_generation, (int *)arg));
         case LL_IOC_JOIN: {
                 char *ftail;
                 int rc;
@@ -1471,6 +1487,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_get_grouplock(inode, file, arg));
         case LL_IOC_GROUP_UNLOCK:
                 RETURN(ll_put_grouplock(inode, file, arg));
+        case LL_IOC_OBD_STATFS:
+                RETURN(ll_obd_statfs(inode, (void *)arg));
 
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly

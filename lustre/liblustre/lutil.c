@@ -126,7 +126,7 @@ void liblustre_init_random()
         seed[0] = _my_pnid;
 #endif
         gettimeofday(&tv, NULL);
-        ll_srand(tv.tv_usec | __swab32(getpid()), tv.tv_sec|__swab32(seed[0]));
+        ll_srand(tv.tv_sec ^ __swab32(seed[0]), tv.tv_usec ^__swab32(getpid()));
 }
 
 void get_random_bytes(void *buf, int size)

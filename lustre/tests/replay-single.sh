@@ -15,8 +15,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-# bug number: 2766 
-ALWAYS_EXCEPT="0b  $REPLAY_SINGLE_EXCEPT"
+# bug number: 2766 9930
+ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
 
 build_test_filter
 

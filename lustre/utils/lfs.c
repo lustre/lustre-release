@@ -55,6 +55,7 @@ static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
+static int lfs_df(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 static int lfs_catinfo(int argc, char **argv);
 #ifdef HAVE_QUOTA_SUPPORT
@@ -99,6 +100,10 @@ command_t cmdlist[] = {
          "join two lustre files into one - join A, B, will be like cat B >> A & del B\n"
          "usage: join <filename_A> <filename_B>\n"},
         {"osts", lfs_osts, 0, "osts"},
+        {"df", lfs_df, 0,
+         "report filesystem disk space usage or inodes usage"
+         "of each MDS/OSD.\n"
+         "Usage: df [-i] [-h] [path]"},
 #ifdef HAVE_QUOTA_SUPPORT
         {"quotachown",lfs_quotachown, 0,
          "Change files' owner or group on the specified filesystem.\n"
@@ -312,7 +317,7 @@ static int lfs_osts(int argc, char **argv)
         fp = setmntent(MOUNTED, "r");
 
         if (fp == NULL) {
-                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
+                 fprintf(stderr, "%s: setmntent(%s): %s:", argv[0], MOUNTED,
                         strerror (errno));
         } else {
                 mnt = getmntent(fp);
@@ -321,8 +326,323 @@ static int lfs_osts(int argc, char **argv)
                                 rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0);
                                 if (rc)
                                         fprintf(stderr,
-                                               "error: lfs osts failed on %s\n",
-                                               mnt->mnt_dir);
+                                               "error: %s: failed on %s\n",
+                                               argv[0], mnt->mnt_dir);
+                        }
+                        mnt = getmntent(fp);
+                }
+                endmntent(fp);
+        }
+
+        return rc;
+}
+
+#define COOK(value)                                                     \
+({                                                                      \
+        int radix = 0;                                                  \
+        while (value > 1024) {                                          \
+                value /= 1024;                                          \
+                radix++;                                                \
+        }                                                               \
+        radix;                                                          \
+})
+#define UUF     "%-20s"
+#define CSF     "%9s"
+#define CDF     "%9llu"
+#define HSF     "%8s"
+#define HDF     "%6.1f"
+#define RSF     "%5s"
+#define RDF     "%5d"
+
+static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
+{
+        char rpath[PATH_MAX] = {'\0'};
+        struct mntent *mnt;
+        int rc, len, out_len = 0;
+
+        if (!realpath(path, rpath)) {
+                rc = -errno;
+                fprintf(stderr, "error: lfs df: invalid path '%s': %s\n",
+                        path, strerror(-rc));
+                return rc;
+        }
+
+        len = 0;
+        mnt = getmntent(fp);
+        while (feof(fp) == 0 && ferror(fp) == 0) {
+                if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                        len = strlen(mnt->mnt_dir);
+                        if (len > out_len &&
+                            !strncmp(rpath, mnt->mnt_dir, len)) {
+                                out_len = len;
+                                memset(mntdir, 0, dir_len);
+                                strncpy(mntdir, mnt->mnt_dir, dir_len);
+                        }
+                }
+                mnt = getmntent(fp);
+        }
+
+        if (out_len > 0)
+                return 0;
+        
+        fprintf(stderr, "error: lfs df: %s isn't mounted on lustre\n", path);
+        return -EINVAL;
+}
+
+static int showdf(char *mntdir, struct obd_statfs *stat,
+                  struct obd_uuid *uuid, int ishow, int cooked,
+                  char *type, int index, int rc)
+{
+        __u64 avail, used, total;
+        double ratio = 0;
+        int obd_type;
+        char *suffix = "KMGTPEZY";
+        char tbuf[10], ubuf[10], abuf[10], rbuf[10];
+
+        if (!uuid || !stat || !type)
+                return -EINVAL;
+        if (!strncmp(type, "MDT", 3)) {
+                obd_type = 0;
+        } else if(!strncmp(type, "OST", 3)){
+                obd_type = 1;
+        } else {
+                fprintf(stderr, "error: lfs df: invalid type '%s'\n", type);
+                return -EINVAL;
+        }
+
+        if (rc == 0) {
+                if (ishow) {
+                        avail = stat->os_ffree;
+                        used = stat->os_files - stat->os_ffree;
+                        total = stat->os_files;
+                } else {
+                        avail = stat->os_bavail * stat->os_bsize / 1024;
+                        used = stat->os_blocks - stat->os_bavail;
+                        used = used * stat->os_bsize / 1024;
+                        total = stat->os_blocks * stat->os_bsize / 1024;
+                }
+
+                if (total > 0)
+                        ratio = (double)used / (double)total;
+
+                if (cooked) {
+                        int i;
+                        double total_d, used_d, avail_d;
+                        
+                        total_d = (double)total;
+                        i = COOK(total_d);
+                        if (i > 0)
+                                sprintf(tbuf, HDF"%c", total_d, suffix[i - 1]);
+                        else
+                                sprintf(tbuf, CDF, total);
+
+                        used_d = (double)used;
+                        i = COOK(used_d);
+                        if (i > 0)
+                                sprintf(ubuf, HDF"%c", used_d, suffix[i - 1]);
+                        else
+                                sprintf(ubuf, CDF, used);
+
+                        avail_d = (double)avail;
+                        i = COOK(avail_d);
+                        if (i > 0)
+                                sprintf(abuf, HDF"%c", avail_d, suffix[i - 1]);
+                        else
+                                sprintf(abuf, CDF, avail);
+                } else {
+                        sprintf(tbuf, CDF, total);
+                        sprintf(ubuf, CDF, used);
+                        sprintf(abuf, CDF, avail);
+                }
+
+                sprintf(rbuf, RDF, (int)(ratio * 100));
+                if (obd_type == 0)
+                        printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s[MDT:%d]\n",
+                               (char *)uuid, tbuf, ubuf, abuf, rbuf,
+                               mntdir, index);
+                else
+                        printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s[OST:%d]\n",
+                               (char *)uuid, tbuf, ubuf, abuf, rbuf,
+                               mntdir, index);
+
+                return 0;
+        }
+        switch (rc) {
+        case -ENODATA:
+                printf(UUF": inactive OST\n", (char *)uuid);
+                break;
+        default:
+                printf(UUF": %s\n", (char *)uuid, strerror(-rc));
+                break;
+        }
+
+        return 0;
+}
+
+static int mntdf(char *mntdir, int ishow, int cooked)
+{
+        struct obd_statfs stat_buf;
+        struct obd_uuid uuid_buf;
+        __u32 index;
+        __u64 avail_sum, used_sum, total_sum;
+        char tbuf[10], ubuf[10], abuf[10], rbuf[10];        
+        double ratio_sum;
+        int rc;
+
+        if (ishow)
+                printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
+                       "UUID", "Inodes", "IUsed", "IFree",
+                       "IUse%", "Mounted on");
+        else
+                printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
+                       "UUID", "1K-blocks", "Used", "Available",
+                       "Use%", "Mounted on");
+
+        avail_sum = total_sum = 0; 
+        for (index = 0; ; index++) {
+                memset(&stat_buf, 0, sizeof(struct obd_statfs));
+                memset(&uuid_buf, 0, sizeof(struct obd_uuid));
+                rc = llapi_obd_statfs(mntdir, LL_STATFS_MDC, index,
+                                      &stat_buf, &uuid_buf);
+                if (rc == -ENODEV)
+                        break;
+
+                if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
+                    rc == -ENODATA || rc == 0) {
+                        showdf(mntdir, &stat_buf, &uuid_buf, ishow, cooked,
+                               "MDT", index, rc);
+                } else {
+                        fprintf(stderr,
+                                "error: llapi_obd_statfs(%s): %s (%d)\n",
+                                uuid_buf.uuid, strerror(-rc), rc);
+                        return rc;
+                }
+                if (!rc && ishow) {
+                        avail_sum += stat_buf.os_ffree;
+                        total_sum += stat_buf.os_files;
+                }
+        }
+
+        for (index = 0;;index++) {
+                memset(&stat_buf, 0, sizeof(struct obd_statfs));
+                memset(&uuid_buf, 0, sizeof(struct obd_uuid));
+                rc = llapi_obd_statfs(mntdir, LL_STATFS_LOV, index,
+                                      &stat_buf, &uuid_buf);
+                if (rc == -ENODEV)
+                        break;
+
+                if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
+                    rc == -ENODATA || rc == 0) {
+                        showdf(mntdir, &stat_buf, &uuid_buf, ishow, cooked,
+                               "OST", index, rc);
+                } else {
+                        fprintf(stderr,
+                                "error: llapi_obd_statfs failed: %s (%d)\n",
+                                strerror(-rc), rc);
+                        return rc;
+                }
+                if (!rc && !ishow) {
+                        __u64 avail, total;
+                        avail = stat_buf.os_bavail * stat_buf.os_bsize;
+                        avail /= 1024;
+                        total = stat_buf.os_blocks * stat_buf.os_bsize;
+                        total /= 1024;
+                        
+                        avail_sum += avail;
+                        total_sum += total;
+                }
+        }
+
+        used_sum = total_sum - avail_sum;
+        ratio_sum = (double)(total_sum - avail_sum) / (double)total_sum;
+        sprintf(rbuf, RDF, (int)(ratio_sum * 100));
+        if (cooked) {
+                int i;
+                char *suffix = "KMGTPEZY";
+                double total_sum_d, used_sum_d, avail_sum_d;
+
+                total_sum_d = (double)total_sum;
+                i = COOK(total_sum_d);
+                if (i > 0)
+                        sprintf(tbuf, HDF"%c", total_sum_d, suffix[i - 1]);
+                else
+                        sprintf(tbuf, CDF, total_sum);
+                
+                used_sum_d = (double)used_sum;
+                i = COOK(used_sum_d);
+                if (i > 0)
+                        sprintf(ubuf, HDF"%c", used_sum_d, suffix[i - 1]);
+                else
+                        sprintf(ubuf, CDF, used_sum);
+                        
+                avail_sum_d = (double)avail_sum;
+                i = COOK(avail_sum_d);
+                if (i > 0)
+                        sprintf(abuf, HDF"%c", avail_sum_d, suffix[i - 1]);
+                else
+                        sprintf(abuf, CDF, avail_sum);
+        } else {
+                sprintf(tbuf, CDF, total_sum);
+                sprintf(ubuf, CDF, used_sum);
+                sprintf(abuf, CDF, avail_sum);
+        }
+       
+        printf("\n"UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
+               "filesystem summary:", tbuf, ubuf, abuf, rbuf, mntdir);
+
+        return 0;
+}
+
+static int lfs_df(int argc, char **argv)
+{
+        FILE *fp;
+        char *path = NULL;
+        struct mntent *mnt = NULL;
+        char mntdir[PATH_MAX] = {'\0'};
+        int ishow = 0, cooked = 0;
+        int c, rc = 0;
+
+        optind = 0;
+        while ((c = getopt(argc, argv, "ih")) != -1) {
+                switch (c) {
+                case 'i':
+                        ishow = 1;
+                        break;
+                case 'h':
+                        cooked = 1;
+                        break;
+                default:
+                        return CMD_HELP;
+                }
+        }
+        if (optind < argc )
+                path = argv[optind];
+
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                rc = -errno;
+                fprintf(stderr, "error: %s: open %s failed( %s )\n",
+                        argv[0], MOUNTED, strerror(errno));
+                return rc;
+        }
+        if (path) {
+                rc = path2mnt(path, fp, mntdir, sizeof(mntdir));
+                if (rc) {
+                        endmntent(fp);
+                        return rc;
+                }
+
+                rc = mntdf(mntdir, ishow, cooked);
+                printf("\n");
+                endmntent(fp);
+        } else {
+                mnt = getmntent(fp);
+                while (feof(fp) == 0 && ferror(fp) == 0) {
+                        if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                                rc = mntdf(mnt->mnt_dir, ishow, cooked);
+                                if (rc)
+                                        break;
+                                printf("\n");
                         }
                         mnt = getmntent(fp);
                 }
@@ -520,6 +840,8 @@ static int lfs_quotacheck(int argc, char **argv)
 
         if (check_type)
                 check_type--;
+        else /* check both user & group quota by default */
+                check_type = 0x02;
 
         if (argc == optind)
                 return CMD_HELP;
@@ -530,7 +852,11 @@ static int lfs_quotacheck(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
         qctl.qc_id = QFMT_LDISKFS;
         qctl.qc_type = check_type;
-        llapi_quotactl(mnt, &qctl);
+        rc = llapi_quotactl(mnt, &qctl);
+        if (rc) {
+                fprintf(stderr, "quota off failed: %s\n", strerror(errno));
+                return rc;
+        }
 
         rc = llapi_quotacheck(mnt, check_type);
         if (rc) {
@@ -903,20 +1229,20 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
                                 printf("%s\n%15s", mnt, "");
                         else
                                 printf("%15s", mnt);
-                        
+
                         if (bover)
                                 diff2str(dqb->dqb_btime, timebuf, now);
-                        
+
                         sprintf(numbuf[0], "%llu", toqb(dqb->dqb_curspace));
                         sprintf(numbuf[1], "%llu", dqb->dqb_bsoftlimit);
                         sprintf(numbuf[2], "%llu", dqb->dqb_bhardlimit);
                         printf(" %7s%c %6s %7s %7s",
                                numbuf[0], bover ? '*' : ' ', numbuf[1],
                                numbuf[2], bover > 1 ? timebuf : "");
-                        
+
                         if (iover)
                                 diff2str(dqb->dqb_itime, timebuf, now);
-                        
+
                         sprintf(numbuf[0], "%llu", dqb->dqb_curinodes);
                         sprintf(numbuf[1], "%llu", dqb->dqb_isoftlimit);
                         sprintf(numbuf[2], "%llu", dqb->dqb_ihardlimit);
@@ -976,6 +1302,8 @@ static void print_lov_quota(char *mnt, struct if_quotactl *qctl)
         for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++) {
                 memcpy(&qctl->obd_uuid, uuidp, sizeof(*uuidp));
 
+                /* XXX clear this flag to get quota from osts */
+                qctl->qc_dqblk.dqb_valid = 0;
                 rc = llapi_quotactl(mnt, qctl);
                 if (rc) {
                         fprintf(stderr, "%s quotactl failed: %s\n",
