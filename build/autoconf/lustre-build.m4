@@ -279,6 +279,7 @@ if test x$enable_bgl != xno; then
         enable_tests='no'
         enable_server='no'
         enable_liblustre='no'
+        enable_libreadline='no'
 fi
 ])
 
