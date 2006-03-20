@@ -360,7 +360,7 @@ timed_run() {
 
     wait $child_pid
     # status will be set to 143 if the process had to be killed due to timeout
-    status=$?
+    status=${PIPESTATUS[0]}
     kill -KILL -$dog_pid
     return $status
 }
@@ -383,13 +383,14 @@ depend_kernel()
     # for them to review and adjust accordingly.
     local logfile=$(mktemp /tmp/XXXXXX)
     timed_run 300 $TOPDIR/build/update_oldconfig $logfile
-    if [ ${PIPESTATUS[0]} -eq 143 ]; then
+    local RC=${PIPESTATUS[0]}
+    if [ $RC -eq 143 ]; then
         fatal 1 "update_oldconfig timed out"
-    elif [ ${PIPESTATUS[0]} -ne 0 ]; then
+    elif [ $RC -ne 0 ]; then
 	# dump the log
         cat $logfile
         rm -f $logfile
-        fatal 1 "update_oldconfig failed: $?. See log above."
+        fatal 1 "update_oldconfig failed: $RC. See log above."
     fi
     rm -f $logfile
     # now notify if resulting .config is different than $CONFIG_FILE
