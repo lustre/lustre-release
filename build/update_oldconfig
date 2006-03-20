@@ -1,6 +1,11 @@
-#!/usr/bin/expect
+#!/usr/bin/expect -f
 
+# log all interaction to a file to diagnose failures
+log_file [index $argv 0]
+
+# and not stddout
 log_user 0
+
 set spawnid [spawn make oldconfig]
 
 #match_max 200
@@ -10,7 +15,7 @@ set timeout 30
 
 expect {
     timeout {
-        puts "timeout"
+        puts "timeout: $expect_out(buffer)"
         exit 1
     }
     -re "\n  *(\[^\n]* \\\[N\/y\/\\?] \\(NEW\\)) " {

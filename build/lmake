@@ -381,10 +381,17 @@ depend_kernel()
     # use the expect script to "make oldconfig" and answer the questions for
     # new items conservatively.  QA will get notified on anything newly added
     # for them to review and adjust accordingly.
-    timed_run 300 $TOPDIR/build/update_oldconfig
-    if [ $? -eq 143 ]; then
+    local logfile=$(mktemp /tmp/XXXXXX)
+    timed_run 300 $TOPDIR/build/update_oldconfig $logfile
+    if [ ${PIPESTATUS[0]} -eq 143 ]; then
         fatal 1 "update_oldconfig timed out"
+    elif [ ${PIPESTATUS[0]} -ne 0 ]; then
+	# dump the log
+        cat $logfile
+        rm -f $logfile
+        fatal 1 "update_oldconfig failed: $?. See log above."
     fi
+    rm -f $logfile
     # now notify if resulting .config is different than $CONFIG_FILE
     local tmpfile=$(mktemp /tmp/XXXXXX)
     diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
