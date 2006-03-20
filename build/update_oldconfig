@@ -1,7 +1,7 @@
 #!/usr/bin/expect -f
 
 # log all interaction to a file to diagnose failures
-log_file [index $argv 0]
+log_file [lindex $argv 0]
 
 # and not stddout
 log_user 0
