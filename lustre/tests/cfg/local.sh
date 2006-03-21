@@ -21,9 +21,9 @@ OSTSIZE=${OSTSIZE:-200000}
 OSTDEV2=${OSTDEV2:-$ROOT/tmp/${FSNAME}-ost1}
 FSTYPE=${FSTYPE:-ext3}
 
-MDS_MKFS_OPTS="--mgs --mdt --device-size=$MDSSIZE $MDSOPT"
-OST_MKFS_OPTS="--ost --device-size=$OSTSIZE --mgsnid=`h2$NETTYPE $HOSTNAME` $OSTOPT"
-OST2_MKFS_OPTS="--ost --device-size=$OSTSIZE --mgsnid=`h2$NETTYPE $HOSTNAME` $OSTOPT"
+MDS_MKFS_OPTS="--mgs --mdt --index=0 --device-size=$MDSSIZE $MDSOPT"
+OST_MKFS_OPTS="--ost --index=0 --device-size=$OSTSIZE --mgsnid=`h2$NETTYPE $HOSTNAME` $OSTOPT"
+OST2_MKFS_OPTS="--ost --index=1 --device-size=$OSTSIZE --mgsnid=`h2$NETTYPE $HOSTNAME` $OSTOPT"
 
 MDS_MOUNT_OPTS="-o loop"
 OST_MOUNT_OPTS="-o loop"

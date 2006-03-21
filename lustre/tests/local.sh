@@ -68,7 +68,7 @@ MGSNID=`h2$NETTYPE $HOSTNAME`
     MDS_MOUNT_OPTS="--mkfsoptions=\"$MDS_MOUNT_OPTS\""
 [ "x$QUOTA_OPTS" != "x" ] &&
     QUOTA_OPTS="--quota $QUOTA_OPTS"
-[ ! -z "$mdsfailover_HOST" ] && MDS_FAIL_OPT="--failover=$mdsfailover_HOST"    
+[ ! -z "$mdsfailover_HOST" ] && MDS_FAIL_OPT="--failnode=$mdsfailover_HOST"    
 
 MDS_OPTS="--mgs $MDS_FAIL_OPT --device-size=$MDSSIZE $MDS_MOUNT_OPTS $MDS_MKFS_OPTS"
 echo mkfs.lustre --mdt $MDS_OPTS --reformat $MDSDEV
@@ -78,9 +78,9 @@ echo mkfs.lustre --mdt $MDS_OPTS --reformat $MDSDEV
 [ "x$OST_MKFS_OPTS" != "x" ] &&
     OST_MOUNT_OPTS="--mkfsoptions=\"$OST_MOUNT_OPTS\""
 
-OST_OPTS="--mgsnid=`h2$NETTYPE $HOSTNAME` $OST_FAIL_OPT --device-size=$OSTSIZE $OST_MOUNT_OPTS $OST_MKFS_OPTS"
+OST_OPTS="--mgsnode=`h2$NETTYPE $HOSTNAME` $OST_FAIL_OPT --device-size=$OSTSIZE $OST_MOUNT_OPTS $OST_MKFS_OPTS"
 echo mkfs.lustre --ost $OST_OPTS --reformat $OSTDEV
 
-OST2_OPTS="--mgsnid=`h2$NETTYPE $HOSTNAME` $OST_FAIL_OPT --device-size=$OSTSIZE $OST_MOUNT_OPTS $OST_MKFS_OPTS"
+OST2_OPTS="--mgsnode=`h2$NETTYPE $HOSTNAME` $OST_FAIL_OPT --device-size=$OSTSIZE $OST_MOUNT_OPTS $OST_MKFS_OPTS"
 echo mkfs.lustre --ost $OST2_OPTS --reformat $OSTDEV2
 

@@ -29,7 +29,7 @@ fi
 [ "$DEBUG" ] && debug_opt="--ptldebug=$DEBUG"
 [ "$PTLDEBUG" ] && debug_opt="--ptldebug=$PTLDEBUG"
 
-echo FIXME use the utils/cluster_scripts/cluster_config.sh to parse config csv files.
+echo llmount: FIXME use the utils/cluster_scripts/cluster_config.sh to parse config csv files.
 
 exit 1
 

@@ -48,16 +48,6 @@ cleanup() {
     stop ost ${FORCE} --dump $TMP/recovery-small-`hostname`.log
 }
 
-replay() {
-    do_mds "sync"
-    do_mds 'echo -e "device \$mds1\\nprobe\\nnotransno\\nreadonly" | lctl'
-    do_client "$1" &
-    shutdown_mds -f
-    start_mds
-    wait
-    do_client "df -h $MOUNT" # trigger failover, if we haven't already
-}
-
 if [ ! -z "$EVAL" ]; then
     eval "$EVAL"
     exit $?

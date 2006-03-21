@@ -38,6 +38,7 @@ init_test_env() {
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
+    export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
 
@@ -84,9 +85,11 @@ start() {
     #    $@ $XMLCONFIG
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
-        # maybe acceptor error, dump tcp port usage
-        netstat -tpn
+        echo Start of ${device} on ${facet} failed ${RC}
     fi
+    label=`do_facet ${facet} e2label ${device}`
+    eval export ${facet}_svc=${label}
+    echo Started ${label}
     return $RC
 }
 
@@ -194,28 +197,35 @@ facet_failover() {
     start $*
 }
 
+obd_name() {
+    local facet=$1
+}
+
 replay_barrier() {
     local facet=$1
     do_facet $facet sync
     df $MOUNT
-    do_facet $facet $LCTL --device %${facet}_svc readonly
-    do_facet $facet $LCTL --device %${facet}_svc notransno
+    local svc=${facet}_svc
+    do_facet $facet $LCTL --device %${!svc} readonly
+    do_facet $facet $LCTL --device %${!svc} notransno
     do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
-    $LCTL mark "local REPLAY BARRIER"
+    $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
 replay_barrier_nodf() {
     local facet=$1
     do_facet $facet sync
-    do_facet $facet $LCTL --device %${facet}_svc readonly
-    do_facet $facet $LCTL --device %${facet}_svc notransno
+    local svc=${facet}_svc
+    echo Replay barrier on ${!svc}
+    do_facet $facet $LCTL --device %${!svc} readonly
+    do_facet $facet $LCTL --device %${!svc} notransno
     do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
-    $LCTL mark "local REPLAY BARRIER"
+    $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
 mds_evict_client() {
     UUID=`cat /proc/fs/lustre/mdc/*_MNT_*/uuid`
-    do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds_svc/evict_client"
+    do_facet mds "echo $UUID > /proc/fs/lustre/mds/${mds_svc}/evict_client"
 }
 
 fail() {
@@ -229,7 +239,8 @@ fail_abort() {
     stop $facet
     change_active $facet
     start $*
-    do_facet $facet lctl --device %${facet}_svc abort_recovery
+    local svc=${facet}_svc
+    do_facet $facet lctl --device %${!svc} abort_recovery
     df $MOUNT || echo "first df failed: $?"
     sleep 1
     df $MOUNT || error "post-failover df: $?"
@@ -369,7 +380,7 @@ add() {
     # failsafe
     umount -d -f /mnt/${facet} || true
     rm -f ${facet}active
-    mkfs.lustre $*
+    $MKFS $*
 }
 
 add_client() {
