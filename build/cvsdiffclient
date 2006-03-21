@@ -13,7 +13,11 @@
 
 [ -f .mergeinfo ] && . ./.mergeinfo
 
-FILES=`cvs-modified-files.pl $1`
+CVS_MODIFIED_FILES_PL=$(which cvs-modified-files.pl 2>/dev/null)
+if [ -z "$CVS_MODIFIED_FILES_PL" ]; then
+    CVS_MODIFIED_FILES_PL=$(dirname $0)/cvs-modified-files.pl
+fi
+FILES=$($CVS_MODIFIED_FILES_PL $1)
 TMP=`mktemp /tmp/cvslog-XXXXXXXX`
 if [ -f $TMP ]; then
 	[ -f .mergeinfo ] && . .mergeinfo
