@@ -48,4 +48,9 @@ expect {
         send "\r"
         exp_continue
     }
+    -re "\n *(\[^\n]* \\\[M\/n\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
 }
