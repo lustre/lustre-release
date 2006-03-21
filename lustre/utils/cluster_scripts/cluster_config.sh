@@ -48,83 +48,74 @@ service address,heartbeat options
 
 Items left blank will be set to defaults.
 
-Sample 1 for csv file (without HA software configuration options):
+Sample 1 for csv file (Simple one without HA software configuration options):
 -------------------------------------------------------------------------------
-mgs-node,options lnet networks=tcp,/r/tmp/mgmt,mgs,,,,--device-size=10240,,,,,,
+# combo mdt/mgs
+lustre-mgs,options lnet networks=tcp,/r/tmp/mgs,mdt|mgs,,,,--device-size=10240
 
-ost-node,options lnet 'networks="tcp,elan"' \n options ost 'numthreads=23',
-/r/tmp/ost,ost,,mgs-node@tcp0,,--device-size=10240,-J size=4,"extents,mballoc",
-,,,
-
-mdt-node,options lnet networks=tcp,/r/tmp/mdt,mdt,,mgs-node1@tcp,,--device-size
-=10240,-J size=4,,,,,
+# ost0
+lustre-ost,options lnet networks=tcp,/r/tmp/ost0,ost,,lustre-mgs@tcp0,,
+--device-size=10240
 -------------------------------------------------------------------------------
 
-Sample 2 for csv file (with Heartbeat version 1 configuration options):
+Sample 2 for csv file (Complex one without HA software configuration options):
 -------------------------------------------------------------------------------
-mgs-node1,options lnet networks=tcp,/r/tmp/mgmt,mgs,,,,--device-size=10240,-J
-size=4,,mgs-node2@tcp0,serial /dev/ttyS0:bcast eth1,192.168.1.170,auto_failback
-off:ping 192.168.1.169:respawn hacluster /usr/lib/heartbeat/ipfail
+# mgs
+lustre-mgs1,options lnet 'networks="tcp,elan"',/r/tmp/mgs,mgs,,,,
+--device-size=10240,-J size=4,,"lustre-mgs2,2@elan"
 
-mgs-node2,options lnet networks=tcp,/r/tmp/mgmt,mgs,,,,--device-size=10240,-J
-size=4,,mgs-node1@tcp0,serial /dev/ttyS1:bcast eth1,192.168.1.170,auto_failback
-off:ping 192.168.1.169:respawn hacluster /usr/lib/heartbeat/ipfail
+# mdt
+lustre-mdt1,options lnet 'networks="tcp,elan"',/r/tmp/mdt,mdt,,
+"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,
+-J size=4,,lustre-mdt2
 
-ost-node1,options lnet networks=tcp,/r/tmp/ost,ost,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,-J size=4,"extents,mballoc",ost-node2@tcp0,bcast
-eth1,192.168.1.171,auto_failback on
-
-ost-node2,options lnet networks=tcp,/r/tmp/ost,ost,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,-J size=4,"extents,mballoc",ost-node1@tcp0,bcast
-eth1,192.168.1.172,auto_failback on
-
-mdt-node1,options lnet networks=tcp,/r/tmp/mdt,mdt,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,-J size=4,,mdt-node2@tcp0,bcast eth1,192.168.1.173,
-auto_failback off
-
-mdt-node2,options lnet networks=tcp,/r/tmp/mdt,mdt,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,-J size=4,,mdt-node1@tcp0,bcast eth1,192.168.1.173,
-auto_failback off
+# ost
+lustre-ost1,options lnet 'networks="tcp,elan"',/r/tmp/ost,ost,,
+"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,
+-J size=4,"extents,mballoc",lustre-ost2
 -------------------------------------------------------------------------------
 
-Sample 3 for csv file (with Heartbeat version 2 configuration options):
+Sample 3 for csv file (with Heartbeat version 1 configuration options):
 -------------------------------------------------------------------------------
-mgs-node1,options lnet networks=tcp,/r/tmp/mgmt,mgs|mdt,,,,--device-size=10240,
-,,mgs-node2@tcp0,bcast eth1,192.168.1.170,auto_failback off
+# mgs
+lustre-mgs1,options lnet networks=tcp,/r/tmp/mgs,mgs,,,,--device-size=10240,,,
+lustre-mgs2,serial /dev/ttyS0:bcast eth1,192.168.1.170,auto_failback off:
+ping 192.168.1.169:respawn hacluster /usr/lib/heartbeat/ipfail
 
-mgs-node2,options lnet networks=tcp,/r/tmp/mgmt,mgs|mdt,,,,--device-size=10240,
-,,mgs-node1@tcp0,bcast eth1,192.168.1.170,auto_failback off
+# mdt
+lustre-mdt1,options lnet networks=tcp,/r/tmp/mdt,mdt,,"lustre-mgs1:lustre-mgs2",
+,--device-size=10240,,,lustre-mdt2,bcast eth1,192.168.1.173,auto_failback off
 
-ost-node1,options lnet networks=tcp,/r/tmp/ost,ost,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,,,ost-node2@tcp0,bcast eth1,192.168.1.171,
+# ost
+lustre-ost1,options lnet networks=tcp,/r/tmp/ost,ost,,"lustre-mgs1:lustre-mgs2",
+,--device-size=10240,,,lustre-ost2,bcast eth1,192.168.1.171,auto_failback on
+-------------------------------------------------------------------------------
+
+Sample 4 for csv file (with Heartbeat version 2 configuration options):
+-------------------------------------------------------------------------------
+# combo mdt/mgs
+lustre-mgs1,options lnet networks=tcp,/r/tmp/mgs,mgs|mdt,,,,--device-size=10240,
+,,"lustre-mgs2:lustre-mgs3",bcast eth1,192.168.1.170,auto_failback off
+
+# ost
+lustre-ost1,options lnet networks=tcp,/r/tmp/ost,ost,,"lustre-mgs1:lustre-mgs2:
+lustre-mgs3",,--device-size=10240,,,lustre-ost2,bcast eth1,192.168.1.171,
 auto_failback on:crm yes
-
-ost-node2,options lnet networks=tcp,/r/tmp/ost,ost,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,,,ost-node1@tcp0,bcast eth1,192.168.1.172,
-auto_failback on:crm yes
 -------------------------------------------------------------------------------
 
-Sample 4 for csv file (with Red Hat's Cluster Manager configuration options):
+Sample 5 for csv file (with Red Hat's Cluster Manager configuration options):
 -------------------------------------------------------------------------------
-mgs-node1,options lnet networks=tcp,/r/tmp/mgmt,mgs,,,,--device-size=10240,
-,,mgs-node2@tcp0,broadcast,192.168.1.170,--clumembd --interval=1000000
---tko_count=20
+# mgs
+lustre-mgs1,options lnet networks=tcp,/r/tmp/mgs,mgs,,,,--device-size=10240,,,
+lustre-mgs2,broadcast,192.168.1.170,--clumembd--interval=1000000 --tko_count=20
 
-mgs-node2,options lnet networks=tcp,/r/tmp/mgmt,mgs,,,,--device-size=10240,
-,,mgs-node1@tcp0,broadcast,192.168.1.170,--clumembd --interval=1000000
---tko_count=20
+# mdt
+lustre-mdt1,options lnet networks=tcp,/r/tmp/mdt,mdt,,"lustre-mgs1:lustre-mgs2",
+,--device-size=10240,,,lustre-mdt2,multicast225.0.0.12,192.168.1.173,
 
-ost-node1,options lnet networks=tcp,/r/tmp/ost,ost,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,,,ost-node2@tcp0,,192.168.1.171:192.168.1.172,
-
-ost-node2,options lnet networks=tcp,/r/tmp/ost,ost,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,,,ost-node1@tcp0,,192.168.1.171:192.168.1.172,
-
-mdt-node1,options lnet networks=tcp,/r/tmp/mdt,mdt,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,,,mdt-node2@tcp0,multicast 225.0.0.12,192.168.1.173,
-
-mdt-node2,options lnet networks=tcp,/r/tmp/mdt,mdt,,"mgs-node1@tcp0,mgs-node2
-@tcp0",,--device-size=10240,,,mdt-node1@tcp0,multicast 225.0.0.12,192.168.1.173,
+# ost
+lustre-ost1,options lnet networks=tcp,/r/tmp/ost,ost,,"lustre-mgs1:lustre-mgs2",
+,--device-size=10240,,,lustre-ost2,,192.168.1.171:192.168.1.172,
 -------------------------------------------------------------------------------
 
 EOF
@@ -134,6 +125,9 @@ EOF
 # Global variables
 PDSH=${PDSH:-"pdsh -R ssh"}
 export PDSH
+
+CMD_PATH=${CMD_PATH:-"/sbin/"}
+
 # Some scripts to be called
 SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"./"}
 MODULE_CONFIG=${SCRIPTS_PATH}$"module_config.sh"
@@ -187,7 +181,7 @@ shift  `expr $OPTIND - 1`
 
 # Here we expect the csv file
 if [ $# -eq 0 ]; then
-	echo >&2 $"`basename $0`: Missing csv file"
+	echo >&2 $"`basename $0`: Missing csv file!"
 	usage
 fi
 
@@ -294,24 +288,24 @@ parse_line() {
 
 # Check the elements required for OSTs, MDTs and MGS
 #
-# When formatting an OST, the following elements: hostname, networks,
-# device name, device type and mgmtnid, cannot have null value.
+# When formatting an OST, the following elements: hostname, module_opts,
+# device name, device type and mgs nids, cannot have null value.
 #
 # When formatting an MDT or MGS, the following elements: hostname,
-# networks, device name and device type, cannot have null value.
+# module_opts, device name and device type, cannot have null value.
 check_element() {
-        # Check hostname, networks, device name and device type
-        if [ -z "${HOST_NAME}" ]||[ -z "${NETWORKS}" ]||[ -z "${DEVICE_NAME}" ]\
+        # Check hostname, module_opts, device name and device type
+        if [ -z "${HOST_NAME}" ]||[ -z "${MODULE_OPTS}" ]||[ -z "${DEVICE_NAME}" ]\
 	   ||[ -z "${DEVICE_TYPE}" ]; then
                 echo >&2 $"`basename $0`: check_element() error: Some required"\
-			  "element has null value! Check hostname, networks,"\
+			  "element has null value! Check hostname, module_opts,"\
 			  "device name and device type!"
                 return 1
         fi
 
-        # Check mgmtnid
-        if [ "${DEVICE_TYPE}" = "ost" ]&&[ -z "${MGMT_NID}" ]; then
-                echo >&2 $"`basename $0`: check_element() error: OST's mgsnid"\
+        # Check mgs nids
+        if [ "${DEVICE_TYPE}" = "ost" ]&&[ -z "${MGS_NIDS}" ]; then
+                echo >&2 $"`basename $0`: check_element() error: OST's mgs nids"\
 			  "element has null value!"
                 return 1
         fi
@@ -358,16 +352,23 @@ check_mgs() {
 			EXP_MGS=${HOST_NAME}
 		fi
 
-		if [ "${EXP_MGS}" != "${HOST_NAME}" ] \
-		&& [ "${FAILOVERS#*$EXP_MGS*}" = "${FAILOVERS}" ]; then
-			echo >&2 $"`basename $0`: check_mgs() error: More than"\
-				  "one explicit MGS in the csv file!"
+		if [ "${EXP_MGS}" != "${HOST_NAME}" ]; then
+			if [ "${FAILOVERS#*$EXP_MGS*}" = "${FAILOVERS}" ]; then
+				echo >&2 $"`basename $0`: check_mgs() error:"\
+				          "More than one explicit MGS in the"\
+					  "csv file!"
+			else
+				echo >&2 $"`basename $0`: check_mgs() error:"\
+					  "There should not be two entries for"\
+					  "a server and its failover partner"\
+					  "in the csv file!"
+			fi
 			return 1
 		fi
 	fi
 
 	# Check the number of implicit MGS
-        if [ "${DEVICE_TYPE}" = "mdt" ]&&[ -z "${MGMT_NID}" ]; then
+        if [ "${DEVICE_TYPE}" = "mdt" ]&&[ -z "${MGS_NIDS}" ]; then
 		if [ "${IMP_MGS}" = "${HOST_NAME}" ]; then
 			echo >&2 $"`basename $0`: check_mgs() error: More than"\
 				  "one implicit MGS in the csv file!"
@@ -378,10 +379,17 @@ check_mgs() {
 			IMP_MGS=${HOST_NAME}
 		fi
 
-		if [ "${IMP_MGS}" != "${HOST_NAME}" ] \
-		&& [ "${FAILOVERS#*$IMP_MGS*}" = "${FAILOVERS}" ]; then
-			echo >&2 $"`basename $0`: check_mgs() error: More than"\
-				  "one implicit MGS in the csv file!"
+		if [ "${IMP_MGS}" != "${HOST_NAME}" ]; then
+			if [ "${FAILOVERS#*$IMP_MGS*}" = "${FAILOVERS}" ]; then
+				echo >&2 $"`basename $0`: check_mgs() error:"\
+					  "More than one implicit MGS in the"\
+					  "csv file!"
+			else
+				echo >&2 $"`basename $0`: check_mgs() error:"\
+					  "There should not be two entries for"\
+					  "a server and its failover partner"\
+					  "in the csv file!"
+			fi
 			return 1
 		fi
 	fi
@@ -397,7 +405,8 @@ check_mgs() {
 
 # Construct the command line of mkfs.lustre
 construct_mkfs_cmdline() {
-	MKFS_CMD=$"mkfs.lustre "${REFORMAT_OPTION}
+	MKFS_CMD=${CMD_PATH}$"mkfs.lustre "
+	MKFS_CMD=${MKFS_CMD}${REFORMAT_OPTION}
 
 	case "${DEVICE_TYPE}" in
 	"ost")
@@ -407,13 +416,13 @@ construct_mkfs_cmdline() {
 		MKFS_CMD=${MKFS_CMD}$"--mdt "
 		;;
 	"mgs")
-		MKFS_CMD=${MKFS_CMD}$"--mgmt "
+		MKFS_CMD=${MKFS_CMD}$"--mgs "
 		;;
 	"mdt|mgs")
-		MKFS_CMD=${MKFS_CMD}$"--mdt --mgmt "
+		MKFS_CMD=${MKFS_CMD}$"--mdt --mgs "
 		;;
 	"mgs|mdt")
-		MKFS_CMD=${MKFS_CMD}$"--mdt --mgmt "
+		MKFS_CMD=${MKFS_CMD}$"--mdt --mgs "
 		;;
 	*)
 		echo >&2 $"`basename $0`: construct_mkfs_cmdline() error:"\
@@ -426,9 +435,9 @@ construct_mkfs_cmdline() {
 		MKFS_CMD=${MKFS_CMD}$"--fsname="${FS_NAME}$" "
 	fi
 
-	if [ -n "${MGMT_NID}" ]; then
-		MGMT_NID=`echo "${MGMT_NID}" | sed 's/^"//' | sed 's/"$//'`
-		MKFS_CMD=${MKFS_CMD}$"--mgmtnid="${MGMT_NID}$" "
+	if [ -n "${MGS_NIDS}" ]; then
+		MGS_NIDS=`echo "${MGS_NIDS}" | sed 's/^"//' | sed 's/"$//'`
+		MKFS_CMD=${MKFS_CMD}$"--mgsnode="${MGS_NIDS}$" "
 	fi
 
 	if [ -n "${INDEX}" ]; then
@@ -452,7 +461,7 @@ construct_mkfs_cmdline() {
 
 	if [ -n "${FAILOVERS}" ]; then
 		FAILOVERS=`echo "${FAILOVERS}" | sed 's/^"//' | sed 's/"$//'`
-		MKFS_CMD=${MKFS_CMD}$"--failover="${FAILOVERS}$" "
+		MKFS_CMD=${MKFS_CMD}$"--failnode="${FAILOVERS}$" "
 	fi
 
 	MKFS_CMD=${MKFS_CMD}${DEVICE_NAME}
@@ -462,17 +471,19 @@ construct_mkfs_cmdline() {
 # Get all the node names in this failover group
 get_nodenames() {
         declare -i idx
-        local failover_nids failover_nid
+        local failover_nids failover_nid first_nid
 
 	NODE_NAMES[0]=${HOST_NAME}
 
-        failover_nids=`echo ${FAILOVERS}|awk '{split($FAILOVERS, a, ",")}\
+        failover_nids=`echo ${FAILOVERS}|awk '{split($FAILOVERS, a, ":")}\
                       	END {for (i in a) print a[i]}'`
 
+	# XXX: Suppose the first nid of one failover node contains the node name
 	idx=1
         for failover_nid in ${failover_nids}
         do
-                NODE_NAMES[idx]=${failover_nid%@*}
+		first_nid=`echo ${failover_nid} | awk -F, '{print $1}'`
+                NODE_NAMES[idx]=${first_nid%@*}
                 idx=$idx+1
         done
 
@@ -592,11 +603,11 @@ mass_config() {
 		fi
 
 		HOST_NAME=${CONFIG_ITEM[0]}
-		NETWORKS=${CONFIG_ITEM[1]}
+		MODULE_OPTS=${CONFIG_ITEM[1]}
 		DEVICE_NAME=${CONFIG_ITEM[2]}
 		DEVICE_TYPE=${CONFIG_ITEM[3]}
 		FS_NAME=${CONFIG_ITEM[4]}
-		MGMT_NID=${CONFIG_ITEM[5]}
+		MGS_NIDS=${CONFIG_ITEM[5]}
 		INDEX=${CONFIG_ITEM[6]}
 		FORMAT_OPTIONS=${CONFIG_ITEM[7]}
 		MKFS_OPTIONS=${CONFIG_ITEM[8]}
@@ -633,8 +644,9 @@ mass_config() {
 			return 1
 		fi
 
-		# Execute pdsh command to add lnet options lines to modprobe.conf/modules.conf
-		COMMAND=$"echo \"${NETWORKS}\"|${MODULE_CONFIG}"
+		# Execute pdsh command to add lnet options lines to 
+		# modprobe.conf/modules.conf
+		COMMAND=$"echo \"${MODULE_OPTS}\"|${MODULE_CONFIG}"
 		verbose_output "Adding module options to ${HOST_NAME}"
 		verbose_output ${COMMAND}
 		${PDSH} -w ${HOST_NAME} ${COMMAND} >&2 &
