@@ -231,7 +231,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         mds->mds_max_mdsize = lov_mds_md_size(stripes);
         mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
       
-        CDEBUG(D_HA, "updated max_mdsize/max_cookiesize: %d/%d\n",
+        CDEBUG(D_HA|D_WARNING, "updated max_mdsize/max_cookiesize: %d/%d\n",
                mds->mds_max_mdsize, mds->mds_max_cookiesize);
 
 out:
@@ -257,9 +257,12 @@ static int mds_lov_update_mds(struct obd_device *obd,
         if (rc)
                 RETURN(rc);
 
-        /* idx is set as data from lov_notify. In the recovery case, this 
-           is not set. */
-        if (idx != MDSLOV_NO_INDEX) {
+        CDEBUG(D_ERROR, "idx=%d, recov=%d/%d, cnt=%d/%d\n",
+               idx, obd->obd_recovering, obd->obd_async_recov, old_count, 
+               mds->mds_lov_desc.ld_tgt_count);
+
+        /* idx is set as data from lov_notify. */
+        if (idx != MDSLOV_NO_INDEX && !obd->obd_recovering) {
                 if (idx >= mds->mds_lov_desc.ld_tgt_count) {
                         CERROR("index %d > count %d!\n", idx, 
                                mds->mds_lov_desc.ld_tgt_count);
@@ -289,9 +292,9 @@ static int mds_lov_update_mds(struct obd_device *obd,
         }
 
         /* If we added a target we have to reconnect the llogs */
-        if (idx != MDSLOV_NO_INDEX || 
-            mds->mds_lov_desc.ld_tgt_count > old_count) {
-                CDEBUG(D_CONFIG, "reset llogs idx=%d\n", idx);
+        /* Only do this at first add (idx), or the first time after recovery */
+        if (idx != MDSLOV_NO_INDEX || 1/*FIXME*/) {
+                CDEBUG(D_CONFIG|D_WARNING, "reset llogs idx=%d\n", idx);
                 /* These two must be atomic */
                 down(&mds->mds_orphan_recovery_sem);
                 obd_llog_finish(obd, old_count);
@@ -678,10 +681,9 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
         }
 
-        EXIT;
 out:
         class_decref(obd);
-        return rc;
+        RETURN(rc);
 }
 
 int mds_lov_synchronize(void *data)
@@ -769,7 +771,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 RETURN(0);
         }
 
-        CDEBUG(D_WARNING, "notify %s ev=%d\n", watched->obd_name, ev);
+        CDEBUG(D_CONFIG, "notify %s ev=%d\n", watched->obd_name, ev);
 
         if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) != 0) {
                 CERROR("unexpected notification of %s %s!\n",
@@ -778,18 +780,20 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         }
 
         if (obd->obd_recovering) {
-                /* if MDT is in recovery we do not reinit desc and
-                   easize, as that will be done in mds_postrecov() after
-                   recovery is finished. */
                 CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
                       obd->obd_name,
                       watched->u.cli.cl_import->imp_target_uuid.uuid);
+                /* We still have to fix the lov descriptor for ost's added 
+                   after the mdt in the config log.  They didn't make it into
+                   mds_lov_connect. */
+                rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp);
                 RETURN(rc);
-        } 
+        }
 
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
         rc = mds_lov_start_synchronize(obd, watched, data, 
                                        !(ev == OBD_NOTIFY_SYNC));
+        
         lquota_recovery(quota_interface, obd);
                 
         RETURN(rc);

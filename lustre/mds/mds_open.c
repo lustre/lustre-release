@@ -314,7 +314,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         struct obd_trans_info oti = { 0 };
         struct lov_stripe_md *lsm = NULL;
         struct lov_mds_md *lmm = NULL;
-        int rc, lmm_bufsize, lmm_size;
+        int rc, lmm_size;
         struct mds_body *body;
         struct obdo *oa;
         void *lmm_buf;
@@ -359,15 +359,16 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
                 mds_objids_from_lmm(*ids, lmm, &mds->mds_lov_desc);
 
-                lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
-                lmm_bufsize = req->rq_repmsg->buflens[offset];
-                LASSERT(lmm_buf);
-                LASSERT(lmm_bufsize >= lmm_size);
-                memcpy(lmm_buf, lmm, lmm_size);
                 rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
+                lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
+                if (!lmm_buf) {
+                        if (!rc) rc = -ENOMEM;
+                } else { 
+                        memcpy(lmm_buf, lmm, lmm_size);
+                }
                 if (rc)
                         CERROR("open replay failed to set md:%d\n", rc);
-                RETURN(0);
+                RETURN(rc);
         }
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
@@ -479,10 +480,11 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
-        if (!lmm_buf) 
-                rc = -ENOMEM;
-        else 
+        if (!lmm_buf) {
+                if (!rc) rc = -ENOMEM;
+        } else { 
                 memcpy(lmm_buf, lmm, lmm_size);
+        }
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);

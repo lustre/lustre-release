@@ -722,17 +722,19 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                        name, rc);
                 GOTO(out, rc);
         }
-
+        
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", name,
                        file->f_dentry->d_inode->i_mode);
                 GOTO(out, rc = -ENOENT);
         }
 
+        CERROR("cat list: disk size=%d, read=%d\n", 
+               (int)file->f_dentry->d_inode->i_size, size);
+
         rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);
         if (rc) {
-                CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
-                       name, rc);
+                CERROR("OBD filter: error reading %s: rc %d\n", name, rc);
                 GOTO(out, rc);
         }
 

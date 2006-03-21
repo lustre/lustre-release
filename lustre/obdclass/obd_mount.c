@@ -25,7 +25,7 @@
 
 
 #define DEBUG_SUBSYSTEM S_MGMT
-#define D_MOUNT D_SUPER|D_CONFIG|D_WARNING
+#define D_MOUNT D_SUPER|D_CONFIG/*|D_WARNING*/
 #define PRINT_CMD LCONSOLE
 #define PRINT_MASK D_WARNING
 
@@ -108,7 +108,7 @@ int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
 
         if (endh) 
                 *endh = endp;
-        CDEBUG(D_WARNING, "Nid %s\n", libcfs_nid2str(*nid));
+        CDEBUG(D_MOUNT, "Nid %s\n", libcfs_nid2str(*nid));
         return 0;
 }
 
@@ -498,10 +498,8 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg    * lcfg = NULL;
         int rc;
-               
 
-        CDEBUG((cmd==LCFG_ADD_UUID)?D_WARNING:D_TRACE,
-               "lcfg %s %#x %s %s %s %s\n", cfgname,
+        CDEBUG(D_TRACE, "lcfg %s %#x %s %s %s %s\n", cfgname,
                cmd, s1, s2, s3, s4); 
 
         lustre_cfg_bufs_reset(&bufs, cfgname);

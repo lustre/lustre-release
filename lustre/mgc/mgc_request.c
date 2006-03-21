@@ -28,7 +28,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGC
-#define D_MGC D_CONFIG|D_WARNING
+#define D_MGC D_CONFIG/*|D_WARNING*/
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -207,7 +207,8 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         spin_unlock(&config_list_lock);
         /* drop the start ref */
         config_log_put(cld);
-        CDEBUG(D_MGC, "end config log %s (%d)\n", logname, rc);
+        CDEBUG(D_MGC, "end config log %s (%d)\n", logname ? logname : "client",
+               rc);
         RETURN(rc);
 }
 

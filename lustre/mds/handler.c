@@ -1911,9 +1911,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Don't wait for mds_postrecov trying to clear orphans */
         obd->obd_async_recov = 1;
         rc = mds_postsetup(obd);
+        obd->obd_async_recov = 0;
         if (rc)
                 GOTO(err_qctxt, rc);
-        obd->obd_async_recov = 0;
 
         lprocfs_init_vars(mds, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
