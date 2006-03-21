@@ -31,15 +31,14 @@ Usage:  `basename $0` <-r HBver> <-n hostnames> <-d target device>
 	-o heartbeat options    a "catchall" for other heartbeat configuration 
 				options
 	-v			verbose mode
-				Causes `basename $0` to print debugging messages
-             			about its progress.
+
 EOF
 	exit 1
 }
 
 # Global variables
-SCRIPT_PATH=$"./"
-SCRIPT_VERIFY_SRVIP=${SCRIPT_PATH}$"verify_serviceIP.sh"
+SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"./"}
+SCRIPT_VERIFY_SRVIP=${SCRIPTS_PATH}$"verify_serviceIP.sh"
 
 LUSTRE_SRV_SCRIPT=$"lustre" 		# service script for lustre
 MON_SRV_SCRIPT=$"mon"			# service script for mon
@@ -164,19 +163,12 @@ verbose_output() {
 	return 0
 }
 
-# Check service IP address
-PRIM_NODENAME=`echo ${HOSTNAME_OPT} | awk -F":" '{print $1}'`
-verbose_output "Verifying service IP ${SRVADDR_OPT} and real IP" \
-	       "of host ${PRIM_NODENAME} are in the same subnet..."
-if ! ${SCRIPT_VERIFY_SRVIP} ${SRVADDR_OPT} ${PRIM_NODENAME}; then
-	exit 1
-fi
-verbose_output "OK"
-
 # get_nodenames
 #
 # Get all the node names in this failover group
 get_nodenames() {
+	PRIM_NODENAME=`echo ${HOSTNAME_OPT} | awk -F":" '{print $1}'`
+
 	declare -i idx
 	local nodename_str nodename
 
@@ -188,6 +180,27 @@ get_nodenames() {
 		NODE_NAMES[idx]=${nodename}
 		idx=$idx+1
         done
+
+	return 0
+}
+
+# check_srvIPaddr
+#
+# Check service IP address in this failover group
+check_srvIPaddr() {
+	declare -i idx
+
+	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
+		# Check service IP address
+	    	verbose_output "Verifying service IP ${SRVADDR_OPT} and" \
+	    	           "real IP of host ${NODE_NAMES[idx]} are in the" \
+			   "same subnet..."
+	    	if ! ${SCRIPT_VERIFY_SRVIP} ${SRVADDR_OPT} ${NODE_NAMES[idx]}
+	    	then
+	      		return 1
+	    	fi
+	    	verbose_output "OK"
+	done
 
 	return 0
 }
@@ -335,7 +348,7 @@ gen_udpport() {
 
 # create_hacf
 #
-# Create the ha.cf file and scp it to the primary node's /etc/ha.d/
+# Create the ha.cf file and scp it to each node's /etc/ha.d/
 create_hacf() {
 	HACF_PRIMNODE=${TMP_DIR}$"ha.cf."${PRIM_NODENAME}
 
@@ -372,31 +385,16 @@ create_hacf() {
 	echo ${HBOPT_OPT} | awk '{split($HBOPT_OPT, a, ":")} \
 	END {for (i in a) print a[i]}' >> ${HACF_PRIMNODE}
 
-	# scp ha.cf file to the primary node's /etc/ha.d/
-	scp ${HACF_PRIMNODE} ${PRIM_NODENAME}:${HA_DIR}ha.cf
-	if [ $? -ne 0 ]; then
-		echo >&2 "`basename $0`: Fail to scp ha.cf file to" \
-			 "node ${PRIM_NODENAME}!"
-		return 1
-	fi
-
-	return 0
-}
-
-# add_resgrp
-#
-# Add the resource group line into the haresources file
-add_resgrp() {
-	declare -i idx
-
-	echo "${PRIM_NODENAME} ${SRVADDR_OPT} "\
-	     "${LUSTRE_SRV_SCRIPT}::${TARGET_TYPE}::${TARGET_DEV} "\
-	     "${MON_SRV_SCRIPT}" >> ${HARES_PRIMNODE}
-
-        for ((idx = 1; idx < ${#NODE_NAMES[@]}; idx++)); do
-		HARES_NODE=${TMP_DIR}$"haresources."${NODE_NAMES[idx]}
-		/bin/cp -f ${HARES_PRIMNODE} ${HARES_NODE}
-        done
+	# scp ha.cf file to all the nodes
+	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
+		touch ${TMP_DIR}$"ha.cf."${NODE_NAMES[idx]}
+		scp ${HACF_PRIMNODE} ${NODE_NAMES[idx]}:${HA_DIR}ha.cf
+		if [ $? -ne 0 ]; then
+			echo >&2 "`basename $0`: Fail to scp ha.cf file"\
+				 "to node ${NODE_NAMES[idx]}!"
+			return 1
+		fi
+	done
 
 	return 0
 }
@@ -411,49 +409,13 @@ create_haresources() {
 	if [ -s ${HARES_PRIMNODE} ]; then
 		# The haresources file for the primary node has already existed
 		verbose_output "${HARES_PRIMNODE} already exists."
-		
-		if [ -z "`grep ${SRVADDR_OPT} ${HARES_PRIMNODE}`" ]; then
-			# Service IP does not exist in the haresources file
-			# Add the resource group line into the haresources file
-			if ! add_resgrp; then
-				echo >&2 "`basename $0`: add_resgrp() error!"
-				return 1
-			fi
-		fi
-	else 	# The haresources file for the primary node does not exist
-		# Add the resource group line into the haresources file
-		if ! add_resgrp; then
-			echo >&2 "`basename $0`: add_resgrp() error!"
-			return 1
-		fi
-
+		return 0
 	fi
-
-	# Add the primary node name into all the nodes' node files
-	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		NODEFILE_NODE=${TMP_DIR}$"nodefile."${NODE_NAMES[idx]}
-		touch ${NODEFILE_NODE}
-
-		if [ -z "`grep ${PRIM_NODENAME} ${NODEFILE_NODE}`" ]; then
-			echo ${PRIM_NODENAME} >> ${NODEFILE_NODE}
-		fi
-	done
-
-	# Check whether all the nodes in the failover group are in the node file
-	# If they are, then we can scp the haresources file to all the nodes;
-	# Else return 0
-	NODEFILE_PRIMNODE=${TMP_DIR}$"nodefile."${PRIM_NODENAME}
-	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		if [ -z "`grep ${NODE_NAMES[idx]} ${NODEFILE_PRIMNODE}`" ]; then
-			verbose_output "INFO: not have the information of node"\
-				       "${NODE_NAMES[idx]}. The haresources"\
-				       "file is incompleted."
-			return 0
-		fi
-	done
-
-	# All the nodes in the failover group are in the node file, then we can
-	# scp the haresources file 
+		
+	# Add the resource group line into the haresources file
+	echo "${PRIM_NODENAME} ${SRVADDR_OPT} "\
+	     "${LUSTRE_SRV_SCRIPT}::${TARGET_TYPE}::${TARGET_DEV} "\
+	     "${MON_SRV_SCRIPT}" > ${HARES_PRIMNODE}
 
 	# Generate the cib.xml file
 	if [ "${HBVER_OPT}" = "${HBVER_HBV2}" ]; then
@@ -468,6 +430,7 @@ create_haresources() {
 
 	# scp the haresources file or cib.xml file
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
+		touch ${TMP_DIR}$"haresources."${NODE_NAMES[idx]}
 		if [ "${HBVER_OPT}" = "${HBVER_HBV2}" ]; then
 			scp ${CIB_PRIMNODE} ${NODE_NAMES[idx]}:${CIB_DIR}cib.xml
 		else
@@ -564,8 +527,8 @@ generate_config() {
 		return 1
 	fi
 
-	verbose_output "Creating and remote copying ha.cf file to host" \
-		       "${PRIM_NODENAME}..."
+	verbose_output "Creating and remote copying ha.cf file to"\
+		       "${PRIM_NODENAME} failover group hosts..." 
 	if ! create_hacf; then
 		return 1
 	fi
@@ -604,6 +567,11 @@ generate_config() {
 # Main flow
 # Get all the node names
 if ! get_nodenames; then
+	exit 1
+fi
+
+# Check service IP address
+if ! check_srvIPaddr; then
 	exit 1
 fi
 
