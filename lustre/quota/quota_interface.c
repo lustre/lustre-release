@@ -602,7 +602,7 @@ int osc_quota_exit(void)
         spin_unlock(&qinfo_list_lock);
 
         rc = cfs_mem_cache_destroy(qinfo_cachep);
-        LASSERT(rc == 0);
+        LASSERTF(rc == 0, "couldn't destory qinfo_cachep slab\n");
         RETURN(0);
 }
 

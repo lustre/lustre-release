@@ -353,15 +353,17 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 
 void obd_cleanup_caches(void)
 {
+        int rc;
+
         ENTRY;
         if (obdo_cachep) {
-                LASSERTF(cfs_mem_cache_destroy(obdo_cachep) == 0,
-                         "Cannot destory ll_obdo_cache\n");
+                rc = cfs_mem_cache_destroy(obdo_cachep);
+                LASSERTF(rc == 0, "Cannot destory ll_obdo_cache\n");
                 obdo_cachep = NULL;
         }
         if (import_cachep) {
-                LASSERTF(cfs_mem_cache_destroy(import_cachep) == 0,
-                         "Cannot destory ll_import_cache\n");
+                rc = cfs_mem_cache_destroy(import_cachep);
+                LASSERTF(rc == 0, "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
         EXIT;

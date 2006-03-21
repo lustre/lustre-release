@@ -62,7 +62,7 @@ void qunit_cache_cleanup(void)
         if (qunit_cachep) {
                 int rc;
                 rc = kmem_cache_destroy(qunit_cachep);
-                LASSERT(rc == 0);
+                LASSERTF(rc == 0, "couldn't destory qunit_cache slab\n");
                 qunit_cachep = NULL;
         }
         EXIT;

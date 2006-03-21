@@ -277,7 +277,8 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 return 0;
         }
 
-        lock->l_callback_timeout = cfs_time_shift(obd_timeout / 2);
+        lock->l_callback_timeout =cfs_time_add(cfs_time_current(),
+                                               cfs_time_seconds(obd_timeout)/2);
 
         timeout_rounded = round_timeout(lock->l_callback_timeout);
 
@@ -1682,12 +1683,14 @@ int __init ldlm_init(void)
 
 void __exit ldlm_exit(void)
 {
-        if ( ldlm_refcount )
+        int rc;
+
+        if (ldlm_refcount)
                 CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
-        LASSERTF(cfs_mem_cache_destroy(ldlm_resource_slab) == 0,
-                 "couldn't free ldlm resource slab\n");
-        LASSERTF(cfs_mem_cache_destroy(ldlm_lock_slab) == 0,
-                 "couldn't free ldlm lock slab\n");
+        rc = cfs_mem_cache_destroy(ldlm_resource_slab);
+        LASSERTF(rc == 0, "couldn't free ldlm resource slab\n");
+        rc = cfs_mem_cache_destroy(ldlm_lock_slab);
+        LASSERTF(rc == 0, "couldn't free ldlm lock slab\n");
 }
 
 /* ldlm_extent.c */

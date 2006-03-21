@@ -1981,8 +1981,11 @@ out:
 
 static void __exit fsfilt_ext3_exit(void)
 {
+        int rc;
+
         fsfilt_unregister_ops(&fsfilt_ext3_ops);
-        LASSERT(kmem_cache_destroy(fcb_cache) == 0);
+        rc = kmem_cache_destroy(fcb_cache);
+        LASSERTF(rc == 0, "couldn't destroy fcb_cache slab\n");
 }
 
 module_init(fsfilt_ext3_init);

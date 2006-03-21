@@ -71,7 +71,7 @@ void lustre_dquot_exit(void)
         if (lustre_dquot_cachep) {
                 int rc;
                 rc = kmem_cache_destroy(lustre_dquot_cachep);
-                LASSERT(rc == 0);
+                LASSERTF(rc == 0,"couldn't destroy lustre_dquot_cachep slab\n");
                 lustre_dquot_cachep = NULL;
         }
         EXIT;

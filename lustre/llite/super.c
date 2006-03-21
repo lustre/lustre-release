@@ -124,16 +124,19 @@ static int __init init_lustre_lite(void)
 
 static void __exit exit_lustre_lite(void)
 {
+        int rc;
+
         unregister_filesystem(&lustre_lite_fs_type);
         unregister_filesystem(&lustre_fs_type);
 
         ll_unregister_cache(&ll_cache_definition);
 
-        LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
-                 "couldn't destroy ll_file_data slab\n");
-        if (ll_async_page_slab)
-                LASSERTF(kmem_cache_destroy(ll_async_page_slab) == 0,
-                         "couldn't destroy ll_async_page slab\n");
+        rc = kmem_cache_destroy(ll_file_data_slab);
+        LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
+        if (ll_async_page_slab) {
+                rc = kmem_cache_destroy(ll_async_page_slab);
+                LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
+        }
 
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);
