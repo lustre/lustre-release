@@ -30,16 +30,14 @@ Usage:  `basename $0` <-n hostnames> <-d target device> <-s service addresses>
 	-o heartbeat options    a "catchall" for other heartbeat configuration 
 				options
 	-v			verbose mode
-				Causes `basename $0` to print debugging messages
-             			about its progress.
 
 EOF
 	exit 1
 }
 
 # Global variables
-SCRIPT_PATH=$"./"
-SCRIPT_VERIFY_SRVIP=${SCRIPT_PATH}$"verify_serviceIP.sh"
+SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"./"}
+SCRIPT_VERIFY_SRVIP=${SCRIPTS_PATH}$"verify_serviceIP.sh"
 
 LUSTRE_SRV_SCRIPT=$"/etc/rc.d/init.d/lustre"	# service script for lustre
 
@@ -129,13 +127,33 @@ verbose_output() {
 	return 0
 }
 
+# get_nodenames
+#
+# Get all the node names in this failover group
+get_nodenames() {
+	PRIM_NODENAME=`echo ${HOSTNAME_OPT} | awk -F":" '{print $1}'`
+
+	declare -i idx
+	local nodename_str nodename
+
+	nodename_str=`echo ${HOSTNAME_OPT}|awk '{split($HOSTNAME_OPT, a, ":")}\
+		      END {for (i in a) print a[i]}'`
+	idx=0
+	for nodename in ${nodename_str}
+        do
+		NODE_NAMES[idx]=${nodename}
+		idx=$idx+1
+        done
+
+	return 0
+}
+
 # get_check_srvIPaddrs
 #
 # Get and check all the service IP addresses in this failover group
 get_check_srvIPaddrs() {
-	PRIM_NODENAME=`echo ${HOSTNAME_OPT} | awk -F":" '{print $1}'`
-
 	declare -i idx
+	declare -i i
 	local srvIPaddr_str srvIPaddr
 
 	srvIPaddr_str=`echo ${SRVADDR_OPT}|awk '{split($SRVADDR_OPT, a, ":")}\
@@ -148,35 +166,18 @@ get_check_srvIPaddrs() {
         done
 
 	for ((idx = 0; idx < ${#SRV_IPADDRS[@]}; idx++)); do
-		# Check service IP address
-		verbose_output "Verifying service IP ${SRV_IPADDRS[idx]} and" \
-	       		       "real IP of host ${PRIM_NODENAME} are in the" \
-			       "same subnet..."
-		if ! ${SCRIPT_VERIFY_SRVIP} ${SRV_IPADDRS[idx]} ${PRIM_NODENAME}
-		then
-			return 1
-		fi
-		verbose_output "OK"
+	  for ((i = 0; i < ${#NODE_NAMES[@]}; i++)); do
+	    # Check service IP address
+	    verbose_output "Verifying service IP ${SRV_IPADDRS[idx]} and" \
+	    	           "real IP of host ${NODE_NAMES[i]} are in the" \
+			   "same subnet..."
+	    if ! ${SCRIPT_VERIFY_SRVIP} ${SRV_IPADDRS[idx]} ${NODE_NAMES[i]}
+	    then
+	      return 1
+	    fi
+	    verbose_output "OK"
+	  done
 	done
-
-	return 0
-}
-
-# get_nodenames
-#
-# Get all the node names in this failover group
-get_nodenames() {
-	declare -i idx
-	local nodename_str nodename
-
-	nodename_str=`echo ${HOSTNAME_OPT}|awk '{split($HOSTNAME_OPT, a, ":")}\
-		      END {for (i in a) print a[i]}'`
-	idx=0
-	for nodename in ${nodename_str}
-        do
-		NODE_NAMES[idx]=${nodename}
-		idx=$idx+1
-        done
 
 	return 0
 }
@@ -352,13 +353,13 @@ create_config() {
 }
 
 # Main flow
-# Get and check all the service IP addresses
-if ! get_check_srvIPaddrs; then
+# Get all the node names
+if ! get_nodenames; then
 	exit 1
 fi
 
-# Get all the node names
-if ! get_nodenames; then
+# Get and check all the service IP addresses
+if ! get_check_srvIPaddrs; then
 	exit 1
 fi
 
