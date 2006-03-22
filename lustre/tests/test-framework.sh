@@ -99,7 +99,7 @@ start() {
 stop() {
     facet=$1
     shift
-    local running=`do_facet ${facet} mount | grep -c /mnt/${facet}" "`
+    local running=`do_facet ${facet} grep -c /mnt/${facet}" " /proc/mounts`
     if [ $running -ne 0 ]; then
 	echo "Stopping /mnt/${facet} (opts:$@)"
 	do_facet ${facet} umount -d $@ /mnt/${facet}
@@ -112,8 +112,12 @@ stop() {
 
 zconf_mount() {
     local OPTIONS
-    client=$1
-    mnt=$2
+    local client=$1
+    local mnt=$2
+    if [ -z "$mnt" ]; then
+	echo No mount point given: zconf_mount $*
+	exit 1
+    fi
 
     do_node $client mkdir $mnt 2> /dev/null || :
 

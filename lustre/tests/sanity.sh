@@ -66,18 +66,22 @@ export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
 
-clean() {
-	echo -n "cln.."
-	sh llmountcleanup.sh ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
-}
-CLEAN=${CLEAN:-:}
+# for MCSETUP and MCCLEANUP
+. mountconf.sh
 
-start() {
+cleanup() {
+	echo -n "cln.."
+	$MCCLEANUP ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
+}
+CLEANUP=${CLEANUP:-:}
+
+setup() {
 	echo -n "mnt.."
-	sh llmount.sh > /dev/null || exit 10
+	$MCSETUP
+#$MCSETUP > /dev/null || exit 10
 	echo "done"
 }
-START=${START:-:}
+SETUP=${SETUP:-:}
 
 log() {
 	echo "$*"
@@ -113,8 +117,8 @@ basetest() {
 }
 
 run_one() {
-	if ! mount | grep -q $DIR; then
-		$START
+	if ! grep -q $DIR /proc/mounts; then
+		$SETUP
 	fi
 	testnum=$1
 	message=$2
@@ -127,7 +131,7 @@ run_one() {
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
-	$CLEAN
+	$CLEANUP
 }
 
 build_test_filter() {
@@ -200,11 +204,11 @@ pass() {
 mounted_lustre_filesystems() {
 	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
-MOUNT="`mounted_lustre_filesystems`"
-if [ -z "$MOUNT" ]; then
-	sh llmount.sh
-	MOUNT="`mounted_lustre_filesystems`"
-	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
+MOUNTED="`mounted_lustre_filesystems`"
+if [ -z "$MOUNTED" ]; then
+	$MCSETUP
+	MOUNTED="`mounted_lustre_filesystems`"
+	[ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
 	I_MOUNTED=yes
 fi
 
@@ -731,7 +735,7 @@ test_24n() {
     $CHECKSTAT ${f}.rename
     $CHECKSTAT -a ${f}
 }
-run_test 24n "Statting the old file after renameing (Posix rename 2)"
+run_test 24n "Statting the old file after renaming (Posix rename 2)"
 
 test_24o() {
 	check_kernel_version 37 || return 0
@@ -985,9 +989,9 @@ reset_enospc() {
 
 exhaust_precreations() {
 	OSTIDX=$1
-	OST=grep ${OSTIDX}": " $LPROC/lov/${LOVNAME}/target_obd | \
-	    awk '{print $2}' | sed -e 's/_UUID$//'
-
+	OST=$(grep ${OSTIDX}": " $LPROC/lov/${LOVNAME}/target_obd | \
+	    awk '{print $2}' | sed -e 's/_UUID$//')
+	# on the mdt's osc
 	last_id=$(cat $LPROC/osc/${OST}-osc/prealloc_last_id)
 	next_id=$(cat $LPROC/osc/${OST}-osc/prealloc_next_id)
 
@@ -1093,10 +1097,10 @@ test_28() {
 run_test 28 "create/mknod/mkdir with bad file types ============"
 
 cancel_lru_locks() {
-	for d in $LPROC/ldlm/namespaces/*-$1*; do
+	for d in $LPROC/ldlm/namespaces/*-$1-*; do
 		echo clear > $d/lru_size
 	done
-	grep "[0-9]" $LPROC/ldlm/namespaces/$1*/lock_unused_count /dev/null
+	grep "[0-9]" $LPROC/ldlm/namespaces/*-$1-*/lock_unused_count /dev/null
 }
 
 test_29() {
@@ -1105,7 +1109,7 @@ test_29() {
 	touch $DIR/d29/foo
 	log 'first d29'
 	ls -l $DIR/d29
-	MDCDIR=${MDCDIR:-$LPROC/ldlm/namespaces/*-mdc*}
+	MDCDIR=${MDCDIR:-$LPROC/ldlm/namespaces/*-mdc-*}
 	LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
 	LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
 	log 'second d29'
@@ -2454,9 +2458,9 @@ run_test 65i "set default striping on root directory (bug 6367)="
 
 test_65j() { # bug6367
 	# if we aren't already remounting for each test, do so for this test
-	if [ "$CLEAN" = ":" ]; then
-		clean || error "failed to unmount"
-		start || error "failed to remount"
+	if [ "$CLEANUP" = ":" ]; then
+		cleanup || error "failed to unmount"
+		setup || error "failed to remount"
 	fi
 	$LSTRIPE -d $MOUNT || true
 }
@@ -2940,7 +2944,7 @@ log "cleanup: ======================================================"
 if [ "`mount | grep ^$NAME`" ]; then
 	rm -rf $DIR/[Rdfs][1-9]*
 	if [ "$I_MOUNTED" = "yes" ]; then
-		sh llmountcleanup.sh || error "llmountcleanup failed"
+		$MCCLEANUP || error "cleanup failed"
 	fi
 fi
 

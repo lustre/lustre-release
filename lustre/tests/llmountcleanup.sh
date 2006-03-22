@@ -33,7 +33,7 @@ fi
 #${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt --cleanup $@ \
     --dump $TMP/debug $conf_opt
 
-echo FIXME this must be umount of some sort
+echo FIXME llmountcleanup should be replaced with $CLEANUP
 exit 1
 
 rc=$?

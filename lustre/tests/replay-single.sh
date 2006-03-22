@@ -35,7 +35,7 @@ CLEANUP=${CLEANUP:-"cleanup"}
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0 || true
     $CLEANUP
-    exit
+    exit 0
 fi
 
 setup() {
@@ -51,7 +51,6 @@ setup() {
     #add_lov lov1 mds --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 
     grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
-    sleep 10
 }
 
 $SETUP
@@ -1065,4 +1064,4 @@ test_58() {
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 
 equals_msg test complete, cleaning up
-FORCE=$CLEANUP
+$CLEANUP
