@@ -142,7 +142,7 @@ test_11(){
     do_facet client multiop $MOUNT/$tfile Ow  || return 1
     do_facet client multiop $MOUNT/$tfile or  || return 2
 
-    cancel_lru_locks OSC
+    cancel_lru_locks osc
 
     do_facet client multiop $MOUNT/$tfile or  || return 3
     drop_bl_callback multiop $MOUNT/$tfile Ow || echo "evicted as expected"
@@ -217,7 +217,7 @@ test_16() {
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
     sysctl -w lustre.fail_loc=0x80000504
-    cancel_lru_locks OSC
+    cancel_lru_locks osc
     # will get evicted here
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
     sysctl -w lustre.fail_loc=0
@@ -250,7 +250,7 @@ test_18a() {
     do_facet client mkdir -p $MOUNT/$tdir
     f=$MOUNT/$tdir/$tfile
 
-    cancel_lru_locks OSC
+    cancel_lru_locks osc
     pgcache_empty || return 1
 
     # 1 stripe on ost2
@@ -276,7 +276,7 @@ test_18b() {
     f=$MOUNT/$tdir/$tfile
     f2=$MOUNT/$tdir/${tfile}-2
 
-    cancel_lru_locks OSC
+    cancel_lru_locks osc
     pgcache_empty || return 1
 
     # shouldn't have to set stripe size of count==1
@@ -319,7 +319,7 @@ test_19b() {
     do_facet client multiop $f Ow  || return 1
     do_facet client multiop $f or  || return 2
 
-    cancel_lru_locks OSC
+    cancel_lru_locks osc
 
     do_facet client multiop $f or  || return 3
     drop_ldlm_cancel multiop $f Ow  || echo "client evicted, as expected"
@@ -333,7 +333,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	multiop $DIR/$tdir/${tfile} O_wc &
 	MULTI_PID=$!
 	sleep 1
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost sysctl -w lustre.fail_loc=0x80000308
 	kill -USR1 $MULTI_PID
@@ -346,7 +346,7 @@ run_test 20a "ldlm_handle_enqueue error (should return error)"
 test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/${tfile}
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost sysctl -w lustre.fail_loc=0x80000308
 	dd if=/etc/hosts of=$DIR/$tdir/$tfile && \
@@ -367,7 +367,7 @@ run_test 20b "ldlm_handle_enqueue error (should return error)"
 
 test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	mkdir -p $DIR/$tdir
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	multiop $DIR/$tdir/$tfile Owy_wyc &
 	MULTI_PID=$!
 	usleep 500

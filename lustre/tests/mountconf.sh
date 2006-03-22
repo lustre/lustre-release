@@ -48,16 +48,18 @@ mccleanup() {
     unload_modules
 }
 
-REFORMAT=${REFORMAT:---reformat}
-
-format() {
+mcformat() {
     stop_all
     echo Formatting mds, ost, ost2
-    add mds $MDS_MKFS_OPTS $REFORMAT $MDSDEV    > /dev/null || exit 10
-    add ost $OST_MKFS_OPTS $REFORMAT $OSTDEV    > /dev/null || exit 10
-    add ost2 $OST2_MKFS_OPTS $REFORMAT $OSTDEV2 > /dev/null || exit 10
+    add mds $MDS_MKFS_OPTS --reformat $MDSDEV    > /dev/null || exit 10
+    add ost $OST_MKFS_OPTS --reformat $OSTDEV    > /dev/null || exit 10
+    add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2 > /dev/null || exit 10
 }
-format
+export MCFORMAT=${MCFORMAT:-"mcformat"}
+
+mount_client() {
+    grep " $1 " /proc/mounts || zconf_mount `hostname` $*
+}
 
 mcsetup() {
     echo Setup mds, ost, ost2
@@ -66,7 +68,7 @@ mcsetup() {
     start ost2 $OSTDEV2 $OST2_MOUNT_OPTS
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
-    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+    mount_client $MOUNT
     sleep 5
 }
 

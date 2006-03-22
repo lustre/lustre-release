@@ -62,6 +62,8 @@ else
     fi
 fi
 
+SANITYLOG=${SANITYLOG:-/tmp/sanity.log}
+
 export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
@@ -77,8 +79,7 @@ CLEANUP=${CLEANUP:-:}
 
 setup() {
 	echo -n "mnt.."
-	$MCSETUP
-#$MCSETUP > /dev/null || exit 10
+	$MCSETUP || exit 10
 	echo "done"
 }
 SETUP=${SETUP:-:}
@@ -204,8 +205,10 @@ pass() {
 mounted_lustre_filesystems() {
 	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
+
 MOUNTED="`mounted_lustre_filesystems`"
 if [ -z "$MOUNTED" ]; then
+        $MCFORMAT
 	$MCSETUP
 	MOUNTED="`mounted_lustre_filesystems`"
 	[ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"

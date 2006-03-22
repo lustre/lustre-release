@@ -459,7 +459,7 @@ test_18() { # bug 3822 - evicting client with enqueued lock
    sleep 1
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
    do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
-   cancel_lru_locks MDC
+   cancel_lru_locks mdc
    usleep 500 # wait to ensure first client is one that will be evicted
    openfile -f O_RDONLY $MOUNT2/$tdir/f0
    wait $OPENPID

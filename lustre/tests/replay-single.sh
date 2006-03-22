@@ -748,7 +748,7 @@ test_36() {
     touch $DIR/$tfile
     checkstat $DIR/$tfile
     facet_failover mds
-    cancel_lru_locks MDC
+    cancel_lru_locks mdc
     if dmesg | grep "unknown lock cookie"; then 
 	echo "cancel after replay failed"
 	return 1
@@ -852,7 +852,7 @@ test_41() {
     # make sure the start of the file is ost1
     lfs setstripe $f $((128 * 1024)) 0 0 
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
-    cancel_lru_locks OSC
+    cancel_lru_locks osc
     # fail ost2 and read from ost1
     local osc2_dev=`$LCTL device_list | \
 		awk '(/ost2.*client_facet/){print $4}' `
@@ -995,7 +995,7 @@ run_test 50 "Double OSC recovery, don't LASSERT (3812)"
 # b3764 timed out lock replay
 test_52() {
     touch $DIR/$tfile
-    cancel_lru_locks MDC
+    cancel_lru_locks mdc
 
     multiop $DIR/$tfile s
     replay_barrier mds

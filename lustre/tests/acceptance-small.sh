@@ -61,6 +61,7 @@ for NAME in $CONFIGS; do
 		fi
 		rm -f /mnt/lustre/`hostname`/client.txt
 	fi
+
 	chown $UID $MOUNT && chmod 700 $MOUNT
 	if [ "$BONNIE" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
@@ -110,6 +111,7 @@ for NAME in $CONFIGS; do
 			echo "iozone $VER too old for multi-thread test"
 		fi
 	fi
+
 	if [ "$FSX" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF

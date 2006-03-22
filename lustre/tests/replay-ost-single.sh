@@ -117,7 +117,7 @@ test_4() {
     verify=$ROOT/tmp/verify-$$
     dd if=/dev/urandom bs=4096 count=1280 | tee $verify > $DIR/$tfile
     # invalidate cache, so that we're reading over the wire
-    for i in /proc/fs/lustre/ldlm/namespaces/OSC_*MNT*; do
+    for i in /proc/fs/lustre/ldlm/namespaces/*-osc-*; do
         echo -n clear > $i/lru_size
     done
     cmp $verify $DIR/$tfile &
@@ -145,7 +145,7 @@ test_5() {
 run_test 5 "Fail OST during iozone"
 
 kbytesfree() {
-   awk '{total+=$1} END {print total}' /proc/fs/lustre/osc/OSC_*MNT*/kbytesfree
+   awk '{total+=$1} END {print total}' /proc/fs/lustre/osc/*-osc-*/kbytesfree
 }
 
 test_6() {
