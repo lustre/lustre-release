@@ -3,9 +3,12 @@
 ######################################################################
 # customize per survey
 
+# CHOOSE EITHER scsidevs or rawdevs
 # the SCSI devices to measure - WARNING: will be erased.
+#scsidevs="/dev/sde /dev/sdh"
+# The raw devices to use
+#rawdevs="/dev/raw/raw1"
 #scsidevs=`ls /dev/sd[a-z] /dev/sd[a-z][a-z]` # all devices, if you use udev
-scsidevs=${scsidevs:-"/dev/sde /dev/sdh"}
 
 # result file prefix.  date/time+hostname makes unique
 # NB ensure the path exists if it includes subdirs
@@ -42,14 +45,39 @@ SG_MAX_QUEUE=16
 # map given device names into SG device names
 i=0
 devs=()
-for d in $scsidevs; do
-    devs[$i]=`sg_map | awk "{if ($ 2 == \"$d\") print $ 1}"`
-    if [ -z "$devs[$i]" ]; then
-	echo "Can't find SG device for $d"
-	exit 1
-    fi
-    i=$((i+1))
-done
+if [ $scsidevs ]; then
+        # we will test for a LUN, the test for a partition
+        # if the partition number is > 9 this will fail
+    for d in $scsidevs; do
+	devs[$i]=`sg_map | awk "{if ($ 2 == \"$d\") print $ 1}"`
+        if [ -z "${devs[i]}" ]; then
+            echo "Can't find SG device for $d, testing for partition"
+            pt=`echo $d | sed 's/[0-9]$//'`
+            # Try again
+            devs[$i]=`sg_map | awk "{if ($ 2 == \"$pt\") print $ 1}"`
+            if [ -z "${devs[i]}" ]; then
+                echo "Can't find SG device $pt"
+                exit 1
+           fi
+	fi
+	i=$((i+1))
+    done
+elif [ $rawdevs ]; then
+    for r in $rawdevs; do
+	RES=`raw -q $r`
+	if [ $? -eq 0 ];then
+	    devs[$i]=$r
+	    i=$((i+1))
+	else
+	    echo "Raw device $r not set up"
+	    exit 1
+	fi
+    done
+else
+    echo "Must specify scsidevs or rawdevs"
+    exit 1
+fi
+
 ndevs=${#devs[@]}
 
 rsltf=${rslt}.summary

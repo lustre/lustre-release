@@ -6,7 +6,10 @@ Requirements
 ------------
 
 . sg3_utils (for sgp_dd)
-. SCSI device
+  SCSI device
+  Or, if using non-scsi disk
+  raw device support
+  sg3_utils
 
 
 Overview
@@ -24,6 +27,13 @@ different request queue depths.
 The script spawns variable numbers of sgp_dd instances, each reading or
 writing a separate area of the disk to show how performance varies with the
 number of concurrent stripe files.
+
+The device(s) used must meet one of two tests:
+SCSI device:
+	Must appear in the output of 'sg_map'
+Raw device:
+	Must appear in the output of 'raw -qa'
+You may not mix raw and SCSI devices in the test specification.
 
 
 Running
