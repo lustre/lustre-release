@@ -14,27 +14,6 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 
-unload_modules() {
-    $LCTL dk $TMP/debug
-    $LCTL modules | awk '{ print $2 }' | xargs rmmod >/dev/null 2>&1 
-     # do it again, in case we tried to unload ksocklnd too early
-    LNET=$(lsmod | grep -c lnet) 
-    if [ $LNET -ne 0 ]; then
-	$LCTL modules | awk '{ print $2 }' | xargs rmmod
-    fi
-    lsmod | grep lnet && echo "modules still loaded" && exit 1
-
-    LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked"`
-    LEAK_PORTALS=`dmesg | tail -n 20 | grep "Portals memory leaked"`
-    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
-	echo "$LEAK_LUSTRE" 1>&2
-	echo "$LEAK_PORTALS" 1>&2
-	mv $TMP/debug $TMP/debug-leak.`date +%s`
-	echo "Memory leaks detected"
-	exit 254
-    fi
-}
-
 stop_all() {
     grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
     stop ost -f

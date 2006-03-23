@@ -10,8 +10,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT"
+# bug number for skipped test:      mc mc mc mc mc  mc
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT 10 11 12 13 13b 14"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -29,56 +29,54 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
+
 gen_config() {
-	rm -f $XMLCONFIG
-
-	add_mds mds --dev $MDSDEV --size $MDSSIZE
-	add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
-	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-	add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-	add_client client mds --lov lov1 --path $MOUNT
-}
-
-gen_second_config() {
-	rm -f $XMLCONFIG
-
-	add_mds mds2 --dev $MDSDEV --size $MDSSIZE
-	add_lov lov2 mds2 --stripe_sz $STRIPE_BYTES\
-	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-	add_ost ost2 --lov lov2 --dev $OSTDEV --size $OSTSIZE
-	add_client client mds2 --lov lov2 --path $MOUNT2
+    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
+    stop ost -f
+    stop mds -f
+    echo Formatting mds, ost
+    add mds $MDS_MKFS_OPTS --reformat $MDSDEV  > /dev/null
+    add ost $OST_MKFS_OPTS --reformat $OSTDEV  > /dev/null
+    #The MGS must be started before the OSTs for a new fs
+    start_mds
+    start_ost
+    sleep 5
+    stop_ost
+    stop_mds
 }
 
 start_mds() {
 	echo "start mds service on `facet_active_host mds`"
-	start mds --reformat $MDSLCONFARGS  || return 94
+	start mds $MDSDEV $MDS_MOUNT_OPTS || return 94
 }
 
 stop_mds() {
 	echo "stop mds service on `facet_active_host mds`"
-	stop mds $@  || return 97
+	# These tests all use non-failover stop
+	stop mds -f  || return 97
 }
 
 start_ost() {
 	echo "start ost service on `facet_active_host ost`"
-	start ost --reformat $OSTLCONFARGS  || return 95
+	start ost $OSTDEV $OST_MOUNT_OPTS || return 95
 }
 
 stop_ost() {
 	echo "stop ost service on `facet_active_host ost`"
-	stop ost $@  || return 98
+	# These tests all use non-failover stop
+	stop ost -f  || return 98
 }
 
 mount_client() {
 	local MOUNTPATH=$1
 	echo "mount lustre on ${MOUNTPATH}....."
-	zconf_mount `hostname`  $MOUNTPATH  || return 96
+	zconf_mount `hostname` $MOUNTPATH  || return 96
 }
 
 umount_client() {
 	local MOUNTPATH=$1
 	echo "umount lustre on ${MOUNTPATH}....."
-	zconf_umount `hostname`  $MOUNTPATH || return 97
+	zconf_umount `hostname` $MOUNTPATH || return 97
 }
 
 manual_umount_client(){
@@ -94,15 +92,9 @@ setup() {
 
 cleanup() {
  	umount_client $MOUNT || return 200
-	stop_mds $FORCE || return 201
-	stop_ost $FORCE || return 202
-	# catch case where these return just fine, but modules are still not unloaded
-	/sbin/lsmod | egrep -q "lnet|libcfs"
-	if [ 1 -ne $? ]; then
-		echo "modules still loaded..."
-		/sbin/lsmod
-		return 203
-	fi
+	stop_mds || return 201
+	stop_ost || return 202
+	unload_modules && return 203
 }
 
 check_mount() {
@@ -148,7 +140,7 @@ run_test 0 "single mount setup"
 test_1() {
 	start_ost
 	echo "start ost second time..."
-	start ost --reformat $OSTLCONFARGS
+	start_ost
 	start_mds	
 	mount_client $MOUNT
 	check_mount || return 42
@@ -160,7 +152,7 @@ test_2() {
 	start_ost
 	start_mds	
 	echo "start mds second time.."
-	start mds --reformat $MDSLCONFARGS
+	start_mds
 	
 	mount_client $MOUNT
 	check_mount || return 43
@@ -182,7 +174,7 @@ run_test 3 "mount client twice"
 test_4() {
 	setup
 	touch $DIR/$tfile || return 85
-	stop_ost --force
+	stop_ost -f
 	cleanup
 	eno=$?
 	# ok for ost to fail shutdown
@@ -196,7 +188,7 @@ run_test 4 "force cleanup ost, then cleanup"
 test_5() {
 	setup
 	touch $DIR/$tfile || return 1
-	stop_mds --force || return 2
+	stop_mds -f || return 2
 
 	# cleanup may return an error from the failed
 	# disconnects; for now I'll consider this successful
@@ -209,13 +201,11 @@ test_5() {
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
 
-	# cleanup client modules
-	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
-	
 	# stop_mds is a no-op here, and should not fail
 	stop_mds  || return 4
 	stop_ost || return 5
 
+	unload_modules
 	lsmod | grep -q lnet && return 6
 	return 0
 }
@@ -223,18 +213,14 @@ run_test 5 "force cleanup mds, then cleanup"
 
 test_5b() {
 	start_ost
-
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
-
-	# cleanup client modules
-	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
+	mount_client $MOUNT && return 1
 	
 	# stop_mds is a no-op here, and should not fail
 	stop_mds || return 2
 	stop_ost || return 3
 
+	unload_modules
 	lsmod | grep -q lnet && return 4
 	return 0
 
@@ -246,15 +232,12 @@ test_5c() {
 	start_mds
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && return 1
+	do_node $client mount -t lustre wrong_mgs:/lustre $mnt && return 1
 
-	# cleanup client modules
-	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
-	
 	stop_mds || return 2
 	stop_ost || return 3
 
+	unload_modules
 	lsmod | grep -q lnet && return 4
 	return 0
 
@@ -264,11 +247,10 @@ run_test 5c "cleanup after failed mount (bug 2712)"
 test_5d() {
 	start_ost
 	start_mds
-	stop_ost --force
+	stop_ost -f
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE,$MOUNTOPT `facet_nid mds`://mds_svc/client_facet $MOUNT  || return 1
+	mount_client $MOUNT || return 1
 
 	umount_client $MOUNT || return 2
 	
@@ -707,7 +689,7 @@ test_17() {
         do_facet mds "debugfs -w -R 'unlink LOGS/mds_svc' $MDSDEV || return \$?" || return $?
 
         start_ost
-	start mds $MDSLCONFARGS && return 42
+	start_mds && return 42
         cleanup || return $?
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
@@ -748,8 +730,8 @@ test_19() {
 	start_mds
 	stop_mds
 	stop_ost
-	start mds $MDSLCONFARGS || return 1
-	stop mds --force || return 2
+	start_mds || return 1
+	stop_mds -f || return 2
 }
 run_test 19 "start/stop MDS without OSTs"
 
