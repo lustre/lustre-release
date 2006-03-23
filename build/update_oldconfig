@@ -1,4 +1,4 @@
-#!/usr/bin/expect -f
+#!/usr/bin/expect -f -d
 
 # log all interaction to a file to diagnose failures
 log_file -a [lindex $argv 0]
