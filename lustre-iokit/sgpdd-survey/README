@@ -1,3 +1,6 @@
+WARNING: Running sgp_dd will ERASE the contents of the disk devices.
+         This is NOT to be run on any OST where you care about any data
+	 or you are not expecting to reformat the filesystem afterward.
 
 Requirements
 ------------

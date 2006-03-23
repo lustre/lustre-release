@@ -22,11 +22,11 @@ rsize_hi=1M
 rsize_iterator="*=2"
 
 ## which tests to run (first must be write)
-# remount)   not really a test; just remount to uncache everything
+# clear_cache)   not really a test; just uncache everything
 # *write*)   write
 # *)         read
 #tests=(write rewrite read reread rewrite_again)
-tests=(write rewrite remount read reread)
+tests=(write rewrite clear_cache read reread)
 
 # total # bytes written/read by any client node
 min_per_client_size=4G
@@ -36,23 +36,18 @@ min_total_size=8G
 file_per_task=1
 
 # the binaries
-IOR="/home/ericb/ior/src/C/IOR"
-llmount=/home/ericb/lustre/utils/llmount
+IOR=/usr/local/sbin/IOR
+llmount=llmount
 pdsh=pdsh
 
 # the result file prefix (date/time + hostname makes unique)
-#rslt=/home/ericb/ior_survey_`date +%F@%R`_`uname -n`
-rslt=/home/ericb/ior_survey
+rslt=/tmp/ior_survey_`date +%F@%R`_`uname -n`
 
 # where lustre is mounted on the clients
 lustre=/mnt/lustre
 
 # basename of the test file(s)
 testfile=${lustre}/ior_survey_testfile
-
-# how to unmount and remount the F/S on a client (to clear the cache)
-# change this depending on lustre config (network type, MDS etc)
-remount="umount $lustre && $llmount -o nettype=elan mdev6:/ll_mds/client $lustre"
 
 # pdsh args required to instantiate all instances of IOR in parallel
 # the chosen module must support '-n <procs-per-node>'
@@ -211,10 +206,11 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
 		tmpf=${workf}_tmp
 		echo -n > $tmpf
 
-		if [ "$test" = "remount" ]; then
-		    echo "=> $remount" >> $tmpf
+		if [ "$test" = "clear_cache" ]; then
+		    clear_cache='for LRU in /proc/fs/lustre/ldlm/namespaces/*/lru_size; do; echo clear > $LRU; done'
+		    echo "=> $clear_cache" >> $tmpf
 		    $pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
-			"$remount"
+			"$clear_cache"
 		    status=$?
 		    echo "Completion Status: $status" >> $tmpf
 
