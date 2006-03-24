@@ -10,8 +10,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:      mc mc mc mc mc  mc
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT 10 11 12 13 13b 14"
+# bug number for skipped test:      mc mc mc mc mc mc  mc mc mc
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT 9  10 11 12 13 13b 14 15 18"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -81,7 +81,7 @@ umount_client() {
 
 manual_umount_client(){
 	echo "manual umount lustre on ${MOUNTPATH}...."
-	do_facet client "umount $MOUNT"
+	do_facet client "umount -d $MOUNT"
 }
 
 setup() {
@@ -90,17 +90,22 @@ setup() {
 	mount_client $MOUNT
 }
 
-cleanup() {
- 	umount_client $MOUNT || return 200
-	sleep 2
+cleanup_nocli() {
 	stop_mds || return 201
 	stop_ost || return 202
 	unload_modules || return 203
 }
 
+cleanup() {
+ 	umount_client $MOUNT || return 200
+	cleanup_nocli || return $?
+}
+
 check_mount() {
-	do_facet client "touch $DIR/a" || return 71	
-	do_facet client "rm $DIR/a" || return 72	
+	do_facet client "touch $DIR/a" || return 71
+	do_facet client "rm $DIR/a" || return 72
+	# make sure lustre is actually mounted
+        do_facet client "grep $MOUNT' ' /proc/mounts > /dev/null" || return 73
 	echo "setup single mount lustre success"
 }
 
@@ -130,9 +135,7 @@ gen_config
 
 
 test_0() {
-	start_ost
-	start_mds	
-	mount_client $MOUNT
+        setup
 	check_mount || return 41
 	cleanup || return $?
 }
@@ -141,9 +144,7 @@ run_test 0 "single mount setup"
 test_1() {
 	start_ost
 	echo "start ost second time..."
-	start_ost
-	start_mds	
-	mount_client $MOUNT
+	setup
 	check_mount || return 42
 	cleanup || return $?
 }
@@ -154,7 +155,6 @@ test_2() {
 	start_mds	
 	echo "start mds second time.."
 	start_mds
-	
 	mount_client $MOUNT
 	check_mount || return 43
 	cleanup || return $?
@@ -165,7 +165,6 @@ test_3() {
 	setup
 	#mount.lustre returns an error if already in mtab
 	mount_client $MOUNT && return $?
-
 	check_mount || return 44
 	cleanup || return $?
 }
@@ -193,7 +192,7 @@ test_5() {
 	# cleanup may return an error from the failed
 	# disconnects; for now I'll consider this successful
 	# if all the modules have unloaded.
- 	umount $MOUNT &
+ 	umount -d $MOUNT &
 	UMOUNT_PID=$!
 	sleep 2
 	echo "killing umount"
@@ -201,13 +200,9 @@ test_5() {
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
 
+	umount_client $MOUNT 
 	# stop_mds is a no-op here, and should not fail
-	stop_mds  || return 4
-	stop_ost || return 5
-
-	unload_modules
-	lsmod | grep -q lnet && return 6
-	return 0
+	cleanup_nocli || return $?
 }
 run_test 5 "force cleanup mds, then cleanup"
 
@@ -215,15 +210,11 @@ test_5b() {
 	start_ost
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	mount_client $MOUNT && return 1
-	
+
+	umount_client $MOUNT	
 	# stop_mds is a no-op here, and should not fail
-	stop_mds || return 2
-	stop_ost || return 3
-
-	unload_modules
-	lsmod | grep -q lnet && return 4
+	cleanup_nocli || return $?
 	return 0
-
 }
 run_test 5b "mds down, cleanup after failed mount (bug 2712)"
 
@@ -232,33 +223,19 @@ test_5c() {
 	start_mds
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	do_node $client mount -t lustre wrong_mgs:/lustre $mnt && return 1
-
-	stop_mds || return 2
-	stop_ost || return 3
-
-	unload_modules
-	lsmod | grep -q lnet && return 4
-	return 0
-
+	do_node $client mount -t lustre wrong_mgs@tcp:/$FSNAME $MOUNT && return 1
+	umount_client $MOUNT
+	cleanup_nocli  || return $?
 }
 run_test 5c "cleanup after failed mount (bug 2712)"
 
 test_5d() {
+        df
 	start_ost
 	start_mds
 	stop_ost -f
-
-	[ -d $MOUNT ] || mkdir -p $MOUNT
 	mount_client $MOUNT || return 1
-
-	umount_client $MOUNT || return 2
-	
-	stop_mds || return 3
-
-	lsmod | grep -q lnet && return 4
-	return 0
-
+	cleanup  || return $?
 }
 run_test 5d "ost down, don't crash during mount attempt"
 
@@ -274,23 +251,16 @@ run_test 6 "manual umount, then mount again"
 test_7() {
 	setup
 	manual_umount_client
-	cleanup || return $?
+	cleanup_nocli || return $?
 }
 run_test 7 "manual umount, then cleanup"
 
 test_8() {
-	start_ost
-	start_mds
-
-	mount_client $MOUNT
+	setup
 	mount_client $MOUNT2
-
 	check_mount2 || return 45
-	umount $MOUNT
 	umount_client $MOUNT2
-	
-	stop_mds
-	stop_ost
+	cleanup  || return $?
 }
 run_test 8 "double mount setup"
 
@@ -608,7 +578,7 @@ test_15() {
 	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
 	[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
 	check_mount || return 41
-	do_node `hostname` umount $MOUNT
+	do_node `hostname` umount -d $MOUNT
 
 	[ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
 	echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
@@ -625,9 +595,7 @@ test_16() {
 
         if [ ! -f "$MDSDEV" ]; then
             echo "no $MDSDEV existing, so mount Lustre to create one"
-            start_ost
-            start_mds
-            mount_client $MOUNT
+	    setup
             check_mount || return 41
             cleanup || return $?
         fi
@@ -636,12 +604,10 @@ test_16() {
         do_facet mds "[ -d $TMPMTPT ] || mkdir -p $TMPMTPT;
                       mount -o loop -t ext3 $MDSDEV $TMPMTPT || return \$?;
                       chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} || return \$?;
-                      umount $TMPMTPT || return \$?" || return $?
+                      umount -d $TMPMTPT || return \$?" || return $?
 
         echo "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
-        start_ost
-        start_mds
-        mount_client $MOUNT
+	setup
         check_mount || return 41
         cleanup || return $?
 
@@ -674,23 +640,20 @@ test_16() {
 run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
 
 test_17() {
-        TMPMTPT="/mnt/conf17"
-
         if [ ! -f "$MDSDEV" ]; then
             echo "no $MDSDEV existing, so mount Lustre to create one"
-            start_ost
-            start_mds
-            mount_client $MOUNT
+	    setup
             check_mount || return 41
             cleanup || return $?
         fi
 
         echo "Remove mds config log"
-        do_facet mds "debugfs -w -R 'unlink LOGS/mds_svc' $MDSDEV || return \$?" || return $?
+        do_facet mds "debugfs -w -R 'rm CONFIGS/$FSNAME-MDT0000' $MDSDEV || return \$?" || return $?
 
         start_ost
 	start_mds && return 42
-        cleanup || return $?
+	umount_client $MOUNT
+        cleanup_nocli || return $?
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
 
@@ -699,12 +662,11 @@ test_18() {
         echo "mount mds with large journal..."
         OLDMDSSIZE=$MDSSIZE
         MDSSIZE=2000000
+	#FIXME have to change MDS_MKFS_OPTS
         gen_config
 
         echo "mount lustre system..."
-        start_ost
-        start_mds
-        mount_client $MOUNT
+	setup
         check_mount || return 41
 
         echo "check journal size..."
@@ -734,5 +696,8 @@ test_19() {
 	stop_mds -f || return 2
 }
 run_test 19 "start/stop MDS without OSTs"
+
+umount_client $MOUNT	
+cleanup_nocli
 
 equals_msg "Done"
