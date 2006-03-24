@@ -1021,10 +1021,16 @@ static int ping_evictor_main(void *arg)
         ENTRY;
 
         lock_kernel();
-        ptlrpc_daemonize();
+
+        /* ptlrpc_daemonize() */
+        exit_mm(current);
+        lustre_daemonize_helper();
+        set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
+        exit_files(current);
+        reparent_to_init();
+        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX-1, "ping_evictor");
 
         cfs_block_allsigs();
-        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX-1, "ping_evictor");
         unlock_kernel();
 
         CDEBUG(D_HA, "Starting Ping Evictor\n");
