@@ -1,4 +1,7 @@
-#!/usr/bin/expect -f -d
+#!/usr/bin/expect -f
+
+#enables some diagnostic output
+exp_internal 1
 
 # log all interaction to a file to diagnose failures
 log_file -a [lindex $argv 0]
