@@ -382,7 +382,8 @@ depend_kernel()
     # new items conservatively.  QA will get notified on anything newly added
     # for them to review and adjust accordingly.
     local logfile=$(mktemp /tmp/XXXXXX)
-    timed_run 300 $TOPDIR/build/update_oldconfig $logfile
+    #timed_run 300 $TOPDIR/build/update_oldconfig $logfile
+    strace -f -o update_oldconfig.strace $TOPDIR/build/update_oldconfig $logfile
     local RC=${PIPESTATUS[0]}
     if [ $RC -eq 143 ]; then
         fatal 1 "update_oldconfig timed out"
@@ -390,6 +391,8 @@ depend_kernel()
 	# dump the log
         cat $logfile
         rm -f $logfile
+	cat update_oldconfig.strace
+	rm -f update_oldconfig.strace
         fatal 1 "update_oldconfig failed: $RC. See log above."
     fi
     rm -f $logfile
