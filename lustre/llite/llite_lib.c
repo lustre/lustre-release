@@ -501,25 +501,19 @@ char *ll_read_opt(const char *opt, char *data)
         RETURN(retval);
 }
 
-int ll_set_opt(const char *opt, char *data, int fl)
+static inline int ll_set_opt(const char *opt, char *data, int fl)
 {
-        ENTRY;
-
-        CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
         if (strncmp(opt, data, strlen(opt)) != 0)
-                RETURN(0);
+                return(0);
         else
-                RETURN(fl);
+                return(fl);
 }
 
 /* non-client-specific mount options are parsed in lmd_parse */
 void ll_options(char *options, int *flags)
 {
         int tmp;
-        char *this_char;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-        char *opt_ptr = options;
-#endif
+        char *s1 = options, *s2;
         ENTRY;
 
         if (!options) {
@@ -528,51 +522,52 @@ void ll_options(char *options, int *flags)
         }
 
         CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        for (this_char = strtok (options, ",");
-             this_char != NULL;
-             this_char = strtok (NULL, ","))
-#else
-        while ((this_char = strsep (&opt_ptr, ",")) != NULL)
-#endif
-        {
-                CDEBUG(D_SUPER, "this_char %s\n", this_char);
-                tmp = ll_set_opt("nolock", this_char, LL_SBI_NOLCK);
+
+        while (*s1) {
+                CDEBUG(D_SUPER, "next opt=%s\n", s1);
+                tmp = ll_set_opt("nolock", s1, LL_SBI_NOLCK);
                 if (tmp) {
                         *flags |= tmp;
-                        continue;
+                        goto next;
                 }
-                tmp = ll_set_opt("flock", this_char, LL_SBI_FLOCK);
+                tmp = ll_set_opt("flock", s1, LL_SBI_FLOCK);
                 if (tmp) {
                         *flags |= tmp;
-                        continue;
+                        goto next;
                 }
-                tmp = ll_set_opt("noflock", this_char, LL_SBI_FLOCK);
+                tmp = ll_set_opt("noflock", s1, LL_SBI_FLOCK);
                 if (tmp) {
                         *flags &= ~tmp;
-                        continue;
+                        goto next;
                 }
-                tmp = ll_set_opt("user_xattr", this_char, LL_SBI_USER_XATTR);
+                tmp = ll_set_opt("user_xattr", s1, LL_SBI_USER_XATTR);
                 if (tmp) {
                         *flags |= tmp;
-                        continue;
+                        goto next;
                 }
-                tmp = ll_set_opt("nouser_xattr", this_char, LL_SBI_USER_XATTR);
+                tmp = ll_set_opt("nouser_xattr", s1, LL_SBI_USER_XATTR);
                 if (tmp) {
                         *flags &= ~tmp;
-                        continue;
+                        goto next;
                 }
-                tmp = ll_set_opt("acl", this_char, LL_SBI_ACL);
+                tmp = ll_set_opt("acl", s1, LL_SBI_ACL);
                 if (tmp) {
                         /* Ignore deprecated mount option.  The client will
                          * always try to mount with ACL support, whether this
                          * is used depends on whether server supports it. */
-                        continue;
+                        goto next;
                 }
-                tmp = ll_set_opt("noacl", this_char, LL_SBI_ACL);
+                tmp = ll_set_opt("noacl", s1, LL_SBI_ACL);
                 if (tmp) {
-                        continue;
+                        goto next;
                 }
+
+next:
+                /* Find next opt */
+                s2 = strchr(s1, ',');
+                if (s2 == NULL) 
+                        break;
+                s1 = s2 + 1;
         }
         EXIT;
 }
@@ -713,6 +708,7 @@ void ll_put_super(struct super_block *sb)
 
         lustre_common_put_super(sb);
 
+        CDEBUG(D_WARNING, "client umount done\n");
         EXIT;
 } /* client_put_super */
 

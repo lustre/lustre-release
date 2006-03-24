@@ -88,7 +88,6 @@ unload_modules() {
 	echo "Memory leaks detected"
 	return 254
     fi
-    return 0
 }
 
 # Facet functions
@@ -98,8 +97,8 @@ start() {
     shift
     device=$1
     shift
-    echo "Starting ${device} as /mnt/${facet} (opts:$@)"
-    mkdir -p /mnt/${facet}
+    echo "Starting ${facet}: $@ ${device} /mnt/${facet}"
+    do_facet ${facet} mkdir -p /mnt/${facet}
     do_facet ${facet} mount -t lustre $@ ${device} /mnt/${facet} 
     #do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
     #    --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
@@ -140,16 +139,15 @@ zconf_mount() {
 	echo No mount point given: zconf_mount $*
 	exit 1
     fi
-
-    do_node $client mkdir $mnt 2> /dev/null || :
-
     # Only supply -o to mount if we have options
     if [ -n "$MOUNTOPT" ]; then
         OPTIONS="-o $MOUNTOPT"
     fi
 
+    echo "Starting client: $OPTIONS `facet_nid mgs`:/$FSNAME $mnt" 
+    do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS \
-	`facet_nid mgs`:/lustre $mnt || return 1
+	`facet_nid mgs`:/$FSNAME $mnt || return 1
 
     do_node $client "sysctl -w lnet.debug=$PTLDEBUG; sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }"
 
@@ -563,7 +561,7 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
-	sysctl -w lustre.fail_loc=0 || true
+	sysctl -w lustre.fail_loc=0 > /dev/null 2>&1 || true
 	echo "${TESTSUITE}: **** FAIL:" $@
 	log "FAIL: $@"
 	exit 1

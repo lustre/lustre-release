@@ -1335,7 +1335,7 @@ static void server_put_super(struct super_block *sb)
            is right. */
         server_stop_servers(lddflags, lsiflags);
 
-        CDEBUG(D_MOUNT|D_WARNING, "umount done\n");
+        CDEBUG(D_MOUNT|D_WARNING, "server umount done\n");
         EXIT;
 }
 

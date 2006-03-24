@@ -92,9 +92,10 @@ setup() {
 
 cleanup() {
  	umount_client $MOUNT || return 200
+	sleep 2
 	stop_mds || return 201
 	stop_ost || return 202
-	unload_modules && return 203
+	unload_modules || return 203
 }
 
 check_mount() {
@@ -162,12 +163,11 @@ run_test 2 "start up mds twice"
 
 test_3() {
 	setup
-	mount_client $MOUNT
+	#mount.lustre returns an error if already in mtab
+	mount_client $MOUNT && return $?
 
 	check_mount || return 44
-	
- 	umount_client $MOUNT 	
-	cleanup  || return $?
+	cleanup || return $?
 }
 run_test 3 "mount client twice"
 
