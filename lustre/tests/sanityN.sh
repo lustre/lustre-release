@@ -34,6 +34,10 @@ fi
 SAVE_PWD=$PWD
 
 # for MCSETUP and MCCLEANUP
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 . mountconf.sh
 
 cleanup() {
@@ -536,6 +540,9 @@ run_test 23 " others should see updated atime while another read===="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
+if [ "$I_MOUNTED" = "yes" ]; then
+    $MCCLEANUP || error "cleanup failed"
+fi
 
 echo '=========================== finished ==============================='
 [ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true

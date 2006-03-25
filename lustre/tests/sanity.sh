@@ -69,6 +69,10 @@ export NAME=${NAME:-local}
 SAVE_PWD=$PWD
 
 # for MCSETUP and MCCLEANUP
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 . mountconf.sh
 
 cleanup() {
@@ -2945,11 +2949,12 @@ HOME=$OLDHOME
 
 log "cleanup: ======================================================"
 if [ "`mount | grep ^$NAME`" ]; then
-	rm -rf $DIR/[Rdfs][1-9]*
-	if [ "$I_MOUNTED" = "yes" ]; then
-		$MCCLEANUP || error "cleanup failed"
-	fi
+    rm -rf $DIR/[Rdfs][1-9]*
 fi
+if [ "$I_MOUNTED" = "yes" ]; then
+    $MCCLEANUP || error "cleanup failed"
+fi
+
 
 echo '=========================== finished ==============================='
 [ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true

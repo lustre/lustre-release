@@ -104,7 +104,8 @@ cleanup() {
 check_mount() {
 	do_facet client "touch $DIR/a" || return 71
 	do_facet client "rm $DIR/a" || return 72
-	# make sure lustre is actually mounted
+	# make sure lustre is actually mounted (touch will block, 
+        # but grep won't, so do it after) 
         do_facet client "grep $MOUNT' ' /proc/mounts > /dev/null" || return 73
 	echo "setup single mount lustre success"
 }

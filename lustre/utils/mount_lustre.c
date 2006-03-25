@@ -383,6 +383,9 @@ int main(int argc, char *const argv[])
                 if (errno == ENOENT)
                         fprintf(stderr,"Is the mgs specification correct? "
                                 "(%s)\n", source);
+                if (errno == EALREADY)
+                        fprintf(stderr,"This service is already running. "
+                                "(%s)\n", source);
                 rc = errno;
         } else if (!nomtab) {
                 rc = update_mtab_entry(source, target, "lustre", options,0,0,0);

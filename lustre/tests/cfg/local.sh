@@ -8,6 +8,7 @@ mds_HOST=${mds_HOST:-$MDSNODE}
 mdsfailover_HOST=${mdsfailover_HOST}
 mgs_HOST=${mgs_HOST:-$MDSNODE}
 ost_HOST=${ost_HOST:-$OSTNODE}
+ostfailover_HOST=${ostfailover_HOST}
 ost2_HOST=${ost2_HOST:-$ost_HOST}
 client_HOST=${client_HOST:-$CLIENT}
 NETTYPE=${NETTYPE:-tcp}
@@ -22,8 +23,8 @@ OSTDEV2=${OSTDEV2:-$ROOT/tmp/${FSNAME}-ost1}
 FSTYPE=${FSTYPE:-ext3}
 
 MDS_MKFS_OPTS="--mgs --mdt --index=0 --device-size=$MDSSIZE $MDSOPT"
-OST_MKFS_OPTS="--ost --index=0 --device-size=$OSTSIZE --mgsnid=`h2$NETTYPE $HOSTNAME` $OSTOPT"
-OST2_MKFS_OPTS="--ost --index=1 --device-size=$OSTSIZE --mgsnid=`h2$NETTYPE $HOSTNAME` $OSTOPT"
+OST_MKFS_OPTS="--ost --index=0 --device-size=$OSTSIZE --mgsnode=`h2$NETTYPE $HOSTNAME` $OSTOPT"
+OST2_MKFS_OPTS="--ost --index=1 --device-size=$OSTSIZE --mgsnode=`h2$NETTYPE $HOSTNAME` $OSTOPT"
 
 MDS_MOUNT_OPTS="-o loop"
 OST_MOUNT_OPTS="-o loop"

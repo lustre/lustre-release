@@ -120,7 +120,7 @@ start() {
 stop() {
     facet=$1
     shift
-    local running=`do_facet ${facet} grep -c /mnt/${facet}" " /proc/mounts`
+    local running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts"`
     if [ $running -ne 0 ]; then
 	echo "Stopping /mnt/${facet} (opts:$@)"
 	do_facet ${facet} umount -d $@ /mnt/${facet}

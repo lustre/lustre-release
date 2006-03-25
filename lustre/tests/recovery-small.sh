@@ -6,46 +6,27 @@ set -e
 ALWAYS_EXCEPT="20b  24   27 $RECOVERY_SMALL_EXCEPT"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
-
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 build_test_filter
-
 
 # Allow us to override the setup if we already have a mounted system by
 # setting SETUP=" " and CLEANUP=" "
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
-FORCE=${FORCE:-"-f"}
 
-make_config() {
-    rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
-	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_client client mds --lov lov1 --path $MOUNT
-}
+# for MCSETUP and MCCLEANUP
+. mountconf.sh
 
 setup() {
-    make_config
-    start ost --reformat $OSTLCONFARGS 
-    start ost2 --reformat $OSTLCONFARGS 
-    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-    start mds $MDSLCONFARGS --reformat
-    grep " $MOUNT " /proc/mounts || zconf_mount `hostname`  $MOUNT
+    $MCFORMAT
+    $MCSETUP
 }
 
 cleanup() {
-    zconf_umount `hostname` $MOUNT
-    stop mds ${FORCE} $MDSLCONFARGS
-    stop ost2 ${FORCE}
-    stop ost ${FORCE} --dump $TMP/recovery-small-`hostname`.log
+	$MCCLEANUP > /dev/null || { echo "FAILed to clean up"; exit 20; }
 }
 
 if [ ! -z "$EVAL" ]; then
@@ -55,12 +36,11 @@ fi
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0 || true
-    FORCE=--force cleanup
+    cleanup
     exit
 fi
 
-REFORMAT=--reformat $SETUP
-unset REFORMAT
+$SETUP
 
 [ "$ONLY" == "setup" ] && exit
 
@@ -83,14 +63,14 @@ test_3() {
 run_test 3 "stat: drop req, drop rep"
 
 test_4() {
-    do_facet client "cp /etc/resolv.conf $MOUNT/resolv.conf" || return 1
-    drop_request "cat $MOUNT/resolv.conf > /dev/null"   || return 2
-    drop_reply "cat $MOUNT/resolv.conf > /dev/null"     || return 3
+    do_facet client "cp /etc/passwd $MOUNT/passwd" || return 1
+    drop_request "cat $MOUNT/passwd > /dev/null"   || return 2
+    drop_reply "cat $MOUNT/passwd > /dev/null"     || return 3
 }
 run_test 4 "open: drop req, drop rep"
 
 test_5() {
-    drop_request "mv $MOUNT/resolv.conf $MOUNT/renamed" || return 1
+    drop_request "mv $MOUNT/passwd $MOUNT/renamed" || return 1
     drop_reint_reply "mv $MOUNT/renamed $MOUNT/renamed-again" || return 2
     do_facet client "checkstat -v $MOUNT/renamed-again"  || return 3
 }
@@ -534,5 +514,4 @@ test_52() {
 }
 run_test 52 "failover OST under load"
 
-
-FORCE=--force $CLEANUP
+$CLEANUP

@@ -10,38 +10,39 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
+#failover= must be defined in OST_MKFS_OPTIONS if ostfailover_HOST != ost_HOST
 
 # Skip these tests
 # BUG NUMBER: 2766?
 ALWAYS_EXCEPT="5 $REPLAY_OST_SINGLE_EXCEPT"
 
 gen_config() {
-    rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
-	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
-    if [ ! -z "$ostfailover_HOST" ]; then
-	 add_ostfailover ost --dev $OSTDEV --size $OSTSIZE
-    fi
-    add_client client mds --lov lov1 --path $MOUNT
+    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
+    stop ost -f
+    stop ost2 -f
+    stop mds -f
+    echo Formatting mds, ost
+    add mds $MDS_MKFS_OPTS --reformat $MDSDEV
+    add ost $OST_MKFS_OPTS --reformat $OSTDEV
 }
 
 cleanup() {
-    # make sure we are using the primary MDS, so the config log will
+    # make sure we are using the primary server, so test-framework will
     # be able to clean up properly.
     activeost=`facet_active ost`
     if [ $activeost != "ost" ]; then
         fail ost
     fi
+
     zconf_umount `hostname` $MOUNT
-    stop mds ${FORCE} $MDSLCONFARGS
-    stop ost ${FORCE} --dump $TMP/replay-ost-single-`hostname`.log
+    stop mds
+    stop ost
+    unload_modules
 }
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0
-    FORCE=--force cleanup
+    cleanup
     exit
 fi
 
@@ -52,18 +53,15 @@ CLEANUP=${CLEANUP:-"cleanup"}
 
 setup() {
     gen_config
-
-    start ost --reformat $OSTLCONFARGS
+    start mds $MDSDEV $MDS_MOUNT_OPTS
+    start ost $OSTDEV $OST_MOUNT_OPTS
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-    start mds --reformat $MDSLCONFARGS
 
     if [ -z "`grep " $MOUNT " /proc/mounts`" ]; then
 	# test "-1" needed during initial client->OST connection
 	log "== test 00: target handle mismatch (bug 5317) === `date +%H:%M:%S`"
-
 	#define OBD_FAIL_OST_ALL_REPLY_NET       0x211
 	do_facet ost "sysctl -w lustre.fail_loc=0x80000211"
-
 	zconf_mount `hostname` $MOUNT && df $MOUNT && pass || error "mount fail"
     fi
 }
@@ -199,4 +197,4 @@ test_7() {
 run_test 7 "Fail OST before obd_destroy"
 
 equals_msg test complete, cleaning up
-FORCE=--force $CLEANUP
+$CLEANUP

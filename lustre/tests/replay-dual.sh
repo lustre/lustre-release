@@ -14,57 +14,40 @@ init_test_env $@
 
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
-FORCE=${FORCE:-"--force"}
-
-gen_config() {
-    rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE
-    if [ ! -z "$mdsfailover_HOST" ]; then
-    add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
-    fi
-    
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
-   --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
-    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE --failover
-    add_client client mds --lov lov1 --path $MOUNT
-}
-
-
 
 build_test_filter
 
 cleanup() {
-    # make sure we are using the primary MDS, so the config log will
+    # make sure we are using the primary server, so test-framework will
     # be able to clean up properly.
     activemds=`facet_active mds`
     if [ $activemds != "mds" ]; then
         fail mds
     fi
 
-    umount $MOUNT2 || true
-    umount $MOUNT  || true
-    rmmod llite || true
-    stop mds ${FORCE}
-    stop ost2 ${FORCE}
-    stop ost ${FORCE}  --dump $TMP/replay-dual-`hostname`.log
+    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
+    grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2
+    stop mds -f
+    stop ost2 -f
+    stop ost -f
 }
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0
-    FORCE=--force cleanup
+    cleanup
     exit
 fi
 
 setup() {
-    gen_config
-    start ost --reformat $OSTLCONFARGS 
-    start ost2 --reformat $OSTLCONFARGS 
-    start mds $MDSLCONFARGS --reformat
-    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
-    grep " $MOUNT2 " /proc/mounts || zconf_mount `hostname` $MOUNT2
-
-#    echo $TIMEOUT > /proc/sys/lustre/timeout
+    cleanup
+    add mds $MDS_MKFS_OPTS --reformat $MDSDEV
+    add ost $OST_MKFS_OPTS --reformat $OSTDEV
+    add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2
+    start mds $MDSDEV $MDS_MOUNT_OPTS
+    start ost $OSTDEV $OST_MOUNT_OPTS
+    start ost2 $OSTDEV2 $OST2_MOUNT_OPTS
+    zconf_mount `hostname` $MOUNT
+    zconf_mount `hostname` $MOUNT2
 }
 
 $SETUP
@@ -472,5 +455,5 @@ if [ "$ONLY" != "setup" ]; then
    equals_msg test complete, cleaning up
    SLEEP=$((`date +%s` - $NOW))
    [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
-   FORCE=--force $CLEANUP
+   $CLEANUP
 fi

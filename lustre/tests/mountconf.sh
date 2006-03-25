@@ -4,14 +4,11 @@
 
 # mountconf setup of MDS and two OSTs
 
-export PATH=`dirname $0`/../utils:$PATH
-
-LUSTRE=${LUSTRE:-`dirname $0`/..}
-. $LUSTRE/tests/test-framework.sh
-
-init_test_env $@
-
-. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+#export PATH=`dirname $0`/../utils:$PATH
+#LUSTRE=${LUSTRE:-`dirname $0`/..}
+#. $LUSTRE/tests/test-framework.sh
+#init_test_env $@
+#. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 
 stop_all() {
@@ -54,13 +51,3 @@ mcsetup() {
 export MCSETUP=${MCSETUP:-"mcsetup"}
 export MCCLEANUP=${MCCLEANUP:-"mccleanup"}
 
-
-#${LCONF} $NOMOD $portals_opt $lustre_opt $debug_opt $node_opt ${REFORMAT:---reformat} $@ $conf_opt  || {
-    # maybe acceptor error, dump tcp port usage
-#    netstat -tpn
-#    exit 2
-#}
-
-#if [ "$MOUNT2" ]; then
-#	$LLMOUNT -v -o user_xattr,acl `hostname`:/mds1/client $MOUNT2 || exit 3
-#fi

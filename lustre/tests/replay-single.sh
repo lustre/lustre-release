@@ -21,12 +21,17 @@ ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
 build_test_filter
 
 cleanup() {
-    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
+    # make sure we are using the primary server, so test-framework will
+    # be able to clean up properly.
+    activemds=`facet_active mds`
+    if [ $activemds != "mds" ]; then
+        fail mds
+    fi
+
+    zconf_umount `hostname` $MOUNT
     stop ost -f
     stop ost2 -f
     stop mds -f
-    #no dump option in mountconf...
-    #stop ost ${FORCE} --dump $TMP/replay-single-`hostname`.log
 }
 
 SETUP=${SETUP:-"setup"}
@@ -47,9 +52,6 @@ setup() {
     start ost $OSTDEV $OST_MOUNT_OPTS
     start ost2 $OSTDEV2 $OST2_MOUNT_OPTS
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-
-    #add_lov lov1 mds --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-
     grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
 }
 

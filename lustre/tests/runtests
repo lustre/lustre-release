@@ -36,11 +36,11 @@ while [ "$1" ]; do
 	shift
 done
 
-MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
-if [ -z "$MOUNT" ]; then
+EXISTING_MOUNT="`mount | awk '/ lustre(_lite)? / { print $3 }' | tail -n 1`"
+if [ -z "$EXISTING_MOUNT" ]; then
 	sh llmount.sh $OPTS
-	MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
-	[ -z "$MOUNT" ] && fail "no lustre filesystem mounted" 1
+	EXISTING_MOUNT="`mount | awk '/ lustre(_lite)? / { print $3 }' | tail -n 1`"
+	[ -z "$EXISTING_MOUNT" ] && fail "no lustre filesystem mounted" 1
 	I_MOUNTED="yes"
 fi
 
