@@ -67,6 +67,23 @@ stop_ost() {
 	stop ost -f  || return 98
 }
 
+add_ost2() {
+	stop ost2 -f
+    	echo Formatting ost2
+    	add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2  > /dev/null
+}
+
+start_ost2() {
+	echo "start ost2 service on `facet_active_host ost2`"
+	start ost2 $OSTDEV2 $OST2_MOUNT_OPTS || return 92
+}
+
+stop_ost2() {
+	echo "stop ost2 service on `facet_active_host ost2`"
+	# These tests all use non-failover stop
+	stop ost2 -f  || return 93
+}
+
 mount_client() {
 	local MOUNTPATH=$1
 	echo "mount lustre on ${MOUNTPATH}....."
@@ -697,6 +714,77 @@ test_19() {
 	stop_mds -f || return 2
 }
 run_test 19 "start/stop MDS without OSTs"
+
+test_20() {
+	add_ost2
+
+        start_mds
+	start_ost
+	start_ost2
+	sleep 5
+	stop_ost2
+	stop_ost
+	stop_mds || return 1
+}
+run_test 20 "start mds first"
+
+test_21() {
+	add_ost2
+
+        start_ost
+	start_ost2
+	start_mds
+	sleep 5
+	stop_ost
+	stop_ost2
+	stop_mds || return 1
+}
+run_test 21 "start mds last"
+
+test_22() {
+	add_ost2
+
+        start_ost
+	start_mds
+	start_ost2
+	sleep 5
+	stop_ost
+	stop_ost2
+	stop_mds || return 1
+}
+run_test 22 "start mds between two osts"
+
+test_23() {
+	#setup
+	start_ost
+	start_mds
+	add_ost2
+	start_ost2
+
+	mount_client $MOUNT
+	check_mount || return 41
+
+	# cleanup
+ 	umount_client $MOUNT || return 200
+	stop_ost2 || return 204
+	cleanup_nocli || return $?
+}
+run_test 23 "add a new ost before a client has started"
+
+test_24() {
+        setup
+	add_ost2
+	start_ost2
+
+	check_mount || return 41
+
+	# cleanup
+ 	umount_client $MOUNT || return 200
+	stop_ost2 || return 204
+	cleanup_nocli || return $?
+}
+run_test 24 "add a new ost after a client has started"
+
 
 umount_client $MOUNT	
 cleanup_nocli
