@@ -1,0 +1,157 @@
+Index: linux-2.6.9-5.0.3.EL/fs/filesystems.c
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/fs/filesystems.c	2005-02-26 13:24:35.467813664 +0200
++++ linux-2.6.9-5.0.3.EL/fs/filesystems.c	2005-02-26 13:53:13.794588288 +0200
+@@ -27,7 +27,9 @@
+  */
+ 
+ static struct file_system_type *file_systems;
+-static rwlock_t file_systems_lock = RW_LOCK_UNLOCKED;
++rwlock_t file_systems_lock = RW_LOCK_UNLOCKED;
++
++EXPORT_SYMBOL(file_systems_lock);
+ 
+ /* WARNING: This can be used only if we _already_ own a reference */
+ void get_filesystem(struct file_system_type *fs)
+Index: linux-2.6.9-5.0.3.EL/include/linux/fs.h
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/include/linux/fs.h	2005-02-26 13:47:37.330738568 +0200
++++ linux-2.6.9-5.0.3.EL/include/linux/fs.h	2005-02-26 13:53:13.796587984 +0200
+@@ -1529,6 +1529,7 @@
+ 
+ extern struct file_operations generic_ro_fops;
+ 
++extern rwlock_t file_systems_lock;
+ #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
+ 
+ extern int vfs_readlink(struct dentry *, char __user *, int, const char *);
+Index: linux-2.6.9-5.0.3.EL/include/linux/ext2_fs_sb.h
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/include/linux/ext2_fs_sb.h	2005-02-26 13:24:35.470813208 +0200
++++ linux-2.6.9-5.0.3.EL/include/linux/ext2_fs_sb.h	2005-02-26 13:53:13.797587832 +0200
+@@ -16,9 +16,11 @@
+ #ifndef _LINUX_EXT2_FS_SB
+ #define _LINUX_EXT2_FS_SB
+ 
++#ifndef EXT_INCLUDE
++#define EXT_INCLUDE
+ #include <linux/blockgroup_lock.h>
+ #include <linux/percpu_counter.h>
+-
++#endif
+ /*
+  * second extended-fs super-block data in memory
+  */
+Index: linux-2.6.9-5.0.3.EL/net/core/sock.c
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/net/core/sock.c	2005-02-26 13:24:35.490810168 +0200
++++ linux-2.6.9-5.0.3.EL/net/core/sock.c	2005-02-26 13:53:13.801587224 +0200
+@@ -602,6 +602,7 @@
+   		return -EFAULT;
+   	return 0;
+ }
++EXPORT_SYMBOL(sock_getsockopt);
+ 
+ static kmem_cache_t *sk_cachep;
+ 
+Index: linux-2.6.9-5.0.3.EL/fs/namespace.c
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/fs/namespace.c	2005-02-26 13:47:31.282658016 +0200
++++ linux-2.6.9-5.0.3.EL/fs/namespace.c	2005-02-26 13:53:13.803586920 +0200
+@@ -1241,6 +1241,7 @@
+ 		mntput(old_pwdmnt);
+ 	}
+ }
++EXPORT_SYMBOL(set_fs_pwd);
+ 
+ static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
+ {
+Index: linux-2.6.9-5.0.3.EL/kernel/exit.c
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/kernel/exit.c	2005-02-26 13:47:31.300655280 +0200
++++ linux-2.6.9-5.0.3.EL/kernel/exit.c	2005-02-26 13:53:13.805586616 +0200
+@@ -244,6 +244,8 @@
+ 	write_unlock_irq(&tasklist_lock);
+ }
+ 
++EXPORT_SYMBOL(reparent_to_init);
++
+ void __set_special_pids(pid_t session, pid_t pgrp)
+ {
+ 	struct task_struct *curr = current;
+@@ -428,6 +430,8 @@
+ 	__exit_files(tsk);
+ }
+ 
++EXPORT_SYMBOL(exit_files);
++
+ static inline void __put_fs_struct(struct fs_struct *fs)
+ {
+ 	/* No need to hold fs->lock if we are killing it */
+@@ -516,6 +516,7 @@
+ {
+ 	__exit_mm(tsk);
+ }
++EXPORT_SYMBOL(exit_mm);
+ 
+ static inline void choose_new_parent(task_t *p, task_t *reaper, task_t *child_reaper)
+ {
+Index: linux-2.6.9-5.0.3.EL/fs/dcache.c
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/fs/dcache.c	2005-02-26 13:49:04.365507272 +0200
++++ linux-2.6.9-5.0.3.EL/fs/dcache.c	2005-02-26 13:53:13.807586312 +0200
+@@ -1526,6 +1526,7 @@
+ 
+ 	return result;
+ }
++EXPORT_SYMBOL(is_subdir);
+ 
+ void d_genocide(struct dentry *root)
+ {
+Index: linux-2.6.9-5.0.3.EL/mm/filemap.c
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/mm/filemap.c	2005-02-26 13:24:35.502808344 +0200
++++ linux-2.6.9-5.0.3.EL/mm/filemap.c	2005-02-26 13:53:59.787596288 +0200
+@@ -1473,7 +1473,7 @@
+ 	return NULL;
+ }
+ 
+-static int filemap_populate(struct vm_area_struct *vma,
++int filemap_populate(struct vm_area_struct *vma,
+ 			unsigned long addr,
+ 			unsigned long len,
+ 			pgprot_t prot,
+@@ -1520,6 +1520,7 @@
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL_GPL(filemap_populate);
+ 
+ struct vm_operations_struct generic_file_vm_ops = {
+ 	.nopage		= filemap_nopage,
+Index: linux-2.6.9-5.0.3.EL/fs/file_table.c
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/fs/file_table.c	2005-02-26 13:24:35.512806824 +0200
++++ linux-2.6.9-5.0.3.EL/fs/file_table.c	2005-02-26 13:53:13.811585704 +0200
+@@ -196,6 +196,7 @@
+ 		file_free(file);
+ 	}
+ }
++EXPORT_SYMBOL(put_filp);
+ 
+ void file_move(struct file *file, struct list_head *list)
+ {
+Index: linux-2.6.9-5.0.3.EL/include/linux/mm.h
+===================================================================
+--- linux-2.6.9-5.0.3.EL.orig/include/linux/mm.h	2005-02-26 13:49:05.823285656 +0200
++++ linux-2.6.9-5.0.3.EL/include/linux/mm.h	2005-02-26 13:53:54.181448552 +0200
+@@ -721,6 +721,9 @@
+ 
+ /* generic vm_area_ops exported for stackable file systems */
+ struct page *filemap_nopage(struct vm_area_struct *, unsigned long, int *);
++int filemap_populate(struct vm_area_struct *vma, unsigned long addr,
++                        unsigned long len, pgprot_t prot, unsigned long pgoff,
++                        int nonblock);
+ 
+ /* mm/page-writeback.c */
+ int write_one_page(struct page *page, int wait);

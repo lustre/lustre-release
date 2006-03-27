@@ -1,0 +1,102 @@
+#!/bin/sh
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "usage: import_patch [ -p prefix-pattern ] patchfile [...]" 1>&2
+	exit 1
+}
+
+XPATTERN=""
+if [ "$1" = "-p" ]
+then
+	XPATTERN="$2"
+	shift; 
+	shift;
+fi
+
+if [ "$1" = "" ]
+then
+	usage
+fi
+
+if [ ! -e applied-patches ]
+then
+	touch applied-patches
+fi
+
+mkdir -p patches || exit 1
+mkdir -p txt || exit 1
+mkdir -p pc || exit 1
+
+if [ ! -e ./series ]
+then
+	touch ./series
+	if [ "$?" != "0" ]
+	then
+		echo "Cannot create ./series" 1>&2
+		exit 1
+	fi
+fi
+
+if [ ! -w ./series ]
+then
+	echo "./series is not writable." 1>&2
+	exit 1
+fi
+
+PATTERN='s/^'"$XPATTERN"'//'
+for x in $* 
+do
+	if [ ! -r "$x" ]
+	then
+		echo "$x does not exist, skipping." 1>&2
+		continue
+	fi
+	patchname=`basename $x .bz2`
+	patchname=`basename $patchname .gz`
+	patchname=`basename $patchname .Z`
+	patchname=`basename $patchname .patch`
+	if is_applied $patchname
+	then
+		echo $patchname is currently applied
+		exit 1
+	fi
+	if [ "$XPATTERN" != "" ]
+	then
+		patchname=`echo $patchname | sed -e "$PATTERN"`
+	fi
+	pname=$P/patches/"$patchname".patch
+	if [ -r "$pname" ]
+	then
+		echo "$pname exists already, skipping." 1>&2
+		continue
+	fi
+	case "$x" in
+	*.bz2) 
+		bunzip2 < "$x" > "$pname"
+		;;
+	*.gz)
+		gunzip < "$x" > "$pname"
+		;;
+	*.Z)	zcat < "$z" > "$pname"
+		;;
+	*)	
+		cat "$x" > "$pname" || continue 
+		;;
+	esac
+	echo "$patchname".patch >> series
+	pcpatch "$pname"
+	extract_description < "$pname" >$P/txt/"$patchname".txt
+	grep '^[(]undescribed patch[)]$' < $P/txt/"$patchname".txt > /dev/null
+	if [ "$?" = "0" ]
+	then
+		echo "Warning: $patchname has no description." 1>&2
+	fi
+done
+

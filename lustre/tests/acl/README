@@ -1,0 +1,4 @@
+- copied from acl-2.2.23/test/
+- add inheritance.test from HP
+- some tests are depend on enviroment. e.g. some succeed on FC2 but fail on
+  FC3 etc. We comment out those items, maybe more will be commented out.

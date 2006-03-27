@@ -1,0 +1,25 @@
+Index: linux-2.6.7/mm/filemap.c
+===================================================================
+--- linux-2.6.7.orig/mm/filemap.c	2004-11-15 12:02:35.000000000 +0800
++++ linux-2.6.7/mm/filemap.c	2004-11-15 12:04:38.000000000 +0800
+@@ -1409,6 +1409,7 @@
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL_GPL(filemap_populate);
+ 
+ static struct vm_operations_struct generic_file_vm_ops = {
+ 	.nopage		= filemap_nopage,
+Index: linux-2.6.7/include/linux/mm.h
+===================================================================
+--- linux-2.6.7.orig/include/linux/mm.h	2004-11-15 12:02:43.000000000 +0800
++++ linux-2.6.7/include/linux/mm.h	2004-11-15 12:04:23.000000000 +0800
+@@ -661,6 +661,8 @@
+ 
+ /* generic vm_area_ops exported for stackable file systems */
+ struct page *filemap_nopage(struct vm_area_struct *, unsigned long, int *);
++int filemap_populate(struct vm_area_struct *, unsigned long, unsigned long,
++		     pgprot_t, unsigned long, int);
+ 
+ /* mm/page-writeback.c */
+ int write_one_page(struct page *page, int wait);

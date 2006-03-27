@@ -1,0 +1,46 @@
+#!/bin/sh
+
+#
+# Bring up a patched file in tkdiff.  We show the diffs
+# in the topmost patch, unless it was specified
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: ptkdiff filename ..."
+	echo "       ptkdiff -"
+	exit 1
+}
+
+PATCH_NAME=$(top_patch)
+
+doit()
+{
+	filename=$1
+	unpatched_file=$filename"~"$PATCH_NAME
+	need_file_there $filename
+	if [ -e $unpatched_file ]
+	then
+		tkdiff $unpatched_file $filename
+	else
+		echo ptkdiff: $filename appears to not be in $PATCH_NAME
+	fi
+}
+
+if [ x"$1" = "x-" ]
+then
+	FILENAME=$(cat $P/pc/$PATCH_NAME.pc)
+else
+	FILENAME="$*"
+fi
+
+for i in $FILENAME
+do
+	doit $i &
+done

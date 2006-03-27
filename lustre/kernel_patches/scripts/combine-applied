@@ -1,0 +1,45 @@
+#!/bin/sh
+
+#
+# Make superpatch from currently applied patches using combinediff.
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: combine-applied output-file"
+	exit 1
+}
+
+if [ $# -ne 1 ] 
+then
+	usage
+fi
+
+need_file_there applied-patches
+CURRENT=$(mktemp /tmp/cmbd-XXXXXXXX)
+APPLY_FILE=$(mktemp /tmp/cmbd-XXXXXXXX)
+for FILE in `cat applied-patches`
+do
+	if [ -f $P/pc/$FILE.pc ]
+	then
+		cat $P/pc/$FILE.pc >> $CURRENT	
+	elif [ -f $P/pc/$FILE ]
+	then
+		cat $P/pc/$FILE >> $CURRENT	
+	fi	
+done
+cat $CURRENT | sort -u > $APPLY_FILE
+echo > $1
+for FILE in `cat $APPLY_FILE`
+do
+	diff -uNp $FILE~orig $FILE >> $1 
+done
+rm -rf $APPLY_FILE 
+rm -rf $CURRENT
+

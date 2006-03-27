@@ -1,0 +1,85 @@
+1. How to build .xml configs:
+The various .xml configs in the tests/ directory are built by running the
+corresponding .sh script.  The .sh script runs a series of lmc (Lustre make
+config) commands in order to build up an XML file.  It is much easier to
+simply edit a .sh script and rebuild your XML config file than trying to
+edit the XML directly.
+
+For a loopback setup with a mounted filesystem, you could do something like:
+
+   sh local.sh
+   ../utils/lconf --reformat local.xml
+
+This will configure an MDS, an OBD/OST, and a filesystem client all running
+on the same system and communicating over the TCP loopback interface.  If
+the --reformat option is given, then the OST and MDS devices will be
+formatted.  This is required the first time you set up the system, or if
+you think you have corrupted the filesystems after you hit a bug.
+
+A more complex configuration, using a separate host for each of the MDS,
+OBD/OST, and filesystem client functions is in uml.sh.  It configures 3
+systems, and the OST system (uml2) serves up multiple OST devices, and
+the client accesses these via a logical object volume (LOV) driver (which
+essentially stripes both of the OST devices into a single storage device.
+
+This configuration could be run on any 3 systems with the following commands:
+
+    sh uml.sh
+    system1# ../utils/lconf --reformat --node uml1 uml.xml
+    system2# ../utils/lconf --reformat --node uml2 uml.xml
+    system3# ../utils/lconf --node uml3 uml.xml
+
+The "--node <name>" parameter tells lconf to use the configuration for
+the node "name" in the XML configuration file.  If the hostnames were
+already "uml1", "uml2", and "uml3", then the "--node" parameter would
+not need to be given.  The internals of lconf and portals handle the
+configuration details for setting up netowrking.
+
+2. runregression-net.sh and runregression-brw.sh
+
+This test performs raw block and attribute requests against a real or
+"null" OST device.  It is useful for generating isolated load on the
+OST device, while avoiding the need to run tests through the filesystem.
+This can be useful for testing the network part of Lustre in isolation,
+or doing RPC and bulk I/O performance tests against an OST.
+
+If things are alright it goes through a series of tests single threaded,
+multithreaded, using getattr and brw (both read and write, with single
+page and vector I/O, doing basic data checking of each page).
+
+You can create a simple echo client by running the "llecho.sh" to
+run the tests locally (over TCP loopback), or edit llecho.sh to
+specify the SERVER and CLIENT names.  You would then set up as normal:
+
+    # if you are using a remote server, first run:
+    server# ../utils/lconf echo.xml
+
+Configure the client (or if you are running a single system only):
+
+    client# ../utils/lconf echo.xml
+    client# sh runregression-net.sh
+
+3. runtests
+
+The runtests script does a series of simple file-based tests using a
+filesystem.  You need to have an XML file as appropriate for your setup
+(one or more hosts, including an MDS, one or more OSTs, and a mountpoint).
+If the MDS and/or OST is on a remote machine, configure them first:
+
+    ../utils/lconf --reformat <conf>.xml
+
+On the client machine, the runtests script needs the XML configuration
+file as a command-line parameter, as it mounts and unmounts the filesystem
+several times during the test in order to verify that the data is still
+there as expected (ensures that it makes it to disk instead of just into
+the filesystem cache).  If you are running on only a single machine, you
+can just use runtests directly.  If this is only a client machine, the
+--reformat parameter is not needed (it will not do anything).
+
+    sh runtests [--reformat] <conf>.xml
+
+This creates a few simple files and directories first, and then untars
+a copy of the /etc filesystem into the Lustre filesystem.  It then does
+data verification both before and after the filesystem is remounted, and
+finally deletes all of the files and verifies that the amount of space
+left in the filesystem is (nearly) the same as it was before the test.

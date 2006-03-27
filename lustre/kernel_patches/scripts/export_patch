@@ -1,0 +1,55 @@
+#!/bin/sh
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "export_patch: export the patches listed in ./series" 1>&2
+	echo "usage: export_patch destination-directory [prefix] " 1>&2
+	exit 1
+}
+
+DIR="$1"
+PREFIX="$2""_"
+
+if [ "$DIR" = "" ]
+then
+	usage
+fi
+
+if [ -e "$DIR" -a ! -d "$DIR" ]
+then
+	echo "$DIR exists already, but is not a directory." 1>&2
+	exit 1
+fi
+
+if [ ! -r ./series ]
+then
+	echo "./series is not readable." 1>&2
+	exit 1
+fi
+
+mkdir -p "$DIR" || exit 1
+
+count=1
+for x in `cat ./series`
+do
+	fname=`echo "$count" "$PREFIX" "$x" |\
+		 awk '{ if ( $2 != "_" )
+				printf("p%05d_%s%s\n", $1, $2, $3); 
+			else
+				printf("p%05d_%s\n", $1, $3); 
+		}'`
+	if [ ! -r $P/patches/"$x" ]
+	then
+		echo "$P/patches/"$x" is not readable. skipping." 1>&2
+		continue;
+	fi
+	cp -f $P/patches/"$x" "$DIR"/"$fname" || continue; 
+	count=`expr $count + 1`
+done
+

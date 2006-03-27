@@ -1,0 +1,3 @@
+DESC
+Fix for block allocation errors if block bitmap or inode block list is corrupt.
+EDESC
