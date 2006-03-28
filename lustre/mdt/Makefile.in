@@ -1,0 +1,4 @@
+MODULES := mdt
+mdt-objs := mdt_handler.o
+
+@INCLUDE_RULES@

@@ -55,7 +55,8 @@ int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
 }
 
 static void
-lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
+lustre_init_msg (struct lustre_msg *msg,
+                 int count, const int *lens, char **bufs)
 {
         char *ptr;
         int   i;
@@ -77,7 +78,7 @@ lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
 }
 
 int lustre_pack_request (struct ptlrpc_request *req,
-                         int count, int *lens, char **bufs)
+                         int count, const int *lens, char **bufs)
 {
         int reqlen;
         ENTRY;
@@ -168,7 +169,7 @@ out:
 
 
 int lustre_pack_reply (struct ptlrpc_request *req,
-                       int count, int *lens, char **bufs)
+                       int count, const int *lens, char **bufs)
 {
         struct ptlrpc_reply_state *rs;
         int                        msg_len;
@@ -285,7 +286,7 @@ void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
 
 /* This returns the size of the buffer that is required to hold a lustre_msg
  * with the given sub-buffer lengths. */
-int lustre_msg_size(int count, int *lengths)
+int lustre_msg_size(int count, const int *lengths)
 {
         int size;
         int i;

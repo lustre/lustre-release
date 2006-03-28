@@ -88,7 +88,7 @@ int obd_memmax;
 
 int proc_version;
 
-/* The following are visible and mutable through /proc/sys/lustre/. */
+/* The following are visible and mutable through /proc/fs/lustre/. */
 unsigned int obd_fail_loc;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_timeout = 100; /* seconds */
@@ -793,6 +793,7 @@ static void cleanup_obdclass(void)
 
         EXIT;
 }
+
 
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */

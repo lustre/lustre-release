@@ -1232,6 +1232,7 @@ enum llogd_rpc_ops {
         LLOG_CATINFO                    = 507,  /* for lfs catinfo */
         LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
         LLOG_ORIGIN_HANDLE_DESTROY      = 509,  /* for destroy llog object*/
+        LLOG_LAST_OPC
 };
 
 struct llogd_body {
