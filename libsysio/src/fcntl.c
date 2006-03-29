@@ -259,8 +259,7 @@ _sysio_vfcntl(int fd, int cmd, va_list ap)
 
 				fl64 = va_arg(ap, struct flock64 *);
 				err = _sysio_fcntl_lock(fil, cmd, fl64);
-				if (err)
-					rtn = -1;
+				rtn = err ? -1 : 0;
 			}
 		break;
 #endif
