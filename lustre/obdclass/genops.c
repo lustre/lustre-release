@@ -75,7 +75,7 @@ struct obd_type *class_get_type(char *name)
 #ifdef CONFIG_KMOD
         if (!type) {
                 char *modname = name;
-                if (strcmp(modname, LUSTRE_MDT_NAME) == 0) 
+                if (strcmp(modname, LUSTRE_MDT_NAME) == 0)
                         modname = LUSTRE_MDS_NAME;
                 if (!request_module(modname)) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
@@ -170,6 +170,9 @@ int class_unregister_type(char *name)
                 lprocfs_remove(type->typ_procroot);
                 type->typ_procroot = NULL;
         }
+
+        if (type->typ_lu)
+                type->typ_lu->ldt_ops->ldto_fini(type->typ_lu);
 
         spin_lock(&obd_types_lock);
         list_del(&type->typ_chain);
@@ -998,7 +1001,7 @@ char *obd_export_nid2str(struct obd_export *exp)
 {
         if (exp->exp_connection != NULL)
                 return libcfs_nid2str(exp->exp_connection->c_peer.nid);
-        
+
         return "(no nid)";
 }
 EXPORT_SYMBOL(obd_export_nid2str);

@@ -117,7 +117,7 @@ struct config_llog_instance {
         struct super_block *cfg_sb;
         struct obd_uuid     cfg_uuid;
         int                 cfg_last_idx; /* for partial llog processing */
-        int                 cfg_flags; 
+        int                 cfg_flags;
 };
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg);
@@ -305,15 +305,27 @@ static inline int obd_set_info(struct obd_export *exp, obd_count keylen,
         RETURN(rc);
 }
 
-static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
+static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
         int rc;
+        struct lu_device_type *ldt;
         ENTRY;
 
-        OBD_CHECK_OP(obd, setup, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, setup);
+        ldt = obd->obd_type->typ_lu;
+        if (ldt != NULL) {
+                struct lu_device *d;
 
-        rc = OBP(obd, setup)(obd, datalen, data);
+                d = ldt->ldt_ops->ldto_device_alloc(ldt, cfg);
+                if (!IS_ERR(d)) {
+                        obd->obd_lu_dev = d;
+                        rc = 0;
+                } else
+                        rc = PTR_ERR(d);
+        } else {
+                OBD_CHECK_OP(obd, setup, -EOPNOTSUPP);
+                OBD_COUNTER_INCREMENT(obd, setup);
+                rc = OBP(obd, setup)(obd, cfg);
+        }
         RETURN(rc);
 }
 
@@ -332,13 +344,23 @@ static inline int obd_precleanup(struct obd_device *obd, int cleanup_stage)
 static inline int obd_cleanup(struct obd_device *obd)
 {
         int rc;
+        struct lu_device *d;
+        struct lu_device_type *ldt;
         ENTRY;
 
         OBD_CHECK_DEV(obd);
-        OBD_CHECK_OP(obd, cleanup, 0);
-        OBD_COUNTER_INCREMENT(obd, cleanup);
 
-        rc = OBP(obd, cleanup)(obd);
+        ldt = obd->obd_type->typ_lu;
+        d = obd->obd_lu_dev;
+        if (ldt != NULL && d != NULL) {
+                ldt->ldt_ops->ldto_device_free(d);
+                obd->obd_lu_dev = NULL;
+                rc = 0;
+        } else {
+                OBD_CHECK_OP(obd, cleanup, 0);
+                rc = OBP(obd, cleanup)(obd);
+        }
+        OBD_COUNTER_INCREMENT(obd, cleanup);
         RETURN(rc);
 }
 
@@ -646,13 +668,13 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
                                exp->exp_obd);
 }
 
-static inline int 
+static inline int
 obd_lvfs_open_llog(struct obd_export *exp, __u64 id_ino, struct dentry *dentry)
 {
         LASSERT(exp->exp_obd);
         CERROR("FIXME what's the story here?  This needs to be an obd fn?\n");
 #if 0
-        return lvfs_open_llog(&exp->exp_obd->obd_lvfs_ctxt, id_ino, 
+        return lvfs_open_llog(&exp->exp_obd->obd_lvfs_ctxt, id_ino,
                               dentry, exp->exp_obd);
 #endif
         return 0;
@@ -905,7 +927,7 @@ static inline int obd_merge_lvb(struct obd_export *exp,
 {
         int rc;
         ENTRY;
-        
+
         OBD_CHECK_OP(exp->exp_obd, merge_lvb, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, merge_lvb);
 
@@ -1094,7 +1116,7 @@ static inline int obd_notify(struct obd_device *obd,
         /* the check for async_recov is a complete hack - I'm hereby
            overloading the meaning to also mean "this was called from
            mds_postsetup".  I know that my mds is able to handle notifies
-           by this point, and it needs to get them to execute mds_postrecov. */ 
+           by this point, and it needs to get them to execute mds_postrecov. */
         if (!obd->obd_set_up && !obd->obd_async_recov) {
                 CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
                 return -EINVAL;

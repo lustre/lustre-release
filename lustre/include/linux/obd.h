@@ -32,6 +32,8 @@
 #include <linux/lustre_export.h>
 #include <linux/lustre_quota.h>
 
+#include <linux/lu_object.h>
+
 /* this is really local to the OSC */
 struct loi_oap_pages {
         struct list_head        lop_pending;
@@ -144,6 +146,7 @@ struct obd_type {
         struct proc_dir_entry *typ_procroot;
         char *typ_name;
         int  typ_refcnt;
+        struct lu_device_type *typ_lu;
 };
 
 struct brw_page {
@@ -621,6 +624,8 @@ struct obd_device {
         char                   *obd_name;
         struct obd_uuid         obd_uuid;
 
+        struct lu_device       *obd_lu_dev;
+
         int                     obd_minor;
         unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
                 obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
@@ -714,7 +719,7 @@ struct obd_ops {
                           __u32 vallen, void *val);
         int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
         int (*o_detach)(struct obd_device *dev);
-        int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
+        int (*o_setup) (struct obd_device *dev, struct lustre_cfg *cfg);
         int (*o_precleanup)(struct obd_device *dev, int cleanup_stage);
         int (*o_cleanup)(struct obd_device *dev);
         int (*o_process_config)(struct obd_device *dev, obd_count len,
@@ -739,15 +744,15 @@ struct obd_ops {
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
-                          struct lov_mds_md *disk_src, int disk_len); 
-        int (*o_checkmd)(struct obd_export *exp, struct obd_export *md_exp, 
+                          struct lov_mds_md *disk_src, int disk_len);
+        int (*o_checkmd)(struct obd_export *exp, struct obd_export *md_exp,
                          struct lov_stripe_md *mem_tgt);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *ea, struct obd_trans_info *oti, 
+                         struct lov_stripe_md *ea, struct obd_trans_info *oti,
                          struct obd_export *md_exp);
         int (*o_setattr)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti);
@@ -877,7 +882,7 @@ struct obd_ops {
 
 struct lsm_operations {
         void (*lsm_free)(struct lov_stripe_md *);
-        int (*lsm_destroy)(struct lov_stripe_md *, struct obdo *oa, 
+        int (*lsm_destroy)(struct lov_stripe_md *, struct obdo *oa,
                            struct obd_export *md_exp);
         void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, obd_off *,
                                      unsigned long *);
