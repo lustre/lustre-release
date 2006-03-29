@@ -89,6 +89,7 @@
 #define LDLM_MAXREQSIZE (5 * 1024)
 #define LDLM_MAXREPSIZE (1024)
 
+#define MDT_MIN_THREADS 2UL
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, MDT_MAX_THREADS, \
                                   num_physpages >> (25 - PAGE_SHIFT)), 2UL)
@@ -767,7 +768,7 @@ ptlrpc_rs_decref(struct ptlrpc_reply_state *rs)
 }
 
 /* ldlm/ldlm_lib.c */
-int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
+int client_obd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg);
 int client_obd_cleanup(struct obd_device * obddev);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid, struct obd_connect_data *);

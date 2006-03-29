@@ -75,10 +75,10 @@ int class_attach(struct lustre_cfg *lcfg)
 
         CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
                MKSTR(typename), MKSTR(name), MKSTR(uuid));
-        
+
         /* Mountconf transitional hack, should go away after 1.6.
-           1.4.7 uses the old names, so translate back if the 
-           mountconf flag is set. 
+           1.4.7 uses the old names, so translate back if the
+           mountconf flag is set.
            1.6 should set this flag, and translate the other way here
            if not set. */
         if (lcfg->lcfg_flags & LCFG_FLG_MOUNTCONF){
@@ -216,7 +216,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         list_del_init(&exp->exp_obd_chain_timed);
         class_export_put(exp);
 
-        err = obd_setup(obd, sizeof(*lcfg), lcfg);
+        err = obd_setup(obd, lcfg);
         if (err)
                 GOTO(err_exp, err);
 
@@ -346,7 +346,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 obd->obd_force = 1;
                                 break;
                         case 'A':
-                                LCONSOLE_WARN("Failing over %s\n", 
+                                LCONSOLE_WARN("Failing over %s\n",
                                               obd->obd_name);
                                 obd->obd_fail = 1;
                                 obd->obd_no_transno = 1;
@@ -461,7 +461,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
         if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
-            strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) && 
+            strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) &&
             strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME)) {
                 CERROR("can't add connection on non-client dev\n");
                 RETURN(-EINVAL);
@@ -564,8 +564,8 @@ out:
                 OBD_FREE(lprof->lp_osc, osclen);
         if (lprof->lp_profile)
                 OBD_FREE(lprof->lp_profile, proflen);
-        OBD_FREE(lprof, sizeof(*lprof));        
-        RETURN(err);                             
+        OBD_FREE(lprof, sizeof(*lprof));
+        RETURN(err);
 }
 
 void class_del_profile(char *prof)
@@ -700,7 +700,7 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         }
 out:
-        if ((err == -ENOSYS || err == -EINVAL) && 
+        if ((err == -ENOSYS || err == -EINVAL) &&
             !(lcfg->lcfg_command & LCFG_REQUIRED)) {
                 CWARN("Skipping optional command %#x\n", lcfg->lcfg_command);
                 err = 0;
@@ -725,7 +725,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
         char *cfg_buf = (char*) (rec + 1);
         int rc = 0;
         ENTRY;
-        
+
         //class_config_dump_handler(handle, rec, data);
 
         switch (rec->lrh_type) {
@@ -752,11 +752,11 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         if (marker->cm_flags & CM_START) {
                                 /* all previous flags off */
                                 cfg->cfg_flags = CFG_F_MARKER;
-                                if (marker->cm_flags & CM_SKIP) { 
+                                if (marker->cm_flags & CM_SKIP) {
                                         cfg->cfg_flags |= CFG_F_SKIP;
                                         CDEBUG(D_CONFIG, "SKIP #%d\n",
                                                marker->cm_step);
-                                } else if (lustre_check_exclusion(cfg->cfg_sb, 
+                                } else if (lustre_check_exclusion(cfg->cfg_sb,
                                                           marker->cm_svname)) {
                                         cfg->cfg_flags |= CFG_F_EXCLUDE;
                                         CDEBUG(D_CONFIG, "EXCLUDE %d\n",
@@ -766,15 +766,15 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                 cfg->cfg_flags = 0;
                         }
                 }
-                /* A config command without a start marker before it is 
+                /* A config command without a start marker before it is
                    illegal (1.4.6. compat must set it artificially) */
-                if (!(cfg->cfg_flags & CFG_F_MARKER) && 
+                if (!(cfg->cfg_flags & CFG_F_MARKER) &&
                     (lcfg->lcfg_command != LCFG_MARKER)) {
-                        CWARN("Config not inside markers, ignoring! (%#x)\n", 
+                        CWARN("Config not inside markers, ignoring! (%#x)\n",
                               cfg->cfg_flags);
                         cfg->cfg_flags |= CFG_F_SKIP;
                 }
-                
+
                 if (cfg->cfg_flags & CFG_F_SKIP) {
                         // FIXME warning
                         CDEBUG(D_CONFIG|D_WARNING, "skipping %#x\n",
@@ -784,7 +784,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         break;
                 }
 
-                if ((cfg->cfg_flags & CFG_F_EXCLUDE) && 
+                if ((cfg->cfg_flags & CFG_F_EXCLUDE) &&
                     (lcfg->lcfg_command == LCFG_LOV_ADD_OBD))
                         /* Add inactive instead */
                         lcfg->lcfg_command = LCFG_LOV_ADD_INA;
@@ -802,13 +802,13 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                 lustre_cfg_string(lcfg, 0),
                                 cfg->cfg_instance);
                         lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
-                        CDEBUG(D_CONFIG, "cmd %x, instance name: %s\n", 
+                        CDEBUG(D_CONFIG, "cmd %x, instance name: %s\n",
                                lcfg->lcfg_command, inst_name);
                 }
 
                 /* we override the llog's uuid for clients, to insure they
                 are unique */
-                if (cfg && cfg->cfg_instance && 
+                if (cfg && cfg->cfg_instance &&
                     lcfg->lcfg_command == LCFG_ATTACH) {
                         lustre_cfg_bufs_set_string(&bufs, 2,
                                                    cfg->cfg_uuid.uuid);
@@ -835,7 +835,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 }
 
                 lcfg_new->lcfg_nal = 0; /* illegal value for obsolete field */
-                
+
                 rc = class_process_config(lcfg_new);
                 lustre_cfg_free(lcfg_new);
 
@@ -885,7 +885,7 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
         // FIXME remove warning
-        CDEBUG(D_CONFIG|D_WARNING, "Processed log %s gen %d-%d (%d)\n", name, 
+        CDEBUG(D_CONFIG|D_WARNING, "Processed log %s gen %d-%d (%d)\n", name,
                cd.first_idx + 1, cd.last_idx, rc);
         if (cfg)
                 cfg->cfg_last_idx = cd.last_idx;
@@ -940,7 +940,7 @@ int class_config_dump_handler(struct llog_handle * handle,
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
                         ptr += snprintf(ptr, end-ptr, "marker=%d(%#x)%s '%s'",
-                                        marker->cm_step, marker->cm_flags, 
+                                        marker->cm_step, marker->cm_flags,
                                         marker->cm_svname, marker->cm_comment);
                 } else {
                         for (i = 0; i <  lcfg->lcfg_bufcount; i++) {

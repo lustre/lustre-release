@@ -80,7 +80,7 @@ static int quotactl_test_2(struct obd_device *obd, struct super_block *sb)
         RETURN(0);
 }
 #endif
-       
+
 /* Test set/getquota */
 static int quotactl_test_3(struct obd_device *obd, struct super_block *sb)
 {
@@ -294,10 +294,9 @@ static int quotactl_test_cleanup(struct obd_device *obd)
         return 0;
 }
 
-static int quotactl_test_setup(struct obd_device *obd, obd_count len, void *buf)
+static int quotactl_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;

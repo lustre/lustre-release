@@ -186,9 +186,8 @@ out:
  * 2 - server UUID
  * 3 - inactive-on-startup
  */
-int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
+int client_obd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg)
 {
-        struct lustre_cfg* lcfg = buf;
         struct client_obd *cli = &obddev->u.cli;
         struct obd_import *imp;
         struct obd_uuid server_uuid;

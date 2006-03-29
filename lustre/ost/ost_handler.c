@@ -532,7 +532,7 @@ static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 #endif
-                           
+
 static int ost_brw_lock_get(int mode, struct obd_export *exp,
                             struct obd_ioobj *obj, struct niobuf_remote *nb,
                             struct lustre_handle *lh)
@@ -1213,7 +1213,7 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
 
         oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
                                    lustre_swab_obd_quotactl);
-        if (oqctl == NULL) 
+        if (oqctl == NULL)
                 RETURN(-EPROTO);
 
         rc = lustre_pack_reply(req, 0, NULL, NULL);
@@ -1603,7 +1603,7 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
         RETURN(result);
 }
 
-static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
+static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
         struct ost_obd *ost = &obd->u.ost;
         struct lprocfs_static_vars lvars;

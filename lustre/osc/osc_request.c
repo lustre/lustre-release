@@ -1208,7 +1208,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                         }
                         *saved_oa = *oa;
                 }
-                
+
                 rc = osc_brw_internal(cmd, exp, oa, md, pages_per_brw, pga);
 
                 if (rc != 0)
@@ -3082,7 +3082,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
 
                 RETURN(0);
         }
-        
+
         if (KEY_IS("unlinked")) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
@@ -3300,7 +3300,7 @@ static int osc_import_event(struct obd_device *obd,
         RETURN(rc);
 }
 
-int osc_setup(struct obd_device *obd, obd_count len, void *buf)
+int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int rc;
 
@@ -3308,7 +3308,7 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 return rc;
 
-        rc = client_obd_setup(obd, len, buf);
+        rc = client_obd_setup(obd, lcfg);
         if (rc) {
                 ptlrpcd_decref();
         } else {

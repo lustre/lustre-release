@@ -429,9 +429,9 @@ echo_get_stripe_off_id (struct lov_stripe_md *lsm, obd_off *offp, obd_id *idp)
         *offp = offset * stripe_size + woffset % stripe_size;
 }
 
-static void 
-echo_client_page_debug_setup(struct lov_stripe_md *lsm, 
-                             struct page *page, int rw, obd_id id, 
+static void
+echo_client_page_debug_setup(struct lov_stripe_md *lsm,
+                             struct page *page, int rw, obd_id id,
                              obd_off offset, obd_off count)
 {
         char    *addr;
@@ -453,7 +453,7 @@ echo_client_page_debug_setup(struct lov_stripe_md *lsm,
                         stripe_off = 0xdeadbeef00c0ffeeULL;
                         stripe_id = 0xdeadbeef00c0ffeeULL;
                 }
-                block_debug_setup(addr + delta, OBD_ECHO_BLOCK_SIZE, 
+                block_debug_setup(addr + delta, OBD_ECHO_BLOCK_SIZE,
                                   stripe_off, stripe_id);
         }
 
@@ -461,8 +461,8 @@ echo_client_page_debug_setup(struct lov_stripe_md *lsm,
 }
 
 static int
-echo_client_page_debug_check(struct lov_stripe_md *lsm, 
-                             struct page *page, obd_id id, 
+echo_client_page_debug_check(struct lov_stripe_md *lsm,
+                             struct page *page, obd_id id,
                              obd_off offset, obd_off count)
 {
         obd_off stripe_off;
@@ -482,8 +482,8 @@ echo_client_page_debug_check(struct lov_stripe_md *lsm,
                 stripe_id = id;
                 echo_get_stripe_off_id (lsm, &stripe_off, &stripe_id);
 
-                rc2 = block_debug_check("test_brw", 
-                                        addr + delta, OBD_ECHO_BLOCK_SIZE, 
+                rc2 = block_debug_check("test_brw",
+                                        addr + delta, OBD_ECHO_BLOCK_SIZE,
                                         stripe_off, stripe_id);
                 if (rc2 != 0) {
                         CERROR ("Error in echo object "LPX64"\n", id);
@@ -546,7 +546,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 pgp->flag = 0;
 
                 if (verify)
-                        echo_client_page_debug_setup(lsm, pgp->pg, rw, 
+                        echo_client_page_debug_setup(lsm, pgp->pg, rw,
                                                      oa->o_id, off, pgp->count);
         }
 
@@ -723,7 +723,7 @@ static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
             eas->eas_oa.o_id != ECHO_PERSISTENT_OBJID &&
             (eas->eas_oa.o_valid & OBD_MD_FLFLAGS) != 0 &&
             (eas->eas_oa.o_flags & OBD_FL_DEBUG_CHECK) != 0)
-                echo_client_page_debug_check(eas->eas_lsm, eap->eap_page, 
+                echo_client_page_debug_check(eas->eas_lsm, eap->eap_page,
                                              eas->eas_oa.o_id, eap->eap_off,
                                              PAGE_SIZE);
 
@@ -815,7 +815,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
                 /* sleep until we have a page to send */
                 spin_unlock_irqrestore(&eas.eas_lock, flags);
-                rc = wait_event_interruptible(eas.eas_waitq, 
+                rc = wait_event_interruptible(eas.eas_waitq,
                                               eas_should_wake(&eas));
                 spin_lock_irqsave(&eas.eas_lock, flags);
                 if (rc && !eas.eas_rc)
@@ -831,7 +831,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
                 /* unbind the eap from its old page offset */
                 if (eap->eap_cookie != NULL) {
-                        obd_teardown_async_page(exp, lsm, NULL, 
+                        obd_teardown_async_page(exp, lsm, NULL,
                                                 eap->eap_cookie);
                         eap->eap_cookie = NULL;
                 }
@@ -851,8 +851,8 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 if (oa->o_id != ECHO_PERSISTENT_OBJID &&
                     (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
                     (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0)
-                        echo_client_page_debug_setup(lsm, eap->eap_page, rw, 
-                                                     oa->o_id, 
+                        echo_client_page_debug_setup(lsm, eap->eap_page, rw,
+                                                     oa->o_id,
                                                      eap->eap_off, PAGE_SIZE);
 
                 /* always asserts urgent, which isn't quite right */
@@ -868,14 +868,14 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 eas.eas_in_flight++;
                 if (eas.eas_next_offset == eas.eas_end_offset)
                         break;
-        } 
+        }
 
         /* still hold the eas_lock here.. */
 
         /* now we just spin waiting for all the rpcs to complete */
         while(eas.eas_in_flight) {
                 spin_unlock_irqrestore(&eas.eas_lock, flags);
-                wait_event_interruptible(eas.eas_waitq, 
+                wait_event_interruptible(eas.eas_waitq,
                                          eas.eas_in_flight == 0);
                 spin_lock_irqsave(&eas.eas_lock, flags);
         }
@@ -883,14 +883,14 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
 out:
         list_for_each_safe(pos, n, &pages) {
-                struct page *page = list_entry(pos, struct page, 
+                struct page *page = list_entry(pos, struct page,
                                                PAGE_LIST_ENTRY);
 
                 list_del(&PAGE_LIST(page));
                 if (page->private != 0) {
                         eap = (struct echo_async_page *)page->private;
                         if (eap->eap_cookie != NULL)
-                                obd_teardown_async_page(exp, lsm, NULL, 
+                                obd_teardown_async_page(exp, lsm, NULL,
                                                         eap->eap_cookie);
                         OBD_FREE(eap, sizeof(*eap));
                 }
@@ -902,7 +902,7 @@ out:
 
 static int echo_client_prep_commit(struct obd_export *exp, int rw,
                                    struct obdo *oa, struct lov_stripe_md *lsm,
-                                   obd_off offset, obd_size count,  
+                                   obd_off offset, obd_size count,
                                    obd_size batch, struct obd_trans_info *oti)
 {
         struct obd_ioobj ioo;
@@ -1222,7 +1222,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                         oa = &data->ioc_obdo1;
                         oa->o_gr = FILTER_GROUP_ECHO;
                         oa->o_valid |= OBD_MD_FLGROUP;
-                        rc = obd_destroy(ec->ec_exp, oa, eco->eco_lsm, 
+                        rc = obd_destroy(ec->ec_exp, oa, eco->eco_lsm,
                                          &dummy_oti, NULL);
                         if (rc == 0)
                                 eco->eco_deleted = 1;
@@ -1309,7 +1309,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
  out:
 
         /* XXX this should be in a helper also called by target_send_reply */
-        for (ack_lock = dummy_oti.oti_ack_locks, i = 0; i < 4; 
+        for (ack_lock = dummy_oti.oti_ack_locks, i = 0; i < 4;
              i++, ack_lock++) {
                 if (!ack_lock->mode)
                         break;
@@ -1321,10 +1321,8 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         return rc;
 }
 
-static int
-echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
+static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 {
-        struct lustre_cfg* lcfg = buf;
         struct echo_client_obd *ec = &obddev->u.echo_client;
         struct obd_device *tgt;
         struct lustre_handle conn = {0, };
@@ -1355,7 +1353,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
                        lustre_cfg_string(lcfg, 1));
                 return -ENOMEM;
         }
-        
+
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
         rc = obd_connect(&conn, tgt, &echo_uuid, ocd);

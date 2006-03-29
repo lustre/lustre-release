@@ -153,10 +153,9 @@ static int quotacheck_test_cleanup(struct obd_device *obd)
         return 0;
 }
 
-static int quotacheck_test_setup(struct obd_device *obd, obd_count len, void *buf)
+static int quotacheck_test_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;

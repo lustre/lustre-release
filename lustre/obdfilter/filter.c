@@ -1383,10 +1383,9 @@ void *filter_iobuf_get(struct filter_obd *filter, struct obd_trans_info *oti)
  * 3 = flags: failover=f, failout=n
  * 4 = mount options
  */
-int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
+int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
                         void *option)
 {
-        struct lustre_cfg* lcfg = buf;
         struct filter_obd *filter = &obd->u.filter;
         struct vfsmount *mnt;
         struct lustre_mount_info *lmi;
@@ -1414,7 +1413,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                 CERROR("Using old MDS mount method\n");
                 mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),
                                     MS_NOATIME|MS_NODIRATIME,
-                                    lustre_cfg_string(lcfg, 1), option);    
+                                    lustre_cfg_string(lcfg, 1), option);
                 if (IS_ERR(mnt)) {
                         rc = PTR_ERR(mnt);
                         LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
@@ -1554,10 +1553,9 @@ err_mntput:
         return rc;
 }
 
-static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
+static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg* lcfg = buf;
         unsigned long page;
         int rc;
 
@@ -1574,7 +1572,7 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 
         memcpy((void *)page, lustre_cfg_buf(lcfg, 4),
                LUSTRE_CFG_BUFLEN(lcfg, 4));
-        rc = filter_common_setup(obd, len, buf, (void *)page);
+        rc = filter_common_setup(obd, lcfg, (void *)page);
         free_page(page);
 
         lprocfs_init_vars(filter, &lvars);
@@ -1711,8 +1709,8 @@ static int filter_cleanup(struct obd_device *obd)
                 unlock_kernel();
                 must_relock++;
         }
-        
-        if (must_put) 
+
+        if (must_put)
                 /* In case we didn't mount with lustre_get_mount -- old method*/
                 mntput(filter->fo_vfsmnt);
         obd->u.obt.obt_sb = NULL;
@@ -1734,9 +1732,9 @@ static int filter_cleanup(struct obd_device *obd)
 static int filter_connect_internal(struct obd_export *exp,
                                    struct obd_connect_data *data)
 {
-        if (!data) 
+        if (!data)
                 RETURN(0);
-        
+
         CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
                " ocd_version: %x ocd_grant: %d\n",
                exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
@@ -1766,19 +1764,19 @@ static int filter_connect_internal(struct obd_export *exp,
                 struct filter_obd *filter = &exp->exp_obd->u.filter;
                 struct lr_server_data *lsd = filter->fo_fsd;
                 int index = le32_to_cpu(lsd->lsd_ost_index);
-                
+
                 if (!(lsd->lsd_feature_compat &
                       cpu_to_le32(OBD_COMPAT_OST))) {
                         /* this will only happen on the first connect */
                         lsd->lsd_ost_index = le32_to_cpu(data->ocd_index);
                         lsd->lsd_feature_compat |= cpu_to_le32(OBD_COMPAT_OST);
-                        filter_update_server_data(exp->exp_obd, 
+                        filter_update_server_data(exp->exp_obd,
                                                   filter->fo_rcvd_filp, lsd, 1);
                 } else if (index != data->ocd_index) {
                         LCONSOLE_ERROR("Connection from %s to index "
                                        "%u doesn't match actual OST "
                                        "index %u, bad configuration?\n",
-                                       obd_export_nid2str(exp), index, 
+                                       obd_export_nid2str(exp), index,
                                        data->ocd_index);
                         RETURN(-EBADF);
                 }
@@ -2234,7 +2232,7 @@ out_unlock:
                 unsigned int cur_ids[MAXQUOTAS] = {oa->o_uid, oa->o_gid};
                 int rc2 = lquota_adjust(quota_interface, exp->exp_obd, cur_ids,
                                         orig_ids, rc, FSFILT_OP_SETATTR);
-                CDEBUG(rc2 ? D_ERROR : D_QUOTA, 
+                CDEBUG(rc2 ? D_ERROR : D_QUOTA,
                        "filter adjust qunit. (rc:%d)\n", rc2);
         }
         return rc;
@@ -2462,7 +2460,7 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         /* set EROFS to state field if FS is mounted as RDONLY. The goal is to
          * stop creating files on MDS if OST is not good shape to create
          * objects.*/
-        osfs->os_state = (filter->fo_obt.obt_sb->s_flags & MS_RDONLY) ? 
+        osfs->os_state = (filter->fo_obt.obt_sb->s_flags & MS_RDONLY) ?
                 EROFS : 0;
         RETURN(rc);
 }
@@ -2821,8 +2819,8 @@ cleanup:
         qcids[USRQUOTA] = oa->o_uid;
         qcids[GRPQUOTA] = oa->o_gid;
         rc2 = lquota_adjust(quota_interface, obd, qcids, NULL, rc,
-                            FSFILT_OP_UNLINK); 
-        CDEBUG(rc2 ? D_ERROR : D_QUOTA, 
+                            FSFILT_OP_UNLINK);
+        CDEBUG(rc2 ? D_ERROR : D_QUOTA,
                "filter adjust qunit! (rc:%d)\n", rc2);
         return rc;
 }
@@ -2843,7 +2841,7 @@ static int filter_truncate(struct obd_export *exp, struct obdo *oa,
 
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPX64
                ", o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
-        
+
         oa->o_size = start;
         rc = filter_setattr(exp, oa, NULL, oti);
         RETURN(rc);
@@ -2963,7 +2961,7 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
         /* setup llog imports */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
-        
+
         lquota_setinfo(quota_interface, exp, obd);
 
         RETURN(rc);
@@ -3155,11 +3153,11 @@ static int __init obdfilter_init(void)
 out:
                 if (quota_interface)
                         PORTAL_SYMBOL_PUT(filter_quota_interface);
-                        
+
                 OBD_FREE(obdfilter_created_scratchpad,
                          OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                          sizeof(*obdfilter_created_scratchpad));
-        } 
+        }
 
         return rc;
 }
@@ -3171,7 +3169,7 @@ static void __exit obdfilter_exit(void)
 
         class_unregister_type(LUSTRE_OSTSAN_NAME);
         class_unregister_type(LUSTRE_OST_NAME);
-        
+
         OBD_FREE(obdfilter_created_scratchpad,
                  OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                  sizeof(*obdfilter_created_scratchpad));

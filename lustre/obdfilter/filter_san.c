@@ -38,9 +38,8 @@
 #include "filter_internal.h"
 
 /* sanobd setup methods - use a specific mount option */
-int filter_san_setup(struct obd_device *obd, obd_count len, void *buf)
+int filter_san_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
-        struct lustre_cfg* lcfg = buf;
         unsigned long page;
         int rc;
 
@@ -60,7 +59,7 @@ int filter_san_setup(struct obd_device *obd, obd_count len, void *buf)
         else
                 LBUG(); /* just a reminder */
 
-        rc = filter_common_setup(obd, len, buf, (void *)page);
+        rc = filter_common_setup(obd, lcfg, (void *)page);
         free_page(page);
 
         return rc;

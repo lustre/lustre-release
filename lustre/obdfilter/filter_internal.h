@@ -78,7 +78,7 @@ int filter_update_fidea(struct obd_export *exp, struct inode *inode,
 int filter_update_server_data(struct obd_device *, struct file *,
                               struct lr_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
-int filter_common_setup(struct obd_device *, obd_count len, void *buf,
+int filter_common_setup(struct obd_device *, struct lustre_cfg *lcfg,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *,
@@ -145,7 +145,7 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                                struct llog_rec_hdr *rec, void *data);
 
 /* filter_san.c */
-int filter_san_setup(struct obd_device *obd, obd_count len, void *buf);
+int filter_san_setup(struct obd_device *obd, struct lustre_cfg *cfg);
 int filter_san_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                       struct obd_ioobj *, int niocount, struct niobuf_remote *);
 

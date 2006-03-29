@@ -530,10 +530,10 @@ static int llog_test_7(struct obd_device *obd)
         }
 
         rc = llog_destroy(llh);
-        if (rc) 
+        if (rc)
                 CERROR("7: llog_destroy failed: %d\n", rc);
         else
-                llog_free_handle(llh); 
+                llog_free_handle(llh);
         RETURN(rc);
 }
 
@@ -627,10 +627,9 @@ static int llog_test_cleanup(struct obd_device *obd)
         return rc;
 }
 
-static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
+static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;

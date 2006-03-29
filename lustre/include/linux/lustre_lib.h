@@ -95,7 +95,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 /* client.c */
 
-int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf);
+int client_sanobd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg);
 struct client_obd *client_conn2cli(struct lustre_handle *conn);
 
 struct mdc_open_data;

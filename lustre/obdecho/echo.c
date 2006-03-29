@@ -142,7 +142,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 }
 
 int echo_destroy(struct obd_export *exp, struct obdo *oa,
-                 struct lov_stripe_md *ea, struct obd_trans_info *oti, 
+                 struct lov_stripe_md *ea, struct obd_trans_info *oti,
                  struct obd_export *md_exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -463,7 +463,7 @@ commitrw_cleanup:
         return rc;
 }
 
-static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
+static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
         int                        rc;

@@ -116,7 +116,7 @@ static int mgs_cleanup(struct obd_device *obd);
 static int mgs_handle(struct ptlrpc_request *req);
 
 /* Start the MGS obd */
-static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
+static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
         struct mgs_obd *mgs = &obd->u.mgs;
@@ -130,7 +130,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
         /* Find our disk */
         lmi = server_get_mount(obd->obd_name);
-        if (!lmi) 
+        if (!lmi)
                 RETURN(rc = -EINVAL);
 
         mnt = lmi->lmi_mnt;
@@ -178,9 +178,9 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Start the service threads */
         mgs->mgs_service =
                 ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
-                                MGS_MAXREPSIZE, MGS_REQUEST_PORTAL, 
+                                MGS_MAXREPSIZE, MGS_REQUEST_PORTAL,
                                 MGC_REPLY_PORTAL, MGS_SERVICE_WATCHDOG_TIMEOUT,
-                                mgs_handle, LUSTRE_MGS_NAME, 
+                                mgs_handle, LUSTRE_MGS_NAME,
                                 obd->obd_proc_entry, NULL, MGS_NUM_THREADS);
 
         if (!mgs->mgs_service) {
@@ -245,7 +245,7 @@ static int mgs_cleanup(struct obd_device *obd)
                 RETURN(0);
 
         save_dev = lvfs_sbdev(mgs->mgs_sb);
-        
+
         lprocfs_obd_cleanup(obd);
 
         ptlrpc_unregister_service(mgs->mgs_service);
@@ -277,14 +277,14 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
         ENTRY;
 
         rc = mgc_logname2resid(fsname, &res_id);
-        if (!rc) 
+        if (!rc)
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
                                       LDLM_PLAIN, NULL, LCK_EX, &flags,
-                                      ldlm_blocking_ast, ldlm_completion_ast, 
+                                      ldlm_blocking_ast, ldlm_completion_ast,
                                       NULL, fsname, NULL, 0, NULL, lockh);
-        if (rc) 
+        if (rc)
                 CERROR("can't take cfg lock for %s (%d)\n", fsname, rc);
-        
+
         RETURN(rc);
 }
 
@@ -317,7 +317,7 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         } else {
                 /* Index is correctly marked as used */
 
-                /* If the logs don't contain the mti_nids then add 
+                /* If the logs don't contain the mti_nids then add
                    them as failover nids */
                 rc = mgs_check_failnid(obd, mti);
         }
@@ -328,7 +328,7 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
 
 /* Called whenever a target starts up.  Flags indicate first connect, etc. */
 static int mgs_handle_target_reg(struct ptlrpc_request *req)
-{    
+{
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lustre_handle lockh;
         struct mgs_target_info *mti, *rep_mti;
@@ -338,7 +338,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 
         mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
                                  lustre_swab_mgs_target_info);
-        
+
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_UPDATE))) {
                 /* We're just here as a startup ping. */
@@ -346,14 +346,14 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                        mti->mti_svname, obd_export_nid2str(req->rq_export));
                 rc = mgs_check_target(obd, mti);
                 /* above will set appropriate mti flags */
-                if (!rc) 
+                if (!rc)
                         /* Nothing wrong, don't revoke lock */
                         GOTO(out_nolock, rc);
         }
 
         /* Revoke the config lock to make sure nobody is reading. */
         /* Although actually I think it should be alright if
-           someone was reading while we were updating the logs - if we 
+           someone was reading while we were updating the logs - if we
            revoke at the end they will just update from where they left off. */
         lockrc = mgs_get_cfg_lock(obd, mti->mti_fsname, &lockh);
         if (lockrc != ELDLM_OK) {
@@ -383,7 +383,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         CERROR("Can't upgrade from 1.4 (%d)\n", rc);
                         GOTO(out, rc);
                 }
-                
+
                 mti->mti_flags &= ~LDD_F_UPGRADE14;
                 /* Turn off the upgrade flag permanently */
                 mti->mti_flags |= LDD_F_REWRITE_LDD;
@@ -391,19 +391,19 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         /* end COMPAT_146 */
 
         if (mti->mti_flags & LDD_F_UPDATE) {
-                CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 
+                CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname,
                        mti->mti_stripe_index);
-                
-                /* create the log for the new target 
+
+                /* create the log for the new target
                    and update the client/mdt logs */
                 rc = mgs_write_log_target(obd, mti);
                 if (rc) {
-                        CERROR("Failed to write %s log (%d)\n", 
+                        CERROR("Failed to write %s log (%d)\n",
                                mti->mti_svname, rc);
                         GOTO(out, rc);
                 }
 
-                mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE | 
+                mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE |
                                     LDD_F_NEED_INDEX);
                 mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
@@ -413,9 +413,9 @@ out:
         if (lockrc == ELDLM_OK)
                 mgs_put_cfg_lock(&lockh);
 out_nolock:
-        CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname, 
+        CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname,
                mti->mti_stripe_index, rc);
-        lustre_pack_reply(req, 1, &rep_size, NULL); 
+        lustre_pack_reply(req, 1, &rep_size, NULL);
         /* send back the whole mti in the reply */
         rep_mti = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_mti));
         memcpy(rep_mti, mti, sizeof(*rep_mti));
@@ -523,7 +523,7 @@ int mgs_handle(struct ptlrpc_request *req)
         }
 
         LASSERT(current->journal_info == NULL);
-        
+
         CDEBUG(D_CONFIG | (rc?D_ERROR:0), "MGS handle cmd=%d rc=%d\n",
                req->rq_reqmsg->opc, rc);
 
@@ -577,7 +577,7 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (lcfg == NULL)
                         RETURN(-ENOMEM);
                 rc = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-                if (rc) 
+                if (rc)
                         GOTO(out_free, rc);
 
                 if (lcfg->lcfg_bufcount < 1)
@@ -591,10 +591,10 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         if (!ptr) {
                                 /* assume devname is the fsname */
                                 strncpy(fsname, devname, sizeof(fsname));
-                        } else {  
+                        } else {
                                 strncpy(fsname, devname, ptr - devname);
                         }
-                        CDEBUG(D_MGS, "set param on fs %s device %s\n", 
+                        CDEBUG(D_MGS, "set param on fs %s device %s\n",
                                fsname, devname);
                 } else {
                         CDEBUG(D_MGS, "set global param\n");
@@ -612,8 +612,8 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                    writing (above). */
                 if (fsname) {
                         lockrc = mgs_get_cfg_lock(obd, fsname, &lockh);
-                        if (lockrc != ELDLM_OK) 
-                                CERROR("lock error %d for fs %s\n", lockrc, 
+                        if (lockrc != ELDLM_OK)
+                                CERROR("lock error %d for fs %s\n", lockrc,
                                        fsname);
                         else
                                 mgs_put_cfg_lock(&lockh);

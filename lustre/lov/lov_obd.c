@@ -113,12 +113,12 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
 
         tgt_obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME,
                                         &obd->obd_uuid);
-        
+
         if (!tgt_obd) {
                 CERROR("Target %s not attached\n", obd_uuid2str(tgt_uuid));
                 RETURN(-EINVAL);
         }
-        
+
         CDEBUG(D_CONFIG, "Connect tgt %s (%s)\n", obd_uuid2str(tgt_uuid),
                tgt_obd->obd_name);
 
@@ -129,7 +129,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
 
         if (activate) {
                 tgt_obd->obd_no_recov = 0;
-                /* FIXME this is probably supposed to be 
+                /* FIXME this is probably supposed to be
                    ptlrpc_set_import_active.  Horrible naming. */
                 ptlrpc_activate_import(tgt_obd->u.cli.cl_import);
         }
@@ -208,12 +208,12 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         int rc;
         ENTRY;
 
-        lov->ocd.ocd_connect_flags = OBD_CONNECT_EMPTY; 
-        if (data) 
+        lov->ocd.ocd_connect_flags = OBD_CONNECT_EMPTY;
+        if (data)
                 lov->ocd = *data;
 
         rc = class_connect(conn, obd, cluuid);
-        if (!rc) 
+        if (!rc)
                 lov->connects++;
         CDEBUG(D_CONFIG, "connect #%d\n", lov->connects);
 
@@ -230,7 +230,7 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         int rc;
         ENTRY;
 
-        CDEBUG(D_CONFIG, "%s: disconnecting target %s\n", 
+        CDEBUG(D_CONFIG, "%s: disconnecting target %s\n",
                obd->obd_name, osc_obd->obd_name);
 
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
@@ -373,7 +373,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 struct obd_uuid *uuid;
 
                 LASSERT(watched);
-                
+
                 if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                         CERROR("unexpected notification of %s %s!\n",
                                watched->obd_type->typ_name,
@@ -406,7 +406,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 struct lov_tgt_desc *tgt;
                 struct obd_device *tgt_obd;
                 int i;
-                for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; 
+                for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count;
                       i++, tgt++) {
                         if (obd_uuid_empty(&tgt->uuid))
                                 continue;
@@ -414,7 +414,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                         rc = obd_notify_observer(obd, tgt_obd, ev, data);
                         if (rc) {
                                 CERROR("%s: notify %s of %s failed %d\n",
-                                       obd->obd_name, 
+                                       obd->obd_name,
                                        obd->obd_observer->obd_name,
                                        tgt_obd->obd_name, rc);
                                 break;
@@ -496,10 +496,10 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                         osc_obd->obd_no_recov = 0;
         }
 
-        if (lov->ocd.ocd_connect_flags != OBD_CONNECT_EMPTY) { 
+        if (lov->ocd.ocd_connect_flags != OBD_CONNECT_EMPTY) {
                 /* Keep the original connect flags pristine */
                 OBD_ALLOC(ocd, sizeof(*ocd));
-                if (!ocd) 
+                if (!ocd)
                         RETURN(-ENOMEM);
                 *ocd = lov->ocd;
         }
@@ -510,13 +510,13 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 GOTO(out, rc);
 
         idx = index;
-        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, 
+        rc = lov_notify(obd, tgt->ltd_exp->exp_obd,
                         active ? OBD_NOTIFY_ACTIVE : OBD_NOTIFY_INACTIVE,
                         (void *)&idx);
 
 out:
         if (rc) {
-                CERROR("add failed (%d), deleting %s\n", rc, 
+                CERROR("add failed (%d), deleting %s\n", rc,
                        (char *)tgt->uuid.uuid);
                 lov_del_target(obd, &tgt->uuid, index, 0);
         }
@@ -524,7 +524,7 @@ out:
 }
 
 /* Schedule a target for deletion */
-static int lov_del_target(struct obd_device *obd, struct obd_uuid *uuidp, 
+static int lov_del_target(struct obd_device *obd, struct obd_uuid *uuidp,
                           int index, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
@@ -571,7 +571,7 @@ static void __lov_del_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         LASSERT(tgt->reap);
         osc_obd = class_exp2obd(tgt->ltd_exp);
 
-        CDEBUG(D_CONFIG, "Removing tgt %s : %s\n", tgt->uuid.uuid, 
+        CDEBUG(D_CONFIG, "Removing tgt %s : %s\n", tgt->uuid.uuid,
                osc_obd ? osc_obd->obd_name : "<no obd>");
 
         if (tgt->ltd_exp)
@@ -612,7 +612,7 @@ static void lov_fix_desc(struct lov_desc *desc)
                 desc->ld_default_stripe_count = 1;
 
         /* from lov_setstripe */
-        if ((desc->ld_pattern != 0) && 
+        if ((desc->ld_pattern != 0) &&
             (desc->ld_pattern != LOV_PATTERN_RAID0)) {
                 CDEBUG(D_IOCTL, "bad userland stripe pattern: %#x\n",
                        desc->ld_pattern);
@@ -620,10 +620,9 @@ static void lov_fix_desc(struct lov_desc *desc)
         }
 }
 
-static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
+static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg *lcfg = buf;
         struct lov_desc *desc;
         struct lov_obd *lov = &obd->u.lov;
         int count;

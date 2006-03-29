@@ -55,9 +55,8 @@ static kdev_t path2dev(char *path)
         return dev;
 }
 
-int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf)
+int client_sanobd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg)
 {
-        struct lustre_cfg* lcfg = buf;
         struct client_obd *cli = &obddev->u.cli;
         ENTRY;
 
@@ -66,7 +65,7 @@ int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        client_obd_setup(obddev, len, buf);
+        client_obd_setup(obddev, lcfg);
 
         cli->cl_sandev = path2dev(lustre_cfg_string(lcfg, 3));
         if (!kdev_t_to_nr(cli->cl_sandev)) {

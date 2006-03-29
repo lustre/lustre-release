@@ -171,7 +171,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
         struct ldlm_res_id res_id = { .name = {0} };
         int flags = 0, rc;
-        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} }; 
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} };
         ENTRY;
 
         if (IS_ERR(de))
@@ -250,7 +250,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         RETURN(result);
 }
 
-static int mds_connect_internal(struct obd_export *exp, 
+static int mds_connect_internal(struct obd_export *exp,
                                 struct obd_connect_data *data)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -1717,12 +1717,12 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
                 /* Swap to the old mds_server_data format, in case
                    someone wants to revert to a pre-1.6 lustre */
                 CDEBUG(D_CONFIG, "writing old last_rcvd format\n");
-                /* malloc new struct instead of swap in-place because 
+                /* malloc new struct instead of swap in-place because
                    we don't have a lock on the last_trasno or mount count -
                    someone may modify it while we're here, and we don't want
                    them to inc the wrong thing. */
                 OBD_ALLOC(lsd_copy, sizeof(*lsd_copy));
-                if (!lsd_copy) 
+                if (!lsd_copy)
                         RETURN(-ENOMEM);
                 *lsd_copy = *lsd;
                 lsd_copy->lsd_unused = lsd->lsd_last_transno;
@@ -1736,7 +1736,7 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
         if (rc)
                 CERROR("error writing MDS server data: rc = %d\n", rc);
 
-        if (lsd_copy) 
+        if (lsd_copy)
                 OBD_FREE(lsd_copy, sizeof(*lsd_copy));
 
         RETURN(rc);
@@ -1777,10 +1777,9 @@ void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
  * 3 = config name
  * 4 = mount options
  */
-static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
+static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg* lcfg = buf;
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_mount_info *lmi;
         struct vfsmount *mnt;
@@ -1831,9 +1830,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                                 lustre_cfg_string(lcfg, 4));
                         fsoptions_to_mds_flags(mds, options);
                 }
-                
+
                 mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
-                                    lustre_cfg_string(lcfg, 1), 
+                                    lustre_cfg_string(lcfg, 1),
                                     (void *)options);
                 free_page(page);
                 if (IS_ERR(mnt)) {
@@ -1974,7 +1973,7 @@ err_put:
                 unlock_kernel();
                 mntput(mds->mds_vfsmnt);
                 lock_kernel();
-        }               
+        }
         obd->u.obt.obt_sb = NULL;
         return rc;
 }
@@ -2029,10 +2028,10 @@ static int mds_postsetup(struct obd_device *obd)
 
         if (mds->mds_profile) {
                 struct lustre_profile *lprof;
-                /* The profile defines which osc and mdc to connect to, for a 
+                /* The profile defines which osc and mdc to connect to, for a
                    client.  We reuse that here to figure out the name of the
                    lov to use (and ignore lprof->lp_mdc).
-                   The profile was set in the config log with 
+                   The profile was set in the config log with
                    LCFG_MOUNTOPT profilenm oscnm mdcnm */
                 lprof = class_get_profile(mds->mds_profile);
                 if (lprof == NULL) {
@@ -2082,7 +2081,7 @@ int mds_postrecov(struct obd_device *obd)
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
         /* This means that we have to hack obd_notify to think we're obd_set_up
            during mds_lov_connect. */
-        obd_notify(obd->u.mds.mds_osc_obd, NULL, 
+        obd_notify(obd->u.mds.mds_osc_obd, NULL,
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
                    OBD_NOTIFY_SYNC, NULL);
 
@@ -2150,7 +2149,7 @@ static int mds_cleanup(struct obd_device *obd)
         lquota_cleanup(quota_interface, obd);
 
         mds_update_server_data(obd, 1);
-        if (mds->mds_lov_objids != NULL) 
+        if (mds->mds_lov_objids != NULL)
                 OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
         mds_fs_cleanup(obd);
 
@@ -2166,8 +2165,8 @@ static int mds_cleanup(struct obd_device *obd)
                 unlock_kernel();
                 must_relock++;
         }
-        
-        if (must_put) 
+
+        if (must_put)
                 /* In case we didn't mount with lustre_get_mount -- old method*/
                 mntput(mds->mds_vfsmnt);
         obd->u.obt.obt_sb = NULL;
@@ -2427,7 +2426,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         RETURN(ELDLM_LOCK_REPLACED);
 }
 
-static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
+static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lprocfs_static_vars lvars;
@@ -2618,7 +2617,7 @@ static int __init mds_init(void)
                 return rc;
         }
         init_obd_quota_ops(quota_interface, &mds_obd_ops);
-        
+
         lprocfs_init_vars(mds, &lvars);
         class_register_type(&mds_obd_ops, lvars.module_vars, LUSTRE_MDS_NAME);
         lprocfs_init_vars(mdt, &lvars);

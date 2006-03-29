@@ -344,7 +344,7 @@ static int quotfmt_test_4(struct lustre_quota_info *lqi)
 
 static int quotfmt_test_5(struct lustre_quota_info *lqi)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)        
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
         int i, rc = 0;
 
         for (i = USRQUOTA; i < MAXQUOTAS && !rc; i++) {
@@ -440,10 +440,9 @@ static int quotfmt_test_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static int quotfmt_test_setup(struct obd_device *obd, obd_count len, void *buf)
+static int quotfmt_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
-        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;

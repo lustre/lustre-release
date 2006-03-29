@@ -100,7 +100,7 @@ int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid)
 }
 
 static
-int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size, 
+int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                        unsigned int acl_size, struct ptlrpc_request *req)
 {
         struct mds_body *body;
@@ -148,14 +148,14 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                         RETURN (-EPROTO);
                 }
         }
-        
+
         if (body->valid & OBD_MD_FLMODEASIZE) {
-                if (exp->exp_obd->u.cli.cl_max_mds_easize < body->max_mdsize) 
-                        exp->exp_obd->u.cli.cl_max_mds_easize = 
+                if (exp->exp_obd->u.cli.cl_max_mds_easize < body->max_mdsize)
+                        exp->exp_obd->u.cli.cl_max_mds_easize =
                                                 body->max_mdsize;
-                if (exp->exp_obd->u.cli.cl_max_mds_cookiesize < 
+                if (exp->exp_obd->u.cli.cl_max_mds_cookiesize <
                                                 body->max_cookiesize)
-                        exp->exp_obd->u.cli.cl_max_mds_cookiesize = 
+                        exp->exp_obd->u.cli.cl_max_mds_cookiesize =
                                                 body->max_cookiesize;
         }
 
@@ -210,7 +210,7 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
                 GOTO(out, rc = -ENOMEM);
 
         mdc_pack_req_body(req, MDS_REQ_REC_OFF, valid, fid, ea_len);
- 
+
         LASSERT (strnlen (filename, namelen) == namelen - 1);
         memcpy(lustre_msg_buf(req->rq_reqmsg, 1, namelen), filename, namelen);
 
@@ -890,7 +890,7 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
         if (keylen == strlen("max_easize") &&
             memcmp(key, "max_easize", strlen("max_easize")) == 0) {
                 int mdsize, *max_easize;
-                
+
                 if (*vallen != sizeof(int))
                         RETURN(-EINVAL);
                 mdsize = *(int*)val;
@@ -1087,7 +1087,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         RETURN(rc);
 }
 
-static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
+static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
         struct client_obd *cli = &obd->u.cli;
         struct lprocfs_static_vars lvars;
@@ -1106,7 +1106,7 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_rpc_lock, rc = -ENOMEM);
         mdc_init_rpc_lock(cli->cl_setattr_lock);
 
-        rc = client_obd_setup(obd, len, buf);
+        rc = client_obd_setup(obd, cfg);
         if (rc)
                 GOTO(err_setattr_lock, rc);
         lprocfs_init_vars(mdc, &lvars);
@@ -1152,7 +1152,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         stripes = min(desc.ld_tgt_count, (__u32)LOV_MAX_STRIPE_COUNT);
         lsm.lsm_stripe_count = stripes;
         size = obd_size_diskmd(lov_exp, &lsm);
-        
+
         if (cli->cl_max_mds_easize < size)
                 cli->cl_max_mds_easize = size;
 
@@ -1168,7 +1168,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
 
         CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
                cli->cl_max_mds_easize, cli->cl_max_mds_cookiesize);
-        
+
         RETURN(0);
 }
 
