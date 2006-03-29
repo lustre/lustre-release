@@ -360,7 +360,14 @@ _sysio_native_init()
 	 * zero. All permission bits to open/creat/setattr are absolute --
 	 * They've already had a umask applied, when appropriate.
 	 */
-	_sysio_umask = syscall(SYSIO_SYS_umask, 0);
+#ifndef REDSTORM
+        _sysio_umask = syscall(SYSIO_SYS_umask, 0);
+        /*
+         *      For Red Storm, this functionality is handled in cstart.
+         *      The mask to be "captured" has been sent already.
+         *      This eliminates a system call from every node!
+         */
+#endif  /* REDSTORM  */
 
 	return _sysio_fssw_register("native", &native_fssw_ops);
 }

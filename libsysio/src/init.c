@@ -128,6 +128,12 @@ void	*_sysio_exit_trace_q = &_sysio_exit_trace_head;
 #endif
 
 /*
+ * In sysio_init we'll allow simple comments, strings outside {}
+ * delimited by COMMENT_INTRO, and '\n' or '\0'
+ */
+#define COMMENT_INTRO		'#'
+
+/*
  * Sysio library initialization. Must be called before anything else in the
  * library.
  */
@@ -955,9 +961,15 @@ _sysio_boot_namespace(const char *arg)
 		/*
 		 * Discard leading white space.
 		 */
-		while ((c = *arg) != '\0' &&
-		       !(c == '{' || strchr(IGNORE_WHITE, c) == NULL))
+		while ((c = *arg) != '\0' && strchr(IGNORE_WHITE, c))
 			arg++;
+                if (COMMENT_INTRO == c) {
+                        while (*arg && (*arg != '\n')) {
+                                ++arg;
+                        }
+
+                        continue;
+                }
 		if (c == '\0')
 			break;
 		if (c != '{') {
