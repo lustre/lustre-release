@@ -23,7 +23,11 @@
 #ifndef __LINUX_LU_OBJECT_H
 #define __LINUX_LU_OBJECT_H
 
-#ifdef __KERNEL__
+/*
+ * struct ll_fid
+ */
+#include <linux/lustre_idl.h>
+
 #include <libcfs/list.h>
 #include <libcfs/kp30.h>
 
@@ -34,20 +38,7 @@
 
 struct seq_file;
 struct proc_dir_entry;
-
-struct lfid {
-	__u64 f_seq;
-	__u32 f_id;
-	__u32 f_version;
-};
-
-static inline int lfid_eq(const struct lfid *f0, const struct lfid *f1)
-{
-	/* check that there is no alignment padding */
-	CLASSERT(sizeof *f0 ==
-                 sizeof f0->f_seq + sizeof f0->f_id + sizeof f0->f_version);
-	return memcmp(f0, f1, sizeof *f0) == 0;
-}
+struct lustre_cfg;
 
 /*
  * lu_* data-types represent server-side entities shared by data and meta-data
@@ -113,11 +104,6 @@ struct lu_object_header;
  * Operations common for data and meta-data devices.
  */
 struct lu_device_operations {
-	/* initialize device */
-	int  (*ldo_init)(struct lu_device *d);
-	/* finalize device, release all resources */
-	void (*ldo_fini)(struct lu_device *d);
-
 	/*
 	 * Object creation protocol.
 	 *
@@ -177,6 +163,11 @@ struct lu_device_operations {
 };
 
 /*
+ * Type of lu_device.
+ */
+struct lu_device_type;
+
+/*
  * Device: a layer in the server side abstraction stacking.
  */
 struct lu_device {
@@ -187,9 +178,25 @@ struct lu_device {
          * XXX which means that atomic_t is probably too small.
          */
         atomic_t                     ld_ref;
+        struct lu_device_type       *ld_type;
 	struct lu_device_operations *ld_ops;
 	struct lu_site              *ld_site;
         struct proc_dir_entry       *ld_proc_entry;
+};
+
+struct lu_device_type_operations;
+struct lu_device_type {
+        char                             *ldt_name;
+        struct lu_device_type_operations *ldt_ops;
+};
+
+struct lu_device_type_operations {
+        struct lu_device *(*ldto_device_alloc)(struct lu_device_type *t,
+                                               struct lustre_cfg *lcfg);
+        void (*ldto_device_free)(struct lu_device *d);
+
+        int  (*ldto_init)(struct lu_device_type *t);
+        void (*ldto_fini)(struct lu_device_type *t);
 };
 
 /*
@@ -254,7 +261,7 @@ struct lu_object_header {
 	/*
 	 * Fid, uniquely identifying this object.
 	 */
-	struct lfid       loh_fid;
+	struct ll_fid     loh_fid;
 	/*
 	 * Linkage into per-site hash table. Protected by site guard lock.
 	 */
@@ -359,7 +366,7 @@ static inline struct lu_object *lu_object_next(const struct lu_object *o)
 	return container_of(o->lo_linkage.next, struct lu_object, lo_linkage);
 }
 
-static inline struct lfid *lu_object_fid(const struct lu_object *o)
+static inline struct ll_fid *lu_object_fid(const struct lu_object *o)
 {
 	return &o->lo_header->loh_fid;
 }
@@ -386,7 +393,7 @@ static inline int lu_object_is_dying(struct lu_object_header *h)
 void lu_object_put(struct lu_object *o);
 void lu_site_purge(struct lu_site *s, int nr);
 int lu_object_print(struct seq_file *f, const struct lu_object *o);
-struct lu_object *lu_object_find(struct lu_site *s, const struct lfid *f);
+struct lu_object *lu_object_find(struct lu_site *s, const struct ll_fid *f);
 
 int  lu_site_init(struct lu_site *s, struct lu_device *top);
 void lu_site_fini(struct lu_site *s);
@@ -394,7 +401,7 @@ void lu_site_fini(struct lu_site *s);
 void lu_device_get(struct lu_device *d);
 void lu_device_put(struct lu_device *d);
 
-int lu_device_init(struct lu_device *d);
+int lu_device_init(struct lu_device *d, struct lu_device_type *t);
 void lu_device_fini(struct lu_device *d);
 
 int lu_object_init(struct lu_object *o,
@@ -406,5 +413,4 @@ void lu_object_add(struct lu_object *before, struct lu_object *o);
 int lu_object_header_init(struct lu_object_header *h);
 void lu_object_header_fini(struct lu_object_header *h);
 
-#endif /* __KERNEL__ */
 #endif /* __LINUX_OBD_CLASS_H */

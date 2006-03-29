@@ -70,7 +70,7 @@ void lu_object_put(struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_put);
 
-struct lu_object *lu_object_alloc(struct lu_site *s, const struct lfid *f)
+struct lu_object *lu_object_alloc(struct lu_site *s, const struct ll_fid *f)
 {
 	struct lu_object *scan;
 	struct lu_object *top;
@@ -166,7 +166,7 @@ EXPORT_SYMBOL(lu_object_print);
 
 static struct lu_object *htable_lookup(struct lu_site *s,
 				       const struct hlist_head *bucket,
-				       const struct lfid *f)
+				       const struct ll_fid *f)
 {
 	struct lu_object_header *h;
 	struct hlist_node *scan;
@@ -187,12 +187,12 @@ static struct lu_object *htable_lookup(struct lu_site *s,
 	return NULL;
 }
 
-static __u32 fid_hash(const struct lfid *f)
+static __u32 fid_hash(const struct ll_fid *f)
 {
-        return f->f_seq + f->f_id + f->f_version;
+        return f->id + f->generation + f->f_type;
 }
 
-struct lu_object *lu_object_find(struct lu_site *s, const struct lfid *f)
+struct lu_object *lu_object_find(struct lu_site *s, const struct ll_fid *f)
 {
 	struct lu_object  *o;
 	struct lu_object  *shadow;
@@ -291,10 +291,11 @@ void lu_device_put(struct lu_device *d)
 }
 EXPORT_SYMBOL(lu_device_put);
 
-int lu_device_init(struct lu_device *d)
+int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 {
         memset(d, 0, sizeof *d);
         atomic_set(&d->ld_ref, 0);
+        d->ld_type = t;
         return 0;
 }
 EXPORT_SYMBOL(lu_device_init);
