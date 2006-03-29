@@ -58,6 +58,11 @@
 #include <lustre/lustre_user.h>
 
 /*
+ * CLASSERT()
+ */
+#include <libcfs/kp30.h>
+
+/*
  * this file contains all data structures used in Lustre interfaces:
  * - obdo and obd_request records
  * - mds_request records
@@ -627,6 +632,15 @@ struct ll_fid {
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
+static inline int lfid_eq(const struct ll_fid *f0, const struct ll_fid *f1)
+{
+	/* check that there is no alignment padding */
+	CLASSERT(sizeof *f0 ==
+                 sizeof f0->id + sizeof f0->generation + sizeof f0->f_type);
+	return memcmp(f0, f1, sizeof *f0) == 0;
+}
+
+
 #define MDS_STATUS_CONN 1
 #define MDS_STATUS_LOV 2
 
@@ -653,7 +667,7 @@ struct mds_body {
         __u64          ino;
         __u32          fsuid;
         __u32          fsgid;
-        __u32          capability; 
+        __u32          capability;
         __u32          mode;
         __u32          uid;
         __u32          gid;
