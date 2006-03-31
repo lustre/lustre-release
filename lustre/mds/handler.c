@@ -165,7 +165,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
-                                     char *name, int namelen, __u64 lockpart)
+                                     __u64 lockpart)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
@@ -869,7 +869,6 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                         /* For revalidate by fid we always take UPDATE lock */
                         dchild = mds_fid2locked_dentry(obd, &body->fid2, NULL,
                                                        LCK_CR, child_lockh,
-                                                       NULL, 0,
                                                        MDS_INODELOCK_UPDATE);
                         LASSERT(dchild);
                         if (IS_ERR(dchild))

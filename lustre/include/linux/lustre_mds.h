@@ -101,7 +101,7 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
-                                     char *name, int namelen, __u64 lockpart);
+                                     __u64 lockpart);
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt);
 int mds_update_server_data(struct obd_device *, int force_sync);
@@ -141,7 +141,7 @@ int mdc_enqueue(struct obd_export *exp,
 /* mdc/mdc_request.c */
 int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp);
 
-int mdc_req2lustre_md(struct ptlrpc_request *req, int offset, 
+int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                       struct obd_export *exp, struct lustre_md *md);
 void mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
 

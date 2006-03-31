@@ -226,7 +226,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         lockpart = MDS_INODELOCK_UPDATE;
 
         de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
-                                   &lockh, NULL, 0, lockpart);
+                                   &lockh, lockpart);
         if (IS_ERR(de))
                 GOTO(out, rc = PTR_ERR(de));
 

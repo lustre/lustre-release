@@ -307,7 +307,7 @@ cleanup_dentry:
 static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
-                              struct dentry *dchild, void **handle, 
+                              struct dentry *dchild, void **handle,
                               obd_id **ids)
 {
         struct inode *inode = dchild->d_inode;
@@ -363,7 +363,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
                 if (!lmm_buf) {
                         if (!rc) rc = -ENOMEM;
-                } else { 
+                } else {
                         memcpy(lmm_buf, lmm, lmm_size);
                 }
                 if (rc)
@@ -482,7 +482,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
         if (!lmm_buf) {
                 if (!rc) rc = -ENOMEM;
-        } else { 
+        } else {
                 memcpy(lmm_buf, lmm, lmm_size);
         }
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
@@ -615,11 +615,11 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
          * Now that exp_outstanding_reply is a list, it's just using mfd != NULL
          * to detect a re-open */
         if (mfd == NULL) {
-                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) { 
-                        rc = mds_join_file(rec, req, dchild, NULL); 
-                        if (rc) 
-                                GOTO(out_dput, rc); 
-                } 
+                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+                        rc = mds_join_file(rec, req, dchild, NULL);
+                        if (rc)
+                                GOTO(out_dput, rc);
+                }
                 mntget(mds->mds_vfsmnt);
                 CERROR("Re-opened file \n");
                 mfd = mds_dentry_open(dchild, mds->mds_vfsmnt,
@@ -697,14 +697,14 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         up(&dchild->d_inode->i_sem);
                         RETURN(-EEXIST);
                 }
-                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) { 
+                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
                         up(&dchild->d_inode->i_sem);
-                        rc = mds_join_file(rec, req, dchild, lockh); 
+                        rc = mds_join_file(rec, req, dchild, lockh);
                         if (rc)
                                 RETURN(rc);
                         down(&dchild->d_inode->i_sem);
-                } 
-                if (!(body->valid & OBD_MD_FLEASIZE) && 
+                }
+                if (!(body->valid & OBD_MD_FLEASIZE) &&
                     !(body->valid & OBD_MD_FLMODEASIZE)) {
                         /* no EA: create objects */
                         rc = mds_create_objects(req, 2, rec, mds, obd,
@@ -931,9 +931,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         if (rec->ur_flags & (MDS_OPEN_CREAT | MDS_OPEN_JOIN_FILE))
                 parent_mode = LCK_EX;
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
-                                        &parent_lockh, rec->ur_name,
-                                        rec->ur_namelen - 1,
-                                        MDS_INODELOCK_UPDATE);
+                                        &parent_lockh, MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
                 if (rc != -ENOENT) {

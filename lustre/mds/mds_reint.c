@@ -74,7 +74,7 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         CDEBUG(D_HA, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
-        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm, 
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm,
                           mlcd->mlcd_eadatalen);
         if (rc < 0) {
                 CERROR("bad LSM cancelling %d log cookies: rc %d\n",
@@ -495,7 +495,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         lockpart |= MDS_INODELOCK_LOOKUP;
 
                 de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_EX,
-                                           &lockh, NULL, 0, lockpart);
+                                           &lockh, lockpart);
                 if (IS_ERR(de))
                         GOTO(cleanup, rc = PTR_ERR(de));
                 locked = 1;
@@ -553,7 +553,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
                 /* journal chown/chgrp in llog, just like unlink */
                 if (rc == 0 && lmm_size){
-                        cookie_size = mds_get_cookie_size(obd, lmm); 
+                        cookie_size = mds_get_cookie_size(obd, lmm);
                         OBD_ALLOC(logcookies, cookie_size);
                         if (logcookies == NULL)
                                 GOTO(cleanup, rc = -ENOMEM);
@@ -735,7 +735,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -ESTALE);
 
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_EX, &lockh,
-                                        rec->ur_name, rec->ur_namelen - 1,
                                         MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
@@ -1041,13 +1040,13 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
 
 int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                            struct lustre_handle *p1_lockh, int p1_lock_mode,
-                           ldlm_policy_data_t *p1_policy, 
+                           ldlm_policy_data_t *p1_policy,
                            struct ldlm_res_id *p2_res_id,
                            struct lustre_handle *p2_lockh, int p2_lock_mode,
-                           ldlm_policy_data_t *p2_policy, 
+                           ldlm_policy_data_t *p2_policy,
                            struct ldlm_res_id *c1_res_id,
                            struct lustre_handle *c1_lockh, int c1_lock_mode,
-                           ldlm_policy_data_t *c1_policy, 
+                           ldlm_policy_data_t *c1_policy,
                            struct ldlm_res_id *c2_res_id,
                            struct lustre_handle *c2_lockh, int c2_lock_mode,
                            ldlm_policy_data_t *c2_policy)
@@ -1419,7 +1418,7 @@ out_dput:
 int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         int count = le32_to_cpu(lmm->lmm_stripe_count);
-        int real_csize = count * sizeof(struct llog_cookie); 
+        int real_csize = count * sizeof(struct llog_cookie);
         return real_csize;
 }
 
@@ -1439,10 +1438,10 @@ void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
 
         CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", md_size,
                cookie_size);
- 
+
         lustre_shrink_reply(req, 1, md_size, 1);
-        
-        lustre_shrink_reply(req, md_size? 2:1, cookie_size, 0); 
+
+        lustre_shrink_reply(req, md_size? 2:1, cookie_size, 0);
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
@@ -1473,9 +1472,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_fid1,
                                          &parent_lockh, &dparent, LCK_EX,
-                                         MDS_INODELOCK_UPDATE, 
+                                         MDS_INODELOCK_UPDATE,
                                          rec->ur_name, rec->ur_namelen,
-                                         &child_lockh, &dchild, LCK_EX, 
+                                         &child_lockh, &dchild, LCK_EX,
                                          MDS_INODELOCK_FULL);
         if (rc)
                 GOTO(cleanup, rc);
