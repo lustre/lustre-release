@@ -739,6 +739,7 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
 
 /***************************************BEGIN PROTO**********************/
 /* cmm is the second thing for MDT logs */
+#if 0
 static int mgs_write_log_cmm(struct obd_device *obd, struct fs_db *fsdb, 
                              struct mgs_target_info *mti,
                              char *logname, char *cmmname)
@@ -784,12 +785,14 @@ static int mgs_write_log_cmm(struct obd_device *obd, struct fs_db *fsdb,
         OBD_FREE(cmmdesc, sizeof(*cmmdesc));
         RETURN(rc);
 }
+#endif
 /***************************************END PROTO**********************/
 
 
 
 /***************************************BEGIN PROTO**********************/
 /* lmv is the second thing for client logs */
+#if 0
 static int mgs_write_log_lmv(struct obd_device *obd, struct fs_db *fsdb, 
                              struct mgs_target_info *mti,
                              char *logname, char *lmvname)
@@ -835,6 +838,7 @@ static int mgs_write_log_lmv(struct obd_device *obd, struct fs_db *fsdb,
         OBD_FREE(lmvdesc, sizeof(*lmvdesc));
         RETURN(rc);
 }
+#endif
 /***************************************END PROTO**********************/
 
 /* lov is the first thing in the mdt and client logs */
@@ -971,18 +975,18 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                 rc = mgs_write_log_lov(obd, fsdb, mti, mti->mti_svname,
                                        lovname);
                 //BEGIN PROTO 
-                rc = mgs_write_log_cmm(obd, fsdb, mti, mti->mti_svname,
-                                       lovname);
+                //rc = mgs_write_log_cmm(obd, fsdb, mti, mti->mti_svname,
+                //                     lovname);
                 //END PROTO
         } 
         /* else there's already some ost entries in the mdt log. */
 
         //BEGIN PROTO 
-                duplicate cmm & mdc info from other MDTes
-        for_all_mdt{
-                add this mdc to other MDT's cmm;
-                mgs_write_log_mdc(...);
-        }
+        //        duplicate cmm & mdc info from other MDTes
+        //for_all_mdt{
+        //        add this mdc to other MDT's cmm;
+        //        mgs_write_log_mdc(...);
+        //}
         //END PROTO
 
         /* We added the lov, maybe some osc's, now for the mdt.
@@ -1017,12 +1021,12 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                 /* Start client log */
                 rc = mgs_write_log_lov(obd, fsdb, mti, cliname, lovname);
                 //BEGIN PROTO 
-                rc = mgs_write_log_lmv(obd, fsdb, mti, cliname, lmvname);
+                //rc = mgs_write_log_lmv(obd, fsdb, mti, cliname, lmvname);
                 //END PROTO 
         }
         //BEGIN PROTO 
-                add this mdc to client'lov;
-                mgs_write_log_mdc(...);
+        //        add this mdc to client'lov;
+        //        mgs_write_log_mdc(...);
         //END PROTO
 
 
@@ -1030,6 +1034,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
 
 
 /***************************************BEGIN PROTO****************************/
+#if 0
 static int mgs_write_log_mdc(struct obd_device *obd, struct fs_db *fsdb,
                              struct mgs_target_info *mti,
                              char *logname, char *lmv_cmm_name, int flags)
@@ -1065,6 +1070,7 @@ static int mgs_write_log_mdc(struct obd_device *obd, struct fs_db *fsdb,
         name_destroy(lovname);
         RETURN(rc);
 }
+#endif
 /***************************************END PROTO*****************************/
 
 
@@ -1183,9 +1189,9 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         name_create(mti->mti_fsname, "-MDT0000", &logname);
         name_create(mti->mti_fsname, "-mdtlov", &lovname);
         //BEGIN PROTO
-        for_all_mdt{
-                mgs_write_log_osc(obd, fsdb, mti, logname, lovname, flags);
-        }
+        //for_all_mdt{
+        //       mgs_write_log_osc(obd, fsdb, mti, logname, lovname, flags);
+        //}
         //END PROTO
         name_destroy(lovname);
         name_destroy(logname);
