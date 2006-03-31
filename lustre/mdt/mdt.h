@@ -63,13 +63,20 @@ struct md_object {
 	struct lu_object mo_lu;
 };
 
+static inline int lu_device_is_md(struct lu_device *d)
+{
+        return d->ld_type->ldt_tags & LU_DEVICE_MD;
+}
+
 static inline struct md_object *lu2md(struct lu_object *o)
 {
+        LASSERT(lu_device_is_md(o->lo_dev));
 	return container_of(o, struct md_object, mo_lu);
 }
 
 static inline struct md_device *md_device_get(struct md_object *o)
 {
+        LASSERT(lu_device_is_md(o->mo_lu.lo_dev));
 	return container_of(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
 }
 
@@ -133,7 +140,7 @@ struct mdt_thread_info {
 };
 
 int fid_lock(const struct ll_fid *, struct lustre_handle *, ldlm_mode_t);
-int fid_unlock(const struct ll_fid *, struct lustre_handle *, ldlm_mode_t);
+void fid_unlock(const struct ll_fid *, struct lustre_handle *, ldlm_mode_t);
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */
