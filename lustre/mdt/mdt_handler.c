@@ -228,6 +228,45 @@ void mdt_object_put(struct mdt_object *o)
 	lu_object_put(&o->mot_obj.mo_lu);
 }
 
+static struct ll_fid *mdt_object_fid(struct mdt_object *o)
+{
+        return lu_object_fid(&o->mot_obj.mo_lu);
+}
+
+static int mdt_object_lock(struct mdt_object *o, struct mdt_lock_handle *lh)
+{
+        LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
+        LASSERT(lh->mlh_mode != LCK_MINMODE);
+
+        return fid_lock(mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode);
+}
+
+static void mdt_object_unlock(struct mdt_object *o, struct mdt_lock_handle *lh)
+{
+        if (lustre_handle_is_used(&lh->mlh_lh)) {
+                fid_unlock(mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode);
+                lh->mlh_lh.cookie = 0;
+        }
+}
+
+struct mdt_object *mdt_object_find_lock(struct mdt_device *d, struct ll_fid *f,
+                                        struct mdt_lock_handle *lh)
+{
+        struct mdt_object *o;
+
+        o = mdt_object_find(d, f);
+        if (!IS_ERR(o)) {
+                int result;
+
+                result = mdt_object_lock(o, lh);
+                if (result != 0) {
+                        mdt_object_put(o);
+                        o = ERR_PTR(result);
+                }
+        }
+        return o;
+}
+
 struct mdt_handler {
 	const char *mh_name;
 	int         mh_fail_id;
@@ -316,24 +355,43 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 	RETURN(result);
 }
 
+void mdt_lock_handle_init(struct mdt_lock_handle *lh)
+{
+        lh->mlh_lh.cookie = 0ull;
+        lh->mlh_mode = LCK_MINMODE;
+}
+
+void mdt_lock_handle_fini(struct mdt_lock_handle *lh)
+{
+        LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
+}
+
 static void mdt_thread_info_init(struct mdt_thread_info *info)
 {
+        int i;
+
 	memset(info, 0, sizeof *info);
 	info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
 	/*
 	 * Poison size array.
 	 */
-	for (info->mti_rep_buf_nr = 0;
-	     info->mti_rep_buf_nr < MDT_REP_BUF_NR_MAX; info->mti_rep_buf_nr++)
-		info->mti_rep_buf_size[info->mti_rep_buf_nr] = ~0;
+	for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
+		info->mti_rep_buf_size[i] = ~0;
+        info->mti_rep_buf_nr = i;
+        for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
+                mdt_lock_handle_init(&info->mti_lh[i]);
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
 {
+        int i;
+
 	if (info->mti_object != NULL) {
 		mdt_object_put(info->mti_object);
 		info->mti_object = NULL;
 	}
+        for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
+                mdt_lock_handle_fini(&info->mti_lh[i]);
 }
 
 static int mds_msg_check_version(struct lustre_msg *msg)
@@ -675,41 +733,40 @@ static struct lu_device_operations mdt_lu_ops = {
 	.ldo_object_print   = mdt_object_print
 };
 
-static struct ll_fid *mdt_object_fid(struct mdt_object *o)
-{
-        return lu_object_fid(&o->mot_obj.mo_lu);
-}
-
-static int mdt_object_lock(struct mdt_object *o, ldlm_mode_t mode)
-{
-        return fid_lock(mdt_object_fid(o), &o->mot_lh, mode);
-}
-
-static void mdt_object_unlock(struct mdt_object *o, ldlm_mode_t mode)
-{
-        fid_unlock(mdt_object_fid(o), &o->mot_lh, mode);
-}
-
 struct md_object *mdt_object_child(struct mdt_object *o)
 {
         return lu2md(lu_object_next(&o->mot_obj.mo_lu));
 }
 
-int mdt_mkdir(struct mdt_device *d, struct ll_fid *pfid, const char *name)
+static inline struct md_device_operations *mdt_child_ops(struct mdt_device *d)
 {
-	struct mdt_object *o;
+        return d->mdt_child->md_ops;
+}
+
+int mdt_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
+              struct ll_fid *pfid, const char *name, struct ll_fid *cfid)
+{
+	struct mdt_object      *o;
+	struct mdt_object      *child;
+        struct mdt_lock_handle *lh;
+
 	int result;
 
-	o = mdt_object_find(d, pfid);
+        (lh = &info->mti_lh[MDT_LH_PARENT])->mlh_mode = LCK_PW;
+
+	o = mdt_object_find_lock(d, pfid, lh);
 	if (IS_ERR(o))
-		return PTR_ERR(o);
-	result = mdt_object_lock(o, LCK_PW);
-	if (result == 0) {
-		result = d->mdt_child->md_ops->mdo_mkdir(mdt_object_child(o),
-                                                         name);
-		mdt_object_unlock(o, LCK_PW);
-	}
-	mdt_object_put(o);
+                return PTR_ERR(o);
+
+        child = mdt_object_find(d, cfid);
+        if (!IS_ERR(child)) {
+                result = mdt_child_ops(d)->mdo_mkdir(mdt_object_child(o), name,
+                                                     mdt_object_child(child));
+                mdt_object_put(child);
+        } else
+                result = PTR_ERR(child);
+        mdt_object_unlock(o, lh);
+        mdt_object_put(o);
 	return result;
 }
 

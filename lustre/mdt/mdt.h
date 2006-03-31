@@ -43,7 +43,8 @@ struct md_device {
 
 struct md_device_operations {
         int (*mdo_root_get)(struct md_device *m, struct ll_fid *f);
-        int (*mdo_mkdir)(struct md_object *o, const char *name);
+        int (*mdo_mkdir)(struct md_object *o, const char *name,
+                         struct md_object *child);
 };
 
 struct mdt_device {
@@ -83,11 +84,15 @@ static inline struct md_device *md_device_get(struct md_object *o)
 struct mdt_object {
 	struct lu_object_header mot_header;
 	struct md_object        mot_obj;
-        /*
-         * lock handle for dlm lock.
-         */
-	struct lustre_handle    mot_lh;
 };
+
+struct mdt_lock_handle {
+	struct lustre_handle    mlh_lh;
+        ldlm_mode_t             mlh_mode;
+};
+
+void mdt_lock_handle_init(struct mdt_lock_handle *lh);
+void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
 struct mdd_object {
 	struct md_object  mod_obj;
@@ -105,38 +110,44 @@ enum {
 	MDT_REP_BUF_NR_MAX = 8
 };
 
+enum {
+        MDT_LH_PARENT,
+        MDT_LH_CHILD,
+        MDT_LH_NR
+};
+
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
  * reduce stack consumption.
  */
 struct mdt_thread_info {
-	struct mdt_device *mti_mdt;
+	struct mdt_device     *mti_mdt;
 	/*
 	 * number of buffers in reply message.
 	 */
-	int                mti_rep_buf_nr;
+	int                    mti_rep_buf_nr;
 	/*
 	 * sizes of reply buffers.
 	 */
-	int                mti_rep_buf_size[MDT_REP_BUF_NR_MAX];
+	int                    mti_rep_buf_size[MDT_REP_BUF_NR_MAX];
 	/*
 	 * Body for "habeo corpus" operations.
 	 */
-	struct mds_body   *mti_body;
+	struct mds_body       *mti_body;
 	/*
 	 * Host object. This is released at the end of mdt_handler().
 	 */
-	struct mdt_object *mti_object;
+	struct mdt_object     *mti_object;
 	/*
 	 * Additional fail id that can be set by handler. Passed to
 	 * target_send_reply().
 	 */
-	int                mti_fail_id;
-	/*
-	 * Offset of incoming buffers. 0 for top-level request processing. +ve
-	 * for intent handling.
-	 */
-	int                mti_offset;
+	int                    mti_fail_id;
+        /*
+         * A couple of lock handles.
+         */
+        struct mdt_lock_handle mti_lh[MDT_LH_NR];
+
 };
 
 int fid_lock(const struct ll_fid *, struct lustre_handle *, ldlm_mode_t);
