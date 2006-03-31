@@ -185,7 +185,16 @@ struct lu_device {
 };
 
 struct lu_device_type_operations;
+
+enum {
+        /* this is meta-data device */
+        LU_DEVICE_MD = (1 << 0),
+        /* this is data device */
+        LU_DEVICE_DT = (1 << 1)
+};
+
 struct lu_device_type {
+        __u32                             ldt_tags;
         char                             *ldt_name;
         struct lu_device_type_operations *ldt_ops;
 };
