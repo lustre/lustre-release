@@ -37,8 +37,8 @@ struct ptlrpc_service_conf {
 struct md_object;
 
 struct md_device {
-	struct lu_device             md_lu_dev;
-	struct md_device_operations *md_ops;
+        struct lu_device             md_lu_dev;
+        struct md_device_operations *md_ops;
 };
 
 struct md_device_operations {
@@ -61,7 +61,7 @@ struct mdt_device {
 };
 
 struct md_object {
-	struct lu_object mo_lu;
+        struct lu_object mo_lu;
 };
 
 static inline int lu_device_is_md(struct lu_device *d)
@@ -72,22 +72,22 @@ static inline int lu_device_is_md(struct lu_device *d)
 static inline struct md_object *lu2md(struct lu_object *o)
 {
         LASSERT(lu_device_is_md(o->lo_dev));
-	return container_of(o, struct md_object, mo_lu);
+        return container_of(o, struct md_object, mo_lu);
 }
 
 static inline struct md_device *md_device_get(struct md_object *o)
 {
         LASSERT(lu_device_is_md(o->mo_lu.lo_dev));
-	return container_of(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
+        return container_of(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
 }
 
 struct mdt_object {
-	struct lu_object_header mot_header;
-	struct md_object        mot_obj;
+        struct lu_object_header mot_header;
+        struct md_object        mot_obj;
 };
 
 struct mdt_lock_handle {
-	struct lustre_handle    mlh_lh;
+        struct lustre_handle    mlh_lh;
         ldlm_mode_t             mlh_mode;
 };
 
@@ -95,19 +95,19 @@ void mdt_lock_handle_init(struct mdt_lock_handle *lh);
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
 struct mdd_object {
-	struct md_object  mod_obj;
+        struct md_object  mod_obj;
 };
 
 struct osd_object {
-	struct lu_object  oo_lu;
-	struct dentry    *oo_dentry;
+        struct lu_object  oo_lu;
+        struct dentry    *oo_dentry;
 };
 
 int md_device_init(struct md_device *md, struct lu_device_type *t);
 void md_device_fini(struct md_device *md);
 
 enum {
-	MDT_REP_BUF_NR_MAX = 8
+        MDT_REP_BUF_NR_MAX = 8
 };
 
 enum {
@@ -121,28 +121,28 @@ enum {
  * reduce stack consumption.
  */
 struct mdt_thread_info {
-	struct mdt_device     *mti_mdt;
-	/*
-	 * number of buffers in reply message.
-	 */
-	int                    mti_rep_buf_nr;
-	/*
-	 * sizes of reply buffers.
-	 */
-	int                    mti_rep_buf_size[MDT_REP_BUF_NR_MAX];
-	/*
-	 * Body for "habeo corpus" operations.
-	 */
-	struct mds_body       *mti_body;
-	/*
-	 * Host object. This is released at the end of mdt_handler().
-	 */
-	struct mdt_object     *mti_object;
-	/*
-	 * Additional fail id that can be set by handler. Passed to
-	 * target_send_reply().
-	 */
-	int                    mti_fail_id;
+        struct mdt_device     *mti_mdt;
+        /*
+         * number of buffers in reply message.
+         */
+        int                    mti_rep_buf_nr;
+        /*
+         * sizes of reply buffers.
+         */
+        int                    mti_rep_buf_size[MDT_REP_BUF_NR_MAX];
+        /*
+         * Body for "habeo corpus" operations.
+         */
+        struct mds_body       *mti_body;
+        /*
+         * Host object. This is released at the end of mdt_handler().
+         */
+        struct mdt_object     *mti_object;
+        /*
+         * Additional fail id that can be set by handler. Passed to
+         * target_send_reply().
+         */
+        int                    mti_fail_id;
         /*
          * A couple of lock handles.
          */

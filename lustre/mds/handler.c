@@ -1370,7 +1370,7 @@ static int mds_msg_check_version(struct lustre_msg *msg)
 int mds_handle(struct ptlrpc_request *req)
 {
         int should_process, fail = OBD_FAIL_MDS_ALL_REPLY_NET;
-        int rc = 0;
+        int rc;
         struct mds_obd *mds = NULL; /* quell gcc overwarning */
         struct obd_device *obd = NULL;
         ENTRY;
@@ -1400,7 +1400,7 @@ int mds_handle(struct ptlrpc_request *req)
 
                 med = &req->rq_export->exp_mds_data;
                 obd = req->rq_export->exp_obd;
-                mds = &obd->u.mds;
+                mds = mds_req2mds(req);
 
                 /* sanity check: if the xid matches, the request must
                  * be marked as a resent or replayed */
@@ -1439,6 +1439,12 @@ int mds_handle(struct ptlrpc_request *req)
                 rc = target_handle_connect(req, mds_handle);
                 if (!rc) {
                         /* Now that we have an export, set mds. */
+                        /*
+                         * XXX nikita: these assignments are useless: mds is
+                         * never used below, and obd is only used for
+                         * MSG_LAST_REPLAY case, which never happens for
+                         * MDS_CONNECT.
+                         */
                         obd = req->rq_export->exp_obd;
                         mds = mds_req2mds(req);
                 }
