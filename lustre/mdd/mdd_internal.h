@@ -7,6 +7,7 @@
 #define LUSTRE_MDD_NAME "mdd"
 #define LUSTRE_OSD_NAME "osd"
 
+#define WRITE_LOCK 1
 /*the context of the mdd ops*/
 struct context {
         const char      *name;
@@ -42,6 +43,7 @@ struct osd_device {
 	struct lu_device              osd_lu_dev;
 	struct osd_device_operations *osd_ops;
 };
+
 
 struct md_device {
         struct lu_device             md_lu_dev;
@@ -86,4 +88,30 @@ struct osd_object {
         struct dentry    *oo_dentry;
 };
 
+struct md_device_operations {
+        int (*mdo_root_get)(struct md_device *m, struct ll_fid *f);
+        int (*mdo_mkdir)(struct md_object *obj, const char *name,
+                         struct md_object *child);
+        
+        int (*mdo_rename)(struct md_object *spobj, struct md_object *tpobj,
+                          struct md_object *sobj, const char *sname,
+                          struct md_object *tobj, const char *tname, 
+                          struct context *uctxt);
+        int (*mdo_link)(struct md_object *tobj, struct md_object *sobj,
+                        const char *name, struct context *uctxt);
+        int (*mdo_attr_get)(struct md_object *obj, void *buf, int buf_len,
+                            const char *name, struct context *uctxt); 
+        int (*mdo_attr_set)(struct md_object *obj, void *buf, int buf_len, 
+                            const char *name, struct context *uctxt);
+        int (*mdo_index_insert)(struct mdd_device *mdd, struct md_object *pobj,
+                                struct md_object *obj, const char *name,
+                                struct context *uctxt);
+        int (*mdo_index_delete)(struct md_object *pobj, struct md_object *obj, 
+                                const char *name, struct context *uctxt);
+        int (*mdo_object_create)(struct md_object *pobj, struct mdd_object *child,
+                                 struct context *uctxt);
+};
+
+int mdd_object_put(struct mdd_device *mdd, struct mdd_object *obj);
+void mdd_object_get(struct mdd_device *mdd, struct mdd_object *obj);
 #endif

@@ -1,0 +1,4 @@
+MODULES := mdd
+mdd-objs := mdd_handler.o
+
+@INCLUDE_RULES@
