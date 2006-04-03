@@ -182,6 +182,9 @@ struct lu_device {
 	struct lu_device_operations *ld_ops;
 	struct lu_site              *ld_site;
         struct proc_dir_entry       *ld_proc_entry;
+
+        /* XXX: temporary back pointer into obd. */
+        struct obd_device           *ld_obd;
 };
 
 struct lu_device_type_operations;

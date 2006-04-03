@@ -318,6 +318,7 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 d = ldt->ldt_ops->ldto_device_alloc(ldt, cfg);
                 if (!IS_ERR(d)) {
                         obd->obd_lu_dev = d;
+                        d->ld_obd = obd;
                         rc = 0;
                 } else
                         rc = PTR_ERR(d);
