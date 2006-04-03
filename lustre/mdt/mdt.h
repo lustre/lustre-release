@@ -19,8 +19,6 @@
 
 #include <linux/lu_object.h>
 
-#define LUSTRE_MDT0_NAME "mdt0"
-
 struct md_device_operations;
 
 struct ptlrpc_service_conf {

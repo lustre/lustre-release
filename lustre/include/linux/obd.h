@@ -489,6 +489,7 @@ struct niobuf_local {
 /* FIXME all the references to these defines need to be updated */
 #define LUSTRE_MDS_NAME "mds"
 #define LUSTRE_MDT_NAME "mdt"
+#define LUSTRE_MDT0_NAME "mdt0"
 
 #define LUSTRE_MDC_NAME "mdc"
 
