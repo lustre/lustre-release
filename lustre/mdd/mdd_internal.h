@@ -4,23 +4,53 @@
 #ifndef _MDD_INTERNAL_H
 #define _MDD_INTERNAL_H
 
-struct osd_device {
-	struct lu_device              osd_lu_dev;
-	struct osd_device_operations *osd_ops;
-}
-
-struct osd_device_operations {
-        int (*osd_object_lock)(struct lu_object *lu __u32 mode);
-        int (*osd_object_unlock)(struct lu_object *lu, __32 mode);
-        int (*osd_trans_start)(struct lu_object *lu); 
-        int (*osd_trans_stop)(struct lu_object *lu);
-}
 #define LUSTRE_MDD_NAME "mdd"
 #define LUSTRE_OSD_NAME "osd"
 
+/*the context of the mdd ops*/
+struct context {
+        const char      *name;
+        int             name_len;
+        __u32           mode;
+        int             flags;
+};
+
+struct osd_device_operations {
+        int   (*osd_object_lock)(struct lu_object *lu, __u32 mode);
+        int   (*osd_object_unlock)(struct lu_object *lu, __u32 mode);
+        void* (*osd_trans_start)(struct lu_object *lu); 
+        void  (*osd_trans_stop)(struct lu_object *lu);
+        int   (*osd_object_create)(struct lu_object *plu, struct lu_object *child,
+                                   struct context *context, void *handle);
+        int   (*osd_object_destroy)(struct lu_object *lu, void *handle); 
+        void  (*osd_object_get)(struct lu_object *lu);
+        int   (*osd_attr_get)(struct lu_object *lu, void *buf, int buf_len, 
+                              const char *name, struct context *context); 
+        int   (*osd_attr_set)(struct lu_object *lu, void *buf, int buf_len,
+                              const char *name, struct context *context,
+                              void *handle);
+        int   (*osd_object_dec_check)(struct lu_object *lu);
+        int   (*osd_index_insert)(struct lu_object *lu, struct ll_fid *fid, 
+                                  const char *name, struct context *uctxt, 
+                                  void *handle);
+        int   (*osd_insert_delete)(struct lu_object *lu, struct ll_fid *fid,
+                                   const char *name,  struct context *uctxt, 
+                                   void *handle);
+};
+
+struct osd_device {
+	struct lu_device              osd_lu_dev;
+	struct osd_device_operations *osd_ops;
+};
+
+struct md_device {
+        struct lu_device             md_lu_dev;
+        struct md_device_operations *md_ops;
+};
+
 struct mdd_device {
         /* NB this field MUST be first */
-        struct md_device                 *mdd_md_device;
+        struct md_device                 mdd_md_dev;
         struct osd_device                *mdd_child;
         int                              mdd_max_mddize;
         int                              mdd_max_cookiesize;
@@ -30,7 +60,6 @@ struct mdd_device {
         __u64                            mdd_mount_count;
         __u64                            mdd_io_epoch;
         unsigned long                    mdd_atime_diff;
-        struct semaphore                 mdd_epoch_sem;
         struct ll_fid                    mdd_rootfid;
         struct lr_server_data           *mdd_server_data;
         struct dentry                   *mdd_pending_dir;
@@ -38,11 +67,23 @@ struct mdd_device {
         struct dentry                   *mdd_objects_dir;
         struct llog_handle              *mdd_cfg_llh;
         struct file                     *mdd_health_check_filp;
-        struct lustre_quota_info         mdd_quota_info;
-        struct semaphore                 mdd_qonoff_sem;
         struct semaphore                 mdd_health_sem;
         unsigned long                    mdd_lov_objids_valid:1,
                                          mdd_fl_user_xattr:1,
                                          mdd_fl_acl:1;
 };
+
+struct md_object {
+        struct lu_object mo_lu;
+};
+
+struct mdd_object {
+        struct md_object  mod_obj;
+};
+
+struct osd_object {
+        struct lu_object  oo_lu;
+        struct dentry    *oo_dentry;
+};
+
 #endif
