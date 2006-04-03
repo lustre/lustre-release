@@ -276,7 +276,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
 
         LASSERT (nbufs > 0);
         LASSERT (bufsize >= max_req_size);
-        
+
         OBD_ALLOC(service, sizeof(*service));
         if (service == NULL)
                 RETURN(NULL);
@@ -313,7 +313,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         spin_lock (&ptlrpc_all_services_lock);
         list_add (&service->srv_list, &ptlrpc_all_services);
         spin_unlock (&ptlrpc_all_services_lock);
-        
+
         /* Now allocate the request buffers */
         rc = ptlrpc_grow_req_bufs(service);
         /* We shouldn't be under memory pressure at startup, so
@@ -781,6 +781,77 @@ ptlrpc_retry_rqbds(void *arg)
         return (-ETIMEDOUT);
 }
 
+enum {
+        /*
+         * Maximal number of tld slots.
+         */
+        PTLRPC_THREAD_KEY_NR = 16
+};
+
+static struct ptlrpc_thread_key *keys[PTLRPC_THREAD_KEY_NR] = { NULL, };
+
+static int keys_nr = 0;
+static spinlock_t keys_guard = SPIN_LOCK_UNLOCKED;
+
+int ptlrpc_thread_key_register(struct ptlrpc_thread_key *key)
+{
+        int result;
+
+        spin_lock(&keys_guard);
+        if (keys_nr < ARRAY_SIZE(keys)) {
+                key->ptk_index = keys_nr;
+                keys[keys_nr] = key;
+                keys_nr++;
+                result = 0;
+        } else
+                result = -ENFILE;
+        spin_unlock(&keys_guard);
+        return result;
+}
+
+void *ptlrpc_thread_key_get(struct ptlrpc_thread *t,
+                            struct ptlrpc_thread_key *key)
+{
+        return t->t_key_values[key->ptk_index];
+}
+
+static void keys_fini(struct ptlrpc_thread *t)
+{
+        int i;
+
+        for (i = 0; i < ARRAY_SIZE(keys); ++i) {
+                if (t->t_key_values[i] != NULL) {
+                        LASSERT(keys[i] != NULL);
+                        LASSERT(keys[i]->ptk_fini != NULL);
+
+                        keys[i]->ptk_fini(t, t->t_key_values[i]);
+                        t->t_key_values[i] = NULL;
+                }
+        }
+}
+
+static int keys_init(struct ptlrpc_thread *t)
+{
+        int i;
+
+        for (i = 0; i < ARRAY_SIZE(keys); ++i) {
+                if (keys[i] != NULL) {
+                        void *value;
+
+                        LASSERT(keys[i]->ptk_init != NULL);
+                        LASSERT(keys[i]->ptk_index == i);
+
+                        value = keys[i]->ptk_init(t);
+                        if (IS_ERR(value)) {
+                                keys_fini(t);
+                                return PTR_ERR(value);
+                        }
+                        t->t_key_values[i] = value;
+                }
+        }
+        return 0;
+}
+
 static int ptlrpc_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
@@ -792,6 +863,8 @@ static int ptlrpc_main(void *arg)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         struct group_info *ginfo = NULL;
 #endif
+
+        void *tld[PTLRPC_THREAD_KEY_NR] = { NULL, };
         int rc = 0;
         ENTRY;
 
@@ -842,6 +915,11 @@ static int ptlrpc_main(void *arg)
                 if (rc)
                         goto out;
         }
+
+        thread->t_key_values = tld;
+        rc = keys_init(thread);
+        if (rc)
+                goto out_srv_init;
 
         /* Alloc reply state structure for this one */
         OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, GFP_KERNEL);
@@ -925,6 +1003,8 @@ out_srv_init:
                 svc->srv_done(thread);
 
 out:
+        keys_fini(thread);
+
         CDEBUG(D_NET, "service thread %d exiting: rc %d\n", thread->t_id, rc);
 
         spin_lock_irqsave(&svc->srv_lock, flags);
@@ -1072,7 +1152,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
          * its 'unlink' flag set for each posted rqbd */
         list_for_each(tmp, &service->srv_active_rqbds) {
                 struct ptlrpc_request_buffer_desc *rqbd =
-                        list_entry(tmp, struct ptlrpc_request_buffer_desc, 
+                        list_entry(tmp, struct ptlrpc_request_buffer_desc,
                                    rqbd_list);
 
                 rc = LNetMDUnlink(rqbd->rqbd_md_h);
