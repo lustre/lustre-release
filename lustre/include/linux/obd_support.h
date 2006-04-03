@@ -308,35 +308,39 @@ extern atomic_t libcfs_kmemory;
 
 #if defined(LUSTRE_UTILS) /* this version is for utils only */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
-do {                                                                          \
-        (ptr) = kmalloc(size, (gfp_mask));                                    \
-        if ((ptr) == NULL) {                                                  \
+({                                                                            \
+        typeof(ptr) __ptr;                                                    \
+        __ptr = kmalloc(size, (gfp_mask));                                    \
+        if (__ptr == NULL) {                                                  \
                 CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
         } else {                                                              \
-                memset(ptr, 0, size);                                         \
+                memset(__ptr, 0, size);                                       \
                 CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p\n",          \
-                       (int)(size), ptr);                                     \
+                       (int)(size), __ptr);                                   \
         }                                                                     \
-} while (0)
+        (ptr) = __ptr;                                                        \
+})
 #else /* this version is for the kernel and liblustre */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
-do {                                                                          \
-        (ptr) = kmalloc(size, (gfp_mask));                                    \
-        if ((ptr) == NULL) {                                                  \
+({                                                                            \
+        typeof(ptr) __ptr;                                                    \
+        __ptr = kmalloc(size, (gfp_mask));                                    \
+        if (__ptr == NULL) {                                                  \
                 CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
                 CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
                        atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
         } else {                                                              \
-                memset(ptr, 0, size);                                         \
+                memset(__ptr, 0, size);                                       \
                 atomic_add(size, &obd_memory);                                \
                 if (atomic_read(&obd_memory) > obd_memmax)                    \
                         obd_memmax = atomic_read(&obd_memory);                \
                 CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d)\n", \
-                       (int)(size), ptr, atomic_read(&obd_memory));           \
+                       (int)(size), __ptr, atomic_read(&obd_memory));         \
         }                                                                     \
-} while (0)
+        (ptr) = __ptr;                                                        \
+})
 #endif
 
 #ifndef OBD_GFP_MASK
