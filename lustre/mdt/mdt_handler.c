@@ -63,6 +63,7 @@
 unsigned long mdt_num_threads;
 
 static int mdt_handle(struct ptlrpc_request *req);
+static struct ptlrpc_thread_key mdt_thread_key;
 
 static int mdt_getstatus(struct mdt_thread_info *info,
                          struct ptlrpc_request *req, int offset)
@@ -643,13 +644,14 @@ static int mdt_handle(struct ptlrpc_request *req)
 {
         int result;
 
-        struct mdt_thread_info info; /* XXX on stack for now */
-        mdt_thread_info_init(&info);
-        info.mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
+        struct mdt_thread_info *info = ptlrpc_thread_key_get(req->rq_svc_thread,
+                                                             &mdt_thread_key);
+        mdt_thread_info_init(info);
+        info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
 
-        result = mdt_handle0(req, &info);
+        result = mdt_handle0(req, info);
 
-        mdt_thread_info_fini(&info);
+        mdt_thread_info_fini(info);
         return result;
 }
 
@@ -885,9 +887,27 @@ void mdt_device_free(struct lu_device *m)
         OBD_FREE_PTR(m);
 }
 
+void *mdt_thread_init(struct ptlrpc_thread *t)
+{
+        struct mdt_thread_info *info;
+
+        return OBD_ALLOC_PTR(info) ? : ERR_PTR(-ENOMEM); 
+}
+
+void mdt_thread_fini(struct ptlrpc_thread *t, void *data)
+{
+        struct mdt_thread_info *info = data;
+        OBD_FREE_PTR(info);
+}
+
+static struct ptlrpc_thread_key mdt_thread_key = {
+        .ptk_init = mdt_thread_init,
+        .ptk_fini = mdt_thread_fini
+};
+
 int mdt_type_init(struct lu_device_type *t)
 {
-        return 0;
+        return ptlrpc_thread_key_register(&mdt_thread_key);
 }
 
 void mdt_type_fini(struct lu_device_type *t)
