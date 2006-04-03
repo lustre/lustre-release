@@ -1,0 +1,101 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ */
+
+#ifndef _CMM_INTERNAL_H
+#define _CMM_INTERNAL_H
+
+#if defined(__KERNEL__)
+
+#include <linux/obd.h>
+#include <linux/md_object.h>
+
+#define LUSTRE_CMM0_NAME "cmm0"
+
+struct cmm_device {
+        struct md_device        cmm_md_dev;
+        /* underlaying device in MDS stack, usually MDD */
+        struct md_device        *cmm_child;
+        /* other MD servers in cluster */
+        struct md_device        *cmm_cluster;
+};
+
+
+#define CMM_DO_CHILD(d) (d->cmm_child->md_ops)
+
+static inline struct cmm_device *md2cmm_dev(struct md_device *m)
+{
+        return container_of(m, struct cmm_device, cmm_md_dev);
+}
+
+static struct cmm_device *lu2cmm_dev(struct lu_device *d)
+{
+	//LASSERT(lu_device_is_cmm(d));
+	return container_of(d, struct cmm_device, cmm_md_dev.md_lu_dev);
+}
+
+static inline struct lu_device *cmm2lu_dev(struct cmm_device *d)
+{
+	return (&d->cmm_md_dev.md_lu_dev);
+}
+
+struct cmm_object {
+	struct md_object        cmo_obj;
+};
+
+static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)
+{
+	return (md2cmm_dev(md_device_get(&c->cmo_obj)));
+}
+
+static struct cmm_object *lu2cmm_obj(struct lu_object *o)
+{
+	//LASSERT(lu_device_is_cmm(o->lo_dev));
+	return container_of(o, struct cmm_object, cmo_obj.mo_lu);
+}
+
+/* get cmm object from md_object */
+static inline struct cmm_object *md2cmm_obj(struct md_object *o)
+{
+	return container_of(o, struct cmm_object, cmo_obj);
+}
+/* get lower-layer object */
+static inline struct md_object *cmm2child_obj(struct cmm_object *o)
+{
+        return lu2md(lu_object_next(&o->cmo_obj.mo_lu));
+}
+
+/* cmm_object.c */
+int cmm_object_init(struct lu_object*);
+struct lu_object *cmm_object_alloc(struct lu_device *);
+void cmm_object_free(struct lu_object *o);
+void cmm_object_release(struct lu_object *o);
+//int cmm_getattr(struct lu_object *o, struct lu_attr *a);
+//int cmm_setattr(struct lu_object *o, struct lu_attr *a);
+int cmm_object_print(struct seq_file *f, const struct lu_object *o);
+
+/* cmm md operations */
+int cmm_root_get(struct md_device *m, struct ll_fid *f);
+int cmm_mkdir(struct md_object *o, const char *name,
+              struct md_object *child);
+
+#endif /* __KERNEL__ */
+#endif /* _CMM_INTERNAL_H */
