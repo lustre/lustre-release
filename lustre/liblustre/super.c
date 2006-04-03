@@ -1668,8 +1668,6 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         return inode;
 }
 
-extern struct list_head lustre_profile_list;
-
 static int
 llu_fsswop_mount(const char *source,
                  unsigned flags,
