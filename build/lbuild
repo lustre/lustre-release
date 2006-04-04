@@ -301,8 +301,6 @@ load_target()
     . "$TARGET_FILE"
 
     [ "$KERNEL"  ] || fatal 1 "Target $TARGET did not specify a kernel."
-#    [ "$SERIES"  ] || fatal 1 "Target $TARGET did not specify a kernel patch series."
-#    [ "$CONFIG"  ] || fatal 1 "Target $TARGET did not specify a kernel config."
     [ "$VERSION" ] || fatal 1 "Target $TARGET did not specify a kernel version."
 
     if [ "$KERNELDIR" ] ; then
@@ -699,17 +697,22 @@ unpack_lustre
 if [ -z "$LINUX" ] ; then
     load_target
 
-    if (( $DO_SRC )) ; then
-        unpack_linux
-        patch_linux
-        pack_linux
-        clean_linux
+    if [ "$SERIES" ] ; then
+        if (( $DO_SRC )) ; then
+            unpack_linux
+            patch_linux
+            pack_linux
+            clean_linux
+        fi
+
+        prep_kernel_build
+        clean_lustre
+
+        build_kernel
+    else
+        # can't build a kernel if we have no series for it (i.e. patchless)
+        build_lustre
     fi
-
-    prep_kernel_build
-    clean_lustre
-
-    build_kernel
 else
     build_lustre
 fi
