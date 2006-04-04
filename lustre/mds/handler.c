@@ -162,7 +162,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 }
 
 /* only valid locked dentries or errors should be returned */
-struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
+struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct lu_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
                                      __u64 lockpart)
@@ -194,7 +194,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 /* Look up an entry by inode number. */
 /* this function ONLY returns valid dget'd dentries with an initialized inode
    or errors */
-struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
+struct dentry *mds_fid2dentry(struct mds_obd *mds, struct lu_fid *fid,
                               struct vfsmount **mnt)
 {
         char fid_name[32];
@@ -878,7 +878,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                     GOTO(cleanup, rc);
         } else {
                 struct ldlm_lock *granted_lock;
-                struct ll_fid child_fid;
+                struct lu_fid child_fid;
                 struct ldlm_resource *res;
                 DEBUG_REQ(D_DLMTRACE, req, "resent, not enqueuing new locks");
                 granted_lock = ldlm_handle2lock(child_lockh);
@@ -2552,7 +2552,7 @@ static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
                                           void *data)
 {
         struct obd_device *obd = data;
-        struct ll_fid fid;
+        struct lu_fid fid;
         fid.id = id;
         fid.generation = gen;
         return mds_fid2dentry(&obd->u.mds, &fid, NULL);

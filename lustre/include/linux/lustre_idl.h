@@ -339,7 +339,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_TRUNCLOCK     (0x00000800)
 
 /* this should be not smaller than sizeof(struct lustre_handle) + sizeof(struct
- * llog_cookie) + sizeof(ll_fid). Nevertheless struct ll_fid is not longer
+ * llog_cookie) + sizeof(lu_fid). Nevertheless struct lu_fid is not longer
  * stored in o_inline, we keep this just for case. */
 #define OBD_INLINESZ    80
 
@@ -622,7 +622,7 @@ typedef enum {
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
-struct ll_fid {
+struct lu_fid {
         __u64 id;         /* holds object id */
         __u32 generation; /* holds object generation */
 
@@ -630,9 +630,9 @@ struct ll_fid {
                            * OST for saving into EA. */
 };
 
-extern void lustre_swab_ll_fid (struct ll_fid *fid);
+extern void lustre_swab_lu_fid (struct lu_fid *fid);
 
-static inline int lfid_eq(const struct ll_fid *f0, const struct ll_fid *f1)
+static inline int lfid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 {
 	/* check that there is no alignment padding */
 	CLASSERT(sizeof *f0 ==
@@ -654,8 +654,8 @@ extern void lustre_swab_mds_status_req (struct mds_status_req *r);
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
 
 struct mds_body {
-        struct ll_fid  fid1;
-        struct ll_fid  fid2;
+        struct lu_fid  fid1;
+        struct lu_fid  fid2;
         struct lustre_handle handle;
         __u64          valid;
         __u64          size;   /* Offset, in the case of MDS_READPAGE */
@@ -714,7 +714,7 @@ struct mds_rec_setattr {
         __u32           sa_cap;
         __u32           sa_suppgid;
         __u32           sa_mode;
-        struct ll_fid   sa_fid;
+        struct lu_fid   sa_fid;
         __u64           sa_valid;
         __u64           sa_size;
         __u64           sa_mtime;
@@ -760,8 +760,8 @@ struct mds_rec_create {
         __u32           cr_cap;
         __u32           cr_flags; /* for use with open */
         __u32           cr_mode;
-        struct ll_fid   cr_fid;
-        struct ll_fid   cr_replayfid;
+        struct lu_fid   cr_fid;
+        struct lu_fid   cr_replayfid;
         __u64           cr_time;
         __u64           cr_rdev;
         __u32           cr_suppgid;
@@ -775,7 +775,7 @@ struct mds_rec_create {
 extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
 
 struct mds_rec_join {
-        struct ll_fid  jr_fid;
+        struct lu_fid  jr_fid;
         __u64          jr_headsize;
 };
 
@@ -788,8 +788,8 @@ struct mds_rec_link {
         __u32           lk_cap;
         __u32           lk_suppgid1;
         __u32           lk_suppgid2;
-        struct ll_fid   lk_fid1;
-        struct ll_fid   lk_fid2;
+        struct lu_fid   lk_fid1;
+        struct lu_fid   lk_fid2;
         __u64           lk_time;
         __u32           lk_padding_1;  /* also fix lustre_swab_mds_rec_link */
         __u32           lk_padding_2;  /* also fix lustre_swab_mds_rec_link */
@@ -806,8 +806,8 @@ struct mds_rec_unlink {
         __u32           ul_cap;
         __u32           ul_suppgid;
         __u32           ul_mode;
-        struct ll_fid   ul_fid1;
-        struct ll_fid   ul_fid2;
+        struct lu_fid   ul_fid1;
+        struct lu_fid   ul_fid2;
         __u64           ul_time;
         __u32           ul_padding_1; /* also fix lustre_swab_mds_rec_unlink */
         __u32           ul_padding_2; /* also fix lustre_swab_mds_rec_unlink */
@@ -824,8 +824,8 @@ struct mds_rec_rename {
         __u32           rn_cap;
         __u32           rn_suppgid1;
         __u32           rn_suppgid2;
-        struct ll_fid   rn_fid1;
-        struct ll_fid   rn_fid2;
+        struct lu_fid   rn_fid1;
+        struct lu_fid   rn_fid2;
         __u64           rn_time;
         __u32           rn_padding_1; /* also fix lustre_swab_mds_rec_rename */
         __u32           rn_padding_2; /* also fix lustre_swab_mds_rec_rename */
@@ -1145,7 +1145,7 @@ struct llog_array_rec {
 
 struct llog_create_rec {
         struct llog_rec_hdr     lcr_hdr;
-        struct ll_fid           lcr_fid;
+        struct lu_fid           lcr_fid;
         obd_id                  lcr_oid;
         obd_count               lcr_ogen;
         __u32                   padding;
@@ -1180,7 +1180,7 @@ struct llog_setattr_rec {
 
 struct llog_size_change_rec {
         struct llog_rec_hdr     lsc_hdr;
-        struct ll_fid           lsc_fid;
+        struct lu_fid           lsc_fid;
         __u32                   lsc_io_epoch;
         __u32                   padding;
         struct llog_rec_tail    lsc_tail;

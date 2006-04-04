@@ -600,8 +600,8 @@ void lustre_swab_mds_status_req (struct mds_status_req *r)
 
 void lustre_swab_mds_body (struct mds_body *b)
 {
-        lustre_swab_ll_fid (&b->fid1);
-        lustre_swab_ll_fid (&b->fid2);
+        lustre_swab_lu_fid (&b->fid1);
+        lustre_swab_lu_fid (&b->fid2);
         /* handle is opaque */
         __swab64s (&b->valid);
         __swab64s (&b->size);
@@ -687,7 +687,7 @@ void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
         __swab32s (&sa->sa_cap);
         __swab32s (&sa->sa_suppgid);
         __swab32s (&sa->sa_mode);
-        lustre_swab_ll_fid (&sa->sa_fid);
+        lustre_swab_lu_fid (&sa->sa_fid);
         __swab64s (&sa->sa_valid);
         __swab64s (&sa->sa_size);
         __swab64s (&sa->sa_mtime);
@@ -702,7 +702,7 @@ void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
 void lustre_swab_mds_rec_join (struct mds_rec_join *jr)
 {
         __swab64s(&jr->jr_headsize);
-        lustre_swab_ll_fid(&jr->jr_fid);
+        lustre_swab_lu_fid(&jr->jr_fid);
 }
 
 void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
@@ -713,8 +713,8 @@ void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
         __swab32s (&cr->cr_cap);
         __swab32s (&cr->cr_flags); /* for use with open */
         __swab32s (&cr->cr_mode);
-        lustre_swab_ll_fid (&cr->cr_fid);
-        lustre_swab_ll_fid (&cr->cr_replayfid);
+        lustre_swab_lu_fid (&cr->cr_fid);
+        lustre_swab_lu_fid (&cr->cr_replayfid);
         __swab64s (&cr->cr_time);
         __swab64s (&cr->cr_rdev);
         __swab32s (&cr->cr_suppgid);
@@ -733,8 +733,8 @@ void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
         __swab32s (&lk->lk_cap);
         __swab32s (&lk->lk_suppgid1);
         __swab32s (&lk->lk_suppgid2);
-        lustre_swab_ll_fid (&lk->lk_fid1);
-        lustre_swab_ll_fid (&lk->lk_fid2);
+        lustre_swab_lu_fid (&lk->lk_fid1);
+        lustre_swab_lu_fid (&lk->lk_fid2);
         __swab64s (&lk->lk_time);
         CLASSERT(offsetof(typeof(*lk), lk_padding_1) != 0);
         CLASSERT(offsetof(typeof(*lk), lk_padding_2) != 0);
@@ -750,8 +750,8 @@ void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
         __swab32s (&ul->ul_cap);
         __swab32s (&ul->ul_suppgid);
         __swab32s (&ul->ul_mode);
-        lustre_swab_ll_fid (&ul->ul_fid1);
-        lustre_swab_ll_fid (&ul->ul_fid2);
+        lustre_swab_lu_fid (&ul->ul_fid1);
+        lustre_swab_lu_fid (&ul->ul_fid2);
         __swab64s (&ul->ul_time);
         CLASSERT(offsetof(typeof(*ul), ul_padding_1) != 0);
         CLASSERT(offsetof(typeof(*ul), ul_padding_2) != 0);
@@ -767,8 +767,8 @@ void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
         __swab32s (&rn->rn_cap);
         __swab32s (&rn->rn_suppgid1);
         __swab32s (&rn->rn_suppgid2);
-        lustre_swab_ll_fid (&rn->rn_fid1);
-        lustre_swab_ll_fid (&rn->rn_fid2);
+        lustre_swab_lu_fid (&rn->rn_fid1);
+        lustre_swab_lu_fid (&rn->rn_fid2);
         __swab64s (&rn->rn_time);
         CLASSERT(offsetof(typeof(*rn), rn_padding_1) != 0);
         CLASSERT(offsetof(typeof(*rn), rn_padding_2) != 0);
@@ -1650,21 +1650,21 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct ost_body *)0)->oa) == 208, " found %lld\n",
                  (long long)(int)sizeof(((struct ost_body *)0)->oa));
 
-        /* Checks for struct ll_fid */
-        LASSERTF((int)sizeof(struct ll_fid) == 16, " found %lld\n",
-                 (long long)(int)sizeof(struct ll_fid));
-        LASSERTF((int)offsetof(struct ll_fid, id) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct ll_fid, id));
-        LASSERTF((int)sizeof(((struct ll_fid *)0)->id) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct ll_fid *)0)->id));
-        LASSERTF((int)offsetof(struct ll_fid, generation) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct ll_fid, generation));
-        LASSERTF((int)sizeof(((struct ll_fid *)0)->generation) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ll_fid *)0)->generation));
-        LASSERTF((int)offsetof(struct ll_fid, f_type) == 12, " found %lld\n",
-                 (long long)(int)offsetof(struct ll_fid, f_type));
-        LASSERTF((int)sizeof(((struct ll_fid *)0)->f_type) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ll_fid *)0)->f_type));
+        /* Checks for struct lu_fid */
+        LASSERTF((int)sizeof(struct lu_fid) == 16, " found %lld\n",
+                 (long long)(int)sizeof(struct lu_fid));
+        LASSERTF((int)offsetof(struct lu_fid, id) == 0, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_fid, id));
+        LASSERTF((int)sizeof(((struct lu_fid *)0)->id) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct lu_fid *)0)->id));
+        LASSERTF((int)offsetof(struct lu_fid, generation) == 8, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_fid, generation));
+        LASSERTF((int)sizeof(((struct lu_fid *)0)->generation) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lu_fid *)0)->generation));
+        LASSERTF((int)offsetof(struct lu_fid, f_type) == 12, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_fid, f_type));
+        LASSERTF((int)sizeof(((struct lu_fid *)0)->f_type) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lu_fid *)0)->f_type));
 
         /* Checks for struct mds_status_req */
         LASSERTF((int)sizeof(struct mds_status_req) == 8, " found %lld\n",

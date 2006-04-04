@@ -31,10 +31,10 @@ struct osd_device_operations {
                               const char *name, struct context *context,
                               void *handle);
         int   (*osd_object_dec_check)(struct lu_object *lu);
-        int   (*osd_index_insert)(struct lu_object *lu, struct ll_fid *fid, 
+        int   (*osd_index_insert)(struct lu_object *lu, struct lu_fid *fid, 
                                   const char *name, struct context *uctxt, 
                                   void *handle);
-        int   (*osd_insert_delete)(struct lu_object *lu, struct ll_fid *fid,
+        int   (*osd_insert_delete)(struct lu_object *lu, struct lu_fid *fid,
                                    const char *name,  struct context *uctxt, 
                                    void *handle);
 };
@@ -62,7 +62,7 @@ struct mdd_device {
         __u64                            mdd_mount_count;
         __u64                            mdd_io_epoch;
         unsigned long                    mdd_atime_diff;
-        struct ll_fid                    mdd_rootfid;
+        struct lu_fid                    mdd_rootfid;
         struct lr_server_data           *mdd_server_data;
         struct dentry                   *mdd_pending_dir;
         struct dentry                   *mdd_logs_dir;

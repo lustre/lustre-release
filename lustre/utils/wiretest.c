@@ -722,21 +722,21 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct ost_body *)0)->oa) == 208, " found %lld\n",
                  (long long)(int)sizeof(((struct ost_body *)0)->oa));
 
-        /* Checks for struct ll_fid */
-        LASSERTF((int)sizeof(struct ll_fid) == 16, " found %lld\n",
-                 (long long)(int)sizeof(struct ll_fid));
-        LASSERTF((int)offsetof(struct ll_fid, id) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct ll_fid, id));
-        LASSERTF((int)sizeof(((struct ll_fid *)0)->id) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct ll_fid *)0)->id));
-        LASSERTF((int)offsetof(struct ll_fid, generation) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct ll_fid, generation));
-        LASSERTF((int)sizeof(((struct ll_fid *)0)->generation) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ll_fid *)0)->generation));
-        LASSERTF((int)offsetof(struct ll_fid, f_type) == 12, " found %lld\n",
-                 (long long)(int)offsetof(struct ll_fid, f_type));
-        LASSERTF((int)sizeof(((struct ll_fid *)0)->f_type) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ll_fid *)0)->f_type));
+        /* Checks for struct lu_fid */
+        LASSERTF((int)sizeof(struct lu_fid) == 16, " found %lld\n",
+                 (long long)(int)sizeof(struct lu_fid));
+        LASSERTF((int)offsetof(struct lu_fid, id) == 0, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_fid, id));
+        LASSERTF((int)sizeof(((struct lu_fid *)0)->id) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct lu_fid *)0)->id));
+        LASSERTF((int)offsetof(struct lu_fid, generation) == 8, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_fid, generation));
+        LASSERTF((int)sizeof(((struct lu_fid *)0)->generation) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lu_fid *)0)->generation));
+        LASSERTF((int)offsetof(struct lu_fid, f_type) == 12, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_fid, f_type));
+        LASSERTF((int)sizeof(((struct lu_fid *)0)->f_type) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lu_fid *)0)->f_type));
 
         /* Checks for struct mds_status_req */
         LASSERTF((int)sizeof(struct mds_status_req) == 8, " found %lld\n",

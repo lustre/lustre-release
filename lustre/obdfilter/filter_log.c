@@ -41,7 +41,7 @@
 #include "filter_internal.h"
 
 int filter_log_sz_change(struct llog_handle *cathandle,
-                         struct ll_fid *mds_fid,
+                         struct lu_fid *mds_fid,
                          __u32 io_epoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode)

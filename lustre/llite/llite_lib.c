@@ -109,7 +109,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
-        struct ll_fid rootfid;
+        struct lu_fid rootfid;
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
         struct lustre_handle osc_conn = {0, };
@@ -773,7 +773,7 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
 
 void ll_clear_inode(struct inode *inode)
 {
-        struct ll_fid fid;
+        struct lu_fid fid;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ENTRY;
@@ -1340,7 +1340,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
         switch(cmd) {
         case EXT3_IOC_GETFLAGS: {
-                struct ll_fid fid;
+                struct lu_fid fid;
                 struct mds_body *body;
 
                 ll_inode2fid(&fid, inode);

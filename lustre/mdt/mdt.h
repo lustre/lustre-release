@@ -40,7 +40,7 @@ struct md_device {
 };
 
 struct md_device_operations {
-        int (*mdo_root_get)(struct md_device *m, struct ll_fid *f);
+        int (*mdo_root_get)(struct md_device *m, struct lu_fid *f);
         int (*mdo_mkdir)(struct md_object *o, const char *name,
                          struct md_object *child);
 };
@@ -148,8 +148,8 @@ struct mdt_thread_info {
 
 };
 
-int fid_lock(const struct ll_fid *, struct lustre_handle *, ldlm_mode_t);
-void fid_unlock(const struct ll_fid *, struct lustre_handle *, ldlm_mode_t);
+int fid_lock(const struct lu_fid *, struct lustre_handle *, ldlm_mode_t);
+void fid_unlock(const struct lu_fid *, struct lustre_handle *, ldlm_mode_t);
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

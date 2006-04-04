@@ -127,7 +127,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 void mds_reconstruct_generic(struct ptlrpc_request *req);
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd);
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
-                                struct ll_fid *fid,
+                                struct lu_fid *fid,
                                 struct lustre_handle *parent_lockh,
                                 struct dentry **dparentp, int parent_mode,
                                 __u64 parent_lockpart,
@@ -139,13 +139,13 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
                        struct lustre_handle *child_lockh);
 int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                           struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies, struct ll_fid *fid);
+                          struct llog_cookie *logcookies, struct lu_fid *fid);
 
 int mds_get_parents_children_locked(struct obd_device *obd,
                                     struct mds_obd *mds,
-                                    struct ll_fid *p1_fid,
+                                    struct lu_fid *p1_fid,
                                     struct dentry **de_srcdirp,
-                                    struct ll_fid *p2_fid,
+                                    struct lu_fid *p2_fid,
                                     struct dentry **de_tgtdirp,
                                     int parent_mode,
                                     const char *old_name, int old_len,
@@ -234,7 +234,7 @@ int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
                int lock);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);
-void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
+void mds_pack_inode2fid(struct lu_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
 int mds_pack_acl(struct mds_export_data *med, struct inode *inode,

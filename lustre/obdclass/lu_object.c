@@ -70,7 +70,7 @@ void lu_object_put(struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_put);
 
-struct lu_object *lu_object_alloc(struct lu_site *s, const struct ll_fid *f)
+struct lu_object *lu_object_alloc(struct lu_site *s, const struct lu_fid *f)
 {
         struct lu_object *scan;
         struct lu_object *top;
@@ -167,7 +167,7 @@ EXPORT_SYMBOL(lu_object_print);
 
 static struct lu_object *htable_lookup(struct lu_site *s,
                                        const struct hlist_head *bucket,
-                                       const struct ll_fid *f)
+                                       const struct lu_fid *f)
 {
         struct lu_object_header *h;
         struct hlist_node *scan;
@@ -188,12 +188,12 @@ static struct lu_object *htable_lookup(struct lu_site *s,
         return NULL;
 }
 
-static __u32 fid_hash(const struct ll_fid *f)
+static __u32 fid_hash(const struct lu_fid *f)
 {
         return f->id + f->generation + f->f_type;
 }
 
-struct lu_object *lu_object_find(struct lu_site *s, const struct ll_fid *f)
+struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f)
 {
         struct lu_object  *o;
         struct lu_object  *shadow;

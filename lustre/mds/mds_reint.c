@@ -390,7 +390,7 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
 
 int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                           struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies, struct ll_fid *fid)
+                          struct llog_cookie *logcookies, struct lu_fid *fid)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -1225,7 +1225,7 @@ cleanup:
 }
 
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
-                                struct ll_fid *fid,
+                                struct lu_fid *fid,
                                 struct lustre_handle *parent_lockh,
                                 struct dentry **dparentp, int parent_mode,
                                 __u64 parent_lockpart,
@@ -1355,7 +1355,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         struct inode *inode = dentry->d_inode;
         struct dentry *pending_child;
-        char fidname[LL_FID_NAMELEN];
+        char fidname[lu_fid_NAMELEN];
         int fidlen = 0, rc, mode;
         ENTRY;
 
@@ -1366,7 +1366,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
 #endif
         LASSERT(down_trylock(&pending_dir->i_sem) != 0);
 
-        fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
+        fidlen = lu_fid2str(fidname, inode->i_ino, inode->i_generation);
 
         CDEBUG(D_INODE, "pending destroy of %dx open %d linked %s %s = %s\n",
                mds_orphan_open_count(inode), inode->i_nlink,
@@ -1831,9 +1831,9 @@ cleanup:
  */
 int mds_get_parents_children_locked(struct obd_device *obd,
                                     struct mds_obd *mds,
-                                    struct ll_fid *p1_fid,
+                                    struct lu_fid *p1_fid,
                                     struct dentry **de_srcdirp,
-                                    struct ll_fid *p2_fid,
+                                    struct lu_fid *p2_fid,
                                     struct dentry **de_tgtdirp,
                                     int parent_mode,
                                     const char *old_name, int old_len,

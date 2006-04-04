@@ -189,12 +189,12 @@ static int mdt_handle_quotactl(struct mdt_thread_info *info,
 }
 
 
-int fid_lock(const struct ll_fid *f, struct lustre_handle *lh, ldlm_mode_t mode)
+int fid_lock(const struct lu_fid *f, struct lustre_handle *lh, ldlm_mode_t mode)
 {
         return 0;
 }
 
-void fid_unlock(const struct ll_fid *f,
+void fid_unlock(const struct lu_fid *f,
                 struct lustre_handle *lh, ldlm_mode_t mode)
 {
 }
@@ -215,7 +215,7 @@ static struct mdt_object *mdt_obj(struct lu_object *o)
         return container_of(o, struct mdt_object, mot_obj.mo_lu);
 }
 
-struct mdt_object *mdt_object_find(struct mdt_device *d, struct ll_fid *f)
+struct mdt_object *mdt_object_find(struct mdt_device *d, struct lu_fid *f)
 {
         struct lu_object *o;
 
@@ -231,7 +231,7 @@ void mdt_object_put(struct mdt_object *o)
         lu_object_put(&o->mot_obj.mo_lu);
 }
 
-static struct ll_fid *mdt_object_fid(struct mdt_object *o)
+static struct lu_fid *mdt_object_fid(struct mdt_object *o)
 {
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
@@ -252,7 +252,7 @@ static void mdt_object_unlock(struct mdt_object *o, struct mdt_lock_handle *lh)
         }
 }
 
-struct mdt_object *mdt_object_find_lock(struct mdt_device *d, struct ll_fid *f,
+struct mdt_object *mdt_object_find_lock(struct mdt_device *d, struct lu_fid *f,
                                         struct mdt_lock_handle *lh)
 {
         struct mdt_object *o;
@@ -830,7 +830,7 @@ static inline struct md_device_operations *mdt_child_ops(struct mdt_device *d)
 }
 
 int mdt_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
-              struct ll_fid *pfid, const char *name, struct ll_fid *cfid)
+              struct lu_fid *pfid, const char *name, struct lu_fid *cfid)
 {
         struct mdt_object      *o;
         struct mdt_object      *child;

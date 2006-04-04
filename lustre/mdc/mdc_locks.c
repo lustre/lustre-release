@@ -143,7 +143,7 @@ void mdc_set_lock_data(__u64 *l, void *data)
 }
 EXPORT_SYMBOL(mdc_set_lock_data);
 
-int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+int mdc_change_cbdata(struct obd_export *exp, struct lu_fid *fid, 
                       ldlm_iterator_t it, void *data)
 {
         struct ldlm_res_id res_id = { .name = {0} };

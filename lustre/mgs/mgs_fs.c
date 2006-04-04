@@ -48,7 +48,7 @@
 /* Look up an entry by inode number. */
 /* this function ONLY returns valid dget'd dentries with an initialized inode
    or errors */
-static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct ll_fid *fid)
+static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct lu_fid *fid)
 {
         char fid_name[32];
         unsigned long ino = fid->id;
@@ -102,7 +102,7 @@ static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
                                           void *data)
 {
         struct obd_device *obd = data;
-        struct ll_fid fid;
+        struct lu_fid fid;
         fid.id = id;
         fid.generation = gen;
         return mgs_fid2dentry(&obd->u.mgs, &fid);

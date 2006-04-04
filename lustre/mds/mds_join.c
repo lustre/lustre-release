@@ -252,7 +252,7 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
         struct inode *tail_inode, *head_inode;
         struct dentry *de_tailparent = NULL, *de_tail = NULL, *de_head = NULL;
         struct lustre_handle dlm_handles[4] = {{0}, {0}, {0}, {0}};
-        struct ll_fid head_fid;
+        struct lu_fid head_fid;
         int rc;
         ENTRY;
 

@@ -540,7 +540,7 @@ static inline struct obd_export *ll_i2mdcexp(struct inode *inode)
         return ll_s2mdcexp(inode->i_sb);
 }
 
-static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+static inline void ll_inode2fid(struct lu_fid *fid, struct inode *inode)
 {
         mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
                      inode->i_mode & S_IFMT);

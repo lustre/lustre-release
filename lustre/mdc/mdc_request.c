@@ -49,7 +49,7 @@ static int mdc_cleanup(struct obd_device *obd);
 extern int mds_queue_req(struct ptlrpc_request *);
 /* Helper that implements most of mdc_getstatus and signal_completed_replay. */
 /* XXX this should become mdc_get_info("key"), sending MDS_GET_INFO RPC */
-static int send_getstatus(struct obd_import *imp, struct ll_fid *rootfid,
+static int send_getstatus(struct obd_import *imp, struct lu_fid *rootfid,
                           int level, int msg_flags)
 {
         struct ptlrpc_request *req;
@@ -93,7 +93,7 @@ static int send_getstatus(struct obd_import *imp, struct ll_fid *rootfid,
 }
 
 /* This should be mdc_get_info("rootfid") */
-int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid)
+int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid)
 {
         return send_getstatus(class_exp2cliimp(exp), rootfid, LUSTRE_IMP_FULL,
                               0);
@@ -162,7 +162,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         RETURN (0);
 }
 
-int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
+int mdc_getattr(struct obd_export *exp, struct lu_fid *fid,
                 obd_valid valid, unsigned int ea_size,
                 struct ptlrpc_request **request)
 {
@@ -196,7 +196,7 @@ int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
         RETURN (rc);
 }
 
-int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
+int mdc_getattr_name(struct obd_export *exp, struct lu_fid *fid,
                      const char *filename, int namelen, unsigned long valid,
                      unsigned int ea_len, struct ptlrpc_request **request)
 {
@@ -225,7 +225,7 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
 }
 
 static
-int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
+int mdc_xattr_common(struct obd_export *exp, struct lu_fid *fid,
                      int opcode, obd_valid valid, const char *xattr_name,
                      const char *input, int input_size, int output_size,
                      int flags, struct ptlrpc_request **request)
@@ -306,7 +306,7 @@ err_out:
         goto out;
 }
 
-int mdc_setxattr(struct obd_export *exp, struct ll_fid *fid,
+int mdc_setxattr(struct obd_export *exp, struct lu_fid *fid,
                  obd_valid valid, const char *xattr_name,
                  const char *input, int input_size,
                  int output_size, int flags,
@@ -316,7 +316,7 @@ int mdc_setxattr(struct obd_export *exp, struct ll_fid *fid,
                                 input, input_size, output_size, flags, request);
 }
 
-int mdc_getxattr(struct obd_export *exp, struct ll_fid *fid,
+int mdc_getxattr(struct obd_export *exp, struct lu_fid *fid,
                  obd_valid valid, const char *xattr_name,
                  const char *input, int input_size,
                  int output_size, struct ptlrpc_request **request)
@@ -712,7 +712,7 @@ int mdc_done_writing(struct obd_export *exp, struct obdo *obdo)
         RETURN(rc);
 }
 
-int mdc_readpage(struct obd_export *exp, struct ll_fid *fid, __u64 offset,
+int mdc_readpage(struct obd_export *exp, struct lu_fid *fid, __u64 offset,
                  struct page *page, struct ptlrpc_request **request)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
@@ -1026,7 +1026,7 @@ static int mdc_unpin(struct obd_export *exp,
         RETURN(rc);
 }
 
-int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
+int mdc_sync(struct obd_export *exp, struct lu_fid *fid,
              struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;

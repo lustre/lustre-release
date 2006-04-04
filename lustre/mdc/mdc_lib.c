@@ -40,7 +40,7 @@
 #endif
 
 void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
-                      __u32 size, struct ll_fid *mdc_fid)
+                      __u32 size, struct lu_fid *mdc_fid)
 {
         struct mds_body *b;
 
@@ -64,7 +64,7 @@ static void mdc_pack_body(struct mds_body *b)
 }
 
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, struct ll_fid *fid, int ea_size)
+                       __u64 valid, struct lu_fid *fid, int ea_size)
 {
         struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
 

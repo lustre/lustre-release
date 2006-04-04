@@ -346,7 +346,7 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
 }
 
 static struct inode* llu_new_inode(struct filesys *fs,
-                                   struct ll_fid *fid)
+                                   struct lu_fid *fid)
 {
         struct inode *inode;
         struct llu_inode_info *lli;
@@ -436,7 +436,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
-                struct ll_fid fid;
+                struct lu_fid fid;
                 unsigned long valid = OBD_MD_FLGETATTR;
                 int rc, ealen = 0;
 
@@ -538,7 +538,7 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
 
 void llu_clear_inode(struct inode *inode)
 {
-        struct ll_fid fid;
+        struct lu_fid fid;
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         ENTRY;
@@ -882,7 +882,7 @@ static int llu_readlink_internal(struct inode *inode,
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct ll_fid fid;
+        struct lu_fid fid;
         struct mds_body *body;
         struct intnl_stat *st = llu_i2stat(inode);
         int rc, symlen = st->st_size + 1;
@@ -1631,7 +1631,7 @@ struct filesys_ops llu_filesys_ops =
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 {
         struct inode *inode;
-        struct ll_fid fid;
+        struct lu_fid fid;
         struct file_identifier fileid = {&fid, sizeof(fid)};
 
         if ((md->body->valid &
@@ -1679,7 +1679,7 @@ llu_fsswop_mount(const char *source,
         struct inode *root;
         struct pnode_base *rootpb;
         struct obd_device *obd;
-        struct ll_fid rootfid;
+        struct lu_fid rootfid;
         struct llu_sb_info *sbi;
         struct obd_statfs osfs;
         static struct qstr noname = { NULL, 0, 0 };

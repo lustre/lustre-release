@@ -52,7 +52,7 @@
 #include <linux/lustre_lib.h>
 #include "mds_internal.h"
 
-void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
+void mds_pack_inode2fid(struct lu_fid *fid, struct inode *inode)
 {
         fid->id = inode->i_ino;
         fid->generation = inode->i_generation;

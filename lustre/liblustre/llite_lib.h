@@ -45,7 +45,7 @@ struct llu_sb_info
 
 struct llu_inode_info {
         struct llu_sb_info     *lli_sbi;
-        struct ll_fid           lli_fid;
+        struct lu_fid           lli_fid;
 
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
@@ -136,7 +136,7 @@ do {                                                                           \
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
 
-static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+static inline void ll_inode2fid(struct lu_fid *fid, struct inode *inode)
 {
         *fid = llu_i2info(inode)->lli_fid;
 }

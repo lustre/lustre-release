@@ -348,7 +348,6 @@ int mdd_object_put(struct mdd_device *mdd, struct mdd_object *obj)
         RETURN(rc);
 }
 
-
 static int
 __mdd_index_insert(struct mdd_device *mdd, struct mdd_object *pobj,
                    struct mdd_object *obj, const char *name,
@@ -553,7 +552,7 @@ cleanup:
         RETURN(rc);
 }
 
-static int mdd_root_get(struct md_device *m, struct ll_fid *f)
+static int mdd_root_get(struct md_device *m, struct lu_fid *f)
 {
         return 0;
 }

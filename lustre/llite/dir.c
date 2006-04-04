@@ -59,7 +59,7 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 static int ll_dir_readpage(struct file *file, struct page *page)
 {
         struct inode *inode = page->mapping->host;
-        struct ll_fid mdc_fid;
+        struct lu_fid mdc_fid;
         __u64 offset;
         struct ptlrpc_request *request;
         struct mds_body *body;
@@ -406,7 +406,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         */
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
-                struct ll_fid fid;
+                struct lu_fid fid;
                 char *buf = NULL;
                 char *filename;
                 int namelen, rc, len = 0;
@@ -483,7 +483,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct ptlrpc_request *request = NULL;
                 struct lov_user_md *lump = (struct lov_user_md *)arg;
                 struct lov_mds_md *lmm;
-                struct ll_fid fid;
+                struct lu_fid fid;
                 struct mds_body *body;
                 int rc, lmmsize;
 
@@ -536,7 +536,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case IOC_MDC_GETFILEINFO:
         case IOC_MDC_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
-                struct ll_fid fid;
+                struct lu_fid fid;
                 struct mds_body *body;
                 struct lov_user_md *lump;
                 struct lov_mds_md *lmm;

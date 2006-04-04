@@ -24,7 +24,7 @@
 #define __LINUX_LU_OBJECT_H
 
 /*
- * struct ll_fid
+ * struct lu_fid
  */
 #include <linux/lustre_idl.h>
 
@@ -273,7 +273,7 @@ struct lu_object_header {
 	/*
 	 * Fid, uniquely identifying this object.
 	 */
-	struct ll_fid     loh_fid;
+	struct lu_fid     loh_fid;
 	/*
 	 * Linkage into per-site hash table. Protected by site guard lock.
 	 */
@@ -378,7 +378,7 @@ static inline struct lu_object *lu_object_next(const struct lu_object *o)
 	return container_of(o->lo_linkage.next, struct lu_object, lo_linkage);
 }
 
-static inline struct ll_fid *lu_object_fid(const struct lu_object *o)
+static inline struct lu_fid *lu_object_fid(const struct lu_object *o)
 {
 	return &o->lo_header->loh_fid;
 }
@@ -405,7 +405,7 @@ static inline int lu_object_is_dying(struct lu_object_header *h)
 void lu_object_put(struct lu_object *o);
 void lu_site_purge(struct lu_site *s, int nr);
 int lu_object_print(struct seq_file *f, const struct lu_object *o);
-struct lu_object *lu_object_find(struct lu_site *s, const struct ll_fid *f);
+struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f);
 
 int  lu_site_init(struct lu_site *s, struct lu_device *top);
 void lu_site_fini(struct lu_site *s);
