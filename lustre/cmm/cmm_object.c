@@ -34,7 +34,7 @@
 
 #include "cmm_internal.h"
 
-struct cmm_object *cmm_object_find(struct cmm_device *d, struct ll_fid *f)
+struct cmm_object *cmm_object_find(struct cmm_device *d, struct lu_fid *f)
 {
 	struct lu_object *o;
 
