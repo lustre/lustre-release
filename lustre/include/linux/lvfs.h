@@ -27,7 +27,7 @@
 #include <libcfs/kp30.h>
 #include <linux/lustre_ucache.h>
 
-#define lu_fid_NAMELEN (16 + 1 + 8 + 1)
+#define LU_FID_NAMELEN (16 + 1 + 8 + 1)
 
 #if defined __KERNEL__
 #include <linux/lustre_compat25.h>

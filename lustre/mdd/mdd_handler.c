@@ -35,6 +35,7 @@
 #include <linux/obd_support.h>
 
 #include <linux/lu_object.h>
+#include <linux/md_object.h>
 
 #include "mdd_internal.h"
 
@@ -181,11 +182,12 @@ __mdd_object_create(struct mdd_device *mdd, struct mdd_object *pobj,
 }
 
 static int
-mdd_object_create(struct md_object *pobj, struct mdd_object *child,
+mdd_object_create(struct md_object *pobj, struct md_object *child,
                   struct context *uctxt)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = mdo2mddo(pobj); 
+        struct mdd_object *mdd_child = mdo2mddo(child); 
         void *handle = NULL;
         int rc;
         ENTRY;
@@ -194,7 +196,7 @@ mdd_object_create(struct md_object *pobj, struct mdd_object *child,
         if (!handle)
                 RETURN(-ENOMEM);
 
-        rc = __mdd_object_create(mdd, mdd_pobj, child, uctxt, handle);
+        rc = __mdd_object_create(mdd, mdd_pobj, mdd_child, uctxt, handle);
 
         mdd_trans_stop(mdd, handle);
 
@@ -307,7 +309,7 @@ mdd_object_dec_check(struct mdd_device *mdd, struct mdd_object *obj)
 }
 
 
-static struct ll_fid *mdd_object_getfid(struct mdd_object *obj)
+static struct lu_fid *mdd_object_getfid(struct mdd_object *obj)
 {
         return &(obj->mod_obj.mo_lu.lo_header->loh_fid);
 }
@@ -361,7 +363,7 @@ __mdd_index_insert(struct mdd_device *mdd, struct mdd_object *pobj,
         mdd_lock(mdd, obj, WRITE_LOCK);
 
         rc = mdd_child_ops(mdd)->osd_index_insert(mdd_object_child(pobj),
-                                             mdd_object_getfid(obj), name, 
+                                             mdd_object_getfid(obj), name,
                                              uctxt, handle);
         mdd_unlock(mdd, pobj, WRITE_LOCK);
         mdd_unlock(mdd, obj, WRITE_LOCK);
@@ -371,10 +373,10 @@ __mdd_index_insert(struct mdd_device *mdd, struct mdd_object *pobj,
 }
 
 static int
-mdd_index_insert(struct mdd_device *mdd, struct md_object *pobj,
-                 struct md_object *obj, const char *name,
+mdd_index_insert(struct md_object *pobj, struct md_object *obj, const char *name,
                  struct context *uctxt)
 {
+        struct mdd_device *mdd = mdo2mdd(pobj);
         int rc;
         void *handle = NULL;
         ENTRY;
@@ -402,7 +404,7 @@ __mdd_index_delete(struct mdd_device *mdd, struct mdd_object *pobj,
         mdd_lock(mdd, pobj, WRITE_LOCK);
         mdd_lock(mdd, obj, WRITE_LOCK);
 
-        rc = mdd_child_ops(mdd)->osd_insert_delete(mdd_object_child(pobj),
+        rc = mdd_child_ops(mdd)->osd_index_delete(mdd_object_child(pobj),
                                               mdd_object_getfid(obj), name, 
                                               uctxt, handle);
         mdd_unlock(mdd, pobj, WRITE_LOCK);

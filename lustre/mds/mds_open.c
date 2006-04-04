@@ -763,7 +763,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct lu_fid *fid,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct dentry *dchild;
-        char fidname[lu_fid_NAMELEN];
+        char fidname[LU_FID_NAMELEN];
         int fidlen = 0, rc;
         void *handle = NULL;
         ENTRY;
@@ -1158,7 +1158,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
                   struct mds_file_data *mfd, int unlink_orphan)
 {
         struct inode *inode = mfd->mfd_dentry->d_inode;
-        char fidname[lu_fid_NAMELEN];
+        char fidname[LU_FID_NAMELEN];
         int last_orphan, fidlen, rc = 0, cleanup_phase = 0;
         struct dentry *pending_child = NULL;
         struct mds_obd *mds = &obd->u.mds;

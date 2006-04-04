@@ -1355,7 +1355,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         struct inode *inode = dentry->d_inode;
         struct dentry *pending_child;
-        char fidname[lu_fid_NAMELEN];
+        char fidname[LU_FID_NAMELEN];
         int fidlen = 0, rc, mode;
         ENTRY;
 

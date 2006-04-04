@@ -31,12 +31,35 @@ struct md_device;
 struct md_device_operations;
 struct md_object;
 
+/*the context of the mdd ops*/
+struct context {
+        const char      *name;
+        int             name_len;
+        __u32           mode;
+        int             flags;
+};
+
 struct md_device_operations {
-        /* get root FID */
-        int (*mdo_root_get)(struct md_device *m, struct ll_fid *f);
-        /* metadata API */
-        int (*mdo_mkdir)(struct md_object *o, const char *name,
+        int (*mdo_root_get)(struct md_device *m, struct lu_fid *f);
+        int (*mdo_mkdir)(struct md_object *obj, const char *name,
                          struct md_object *child);
+        
+        int (*mdo_rename)(struct md_object *spobj, struct md_object *tpobj,
+                          struct md_object *sobj, const char *sname,
+                          struct md_object *tobj, const char *tname, 
+                          struct context *uctxt);
+        int (*mdo_link)(struct md_object *tobj, struct md_object *sobj,
+                        const char *name, struct context *uctxt);
+        int (*mdo_attr_get)(struct md_object *obj, void *buf, int buf_len,
+                            const char *name, struct context *uctxt); 
+        int (*mdo_attr_set)(struct md_object *obj, void *buf, int buf_len, 
+                            const char *name, struct context *uctxt);
+        int (*mdo_index_insert)(struct md_object *pobj, struct md_object *obj, 
+                                const char *name, struct context *uctxt);
+        int (*mdo_index_delete)(struct md_object *pobj, struct md_object *obj, 
+                                const char *name, struct context *uctxt);
+        int (*mdo_object_create)(struct md_object *pobj, struct md_object *child,
+                                 struct context *uctxt);
 };
 
 struct md_device {

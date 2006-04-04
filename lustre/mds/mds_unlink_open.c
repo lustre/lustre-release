@@ -179,7 +179,7 @@ int mds_cleanup_pending(struct obd_device *obd)
         struct inode *child_inode, *pending_dir = mds->mds_pending_dir->d_inode;
         struct l_linux_dirent *dirent, *n;
         struct list_head dentry_list;
-        char d_name[LL_FID_NAMELEN];
+        char d_name[LU_FID_NAMELEN];
         unsigned long inum;
         int i = 0, rc = 0, item = 0, namlen;
         ENTRY;

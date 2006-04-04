@@ -644,7 +644,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         struct file *filp;
         struct dentry *new_child;
         struct lvfs_run_ctxt saved;
-        char fidname[LL_FID_NAMELEN];
+        char fidname[LU_FID_NAMELEN];
         void *handle;
         struct lvfs_ucred ucred = { 0 };
         int rc = 0, err, namelen;
@@ -730,7 +730,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
         struct lvfs_ucred ucred = { 0 };
-        char fidname[lu_fid_NAMELEN];
+        char fidname[LU_FID_NAMELEN];
         struct dentry *de;
         void *handle;
         int err, namelen, rc = 0;
