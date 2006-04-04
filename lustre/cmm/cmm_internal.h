@@ -28,8 +28,6 @@
 #include <linux/obd.h>
 #include <linux/md_object.h>
 
-#define LUSTRE_CMM0_NAME "cmm0"
-
 struct cmm_device {
         struct md_device        cmm_md_dev;
         /* underlaying device in MDS stack, usually MDD */
