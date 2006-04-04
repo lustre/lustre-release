@@ -697,21 +697,22 @@ unpack_lustre
 if [ -z "$LINUX" ] ; then
     load_target
 
-    if [ "$SERIES" ] ; then
-        if (( $DO_SRC )) ; then
-            unpack_linux
+    if (( $DO_SRC )) ; then
+        unpack_linux
+        if [ "$SERIES" ] ; then
             patch_linux
             pack_linux
             clean_linux
+
+            prep_kernel_build
+            clean_lustre
+
+            build_kernel
+        else
+            # can't build a kernel if we have no series for it (i.e. patchless)
+            LINUX=$(pwd)/linux
+            build_lustre
         fi
-
-        prep_kernel_build
-        clean_lustre
-
-        build_kernel
-    else
-        # can't build a kernel if we have no series for it (i.e. patchless)
-        build_lustre
     fi
 else
     build_lustre
