@@ -60,7 +60,7 @@ case "$lustretag" in
         buildtag="HEAD"
         ;;
     
-    b_release_1_4_6-patchless) buildtag=b_release_1_4_6 ;;
+    b_release_1_4_6-patchless) buildtag="HEAD" ;;
 
     v* | b_release*) buildtag=$lustretag ;;
 
