@@ -623,6 +623,24 @@ typedef enum {
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
 struct lu_fid {
+        __u32 f_seq;  /* holds fid sequence, each client should be able to 
+                         perform 2 ^ 32 connections. */
+        __u16 f_wid;  /* holds width of sequence. */
+        __u16 f_num;  /* holds fid number. */
+};
+
+#define fid_seq(fid) ((fid)->f_seq)
+#define fid_num(fid) ((fid)->f_num)
+#define fid_wid(fid) ((fid)->f_wid)
+
+#define DFID2 "%lu/%u"
+
+#define PFID2(fid) \
+        (unsigned long)fid_seq(fid), \
+        (unsigned int)fid_num(fid)
+
+/* temporary stuff for compatibility */
+struct ll_fid {
         __u64 id;         /* holds object id */
         __u32 generation; /* holds object generation */
 
@@ -630,13 +648,15 @@ struct lu_fid {
                            * OST for saving into EA. */
 };
 
+
+extern void lustre_swab_ll_fid (struct ll_fid *fid);
 extern void lustre_swab_lu_fid (struct lu_fid *fid);
 
-static inline int lfid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
+static inline int lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 {
 	/* check that there is no alignment padding */
 	CLASSERT(sizeof *f0 ==
-                 sizeof f0->id + sizeof f0->generation + sizeof f0->f_type);
+                 sizeof f0->f_seq + sizeof f0->f_wid + sizeof f0->f_num);
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
 
@@ -653,7 +673,7 @@ extern void lustre_swab_mds_status_req (struct mds_status_req *r);
 
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
 
-struct mds_body {
+struct mdt_body {
         struct lu_fid  fid1;
         struct lu_fid  fid2;
         struct lustre_handle handle;
@@ -683,7 +703,38 @@ struct mds_body {
         __u32          padding_4; /* also fix lustre_swab_mds_body */
 };
 
+struct mds_body {
+        struct ll_fid  fid1;
+        struct ll_fid  fid2;
+        struct lustre_handle handle;
+        __u64          valid;
+        __u64          size;   /* Offset, in the case of MDS_READPAGE */
+        __u64          mtime;
+        __u64          atime;
+        __u64          ctime;
+        __u64          blocks; /* XID, in the case of MDS_READPAGE */
+        __u64          io_epoch;
+        __u64          ino;
+        __u32          fsuid;
+        __u32          fsgid;
+        __u32          capability;
+        __u32          mode;
+        __u32          uid;
+        __u32          gid;
+        __u32          flags; /* from vfs for pin/unpin, MDS_BFLAG for close */
+        __u32          rdev;
+        __u32          nlink; /* #bytes to read in the case of MDS_READPAGE */
+        __u32          generation;
+        __u32          suppgid;
+        __u32          eadatasize;
+        __u32          aclsize;
+        __u32          max_mdsize;
+        __u32          max_cookiesize; /* also fix lustre_swab_mds_body */
+        __u32          padding_4; /* also fix lustre_swab_mds_body */
+};
+
 extern void lustre_swab_mds_body (struct mds_body *b);
+extern void lustre_swab_mdt_body (struct mdt_body *b);
 
 #define Q_QUOTACHECK    0x800100
 #define Q_INITQUOTA     0x800101        /* init slave limits */
@@ -714,7 +765,7 @@ struct mds_rec_setattr {
         __u32           sa_cap;
         __u32           sa_suppgid;
         __u32           sa_mode;
-        struct lu_fid   sa_fid;
+        struct ll_fid   sa_fid;
         __u64           sa_valid;
         __u64           sa_size;
         __u64           sa_mtime;
@@ -760,8 +811,8 @@ struct mds_rec_create {
         __u32           cr_cap;
         __u32           cr_flags; /* for use with open */
         __u32           cr_mode;
-        struct lu_fid   cr_fid;
-        struct lu_fid   cr_replayfid;
+        struct ll_fid   cr_fid;
+        struct ll_fid   cr_replayfid;
         __u64           cr_time;
         __u64           cr_rdev;
         __u32           cr_suppgid;
@@ -775,7 +826,7 @@ struct mds_rec_create {
 extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
 
 struct mds_rec_join {
-        struct lu_fid  jr_fid;
+        struct ll_fid  jr_fid;
         __u64          jr_headsize;
 };
 
@@ -788,8 +839,8 @@ struct mds_rec_link {
         __u32           lk_cap;
         __u32           lk_suppgid1;
         __u32           lk_suppgid2;
-        struct lu_fid   lk_fid1;
-        struct lu_fid   lk_fid2;
+        struct ll_fid   lk_fid1;
+        struct ll_fid   lk_fid2;
         __u64           lk_time;
         __u32           lk_padding_1;  /* also fix lustre_swab_mds_rec_link */
         __u32           lk_padding_2;  /* also fix lustre_swab_mds_rec_link */
@@ -806,8 +857,8 @@ struct mds_rec_unlink {
         __u32           ul_cap;
         __u32           ul_suppgid;
         __u32           ul_mode;
-        struct lu_fid   ul_fid1;
-        struct lu_fid   ul_fid2;
+        struct ll_fid   ul_fid1;
+        struct ll_fid   ul_fid2;
         __u64           ul_time;
         __u32           ul_padding_1; /* also fix lustre_swab_mds_rec_unlink */
         __u32           ul_padding_2; /* also fix lustre_swab_mds_rec_unlink */
@@ -824,8 +875,8 @@ struct mds_rec_rename {
         __u32           rn_cap;
         __u32           rn_suppgid1;
         __u32           rn_suppgid2;
-        struct lu_fid   rn_fid1;
-        struct lu_fid   rn_fid2;
+        struct ll_fid   rn_fid1;
+        struct ll_fid   rn_fid2;
         __u64           rn_time;
         __u32           rn_padding_1; /* also fix lustre_swab_mds_rec_rename */
         __u32           rn_padding_2; /* also fix lustre_swab_mds_rec_rename */
@@ -1145,7 +1196,7 @@ struct llog_array_rec {
 
 struct llog_create_rec {
         struct llog_rec_hdr     lcr_hdr;
-        struct lu_fid           lcr_fid;
+        struct ll_fid           lcr_fid;
         obd_id                  lcr_oid;
         obd_count               lcr_ogen;
         __u32                   padding;
@@ -1180,7 +1231,7 @@ struct llog_setattr_rec {
 
 struct llog_size_change_rec {
         struct llog_rec_hdr     lsc_hdr;
-        struct lu_fid           lsc_fid;
+        struct ll_fid           lsc_fid;
         __u32                   lsc_io_epoch;
         __u32                   padding;
         struct llog_rec_tail    lsc_tail;

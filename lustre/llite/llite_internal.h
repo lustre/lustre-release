@@ -90,6 +90,9 @@ struct ll_inode_info {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
+
+        /* inode fid */
+        struct lu_fid           lli_fid;
 };
 
 /*
@@ -155,7 +158,7 @@ struct ll_sb_info {
         struct obd_export        *ll_mdc_exp;
         struct obd_export        *ll_osc_exp;
         struct proc_dir_entry*    ll_proc_root;
-        obd_id                    ll_rootino; /* number of root inode */
+        struct ll_fid             ll_root_fid; /* root object fid */
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
@@ -540,7 +543,7 @@ static inline struct obd_export *ll_i2mdcexp(struct inode *inode)
         return ll_s2mdcexp(inode->i_sb);
 }
 
-static inline void ll_inode2fid(struct lu_fid *fid, struct inode *inode)
+static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
         mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
                      inode->i_mode & S_IFMT);
@@ -563,5 +566,8 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
                     void *buffer, size_t size);
 ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
 int ll_removexattr(struct dentry *dentry, const char *name);
+
+/* llite/llite_fid.c*/
+int ll_fid_alloc(struct ll_sb_info *sbi, struct lu_fid *fid);
 
 #endif /* LLITE_INTERNAL_H */

@@ -231,7 +231,7 @@ static int revalidate_it_finish(struct ptlrpc_request *request, int offset,
                 RETURN(-ENOENT);
 
         sbi = ll_i2sbi(de->d_inode);
-        rc = ll_prep_inode(sbi->ll_osc_exp, &de->d_inode, request, offset,NULL);
+        rc = ll_prep_inode(sbi->ll_osc_exp, &de->d_inode, request, offset, NULL);
 
         RETURN(rc);
 }

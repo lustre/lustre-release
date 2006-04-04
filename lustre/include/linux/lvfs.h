@@ -27,7 +27,7 @@
 #include <libcfs/kp30.h>
 #include <linux/lustre_ucache.h>
 
-#define LU_FID_NAMELEN (16 + 1 + 8 + 1)
+#define LL_FID_NAMELEN (16 + 1 + 8 + 1)
 
 #if defined __KERNEL__
 #include <linux/lustre_compat25.h>
@@ -142,7 +142,7 @@ static inline void ll_sleep(int t)
 }
 #endif
 
-static inline int lu_fid2str(char *str, __u64 id, __u32 generation)
+static inline int ll_fid2str(char *str, __u64 id, __u32 generation)
 {
         return sprintf(str, "%llx:%08x", (unsigned long long)id, generation);
 }

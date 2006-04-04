@@ -1555,7 +1555,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct lu_fid fid;
+        struct ll_fid fid;
         struct ptlrpc_request *req;
         int rc, err;
         ENTRY;
@@ -1741,7 +1741,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         if (!ll_have_md_lock(dentry)) {
                 struct ptlrpc_request *req = NULL;
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-                struct lu_fid fid;
+                struct ll_fid fid;
                 obd_valid valid = OBD_MD_FLGETATTR;
                 int ealen = 0;
 

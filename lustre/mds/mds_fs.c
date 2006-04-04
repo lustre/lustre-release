@@ -644,7 +644,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         struct file *filp;
         struct dentry *new_child;
         struct lvfs_run_ctxt saved;
-        char fidname[LU_FID_NAMELEN];
+        char fidname[LL_FID_NAMELEN];
         void *handle;
         struct lvfs_ucred ucred = { 0 };
         int rc = 0, err, namelen;
@@ -672,7 +672,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         oa->o_id = filp->f_dentry->d_inode->i_ino;
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
-        namelen = lu_fid2str(fidname, oa->o_id, oa->o_generation);
+        namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
         down(&parent_inode->i_sem);
         new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
@@ -730,7 +730,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
         struct lvfs_ucred ucred = { 0 };
-        char fidname[LU_FID_NAMELEN];
+        char fidname[LL_FID_NAMELEN];
         struct dentry *de;
         void *handle;
         int err, namelen, rc = 0;
@@ -739,7 +739,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
 
-        namelen = lu_fid2str(fidname, oa->o_id, oa->o_generation);
+        namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
         down(&parent_inode->i_sem);
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);

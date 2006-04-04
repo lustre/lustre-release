@@ -109,7 +109,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
-        struct lu_fid rootfid;
+        struct ll_fid rootfid;
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
         struct lustre_handle osc_conn = {0, };
@@ -267,7 +267,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_osc, err);
         }
         CDEBUG(D_SUPER, "rootfid "LPU64"\n", rootfid.id);
-        sbi->ll_rootino = rootfid.id;
+        sbi->ll_root_fid = rootfid;
 
         sb->s_op = &lustre_super_operations;
 
@@ -289,8 +289,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_osc, err);
         }
 
-        LASSERT(sbi->ll_rootino != 0);
-        root = ll_iget(sb, sbi->ll_rootino, &md);
+        LASSERT(sbi->ll_root_fid.id != 0);
+        root = ll_iget(sb, sbi->ll_root_fid.id, &md);
 
         ptlrpc_req_finished(request);
 
@@ -773,7 +773,7 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
 
 void ll_clear_inode(struct inode *inode)
 {
-        struct lu_fid fid;
+        struct ll_fid fid;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ENTRY;
@@ -1340,7 +1340,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
         switch(cmd) {
         case EXT3_IOC_GETFLAGS: {
-                struct lu_fid fid;
+                struct ll_fid fid;
                 struct mds_body *body;
 
                 ll_inode2fid(&fid, inode);
@@ -1499,7 +1499,8 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
 }
 
 int ll_prep_inode(struct obd_export *exp, struct inode **inode,
-                  struct ptlrpc_request *req, int offset,struct super_block *sb)
+                  struct ptlrpc_request *req, int offset,
+                  struct super_block *sb)
 {
         struct lustre_md md;
         struct ll_sb_info *sbi = NULL;
@@ -1525,6 +1526,20 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                         CERROR("new_inode -fatal: rc %d\n", rc);
                         GOTO(out, rc);
                 }
+#if 0
+                {
+                        struct ll_inode_info *lli;
+                
+                        lli = ll_i2info(*inode);
+                        rc = ll_fid_alloc(sbi, lli->lli_fid);
+                        if (rc) {
+                                CERROR("cannot allocate new fid, rc %d\n", 
+                                       rc);
+                                mdc_free_lustre_md(exp, &md);
+                                GOTO(out, rc);
+                        }
+                }
+#endif
         }
 
         rc = obd_checkmd(exp, ll_i2mdcexp(*inode),

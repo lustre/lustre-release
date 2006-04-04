@@ -287,13 +287,13 @@ check_ost_body(void)
 }
 
 static void
-check_lu_fid(void)
+check_ll_fid(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(lu_fid);
-        CHECK_MEMBER(lu_fid, id);
-        CHECK_MEMBER(lu_fid, generation);
-        CHECK_MEMBER(lu_fid, f_type);
+        CHECK_STRUCT(ll_fid);
+        CHECK_MEMBER(ll_fid, id);
+        CHECK_MEMBER(ll_fid, generation);
+        CHECK_MEMBER(ll_fid, f_type);
 }
 
 static void
@@ -975,7 +975,7 @@ main(int argc, char **argv)
         check_obd_quotactl();
         check_niobuf_remote();
         check_ost_body();
-        check_lu_fid();
+        check_ll_fid();
         check_mds_status_req();
         check_mds_body();
         check_mds_rec_setattr();

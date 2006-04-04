@@ -87,6 +87,7 @@ struct mdt_object {
 struct mdt_lock_handle {
         struct lustre_handle    mlh_lh;
         ldlm_mode_t             mlh_mode;
+        __u64                   mlh_part;
 };
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh);
@@ -131,7 +132,7 @@ struct mdt_thread_info {
         /*
          * Body for "habeo corpus" operations.
          */
-        struct mds_body       *mti_body;
+        struct mdt_body       *mti_body;
         /*
          * Host object. This is released at the end of mdt_handler().
          */
@@ -148,8 +149,11 @@ struct mdt_thread_info {
 
 };
 
-int fid_lock(const struct lu_fid *, struct lustre_handle *, ldlm_mode_t);
-void fid_unlock(const struct lu_fid *, struct lustre_handle *, ldlm_mode_t);
+int fid_lock(struct ldlm_namespace *, const struct lu_fid *, 
+             struct lustre_handle *, ldlm_mode_t, __u64);
+             
+void fid_unlock(struct ldlm_namespace *, const struct lu_fid *, 
+                struct lustre_handle *, ldlm_mode_t);
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

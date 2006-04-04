@@ -43,8 +43,8 @@ struct lustre_md {
 };
 
 struct mdc_op_data {
-        struct lu_fid    fid1;
-        struct lu_fid    fid2;
+        struct ll_fid    fid1;
+        struct ll_fid    fid2;
         __u64            mod_time;
         const char      *name;
         int              namelen;
@@ -54,8 +54,8 @@ struct mdc_op_data {
 
 struct mds_update_record {
         __u32 ur_opcode;
-        struct lu_fid *ur_fid1;
-        struct lu_fid *ur_fid2;
+        struct ll_fid *ur_fid1;
+        struct ll_fid *ur_fid2;
         int ur_namelen;
         char *ur_name;
         int ur_tgtlen;
@@ -98,11 +98,11 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 
 /* mds/handler.c */
 #ifdef __KERNEL__
-struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct lu_fid *fid,
+struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
                                      __u64 lockpart);
-struct dentry *mds_fid2dentry(struct mds_obd *mds, struct lu_fid *fid,
+struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt);
 int mds_update_server_data(struct obd_device *, int force_sync);
 
@@ -118,7 +118,7 @@ int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
 void mdc_set_lock_data(__u64 *lockh, void *data);
-int mdc_change_cbdata(struct obd_export *exp, struct lu_fid *fid,
+int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
                       ldlm_iterator_t it, void *data);
 int mdc_intent_lock(struct obd_export *exp,
                     struct mdc_op_data *,
@@ -145,22 +145,22 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                       struct obd_export *exp, struct lustre_md *md);
 void mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
 
-int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid);
-int mdc_getattr(struct obd_export *exp, struct lu_fid *fid,
+int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
+int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 obd_valid valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
-int mdc_getattr_name(struct obd_export *exp, struct lu_fid *fid,
+int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
                      const char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request);
-int mdc_setxattr(struct obd_export *exp, struct lu_fid *fid,
+int mdc_setxattr(struct obd_export *exp, struct ll_fid *fid,
                  obd_valid valid, const char *xattr_name,
                  const char *input, int input_size,
                  int output_size, int flags,
                  struct ptlrpc_request **request);
-int mdc_getxattr(struct obd_export *exp, struct lu_fid *fid,
+int mdc_getxattr(struct obd_export *exp, struct ll_fid *fid,
                  obd_valid valid, const char *xattr_name,
                  const char *input, int input_size,
                  int output_size, struct ptlrpc_request **request);
@@ -173,7 +173,7 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
 void mdc_clear_open_replay_data(struct obd_client_handle *och);
 int mdc_close(struct obd_export *, struct obdo *, struct obd_client_handle *,
               struct ptlrpc_request **);
-int mdc_readpage(struct obd_export *exp, struct lu_fid *mdc_fid, __u64 offset,
+int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
                  struct page *, struct ptlrpc_request **);
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
@@ -185,7 +185,7 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
 int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request);
-int mdc_sync(struct obd_export *exp, struct lu_fid *fid,
+int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
              struct ptlrpc_request **);
 int mdc_create_client(struct obd_uuid uuid, struct ptlrpc_client *cl);
 
@@ -195,7 +195,7 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
 int mdc_llog_process(struct obd_export *, char *logname, llog_cb_t, void *data);
 int mdc_done_writing(struct obd_export *exp, struct obdo *);
 
-static inline void mdc_pack_fid(struct lu_fid *fid, obd_id ino, __u32 gen,
+static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
                                 int type)
 {
         fid->id = ino;

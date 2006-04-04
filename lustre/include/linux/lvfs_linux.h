@@ -25,7 +25,7 @@ struct l_linux_dirent {
         struct list_head lld_list;
         ino_t           lld_ino;
         unsigned long   lld_off;
-        char            lld_name[LU_FID_NAMELEN];
+        char            lld_name[LL_FID_NAMELEN];
 };
 struct l_readdir_callback {
         struct l_linux_dirent *lrc_dirent;

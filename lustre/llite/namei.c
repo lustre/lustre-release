@@ -176,11 +176,25 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (inode == NULL)
                         break;
 
+#ifdef ENABLED_FID
+                {
+                        struct ll_inode_info *lli;
+                
+                        lli = ll_i2info(inode);
+                
+                        if (lock->l_resource->lr_name.name[0] != fid_seq(&lli->lli_fid) ||
+                            lock->l_resource->lr_name.name[1] != fid_num(&lli->lli_fid)) {
+                                LDLM_ERROR(lock, "data mismatch with object "DLID2" (%p)",
+                                           PLID2(&lli->lli_fid), inode);
+                        }
+                }
+#else
                 if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
                     lock->l_resource->lr_name.name[1] != inode->i_generation) {
-                        LDLM_ERROR(lock, "data mismatch with ino %lu/%u (%p)",
+                        LDLM_ERROR(lock, "data mismatch with object %lu/%u (%p)",
                                    inode->i_ino, inode->i_generation, inode);
                 }
+#endif
 
                 if (bits & MDS_INODELOCK_UPDATE)
                         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,

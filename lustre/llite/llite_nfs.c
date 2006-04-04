@@ -43,7 +43,7 @@ static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, void *opaqu
 static int ll_nfs_test_inode(struct inode *inode, void *opaque)
 #endif
 {
-        struct lu_fid *iid = opaque;
+        struct ll_fid *iid = opaque;
 
         if (inode->i_ino == iid->id && inode->i_generation == iid->generation)
                 return 1;
@@ -58,11 +58,11 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
 {
         struct ptlrpc_request *req = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct lu_fid fid;
+        struct ll_fid fid;
         unsigned long valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
-        struct lu_fid iid = { .id = ino, .generation = generation };
+        struct ll_fid iid = { .id = ino, .generation = generation };
 
         inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
 

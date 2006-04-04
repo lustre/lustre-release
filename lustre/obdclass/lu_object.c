@@ -174,7 +174,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
 
         hlist_for_each_entry(h, scan, bucket, loh_hash) {
                 s->ls_stats.s_cache_check ++;
-                if (lfid_eq(&h->loh_fid, f) && !lu_object_is_dying(h)) {
+                if (lu_fid_eq(&h->loh_fid, f) && !lu_object_is_dying(h)) {
                         /* bump reference count... */
                         if (h->loh_ref ++ == 0)
                                 ++ s->ls_busy;
@@ -188,9 +188,14 @@ static struct lu_object *htable_lookup(struct lu_site *s,
         return NULL;
 }
 
+/* maximal objects in sequence */
+#define FID_SEQ_WIDTH 10000
+
 static __u32 fid_hash(const struct lu_fid *f)
 {
-        return f->id + f->generation + f->f_type;
+        /* FIXME: this is proto anyway, so we do not care of getting rid 
+           of hardcoded things in it like sequence width, etc. */
+        return fid_seq(f) * FID_SEQ_WIDTH + fid_num(f);
 }
 
 struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f)
@@ -211,7 +216,7 @@ struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f)
                 return o;
 
         ++ s->ls_total;
-        LASSERT(lfid_eq(lu_object_fid(o), f));
+        LASSERT(lu_fid_eq(lu_object_fid(o), f));
 
         spin_lock(&s->ls_guard);
         shadow = htable_lookup(s, bucket, f);

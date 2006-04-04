@@ -69,7 +69,7 @@ static int mdt_getstatus(struct mdt_thread_info *info,
                          struct ptlrpc_request *req, int offset)
 {
         struct md_device *mdd  = info->mti_mdt->mdt_child;
-        struct mds_body  *body;
+        struct mdt_body  *body;
         int               size = sizeof *body;
         int               result;
 
@@ -188,15 +188,49 @@ static int mdt_handle_quotactl(struct mdt_thread_info *info,
         return -EOPNOTSUPP;
 }
 
-
-int fid_lock(const struct lu_fid *f, struct lustre_handle *lh, ldlm_mode_t mode)
+/* issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
+int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f, 
+             struct lustre_handle *lh, ldlm_mode_t mode, __u64 lockpart)
 {
-        return 0;
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} };
+        struct ldlm_res_id res_id = { .name = {0} };
+        int flags = 0, rc;
+        ENTRY;
+        
+        LASSERT(ns != NULL);
+        LASSERT(lh != NULL);
+        LASSERT(f != NULL);
+        
+        res_id.name[0] = fid_seq(f);
+        res_id.name[1] = fid_num(f);
+        
+        /* FIXME: is that correct to have @flags=0 here? */
+        rc = ldlm_cli_enqueue(NULL, NULL, ns, res_id, LDLM_IBITS, 
+                              &policy, mode, &flags, ldlm_blocking_ast, 
+                              ldlm_completion_ast, NULL, NULL, NULL, 0, NULL, lh);
+        if (rc != ELDLM_OK)
+                RETURN(-EIO);
+        RETURN(0);
 }
 
-void fid_unlock(const struct lu_fid *f,
+void fid_unlock(struct ldlm_namespace *ns, const struct lu_fid *f,
                 struct lustre_handle *lh, ldlm_mode_t mode)
 {
+        struct ldlm_lock *lock;
+        ENTRY;
+
+        /* FIXME: this is debug stuff, remove it later. */
+        lock = ldlm_handle2lock(lh);
+        if (!lock) {
+                CERROR("invalid lock handle "LPX64, lh->cookie);
+                LBUG();
+        }
+        
+        LASSERT(fid_seq(f) == lock->l_resource->lr_name.name[0] && 
+                fid_num(f) == lock->l_resource->lr_name.name[1]);
+
+        ldlm_lock_decref(lh, mode);
+        EXIT;
 }
 
 static struct lu_device_operations mdt_lu_ops;
@@ -236,18 +270,21 @@ static struct lu_fid *mdt_object_fid(struct mdt_object *o)
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
 
-static int mdt_object_lock(struct mdt_object *o, struct mdt_lock_handle *lh)
+static int mdt_object_lock(struct ldlm_namespace *ns, struct mdt_object *o, 
+                           struct mdt_lock_handle *lh)
 {
         LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
         LASSERT(lh->mlh_mode != LCK_MINMODE);
 
-        return fid_lock(mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode);
+        return fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode, 
+                        lh->mlh_part);
 }
 
-static void mdt_object_unlock(struct mdt_object *o, struct mdt_lock_handle *lh)
+static void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o, 
+                              struct mdt_lock_handle *lh)
 {
         if (lustre_handle_is_used(&lh->mlh_lh)) {
-                fid_unlock(mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode);
+                fid_unlock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode);
                 lh->mlh_lh.cookie = 0;
         }
 }
@@ -261,7 +298,7 @@ struct mdt_object *mdt_object_find_lock(struct mdt_device *d, struct lu_fid *f,
         if (!IS_ERR(o)) {
                 int result;
 
-                result = mdt_object_lock(o, lh);
+                result = mdt_object_lock(d->mdt_namespace, o, lh);
                 if (result != 0) {
                         mdt_object_put(o);
                         o = ERR_PTR(result);
@@ -281,7 +318,7 @@ struct mdt_handler {
 
 enum mdt_handler_flags {
         /*
-         * struct mds_body is passed in the 0-th incoming buffer.
+         * struct mdt_body is passed in the 0-th incoming buffer.
          */
         HABEO_CORPUS = (1 << 0)
 };
@@ -346,7 +383,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         if (h->mh_flags & HABEO_CORPUS) {
                 info->mti_body = lustre_swab_reqbuf(req, off,
                                                     sizeof *info->mti_body,
-                                                    lustre_swab_mds_body);
+                                                    lustre_swab_mdt_body);
                 if (info->mti_body == NULL) {
                         CERROR("Can't unpack body\n");
                         result = req->rq_status = -EFAULT;
@@ -838,7 +875,9 @@ int mdt_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
 
         int result;
 
-        (lh = &info->mti_lh[MDT_LH_PARENT])->mlh_mode = LCK_PW;
+        lh = &info->mti_lh[MDT_LH_PARENT];
+        lh->mlh_mode = LCK_PW;
+        lh->mlh_part = MDS_INODELOCK_UPDATE;
 
         o = mdt_object_find_lock(d, pfid, lh);
         if (IS_ERR(o))
@@ -851,7 +890,7 @@ int mdt_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
                 mdt_object_put(child);
         } else
                 result = PTR_ERR(child);
-        mdt_object_unlock(o, lh);
+        mdt_object_unlock(d->mdt_namespace, o, lh);
         mdt_object_put(o);
         return result;
 }

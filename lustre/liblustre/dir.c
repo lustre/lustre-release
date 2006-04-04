@@ -67,7 +67,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct lu_fid mdc_fid;
+        struct ll_fid mdc_fid;
         __u64 offset;
         int rc = 0;
         struct ptlrpc_request *request;

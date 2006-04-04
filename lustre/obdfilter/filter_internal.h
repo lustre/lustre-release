@@ -43,7 +43,7 @@ struct filter_client_data {
                             OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
 
 struct filter_fid {
-        struct lu_fid   ff_fid;
+        struct ll_fid   ff_fid;
         __u64           ff_objid;
         __u64           ff_group;
 };
@@ -134,7 +134,7 @@ struct ost_filterdata {
         __u32  ofd_epoch;
 };
 int filter_log_sz_change(struct llog_handle *cathandle,
-                         struct lu_fid *mds_fid,
+                         struct ll_fid *mds_fid,
                          __u32 io_epoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode);

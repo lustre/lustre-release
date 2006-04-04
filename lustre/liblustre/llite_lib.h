@@ -28,7 +28,7 @@ struct llu_sb_info
         struct obd_uuid          ll_sb_uuid;
         struct obd_export       *ll_mdc_exp;
         struct obd_export       *ll_osc_exp;
-        obd_id                   ll_rootino;
+        struct ll_fid            ll_root_fid;
         int                      ll_flags;
         struct lustre_client_ocd ll_lco;
         struct list_head         ll_conn_chain;
@@ -45,7 +45,7 @@ struct llu_sb_info
 
 struct llu_inode_info {
         struct llu_sb_info     *lli_sbi;
-        struct lu_fid           lli_fid;
+        struct ll_fid           lli_fid;
 
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
@@ -107,7 +107,7 @@ static inline struct obd_export *llu_i2mdcexp(struct inode *inode)
 static inline int llu_is_root_inode(struct inode *inode)
 {
         return (llu_i2info(inode)->lli_fid.id ==
-                llu_i2info(inode)->lli_sbi->ll_rootino);
+                llu_i2info(inode)->lli_sbi->ll_root_fid.id);
 }
 
 #define LL_SAVE_INTENT(inode, it)                                              \
@@ -136,7 +136,7 @@ do {                                                                           \
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
 
-static inline void ll_inode2fid(struct lu_fid *fid, struct inode *inode)
+static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
         *fid = llu_i2info(inode)->lli_fid;
 }
