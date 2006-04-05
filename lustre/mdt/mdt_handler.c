@@ -189,28 +189,27 @@ static int mdt_handle_quotactl(struct mdt_thread_info *info,
 }
 
 /* issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
-int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f, 
-             struct lustre_handle *lh, ldlm_mode_t mode, __u64 lockpart)
+int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
+             struct lustre_handle *lh, ldlm_mode_t mode,
+             ldlm_policy_data_t *policy)
 {
-        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} };
         struct ldlm_res_id res_id = { .name = {0} };
         int flags = 0, rc;
         ENTRY;
-        
+
         LASSERT(ns != NULL);
         LASSERT(lh != NULL);
         LASSERT(f != NULL);
-        
+
         res_id.name[0] = fid_seq(f);
         res_id.name[1] = fid_num(f);
-        
+
         /* FIXME: is that correct to have @flags=0 here? */
-        rc = ldlm_cli_enqueue(NULL, NULL, ns, res_id, LDLM_IBITS, 
-                              &policy, mode, &flags, ldlm_blocking_ast, 
-                              ldlm_completion_ast, NULL, NULL, NULL, 0, NULL, lh);
-        if (rc != ELDLM_OK)
-                RETURN(-EIO);
-        RETURN(0);
+        rc = ldlm_cli_enqueue(NULL, NULL, ns, res_id, LDLM_IBITS, policy,
+                              mode, &flags, ldlm_blocking_ast,
+                              ldlm_completion_ast, NULL, NULL,
+                              NULL, 0, NULL, lh);
+        RETURN (rc == ELDLM_OK ? 0 : -EIO);
 }
 
 void fid_unlock(struct ldlm_namespace *ns, const struct lu_fid *f,
@@ -225,8 +224,8 @@ void fid_unlock(struct ldlm_namespace *ns, const struct lu_fid *f,
                 CERROR("invalid lock handle "LPX64, lh->cookie);
                 LBUG();
         }
-        
-        LASSERT(fid_seq(f) == lock->l_resource->lr_name.name[0] && 
+
+        LASSERT(fid_seq(f) == lock->l_resource->lr_name.name[0] &&
                 fid_num(f) == lock->l_resource->lr_name.name[1]);
 
         ldlm_lock_decref(lh, mode);
@@ -270,17 +269,21 @@ static struct lu_fid *mdt_object_fid(struct mdt_object *o)
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
 
-static int mdt_object_lock(struct ldlm_namespace *ns, struct mdt_object *o, 
-                           struct mdt_lock_handle *lh)
+static int mdt_object_lock(struct ldlm_namespace *ns, struct mdt_object *o,
+                           struct mdt_lock_handle *lh, __u64 ibits)
 {
+        ldlm_policy_data_t p = {
+                .l_inodebits = {
+                        .bits = ibits
+                }
+        };
         LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
         LASSERT(lh->mlh_mode != LCK_MINMODE);
 
-        return fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode, 
-                        lh->mlh_part);
+        return fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode, &p);
 }
 
-static void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o, 
+static void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o,
                               struct mdt_lock_handle *lh)
 {
         if (lustre_handle_is_used(&lh->mlh_lh)) {
@@ -290,7 +293,7 @@ static void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o,
 }
 
 struct mdt_object *mdt_object_find_lock(struct mdt_device *d, struct lu_fid *f,
-                                        struct mdt_lock_handle *lh)
+                                        struct mdt_lock_handle *lh, __u64 ibits)
 {
         struct mdt_object *o;
 
@@ -298,7 +301,7 @@ struct mdt_object *mdt_object_find_lock(struct mdt_device *d, struct lu_fid *f,
         if (!IS_ERR(o)) {
                 int result;
 
-                result = mdt_object_lock(d->mdt_namespace, o, lh);
+                result = mdt_object_lock(d->mdt_namespace, o, lh, ibits);
                 if (result != 0) {
                         mdt_object_put(o);
                         o = ERR_PTR(result);
@@ -878,9 +881,8 @@ int mdt_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
-        lh->mlh_part = MDS_INODELOCK_UPDATE;
 
-        o = mdt_object_find_lock(d, pfid, lh);
+        o = mdt_object_find_lock(d, pfid, lh, MDS_INODELOCK_UPDATE);
         if (IS_ERR(o))
                 return PTR_ERR(o);
 
@@ -931,7 +933,7 @@ void *mdt_thread_init(struct ptlrpc_thread *t)
 {
         struct mdt_thread_info *info;
 
-        return OBD_ALLOC_PTR(info) ? : ERR_PTR(-ENOMEM); 
+        return OBD_ALLOC_PTR(info) ? : ERR_PTR(-ENOMEM);
 }
 
 void mdt_thread_fini(struct ptlrpc_thread *t, void *data)

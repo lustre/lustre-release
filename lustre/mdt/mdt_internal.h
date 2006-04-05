@@ -115,7 +115,6 @@ struct mdt_object {
 struct mdt_lock_handle {
         struct lustre_handle    mlh_lh;
         ldlm_mode_t             mlh_mode;
-        __u64                   mlh_part;
 };
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh);
@@ -177,10 +176,10 @@ struct mdt_thread_info {
 
 };
 
-int fid_lock(struct ldlm_namespace *, const struct lu_fid *, 
-             struct lustre_handle *, ldlm_mode_t, __u64);
-             
-void fid_unlock(struct ldlm_namespace *, const struct lu_fid *, 
+int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
+             struct lustre_handle *, ldlm_mode_t, ldlm_policy_data_t *);
+
+void fid_unlock(struct ldlm_namespace *, const struct lu_fid *,
                 struct lustre_handle *, ldlm_mode_t);
 
 #endif /* __KERNEL__ */
