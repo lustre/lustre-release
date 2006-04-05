@@ -704,12 +704,12 @@ if [ -z "$LINUX" ] ; then
             patch_linux
             pack_linux
             clean_linux
-
-            prep_kernel_build
-            clean_lustre
-
-            build_kernel
         fi
+
+        prep_kernel_build
+        clean_lustre
+
+        build_kernel
     else
         # can't build a kernel if we have no series for it (i.e. patchless)
         # but we still need the headers
