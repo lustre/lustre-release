@@ -86,7 +86,7 @@ rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
-./configure @ac_configure_args@ %{configure_flags} \
+./configure @ac_configure_args@ %{?configure_flags:configure_flags} \
 	--sysconfdir=%{_sysconfdir} \
 	--mandir=%{_mandir} \
 	--libdir=%{_libdir}
