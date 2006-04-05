@@ -31,13 +31,18 @@
 
 #include <linux/module.h>
 
+#include <linux/obd.h>
+#include <linux/obd_class.h>
 #include <linux/lustre_ver.h>
 #include <linux/obd_support.h>
+#include <linux/lprocfs_status.h>
+
 
 #include <linux/lu_object.h>
 #include <linux/md_object.h>
 
 #include "mdd_internal.h"
+
 
 static struct lu_device_operations mdd_lu_ops;
 
@@ -49,21 +54,26 @@ static int lu_device_is_mdd(struct lu_device *d)
 	return ergo(d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
 }
 
+static struct mdd_device* lu2mdd_dev(struct lu_device *d)
+{
+	LASSERT(lu_device_is_mdd(d));
+	return container_of(d, struct mdd_device, mdd_md_dev.md_lu_dev);
+}
+
+static inline struct lu_device *mdd2lu_dev(struct mdd_device *d)
+{
+	return (&d->mdd_md_dev.md_lu_dev);
+}
+
 static struct mdd_object *mdd_obj(struct lu_object *o)
 {
 	LASSERT(lu_device_is_mdd(o->lo_dev));
 	return container_of(o, struct mdd_object, mod_obj.mo_lu);
 }
 
-static struct mdd_device* mdd_dev(struct lu_device *d)
-{
-	LASSERT(lu_device_is_mdd(d));
-	return container_of(d, struct mdd_device, mdd_md_dev.md_lu_dev);
-}
-
 static struct mdd_device* mdo2mdd(struct md_object *mdo)
 {
-        return mdd_dev(mdo->mo_lu.lo_dev);
+        return lu2mdd_dev(mdo->mo_lu.lo_dev);
 }
 
 static struct mdd_object* mdo2mddo(struct md_object *mdo)
@@ -94,7 +104,7 @@ struct lu_object *mdd_object_alloc(struct lu_device *d)
 
 int mdd_object_init(struct lu_object *o)
 {
-	struct mdd_device *d = mdd_dev(o->lo_dev);
+	struct mdd_device *d = lu2mdd_dev(o->lo_dev);
 	struct lu_object  *below;
         struct lu_device  *under;
         ENTRY;
@@ -283,7 +293,7 @@ __mdd_attr_set(struct mdd_device *mdd, struct mdd_object *obj, void *buf,
 
 static int
 mdd_attr_set(struct md_object *obj, void *buf, int buf_len, const char *name,
-             struct context *uc_context)
+             struct context *uctxt)
 {
         struct mdd_device *mdd = mdo2mdd(obj);
         void *handle = NULL;
@@ -294,7 +304,7 @@ mdd_attr_set(struct md_object *obj, void *buf, int buf_len, const char *name,
         if (!handle)
                 RETURN(-ENOMEM);
 
-        rc = __mdd_attr_set(mdd, mdo2mddo(obj), buf, buf_len, name, uc_context,
+        rc = __mdd_attr_set(mdd, mdo2mddo(obj), buf, buf_len, name, uctxt,
                             handle);
 
         mdd_trans_stop(mdd, handle);
@@ -394,7 +404,7 @@ mdd_index_insert(struct md_object *pobj, struct md_object *obj, const char *name
 
 static int 
 __mdd_index_delete(struct mdd_device *mdd, struct mdd_object *pobj,
-                   struct mdd_object *obj, const char *name, 
+                   struct mdd_object *obj, const char *name,
                    struct context *uctxt, void *handle)
 {
         int rc;
@@ -405,7 +415,7 @@ __mdd_index_delete(struct mdd_device *mdd, struct mdd_object *pobj,
         mdd_lock(mdd, obj, WRITE_LOCK);
 
         rc = mdd_child_ops(mdd)->osd_index_delete(mdd_object_child(pobj),
-                                              mdd_object_getfid(obj), name, 
+                                              mdd_object_getfid(obj), name,
                                               uctxt, handle);
         mdd_unlock(mdd, pobj, WRITE_LOCK);
         mdd_unlock(mdd, obj, WRITE_LOCK);
@@ -415,7 +425,7 @@ __mdd_index_delete(struct mdd_device *mdd, struct mdd_object *pobj,
 }
 
 static int
-mdd_index_delete(struct md_object *pobj, struct md_object *obj, 
+mdd_index_delete(struct md_object *pobj, struct md_object *obj,
                  const char *name, struct context *uctxt)
 {
         struct mdd_object *mdd_pobj = mdo2mddo(pobj);
@@ -581,29 +591,125 @@ static int mdd_fs_cleanup(struct mdd_device *mdd)
         return 0;
 }
 
-static int mdd_setup(struct mdd_device *mdd, struct lustre_cfg* lcfg)
+static int mdd_init(struct mdd_device *mdd, struct lu_device_type *t, 
+                    struct lustre_cfg* lcfg)
 {
+        struct lu_device *lu_dev = mdd2lu_dev(mdd);
         int rc = 0;
         ENTRY;
 
+	md_device_init(&mdd->mdd_md_dev, t);
+
+	lu_dev->ld_ops = &mdd_lu_ops;
+
         rc = mdd_fs_setup(mdd);
-        if (rc) 
+        if (rc)
                 GOTO(err, rc);
-        
+
         RETURN(rc);
 err:
         mdd_fs_cleanup(mdd);
         RETURN(rc);
 }
 
+static void mdd_fini(struct lu_device *d)
+{
+	struct mdd_device *m = lu2mdd_dev(d);
+
+	LASSERT(atomic_read(&d->ld_ref) == 0);
+	md_device_fini(&m->mdd_md_dev);
+}
+
+static struct obd_ops mdd_obd_device_ops = {
+        .o_owner = THIS_MODULE
+};
+
+struct lu_device *mdd_device_alloc(struct lu_device_type *t,
+                                   struct lustre_cfg *cfg)
+{
+        struct lu_device  *l;
+        struct mdd_device *m;
+
+        OBD_ALLOC_PTR(m);
+        if (m == NULL) {
+                l = ERR_PTR(-ENOMEM);
+        } else {
+                int err;
+
+                err = mdd_init(m, t, cfg);
+                if (!err)
+                        l = mdd2lu_dev(m);
+                else
+                        l = ERR_PTR(err);
+        }
+
+        return l;
+}
+
+void mdd_device_free(struct lu_device *lu)
+{
+        struct mdd_device *mdd = lu2mdd_dev(lu);
+        mdd_fini(lu);
+
+        OBD_FREE_PTR(mdd);
+}
+
+int mdd_type_init(struct lu_device_type *t)
+{
+        return 0;
+}
+
+void mdd_type_fini(struct lu_device_type *t)
+{
+}
+
+static struct lu_device_type_operations mdd_device_type_ops = {
+        .ldto_init = mdd_type_init,
+        .ldto_fini = mdd_type_fini,
+
+        .ldto_device_alloc = mdd_device_alloc,
+        .ldto_device_free  = mdd_device_free
+};
+
+static struct lu_device_type mdd_device_type = {
+        .ldt_tags = LU_DEVICE_MD,
+        .ldt_name = LUSTRE_MDD_NAME,
+        .ldt_ops  = &mdd_device_type_ops
+};
+
+struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
+        { 0 }
+};
+
+struct lprocfs_vars lprocfs_mdd_module_vars[] = {
+        { 0 }
+};
+
+LPROCFS_INIT_VARS(mdd, lprocfs_mdd_module_vars, lprocfs_mdd_obd_vars);
+
 static int __init mdd_mod_init(void)
 {
-	return 0;
+        struct lprocfs_static_vars lvars;
+        struct obd_type *type;
+        int result;
+
+        lprocfs_init_vars(mdd, &lvars);
+        result = class_register_type(&mdd_obd_device_ops,
+                                     lvars.module_vars, LUSTRE_MDD_NAME);
+        if (result == 0) {
+                type = class_get_type(LUSTRE_MDD_NAME);
+                LASSERT(type != NULL);
+                type->typ_lu = &mdd_device_type;
+                result = type->typ_lu->ldt_ops->ldto_init(type->typ_lu);
+                if (result != 0)
+                        class_unregister_type(LUSTRE_MDD_NAME);
+        }
+        return result;
 }
 
 static void __exit mdd_mod_exit(void)
 {
-        return;
+        class_unregister_type(LUSTRE_MDD_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
