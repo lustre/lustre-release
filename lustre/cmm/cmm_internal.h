@@ -64,7 +64,7 @@ static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)
 	return (md2cmm_dev(md_device_get(&c->cmo_obj)));
 }
 
-static struct cmm_object *lu2cmm_obj(struct lu_object *o)
+static inline struct cmm_object *lu2cmm_obj(struct lu_object *o)
 {
 	//LASSERT(lu_device_is_cmm(o->lo_dev));
 	return container_of(o, struct cmm_object, cmo_obj.mo_lu);

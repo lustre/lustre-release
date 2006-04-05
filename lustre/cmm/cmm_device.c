@@ -47,7 +47,7 @@ static struct obd_ops cmm_obd_device_ops = {
 
 static struct lu_device_operations cmm_lu_ops;
 
-static int lu_device_is_cmm(struct lu_device *d)
+static inline int lu_device_is_cmm(struct lu_device *d)
 {
 	/*
 	 * XXX for now. Tags in lu_device_type->ldt_something are needed.
@@ -114,7 +114,7 @@ int mds_md_connect(struct obd_device *obd, char *md_name)
         /* retrieve size of EA */
         rc = obd_get_info(mds->mds_md_exp, strlen("mdsize"),
                           "mdsize", &valsize, &value);
-        if (rc) 
+        if (rc)
                 GOTO(err_reg, rc);
 
         if (value > mds->mds_max_mdsize)
@@ -123,9 +123,9 @@ int mds_md_connect(struct obd_device *obd, char *md_name)
         /* find our number in LMV cluster */
         rc = obd_get_info(mds->mds_md_exp, strlen("mdsnum"),
                           "mdsnum", &valsize, &value);
-        if (rc) 
+        if (rc)
                 GOTO(err_reg, rc);
-        
+
         mds->mds_num = value;
 
         rc = obd_set_info(mds->mds_md_exp, strlen("inter_mds"),
@@ -177,12 +177,12 @@ int mds_md_disconnect(struct obd_device *obd, int flags)
                 if (flags & OBD_OPT_FORCE) {
                         struct obd_device *lmv_obd;
                         struct obd_ioctl_data ioc_data = { 0 };
-                        
+
                         lmv_obd = class_exp2obd(mds->mds_md_exp);
                         if (lmv_obd == NULL)
                                 GOTO(out, rc = 0);
 
-                        /* 
+                        /*
                          * making disconnecting lmv stuff do not send anything
                          * to all remote MDSs from LMV. This is needed to
                          * prevent possible hanging with endless recovery, when
@@ -226,7 +226,7 @@ static int cmm_init(struct cmm_device *m,
 	lu_dev->ld_ops = &cmm_lu_ops;
 
         snprintf(ns_name, sizeof ns_name, LUSTRE_CMM0_NAME"-%p", m);
-        
+
 	return 0;
 }
 
@@ -235,20 +235,20 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
 {
         struct lu_device  *l;
         struct cmm_device *m;
-        
+
         OBD_ALLOC_PTR(m);
         if (m == NULL) {
                 l = ERR_PTR(-ENOMEM);
         } else {
                 int err;
-                
+
                 err = cmm_init(m, t, cfg);
-                if (!err) 
+                if (!err)
                         l = cmm2lu_dev(m);
-                else 
+                else
                         l = ERR_PTR(err);
         }
-        
+
         return l;
 }
 

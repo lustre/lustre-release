@@ -1,8 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
- * 
+ *
  *  Extention of lu_object.h for metadata objects
- *  
+ *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -43,20 +43,20 @@ struct md_device_operations {
         int (*mdo_root_get)(struct md_device *m, struct lu_fid *f);
         int (*mdo_mkdir)(struct md_object *obj, const char *name,
                          struct md_object *child);
-        
+
         int (*mdo_rename)(struct md_object *spobj, struct md_object *tpobj,
                           struct md_object *sobj, const char *sname,
-                          struct md_object *tobj, const char *tname, 
+                          struct md_object *tobj, const char *tname,
                           struct context *uctxt);
         int (*mdo_link)(struct md_object *tobj, struct md_object *sobj,
                         const char *name, struct context *uctxt);
         int (*mdo_attr_get)(struct md_object *obj, void *buf, int buf_len,
-                            const char *name, struct context *uctxt); 
-        int (*mdo_attr_set)(struct md_object *obj, void *buf, int buf_len, 
                             const char *name, struct context *uctxt);
-        int (*mdo_index_insert)(struct md_object *pobj, struct md_object *obj, 
+        int (*mdo_attr_set)(struct md_object *obj, void *buf, int buf_len,
+                            const char *name, struct context *uctxt);
+        int (*mdo_index_insert)(struct md_object *pobj, struct md_object *obj,
                                 const char *name, struct context *uctxt);
-        int (*mdo_index_delete)(struct md_object *pobj, struct md_object *obj, 
+        int (*mdo_index_delete)(struct md_object *pobj, struct md_object *obj,
                                 const char *name, struct context *uctxt);
         int (*mdo_object_create)(struct md_object *pobj, struct md_object *child,
                                  struct context *uctxt);
@@ -88,12 +88,12 @@ static inline struct md_device *md_device_get(struct md_object *o)
         return container_of(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
 }
 
-static int md_device_init(struct md_device *md, struct lu_device_type *t)
+static inline int md_device_init(struct md_device *md, struct lu_device_type *t)
 {
 	return lu_device_init(&md->md_lu_dev, t);
 }
 
-static void md_device_fini(struct md_device *md)
+static inline void md_device_fini(struct md_device *md)
 {
 	lu_device_fini(&md->md_lu_dev);
 }
