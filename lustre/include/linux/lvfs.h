@@ -142,9 +142,4 @@ static inline void ll_sleep(int t)
 }
 #endif
 
-static inline int ll_fid2str(char *str, __u64 id, __u32 generation)
-{
-        return sprintf(str, "%llx:%08x", (unsigned long long)id, generation);
-}
-
 #endif

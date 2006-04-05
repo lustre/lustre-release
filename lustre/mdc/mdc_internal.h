@@ -1,4 +1,4 @@
-#include <linux/lustre_mds.h>
+#include <linux/lustre_mdc.h>
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
                        __u64 valid, struct ll_fid *fid, int ea_size);
 void mdc_pack_rep_body(struct ptlrpc_request *);

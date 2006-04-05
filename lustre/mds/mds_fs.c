@@ -672,7 +672,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         oa->o_id = filp->f_dentry->d_inode->i_ino;
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
-        namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
+        namelen = mds_fid2str(fidname, oa->o_id, oa->o_generation);
 
         down(&parent_inode->i_sem);
         new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
@@ -739,7 +739,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
 
-        namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
+        namelen = mds_fid2str(fidname, oa->o_id, oa->o_generation);
 
         down(&parent_inode->i_sem);
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);

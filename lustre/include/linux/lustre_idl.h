@@ -629,9 +629,20 @@ struct lu_fid {
         __u16 f_num;  /* holds fid number. */
 };
 
-#define fid_seq(fid) ((fid)->f_seq)
-#define fid_num(fid) ((fid)->f_num)
-#define fid_wid(fid) ((fid)->f_wid)
+static inline __u32 fid_seq(const struct lu_fid *fid)
+{ 
+        return fid->f_seq;
+}
+
+static inline __u16 fid_wid(const struct lu_fid *fid)
+{ 
+        return fid->f_wid;
+}
+
+static inline __u16 fid_num(const struct lu_fid *fid)
+{ 
+        return fid->f_num;
+}
 
 #define DFID2 "%lu/%u"
 

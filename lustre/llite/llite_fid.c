@@ -3,7 +3,7 @@
  *
  * Lustre Light Super operations
  *
- *  Copyright (c) 2002-2005 Cluster File Systems, Inc.
+ *  Copyright (c) 2006 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *

@@ -938,8 +938,10 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                              struct mgs_target_info *mti)
 {
         struct llog_handle *llh = NULL;
-        char *cliname, *mdcname, *lovname, *nodeuuid, *mdcuuid;
-        int rc, i, first_log = 0;
+//        char *mdcname, **nodeuuid, *mdcuuid;
+        char *cliname, *lovname;
+        int rc, first_log = 0;
+//        int i;
         ENTRY;
 
         CDEBUG(D_MGS, "writing new mdt %s\n", mti->mti_svname);
@@ -1029,7 +1031,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         //        mgs_write_log_mdc(...);
         //END PROTO
 
-
+        RETURN(rc);
 }
 
 

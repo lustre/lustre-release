@@ -249,4 +249,9 @@ extern quota_interface_t *quota_interface;
 int mds_setxattr(struct ptlrpc_request *req);
 int mds_getxattr(struct ptlrpc_request *req);
 
+static inline int mds_fid2str(char *str, __u64 id, __u32 generation)
+{
+        return sprintf(str, "%llx:%08x", (unsigned long long)id, generation);
+}
+
 #endif /* _MDS_INTERNAL_H */

@@ -29,7 +29,7 @@
 #endif
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
-#include <linux/lustre_mds.h>
+#include <linux/lustre_mdc.h>
 #include "mdc_internal.h"
 
 #ifndef __KERNEL__

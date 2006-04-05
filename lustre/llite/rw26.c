@@ -46,7 +46,7 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_mds.h>
+#include <linux/lustre_mdc.h>
 #include <linux/lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>

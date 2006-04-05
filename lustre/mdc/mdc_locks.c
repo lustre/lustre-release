@@ -37,7 +37,8 @@
 #endif
 
 #include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
+#include <linux/lustre_mdc.h>
+#include <linux/lustre_acl.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
 #include "mdc_internal.h"

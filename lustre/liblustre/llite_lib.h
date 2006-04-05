@@ -8,7 +8,7 @@
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
+#include <linux/lustre_mdc.h>
 #include <linux/lustre_lite.h>
 
 #include <sys/types.h>

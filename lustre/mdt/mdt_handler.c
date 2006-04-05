@@ -55,7 +55,7 @@
 
 /* struct mds_client_data */
 #include "../mds/mds_internal.h"
-#include "mdt.h"
+#include "mdt_internal.h"
 
 /*
  * Initialized in mdt_mod_init().
@@ -696,7 +696,8 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
                              ldlm_mode_t mode, int flags, void *data)
 {
-        return ELDLM_LOCK_ABORTED;
+        ENTRY;
+        RETURN(ELDLM_LOCK_ABORTED);
 }
 
 struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,

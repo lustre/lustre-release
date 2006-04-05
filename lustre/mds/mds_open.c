@@ -768,7 +768,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         void *handle = NULL;
         ENTRY;
 
-        fidlen = ll_fid2str(fidname, fid->id, fid->generation);
+        fidlen = mds_fid2str(fidname, fid->id, fid->generation);
         dchild = ll_lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
@@ -1176,7 +1176,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
                 reply_body = lustre_msg_buf(req->rq_repmsg, 0,
                                             sizeof(*reply_body));
 
-        fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
+        fidlen = mds_fid2str(fidname, inode->i_ino, inode->i_generation);
 
         CDEBUG(D_INODE, "inode %p ino %s nlink %d orphan %d\n", inode, fidname,
                inode->i_nlink, mds_orphan_open_count(inode));

@@ -1366,7 +1366,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
 #endif
         LASSERT(down_trylock(&pending_dir->i_sem) != 0);
 
-        fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
+        fidlen = mds_fid2str(fidname, inode->i_ino, inode->i_generation);
 
         CDEBUG(D_INODE, "pending destroy of %dx open %d linked %s %s = %s\n",
                mds_orphan_open_count(inode), inode->i_nlink,

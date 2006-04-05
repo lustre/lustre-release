@@ -21,7 +21,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
-#include <linux/lustre_mds.h>
+#include <linux/lustre_mdc.h>
 #include <linux/lustre_ha.h>
 
 #include <linux/rbtree.h>

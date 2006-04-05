@@ -36,6 +36,7 @@
 
 #include <linux/module.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_acl.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/obd_class.h>

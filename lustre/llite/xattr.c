@@ -36,7 +36,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_version.h>
-#include <linux/lustre_mds.h>
+#include <linux/lustre_mdc.h>
 
 #include "llite_internal.h"
 
