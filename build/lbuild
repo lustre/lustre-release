@@ -717,11 +717,17 @@ if [ -z "$LINUX" ] ; then
         LINUX=$(pwd)/linux
         pushd $LINUX && {
             # need a .config -- like a user would do
-            cp /boot/config-${lnxmaj}-${lnxrel}smp .config
+            BOOTCONFIG="/boot/config-${lnxmaj}-${lnxrel}smp"
+            if [ -f $BOOTCONFIG ]; then
+                cp $BOOTCONFIG .config
+            else
+                fatal 1 "$BOOTCONFIG doesn't exist!  Help!"                
+            fi
             make oldconfig
             make include/asm
             make include/linux/version.h
             make SUBDIRS=scripts
+        }
         popd
         build_lustre
     fi
