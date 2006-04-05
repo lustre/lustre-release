@@ -570,7 +570,8 @@ build_lustre()
     ./configure "--with-linux=${LINUX}" ${CONFIGURE_FLAGS}
 
     $RPMBUILD $targets -bb build/lustre.spec \
-        --define "_topdir $TOPDIR" || \
+        --define "_topdir $TOPDIR" \
+        --define "configure_flags --with-linux=${LINUX}" || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
     popd >/dev/null
@@ -714,6 +715,14 @@ if [ -z "$LINUX" ] ; then
         # but we still need the headers
         unpack_linux
         LINUX=$(pwd)/linux
+        pushd $LINUX && {
+            # need a .config -- like a user would do
+            cp /boot/config-${lnxmaj}-${lnxrel}smp .config
+            make oldconfig
+            make include/asm
+            make include/linux/version.h
+            make SUBDIRS=scripts
+        popd
         build_lustre
     fi
 else
