@@ -742,7 +742,7 @@ EOF
                 fatal 1 "$LINUX does not exist!  Install a kernel-devel package!"
             fi
         fi
-        CONFIGURE_FLAGS="CONFIGURE_FLAGS --disable-server"
+        CONFIGURE_FLAGS="$CONFIGURE_FLAGS --disable-server"
         build_lustre
     fi
 else
