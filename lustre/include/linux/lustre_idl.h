@@ -927,6 +927,22 @@ struct lov_desc {
 
 #define ld_magic ld_active_tgt_count       /* for swabbing from llogs */
 
+/*begin adding MDT by huanghua@clusterfs.com*/
+struct lmv_desc {
+        __u32 ld_tgt_count;                /* how many MDS's */
+        __u32 ld_active_tgt_count;         /* how many active */
+        struct obd_uuid ld_uuid;
+};
+struct cmm_desc {
+        __u32 ld_tgt_count;                /* how many MDS's */
+        __u32 ld_active_tgt_count;         /* how many active */
+        struct obd_uuid ld_uuid;
+};
+
+extern void lustre_swab_lmv_desc (struct lmv_desc *ld);
+extern void lustre_swab_cmm_desc (struct cmm_desc *ld);
+/*end adding MDT by huanghua@clusterfs.com*/
+
 extern void lustre_swab_lov_desc (struct lov_desc *ld);
 
 /*

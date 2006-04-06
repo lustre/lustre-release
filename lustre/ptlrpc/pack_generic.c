@@ -818,6 +818,22 @@ void lustre_swab_lov_desc (struct lov_desc *ld)
         /* uuid endian insensitive */
 }
 
+/*begin adding MDT by huanghua@clusterfs.com*/
+void lustre_swab_lmv_desc (struct lmv_desc *ld)
+{
+        __swab32s (&ld->ld_tgt_count);
+        __swab32s (&ld->ld_active_tgt_count);
+        /* uuid endian insensitive */
+}
+void lustre_swab_cmm_desc (struct cmm_desc *ld)
+{
+        __swab32s (&ld->ld_tgt_count);
+        __swab32s (&ld->ld_active_tgt_count);
+        /* uuid endian insensitive */
+}
+/*end adding MDT by huanghua@clusterfs.com*/
+
+
 static void print_lum (struct lov_user_md *lum)
 {
         CDEBUG(D_OTHER, "lov_user_md %p:\n", lum);
