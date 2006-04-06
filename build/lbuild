@@ -570,8 +570,7 @@ build_lustre()
     ./configure "--with-linux=${LINUX}" ${CONFIGURE_FLAGS}
 
     $RPMBUILD $targets -bb build/lustre.spec \
-        --define "_topdir $TOPDIR" \
-        --define "configure_flags --with-linux=${LINUX}" || \
+        --define "_topdir $TOPDIR" || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
     popd >/dev/null
@@ -713,22 +712,37 @@ if [ -z "$LINUX" ] ; then
     else
         # can't build a kernel if we have no series for it (i.e. patchless)
         # but we still need the headers
-        unpack_linux
-        LINUX=$(pwd)/linux
-        pushd $LINUX && {
-            # need a .config -- like a user would do
-            BOOTCONFIG="/boot/config-${lnxmaj}-${lnxrel}smp"
-            if [ -f $BOOTCONFIG ]; then
-                cp $BOOTCONFIG .config
-            else
-                fatal 1 "$BOOTCONFIG doesn't exist!  Help!"                
+        use_unpacked_source=false
+        if $use_unpacked_source; then
+            unpack_linux
+            LINUX=$(pwd)/linux
+            pushd $LINUX && {
+                # need a .config -- like a user would do
+                BOOTCONFIG="/boot/config-${lnxmaj}-${lnxrel}smp"
+                if [ -f $BOOTCONFIG ]; then
+                    cp $BOOTCONFIG .config
+                else
+                    fatal 1 "$BOOTCONFIG doesn't exist!  Help!"                
+                fi
+                # vendors like to taint the EXTRAVERSION in their kernel-source
+                # to differentiate a user-built kernel from their own
+                ed << EOF Makefile
+/^EXTRAVERSION =/d
+wq
+EOF
+                make oldconfig
+                make include/asm
+                make include/linux/version.h
+                make SUBDIRS=scripts
+            }
+            popd
+        else
+            LINUX=/lib/modules/${lnxmaj}-${lnxrel}smp/build
+            if [ ! -e $LINUX ]; then
+                fatal 1 "$LINUX does not exist!  Install a kernel-devel package!"
             fi
-            make oldconfig
-            make include/asm
-            make include/linux/version.h
-            make SUBDIRS=scripts
-        }
-        popd
+        fi
+        CONFIGURE_FLAGS="CONFIGURE_FLAGS --disable-server"
         build_lustre
     fi
 else
