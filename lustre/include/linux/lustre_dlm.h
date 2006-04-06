@@ -444,6 +444,11 @@ int ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 /* ldlm_extent.c */
 __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms);
 
+struct ldlm_callback_suite {
+        ldlm_completion_callback lcs_completion;
+        ldlm_blocking_callback   lcs_blocking;
+        ldlm_glimpse_callback    lcs_glimpse;
+};
 
 /* ldlm_lockd.c */
 int ldlm_server_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
@@ -452,7 +457,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data);
 int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
                         ldlm_blocking_callback, ldlm_glimpse_callback);
+int ldlm_handle_enqueue0(struct ptlrpc_request *req,
+                         struct ldlm_request *dlm_req,
+                         struct ldlm_callback_suite *cbs);
 int ldlm_handle_convert(struct ptlrpc_request *req);
+int ldlm_handle_convert0(struct ptlrpc_request *req,
+                         struct ldlm_request *dlm_req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_get_ref(void);

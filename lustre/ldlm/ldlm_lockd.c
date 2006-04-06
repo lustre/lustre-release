@@ -671,14 +671,12 @@ find_existing_lock(struct obd_export *exp, struct lustre_handle *remote_hdl)
  * Main server-side entry point into LDLM. This is called by ptlrpc service
  * threads to carry out client lock enqueueing requests.
  */
-int ldlm_handle_enqueue(struct ptlrpc_request *req,
-                        ldlm_completion_callback completion_callback,
-                        ldlm_blocking_callback blocking_callback,
-                        ldlm_glimpse_callback glimpse_callback)
+int ldlm_handle_enqueue0(struct ptlrpc_request *req,
+                         struct ldlm_request *dlm_req,
+                         struct ldlm_callback_suite *cbs)
 {
         struct obd_device *obddev = req->rq_export->exp_obd;
         struct ldlm_reply *dlm_rep;
-        struct ldlm_request *dlm_req;
         int rc = 0, size[2] = {sizeof(*dlm_rep)};
         __u32 flags;
         ldlm_error_t err = ELDLM_OK;
@@ -687,14 +685,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         ENTRY;
 
         LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
-
-        dlm_req = lustre_swab_reqbuf (req, MDS_REQ_INTENT_LOCKREQ_OFF,
-                                      sizeof (*dlm_req),
-                                      lustre_swab_ldlm_request);
-        if (dlm_req == NULL) {
-                CERROR ("Can't unpack dlm_req\n");
-                GOTO(out, rc = -EFAULT);
-        }
 
         flags = dlm_req->lock_flags;
 
@@ -759,8 +749,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                                 dlm_req->lock_desc.l_resource.lr_name,
                                 dlm_req->lock_desc.l_resource.lr_type,
                                 dlm_req->lock_desc.l_req_mode,
-                                blocking_callback, completion_callback,
-                                glimpse_callback, NULL, 0);
+                                cbs->lcs_blocking, cbs->lcs_completion,
+                                cbs->lcs_glimpse, NULL, 0);
         if (!lock)
                 GOTO(out, rc = -ENOMEM);
 
@@ -918,20 +908,38 @@ existing_lock:
         return rc;
 }
 
-int ldlm_handle_convert(struct ptlrpc_request *req)
+int ldlm_handle_enqueue(struct ptlrpc_request *req,
+                        ldlm_completion_callback completion_callback,
+                        ldlm_blocking_callback blocking_callback,
+                        ldlm_glimpse_callback glimpse_callback)
 {
+        int rc;
         struct ldlm_request *dlm_req;
+        struct ldlm_callback_suite cbs = {
+                .lcs_completion = completion_callback,
+                .lcs_blocking   = blocking_callback,
+                .lcs_glimpse    = glimpse_callback
+        };
+
+
+        dlm_req = lustre_swab_reqbuf(req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                                     sizeof *dlm_req, lustre_swab_ldlm_request);
+        if (dlm_req == NULL) {
+                rc = ldlm_handle_enqueue0(req, dlm_req, &cbs);
+        } else {
+                CERROR ("Can't unpack dlm_req\n");
+                rc = -EFAULT;
+        }
+        return rc;
+}
+
+int ldlm_handle_convert0(struct ptlrpc_request *req,
+                         struct ldlm_request *dlm_req)
+{
         struct ldlm_reply *dlm_rep;
         struct ldlm_lock *lock;
         int rc, size = sizeof(*dlm_rep);
         ENTRY;
-
-        dlm_req = lustre_swab_reqbuf (req, 0, sizeof (*dlm_req),
-                                      lustre_swab_ldlm_request);
-        if (dlm_req == NULL) {
-                CERROR ("Can't unpack dlm_req\n");
-                RETURN (-EFAULT);
-        }
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc) {
@@ -975,6 +983,22 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
                 LDLM_DEBUG_NOLOCK("server-side convert handler END");
 
         RETURN(0);
+}
+
+int ldlm_handle_convert(struct ptlrpc_request *req)
+{
+        int rc;
+        struct ldlm_request *dlm_req;
+
+        dlm_req = lustre_swab_reqbuf(req, 0, sizeof *dlm_req,
+                                     lustre_swab_ldlm_request);
+        if (dlm_req != NULL) {
+                rc = ldlm_handle_convert0(req, dlm_req);
+        } else {
+                CERROR ("Can't unpack dlm_req\n");
+                rc = -EFAULT;
+        }
+        return rc;
 }
 
 int ldlm_handle_cancel(struct ptlrpc_request *req)
@@ -1758,8 +1782,10 @@ EXPORT_SYMBOL(ldlm_server_blocking_ast);
 EXPORT_SYMBOL(ldlm_server_completion_ast);
 EXPORT_SYMBOL(ldlm_server_glimpse_ast);
 EXPORT_SYMBOL(ldlm_handle_enqueue);
+EXPORT_SYMBOL(ldlm_handle_enqueue0);
 EXPORT_SYMBOL(ldlm_handle_cancel);
 EXPORT_SYMBOL(ldlm_handle_convert);
+EXPORT_SYMBOL(ldlm_handle_convert0);
 EXPORT_SYMBOL(ldlm_del_waiting_lock);
 EXPORT_SYMBOL(ldlm_get_ref);
 EXPORT_SYMBOL(ldlm_put_ref);

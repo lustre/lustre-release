@@ -84,6 +84,19 @@ struct mdt_device {
         struct ptlrpc_client       mdt_ldlm_client;
         /* underlying device */
         struct md_device          *mdt_child;
+        /*
+         * Device flags, taken from enum mdt_flags. No locking (so far) is
+         * necessary.
+         */
+        unsigned long              mdt_flags;
+};
+
+enum mdt_flags {
+        /*
+         * This mdt works with legacy clients with different resource name
+         * encoding (pre-fid, etc.).
+         */
+        MDT_CL_COMPAT_RESNAME = 1 << 0,
 };
 
 struct md_object {
@@ -160,6 +173,10 @@ struct mdt_thread_info {
          * Body for "habeo corpus" operations.
          */
         struct mdt_body       *mti_body;
+        /*
+         * Lock request for "habeo clavis" operations.
+         */
+        struct ldlm_request   *mti_dlm_req;
         /*
          * Host object. This is released at the end of mdt_handler().
          */
