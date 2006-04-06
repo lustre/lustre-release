@@ -125,7 +125,7 @@ case "$lustretag" in
 
     b_release_1_4_6-patchless)
         portalstag=b_release_1_4_6
-        lnettag=b_release_1_4_6
+        lnettag=b_release_1_4_6-patchless
         libsysiotag=b_release_1_4_6
         snmptag=b_release_1_4_6
         ;;
