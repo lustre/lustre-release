@@ -1,10 +1,11 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mdd/mdd_reint.c
+ *  mdd/mdd_handler.c
  *  Lustre Metadata Server (mdd) routines
  *
- *  Copyright (C) 2002-2005 Cluster File Systems, Inc.
+ *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Wang Di <wangdi@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -95,7 +96,7 @@ struct lu_object *mdd_object_alloc(struct lu_device *d)
         if (mdo != NULL) {
                 struct lu_object *o;
 		
-                o = &mdo->mod_obj.mo_lu; 
+                o = &mdo->mod_obj.mo_lu;
                 lu_object_init(o, NULL, d);
                 return (&mdo->mod_obj.mo_lu);
         } else
@@ -135,8 +136,8 @@ void mdd_object_free(struct lu_object *o)
 void mdd_object_release(struct lu_object *o)
 {
 	struct mdd_device *mdd = lu2mdd_dev(o->lo_dev);
-        struct mdd_object *obj = mdd_obj(o); 
-        
+        struct mdd_object *obj = mdd_obj(o);
+
         mdd_object_put(mdd, obj);
 }
 
@@ -200,8 +201,8 @@ mdd_object_create(struct md_object *pobj, struct md_object *child,
                   struct context *uctxt)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
-        struct mdd_object *mdd_pobj = mdo2mddo(pobj); 
-        struct mdd_object *mdd_child = mdo2mddo(child); 
+        struct mdd_object *mdd_pobj = mdo2mddo(pobj);
+        struct mdd_object *mdd_child = mdo2mddo(child);
         void *handle = NULL;
         int rc;
         ENTRY;
@@ -258,7 +259,7 @@ mdd_object_destroy(struct md_object *obj)
         void *handle;
         int rc ;
         ENTRY;
- 
+
         handle = mdd_trans_start(mdd, mdd_obj);
         if (!handle)
                 RETURN(-ENOMEM);
@@ -290,7 +291,7 @@ __mdd_attr_set(struct mdd_device *mdd, struct mdd_object *obj, void *buf,
                void *handle)
 {
         return mdd_child_ops(mdd)->osd_attr_set(mdd_object_child(obj),
-                                                buf, buf_len, 
+                                                buf, buf_len,
                                                 name, uc_context,
                                                 handle);
 }
@@ -335,7 +336,7 @@ mdd_attr_get(struct md_object *obj, void *buf, int buf_len, const char *name,
         struct mdd_object *mdd_obj = mdo2mddo(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         int rc;
-        
+
         ENTRY;
 
         mdd_object_get(mdd, mdd_obj);
@@ -348,7 +349,7 @@ mdd_attr_get(struct md_object *obj, void *buf, int buf_len, const char *name,
 int mdd_object_put(struct mdd_device *mdd, struct mdd_object *obj)
 {
         int rc = 0;
- 
+
         if ((mdd_object_dec_check(mdd, obj)) == 0) {
                 int nlink;
 
@@ -356,7 +357,7 @@ int mdd_object_put(struct mdd_device *mdd, struct mdd_object *obj)
                                   NULL);
                 if (!rc)
                         RETURN(-EINVAL);
-                
+
                 if (nlink == 0)
                         rc = mdd_object_destroy(&obj->mod_obj);
         }
@@ -401,12 +402,12 @@ mdd_index_insert(struct md_object *pobj, struct md_object *obj, const char *name
 
         rc = __mdd_index_insert(mdd, mdo2mddo(pobj), mdo2mddo(obj), name, uctxt,
                                 handle);
- 
+
         mdd_trans_stop(mdd, handle);
         RETURN(rc);
 }
 
-static int 
+static int
 __mdd_index_delete(struct mdd_device *mdd, struct mdd_object *pobj,
                    struct mdd_object *obj, const char *name,
                    struct context *uctxt, void *handle)
@@ -446,12 +447,12 @@ mdd_index_delete(struct md_object *pobj, struct md_object *obj,
         rc = __mdd_index_delete(mdd, mdd_pobj, mdd_obj, name, uctxt, handle);
 
         mdd_trans_stop(mdd, handle);
-        
+
         RETURN(rc);
 }
 
 static int
-mdd_link(struct md_object *tgt_obj, struct md_object *src_obj, 
+mdd_link(struct md_object *tgt_obj, struct md_object *src_obj,
          const char *name, struct context *uctxt)
 {
         struct mdd_object *mdd_tobj = mdo2mddo(tgt_obj);
@@ -475,7 +476,7 @@ mdd_link(struct md_object *tgt_obj, struct md_object *src_obj,
         rc = mdd_attr_get(src_obj, &nlink, sizeof(nlink), "NLINK", uctxt);
         ++nlink;
 
-        rc = __mdd_attr_set(mdd, mdd_sobj, &nlink, sizeof(nlink), "NLINK", 
+        rc = __mdd_attr_set(mdd, mdd_sobj, &nlink, sizeof(nlink), "NLINK",
                             uctxt, handle);
 exit:
         mdd_unlock(mdd, mdd_tobj, WRITE_LOCK);
@@ -499,8 +500,8 @@ static void mdd_rename_unlock(struct mdd_device *mdd, struct mdd_object *src_pob
         return;
 }
 
-static int 
-mdd_rename(struct md_object *src_pobj, struct md_object *tgt_pobj, 
+static int
+mdd_rename(struct md_object *src_pobj, struct md_object *tgt_pobj,
            struct md_object *sobj, const char *sname, struct md_object *tobj,
            const char *tname, struct context *uctxt)
 {
@@ -509,9 +510,9 @@ mdd_rename(struct md_object *src_pobj, struct md_object *tgt_pobj,
         struct mdd_object *mdd_tpobj = mdo2mddo(tgt_pobj);
         struct mdd_object *mdd_sobj = mdo2mddo(sobj);
         struct mdd_object *mdd_tobj = mdo2mddo(tobj);
-        int rc; 
+        int rc;
         void *handle = NULL;
- 
+
         handle = mdd_trans_start(mdd, mdd_spobj);
         if (!handle)
                 RETURN(-ENOMEM);
@@ -597,7 +598,7 @@ static int mdd_fs_cleanup(struct mdd_device *mdd)
         return 0;
 }
 
-static int mdd_init(struct mdd_device *mdd, struct lu_device_type *t, 
+static int mdd_init(struct mdd_device *mdd, struct lu_device_type *t,
                     struct lustre_cfg* lcfg)
 {
         struct lu_device *lu_dev = mdd2lu_dev(mdd);
