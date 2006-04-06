@@ -33,8 +33,6 @@ struct md_object;
 
 /*the context of the mdd ops*/
 struct context {
-        const char      *name;
-        int             name_len;
         __u32           mode;
         int             flags;
 };

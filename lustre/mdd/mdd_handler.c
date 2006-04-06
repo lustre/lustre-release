@@ -134,6 +134,10 @@ void mdd_object_free(struct lu_object *o)
 
 void mdd_object_release(struct lu_object *o)
 {
+	struct mdd_device *mdd = lu2mdd_dev(o->lo_dev);
+        struct mdd_object *obj = mdd_obj(o); 
+        
+        mdd_object_put(mdd, obj);
 }
 
 int mdd_object_print(struct seq_file *f, const struct lu_object *o)
@@ -566,6 +570,8 @@ cleanup:
 
 static int mdd_root_get(struct md_device *m, struct lu_fid *f)
 {
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        memcpy(f, &mdd->mdd_rootfid, sizeof(*f));
         return 0;
 }
 
@@ -717,4 +723,3 @@ MODULE_DESCRIPTION("Lustre Meta-data Device Prototype ("LUSTRE_MDD_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(mdd, "0.0.2", mdd_mod_init, mdd_mod_exit);
-

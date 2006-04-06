@@ -67,15 +67,14 @@ struct osd_device_operations {
                                   const char *name, struct context *uctxt, 
                                   void *handle);
         int   (*osd_index_delete)(struct lu_object *lu, struct lu_fid *fid,
-                                   const char *name,  struct context *uctxt, 
-                                   void *handle);
+                                  const char *name,  struct context *uctxt, 
+                                  void *handle);
 };
 
 struct osd_device {
 	struct lu_device              osd_lu_dev;
 	struct osd_device_operations *osd_ops;
 };
-
 
 int mdd_object_put(struct mdd_device *mdd, struct mdd_object *obj);
 void mdd_object_get(struct mdd_device *mdd, struct mdd_object *obj);
