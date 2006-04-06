@@ -1,0 +1,4 @@
+MODULES := osd
+osd-objs := osd_handler.o
+
+@INCLUDE_RULES@
