@@ -201,6 +201,8 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
         LASSERT(lh != NULL);
         LASSERT(f != NULL);
 
+        /* we use fid_num() whoch includes also object version instread of raw
+         * fid_oid(). */
         res_id.name[0] = fid_seq(f);
         res_id.name[1] = fid_num(f);
 

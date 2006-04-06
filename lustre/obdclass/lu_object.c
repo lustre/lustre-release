@@ -188,14 +188,11 @@ static struct lu_object *htable_lookup(struct lu_site *s,
         return NULL;
 }
 
-/* maximal objects in sequence */
-#define FID_SEQ_WIDTH 10000
-
 static __u32 fid_hash(const struct lu_fid *f)
 {
-        /* FIXME: this is proto anyway, so we do not care of getting rid 
-           of hardcoded things in it like sequence width, etc. */
-        return fid_seq(f) * FID_SEQ_WIDTH + fid_num(f);
+        /* all objects with same id and different versions will belong to same
+         * collisions list. */
+        return fid_seq(f) * LUSTRE_FID_SEQ_WIDTH + fid_oid(f);
 }
 
 struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f)

@@ -623,32 +623,57 @@ typedef enum {
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
 struct lu_fid {
-        __u32 f_seq;  /* holds fid sequence, each client should be able to 
-                         perform 2 ^ 32 connections. */
-        __u16 f_wid;  /* holds width of sequence. */
-        __u16 f_num;  /* holds fid number. */
+        __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
+                       * objects, thus even if one sequence has one object we
+                       * reach this value. */
+        __u64 f_num;  /* firt 32 bits holds fid number and another 32 bits holds
+                       * version of object. */
 };
 
-static inline __u32 fid_seq(const struct lu_fid *fid)
+/* get object sequence */
+static inline __u64 fid_seq(const struct lu_fid *fid)
 { 
         return fid->f_seq;
 }
 
-static inline __u16 fid_wid(const struct lu_fid *fid)
-{ 
-        return fid->f_wid;
-}
-
-static inline __u16 fid_num(const struct lu_fid *fid)
+/* get complex object number (id + version) */
+static inline __u64 fid_num(const struct lu_fid *fid)
 { 
         return fid->f_num;
 }
 
-#define DFID2 "%lu/%u"
+/* maximal objects in sequence */
+#define LUSTRE_FID_SEQ_WIDTH 10000
 
-#define PFID2(fid) \
-        (unsigned long)fid_seq(fid), \
-        (unsigned int)fid_num(fid)
+/* object id is stored in rightmost 32 bits and version in leftmost 32 bits. So
+ * that if object has no version component ->f_num shows object id and no need
+ * to mask anything out. */
+#define LUSTRE_FID_OID_MASK 0x00000000ffffffffull
+#define LUSTRE_FID_VER_MASK (~LUSTRE_FID_OID_MASK)
+
+/* shifts of both components */
+#define LUSTRE_FID_OID_SHIFT 0
+#define LUSTRE_FID_VER_SHIFT (sizeof(((struct lu_fid *)0)->f_num) / 2 * 8)
+
+/* get object id */
+static inline __u32 fid_oid(const struct lu_fid *fid)
+{ 
+        return (__u32)((fid->f_num & LUSTRE_FID_OID_MASK) >> LUSTRE_FID_OID_SHIFT);
+}
+
+/* get object version */
+static inline __u32 fid_ver(const struct lu_fid *fid)
+{ 
+        return (__u32)((fid->f_num & LUSTRE_FID_VER_MASK) >> LUSTRE_FID_VER_SHIFT);
+}
+
+/* show sequence, object id and version */
+#define DFID3 LPU64"/%lu:%lu"
+
+#define PFID3(fid)    \
+        fid_seq(fid), \
+        fid_num(fid), \
+        fid_num(fid)
 
 /* temporary stuff for compatibility */
 struct ll_fid {
@@ -667,7 +692,7 @@ static inline int lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 {
 	/* check that there is no alignment padding */
 	CLASSERT(sizeof *f0 ==
-                 sizeof f0->f_seq + sizeof f0->f_wid + sizeof f0->f_num);
+                 sizeof f0->f_seq + sizeof f0->f_num);
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
 

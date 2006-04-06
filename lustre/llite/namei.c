@@ -181,11 +181,13 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         struct ll_inode_info *lli;
                 
                         lli = ll_i2info(inode);
-                
+
+                        /* DLM locks are taken using version component as well,
+                         * so we use fid_num() instead of fid_oid(). */
                         if (lock->l_resource->lr_name.name[0] != fid_seq(&lli->lli_fid) ||
                             lock->l_resource->lr_name.name[1] != fid_num(&lli->lli_fid)) {
-                                LDLM_ERROR(lock, "data mismatch with object "DLID2" (%p)",
-                                           PLID2(&lli->lli_fid), inode);
+                                LDLM_ERROR(lock, "data mismatch with object "DLID3" (%p)",
+                                           PLID3(&lli->lli_fid), inode);
                         }
                 }
 #else
