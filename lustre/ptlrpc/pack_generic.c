@@ -48,10 +48,11 @@ int lustre_msg_swabbed(struct lustre_msg *msg)
 
 int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
 {
+        __u32 msgversion = msg->version;
         if (lustre_msg_swabbed(msg))
-                 return (__swab32(msg->version) & LUSTRE_VERSION_MASK) != version;
+                __swab32s(&msgversion);
 
-        return (msg->version & LUSTRE_VERSION_MASK) != version;
+        return (msgversion & LUSTRE_VERSION_MASK) != version;
 }
 
 static void
@@ -153,7 +154,7 @@ static struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc
                         goto out;
                 spin_lock_irqsave(&svc->srv_lock, flags);
         }
-        
+
         rs = list_entry(svc->srv_free_rs_list.next, struct ptlrpc_reply_state,
                         rs_list);
         list_del(&rs->rs_list);
@@ -207,7 +208,7 @@ int lustre_pack_reply (struct ptlrpc_request *req,
 /*
  * shrink @segment to size @newlen. if @move_data is non-zero, we also move
  * data forward from @segment + 1.
- * 
+ *
  * if @newlen == 0, we remove the segment completely, but we still keep the
  * totally bufcount the same to save possible data moving. this will leave a
  * unused segment with size 0 at the tail, but that's ok.
