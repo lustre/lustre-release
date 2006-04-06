@@ -312,7 +312,8 @@ static struct mdt_object *mdt_obj(struct lu_object *o)
         return container_of(o, struct mdt_object, mot_obj.mo_lu);
 }
 
-struct mdt_object *mdt_object_find(struct mdt_device *d, struct lu_fid *f)
+static struct mdt_object *mdt_object_find(struct mdt_device *d,
+                                          struct lu_fid *f)
 {
         struct lu_object *o;
 
@@ -323,7 +324,7 @@ struct mdt_object *mdt_object_find(struct mdt_device *d, struct lu_fid *f)
                 return mdt_obj(o);
 }
 
-void mdt_object_put(struct mdt_object *o)
+static void mdt_object_put(struct mdt_object *o)
 {
         lu_object_put(&o->mot_obj.mo_lu);
 }
@@ -356,8 +357,10 @@ static void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o,
         }
 }
 
-struct mdt_object *mdt_object_find_lock(struct mdt_device *d, struct lu_fid *f,
-                                        struct mdt_lock_handle *lh, __u64 ibits)
+static struct mdt_object *mdt_object_find_lock(struct mdt_device *d,
+                                               struct lu_fid *f,
+                                               struct mdt_lock_handle *lh,
+                                               __u64 ibits)
 {
         struct mdt_object *o;
 
@@ -403,7 +406,7 @@ struct mdt_opc_slice {
 
 static struct mdt_opc_slice mdt_handlers[];
 
-struct mdt_handler *mdt_handler_find(__u32 opc)
+static struct mdt_handler *mdt_handler_find(__u32 opc)
 {
         struct mdt_opc_slice *s;
         struct mdt_handler   *h;
@@ -837,9 +840,9 @@ void md_device_fini(struct md_device *md)
         lu_device_fini(&md->md_lu_dev);
 }
 
-static void mdt_fini(struct lu_device *d)
+static void mdt_fini(struct mdt_device *m)
 {
-        struct mdt_device *m = mdt_dev(d);
+        struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
 
         if (d->ld_site != NULL) {
                 lu_site_fini(d->ld_site);
@@ -910,7 +913,7 @@ static int mdt_init0(struct mdt_device *m,
         return ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT0_NAME);
 }
 
-struct lu_object *mdt_object_alloc(struct lu_device *d)
+static struct lu_object *mdt_object_alloc(struct lu_device *d)
 {
         struct mdt_object *mo;
 
@@ -923,14 +926,12 @@ struct lu_object *mdt_object_alloc(struct lu_device *d)
                 h = &mo->mot_header;
                 lu_object_header_init(h);
                 lu_object_init(o, h, d);
-                /* ->lo_depth and ->lo_flags are automatically 0 */
-                lu_object_add_top(h, o);
                 return o;
         } else
                 return NULL;
 }
 
-int mdt_object_init(struct lu_object *o)
+static int mdt_object_init(struct lu_object *o)
 {
         struct mdt_device *d = mdt_dev(o->lo_dev);
         struct lu_device  *under;
@@ -945,7 +946,7 @@ int mdt_object_init(struct lu_object *o)
                 return -ENOMEM;
 }
 
-void mdt_object_free(struct lu_object *o)
+static void mdt_object_free(struct lu_object *o)
 {
         struct lu_object_header *h;
 
@@ -954,11 +955,11 @@ void mdt_object_free(struct lu_object *o)
         lu_object_header_fini(h);
 }
 
-void mdt_object_release(struct lu_object *o)
+static void mdt_object_release(struct lu_object *o)
 {
 }
 
-int mdt_object_print(struct seq_file *f, const struct lu_object *o)
+static int mdt_object_print(struct seq_file *f, const struct lu_object *o)
 {
         return seq_printf(f, LUSTRE_MDT0_NAME"-object@%p", o);
 }
@@ -971,7 +972,7 @@ static struct lu_device_operations mdt_lu_ops = {
         .ldo_object_print   = mdt_object_print
 };
 
-struct md_object *mdt_object_child(struct mdt_object *o)
+static struct md_object *mdt_object_child(struct mdt_object *o)
 {
         return lu2md(lu_object_next(&o->mot_obj.mo_lu));
 }
@@ -981,8 +982,8 @@ static inline struct md_device_operations *mdt_child_ops(struct mdt_device *d)
         return d->mdt_child->md_ops;
 }
 
-int mdt_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
-              struct lu_fid *pfid, const char *name, struct lu_fid *cfid)
+static int mdt_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
+                     struct lu_fid *pfid, const char *name, struct lu_fid *cfid)
 {
         struct mdt_object      *o;
         struct mdt_object      *child;
@@ -1013,8 +1014,8 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
 
-struct lu_device *mdt_device_alloc(struct lu_device_type *t,
-                                   struct lustre_cfg *cfg)
+static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
+                                          struct lustre_cfg *cfg)
 {
         struct lu_device  *l;
         struct mdt_device *m;
@@ -1026,28 +1027,30 @@ struct lu_device *mdt_device_alloc(struct lu_device_type *t,
                 l = &m->mdt_md_dev.md_lu_dev;
                 result = mdt_init0(m, t, cfg);
                 if (result != 0) {
-                        mdt_fini(l);
-                        m = ERR_PTR(result);
+                        mdt_fini(m);
+                        l = ERR_PTR(result);
                 }
         } else
                 l = ERR_PTR(-ENOMEM);
         return l;
 }
 
-void mdt_device_free(struct lu_device *m)
+static void mdt_device_free(struct lu_device *d)
 {
+        struct mdt_device *m = mdt_dev(d);
+
         mdt_fini(m);
         OBD_FREE_PTR(m);
 }
 
-void *mdt_thread_init(struct ptlrpc_thread *t)
+static void *mdt_thread_init(struct ptlrpc_thread *t)
 {
         struct mdt_thread_info *info;
 
         return OBD_ALLOC_PTR(info) ? : ERR_PTR(-ENOMEM);
 }
 
-void mdt_thread_fini(struct ptlrpc_thread *t, void *data)
+static void mdt_thread_fini(struct ptlrpc_thread *t, void *data)
 {
         struct mdt_thread_info *info = data;
         OBD_FREE_PTR(info);
@@ -1058,12 +1061,12 @@ static struct ptlrpc_thread_key mdt_thread_key = {
         .ptk_fini = mdt_thread_fini
 };
 
-int mdt_type_init(struct lu_device_type *t)
+static int mdt_type_init(struct lu_device_type *t)
 {
         return ptlrpc_thread_key_register(&mdt_thread_key);
 }
 
-void mdt_type_fini(struct lu_device_type *t)
+static void mdt_type_fini(struct lu_device_type *t)
 {
 }
 
@@ -1081,11 +1084,11 @@ static struct lu_device_type mdt_device_type = {
         .ldt_ops  = &mdt_device_type_ops
 };
 
-struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
+static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { 0 }
 };
 
-struct lprocfs_vars lprocfs_mdt_module_vars[] = {
+static struct lprocfs_vars lprocfs_mdt_module_vars[] = {
         { 0 }
 };
 

@@ -137,11 +137,6 @@ struct mdd_object {
         struct md_object  mod_obj;
 };
 
-struct osd_object {
-        struct lu_object  oo_lu;
-        struct dentry    *oo_dentry;
-};
-
 int md_device_init(struct md_device *md, struct lu_device_type *t);
 void md_device_fini(struct md_device *md);
 
