@@ -227,23 +227,40 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
 
 static void print_setup_cfg(struct lustre_cfg *lcfg)
 {
-        struct lov_desc *desc;
-
-        if ((lcfg->lcfg_bufcount == 2) && 
-            (lcfg->lcfg_buflens[1] == sizeof(*desc))) {
+        char *name = lustre_cfg_string(lcfg, 0);
+        char *type = name + strlen(name) - 3;
+        if (!strcmp(type,"lov")){
+                struct lov_desc *lovdesc;
                 printf("lov_setup ");
-                printf("0:%s  ", lustre_cfg_string(lcfg, 0));
+                printf("0:%s  ", name);
                 printf("1:(struct lov_desc)\n");
-                desc = (struct lov_desc*)(lustre_cfg_string(lcfg, 1));
-                printf("\t\tuuid=%s  ", (char*)desc->ld_uuid.uuid);
-                printf("stripe:cnt=%d ", desc->ld_default_stripe_count);
-                printf("size=%lld ", desc->ld_default_stripe_size);
-                printf("offset=%lld ", desc->ld_default_stripe_offset);
-                printf("pattern=%d", desc->ld_pattern);
+                lovdesc = (struct lov_desc*)(lustre_cfg_string(lcfg, 1));
+                printf("\t\tuuid=%s  ", (char*)lovdesc->ld_uuid.uuid);
+                printf("stripe:cnt=%d ", lovdesc->ld_default_stripe_count);
+                printf("size=%lld ", lovdesc->ld_default_stripe_size);
+                printf("offset=%lld ", lovdesc->ld_default_stripe_offset);
+                printf("pattern=%d", lovdesc->ld_pattern);
+        } else if (!strcmp(type,"lmv")){
+                struct lmv_desc *lmvdesc;
+                printf("lmv_setup ");
+                printf("0:%s  ", name);
+                printf("1:(struct lmv_desc)\n");
+                lmvdesc = (struct lmv_desc*)(lustre_cfg_string(lcfg, 1));
+                printf("count=%d ", lmvdesc->ld_tgt_count);
+                printf("atcive_count=%d", lmvdesc->ld_active_tgt_count);
+        } else if (!strcmp(type,"cmm")){
+                struct cmm_desc *cmmdesc;
+                printf("cmm_setup ");
+                printf("0:%s  ", name);
+                printf("1:(struct cmm_desc)\n");
+                cmmdesc = (struct cmm_desc*)(lustre_cfg_string(lcfg, 1));
+                printf("count=%d ", cmmdesc->ld_tgt_count);
+                printf("atcive_count=%d", cmmdesc->ld_active_tgt_count);
         } else {
-                printf("setup     ");
+                printf("setup ");
                 print_1_cfg(lcfg);
         }
+        
         return;
 }
 
@@ -301,6 +318,26 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
         }
         case(LCFG_LOV_DEL_OBD):{
                 printf("lov_modify_tgts del ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_LMV_ADD_MDC):{
+                printf("lmv_modify_tgts add ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_LMV_DEL_MDC):{
+                printf("lmv_modify_tgts del ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_CMM_ADD_MDC):{
+                printf("cmm_modify_tgts add ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_CMM_DEL_MDC):{
+                printf("cmm_modify_tgts del ");
                 print_1_cfg(lcfg);
                 break;
         }
