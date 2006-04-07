@@ -104,7 +104,13 @@ struct lu_object *lu_object_alloc(struct lu_site *s, const struct lu_fid *f)
 static void lu_object_free(struct lu_object *o)
 {
         struct list_head splice;
+        struct lu_object *scan;
 
+        list_for_each_entry_reverse(scan,
+                                    &o->lo_header->loh_layers, lo_linkage) {
+                if (lu_object_ops(scan)->ldo_object_delete != NULL)
+                        lu_object_ops(scan)->ldo_object_delete(scan);
+        }
         -- o->lo_dev->ld_site->ls_total;
         INIT_LIST_HEAD(&splice);
         list_splice_init(&o->lo_header->loh_layers, &splice);
@@ -361,3 +367,16 @@ void lu_object_header_fini(struct lu_object_header *h)
         LASSERT(hlist_unhashed(&h->loh_hash));
 }
 EXPORT_SYMBOL(lu_object_header_fini);
+
+struct lu_object *lu_object_locate(struct lu_object_header *h,
+                                   struct lu_device_type *dtype)
+{
+        struct lu_object *o;
+
+        list_for_each_entry(o, &h->loh_layers, lo_linkage) {
+                if (o->lo_dev->ld_type == dtype)
+                        return o;
+        }
+        return NULL;
+}
+EXPORT_SYMBOL(lu_object_locate);

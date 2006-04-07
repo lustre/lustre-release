@@ -145,6 +145,12 @@ struct lu_device_operations {
 	struct lu_object *(*ldo_object_alloc)(struct lu_device *);
 
 	/*
+	 * Called before ->ldo_object_free() to signal that object is being
+	 * destroyed.
+	 */
+	void (*ldo_object_delete)(struct lu_object *o);
+
+	/*
 	 * Dual to ->ldo_object_alloc(). Called when object is removed from
 	 * memory.
 	 */
@@ -425,39 +431,62 @@ void lu_object_add(struct lu_object *before, struct lu_object *o);
 int lu_object_header_init(struct lu_object_header *h);
 void lu_object_header_fini(struct lu_object_header *h);
 
+struct lu_object *lu_object_locate(struct lu_object_header *h,
+                                   struct lu_device_type *dtype);
+
 /*
- * OSD device interface. XXX Probably should go elsewhere.
+ * DT device interface. XXX Probably should go elsewhere.
  */
 
+struct dt_object {
+        struct lu_object do_lu;
+};
+
+enum dt_lock_mode {
+        DT_WRITE_LOCK = 1,
+        DT_READ_LOCK  = 2,
+};
+
 struct context;
+struct thandle;
+struct txn_param;
+struct dt_device;
 
-struct osd_device_operations {
-        int   (*osd_object_lock)(struct lu_object *lu, __u32 mode);
-        int   (*osd_object_unlock)(struct lu_object *lu, __u32 mode);
-        void* (*osd_trans_start)(struct lu_object *lu);
-        void  (*osd_trans_stop)(struct lu_object *lu);
-        int   (*osd_object_create)(struct lu_object *plu, struct lu_object *child,
-                                   struct context *context, void *handle);
-        int   (*osd_object_destroy)(struct lu_object *lu, void *handle);
-        void  (*osd_object_get)(struct lu_object *lu);
-        int   (*osd_attr_get)(struct lu_object *lu, void *buf, int buf_len,
-                              const char *name, struct context *context);
-        int   (*osd_attr_set)(struct lu_object *lu, void *buf, int buf_len,
-                              const char *name, struct context *context,
-                              void *handle);
-        int   (*osd_object_dec_check)(struct lu_object *lu);
-        int   (*osd_index_insert)(struct lu_object *lu, struct lu_fid *fid,
-                                  const char *name, struct context *uctxt,
-                                  void *handle);
-        int   (*osd_index_delete)(struct lu_object *lu, struct lu_fid *fid,
-                                  const char *name,  struct context *uctxt,
-                                  void *handle);
+struct dt_device_operations {
+        void  (*dt_object_lock)(struct dt_object *dt, enum dt_lock_mode mode);
+        void  (*dt_object_unlock)(struct dt_object *dt, enum dt_lock_mode mode);
+        struct thandle *(*dt_trans_start)(struct dt_device *dev,
+                                          struct txn_param *param);
+        void  (*dt_trans_stop)(struct thandle *th);
+        int   (*dt_object_create)(struct dt_object *dt, struct dt_object *child,
+                                  struct context *context, struct thandle *th);
+        int   (*dt_object_destroy)(struct dt_object *dt, struct thandle *th);
+        int   (*dt_attr_get)(struct dt_object *dt, void *buf, int buf_len,
+                             const char *name, struct context *context);
+        int   (*dt_attr_set)(struct dt_object *dt, void *buf, int buf_len,
+                             const char *name, struct context *context,
+                             struct thandle *handle);
+        int   (*dt_index_insert)(struct dt_object *dt, struct lu_fid *fid,
+                                 const char *name, struct context *uctxt,
+                                 void *handle);
+        int   (*dt_index_delete)(struct dt_object *dt, struct lu_fid *fid,
+                                 const char *name, struct context *uctxt,
+                                 struct thandle *handle);
 };
 
-struct osd_device {
-	struct lu_device              osd_lu_dev;
-	struct osd_device_operations *osd_ops;
+struct dt_device {
+	struct lu_device             dd_lu_dev;
+	struct dt_device_operations *dd_ops;
 };
 
+struct txn_param {
+        unsigned int tp_credits;
+};
+
+#define TXN_PARAM_INIT(credits) {               \
+        .tp_credits = (credits)                 \
+}
+
+#define TXN_PARAM(...) ((struct txn_param)TXN_PARAM_INIT(__VA_ARGS__))
 
 #endif /* __LINUX_OBD_CLASS_H */
