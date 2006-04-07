@@ -84,9 +84,9 @@ int class_attach(struct lustre_cfg *lcfg)
         if (lcfg->lcfg_flags & LCFG_FLG_MOUNTCONF){
                 char *tmp = NULL;
                 if (strcmp(typename, "mds") == 0)
-                        tmp = "mdt";
-                if (strcmp(typename, "mdt") == 0)
                         tmp = "mds";
+                if (strcmp(typename, "mdt") == 0)
+                        tmp = "mdt0";
                 if (strcmp(typename, "osd") == 0)
                         tmp = "obdfilter";
                 if (tmp) {
