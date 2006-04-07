@@ -7,16 +7,9 @@
 #define LUSTRE_MDD_NAME "mdd"
 #define LUSTRE_OSD_NAME "osd"
 
-enum {
-        WRITE_LOCK = 1,
-        READ_LOCK = 2,
-};
-
-
 struct mdd_device {
-        /* NB this field MUST be first */
         struct md_device                 mdd_md_dev;
-        struct osd_device                *mdd_child;
+        struct dt_device                *mdd_child;
         int                              mdd_max_mddize;
         int                              mdd_max_cookiesize;
         struct file                     *mdd_rcvd_filp;
