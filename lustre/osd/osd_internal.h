@@ -39,13 +39,17 @@
 struct dentry;
 
 struct osd_object {
-        struct lu_object     oo_lu;
+        struct dt_object     oo_dt;
         /*
          * Dentry for file system object represented by this osd_object. This
          * dentry is pinned for the whole duration of lu_object life.
          */
         struct dentry       *oo_dentry;
         struct rw_semaphore  oo_sem;
+};
+
+struct osd_device {
+        struct dt_device od_dt_dev;
 };
 
 #endif /* __KERNEL__ */

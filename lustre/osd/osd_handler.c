@@ -79,8 +79,6 @@ static struct lprocfs_vars              lprocfs_osd_module_vars[];
 static struct lprocfs_vars              lprocfs_osd_obd_vars[];
 static struct lu_device_operations      osd_lu_ops;
 
-
-
 /*
  * OSD object methods.
  */
@@ -93,7 +91,7 @@ static struct lu_object *osd_object_alloc(struct lu_device *d)
         if (mo != NULL) {
                 struct lu_object *l;
 
-                l = &mo->oo_lu;
+                l = &mo->oo_dt.do_lu;
                 lu_object_init(l, NULL, d);
                 return l;
         } else
@@ -118,6 +116,10 @@ static void osd_object_free(struct lu_object *l)
 
         if (o->oo_dentry != NULL)
                 dput(o->oo_dentry);
+}
+
+static void osd_object_delete(struct lu_object *l)
+{
 }
 
 static void osd_object_release(struct lu_object *l)
@@ -172,8 +174,8 @@ static void osd_type_fini(struct lu_device_type *t)
 static int osd_device_init(struct osd_device *d,
                            struct lu_device_type *t, struct lustre_cfg *cfg)
 {
-        lu_device_init(&d->osd_lu_dev, t);
-        d->osd_lu_dev.ld_ops = &osd_lu_ops;
+        lu_device_init(&d->od_dt_dev.dd_lu_dev, t);
+        d->od_dt_dev.dd_lu_dev.ld_ops = &osd_lu_ops;
         /*
          * mount file system...
          */
@@ -185,7 +187,7 @@ static void osd_device_fini(struct osd_device *d)
         /*
          * umount file system.
          */
-        lu_device_fini(&d->osd_lu_dev);
+        lu_device_fini(&d->od_dt_dev.dd_lu_dev);
 }
 
 static struct lu_device *osd_device_alloc(struct lu_device_type *t,
@@ -198,7 +200,7 @@ static struct lu_device *osd_device_alloc(struct lu_device_type *t,
         if (o != NULL) {
                 int result;
 
-                l = &o->osd_lu_dev;
+                l = &o->od_dt_dev.dd_lu_dev;
                 result = osd_device_init(o, t, cfg);
                 if (result != 0) {
                         osd_device_fini(o);
@@ -232,13 +234,13 @@ static int lu_device_is_osd(const struct lu_device *d)
 static struct osd_object *osd_obj(const struct lu_object *o)
 {
         LASSERT(lu_device_is_osd(o->lo_dev));
-        return container_of(o, struct osd_object, oo_lu);
+        return container_of(o, struct osd_object, oo_dt.do_lu);
 }
 
 static struct osd_device *osd_dev(const struct lu_device *d)
 {
         LASSERT(lu_device_is_osd(d));
-        return container_of(d, struct osd_device, osd_lu_dev);
+        return container_of(d, struct osd_device, od_dt_dev.dd_lu_dev);
 }
 
 static struct lu_device_operations osd_lu_ops = {
@@ -246,6 +248,7 @@ static struct lu_device_operations osd_lu_ops = {
         .ldo_object_init    = osd_object_init,
         .ldo_object_free    = osd_object_free,
         .ldo_object_release = osd_object_release,
+        .ldo_object_delete  = osd_object_delete,
         .ldo_object_print   = osd_object_print
 };
 
