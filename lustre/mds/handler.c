@@ -2642,9 +2642,52 @@ static void /*__exit*/ mds_exit(void)
         class_unregister_type(LUSTRE_MDT_NAME);
 }
 
+static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+{
+        ENTRY;
+
+        RETURN(0);
+}
+
+static int mds_cmd_cleanup(struct obd_device *obd)
+{
+        ENTRY;
+
+        RETURN(0);
+}
+
+
+static int mds_cmd_health_check(struct obd_device *obd)
+{
+        return 0;
+}
+
+static struct obd_ops mds_cmd_obd_ops = {
+        .o_owner           = THIS_MODULE,
+        .o_setup           = mds_cmd_setup,
+        .o_cleanup         = mds_cmd_cleanup,
+        .o_health_check    = mds_cmd_health_check,
+};
+
+static int __init mds_cmd_init(void)
+{
+        struct lprocfs_static_vars lvars;
+
+        lprocfs_init_vars(mds, &lvars);
+        class_register_type(&mds_cmd_obd_ops, lvars.module_vars,
+                            LUSTRE_MDS_NAME);
+
+        return 0;
+}
+
+static void /*__exit*/ mds_cmd_exit(void)
+{
+        class_unregister_type(LUSTRE_MDS_NAME);
+}
+
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Metadata Server (MDS)");
 MODULE_LICENSE("GPL");
 
-module_init(mds_init);
-module_exit(mds_exit);
+module_init(mds_cmd_init);
+module_exit(mds_cmd_exit);
