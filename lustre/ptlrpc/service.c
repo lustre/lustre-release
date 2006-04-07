@@ -808,12 +808,14 @@ int ptlrpc_thread_key_register(struct ptlrpc_thread_key *key)
         spin_unlock(&keys_guard);
         return result;
 }
+EXPORT_SYMBOL(ptlrpc_thread_key_register);
 
 void *ptlrpc_thread_key_get(struct ptlrpc_thread *t,
                             struct ptlrpc_thread_key *key)
 {
         return t->t_key_values[key->ptk_index];
 }
+EXPORT_SYMBOL(ptlrpc_thread_key_get);
 
 static void keys_fini(struct ptlrpc_thread *t)
 {
