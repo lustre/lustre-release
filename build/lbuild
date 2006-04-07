@@ -712,7 +712,7 @@ if [ -z "$LINUX" ] ; then
     else
         # can't build a kernel if we have no series for it (i.e. patchless)
         # but we still need the headers
-        use_unpacked_source=false
+        use_unpacked_source=true
         if $use_unpacked_source; then
             unpack_linux
             LINUX=$(pwd)/linux
@@ -727,7 +727,7 @@ if [ -z "$LINUX" ] ; then
                 # vendors like to taint the EXTRAVERSION in their kernel-source
                 # to differentiate a user-built kernel from their own
                 ed << EOF Makefile
-/^EXTRAVERSION =/d
+,s/^EXTRAVERSION =.*/EXTRAVERSION = -${lnxrel}smp/
 wq
 EOF
                 make oldconfig
