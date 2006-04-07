@@ -47,9 +47,6 @@
 /* class_register_type(), class_unregister_type(), class_get_type() */
 #include <linux/obd_class.h>
 
-
-#include <linux/lu_object.h>
-
 #include "osd_internal.h"
 
 static int   lu_device_is_osd  (const struct lu_device *d);
@@ -280,6 +277,8 @@ static struct lprocfs_vars lprocfs_osd_module_vars[] = {
 static struct obd_ops osd_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
+
+LPROCFS_INIT_VARS(osd, lprocfs_osd_module_vars, lprocfs_osd_obd_vars);
 
 static int __init osd_mod_init(void)
 {
