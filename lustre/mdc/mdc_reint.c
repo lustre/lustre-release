@@ -52,9 +52,9 @@ static int mdc_reint(struct ptlrpc_request *request,
         mdc_put_rpc_lock(rpc_lock, NULL);
         if (rc)
                 CDEBUG(D_INFO, "error in handling %d\n", rc);
-        else if (!lustre_swab_repbuf(request, 0, sizeof(struct mds_body),
-                                     lustre_swab_mds_body)) {
-                CERROR ("Can't unpack mds_body\n");
+        else if (!lustre_swab_repbuf(request, 0, sizeof(struct mdt_body),
+                                     lustre_swab_mdt_body)) {
+                CERROR ("Can't unpack mdt_body\n");
                 rc = -EPROTO;
         }
         return rc;
@@ -71,7 +71,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        struct mds_rec_setattr *rec;
+        struct mdt_rec_setattr *rec;
         struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = exp->exp_obd;
         int size[] = { sizeof(*rec), ealen, ea2len};
@@ -103,7 +103,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                        LTIME_S(iattr->ia_mtime), LTIME_S(iattr->ia_ctime));
         mdc_setattr_pack(req, MDS_REQ_REC_OFF, data, iattr, ea, ealen, ea2, ea2len);
 
-        size[0] = sizeof(struct mds_body);
+        size[0] = sizeof(struct mdt_body);
         req->rq_replen = lustre_msg_size(1, size);
 
         rc = mdc_reint(req, rpc_lock, LUSTRE_IMP_FULL);
@@ -120,7 +120,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int size[] = { sizeof(struct mds_rec_create), op_data->namelen + 1, 0};
+        int size[] = { sizeof(struct mdt_rec_create), op_data->namelen + 1, 0};
         int rc, level, bufcount = 2;
         ENTRY;
 
@@ -139,7 +139,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         mdc_create_pack(req, MDS_REQ_REC_OFF, op_data, data, datalen, mode,
                         uid, gid, cap_effective, rdev);
 
-        size[0] = sizeof(struct mds_body);
+        size[0] = sizeof(struct mdt_body);
         req->rq_replen = lustre_msg_size(1, size);
 
         level = LUSTRE_IMP_FULL;
@@ -151,9 +151,6 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                 goto resend;
         }
 
-        if (!rc)
-                mdc_store_inode_generation(req, 0, 0);
-
         *request = req;
         RETURN(rc);
 }
@@ -163,7 +160,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
-        int rc, size[] = { sizeof(struct mds_rec_unlink), data->namelen + 1};
+        int rc, size[] = { sizeof(struct mdt_rec_unlink), data->namelen + 1};
         ENTRY;
 
         LASSERT(req == NULL);
@@ -173,7 +170,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                 RETURN(-ENOMEM);
         *request = req;
 
-        size[0] = sizeof(struct mds_body);
+        size[0] = sizeof(struct mdt_body);
         size[1] = obd->u.cli.cl_max_mds_easize;
         size[2] = obd->u.cli.cl_max_mds_cookiesize;
         req->rq_replen = lustre_msg_size(3, size);
@@ -191,7 +188,7 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int rc, size[] = { sizeof(struct mds_rec_link), data->namelen + 1};
+        int rc, size[] = { sizeof(struct mdt_rec_link), data->namelen + 1};
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -201,7 +198,7 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
 
         mdc_link_pack(req, MDS_REQ_REC_OFF, data);
 
-        size[0] = sizeof(struct mds_body);
+        size[0] = sizeof(struct mdt_body);
         req->rq_replen = lustre_msg_size(1, size);
 
         rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
@@ -218,7 +215,7 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int rc, size[] = { sizeof(struct mds_rec_rename), oldlen +1, newlen +1};
+        int rc, size[] = { sizeof(struct mdt_rec_rename), oldlen +1, newlen +1};
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -228,7 +225,7 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
 
         mdc_rename_pack(req, MDS_REQ_REC_OFF, data, old, oldlen, new, newlen);
 
-        size[0] = sizeof(struct mds_body);
+        size[0] = sizeof(struct mdt_body);
         size[1] = obd->u.cli.cl_max_mds_easize;
         size[2] = obd->u.cli.cl_max_mds_cookiesize;
         req->rq_replen = lustre_msg_size(3, size);

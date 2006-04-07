@@ -856,7 +856,7 @@ struct obd_ops {
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
         /* metadata-only methods */
-        int (*o_pin)(struct obd_export *, obd_id ino, __u32 gen, int type,
+        int (*o_pin)(struct obd_export *, struct lu_fid *fid,
                      struct obd_client_handle *, int flag);
         int (*o_unpin)(struct obd_export *, struct obd_client_handle *, int);
 

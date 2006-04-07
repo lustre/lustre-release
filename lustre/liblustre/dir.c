@@ -67,12 +67,11 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct ll_fid mdc_fid;
         __u64 offset;
         int rc = 0;
         struct ptlrpc_request *request;
         struct lustre_handle lockh;
-        struct mds_body *body;
+        struct mdt_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
         struct mdc_op_data data;
         struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
@@ -100,10 +99,8 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        mdc_pack_fid(&mdc_fid, st->st_ino, lli->lli_st_generation, S_IFDIR);
-
         offset = page->index << PAGE_SHIFT;
-        rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,
+        rc = mdc_readpage(sbi->ll_mdc_exp, &lli->lli_fid,
                           offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));

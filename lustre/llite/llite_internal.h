@@ -158,7 +158,7 @@ struct ll_sb_info {
         struct obd_export        *ll_mdc_exp;
         struct obd_export        *ll_osc_exp;
         struct proc_dir_entry*    ll_proc_root;
-        struct ll_fid             ll_root_fid; /* root object fid */
+        struct lu_fid             ll_root_fid; /* root object fid */
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
@@ -543,10 +543,11 @@ static inline struct obd_export *ll_i2mdcexp(struct inode *inode)
         return ll_s2mdcexp(inode->i_sb);
 }
 
-static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+static inline void ll_inode2fid(struct lu_fid *fid, struct inode *inode)
 {
-        mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
-                     inode->i_mode & S_IFMT);
+        LASSERT(fid != NULL);
+        LASSERT(inode != NULL);
+        *fid = ll_i2info(inode)->lli_fid;
 }
 
 static inline int ll_mds_max_easize(struct super_block *sb)
@@ -569,5 +570,6 @@ int ll_removexattr(struct dentry *dentry, const char *name);
 
 /* llite/llite_fid.c*/
 int ll_fid_alloc(struct ll_sb_info *sbi, struct lu_fid *fid);
+unsigned long ll_fid2ino(struct ll_sb_info *sbi, struct lu_fid *fid);
 
 #endif /* LLITE_INTERNAL_H */

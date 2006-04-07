@@ -38,7 +38,13 @@
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
 int ll_fid_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
 {
-    ENTRY;
-    RETURN(0);
+        ENTRY;
+        RETURN(0);
 }
 
+/* build inode number on passed @fid */
+unsigned long ll_fid2ino(struct ll_sb_info *sbi, struct lu_fid *fid)
+{
+        ENTRY;
+        RETURN(0);
+}

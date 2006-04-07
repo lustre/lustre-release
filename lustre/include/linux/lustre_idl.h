@@ -626,9 +626,15 @@ struct lu_fid {
         __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
                        * objects, thus even if one sequence has one object we
                        * reach this value. */
-        __u64 f_num;  /* firt 32 bits holds fid number and another 32 bits holds
-                       * version of object. */
+        __u32 f_oid;  /* fid number within its sequence. */
+        __u32 f_ver;  /* holds fid version. */
 };
+
+/* maximal objects in sequence */
+#define LUSTRE_FID_SEQ_WIDTH 10000
+
+/* shift of version component */
+#define LUSTRE_FID_VER_SHIFT (sizeof(((struct lu_fid *)0)->f_ver) * 8)
 
 /* get object sequence */
 static inline __u64 fid_seq(const struct lu_fid *fid)
@@ -636,44 +642,33 @@ static inline __u64 fid_seq(const struct lu_fid *fid)
         return fid->f_seq;
 }
 
-/* get complex object number (id + version) */
-static inline __u64 fid_num(const struct lu_fid *fid)
-{ 
-        return fid->f_num;
-}
-
-/* maximal objects in sequence */
-#define LUSTRE_FID_SEQ_WIDTH 10000
-
-/* object id is stored in rightmost 32 bits and version in leftmost 32 bits. So
- * that if object has no version component ->f_num shows object id and no need
- * to mask anything out. */
-#define LUSTRE_FID_OID_MASK 0x00000000ffffffffull
-#define LUSTRE_FID_VER_MASK (~LUSTRE_FID_OID_MASK)
-
-/* shifts of both components */
-#define LUSTRE_FID_OID_SHIFT 0
-#define LUSTRE_FID_VER_SHIFT (sizeof(((struct lu_fid *)0)->f_num) / 2 * 8)
-
 /* get object id */
 static inline __u32 fid_oid(const struct lu_fid *fid)
 { 
-        return (__u32)((fid->f_num & LUSTRE_FID_OID_MASK) >> LUSTRE_FID_OID_SHIFT);
+        return fid->f_oid;
 }
 
 /* get object version */
 static inline __u32 fid_ver(const struct lu_fid *fid)
 { 
-        return (__u32)((fid->f_num & LUSTRE_FID_VER_MASK) >> LUSTRE_FID_VER_SHIFT);
+        return fid->f_ver;
+}
+
+/* get complex object number (oid + version) */
+static inline __u64 fid_num(const struct lu_fid *fid)
+{
+        __u64 f_ver = fid_ver(fid);
+        f_ver = f_ver << LUSTRE_FID_VER_SHIFT;
+        return f_ver | fid_oid(fid);
 }
 
 /* show sequence, object id and version */
-#define DFID3 LPU64"/%lu:%lu"
+#define DFID3 LPU64"/%u:%u"
 
 #define PFID3(fid)    \
         fid_seq(fid), \
-        fid_num(fid), \
-        fid_num(fid)
+        fid_oid(fid), \
+        fid_ver(fid)
 
 /* temporary stuff for compatibility */
 struct ll_fid {
@@ -692,7 +687,7 @@ static inline int lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 {
 	/* check that there is no alignment padding */
 	CLASSERT(sizeof *f0 ==
-                 sizeof f0->f_seq + sizeof f0->f_num);
+                 sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
 
@@ -813,12 +808,33 @@ struct mds_rec_setattr {
         __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
 };
 
+extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
+
+struct mdt_rec_setattr {
+        __u32           sa_opcode;
+        __u32           sa_fsuid;
+        __u32           sa_fsgid;
+        __u32           sa_cap;
+        __u32           sa_suppgid;
+        __u32           sa_mode;
+        struct lu_fid   sa_fid;
+        __u64           sa_valid;
+        __u64           sa_size;
+        __u64           sa_mtime;
+        __u64           sa_atime;
+        __u64           sa_ctime;
+        __u32           sa_uid;
+        __u32           sa_gid;
+        __u32           sa_attr_flags;
+        __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
+};
+
+extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
+
 /* Remove this once we declare it in include/linux/fs.h (v21 kernel patch?) */
 #ifndef ATTR_CTIME_SET
 #define ATTR_CTIME_SET 0x2000
 #endif
-
-extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
 #ifndef FMODE_READ
 #define FMODE_READ               00000001
@@ -839,6 +855,20 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 #define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file*/
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
+
+struct mds_rec_join {
+        struct ll_fid  jr_fid;
+        __u64          jr_headsize;
+};
+
+extern void lustre_swab_mds_rec_join (struct mds_rec_join *jr);
+
+struct mdt_rec_join {
+        struct lu_fid  jr_fid;
+        __u64          jr_headsize;
+};
+
+extern void lustre_swab_mdt_rec_join (struct mdt_rec_join *jr);
 
 struct mds_rec_create {
         __u32           cr_opcode;
@@ -861,12 +891,26 @@ struct mds_rec_create {
 
 extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
 
-struct mds_rec_join {
-        struct ll_fid  jr_fid;
-        __u64          jr_headsize;
+struct mdt_rec_create {
+        __u32           cr_opcode;
+        __u32           cr_fsuid;
+        __u32           cr_fsgid;
+        __u32           cr_cap;
+        __u32           cr_flags; /* for use with open */
+        __u32           cr_mode;
+        struct lu_fid   cr_fid;
+        struct lu_fid   cr_replayfid;
+        __u64           cr_time;
+        __u64           cr_rdev;
+        __u32           cr_suppgid;
+        __u32           cr_padding_1; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_padding_2; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_padding_3; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_padding_4; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_padding_5; /* also fix lustre_swab_mds_rec_create */
 };
 
-extern void lustre_swab_mds_rec_join (struct mds_rec_join *jr);
+extern void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr);
 
 struct mds_rec_link {
         __u32           lk_opcode;
@@ -886,6 +930,24 @@ struct mds_rec_link {
 
 extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
 
+struct mdt_rec_link {
+        __u32           lk_opcode;
+        __u32           lk_fsuid;
+        __u32           lk_fsgid;
+        __u32           lk_cap;
+        __u32           lk_suppgid1;
+        __u32           lk_suppgid2;
+        struct lu_fid   lk_fid1;
+        struct lu_fid   lk_fid2;
+        __u64           lk_time;
+        __u32           lk_padding_1;  /* also fix lustre_swab_mds_rec_link */
+        __u32           lk_padding_2;  /* also fix lustre_swab_mds_rec_link */
+        __u32           lk_padding_3;  /* also fix lustre_swab_mds_rec_link */
+        __u32           lk_padding_4;  /* also fix lustre_swab_mds_rec_link */
+};
+
+extern void lustre_swab_mdt_rec_link (struct mdt_rec_link *lk);
+
 struct mds_rec_unlink {
         __u32           ul_opcode;
         __u32           ul_fsuid;
@@ -904,6 +966,24 @@ struct mds_rec_unlink {
 
 extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
 
+struct mdt_rec_unlink {
+        __u32           ul_opcode;
+        __u32           ul_fsuid;
+        __u32           ul_fsgid;
+        __u32           ul_cap;
+        __u32           ul_suppgid;
+        __u32           ul_mode;
+        struct lu_fid   ul_fid1;
+        struct lu_fid   ul_fid2;
+        __u64           ul_time;
+        __u32           ul_padding_1; /* also fix lustre_swab_mds_rec_unlink */
+        __u32           ul_padding_2; /* also fix lustre_swab_mds_rec_unlink */
+        __u32           ul_padding_3; /* also fix lustre_swab_mds_rec_unlink */
+        __u32           ul_padding_4; /* also fix lustre_swab_mds_rec_unlink */
+};
+
+extern void lustre_swab_mdt_rec_unlink (struct mdt_rec_unlink *ul);
+
 struct mds_rec_rename {
         __u32           rn_opcode;
         __u32           rn_fsuid;
@@ -921,6 +1001,24 @@ struct mds_rec_rename {
 };
 
 extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
+
+struct mdt_rec_rename {
+        __u32           rn_opcode;
+        __u32           rn_fsuid;
+        __u32           rn_fsgid;
+        __u32           rn_cap;
+        __u32           rn_suppgid1;
+        __u32           rn_suppgid2;
+        struct lu_fid   rn_fid1;
+        struct lu_fid   rn_fid2;
+        __u64           rn_time;
+        __u32           rn_padding_1; /* also fix lustre_swab_mds_rec_rename */
+        __u32           rn_padding_2; /* also fix lustre_swab_mds_rec_rename */
+        __u32           rn_padding_3; /* also fix lustre_swab_mds_rec_rename */
+        __u32           rn_padding_4; /* also fix lustre_swab_mds_rec_rename */
+};
+
+extern void lustre_swab_mdt_rec_rename (struct mdt_rec_rename *rn);
 
 /*
  *  LOV data structures

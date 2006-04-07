@@ -28,7 +28,7 @@ struct llu_sb_info
         struct obd_uuid          ll_sb_uuid;
         struct obd_export       *ll_mdc_exp;
         struct obd_export       *ll_osc_exp;
-        struct ll_fid            ll_root_fid;
+        struct lu_fid            ll_root_fid;
         int                      ll_flags;
         struct lustre_client_ocd ll_lco;
         struct list_head         ll_conn_chain;
@@ -45,7 +45,7 @@ struct llu_sb_info
 
 struct llu_inode_info {
         struct llu_sb_info     *lli_sbi;
-        struct ll_fid           lli_fid;
+        struct lu_fid           lli_fid;
 
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
@@ -106,8 +106,10 @@ static inline struct obd_export *llu_i2mdcexp(struct inode *inode)
 
 static inline int llu_is_root_inode(struct inode *inode)
 {
-        return (llu_i2info(inode)->lli_fid.id ==
-                llu_i2info(inode)->lli_sbi->ll_root_fid.id);
+        return (fid_seq(&llu_i2info(inode)->lli_fid) ==
+                fid_seq(&llu_i2info(inode)->lli_sbi->ll_root_fid) &&
+                fid_num(&llu_i2info(inode)->lli_fid) ==
+                fid_num(&llu_i2info(inode)->lli_sbi->ll_root_fid));
 }
 
 #define LL_SAVE_INTENT(inode, it)                                              \
@@ -136,8 +138,10 @@ do {                                                                           \
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
 
-static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+static inline void ll_inode2fid(struct lu_fid *fid, struct inode *inode)
 {
+        LASSERT(fid != NULL);
+        LASSERT(fid != NULL);
         *fid = llu_i2info(inode)->lli_fid;
 }
 
@@ -179,7 +183,7 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
 extern struct mount_option_s mount_option;
 
 /* super.c */
-void llu_update_inode(struct inode *inode, struct mds_body *body,
+void llu_update_inode(struct inode *inode, struct mdt_body *body,
                       struct lov_stripe_md *lmm);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);

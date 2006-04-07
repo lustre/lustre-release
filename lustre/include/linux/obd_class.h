@@ -1067,15 +1067,15 @@ static inline int obd_san_preprw(int cmd, struct obd_export *exp,
         return(rc);
 }
 
-static inline int obd_pin(struct obd_export *exp, obd_id ino, __u32 gen,
-                          int type, struct obd_client_handle *handle, int flag)
+static inline int obd_pin(struct obd_export *exp, struct lu_fid *fid, 
+                          struct obd_client_handle *handle, int flag)
 {
         int rc;
 
         EXP_CHECK_OP(exp, pin);
         OBD_COUNTER_INCREMENT(exp->exp_obd, pin);
 
-        rc = OBP(exp->exp_obd, pin)(exp, ino, gen, type, handle, flag);
+        rc = OBP(exp->exp_obd, pin)(exp, fid, handle, flag);
         return(rc);
 }
 

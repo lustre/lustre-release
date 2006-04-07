@@ -395,8 +395,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        rc = obd_pin(sbi->ll_mdc_exp, inode->i_ino, inode->i_generation,
-                     inode->i_mode & S_IFMT, handle, flag);
+        rc = obd_pin(sbi->ll_mdc_exp, &ll_i2info(inode)->lli_fid, 
+                     handle, flag);
 
         if (rc) {
                 lock_kernel();

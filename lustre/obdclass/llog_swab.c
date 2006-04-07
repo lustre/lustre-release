@@ -88,7 +88,8 @@ EXPORT_SYMBOL(lustre_swab_ll_fid);
 void lustre_swab_lu_fid(struct lu_fid *fid)
 {
         __swab64s (&fid->f_seq);
-        __swab64s (&fid->f_num);
+        __swab32s (&fid->f_oid);
+        __swab32s (&fid->f_ver);
 }
 EXPORT_SYMBOL(lustre_swab_lu_fid);
 

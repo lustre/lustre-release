@@ -53,7 +53,7 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
-        struct obdo obdo;
+        struct mdc_op_data op_data;
         int rc;
         ENTRY;
 
@@ -65,17 +65,26 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                                       &fd->fd_cwlockh);
         }
 
-        obdo.o_id = inode->i_ino;
-        obdo.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&obdo, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                      OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                      OBD_MD_FLCTIME);
+        memset(&op_data, 0, sizeof(op_data));
+        op_data.fid1 = ll_i2info(inode)->lli_fid;
+        op_data.valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                        OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                        OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                        OBD_MD_FLCTIME;
+
+        op_data.atime = LTIME_S(inode->i_atime);
+        op_data.mtime = LTIME_S(inode->i_mtime);
+        op_data.ctime = LTIME_S(inode->i_ctime);
+        op_data.size = inode->i_size;
+        op_data.blocks = inode->i_blocks;
+        op_data.flags = inode->i_flags;
+
         if (0 /* ll_is_inode_dirty(inode) */) {
-                obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                obdo.o_valid |= OBD_MD_FLFLAGS;
+                op_data.flags = MDS_BFLAG_UNCOMMITTED_WRITES;
+                op_data.valid |= OBD_MD_FLFLAGS;
         }
-        rc = mdc_close(mdc_exp, &obdo, och, &req);
+        
+        rc = mdc_close(mdc_exp, &op_data, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
@@ -1555,7 +1564,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct ll_fid fid;
+        struct lu_fid fid;
         struct ptlrpc_request *req;
         int rc, err;
         ENTRY;
@@ -1741,7 +1750,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         if (!ll_have_md_lock(dentry)) {
                 struct ptlrpc_request *req = NULL;
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-                struct ll_fid fid;
+                struct lu_fid fid;
                 obd_valid valid = OBD_MD_FLGETATTR;
                 int ealen = 0;
 

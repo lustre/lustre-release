@@ -125,7 +125,7 @@ static void llu_fsop_gone(struct filesys *fs)
 
 static struct inode_ops llu_inode_ops;
 
-void llu_update_inode(struct inode *inode, struct mds_body *body,
+void llu_update_inode(struct inode *inode, struct mdt_body *body,
                       struct lov_stripe_md *lsm)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
@@ -183,6 +183,7 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
         if (body->valid & OBD_MD_FLGENER)
                 lli->lli_st_generation = body->generation;
 
+#if 0
         /* fillin fid */
         if (body->valid & OBD_MD_FLID)
                 lli->lli_fid.id = body->ino;
@@ -190,6 +191,7 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
                 lli->lli_fid.generation = body->generation;
         if (body->valid & OBD_MD_FLTYPE)
                 lli->lli_fid.f_type = body->mode & S_IFMT;
+#endif
 }
 
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
@@ -346,17 +348,22 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
 }
 
 static struct inode* llu_new_inode(struct filesys *fs,
-                                   struct ll_fid *fid)
+                                   struct lu_fid *fid)
 {
         struct inode *inode;
         struct llu_inode_info *lli;
         struct intnl_stat st = {
                 .st_dev  = 0,
+#if 0
 #ifndef AUTOMOUNT_FILE_NAME
                 .st_mode = fid->f_type & S_IFMT,
 #else
                 .st_mode = fid->f_type /* all of the bits! */
 #endif
+#endif
+                /* FIXME: fix this later */
+                .st_mode = 0,
+                
                 .st_uid  = geteuid(),
                 .st_gid  = getegid(),
         };
@@ -436,7 +443,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
-                struct ll_fid fid;
+                struct lu_fid fid;
                 unsigned long valid = OBD_MD_FLGETATTR;
                 int rc, ealen = 0;
 
@@ -538,7 +545,7 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
 
 void llu_clear_inode(struct inode *inode)
 {
-        struct ll_fid fid;
+        struct lu_fid fid;
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         ENTRY;
@@ -882,8 +889,8 @@ static int llu_readlink_internal(struct inode *inode,
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct ll_fid fid;
-        struct mds_body *body;
+        struct lu_fid fid;
+        struct mdt_body *body;
         struct intnl_stat *st = llu_i2stat(inode);
         int rc, symlen = st->st_size + 1;
         ENTRY;
@@ -1631,7 +1638,7 @@ struct filesys_ops llu_filesys_ops =
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 {
         struct inode *inode;
-        struct ll_fid fid;
+        struct lu_fid fid;
         struct file_identifier fileid = {&fid, sizeof(fid)};
 
         if ((md->body->valid &
@@ -1643,9 +1650,7 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         }
 
         /* try to find existing inode */
-        fid.id = md->body->ino;
-        fid.generation = md->body->generation;
-        fid.f_type = md->body->mode & S_IFMT;
+        fid = md->body->fid1;
 
         inode = _sysio_i_find(fs, &fileid);
         if (inode) {
@@ -1679,7 +1684,7 @@ llu_fsswop_mount(const char *source,
         struct inode *root;
         struct pnode_base *rootpb;
         struct obd_device *obd;
-        struct ll_fid rootfid;
+        struct lu_fid rootfid;
         struct llu_sb_info *sbi;
         struct obd_statfs osfs;
         static struct qstr noname = { NULL, 0, 0 };
@@ -1816,7 +1821,7 @@ llu_fsswop_mount(const char *source,
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_osc, err);
         }
-        CDEBUG(D_SUPER, "rootfid "LPU64"\n", rootfid.id);
+        CDEBUG(D_SUPER, "rootfid "DFID3"\n", PFID3(&rootfid));
         sbi->ll_root_fid = rootfid;
 
         /* fetch attr of root inode */
@@ -1833,7 +1838,7 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_request, err);
         }
 
-        LASSERT(sbi->ll_root_fid.id != 0);
+        LASSERT(fid_num(&sbi->ll_root_fid) != 0);
 
         root = llu_iget(fs, &md);
         if (!root || IS_ERR(root)) {

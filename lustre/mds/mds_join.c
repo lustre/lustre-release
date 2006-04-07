@@ -240,6 +240,13 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
         mds_pack_inode2body(body, inode);
 }
 
+static inline void mds_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen, int type)
+{
+        fid->id = ino;
+        fid->generation = gen;
+        fid->f_type = type;
+}
+
 static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                                       struct ptlrpc_request *req,
                                       struct mds_rec_join *join_rec,
@@ -260,8 +267,8 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 ldlm_lock_decref(lockh, LCK_EX);
 
         head_inode = dchild->d_inode;
-        mdc_pack_fid(&head_fid, head_inode->i_ino, head_inode->i_generation,
-                      head_inode->i_mode & S_IFMT);
+        mds_pack_fid(&head_fid, head_inode->i_ino, head_inode->i_generation,
+                     head_inode->i_mode & S_IFMT);
 
         rc = mds_get_parents_children_locked(obd, mds, &join_rec->jr_fid,
                                              &de_tailparent, &head_fid,

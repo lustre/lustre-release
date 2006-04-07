@@ -37,32 +37,40 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
+struct ll_ino {
+        unsigned long ino;
+        unsigned long gen;
+};
+
+#if 0
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, void *opaque)
 #else
 static int ll_nfs_test_inode(struct inode *inode, void *opaque)
 #endif
 {
-        struct ll_fid *iid = opaque;
+        struct ll_ino *iid = opaque;
 
-        if (inode->i_ino == iid->id && inode->i_generation == iid->generation)
+        if (inode->i_ino == iid->ino && inode->i_generation == iid->gen)
                 return 1;
 
         return 0;
 }
+#endif
 
-static struct inode * search_inode_for_lustre(struct super_block *sb,
-                                              unsigned long ino,
-                                              unsigned long generation,
-                                              int mode)
+static struct inode *search_inode_for_lustre(struct super_block *sb,
+                                             unsigned long ino,
+                                             unsigned long gen,
+                                             int mode)
 {
-        struct ptlrpc_request *req = NULL;
+#if 0
+        struct ll_ino iid = { .ino = ino, .gen = gen };
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct ll_fid fid;
+        struct ptlrpc_request *req = NULL;
+        struct inode *inode = NULL;
         unsigned long valid = 0;
         int eadatalen = 0, rc;
-        struct inode *inode = NULL;
-        struct ll_fid iid = { .id = ino, .generation = generation };
 
         inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
 
@@ -74,13 +82,11 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
                         return ERR_PTR(rc); 
                 valid |= OBD_MD_FLEASIZE;
         }
-        fid.id = (__u64)ino;
-        fid.generation = generation;
-        fid.f_type = mode;
 
-        rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, eadatalen, &req);
+        rc = mdc_getattr(sbi->ll_mdc_exp, iid, 
+                         valid, eadatalen, &req);
         if (rc) {
-                CERROR("failure %d inode %lu\n", rc, ino);
+                CERROR("failure %d fid "DFID3"\n", rc, PFID3(iid));
                 return ERR_PTR(rc);
         }
 
@@ -92,6 +98,9 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         ptlrpc_req_finished(req);
 
         return inode;
+#endif
+        /* FIXME: this should be worked out later */
+        return NULL;
 }
 
 extern struct dentry_operations ll_d_ops;
@@ -107,9 +116,9 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 return ERR_PTR(-ESTALE);
 
         inode = search_inode_for_lustre(sb, ino, generation, mode);
-        if (IS_ERR(inode)) {
+        if (IS_ERR(inode))
                 return ERR_PTR(PTR_ERR(inode));
-        }
+
         if (is_bad_inode(inode) ||
             (generation && inode->i_generation != generation)){
                 /* we didn't find the right inode.. */

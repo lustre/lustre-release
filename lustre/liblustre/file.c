@@ -127,7 +127,7 @@ static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct ll_file_data *fd;
-        struct mds_body *body;
+        struct mdt_body *body;
         ENTRY;
 
         body = lustre_msg_buf (req->rq_repmsg, 1, sizeof (*body));
@@ -229,7 +229,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
 
 int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 {
-        struct mds_body *body;
+        struct mdt_body *body;
         struct lov_mds_md *eadata;
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
@@ -300,12 +300,12 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
-        struct intnl_stat *st = llu_i2stat(inode);
         struct ll_file_data *fd = lli->lli_file_data;
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
-        struct obdo obdo;
-        int rc, valid;
+        struct intnl_stat *st = llu_i2stat(inode);
+        struct mdc_op_data op_data;
+        int rc;
         ENTRY;
 
         /* clear group lock, if present */
@@ -316,20 +316,28 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                                        &fd->fd_cwlockh);
         }
 
-        obdo.o_id = st->st_ino;
-        obdo.o_valid = OBD_MD_FLID;
-        valid = OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLSIZE |OBD_MD_FLBLOCKS |
-                OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
-        if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
-                valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        memset(&op_data, 0, sizeof(op_data));
+        op_data.fid1 = lli->lli_fid;
+        op_data.valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                        OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                        OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                        OBD_MD_FLCTIME;
 
-        obdo_from_inode(&obdo, inode, valid);
+        op_data.atime = LTIME_S(st->st_atime);
+        op_data.mtime = LTIME_S(st->st_mtime);
+        op_data.ctime = LTIME_S(st->st_ctime);
+        op_data.size = st->st_size;
+        op_data.blocks = st->st_blocks;
+        op_data.flags = lli->lli_st_flags;
+
+        if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
+                op_data.valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
         if (0 /* ll_is_inode_dirty(inode) */) {
-                obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                obdo.o_valid |= OBD_MD_FLFLAGS;
+                op_data.flags = MDS_BFLAG_UNCOMMITTED_WRITES;
+                op_data.valid |= OBD_MD_FLFLAGS;
         }
-        rc = mdc_close(mdc_exp, &obdo, och, &req);
+        rc = mdc_close(mdc_exp, &op_data, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */

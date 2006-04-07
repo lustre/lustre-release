@@ -144,17 +144,17 @@ void mdc_set_lock_data(__u64 *l, void *data)
 }
 EXPORT_SYMBOL(mdc_set_lock_data);
 
-int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+int mdc_change_cbdata(struct obd_export *exp, struct lu_fid *fid, 
                       ldlm_iterator_t it, void *data)
 {
         struct ldlm_res_id res_id = { .name = {0} };
         ENTRY;
 
-        res_id.name[0] = fid->id;
-        res_id.name[1] = fid->generation;
+        res_id.name[0] = fid_seq(fid);
+        res_id.name[1] = fid_num(fid);
 
-        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it,
-                           data);
+        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, 
+                           &res_id, it, data);
 
         EXIT;
         return 0;
@@ -197,7 +197,7 @@ static int round_up(int val)
  * but this is incredibly unlikely, and questionable whether the client
  * could do MDS recovery under OOM anyways... */
 static void mdc_realloc_openmsg(struct ptlrpc_request *req,
-                                struct mds_body *body, int size[5])
+                                struct mdt_body *body, int size[5])
 {
         int new_size, old_size;
         struct lustre_msg *new_msg;
@@ -246,7 +246,7 @@ int mdc_enqueue(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_exp2obd(exp);
         struct ldlm_res_id res_id =
-                { .name = {data->fid1.id, data->fid1.generation} };
+                { .name = {fid_seq(&data->fid1), fid_num(&data->fid1)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
         struct ldlm_request *lockreq;
         struct ldlm_intent *lit;
@@ -254,7 +254,7 @@ int mdc_enqueue(struct obd_export *exp,
                        [MDS_REQ_INTENT_IT_OFF] = sizeof(*lit) };
         struct ldlm_reply *dlm_rep;
         int repsize[4] = {sizeof(*dlm_rep),
-                          sizeof(struct mds_body),
+                          sizeof(struct mdt_body),
                           obddev->u.cli.cl_max_mds_easize};
         void *eadata;
         unsigned long irqflags;
@@ -269,7 +269,7 @@ int mdc_enqueue(struct obd_export *exp,
         if (it->it_op & IT_OPEN) {
                 it->it_create_mode |= S_IFREG;
 
-                size[req_buffers++] = sizeof(struct mds_rec_create);
+                size[req_buffers++] = sizeof(struct mdt_rec_create);
                 size[req_buffers++] = data->namelen + 1;
                 /* As an optimization, we allocate an RPC request buffer for
                  * at least a default-sized LOV EA even if we aren't sending
@@ -291,7 +291,7 @@ int mdc_enqueue(struct obd_export *exp,
 
                         /* join is like an unlink of the tail */
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                        size[req_buffers++] = sizeof(struct mds_rec_join);
+                        size[req_buffers++] = sizeof(struct mdt_rec_join);
                         req = ptlrpc_prep_req(class_exp2cliimp(exp),
                                               LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
                                               req_buffers, size, NULL);
@@ -324,7 +324,7 @@ int mdc_enqueue(struct obd_export *exp,
 
                 repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
         } else if (it->it_op & IT_UNLINK) {
-                size[req_buffers++] = sizeof(struct mds_rec_unlink);
+                size[req_buffers++] = sizeof(struct mdt_rec_unlink);
                 size[req_buffers++] = data->namelen + 1;
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
@@ -344,7 +344,7 @@ int mdc_enqueue(struct obd_export *exp,
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
                                   OBD_MD_FLACL | OBD_MD_FLMODEASIZE;
-                size[req_buffers++] = sizeof(struct mds_body);
+                size[req_buffers++] = sizeof(struct mdt_body);
                 size[req_buffers++] = data->namelen + 1;
 
                 if (it->it_op & IT_GETATTR)
@@ -444,12 +444,12 @@ int mdc_enqueue(struct obd_export *exp,
         /* We know what to expect, so we do any byte flipping required here */
         LASSERT(repbufcnt == 4 || repbufcnt == 1);
         if (repbufcnt == 4) {
-                struct mds_body *body;
+                struct mdt_body *body;
 
                 body = lustre_swab_repbuf(req, 1, sizeof (*body),
-                                          lustre_swab_mds_body);
+                                          lustre_swab_mdt_body);
                 if (body == NULL) {
-                        CERROR ("Can't swab mds_body\n");
+                        CERROR ("Can't swab mdt_body\n");
                         RETURN (-EPROTO);
                 }
 
@@ -536,23 +536,23 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
         struct lustre_handle lockh;
         struct ptlrpc_request *request;
         int rc = 0;
-        struct mds_body *mds_body;
+        struct mdt_body *mdt_body;
         struct lustre_handle old_lock;
         struct ldlm_lock *lock;
         ENTRY;
         LASSERT(it);
 
-        CDEBUG(D_DLMTRACE,"name: %.*s in inode "LPU64", intent: %s flags %#o\n",
-               op_data->namelen, op_data->name, op_data->fid1.id,
+        CDEBUG(D_DLMTRACE,"name: %.*s in obj "DFID3", intent: %s flags %#o\n",
+               op_data->namelen, op_data->name, PFID3(&op_data->fid1),
                ldlm_it2str(it->it_op), it->it_flags);
 
-        if (op_data->fid2.id &&
+        if (fid_num(&op_data->fid2) &&
             (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
-                struct ldlm_res_id res_id = {.name ={op_data->fid2.id,
-                                                     op_data->fid2.generation}};
+                struct ldlm_res_id res_id = { .name = { fid_seq(&op_data->fid2),
+                                                        fid_num(&op_data->fid2) } };
                 struct lustre_handle lockh;
                 ldlm_policy_data_t policy;
                 int mode = LCK_CR;
@@ -599,7 +599,7 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
-        } else if (!op_data->fid2.id) {
+        } else if (!fid_num(&op_data->fid2)) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
                  * request referenced from this intent, saved for subsequent
                  * lookup.  This path is executed when we proceed to this
@@ -632,16 +632,16 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
         if (rc)
                 RETURN(rc);
 
-        mds_body = lustre_msg_buf(request->rq_repmsg, 1, sizeof(*mds_body));
-        LASSERT(mds_body != NULL);           /* mdc_enqueue checked */
+        mdt_body = lustre_msg_buf(request->rq_repmsg, 1, sizeof(*mdt_body));
+        LASSERT(mdt_body != NULL);           /* mdc_enqueue checked */
         LASSERT_REPSWABBED(request, 1); /* mdc_enqueue swabbed */
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
-        if (op_data->fid2.id) {
+        if (fid_num(&op_data->fid2)) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                if (memcmp(&op_data->fid2, &mds_body->fid1, sizeof(op_data->fid2)))
+                if (memcmp(&op_data->fid2, &mdt_body->fid1, sizeof(op_data->fid2)))
                         RETURN(-ESTALE);
         }
 

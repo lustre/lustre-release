@@ -40,21 +40,21 @@
 #endif
 
 void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
-                      __u32 size, struct ll_fid *mdc_fid)
+                      __u32 size, struct lu_fid *fid)
 {
-        struct mds_body *b;
+        struct mdt_body *b;
 
         b = lustre_msg_buf(req->rq_reqmsg, pos, sizeof (*b));
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
-        b->fid1 = *mdc_fid;
+        b->fid1 = *fid;
         b->size = offset;                       /* !! */
         b->suppgid = -1;
         b->nlink = size;                        /* !! */
 }
 
-static void mdc_pack_body(struct mds_body *b)
+static void mdc_pack_body(struct mdt_body *b)
 {
         LASSERT (b != NULL);
 
@@ -64,9 +64,9 @@ static void mdc_pack_body(struct mds_body *b)
 }
 
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, struct ll_fid *fid, int ea_size)
+                       __u64 valid, struct lu_fid *fid, int ea_size)
 {
-        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
 
         if (fid)
                 b->fid1 = *fid;
@@ -81,7 +81,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
                      __u32 mode, __u32 uid, __u32 gid, __u32 cap_effective,
                      __u64 rdev)
 {
-        struct mds_rec_create *rec;
+        struct mdt_rec_create *rec;
         char *tmp;
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
@@ -125,7 +125,7 @@ static __u32 mds_pack_open_flags(__u32 flags)
 void mdc_join_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data, __u64 head_size)
 {
-        struct mds_rec_join *rec;
+        struct mdt_rec_join *rec;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
         LASSERT(rec != NULL);
@@ -137,7 +137,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *lmm, int lmmlen)
 {
-        struct mds_rec_create *rec;
+        struct mdt_rec_create *rec;
         char *tmp;
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
@@ -172,7 +172,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                       struct mdc_op_data *data, struct iattr *iattr,
                       void *ea, int ealen, void *ea2, int ea2len)
 {
-        struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset,
+        struct mdt_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset,
                                                      sizeof (*rec));
         rec->sa_opcode = REINT_SETATTR;
         rec->sa_fsuid = current->fsuid;
@@ -211,7 +211,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *data)
 {
-        struct mds_rec_unlink *rec;
+        struct mdt_rec_unlink *rec;
         char *tmp;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
@@ -235,7 +235,7 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
 void mdc_link_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *data)
 {
-        struct mds_rec_link *rec;
+        struct mdt_rec_link *rec;
         char *tmp;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
@@ -258,7 +258,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *data,
                      const char *old, int oldlen, const char *new, int newlen)
 {
-        struct mds_rec_rename *rec;
+        struct mdt_rec_rename *rec;
         char *tmp;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
@@ -286,7 +286,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
 void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
                       int flags, struct mdc_op_data *data)
 {
-        struct mds_body *b;
+        struct mdt_body *b;
         b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*b));
 
         b->fsuid = current->fsuid;
@@ -305,37 +305,38 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
         }
 }
 
-void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
-                    int valid, struct obd_client_handle *och)
+void mdc_close_pack(struct ptlrpc_request *req, int offset,
+                    struct mdc_op_data *op_data, int valid,
+                    struct obd_client_handle *och)
 {
-        struct mds_body *body;
+        struct mdt_body *body;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
 
-        mdc_pack_fid(&body->fid1, oa->o_id, 0, oa->o_mode);
+        body->fid1 = op_data->fid1;
         memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
-        if (oa->o_valid & OBD_MD_FLATIME) {
-                body->atime = oa->o_atime;
+        if (op_data->valid & OBD_MD_FLATIME) {
+                body->atime = op_data->atime;
                 body->valid |= OBD_MD_FLATIME;
         }
-        if (oa->o_valid & OBD_MD_FLMTIME) {
-                body->mtime = oa->o_mtime;
+        if (op_data->valid & OBD_MD_FLMTIME) {
+                body->mtime = op_data->mtime;
                 body->valid |= OBD_MD_FLMTIME;
         }
-        if (oa->o_valid & OBD_MD_FLCTIME) {
-                body->ctime = oa->o_ctime;
+        if (op_data->valid & OBD_MD_FLCTIME) {
+                body->ctime = op_data->ctime;
                 body->valid |= OBD_MD_FLCTIME;
         }
-        if (oa->o_valid & OBD_MD_FLSIZE) {
-                body->size = oa->o_size;
+        if (op_data->valid & OBD_MD_FLSIZE) {
+                body->size = op_data->size;
                 body->valid |= OBD_MD_FLSIZE;
         }
-        if (oa->o_valid & OBD_MD_FLBLOCKS) {
-                body->blocks = oa->o_blocks;
+        if (op_data->valid & OBD_MD_FLBLOCKS) {
+                body->blocks = op_data->blocks;
                 body->valid |= OBD_MD_FLBLOCKS;
         }
-        if (oa->o_valid & OBD_MD_FLFLAGS) {
-                body->flags = oa->o_flags;
+        if (op_data->valid & OBD_MD_FLFLAGS) {
+                body->flags = op_data->flags;
                 body->valid |= OBD_MD_FLFLAGS;
         }
 }
