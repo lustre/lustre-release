@@ -157,6 +157,7 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         RETURN(rc);
 }
 
+/* fsdb->fsdb_sem is already held  in mgs_find_or_make_fsdb*/
 static int mgs_get_fsdb_from_llog(struct obd_device *obd, char *logname,
                                 struct fs_db *fsdb)
 {
@@ -165,7 +166,6 @@ static int mgs_get_fsdb_from_llog(struct obd_device *obd, char *logname,
         int rc, rc2;
         ENTRY;
 
-        down(&fsdb->fsdb_sem);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         
         rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
@@ -189,10 +189,11 @@ out_close:
 
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        up(&fsdb->fsdb_sem);
 
         RETURN(rc);
 }
+
+
 
 static int next_index(void *index_map, int map_len)
 {
@@ -337,7 +338,9 @@ static int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
 
         /* populate the db from the client llog */
         name_create(name, "-client", &cliname);
+        down(&fsdb->fsdb_sem);
         rc = mgs_get_fsdb_from_llog(obd, cliname, fsdb);
+        up(&fsdb->fsdb_sem);
         name_destroy(cliname);
         if (rc) {
                 CERROR("Can't get db from llog %d\n", rc);
@@ -792,6 +795,229 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
         
         RETURN(rc);
 }
+struct temp_comp
+{
+        struct obd_device *comp_obd;
+        struct mgs_target_info *comp_mti;
+        struct fs_db *comp_fsdb;
+};
+
+static int mgs_steal_llog_handler(struct llog_handle *llh,
+                                  struct llog_rec_hdr *rec, 
+                                  void *data)
+{
+        struct obd_device * obd;
+        struct mgs_target_info *mti;
+        struct fs_db *fsdb;
+        int cfg_len = rec->lrh_len;
+        char *cfg_buf = (char*) (rec + 1);
+        struct lustre_cfg *lcfg;
+        int rc = 0;
+        struct llog_handle *mdt_llh = NULL;
+        static int got_an_osc_or_mdc = 0;
+        /* 0: not found any osc/mdc;
+           1: found osc;
+           2: found mdc;
+        */
+        static int last_step = -1;
+
+        ENTRY;
+
+        obd = ((struct temp_comp*)data)->comp_obd;
+        mti = ((struct temp_comp*)data)->comp_mti;
+        fsdb = ((struct temp_comp*)data)->comp_fsdb;
+
+        if (rec->lrh_type != OBD_CFG_REC) {
+                CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);
+                RETURN(-EINVAL);
+        }
+
+        rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+        if (rc) {
+                CERROR("Insane cfg\n");
+                RETURN(rc);
+        }
+
+        lcfg = (struct lustre_cfg *)cfg_buf;
+
+        CDEBUG(D_INFO, "cmd %x %s %s\n", lcfg->lcfg_command,
+               lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
+
+        if (lcfg->lcfg_command == LCFG_MARKER) {
+                struct cfg_marker *marker;
+                marker = lustre_cfg_buf(lcfg, 1);
+                if(!strncmp(marker->cm_comment,"add osc",7) &&
+                        (marker->cm_flags & CM_START)){
+                        got_an_osc_or_mdc = 1;
+                        rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                        rc = record_marker(obd, mdt_llh, fsdb, CM_START,
+                                           mti->mti_svname,"add osc(copied)");
+                        rc = record_end_log(obd, &mdt_llh);
+                        last_step = marker->cm_step;
+                        RETURN(rc);
+                }
+                if(!strncmp(marker->cm_comment,"add osc",7) &&
+                        (marker->cm_flags & CM_END)){
+                        LASSERT(last_step == marker->cm_step);
+                        last_step = -1;
+                        got_an_osc_or_mdc = 0;
+                        rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                        rc = record_marker(obd, mdt_llh, fsdb, CM_END,
+                                           mti->mti_svname,"add osc(copied)");
+                        rc = record_end_log(obd, &mdt_llh);
+                        RETURN(rc);
+                }
+                if(!strncmp(marker->cm_comment,"add mdc to lmv",14) &&
+                        (marker->cm_flags & CM_START)){
+                        got_an_osc_or_mdc = 2;
+                        rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                        rc = record_marker(obd, mdt_llh, fsdb, CM_START,
+                                           mti->mti_svname,"add mdc(copied)");
+                        rc = record_end_log(obd, &mdt_llh);
+                        last_step = marker->cm_step;
+                        RETURN(rc);
+                }
+                if(!strncmp(marker->cm_comment,"add mdc to lmv",14) &&
+                        (marker->cm_flags & CM_END)){
+                        LASSERT(last_step == marker->cm_step);
+                        last_step = -1;
+                        got_an_osc_or_mdc = 0;
+                        rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                        rc = record_marker(obd, mdt_llh, fsdb, CM_END,
+                                           mti->mti_svname,"add mdc(copied)");
+                        rc = record_end_log(obd, &mdt_llh);
+                        RETURN(rc);
+                }
+        }
+        if(got_an_osc_or_mdc == 0 || last_step < 0)
+                RETURN(rc);
+        if (lcfg->lcfg_command == LCFG_ADD_UUID) {
+                uint64_t nodenid;
+                char *nodeuuid;
+                nodenid = lcfg->lcfg_nid;
+                nodeuuid = lustre_cfg_string(lcfg, 1);
+                rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                rc = record_add_uuid(obd, mdt_llh, nodenid, nodeuuid);
+                rc = record_end_log(obd, &mdt_llh);
+                RETURN(rc);
+        }
+        if (lcfg->lcfg_command == LCFG_ATTACH) {
+                char *name;
+                char *type;
+                char *uuid;
+                char *dash;
+                name = lustre_cfg_string(lcfg, 0);
+                type = lustre_cfg_string(lcfg, 1);
+                name_create(lustre_cfg_string(lcfg, 2),"",&uuid);
+                dash =  strchr(uuid, '-');
+                *(++dash)='m';
+                *(++dash)='d';
+                *(++dash)='t';
+                rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                rc = record_attach(obd, mdt_llh, name, type, uuid);
+                rc = record_end_log(obd, &mdt_llh);
+                name_destroy(uuid);
+                RETURN(rc);
+        }
+
+        if (lcfg->lcfg_command == LCFG_SETUP) {
+                char *name;
+                char *target;
+                char *target_uuid;
+                name = lustre_cfg_string(lcfg, 0);
+                target = lustre_cfg_string(lcfg, 1);
+                target_uuid = lustre_cfg_string(lcfg, 2);
+                rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                rc = record_setup(obd, mdt_llh, name, target, target_uuid,0,0);
+                rc = record_end_log(obd, &mdt_llh);
+                RETURN(rc);
+        }
+
+        if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD) {
+                char *name;
+                char *uuid;
+                char *index;
+                char *gen;
+                char *dash; 
+                
+                LASSERT(got_an_osc_or_mdc == 1);
+                name_create(lustre_cfg_string(lcfg, 0),"",&name);
+                uuid = lustre_cfg_string(lcfg, 1);
+                index = lustre_cfg_string(lcfg, 2);
+                gen = lustre_cfg_string(lcfg, 3);
+                dash =  strchr(uuid, '-');
+                *(++dash)='m';
+                *(++dash)='d';
+                *(++dash)='t';
+                
+                rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                rc = record_lov_add(obd,mdt_llh,name,uuid,index,gen);
+                rc = record_end_log(obd, &mdt_llh);
+                RETURN(rc);
+        }
+
+        if (lcfg->lcfg_command == LCFG_LMV_ADD_MDC) {
+                char *name;
+                char *uuid;
+                char *index;
+                char *gen;
+                char *dash; 
+                
+                LASSERT(got_an_osc_or_mdc == 2);
+                name_create(lustre_cfg_string(lcfg, 0),"",&name);
+                uuid = lustre_cfg_string(lcfg, 1);
+                index = lustre_cfg_string(lcfg, 2);
+                gen = lustre_cfg_string(lcfg, 3);
+                dash =  strchr(uuid, '-');
+                *(++dash)='m';
+                *(++dash)='d';
+                *(++dash)='t';
+                *(++dash)='c';
+                *(++dash)='m';
+                *(++dash)='m';
+                
+                rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
+                rc = record_cmm_add(obd,mdt_llh,name,uuid,index,gen);
+                rc = record_end_log(obd, &mdt_llh);
+                RETURN(rc);
+        }
+        RETURN(rc);
+}
+
+/* fsdb->fsdb_sem is already held  in mgs_write_log_target*/
+/* stealed from mgs_get_fsdb_from_llog*/
+static int mgs_steal_llog_for_mdt_from_client(struct obd_device *obd,
+                                              char *client_name,
+                                              struct temp_comp* comp)
+{
+        struct llog_handle *loghandle;
+        struct lvfs_run_ctxt saved;
+        int rc, rc2;
+        ENTRY;
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        
+        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
+                         &loghandle, NULL, client_name);
+        if (rc)
+                GOTO(out_pop, rc);
+
+        rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
+        if (rc)
+                GOTO(out_close, rc);
+
+        rc = llog_process(loghandle, mgs_steal_llog_handler, (void *)comp, NULL);
+        CDEBUG(D_MGS, "get_db = %d\n", rc);
+out_close:
+        rc2 = llog_close(loghandle);
+        if (!rc)
+                rc = rc2;
+out_pop:
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        RETURN(rc);
+}
+
 
 /***************************************BEGIN PROTO**********************/
 /* cmm is the second thing for MDT logs */
@@ -1058,10 +1284,10 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                              struct mgs_target_info *mti)
 {
         struct llog_handle *llh = NULL;
-       // char *cliname, *lovname, *nodeuuid, *mdcuuid,*lmvname,*cmmname,*mdtname;
         char *cliname, *lovname, *lmvname, *cmmname, *mdtname;
         int rc, i, first_log = 0;
         char mdt_index[9];
+        struct temp_comp comp;
         ENTRY;
 
         CDEBUG(D_MGS, "writing new mdt %s\n", mti->mti_svname);
@@ -1105,7 +1331,12 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         /* else there's already some ost entries in the mdt log. */
 
         //BEGIN PROTO 
-        //FIXME FIXME FIXME  duplicate cmm & mdc info from other clients
+        //FIXME FIXME FIXME  duplicate mdc & osc info from clients' log to mdt
+        name_create(mti->mti_fsname, "-client", &cliname);
+        comp.comp_obd = obd;
+        comp.comp_mti = mti;
+        comp.comp_fsdb = fsdb;
+        rc = mgs_steal_llog_for_mdt_from_client(obd,cliname,&comp);
         //END PROTO
 
         /* We added the lov, maybe some osc's, now for the mdt.
@@ -1128,10 +1359,9 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                           mti->mti_svname, 0/*options*/);
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdt"); 
         rc = record_end_log(obd, &llh);
+        name_destroy(lovname);
 
         /* Append the mdt info to the client log */
-        name_create(mti->mti_fsname, "-client", &cliname);
-        name_destroy(lovname);
         name_create(mti->mti_fsname, "-clilov", &lovname);
         name_create(mti->mti_fsname, "-clilmv", &lmvname);
         if (first_log || 
@@ -1161,7 +1391,6 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         name_destroy(lovname);
         name_destroy(lmvname);
         name_destroy(cmmname);
-        name_destroy(lovname);
         RETURN(rc);
 }
 
@@ -1178,14 +1407,15 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
         int i, rc;
 
         ENTRY;
+        CDEBUG(D_MGS, "adding osc for %s to log %s\n",
+               mti->mti_svname, logname);
+        
         if (mgs_log_is_empty(obd, logname)) {
                 /* The first item in the log must be the lov, so we have
                    somewhere to add our osc. */
                 rc = mgs_write_log_lov(obd, fsdb, mti, logname, lovname);
         }
   
-        CDEBUG(D_MGS, "adding osc for %s to log %s\n",
-               mti->mti_svname, logname);
 
         name_create(libcfs_nid2str(mti->mti_nids[0]), "", &nodeuuid);
         name_create(mti->mti_svname, "-osc", &oscname);
