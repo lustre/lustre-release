@@ -1364,10 +1364,7 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         /* Append the mdt info to the client log */
         name_create(mti->mti_fsname, "-clilov", &lovname);
         name_create(mti->mti_fsname, "-clilmv", &lmvname);
-        if (first_log || 
-            /* If we're upgrading, the MDT log will exist but not the client. */
-            ((mti->mti_flags & LDD_F_UPGRADE14) && 
-             mgs_log_is_empty(obd, cliname))) {
+        if (mgs_log_is_empty(obd, cliname)) {
                 /* Start client log */
                 rc = mgs_write_log_lov(obd, fsdb, mti, cliname, lovname);
                 //BEGIN PROTO 
@@ -1379,6 +1376,8 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         //for_all_existing_mdt
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                  if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
+                        if(i == mti->mti_stripe_index)
+                                continue; /*skip itself*/
                         sprintf(mdt_index,"-MDT%04x",i);
                         name_create(mti->mti_fsname, mdt_index, &mdtname);
                         rc = mgs_write_log_mdc_to_cmm(obd, fsdb, mti,
