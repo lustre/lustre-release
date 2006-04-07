@@ -537,7 +537,6 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
                         struct lookup_intent *it)
 {
         struct inode *inode;
-        struct ptlrpc_request *request = it->d.lustre.it_data;
         int rc = 0;
         ENTRY;
 
@@ -569,7 +568,7 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, stru
 static void ll_update_times(struct ptlrpc_request *request, int offset,
                             struct inode *inode)
 {
-        struct mds_body *body = lustre_msg_buf(request->rq_repmsg, offset,
+        struct mdt_body *body = lustre_msg_buf(request->rq_repmsg, offset,
                                                sizeof(*body));
         LASSERT(body);
 
@@ -786,7 +785,7 @@ static int ll_rmdir_raw(struct nameidata *nd)
 
 int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 {
-        struct mds_body *body;
+        struct mdt_body *body;
         struct lov_mds_md *eadata;
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };

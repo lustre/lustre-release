@@ -180,6 +180,8 @@ struct ll_sb_info {
 
         struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
         spinlock_t                ll_deathrow_lock;
+
+        struct lu_fid             ll_fid;
 };
 
 struct ll_ra_read {

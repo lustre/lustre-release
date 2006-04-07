@@ -62,7 +62,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         struct lu_fid fid;
         __u64 offset;
         struct ptlrpc_request *request;
-        struct mds_body *body;
+        struct mdt_body *body;
         int rc = 0;
         ENTRY;
 
@@ -484,7 +484,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct lov_user_md *lump = (struct lov_user_md *)arg;
                 struct lov_mds_md *lmm;
                 struct lu_fid fid;
-                struct mds_body *body;
+                struct mdt_body *body;
                 int rc, lmmsize;
 
                 ll_inode2fid(&fid, inode);
@@ -537,7 +537,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case IOC_MDC_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct lu_fid fid;
-                struct mds_body *body;
+                struct mdt_body *body;
                 struct lov_user_md *lump;
                 struct lov_mds_md *lmm;
                 char *filename;

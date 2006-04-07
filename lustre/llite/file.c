@@ -174,7 +174,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
-        struct mds_body *body;
+        struct mdt_body *body;
         ENTRY;
 
         body = lustre_msg_buf (req->rq_repmsg, 1, sizeof (*body));

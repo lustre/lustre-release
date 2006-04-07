@@ -35,7 +35,7 @@ static int ll_readlink_internal(struct inode *inode,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct lu_fid fid;
-        struct mds_body *body;
+        struct mdt_body *body;
         int rc, symlen = inode->i_size + 1;
         ENTRY;
 

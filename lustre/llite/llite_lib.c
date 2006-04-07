@@ -1155,7 +1155,7 @@ static void ll_replace_lsm(struct inode *inode, struct lov_stripe_md *lsm)
 void ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct mds_body *body = md->body;
+        struct mdt_body *body = md->body;
         struct lov_stripe_md *lsm = md->lsm;
 
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
@@ -1342,7 +1342,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         switch(cmd) {
         case EXT3_IOC_GETFLAGS: {
                 struct lu_fid fid;
-                struct mds_body *body;
+                struct mdt_body *body;
 
                 ll_inode2fid(&fid, inode);
                 rc = mdc_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_FLFLAGS,0,&req);

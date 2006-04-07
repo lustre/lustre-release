@@ -156,7 +156,7 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req = NULL;
-        struct mds_body *body;
+        struct mdt_body *body;
         struct lu_fid fid;
         void *xdata;
         int xattr_type, rc;
