@@ -62,6 +62,19 @@ static struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_release = cmm_object_release,
 	.ldo_object_print   = cmm_object_print
 };
+
+static struct md_device_operations cmm_md_ops = {
+        .mdo_root_get   = cmm_root_get,
+        .mdo_mkdir      = cmm_mkdir,
+//        .mdo_rename     = cmm_rename,
+//        .mdo_link       = cmm_link,
+//        .mdo_attr_get   = cmm_attr_get,
+//        .mdo_attr_set   = cmm_attr_set,
+//        .mdo_index_insert = cmm_index_insert,
+//       .mdo_index_delete = cmm_index_delete,
+//        .mdo_object_create = cmm_object_create,
+};
+
 #if 0
 int mds_md_connect(struct obd_device *obd, char *md_name)
 {
@@ -217,15 +230,13 @@ int mds_md_disconnect(struct obd_device *obd, int flags)
 static int cmm_init(struct cmm_device *m,
                     struct lu_device_type *t, struct lustre_cfg *cfg)
 {
-        char   ns_name[48];
         struct lu_device *lu_dev = cmm2lu_dev(m);
         ENTRY;
 
 	md_device_init(&m->cmm_md_dev, t);
-
+        
+        m->cmm_md_dev.md_ops = &cmm_md_ops;
 	lu_dev->ld_ops = &cmm_lu_ops;
-
-        snprintf(ns_name, sizeof ns_name, LUSTRE_CMM0_NAME"-%p", m);
 
 	return 0;
 }
@@ -235,20 +246,44 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
 {
         struct lu_device  *l;
         struct cmm_device *m;
-
+        int err;
+        
+        ENTRY;
+        
         OBD_ALLOC_PTR(m);
         if (m == NULL) {
-                l = ERR_PTR(-ENOMEM);
-        } else {
-                int err;
-
-                err = cmm_init(m, t, cfg);
-                if (!err)
-                        l = cmm2lu_dev(m);
-                else
-                        l = ERR_PTR(err);
+                return ERR_PTR(-ENOMEM);
+        } 
+        
+        err = cmm_init(m, t, cfg);
+        if (err) {
+                return ERR_PTR(err);
         }
 
+        for (err = 0; err < cfg->lcfg_bufcount; err++) {
+                char * name = lustre_cfg_string(cfg, err);
+                if (name) {
+                        name = "NULL"; 
+                }
+                CDEBUG(D_INFO, "lcfg#%i: %s\n", err, name);
+                
+        }
+        /* get next layer from mountopt */
+        if (LUSTRE_CFG_BUFLEN(cfg, 2)) {
+                struct obd_device * obd = NULL;
+                char * child = lustre_cfg_string(cfg, 2);
+                
+                obd = class_name2obd(child);
+                if (obd && obd->obd_lu_dev) {
+                        CDEBUG(D_INFO, "Child device is %s\n", child);
+                        m->cmm_child = lu2md_dev(obd->obd_lu_dev);
+                } else {
+                        CDEBUG(D_INFO, "Child device %s not found\n", child);
+                }
+        }
+        l = cmm2lu_dev(m);
+
+        EXIT;
         return l;
 }
 
@@ -285,6 +320,7 @@ static struct lu_device_type_operations cmm_device_type_ops = {
 };
 
 static struct lu_device_type cmm_device_type = {
+        .ldt_tags = LU_DEVICE_MD,
         .ldt_name = LUSTRE_CMM0_NAME,
         .ldt_ops  = &cmm_device_type_ops
 };

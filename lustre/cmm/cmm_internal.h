@@ -37,7 +37,7 @@ struct cmm_device {
 };
 
 
-#define CMM_DO_CHILD(d) (d->cmm_child->md_ops)
+#define CMM_CHILD_OPS(d) (d->cmm_child->md_ops)
 
 static inline struct cmm_device *md2cmm_dev(struct md_device *m)
 {

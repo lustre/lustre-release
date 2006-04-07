@@ -116,17 +116,22 @@ static void cmm_unlock(struct md_object *obj, __u32 mode)
 /* Llog API */
 /* Object API */
 /* Metadata API */
+int cmm_root_get(struct md_device *md, struct lu_fid *fid) {
+        return 0;
+}
+
 int cmm_mkdir(struct md_object *md_parent, const char *name, 
               struct md_object *md_child)
 {
 	struct cmm_object *cmm_parent = md2cmm_obj(md_parent);
         struct cmm_device *cmm_dev = cmm_obj2dev(cmm_parent);
-	int result;
+	int result = -EOPNOTSUPP;
 
-	result = CMM_DO_CHILD(cmm_dev)->mdo_mkdir(cmm2child_obj(cmm_parent),
+        if (CMM_CHILD_OPS(cmm_dev) && CMM_CHILD_OPS(cmm_dev)->mdo_mkdir) {
+	        result = CMM_CHILD_OPS(cmm_dev)->mdo_mkdir(
+                                                  cmm2child_obj(cmm_parent),
                                                   name, md_child);
-
-        
+        }       
         
 	return result;
 }
