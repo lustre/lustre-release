@@ -51,8 +51,6 @@
 /* struct obd_device */
 #include <linux/obd.h>
 
-#include <linux/lu_object.h>
-
 /* struct mds_client_data */
 #include "../mds/mds_internal.h"
 #include "mdt_internal.h"
@@ -830,16 +828,6 @@ struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
                                prntfn, c->psc_num_threads);
 }
 
-int md_device_init(struct md_device *md, struct lu_device_type *t)
-{
-        return lu_device_init(&md->md_lu_dev, t);
-}
-
-void md_device_fini(struct md_device *md)
-{
-        lu_device_fini(&md->md_lu_dev);
-}
-
 static void mdt_fini(struct mdt_device *m)
 {
         struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
@@ -1023,12 +1011,24 @@ static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
         OBD_ALLOC_PTR(m);
         if (m != NULL) {
                 int result;
+                struct obd_device * obd = NULL;
+                char *child = "lustre-mdtcmm";
 
                 l = &m->mdt_md_dev.md_lu_dev;
                 result = mdt_init0(m, t, cfg);
                 if (result != 0) {
                         mdt_fini(m);
-                        l = ERR_PTR(result);
+                        return ERR_PTR(result);
+                }
+
+                /* get next layer */
+                obd = class_name2obd(child);
+                if (obd && obd->obd_lu_dev) {
+                       CDEBUG(D_INFO, "Child device is %s\n", child);
+                       m->mdt_child = lu2md_dev(obd->obd_lu_dev);
+                } else {
+                       CDEBUG(D_INFO, "Child device %s is not found\n", child);
+                
                 }
         } else
                 l = ERR_PTR(-ENOMEM);
@@ -1202,4 +1202,4 @@ MODULE_LICENSE("GPL");
 CFS_MODULE_PARM(mdt_num_threads, "ul", ulong, 0444,
                 "number of mdt service threads to start");
 
-cfs_module(mdt, "0.0.2", mdt_mod_init, mdt_mod_exit);
+cfs_module(mdt, "0.0.3", mdt_mod_init, mdt_mod_exit);
