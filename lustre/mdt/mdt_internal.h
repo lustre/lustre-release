@@ -39,15 +39,14 @@
  * struct ptlrpc_client
  */
 #include <linux/lustre_net.h>
+#include <linux/obd.h>
 /*
  * struct obd_connect_data
  * struct lustre_handle
  */
 #include <linux/lustre_idl.h>
 
-#include <linux/lu_object.h>
-
-struct md_device_operations;
+#include <linux/md_object.h>
 
 struct ptlrpc_service_conf {
         int psc_nbufs;
@@ -58,19 +57,6 @@ struct ptlrpc_service_conf {
         int psc_rep_portal;
         int psc_watchdog_timeout; /* in ms */
         int psc_num_threads;
-};
-
-struct md_object;
-
-struct md_device {
-        struct lu_device             md_lu_dev;
-        struct md_device_operations *md_ops;
-};
-
-struct md_device_operations {
-        int (*mdo_root_get)(struct md_device *m, struct lu_fid *f);
-        int (*mdo_mkdir)(struct md_object *o, const char *name,
-                         struct md_object *child);
 };
 
 struct mdt_device {
@@ -98,27 +84,6 @@ enum mdt_flags {
          */
         MDT_CL_COMPAT_RESNAME = 1 << 0,
 };
-
-struct md_object {
-        struct lu_object mo_lu;
-};
-
-static inline int lu_device_is_md(struct lu_device *d)
-{
-        return d->ld_type->ldt_tags & LU_DEVICE_MD;
-}
-
-static inline struct md_object *lu2md(struct lu_object *o)
-{
-        LASSERT(lu_device_is_md(o->lo_dev));
-        return container_of(o, struct md_object, mo_lu);
-}
-
-static inline struct md_device *md_device_get(struct md_object *o)
-{
-        LASSERT(lu_device_is_md(o->mo_lu.lo_dev));
-        return container_of(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
-}
 
 struct mdt_object {
         struct lu_object_header mot_header;
