@@ -489,8 +489,10 @@ struct niobuf_local {
 /* FIXME all the references to these defines need to be updated */
 #define LUSTRE_MDS_NAME "mds"
 #define LUSTRE_MDT_NAME "mdt"
+/* new MDS layers. Prototype */
 #define LUSTRE_MDT0_NAME "mdt0"
 #define LUSTRE_CMM0_NAME "cmm0"
+#define LUSTRE_MDD0_NAME "mdd0"
 #define LUSTRE_OSD0_NAME "osd0"
 
 #define LUSTRE_MDC_NAME "mdc"
@@ -509,7 +511,6 @@ struct niobuf_local {
 
 #define LUSTRE_MGS_OBDNAME "MGS"
 #define LUSTRE_MGC_OBDNAME "MGC"
-
 
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
 #define N_LOCAL_TEMP_PAGE 0x10000000
