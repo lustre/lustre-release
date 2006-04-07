@@ -74,6 +74,12 @@ static inline int lu_device_is_md(struct lu_device *d)
         return d->ld_type->ldt_tags & LU_DEVICE_MD;
 }
 
+static inline struct md_device *lu2md_dev(struct lu_device *d)
+{
+        LASSERT(lu_device_is_md(d));
+        return container_of(d, struct md_device, md_lu_dev);
+}
+
 static inline struct md_object *lu2md(struct lu_object *o)
 {
         LASSERT(lu_device_is_md(o->lo_dev));
