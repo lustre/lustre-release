@@ -1002,7 +1002,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 obd = class_name2obd("MDS");
                 if (!obd) {
                         //FIXME pre-rename, should eventually be LUSTRE_MDS_NAME
-                        rc = lustre_start_simple("MDS", LUSTRE_MDT_NAME,
+                        rc = lustre_start_simple("MDS", LUSTRE_MDS_NAME,
                                                  "MDS_uuid", 0, 0);
                         if (rc) {
                                 CERROR("failed to start MDS: %d\n", rc);
