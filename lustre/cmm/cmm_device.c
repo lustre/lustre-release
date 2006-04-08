@@ -231,12 +231,24 @@ static int cmm_init(struct cmm_device *m,
                     struct lu_device_type *t, struct lustre_cfg *cfg)
 {
         struct lu_device *lu_dev = cmm2lu_dev(m);
+        struct obd_device * obd = NULL;
+        char * child = lustre_cfg_string(cfg, 1);
+
         ENTRY;
 
 	md_device_init(&m->cmm_md_dev, t);
         
         m->cmm_md_dev.md_ops = &cmm_md_ops;
 	lu_dev->ld_ops = &cmm_lu_ops;
+        
+        /* get next layer */
+        obd = class_name2obd(child);
+        if (obd && obd->obd_lu_dev) {
+                CDEBUG(D_INFO, "Child device is %s\n", child);
+                m->cmm_child = lu2md_dev(obd->obd_lu_dev);
+        } else {
+                CDEBUG(D_INFO, "Child device %s not found\n", child);
+        }
 
 	return 0;
 }
@@ -246,42 +258,23 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
 {
         struct lu_device  *l;
         struct cmm_device *m;
+        struct obd_device * obd = NULL;
+        char * child = lustre_cfg_string(cfg, 1);
+
         int err;
         
         ENTRY;
         
         OBD_ALLOC_PTR(m);
         if (m == NULL) {
-                return ERR_PTR(-ENOMEM);
-        } 
-        
-        err = cmm_init(m, t, cfg);
-        if (err) {
-                return ERR_PTR(err);
+                l = ERR_PTR(-ENOMEM);
+        } else {
+                err = cmm_init(m, t, cfg);
+                if (err)
+                        l = ERR_PTR(err);
+                else
+                        l = cmm2lu_dev(m);
         }
-
-        for (err = 0; err < cfg->lcfg_bufcount; err++) {
-                char * name = lustre_cfg_string(cfg, err);
-                if (name) {
-                        name = "NULL"; 
-                }
-                CDEBUG(D_INFO, "lcfg#%i: %s\n", err, name);
-                
-        }
-        /* get next layer from mountopt */
-        if (LUSTRE_CFG_BUFLEN(cfg, 2)) {
-                struct obd_device * obd = NULL;
-                char * child = lustre_cfg_string(cfg, 2);
-                
-                obd = class_name2obd(child);
-                if (obd && obd->obd_lu_dev) {
-                        CDEBUG(D_INFO, "Child device is %s\n", child);
-                        m->cmm_child = lu2md_dev(obd->obd_lu_dev);
-                } else {
-                        CDEBUG(D_INFO, "Child device %s not found\n", child);
-                }
-        }
-        l = cmm2lu_dev(m);
 
         EXIT;
         return l;

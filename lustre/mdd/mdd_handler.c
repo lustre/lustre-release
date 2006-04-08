@@ -245,7 +245,7 @@ static void mdd_object_release(struct lu_object *o)
 
 static int mdd_object_print(struct seq_file *f, const struct lu_object *o)
 {
-        return seq_printf(f, LUSTRE_MDD_NAME"-object@%p", o);
+        return seq_printf(f, LUSTRE_MDD0_NAME"-object@%p", o);
 }
 
 static struct lu_device_operations mdd_lu_ops = {
@@ -600,12 +600,26 @@ static int mdd_init(struct mdd_device *mdd, struct lu_device_type *t,
                     struct lustre_cfg* lcfg)
 {
         struct lu_device *lu_dev = mdd2lu_dev(mdd);
+        struct obd_device * obd = NULL;
+        char *child = lustre_cfg_string(lcfg, 1);
+        char *lov = lustre_cfg_string(lcfg, 2);
         int rc = 0;
         ENTRY;
 
 	md_device_init(&mdd->mdd_md_dev, t);
 
 	lu_dev->ld_ops = &mdd_lu_ops;
+        mdd->mdd_md_dev.md_ops = &mdd_ops;
+        
+        /* get next layer */
+        obd = class_name2obd(child);
+        if (obd && obd->obd_lu_dev) {
+                CDEBUG(D_INFO, "Child device is %s\n", child);
+                mdd->mdd_child = container_of(obd->obd_lu_dev,
+                                              struct dt_device, dd_lu_dev);
+        } else {
+                CDEBUG(D_INFO, "Child device %s not found\n", child);
+        }
 
         rc = mdd_fs_setup(mdd);
         if (rc)
@@ -678,7 +692,7 @@ static struct lu_device_type_operations mdd_device_type_ops = {
 
 static struct lu_device_type mdd_device_type = {
         .ldt_tags = LU_DEVICE_MD,
-        .ldt_name = LUSTRE_MDD_NAME,
+        .ldt_name = LUSTRE_MDD0_NAME,
         .ldt_ops  = &mdd_device_type_ops
 };
 
@@ -700,25 +714,25 @@ static int __init mdd_mod_init(void)
 
         lprocfs_init_vars(mdd, &lvars);
         result = class_register_type(&mdd_obd_device_ops,
-                                     lvars.module_vars, LUSTRE_MDD_NAME);
+                                     lvars.module_vars, LUSTRE_MDD0_NAME);
         if (result == 0) {
-                type = class_get_type(LUSTRE_MDD_NAME);
+                type = class_get_type(LUSTRE_MDD0_NAME);
                 LASSERT(type != NULL);
                 type->typ_lu = &mdd_device_type;
                 result = type->typ_lu->ldt_ops->ldto_init(type->typ_lu);
                 if (result != 0)
-                        class_unregister_type(LUSTRE_MDD_NAME);
+                        class_unregister_type(LUSTRE_MDD0_NAME);
         }
         return result;
 }
 
 static void __exit mdd_mod_exit(void)
 {
-        class_unregister_type(LUSTRE_MDD_NAME);
+        class_unregister_type(LUSTRE_MDD0_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Meta-data Device Prototype ("LUSTRE_MDD_NAME")");
+MODULE_DESCRIPTION("Lustre Meta-data Device Prototype ("LUSTRE_MDD0_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(mdd, "0.0.2", mdd_mod_init, mdd_mod_exit);

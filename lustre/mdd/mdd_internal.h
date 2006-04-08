@@ -4,9 +4,6 @@
 #ifndef _MDD_INTERNAL_H
 #define _MDD_INTERNAL_H
 
-#define LUSTRE_MDD_NAME "mdd"
-#define LUSTRE_OSD_NAME "osd"
-
 struct mdd_device {
         struct md_device                 mdd_md_dev;
         struct dt_device                *mdd_child;

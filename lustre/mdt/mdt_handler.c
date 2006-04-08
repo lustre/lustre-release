@@ -854,6 +854,8 @@ static int mdt_init0(struct mdt_device *m,
 {
         struct lu_site *s;
         char   ns_name[48];
+        struct obd_device * obd = NULL;
+        char *child = lustre_cfg_string(cfg, 1);
 
         ENTRY;
 
@@ -864,6 +866,15 @@ static int mdt_init0(struct mdt_device *m,
         md_device_init(&m->mdt_md_dev, t);
 
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
+
+        /* get next layer */
+        obd = class_name2obd(child);
+        if (obd && obd->obd_lu_dev) {
+                CDEBUG(D_INFO, "Child device is %s\n", child);
+                m->mdt_child = lu2md_dev(obd->obd_lu_dev);
+        } else {
+                CDEBUG(D_INFO, "Child device %s is not found\n", child);
+        }
 
         m->mdt_service_conf.psc_nbufs            = MDS_NBUFS;
         m->mdt_service_conf.psc_bufsize          = MDS_BUFSIZE;
@@ -1011,8 +1022,6 @@ static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
         OBD_ALLOC_PTR(m);
         if (m != NULL) {
                 int result;
-                struct obd_device * obd = NULL;
-                char *child = "lustre-mdtcmm";
 
                 l = &m->mdt_md_dev.md_lu_dev;
                 result = mdt_init0(m, t, cfg);
@@ -1020,16 +1029,7 @@ static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
                         mdt_fini(m);
                         return ERR_PTR(result);
                 }
-
-                /* get next layer */
-                obd = class_name2obd(child);
-                if (obd && obd->obd_lu_dev) {
-                       CDEBUG(D_INFO, "Child device is %s\n", child);
-                       m->mdt_child = lu2md_dev(obd->obd_lu_dev);
-                } else {
-                       CDEBUG(D_INFO, "Child device %s is not found\n", child);
                 
-                }
         } else
                 l = ERR_PTR(-ENOMEM);
         return l;
