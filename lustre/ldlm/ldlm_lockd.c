@@ -924,7 +924,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         dlm_req = lustre_swab_reqbuf(req, MDS_REQ_INTENT_LOCKREQ_OFF,
                                      sizeof *dlm_req, lustre_swab_ldlm_request);
-        if (dlm_req == NULL) {
+        if (dlm_req != NULL) {
                 rc = ldlm_handle_enqueue0(req, dlm_req, &cbs);
         } else {
                 CERROR ("Can't unpack dlm_req\n");

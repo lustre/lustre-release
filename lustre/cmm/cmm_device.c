@@ -258,8 +258,6 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
 {
         struct lu_device  *l;
         struct cmm_device *m;
-        struct obd_device * obd = NULL;
-        char * child = lustre_cfg_string(cfg, 1);
 
         int err;
         

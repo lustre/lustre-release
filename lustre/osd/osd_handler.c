@@ -46,6 +46,7 @@
 #include <linux/obd.h>
 /* class_register_type(), class_unregister_type(), class_get_type() */
 #include <linux/obd_class.h>
+#include <linux/lustre_disk.h>
 
 #include "osd_internal.h"
 
@@ -174,11 +175,40 @@ static void osd_type_fini(struct lu_device_type *t)
 static int osd_device_init(struct osd_device *d,
                            struct lu_device_type *t, struct lustre_cfg *cfg)
 {
+        struct lustre_mount_info *lmi = NULL;
+        struct vfsmount *mnt = NULL;
+        char *disk = lustre_cfg_string(cfg, 0);
+        char *name = lustre_cfg_string(cfg, 1);
+        
         lu_device_init(&d->od_dt_dev.dd_lu_dev, t);
         d->od_dt_dev.dd_lu_dev.ld_ops = &osd_lu_ops;
-        /*
-         * mount file system...
-         */
+        
+        if (!disk) {
+                CERROR("No obd device for OSD!\n");
+#if 1
+        } else {
+
+                lmi = server_get_mount(disk);
+                if (lmi) {
+                        /* We already mounted in lustre_fill_super */
+                        struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
+                        struct lustre_disk_data *ldd = lsi->lsi_ldd;
+                        struct lustre_mount_data *lmd = lsi->lsi_lmd;
+                        
+                        CDEBUG(D_INFO, "%s info: device=%s,\n opts=%s,\n",
+                                        name, lmd->lmd_dev, ldd->ldd_mount_opts);
+                        mnt = lmi->lmi_mnt;
+                        
+                } else {
+                        CERROR("Cannot get mount info for %s!\n", disk);
+                }
+#endif
+        }
+        // to be continued...
+
+        if (lmi) {
+                server_put_mount(disk, mnt);
+        }
         return 0;
 }
 
@@ -208,6 +238,7 @@ static struct lu_device *osd_device_alloc(struct lu_device_type *t,
                 }
         } else
                 l = ERR_PTR(-ENOMEM);
+        
         return l;
 }
 

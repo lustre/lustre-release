@@ -52,5 +52,9 @@ struct osd_device {
         struct dt_device od_dt_dev;
 };
 
+static inline struct lu_device * osd2lu_dev(struct osd_device * osd) {
+        return &osd->od_dt_dev.dd_lu_dev;
+}
+
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */
