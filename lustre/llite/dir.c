@@ -219,7 +219,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
                 struct ptlrpc_request *request;
-                struct mdc_op_data data;
+                struct mdc_op_data data = { { 0 } };
 
                 ll_prepare_mdc_op_data(&data, dir, NULL, NULL, 0, 0);
 
@@ -441,12 +441,13 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case LL_IOC_LOV_SETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
-                struct mdc_op_data op_data;
+                struct mdc_op_data op_data = { { 0 } };
                 struct iattr attr = { 0 };
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
                 int rc = 0;
 
-                ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+                ll_prepare_mdc_op_data(&op_data, inode,
+                                       NULL, NULL, 0, 0);
 
                 LASSERT(sizeof(lum) == sizeof(*lump));
                 LASSERT(sizeof(lum.lmm_objects[0]) ==

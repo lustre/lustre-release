@@ -150,7 +150,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 {
         struct ll_sb_info *sbi = ll_i2sbi(file->f_dentry->d_inode);
         struct lustre_handle lockh;
-        struct mdc_op_data data;
+        struct mdc_op_data data = { { 0 } };
         struct dentry *parent = file->f_dentry->d_parent;
         const char *name = file->f_dentry->d_name.name;
         const int len = file->f_dentry->d_name.len;
@@ -1312,6 +1312,7 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         ll_prepare_mdc_op_data(op_data, head_inode, tail_parent,
                                tail_dentry->d_name.name,
                                tail_dentry->d_name.len, 0);
+        
         rc = mdc_enqueue(ll_i2mdcexp(head_inode), LDLM_IBITS, &oit, LCK_PW,
                          op_data, &lockh, &tsize, 0, ldlm_completion_ast,
                          ll_mdc_blocking_ast, &hsize, 0);

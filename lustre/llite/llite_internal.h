@@ -344,9 +344,9 @@ int ll_mdc_cancel_unused(struct lustre_handle *, struct inode *, int flags,
                          void *opaque);
 int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                         void *data, int flag);
-void ll_prepare_mdc_op_data(struct mdc_op_data *,
-                            struct inode *i1, struct inode *i2,
-                            const char *name, int namelen, int mode);
+void ll_prepare_mdc_op_data(struct mdc_op_data *op_data, struct inode *i1,
+                            struct inode *i2, const char *name, int namelen,
+                            int mode);
 
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);

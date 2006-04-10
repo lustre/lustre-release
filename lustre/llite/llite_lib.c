@@ -836,7 +836,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int ia_valid = attr->ia_valid;
         int rc = 0;
         ENTRY;
@@ -1365,7 +1365,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 RETURN(put_user(flags, (int *)arg));
         }
         case EXT3_IOC_SETFLAGS: {
-                struct mdc_op_data op_data;
+                struct mdc_op_data op_data = { { 0 } };
                 struct iattr attr;
                 struct obdo *oa;
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
@@ -1519,26 +1519,19 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
         if (*inode) {
                 ll_update_inode(*inode, &md);
         } else {
-                struct lu_fid fid;
-                
                 LASSERT(sb != NULL);
-                
-                rc = ll_fid_alloc(sbi, &fid);
-                if (rc) {
-                        CERROR("cannot allocate new fid, rc %d\n", 
-                               rc);
-                        mdc_free_lustre_md(exp, &md);
-                        GOTO(out, rc);
-                }
 
-                *inode = ll_iget(sb, ll_fid2ino(sbi, &fid), &md);
+                /* at this point server answers to client's RPC with same fid as
+                 * client generated for creating some inode. So using
+                 * md.body.fid1 is okay here. */
+                *inode = ll_iget(sb, ll_fid2ino(sbi, &md.body->fid1), &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
                         mdc_free_lustre_md(exp, &md);
                         rc = -ENOMEM;
                         CERROR("new_inode -fatal: rc %d\n", rc);
                         GOTO(out, rc);
                 }
-                ll_i2info(*inode)->lli_fid = fid;
+                ll_i2info(*inode)->lli_fid = md.body->fid1;
         }
 
         rc = obd_checkmd(exp, ll_i2mdcexp(*inode),

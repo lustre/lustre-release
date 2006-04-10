@@ -282,10 +282,11 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 {
         int rc;
         struct it_cb_data icbd;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
+        struct inode *parent;
 
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%s\n", de->d_name.name,
@@ -308,8 +309,10 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
 
-        ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, de->d_inode,
-                               de->d_name.name, de->d_name.len, 0);
+        parent = de->d_parent->d_inode;
+                
+        ll_prepare_mdc_op_data(&op_data, parent, NULL, de->d_name.name,
+                               de->d_name.len, 0);
 
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
                              &req, ll_mdc_blocking_ast, 0);

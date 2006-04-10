@@ -276,24 +276,25 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         }
 }
 
-void ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
+void ll_prepare_mdc_op_data(struct mdc_op_data *op_data, struct inode *i1,
                             struct inode *i2, const char *name, int namelen,
                             int mode)
 {
-        LASSERT(i1);
+        LASSERT(i1 = NULL);
+        LASSERT(op_data != NULL);
 
-        ll_i2gids(data->suppgids, i1, i2);
-        ll_inode2fid(&data->fid1, i1);
+        ll_i2gids(op_data->suppgids, i1, i2);
+        op_data->fid1 = ll_i2info(i1)->lli_fid;
 
+        /* @i2 may be NULL. In this case caller itself has to initialize ->fid2
+         * if needed. */
         if (i2)
-                ll_inode2fid(&data->fid2, i2);
-        else
-                memset(&data->fid2, 0, sizeof(data->fid2));
+                op_data->fid2 = ll_i2info(i2)->lli_fid;
 
-        data->name = name;
-        data->namelen = namelen;
-        data->create_mode = mode;
-        data->mod_time = CURRENT_SECONDS;
+        op_data->name = name;
+        op_data->namelen = namelen;
+        op_data->create_mode = mode;
+        op_data->mod_time = CURRENT_SECONDS;
 }
 
 static void ll_d_add(struct dentry *de, struct inode *inode)
@@ -419,7 +420,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                    struct lookup_intent *it, int lookup_flags)
 {
         struct dentry *save = dentry, *retval;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -441,6 +442,15 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
 
+        /* allocate new fid for child */
+        if (it->it_op == IT_OPEN || it->it_op == IT_CREAT) {
+                rc = ll_fid_alloc(ll_i2sbi(parent), &op_data.fid2);
+                if (rc) {
+                        CERROR("can't allocate new fid, rc %d\n", rc);
+                        LBUG();
+                }
+        }
+        
         ll_prepare_mdc_op_data(&op_data, parent, NULL, dentry->d_name.name,
                                dentry->d_name.len, lookup_flags);
 
@@ -588,7 +598,7 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         struct ptlrpc_request *request = NULL;
         struct inode *dir = nd->dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err;
         ENTRY;
 
@@ -606,8 +616,9 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                                       nd->last.len, 0);
+                ll_prepare_mdc_op_data(&op_data, dir, NULL,
+                                       nd->last.name, nd->last.len, 0);
+                
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
                                  current->cap_effective, rdev, &request);
@@ -630,7 +641,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
         struct ptlrpc_request *request = NULL;
         struct inode *inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err;
         ENTRY;
 
@@ -648,8 +659,16 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
+                /* allocate new fid */
+                err = ll_fid_alloc(ll_i2sbi(dir), &op_data.fid2);
+                if (err) {
+                        CERROR("can't allocate new fid, rc %d\n", err);
+                        LBUG();
+                }
+
                 ll_prepare_mdc_op_data(&op_data, dir, NULL, dchild->d_name.name,
                                        dchild->d_name.len, 0);
+                
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
                                  current->cap_effective, rdev, &request);
@@ -681,7 +700,7 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err;
         ENTRY;
 
@@ -689,8 +708,16 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation,
                dir, tgt);
 
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                               nd->last.len, 0);
+        /* allocate new fid */
+        err = ll_fid_alloc(ll_i2sbi(dir), &op_data.fid2);
+        if (err) {
+                CERROR("can't allocate new fid, rc %d\n", err);
+                LBUG();
+        }
+
+        ll_prepare_mdc_op_data(&op_data, dir, NULL,
+                               nd->last.name, nd->last.len, 0);
+
         err = mdc_create(sbi->ll_mdc_exp, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                          current->fsuid, current->fsgid, current->cap_effective,
@@ -707,7 +734,7 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         struct inode *src = srcnd->dentry->d_inode;
         struct inode *dir = tgtnd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
@@ -719,6 +746,7 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 
         ll_prepare_mdc_op_data(&op_data, src, dir, tgtnd->last.name,
                                tgtnd->last.len, 0);
+        
         err = mdc_link(sbi->ll_mdc_exp, &op_data, &request);
         if (err == 0)
                 ll_update_times(request, 0, dir);
@@ -734,15 +762,24 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                               nd->last.len, 0);
+
+        /* allocate new fid */
+        err = ll_fid_alloc(ll_i2sbi(dir), &op_data.fid2);
+        if (err) {
+                CERROR("can't allocate new fid, rc %d\n", err);
+                LBUG();
+        }
+
+        ll_prepare_mdc_op_data(&op_data, dir, NULL,
+                               nd->last.name, nd->last.len, 0);
+        
         err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                          current->fsuid, current->fsgid, current->cap_effective,
                          0, &request);
@@ -757,7 +794,7 @@ static int ll_rmdir_raw(struct nameidata *nd)
 {
         struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         struct dentry *dentry;
         int rc;
         ENTRY;
@@ -776,6 +813,7 @@ static int ll_rmdir_raw(struct nameidata *nd)
                 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
                                nd->last.len, S_IFDIR);
+        
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc == 0)
                 ll_update_times(request, 0, dir);
@@ -861,14 +899,15 @@ static int ll_unlink_raw(struct nameidata *nd)
 {
         struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                               nd->last.len, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL,
+                               nd->last.name, nd->last.len, 0);
+        
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc)
                 GOTO(out, rc);
@@ -887,7 +926,7 @@ static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         struct inode *tgt = tgtnd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(src);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE,"VFS Op:oldname=%.*s,src_dir=%lu/%u(%p),newname=%.*s,"
@@ -896,6 +935,7 @@ static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
                tgtnd->last.name, tgt->i_ino, tgt->i_generation, tgt);
 
         ll_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
+        
         err = mdc_rename(sbi->ll_mdc_exp, &op_data,
                          srcnd->last.name, srcnd->last.len,
                          tgtnd->last.name, tgtnd->last.len, &request);
