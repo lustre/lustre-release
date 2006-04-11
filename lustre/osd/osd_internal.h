@@ -52,6 +52,14 @@ struct osd_device {
         struct dt_device od_dt_dev;
 };
 
+static inline struct osd_device * dt2osd_dev(struct dt_device *dt) {
+        return container_of(dt, struct osd_device, od_dt_dev);
+}
+
+static inline struct osd_device * lu2osd_dev(struct lu_device *d) {
+        return dt2osd_dev(container_of(d, struct dt_device, dd_lu_dev));
+}
+
 static inline struct lu_device * osd2lu_dev(struct osd_device * osd) {
         return &osd->od_dt_dev.dd_lu_dev;
 }
