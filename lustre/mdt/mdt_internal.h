@@ -77,7 +77,7 @@ struct mdt_device {
         unsigned long              mdt_flags;
 
         /* Seq management related stuff */
-        struct semaphore           mdt_seq_sem; 
+        struct semaphore           mdt_seq_sem;
         __u64                      mdt_seq;
 };
 
@@ -168,7 +168,7 @@ struct mdt_thread_info {
 
 };
 
-int mdt_alloc_seq(struct mdt_device *, __u64 *);
+int mdt_seq_alloc(struct mdt_device *, __u64 *);
 
 int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
              struct lustre_handle *, ldlm_mode_t,

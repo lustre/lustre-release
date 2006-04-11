@@ -944,7 +944,7 @@ static int mdt_config(struct mdt_device *m, const char *name,
 }
 
 /* allocate sequence to client */
-int mdt_alloc_seq(struct mdt_device *m, __u64 *seq)
+int mdt_seq_alloc(struct mdt_device *m, __u64 *seq)
 {
         int rc = 0;
         ENTRY;
@@ -969,11 +969,12 @@ int mdt_alloc_seq(struct mdt_device *m, __u64 *seq)
 
         RETURN(0);
 }
+EXPORT_SYMBOL(mdt_seq_alloc);
 
 /* initialize meta-sequence. First of all try to get it from lower layer down to
  * back store one. In the case this is first run and there is not meta-sequence
  * initialized yet - store it to backstore. */
-static int mdt_init_seq(struct mdt_device *m)
+static int mdt_seq_init(struct mdt_device *m)
 {
         int rc = 0;
         ENTRY;
@@ -1122,7 +1123,7 @@ static int mdt_init0(struct mdt_device *m,
         }
 
         /* init sequence info after device stack is initialized. */
-        rc = mdt_init_seq(m);
+        rc = mdt_seq_init(m);
         if (rc)
                 GOTO(err_fini_child, rc);
 
@@ -1251,7 +1252,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
 
-        rc = mdt_alloc_seq(mdt_dev(obd->obd_lu_dev),
+        rc = mdt_seq_alloc(mdt_dev(obd->obd_lu_dev),
                            &data->ocd_seq);
         if (rc)
                 GOTO(out, rc);
