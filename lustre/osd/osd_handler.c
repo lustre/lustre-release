@@ -63,8 +63,8 @@ static int   osd_object_init   (struct lu_object *l);
 static void  osd_object_release(struct lu_object *l);
 static int   osd_object_print  (struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (struct lu_device *m);
-static void  osd_device_fini   (struct osd_device *d);
-static int   osd_device_init   (struct osd_device *m, const char *conf);
+static void  osd_device_fini   (struct lu_device *d);
+static int   osd_device_init   (struct lu_device *d, const char *conf);
 
 static struct lu_object  *osd_object_alloc(struct lu_device *d);
 static struct osd_object *osd_obj         (const struct lu_object *o);
@@ -83,6 +83,16 @@ static struct lprocfs_vars              lprocfs_osd_obd_vars[];
 static struct lu_device_operations      osd_lu_ops;
 
 
+static struct lu_fid *lu_inode_get_fid(const struct inode *inode)
+{
+        static struct lu_fid stub = {
+                .f_seq = 42,
+                .f_oid = 42,
+                .f_ver = 0
+        };
+        return &stub;
+}
+
 /*
  * DT methods.
  */
@@ -90,7 +100,7 @@ static int osd_root_get(struct dt_device *dev, struct lu_fid *f)
 {
         struct osd_device *od = osd_dt_dev(dev);
 
-        *fid = *lu_inode_get_fid(od->od_mount->lmi_sb->s_root->d_inode);
+        *f = *lu_inode_get_fid(od->od_mount->lmi_sb->s_root->d_inode);
         return 0;
 }
 
@@ -217,8 +227,9 @@ static int osd_statfs(struct dt_device *d, struct kstatfs *sfs)
 }
 
 static struct dt_device_operations osd_dt_ops = {
-        .dt_config = osd_config,
-        .dt_statfs = osd_statfs
+        .dt_root_get = osd_root_get,
+        .dt_config   = osd_config,
+        .dt_statfs   = osd_statfs
 };
 
 /*
