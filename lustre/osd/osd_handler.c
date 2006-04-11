@@ -50,6 +50,8 @@
 
 #include "osd_internal.h"
 
+static int   osd_root_get      (struct dt_device *dev, struct lu_fid *f);
+
 static int   lu_device_is_osd  (const struct lu_device *d);
 static void  osd_mod_exit      (void) __exit;
 static int   osd_mod_init      (void) __init;
@@ -61,14 +63,13 @@ static int   osd_object_init   (struct lu_object *l);
 static void  osd_object_release(struct lu_object *l);
 static int   osd_object_print  (struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (struct lu_device *m);
-/*
 static void  osd_device_fini   (struct osd_device *d);
-static int   osd_device_init   (struct osd_device *m, struct lu_device_type *t,
-                                struct lustre_cfg *cfg);
-*/
+static int   osd_device_init   (struct osd_device *m, const char *conf);
+
 static struct lu_object  *osd_object_alloc(struct lu_device *d);
 static struct osd_object *osd_obj         (const struct lu_object *o);
 static struct osd_device *osd_dev         (const struct lu_device *d);
+static struct osd_device *osd_dt_dev      (const struct dt_device *d);
 static struct lu_device  *osd_device_alloc(struct lu_device_type *t,
                                            struct lustre_cfg *cfg);
 
@@ -80,6 +81,19 @@ static struct obd_ops                   osd_obd_device_ops;
 static struct lprocfs_vars              lprocfs_osd_module_vars[];
 static struct lprocfs_vars              lprocfs_osd_obd_vars[];
 static struct lu_device_operations      osd_lu_ops;
+
+
+/*
+ * DT methods.
+ */
+static int osd_root_get(struct dt_device *dev, struct lu_fid *f)
+{
+        struct osd_device *od = osd_dt_dev(dev);
+
+        *fid = *lu_inode_get_fid(od->od_mount->lmi_sb->s_root->d_inode);
+        return 0;
+}
+
 
 /*
  * OSD object methods.
@@ -124,8 +138,17 @@ static void osd_object_delete(struct lu_object *l)
 {
 }
 
+static int osd_inode_unlinked(const struct inode *inode)
+{
+        return inode->i_nlink == !!S_ISDIR(inode->i_mode);
+}
+
 static void osd_object_release(struct lu_object *l)
 {
+        struct osd_object *o = osd_obj(l);
+
+        if (o->oo_dentry != NULL && osd_inode_unlinked(o->oo_dentry->d_inode))
+                set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
 static int osd_object_print(struct seq_file *f, const struct lu_object *l)
@@ -167,7 +190,7 @@ static int osd_config(struct dt_device *d, const char *name,
 	struct osd_device *osd = dt2osd_dev(d);
         struct super_block *sb = osd->od_dt_dev.dd_lmi->lmi_sb;
         int result = -EOPNOTSUPP;
-        
+
         ENTRY;
 
         if (mode == LUSTRE_CONFIG_GET) {
@@ -175,7 +198,7 @@ static int osd_config(struct dt_device *d, const char *name,
         } else {
                 /* to be continued */
         }
-        
+
         RETURN (result);
 }
 
@@ -184,12 +207,12 @@ static int osd_statfs(struct dt_device *d, struct kstatfs *sfs)
 	struct osd_device *osd = dt2osd_dev(d);
         struct super_block *sb = osd->od_dt_dev.dd_lmi->lmi_sb;
         int result = -EOPNOTSUPP;
-        
+
         ENTRY;
-        
+
         memset(sfs, 0, sizeof(*sfs));
         result = sb->s_op->statfs(sb, sfs);
-        
+
         RETURN (result);
 }
 
@@ -210,39 +233,38 @@ static void osd_type_fini(struct lu_device_type *t)
 {
 }
 
-static int osd_device_init(struct lu_device *d, char *top)
+static int osd_device_init(struct lu_device *d, const char *top)
 {
-        struct osd_device *o = lu2osd_dev(d);
-        struct lustre_mount_info *lmi = NULL;
-        struct vfsmount *mnt = NULL;
-        struct lustre_sb_info *lsi;
-        struct lustre_disk_data *ldd;      
-        struct lustre_mount_data *lmd;
-        int err = 0;
-        
+        struct osd_device *o = osd_dev(d);
+        struct lustre_mount_info *lmi;
+        struct vfsmount          *mnt;
+        int result;
+
         ENTRY;
-        
+
         lmi = server_get_mount(top);
-        if (lmi == NULL) {
+        if (lmi != NULL) {
+                struct lustre_sb_info    *lsi;
+                struct lustre_disk_data  *ldd;
+                struct lustre_mount_data *lmd;
+
+                /* We already mounted in lustre_fill_super */
+                lsi = s2lsi(lmi->lmi_sb);
+                ldd = lsi->lsi_ldd;
+                lmd = lsi->lsi_lmd;
+
+                CDEBUG(D_INFO, "OSD info: device=%s,\n opts=%s,\n",
+                       lmd->lmd_dev, ldd->ldd_mount_opts);
+                mnt = lmi->lmi_mnt;
+
+                /* save lustre_moint_info in dt_device */
+                o->od_mount = lmi;
+                result = 0;
+        } else {
                 CERROR("Cannot get mount info for %s!\n", top);
-                GOTO(out, -EFAULT);
+                result = -EFAULT;
         }
-                
-        /* We already mounted in lustre_fill_super */
-        lsi = s2lsi(lmi->lmi_sb);
-        ldd = lsi->lsi_ldd;
-        lmd = lsi->lsi_lmd;
-        
-        CDEBUG(D_INFO, "OSD info: device=%s,\n opts=%s,\n",
-                        lmd->lmd_dev, ldd->ldd_mount_opts);
-        mnt = lmi->lmi_mnt;
-
-        //save lustre_moint_info in dt_device
-        o->od_dt_dev.dd_lmi = lmi;
-        // to be continued...
-
-out:
-        RETURN(err);
+        RETURN(result);
 }
 
 static void osd_device_fini(struct lu_device *d)
@@ -250,7 +272,6 @@ static void osd_device_fini(struct lu_device *d)
         /*
          * umount file system.
          */
-        //lu_device_fini(&d->od_dt_dev.dd_lu_dev);
 }
 
 static struct lu_device *osd_device_alloc(struct lu_device_type *t,
@@ -265,9 +286,8 @@ static struct lu_device *osd_device_alloc(struct lu_device_type *t,
                 lu_device_init(&o->od_dt_dev.dd_lu_dev, t);
                 o->od_dt_dev.dd_lu_dev.ld_ops = &osd_lu_ops;
                 o->od_dt_dev.dd_ops = &osd_dt_ops;
-        } else {
+        } else
                 l = ERR_PTR(-ENOMEM);
-        }
         return l;
 }
 
@@ -297,15 +317,19 @@ static struct osd_object *osd_obj(const struct lu_object *o)
         return container_of(o, struct osd_object, oo_dt.do_lu);
 }
 
+static struct osd_device *osd_dt_dev(const struct dt_device *d)
+{
+        LASSERT(lu_device_is_osd(&d->dd_lu_dev));
+        return container_of(d, struct osd_device, od_dt_dev);
+}
+
 static struct osd_device *osd_dev(const struct lu_device *d)
 {
         LASSERT(lu_device_is_osd(d));
-        return container_of(d, struct osd_device, od_dt_dev.dd_lu_dev);
+        return osd_dt_dev(container_of(d, struct dt_device, dd_lu_dev));
 }
 
 static struct lu_device_operations osd_lu_ops = {
-        .ldo_device_init    = osd_device_init,
-        .ldo_device_fini    = osd_device_fini,
         .ldo_object_alloc   = osd_object_alloc,
         .ldo_object_init    = osd_object_init,
         .ldo_object_free    = osd_object_free,
@@ -319,7 +343,10 @@ static struct lu_device_type_operations osd_device_type_ops = {
         .ldto_fini = osd_type_fini,
 
         .ldto_device_alloc = osd_device_alloc,
-        .ldto_device_free  = osd_device_free
+        .ldto_device_free  = osd_device_free,
+
+        .ldto_device_init    = osd_device_init,
+        .ldto_device_fini    = osd_device_fini
 };
 
 static struct lu_device_type osd_device_type = {
