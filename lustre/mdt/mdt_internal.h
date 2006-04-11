@@ -77,6 +77,12 @@ struct mdt_device {
         unsigned long              mdt_flags;
 };
 
+static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
+{
+        LASSERT(m->mdt_child);
+        return m->mdt_child->md_ops;
+}
+
 enum mdt_flags {
         /*
          * This mdt works with legacy clients with different resource name
@@ -89,6 +95,11 @@ struct mdt_object {
         struct lu_object_header mot_header;
         struct md_object        mot_obj;
 };
+
+static inline struct md_object *mdt_object_child(struct mdt_object *o)
+{
+        return lu2md(lu_object_next(&o->mot_obj.mo_lu));
+}
 
 struct mdt_lock_handle {
         struct lustre_handle    mlh_lh;
