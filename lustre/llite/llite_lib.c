@@ -117,6 +117,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct lustre_handle mdc_conn = {0, };
         struct lustre_md md;
         struct obd_connect_data *data = NULL;
+        struct obd_connect_data *md_data = NULL;
+        struct obd_connect_data *dt_data = NULL;
         int err;
         ENTRY;
 
@@ -174,6 +176,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         /* async connect is surely finished by now */
         *data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
+        md_data = &class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
 
         LASSERT(osfs.os_bsize);
         sb->s_blocksize = osfs.os_bsize;
@@ -242,6 +245,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         spin_unlock(&sbi->ll_lco.lco_lock);
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
+        dt_data = &class_exp2cliimp(sbi->ll_osc_exp)->imp_connect_data;
 
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
                                   0, NULL, NULL, NULL);
@@ -269,6 +273,18 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
         CDEBUG(D_SUPER, "rootfid "DFID3"\n", PFID3(&rootfid));
         sbi->ll_root_fid = rootfid;
+
+        spin_lock_init(&sbi->ll_fid_lock);
+        
+        /* initializing @ll_md_fid. It is known that root object has separate
+         * sequence, so that we use what MDS returned to us and do not check if
+         * f_oid collides with root or not. */
+        sbi->ll_md_fid.f_seq = md_data->ocd_seq;
+        sbi->ll_md_fid.f_oid = LUSTRE_FID_INIT_OID;
+
+        /* initializing @ll_dt_fid */
+        sbi->ll_md_fid.f_seq = dt_data->ocd_seq;
+        sbi->ll_md_fid.f_oid = LUSTRE_FID_INIT_OID;
 
         sb->s_op = &lustre_super_operations;
 

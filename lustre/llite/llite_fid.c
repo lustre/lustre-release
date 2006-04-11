@@ -39,12 +39,29 @@
 int ll_fid_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
 {
         ENTRY;
+
+        spin_lock(&sbi->ll_fid_lock);
+        if (sbi->ll_md_fid.f_oid < LUSTRE_FID_SEQ_WIDTH) {
+                sbi->ll_md_fid.f_oid += 1;
+                *fid = sbi->ll_md_fid;
+        } else {
+                CERROR("sequence is exhausted. Switching to "
+                       "new one is not yet implemented\n");
+                LBUG();
+        }
+        spin_unlock(&sbi->ll_fid_lock);
+        
         RETURN(0);
 }
 
 /* build inode number on passed @fid */
 unsigned long ll_fid2ino(struct ll_sb_info *sbi, struct lu_fid *fid)
 {
+        unsigned long ino;
         ENTRY;
-        RETURN(0);
+
+        /* very stupid and having many downsides inode allocation algorithm
+         * based on fid. */
+        ino = (fid_seq(fid) - 1) * LUSTRE_FID_SEQ_WIDTH + fid_oid(fid);
+        RETURN(ino);
 }

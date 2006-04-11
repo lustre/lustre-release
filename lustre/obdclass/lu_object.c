@@ -198,7 +198,7 @@ static __u32 fid_hash(const struct lu_fid *f)
 {
         /* all objects with same id and different versions will belong to same
          * collisions list. */
-        return fid_seq(f) * LUSTRE_FID_SEQ_WIDTH + fid_oid(f);
+        return (fid_seq(f) - 1) * LUSTRE_FID_SEQ_WIDTH + fid_oid(f);
 }
 
 struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f)

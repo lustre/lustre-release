@@ -501,12 +501,6 @@ void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
  * lustre_idl.h implemented here.
  */
 
-void lustre_swab_msq(struct lu_msq *msq)
-{
-        __swab64s (&msq->m_ran);
-        __swab32s (&msq->m_seq);
-}
-
 void lustre_swab_connect(struct obd_connect_data *ocd)
 {
         __swab64s (&ocd->ocd_connect_flags);
@@ -515,10 +509,11 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         __swab32s (&ocd->ocd_index);
         __swab32s (&ocd->ocd_unused);
         __swab64s (&ocd->ocd_ibits_known);
-        lustre_swab_msq(&ocd->ocd_msq);
+        __swab64s (&ocd->ocd_seq);
         CLASSERT(offsetof(typeof(*ocd), padding2) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding3) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding4) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding5) != 0);
 }
 
 void lustre_swab_obdo (struct obdo  *o)

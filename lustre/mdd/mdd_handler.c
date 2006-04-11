@@ -250,8 +250,8 @@ static int mdd_object_print(struct seq_file *f, const struct lu_object *o)
 
 static int mdd_fs_setup(struct mdd_device *mdd)
 {
-        mdd->mdd_rootfid.f_seq = ROOT_FID_SEQ;
-        mdd->mdd_rootfid.f_oid = ROOT_FID_OID;
+        mdd->mdd_rootfid.f_seq = LUSTRE_ROOT_FID_SEQ;
+        mdd->mdd_rootfid.f_oid = LUSTRE_ROOT_FID_OID;
         mdd->mdd_rootfid.f_ver = 0;        
         return 0;
 }

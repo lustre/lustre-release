@@ -929,23 +929,43 @@ struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
                                prntfn, c->psc_num_threads);
 }
 
-/* default meta-sequenve values */
-#define LUSTRE_METASEQ_DEFAULT_RAN 0
-#define LUSTRE_METASEQ_DEFAULT_SEQ 0
-
-/* allocate meta-sequence to client */
-int mdt_alloc_metaseq(struct mdt_device *m, struct lu_msq *msq)
+static int mdt_config(struct mdt_device *m, const char *name,
+                      void *buf, int size, int mode)
 {
+        struct md_device *child = m->mdt_child;
+        int rc;
+        ENTRY;
+
+        if (!child->md_ops->mdo_config)
+                RETURN(-EOPNOTSUPP);
+        
+        rc = child->md_ops->mdo_config(child, name, buf, size, mode);
+        RETURN(rc);
+}
+
+/* allocate sequence to client */
+int mdt_alloc_seq(struct mdt_device *m, __u64 *seq)
+{
+        int rc = 0;
         ENTRY;
 
         LASSERT(m != NULL);
-        LASSERT(msq != NULL);
+        LASSERT(seq != NULL);
         
-        spin_lock(&m->mdt_msq_lock);
+        down(&m->mdt_seq_sem);
+        m->mdt_seq += 1;
+        *seq = m->mdt_seq;
 
-        /* to be continued */
+        /* update new allocated sequence on store */
+        rc = mdt_config(m, LUSTRE_CONFIG_METASEQ,
+                        &m->mdt_seq, sizeof(m->mdt_seq),
+                        LUSTRE_CONFIG_SET);
+        if (rc) {
+                CERROR("can't save new seq, rc %d\n",
+                       rc);
+        }
         
-        spin_unlock(&m->mdt_msq_lock);
+        up(&m->mdt_seq_sem);
 
         RETURN(0);
 }
@@ -953,39 +973,41 @@ int mdt_alloc_metaseq(struct mdt_device *m, struct lu_msq *msq)
 /* initialize meta-sequence. First of all try to get it from lower layer down to
  * back store one. In the case this is first run and there is not meta-sequence
  * initialized yet - store it to backstore. */
-static int mdt_init_metaseq(struct mdt_device *m)
+static int mdt_init_seq(struct mdt_device *m)
 {
-        struct md_device *child = m->mdt_child;
-        int rc;
+        int rc = 0;
         ENTRY;
 
-        m->mdt_msq.m_ran = LUSTRE_METASEQ_DEFAULT_RAN;
-        m->mdt_msq.m_seq = LUSTRE_METASEQ_DEFAULT_SEQ;
+        /* allocate next seq after root one */
+        m->mdt_seq = LUSTRE_ROOT_FID_SEQ + 1;
 
-        if (!child->md_ops->mdo_config)
-                GOTO(out, rc = 0);
-        
-        rc = child->md_ops->mdo_config(child, LUSTRE_CONFIG_METASEQ,
-                                       &m->mdt_msq, sizeof(m->mdt_msq),
-                                       LUSTRE_CONFIG_GET);
+        rc = mdt_config(m, LUSTRE_CONFIG_METASEQ,
+                        &m->mdt_seq, sizeof(m->mdt_seq),
+                        LUSTRE_CONFIG_GET);
+
         if (rc == -EOPNOTSUPP) {
-                /* provide zero error and let contnibnue with default values of
-                 * meta-sequence. */
+                /* provide zero error and let continue with default value of
+                 * sequence. */
                 GOTO(out, rc = 0);
         } else if (rc == -ENODATA) {
-                CWARN("initialize new meta-sequence\n");
+                CWARN("initialize new sequence\n");
 
-                /*initialize new meta-sequence config as it is not yet
-                 * created. */
-                rc = child->md_ops->mdo_config(child, LUSTRE_CONFIG_METASEQ,
-                                               &m->mdt_msq, sizeof(m->mdt_msq),
-                                               LUSTRE_CONFIG_SET);
-                if (rc) {
+                /*initialize new sequence config as it is not yet created. */
+                rc = mdt_config(m, LUSTRE_CONFIG_METASEQ,
+                                &m->mdt_seq, sizeof(m->mdt_seq),
+                                LUSTRE_CONFIG_SET);
+                if (rc == -EOPNOTSUPP) {
+                        /* provide zero error and let continue with default
+                         * value of sequence. */
+                        CERROR("can't update save initial sequence. "
+                               "No method defined\n");
+                        GOTO(out, rc = 0);
+                } else if (rc) {
                         CERROR("can't update config %s, rc %d\n",
                                LUSTRE_CONFIG_METASEQ, rc);
                         GOTO(out, rc);
                 }
-        } else {
+        } else if (rc) {
                 CERROR("can't get config %s, rc %d\n",
                        LUSTRE_CONFIG_METASEQ, rc);
                 GOTO(out, rc);
@@ -993,10 +1015,8 @@ static int mdt_init_metaseq(struct mdt_device *m)
 
         EXIT;
 out:
-        if (rc == 0) {
-                CWARN("initialized meta-sequence: "DSEQ"\n",
-                      PSEQ(&m->mdt_msq));
-        }
+        if (rc == 0)
+                CWARN("last used sequence: "LPU64"\n", m->mdt_seq);
         return rc;
 }
 
@@ -1061,7 +1081,7 @@ static int mdt_init0(struct mdt_device *m,
         if (m->mdt_child)
                 mdt_child = md2lu_dev(m->mdt_child);
         
-        spin_lock_init(&m->mdt_msq_lock);
+        sema_init(&m->mdt_seq_sem, 1);
 
         m->mdt_service_conf.psc_nbufs            = MDS_NBUFS;
         m->mdt_service_conf.psc_bufsize          = MDS_BUFSIZE;
@@ -1111,8 +1131,8 @@ static int mdt_init0(struct mdt_device *m,
                 LBUG();
         }
 
-        /* init meta-sequence info after device stack is initialized. */
-        rc = mdt_init_metaseq(m);
+        /* init sequence info after device stack is initialized. */
+        rc = mdt_init_seq(m);
         if (rc)
                 GOTO(err_fini_child, rc);
 
@@ -1241,8 +1261,8 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
 
-        rc = mdt_alloc_metaseq(mdt_dev(obd->obd_lu_dev),
-                               &data->ocd_msq);
+        rc = mdt_alloc_seq(mdt_dev(obd->obd_lu_dev),
+                           &data->ocd_seq);
         if (rc)
                 GOTO(out, rc);
 out:
