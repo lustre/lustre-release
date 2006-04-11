@@ -248,7 +248,61 @@ static int mdd_object_print(struct seq_file *f, const struct lu_object *o)
         return seq_printf(f, LUSTRE_MDD0_NAME"-object@%p", o);
 }
 
+static int mdd_fs_setup(struct mdd_device *mdd)
+{
+        mdd->mdd_rootfid.f_seq = ROOT_FID_SEQ;
+        mdd->mdd_rootfid.f_oid = ROOT_FID_OID;
+        mdd->mdd_rootfid.f_ver = 0;        
+        return 0;
+}
+
+static int mdd_fs_cleanup(struct mdd_device *mdd)
+{
+        return 0;
+}
+
+static int mdd_device_init(struct lu_device *d, char *top)
+{
+        struct mdd_device *mdd = lu2mdd_dev(d);
+        struct lu_device *next;
+        int rc = -EFAULT;
+        
+        ENTRY;
+
+        LASSERT(mdd->mdd_child);
+        next = &mdd->mdd_child->dd_lu_dev;
+
+        if (next->ld_ops->ldo_device_init)
+                rc = next->ld_ops->ldo_device_init(next, top);
+        
+        if (rc)
+                GOTO(err, rc);
+        
+        rc = mdd_fs_setup(mdd);
+        if (rc)
+                GOTO(err, rc);
+
+        RETURN(rc);
+err:
+        mdd_fs_cleanup(mdd);
+        RETURN(rc);
+}
+
+static void mdd_device_fini(struct lu_device *d)
+{
+	struct mdd_device *m = lu2mdd_dev(d);
+        struct lu_device *next;
+        
+	LASSERT(m->mdd_child);
+        next = &m->mdd_child->dd_lu_dev;
+        
+        if (next->ld_ops->ldo_device_fini)
+                next->ld_ops->ldo_device_fini(next);
+}
+
 static struct lu_device_operations mdd_lu_ops = {
+        .ldo_device_init    = mdd_device_init,
+        .ldo_device_fini    = mdd_device_fini,
 	.ldo_object_alloc   = mdd_object_alloc,
 	.ldo_object_init    = mdd_object_init,
 	.ldo_object_free    = mdd_object_free,
@@ -574,8 +628,21 @@ static int mdd_root_get(struct md_device *m, struct lu_fid *f)
         return 0;
 }
 
+static int mdd_statfs(struct md_device *m, struct kstatfs *sfs) {
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        int result = -EOPNOTSUPP;
+        
+        ENTRY;
+        if (mdd_child_ops(mdd) && mdd_child_ops(mdd)->dt_statfs) {
+	        result = mdd_child_ops(mdd)->dt_statfs(mdd->mdd_child, sfs);
+        }
+                
+        RETURN(result);
+}
+
 struct md_device_operations mdd_ops = {
         .mdo_root_get   = mdd_root_get,
+        .mdo_statfs     = mdd_statfs,
         .mdo_mkdir      = mdd_mkdir,
         .mdo_rename     = mdd_rename,
         .mdo_link       = mdd_link,
@@ -586,80 +653,39 @@ struct md_device_operations mdd_ops = {
         .mdo_object_create = mdd_object_create,
 };
 
-static int mdd_fs_setup(struct mdd_device *mdd)
-{
-        return 0;
-}
-
-static int mdd_fs_cleanup(struct mdd_device *mdd)
-{
-        return 0;
-}
-
-static int mdd_init(struct mdd_device *mdd, struct lu_device_type *t,
-                    struct lustre_cfg* lcfg)
-{
-        struct lu_device *lu_dev = mdd2lu_dev(mdd);
-        struct obd_device * obd = NULL;
-        char *child = lustre_cfg_string(lcfg, 1);
-        char *lov = lustre_cfg_string(lcfg, 2);
-        int rc = 0;
-        ENTRY;
-
-	md_device_init(&mdd->mdd_md_dev, t);
-
-	lu_dev->ld_ops = &mdd_lu_ops;
-        mdd->mdd_md_dev.md_ops = &mdd_ops;
-        
-        /* get next layer */
-        obd = class_name2obd(child);
-        if (obd && obd->obd_lu_dev) {
-                CDEBUG(D_INFO, "Child device is %s\n", child);
-                mdd->mdd_child = container_of(obd->obd_lu_dev,
-                                              struct dt_device, dd_lu_dev);
-        } else {
-                CDEBUG(D_INFO, "Child device %s not found\n", child);
-        }
-
-        rc = mdd_fs_setup(mdd);
-        if (rc)
-                GOTO(err, rc);
-
-        RETURN(rc);
-err:
-        mdd_fs_cleanup(mdd);
-        RETURN(rc);
-}
-
-static void mdd_fini(struct lu_device *d)
-{
-	struct mdd_device *m = lu2mdd_dev(d);
-
-	LASSERT(atomic_read(&d->ld_ref) == 0);
-	md_device_fini(&m->mdd_md_dev);
-}
-
 static struct obd_ops mdd_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
 
 struct lu_device *mdd_device_alloc(struct lu_device_type *t,
-                                   struct lustre_cfg *cfg)
+                                   struct lustre_cfg *lcfg)
 {
         struct lu_device  *l;
         struct mdd_device *m;
+        struct obd_device *obd;
+        char *child = lustre_cfg_string(lcfg, 1);
+        char *lov = lustre_cfg_string(lcfg, 2);
 
         OBD_ALLOC_PTR(m);
         if (m == NULL) {
                 l = ERR_PTR(-ENOMEM);
         } else {
-                int err;
-
-                err = mdd_init(m, t, cfg);
-                if (!err)
-                        l = mdd2lu_dev(m);
-                else
-                        l = ERR_PTR(err);
+                //err = mdd_init(m, t, cfg);
+        	md_device_init(&m->mdd_md_dev, t);
+                l = mdd2lu_dev(m);
+	        l->ld_ops = &mdd_lu_ops;
+                m->mdd_md_dev.md_ops = &mdd_ops;
+        
+                /* get next layer */
+                obd = class_name2obd(child);
+                if (obd && obd->obd_lu_dev) {
+                        CDEBUG(D_INFO, "Child device is %s\n", child);
+                        m->mdd_child = container_of(obd->obd_lu_dev,
+                                              struct dt_device, dd_lu_dev);
+                } else {
+                        CDEBUG(D_INFO, "Child device %s not found\n", child);
+                        l = ERR_PTR(-EINVAL);
+                }
         }
 
         return l;
@@ -667,10 +693,12 @@ struct lu_device *mdd_device_alloc(struct lu_device_type *t,
 
 void mdd_device_free(struct lu_device *lu)
 {
-        struct mdd_device *mdd = lu2mdd_dev(lu);
-        mdd_fini(lu);
+        struct mdd_device *m = lu2mdd_dev(lu);
+        
+        LASSERT(atomic_read(&lu->ld_ref) == 0);
+	md_device_fini(&m->mdd_md_dev);
 
-        OBD_FREE_PTR(mdd);
+        OBD_FREE_PTR(m);
 }
 
 int mdd_type_init(struct lu_device_type *t)
