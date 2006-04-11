@@ -51,13 +51,13 @@
 
 
 enum ldd_mount_type {
-        LDD_MT_EXT3 = 0, 
+        LDD_MT_EXT3 = 0,
         LDD_MT_LDISKFS,
-        LDD_MT_SMFS,   
+        LDD_MT_SMFS,
         LDD_MT_REISERFS,
         LDD_MT_LAST
 };
-       
+
 static inline char *mt_str(enum ldd_mount_type mt)
 {
         static char *mount_type_string[] = {
@@ -85,16 +85,16 @@ struct lustre_disk_data {
         __u32      ldd_feature_compat;  /* compatible feature flags */
         __u32      ldd_feature_rocompat;/* read-only compatible feature flags */
         __u32      ldd_feature_incompat;/* incompatible feature flags */
-        
+
         __u32      ldd_config_ver;      /* config rewrite count - not used */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
-        __u32      ldd_svindex;         /* server index (0001), must match 
+        __u32      ldd_svindex;         /* server index (0001), must match
                                            svname */
         __u32      ldd_mount_type;      /* target fs type LDD_MT_* */
         char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
         __u8       ldd_uuid[40];        /* server UUID (COMPAT_146) */
-   
+
 /*200*/ __u8       ldd_padding[4096 - 200];
 /*4096*/char       ldd_mount_opts[4096]; /* target fs mount opts */
 /*8192*/char       ldd_params[4096];     /* key=value pairs */
@@ -111,7 +111,7 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
 {
         if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
                 sprintf(name, "%.8s-%s%04x", fs,
-                        (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",  
+                        (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
                         index);
         } else if (flags & LDD_F_SV_TYPE_MGS) {
                 sprintf(name, "MGS");
@@ -128,7 +128,7 @@ int server_name2index(char *svname, __u32 *idx, char **endptr);
 
 /****************** mount command *********************/
 
-/* The lmd is only used internally by Lustre; mount simply passes 
+/* The lmd is only used internally by Lustre; mount simply passes
    everything as string options */
 
 #define LMD_MAGIC    0xbdacbd03
@@ -141,17 +141,17 @@ struct lustre_mount_data {
         int        lmd_exclude_count;
         char      *lmd_dev;           /* device name */
         char      *lmd_profile;       /* client only */
-        char      *lmd_opts;          /* lustre mount options (as opposed to 
+        char      *lmd_opts;          /* lustre mount options (as opposed to
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
 };
 
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client only */
 #define LMD_FLG_RECOVER      0x0004  /* Allow recovery */
-#define LMD_FLG_NOSVC        0x0008  /* Only start MGS/MGC for servers, 
+#define LMD_FLG_NOSVC        0x0008  /* Only start MGS/MGC for servers,
                                         no other services */
 
-#define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT) 
+#define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
 
 /****************** mkfs command *********************/
 
@@ -167,7 +167,7 @@ struct mkfs_opts {
         char  mo_loopdev[128];          /* in case a loop dev is needed */
         __u64 mo_device_sz;             /* in KB */
         int   mo_stripe_count;
-        int   mo_flags; 
+        int   mo_flags;
         int   mo_mgs_failnodes;
 };
 
@@ -184,7 +184,7 @@ struct mkfs_opts {
 /* This limit is arbitrary (32k clients on x86), but it is convenient to use
  * 2^n * PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
 #define LR_MAX_CLIENTS (PAGE_SIZE * 8)
-                                                                                
+
 /* COMPAT_146 */
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
 #define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
@@ -192,7 +192,7 @@ struct mkfs_opts {
 
 #define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
 #define OBD_ROCOMPAT_CROW       0x00000002 /* OST will CROW create objects */
-                                                                                
+
 #define OBD_INCOMPAT_GROUPS     0x00000001 /* OST handles group subdirs */
 #define OBD_INCOMPAT_OST        0x00000002 /* this is an OST */
 #define OBD_INCOMPAT_MDT        0x00000004 /* this is an MDT */
@@ -284,12 +284,12 @@ struct lustre_mount_info {
 /* obd_mount.c */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 int lustre_common_put_super(struct super_block *sb);
-int lustre_process_log(struct super_block *sb, char *logname, 
+int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg);
-int lustre_end_log(struct super_block *sb, char *logname, 
+int lustre_end_log(struct super_block *sb, char *logname,
                        struct config_llog_instance *cfg);
-struct lustre_mount_info *server_get_mount(char *name);
-int server_put_mount(char *name, struct vfsmount *mnt);
+struct lustre_mount_info *server_get_mount(const char *name);
+int server_put_mount(const char *name, struct vfsmount *mnt);
 int server_register_target(struct super_block *sb);
 int server_mti_print(char *title, struct mgs_target_info *mti);
 

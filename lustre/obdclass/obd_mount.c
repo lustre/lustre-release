@@ -117,7 +117,7 @@ int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
 DECLARE_MUTEX(lustre_mount_info_lock);
 struct list_head server_mount_info_list = LIST_HEAD_INIT(server_mount_info_list);
 
-static struct lustre_mount_info *server_find_mount(char *name)
+static struct lustre_mount_info *server_find_mount(const char *name)
 {
         struct list_head *tmp;
         struct lustre_mount_info *lmi;
@@ -133,7 +133,7 @@ static struct lustre_mount_info *server_find_mount(char *name)
 /* we must register an obd for a mount before we call the setup routine.
    *_setup will call lustre_get_mount to get the mnt struct
    by obd_name, since we can't pass the pointer to setup. */
-static int server_register_mount(char *name, struct super_block *sb,
+static int server_register_mount(const char *name, struct super_block *sb,
                           struct vfsmount *mnt)
 {
         struct lustre_mount_info *lmi;
@@ -176,7 +176,7 @@ static int server_register_mount(char *name, struct super_block *sb,
 }
 
 /* when an obd no longer needs a mount */
-static int server_deregister_mount(char *name)
+static int server_deregister_mount(const char *name)
 {
         struct lustre_mount_info *lmi;
         ENTRY;
@@ -226,7 +226,7 @@ static void server_deregister_mount_all(struct vfsmount *mnt)
 /* obd's look up a registered mount using their name. This is just
    for initial obd setup to find the mount struct.  It should not be
    called every time you want to mntget. */
-struct lustre_mount_info *server_get_mount(char *name)
+struct lustre_mount_info *server_get_mount(const char *name)
 {
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
@@ -267,7 +267,7 @@ static void unlock_mntput(struct vfsmount *mnt)
 static int lustre_put_lsi(struct super_block *sb);
 
 /* to be called from obd_cleanup methods */
-int server_put_mount(char *name, struct vfsmount *mnt)
+int server_put_mount(const char *name, struct vfsmount *mnt)
 {
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
