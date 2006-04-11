@@ -127,6 +127,12 @@ struct lu_device_operations {
 	 *  repeatedly, until no new objects are created.
 	 *
 	 */
+
+        /* Initialize the devices after allocation
+         * called from top device, when all layers are linked */
+        int (*ldo_device_init)(struct lu_device *, char *);
+        void (*ldo_device_fini)(struct lu_device *);
+
 	/*
 	 * Allocate lower-layer parts of the object by calling
 	 * ->ldo_object_alloc() of the corresponding underlying device.
@@ -453,6 +459,7 @@ struct txn_param;
 struct dt_device;
 
 struct dt_device_operations {
+        int   (*dt_statfs)(struct dt_device *dev, struct kstatfs *sfs);
         void  (*dt_object_lock)(struct dt_object *dt, enum dt_lock_mode mode);
         void  (*dt_object_unlock)(struct dt_object *dt, enum dt_lock_mode mode);
         struct thandle *(*dt_trans_start)(struct dt_device *dev,
@@ -477,6 +484,7 @@ struct dt_device_operations {
 struct dt_device {
 	struct lu_device             dd_lu_dev;
 	struct dt_device_operations *dd_ops;
+        struct lustre_mount_info    *dd_lmi;
 };
 
 struct txn_param {

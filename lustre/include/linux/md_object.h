@@ -39,6 +39,7 @@ struct context {
 
 struct md_device_operations {
         int (*mdo_root_get)(struct md_device *m, struct lu_fid *f);
+        int (*mdo_statfs)(struct md_device *m, struct kstatfs *sfs);
         int (*mdo_mkdir)(struct md_object *obj, const char *name,
                          struct md_object *child);
 
@@ -78,6 +79,11 @@ static inline struct md_device *lu2md_dev(struct lu_device *d)
 {
         LASSERT(lu_device_is_md(d));
         return container_of(d, struct md_device, md_lu_dev);
+}
+
+static inline struct lu_device *md2lu_dev(struct md_device *d)
+{
+        return &d->md_lu_dev;
 }
 
 static inline struct md_object *lu2md(struct lu_object *o)
