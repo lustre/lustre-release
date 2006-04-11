@@ -148,7 +148,7 @@ static int mdt_statfs(struct mdt_thread_info *info,
         struct kstatfs    sfs;
         int               result;
         int               size = sizeof(struct obd_statfs);
-        
+
         ENTRY;
 
         result = lustre_pack_reply(req, 1, &size, NULL);
@@ -175,9 +175,9 @@ static int mdt_getattr(struct mdt_thread_info *info,
         int                    size = sizeof (*body);
         struct md_obj_attr     attr;
         int result;
-        
+
         ENTRY;
-        
+
         result = lustre_pack_reply(req, 1, &size, NULL);
         if (result)
                 CERROR(LUSTRE_MDT0_NAME" out of memory for statfs: size=%d\n",
@@ -938,7 +938,7 @@ static int mdt_config(struct mdt_device *m, const char *name,
 
         if (!child->md_ops->mdo_config)
                 RETURN(-EOPNOTSUPP);
-        
+
         rc = child->md_ops->mdo_config(child, name, buf, size, mode);
         RETURN(rc);
 }
@@ -951,7 +951,7 @@ int mdt_alloc_seq(struct mdt_device *m, __u64 *seq)
 
         LASSERT(m != NULL);
         LASSERT(seq != NULL);
-        
+
         down(&m->mdt_seq_sem);
         m->mdt_seq += 1;
         *seq = m->mdt_seq;
@@ -964,7 +964,7 @@ int mdt_alloc_seq(struct mdt_device *m, __u64 *seq)
                 CERROR("can't save new seq, rc %d\n",
                        rc);
         }
-        
+
         up(&m->mdt_seq_sem);
 
         RETURN(0);
@@ -1080,7 +1080,7 @@ static int mdt_init0(struct mdt_device *m,
 
         if (m->mdt_child)
                 mdt_child = md2lu_dev(m->mdt_child);
-        
+
         sema_init(&m->mdt_seq_sem, 1);
 
         m->mdt_service_conf.psc_nbufs            = MDS_NBUFS;
@@ -1116,7 +1116,7 @@ static int mdt_init0(struct mdt_device *m,
                                      NULL);
         if (m->mdt_service == NULL)
                 GOTO(err_free_ns, rc = -ENOMEM);
-        
+
         /* init the stack */
         if (m->mdt_child && mdt_child) {
                 if (mdt_child->ld_ops->ldo_device_init) {
@@ -1139,7 +1139,7 @@ static int mdt_init0(struct mdt_device *m,
         rc = ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT0_NAME);
         if (rc)
                 GOTO(err_fini_child, rc);
-                
+
         RETURN(0);
 
 err_fini_child:
@@ -1170,6 +1170,7 @@ static struct lu_object *mdt_object_alloc(struct lu_device *d)
                 h = &mo->mot_header;
                 lu_object_header_init(h);
                 lu_object_init(o, h, d);
+                lu_object_add_top(h, o);
                 return o;
         } else
                 return NULL;
@@ -1224,7 +1225,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         int rc, abort_recovery;
         struct mds_export_data *med;
         struct mds_client_data *mcd = NULL;
-        
+
         ENTRY;
 
         if (!conn || !obd || !cluuid)
@@ -1253,7 +1254,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         exp = class_conn2export(conn);
         LASSERT(exp);
         med = &exp->exp_mds_data;
-        
+
         OBD_ALLOC(mcd, sizeof(*mcd));
         if (!mcd)
                 GOTO(out, rc = -ENOMEM);
@@ -1300,7 +1301,7 @@ static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
                         mdt_fini(m);
                         return ERR_PTR(result);
                 }
-                
+
         } else
                 l = ERR_PTR(-ENOMEM);
         return l;

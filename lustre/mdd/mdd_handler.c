@@ -121,9 +121,6 @@ static int mdd_object_init(struct lu_object *o)
         if (below == NULL)
 		RETURN(-ENOMEM);
 
-        if (o->lo_header)
-                lu_object_add_top(o->lo_header, o);
-
         lu_object_add(o, below);
         RETURN(0);
 }
