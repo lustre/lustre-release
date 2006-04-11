@@ -1523,6 +1523,7 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
         struct llog_handle *llh = NULL;
         char *cliname, *osdname, *lovname, *mddname;
         char *mdtname, *cmmname, *lmvname;
+        char *mdcname, *nodeuuid, *mdcuuid;
         int rc, i, first_log = 0;
         char mdt_index[9];
         struct temp_comp comp;
@@ -1540,7 +1541,7 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
         name_create(mti->mti_fsname, "-mdtlov", &lovname);
 
         /* add osd */
-        rc = mgs_write_log_osd(obd, fsdb, mti->mti_svname, mti->mti_svname);
+        rc = mgs_write_log_osd(obd, fsdb, mti->mti_svname, osdname);
         /* add lov */
         rc = mgs_write_log_lov(obd, fsdb, mti, mti->mti_svname, lovname);
         /* add mdd */
@@ -1549,7 +1550,7 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
         /* add cmm */
         rc = mgs_write_log_cmm0(obd, fsdb, mti->mti_svname, cmmname, mddname);
         /* add mdt */
-        rc = mgs_write_log_mdt0(obd, fsdb, mti->mti_svname, mdtname, cmmname);
+        rc = mgs_write_log_mdt0(obd, fsdb, mti->mti_svname, mti->mti_svname, cmmname);
         name_destroy(lovname);
         name_destroy(osdname);
         name_destroy(mddname);
@@ -1563,18 +1564,48 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
         rc = mgs_steal_llog_for_mdt_from_client(obd,cliname,&comp);
 
         /* Append the mdt info to the client log */
-        name_create(mti->mti_fsname, "-clilmv", &lmvname);
+        name_create(mti->mti_fsname, "-clilov", &lovname);
+        // name_create(mti->mti_fsname, "-clilmv", &lmvname);
         if (mgs_log_is_empty(obd, cliname)) {
                 /* Start client log */
-                name_create(mti->mti_fsname, "-clilov", &lovname);
                 rc = mgs_write_log_lov(obd, fsdb, mti, cliname, lovname);
-                name_destroy(lovname);
-
-                rc = mgs_write_log_lmv(obd, fsdb, mti, cliname, lmvname);
+                //rc = mgs_write_log_lmv(obd, fsdb, mti, cliname, lmvname);
         }
 
-        rc = mgs_write_log_mdc_to_lmv(obd, fsdb, mti, cliname, lmvname);
-        name_destroy(lmvname);
+        //rc = mgs_write_log_mdc_to_lmv(obd, fsdb, mti, cliname, lmvname);
+        //name_destroy(lmvname);
+        /*-------- until lmv: START ------------*/
+        name_create(libcfs_nid2str(mti->mti_nids[0]), /*"_UUID"*/"", &nodeuuid);
+        name_create(mti->mti_svname, "-mdc", &mdcname);
+        name_create(mdcname, "_UUID", &mdcuuid);
+        /* 
+        #09 L add_uuid nid=uml1@tcp(0x20000c0a80201) 0:  1:uml1_UUID
+        #10 L attach   0:MDC_uml1_mdsA_MNT_client  1:mdc  2:1d834_MNT_client_03f
+        #11 L setup    0:MDC_uml1_mdsA_MNT_client  1:mdsA_UUID  2:uml1_UUID
+        #12 L add_uuid nid=uml2@tcp(0x20000c0a80202) 0:  1:uml2_UUID
+        #13 L add_conn 0:MDC_uml1_mdsA_MNT_client  1:uml2_UUID
+        #14 L mount_option 0:  1:client  2:lov1  3:MDC_uml1_mdsA_MNT_client
+        */
+        rc = record_start_log(obd, &llh, cliname);
+        rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,"add mdc");
+        for (i = 0; i < mti->mti_nid_count; i++) {
+                CDEBUG(D_MGS, "add nid %s\n", libcfs_nid2str(mti->mti_nids[i]));
+                rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
+        }
+        rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, mdcuuid);
+        rc = record_setup(obd, llh, mdcname, mti->mti_uuid,nodeuuid, 0, 0);
+        rc = mgs_write_log_failnids(obd, mti, llh, mdcname);
+        rc = record_mount_opt(obd, llh, cliname, lovname, mdcname);
+        rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdc"); 
+        rc = record_end_log(obd, &llh);
+        
+        name_destroy(lovname);
+        name_destroy(mdcuuid);
+        name_destroy(mdcname);
+        name_destroy(nodeuuid);
+        /*-------- until lmv: END ------------*/
+
+        
         name_destroy(cliname);
         
         //for_all_existing_mdt except current one
