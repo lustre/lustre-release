@@ -624,24 +624,42 @@ cleanup:
 static int mdd_root_get(struct md_device *m, struct lu_fid *f)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        ENTRY;
         *f = mdd->mdd_rootfid;
-        return 0;
+        RETURN(0);
+}
+
+static int mdd_config(struct md_device *m, const char *name,
+                      void *buf, int size, int mode)
+{
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        int rc = -EOPNOTSUPP;
+        ENTRY;
+
+        if (mdd_child_ops(mdd)->dt_config) {
+                rc = mdd_child_ops(mdd)->dt_config(mdd->mdd_child,
+                                                   name, buf, size,
+                                                   mode);
+        }
+        
+        RETURN(rc);
 }
 
 static int mdd_statfs(struct md_device *m, struct kstatfs *sfs) {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        int result = -EOPNOTSUPP;
+        int rc = -EOPNOTSUPP;
         
         ENTRY;
-        if (mdd_child_ops(mdd) && mdd_child_ops(mdd)->dt_statfs) {
-	        result = mdd_child_ops(mdd)->dt_statfs(mdd->mdd_child, sfs);
-        }
+
+        if (mdd_child_ops(mdd) && mdd_child_ops(mdd)->dt_statfs)
+	        rc = mdd_child_ops(mdd)->dt_statfs(mdd->mdd_child, sfs);
                 
-        RETURN(result);
+        RETURN(rc);
 }
 
 struct md_device_operations mdd_ops = {
         .mdo_root_get   = mdd_root_get,
+        .mdo_config     = mdd_config,
         .mdo_statfs     = mdd_statfs,
         .mdo_mkdir      = mdd_mkdir,
         .mdo_rename     = mdd_rename,

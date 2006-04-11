@@ -129,6 +129,20 @@ int cmm_root_get(struct md_device *md, struct lu_fid *fid) {
         return result;
 }
 
+int cmm_config(struct md_device *md, const char *name,
+               void *buf, int size, int mode)
+{
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+        int result = -EOPNOTSUPP;
+        ENTRY;
+        
+        if (CMM_CHILD_OPS(cmm_dev) && CMM_CHILD_OPS(cmm_dev)->mdo_statfs)
+	        result = CMM_CHILD_OPS(cmm_dev)->mdo_config(cmm_dev->cmm_child,
+                                                            name, buf, size, mode);
+
+        RETURN(result);
+}
+
 int cmm_statfs(struct md_device *md, struct kstatfs *sfs) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 	int result = -EOPNOTSUPP;

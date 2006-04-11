@@ -38,8 +38,17 @@ struct context {
 };
 
 struct md_device_operations {
+
+        /* method for getting/setting device wide back stored config data, like
+         * last used meta-sequence, etc. */
+        int (*mdo_config) (struct md_device *m, const char *name,
+                           void *buf, int size, int mode);
+
+        /* meta-data device related handlers. */
         int (*mdo_root_get)(struct md_device *m, struct lu_fid *f);
         int (*mdo_statfs)(struct md_device *m, struct kstatfs *sfs);
+
+        /* meta-data object operations related handlers */
         int (*mdo_mkdir)(struct md_object *obj, const char *name,
                          struct md_object *child);
 
@@ -53,6 +62,8 @@ struct md_device_operations {
                             const char *name, struct context *uctxt);
         int (*mdo_attr_set)(struct md_object *obj, void *buf, int buf_len,
                             const char *name, struct context *uctxt);
+
+        /* FLD maintanence related handlers */
         int (*mdo_index_insert)(struct md_object *pobj, struct md_object *obj,
                                 const char *name, struct context *uctxt);
         int (*mdo_index_delete)(struct md_object *pobj, struct md_object *obj,

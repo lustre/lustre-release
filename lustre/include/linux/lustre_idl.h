@@ -256,26 +256,6 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_OCD_VERSION_PATCH(version) ((int)((version)>>8)&255)
 #define OBD_OCD_VERSION_FIX(version)   ((int)(version)&255)
 
-/* This structure is used for both request and reply.
- *
- * If we eventually have separate connect data for different types, which we
- * almost certainly will, then perhaps we stick a union in here. */
-struct obd_connect_data {
-        __u64 ocd_connect_flags;        /* OBD_CONNECT_* per above */
-        __u32 ocd_version;              /* lustre release version number */
-        __u32 ocd_grant;                /* initial cache grant amount (bytes) */
-        __u32 ocd_index;                /* LOV index to connect to */
-        __u32 ocd_unused;
-        __u64 ocd_ibits_known;          /* inode bits this client understands */
-        __u64 padding2;                 /* also fix lustre_swab_connect */
-        __u64 padding3;                 /* also fix lustre_swab_connect */
-        __u64 padding4;                 /* also fix lustre_swab_connect */
-        __u64 padding5;                 /* also fix lustre_swab_connect */
-        __u64 padding6;                 /* also fix lustre_swab_connect */
-};
-
-extern void lustre_swab_connect(struct obd_connect_data *ocd);
-
 /*
  *   OST requests: OBDO & OBD request records
  */
@@ -622,6 +602,42 @@ typedef enum {
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
+#define LUSTRE_CONFIG_SET 0
+#define LUSTRE_CONFIG_GET 1
+
+/* meta-sequence */
+struct lu_msq {
+        __u64 m_ran; /* holds number of ranges allocated to clients. Thus,
+                      * server allocates 2 ^ 64 ranges. */
+        
+        __u32 m_seq; /* holds number of sequences allocated in a range. Thus,
+                      * each client may use 2 ^ 32 sequences before asking
+                      * server to allocate new. */
+        
+        __u32 m_pad; /* padding */
+};
+
+extern void lustre_swab_msq(struct lu_msq *msq);
+
+static inline __u64 msq_ran(struct lu_msq *msq)
+{
+        return msq->m_ran;
+}
+
+static inline __u32 msq_seq(struct lu_msq *msq)
+{
+        return msq->m_seq;
+}
+
+#define DSEQ "["LPU64"/%u]"
+
+#define PSEQ(seq)     \
+        msq_ran(seq), \
+        msq_seq(seq)
+
+#define LUSTRE_CONFIG_METASEQ "metaseq"
+#define LUSTRE_CONFIG_TRANSNO "transno"
+
 struct lu_fid {
         __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
                        * objects, thus even if one sequence has one object we
@@ -662,8 +678,7 @@ static inline __u64 fid_num(const struct lu_fid *fid)
         return f_ver | fid_oid(fid);
 }
 
-/* show sequence, object id and version */
-#define DFID3 LPU64"/%u:%u"
+#define DFID3 "["LPU64"/%u:%u]"
 
 #define PFID3(fid)    \
         fid_seq(fid), \
@@ -691,6 +706,24 @@ static inline int lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
 
+/* This structure is used for both request and reply.
+ *
+ * If we eventually have separate connect data for different types, which we
+ * almost certainly will, then perhaps we stick a union in here. */
+struct obd_connect_data {
+        __u64          ocd_connect_flags;        /* OBD_CONNECT_* per above */
+        __u32          ocd_version;              /* lustre release version number */
+        __u32          ocd_grant;                /* initial cache grant amount (bytes) */
+        __u32          ocd_index;                /* LOV index to connect to */
+        __u32          ocd_unused;
+        __u64          ocd_ibits_known;          /* inode bits this client understands */
+        struct lu_msq  ocd_msq;                  /* meta-sequence info */
+        __u64          padding2;                 /* also fix lustre_swab_connect */
+        __u64          padding3;                 /* also fix lustre_swab_connect */
+        __u64          padding4;                 /* also fix lustre_swab_connect */
+};
+
+extern void lustre_swab_connect(struct obd_connect_data *ocd);
 
 #define MDS_STATUS_CONN 1
 #define MDS_STATUS_LOV 2

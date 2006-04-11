@@ -75,6 +75,10 @@ struct mdt_device {
          * necessary.
          */
         unsigned long              mdt_flags;
+
+        /* Seq management related stuff */
+        spinlock_t                 mdt_msq_lock; 
+        struct lu_msq              mdt_msq;
 };
 
 static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
@@ -164,11 +168,30 @@ struct mdt_thread_info {
 
 };
 
+int mdt_alloc_metaseq(struct mdt_device *m, struct lu_msq *msq);
+
 int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
-             struct lustre_handle *, ldlm_mode_t, ldlm_policy_data_t *);
+             struct lustre_handle *, ldlm_mode_t,
+             ldlm_policy_data_t *);
 
 void fid_unlock(struct ldlm_namespace *, const struct lu_fid *,
                 struct lustre_handle *, ldlm_mode_t);
 
+struct mdt_object *mdt_object_find(struct mdt_device *,
+                                   struct lu_fid *);
+void mdt_object_put(struct mdt_object *);
+
+struct lu_fid *mdt_object_fid(struct mdt_object *);
+
+int mdt_object_lock(struct ldlm_namespace *, struct mdt_object *,
+                    struct mdt_lock_handle *, __u64);
+
+void mdt_object_unlock(struct ldlm_namespace *, struct mdt_object *,
+                       struct mdt_lock_handle *);
+
+struct mdt_object *mdt_object_find_lock(struct mdt_device *,
+                                        struct lu_fid *,
+                                        struct mdt_lock_handle *,
+                                        __u64);
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

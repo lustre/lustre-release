@@ -459,6 +459,11 @@ struct txn_param;
 struct dt_device;
 
 struct dt_device_operations {
+        /* method for getting/setting device wide back stored config data, like
+         * last used meta-sequence, etc. */
+        int (*dt_config) (struct dt_device *dev, const char *name,
+                          void *buf, int size, int mode);
+        
         int   (*dt_statfs)(struct dt_device *dev, struct kstatfs *sfs);
         void  (*dt_object_lock)(struct dt_object *dt, enum dt_lock_mode mode);
         void  (*dt_object_unlock)(struct dt_object *dt, enum dt_lock_mode mode);

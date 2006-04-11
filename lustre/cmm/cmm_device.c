@@ -57,6 +57,7 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 
 static struct md_device_operations cmm_md_ops = {
         .mdo_root_get   = cmm_root_get,
+        .mdo_config     = cmm_config,
         .mdo_statfs     = cmm_statfs,
         .mdo_mkdir      = cmm_mkdir,
 //        .mdo_rename     = cmm_rename,

@@ -164,7 +164,7 @@ static int mdt_statfs(struct mdt_thread_info *info,
                 result = child->md_ops->mdo_statfs(child, &sfs);
                 statfs_pack(osfs, &sfs);
         }
-out:
+
         RETURN(result);
 }
 #if 0
@@ -231,7 +231,7 @@ static int mdt_getxattr(struct mdt_thread_info *info,
 }
 
 static int mdt_readpage(struct mdt_thread_info *info,
-                       struct ptlrpc_request *req, int offset)
+                        struct ptlrpc_request *req, int offset)
 {
         return -EOPNOTSUPP;
 }
@@ -408,8 +408,8 @@ static struct mdt_object *mdt_obj(struct lu_object *o)
         return container_of(o, struct mdt_object, mot_obj.mo_lu);
 }
 
-static struct mdt_object *mdt_object_find(struct mdt_device *d,
-                                          struct lu_fid *f)
+struct mdt_object *mdt_object_find(struct mdt_device *d,
+                                   struct lu_fid *f)
 {
         struct lu_object *o;
 
@@ -420,18 +420,18 @@ static struct mdt_object *mdt_object_find(struct mdt_device *d,
                 return mdt_obj(o);
 }
 
-static void mdt_object_put(struct mdt_object *o)
+void mdt_object_put(struct mdt_object *o)
 {
         lu_object_put(&o->mot_obj.mo_lu);
 }
 
-static struct lu_fid *mdt_object_fid(struct mdt_object *o)
+struct lu_fid *mdt_object_fid(struct mdt_object *o)
 {
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
 
-static int mdt_object_lock(struct ldlm_namespace *ns, struct mdt_object *o,
-                           struct mdt_lock_handle *lh, __u64 ibits)
+int mdt_object_lock(struct ldlm_namespace *ns, struct mdt_object *o,
+                    struct mdt_lock_handle *lh, __u64 ibits)
 {
         ldlm_policy_data_t p = {
                 .l_inodebits = {
@@ -444,7 +444,7 @@ static int mdt_object_lock(struct ldlm_namespace *ns, struct mdt_object *o,
         return fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode, &p);
 }
 
-static void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o,
+void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o,
                               struct mdt_lock_handle *lh)
 {
         if (lustre_handle_is_used(&lh->mlh_lh)) {
@@ -453,10 +453,10 @@ static void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o,
         }
 }
 
-static struct mdt_object *mdt_object_find_lock(struct mdt_device *d,
-                                               struct lu_fid *f,
-                                               struct mdt_lock_handle *lh,
-                                               __u64 ibits)
+struct mdt_object *mdt_object_find_lock(struct mdt_device *d,
+                                        struct lu_fid *f,
+                                        struct mdt_lock_handle *lh,
+                                        __u64 ibits)
 {
         struct mdt_object *o;
 
@@ -929,12 +929,84 @@ struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
                                prntfn, c->psc_num_threads);
 }
 
+/* default meta-sequenve values */
+#define LUSTRE_METASEQ_DEFAULT_RAN 0
+#define LUSTRE_METASEQ_DEFAULT_SEQ 0
+
+/* allocate meta-sequence to client */
+int mdt_alloc_metaseq(struct mdt_device *m, struct lu_msq *msq)
+{
+        ENTRY;
+
+        LASSERT(m != NULL);
+        LASSERT(msq != NULL);
+        
+        spin_lock(&m->mdt_msq_lock);
+
+        /* to be continued */
+        
+        spin_unlock(&m->mdt_msq_lock);
+
+        RETURN(0);
+}
+
+/* initialize meta-sequence. First of all try to get it from lower layer down to
+ * back store one. In the case this is first run and there is not meta-sequence
+ * initialized yet - store it to backstore. */
+static int mdt_init_metaseq(struct mdt_device *m)
+{
+        struct md_device *child = m->mdt_child;
+        int rc;
+        ENTRY;
+
+        m->mdt_msq.m_ran = LUSTRE_METASEQ_DEFAULT_RAN;
+        m->mdt_msq.m_seq = LUSTRE_METASEQ_DEFAULT_SEQ;
+
+        if (!child->md_ops->mdo_config)
+                GOTO(out, rc = 0);
+        
+        rc = child->md_ops->mdo_config(child, LUSTRE_CONFIG_METASEQ,
+                                       &m->mdt_msq, sizeof(m->mdt_msq),
+                                       LUSTRE_CONFIG_GET);
+        if (rc == -EOPNOTSUPP) {
+                /* provide zero error and let contnibnue with default values of
+                 * meta-sequence. */
+                GOTO(out, rc = 0);
+        } else if (rc == -ENODATA) {
+                CWARN("initialize new meta-sequence\n");
+
+                /*initialize new meta-sequence config as it is not yet
+                 * created. */
+                rc = child->md_ops->mdo_config(child, LUSTRE_CONFIG_METASEQ,
+                                               &m->mdt_msq, sizeof(m->mdt_msq),
+                                               LUSTRE_CONFIG_SET);
+                if (rc) {
+                        CERROR("can't update config %s, rc %d\n",
+                               LUSTRE_CONFIG_METASEQ, rc);
+                        GOTO(out, rc);
+                }
+        } else {
+                CERROR("can't get config %s, rc %d\n",
+                       LUSTRE_CONFIG_METASEQ, rc);
+                GOTO(out, rc);
+        }
+
+        EXIT;
+out:
+        if (rc == 0) {
+                CWARN("initialized meta-sequence: "DSEQ"\n",
+                      PSEQ(&m->mdt_msq));
+        }
+        return rc;
+}
+
 static void mdt_fini(struct mdt_device *m)
 {
         struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
 
         if (d->ld_site != NULL) {
                 lu_site_fini(d->ld_site);
+                OBD_FREE_PTR(d->ld_site);
                 d->ld_site = NULL;
         }
         if (m->mdt_service != NULL) {
@@ -948,7 +1020,6 @@ static void mdt_fini(struct mdt_device *m)
         /* finish the stack */
         if (m->mdt_child) {
                 struct lu_device *child = md2lu_dev(m->mdt_child);
-                                
                 child->ld_ops->ldo_device_fini(child);
         }
 
@@ -959,9 +1030,11 @@ static void mdt_fini(struct mdt_device *m)
 static int mdt_init0(struct mdt_device *m,
                      struct lu_device_type *t, struct lustre_cfg *cfg)
 {
+        int rc;
         struct lu_site *s;
         char   ns_name[48];
         struct obd_device * obd = NULL;
+        struct lu_device *mdt_child = NULL;
         char *top = lustre_cfg_string(cfg, 0);
         char *child = lustre_cfg_string(cfg, 1);
 
@@ -969,7 +1042,7 @@ static int mdt_init0(struct mdt_device *m,
 
         OBD_ALLOC_PTR(s);
         if (s == NULL)
-                return -ENOMEM;
+                RETURN(-ENOMEM);
 
         md_device_init(&m->mdt_md_dev, t);
 
@@ -982,8 +1055,13 @@ static int mdt_init0(struct mdt_device *m,
                 m->mdt_child = lu2md_dev(obd->obd_lu_dev);
         } else {
                 CDEBUG(D_INFO, "Child device %s is not found\n", child);
-                return -EINVAL;
+                GOTO(err_free_site, rc = -EINVAL);
         }
+
+        if (m->mdt_child)
+                mdt_child = md2lu_dev(m->mdt_child);
+        
+        spin_lock_init(&m->mdt_msq_lock);
 
         m->mdt_service_conf.psc_nbufs            = MDS_NBUFS;
         m->mdt_service_conf.psc_bufsize          = MDS_BUFSIZE;
@@ -1004,7 +1082,8 @@ static int mdt_init0(struct mdt_device *m,
         snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (m->mdt_namespace == NULL)
-                return -ENOMEM;
+                GOTO(err_fini_site, rc = -ENOMEM);
+
         ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
 
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
@@ -1016,20 +1095,46 @@ static int mdt_init0(struct mdt_device *m,
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
                                      NULL);
         if (m->mdt_service == NULL)
-                return -ENOMEM;
+                GOTO(err_free_ns, rc = -ENOMEM);
         
         /* init the stack */
-        if (m->mdt_child) {
-                struct lu_device *child = md2lu_dev(m->mdt_child);
-                int err;
-                
-                if (child->ld_ops->ldo_device_init) {
-                        err = child->ld_ops->ldo_device_init(child, top);
-                        if (err) 
-                                return err;                        
+        if (m->mdt_child && mdt_child) {
+                if (mdt_child->ld_ops->ldo_device_init) {
+                        rc = mdt_child->ld_ops->ldo_device_init(mdt_child, top);
+                        if (rc) {
+                                CERROR("can't init device stack, rc %d\n", rc);
+                                GOTO(err_free_svc, rc);
+                        }
                 }
+        } else {
+                CERROR("something bad with child device\n");
+                LBUG();
         }
-        return ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT0_NAME);
+
+        /* init meta-sequence info after device stack is initialized. */
+        rc = mdt_init_metaseq(m);
+        if (rc)
+                GOTO(err_fini_child, rc);
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT0_NAME);
+        if (rc)
+                GOTO(err_fini_child, rc);
+                
+        RETURN(0);
+
+err_fini_child:
+        mdt_child->ld_ops->ldo_device_fini(mdt_child);
+err_free_svc:
+        ptlrpc_unregister_service(m->mdt_service);
+        m->mdt_service = NULL;
+err_free_ns:
+        ldlm_namespace_free(m->mdt_namespace, 0);
+        m->mdt_namespace = NULL;
+err_fini_site:
+        lu_site_fini(s);
+err_free_site:
+        OBD_FREE_PTR(s);
+        return rc;
 }
 
 static struct lu_object *mdt_object_alloc(struct lu_device *d)
@@ -1093,8 +1198,7 @@ static struct lu_device_operations mdt_lu_ops = {
 
 /* mds_connect copy */
 static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
-                           struct obd_uuid *cluuid,
-                           struct obd_connect_data *data)
+                           struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct obd_export *exp;
         int rc, abort_recovery;
@@ -1136,7 +1240,11 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
-        
+
+        rc = mdt_alloc_metaseq(mdt_dev(obd->obd_lu_dev),
+                               &data->ocd_msq);
+        if (rc)
+                GOTO(out, rc);
 out:
         if (rc) {
                 if (mcd) {

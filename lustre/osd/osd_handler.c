@@ -161,7 +161,26 @@ static struct ptlrpc_thread_key osd_thread_key = {
         .ptk_fini = osd_thread_fini
 };
 
-static int osd_statfs(struct dt_device *d, struct kstatfs *sfs) {
+static int osd_config(struct dt_device *d, const char *name,
+                      void *buf, int size, int mode)
+{
+	struct osd_device *osd = dt2osd_dev(d);
+        struct super_block *sb = osd->od_dt_dev.dd_lmi->lmi_sb;
+        int result = -EOPNOTSUPP;
+        
+        ENTRY;
+
+        if (mode == LUSTRE_CONFIG_GET) {
+                /* to be continued */
+        } else {
+                /* to be continued */
+        }
+        
+        RETURN (result);
+}
+
+static int osd_statfs(struct dt_device *d, struct kstatfs *sfs)
+{
 	struct osd_device *osd = dt2osd_dev(d);
         struct super_block *sb = osd->od_dt_dev.dd_lmi->lmi_sb;
         int result = -EOPNOTSUPP;
@@ -175,7 +194,8 @@ static int osd_statfs(struct dt_device *d, struct kstatfs *sfs) {
 }
 
 static struct dt_device_operations osd_dt_ops = {
-        .dt_statfs = osd_statfs,
+        .dt_config = osd_config,
+        .dt_statfs = osd_statfs
 };
 
 /*
