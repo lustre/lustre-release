@@ -118,7 +118,29 @@ static void cmm_unlock(struct md_object *obj, __u32 mode)
 /* Object API */
 /* Metadata API */
 int cmm_root_get(struct md_device *md, struct lu_fid *fid) {
-        return 0;
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+	int result = -EOPNOTSUPP;
+
+        if (CMM_CHILD_OPS(cmm_dev) && CMM_CHILD_OPS(cmm_dev)->mdo_root_get) {
+	        result = CMM_CHILD_OPS(cmm_dev)->mdo_root_get(
+                                                  cmm_dev->cmm_child, fid);
+        }       
+        
+        return result;
+}
+
+int cmm_statfs(struct md_device *md, struct kstatfs *sfs) {
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+	int result = -EOPNOTSUPP;
+        
+        ENTRY;
+        
+        if (CMM_CHILD_OPS(cmm_dev) && CMM_CHILD_OPS(cmm_dev)->mdo_statfs) {
+	        result = CMM_CHILD_OPS(cmm_dev)->mdo_statfs(
+                                                  cmm_dev->cmm_child, sfs);
+        }            
+        
+        RETURN (result);
 }
 
 int cmm_mkdir(struct md_object *md_parent, const char *name, 

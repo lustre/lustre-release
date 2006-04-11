@@ -55,16 +55,9 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	return ergo(d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
-static struct lu_device_operations cmm_lu_ops = {
-	.ldo_object_alloc   = cmm_object_alloc,
-	.ldo_object_init    = cmm_object_init,
-	.ldo_object_free    = cmm_object_free,
-	.ldo_object_release = cmm_object_release,
-	.ldo_object_print   = cmm_object_print
-};
-
 static struct md_device_operations cmm_md_ops = {
         .mdo_root_get   = cmm_root_get,
+        .mdo_statfs     = cmm_statfs,
         .mdo_mkdir      = cmm_mkdir,
 //        .mdo_rename     = cmm_rename,
 //        .mdo_link       = cmm_link,
@@ -75,191 +68,52 @@ static struct md_device_operations cmm_md_ops = {
 //        .mdo_object_create = cmm_object_create,
 };
 
-#if 0
-int mds_md_connect(struct obd_device *obd, char *md_name)
+static int cmm_device_init(struct lu_device *d, char *top)
 {
-        struct mds_obd *mds = &obd->u.mds;
-        struct lustre_handle conn = {0};
-        unsigned long sec_flags = PTLRPC_SEC_FL_MDS;
-        int rc, value;
-        __u32 valsize;
-        ENTRY;
-
-        if (IS_ERR(mds->mds_md_obd))
-                RETURN(PTR_ERR(mds->mds_md_obd));
-
-        if (mds->mds_md_connected)
-                RETURN(0);
-
-        down(&mds->mds_md_sem);
-        if (mds->mds_md_connected) {
-                up(&mds->mds_md_sem);
-                RETURN(0);
-        }
-
-        mds->mds_md_obd = class_name2obd(md_name);
-        if (!mds->mds_md_obd) {
-                CERROR("MDS cannot locate MD(LMV) %s\n",
-                       md_name);
-                mds->mds_md_obd = ERR_PTR(-ENOTCONN);
-                GOTO(err_last, rc = -ENOTCONN);
-        }
-
-        rc = obd_connect(&conn, mds->mds_md_obd, &obd->obd_uuid, NULL,
-                         OBD_OPT_MDS_CONNECTION);
-        if (rc) {
-                CERROR("MDS cannot connect to MD(LMV) %s (%d)\n",
-                       md_name, rc);
-                mds->mds_md_obd = ERR_PTR(rc);
-                GOTO(err_last, rc);
-        }
-        mds->mds_md_exp = class_conn2export(&conn);
-        if (mds->mds_md_exp == NULL)
-                CERROR("can't get export!\n");
-
-        rc = obd_register_observer(mds->mds_md_obd, obd);
-        if (rc) {
-                CERROR("MDS cannot register as observer of MD(LMV) %s, "
-                       "rc = %d\n", md_name, rc);
-                GOTO(err_discon, rc);
-        }
-
-        /* retrieve size of EA */
-        rc = obd_get_info(mds->mds_md_exp, strlen("mdsize"),
-                          "mdsize", &valsize, &value);
-        if (rc)
-                GOTO(err_reg, rc);
-
-        if (value > mds->mds_max_mdsize)
-                mds->mds_max_mdsize = value;
-
-        /* find our number in LMV cluster */
-        rc = obd_get_info(mds->mds_md_exp, strlen("mdsnum"),
-                          "mdsnum", &valsize, &value);
-        if (rc)
-                GOTO(err_reg, rc);
-
-        mds->mds_num = value;
-
-        rc = obd_set_info(mds->mds_md_exp, strlen("inter_mds"),
-                          "inter_mds", 0, NULL);
-        if (rc)
-                GOTO(err_reg, rc);
-
-        if (mds->mds_mds_sec) {
-                rc = obd_set_info(mds->mds_md_exp, strlen("sec"), "sec",
-                                  strlen(mds->mds_mds_sec), mds->mds_mds_sec);
-                if (rc)
-                        GOTO(err_reg, rc);
-        }
-
-        rc = obd_set_info(mds->mds_md_exp, strlen("sec_flags"), "sec_flags",
-                          sizeof(sec_flags), &sec_flags);
-        if (rc)
-                GOTO(err_reg, rc);
-
-        mds->mds_md_connected = 1;
-        up(&mds->mds_md_sem);
-	RETURN(0);
-
-err_reg:
-        obd_register_observer(mds->mds_md_obd, NULL);
-err_discon:
-        obd_disconnect(mds->mds_md_exp, 0);
-        mds->mds_md_exp = NULL;
-        mds->mds_md_obd = ERR_PTR(rc);
-err_last:
-        up(&mds->mds_md_sem);
-        return rc;
-}
-int mds_md_disconnect(struct obd_device *obd, int flags)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        int rc = 0;
-        ENTRY;
-
-        if (!mds->mds_md_connected)
-                RETURN(0);
-
-        down(&mds->mds_md_sem);
-        if (!IS_ERR(mds->mds_md_obd) && mds->mds_md_exp != NULL) {
-                LASSERT(mds->mds_md_connected);
-
-                obd_register_observer(mds->mds_md_obd, NULL);
-
-                if (flags & OBD_OPT_FORCE) {
-                        struct obd_device *lmv_obd;
-                        struct obd_ioctl_data ioc_data = { 0 };
-
-                        lmv_obd = class_exp2obd(mds->mds_md_exp);
-                        if (lmv_obd == NULL)
-                                GOTO(out, rc = 0);
-
-                        /*
-                         * making disconnecting lmv stuff do not send anything
-                         * to all remote MDSs from LMV. This is needed to
-                         * prevent possible hanging with endless recovery, when
-                         * MDS sends disconnect to already disconnected
-                         * target. Probably this is wrong, but client does the
-                         * same in --force mode and I do not see why can't we do
-                         * it here. --umka.
-                         */
-                        lmv_obd->obd_no_recov = 1;
-                        obd_iocontrol(IOC_OSC_SET_ACTIVE, mds->mds_md_exp,
-                                      sizeof(ioc_data), &ioc_data, NULL);
-                }
-
-                /*
-                 * if obd_disconnect() fails (probably because the export was
-                 * disconnected by class_disconnect_exports()) then we just need
-                 * to drop our ref.
-                 */
-                mds->mds_md_connected = 0;
-                rc = obd_disconnect(mds->mds_md_exp, flags);
-                if (rc)
-                        class_export_put(mds->mds_md_exp);
-
-        out:
-                mds->mds_md_exp = NULL;
-                mds->mds_md_obd = NULL;
-        }
-        up(&mds->mds_md_sem);
-        RETURN(rc);
-}
-#endif
-static int cmm_init(struct cmm_device *m,
-                    struct lu_device_type *t, struct lustre_cfg *cfg)
-{
-        struct lu_device *lu_dev = cmm2lu_dev(m);
-        struct obd_device * obd = NULL;
-        char * child = lustre_cfg_string(cfg, 1);
-
-        ENTRY;
-
-	md_device_init(&m->cmm_md_dev, t);
+        struct cmm_device *m = lu2cmm_dev(d);
+        struct lu_device *next;
+        int err = -EFAULT;
         
-        m->cmm_md_dev.md_ops = &cmm_md_ops;
-	lu_dev->ld_ops = &cmm_lu_ops;
-        
-        /* get next layer */
-        obd = class_name2obd(child);
-        if (obd && obd->obd_lu_dev) {
-                CDEBUG(D_INFO, "Child device is %s\n", child);
-                m->cmm_child = lu2md_dev(obd->obd_lu_dev);
-        } else {
-                CDEBUG(D_INFO, "Child device %s not found\n", child);
-        }
+        ENTRY;
+       
+        LASSERT(m->cmm_child);
+        next = md2lu_dev(m->cmm_child);
 
-	return 0;
+        if (next->ld_ops->ldo_device_init) {
+                err = next->ld_ops->ldo_device_init(next, top);
+        }      
+	return err;
 }
+
+static void cmm_device_fini(struct lu_device *d)
+{
+	struct cmm_device *m = lu2cmm_dev(d);
+        struct lu_device *next;
+
+	LASSERT(m->cmm_child);
+        next = md2lu_dev(m->cmm_child);
+        
+        if (next->ld_ops->ldo_device_fini)
+                next->ld_ops->ldo_device_fini(next);
+}
+
+static struct lu_device_operations cmm_lu_ops = {
+        .ldo_device_init    = cmm_device_init,
+        .ldo_device_fini    = cmm_device_fini,
+	.ldo_object_alloc   = cmm_object_alloc,
+	.ldo_object_init    = cmm_object_init,
+	.ldo_object_free    = cmm_object_free,
+	.ldo_object_release = cmm_object_release,
+	.ldo_object_print   = cmm_object_print
+};
 
 struct lu_device *cmm_device_alloc(struct lu_device_type *t,
                                    struct lustre_cfg *cfg)
 {
         struct lu_device  *l;
         struct cmm_device *m;
-
-        int err;
+        struct obd_device * obd = NULL;
+        char * child = lustre_cfg_string(cfg, 1);
         
         ENTRY;
         
@@ -267,28 +121,33 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
         if (m == NULL) {
                 l = ERR_PTR(-ENOMEM);
         } else {
-                err = cmm_init(m, t, cfg);
-                if (err)
-                        l = ERR_PTR(err);
-                else
-                        l = cmm2lu_dev(m);
+                md_device_init(&m->cmm_md_dev, t);
+                m->cmm_md_dev.md_ops = &cmm_md_ops;
+	        l = cmm2lu_dev(m);
+                l->ld_ops = &cmm_lu_ops;
+        
+                /* get next layer */
+                obd = class_name2obd(child);
+                if (obd && obd->obd_lu_dev) {
+                        CDEBUG(D_INFO, "Child device is %s\n", child);
+                        m->cmm_child = lu2md_dev(obd->obd_lu_dev);
+                } else {
+                        CDEBUG(D_INFO, "Child device %s not found\n", child);
+                        l = ERR_PTR(-EINVAL);
+                }
         }
 
         EXIT;
         return l;
 }
 
-static void cmm_fini(struct lu_device *d)
+void cmm_device_free(struct lu_device *d)
 {
-	struct cmm_device *m = lu2cmm_dev(d);
-
+        struct cmm_device *m = lu2cmm_dev(d);
+        
 	LASSERT(atomic_read(&d->ld_ref) == 0);
 	md_device_fini(&m->cmm_md_dev);
-}
-
-void cmm_device_free(struct lu_device *m)
-{
-        cmm_fini(m);
+        //cmm_fini(m);
         OBD_FREE_PTR(m);
 }
 

@@ -92,6 +92,7 @@ int cmm_object_print(struct seq_file *f, const struct lu_object *o);
 
 /* cmm md operations */
 int cmm_root_get(struct md_device *m, struct lu_fid *f);
+int cmm_statfs(struct md_device *m, struct kstatfs *sfs);
 int cmm_mkdir(struct md_object *o, const char *name,
               struct md_object *child);
 
