@@ -1026,7 +1026,7 @@ static int mgs_steal_llog_for_mdt_from_client(struct obd_device *obd,
                 GOTO(out_close, rc);
 
         rc = llog_process(loghandle, mgs_steal_llog_handler, (void *)comp, NULL);
-        CDEBUG(D_MGS, "get_db = %d\n", rc);
+        CDEBUG(D_MGS, "steal llog re = %d\n", rc);
 out_close:
         rc2 = llog_close(loghandle);
         if (!rc)

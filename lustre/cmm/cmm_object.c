@@ -58,6 +58,7 @@ struct lu_object *cmm_object_alloc(struct lu_device *d)
 	if (mo != NULL) {
 		struct lu_object *o;
 		o = &mo->cmo_obj.mo_lu;
+                lu_object_init(o, NULL, d);
 		return o;
 	} else
 		return NULL;
