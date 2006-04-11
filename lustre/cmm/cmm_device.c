@@ -69,21 +69,20 @@ static struct md_device_operations cmm_md_ops = {
 //        .mdo_object_create = cmm_object_create,
 };
 
-static int cmm_device_init(struct lu_device *d, char *top)
+static int cmm_device_init(struct lu_device *d, const char *top)
 {
         struct cmm_device *m = lu2cmm_dev(d);
         struct lu_device *next;
-        int err = -EFAULT;
-        
+        int err;
+
         ENTRY;
-       
+
         LASSERT(m->cmm_child);
         next = md2lu_dev(m->cmm_child);
 
-        if (next->ld_ops->ldo_device_init) {
-                err = next->ld_ops->ldo_device_init(next, top);
-        }      
-	return err;
+        LASSERT(next->ld_type->ldt_ops->ldto_device_init != NULL);
+        err = next->ld_type->ldt_ops->ldto_device_init(next, top);
+        RETURN(err);
 }
 
 static void cmm_device_fini(struct lu_device *d)
@@ -93,14 +92,12 @@ static void cmm_device_fini(struct lu_device *d)
 
 	LASSERT(m->cmm_child);
         next = md2lu_dev(m->cmm_child);
-        
-        if (next->ld_ops->ldo_device_fini)
-                next->ld_ops->ldo_device_fini(next);
+
+        LASSERT(next->ld_type->ldt_ops->ldto_device_fini != NULL);
+        next->ld_type->ldt_ops->ldto_device_fini(next);
 }
 
 static struct lu_device_operations cmm_lu_ops = {
-        .ldo_device_init    = cmm_device_init,
-        .ldo_device_fini    = cmm_device_fini,
 	.ldo_object_alloc   = cmm_object_alloc,
 	.ldo_object_init    = cmm_object_init,
 	.ldo_object_free    = cmm_object_free,
@@ -115,9 +112,9 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
         struct cmm_device *m;
         struct obd_device * obd = NULL;
         char * child = lustre_cfg_string(cfg, 1);
-        
+
         ENTRY;
-        
+
         OBD_ALLOC_PTR(m);
         if (m == NULL) {
                 l = ERR_PTR(-ENOMEM);
@@ -126,7 +123,7 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
                 m->cmm_md_dev.md_ops = &cmm_md_ops;
 	        l = cmm2lu_dev(m);
                 l->ld_ops = &cmm_lu_ops;
-        
+
                 /* get next layer */
                 obd = class_name2obd(child);
                 if (obd && obd->obd_lu_dev) {
@@ -145,7 +142,7 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
 void cmm_device_free(struct lu_device *d)
 {
         struct cmm_device *m = lu2cmm_dev(d);
-        
+
 	LASSERT(atomic_read(&d->ld_ref) == 0);
 	md_device_fini(&m->cmm_md_dev);
         //cmm_fini(m);
@@ -167,7 +164,10 @@ static struct lu_device_type_operations cmm_device_type_ops = {
         .ldto_fini = cmm_type_fini,
 
         .ldto_device_alloc = cmm_device_alloc,
-        .ldto_device_free  = cmm_device_free
+        .ldto_device_free  = cmm_device_free,
+
+        .ldto_device_init = cmm_device_init,
+        .ldto_device_fini = cmm_device_fini
 };
 
 static struct lu_device_type cmm_device_type = {

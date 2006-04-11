@@ -247,9 +247,6 @@ static int mdd_object_print(struct seq_file *f, const struct lu_object *o)
 
 static int mdd_fs_setup(struct mdd_device *mdd)
 {
-        mdd->mdd_rootfid.f_seq = LUSTRE_ROOT_FID_SEQ;
-        mdd->mdd_rootfid.f_oid = LUSTRE_ROOT_FID_OID;
-        mdd->mdd_rootfid.f_ver = 0;        
         return 0;
 }
 
@@ -258,23 +255,22 @@ static int mdd_fs_cleanup(struct mdd_device *mdd)
         return 0;
 }
 
-static int mdd_device_init(struct lu_device *d, char *top)
+static int mdd_device_init(struct lu_device *d, const char *top)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
         struct lu_device *next;
         int rc = -EFAULT;
-        
+
         ENTRY;
 
         LASSERT(mdd->mdd_child);
         next = &mdd->mdd_child->dd_lu_dev;
 
-        if (next->ld_ops->ldo_device_init)
-                rc = next->ld_ops->ldo_device_init(next, top);
-        
+        LASSERT(next->ld_type->ldt_ops->ldto_device_init != NULL);
+        rc = next->ld_type->ldt_ops->ldto_device_init(next, top);
         if (rc)
                 GOTO(err, rc);
-        
+
         rc = mdd_fs_setup(mdd);
         if (rc)
                 GOTO(err, rc);
@@ -289,17 +285,15 @@ static void mdd_device_fini(struct lu_device *d)
 {
 	struct mdd_device *m = lu2mdd_dev(d);
         struct lu_device *next;
-        
+
 	LASSERT(m->mdd_child);
         next = &m->mdd_child->dd_lu_dev;
-        
-        if (next->ld_ops->ldo_device_fini)
-                next->ld_ops->ldo_device_fini(next);
+
+        LASSERT(next->ld_type->ldt_ops->ldto_device_fini != NULL);
+        next->ld_type->ldt_ops->ldto_device_fini(next);
 }
 
 static struct lu_device_operations mdd_lu_ops = {
-        .ldo_device_init    = mdd_device_init,
-        .ldo_device_fini    = mdd_device_fini,
 	.ldo_object_alloc   = mdd_object_alloc,
 	.ldo_object_init    = mdd_object_init,
 	.ldo_object_free    = mdd_object_free,
@@ -621,36 +615,31 @@ cleanup:
 static int mdd_root_get(struct md_device *m, struct lu_fid *f)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+
         ENTRY;
-        *f = mdd->mdd_rootfid;
-        RETURN(0);
+        RETURN(mdd_child_ops(mdd)->dt_root_get(mdd->mdd_child, f));
 }
 
 static int mdd_config(struct md_device *m, const char *name,
                       void *buf, int size, int mode)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        int rc = -EOPNOTSUPP;
+        int rc;
         ENTRY;
 
-        if (mdd_child_ops(mdd)->dt_config) {
-                rc = mdd_child_ops(mdd)->dt_config(mdd->mdd_child,
-                                                   name, buf, size,
-                                                   mode);
-        }
-        
+        rc = mdd_child_ops(mdd)->dt_config(mdd->mdd_child,
+                                           name, buf, size, mode);
         RETURN(rc);
 }
 
 static int mdd_statfs(struct md_device *m, struct kstatfs *sfs) {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        int rc = -EOPNOTSUPP;
-        
+        int rc;
+
         ENTRY;
 
-        if (mdd_child_ops(mdd) && mdd_child_ops(mdd)->dt_statfs)
-	        rc = mdd_child_ops(mdd)->dt_statfs(mdd->mdd_child, sfs);
-                
+        rc = mdd_child_ops(mdd)->dt_statfs(mdd->mdd_child, sfs);
+
         RETURN(rc);
 }
 
@@ -690,7 +679,7 @@ struct lu_device *mdd_device_alloc(struct lu_device_type *t,
                 l = mdd2lu_dev(m);
 	        l->ld_ops = &mdd_lu_ops;
                 m->mdd_md_dev.md_ops = &mdd_ops;
-        
+
                 /* get next layer */
                 obd = class_name2obd(child);
                 if (obd && obd->obd_lu_dev) {
@@ -709,7 +698,7 @@ struct lu_device *mdd_device_alloc(struct lu_device_type *t,
 void mdd_device_free(struct lu_device *lu)
 {
         struct mdd_device *m = lu2mdd_dev(lu);
-        
+
         LASSERT(atomic_read(&lu->ld_ref) == 0);
 	md_device_fini(&m->mdd_md_dev);
 
@@ -730,7 +719,10 @@ static struct lu_device_type_operations mdd_device_type_ops = {
         .ldto_fini = mdd_type_fini,
 
         .ldto_device_alloc = mdd_device_alloc,
-        .ldto_device_free  = mdd_device_free
+        .ldto_device_free  = mdd_device_free,
+
+        .ldto_device_init    = mdd_device_init,
+        .ldto_device_fini    = mdd_device_fini
 };
 
 static struct lu_device_type mdd_device_type = {

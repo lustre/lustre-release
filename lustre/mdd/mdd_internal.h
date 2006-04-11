@@ -15,7 +15,6 @@ struct mdd_device {
         __u64                            mdd_mount_count;
         __u64                            mdd_io_epoch;
         unsigned long                    mdd_atime_diff;
-        struct lu_fid                    mdd_rootfid;
         struct lr_server_data           *mdd_server_data;
         struct dentry                   *mdd_pending_dir;
         struct dentry                   *mdd_logs_dir;

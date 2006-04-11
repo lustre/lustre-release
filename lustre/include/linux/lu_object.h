@@ -128,11 +128,6 @@ struct lu_device_operations {
 	 *
 	 */
 
-        /* Initialize the devices after allocation
-         * called from top device, when all layers are linked */
-        int (*ldo_device_init)(struct lu_device *, char *);
-        void (*ldo_device_fini)(struct lu_device *);
-
 	/*
 	 * Allocate lower-layer parts of the object by calling
 	 * ->ldo_object_alloc() of the corresponding underlying device.
@@ -218,6 +213,13 @@ struct lu_device_type_operations {
         struct lu_device *(*ldto_device_alloc)(struct lu_device_type *t,
                                                struct lustre_cfg *lcfg);
         void (*ldto_device_free)(struct lu_device *d);
+
+        /*
+         * Initialize the devices after allocation
+         * called from top device, when all layers are linked
+         */
+        int  (*ldto_device_init)(struct lu_device *, const char *);
+        void (*ldto_device_fini)(struct lu_device *);
 
         int  (*ldto_init)(struct lu_device_type *t);
         void (*ldto_fini)(struct lu_device_type *t);
@@ -463,7 +465,7 @@ struct dt_device_operations {
          * last used meta-sequence, etc. */
         int (*dt_config) (struct dt_device *dev, const char *name,
                           void *buf, int size, int mode);
-        
+
         int   (*dt_statfs)(struct dt_device *dev, struct kstatfs *sfs);
         void  (*dt_object_lock)(struct dt_object *dt, enum dt_lock_mode mode);
         void  (*dt_object_unlock)(struct dt_object *dt, enum dt_lock_mode mode);
@@ -484,6 +486,7 @@ struct dt_device_operations {
         int   (*dt_index_delete)(struct dt_object *dt, struct lu_fid *fid,
                                  const char *name, struct context *uctxt,
                                  struct thandle *handle);
+        int   (*dt_root_get)(struct dt_device *dev, struct lu_fid *f);
 };
 
 struct dt_device {
