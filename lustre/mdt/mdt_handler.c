@@ -1040,7 +1040,7 @@ static void mdt_fini(struct mdt_device *m)
         /* finish the stack */
         if (m->mdt_child) {
                 struct lu_device *child = md2lu_dev(m->mdt_child);
-                child->ld_ops->ldo_device_fini(child);
+                child->ld_type->ldt_ops->ldto_device_fini(child);
         }
 
         LASSERT(atomic_read(&d->ld_ref) == 0);
@@ -1053,33 +1053,31 @@ static int mdt_init0(struct mdt_device *m,
         int rc;
         struct lu_site *s;
         char   ns_name[48];
-        struct obd_device * obd = NULL;
-        struct lu_device *mdt_child = NULL;
-        char *top = lustre_cfg_string(cfg, 0);
-        char *child = lustre_cfg_string(cfg, 1);
+        struct obd_device *obd;
+        struct lu_device  *mdt_child;
+        const char *top   = lustre_cfg_string(cfg, 0);
+        const char *child = lustre_cfg_string(cfg, 1);
 
         ENTRY;
-
-        OBD_ALLOC_PTR(s);
-        if (s == NULL)
-                RETURN(-ENOMEM);
-
-        md_device_init(&m->mdt_md_dev, t);
-
-        m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
 
         /* get next layer */
         obd = class_name2obd(child);
         if (obd && obd->obd_lu_dev) {
                 CDEBUG(D_INFO, "Child device is %s\n", child);
                 m->mdt_child = lu2md_dev(obd->obd_lu_dev);
+                mdt_child = md2lu_dev(m->mdt_child);
         } else {
                 CDEBUG(D_INFO, "Child device %s is not found\n", child);
-                GOTO(err_free_site, rc = -EINVAL);
+                RETURN(-EINVAL);
         }
 
-        if (m->mdt_child)
-                mdt_child = md2lu_dev(m->mdt_child);
+        OBD_ALLOC_PTR(s);
+        if (s == NULL)
+                RETURN(-ENOMEM);
+
+        md_device_init(&m->mdt_md_dev, t);
+        m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
+        lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
 
         sema_init(&m->mdt_seq_sem, 1);
 
@@ -1097,8 +1095,6 @@ static int mdt_init0(struct mdt_device *m,
         m->mdt_service_conf.psc_num_threads = min(max(mdt_num_threads,
                                                       MDT_MIN_THREADS),
                                                   MDT_MAX_THREADS);
-        lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
-
         snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (m->mdt_namespace == NULL)
@@ -1118,17 +1114,11 @@ static int mdt_init0(struct mdt_device *m,
                 GOTO(err_free_ns, rc = -ENOMEM);
 
         /* init the stack */
-        if (m->mdt_child && mdt_child) {
-                if (mdt_child->ld_ops->ldo_device_init) {
-                        rc = mdt_child->ld_ops->ldo_device_init(mdt_child, top);
-                        if (rc) {
-                                CERROR("can't init device stack, rc %d\n", rc);
-                                GOTO(err_free_svc, rc);
-                        }
-                }
-        } else {
-                CERROR("something bad with child device\n");
-                LBUG();
+        LASSERT(mdt_child->ld_type->ldt_ops->ldto_device_init != NULL);
+        rc = mdt_child->ld_type->ldt_ops->ldto_device_init(mdt_child, top);
+        if (rc) {
+                CERROR("can't init device stack, rc %d\n", rc);
+                GOTO(err_free_svc, rc);
         }
 
         /* init sequence info after device stack is initialized. */
@@ -1143,7 +1133,7 @@ static int mdt_init0(struct mdt_device *m,
         RETURN(0);
 
 err_fini_child:
-        mdt_child->ld_ops->ldo_device_fini(mdt_child);
+        mdt_child->ld_type->ldt_ops->ldto_device_fini(mdt_child);
 err_free_svc:
         ptlrpc_unregister_service(m->mdt_service);
         m->mdt_service = NULL;
@@ -1152,9 +1142,8 @@ err_free_ns:
         m->mdt_namespace = NULL;
 err_fini_site:
         lu_site_fini(s);
-err_free_site:
         OBD_FREE_PTR(s);
-        return rc;
+        RETURN(rc);
 }
 
 static struct lu_object *mdt_object_alloc(struct lu_device *d)
