@@ -99,7 +99,7 @@ struct lu_site;
 struct lu_object;
 struct lu_device;
 struct lu_object_header;
-
+struct lu_context;
 /*
  * Operations common for data and meta-data devices.
  */
@@ -136,7 +136,7 @@ struct lu_device_operations {
 	 * stack. It's responsibility of this method to insert lower-layer
 	 * object(s) it create into appropriate places of object stack.
 	 */
-	int (*ldo_object_init)(struct lu_object *);
+	int (*ldo_object_init)(struct lu_context *, struct lu_object *);
 
 	/*
 	 * Allocate object for the given device (without lower-layer
@@ -161,7 +161,7 @@ struct lu_device_operations {
 	 * Called when last active reference to the object is released (and
 	 * object returns to the cache).
 	 */
-	void (*ldo_object_release)(struct lu_object *o);
+	void (*ldo_object_release)(struct lu_context *ctxt, struct lu_object *o);
 
 	/*
 	 * Debugging helper. Print given object.
@@ -234,6 +234,25 @@ enum lu_object_flags {
 	 * layer. Used by lu_object_alloc().
 	 */
 	LU_OBJECT_ALLOCATED = (1 << 0)
+};
+
+/* attr */
+struct lu_attr {
+        __u64          size;
+        __u64          mtime;
+        __u64          atime;
+        __u64          ctime;
+        __u64          blocks; 
+        __u32          mode;
+        __u32          uid;
+        __u32          gid;
+        __u32          flags;
+        __u32          nlink;
+};
+
+/* the context of the ops*/
+struct lu_context {
+        struct lu_attr lc_attr;
 };
 
 /*
@@ -416,10 +435,11 @@ static inline int lu_object_is_dying(struct lu_object_header *h)
 	return test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
 }
 
-void lu_object_put(struct lu_object *o);
+void lu_object_put(struct lu_context *ctxt, struct lu_object *o);
 void lu_site_purge(struct lu_site *s, int nr);
 int lu_object_print(struct seq_file *f, const struct lu_object *o);
-struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f);
+struct lu_object *lu_object_find(struct lu_context *ctxt, 
+                                 struct lu_site *s, const struct lu_fid *f);
 
 int  lu_site_init(struct lu_site *s, struct lu_device *top);
 void lu_site_fini(struct lu_site *s);
@@ -442,11 +462,11 @@ void lu_object_header_fini(struct lu_object_header *h);
 struct lu_object *lu_object_locate(struct lu_object_header *h,
                                    struct lu_device_type *dtype);
 
+
 /*
  * DT device interface. XXX Probably should go elsewhere.
  */
-
-struct context;
+struct md_params;
 struct thandle;
 struct txn_param;
 struct dt_device;
@@ -472,19 +492,34 @@ struct dt_device_operations {
 struct dt_object_operations {
         void  (*do_object_lock)(struct dt_object *dt, enum dt_lock_mode mode);
         void  (*do_object_unlock)(struct dt_object *dt, enum dt_lock_mode mode);
-        int   (*do_object_create)(struct dt_object *dt, struct dt_object *child,
-                                  struct context *context, struct thandle *th);
-        int   (*do_object_destroy)(struct dt_object *dt, struct thandle *th);
-        int   (*do_attr_get)(struct dt_object *dt, void *buf, int buf_len,
-                             const char *name, struct context *context);
-        int   (*do_attr_set)(struct dt_object *dt, void *buf, int buf_len,
-                             const char *name, struct context *context,
-                             struct thandle *handle);
-        int   (*do_index_insert)(struct dt_object *dt, struct lu_fid *fid,
-                                 const char *name, struct context *uctxt,
-                                 void *handle);
-        int   (*do_index_delete)(struct dt_object *dt, struct lu_fid *fid,
-                                 const char *name, struct context *uctxt,
+
+        int   (*do_object_create)(struct lu_context *ctxt,
+                                  struct dt_object *dt,
+                                  struct dt_object *child,
+                                  struct md_params *arg, struct thandle *th);
+
+        int   (*do_object_destroy)(struct lu_context *ctxt,
+                                   struct dt_object *dt,
+                                   struct thandle *th);
+
+        int   (*do_attr_get)(struct lu_context *ctxt, struct dt_object *dt,
+                             void *buf, int buf_len, const char *name,
+                             struct md_params *arg);
+
+        int   (*do_attr_set)(struct lu_context *ctxt, struct dt_object *dt,
+                             void *buf, int buf_len, const char *name,
+                             struct md_params *arg, struct thandle *handle);
+
+        int   (*do_index_insert)(struct lu_context *ctxt,
+                                 struct dt_object *dt,
+                                 struct lu_fid *fid, const char *name,
+                                 struct md_params *arg,
+                                 struct thandle *handle);
+
+        int   (*do_index_delete)(struct lu_context *ctxt,
+                                 struct dt_object *dt,
+                                 struct lu_fid *fid, const char *name,
+                                 struct md_params *arg,
                                  struct thandle *handle);
 };
 

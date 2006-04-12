@@ -31,37 +31,45 @@ struct md_device;
 struct md_device_operations;
 struct md_object;
 
-/*the context of the mdd ops*/
-struct context {
-        __u32           mode;
-        int             flags;
+struct md_params {
+        __u32 mode;
+        __u32 flags;
 };
 
 struct md_object_operations {
 
         /* meta-data object operations related handlers */
-        int (*moo_mkdir)(struct md_object *obj, const char *name,
-                         struct md_object *child);
+        int (*moo_mkdir)(struct lu_context *ctxt, struct md_object *obj,
+                         const char *name, struct md_object *child);
 
-        int (*moo_rename)(struct md_object *spobj, struct md_object *tpobj,
-                          struct md_object *sobj, const char *sname,
-                          struct md_object *tobj, const char *tname,
-                          struct context *uctxt);
-        int (*moo_link)(struct md_object *tobj, struct md_object *sobj,
-                        const char *name, struct context *uctxt);
-        int (*moo_attr_get)(struct md_object *obj, void *buf, int buf_len,
-                            const char *name, struct context *uctxt);
-        int (*moo_attr_set)(struct md_object *obj, void *buf, int buf_len,
-                            const char *name, struct context *uctxt);
+        int (*moo_rename)(struct lu_context *ctxt, struct md_object *spobj,
+                          struct md_object *tpobj, struct md_object *sobj,
+                          const char *sname, struct md_object *tobj,
+                          const char *tname, struct md_params *arg);
+
+        int (*moo_link)(struct lu_context *ctxt, struct md_object *tobj,
+                        struct md_object *sobj, const char *name,
+                        struct md_params *arg);
+
+        int (*moo_attr_get)(struct lu_context *ctxt, struct md_object *obj,
+                            void *buf, int buf_len, const char *name,
+                            struct md_params *arg);
+
+        int (*moo_attr_set)(struct lu_context *ctxt, struct md_object *obj,
+                            void *buf, int buf_len, const char *name,
+                            struct md_params *arg);
 
         /* FLD maintanence related handlers */
-        int (*moo_index_insert)(struct md_object *pobj, struct md_object *obj,
-                                const char *name, struct context *uctxt);
-        int (*moo_index_delete)(struct md_object *pobj, struct md_object *obj,
-                                const char *name, struct context *uctxt);
-        int (*moo_object_create)(struct md_object *pobj,
-                                 struct md_object *child,
-                                 struct context *uctxt);
+        int (*moo_index_insert)(struct lu_context *ctxt,
+                                struct md_object *pobj, struct md_object *obj,
+                                const char *name, struct md_params *arg);
+
+        int (*moo_index_delete)(struct lu_context *ctxt,
+                                struct md_object *pobj, struct md_object *obj,
+                                const char *name, struct md_params *arg);
+
+        int (*moo_object_create)(struct lu_context *, struct md_object *,
+                                 struct md_object *, struct md_params *);
 };
 
 struct md_device_operations {
