@@ -16,23 +16,38 @@ fi
 
 echo "Copying modules from local build dir to "$MDIR
 
-cp -u ../../lnet/libcfs/libcfs.$EXT $MDIR
-cp -u ../../lnet/lnet/lnet.$EXT $MDIR
-cp -u ../../lnet/klnds/socklnd/ksocklnd.$EXT $MDIR
-cp -u ../lvfs/lvfs.$EXT $MDIR
-cp -u ../obdclass/obdclass.$EXT $MDIR
-cp -u ../ptlrpc/ptlrpc.$EXT $MDIR
-cp -u ../mdc/mdc.$EXT $MDIR
-cp -u ../osc/osc.$EXT $MDIR
-cp -u ../lov/lov.$EXT $MDIR
-cp -u ../mds/mds.$EXT $MDIR
-cp -u ../lvfs/$FSFLT.$EXT $MDIR
-[ $KVER == "26" ] && cp -u ../ldiskfs/ldiskfs.$EXT $MDIR
-cp -u ../ost/ost.$EXT $MDIR
-cp -u ../obdfilter/obdfilter.$EXT $MDIR
-cp -u ../llite/llite.$EXT $MDIR
-cp -u ../mgc/mgc.$EXT $MDIR
-cp -u ../mgs/mgs.$EXT $MDIR
+cp -u ../../lustre/mds/mds.ko $MDIR
+cp -u ../../lustre/osd/osd.ko $MDIR
+cp -u ../../lustre/obdfilter/obdfilter.ko $MDIR
+cp -u ../../lustre/ost/ost.ko $MDIR
+cp -u ../../lustre/mgs/mgs.ko $MDIR
+cp -u ../../lustre/lov/lov.ko $MDIR
+cp -u ../../lustre/ptlrpc/ptlrpc.ko $MDIR
+cp -u ../../lustre/obdecho/obdecho.ko $MDIR
+cp -u ../../lustre/llite/llite.ko $MDIR
+cp -u ../../lustre/mgc/mgc.ko $MDIR
+cp -u ../../lustre/ldiskfs/ldiskfs.ko $MDIR
+cp -u ../../lustre/ldiskfs/quotafmt_test.ko $MDIR
+cp -u ../../lustre/osc/osc.ko $MDIR
+cp -u ../../lustre/mdt/mdt.ko $MDIR
+cp -u ../../lustre/quota/lquota.ko $MDIR
+cp -u ../../lustre/quota/quotactl_test.ko $MDIR
+cp -u ../../lustre/quota/quotacheck_test.ko $MDIR
+cp -u ../../lustre/cmm/cmm.ko $MDIR
+cp -u ../../lustre/mdc/mdc.ko $MDIR
+cp -u ../../lustre/lvfs/fsfilt_ldiskfs.ko $MDIR
+cp -u ../../lustre/lvfs/lvfs.ko $MDIR
+cp -u ../../lustre/obdclass/llog_test.ko $MDIR
+cp -u ../../lustre/obdclass/obdclass.ko $MDIR
+cp -u ../../lustre/mdd/mdd.ko $MDIR
+cp -u ../../lnet/libcfs/libcfs.ko $MDIR
+cp -u ../../lnet/tests/pingcli.ko $MDIR
+cp -u ../../lnet/tests/spingsrv.ko $MDIR
+cp -u ../../lnet/tests/pingsrv.ko $MDIR
+cp -u ../../lnet/tests/spingcli.ko $MDIR
+cp -u ../../lnet/lnet/lnet.ko $MDIR
+cp -u ../../lnet/klnds/socklnd/ksocklnd.ko $MDIR
+
 
 # prevent warnings on my uml
 rm -f /lib/modules/`uname -r`/modules.*
