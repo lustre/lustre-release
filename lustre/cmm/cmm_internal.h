@@ -85,10 +85,10 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 }
 
 /* cmm_object.c */
-int cmm_object_init(struct lu_object*);
+int cmm_object_init(struct lu_context *ctxt, struct lu_object*);
 struct lu_object *cmm_object_alloc(struct lu_device *);
 void cmm_object_free(struct lu_object *o);
-void cmm_object_release(struct lu_object *o);
+void cmm_object_release(struct lu_context *ctxt, struct lu_object *o);
 //int cmm_getattr(struct lu_object *o, struct lu_attr *a);
 //int cmm_setattr(struct lu_object *o, struct lu_attr *a);
 int cmm_object_print(struct seq_file *f, const struct lu_object *o);
@@ -98,10 +98,10 @@ int cmm_config(struct md_device *md, const char *name,
                void *buf, int size, int mode);
 int cmm_root_get(struct md_device *m, struct lu_fid *f);
 int cmm_statfs(struct md_device *m, struct kstatfs *sfs);
-int cmm_mkdir(struct md_object *o, const char *name,
+int cmm_mkdir(struct lu_context *ctxt, struct md_object *o, const char *name,
               struct md_object *child);
-int cmm_attr_get(struct md_object *obj, void *buf, int size,
-                 const char *name, struct context *ctxt);
+int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj, void *buf, int size,
+                 const char *name, struct md_params *);
 
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */

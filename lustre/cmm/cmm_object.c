@@ -36,22 +36,6 @@
 
 static struct md_object_operations cmm_mo_ops;
 
-struct cmm_object *cmm_object_find(struct cmm_device *d, struct lu_fid *f)
-{
-	struct lu_object *o;
-
-	o = lu_object_find(d->cmm_md_dev.md_lu_dev.ld_site, f);
-	if (IS_ERR(o))
-		return (struct cmm_object *)o;
-	else
-		return container_of(o, struct cmm_object, cmo_obj.mo_lu);
-}
-
-void cmm_object_put(struct cmm_object *o)
-{
-	lu_object_put(&o->cmo_obj.mo_lu);
-}
-
 struct lu_object *cmm_object_alloc(struct lu_device *d)
 {
 	struct cmm_object *mo;
@@ -69,7 +53,7 @@ struct lu_object *cmm_object_alloc(struct lu_device *d)
 		RETURN(NULL);
 }
 
-int cmm_object_init(struct lu_object *o)
+int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
 {
 	struct cmm_device *d = lu2cmm_dev(o->lo_dev);
 	struct lu_device  *under;
@@ -90,7 +74,7 @@ void cmm_object_free(struct lu_object *o)
 	lu_object_fini(o);
 }
 
-void cmm_object_release(struct lu_object *o)
+void cmm_object_release(struct lu_context *ctxt, struct lu_object *o)
 {
         return;
 }
@@ -149,17 +133,24 @@ int cmm_statfs(struct md_device *md, struct kstatfs *sfs) {
         RETURN (result);
 }
 
-int cmm_mkdir(struct md_object *md_parent, const char *name,
-                     struct md_object *md_child)
+int cmm_mkdir(struct lu_context *ctxt, struct md_object *md_parent,
+              const char *name, struct md_object *md_child)
 {
 	struct cmm_object *cmm_parent = md2cmm_obj(md_parent);
         struct md_object  *next       = cmm2child_obj(cmm_parent);
 
-        return next->mo_ops->moo_mkdir(next, name, md_child);
+        return next->mo_ops->moo_mkdir(ctxt, next, name, md_child);
+}
+
+int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,
+                 void *buf, int size, const char *name, struct md_params *arg)
+{
+        struct md_object *next = cmm2child_obj(md2cmm_obj(obj));
+
+        return next->mo_ops->moo_attr_get(ctxt, next, buf, size, name, arg);
 }
 
 static struct md_object_operations cmm_mo_ops = {
-        .moo_mkdir      = cmm_mkdir,
         .moo_mkdir      = cmm_mkdir,
         .moo_attr_get   = cmm_attr_get,
 //        .moo_rename     = cmm_rename,
@@ -170,12 +161,4 @@ static struct md_object_operations cmm_mo_ops = {
 //        .moo_object_create = cmm_object_create,
 };
 
-int cmm_attr_get(struct md_object *obj, void *buf, int size,
-                 const char *name, struct context *ctxt)
-{
-        struct md_object *next = cmm2child_obj(md2cmm_obj(obj));
-
-        LASSERT((void *)obj->mo_ops > (void *)0x100);
-        return next->mo_ops->moo_attr_get(next, buf, size, name, ctxt);
-}
 
