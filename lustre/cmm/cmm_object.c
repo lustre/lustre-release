@@ -34,6 +34,8 @@
 
 #include "cmm_internal.h"
 
+static struct md_object_operations cmm_mo_ops;
+
 struct cmm_object *cmm_object_find(struct cmm_device *d, struct lu_fid *f)
 {
 	struct lu_object *o;
@@ -54,12 +56,14 @@ struct lu_object *cmm_object_alloc(struct lu_device *d)
 {
 	struct cmm_object *mo;
         ENTRY;
-        
+
 	OBD_ALLOC_PTR(mo);
 	if (mo != NULL) {
 		struct lu_object *o;
+
 		o = &mo->cmo_obj.mo_lu;
                 lu_object_init(o, NULL, d);
+                mo->cmo_obj.mo_ops = &cmm_mo_ops;
 		RETURN(o);
 	} else
 		RETURN(NULL);
@@ -102,7 +106,7 @@ static void cmm_lock(struct md_object *obj, __u32 mode)
 {
         struct cmm_object *cmm_obj = md2cmm_obj(obj);
         struct cmm_device *cmm_dev = cmm_obj2dev(cmm_obj);
-        
+
         CMM_DO_CHILD(cmm_dev)->ldo_lock_obj(cmm2child_obj(cmm_obj), mode);
         return;
 }
@@ -111,7 +115,7 @@ static void cmm_unlock(struct md_object *obj, __u32 mode)
 {
         struct cmm_object *cmm_obj = md2cmm_obj(obj);
         struct cmm_device *cmm_dev = cmm_obj2dev(cmm_obj);
-        
+
         CMM_DO_CHILD(cmm_dev)->ldo_unlock_obj(cmm2child_obj(cmm_obj), mode);
         return;
 }
@@ -121,74 +125,57 @@ static void cmm_unlock(struct md_object *obj, __u32 mode)
 /* Metadata API */
 int cmm_root_get(struct md_device *md, struct lu_fid *fid) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
-	int result = -EOPNOTSUPP;
 
-        if (cmm_child_ops(cmm_dev)->mdo_root_get) {
-	        result = cmm_child_ops(cmm_dev)->mdo_root_get(
-                                                  cmm_dev->cmm_child, fid);
-        }       
-        
-        return result;
+        return cmm_child_ops(cmm_dev)->mdo_root_get(cmm_dev->cmm_child, fid);
 }
 
 int cmm_config(struct md_device *md, const char *name,
                void *buf, int size, int mode)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
-        int result = -EOPNOTSUPP;
+        int result;
         ENTRY;
-        
-        if (cmm_child_ops(cmm_dev)->mdo_config)
-	        result = cmm_child_ops(cmm_dev)->mdo_config(cmm_dev->cmm_child,
-                                                            name, buf, size, mode);
-
+        result = cmm_child_ops(cmm_dev)->mdo_config(cmm_dev->cmm_child,
+                                                    name, buf, size, mode);
         RETURN(result);
 }
 
 int cmm_statfs(struct md_device *md, struct kstatfs *sfs) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
-	int result = -EOPNOTSUPP;
-        
+	int result;
+
         ENTRY;
-        
-        if (cmm_child_ops(cmm_dev)->mdo_statfs) {
-	        result = cmm_child_ops(cmm_dev)->mdo_statfs(
-                                                  cmm_dev->cmm_child, sfs);
-        }            
-        
+        result = cmm_child_ops(cmm_dev)->mdo_statfs(cmm_dev->cmm_child, sfs);
         RETURN (result);
 }
 
-int cmm_mkdir(struct md_object *md_parent, const char *name, 
-              struct md_object *md_child)
+int cmm_mkdir(struct md_object *md_parent, const char *name,
+                     struct md_object *md_child)
 {
 	struct cmm_object *cmm_parent = md2cmm_obj(md_parent);
-        struct cmm_device *cmm_dev = cmm_obj2dev(cmm_parent);
-	int result = -EOPNOTSUPP;
 
-        if (cmm_child_ops(cmm_dev)->mdo_mkdir) {
-	        result = cmm_child_ops(cmm_dev)->mdo_mkdir(
-                                                  cmm2child_obj(cmm_parent),
-                                                  name, md_child);
-        }       
-        
-	return result;
+        return md_parent->mo_ops->moo_mkdir(cmm2child_obj(cmm_parent),
+                                            name, md_child);
 }
+
+static struct md_object_operations cmm_mo_ops = {
+        .moo_mkdir      = cmm_mkdir,
+        .moo_mkdir      = cmm_mkdir,
+        .moo_attr_get   = cmm_attr_get,
+//        .moo_rename     = cmm_rename,
+//        .moo_link       = cmm_link,
+//        .moo_attr_set   = cmm_attr_set,
+//        .moo_index_insert = cmm_index_insert,
+//        .moo_index_delete = cmm_index_delete,
+//        .moo_object_create = cmm_object_create,
+};
 
 int cmm_attr_get(struct md_object *obj, void *buf, int size,
                  const char *name, struct context *ctxt)
 {
-        struct cmm_object *co  = md2cmm_obj(obj);
-        struct cmm_device *dev = cmm_obj2dev(co);
-        struct md_object *next = cmm2child_obj(co);
-	int result = -EOPNOTSUPP;
-        
-        LASSERT(cmm_child_ops(dev)>0x100);
-        if (cmm_child_ops(dev)->mdo_attr_get) {
-               result = cmm_child_ops(dev)->mdo_attr_get(next, buf, size,
-                                                         name, ctxt);
-        }
+        struct md_object *next = cmm2child_obj(md2cmm_obj(obj));
 
-        return result;
+        LASSERT((void *)obj->mo_ops > (void *)0x100);
+        return obj->mo_ops->moo_attr_get(next, buf, size, name, ctxt);
 }
 

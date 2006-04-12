@@ -81,8 +81,8 @@ static int mdt_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
 
         child = mdt_object_find(d, cfid);
         if (!IS_ERR(child)) {
-                result = mdt_child_ops(d)->mdo_mkdir(mdt_object_child(o), name,
-                                                     mdt_object_child(child));
+                result = o->mot_obj.mo_ops->moo_mkdir(mdt_object_child(o), name,
+                                                      mdt_object_child(child));
                 mdt_object_put(child);
         } else
                 result = PTR_ERR(child);
@@ -103,9 +103,9 @@ static int mdt_md_getattr(struct mdt_thread_info *info, struct lu_fid *fid,
         if (IS_ERR(o))
                 return PTR_ERR(o);
 
-        result = mdt_child_ops(d)->mdo_attr_get(mdt_object_child(o), name,
-                                                     mdt_object_child(child));
-                mdt_object_put(child);
+        result = o->mot_obj.mo_ops->moo_attr_get(mdt_object_child(o), name,
+                                                 mdt_object_child(child));
+        mdt_object_put(child);
         } else
                 result = PTR_ERR(child);
         mdt_object_unlock(d->mdt_namespace, o, lh);

@@ -52,6 +52,8 @@ static struct lu_device_operations mdd_lu_ops;
 static void mdd_lock(struct mdd_object *obj, enum dt_lock_mode mode);
 static void mdd_unlock(struct mdd_object *obj, enum dt_lock_mode mode);
 
+static struct md_object_operations mdd_obj_ops;
+
 static int lu_device_is_mdd(struct lu_device *d)
 {
 	/*
@@ -103,6 +105,7 @@ static struct lu_object *mdd_object_alloc(struct lu_device *d)
 		
                 o = &mdo->mod_obj.mo_lu;
                 lu_object_init(o, NULL, d);
+                mdo->mod_obj.mo_ops = &mdd_obj_ops;
                 return (&mdo->mod_obj.mo_lu);
         } else
                 return(NULL);
@@ -643,18 +646,21 @@ static int mdd_statfs(struct md_device *m, struct kstatfs *sfs) {
         RETURN(rc);
 }
 
-struct md_device_operations mdd_ops = {
+static struct md_device_operations mdd_ops = {
         .mdo_root_get   = mdd_root_get,
         .mdo_config     = mdd_config,
-        .mdo_statfs     = mdd_statfs,
-        .mdo_mkdir      = mdd_mkdir,
-        .mdo_rename     = mdd_rename,
-        .mdo_link       = mdd_link,
-        .mdo_attr_get   = mdd_attr_get,
-        .mdo_attr_set   = mdd_attr_set,
-        .mdo_index_insert = mdd_index_insert,
-        .mdo_index_delete = mdd_index_delete,
-        .mdo_object_create = mdd_object_create,
+        .mdo_statfs     = mdd_statfs
+};
+
+static struct md_object_operations mdd_obj_ops = {
+        .moo_mkdir      = mdd_mkdir,
+        .moo_rename     = mdd_rename,
+        .moo_link       = mdd_link,
+        .moo_attr_get   = mdd_attr_get,
+        .moo_attr_set   = mdd_attr_set,
+        .moo_index_insert = mdd_index_insert,
+        .moo_index_delete = mdd_index_delete,
+        .moo_object_create = mdd_object_create,
 };
 
 static struct obd_ops mdd_obd_device_ops = {

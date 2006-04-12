@@ -58,16 +58,7 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 static struct md_device_operations cmm_md_ops = {
         .mdo_root_get   = cmm_root_get,
         .mdo_config     = cmm_config,
-        .mdo_statfs     = cmm_statfs,
-        .mdo_mkdir      = cmm_mkdir,
-        .mdo_attr_get   = cmm_attr_get,
-//        .mdo_rename     = cmm_rename,
-//        .mdo_link       = cmm_link,
-//        .mdo_attr_get   = cmm_attr_get,
-//        .mdo_attr_set   = cmm_attr_set,
-//        .mdo_index_insert = cmm_index_insert,
-//       .mdo_index_delete = cmm_index_delete,
-//        .mdo_object_create = cmm_object_create,
+        .mdo_statfs     = cmm_statfs
 };
 
 static int cmm_device_init(struct lu_device *d, const char *top)
