@@ -53,21 +53,24 @@ extern spinlock_t obd_dev_lock;
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
 extern struct obd_device *class_exp2obd(struct obd_export *);
 
+struct lu_device_type;
+
 /* genops.c */
 struct obd_export *class_conn2export(struct lustre_handle *);
-int class_register_type(struct obd_ops *ops, struct lprocfs_vars *, char *nm);
-int class_unregister_type(char *nm);
+int class_register_type(struct obd_ops *ops, struct lprocfs_vars *,
+                        const char *nm, struct lu_device_type *ldt);
+int class_unregister_type(const char *nm);
 
 struct obd_device *class_newdev(struct obd_type *type, char *name);
 void class_release_dev(struct obd_device *obd);
 
-int class_name2dev(char *name);
-struct obd_device *class_name2obd(char *name);
+int class_name2dev(const char *name);
+struct obd_device *class_name2obd(const char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
 void class_obd_list(void);
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
-                                          char * typ_name,
+                                          const char * typ_name,
                                           struct obd_uuid *grp_uuid);
 struct obd_device * class_find_client_notype(struct obd_uuid *tgt_uuid,
                                              struct obd_uuid *grp_uuid);
@@ -93,8 +96,8 @@ void ping_evictor_stop(void);
 
 char *obd_export_nid2str(struct obd_export *exp);
 
-int obd_export_evict_by_nid(struct obd_device *obd, char *nid);
-int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid);
+int obd_export_evict_by_nid(struct obd_device *obd, const char *nid);
+int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid);
 
 /* config.c */
 int class_process_config(struct lustre_cfg *lcfg);
@@ -141,8 +144,8 @@ struct lustre_profile {
         char * lp_mdc;
 };
 
-struct lustre_profile *class_get_profile(char * prof);
-void class_del_profile(char *prof);
+struct lustre_profile *class_get_profile(const char * prof);
+void class_del_profile(const char *prof);
 
 /* genops.c */
 #define class_export_get(exp)                                                  \
@@ -173,8 +176,8 @@ void class_import_put(struct obd_import *);
 struct obd_import *class_new_import(void);
 void class_destroy_import(struct obd_import *exp);
 
-struct obd_type *class_search_type(char *name);
-struct obd_type *class_get_type(char *name);
+struct obd_type *class_search_type(const char *name);
+struct obd_type *class_get_type(const char *name);
 void class_put_type(struct obd_type *type);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
@@ -1067,7 +1070,7 @@ static inline int obd_san_preprw(int cmd, struct obd_export *exp,
         return(rc);
 }
 
-static inline int obd_pin(struct obd_export *exp, struct lu_fid *fid, 
+static inline int obd_pin(struct obd_export *exp, struct lu_fid *fid,
                           struct obd_client_handle *handle, int flag)
 {
         int rc;
@@ -1264,9 +1267,9 @@ void class_generate_random_uuid(class_uuid_t uuid);
 void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
 
 /* lustre_peer.c    */
-int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index);
-int class_add_uuid(char *uuid, __u64 nid);
-int class_del_uuid (char *uuid);
+int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index);
+int class_add_uuid(const char *uuid, __u64 nid);
+int class_del_uuid (const char *uuid);
 void class_init_uuidlist(void);
 void class_exit_uuidlist(void);
 

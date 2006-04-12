@@ -36,6 +36,7 @@
 #include <linux/obd_ost.h>
 #include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lu_object.h>
 
 extern struct list_head obd_types;
 static spinlock_t obd_types_lock = SPIN_LOCK_UNLOCKED;
@@ -51,7 +52,7 @@ void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
  * support functions: we could use inter-module communication, but this
  * is more portable to other OS's
  */
-struct obd_type *class_search_type(char *name)
+struct obd_type *class_search_type(const char *name)
 {
         struct list_head *tmp;
         struct obd_type *type;
@@ -68,13 +69,13 @@ struct obd_type *class_search_type(char *name)
         return NULL;
 }
 
-struct obd_type *class_get_type(char *name)
+struct obd_type *class_get_type(const char *name)
 {
         struct obd_type *type = class_search_type(name);
 
 #ifdef CONFIG_KMOD
         if (!type) {
-                char *modname = name;
+                const char *modname = name;
                 if (strcmp(modname, LUSTRE_MDT_NAME) == 0)
                         modname = LUSTRE_MDS_NAME;
                 if (!request_module(modname)) {
@@ -97,7 +98,7 @@ void class_put_type(struct obd_type *type)
 }
 
 int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
-                        char *name)
+                        const char *name, struct lu_device_type *ldt)
 {
         struct obd_type *type;
         int rc = 0;
@@ -132,6 +133,12 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
                 GOTO (failed, rc);
         }
 #endif
+        if (ldt != NULL) {
+                type->typ_lu = ldt;
+                rc = ldt->ldt_ops->ldto_init(ldt);
+                if (rc != 0)
+                        GOTO (failed, rc);
+        }
 
         spin_lock(&obd_types_lock);
         list_add(&type->typ_chain, &obd_types);
@@ -148,7 +155,7 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
         RETURN(rc);
 }
 
-int class_unregister_type(char *name)
+int class_unregister_type(const char *name)
 {
         struct obd_type *type = class_search_type(name);
         ENTRY;
@@ -228,7 +235,7 @@ void class_release_dev(struct obd_device *obd)
         spin_unlock(&obd_dev_lock);
 }
 
-int class_name2dev(char *name)
+int class_name2dev(const char *name)
 {
         int i;
 
@@ -253,7 +260,7 @@ int class_name2dev(char *name)
         return -1;
 }
 
-struct obd_device *class_name2obd(char *name)
+struct obd_device *class_name2obd(const char *name)
 {
         int dev = class_name2dev(name);
         if (dev < 0)
@@ -317,7 +324,7 @@ void class_obd_list(void)
    specified, then only the client with that uuid is returned,
    otherwise any client connected to the tgt is returned. */
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
-                                          char * typ_name,
+                                          const char * typ_name,
                                           struct obd_uuid *grp_uuid)
 {
         int i;
@@ -1239,7 +1246,7 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 EXPORT_SYMBOL(class_update_export_timer);
 
 #define EVICT_BATCH 32
-int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
+int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 {
         struct obd_export *doomed_exp[EVICT_BATCH] = { NULL };
         struct list_head *p;
@@ -1279,7 +1286,7 @@ search_again:
 }
 EXPORT_SYMBOL(obd_export_evict_by_nid);
 
-int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
+int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 {
         struct obd_export *doomed_exp = NULL;
         struct list_head *p;
