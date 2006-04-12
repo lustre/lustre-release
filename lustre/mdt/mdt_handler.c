@@ -947,83 +947,35 @@ static int mdt_config(struct mdt_device *m, const char *name,
         RETURN(rc);
 }
 
-/* allocate sequence to client */
-int mdt_seq_alloc(struct mdt_device *m, __u64 *seq)
+static int mdt_seq_mgr_hpr(void *opaque, __u64 *seq,
+                           int mode)
 {
-        int rc = 0;
+        struct mdt_device *m = opaque;
+        int rc;
         ENTRY;
-
-        LASSERT(m != NULL);
-        LASSERT(seq != NULL);
-
-        down(&m->mdt_seq_sem);
-        m->mdt_seq += 1;
-        *seq = m->mdt_seq;
-
-        /* update new allocated sequence on store */
+        
         rc = mdt_config(m, LUSTRE_CONFIG_METASEQ,
-                        &m->mdt_seq, sizeof(m->mdt_seq),
-                        LUSTRE_CONFIG_SET);
-        if (rc) {
-                CERROR("can't save new seq, rc %d\n",
-                       rc);
-        }
-
-        up(&m->mdt_seq_sem);
-
-        RETURN(0);
+                        seq, sizeof(*seq),
+                        mode);
+        RETURN(rc);
 }
-EXPORT_SYMBOL(mdt_seq_alloc);
 
-/* initialize meta-sequence. First of all try to get it from lower layer down to
- * back store one. In the case this is first run and there is not meta-sequence
- * initialized yet - store it to backstore. */
-static int mdt_seq_init(struct mdt_device *m)
+static int mdt_seq_mgr_read(void *opaque, __u64 *seq)
 {
-        int rc = 0;
         ENTRY;
-
-        /* allocate next seq after root one */
-        m->mdt_seq = LUSTRE_ROOT_FID_SEQ + 1;
-
-        rc = mdt_config(m, LUSTRE_CONFIG_METASEQ,
-                        &m->mdt_seq, sizeof(m->mdt_seq),
-                        LUSTRE_CONFIG_GET);
-
-        if (rc == -EOPNOTSUPP) {
-                /* provide zero error and let continue with default value of
-                 * sequence. */
-                GOTO(out, rc = 0);
-        } else if (rc == -ENODATA) {
-                CWARN("initialize new sequence\n");
-
-                /*initialize new sequence config as it is not yet created. */
-                rc = mdt_config(m, LUSTRE_CONFIG_METASEQ,
-                                &m->mdt_seq, sizeof(m->mdt_seq),
-                                LUSTRE_CONFIG_SET);
-                if (rc == -EOPNOTSUPP) {
-                        /* provide zero error and let continue with default
-                         * value of sequence. */
-                        CERROR("can't update save initial sequence. "
-                               "No method defined\n");
-                        GOTO(out, rc = 0);
-                } else if (rc) {
-                        CERROR("can't update config %s, rc %d\n",
-                               LUSTRE_CONFIG_METASEQ, rc);
-                        GOTO(out, rc);
-                }
-        } else if (rc) {
-                CERROR("can't get config %s, rc %d\n",
-                       LUSTRE_CONFIG_METASEQ, rc);
-                GOTO(out, rc);
-        }
-
-        EXIT;
-out:
-        if (rc == 0)
-                CWARN("last used sequence: "LPU64"\n", m->mdt_seq);
-        return rc;
+        RETURN(mdt_seq_mgr_hpr(opaque, seq, LUSTRE_CONFIG_GET));
 }
+
+static int mdt_seq_mgr_write(void *opaque, __u64 *seq)
+{
+        ENTRY;
+        RETURN(mdt_seq_mgr_hpr(opaque, seq, LUSTRE_CONFIG_SET));
+}
+
+struct lu_seq_mgr_ops seq_mgr_ops = {
+        .smo_read = mdt_seq_mgr_read,
+        .smo_write = mdt_seq_mgr_write
+};
 
 static void mdt_fini(struct mdt_device *m)
 {
@@ -1046,6 +998,11 @@ static void mdt_fini(struct mdt_device *m)
         if (m->mdt_child) {
                 struct lu_device *child = md2lu_dev(m->mdt_child);
                 child->ld_type->ldt_ops->ldto_device_fini(child);
+        }
+
+        if (m->mdt_seq_mgr) {
+                seq_mgr_fini(m->mdt_seq_mgr);
+                m->mdt_seq_mgr = NULL;
         }
 
         LASSERT(atomic_read(&d->ld_ref) == 0);
@@ -1083,8 +1040,6 @@ static int mdt_init0(struct mdt_device *m,
         md_device_init(&m->mdt_md_dev, t);
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
         lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
-
-        sema_init(&m->mdt_seq_sem, 1);
 
         m->mdt_service_conf.psc_nbufs            = MDS_NBUFS;
         m->mdt_service_conf.psc_bufsize          = MDS_BUFSIZE;
@@ -1126,17 +1081,26 @@ static int mdt_init0(struct mdt_device *m,
                 GOTO(err_free_svc, rc);
         }
 
-        /* init sequence info after device stack is initialized. */
-        rc = mdt_seq_init(m);
-        if (rc)
+        m->mdt_seq_mgr = seq_mgr_init(&seq_mgr_ops, m);
+        if (!m->mdt_seq_mgr) {
+                CERROR("can't initialize sequence manager\n");
                 GOTO(err_fini_child, rc);
+        }
+        
+        /* init sequence info after device stack is initialized. */
+        rc = seq_mgr_setup(m->mdt_seq_mgr);
+        if (rc)
+                GOTO(err_fini_mgr, rc);
 
         rc = ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT0_NAME);
         if (rc)
-                GOTO(err_fini_child, rc);
+                GOTO(err_fini_mgr, rc);
 
         RETURN(0);
 
+err_fini_mgr:
+        seq_mgr_fini(m->mdt_seq_mgr);
+        m->mdt_seq_mgr = NULL;
 err_fini_child:
         mdt_child->ld_type->ldt_ops->ldto_device_fini(mdt_child);
 err_free_svc:
@@ -1217,6 +1181,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 {
         struct obd_export *exp;
         int rc, abort_recovery;
+        struct mdt_device *mdt;
         struct mds_export_data *med;
         struct mds_client_data *mcd = NULL;
 
@@ -1224,6 +1189,8 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         if (!conn || !obd || !cluuid)
                 RETURN(-EINVAL);
+
+        mdt = mdt_dev(obd->obd_lu_dev);
 
         /* Check for aborted recovery. */
         spin_lock_bh(&obd->obd_processing_task_lock);
@@ -1256,8 +1223,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
 
-        rc = mdt_seq_alloc(mdt_dev(obd->obd_lu_dev),
-                           &data->ocd_seq);
+        rc = seq_mgr_alloc(mdt->mdt_seq_mgr, &data->ocd_seq);
         if (rc)
                 GOTO(out, rc);
 out:

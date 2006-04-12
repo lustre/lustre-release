@@ -629,6 +629,8 @@ lustre/kernel_patches/targets/sles-2.4.target
 lustre/ldiskfs/Makefile
 lustre/ldiskfs/autoMakefile
 lustre/ldlm/Makefile
+lustre/fid/Makefile
+lustre/fid/autoMakefile
 lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile
 lustre/llite/Makefile

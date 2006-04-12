@@ -1,0 +1,4 @@
+MODULES := fid
+fid-objs := fid_seq.o
+
+@INCLUDE_RULES@

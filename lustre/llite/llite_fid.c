@@ -55,7 +55,7 @@ int ll_fid_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
 }
 
 /* build inode number on passed @fid */
-ino_t ll_fid2ino(struct ll_sb_info *sbi, struct lu_fid *fid)
+ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid)
 {
         ino_t ino;
         ENTRY;

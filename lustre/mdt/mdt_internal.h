@@ -45,8 +45,8 @@
  * struct lustre_handle
  */
 #include <linux/lustre_idl.h>
-
 #include <linux/md_object.h>
+#include <linux/lustre_fid.h>
 
 struct ptlrpc_service_conf {
         int psc_nbufs;
@@ -77,8 +77,7 @@ struct mdt_device {
         unsigned long              mdt_flags;
 
         /* Seq management related stuff */
-        struct semaphore           mdt_seq_sem;
-        __u64                      mdt_seq;
+        struct lu_seq_mgr         *mdt_seq_mgr;
 };
 
 static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
@@ -167,8 +166,6 @@ struct mdt_thread_info {
         struct mdt_lock_handle mti_lh[MDT_LH_NR];
 
 };
-
-int mdt_seq_alloc(struct mdt_device *, __u64 *);
 
 int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
              struct lustre_handle *, ldlm_mode_t,

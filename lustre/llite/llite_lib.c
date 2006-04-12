@@ -307,7 +307,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
 
         LASSERT(fid_oid(&sbi->ll_root_fid) != 0);
-        root = ll_iget(sb, ll_fid2ino(sbi, &sbi->ll_root_fid), &md);
+        root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &md);
         ptlrpc_req_finished(request);
 
         if (root == NULL || is_bad_inode(root)) {
@@ -1541,7 +1541,7 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                 /* at this point server answers to client's RPC with same fid as
                  * client generated for creating some inode. So using
                  * md.body.fid1 is okay here. */
-                *inode = ll_iget(sb, ll_fid2ino(sbi, &md.body->fid1), &md);
+                *inode = ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1), &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
                         mdc_free_lustre_md(exp, &md);
                         rc = -ENOMEM;
