@@ -1359,22 +1359,11 @@ LPROCFS_INIT_VARS(mdt, lprocfs_mdt_module_vars, lprocfs_mdt_obd_vars);
 static int __init mdt_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-        struct obd_type *type;
-        int result;
 
         mdt_num_threads = MDT_NUM_THREADS;
         lprocfs_init_vars(mdt, &lvars);
-        result = class_register_type(&mdt_obd_device_ops,
-                                     lvars.module_vars, LUSTRE_MDT0_NAME);
-        if (result == 0) {
-                type = class_get_type(LUSTRE_MDT0_NAME);
-                LASSERT(type != NULL);
-                type->typ_lu = &mdt_device_type;
-                result = type->typ_lu->ldt_ops->ldto_init(type->typ_lu);
-                if (result != 0)
-                        class_unregister_type(LUSTRE_MDT0_NAME);
-        }
-        return result;
+        return class_register_type(&mdt_obd_device_ops, lvars.module_vars,
+                                   LUSTRE_MDT0_NAME, &mdt_device_type);
 }
 
 static void __exit mdt_mod_exit(void)

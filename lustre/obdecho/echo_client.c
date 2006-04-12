@@ -1469,7 +1469,7 @@ int echo_client_init(void)
 
         lprocfs_init_vars(echo, &lvars);
         return class_register_type(&echo_obd_ops, lvars.module_vars,
-                                   OBD_ECHO_CLIENT_DEVICENAME);
+                                   OBD_ECHO_CLIENT_DEVICENAME, NULL);
 }
 
 void echo_client_exit(void)

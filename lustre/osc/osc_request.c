@@ -3482,7 +3482,7 @@ int __init osc_init(void)
         init_obd_quota_ops(quota_interface, &osc_obd_ops);
 
         rc = class_register_type(&osc_obd_ops, lvars.module_vars,
-                                 LUSTRE_OSC_NAME);
+                                 LUSTRE_OSC_NAME, NULL);
         if (rc) {
                 if (quota_interface)
                         PORTAL_SYMBOL_PUT(osc_quota_interface);
@@ -3491,7 +3491,7 @@ int __init osc_init(void)
 
 #if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         rc = class_register_type(&sanosc_obd_ops, sanlvars.module_vars,
-                                 LUSTRE_SANOSC_NAME);
+                                 LUSTRE_SANOSC_NAME, NULL);
         if (rc) {
                 class_unregister_type(LUSTRE_OSC_NAME);
                 if (quota_interface)

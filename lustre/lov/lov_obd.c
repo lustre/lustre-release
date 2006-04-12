@@ -740,7 +740,7 @@ static int lov_cleanup(struct obd_device *obd)
                         if (!obd_uuid_empty(&tgt->uuid)) {
                                 CERROR("lov tgt %d not cleaned!"
                                        " deathrow=%d, lovrc=%d\n",
-                                       i, lov->death_row, 
+                                       i, lov->death_row,
                                        atomic_read(&lov->refcount));
                                 lov_del_target(obd, &tgt->uuid, i, 0);
                         }
@@ -789,7 +789,7 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                 if (!desc)
                         GOTO(out, rc = -EINVAL);
                 /* see jt_obd_lov_getconfig for variable names */
-                /* setparam 0:lov_mdsA 1:default_stripe_size=1048576 
+                /* setparam 0:lov_mdsA 1:default_stripe_size=1048576
                    2:default_stripe_pattern=0 3:default_stripe_offset=0 */
                 for (i = 1; i < lcfg->lcfg_bufcount; i++) {
                         char *key, *sval;
@@ -1528,11 +1528,11 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (!page) {
                 int i = 0;
                 /* Find an existing osc so we can get it's stupid sizeof(*oap).
-                   Only because of this layering limitation will a client 
+                   Only because of this layering limitation will a client
                    mount with no osts fail */
                 while (!lov->tgts[i].ltd_exp) {
                         i++;
-                        if (i >= lov->desc.ld_tgt_count) 
+                        if (i >= lov->desc.ld_tgt_count)
                                 RETURN(-ENOTBLK);
                 }
                 rc = size_round(sizeof(*lap)) +
@@ -2191,7 +2191,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                                 GOTO(out, rc);
                 }
                 GOTO(out, rc = 0);
-        } else if (keylen >= strlen(KEY_LOVDESC) && 
+        } else if (keylen >= strlen(KEY_LOVDESC) &&
                    strcmp(key, KEY_LOVDESC) == 0) {
                 struct lov_desc *desc_ret = val;
                 *desc_ret = lov->desc;
@@ -2289,7 +2289,7 @@ static int lov_checkmd(struct obd_export *exp, struct obd_export *md_exp,
         LASSERT(md_exp);
         LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
         rc = lsm_op_find(lsm->lsm_magic)->lsm_revalidate(lsm, md_exp->exp_obd);
- 
+
         RETURN(rc);
 }
 
@@ -2474,7 +2474,7 @@ int __init lov_init(void)
         init_obd_quota_ops(quota_interface, &lov_obd_ops);
 
         rc = class_register_type(&lov_obd_ops, lvars.module_vars,
-                                 OBD_LOV_DEVICENAME);
+                                 OBD_LOV_DEVICENAME, NULL);
         if (rc && quota_interface)
                 PORTAL_SYMBOL_PUT(osc_quota_interface);
 

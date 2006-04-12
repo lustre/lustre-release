@@ -686,7 +686,8 @@ static int __init llog_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(llog_test, &lvars);
-        return class_register_type(&llog_obd_ops,lvars.module_vars,"llog_test");
+        return class_register_type(&llog_obd_ops,
+                                   lvars.module_vars,"llog_test", NULL);
 }
 
 static void __exit llog_test_exit(void)

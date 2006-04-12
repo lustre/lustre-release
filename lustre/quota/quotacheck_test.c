@@ -200,7 +200,7 @@ static int __init quotacheck_test_init(void)
 
         lprocfs_init_vars(quotacheck_test, &lvars);
         return class_register_type(&quotacheck_obd_ops, lvars.module_vars,
-                                   "quotacheck_test");
+                                   "quotacheck_test", NULL);
 }
 
 static void __exit quotacheck_test_exit(void)

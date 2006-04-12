@@ -189,21 +189,10 @@ LPROCFS_INIT_VARS(cmm, lprocfs_cmm_module_vars, lprocfs_cmm_obd_vars);
 static int __init cmm_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-        struct obd_type *type;
-        int result;
 
         lprocfs_init_vars(cmm, &lvars);
-        result = class_register_type(&cmm_obd_device_ops,
-                                     lvars.module_vars, LUSTRE_CMM0_NAME);
-        if (result == 0) {
-                type = class_get_type(LUSTRE_CMM0_NAME);
-                LASSERT(type != NULL);
-                type->typ_lu = &cmm_device_type;
-                result = type->typ_lu->ldt_ops->ldto_init(type->typ_lu);
-                if (result != 0)
-                        class_unregister_type(LUSTRE_CMM0_NAME);
-        }
-	return result;
+        return class_register_type(&cmm_obd_device_ops, lvars.module_vars,
+                                   LUSTRE_CMM0_NAME, &cmm_device_type);
 }
 
 static void __exit cmm_mod_exit(void)

@@ -341,7 +341,7 @@ static int __init quotactl_test_init(void)
 
         lprocfs_init_vars(quotactl_test, &lvars);
         return class_register_type(&quotactl_obd_ops, lvars.module_vars,
-                                   "quotactl_test");
+                                   "quotactl_test", NULL);
 }
 
 static void __exit quotactl_test_exit(void)

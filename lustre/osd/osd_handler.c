@@ -51,6 +51,7 @@
 #include "osd_internal.h"
 
 static int   osd_root_get      (struct dt_device *dev, struct lu_fid *f);
+static int   osd_statfs        (struct dt_device *dev, struct kstatfs *sfs);
 
 static int   lu_device_is_osd  (const struct lu_device *d);
 static void  osd_mod_exit      (void) __exit;
@@ -216,7 +217,7 @@ static int osd_statfs(struct dt_device *d, struct kstatfs *sfs)
 {
 	struct osd_device *osd = dt2osd_dev(d);
         struct super_block *sb = osd->od_dt_dev.dd_lmi->lmi_sb;
-        int result = -EOPNOTSUPP;
+        int result;
 
         ENTRY;
 
@@ -386,21 +387,10 @@ LPROCFS_INIT_VARS(osd, lprocfs_osd_module_vars, lprocfs_osd_obd_vars);
 static int __init osd_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-        struct obd_type *type;
-        int result;
 
         lprocfs_init_vars(osd, &lvars);
-        result = class_register_type(&osd_obd_device_ops,
-                                     lvars.module_vars, LUSTRE_OSD0_NAME);
-        if (result == 0) {
-                type = class_get_type(LUSTRE_OSD0_NAME);
-                LASSERT(type != NULL);
-                type->typ_lu = &osd_device_type;
-                result = type->typ_lu->ldt_ops->ldto_init(type->typ_lu);
-                if (result != 0)
-                        class_unregister_type(LUSTRE_OSD0_NAME);
-        }
-        return result;
+        return class_register_type(&osd_obd_device_ops, lvars.module_vars,
+                                     LUSTRE_OSD0_NAME, &osd_device_type);
 }
 
 static void __exit osd_mod_exit(void)

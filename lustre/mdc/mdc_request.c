@@ -1243,7 +1243,7 @@ int __init mdc_init(void)
         init_obd_quota_ops(quota_interface, &mdc_obd_ops);
 
         rc = class_register_type(&mdc_obd_ops, lvars.module_vars,
-                                 LUSTRE_MDC_NAME);
+                                 LUSTRE_MDC_NAME, NULL);
         if (rc && quota_interface)
                 PORTAL_SYMBOL_PUT(mdc_quota_interface);
 
