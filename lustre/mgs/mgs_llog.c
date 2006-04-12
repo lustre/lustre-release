@@ -964,7 +964,7 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
                 uuid = lustre_cfg_string(lcfg, 1);
                 index = lustre_cfg_string(lcfg, 2);
                 gen = lustre_cfg_string(lcfg, 3);
-                dash =  strchr(uuid, '-');
+                dash =  strchr(name, '-');
                 *(++dash)='m';
                 *(++dash)='d';
                 *(++dash)='t';
@@ -987,7 +987,7 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
                 uuid = lustre_cfg_string(lcfg, 1);
                 index = lustre_cfg_string(lcfg, 2);
                 gen = lustre_cfg_string(lcfg, 3);
-                dash =  strchr(uuid, '-');
+                dash =  strchr(name, '-');
                 *(++dash)='m';
                 *(++dash)='d';
                 *(++dash)='t';
