@@ -134,6 +134,7 @@ enum {
  * reduce stack consumption.
  */
 struct mdt_thread_info {
+        struct lu_context     mti_ctxt;
         struct mdt_device     *mti_mdt;
         /*
          * number of buffers in reply message.
@@ -174,9 +175,9 @@ int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
 void fid_unlock(struct ldlm_namespace *, const struct lu_fid *,
                 struct lustre_handle *, ldlm_mode_t);
 
-struct mdt_object *mdt_object_find(struct mdt_device *,
+struct mdt_object *mdt_object_find(struct lu_context *, struct mdt_device *,
                                    struct lu_fid *);
-void mdt_object_put(struct mdt_object *);
+void mdt_object_put(struct lu_context *ctxt, struct mdt_object *);
 
 struct lu_fid *mdt_object_fid(struct mdt_object *);
 
@@ -186,9 +187,8 @@ int mdt_object_lock(struct ldlm_namespace *, struct mdt_object *,
 void mdt_object_unlock(struct ldlm_namespace *, struct mdt_object *,
                        struct mdt_lock_handle *);
 
-struct mdt_object *mdt_object_find_lock(struct mdt_device *,
+struct mdt_object *mdt_object_find_lock(struct lu_context *, struct mdt_device *,
                                         struct lu_fid *,
-                                        struct mdt_lock_handle *,
-                                        __u64);
+                                        struct mdt_lock_handle *, __u64);
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */
