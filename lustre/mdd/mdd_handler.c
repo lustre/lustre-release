@@ -111,7 +111,7 @@ static struct lu_object *mdd_object_alloc(struct lu_device *d)
                 return(NULL);
 }
 
-static int mdd_object_init(struct lu_object *o)
+static int mdd_object_init(struct lu_context *ctxt, struct lu_object *o)
 {
 	struct mdd_device *d = lu2mdd_dev(o->lo_dev);
 	struct lu_object  *below;
@@ -139,8 +139,9 @@ static void mdd_object_free(struct lu_object *o)
 }
 
 static int
-mdd_attr_get(struct md_object *obj, void *buf, int buf_len, const char *name,
-             struct context *uctxt)
+mdd_attr_get(struct lu_context *ctxt, struct md_object *obj, void *buf,
+             int buf_len, const char *name,
+             struct md_params *arg)
 {
         struct mdd_object *mdd_obj = mdo2mddo(obj);
         struct dt_object  *next = mdd_object_child(mdd_obj);
@@ -148,18 +149,19 @@ mdd_attr_get(struct md_object *obj, void *buf, int buf_len, const char *name,
 
         ENTRY;
 
-        rc = next->do_ops->do_attr_get(next, buf, buf_len, name, uctxt);
+        rc = next->do_ops->do_attr_get(ctxt, next, buf, buf_len, name, arg);
         RETURN(rc);
 }
 
 static int
-__mdd_object_destroy(struct mdd_device *mdd, struct mdd_object *obj,
+__mdd_object_destroy(struct lu_context *ctxt, struct mdd_device *mdd,
+                     struct mdd_object *obj,
                      struct thandle *handle)
 {
         int rc = 0;
         struct dt_object *next = mdd_object_child(obj);
 
-        rc = next->do_ops->do_object_destroy(next, handle);
+        rc = next->do_ops->do_object_destroy(ctxt, next, handle);
         RETURN(rc);
 }
 
@@ -201,7 +203,7 @@ enum {
 };
 
 static int
-mdd_object_destroy(struct md_object *obj)
+mdd_object_destroy(struct lu_context *ctxt, struct md_object *obj)
 {
         struct mdd_device *mdd = mdo2mdd(obj);
         struct mdd_object *mdd_obj = mdo2mddo(obj);
@@ -217,7 +219,8 @@ mdd_object_destroy(struct md_object *obj)
         if (open_orphan(mdd_obj))
                 rc = mdd_add_orphan(mdd, mdd_obj, handle);
         else {
-                rc = __mdd_object_destroy(mdd, mdd_obj, handle);
+                rc = __mdd_object_destroy(ctxt, mdd,
+                                          mdd_obj, handle);
                 if (rc == 0)
                         rc = mdd_add_unlink_log(mdd, mdd_obj, handle);
         }
@@ -227,17 +230,18 @@ mdd_object_destroy(struct md_object *obj)
         RETURN(rc);
 }
 
-static void mdd_object_release(struct lu_object *o)
+static void mdd_object_release(struct lu_context *ctxt, struct lu_object *o)
 {
         struct mdd_object *obj = mdd_obj(o);
 
         int rc;
         int nlink;
 
-        rc = mdd_attr_get(&obj->mod_obj, &nlink, sizeof(nlink), "NLINK", NULL);
+        rc = mdd_attr_get(ctxt, &obj->mod_obj, &nlink,
+                          sizeof(nlink), "NLINK", NULL);
         if (rc == 0) {
                 if (nlink == 0)
-                        rc = mdd_object_destroy(&obj->mod_obj);
+                        rc = mdd_object_destroy(ctxt, &obj->mod_obj);
         } else
                 CERROR("Failed to get nlink: %d. Pretending nonzero.\n", rc);
 }
@@ -347,23 +351,24 @@ static void mdd_trans_stop(struct mdd_device *mdd, struct thandle *handle)
 }
 
 static int
-__mdd_object_create(struct mdd_device *mdd, struct mdd_object *pobj,
-                    struct mdd_object *child, struct context *uctxt,
+__mdd_object_create(struct lu_context *ctxt, struct mdd_device *mdd,
+                    struct mdd_object *pobj,
+                    struct mdd_object *child, struct md_params *arg,
                     struct thandle *handle)
 {
         int rc;
         struct dt_object *next = mdd_object_child(pobj);
         ENTRY;
 
-        rc = next->do_ops->do_object_create(next, mdd_object_child(child),
-                                            uctxt, handle);
+        rc = next->do_ops->do_object_create(ctxt, next, mdd_object_child(child),
+                                            arg, handle);
         /*XXX increase the refcount of the object or not?*/
         RETURN(rc);
 }
 
 static int
-mdd_object_create(struct md_object *pobj, struct md_object *child,
-                  struct context *uctxt)
+mdd_object_create(struct lu_context *ctxt, struct md_object *pobj,
+                  struct md_object *child, struct md_params *arg)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = mdo2mddo(pobj);
@@ -376,7 +381,7 @@ mdd_object_create(struct md_object *pobj, struct md_object *child,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_object_create(mdd, mdd_pobj, mdd_child, uctxt, handle);
+        rc = __mdd_object_create(ctxt, mdd, mdd_pobj, mdd_child, arg, handle);
 
         mdd_trans_stop(mdd, handle);
 
@@ -384,18 +389,19 @@ mdd_object_create(struct md_object *pobj, struct md_object *child,
 }
 
 static int
-__mdd_attr_set(struct mdd_device *mdd, struct mdd_object *obj, void *buf,
-               int buf_len, const char *name, struct context *uc_context,
+__mdd_attr_set(struct lu_context *ctxt, struct mdd_device *mdd,
+               struct mdd_object *obj, void *buf,
+               int buf_len, const char *name, struct md_params *arg,
                struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(obj);
-        return next->do_ops->do_attr_set(next, buf, buf_len,
-                                         name, uc_context, handle);
+        return next->do_ops->do_attr_set(ctxt, next, buf, buf_len,
+                                         name, arg, handle);
 }
 
 static int
-mdd_attr_set(struct md_object *obj, void *buf, int buf_len, const char *name,
-             struct context *uctxt)
+mdd_attr_set(struct lu_context *ctxt, struct md_object *obj, void *buf,
+             int buf_len, const char *name, struct md_params *arg)
 {
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -406,8 +412,8 @@ mdd_attr_set(struct md_object *obj, void *buf, int buf_len, const char *name,
         if (!handle)
                 RETURN(-ENOMEM);
 
-        rc = __mdd_attr_set(mdd, mdo2mddo(obj), buf, buf_len, name, uctxt,
-                            handle);
+        rc = __mdd_attr_set(ctxt, mdd, mdo2mddo(obj), buf, buf_len, name,
+                            arg, handle);
 
         mdd_trans_stop(mdd, handle);
 
@@ -420,9 +426,10 @@ static struct lu_fid *mdd_object_getfid(struct mdd_object *obj)
 }
 
 static int
-__mdd_index_insert(struct mdd_device *mdd, struct mdd_object *pobj,
+__mdd_index_insert(struct lu_context *ctxt, struct mdd_device *mdd,
+                   struct mdd_object *pobj,
                    struct mdd_object *obj, const char *name,
-                   struct context *uctxt, void *handle)
+                   struct md_params *arg, void *handle)
 {
         int rc;
         struct dt_object *next = mdd_object_child(pobj);
@@ -430,16 +437,17 @@ __mdd_index_insert(struct mdd_device *mdd, struct mdd_object *pobj,
 
         mdd_lock2(pobj, obj);
 
-        rc = next->do_ops->do_index_insert(next, mdd_object_getfid(obj), name,
-                                           uctxt, handle);
+        rc = next->do_ops->do_index_insert(ctxt, next, mdd_object_getfid(obj), name,
+                                           arg, handle);
         mdd_unlock2(pobj, obj);
 
         RETURN(rc);
 }
 
 static int
-mdd_index_insert(struct md_object *pobj, struct md_object *obj, const char *name,
-                 struct context *uctxt)
+mdd_index_insert(struct lu_context *ctxt, struct md_object *pobj,
+                 struct md_object *obj, const char *name,
+                 struct md_params *arg)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         int rc;
@@ -450,17 +458,18 @@ mdd_index_insert(struct md_object *pobj, struct md_object *obj, const char *name
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_index_insert(mdd, mdo2mddo(pobj), mdo2mddo(obj), name, uctxt,
-                                handle);
+        rc = __mdd_index_insert(ctxt, mdd, mdo2mddo(pobj), mdo2mddo(obj),
+                                name, arg, handle);
 
         mdd_trans_stop(mdd, handle);
         RETURN(rc);
 }
 
 static int
-__mdd_index_delete(struct mdd_device *mdd, struct mdd_object *pobj,
+__mdd_index_delete(struct lu_context *ctxt, struct mdd_device *mdd,
+                   struct mdd_object *pobj,
                    struct mdd_object *obj, const char *name,
-                   struct context *uctxt, struct thandle *handle)
+                   struct md_params *arg, struct thandle *handle)
 {
         int rc;
         struct dt_object *next = mdd_object_child(pobj);
@@ -468,16 +477,17 @@ __mdd_index_delete(struct mdd_device *mdd, struct mdd_object *pobj,
 
         mdd_lock2(pobj, obj);
 
-        rc = next->do_ops->do_index_delete(next, mdd_object_getfid(obj), name,
-                                           uctxt, handle);
+        rc = next->do_ops->do_index_delete(ctxt, next, mdd_object_getfid(obj),
+                                           name, arg, handle);
         mdd_unlock2(pobj, obj);
 
         RETURN(rc);
 }
 
 static int
-mdd_index_delete(struct md_object *pobj, struct md_object *obj,
-                 const char *name, struct context *uctxt)
+mdd_index_delete(struct lu_context *ctxt, struct md_object *pobj,
+                 struct md_object *obj, const char *name,
+                 struct md_params *arg)
 {
         struct mdd_object *mdd_pobj = mdo2mddo(pobj);
         struct mdd_object *mdd_obj = mdo2mddo(obj);
@@ -490,7 +500,8 @@ mdd_index_delete(struct md_object *pobj, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_index_delete(mdd, mdd_pobj, mdd_obj, name, uctxt, handle);
+        rc = __mdd_index_delete(ctxt, mdd, mdd_pobj, mdd_obj, name, arg,
+                                handle);
 
         mdd_trans_stop(mdd, handle);
 
@@ -498,8 +509,9 @@ mdd_index_delete(struct md_object *pobj, struct md_object *obj,
 }
 
 static int
-mdd_link(struct md_object *tgt_obj, struct md_object *src_obj,
-         const char *name, struct context *uctxt)
+mdd_link(struct lu_context *ctxt, struct md_object *tgt_obj,
+         struct md_object *src_obj,
+         const char *name, struct md_params *arg)
 {
         struct mdd_object *mdd_tobj = mdo2mddo(tgt_obj);
         struct mdd_object *mdd_sobj = mdo2mddo(src_obj);
@@ -514,15 +526,16 @@ mdd_link(struct md_object *tgt_obj, struct md_object *src_obj,
 
         mdd_lock2(mdd_tobj, mdd_sobj);
 
-        rc = __mdd_index_insert(mdd, mdd_tobj, mdd_sobj, name, uctxt, handle);
+        rc = __mdd_index_insert(ctxt, mdd, mdd_tobj, mdd_sobj, name, arg,
+                                handle);
         if (rc)
                 GOTO(exit, rc);
 
-        rc = mdd_attr_get(src_obj, &nlink, sizeof(nlink), "NLINK", uctxt);
+        rc = mdd_attr_get(ctxt, src_obj, &nlink, sizeof(nlink), "NLINK", arg);
         ++nlink;
 
-        rc = __mdd_attr_set(mdd, mdd_sobj, &nlink, sizeof(nlink), "NLINK",
-                            uctxt, handle);
+        rc = __mdd_attr_set(ctxt, mdd, mdd_sobj, &nlink, sizeof(nlink), "NLINK",
+                            arg, handle);
 exit:
         mdd_unlock2(mdd_tobj, mdd_sobj);
 
@@ -545,9 +558,10 @@ static void mdd_rename_unlock(struct mdd_device *mdd, struct mdd_object *src_pob
 }
 
 static int
-mdd_rename(struct md_object *src_pobj, struct md_object *tgt_pobj,
+mdd_rename(struct lu_context *ctxt, struct md_object *src_pobj,
+           struct md_object *tgt_pobj,
            struct md_object *sobj, const char *sname, struct md_object *tobj,
-           const char *tname, struct context *uctxt)
+           const char *tname, struct md_params *arg)
 {
         struct mdd_device *mdd = mdo2mdd(src_pobj);
         struct mdd_object *mdd_spobj = mdo2mddo(src_pobj);
@@ -563,19 +577,22 @@ mdd_rename(struct md_object *src_pobj, struct md_object *tgt_pobj,
 
         mdd_rename_lock(mdd, mdd_spobj, mdd_tpobj, mdd_sobj, mdd_tobj);
 
-        rc = __mdd_index_delete(mdd, mdd_spobj, mdd_sobj, sname, uctxt, handle);
+        rc = __mdd_index_delete(ctxt, mdd, mdd_spobj, mdd_sobj, sname, arg,
+                                handle);
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = __mdd_index_delete(mdd, mdd_tpobj, mdd_tobj, tname, uctxt, handle);
+        rc = __mdd_index_delete(ctxt, mdd, mdd_tpobj, mdd_tobj, tname, arg,
+                                handle);
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = __mdd_index_insert(mdd, mdd_spobj, mdd_tobj, tname, uctxt, handle);
+        rc = __mdd_index_insert(ctxt, mdd, mdd_spobj, mdd_tobj, tname, arg,
+                                handle);
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = __mdd_object_destroy(mdd, mdd_sobj, handle);
+        rc = __mdd_object_destroy(ctxt, mdd, mdd_sobj, handle);
         if (rc)
                 GOTO(cleanup, rc);
 cleanup:
@@ -585,7 +602,8 @@ cleanup:
 }
 
 static int
-mdd_mkdir(struct md_object *pobj, const char *name, struct md_object *child)
+mdd_mkdir(struct lu_context *ctxt, struct md_object *pobj,
+          const char *name, struct md_object *child)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct thandle *handle;
@@ -598,13 +616,13 @@ mdd_mkdir(struct md_object *pobj, const char *name, struct md_object *child)
 
         mdd_lock(mdo2mddo(pobj), DT_WRITE_LOCK);
 
-        rc = __mdd_object_create(mdd, mdo2mddo(pobj), mdo2mddo(child), NULL,
-                                 handle);
+        rc = __mdd_object_create(ctxt, mdd, mdo2mddo(pobj), mdo2mddo(child),
+                                 NULL, handle);
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = __mdd_index_insert(mdd, mdo2mddo(pobj), mdo2mddo(child), name,
-                                NULL, handle);
+        rc = __mdd_index_insert(ctxt, mdd, mdo2mddo(pobj), mdo2mddo(child),
+                                name, NULL, handle);
         if (rc)
                 GOTO(cleanup, rc);
 cleanup:

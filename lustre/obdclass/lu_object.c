@@ -41,7 +41,7 @@
 
 static void lu_object_free(struct lu_object *o);
 
-void lu_object_put(struct lu_object *o)
+void lu_object_put(struct lu_context *ctxt, struct lu_object *o)
 {
         struct lu_object_header *top;
         struct lu_site          *site;
@@ -52,7 +52,7 @@ void lu_object_put(struct lu_object *o)
         if (-- top->loh_ref == 0) {
                 list_for_each_entry(o, &top->loh_layers, lo_linkage) {
                         if (lu_object_ops(o)->ldo_object_release != NULL)
-                                lu_object_ops(o)->ldo_object_release(o);
+                                lu_object_ops(o)->ldo_object_release(ctxt, o);
                 }
                 -- site->ls_busy;
                 if (lu_object_is_dying(top)) {
@@ -70,7 +70,8 @@ void lu_object_put(struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_put);
 
-struct lu_object *lu_object_alloc(struct lu_site *s, const struct lu_fid *f)
+struct lu_object *lu_object_alloc(struct lu_context *ctxt,
+                                  struct lu_site *s, const struct lu_fid *f)
 {
         struct lu_object *scan;
         struct lu_object *top;
@@ -79,7 +80,7 @@ struct lu_object *lu_object_alloc(struct lu_site *s, const struct lu_fid *f)
 
         top = s->ls_top_dev->ld_ops->ldo_object_alloc(s->ls_top_dev);
         if (IS_ERR(top))
-                return top;
+                RETURN(top);
         *lu_object_fid(top) = *f;
         do {
                 clean = 1;
@@ -89,16 +90,16 @@ struct lu_object *lu_object_alloc(struct lu_site *s, const struct lu_fid *f)
                                 continue;
                         clean = 0;
                         scan->lo_header = top->lo_header;
-                        result = lu_object_ops(scan)->ldo_object_init(scan);
+                        result = lu_object_ops(scan)->ldo_object_init(ctxt, scan);
                         if (result != 0) {
                                 lu_object_free(top);
-                                return ERR_PTR(result);
+                                RETURN(ERR_PTR(result));
                         }
                         scan->lo_flags |= LU_OBJECT_ALLOCATED;
                 }
         } while (!clean);
         s->ls_stats.s_created ++;
-        return top;
+        RETURN(top);
 }
 
 static void lu_object_free(struct lu_object *o)
@@ -201,7 +202,8 @@ static __u32 fid_hash(const struct lu_fid *f)
         return (fid_seq(f) - 1) * LUSTRE_FID_SEQ_WIDTH + fid_oid(f);
 }
 
-struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f)
+struct lu_object *lu_object_find(struct lu_context *ctxt, struct lu_site *s,
+                                 const struct lu_fid *f)
 {
         struct lu_object  *o;
         struct lu_object  *shadow;
@@ -214,7 +216,7 @@ struct lu_object *lu_object_find(struct lu_site *s, const struct lu_fid *f)
         if (o != NULL)
                 return o;
 
-        o = lu_object_alloc(s, f);
+        o = lu_object_alloc(ctxt, s, f);
         if (IS_ERR(o))
                 return o;
 
