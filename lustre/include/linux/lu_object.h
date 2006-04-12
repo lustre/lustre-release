@@ -491,7 +491,6 @@ struct dt_object_operations {
 struct dt_device {
 	struct lu_device             dd_lu_dev;
 	struct dt_device_operations *dd_ops;
-        struct lustre_mount_info    *dd_lmi;
 };
 
 struct dt_object {

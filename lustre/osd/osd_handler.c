@@ -199,7 +199,7 @@ static int osd_config(struct dt_device *d, const char *name,
                       void *buf, int size, int mode)
 {
 	struct osd_device *osd = dt2osd_dev(d);
-        struct super_block *sb = osd->od_dt_dev.dd_lmi->lmi_sb;
+        struct super_block *sb = osd->od_mount->lmi_sb;
         int result = -EOPNOTSUPP;
 
         ENTRY;
@@ -216,7 +216,7 @@ static int osd_config(struct dt_device *d, const char *name,
 static int osd_statfs(struct dt_device *d, struct kstatfs *sfs)
 {
 	struct osd_device *osd = dt2osd_dev(d);
-        struct super_block *sb = osd->od_dt_dev.dd_lmi->lmi_sb;
+        struct super_block *sb = osd->od_mount->lmi_sb;
         int result;
 
         ENTRY;
