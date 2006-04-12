@@ -60,8 +60,8 @@ static void *osd_thread_init   (struct ptlrpc_thread *t);
 static void  osd_thread_fini   (struct ptlrpc_thread *t, void *data);
 static int   osd_type_init     (struct lu_device_type *t);
 static void  osd_type_fini     (struct lu_device_type *t);
-static int   osd_object_init   (struct lu_object *l);
-static void  osd_object_release(struct lu_object *l);
+static int   osd_object_init   (struct lu_context *ctxt, struct lu_object *l);
+static void  osd_object_release(struct lu_context *ctxt, struct lu_object *l);
 static int   osd_object_print  (struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (struct lu_device *m);
 static void  osd_device_fini   (struct lu_device *d);
@@ -125,11 +125,30 @@ static struct lu_object *osd_object_alloc(struct lu_device *d)
                 return NULL;
 }
 
-static int osd_object_init(struct lu_object *l)
+static int osd_getattr(struct inode *inode, struct lu_attr *attr)
+{
+        //attr->atime      = inode->i_atime;
+        //attr->mtime      = inode->i_mtime;
+        //attr->ctime      = inode->i_ctime;
+        attr->mode       = inode->i_mode;
+        attr->size       = inode->i_size;
+        attr->blocks     = inode->i_blocks;
+        attr->uid        = inode->i_uid;
+        attr->gid        = inode->i_gid;
+        attr->flags      = inode->i_flags;
+        attr->nlink      = inode->i_nlink;
+        return 0;
+}
+
+static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 {
         struct osd_device  *d = osd_dev(l->lo_dev);
         struct osd_object  *o = osd_obj(l);
         struct lu_fid      *f = lu_object_fid(l);
+       
+        /* fill lu_attr in ctxt */
+        //XXX temporary hack for proto only
+        osd_getattr(d->od_mount->lmi_sb->s_root->d_inode, &ctxt->lc_attr);
 
         /*
          * use object index to locate dentry/inode by fid.
@@ -154,7 +173,7 @@ static int osd_inode_unlinked(const struct inode *inode)
         return inode->i_nlink == !!S_ISDIR(inode->i_mode);
 }
 
-static void osd_object_release(struct lu_object *l)
+static void osd_object_release(struct lu_context *ctxt, struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
 
@@ -199,15 +218,17 @@ static int osd_config(struct dt_device *d, const char *name,
                       void *buf, int size, int mode)
 {
 	struct osd_device *osd = dt2osd_dev(d);
-        struct super_block *sb = osd->od_mount->lmi_sb;
+        //struct super_block *sb = osd->od_mount->lmi_sb;
         int result = -EOPNOTSUPP;
 
         ENTRY;
 
         if (mode == LUSTRE_CONFIG_GET) {
                 /* to be continued */
+                return 0;
         } else {
                 /* to be continued */
+                return 0;
         }
 
         RETURN (result);
@@ -225,6 +246,24 @@ static int osd_statfs(struct dt_device *d, struct kstatfs *sfs)
         result = sb->s_op->statfs(sb, sfs);
 
         RETURN (result);
+}
+
+static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
+                        void *buf, int size, const char *name,
+                        struct md_params *arg) 
+{
+	struct osd_object *o = dt2osd_obj(dt);
+        struct osd_device *dev = osd_obj2dev(o);
+        //struct super_block *sb = dev->od_mount->lmi_sb;
+        struct inode *inode = o->oo_dentry->d_inode;
+        int result = -EOPNOTSUPP;
+        
+        ENTRY;
+       
+        memset(buf, 0, size);
+	//TODO 
+        RETURN (result);
+        
 }
 
 static struct dt_device_operations osd_dt_ops = {

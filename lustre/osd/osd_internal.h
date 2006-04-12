@@ -53,6 +53,18 @@ struct osd_device {
         struct lustre_mount_info *od_mount;
 };
 
+static inline struct osd_object * dt2osd_obj(struct dt_object *o)
+{
+        return container_of(o, struct osd_object, oo_dt);
+}
+
+static inline struct osd_device * osd_obj2dev(struct osd_object *o) {
+        struct lu_device *lu = o->oo_dt.do_lu.lo_dev;
+        struct dt_device *dt = container_of(lu, struct dt_device, dd_lu_dev);
+
+        return container_of(dt, struct osd_device, od_dt_dev);
+}
+
 static inline struct osd_device * dt2osd_dev(struct dt_device *dt) {
         return container_of(dt, struct osd_device, od_dt_dev);
 }
