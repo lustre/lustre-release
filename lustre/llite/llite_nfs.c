@@ -42,40 +42,35 @@ struct ll_ino {
         unsigned long gen;
 };
 
-#if 0
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, void *opaque)
 #else
 static int ll_nfs_test_inode(struct inode *inode, void *opaque)
 #endif
 {
-        struct ll_ino *iid = opaque;
+        struct lu_fid *ifid = &ll_i2info(inode)->lli_fid;
+        struct lu_fid *lfid = opaque;
 
-        if (inode->i_ino == iid->ino && inode->i_generation == iid->gen)
+        if (memcmp(ifid, lfid, sizeof(struct lu_fid)) == 0)
                 return 1;
 
         return 0;
 }
-#endif
 
 static struct inode *search_inode_for_lustre(struct super_block *sb,
-                                             unsigned long ino,
-                                             unsigned long gen,
+                                             struct lu_fid *fid,
                                              int mode)
 {
-#if 0
-        struct ll_ino iid = { .ino = ino, .gen = gen };
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct ptlrpc_request *req = NULL;
         struct inode *inode = NULL;
         unsigned long valid = 0;
         int eadatalen = 0, rc;
 
-        inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
-
+        inode = ILOOKUP(sb, 0, ll_nfs_test_inode, fid);
         if (inode)
                 return inode;
+
         if (S_ISREG(mode)) {
                 rc = ll_get_max_mdsize(sbi, &eadatalen);
                 if (rc) 
@@ -83,10 +78,10 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
                 valid |= OBD_MD_FLEASIZE;
         }
 
-        rc = mdc_getattr(sbi->ll_mdc_exp, iid, 
-                         valid, eadatalen, &req);
+        rc = mdc_getattr(sbi->ll_mdc_exp, fid, valid, eadatalen, &req);
         if (rc) {
-                CERROR("failure %d fid "DFID3"\n", rc, PFID3(iid));
+                CERROR("can't get object attrs, fid "DFID3", rc %d\n",
+                       PFID3(fid), rc);
                 return ERR_PTR(rc);
         }
 
@@ -98,34 +93,28 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         ptlrpc_req_finished(req);
 
         return inode;
-#endif
-        /* FIXME: this should be worked out later */
-        return NULL;
 }
 
 extern struct dentry_operations ll_d_ops;
 
-static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
-                                      __u32 generation, umode_t mode)
+static struct dentry *ll_iget_for_nfs(struct super_block *sb,
+                                      struct lu_fid *fid, umode_t mode)
 {
         struct inode *inode;
         struct dentry *result;
         struct list_head *lp;
 
-        if (ino == 0)
+        if (fid_num(fid) == 0)
                 return ERR_PTR(-ESTALE);
 
-        inode = search_inode_for_lustre(sb, ino, generation, mode);
+        inode = search_inode_for_lustre(sb, fid, mode);
         if (IS_ERR(inode))
                 return ERR_PTR(PTR_ERR(inode));
 
-        if (is_bad_inode(inode) ||
-            (generation && inode->i_generation != generation)){
+        if (is_bad_inode(inode)) {
                 /* we didn't find the right inode.. */
-                CERROR("Inode %lu, Bad count: %lu %d or version  %u %u\n",
-                       inode->i_ino, (unsigned long)inode->i_nlink,
-                       atomic_read(&inode->i_count), inode->i_generation,
-                       generation);
+                CERROR("can't get inode by fid "DFID3"\n",
+                       PFID3(fid));
                 iput(inode);
                 return ERR_PTR(-ESTALE);
         }
@@ -160,21 +149,56 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         return result;
 }
 
+static void ll_fh_to_fid(struct lu_fid *fid, __u32 *mode, __u32 *datap)
+{
+        /* unpacking ->f_seq */
+        fid->f_seq = datap[0];
+        fid->f_seq = (fid->f_seq << 32) | datap[1];
+
+        /* unpacking ->f_num */
+        fid->f_ver = datap[2];
+        fid->f_oid = datap[3];
+
+        *mode = datap[4];
+}
+
+static void ll_fid_to_fh(struct lu_fid *fid, __u32 *mode, __u32 *datap)
+{
+        /* packing ->f_seq */
+        *datap++ = (__u32)(fid_seq(fid) >> 32);
+        *datap++ = (__u32)(fid_seq(fid) & 0x00000000ffffffff);
+
+        /* packing ->f_num */
+        *datap++ = fid_ver(fid);
+        *datap++ = fid_oid(fid);
+
+        /* packing inode mode */
+        *datap++ = (__u32)(S_IFMT & *mode);
+}
+
 struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
                                int fhtype, int parent)
 {
+        struct lu_fid fid;
+        __u32 mode;
+        
         switch (fhtype) {
                 case 2:
+                        if (len < 10)
+                                break;
+                        if (parent) {
+                                /* getting fid from parent's patr of @fh. That
+                                 * is (data + 5) */
+                                ll_fh_to_fid(&fid, &mode, data + 5);
+                                return ll_iget_for_nfs(sb, &fid, mode);
+                        }
+                case 1:
                         if (len < 5)
                                 break;
                         if (parent)
-                                return ll_iget_for_nfs(sb, data[3], 0, data[4]);
-                case 1:
-                        if (len < 3)
                                 break;
-                        if (parent)
-                                break;
-                        return ll_iget_for_nfs(sb, data[0], data[1], data[2]);
+                        ll_fh_to_fid(&fid, &mode, data);
+                        return ll_iget_for_nfs(sb, &fid, mode);
                 default: break;
         }
         return ERR_PTR(-EINVAL);
@@ -183,23 +207,27 @@ struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
 int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
                     int need_parent)
 {
+        struct inode *child = dentry->d_inode;
+        
         if (*lenp < 3)
                 return 255;
-        *datap++ = dentry->d_inode->i_ino;
-        *datap++ = dentry->d_inode->i_generation;
-        *datap++ = (__u32)(S_IFMT & dentry->d_inode->i_mode);
 
-        if (*lenp == 3 || S_ISDIR(dentry->d_inode->i_mode)) {
-                *lenp = 3;
+        /* XXX: there is suspection that @datap is 5*4 bytes max long, so that
+         * 10*4 bytes (two fids + two times mode) does not fit into it. Not sure
+         * how to fix it though. */
+        ll_fid_to_fh(&ll_i2info(child)->lli_fid, (__u32 *)&child->i_mode, datap);
+        if (*lenp == 3 || *lenp == 5 || S_ISDIR(child->i_mode)) {
+                *lenp = 5;
                 return 1;
         }
         if (dentry->d_parent) {
-                *datap++ = dentry->d_parent->d_inode->i_ino;
-                *datap++ = (__u32)(S_IFMT & dentry->d_parent->d_inode->i_mode);
-
-                *lenp = 5;
+                struct inode *parent = dentry->d_parent->d_inode;
+                
+                ll_fid_to_fh(&ll_i2info(parent)->lli_fid,
+                             (__u32 *)&parent->i_mode, datap);
+                *lenp = 10;
                 return 2;
         }
-        *lenp = 3;
+        *lenp = 5;
         return 1;
 }

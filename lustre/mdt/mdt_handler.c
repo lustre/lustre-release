@@ -1062,7 +1062,7 @@ static int mdt_init0(struct mdt_device *m,
         ENTRY;
 
         /* get next layer */
-        obd = class_name2obd(child);
+        obd = class_name2obd((char *)child);
         if (obd && obd->obd_lu_dev) {
                 CDEBUG(D_INFO, "Child device is %s\n", child);
                 m->mdt_child = lu2md_dev(obd->obd_lu_dev);

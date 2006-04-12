@@ -55,9 +55,9 @@ int ll_fid_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
 }
 
 /* build inode number on passed @fid */
-unsigned long ll_fid2ino(struct ll_sb_info *sbi, struct lu_fid *fid)
+ino_t ll_fid2ino(struct ll_sb_info *sbi, struct lu_fid *fid)
 {
-        unsigned long ino;
+        ino_t ino;
         ENTRY;
 
         /* very stupid and having many downsides inode allocation algorithm
