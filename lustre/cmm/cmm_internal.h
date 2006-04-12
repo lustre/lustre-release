@@ -37,7 +37,10 @@ struct cmm_device {
 };
 
 
-#define CMM_CHILD_OPS(d) (d->cmm_child->md_ops)
+static inline struct md_device_operations *cmm_child_ops(struct cmm_device *d)
+{
+        return (d->cmm_child->md_ops);
+}
 
 static inline struct cmm_device *md2cmm_dev(struct md_device *m)
 {
@@ -97,6 +100,8 @@ int cmm_root_get(struct md_device *m, struct lu_fid *f);
 int cmm_statfs(struct md_device *m, struct kstatfs *sfs);
 int cmm_mkdir(struct md_object *o, const char *name,
               struct md_object *child);
+int cmm_attr_get(struct md_object *obj, void *buf, int size,
+                 const char *name, struct context *ctxt);
 
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */

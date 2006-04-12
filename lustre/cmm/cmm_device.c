@@ -60,6 +60,7 @@ static struct md_device_operations cmm_md_ops = {
         .mdo_config     = cmm_config,
         .mdo_statfs     = cmm_statfs,
         .mdo_mkdir      = cmm_mkdir,
+        .mdo_attr_get   = cmm_attr_get,
 //        .mdo_rename     = cmm_rename,
 //        .mdo_link       = cmm_link,
 //        .mdo_attr_get   = cmm_attr_get,
@@ -145,7 +146,6 @@ void cmm_device_free(struct lu_device *d)
 
 	LASSERT(atomic_read(&d->ld_ref) == 0);
 	md_device_fini(&m->cmm_md_dev);
-        //cmm_fini(m);
         OBD_FREE_PTR(m);
 }
 
@@ -190,6 +190,8 @@ static int __init cmm_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
 
+        printk(KERN_INFO "Lustre: Clustered Metadata Manager; info@clusterfs.com\n");
+
         lprocfs_init_vars(cmm, &lvars);
         return class_register_type(&cmm_obd_device_ops, lvars.module_vars,
                                    LUSTRE_CMM0_NAME, &cmm_device_type);
@@ -204,4 +206,4 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Clustered Meta-data Manager Prototype ("LUSTRE_CMM0_NAME")");
 MODULE_LICENSE("GPL");
 
-cfs_module(cmm, "0.0.1", cmm_mod_init, cmm_mod_exit);
+cfs_module(cmm, "0.0.3", cmm_mod_init, cmm_mod_exit);

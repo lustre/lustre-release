@@ -53,15 +53,16 @@ void cmm_object_put(struct cmm_object *o)
 struct lu_object *cmm_object_alloc(struct lu_device *d)
 {
 	struct cmm_object *mo;
-
+        ENTRY;
+        
 	OBD_ALLOC_PTR(mo);
 	if (mo != NULL) {
 		struct lu_object *o;
 		o = &mo->cmo_obj.mo_lu;
                 lu_object_init(o, NULL, d);
-		return o;
+		RETURN(o);
 	} else
-		return NULL;
+		RETURN(NULL);
 }
 
 int cmm_object_init(struct lu_object *o)
@@ -69,14 +70,15 @@ int cmm_object_init(struct lu_object *o)
 	struct cmm_device *d = lu2cmm_dev(o->lo_dev);
 	struct lu_device  *under;
 	struct lu_object  *below;
+        ENTRY;
 
 	under = &d->cmm_child->md_lu_dev;
 	below = under->ld_ops->ldo_object_alloc(under);
 	if (below != NULL) {
 		lu_object_add(o, below);
-		return 0;
+		RETURN(0);
 	} else
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 }
 
 void cmm_object_free(struct lu_object *o)
@@ -121,8 +123,8 @@ int cmm_root_get(struct md_device *md, struct lu_fid *fid) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 	int result = -EOPNOTSUPP;
 
-        if (CMM_CHILD_OPS(cmm_dev) && CMM_CHILD_OPS(cmm_dev)->mdo_root_get) {
-	        result = CMM_CHILD_OPS(cmm_dev)->mdo_root_get(
+        if (cmm_child_ops(cmm_dev)->mdo_root_get) {
+	        result = cmm_child_ops(cmm_dev)->mdo_root_get(
                                                   cmm_dev->cmm_child, fid);
         }       
         
@@ -136,8 +138,8 @@ int cmm_config(struct md_device *md, const char *name,
         int result = -EOPNOTSUPP;
         ENTRY;
         
-        if (CMM_CHILD_OPS(cmm_dev) && CMM_CHILD_OPS(cmm_dev)->mdo_statfs)
-	        result = CMM_CHILD_OPS(cmm_dev)->mdo_config(cmm_dev->cmm_child,
+        if (cmm_child_ops(cmm_dev)->mdo_config)
+	        result = cmm_child_ops(cmm_dev)->mdo_config(cmm_dev->cmm_child,
                                                             name, buf, size, mode);
 
         RETURN(result);
@@ -149,8 +151,8 @@ int cmm_statfs(struct md_device *md, struct kstatfs *sfs) {
         
         ENTRY;
         
-        if (CMM_CHILD_OPS(cmm_dev) && CMM_CHILD_OPS(cmm_dev)->mdo_statfs) {
-	        result = CMM_CHILD_OPS(cmm_dev)->mdo_statfs(
+        if (cmm_child_ops(cmm_dev)->mdo_statfs) {
+	        result = cmm_child_ops(cmm_dev)->mdo_statfs(
                                                   cmm_dev->cmm_child, sfs);
         }            
         
@@ -164,8 +166,8 @@ int cmm_mkdir(struct md_object *md_parent, const char *name,
         struct cmm_device *cmm_dev = cmm_obj2dev(cmm_parent);
 	int result = -EOPNOTSUPP;
 
-        if (CMM_CHILD_OPS(cmm_dev) && CMM_CHILD_OPS(cmm_dev)->mdo_mkdir) {
-	        result = CMM_CHILD_OPS(cmm_dev)->mdo_mkdir(
+        if (cmm_child_ops(cmm_dev)->mdo_mkdir) {
+	        result = cmm_child_ops(cmm_dev)->mdo_mkdir(
                                                   cmm2child_obj(cmm_parent),
                                                   name, md_child);
         }       
@@ -173,4 +175,20 @@ int cmm_mkdir(struct md_object *md_parent, const char *name,
 	return result;
 }
 
+int cmm_attr_get(struct md_object *obj, void *buf, int size,
+                 const char *name, struct context *ctxt)
+{
+        struct cmm_object *co  = md2cmm_obj(obj);
+        struct cmm_device *dev = cmm_obj2dev(co);
+        struct md_object *next = cmm2child_obj(co);
+	int result = -EOPNOTSUPP;
+        
+        LASSERT(cmm_child_ops(dev)>0x100);
+        if (cmm_child_ops(dev)->mdo_attr_get) {
+               result = cmm_child_ops(dev)->mdo_attr_get(next, buf, size,
+                                                         name, ctxt);
+        }
+
+        return result;
+}
 
