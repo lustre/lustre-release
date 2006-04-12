@@ -67,7 +67,8 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         unsigned long valid = 0;
         int eadatalen = 0, rc;
 
-        inode = ILOOKUP(sb, 0, ll_nfs_test_inode, fid);
+        inode = ILOOKUP(sb, ll_fid2ino(sbi, fid),
+                        ll_nfs_test_inode, fid);
         if (inode)
                 return inode;
 
