@@ -128,8 +128,16 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 RETURN(-EINVAL);
         }
 
-        OBD_ALLOC(data, sizeof(*data));
+        OBD_ALLOC_PTR(data);
         if (data == NULL)
+                RETURN(-ENOMEM);
+
+        OBD_ALLOC_PTR(md_data);
+        if (md_data == NULL)
+                RETURN(-ENOMEM);
+        
+        OBD_ALLOC_PTR(dt_data);
+        if (dt_data == NULL)
                 RETURN(-ENOMEM);
 
         if (proc_lustre_fs_root) {
@@ -245,7 +253,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         spin_unlock(&sbi->ll_lco.lco_lock);
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
-        *dt_data = class_exp2cliimp(sbi->ll_osc_exp)->imp_connect_data;
+        //*dt_data = class_exp2cliimp(sbi->ll_osc_exp)->imp_connect_data;
 
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
                                   0, NULL, NULL, NULL);
@@ -283,8 +291,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sbi->ll_md_fid.f_oid = LUSTRE_FID_INIT_OID;
 
         /* initializing @ll_dt_fid */
-        sbi->ll_md_fid.f_seq = dt_data->ocd_seq;
-        sbi->ll_md_fid.f_oid = LUSTRE_FID_INIT_OID;
+        //sbi->ll_dt_fid.f_seq = dt_data->ocd_seq;
+        sbi->ll_dt_fid.f_oid = LUSTRE_FID_INIT_OID;
 
         sb->s_op = &lustre_super_operations;
 
@@ -307,6 +315,9 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
 
         LASSERT(fid_oid(&sbi->ll_root_fid) != 0);
+        /* ino/generation are taken from fid */
+        md.body->ino = ll_fid_build_ino(sbi, &sbi->ll_root_fid);
+        
         root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &md);
         ptlrpc_req_finished(request);
 
@@ -348,7 +359,11 @@ out_mdc:
         obd_disconnect(sbi->ll_mdc_exp);
 out:
         if (data != NULL)
-                OBD_FREE(data, sizeof(*data));
+                OBD_FREE_PTR(data);
+        if (md_data != NULL)
+                OBD_FREE_PTR(md_data);
+        if (dt_data != NULL)
+                OBD_FREE_PTR(dt_data);
         lprocfs_unregister_mountpoint(sbi);
         RETURN(err);
 }
