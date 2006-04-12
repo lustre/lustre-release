@@ -585,6 +585,7 @@ static int record_cmm0_setup(struct obd_device *obd, struct llog_handle *llh,
         lustre_cfg_free(lcfg);
         return rc;
 }
+#if 0
 static int record_cmm_setup(struct obd_device *obd, struct llog_handle *llh,
                             char *devname, struct cmm_desc *desc)
 {
@@ -618,6 +619,8 @@ static int record_lmv_setup(struct obd_device *obd, struct llog_handle *llh,
         lustre_cfg_free(lcfg);
         return rc;
 }
+#endif
+
 static inline int record_lmv_add(struct obd_device *obd,
                                  struct llog_handle *llh,
                                  char *lmv_name, char *mdt_uuid,
@@ -1037,7 +1040,7 @@ out_pop:
         RETURN(rc);
 }
 
-
+#if 0
 /***************************************BEGIN PROTO**********************/
 static int mgs_write_log_cmm(struct obd_device *obd, struct fs_db *fsdb, 
                              struct mgs_target_info *mti,
@@ -1069,6 +1072,7 @@ static int mgs_write_log_cmm(struct obd_device *obd, struct fs_db *fsdb,
         OBD_FREE(cmmdesc, sizeof(*cmmdesc));
         RETURN(rc);
 }
+
 /* lmv is the second thing for client logs */
 /* copied from mgs_write_log_lov. Please refer to that.  */
 static int mgs_write_log_lmv(struct obd_device *obd, struct fs_db *fsdb, 
@@ -1102,6 +1106,7 @@ static int mgs_write_log_lmv(struct obd_device *obd, struct fs_db *fsdb,
         RETURN(rc);
 }
 /***************************************END PROTO**********************/
+#endif
 
 /* lov is the first thing in the mdt and client logs */
 static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *fsdb, 
@@ -1198,6 +1203,7 @@ static int mgs_write_log_failnids(struct obd_device *obd,
 
 
 /***************************************BEGIN PROTO****************************/
+#if 0
 static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
                              struct mgs_target_info *mti,
                              char *logname, char *lmvname)
@@ -1243,6 +1249,7 @@ static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
         name_destroy(nodeuuid);
         RETURN(rc);
 }
+#endif
 /***************************************END PROTO*****************************/
 /***************************************BEGIN PROTO****************************/
 static int mgs_write_log_mdc_to_cmm(struct obd_device *obd, struct fs_db *fsdb,
@@ -1291,7 +1298,7 @@ static int mgs_write_log_mdc_to_cmm(struct obd_device *obd, struct fs_db *fsdb,
         RETURN(rc);
 }
 /***************************************END PROTO*****************************/
-
+#if 0
 static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                              struct mgs_target_info *mti)
 {
@@ -1403,6 +1410,8 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         name_destroy(cmmname);
         RETURN(rc);
 }
+#endif
+
 /************************** setup mds layers ******************************/
 static int mgs_write_log_cmm0(struct obd_device *obd, struct fs_db *fsdb, 
                              char *log, char *dev, char *child)
@@ -1522,9 +1531,9 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
 {
         struct llog_handle *llh = NULL;
         char *cliname, *osdname, *lovname, *mddname;
-        char *mdtname, *cmmname, *lmvname;
+        char *mdtname, *cmmname;// *lmvname;
         char *mdcname, *nodeuuid, *mdcuuid;
-        int rc, i, first_log = 0;
+        int rc, i = 0;//, first_log = 0;
         char mdt_index[9];
         struct temp_comp comp;
         ENTRY;
