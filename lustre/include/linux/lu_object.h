@@ -446,53 +446,57 @@ struct lu_object *lu_object_locate(struct lu_object_header *h,
  * DT device interface. XXX Probably should go elsewhere.
  */
 
-struct dt_object {
-        struct lu_object do_lu;
-};
+struct context;
+struct thandle;
+struct txn_param;
+struct dt_device;
+struct dt_object;
 
 enum dt_lock_mode {
         DT_WRITE_LOCK = 1,
         DT_READ_LOCK  = 2,
 };
 
-struct context;
-struct thandle;
-struct txn_param;
-struct dt_device;
-
 struct dt_device_operations {
         /* method for getting/setting device wide back stored config data, like
          * last used meta-sequence, etc. */
         int (*dt_config) (struct dt_device *dev, const char *name,
                           void *buf, int size, int mode);
-
         int   (*dt_statfs)(struct dt_device *dev, struct kstatfs *sfs);
-        void  (*dt_object_lock)(struct dt_object *dt, enum dt_lock_mode mode);
-        void  (*dt_object_unlock)(struct dt_object *dt, enum dt_lock_mode mode);
         struct thandle *(*dt_trans_start)(struct dt_device *dev,
                                           struct txn_param *param);
         void  (*dt_trans_stop)(struct thandle *th);
-        int   (*dt_object_create)(struct dt_object *dt, struct dt_object *child,
+        int   (*dt_root_get)(struct dt_device *dev, struct lu_fid *f);
+};
+
+struct dt_object_operations {
+        void  (*do_object_lock)(struct dt_object *dt, enum dt_lock_mode mode);
+        void  (*do_object_unlock)(struct dt_object *dt, enum dt_lock_mode mode);
+        int   (*do_object_create)(struct dt_object *dt, struct dt_object *child,
                                   struct context *context, struct thandle *th);
-        int   (*dt_object_destroy)(struct dt_object *dt, struct thandle *th);
-        int   (*dt_attr_get)(struct dt_object *dt, void *buf, int buf_len,
+        int   (*do_object_destroy)(struct dt_object *dt, struct thandle *th);
+        int   (*do_attr_get)(struct dt_object *dt, void *buf, int buf_len,
                              const char *name, struct context *context);
-        int   (*dt_attr_set)(struct dt_object *dt, void *buf, int buf_len,
+        int   (*do_attr_set)(struct dt_object *dt, void *buf, int buf_len,
                              const char *name, struct context *context,
                              struct thandle *handle);
-        int   (*dt_index_insert)(struct dt_object *dt, struct lu_fid *fid,
+        int   (*do_index_insert)(struct dt_object *dt, struct lu_fid *fid,
                                  const char *name, struct context *uctxt,
                                  void *handle);
-        int   (*dt_index_delete)(struct dt_object *dt, struct lu_fid *fid,
+        int   (*do_index_delete)(struct dt_object *dt, struct lu_fid *fid,
                                  const char *name, struct context *uctxt,
                                  struct thandle *handle);
-        int   (*dt_root_get)(struct dt_device *dev, struct lu_fid *f);
 };
 
 struct dt_device {
 	struct lu_device             dd_lu_dev;
 	struct dt_device_operations *dd_ops;
         struct lustre_mount_info    *dd_lmi;
+};
+
+struct dt_object {
+        struct lu_object             do_lu;
+	struct dt_object_operations *do_ops;
 };
 
 struct txn_param {

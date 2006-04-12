@@ -153,9 +153,9 @@ int cmm_mkdir(struct md_object *md_parent, const char *name,
                      struct md_object *md_child)
 {
 	struct cmm_object *cmm_parent = md2cmm_obj(md_parent);
+        struct md_object  *next       = cmm2child_obj(cmm_parent);
 
-        return md_parent->mo_ops->moo_mkdir(cmm2child_obj(cmm_parent),
-                                            name, md_child);
+        return next->mo_ops->moo_mkdir(next, name, md_child);
 }
 
 static struct md_object_operations cmm_mo_ops = {
@@ -176,6 +176,6 @@ int cmm_attr_get(struct md_object *obj, void *buf, int size,
         struct md_object *next = cmm2child_obj(md2cmm_obj(obj));
 
         LASSERT((void *)obj->mo_ops > (void *)0x100);
-        return obj->mo_ops->moo_attr_get(next, buf, size, name, ctxt);
+        return next->mo_ops->moo_attr_get(next, buf, size, name, ctxt);
 }
 

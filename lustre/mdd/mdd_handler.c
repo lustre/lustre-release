@@ -143,13 +143,12 @@ mdd_attr_get(struct md_object *obj, void *buf, int buf_len, const char *name,
              struct context *uctxt)
 {
         struct mdd_object *mdd_obj = mdo2mddo(obj);
-        struct mdd_device *mdd = mdo2mdd(obj);
+        struct dt_object  *next = mdd_object_child(mdd_obj);
         int rc;
 
         ENTRY;
 
-        rc = mdd_child_ops(mdd)->dt_attr_get(mdd_object_child(mdd_obj),
-                                             buf, buf_len, name, uctxt);
+        rc = next->do_ops->do_attr_get(next, buf, buf_len, name, uctxt);
         RETURN(rc);
 }
 
@@ -158,9 +157,9 @@ __mdd_object_destroy(struct mdd_device *mdd, struct mdd_object *obj,
                      struct thandle *handle)
 {
         int rc = 0;
+        struct dt_object *next = mdd_object_child(obj);
 
-        rc = mdd_child_ops(mdd)->dt_object_destroy(mdd_object_child(obj),
-                                                   handle);
+        rc = next->do_ops->do_object_destroy(next, handle);
         RETURN(rc);
 }
 
@@ -312,16 +311,16 @@ static struct dt_object* mdd_object_child(struct mdd_object *o)
 
 static void mdd_lock(struct mdd_object *obj, enum dt_lock_mode mode)
 {
-        struct mdd_device *dev = mdo2mdd(&obj->mod_obj);
+        struct dt_object  *next = mdd_object_child(obj);
 
-        mdd_child_ops(dev)->dt_object_lock(mdd_object_child(obj), mode);
+        next->do_ops->do_object_lock(next, mode);
 }
 
 static void mdd_unlock(struct mdd_object *obj, enum dt_lock_mode mode)
 {
-        struct mdd_device *dev = mdo2mdd(&obj->mod_obj);
+        struct dt_object  *next = mdd_object_child(obj);
 
-        mdd_child_ops(dev)->dt_object_unlock(mdd_object_child(obj), mode);
+        next->do_ops->do_object_unlock(next, mode);
 }
 
 static void mdd_lock2(struct mdd_object *o0, struct mdd_object *o1)
@@ -353,11 +352,11 @@ __mdd_object_create(struct mdd_device *mdd, struct mdd_object *pobj,
                     struct thandle *handle)
 {
         int rc;
+        struct dt_object *next = mdd_object_child(pobj);
         ENTRY;
 
-        rc = mdd_child_ops(mdd)->dt_object_create(mdd_object_child(pobj),
-                                                  mdd_object_child(child),
-                                                  uctxt, handle);
+        rc = next->do_ops->do_object_create(next, mdd_object_child(child),
+                                            uctxt, handle);
         /*XXX increase the refcount of the object or not?*/
         RETURN(rc);
 }
@@ -389,10 +388,9 @@ __mdd_attr_set(struct mdd_device *mdd, struct mdd_object *obj, void *buf,
                int buf_len, const char *name, struct context *uc_context,
                struct thandle *handle)
 {
-        return mdd_child_ops(mdd)->dt_attr_set(mdd_object_child(obj),
-                                                buf, buf_len,
-                                                name, uc_context,
-                                                handle);
+        struct dt_object *next = mdd_object_child(obj);
+        return next->do_ops->do_attr_set(next, buf, buf_len,
+                                         name, uc_context, handle);
 }
 
 static int
@@ -427,13 +425,13 @@ __mdd_index_insert(struct mdd_device *mdd, struct mdd_object *pobj,
                    struct context *uctxt, void *handle)
 {
         int rc;
+        struct dt_object *next = mdd_object_child(pobj);
         ENTRY;
 
         mdd_lock2(pobj, obj);
 
-        rc = mdd_child_ops(mdd)->dt_index_insert(mdd_object_child(pobj),
-                                             mdd_object_getfid(obj), name,
-                                             uctxt, handle);
+        rc = next->do_ops->do_index_insert(next, mdd_object_getfid(obj), name,
+                                           uctxt, handle);
         mdd_unlock2(pobj, obj);
 
         RETURN(rc);
@@ -465,13 +463,13 @@ __mdd_index_delete(struct mdd_device *mdd, struct mdd_object *pobj,
                    struct context *uctxt, struct thandle *handle)
 {
         int rc;
+        struct dt_object *next = mdd_object_child(pobj);
         ENTRY;
 
         mdd_lock2(pobj, obj);
 
-        rc = mdd_child_ops(mdd)->dt_index_delete(mdd_object_child(pobj),
-                                              mdd_object_getfid(obj), name,
-                                              uctxt, handle);
+        rc = next->do_ops->do_index_delete(next, mdd_object_getfid(obj), name,
+                                           uctxt, handle);
         mdd_unlock2(pobj, obj);
 
         RETURN(rc);
