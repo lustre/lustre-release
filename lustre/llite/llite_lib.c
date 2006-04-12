@@ -176,7 +176,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         /* async connect is surely finished by now */
         *data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
-        md_data = &class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
+        *md_data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
 
         LASSERT(osfs.os_bsize);
         sb->s_blocksize = osfs.os_bsize;
@@ -245,7 +245,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         spin_unlock(&sbi->ll_lco.lco_lock);
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
-        dt_data = &class_exp2cliimp(sbi->ll_osc_exp)->imp_connect_data;
+        *dt_data = class_exp2cliimp(sbi->ll_osc_exp)->imp_connect_data;
 
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
                                   0, NULL, NULL, NULL);
@@ -308,7 +308,6 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         LASSERT(fid_oid(&sbi->ll_root_fid) != 0);
         root = ll_iget(sb, ll_fid2ino(sbi, &sbi->ll_root_fid), &md);
-        ll_i2info(root)->lli_fid = sbi->ll_root_fid;
         ptlrpc_req_finished(request);
 
         if (root == NULL || is_bad_inode(root)) {
@@ -316,6 +315,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_root, err = -EBADF);
         }
+
+        ll_i2info(root)->lli_fid = sbi->ll_root_fid;
 
         err = ll_close_thread_start(&sbi->ll_lcq);
         if (err) {
