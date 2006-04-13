@@ -21,26 +21,40 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_LLITE
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/queue.h>
 
-#include <linux/module.h>
-#include <linux/types.h>
-#include <linux/random.h>
-#include <linux/version.h>
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
+#include <sysio.h>
+#include <fs.h>
+#include <mount.h>
+#include <inode.h>
+#ifdef HAVE_FILE_H
+#include <file.h>
+#endif
 
-#include <linux/lustre_lite.h>
-#include <linux/lustre_ha.h>
+/* both sys/queue.h (libsysio require it) and portals/lists.h have definition
+ * of 'LIST_HEAD'. undef it to suppress warnings
+ */
+#undef LIST_HEAD
+#include <lnet/lnetctl.h>     /* needed for parse_dump */
+
+#include "lutil.h"
+#include "llite_lib.h"
 #include <linux/lustre_ver.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_disk.h>
-#include "llite_internal.h"
 
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
-int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
+int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid)
 {
         ENTRY;
 
-        spin_lock(&sbi->ll_fid_lock);
         if (sbi->ll_fid.f_oid < LUSTRE_FID_SEQ_WIDTH) {
                 sbi->ll_fid.f_oid += 1;
                 *fid = sbi->ll_fid;
@@ -49,22 +63,21 @@ int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
                        "new one is not yet implemented\n");
                 RETURN(-ERANGE);
         }
-        spin_unlock(&sbi->ll_fid_lock);
         
         RETURN(0);
 }
 
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
-int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
+int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
 
 /* build inode number on passed @fid */
-ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid)
+unsigned long llu_fid_build_ino(struct llu_sb_info *sbi, struct lu_fid *fid)
 {
-        ino_t ino;
+        unsigned long ino;
         ENTRY;
 
         /* very stupid and having many downsides inode allocation algorithm

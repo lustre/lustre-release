@@ -37,69 +37,6 @@
 
 /* methods */
 
-/* called from iget{4,5_locked}->find_inode() under inode_lock spinlock */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static int ll_test_inode(struct inode *inode, unsigned long ino, void *opaque)
-#else
-static int ll_test_inode(struct inode *inode, void *opaque)
-#endif
-{
-        static int last_ino, last_gen, last_count;
-        struct lustre_md *md = opaque;
-
-        if (!(md->body->valid & (OBD_MD_FLGENER | OBD_MD_FLID))) {
-                CERROR("MDS body missing inum or generation\n");
-                return 0;
-        }
-
-        if (last_ino == md->body->ino && last_gen == md->body->generation &&
-            last_count < 500) {
-                last_count++;
-        } else {
-                if (last_count > 1)
-                        CDEBUG(D_VFSTRACE, "compared %u/%u %u times\n",
-                               last_ino, last_gen, last_count);
-                last_count = 0;
-                last_ino = md->body->ino;
-                last_gen = md->body->generation;
-                CDEBUG(D_VFSTRACE,
-                       "comparing inode %p ino %lu/%u to body "LPU64"/%u\n",
-                       inode, inode->i_ino, inode->i_generation,
-                       md->body->ino, md->body->generation);
-        }
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        if (inode->i_ino != md->body->ino)
-                return 0;
-#endif
-        if (inode->i_generation != md->body->generation) {
-                struct ll_sb_info *sbi = ll_i2sbi(inode);
-                struct ll_inode_info *lli = ll_i2info(inode);
-
-                if (inode->i_state & (I_FREEING | I_CLEAR))
-                        return 0;
-
-                atomic_inc(&inode->i_count);
-                inode->i_nlink = 0;
-                inode->i_state |= I_FREEING;
-                LASSERT(list_empty(&lli->lli_dead_list));
-                /* add "duplicate" inode into deathrow for destroy */
-                spin_lock(&sbi->ll_deathrow_lock);
-                list_add(&lli->lli_dead_list, &sbi->ll_deathrow);
-                spin_unlock(&sbi->ll_deathrow_lock);
-
-                /* remove inode from dirty/io lists */
-                list_del_init(&inode->i_list);
-                
-                return 0;
-        }
-
-        /* Apply the attributes in 'opaque' to this inode */
-        if (!(inode->i_state & (I_FREEING | I_CLEAR)))
-                ll_update_inode(inode, md);
-        return 1;
-}
-
 extern struct dentry_operations ll_d_ops;
 
 int ll_unlock(__u32 mode, struct lustre_handle *lockh)
@@ -125,15 +62,18 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
 {
         struct inode *inode;
-
         LASSERT(hash != 0);
-        inode = iget5_locked(sb, hash, ll_test_inode, ll_set_inode, md);
 
+        inode = iget_locked(sb, hash);
         if (inode) {
-                if (inode->i_state & I_NEW)
+                if (inode->i_state & I_NEW) {
+                        ll_read_inode2(inode, md);
                         unlock_new_inode(inode);
-                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
-                       inode->i_generation, inode);
+                } else {
+                        ll_update_inode(inode, md);
+                }
+                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n",
+                       inode->i_ino, inode->i_generation, inode);
         }
 
         return inode;
@@ -144,10 +84,15 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 {
         struct inode *inode;
         LASSERT(hash != 0);
-        inode = iget4(sb, hash, ll_test_inode, md);
-        if (inode)
-                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
-                       inode->i_generation, inode);
+        
+        inode = iget4(sb, hash, NULL, md);
+        if (inode) {
+                if (!(inode->i_state & (I_FREEING | I_CLEAR)))
+                        ll_update_inode(inode, md);
+                
+                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n",
+                       inode->i_ino, inode->i_generation, inode);
+        }
         return inode;
 }
 #endif
@@ -176,27 +121,13 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (inode == NULL)
                         break;
 
-#ifdef ENABLED_FID
-                {
-                        struct ll_inode_info *lli;
-                
-                        lli = ll_i2info(inode);
-
-                        /* DLM locks are taken using version component as well,
-                         * so we use fid_num() instead of fid_oid(). */
-                        if (lock->l_resource->lr_name.name[0] != fid_seq(&lli->lli_fid) ||
-                            lock->l_resource->lr_name.name[1] != fid_num(&lli->lli_fid)) {
-                                LDLM_ERROR(lock, "data mismatch with object "DLID3" (%p)",
-                                           PLID3(&lli->lli_fid), inode);
-                        }
+                /* DLM locks are taken using version component as well,
+                 * so we use fid_num() instead of fid_oid(). */
+                if (lock->l_resource->lr_name.name[0] != fid_seq(ll_inode2fid(inode)) ||
+                    lock->l_resource->lr_name.name[1] != fid_num(ll_inode2fid(inode))) {
+                        LDLM_ERROR(lock, "data mismatch with object "DFID3" (%p)",
+                                   PFID3(ll_inode2fid(inode)), inode);
                 }
-#else
-                if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
-                    lock->l_resource->lr_name.name[1] != inode->i_generation) {
-                        LDLM_ERROR(lock, "data mismatch with object %lu/%u (%p)",
-                                   inode->i_ino, inode->i_generation, inode);
-                }
-#endif
 
                 if (bits & MDS_INODELOCK_UPDATE)
                         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
@@ -228,7 +159,7 @@ int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
                          int flags, void *opaque)
 {
         struct ldlm_res_id res_id =
-                { .name = {inode->i_ino, inode->i_generation} };
+                { .name = {fid_seq(ll_inode2fid(inode)), fid_num(ll_inode2fid(inode))} };
         struct obd_device *obddev = class_conn2obd(conn);
         ENTRY;
 
@@ -444,7 +375,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         /* allocate new fid for child */
         if (it->it_op == IT_OPEN || it->it_op == IT_CREAT) {
-                rc = ll_fid_alloc(ll_i2sbi(parent), &op_data.fid2);
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data.fid2);
                 if (rc) {
                         CERROR("can't allocate new fid, rc %d\n", rc);
                         LBUG();
@@ -660,7 +591,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
         case S_IFIFO:
         case S_IFSOCK:
                 /* allocate new fid */
-                err = ll_fid_alloc(ll_i2sbi(dir), &op_data.fid2);
+                err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2);
                 if (err) {
                         CERROR("can't allocate new fid, rc %d\n", err);
                         LBUG();
@@ -709,7 +640,7 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
                dir, tgt);
 
         /* allocate new fid */
-        err = ll_fid_alloc(ll_i2sbi(dir), &op_data.fid2);
+        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 LBUG();
@@ -771,7 +702,7 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
 
         /* allocate new fid */
-        err = ll_fid_alloc(ll_i2sbi(dir), &op_data.fid2);
+        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 LBUG();

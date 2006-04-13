@@ -1565,7 +1565,6 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct lu_fid fid;
         struct ptlrpc_request *req;
         int rc, err;
         ENTRY;
@@ -1590,8 +1589,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                         rc = err;
         }
 
-        ll_inode2fid(&fid, inode);
-        err = mdc_sync(ll_i2sbi(inode)->ll_mdc_exp, &fid, &req);
+        err = mdc_sync(ll_i2sbi(inode)->ll_mdc_exp,
+                       ll_inode2fid(inode), &req);
         if (!rc)
                 rc = err;
         if (!err)
@@ -1624,7 +1623,9 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct obd_device *obddev;
         struct ldlm_res_id res_id =
-                    { .name = {inode->i_ino, inode->i_generation, LDLM_FLOCK} };
+                { .name = { fid_seq(ll_inode2fid(inode)),
+                            fid_num(ll_inode2fid(inode)),
+                            LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
         ldlm_mode_t mode = 0;
@@ -1715,8 +1716,8 @@ static int ll_have_md_lock(struct dentry *de)
                RETURN(0);
 
         obddev = sbi->ll_mdc_exp->exp_obd;
-        res_id.name[0] = de->d_inode->i_ino;
-        res_id.name[1] = de->d_inode->i_generation;
+        res_id.name[0] = fid_seq(ll_inode2fid(de->d_inode));
+        res_id.name[1] = fid_num(ll_inode2fid(de->d_inode));
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
@@ -1751,7 +1752,6 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         if (!ll_have_md_lock(dentry)) {
                 struct ptlrpc_request *req = NULL;
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-                struct lu_fid fid;
                 obd_valid valid = OBD_MD_FLGETATTR;
                 int ealen = 0;
 
@@ -1761,8 +1761,8 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                                 RETURN(rc); 
                         valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
                 }
-                ll_inode2fid(&fid, inode);
-                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, ealen, &req);
+                rc = mdc_getattr(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                                 valid, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));

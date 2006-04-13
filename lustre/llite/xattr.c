@@ -94,7 +94,6 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req;
-        struct lu_fid fid;
         int xattr_type, rc;
         ENTRY;
 
@@ -105,8 +104,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if (rc)
                 RETURN(rc);
 
-        ll_inode2fid(&fid, inode);
-        rc = mdc_setxattr(sbi->ll_mdc_exp, &fid, valid,
+        rc = mdc_setxattr(sbi->ll_mdc_exp, ll_inode2fid(inode), valid,
                           name, value, size, 0, flags, &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
@@ -157,9 +155,8 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req = NULL;
         struct mdt_body *body;
-        struct lu_fid fid;
-        void *xdata;
         int xattr_type, rc;
+        void *xdata;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
@@ -182,9 +179,8 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 RETURN(rc);
 
 do_getxattr:
-        ll_inode2fid(&fid, inode);
-        rc = mdc_getxattr(sbi->ll_mdc_exp, &fid, valid, name, NULL, 0,
-                          size, &req);
+        rc = mdc_getxattr(sbi->ll_mdc_exp, ll_inode2fid(inode), valid,
+                          name, NULL, 0, size, &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "

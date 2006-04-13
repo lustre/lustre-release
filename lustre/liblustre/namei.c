@@ -161,10 +161,11 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                 if (bits & MDS_INODELOCK_UPDATE)
                         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
-                if (lock->l_resource->lr_name.name[0] != st->st_ino ||
-                    lock->l_resource->lr_name.name[1] !=lli->lli_st_generation){
-                        LDLM_ERROR(lock, "data mismatch with ino %llu/%lu",
-                                  (long long)st->st_ino,lli->lli_st_generation);
+                if (lock->l_resource->lr_name.name[0] != fid_seq(&lli->lli_fid) ||
+                    lock->l_resource->lr_name.name[1] != fid_num(&lli->lli_fid)) {
+                        LDLM_ERROR(lock, "data mismatch with ino %llu/%llu",
+                                  (long long)fid_seq(&lli->lli_fid), 
+                                  (long long)fid_num(&lli->lli_fid));
                 }
                 if (S_ISDIR(st->st_mode) &&
                     (bits & MDS_INODELOCK_UPDATE)) {
@@ -413,7 +414,7 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                          struct lookup_intent *it, int flags)
 {
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -431,6 +432,14 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         icbd.icbd_child = pnode;
         icbd.icbd_parent = parent;
 
+        /* allocate new fid for child */
+        if (it->it_op == IT_OPEN || it->it_op == IT_CREAT) {
+                rc = llu_fid_md_alloc(llu_i2sbi(parent), &op_data.fid2);
+                if (rc) {
+                        CERROR("can't allocate new fid, rc %d\n", rc);
+                        LBUG();
+                }
+        }
         llu_prepare_mdc_op_data(&op_data, parent, NULL,
                                 pnode->p_base->pb_name.name,
                                 pnode->p_base->pb_name.len, flags);

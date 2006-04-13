@@ -73,10 +73,10 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct lustre_handle lockh;
         struct mdt_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
-        struct mdc_op_data data;
+        struct mdc_op_data data = { { 0 } };
         struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
         struct ldlm_res_id res_id =
-                { .name = {st->st_ino, (__u64)lli->lli_st_generation} };
+                { .name = {fid_seq(&lli->lli_fid), fid_num(&lli->lli_fid)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 

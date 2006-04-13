@@ -147,8 +147,6 @@ void llu_update_inode(struct inode *inode, struct mdt_body *body,
                 }
         }
 
-        if (body->valid & OBD_MD_FLID)
-                st->st_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME &&
             body->mtime > LTIME_S(st->st_mtime))
                 LTIME_S(st->st_mtime) = body->mtime;
@@ -180,18 +178,6 @@ void llu_update_inode(struct inode *inode, struct mdt_body *body,
                 st->st_blocks = body->blocks;
         if (body->valid & OBD_MD_FLFLAGS)
                 lli->lli_st_flags = body->flags;
-        if (body->valid & OBD_MD_FLGENER)
-                lli->lli_st_generation = body->generation;
-
-#if 0
-        /* fillin fid */
-        if (body->valid & OBD_MD_FLID)
-                lli->lli_fid.id = body->ino;
-        if (body->valid & OBD_MD_FLGENER)
-                lli->lli_fid.generation = body->generation;
-        if (body->valid & OBD_MD_FLTYPE)
-                lli->lli_fid.f_type = body->mode & S_IFMT;
-#endif
 }
 
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
@@ -229,8 +215,6 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 st->st_gid = src->o_gid;
         if (valid & OBD_MD_FLFLAGS)
                 lli->lli_st_flags = src->o_flags;
-        if (valid & OBD_MD_FLGENER)
-                lli->lli_st_generation = src->o_generation;
 }
 
 #define S_IRWXUGO       (S_IRWXU|S_IRWXG|S_IRWXO)
@@ -408,8 +392,8 @@ static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
         LASSERT(inode);
 
         obddev = sbi->ll_mdc_exp->exp_obd;
-        res_id.name[0] = llu_i2stat(inode)->st_ino;
-        res_id.name[1] = lli->lli_st_generation;
+        res_id.name[0] = fid_seq(&lli->lli_fid);
+        res_id.name[1] = fid_num(&lli->lli_fid);
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
@@ -443,7 +427,6 @@ static int llu_inode_revalidate(struct inode *inode)
                 struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
-                struct lu_fid fid;
                 unsigned long valid = OBD_MD_FLGETATTR;
                 int rc, ealen = 0;
 
@@ -453,8 +436,8 @@ static int llu_inode_revalidate(struct inode *inode)
                         ealen = obd_size_diskmd(sbi->ll_osc_exp, NULL);
                         valid |= OBD_MD_FLEASIZE;
                 }
-                ll_inode2fid(&fid, inode);
-                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, ealen, &req);
+                rc = mdc_getattr(sbi->ll_mdc_exp, ll_inode2fid(inode), 
+                                 valid, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %llu\n", rc,
                                (long long)llu_i2stat(inode)->st_ino);
@@ -545,7 +528,6 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
 
 void llu_clear_inode(struct inode *inode)
 {
-        struct lu_fid fid;
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         ENTRY;
@@ -554,9 +536,9 @@ void llu_clear_inode(struct inode *inode)
                (long long)llu_i2stat(inode)->st_ino, lli->lli_st_generation,
                inode);
 
-        ll_inode2fid(&fid, inode);
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(lli->lli_flags));
-        mdc_change_cbdata(sbi->ll_mdc_exp, &fid, null_if_equal, inode);
+        mdc_change_cbdata(sbi->ll_mdc_exp, ll_inode2fid(inode), 
+                          null_if_equal, inode);
 
         if (lli->lli_smd)
                 obd_change_cbdata(sbi->ll_osc_exp, lli->lli_smd,
@@ -640,7 +622,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int ia_valid = attr->ia_valid;
         int rc = 0;
         ENTRY;
@@ -865,7 +847,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err = -EMLINK;
         ENTRY;
 
@@ -873,6 +855,12 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         if (llu_i2stat(dir)->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
+        /* allocate new fid */
+        err = llu_fid_md_alloc(sbi, &op_data.fid2);
+        if (err) {
+                CERROR("can't allocate new fid, rc %d\n", err);
+                RETURN(err);
+        }
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
@@ -889,7 +877,6 @@ static int llu_readlink_internal(struct inode *inode,
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct lu_fid fid;
         struct mdt_body *body;
         struct intnl_stat *st = llu_i2stat(inode);
         int rc, symlen = st->st_size + 1;
@@ -903,8 +890,7 @@ static int llu_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        ll_inode2fid(&fid, inode);
-        rc = mdc_getattr(sbi->ll_mdc_exp, &fid,
+        rc = mdc_getattr(sbi->ll_mdc_exp, ll_inode2fid(inode),
                          OBD_MD_LINKNAME, symlen, request);
         if (rc) {
                 CERROR("inode %llu: rc = %d\n", (long long)st->st_ino, rc);
@@ -978,7 +964,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         struct ptlrpc_request *request = NULL;
         struct inode *dir = pno->p_parent->p_base->pb_ino;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err = -EMLINK;
         ENTRY;
 
@@ -998,6 +984,13 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
+                /* allocate new fid */
+                err = llu_fid_md_alloc(sbi, &op_data.fid2);
+                if (err) {
+                        CERROR("can't allocate new fid, rc %d\n", err);
+                        RETURN(err);
+                }
+
                 llu_prepare_mdc_op_data(&op_data, dir, NULL,
                                         pno->p_base->pb_name.name,
                                         pno->p_base->pb_name.len,
@@ -1024,7 +1017,7 @@ static int llu_iop_link_raw(struct pnode *old, struct pnode *new)
         const char *name = new->p_base->pb_name.name;
         int namelen = new->p_base->pb_name.len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1051,7 +1044,7 @@ static int llu_iop_unlink_raw(struct pnode *pno)
         int len = qstr->len;
         struct inode *target = pno->p_base->pb_ino;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1077,7 +1070,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         const char *newname = new->p_base->pb_name.name;
         int newnamelen = new->p_base->pb_name.len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1220,7 +1213,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
         struct intnl_stat *st = llu_i2stat(dir);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int err = -EMLINK;
         ENTRY;
 
@@ -1231,6 +1224,12 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         if (st->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
+        /* allocate new fid */
+        err = llu_fid_md_alloc(llu_i2sbi(dir), &op_data.fid2);
+        if (err) {
+                CERROR("can't allocate new fid, rc %d\n", err);
+                RETURN(err);
+        }
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(llu_i2sbi(dir)->ll_mdc_exp, &op_data, NULL, 0, mode,
                          current->fsuid, current->fsgid, current->cap_effective,
@@ -1247,7 +1246,7 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
         const char *name = qstr->name;
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1280,8 +1279,8 @@ static int llu_file_flock(struct inode *ino,
         struct llu_inode_info *lli = llu_i2info(ino);
         struct intnl_stat *st = llu_i2stat(ino);
         struct ldlm_res_id res_id =
-                { .name = {st->st_ino,
-                           lli->lli_st_generation, LDLM_FLOCK} };
+                { .name = {fid_seq(&lli->lli_fid),
+                           fid_num(&lli->lli_fid), LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
         ldlm_mode_t mode = 0;
@@ -1656,8 +1655,8 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         if (inode) {
                 struct llu_inode_info *lli = llu_i2info(inode);
 
-                if (inode->i_zombie ||
-                    lli->lli_st_generation != md->body->generation) {
+                if (inode->i_zombie/* ||
+                    lli->lli_st_generation != md->body->generation*/) {
                         I_RELE(inode);
                 }
                 else {
@@ -1786,6 +1785,12 @@ llu_fsswop_mount(const char *source,
         err = obd_statfs(obd, &osfs, 100000000);
         if (err)
                 GOTO(out_mdc, err);
+
+        /* initializing ->ll_fid. It is known that root object has separate
+         * sequence, so that we use what MDS returned to us and do not check if
+         * f_oid collides with root or not. */
+        sbi->ll_fid.f_seq = ocd.ocd_seq;
+        sbi->ll_fid.f_oid = LUSTRE_FID_INIT_OID;
 
         /*
          * FIXME fill fs stat data into sbi here!!! FIXME

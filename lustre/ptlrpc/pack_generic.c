@@ -642,7 +642,6 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab64s (&b->ctime);
         __swab64s (&b->blocks);
         __swab64s (&b->io_epoch);
-        __swab64s (&b->ino);
         __swab32s (&b->fsuid);
         __swab32s (&b->fsgid);
         __swab32s (&b->capability);
@@ -652,13 +651,11 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab32s (&b->flags);
         __swab32s (&b->rdev);
         __swab32s (&b->nlink);
-        __swab32s (&b->generation);
         __swab32s (&b->suppgid);
         __swab32s (&b->eadatasize);
         __swab32s (&b->aclsize);
         __swab32s (&b->max_mdsize);
         __swab32s (&b->max_cookiesize);
-        __swab32s (&b->padding_4);
 }
 
 void lustre_swab_mgs_target_info(struct mgs_target_info *mti)

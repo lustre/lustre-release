@@ -91,7 +91,6 @@ struct ll_inode_info {
         struct inode            lli_vfs_inode;
 #endif
 
-        /* inode fid */
         struct lu_fid           lli_fid;
 };
 
@@ -183,8 +182,7 @@ struct ll_sb_info {
 
         /* last allocated fids */
         spinlock_t                ll_fid_lock;
-        struct lu_fid             ll_dt_fid;
-        struct lu_fid             ll_md_fid;
+        struct lu_fid             ll_fid;
 };
 
 struct ll_ra_read {
@@ -548,11 +546,10 @@ static inline struct obd_export *ll_i2mdcexp(struct inode *inode)
         return ll_s2mdcexp(inode->i_sb);
 }
 
-static inline void ll_inode2fid(struct lu_fid *fid, struct inode *inode)
+static inline struct lu_fid *ll_inode2fid(struct inode *inode)
 {
-        LASSERT(fid != NULL);
         LASSERT(inode != NULL);
-        *fid = ll_i2info(inode)->lli_fid;
+        return &ll_i2info(inode)->lli_fid;
 }
 
 static inline int ll_mds_max_easize(struct super_block *sb)
@@ -574,7 +571,8 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
 int ll_removexattr(struct dentry *dentry, const char *name);
 
 /* llite/llite_fid.c*/
-int ll_fid_alloc(struct ll_sb_info *sbi, struct lu_fid *fid);
+int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid);
+int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid);
 ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid);
 
 #endif /* LLITE_INTERNAL_H */

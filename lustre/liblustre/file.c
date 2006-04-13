@@ -81,12 +81,10 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
         LASSERT(i1);
 
         ll_i2gids(data->suppgids, i1, i2);
-        ll_inode2fid(&data->fid1, i1);
+        data->fid1 = *ll_inode2fid(i1);
 
         if (i2)
-                ll_inode2fid(&data->fid2, i2);
-        else
-                memset(&data->fid2, 0, sizeof(data->fid2));
+                data->fid2 = *ll_inode2fid(i2);
 
         data->name = name;
         data->namelen = namelen;
@@ -304,7 +302,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
         struct intnl_stat *st = llu_i2stat(inode);
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 

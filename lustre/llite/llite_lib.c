@@ -118,7 +118,6 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct lustre_md md;
         struct obd_connect_data *data = NULL;
         struct obd_connect_data *md_data = NULL;
-        struct obd_connect_data *dt_data = NULL;
         int err;
         ENTRY;
 
@@ -133,13 +132,11 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 RETURN(-ENOMEM);
 
         OBD_ALLOC_PTR(md_data);
-        if (md_data == NULL)
+        if (md_data == NULL) {
+                OBD_FREE_PTR(data);
                 RETURN(-ENOMEM);
+        }
         
-        OBD_ALLOC_PTR(dt_data);
-        if (dt_data == NULL)
-                RETURN(-ENOMEM);
-
         if (proc_lustre_fs_root) {
                 err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
                                                   osc, mdc);
@@ -247,13 +244,14 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);
         }
+
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
+
         spin_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         spin_unlock(&sbi->ll_lco.lco_lock);
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
-        //*dt_data = class_exp2cliimp(sbi->ll_osc_exp)->imp_connect_data;
 
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
                                   0, NULL, NULL, NULL);
@@ -284,15 +282,11 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         spin_lock_init(&sbi->ll_fid_lock);
         
-        /* initializing @ll_md_fid. It is known that root object has separate
+        /* initializing ->ll_fid. It is known that root object has separate
          * sequence, so that we use what MDS returned to us and do not check if
          * f_oid collides with root or not. */
-        sbi->ll_md_fid.f_seq = md_data->ocd_seq;
-        sbi->ll_md_fid.f_oid = LUSTRE_FID_INIT_OID;
-
-        /* initializing @ll_dt_fid */
-        //sbi->ll_dt_fid.f_seq = dt_data->ocd_seq;
-        sbi->ll_dt_fid.f_oid = LUSTRE_FID_INIT_OID;
+        sbi->ll_fid.f_seq = md_data->ocd_seq;
+        sbi->ll_fid.f_oid = LUSTRE_FID_INIT_OID;
 
         sb->s_op = &lustre_super_operations;
 
@@ -315,9 +309,6 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
 
         LASSERT(fid_oid(&sbi->ll_root_fid) != 0);
-        /* ino/generation are taken from fid */
-        md.body->ino = ll_fid_build_ino(sbi, &sbi->ll_root_fid);
-        
         root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &md);
         ptlrpc_req_finished(request);
 
@@ -362,8 +353,6 @@ out:
                 OBD_FREE_PTR(data);
         if (md_data != NULL)
                 OBD_FREE_PTR(md_data);
-        if (dt_data != NULL)
-                OBD_FREE_PTR(dt_data);
         lprocfs_unregister_mountpoint(sbi);
         RETURN(err);
 }
@@ -806,7 +795,6 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
 
 void ll_clear_inode(struct inode *inode)
 {
-        struct lu_fid fid;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ENTRY;
@@ -814,9 +802,9 @@ void ll_clear_inode(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-        ll_inode2fid(&fid, inode);
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
-        mdc_change_cbdata(sbi->ll_mdc_exp, &fid, null_if_equal, inode);
+        mdc_change_cbdata(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                          null_if_equal, inode);
 
         if (lli->lli_smd) {
                 obd_change_cbdata(sbi->ll_osc_exp, lli->lli_smd,
@@ -1244,8 +1232,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         }
 #endif
 
-        if (body->valid & OBD_MD_FLID)
-                inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))
                 LTIME_S(inode->i_atime) = body->atime;
@@ -1270,8 +1256,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 inode->i_flags = body->flags;
         if (body->valid & OBD_MD_FLNLINK)
                 inode->i_nlink = body->nlink;
-        if (body->valid & OBD_MD_FLGENER)
-                inode->i_generation = body->generation;
         if (body->valid & OBD_MD_FLRDEV)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 inode->i_rdev = body->rdev;
@@ -1304,8 +1288,8 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
-               inode->i_generation, inode);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
+               inode->i_ino, inode->i_generation, inode);
 
         ll_lli_init(lli);
 
@@ -1373,11 +1357,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
         switch(cmd) {
         case EXT3_IOC_GETFLAGS: {
-                struct lu_fid fid;
                 struct mdt_body *body;
 
-                ll_inode2fid(&fid, inode);
-                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_FLFLAGS,0,&req);
+                rc = mdc_getattr(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                                 OBD_MD_FLFLAGS, 0, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));
@@ -1554,8 +1537,10 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                 LASSERT(sb != NULL);
 
                 /* at this point server answers to client's RPC with same fid as
-                 * client generated for creating some inode. So using
-                 * md.body.fid1 is okay here. */
+                 * client generated for creating some inode. So using ->fid1 is
+                 * okay here. */
+                LASSERT(fid_num(&md.body->fid1) != 0);
+                
                 *inode = ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1), &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
                         mdc_free_lustre_md(exp, &md);

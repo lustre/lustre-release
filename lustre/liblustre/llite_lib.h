@@ -23,8 +23,7 @@ struct ll_file_data {
         unsigned long fd_gid;
 };
 
-struct llu_sb_info
-{
+struct llu_sb_info {
         struct obd_uuid          ll_sb_uuid;
         struct obd_export       *ll_mdc_exp;
         struct obd_export       *ll_osc_exp;
@@ -36,6 +35,8 @@ struct llu_sb_info
         struct obd_uuid          ll_mds_uuid;
         struct obd_uuid          ll_mds_peer_uuid;
         char                    *ll_instance;
+
+        struct lu_fid            ll_fid;
 };
 
 #define LL_SBI_NOLCK            0x1
@@ -138,11 +139,10 @@ do {                                                                           \
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
 
-static inline void ll_inode2fid(struct lu_fid *fid, struct inode *inode)
+static inline struct lu_fid *ll_inode2fid(struct inode *inode)
 {
-        LASSERT(fid != NULL);
-        LASSERT(fid != NULL);
-        *fid = llu_i2info(inode)->lli_fid;
+        LASSERT(inode != NULL);
+        return &llu_i2info(inode)->lli_fid;
 }
 
 struct it_cb_data {
@@ -237,6 +237,11 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
 /* dir.c */
 ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
 			       char *buf, size_t nbytes);
+
+/* liblustre/llite_fid.c*/
+int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid);
+int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid);
+unsigned long llu_fid_build_ino(struct llu_sb_info *sbi, struct lu_fid *fid);
 
 /* ext2 related */
 #define EXT2_NAME_LEN (255)

@@ -59,10 +59,9 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 static int ll_dir_readpage(struct file *file, struct page *page)
 {
         struct inode *inode = page->mapping->host;
-        struct lu_fid fid;
-        __u64 offset;
         struct ptlrpc_request *request;
         struct mdt_body *body;
+        __u64 offset;
         int rc = 0;
         ENTRY;
 
@@ -70,9 +69,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) off "LPU64"\n",
                inode->i_ino, inode->i_generation, inode, offset);
 
-        ll_inode2fid(&fid, inode);
-
-        rc = mdc_readpage(ll_i2sbi(inode)->ll_mdc_exp, &fid,
+        rc = mdc_readpage(ll_i2sbi(inode)->ll_mdc_exp, ll_inode2fid(inode),
                           offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
@@ -206,7 +203,7 @@ fail:
 static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 {
         struct ldlm_res_id res_id =
-                { .name = { dir->i_ino, (__u64)dir->i_generation} };
+                { .name = { fid_seq(ll_inode2fid(dir)), fid_num(ll_inode2fid(dir)) } };
         struct lustre_handle lockh;
         struct obd_device *obddev = class_exp2obd(ll_i2sbi(dir)->ll_mdc_exp);
         struct address_space *mapping = dir->i_mapping;
@@ -406,10 +403,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         */
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
-                struct lu_fid fid;
+                int namelen, rc, len = 0;
                 char *buf = NULL;
                 char *filename;
-                int namelen, rc, len = 0;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
@@ -424,9 +420,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                ll_inode2fid(&fid, inode);
-                rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, filename, namelen,
-                                      OBD_MD_FLID, 0, &request);
+                rc = mdc_getattr_name(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                                      filename, namelen, OBD_MD_FLID, 0,
+                                      &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr_name: %d\n", rc);
                         GOTO(out, rc);
@@ -484,18 +480,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct ptlrpc_request *request = NULL;
                 struct lov_user_md *lump = (struct lov_user_md *)arg;
                 struct lov_mds_md *lmm;
-                struct lu_fid fid;
                 struct mdt_body *body;
                 int rc, lmmsize;
-
-                ll_inode2fid(&fid, inode);
 
                 rc = ll_get_max_mdsize(sbi, &lmmsize);
                 if (rc)
                         RETURN(rc);
 
-                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_FLDIREA,
-                                 lmmsize, &request);
+                rc = mdc_getattr(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                                 OBD_MD_FLDIREA, lmmsize, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr failed: rc = %d\n", rc);
                         RETURN(rc);
@@ -537,10 +530,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case IOC_MDC_GETFILEINFO:
         case IOC_MDC_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
-                struct lu_fid fid;
-                struct mdt_body *body;
                 struct lov_user_md *lump;
                 struct lov_mds_md *lmm;
+                struct mdt_body *body;
                 char *filename;
                 int rc, lmmsize;
 
@@ -548,15 +540,13 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (IS_ERR(filename))
                         RETURN(PTR_ERR(filename));
 
-                ll_inode2fid(&fid, inode);
-                
                 rc = ll_get_max_mdsize(sbi, &lmmsize);
                 if (rc) 
                         RETURN(rc);
 
-                rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, filename,
-                                      strlen(filename) + 1, OBD_MD_FLEASIZE,
-                                      lmmsize, &request);
+                rc = mdc_getattr_name(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                                      filename, strlen(filename) + 1,
+                                      OBD_MD_FLEASIZE, lmmsize, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr_name failed on %s: rc %d\n",
                                filename, rc);
@@ -662,7 +652,7 @@ out_free_memmd:
                         st.st_atime   = body->atime;
                         st.st_mtime   = body->mtime;
                         st.st_ctime   = body->ctime;
-                        st.st_ino     = body->ino;
+                        st.st_ino     = inode->i_ino;
 
                         lmdp = (struct lov_user_mds_data *)arg;
                         rc = copy_to_user(&lmdp->lmd_st, &st, sizeof(st));

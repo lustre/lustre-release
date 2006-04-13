@@ -34,9 +34,8 @@ static int ll_readlink_internal(struct inode *inode,
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct lu_fid fid;
-        struct mdt_body *body;
         int rc, symlen = inode->i_size + 1;
+        struct mdt_body *body;
         ENTRY;
 
         *request = NULL;
@@ -47,8 +46,7 @@ static int ll_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        ll_inode2fid(&fid, inode);
-        rc = mdc_getattr(sbi->ll_mdc_exp, &fid,
+        rc = mdc_getattr(sbi->ll_mdc_exp, ll_inode2fid(inode),
                          OBD_MD_LINKNAME, symlen, request);
         if (rc) {
                 if (rc != -ENOENT)

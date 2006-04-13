@@ -725,7 +725,6 @@ struct mdt_body {
         __u64          ctime;
         __u64          blocks; /* XID, in the case of MDS_READPAGE */
         __u64          io_epoch;
-        __u64          ino;
         __u32          fsuid;
         __u32          fsgid;
         __u32          capability;
@@ -735,13 +734,11 @@ struct mdt_body {
         __u32          flags; /* from vfs for pin/unpin, MDS_BFLAG for close */
         __u32          rdev;
         __u32          nlink; /* #bytes to read in the case of MDS_READPAGE */
-        __u32          generation;
         __u32          suppgid;
         __u32          eadatasize;
         __u32          aclsize;
         __u32          max_mdsize;
-        __u32          max_cookiesize; /* also fix lustre_swab_mds_body */
-        __u32          padding_4; /* also fix lustre_swab_mds_body */
+        __u32          max_cookiesize; /* also fix lustre_swab_mdt_body */
 };
 
 struct mds_body {

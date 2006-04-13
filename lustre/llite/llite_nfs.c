@@ -216,7 +216,9 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
         /* XXX: there is suspection that @datap is 5*4 bytes max long, so that
          * 10*4 bytes (two fids + two times mode) does not fit into it. Not sure
          * how to fix it though. */
-        ll_fid_to_fh(&ll_i2info(child)->lli_fid, (__u32 *)&child->i_mode, datap);
+        ll_fid_to_fh(&ll_i2info(child)->lli_fid, 
+                     (__u32 *)&child->i_mode, datap);
+
         if (*lenp == 5 || S_ISDIR(child->i_mode)) {
                 *lenp = 5;
                 return 1;
