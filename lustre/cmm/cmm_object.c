@@ -36,7 +36,7 @@
 
 static struct md_object_operations cmm_mo_ops;
 
-struct lu_object *cmm_object_alloc(struct lu_device *d)
+struct lu_object *cmm_object_alloc(struct lu_context *ctx, struct lu_device *d)
 {
 	struct cmm_object *mo;
         ENTRY;
@@ -61,7 +61,7 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
         ENTRY;
 
 	under = &d->cmm_child->md_lu_dev;
-	below = under->ld_ops->ldo_object_alloc(under);
+	below = under->ld_ops->ldo_object_alloc(ctxt, under);
 	if (below != NULL) {
 		lu_object_add(o, below);
 		RETURN(0);
@@ -69,7 +69,7 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
 		RETURN(-ENOMEM);
 }
 
-void cmm_object_free(struct lu_object *o)
+void cmm_object_free(struct lu_context *ctx, struct lu_object *o)
 {
 	lu_object_fini(o);
 }
@@ -79,57 +79,65 @@ void cmm_object_release(struct lu_context *ctxt, struct lu_object *o)
         return;
 }
 
-int cmm_object_print(struct seq_file *f, const struct lu_object *o)
+int cmm_object_print(struct lu_context *ctx,
+                     struct seq_file *f, const struct lu_object *o)
 {
 	return seq_printf(f, LUSTRE_CMM0_NAME"-object@%p", o);
 }
 
 /* Locking API */
 #if 0
-static void cmm_lock(struct md_object *obj, __u32 mode)
+static void cmm_lock(struct lu_context *ctxt, struct md_object *obj, __u32 mode)
 {
         struct cmm_object *cmm_obj = md2cmm_obj(obj);
         struct cmm_device *cmm_dev = cmm_obj2dev(cmm_obj);
+        struct md_object  *next    = cmm2child_obj(cmm_obj);
 
-        CMM_DO_CHILD(cmm_dev)->ldo_lock_obj(cmm2child_obj(cmm_obj), mode);
-        return;
+        next->mo_ops->moo_object_lock(ctxt, next, mode);
 }
 
-static void cmm_unlock(struct md_object *obj, __u32 mode)
+static void cmm_unlock(struct lu_context *ctxt,
+                       struct md_object *obj, __u32 mode)
 {
         struct cmm_object *cmm_obj = md2cmm_obj(obj);
         struct cmm_device *cmm_dev = cmm_obj2dev(cmm_obj);
+        struct md_object  *next    = cmm2child_obj(cmm_obj);
 
-        CMM_DO_CHILD(cmm_dev)->ldo_unlock_obj(cmm2child_obj(cmm_obj), mode);
-        return;
+        next->mo_ops->moo_object_unlock(ctxt, next, mode);
 }
 #endif
 /* Llog API */
 /* Object API */
 /* Metadata API */
-int cmm_root_get(struct md_device *md, struct lu_fid *fid) {
+int cmm_root_get(struct lu_context *ctx,
+                 struct md_device *md, struct lu_fid *fid)
+{
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 
-        return cmm_child_ops(cmm_dev)->mdo_root_get(cmm_dev->cmm_child, fid);
+        return cmm_child_ops(cmm_dev)->mdo_root_get(ctx,
+                                                    cmm_dev->cmm_child, fid);
 }
 
-int cmm_config(struct md_device *md, const char *name,
+int cmm_config(struct lu_context *ctxt,
+               struct md_device *md, const char *name,
                void *buf, int size, int mode)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         int result;
         ENTRY;
-        result = cmm_child_ops(cmm_dev)->mdo_config(cmm_dev->cmm_child,
+        result = cmm_child_ops(cmm_dev)->mdo_config(ctxt, cmm_dev->cmm_child,
                                                     name, buf, size, mode);
         RETURN(result);
 }
 
-int cmm_statfs(struct md_device *md, struct kstatfs *sfs) {
+int cmm_statfs(struct lu_context *ctxt,
+               struct md_device *md, struct kstatfs *sfs) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 	int result;
 
         ENTRY;
-        result = cmm_child_ops(cmm_dev)->mdo_statfs(cmm_dev->cmm_child, sfs);
+        result = cmm_child_ops(cmm_dev)->mdo_statfs(ctxt,
+                                                    cmm_dev->cmm_child, sfs);
         RETURN (result);
 }
 

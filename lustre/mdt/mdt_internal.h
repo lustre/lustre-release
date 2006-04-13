@@ -134,7 +134,7 @@ enum {
  * reduce stack consumption.
  */
 struct mdt_thread_info {
-        struct lu_context     mti_ctxt;
+        struct lu_context      mti_ctxt;
         struct mdt_device     *mti_mdt;
         /*
          * number of buffers in reply message.

@@ -39,7 +39,7 @@
 
 #include <libcfs/list.h>
 
-static void lu_object_free(struct lu_object *o);
+static void lu_object_free(struct lu_context *ctx, struct lu_object *o);
 
 void lu_object_put(struct lu_context *ctxt, struct lu_object *o)
 {
@@ -66,7 +66,7 @@ void lu_object_put(struct lu_context *ctxt, struct lu_object *o)
                  * Object was already removed from hash and lru above, can
                  * kill it.
                  */
-                lu_object_free(o);
+                lu_object_free(ctxt, o);
 }
 EXPORT_SYMBOL(lu_object_put);
 
@@ -78,7 +78,7 @@ struct lu_object *lu_object_alloc(struct lu_context *ctxt,
         int clean;
         int result;
 
-        top = s->ls_top_dev->ld_ops->ldo_object_alloc(s->ls_top_dev);
+        top = s->ls_top_dev->ld_ops->ldo_object_alloc(ctxt, s->ls_top_dev);
         if (IS_ERR(top))
                 RETURN(top);
         *lu_object_fid(top) = *f;
@@ -90,9 +90,10 @@ struct lu_object *lu_object_alloc(struct lu_context *ctxt,
                                 continue;
                         clean = 0;
                         scan->lo_header = top->lo_header;
-                        result = lu_object_ops(scan)->ldo_object_init(ctxt, scan);
+                        result = lu_object_ops(scan)->ldo_object_init(ctxt,
+                                                                      scan);
                         if (result != 0) {
-                                lu_object_free(top);
+                                lu_object_free(ctxt, top);
                                 RETURN(ERR_PTR(result));
                         }
                         scan->lo_flags |= LU_OBJECT_ALLOCATED;
@@ -102,7 +103,7 @@ struct lu_object *lu_object_alloc(struct lu_context *ctxt,
         RETURN(top);
 }
 
-static void lu_object_free(struct lu_object *o)
+static void lu_object_free(struct lu_context *ctx, struct lu_object *o)
 {
         struct list_head splice;
         struct lu_object *scan;
@@ -110,7 +111,7 @@ static void lu_object_free(struct lu_object *o)
         list_for_each_entry_reverse(scan,
                                     &o->lo_header->loh_layers, lo_linkage) {
                 if (lu_object_ops(scan)->ldo_object_delete != NULL)
-                        lu_object_ops(scan)->ldo_object_delete(scan);
+                        lu_object_ops(scan)->ldo_object_delete(ctx, scan);
         }
         -- o->lo_dev->ld_site->ls_total;
         INIT_LIST_HEAD(&splice);
@@ -119,11 +120,11 @@ static void lu_object_free(struct lu_object *o)
                 o = container_of(splice.next, struct lu_object, lo_linkage);
                 list_del_init(&o->lo_linkage);
                 LASSERT(lu_object_ops(o)->ldo_object_free != NULL);
-                lu_object_ops(o)->ldo_object_free(o);
+                lu_object_ops(o)->ldo_object_free(ctx, o);
         }
 }
 
-void lu_site_purge(struct lu_site *s, int nr)
+void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr)
 {
         struct list_head         dispose;
         struct lu_object_header *h;
@@ -144,13 +145,14 @@ void lu_site_purge(struct lu_site *s, int nr)
                 h = container_of(dispose.next,
                                  struct lu_object_header, loh_lru);
                 list_del_init(&h->loh_lru);
-                lu_object_free(lu_object_top(h));
+                lu_object_free(ctx, lu_object_top(h));
                 s->ls_stats.s_lru_purged ++;
         }
 }
 EXPORT_SYMBOL(lu_site_purge);
 
-int lu_object_print(struct seq_file *f, const struct lu_object *o)
+int lu_object_print(struct lu_context *ctx,
+                    struct seq_file *f, const struct lu_object *o)
 {
         static char ruler[] = "........................................";
         const struct lu_object *scan;
@@ -165,7 +167,7 @@ int lu_object_print(struct seq_file *f, const struct lu_object *o)
                         break;
                 LASSERT(lu_object_ops(scan)->ldo_object_print != NULL);
                 nob += seq_printf(f, "%*.*s", depth, depth, ruler);
-                nob += lu_object_ops(scan)->ldo_object_print(f, scan);
+                nob += lu_object_ops(scan)->ldo_object_print(ctx, f, scan);
                 nob += seq_printf(f, "\n");
         }
         return nob;
@@ -234,7 +236,7 @@ struct lu_object *lu_object_find(struct lu_context *ctxt, struct lu_site *s,
                 s->ls_stats.s_cache_race ++;
         spin_unlock(&s->ls_guard);
         if (o != NULL)
-                lu_object_free(o);
+                lu_object_free(ctxt, o);
         return shadow;
 }
 EXPORT_SYMBOL(lu_object_find);
@@ -382,3 +384,117 @@ struct lu_object *lu_object_locate(struct lu_object_header *h,
         return NULL;
 }
 EXPORT_SYMBOL(lu_object_locate);
+
+enum {
+        /*
+         * Maximal number of tld slots.
+         */
+        LU_CONTEXT_KEY_NR = 16
+};
+
+static struct lu_context_key *keys[LU_CONTEXT_KEY_NR] = { NULL, };
+
+static int keys_nr = 0;
+static spinlock_t keys_guard = SPIN_LOCK_UNLOCKED;
+static int key_registration_over = 0;
+
+int lu_context_key_register(struct lu_context_key *key)
+{
+        int result;
+
+        if (!key_registration_over) {
+                spin_lock(&keys_guard);
+                if (keys_nr < ARRAY_SIZE(keys)) {
+                        key->lct_index = keys_nr;
+                        keys[keys_nr] = key;
+                        keys_nr++;
+                        result = 0;
+                } else
+                        result = -ENFILE;
+                spin_unlock(&keys_guard);
+        } else {
+                CERROR("Too late to register a key.\n");
+                result = -EBUSY;
+        }
+        return result;
+}
+EXPORT_SYMBOL(lu_context_key_register);
+
+void *lu_context_key_get(struct lu_context *ctx, struct lu_context_key *key)
+{
+        return ctx->lc_value[key->lct_index];
+}
+EXPORT_SYMBOL(lu_context_key_get);
+
+static void keys_fini(struct lu_context *ctx)
+{
+        int i;
+
+        if (ctx->lc_value != NULL) {
+                for (i = 0; i < keys_nr; ++i) {
+                        if (ctx->lc_value[i] != NULL) {
+                                LASSERT(keys[i] != NULL);
+                                LASSERT(keys[i]->lct_fini != NULL);
+
+                                keys[i]->lct_fini(ctx, ctx->lc_value[i]);
+                                ctx->lc_value[i] = NULL;
+                        }
+                }
+                OBD_FREE(ctx->lc_value, keys_nr * sizeof ctx->lc_value[0]);
+                ctx->lc_value = NULL;
+        }
+}
+
+static int keys_init(struct lu_context *ctx)
+{
+        int i;
+        int result;
+
+        key_registration_over = 1;
+
+        OBD_ALLOC(ctx->lc_value, keys_nr * sizeof ctx->lc_value[0]);
+        if (ctx->lc_value != NULL) {
+                for (i = 0; i < ARRAY_SIZE(keys); ++i) {
+                        if (keys[i] != NULL) {
+                                void *value;
+
+                                LASSERT(keys[i]->lct_init != NULL);
+                                LASSERT(keys[i]->lct_index == i);
+
+                                value = keys[i]->lct_init(ctx);
+                                if (IS_ERR(value)) {
+                                        keys_fini(ctx);
+                                        return PTR_ERR(value);
+                                }
+                                ctx->lc_value[i] = value;
+                        }
+                }
+                result = 0;
+        } else
+                result = -ENOMEM;
+        return result;
+}
+
+int lu_context_init(struct lu_context *ctx)
+{
+        memset(ctx, 0, sizeof *ctx);
+        keys_init(ctx);
+        return 0;
+}
+EXPORT_SYMBOL(lu_context_init);
+
+void lu_context_fini(struct lu_context *ctx)
+{
+        keys_fini(ctx);
+}
+EXPORT_SYMBOL(lu_context_fini);
+
+void lu_context_enter(struct lu_context *ctx)
+{
+}
+EXPORT_SYMBOL(lu_context_enter);
+
+void lu_context_exit(struct lu_context *ctx)
+{
+}
+EXPORT_SYMBOL(lu_context_exit);

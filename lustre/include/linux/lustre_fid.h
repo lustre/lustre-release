@@ -31,9 +31,10 @@
 #include <libcfs/list.h>
 #include <libcfs/kp30.h>
 
+struct lu_context;
 struct lu_seq_mgr_ops {
-        int (*smo_read) (void *opaque, __u64 *);
-        int (*smo_write) (void *opaque, __u64 *);
+        int (*smo_read) (struct lu_context *, void *opaque, __u64 *);
+        int (*smo_write) (struct lu_context *, void *opaque, __u64 *);
 };
 
 struct lu_seq_mgr {
@@ -51,9 +52,9 @@ struct lu_seq_mgr *seq_mgr_init(struct lu_seq_mgr_ops *, void *);
 void seq_mgr_fini(struct lu_seq_mgr *);
 
 /* seq management methods */
-int seq_mgr_setup(struct lu_seq_mgr *);
-int seq_mgr_read(struct lu_seq_mgr *);
-int seq_mgr_write(struct lu_seq_mgr *);
-int seq_mgr_alloc(struct lu_seq_mgr *, __u64 *);
+int seq_mgr_setup(struct lu_context *, struct lu_seq_mgr *);
+int seq_mgr_read(struct lu_context *, struct lu_seq_mgr *);
+int seq_mgr_write(struct lu_context *, struct lu_seq_mgr *);
+int seq_mgr_alloc(struct lu_context *, struct lu_seq_mgr *, __u64 *);
 
 #endif /* __LINUX_OBD_CLASS_H */

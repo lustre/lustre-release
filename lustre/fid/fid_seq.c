@@ -38,7 +38,7 @@ struct lu_seq_mgr *seq_mgr_init(struct lu_seq_mgr_ops *ops,
 {
         struct lu_seq_mgr *mgr;
         ENTRY;
-        
+
         OBD_ALLOC_PTR(mgr);
         if (!mgr)
                 RETURN(NULL);
@@ -57,32 +57,22 @@ void seq_mgr_fini(struct lu_seq_mgr *mgr)
 }
 EXPORT_SYMBOL(seq_mgr_fini);
 
-int seq_mgr_write(struct lu_seq_mgr *mgr)
+int seq_mgr_write(struct lu_context *ctx, struct lu_seq_mgr *mgr)
 {
-        int rc = -ENOTSUPP;
         ENTRY;
-
-        if (mgr->m_ops->smo_write)
-                rc = mgr->m_ops->smo_write(mgr->m_opaque, &mgr->m_seq);
-
-        RETURN(rc);
+        RETURN(mgr->m_ops->smo_write(ctx, mgr->m_opaque, &mgr->m_seq));
 }
 EXPORT_SYMBOL(seq_mgr_write);
 
-int seq_mgr_read(struct lu_seq_mgr *mgr)
+int seq_mgr_read(struct lu_context *ctx, struct lu_seq_mgr *mgr)
 {
-        int rc = -ENOTSUPP;
         ENTRY;
-
-        if (mgr->m_ops->smo_read)
-                rc = mgr->m_ops->smo_read(mgr->m_opaque, &mgr->m_seq);
-
-        RETURN(rc);
+        RETURN(mgr->m_ops->smo_read(ctx, mgr->m_opaque, &mgr->m_seq));
 }
 EXPORT_SYMBOL(seq_mgr_read);
 
 /* manager functinality stuff */
-int seq_mgr_alloc(struct lu_seq_mgr *mgr, __u64 *seq)
+int seq_mgr_alloc(struct lu_context *ctx, struct lu_seq_mgr *mgr, __u64 *seq)
 {
         int rc = 0;
         ENTRY;
@@ -94,13 +84,8 @@ int seq_mgr_alloc(struct lu_seq_mgr *mgr, __u64 *seq)
         mgr->m_seq += 1;
         *seq = mgr->m_seq;
 
-        rc = seq_mgr_write(mgr);
-        if (rc == -ENOTSUPP) {
-                CERROR("Seq manager ->write() method "
-                       "is no defined.\n");
-                rc = 0;
-        }
-        
+        rc = seq_mgr_write(ctx, mgr);
+
         up(&mgr->m_seq_sem);
         RETURN(rc);
 }
@@ -109,7 +94,7 @@ EXPORT_SYMBOL(seq_mgr_alloc);
 /* initialize meta-sequence. First of all try to get it from lower layer,
  * falling down to back store one. In the case this is first run and there is
  * not meta-sequence initialized yet - store it to backstore. */
-int seq_mgr_setup(struct lu_seq_mgr *mgr)
+int seq_mgr_setup(struct lu_context *ctx, struct lu_seq_mgr *mgr)
 {
         int rc = 0;
         ENTRY;
@@ -117,27 +102,15 @@ int seq_mgr_setup(struct lu_seq_mgr *mgr)
         /* allocate next seq after root one */
         mgr->m_seq = LUSTRE_ROOT_FID_SEQ + 1;
 
-        rc = seq_mgr_read(mgr);
-        if (rc == -EOPNOTSUPP) {
-                /* provide zero error and let continue with default value of
-                 * sequence. */
-                GOTO(out, rc = 0);
-        } else if (rc == -ENODATA) {
+        rc = seq_mgr_read(ctx, mgr);
+        if (rc == -ENODATA) {
                 CWARN("initialize sequence by defaut ["LPU64"]\n", mgr->m_seq);
 
                 /* initialize new sequence config as it is not yet created. */
-                rc = seq_mgr_write(mgr);
-                if (rc == -EOPNOTSUPP) {
-                        /* provide zero error and let continue with default
-                         * value of sequence. */
-                        CERROR("can't update save initial sequence. "
-                               "No method defined\n");
-                        GOTO(out, rc = 0);
-                }
+                rc = seq_mgr_write(ctx, mgr);
         }
 
         EXIT;
-out:
         if (rc == 0)
                 CWARN("using start sequence: ["LPU64"]\n", mgr->m_seq);
         return rc;

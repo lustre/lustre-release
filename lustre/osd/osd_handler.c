@@ -50,34 +50,35 @@
 
 #include "osd_internal.h"
 
-static int   osd_root_get      (struct dt_device *dev, struct lu_fid *f);
-static int   osd_statfs        (struct dt_device *dev, struct kstatfs *sfs);
+static int   osd_root_get      (struct lu_context *ctxt,
+                                struct dt_device *dev, struct lu_fid *f);
+static int   osd_statfs        (struct lu_context *ctxt,
+                                struct dt_device *dev, struct kstatfs *sfs);
 
 static int   lu_device_is_osd  (const struct lu_device *d);
 static void  osd_mod_exit      (void) __exit;
 static int   osd_mod_init      (void) __init;
-static void *osd_thread_init   (struct ptlrpc_thread *t);
-static void  osd_thread_fini   (struct ptlrpc_thread *t, void *data);
 static int   osd_type_init     (struct lu_device_type *t);
 static void  osd_type_fini     (struct lu_device_type *t);
 static int   osd_object_init   (struct lu_context *ctxt, struct lu_object *l);
 static void  osd_object_release(struct lu_context *ctxt, struct lu_object *l);
-static int   osd_object_print  (struct seq_file *f, const struct lu_object *o);
+static int   osd_object_print  (struct lu_context *ctx,
+                                struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (struct lu_device *m);
 static void  osd_device_fini   (struct lu_device *d);
 static int   osd_device_init   (struct lu_device *d, const char *conf);
 
-static struct lu_object  *osd_object_alloc(struct lu_device *d);
 static struct osd_object *osd_obj         (const struct lu_object *o);
 static struct osd_device *osd_dev         (const struct lu_device *d);
 static struct osd_device *osd_dt_dev      (const struct dt_device *d);
 static struct lu_device  *osd_device_alloc(struct lu_device_type *t,
                                            struct lustre_cfg *cfg);
+static struct lu_object  *osd_object_alloc(struct lu_context *ctx,
+                                           struct lu_device *d);
 
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
-static struct ptlrpc_thread_key         osd_thread_key;
 static struct obd_ops                   osd_obd_device_ops;
 static struct lprocfs_vars              lprocfs_osd_module_vars[];
 static struct lprocfs_vars              lprocfs_osd_obd_vars[];
@@ -97,7 +98,8 @@ static struct lu_fid *lu_inode_get_fid(const struct inode *inode)
 /*
  * DT methods.
  */
-static int osd_root_get(struct dt_device *dev, struct lu_fid *f)
+static int osd_root_get(struct lu_context *ctx,
+                        struct dt_device *dev, struct lu_fid *f)
 {
         struct osd_device *od = osd_dt_dev(dev);
 
@@ -110,7 +112,8 @@ static int osd_root_get(struct dt_device *dev, struct lu_fid *f)
  * OSD object methods.
  */
 
-static struct lu_object *osd_object_alloc(struct lu_device *d)
+static struct lu_object *osd_object_alloc(struct lu_context *ctx,
+                                          struct lu_device *d)
 {
         struct osd_object *mo;
 
@@ -125,7 +128,8 @@ static struct lu_object *osd_object_alloc(struct lu_device *d)
                 return NULL;
 }
 
-static int osd_getattr(struct inode *inode, struct lu_attr *attr)
+static int osd_getattr(struct lu_context *ctx,
+                       struct inode *inode, struct lu_attr *attr)
 {
         //attr->la_atime      = inode->i_atime;
         //attr->la_mtime      = inode->i_mtime;
@@ -148,7 +152,8 @@ static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 
         /* fill lu_attr in ctxt */
         //XXX temporary hack for proto only
-        osd_getattr(d->od_mount->lmi_sb->s_root->d_inode, &ctxt->lc_attr);
+        osd_getattr(ctxt,
+                    d->od_mount->lmi_sb->s_root->d_inode, &ctxt->lc_attr);
 
         /*
          * use object index to locate dentry/inode by fid.
@@ -156,7 +161,7 @@ static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
         return 0;
 }
 
-static void osd_object_free(struct lu_object *l)
+static void osd_object_free(struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object  *o = osd_obj(l);
 
@@ -164,7 +169,7 @@ static void osd_object_free(struct lu_object *l)
                 dput(o->oo_dentry);
 }
 
-static void osd_object_delete(struct lu_object *l)
+static void osd_object_delete(struct lu_context *ctx, struct lu_object *l)
 {
 }
 
@@ -181,7 +186,8 @@ static void osd_object_release(struct lu_context *ctxt, struct lu_object *l)
                 set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
-static int osd_object_print(struct seq_file *f, const struct lu_object *l)
+static int osd_object_print(struct lu_context *ctx,
+                            struct seq_file *f, const struct lu_object *l)
 {
         struct osd_object  *o = osd_obj(l);
 
@@ -189,32 +195,8 @@ static int osd_object_print(struct seq_file *f, const struct lu_object *l)
                           o, o->oo_dentry);
 }
 
-struct osd_thread_info {
-};
-
-/*
- * ptlrpc_key call-backs.
- */
-static void *osd_thread_init(struct ptlrpc_thread *t)
-{
-        struct osd_thread_info *info;
-
-        return OBD_ALLOC_PTR(info) ? : ERR_PTR(-ENOMEM);
-}
-
-static void osd_thread_fini(struct ptlrpc_thread *t, void *data)
-{
-        struct osd_thread_info *info = data;
-        OBD_FREE_PTR(info);
-}
-
-
-static struct ptlrpc_thread_key osd_thread_key = {
-        .ptk_init = osd_thread_init,
-        .ptk_fini = osd_thread_fini
-};
-
-static int osd_config(struct dt_device *d, const char *name,
+static int osd_config(struct lu_context *ctx,
+                      struct dt_device *d, const char *name,
                       void *buf, int size, int mode)
 {
 	struct osd_device *osd = dt2osd_dev(d);
@@ -234,7 +216,8 @@ static int osd_config(struct dt_device *d, const char *name,
         RETURN (result);
 }
 
-static int osd_statfs(struct dt_device *d, struct kstatfs *sfs)
+static int osd_statfs(struct lu_context *ctx,
+                      struct dt_device *d, struct kstatfs *sfs)
 {
 	struct osd_device *osd = dt2osd_dev(d);
         struct super_block *sb = osd->od_mount->lmi_sb;
@@ -277,7 +260,7 @@ static struct dt_device_operations osd_dt_ops = {
  */
 static int osd_type_init(struct lu_device_type *t)
 {
-        return ptlrpc_thread_key_register(&osd_thread_key);
+        return 0;
 }
 
 static void osd_type_fini(struct lu_device_type *t)

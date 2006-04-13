@@ -143,30 +143,32 @@ struct lu_device_operations {
 	 * parts). This is called by ->ldo_object_init() from the parent
 	 * layer.
 	 */
-	struct lu_object *(*ldo_object_alloc)(struct lu_device *);
+	struct lu_object *(*ldo_object_alloc)(struct lu_context *,
+                                              struct lu_device *);
 
 	/*
 	 * Called before ->ldo_object_free() to signal that object is being
 	 * destroyed.
 	 */
-	void (*ldo_object_delete)(struct lu_object *o);
+	void (*ldo_object_delete)(struct lu_context *ctx, struct lu_object *o);
 
 	/*
 	 * Dual to ->ldo_object_alloc(). Called when object is removed from
 	 * memory.
 	 */
-	void (*ldo_object_free)(struct lu_object *o);
+	void (*ldo_object_free)(struct lu_context *ctx, struct lu_object *o);
 
 	/*
 	 * Called when last active reference to the object is released (and
 	 * object returns to the cache).
 	 */
-	void (*ldo_object_release)(struct lu_context *ctxt, struct lu_object *o);
+	void (*ldo_object_release)(struct lu_context *ctx, struct lu_object *o);
 
 	/*
 	 * Debugging helper. Print given object.
 	 */
-	int (*ldo_object_print)(struct seq_file *f, const struct lu_object *o);
+	int (*ldo_object_print)(struct lu_context *ctx,
+                                struct seq_file *f, const struct lu_object *o);
 };
 
 /*
@@ -248,11 +250,6 @@ struct lu_attr {
         __u32          la_gid;
         __u32          la_flags;
         __u32          la_nlink;
-};
-
-/* the context of the ops*/
-struct lu_context {
-        struct lu_attr lc_attr;
 };
 
 /*
@@ -436,8 +433,9 @@ static inline int lu_object_is_dying(struct lu_object_header *h)
 }
 
 void lu_object_put(struct lu_context *ctxt, struct lu_object *o);
-void lu_site_purge(struct lu_site *s, int nr);
-int lu_object_print(struct seq_file *f, const struct lu_object *o);
+void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr);
+int lu_object_print(struct lu_context *ctxt,
+                    struct seq_file *f, const struct lu_object *o);
 struct lu_object *lu_object_find(struct lu_context *ctxt,
                                  struct lu_site *s, const struct lu_fid *f);
 
@@ -462,6 +460,32 @@ void lu_object_header_fini(struct lu_object_header *h);
 struct lu_object *lu_object_locate(struct lu_object_header *h,
                                    struct lu_device_type *dtype);
 
+/*
+ * lu_context. Execution context for lu_object methods. Currently associated
+ * with thread.
+ */
+struct lu_context {
+        __u32                  lc_tags;
+        struct lu_attr         lc_attr;
+        struct ptlrpc_thread  *lc_thread;
+        void                 **lc_value;
+};
+
+
+struct lu_context_key {
+        void  *(*lct_init)(struct lu_context *ctx);
+        void   (*lct_fini)(struct lu_context *ctx, void *data);
+        int      lct_index;
+};
+
+int   lu_context_key_register(struct lu_context_key *key);
+void *lu_context_key_get(struct lu_context *ctx, struct lu_context_key *key);
+
+int  lu_context_init(struct lu_context *ctx);
+void lu_context_fini(struct lu_context *ctx);
+
+void lu_context_enter(struct lu_context *ctx);
+void lu_context_exit(struct lu_context *ctx);
 
 /*
  * DT device interface. XXX Probably should go elsewhere.
@@ -480,18 +504,24 @@ enum dt_lock_mode {
 struct dt_device_operations {
         /* method for getting/setting device wide back stored config data, like
          * last used meta-sequence, etc. */
-        int (*dt_config) (struct dt_device *dev, const char *name,
+        int (*dt_config) (struct lu_context *ctx,
+                          struct dt_device *dev, const char *name,
                           void *buf, int size, int mode);
-        int   (*dt_statfs)(struct dt_device *dev, struct kstatfs *sfs);
-        struct thandle *(*dt_trans_start)(struct dt_device *dev,
+        int   (*dt_statfs)(struct lu_context *ctx,
+                           struct dt_device *dev, struct kstatfs *sfs);
+        struct thandle *(*dt_trans_start)(struct lu_context *ctx,
+                                          struct dt_device *dev,
                                           struct txn_param *param);
-        void  (*dt_trans_stop)(struct thandle *th);
-        int   (*dt_root_get)(struct dt_device *dev, struct lu_fid *f);
+        void  (*dt_trans_stop)(struct lu_context *ctx, struct thandle *th);
+        int   (*dt_root_get)(struct lu_context *ctx,
+                             struct dt_device *dev, struct lu_fid *f);
 };
 
 struct dt_object_operations {
-        void  (*do_object_lock)(struct dt_object *dt, enum dt_lock_mode mode);
-        void  (*do_object_unlock)(struct dt_object *dt, enum dt_lock_mode mode);
+        void  (*do_object_lock)(struct lu_context *ctx,
+                                struct dt_object *dt, enum dt_lock_mode mode);
+        void  (*do_object_unlock)(struct lu_context *ctx,
+                                  struct dt_object *dt, enum dt_lock_mode mode);
 
         int   (*do_object_create)(struct lu_context *ctxt,
                                   struct dt_object *dt,

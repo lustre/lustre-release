@@ -75,12 +75,15 @@ struct md_object_operations {
 struct md_device_operations {
         /* method for getting/setting device wide back stored config data, like
          * last used meta-sequence, etc. */
-        int (*mdo_config) (struct md_device *m, const char *name,
+        int (*mdo_config) (struct lu_context *ctx,
+                           struct md_device *m, const char *name,
                            void *buf, int size, int mode);
 
         /* meta-data device related handlers. */
-        int (*mdo_root_get)(struct md_device *m, struct lu_fid *f);
-        int (*mdo_statfs)(struct md_device *m, struct kstatfs *sfs);
+        int (*mdo_root_get)(struct lu_context *ctx,
+                            struct md_device *m, struct lu_fid *f);
+        int (*mdo_statfs)(struct lu_context *ctx,
+                          struct md_device *m, struct kstatfs *sfs);
 };
 
 struct md_device {
