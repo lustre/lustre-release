@@ -99,18 +99,17 @@ static int mdt_md_getattr(struct mdt_thread_info *info, struct lu_fid *fid)
 {
         struct mdt_device *d = info->mti_mdt;
         struct mdt_object *o;
-        struct md_object  *next;
         int               result;
 
         ENTRY;
-        
+
         o = mdt_object_find(&info->mti_ctxt, d, fid);
         if (IS_ERR(o))
                 return PTR_ERR(o);
         /* attr are in mti_ctxt */
         result = 0;
         mdt_object_put(&info->mti_ctxt, o);
-        
+
         RETURN(result);
 }
 
@@ -174,21 +173,21 @@ static void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
         b->valid |= OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID |
                     OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
                     OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER;
-        
-        if (!S_ISREG(attr->mode))
+
+        if (!S_ISREG(attr->la_mode))
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
                             OBD_MD_FLMTIME;
 
-        b->atime      = attr->atime;
-        b->mtime      = attr->mtime;
-        b->ctime      = attr->ctime;
-        b->mode       = attr->mode;
-        b->size       = attr->size;
-        b->blocks     = attr->blocks;
-        b->uid        = attr->uid;
-        b->gid        = attr->gid;
-        b->flags      = attr->flags;
-        b->nlink      = attr->nlink;
+        b->atime      = attr->la_atime;
+        b->mtime      = attr->la_mtime;
+        b->ctime      = attr->la_ctime;
+        b->mode       = attr->la_mode;
+        b->size       = attr->la_size;
+        b->blocks     = attr->la_blocks;
+        b->uid        = attr->la_uid;
+        b->gid        = attr->la_gid;
+        b->flags      = attr->la_flags;
+        b->nlink      = attr->la_nlink;
 }
 
 static int mdt_getattr(struct mdt_thread_info *info,
@@ -200,7 +199,7 @@ static int mdt_getattr(struct mdt_thread_info *info,
         int result;
 
         ENTRY;
-        
+
         OBD_ALLOC_PTR(attr);
         if (attr == NULL)
                 return -ENOMEM;
@@ -215,10 +214,9 @@ static int mdt_getattr(struct mdt_thread_info *info,
         } else {
                 body = lustre_msg_buf(req->rq_repmsg, 0, size);
                 result = mdt_md_getattr(info, &body->fid1);
-                if (result == 0) 
+                if (result == 0)
                         mdt_pack_attr2body(body, &info->mti_ctxt.lc_attr);
         }
-out:
         OBD_FREE_PTR(attr);
         RETURN(result);
 }
@@ -974,7 +972,7 @@ static int mdt_seq_mgr_hpr(void *opaque, __u64 *seq,
         struct mdt_device *m = opaque;
         int rc;
         ENTRY;
-        
+
         rc = mdt_config(m, LUSTRE_CONFIG_METASEQ,
                         seq, sizeof(*seq),
                         mode);
@@ -1107,7 +1105,7 @@ static int mdt_init0(struct mdt_device *m,
                 CERROR("can't initialize sequence manager\n");
                 GOTO(err_fini_child, rc);
         }
-        
+
         /* init sequence info after device stack is initialized. */
         rc = seq_mgr_setup(m->mdt_seq_mgr);
         if (rc)

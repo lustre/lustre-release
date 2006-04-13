@@ -238,16 +238,16 @@ enum lu_object_flags {
 
 /* attr */
 struct lu_attr {
-        __u64          size;
-        __u64          mtime;
-        __u64          atime;
-        __u64          ctime;
-        __u64          blocks; 
-        __u32          mode;
-        __u32          uid;
-        __u32          gid;
-        __u32          flags;
-        __u32          nlink;
+        __u64          la_size;
+        __u64          la_mtime;
+        __u64          la_atime;
+        __u64          la_ctime;
+        __u64          la_blocks;
+        __u32          la_mode;
+        __u32          la_uid;
+        __u32          la_gid;
+        __u32          la_flags;
+        __u32          la_nlink;
 };
 
 /* the context of the ops*/
@@ -438,7 +438,7 @@ static inline int lu_object_is_dying(struct lu_object_header *h)
 void lu_object_put(struct lu_context *ctxt, struct lu_object *o);
 void lu_site_purge(struct lu_site *s, int nr);
 int lu_object_print(struct seq_file *f, const struct lu_object *o);
-struct lu_object *lu_object_find(struct lu_context *ctxt, 
+struct lu_object *lu_object_find(struct lu_context *ctxt,
                                  struct lu_site *s, const struct lu_fid *f);
 
 int  lu_site_init(struct lu_site *s, struct lu_device *top);

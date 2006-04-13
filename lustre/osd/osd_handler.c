@@ -127,16 +127,16 @@ static struct lu_object *osd_object_alloc(struct lu_device *d)
 
 static int osd_getattr(struct inode *inode, struct lu_attr *attr)
 {
-        //attr->atime      = inode->i_atime;
-        //attr->mtime      = inode->i_mtime;
-        //attr->ctime      = inode->i_ctime;
-        attr->mode       = inode->i_mode;
-        attr->size       = inode->i_size;
-        attr->blocks     = inode->i_blocks;
-        attr->uid        = inode->i_uid;
-        attr->gid        = inode->i_gid;
-        attr->flags      = inode->i_flags;
-        attr->nlink      = inode->i_nlink;
+        //attr->la_atime      = inode->i_atime;
+        //attr->la_mtime      = inode->i_mtime;
+        //attr->la_ctime      = inode->i_ctime;
+        attr->la_mode       = inode->i_mode;
+        attr->la_size       = inode->i_size;
+        attr->la_blocks     = inode->i_blocks;
+        attr->la_uid        = inode->i_uid;
+        attr->la_gid        = inode->i_gid;
+        attr->la_flags      = inode->i_flags;
+        attr->la_nlink      = inode->i_nlink;
         return 0;
 }
 
@@ -145,7 +145,7 @@ static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
         struct osd_device  *d = osd_dev(l->lo_dev);
         struct osd_object  *o = osd_obj(l);
         struct lu_fid      *f = lu_object_fid(l);
-       
+
         /* fill lu_attr in ctxt */
         //XXX temporary hack for proto only
         osd_getattr(d->od_mount->lmi_sb->s_root->d_inode, &ctxt->lc_attr);
@@ -250,20 +250,20 @@ static int osd_statfs(struct dt_device *d, struct kstatfs *sfs)
 
 static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
                         void *buf, int size, const char *name,
-                        struct md_params *arg) 
+                        struct md_params *arg)
 {
 	struct osd_object *o = dt2osd_obj(dt);
         struct osd_device *dev = osd_obj2dev(o);
         //struct super_block *sb = dev->od_mount->lmi_sb;
         struct inode *inode = o->oo_dentry->d_inode;
         int result = -EOPNOTSUPP;
-        
+
         ENTRY;
-       
+
         memset(buf, 0, size);
-	//TODO 
+	//TODO
         RETURN (result);
-        
+
 }
 
 static struct dt_device_operations osd_dt_ops = {
