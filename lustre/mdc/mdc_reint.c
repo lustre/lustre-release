@@ -155,6 +155,35 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         RETURN(rc);
 }
 
+#ifdef FLD_PROTO_TYPE
+int mdc_fld_req(struct obd_export *exp, __u64 mds_num, __u64 seq_num, int op)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct ptlrpc_request *req;
+        int size[] = { sizeof(struct mdt_body)};
+        int rc, level, bufcount = 1;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
+                              MDS_FLD_OP, bufcount, size, NULL);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        /* mdc_create_pack fills msg->bufs[1] with name
+         * and msg->bufs[2] with tgt, for symlinks or lov MD data */
+        mdc_fld_pack(req, MDS_REQ_REC_OFF, mds_num, seq_num, op);
+
+        size[0] = sizeof(struct mdt_body);
+        req->rq_replen = lustre_msg_size(1, size);
+
+        level = LUSTRE_IMP_FULL;
+        rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, level);
+
+        ptlrpc_req_finished(req);
+        RETURN(rc);
+}
+#endif
+
 int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request)
 {
