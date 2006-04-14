@@ -61,7 +61,6 @@ struct ll_inode_info {
         struct semaphore        lli_size_sem;
         void                   *lli_size_sem_owner;
         struct semaphore        lli_open_sem;
-        struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
         __u64                   lli_maxbytes;
         __u64                   lli_io_epoch;
@@ -91,7 +90,9 @@ struct ll_inode_info {
         struct inode            lli_vfs_inode;
 #endif
 
+        /* indexing fields for both metadata and data stacks. */
         struct lu_fid           lli_fid;
+        struct lov_stripe_md   *lli_smd;
 };
 
 /*

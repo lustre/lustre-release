@@ -652,6 +652,9 @@ static inline __u64 fid_num(const struct lu_fid *fid)
         return f_ver | fid_oid(fid);
 }
 
+#define fid_equals(fid1, fid2) \
+        (memcmp(fid1, fid2, sizeof(*fid1)) == 0)
+
 #define DFID3 "["LPU64"/%u:%u]"
 
 #define PFID3(fid)    \

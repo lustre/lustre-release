@@ -97,8 +97,8 @@ static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs,
         RETURN(result);
 }
 
-static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
-                                          void *data)
+static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen,
+                                          __u64 gr, void *data)
 {
         struct obd_device *obd = data;
         return mgs_fid2dentry(&obd->u.mgs, id, gen);

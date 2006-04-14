@@ -40,11 +40,8 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
-//#include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
-//#include <linux/obd_ost.h>
 #include <linux/lprocfs_status.h>
-//#include <linux/lustre_fsfilt.h>
 #include "lmv_internal.h"
 
 /* objects cache. */
@@ -58,7 +55,7 @@ static spinlock_t obj_list_lock = SPIN_LOCK_UNLOCKED;
 /* creates new obj on passed @id and @mea. */
 struct lmv_obj *
 lmv_alloc_obj(struct obd_device *obd,
-              struct lustre_id *id,
+              struct lu_fid *fid,
               struct mea *mea)
 {
         int i;
@@ -76,7 +73,7 @@ lmv_alloc_obj(struct obd_device *obd,
 
         atomic_inc(&obj_cache_count);
         
-        obj->id = *id;
+        obj->lo_fid = *fid;
         obj->obd = obd;
         obj->state = 0;
         obj->hashtype = mea->mea_magic;
@@ -96,11 +93,10 @@ lmv_alloc_obj(struct obd_device *obd,
 
         /* put all ids in */
         for (i = 0; i < mea->mea_count; i++) {
-                CDEBUG(D_OTHER, "subobj "DLID4"\n",
-                       OLID4(&mea->mea_ids[i]));
+                CDEBUG(D_OTHER, "subobj "DFID3"\n",
+                       PFID3(&mea->mea_ids[i]));
                 obj->objs[i].id = mea->mea_ids[i];
-                LASSERT(id_ino(&obj->objs[i].id));
-                LASSERT(id_fid(&obj->objs[i].id));
+                LASSERT(fid_num(&obj->objs[i].lo_fid));
         }
 
         return obj;
@@ -180,9 +176,9 @@ __put_obj(struct lmv_obj *obj)
         LASSERT(obj);
 
         if (atomic_dec_and_test(&obj->count)) {
-                struct lustre_id *id = &obj->id;
-                CDEBUG(D_OTHER, "last reference to "DLID4" - "
-                       "destroying\n", OLID4(id));
+                struct lu_fid *fid = &obj->lo_fid;
+                CDEBUG(D_OTHER, "last reference to "DFID3" - "
+                       "destroying\n", PFID3(id));
                 __del_obj(obj);
         }
 }
@@ -196,7 +192,7 @@ lmv_put_obj(struct lmv_obj *obj)
 }
 
 static struct lmv_obj *
-__grab_obj(struct obd_device *obd, struct lustre_id *id)
+__grab_obj(struct obd_device *obd, struct lu_fid *fid)
 {
         struct lmv_obj *obj;
         struct list_head *cur;
@@ -220,7 +216,7 @@ __grab_obj(struct obd_device *obd, struct lustre_id *id)
                         continue;
 
                 /* check if this is what we're looking for. */
-                if (id_equal_fid(&obj->id, id))
+                if (fid_equals(&obj->lo_fid, fid))
                         return __get_obj(obj);
         }
 
@@ -228,13 +224,13 @@ __grab_obj(struct obd_device *obd, struct lustre_id *id)
 }
 
 struct lmv_obj *
-lmv_grab_obj(struct obd_device *obd, struct lustre_id *id)
+lmv_grab_obj(struct obd_device *obd, struct lu_fid *fid)
 {
         struct lmv_obj *obj;
         ENTRY;
         
         spin_lock(&obj_list_lock);
-        obj = __grab_obj(obd, id);
+        obj = __grab_obj(obd, fid);
         spin_unlock(&obj_list_lock);
         
         RETURN(obj);
@@ -243,7 +239,7 @@ lmv_grab_obj(struct obd_device *obd, struct lustre_id *id)
 /* looks in objects list for an object that matches passed @id. If it is not
  * found -- creates it using passed @mea and puts onto list. */
 static struct lmv_obj *
-__create_obj(struct obd_device *obd, struct lustre_id *id, struct mea *mea)
+__create_obj(struct obd_device *obd, struct lu_fid *fid, struct mea *mea)
 {
         struct lmv_obj *new, *obj;
         ENTRY;
@@ -273,8 +269,8 @@ __create_obj(struct obd_device *obd, struct lustre_id *id, struct mea *mea)
         
         spin_unlock(&obj_list_lock);
 
-        CDEBUG(D_OTHER, "new obj in lmv cache: "DLID4"\n",
-               OLID4(id));
+        CDEBUG(D_OTHER, "new obj in lmv cache: "DFID3"\n",
+               PFID3(id));
 
         RETURN(new);
         
@@ -283,18 +279,18 @@ __create_obj(struct obd_device *obd, struct lustre_id *id, struct mea *mea)
 /* creates object from passed @id and @mea. If @mea is NULL, it will be
  * obtained from correct MDT and used for constructing the object. */
 struct lmv_obj *
-lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
+lmv_create_obj(struct obd_export *exp, struct lu_fid *fid, struct mea *mea)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct ptlrpc_request *req = NULL;
         struct lmv_obj *obj;
         struct lustre_md md;
-        int mealen, rc;
+        int mealen, rc, mds;
         ENTRY;
 
-        CDEBUG(D_OTHER, "get mea for "DLID4" and create lmv obj\n",
-               OLID4(id));
+        CDEBUG(D_OTHER, "get mea for "DFID3" and create lmv obj\n",
+               PFID3(id));
 
         md.mea = NULL;
 	
@@ -308,8 +304,10 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
                 md.mea = NULL;
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
-                rc = md_getattr(lmv->tgts[id_group(id)].ltd_exp,
-                                id, valid, NULL, NULL, 0, mealen, NULL, &req);
+                mds = lmv_fld_lookup(obd, fid);
+
+                rc = md_getattr(lmv->tgts[mds].ltd_exp,
+                                fid, valid, NULL, NULL, 0, mealen, NULL, &req);
                 if (rc) {
                         CERROR("md_getattr() failed, error %d\n", rc);
                         GOTO(cleanup, obj = ERR_PTR(rc));
@@ -330,8 +328,8 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
         /* got mea, now create obj for it. */
         obj = __create_obj(obd, id, mea);
         if (!obj) {
-                CERROR("Can't create new object "DLID4"\n",
-                       OLID4(id));
+                CERROR("Can't create new object "DFID3"\n",
+                       PFID3(id));
                 GOTO(cleanup, obj = ERR_PTR(-ENOMEM));
         }
 	
@@ -352,7 +350,7 @@ cleanup:
  * for subsequent callers of lmv_grab_obj().
  */
 int
-lmv_delete_obj(struct obd_export *exp, struct lustre_id *id)
+lmv_delete_obj(struct obd_export *exp, struct lu_fid *fid)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obj *obj;
@@ -403,8 +401,8 @@ lmv_cleanup_mgr(struct obd_device *obd)
 
                 obj->state |= O_FREEING;
                 if (atomic_read(&obj->count) > 1) {
-                        CERROR("obj "DLID4" has count > 1 (%d)\n",
-                               OLID4(&obj->id), atomic_read(&obj->count));
+                        CERROR("obj "DFID3" has count > 1 (%d)\n",
+                               PFID3(&obj->lo_fid), atomic_read(&obj->count));
                 }
                 __put_obj(obj);
         }
