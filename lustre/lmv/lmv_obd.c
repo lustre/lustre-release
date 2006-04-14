@@ -862,7 +862,7 @@ static int lmv_getattr(struct obd_export *exp, struct lu_fid *fid,
                         }
 
                         /* skip master obj. */
-                        if (fid_equals(&obj->lo_fid, &obj->objs[i].lo_fid))
+                        if (lu_fid_eq(&obj->lo_fid, &obj->objs[i].lo_fid))
                                 continue;
                         
                         body->size += obj->objs[i].size;
@@ -1519,7 +1519,7 @@ static int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
                                         data, iattr, ea, ealen, ea2, ea2len, 
                                         ea3, ea3len, &req);
 
-                        if (fid_equals(&obj->lo_fid, &obj->objs[i].lo_fid)) {
+                        if (lu_fid_eq(&obj->lo_fid, &obj->objs[i].lo_fid)) {
                                 /*
                                  * this is master object and this request should
                                  * be returned back to llite.
@@ -1664,7 +1664,7 @@ static int lmv_readpage(struct obd_export *exp, struct lu_fid *fid,
         rc = md_readpage(lmv->tgts[i].ltd_exp, &rid, 
                          offset, page, request);
         
-        if (rc == 0 && !fid_equals(&rid, fid))
+        if (rc == 0 && !lu_fid_eq(&rid, fid))
                 /* this page isn't from master object. To avoid "." and ".." 
                  * duplication in directory, we have to remove them from all
                  * slave objects */

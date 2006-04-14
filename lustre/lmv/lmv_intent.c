@@ -165,7 +165,7 @@ repeat:
         if (rc == -ERESTART) {
                 /* directory got splitted. time to update local object and
                  * repeat the request with proper MDS */
-                LASSERT(fid_equals(pid, &rpid));
+                LASSERT(lu_fid_eq(pid, &rpid));
                 rc = lmv_get_mea_and_update_object(exp, &rpid);
                 if (rc == 0) {
                         ptlrpc_req_finished(*reqp);
@@ -263,7 +263,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                 if (obj) {
                         /* in fact, we need not this with current intent_lock(),
                          * but it may change some day */
-                        if (!fid_equals(pid, cid)){
+                        if (!lu_fid_eq(pid, cid)){
                                 rpid = obj->objs[mds].lo_fid;
                                 mds = lmv_fld_lookup(obd, &rpid);
                         }
@@ -409,7 +409,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 struct lookup_intent it;
                 int mds;
 
-                if (fid_equals(&fid, &obj->lo_fid))
+                if (lu_fid_eq(&fid, &obj->lo_fid))
                         /* skip master obj */
                         continue;
 
@@ -680,7 +680,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 if (!it.d.fs_data)
                         GOTO(cleanup, rc = -ENOMEM);
                         
-                if (fid_equals(&fid, &obj->lo_fid)) {
+                if (lu_fid_eq(&fid, &obj->lo_fid)) {
                         if (master_valid) {
                                 /* lmv_intent_getattr() already checked
                                  * validness and took the lock */

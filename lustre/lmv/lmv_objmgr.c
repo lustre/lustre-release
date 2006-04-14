@@ -216,7 +216,7 @@ __grab_obj(struct obd_device *obd, struct lu_fid *fid)
                         continue;
 
                 /* check if this is what we're looking for. */
-                if (fid_equals(&obj->lo_fid, fid))
+                if (lu_fid_eq(&obj->lo_fid, fid))
                         return __get_obj(obj);
         }
 
