@@ -51,6 +51,7 @@ struct osd_object {
 struct osd_device {
         struct dt_device          od_dt_dev;
         struct lustre_mount_info *od_mount;
+        struct dentry            *od_objdir;
 };
 
 static inline struct osd_object * dt2osd_obj(struct dt_object *o)
