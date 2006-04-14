@@ -59,14 +59,14 @@ static inline void
 lmv_lock_obj(struct lmv_obj *obj)
 {
         LASSERT(obj);
-        down(&obj->guard);
+        down(&obj->lo_guard);
 }
 
 static inline void
 lmv_unlock_obj(struct lmv_obj *obj)
 {
         LASSERT(obj);
-        up(&obj->guard);
+        up(&obj->lo_guard);
 }
 
 void lmv_add_obj(struct lmv_obj *obj);

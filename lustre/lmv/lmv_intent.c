@@ -150,12 +150,12 @@ repeat:
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
-                mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                    (char *)name, len);
                 
                 CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n",
                        mds, PFID3(&rpid));
-                rpid = obj->objs[mds].lo_fid;
+                rpid = obj->lo_objs[mds].li_fid;
                 lmv_put_obj(obj);
         }
 
@@ -264,7 +264,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                         /* in fact, we need not this with current intent_lock(),
                          * but it may change some day */
                         if (!lu_fid_eq(pid, cid)){
-                                rpid = obj->objs[mds].lo_fid;
+                                rpid = obj->lo_objs[mds].li_fid;
                                 mds = lmv_fld_lookup(obd, &rpid);
                         }
                         lmv_put_obj(obj);
@@ -277,9 +277,9 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                 obj = lmv_grab_obj(obd, pid);
                 if (obj && len) {
                         /* directory is already splitted. calculate mds */
-                        mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                            (char *)name, len);
-                        rpid = obj->objs[mds].lo_fid;
+                        rpid = obj->lo_objs[mds].li_fid;
                         mds = lmv_fld_lookup(obd, &rpid);
                         lmv_put_obj(obj);
 
@@ -363,7 +363,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
 void lmv_update_body_from_obj(struct mdt_body *body, struct lmv_inode *obj)
 {
         /* update size */
-        body->size += obj->size;
+        body->size += obj->lo_size;
 }
 
 int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
@@ -403,8 +403,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
         lmv_lock_obj(obj);
         
-        for (i = 0; i < obj->objcount; i++) {
-                struct lu_fid fid = obj->objs[i].lo_fid;
+        for (i = 0; i < obj->lo_objcount; i++) {
+                struct lu_fid fid = obj->lo_objs[i].li_fid;
                 struct ptlrpc_request *req = NULL;
                 struct lookup_intent it;
                 int mds;
@@ -413,7 +413,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                         /* skip master obj */
                         continue;
 
-                CDEBUG(D_OTHER, "lookup slave "DFID3"\n", PFID3(&id));
+                CDEBUG(D_OTHER, "lookup slave "DFID3"\n", PFID3(&fid));
 
                 /* is obj valid? */
                 memset(&it, 0, sizeof(it));
@@ -423,8 +423,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                         GOTO(cleanup, rc = -ENOMEM);
                         
                 mds = lmv_fld_lookup(obd, &fid);
-                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &id,
-                                    NULL, 0, NULL, 0, &id, &it, 0, &req,
+                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &fid,
+                                    NULL, 0, NULL, 0, &fid, &it, 0, &req,
                                     lmv_dirobj_blocking_ast);
                 
                 lockh = (struct lustre_handle *)&LUSTRE_IT(&it)->it_lock_handle;
@@ -448,17 +448,17 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 body2 = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body2));
                 LASSERT(body2);
 
-                obj->objs[i].size = body2->size;
+                obj->lo_objs[i].li_size = body2->size;
                 
                 CDEBUG(D_OTHER, "fresh: %lu\n",
-                       (unsigned long)obj->objs[i].size);
+                       (unsigned long)obj->lo_objs[i].li_size);
 
                 LDLM_LOCK_PUT(lock);
 
                 if (req)
                         ptlrpc_req_finished(req);
 release_lock:
-                lmv_update_body_from_obj(body, obj->objs + i);
+                lmv_update_body_from_obj(body, obj->lo_objs + i);
 
                 if (LUSTRE_IT(&it)->it_lock_mode)
                         ldlm_lock_decref(lockh, LUSTRE_IT(&it)->it_lock_mode);
@@ -488,22 +488,22 @@ int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
         ENTRY;
 
         /*
-         * IT_LOOKUP is intended to produce name -> id resolving (let's call
+         * IT_LOOKUP is intended to produce name -> fid resolving (let's call
          * this lookup below) or to confirm requested resolving is still valid
          * (let's call this revalidation) cid != NULL specifies revalidation.
          */
         if (cid) {
                 /*
                  * this is revalidation: we have to check is LOOKUP lock still
-                 * valid for given id. Very important part is that we have to
+                 * valid for given fid. Very important part is that we have to
                  * choose right mds because namespace is per mds.
                  */
                 rpid = *pid;
                 obj = lmv_grab_obj(obd, pid);
                 if (obj) {
-                        mds = raw_name2idx(obj->hashtype, obj->objcount,
+                        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)name, len);
-                        rpid = obj->objs[mds].lo_fid;
+                        rpid = obj->lo_objs[mds].li_fid;
                         lmv_put_obj(obj);
                 }
                 mds = lmv_fld_lookup(obd, &rpid);
@@ -524,9 +524,9 @@ repeat:
                 if (obj) {
                         if (len) {
                                 /* directory is already splitted. calculate mds */
-                                mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                                    (char *)name, len);
-                                rpid = obj->objs[mds].lo_fid;
+                                rpid = obj->lo_objs[mds].li_fid;
                                 mds = lmv_fld_lookup(obd, &rpid);
                         }
                         lmv_put_obj(obj);
@@ -660,8 +660,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         lmv_lock_obj(obj);
         
-        for (i = 0; i < obj->objcount; i++) {
-                struct lu_fid fid = obj->objs[i].lo_fid;
+        for (i = 0; i < obj->lo_objcount; i++) {
+                struct lu_fid fid = obj->lo_objs[i].li_fid;
                 struct lustre_handle *lockh = NULL;
                 struct ptlrpc_request *req = NULL;
                 ldlm_blocking_callback cb;
@@ -669,7 +669,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 int master = 0;
 
                 CDEBUG(D_OTHER, "revalidate subobj "DFID3"\n",
-                       PFID3(&id));
+                       PFID3(&fid));
 
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
@@ -705,7 +705,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 /* is obj valid? */
                 mds = lmv_fld_lookup(obd, &fid);
                 rc = md_intent_lock(lmv->tgts[mds].ltd_exp,
-                                    &id, NULL, 0, NULL, 0, &id, &it, 0, 
+                                    &fid, NULL, 0, NULL, 0, &fid, &it, 0, 
                                     &req, cb);
                 lockh = (struct lustre_handle *) &LUSTRE_IT(&it)->it_lock_handle;
                 if (rc > 0 && req == NULL) {
@@ -748,15 +748,15 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 LASSERT(body);
                 
 update:
-                obj->objs[i].size = body->size;
+                obj->lo_objs[i].li_size = body->size;
                 
                 CDEBUG(D_OTHER, "fresh: %lu\n",
-                       (unsigned long)obj->objs[i].size);
+                       (unsigned long)obj->lo_objs[i].li_size);
                 
                 if (req)
                         ptlrpc_req_finished(req);
 release_lock:
-                size += obj->objs[i].size;
+                size += obj->lo_objs[i].li_size;
 
                 if (LUSTRE_IT(&it)->it_lock_mode)
                         ldlm_lock_decref(lockh, LUSTRE_IT(&it)->it_lock_mode);

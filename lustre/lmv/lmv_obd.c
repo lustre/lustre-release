@@ -853,7 +853,7 @@ static int lmv_getattr(struct obd_export *exp, struct lu_fid *fid,
 
                 lmv_lock_obj(obj);
         
-                for (i = 0; i < obj->objcount; i++) {
+                for (i = 0; i < obj->lo_objcount; i++) {
 
                         if (lmv->tgts[i].ltd_exp == NULL) {
                                 CWARN("%s: NULL export for %d\n",
@@ -862,10 +862,10 @@ static int lmv_getattr(struct obd_export *exp, struct lu_fid *fid,
                         }
 
                         /* skip master obj. */
-                        if (lu_fid_eq(&obj->lo_fid, &obj->objs[i].lo_fid))
+                        if (lu_fid_eq(&obj->lo_fid, &obj->lo_objs[i].li_fid))
                                 continue;
                         
-                        body->size += obj->objs[i].size;
+                        body->size += obj->lo_objs[i].li_size;
                 }
 
                 lmv_unlock_obj(obj);
@@ -951,8 +951,8 @@ static int lmv_change_cbdata_name(struct obd_export *exp,
         obj = lmv_grab_obj(obd, pid);
         if (obj) {
                 /* directory is splitted. look for right mds for this name. */
-                mds = raw_name2idx(obj->hashtype, obj->objcount, name, len);
-                rcid = obj->objs[mds].lo_fid;
+                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, name, len);
+                rcid = obj->lo_objs[mds].li_fid;
                 mds = lmv_fld_lookup(obd, &rcid);
                 lmv_put_obj(obj);
         }
@@ -1015,10 +1015,10 @@ int lmv_get_mea_and_update_object(struct obd_export *exp,
         
         valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
-        /* time to update mea of parent id */
+        /* time to update mea of parent fid */
         i = lmv_fld_lookup(obd, fid);
-        rc = md_getattr(lmv->tgts[i].ltd_exp,
-                        id, valid, NULL, NULL, 0, mealen, NULL, &req);
+        rc = md_getattr(lmv->tgts[i].ltd_exp, fid, valid, NULL, 
+                        NULL, 0, mealen, NULL, &req);
         if (rc) {
                 CERROR("md_getattr() failed, error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -1069,9 +1069,9 @@ repeat:
         LASSERT(++loop <= 2);
         obj = lmv_grab_obj(obd, &op_data->fid1);
         if (obj) {
-                mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                    op_data->name, op_data->namelen);
-                op_data->fid1 = obj->objs[mds].lo_fid;
+                op_data->fid1 = obj->lo_objs[mds].li_fid;
                 lmv_put_obj(obj);
         }
 
@@ -1260,9 +1260,9 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
                 if (obj) {
                         /* directory is splitted. look for right mds for this
                          * name */
-                        mds = raw_name2idx(obj->hashtype, obj->objcount,
+                        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)data->name, data->namelen);
-                        data->fid1 = obj->objs[mds].lo_fid;
+                        data->fid1 = obj->lo_objs[mds].li_fid;
                         lmv_put_obj(obj);
                 }
         }
@@ -1303,9 +1303,9 @@ repeat:
         obj = lmv_grab_obj(obd, fid);
         if (obj) {
                 /* directory is splitted. look for right mds for this name */
-                mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                    filename, namelen - 1);
-                rid = obj->objs[mds].lo_fid;
+                rid = obj->lo_objs[mds].li_fid;
                 lmv_put_obj(obj);
         }
         
@@ -1318,11 +1318,6 @@ repeat:
                              valid == OBD_MD_FLID ? valid : valid | OBD_MD_FID,
                              ea_size, request);
         if (rc == 0) {
-                /*
-                 * this could be cross-node reference. in this case all we have
-                 * right now is lustre_id triple. we'd like to find other
-                 * attributes.
-                 */
                 body = lustre_msg_buf((*request)->rq_repmsg, 0, sizeof(*body));
                 LASSERT(body != NULL);
                 LASSERT((body->valid & OBD_MD_FID) != 0
@@ -1353,7 +1348,7 @@ repeat:
 }
 
 /*
- * llite passes id of an target inode in data->fid1 and id of directory in
+ * llite passes fid of an target inode in data->fid1 and id of directory in
  * data->fid2
  */
 static int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
@@ -1373,9 +1368,9 @@ static int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
                 /* usual link request */
                 obj = lmv_grab_obj(obd, &data->fid2);
                 if (obj) {
-                        rc = raw_name2idx(obj->hashtype, obj->objcount, 
+                        rc = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                           data->name, data->namelen);
-                        data->fid2 = obj->objs[rc].lo_fid;
+                        data->fid2 = obj->lo_objs[rc].li_fid;
                         lmv_put_obj(obj);
                 }
 
@@ -1385,9 +1380,9 @@ static int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
                        PFID3(&data->fid2), data->namelen, data->name,
                        PFID3(&data->fid1));
         } else {
-                mds = id_group(&data->fid1);
+                mds = lmv_fld_lookup(obd, &data->fid1);
                 
-                /* request from MDS to acquire i_links for inode by id1 */
+                /* request from MDS to acquire i_links for inode by fid1 */
                 CDEBUG(D_OTHER, "inc i_nlinks for "DFID3"\n",
                        PFID3(&data->fid1));
         }
@@ -1435,9 +1430,9 @@ static int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
                  */
                 obj = lmv_grab_obj(obd, &data->fid2);
                 if (obj) {
-                        mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                            (char *)new, newlen);
-                        data->fid2 = obj->objs[mds].lo_fid;
+                        data->fid2 = obj->lo_objs[mds].li_fid;
                         CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n", mds,
                                PFID3(&data->fid2));
                         lmv_put_obj(obj);
@@ -1451,9 +1446,9 @@ static int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
                  * directory is already splitted, so we have to forward request
                  * to the right MDS.
                  */
-                mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                    (char *)old, oldlen);
-                data->fid1 = obj->objs[mds].lo_fid;
+                data->fid1 = obj->lo_objs[mds].li_fid;
                 CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n", mds,
                        PFID3(&data->fid1));
                 lmv_put_obj(obj);
@@ -1465,10 +1460,10 @@ static int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
                  * directory is already splitted, so we have to forward request
                  * to the right MDS.
                  */
-                mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                    (char *)new, newlen);
                 
-                data->fid2 = obj->objs[mds].lo_fid;
+                data->fid2 = obj->lo_objs[mds].li_fid;
                 CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n", mds,
                        PFID3(&data->fid2));
                 lmv_put_obj(obj);
@@ -1511,15 +1506,15 @@ static int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
                PFID3(&data->fid1), iattr->ia_valid, obj ? ", splitted" : "");
         
         if (obj) {
-                for (i = 0; i < obj->objcount; i++) {
-                        data->fid1 = obj->objs[i].lo_fid;
+                for (i = 0; i < obj->lo_objcount; i++) {
+                        data->fid1 = obj->lo_objs[i].li_fid;
                         
                         mds = lmv_fld_lookup(obd, &data->fid1);
                         rc = md_setattr(lmv->tgts[mds].ltd_exp, 
                                         data, iattr, ea, ealen, ea2, ea2len, 
                                         ea3, ea3len, &req);
 
-                        if (lu_fid_eq(&obj->lo_fid, &obj->objs[i].lo_fid)) {
+                        if (lu_fid_eq(&obj->lo_fid, &obj->lo_objs[i].li_fid)) {
                                 /*
                                  * this is master object and this request should
                                  * be returned back to llite.
@@ -1647,12 +1642,12 @@ static int lmv_readpage(struct obd_export *exp, struct lu_fid *fid,
                 lmv_lock_obj(obj);
 
                 /* find dirobj containing page with requested offset. */
-                for (i = 0; i < obj->objcount; i++) {
-                        if (offset < obj->objs[i].size)
+                for (i = 0; i < obj->lo_objcount; i++) {
+                        if (offset < obj->lo_objs[i].li_size)
                                 break;
-                        offset -= obj->objs[i].size;
+                        offset -= obj->lo_objs[i].li_size;
                 }
-                rid = obj->objs[i].lo_fid;
+                rid = obj->lo_objs[i].li_fid;
                 
                 lmv_unlock_obj(obj);
                 lmv_put_obj(obj);
@@ -1721,7 +1716,7 @@ static int lmv_delete_inode(struct obd_export *exp, struct lu_fid *fid)
         LASSERT(exp && fid);
         if (lmv_delete_obj(exp, fid)) {
                 CDEBUG(D_OTHER, "lmv object "DFID3" is destroyed.\n",
-                       PFID3(id));
+                       PFID3(fid));
         }
         RETURN(0);
 }
@@ -1749,9 +1744,9 @@ static int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
                 
                 obj = lmv_grab_obj(obd, &data->fid1);
                 if (obj) {
-                        i = raw_name2idx(obj->hashtype, obj->objcount,
+                        i = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                          data->name, data->namelen);
-                        data->fid1 = obj->objs[i].lo_fid;
+                        data->fid1 = obj->lo_objs[i].li_fid;
                         lmv_put_obj(obj);
                 }
                 CDEBUG(D_OTHER, "unlink '%*s' in "DFID3" -> %u\n",
@@ -1856,7 +1851,7 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa->o_id != 0);
         LASSERT(oa->o_fid != 0);
 
-        /* save "master" object id */
+        /* save "master" object fid */
         obdo2id(&mid, oa);
 
         mea = (struct mea *)*ea;
