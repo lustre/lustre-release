@@ -61,7 +61,9 @@
 unsigned long mdt_num_threads;
 
 static int mdt_handle(struct ptlrpc_request *req);
-static struct ptlrpc_thread_key mdt_thread_key;
+static struct mdt_device *mdt_dev(struct lu_device *d);
+
+static struct lu_context_key mdt_thread_key;
 
 /* object operations */
 #if 0
@@ -85,7 +87,7 @@ static int mdt_md_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(o);
 
-                result = next->mo_ops->moo_mkdir(&info->mti_ctxt, next, name,
+                result = next->mo_ops->moo_mkdir(info->mti_ctxt, next, name,
                                                  mdt_object_child(child));
                 mdt_object_put(child);
         } else
@@ -103,12 +105,12 @@ static int mdt_md_getattr(struct mdt_thread_info *info, struct lu_fid *fid)
 
         ENTRY;
 
-        o = mdt_object_find(&info->mti_ctxt, d, fid);
+        o = mdt_object_find(info->mti_ctxt, d, fid);
         if (IS_ERR(o))
                 return PTR_ERR(o);
         /* attr are in mti_ctxt */
         result = 0;
-        mdt_object_put(&info->mti_ctxt, o);
+        mdt_object_put(info->mti_ctxt, o);
 
         RETURN(result);
 }
@@ -131,7 +133,7 @@ static int mdt_getstatus(struct mdt_thread_info *info,
                 result = -ENOMEM;
         else {
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof *body);
-                result = next->md_ops->mdo_root_get(&info->mti_ctxt,
+                result = next->md_ops->mdo_root_get(info->mti_ctxt,
                                                     next, &body->fid1);
         }
 
@@ -162,7 +164,7 @@ static int mdt_statfs(struct mdt_thread_info *info,
         } else {
                 osfs = lustre_msg_buf(req->rq_repmsg, 0, size);
                 /* XXX max_age optimisation is needed here. See mds_statfs */
-                result = next->md_ops->mdo_statfs(&info->mti_ctxt, next, &sfs);
+                result = next->md_ops->mdo_statfs(info->mti_ctxt, next, &sfs);
                 statfs_pack(osfs, &sfs);
         }
 
@@ -216,7 +218,7 @@ static int mdt_getattr(struct mdt_thread_info *info,
                 body = lustre_msg_buf(req->rq_repmsg, 0, size);
                 result = mdt_md_getattr(info, &body->fid1);
                 if (result == 0)
-                        mdt_pack_attr2body(body, &info->mti_ctxt.lc_attr);
+                        mdt_pack_attr2body(body, &info->mti_ctxt->lc_attr);
         }
         OBD_FREE_PTR(attr);
         RETURN(result);
@@ -229,16 +231,16 @@ static int mdt_set_info(struct mdt_thread_info *info,
         char *key;
         int keylen, rc = 0;
         ENTRY;
-        
+
         key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
         if (key == NULL) {
                 DEBUG_REQ(D_HA, req, "no set_info key");
                 RETURN(-EFAULT);
         }
         keylen = req->rq_reqmsg->buflens[0];
-       
+
         if (((keylen >= strlen("fld_create") &&
-            memcmp(key, "fld_create", keylen) == 0)) || 
+            memcmp(key, "fld_create", keylen) == 0)) ||
             ((keylen >= strlen("fld_delete") &&
             memcmp(key, "fld_delete", keylen) == 0))) {
                 struct md_fld mf, *p;
@@ -247,12 +249,12 @@ static int mdt_set_info(struct mdt_thread_info *info,
                 rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc)
                         RETURN(rc);
-                
+
                 p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
                 mf = *p;
-                rc = next->md_ops->mdo_get_info(&info->mti_ctxt, next, keylen, 
+                rc = next->md_ops->mdo_get_info(info->mti_ctxt, next, keylen,
                                                 key, &size, &mf);
-                RETURN(rc); 
+                RETURN(rc);
         }
 
         CDEBUG(D_IOCTL, "invalid key\n");
@@ -267,29 +269,29 @@ static int mdt_get_info(struct mdt_thread_info *info,
         char *key;
         int keylen, rc = 0;
         ENTRY;
-        
+
         key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
         if (key == NULL) {
                 DEBUG_REQ(D_HA, req, "no set_info key");
                 RETURN(-EFAULT);
         }
         keylen = req->rq_reqmsg->buflens[0];
-       
+
         if (((keylen >= strlen("fld_get") &&
             memcmp(key, "fld_get", keylen) == 0))) {
                 struct md_fld mf, *p, *reply;
                 int size = sizeof(*reply);
-               
+
                 rc = lustre_pack_reply(req, 1, &size, NULL);
                 if (rc)
                         RETURN(rc);
                 p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
                 mf = *p;
-                rc = next->md_ops->mdo_get_info(&info->mti_ctxt, next, keylen, 
+                rc = next->md_ops->mdo_get_info(info->mti_ctxt, next, keylen,
                                                 key, &size, &mf);
                 reply = lustre_msg_buf(req->rq_repmsg, 0, size);
                 *reply = mf;
-                RETURN(rc); 
+                RETURN(rc);
         }
 
         CDEBUG(D_IOCTL, "invalid key\n");
@@ -323,7 +325,7 @@ static int mdt_connect(struct mdt_thread_info *info,
                 struct obd_connect_data *data;
 
                 data = lustre_msg_buf(req->rq_repmsg, 0, sizeof *data);
-                result = seq_mgr_alloc(&info->mti_ctxt,
+                result = seq_mgr_alloc(info->mti_ctxt,
                                        mdt->mdt_seq_mgr, &data->ocd_seq);
         }
         return result;
@@ -685,7 +687,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                         lustre_swab_reqbuf(req, off, sizeof *info->mti_body,
                                            lustre_swab_mdt_body);
                 if (body != NULL) {
-                        info->mti_object = mdt_object_find(&info->mti_ctxt,
+                        info->mti_object = mdt_object_find(info->mti_ctxt,
                                                            info->mti_mdt,
                                                            &body->fid1);
                         if (IS_ERR(info->mti_object))
@@ -765,16 +767,16 @@ static void mdt_thread_info_init(struct mdt_thread_info *info)
         info->mti_rep_buf_nr = i;
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
-        lu_context_enter(&info->mti_ctxt);
+        lu_context_enter(info->mti_ctxt);
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
 {
         int i;
 
-        lu_context_exit(&info->mti_ctxt);
+        lu_context_exit(info->mti_ctxt);
         if (info->mti_object != NULL) {
-                mdt_object_put(&info->mti_ctxt, info->mti_object);
+                mdt_object_put(info->mti_ctxt, info->mti_object);
                 info->mti_object = NULL;
         }
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
@@ -998,16 +1000,21 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
 static int mdt_handle(struct ptlrpc_request *req)
 {
         int result;
-
-        struct mdt_thread_info *info = ptlrpc_thread_key_get(req->rq_svc_thread,
-                                                             &mdt_thread_key);
+        struct lu_context      *ctx;
+        struct mdt_thread_info *info;
         ENTRY;
+
+        ctx = req->rq_svc_thread->t_ctx;
+        LASSERT(ctx != NULL);
+        LASSERT(ctx->lc_thread == req->rq_svc_thread);
+
+        info = lu_context_key_get(ctx, &mdt_thread_key);
+        LASSERT(info != NULL);
 
         mdt_thread_info_init(info);
         /* it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
-        info->mti_ctxt.lc_thread = req->rq_svc_thread;
 
         result = mdt_handle0(req, info);
         mdt_thread_info_fini(info);
@@ -1381,40 +1388,37 @@ static void mdt_device_free(struct lu_device *d)
         OBD_FREE_PTR(m);
 }
 
-static void *mdt_thread_init(struct ptlrpc_thread *t)
+static void *mdt_thread_init(struct lu_context *ctx)
 {
         struct mdt_thread_info *info;
-        int result;
 
         OBD_ALLOC_PTR(info);
         if (info != NULL)
-                result = lu_context_init(&info->mti_ctxt);
+                info->mti_ctxt = ctx;
         else
-                result = -ENOMEM;
-        if (result != 0)
-                info = ERR_PTR(result);
+                info = ERR_PTR(-ENOMEM);
         return info;
 }
 
-static void mdt_thread_fini(struct ptlrpc_thread *t, void *data)
+static void mdt_thread_fini(struct lu_context *ctx, void *data)
 {
         struct mdt_thread_info *info = data;
-        lu_context_fini(&info->mti_ctxt);
         OBD_FREE_PTR(info);
 }
 
-static struct ptlrpc_thread_key mdt_thread_key = {
-        .ptk_init = mdt_thread_init,
-        .ptk_fini = mdt_thread_fini
+static struct lu_context_key mdt_thread_key = {
+        .lct_init = mdt_thread_init,
+        .lct_fini = mdt_thread_fini
 };
 
 static int mdt_type_init(struct lu_device_type *t)
 {
-        return ptlrpc_thread_key_register(&mdt_thread_key);
+        return lu_context_key_register(&mdt_thread_key);
 }
 
 static void mdt_type_fini(struct lu_device_type *t)
 {
+        lu_context_key_degister(&mdt_thread_key);
 }
 
 static struct lu_device_type_operations mdt_device_type_ops = {
