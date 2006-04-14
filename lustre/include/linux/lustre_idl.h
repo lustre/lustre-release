@@ -615,33 +615,38 @@ struct lu_fid {
         __u32 f_ver;  /* holds fid version. */
 };
 
-#define LUSTRE_ROOT_FID_SEQ 1
-#define LUSTRE_ROOT_FID_OID 2
+/*
+ * fid constants
+ */
+enum {
+        LUSTRE_ROOT_FID_SEQ  = 1ULL, /* XXX: should go into mkfs. */
+        LUSTRE_ROOT_FID_OID  = 2UL,  /* XXX: should go into mkfs. */
 
-/* maximal objects in sequence */
-#define LUSTRE_FID_SEQ_WIDTH 10000
+        /* maximal objects in sequence */
+        LUSTRE_FID_SEQ_WIDTH = 10000,
 
-/* initial fid id value */
-#define LUSTRE_FID_INIT_OID  1
+        /* initial fid id value */
+        LUSTRE_FID_INIT_OID  = 1UL,
 
-/* shift of version component */
-#define LUSTRE_FID_VER_SHIFT (sizeof(((struct lu_fid *)0)->f_ver) * 8)
+        /* shift of version component */
+        LUSTRE_FID_VER_SHIFT = (sizeof(((struct lu_fid *)0)->f_ver) * 8)
+};
 
 /* get object sequence */
 static inline __u64 fid_seq(const struct lu_fid *fid)
-{ 
+{
         return fid->f_seq;
 }
 
 /* get object id */
 static inline __u32 fid_oid(const struct lu_fid *fid)
-{ 
+{
         return fid->f_oid;
 }
 
 /* get object version */
 static inline __u32 fid_ver(const struct lu_fid *fid)
-{ 
+{
         return fid->f_ver;
 }
 
@@ -653,8 +658,10 @@ static inline __u64 fid_num(const struct lu_fid *fid)
         return f_ver | fid_oid(fid);
 }
 
-#define fid_equals(fid1, fid2) \
-        (memcmp(fid1, fid2, sizeof(*fid1)) == 0)
+static inline int fid_is_sane(const struct lu_fid *fid)
+{
+        return fid != NULL && fid_seq(fid) != 0 && fid_oid(fid) != 0;
+}
 
 #define DFID3 "["LPU64"/%u:%u]"
 
