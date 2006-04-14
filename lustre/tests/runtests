@@ -4,7 +4,19 @@
 # Probably a good idea to run this before doing any checkins.
 # In the future this can become more fancy, but it's OK for now.
 
+LUSTRE=${LUSTRE:-`dirname $0`/..}
 SRCDIR="`dirname $0`"
+export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
+
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. mountconf.sh
+
+SETUP=${SETUP:-mcsetup}
+FORMAT=${FORMAT:-mcformat}
+CLEANUP=${CLEANUP:-mcstopall}
+
 fail() { 
 	echo "ERROR: $1" 1>&2
 	[ $2 ] && RC=$2 || RC=1
@@ -16,13 +28,10 @@ log() {
 	lctl mark "$*"
 }
 
-export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
 
 ERROR=
 SRC=/etc
 [ "$COUNT" ] || COUNT=1000
-
-[ "$LCONF" ] || LCONF=lconf
 
 [ "$MCREATE" ] || MCREATE=mcreate
 
@@ -36,20 +45,23 @@ while [ "$1" ]; do
 	shift
 done
 
-EXISTING_MOUNT="`mount | awk '/ lustre(_lite)? / { print $3 }' | tail -n 1`"
+EXISTING_MOUNT=`awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts`
 if [ -z "$EXISTING_MOUNT" ]; then
-	sh llmount.sh $OPTS
-	EXISTING_MOUNT="`mount | awk '/ lustre(_lite)? / { print $3 }' | tail -n 1`"
+        $FORMAT
+        $SETUP
+	EXISTING_MOUNT=`awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts`
 	[ -z "$EXISTING_MOUNT" ] && fail "no lustre filesystem mounted" 1
 	I_MOUNTED="yes"
 fi
+MOUNT=$EXISTING_MOUNT
 
 OSCTMP=`echo $MOUNT | tr "/" "."`
 USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
 USED=`expr $USED + 16`	# Some space for the status file
 
 # let's start slowly here...
-log "touching $MOUNT"
+START=`date +%s`
+log "touching $MOUNT at `date`"
 touch $MOUNT || fail "can't touch $MOUNT" 2
 HOSTS=$MOUNT/hosts.$$
 
@@ -79,19 +91,20 @@ mkdir $DST || fail "can't mkdir $DST" 10
 # ok, that hopefully worked, so let's do a little more, with files that
 # haven't changed in the last day (hopefully they don't change during test)
 FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -n $COUNT`
-log "copying files from $SRC to $DST$SRC"
+log "copying files from $SRC to $DST$SRC at `date`"
 tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
 
-log "comparing newly copied files"
+log "comparing newly copied files at `date`"
 for f in $FILES; do
 	[ $V ] && log "verifying $DST/$f"
 	diff -q $f $DST/$f || ERROR=11
 done
 
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
+log "finished at `date` ($(($(date +%s) - START)))"
 
-sh llmountcleanup.sh || exit 19
-sh llmount.sh $OPTS || exit 20
+$CLEANUP || exit 19
+$SETUP || exit 20
 
 log "comparing previously copied files"
 for f in $FILES; do
@@ -101,8 +114,8 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
-sh llmountcleanup.sh || exit 19
-sh llmount.sh $OPTS || exit 20
+$CLEANUP || exit 19
+$SETUP || exit 20
 
 log "removing $DST"
 rm -r $V $DST || fail "can't remove $DST" 37
@@ -131,5 +144,5 @@ fi
 
 if [ "$I_MOUNTED" = "yes" ]; then
 	sync && sleep 2 && sync     # wait for delete thread
-	sh llmountcleanup.sh || exit 29
+	$CLEANUP
 fi

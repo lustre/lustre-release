@@ -19,7 +19,7 @@ NETTYPE=${NETTYPE:-tcp}
 [ "$ACCEPTOR_PORT" ] && PORT_OPT="--port $ACCEPTOR_PORT"
 
 OSTCOUNT=${OSTCOUNT:-5}
-# OSTDEVN will still override the device for OST N
+# OSTDEVn will still override the device for OST n
 
 OSTSIZE=${OSTSIZE:-150000}
 # 1 to config an echo client instead of llite

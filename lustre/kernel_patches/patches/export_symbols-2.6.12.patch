@@ -25,18 +25,6 @@ Index: linux-2.6.12-rc6/include/linux/fs.h
  #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
  
  extern int vfs_readlink(struct dentry *, char __user *, int, const char *);
-Index: linux-2.6.12-rc6/net/core/sock.c
-===================================================================
---- linux-2.6.12-rc6.orig/net/core/sock.c	2005-06-06 17:22:29.000000000 +0200
-+++ linux-2.6.12-rc6/net/core/sock.c	2005-06-14 15:53:58.349304101 +0200
-@@ -613,6 +613,7 @@
-   		return -EFAULT;
-   	return 0;
- }
-+EXPORT_SYMBOL(sock_getsockopt);
- 
- /**
-  *	sk_alloc - All socket objects are allocated here
 Index: linux-2.6.12-rc6/fs/namespace.c
 ===================================================================
 --- linux-2.6.12-rc6.orig/fs/namespace.c	2005-06-14 15:53:17.868835847 +0200
@@ -62,23 +50,6 @@ Index: linux-2.6.12.5/kernel/exit.c
  void __set_special_pids(pid_t session, pid_t pgrp)
  {
  	struct task_struct *curr = current;
-@@ -432,6 +434,8 @@
- 	__exit_files(tsk);
- }
- 
-+EXPORT_SYMBOL(exit_files);
-+
- static inline void __put_fs_struct(struct fs_struct *fs)
- {
- 	/* No need to hold fs->lock if we are killing it */
-@@ -515,6 +515,7 @@
- 	task_unlock(tsk);
- 	mmput(mm);
- }
-+EXPORT_SYMBOL(exit_mm);
- 
- static inline void choose_new_parent(task_t *p, task_t *reaper, task_t *child_reaper)
- {
 Index: linux-2.6.12-rc6/fs/dcache.c
 ===================================================================
 --- linux-2.6.12-rc6.orig/fs/dcache.c	2005-06-14 15:53:19.812195198 +0200
@@ -90,16 +61,4 @@ Index: linux-2.6.12-rc6/fs/dcache.c
 +EXPORT_SYMBOL(is_subdir);
  
  void d_genocide(struct dentry *root)
- {
-Index: linux-2.6.12-rc6/fs/file_table.c
-===================================================================
---- linux-2.6.12-rc6.orig/fs/file_table.c	2005-06-06 17:22:29.000000000 +0200
-+++ linux-2.6.12-rc6/fs/file_table.c	2005-06-14 15:53:58.396179101 +0200
-@@ -197,6 +197,7 @@
- 		file_free(file);
- 	}
- }
-+EXPORT_SYMBOL(put_filp);
- 
- void file_move(struct file *file, struct list_head *list)
  {

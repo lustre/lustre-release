@@ -478,6 +478,8 @@ class LustreDB_LDAP(LustreDB):
 
     def _get_val(self, k):
         ret = None
+        if k == 'name':
+            k = 'lustreName'
         if self._attrs.has_key(k):
             v = self._attrs[k]
             if type(v) == types.ListType:

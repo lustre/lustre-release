@@ -1680,6 +1680,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         if (rc)
                 GOTO(out_io, rc = -EINVAL);
 
+        ping_evictor_start();
+
         RETURN(0);
 
 out_io:
@@ -1701,6 +1703,8 @@ static int ost_cleanup(struct obd_device *obd)
         struct ost_obd *ost = &obd->u.ost;
         int err = 0;
         ENTRY;
+
+        ping_evictor_stop();
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {

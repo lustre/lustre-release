@@ -289,9 +289,11 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd,
         spin_lock (&ec->ec_lock);
         eco = echo_find_object_locked (obd, oa->o_id);
         if (eco != NULL) {
-                if (eco->eco_deleted)           /* being deleted */
-                        return (-EAGAIN);       /* (see comment in cleanup) */
-
+                if (eco->eco_deleted) {            /* being deleted */
+                        spin_unlock(&ec->ec_lock); /* (see comment in cleanup) */
+                        return (-EAGAIN);
+                }
+                
                 eco->eco_refcount++;
                 spin_unlock (&ec->ec_lock);
                 *ecop = eco;
@@ -794,7 +796,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 if (page == NULL)
                         GOTO(out, rc = -ENOMEM);
 
-                page->private = 0;
+                set_page_private(page, 0);
                 list_add_tail(&PAGE_LIST(page), &pages);
 
                 OBD_ALLOC(eap, sizeof(*eap));
@@ -804,7 +806,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 eap->eap_magic = EAP_MAGIC;
                 eap->eap_page = page;
                 eap->eap_eas = &eas;
-                page->private = (unsigned long)eap;
+                set_page_private(page, (unsigned long)eap);
                 list_add_tail(&eap->eap_item, &eas.eas_avail);
         }
 
@@ -887,8 +889,8 @@ out:
                                                PAGE_LIST_ENTRY);
 
                 list_del(&PAGE_LIST(page));
-                if (page->private != 0) {
-                        eap = (struct echo_async_page *)page->private;
+                if (page_private(page) != 0) {
+                        eap = (struct echo_async_page *)page_private(page);
                         if (eap->eap_cookie != NULL)
                                 obd_teardown_async_page(exp, lsm, NULL,
                                                         eap->eap_cookie);
@@ -1354,6 +1356,7 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                 return -ENOMEM;
         }
 
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
         rc = obd_connect(&conn, tgt, &echo_uuid, ocd);

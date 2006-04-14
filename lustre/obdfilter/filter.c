@@ -24,12 +24,12 @@
  */
 
 /*
- * Invariant: Get O/R i_sem for lookup, if needed, before any journal ops
+ * Invariant: Get O/R i_mutex for lookup, if needed, before any journal ops
  *            (which need to get journal_lock, may block if journal full).
  *
  * Invariant: Call filter_start_transno() before any journal ops to avoid the
  *            same deadlock problem.  We can (and want) to get rid of the
- *            transno sem in favour of the dir/inode i_sem to avoid single
+ *            transno sem in favour of the dir/inode i_mutex to avoid single
  *            threaded operation on the OST.
  */
 
@@ -301,6 +301,14 @@ free:
         return 0;
 }
 
+static int filter_init_export(struct obd_export *exp)
+{
+        spin_lock_init(&exp->exp_filter_data.fed_lock);
+        exp->exp_connecting = 1;
+
+        return 0;
+}
+
 static int filter_free_server_data(struct filter_obd *filter)
 {
         OBD_FREE(filter->fo_fsd, sizeof(*filter->fo_fsd));
@@ -487,25 +495,22 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 /* These exports are cleaned up by filter_disconnect(), so they
                  * need to be set up like real exports as filter_connect() does.
                  */
-                exp = class_new_export(obd);
+                exp = class_new_export(obd, (struct obd_uuid *)fcd->fcd_uuid);
                 CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
                        " srv lr: "LPU64"\n", fcd->fcd_uuid, cl_idx,
                        last_rcvd, le64_to_cpu(fsd->lsd_last_transno));
-                if (exp == NULL)
-                        GOTO(err_client, rc = -ENOMEM);
+                if (IS_ERR(exp))
+                        GOTO(err_client, rc = PTR_ERR(exp));
 
-                memcpy(&exp->exp_client_uuid.uuid, fcd->fcd_uuid,
-                       sizeof exp->exp_client_uuid.uuid);
                 fed = &exp->exp_filter_data;
                 fed->fed_fcd = fcd;
                 rc = filter_client_add(obd, filter, fed, cl_idx);
                 LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 
-                /* create helper if export init gets more complex */
-                spin_lock_init(&fed->fed_lock);
 
                 fcd = NULL;
                 exp->exp_replay_needed = 1;
+                exp->exp_connecting = 0;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
                 class_export_put(exp);
@@ -647,10 +652,10 @@ static int filter_prep_groups(struct obd_device *obd)
                         GOTO(cleanup_O0, rc = -EEXIST);
                 }
 
-                down(&O_dentry->d_inode->i_sem);
+                LOCK_INODE_MUTEX(O_dentry->d_inode);
                 rc = vfs_rename(O_dentry->d_inode, dentry,
                                 O_dentry->d_inode, O0_dentry);
-                up(&O_dentry->d_inode->i_sem);
+                UNLOCK_INODE_MUTEX(O_dentry->d_inode);
 
                 if (rc) {
                         CERROR("error renaming O/R to O/0: rc %d\n", rc);
@@ -912,7 +917,7 @@ __u64 filter_last_id(struct filter_obd *filter, struct obdo *oa)
 
 static int filter_lock_dentry(struct obd_device *obd, struct dentry *dparent)
 {
-        down(&dparent->d_inode->i_sem);
+        LOCK_INODE_MUTEX(dparent->d_inode);
         return 0;
 }
 
@@ -947,7 +952,7 @@ struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
 /* We never dget the object parent, so DON'T dput it either */
 static void filter_parent_unlock(struct dentry *dparent)
 {
-        up(&dparent->d_inode->i_sem);
+        UNLOCK_INODE_MUTEX(dparent->d_inode);
 }
 
 /* How to get files, dentries, inodes from object id's.
@@ -1044,9 +1049,10 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
         ENTRY;
 
         /* don't need dir->i_zombie for 2.4, it is for rename/unlink of dir
-         * itself we already hold dir->i_sem for child create/unlink ops */
-        LASSERT(down_trylock(&dir->i_sem) != 0);
-        LASSERT(down_trylock(&dentry->d_inode->i_sem) != 0);
+         * itself we already hold dir->i_mutex for child create/unlink ops */
+        LASSERT(TRYLOCK_INODE_MUTEX(dir) == 0);
+        LASSERT(TRYLOCK_INODE_MUTEX(dentry->d_inode) == 0);
+
 
         /* may_delete() */
         if (!dentry->d_inode || dentry->d_parent->d_inode != dir)
@@ -1064,7 +1070,7 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
             IS_APPEND(dentry->d_inode) || IS_IMMUTABLE(dentry->d_inode))
                 GOTO(out, rc = -EPERM);
 
-        /* NOTE: This might need to go outside i_sem, though it isn't clear if
+        /* NOTE: This might need to go outside i_mutex, though it isn't clear if
          *       that was done because of journal_start (which is already done
          *       here) or some other ordering issue. */
         DQUOT_INIT(dir);
@@ -1077,8 +1083,8 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
 
         rc = dir->i_op->unlink(dir, dentry);
 out:
-        /* need to drop i_sem before we lose inode reference */
-        up(&dentry->d_inode->i_sem);
+        /* need to drop i_mutex before we lose inode reference */
+        UNLOCK_INODE_MUTEX(dentry->d_inode);
         if (rc == 0)
                 d_delete(dentry);
 
@@ -1086,7 +1092,7 @@ out:
 }
 
 /* Caller must hold LCK_PW on parent and push us into kernel context.
- * Caller must hold child i_sem, we drop it always.
+ * Caller must hold child i_mutex, we drop it always.
  * Caller is also required to ensure that dchild->d_inode exists. */
 static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
                                    struct dentry *dparent,
@@ -1434,14 +1440,12 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
 
         /* failover is the default */
         obd->obd_replayable = 1;
-        obd_sync_filter = 1;
 
         if (lcfg->lcfg_bufcount > 3 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 str = lustre_cfg_string(lcfg, 3);
                 if (strchr(str, 'n')) {
                         CWARN("%s: recovery disabled\n", obd->obd_name);
                         obd->obd_replayable = 0;
-                        obd_sync_filter = 0;
                 }
         }
 
@@ -1509,7 +1513,8 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         } else {
                 str = "no UUID";
         }
-        label = fsfilt_label(obd, obd->u.obt.obt_sb);
+        
+        label = fsfilt_get_label(obd, obd->u.obt.obt_sb);
 
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("OST %s now serving %s (%s%s%s), but will be in "
@@ -1589,8 +1594,6 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 lproc_filter_attach_seqstat(obd);
         }
 
-        ping_evictor_start();
-
         return rc;
 }
 
@@ -1646,17 +1649,23 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
-static int filter_precleanup(struct obd_device *obd, int stage)
+static int filter_precleanup(struct obd_device *obd,
+                             enum obd_cleanup_stage stage)
 {
         int rc = 0;
         ENTRY;
 
         switch(stage) {
+        case OBD_CLEANUP_EARLY:
+                break;
         case OBD_CLEANUP_EXPORTS:
                 target_cleanup_recovery(obd);
                 break;
         case OBD_CLEANUP_SELF_EXP:
                 rc = filter_llog_finish(obd, 0);
+                break;
+        case OBD_CLEANUP_OBD:
+                break;
         }
         RETURN(rc);
 }
@@ -1680,8 +1689,6 @@ static int filter_cleanup(struct obd_device *obd)
                         RETURN(-EBUSY);
                 }
         }
-
-        ping_evictor_stop();
 
         lquota_cleanup(quota_interface, obd);
 
@@ -1768,7 +1775,7 @@ static int filter_connect_internal(struct obd_export *exp,
                 if (!(lsd->lsd_feature_compat &
                       cpu_to_le32(OBD_COMPAT_OST))) {
                         /* this will only happen on the first connect */
-                        lsd->lsd_ost_index = le32_to_cpu(data->ocd_index);
+                        lsd->lsd_ost_index = cpu_to_le32(data->ocd_index);
                         lsd->lsd_feature_compat |= cpu_to_le32(OBD_COMPAT_OST);
                         filter_update_server_data(exp->exp_obd,
                                                   filter->fo_rcvd_filp, lsd, 1);
@@ -1981,6 +1988,9 @@ static int filter_destroy_export(struct obd_export *exp)
 
         target_destroy_export(exp);
 
+        if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
+                RETURN(0);
+
         if (exp->exp_obd->obd_replayable)
                 filter_client_free(exp);
         else
@@ -2149,7 +2159,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
                 locked = 1;
         }
 
@@ -2210,7 +2220,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         if (locked) {
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
                 locked = 0;
         }
 
@@ -2225,7 +2235,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         EXIT;
 out_unlock:
         if (locked)
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
 
         /* trigger quota release */
         if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
@@ -2746,11 +2756,11 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
          *                      restart transaction
          * (see BUG 4180) -bzzz
          */
-        down(&dchild->d_inode->i_sem);
+        LOCK_INODE_MUTEX(dchild->d_inode);
         handle = fsfilt_start_log(obd, dchild->d_inode, FSFILT_OP_SETATTR,
                                   NULL, 1);
         if (IS_ERR(handle)) {
-                up(&dchild->d_inode->i_sem);
+                UNLOCK_INODE_MUTEX(dchild->d_inode);
                 GOTO(cleanup, rc = PTR_ERR(handle));
         }
 
@@ -2758,7 +2768,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         iattr.ia_size = 0;
         rc = fsfilt_setattr(obd, dchild, handle, &iattr, 1);
         rc2 = fsfilt_commit(obd, dchild->d_inode, handle, 0);
-        up(&dchild->d_inode->i_sem);
+        UNLOCK_INODE_MUTEX(dchild->d_inode);
         if (rc)
                 GOTO(cleanup, rc);
         if (rc2)
@@ -2773,10 +2783,10 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc = PTR_ERR(dparent));
         cleanup_phase = 3; /* filter_parent_unlock */
 
-        down(&dchild->d_inode->i_sem);
+        LOCK_INODE_MUTEX(dchild->d_inode);
         handle = fsfilt_start_log(obd, dparent->d_inode,FSFILT_OP_UNLINK,oti,1);
         if (IS_ERR(handle)) {
-                up(&dchild->d_inode->i_sem);
+                UNLOCK_INODE_MUTEX(dchild->d_inode);
                 GOTO(cleanup, rc = PTR_ERR(handle));
         }
         cleanup_phase = 4; /* fsfilt_commit */
@@ -2784,7 +2794,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         /* Quota release need uid/gid of inode */
         obdo_from_inode(oa, dchild->d_inode, OBD_MD_FLUID|OBD_MD_FLGID);
 
-        /* this drops dchild->d_inode->i_sem unconditionally */
+        /* this drops dchild->d_inode->i_mutex unconditionally */
         rc = filter_destroy_internal(obd, oa->o_id, dparent, dchild);
 
         EXIT;
@@ -2874,7 +2884,8 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
-        down(&dentry->d_inode->i_sem);
+        LOCK_INODE_MUTEX(dentry->d_inode);
+
         rc = filemap_fdatawrite(dentry->d_inode->i_mapping);
         if (rc == 0) {
                 /* just any file to grab fsync method - "file" arg unused */
@@ -2887,7 +2898,7 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
                 if (!rc)
                         rc = rc2;
         }
-        up(&dentry->d_inode->i_sem);
+        UNLOCK_INODE_MUTEX(dentry->d_inode);
 
         oa->o_valid = OBD_MD_FLID;
         obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
@@ -3073,6 +3084,8 @@ static struct obd_ops filter_obd_ops = {
         .o_connect        = filter_connect,
         .o_reconnect      = filter_reconnect,
         .o_disconnect     = filter_disconnect,
+        .o_init_export    = filter_init_export,
+        .o_destroy_export = filter_destroy_export,
         .o_statfs         = filter_statfs,
         .o_getattr        = filter_getattr,
         .o_unpackmd       = filter_unpackmd,
@@ -3084,7 +3097,6 @@ static struct obd_ops filter_obd_ops = {
         .o_sync           = filter_sync,
         .o_preprw         = filter_preprw,
         .o_commitrw       = filter_commitrw,
-        .o_destroy_export = filter_destroy_export,
         .o_llog_init      = filter_llog_init,
         .o_llog_finish    = filter_llog_finish,
         .o_iocontrol      = filter_iocontrol,
@@ -3101,6 +3113,8 @@ static struct obd_ops filter_sanobd_ops = {
         .o_connect        = filter_connect,
         .o_reconnect      = filter_reconnect,
         .o_disconnect     = filter_disconnect,
+        .o_init_export    = filter_init_export,
+        .o_destroy_export = filter_destroy_export,
         .o_statfs         = filter_statfs,
         .o_getattr        = filter_getattr,
         .o_unpackmd       = filter_unpackmd,
@@ -3113,7 +3127,6 @@ static struct obd_ops filter_sanobd_ops = {
         .o_preprw         = filter_preprw,
         .o_commitrw       = filter_commitrw,
         .o_san_preprw     = filter_san_preprw,
-        .o_destroy_export = filter_destroy_export,
         .o_llog_init      = filter_llog_init,
         .o_llog_finish    = filter_llog_finish,
         .o_iocontrol      = filter_iocontrol,

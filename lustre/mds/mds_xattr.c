@@ -272,20 +272,20 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                                 xattr = lustre_msg_buf(req->rq_reqmsg, 2,
                                                        xattrlen);
 
-                        down(&inode->i_sem);
+                        LOCK_INODE_MUTEX(inode);
                         lock_24kernel();
                         rc = inode->i_op->setxattr(de, xattr_name, xattr,
                                                    xattrlen, body->flags);
                         unlock_24kernel();
-                        up(&inode->i_sem);
+                        UNLOCK_INODE_MUTEX(inode);
                 }
         } else if (body->valid & OBD_MD_FLXATTRRM) {
                 if (inode->i_op && inode->i_op->removexattr) {
-                        down(&inode->i_sem);
+                        LOCK_INODE_MUTEX(inode);
                         lock_24kernel();
                         rc = inode->i_op->removexattr(de, xattr_name);
                         unlock_24kernel();
-                        up(&inode->i_sem);
+                        UNLOCK_INODE_MUTEX(inode);
                 }
         } else {
                 CERROR("valid bits: "LPX64"\n", body->valid);

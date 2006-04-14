@@ -91,7 +91,6 @@ static ldlm_processing_policy ldlm_processing_policy_table[] = {
         [LDLM_EXTENT] ldlm_process_extent_lock,
 #ifdef __KERNEL__
         [LDLM_FLOCK] ldlm_process_flock_lock,
-        //[LDLM_LLOG]  ldlm_process_llog_lock,
 #endif
         [LDLM_IBITS] ldlm_process_inodebits_lock,
 };
@@ -748,6 +747,10 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                                           LDLM_FL_WAIT_NOREPROC,
                                                                  NULL);
                                 if (err) {
+                                        if (flags & LDLM_FL_TEST_LOCK)
+                                                LDLM_LOCK_PUT(lock);
+                                        else
+                                                ldlm_lock_decref_internal(lock, mode);
                                         rc = 0;
                                         goto out2;
                                 }

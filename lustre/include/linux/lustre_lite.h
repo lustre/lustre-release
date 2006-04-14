@@ -171,7 +171,7 @@ static inline int ll_ocd_update(struct obd_device *host,
                 spin_unlock(&lco->lco_lock);
                 result = 0;
         } else {
-                CERROR("unexpected notification of %s %s!\n",
+                CERROR("unexpected notification from %s %s!\n",
                        watched->obd_type->typ_name,
                        watched->obd_name);
                 result = -EINVAL;

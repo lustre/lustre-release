@@ -221,27 +221,20 @@ static int log_commit_thread(void *arg)
         struct llog_commit_master *lcm = arg;
         struct llog_commit_daemon *lcd;
         struct llog_canceld_ctxt *llcd, *n;
-        unsigned long flags;
+        char name[24];
         ENTRY;
 
         OBD_ALLOC(lcd, sizeof(*lcd));
         if (lcd == NULL)
                 RETURN(-ENOMEM);
 
-        lock_kernel();
-        ptlrpc_daemonize(); /* thread never needs to do IO */
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-
         spin_lock(&lcm->lcm_thread_lock);
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1,
+        THREAD_NAME(name, sizeof(name) - 1,
                     "ll_log_comt_%02d", atomic_read(&lcm->lcm_thread_total));
         atomic_inc(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
-        unlock_kernel();
+
+        ptlrpc_daemonize(name); /* thread never needs to do IO */
 
         INIT_LIST_HEAD(&lcd->lcd_lcm_list);
         INIT_LIST_HEAD(&lcd->lcd_llcd_list);
@@ -348,7 +341,8 @@ static int log_commit_thread(void *arg)
                         }
                         up(&llcd->llcd_ctxt->loc_sem);
 
-                        if (!import || (import == LP_POISON)) {
+                        if (!import || (import == LP_POISON) ||
+                            (import->imp_client == LP_POISON)) {
                                 CERROR("No import %p (llcd=%p, ctxt=%p)\n",
                                        import, llcd, llcd->llcd_ctxt);
                                 llcd_put(llcd);
@@ -501,20 +495,11 @@ static int log_process_thread(void *args)
         void   *cb = data->llpa_cb;
         struct llog_logid logid = *(struct llog_logid *)(data->llpa_arg);
         struct llog_handle *llh = NULL;
-        unsigned long flags;
         int rc;
         ENTRY;
 
         up(&data->llpa_sem);
-        lock_kernel();
-        ptlrpc_daemonize();     /* thread does IO to log files */
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "llog_process");
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-        unlock_kernel();
+        ptlrpc_daemonize("llog_process");     /* thread does IO to log files */
 
         rc = llog_create(ctxt, &llh, &logid, NULL);
         if (rc) {

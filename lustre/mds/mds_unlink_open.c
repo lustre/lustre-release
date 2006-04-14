@@ -221,10 +221,10 @@ int mds_cleanup_pending(struct obd_device *obd)
                     ((namlen == 2) && !strcmp(d_name, "..")) || inum == 0)
                         continue;
 
-                down(&pending_dir->i_sem);
+                LOCK_INODE_MUTEX(pending_dir);
                 dchild = lookup_one_len(d_name, mds->mds_pending_dir, namlen);
                 if (IS_ERR(dchild)) {
-                        up(&pending_dir->i_sem);
+                        UNLOCK_INODE_MUTEX(pending_dir);
                         GOTO(err_out, rc = PTR_ERR(dchild));
                 }
                 if (!dchild->d_inode) {
@@ -263,7 +263,7 @@ int mds_cleanup_pending(struct obd_device *obd)
                 }
 next:
                 l_dput(dchild);
-                up(&pending_dir->i_sem);
+                UNLOCK_INODE_MUTEX(pending_dir);
         }
         rc = 0;
 err_out:

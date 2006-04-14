@@ -494,6 +494,9 @@ static void ll_vm_close(struct vm_area_struct *vma)
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#ifndef HAVE_FILEMAP_POPULATE
+static int (*filemap_populate)(struct vm_area_struct * area, unsigned long address, unsigned long len, pgprot_t prot, unsigned long pgoff, int nonblock);
+#endif
 static int ll_populate(struct vm_area_struct *area, unsigned long address,
                        unsigned long len, pgprot_t prot, unsigned long pgoff,
                        int nonblock)
@@ -600,6 +603,11 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
 
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
+#if !defined(HAVE_FILEMAP_POPULATE) && \
+    (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+                if (!filemap_populate)
+                        filemap_populate = vma->vm_ops->populate;
+#endif
                 vma->vm_ops = &ll_file_vm_ops;
                 vma->vm_ops->open(vma);
                 /* update the inode's size and mtime */

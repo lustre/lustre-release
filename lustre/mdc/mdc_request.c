@@ -809,7 +809,7 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
-                CDEBUG(D_HA, "%s: set imp_no_init_recov = %d\n",
+                CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
                        exp->exp_obd->obd_name, imp->imp_initial_recov);
                 RETURN(0);
         }
@@ -1144,18 +1144,22 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         RETURN(0);
 }
 
-static int mdc_precleanup(struct obd_device *obd, int stage)
+static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
         ENTRY;
 
-        if (stage < OBD_CLEANUP_SELF_EXP)
-                RETURN(0);
-
-        rc = obd_llog_finish(obd, 0);
-        if (rc != 0)
-                CERROR("failed to cleanup llogging subsystems\n");
-
+        switch (stage) {
+        case OBD_CLEANUP_EARLY: 
+        case OBD_CLEANUP_EXPORTS:
+                break;
+        case OBD_CLEANUP_SELF_EXP:
+                rc = obd_llog_finish(obd, 0);
+                if (rc != 0)
+                        CERROR("failed to cleanup llogging subsystems\n");
+        case OBD_CLEANUP_OBD:
+                break;
+        }
         RETURN(rc);
 }
 

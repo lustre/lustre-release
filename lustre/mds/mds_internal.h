@@ -229,6 +229,7 @@ extern struct lvfs_callback_ops mds_lvfs_ops;
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 int mds_postrecov(struct obd_device *obd);
+int mds_init_export(struct obd_export *exp);
 #ifdef __KERNEL__
 int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
                int lock);

@@ -222,6 +222,22 @@ static int mdt_getattr(struct mdt_thread_info *info,
         RETURN(result);
 }
 
+static struct lu_device_operations mdt_lu_ops;
+
+static int lu_device_is_mdt(struct lu_device *d)
+{
+        /*
+         * XXX for now. Tags in lu_device_type->ldt_something are needed.
+         */
+        return ergo(d->ld_ops != NULL, d->ld_ops == &mdt_lu_ops);
+}
+
+static struct mdt_device *mdt_dev(struct lu_device *d)
+{
+        LASSERT(lu_device_is_mdt(d));
+        return container_of(d, struct mdt_device, mdt_md_dev.md_lu_dev);
+}
+
 static int mdt_connect(struct mdt_thread_info *info,
                        struct ptlrpc_request *req, int offset)
 {
@@ -229,10 +245,9 @@ static int mdt_connect(struct mdt_thread_info *info,
 
         result = target_handle_connect(req, mdt_handle);
         if (result == 0) {
+                struct mdt_device *mdt = info->mti_mdt;
                 struct obd_connect_data *data;
-                struct mdt_device *mdt;
 
-                mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
                 data = lustre_msg_buf(req->rq_repmsg, 0, sizeof *data);
                 result = seq_mgr_alloc(&info->mti_ctxt,
                                        mdt->mdt_seq_mgr, &data->ocd_seq);
@@ -424,16 +439,6 @@ void fid_unlock(struct ldlm_namespace *ns, const struct lu_fid *f,
 
         ldlm_lock_decref(lh, mode);
         EXIT;
-}
-
-static struct lu_device_operations mdt_lu_ops;
-
-static int lu_device_is_mdt(struct lu_device *d)
-{
-        /*
-         * XXX for now. Tags in lu_device_type->ldt_something are needed.
-         */
-        return ergo(d->ld_ops != NULL, d->ld_ops == &mdt_lu_ops);
 }
 
 static struct mdt_object *mdt_obj(struct lu_object *o)
@@ -920,12 +925,6 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
         } else
                 CERROR(LUSTRE_MDT0_NAME" drops mal-formed request\n");
         RETURN(result);
-}
-
-static struct mdt_device *mdt_dev(struct lu_device *d)
-{
-        LASSERT(lu_device_is_mdt(d));
-        return container_of(d, struct mdt_device, mdt_md_dev.md_lu_dev);
 }
 
 static int mdt_handle(struct ptlrpc_request *req)

@@ -123,52 +123,59 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_misc);
         CHECK_MEMBER(obdo, o_easize);
         CHECK_MEMBER(obdo, o_mds);
+        CHECK_MEMBER(obdo, o_stripe_idx);
         CHECK_MEMBER(obdo, o_padding_1);
         CHECK_MEMBER(obdo, o_inline);
 
         CHECK_VALUE(OBD_INLINESZ);
 
-        CHECK_VALUE(OBD_MD_FLID);
-        CHECK_VALUE(OBD_MD_FLATIME);
-        CHECK_VALUE(OBD_MD_FLMTIME);
-        CHECK_VALUE(OBD_MD_FLCTIME);
-        CHECK_VALUE(OBD_MD_FLSIZE);
-        CHECK_VALUE(OBD_MD_FLBLOCKS);
-        CHECK_VALUE(OBD_MD_FLBLKSZ);
-        CHECK_VALUE(OBD_MD_FLMODE);
-        CHECK_VALUE(OBD_MD_FLTYPE);
-        CHECK_VALUE(OBD_MD_FLUID);
-        CHECK_VALUE(OBD_MD_FLGID);
-        CHECK_VALUE(OBD_MD_FLFLAGS);
-        CHECK_VALUE(OBD_MD_FLNLINK);
-        CHECK_VALUE(OBD_MD_FLGENER);
-        CHECK_VALUE(OBD_MD_FLINLINE);
-        CHECK_VALUE(OBD_MD_FLRDEV);
-        CHECK_VALUE(OBD_MD_FLEASIZE);
-        CHECK_VALUE(OBD_MD_LINKNAME);
-        CHECK_VALUE(OBD_MD_FLHANDLE);
-        CHECK_VALUE(OBD_MD_FLCKSUM);
-        CHECK_VALUE(OBD_MD_FLQOS);
-        CHECK_VALUE(OBD_MD_FLCOOKIE);
-        CHECK_VALUE(OBD_MD_FLGROUP);
-        CHECK_VALUE(OBD_MD_FLFID);
-        CHECK_VALUE(OBD_MD_FLEPOCH);
-        CHECK_VALUE(OBD_MD_FLGRANT);
-        CHECK_VALUE(OBD_MD_FLDIREA);
-        CHECK_VALUE(OBD_MD_FLUSRQUOTA);
-        CHECK_VALUE(OBD_MD_FLGRPQUOTA);
-        CHECK_VALUE_64(OBD_MD_MDS);
-        CHECK_VALUE_64(OBD_MD_REINT);
+        CHECK_CDEFINE(OBD_MD_FLID);
+        CHECK_CDEFINE(OBD_MD_FLATIME);
+        CHECK_CDEFINE(OBD_MD_FLMTIME);
+        CHECK_CDEFINE(OBD_MD_FLCTIME);
+        CHECK_CDEFINE(OBD_MD_FLSIZE);
+        CHECK_CDEFINE(OBD_MD_FLBLOCKS);
+        CHECK_CDEFINE(OBD_MD_FLBLKSZ);
+        CHECK_CDEFINE(OBD_MD_FLMODE);
+        CHECK_CDEFINE(OBD_MD_FLTYPE);
+        CHECK_CDEFINE(OBD_MD_FLUID);
+        CHECK_CDEFINE(OBD_MD_FLGID);
+        CHECK_CDEFINE(OBD_MD_FLFLAGS);
+        CHECK_CDEFINE(OBD_MD_FLNLINK);
+        CHECK_CDEFINE(OBD_MD_FLGENER);
+        CHECK_CDEFINE(OBD_MD_FLINLINE);
+        CHECK_CDEFINE(OBD_MD_FLRDEV);
+        CHECK_CDEFINE(OBD_MD_FLEASIZE);
+        CHECK_CDEFINE(OBD_MD_LINKNAME);
+        CHECK_CDEFINE(OBD_MD_FLHANDLE);
+        CHECK_CDEFINE(OBD_MD_FLCKSUM);
+        CHECK_CDEFINE(OBD_MD_FLQOS);
+        CHECK_CDEFINE(OBD_MD_FLCOOKIE);
+        CHECK_CDEFINE(OBD_MD_FLGROUP);
+        CHECK_CDEFINE(OBD_MD_FLFID);
+        CHECK_CDEFINE(OBD_MD_FLEPOCH);
+        CHECK_CDEFINE(OBD_MD_FLGRANT);
+        CHECK_CDEFINE(OBD_MD_FLDIREA);
+        CHECK_CDEFINE(OBD_MD_FLUSRQUOTA);
+        CHECK_CDEFINE(OBD_MD_FLGRPQUOTA);
+        CHECK_CDEFINE(OBD_MD_FLMODEASIZE);
+        CHECK_CDEFINE(OBD_MD_MDS);
+        CHECK_CDEFINE(OBD_MD_REINT);
+        CHECK_CDEFINE(OBD_MD_FLXATTR);
+        CHECK_CDEFINE(OBD_MD_FLXATTRLS);
+        CHECK_CDEFINE(OBD_MD_FLXATTRRM);
+        CHECK_CDEFINE(OBD_MD_FLACL);
 
-        CHECK_VALUE(OBD_FL_INLINEDATA);
-        CHECK_VALUE(OBD_FL_OBDMDEXISTS);
-        CHECK_VALUE(OBD_FL_DELORPHAN);
-        CHECK_VALUE(OBD_FL_NORPC);
-        CHECK_VALUE(OBD_FL_IDONLY);
-        CHECK_VALUE(OBD_FL_RECREATE_OBJS);
-        CHECK_VALUE(OBD_FL_DEBUG_CHECK);
-        CHECK_VALUE(OBD_FL_NO_USRQUOTA);
-        CHECK_VALUE(OBD_FL_NO_GRPQUOTA);
+        CHECK_CDEFINE(OBD_FL_INLINEDATA);
+        CHECK_CDEFINE(OBD_FL_OBDMDEXISTS);
+        CHECK_CDEFINE(OBD_FL_DELORPHAN);
+        CHECK_CDEFINE(OBD_FL_NORPC);
+        CHECK_CDEFINE(OBD_FL_IDONLY);
+        CHECK_CDEFINE(OBD_FL_RECREATE_OBJS);
+        CHECK_CDEFINE(OBD_FL_DEBUG_CHECK);
+        CHECK_CDEFINE(OBD_FL_NO_USRQUOTA);
+        CHECK_CDEFINE(OBD_FL_NO_GRPQUOTA);
+        CHECK_CDEFINE(OBD_FL_CREATE_CROW);
 }
 
 static void
@@ -191,10 +198,21 @@ check_lov_mds_md_v1(void)
         CHECK_MEMBER(lov_ost_data_v1, l_ost_gen);
         CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
 
-        CHECK_VALUE(LOV_MAGIC_V1);
+        CHECK_CDEFINE(LOV_MAGIC_V1);
+        CHECK_CDEFINE(LOV_MAGIC_JOIN);
 
         CHECK_VALUE(LOV_PATTERN_RAID0);
         CHECK_VALUE(LOV_PATTERN_RAID1);
+}
+
+static void
+check_lov_mds_md_join(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lov_mds_md_join);
+        CHECK_MEMBER(lov_mds_md_join, lmmj_md);
+        CHECK_MEMBER(lov_mds_md_join, lmmj_array_id);
+        CHECK_MEMBER(lov_mds_md_join, lmmj_extent_count);
 }
 
 static void
@@ -211,6 +229,15 @@ check_obd_statfs(void)
         CHECK_MEMBER(obd_statfs, os_bsize);
         CHECK_MEMBER(obd_statfs, os_namelen);
         CHECK_MEMBER(obd_statfs, os_state);
+        CHECK_MEMBER(obd_statfs, os_spare1);
+        CHECK_MEMBER(obd_statfs, os_spare2);
+        CHECK_MEMBER(obd_statfs, os_spare3);
+        CHECK_MEMBER(obd_statfs, os_spare4);
+        CHECK_MEMBER(obd_statfs, os_spare5);
+        CHECK_MEMBER(obd_statfs, os_spare6);
+        CHECK_MEMBER(obd_statfs, os_spare7);
+        CHECK_MEMBER(obd_statfs, os_spare8);
+        CHECK_MEMBER(obd_statfs, os_spare9);
 }
 
 static void
@@ -340,19 +367,23 @@ check_mds_body(void)
 
         CHECK_VALUE(FMODE_READ);
         CHECK_VALUE(FMODE_WRITE);
-        CHECK_VALUE(FMODE_EXEC);
+        CHECK_VALUE(MDS_FMODE_EXEC);
 
-        CHECK_VALUE(MDS_OPEN_CREAT);
-        CHECK_VALUE(MDS_OPEN_EXCL);
-        CHECK_VALUE(MDS_OPEN_TRUNC);
-        CHECK_VALUE(MDS_OPEN_APPEND);
-        CHECK_VALUE(MDS_OPEN_SYNC);
-        CHECK_VALUE(MDS_OPEN_DIRECTORY);
-        CHECK_VALUE(MDS_OPEN_DELAY_CREATE);
+        CHECK_CDEFINE(MDS_OPEN_CREAT);
+        CHECK_CDEFINE(MDS_OPEN_EXCL);
+        CHECK_CDEFINE(MDS_OPEN_TRUNC);
+        CHECK_CDEFINE(MDS_OPEN_APPEND);
+        CHECK_CDEFINE(MDS_OPEN_SYNC);
+        CHECK_CDEFINE(MDS_OPEN_DIRECTORY);
+        CHECK_CDEFINE(MDS_OPEN_DELAY_CREATE);
         CHECK_CDEFINE(MDS_OPEN_OWNEROVERRIDE);
         CHECK_CDEFINE(MDS_OPEN_JOIN_FILE);
         CHECK_CDEFINE(MDS_OPEN_HAS_EA);
         CHECK_CDEFINE(MDS_OPEN_HAS_OBJS);
+
+        CHECK_CDEFINE(MDS_INODELOCK_LOOKUP);
+        CHECK_CDEFINE(MDS_INODELOCK_UPDATE);
+        CHECK_CDEFINE(MDS_INODELOCK_OPEN);
 }
 
 static void
@@ -444,6 +475,15 @@ check_mds_rec_rename(void)
 }
 
 static void
+check_mds_rec_join(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(mds_rec_join);
+        CHECK_MEMBER(mds_rec_join, jr_fid);
+        CHECK_MEMBER(mds_rec_join, jr_headsize);
+}
+
+static void
 check_lov_desc(void)
 {
         BLANK_LINE();
@@ -478,6 +518,14 @@ check_ldlm_extent(void)
         CHECK_MEMBER(ldlm_extent, start);
         CHECK_MEMBER(ldlm_extent, end);
         CHECK_MEMBER(ldlm_extent, gid);
+}
+
+static void
+check_ldlm_inodebits(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ldlm_inodebits);
+        CHECK_MEMBER(ldlm_inodebits, bits);
 }
 
 static void
@@ -567,15 +615,16 @@ check_llog_logid(void)
         CHECK_MEMBER(llog_logid, lgl_ogr);
         CHECK_MEMBER(llog_logid, lgl_ogen);
 
-        CHECK_VALUE(OST_SZ_REC);
-        CHECK_VALUE(OST_RAID1_REC);
-        CHECK_VALUE(MDS_UNLINK_REC);
-        CHECK_VALUE(MDS_SETATTR_REC);
-        CHECK_VALUE(OBD_CFG_REC);
-        CHECK_VALUE(PTL_CFG_REC);
-        CHECK_VALUE(LLOG_GEN_REC);
-        CHECK_VALUE(LLOG_HDR_MAGIC);
-        CHECK_VALUE(LLOG_LOGID_MAGIC);
+        CHECK_CVALUE(OST_SZ_REC);
+        CHECK_CVALUE(OST_RAID1_REC);
+        CHECK_CVALUE(MDS_UNLINK_REC);
+        CHECK_CVALUE(MDS_SETATTR_REC);
+        CHECK_CVALUE(OBD_CFG_REC);
+        CHECK_CVALUE(PTL_CFG_REC);
+        CHECK_CVALUE(LLOG_GEN_REC);
+        CHECK_CVALUE(LLOG_JOIN_REC);
+        CHECK_CVALUE(LLOG_HDR_MAGIC);
+        CHECK_CVALUE(LLOG_LOGID_MAGIC);
 }
 
 static void
@@ -747,13 +796,15 @@ check_llogd_body(void)
         CHECK_MEMBER(llogd_body, lgd_len);
         CHECK_MEMBER(llogd_body, lgd_cur_offset);
 
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_CREATE);
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_READ_HEADER);
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_WRITE_REC);
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_CLOSE);
-        CHECK_VALUE(LLOG_ORIGIN_CONNECT);
-        CHECK_VALUE(LLOG_CATINFO);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_CREATE);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_READ_HEADER);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_WRITE_REC);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_CLOSE);
+        CHECK_CVALUE(LLOG_ORIGIN_CONNECT);
+        CHECK_CVALUE(LLOG_CATINFO);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_PREV_BLOCK);
+        CHECK_CVALUE(LLOG_ORIGIN_HANDLE_DESTROY);
 }
 
 static void
@@ -764,6 +815,26 @@ check_llogd_conn_body(void)
         CHECK_MEMBER(llogd_conn_body, lgdc_gen);
         CHECK_MEMBER(llogd_conn_body, lgdc_logid);
         CHECK_MEMBER(llogd_conn_body, lgdc_ctxt_idx);
+}
+
+static void
+check_mds_extent_desc(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(mds_extent_desc);
+        CHECK_MEMBER(mds_extent_desc, med_start);
+        CHECK_MEMBER(mds_extent_desc, med_len);
+        CHECK_MEMBER(mds_extent_desc, med_lmm);
+}
+
+static void
+check_llog_array_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_array_rec);
+        CHECK_MEMBER(llog_array_rec, lmr_hdr);
+        CHECK_MEMBER(llog_array_rec, lmr_med);
+        CHECK_MEMBER(llog_array_rec, lmr_tail);
 }
 
 static void
@@ -911,6 +982,12 @@ main(int argc, char **argv)
         CHECK_VALUE(REINT_OPEN);
         CHECK_VALUE(REINT_MAX);
 
+        CHECK_VALUE(MGS_CONNECT);
+        CHECK_VALUE(MGS_DISCONNECT);
+        CHECK_VALUE(MGS_EXCEPTION);
+        CHECK_VALUE(MGS_TARGET_REG);
+        CHECK_VALUE(MGS_TARGET_DEL);
+
         CHECK_VALUE(DISP_IT_EXECD);
         CHECK_VALUE(DISP_LOOKUP_EXECD);
         CHECK_VALUE(DISP_LOOKUP_NEG);
@@ -938,11 +1015,10 @@ main(int argc, char **argv)
         CHECK_VALUE(LCK_GROUP);
         CHECK_VALUE(LCK_MAXMODE);
 
-        CHECK_VALUE(MGS_CONNECT);
-        CHECK_VALUE(MGS_DISCONNECT);
-        CHECK_VALUE(MGS_EXCEPTION);
-        CHECK_VALUE(MGS_TARGET_REG);
-        CHECK_VALUE(MGS_TARGET_DEL);
+        CHECK_CVALUE(LDLM_PLAIN);
+        CHECK_CVALUE(LDLM_EXTENT);
+        CHECK_CVALUE(LDLM_FLOCK);
+        CHECK_CVALUE(LDLM_IBITS);
 
         CHECK_VALUE(OBD_PING);
         CHECK_VALUE(OBD_LOG_CANCEL);
@@ -952,17 +1028,19 @@ main(int argc, char **argv)
         CHECK_VALUE(QUOTA_DQACQ);
         CHECK_VALUE(QUOTA_DQREL);
 
-        CHECK_VALUE(OBD_CONNECT_RDONLY);
-        CHECK_VALUE(OBD_CONNECT_INDEX);
-        CHECK_VALUE(OBD_CONNECT_GRANT);
-        CHECK_VALUE(OBD_CONNECT_SRVLOCK);
-        CHECK_VALUE(OBD_CONNECT_VERSION);
-        CHECK_VALUE(OBD_CONNECT_REQPORTAL);
-        CHECK_VALUE(OBD_CONNECT_ACL);
-        CHECK_VALUE(OBD_CONNECT_XATTR);
-        CHECK_VALUE(OBD_CONNECT_CROW);
-        CHECK_VALUE(OBD_CONNECT_TRUNCLOCK);
-        CHECK_VALUE(OBD_CONNECT_TRANSNO);
+        CHECK_CDEFINE(OBD_CONNECT_RDONLY);
+        CHECK_CDEFINE(OBD_CONNECT_INDEX);
+        CHECK_CDEFINE(OBD_CONNECT_GRANT);
+        CHECK_CDEFINE(OBD_CONNECT_SRVLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_VERSION);
+        CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
+        CHECK_CDEFINE(OBD_CONNECT_ACL);
+        CHECK_CDEFINE(OBD_CONNECT_XATTR);
+        CHECK_CDEFINE(OBD_CONNECT_CROW);
+        CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
+        CHECK_CDEFINE(OBD_CONNECT_IBITS);
+        CHECK_CDEFINE(OBD_CONNECT_JOIN);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
@@ -970,6 +1048,7 @@ main(int argc, char **argv)
         check_lustre_msg();
         check_obdo();
         check_lov_mds_md_v1();
+        check_lov_mds_md_join();
         check_obd_statfs();
         check_obd_ioobj();
         check_obd_quotactl();
@@ -983,10 +1062,12 @@ main(int argc, char **argv)
         check_mds_rec_link();
         check_mds_rec_unlink();
         check_mds_rec_rename();
+        check_mds_rec_join();
         check_lov_desc();
         check_ldlm_res_id();
         check_ldlm_extent();
         check_ldlm_flock();
+        check_ldlm_inodebits();
         check_ldlm_intent();
         check_ldlm_resource_desc();
         check_ldlm_lock_desc();
@@ -1009,6 +1090,8 @@ main(int argc, char **argv)
         check_llog_cookie();
         check_llogd_body();
         check_llogd_conn_body();
+        check_llog_array_rec();
+        check_mds_extent_desc();
         check_qunit_data();
 
         printf("}\n\n");

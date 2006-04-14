@@ -29,20 +29,26 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
+reformat() {
+        grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
+	stop ost -f
+	stop ost2 -f
+	stop mds -f
+	echo Formatting mds, ost, ost2
+	add mds $MDS_MKFS_OPTS --reformat $MDSDEV  > /dev/null
+	add ost $OST_MKFS_OPTS --reformat $OSTDEV  > /dev/null
+	add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2  > /dev/null
+}
 
 gen_config() {
-    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
-    stop ost -f
-    stop mds -f
-    echo Formatting mds, ost
-    add mds $MDS_MKFS_OPTS --reformat $MDSDEV  > /dev/null
-    add ost $OST_MKFS_OPTS --reformat $OSTDEV  > /dev/null
-    #The MGS must be started before the OSTs for a new fs
-    start_mds
-    start_ost
-    sleep 5
-    stop_ost
-    stop_mds
+        reformat
+        # The MGS must be started before the OSTs for a new fs, so start
+        # and stop to generate the startup logs. 
+	start_mds
+	start_ost
+	sleep 5
+	stop_ost
+	stop_mds
 }
 
 start_mds() {
@@ -65,12 +71,6 @@ stop_ost() {
 	echo "stop ost service on `facet_active_host ost`"
 	# These tests all use non-failover stop
 	stop ost -f  || return 98
-}
-
-add_ost2() {
-	stop ost2 -f
-    	echo Formatting ost2
-    	add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2  > /dev/null
 }
 
 start_ost2() {
@@ -97,7 +97,7 @@ umount_client() {
 }
 
 manual_umount_client(){
-	echo "manual umount lustre on ${MOUNTPATH}...."
+	echo "manual umount lustre on ${MOUNT}...."
 	do_facet client "umount -d $MOUNT"
 }
 
@@ -119,7 +119,7 @@ cleanup() {
 }
 
 check_mount() {
-	do_facet client "touch $DIR/a" || return 71
+	do_facet client "cp /etc/passwd $DIR/a" || return 71
 	do_facet client "rm $DIR/a" || return 72
 	# make sure lustre is actually mounted (touch will block, 
         # but grep won't, so do it after) 
@@ -218,9 +218,14 @@ test_5() {
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
 
-	umount_client $MOUNT 
+	manual_umount_client
 	# stop_mds is a no-op here, and should not fail
 	cleanup_nocli || return $?
+	# df may have lingering entry
+	manual_umount_client
+	# mtab may have lingering entry
+	grep -v $MOUNT" " /etc/mtab > $TMP/mtabtemp
+	mv $TMP/mtabtemp /etc/mtab
 }
 run_test 5 "force cleanup mds, then cleanup"
 
@@ -239,23 +244,32 @@ run_test 5b "mds down, cleanup after failed mount (bug 2712)"
 test_5c() {
 	start_ost
 	start_mds
-
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	do_node $client mount -t lustre wrong_mgs@tcp:/$FSNAME $MOUNT && return 1
+	# Bad nid might still work if mgs is on 0@lo
+	mount -t lustre 1.2.3.4@tcp:/wrong.$FSNAME $MOUNT || :
 	umount_client $MOUNT
 	cleanup_nocli  || return $?
 }
 run_test 5c "cleanup after failed mount (bug 2712)"
 
 test_5d() {
-        df
 	start_ost
 	start_mds
 	stop_ost -f
 	mount_client $MOUNT || return 1
 	cleanup  || return $?
 }
-run_test 5d "ost down, don't crash during mount attempt"
+run_test 5d "mount with ost down"
+
+test_5e() {
+	start_ost
+	start_mds
+#define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
+	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
+	mount_client $MOUNT || echo "mount failed (not fatal)"
+	cleanup  || return $?
+}
+run_test 5e "delayed connect, don't crash (bug 10268)"
 
 test_6() {
 	setup
@@ -295,8 +309,7 @@ test_9() {
         # check the result of lmc --ptldebug/subsystem
         start_ost
         start_mds
-        mount_client $MOUNT
-        CHECK_PTLDEBUG="`do_facet mds sysctl lnet.debug | sed -e 's/.* = //'`"
+        CHECK_PTLDEBUG="`do_facet mds sysctl lnet.debug|cut -d= -f2`"
         if [ "$CHECK_PTLDEBUG" ] && [ $CHECK_PTLDEBUG -eq 1 ]; then
            echo "lmc --debug success"
         else
@@ -311,7 +324,6 @@ test_9() {
            echo "lmc --subsystem: want 2, have $CHECK_SUBSYS"
            return 1
         fi
-        check_mount || return 41
         cleanup || return $?
 
         # the new PTLDEBUG/SUBSYSTEM used for lconf --ptldebug/subsystem
@@ -335,8 +347,6 @@ test_9() {
            echo "lconf --subsystem: want 20, have $CHECK_SUBSYS"
            return 1
         fi
-        mount_client $MOUNT
-        check_mount || return 41
         cleanup || return $?
 
         # resume the old configuration
@@ -578,16 +588,18 @@ cleanup_15() {
 }
 
 test_15() {
-	start_ost
-	start_mds
 	echo "mount lustre on ${MOUNT} with $MOUNTLUSTRE....."
 	if [ -f "$MOUNTLUSTRE" ]; then
 		echo "save $MOUNTLUSTRE to $MOUNTLUSTRE.sav"
-		mv $MOUNTLUSTRE $MOUNTLUSTRE.sav
+		mv $MOUNTLUSTRE $MOUNTLUSTRE.sav && trap cleanup_15 EXIT INT
+		if [ -f $MOUNTLUSTRE ]; then
+			echo "$MOUNTLUSTRE cannot be moved, skipping test"
+			return 0
+		fi
 	fi
-	[ -f "$MOUNTLUSTRE" ] && echo "can't move $MOUNTLUSTRE" && return 40
-	trap cleanup_15 EXIT INT
 	[ ! `cp $(which llmount) $MOUNTLUSTRE` ] || return $?
+	start_ost
+	start_mds
 	do_facet client "mkdir -p $MOUNT 2> /dev/null"
 	# load llite module on the client if it isn't in /lib/modules
 	do_facet client "$LCONF --nosetup --node client_facet $XMLCONFIG"
@@ -609,7 +621,7 @@ test_15() {
 run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 
 test_16() {
-        TMPMTPT="/mnt/conf16"
+        TMPMTPT="${MOUNT%/*}/conf16"
 
         if [ ! -f "$MDSDEV" ]; then
             echo "no $MDSDEV existing, so mount Lustre to create one"
@@ -666,12 +678,11 @@ test_17() {
         fi
 
         echo "Remove mds config log"
-        do_facet mds "debugfs -w -R 'rm CONFIGS/$FSNAME-MDT0000' $MDSDEV || return \$?" || return $?
+        do_facet mds "debugfs -w -R 'unlink CONFIGS/$FSNAME-MDT0000' $MDSDEV || return \$?" || return $?
 
         start_ost
 	start_mds && return 42
-	umount_client $MOUNT
-        cleanup_nocli || return $?
+	gen_config
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
 
@@ -704,86 +715,69 @@ test_18() {
 }
 run_test 18 "check lconf creates large journals"
 
-test_19() {
-        # first format the ost/mdt
+test_19a() {
+	start_mds || return 1
+	stop_mds -f || return 2
+}
+run_test 19a "start/stop MDS without OSTs"
+
+test_19b() {
+	start_ost || return 1
+	stop_ost -f || return 2
+}
+run_test 19b "start/stop OSTs without MDS"
+
+test_20a() {
+        start_mds
+	start_ost
+	stop_ost
+	stop_mds
+}
+run_test 20a "start mds before ost, stop ost first"
+
+test_20b() {
         start_ost
 	start_mds
 	stop_mds
 	stop_ost
-	start_mds || return 1
-	stop_mds -f || return 2
 }
-run_test 19 "start/stop MDS without OSTs"
+run_test 20b "start ost before mds, stop mds first"
 
-test_20() {
-	add_ost2
-
-        start_mds
-	start_ost
+test_20c() {
+        start_ost
+	start_mds
 	start_ost2
-	sleep 5
-	stop_ost2
 	stop_ost
-	stop_mds || return 1
+	stop_ost2
+	stop_mds
 }
-run_test 20 "start mds first"
+run_test 20c "start mds between two osts, stop mds last"
 
 test_21() {
-	add_ost2
-
-        start_ost
-	start_ost2
+        reformat
 	start_mds
-	sleep 5
-	stop_ost
-	stop_ost2
-	stop_mds || return 1
-}
-run_test 21 "start mds last"
+	echo Client mount before any osts are in the logs
+	mount_client $MOUNT
+	check_mount && return 41
+	pass
 
-test_22() {
-	add_ost2
-
-        start_ost
-	start_mds
-	start_ost2
-	sleep 5
-	stop_ost
-	stop_ost2
-	stop_mds || return 1
-}
-run_test 22 "start mds between two osts"
-
-test_23() {
-	#setup
+	echo Client mount with ost in logs, but none running
 	start_ost
-	start_mds
-	add_ost2
-	start_ost2
+	stop_ost
+	mount_client $MOUNT
+	# check_mount will block trying to contact ost
+	umount_client $MOUNT
+	pass
 
+	echo Client mount with a running ost
+	start_ost
 	mount_client $MOUNT
 	check_mount || return 41
+	pass
 
-	# cleanup
- 	umount_client $MOUNT || return 200
-	stop_ost2 || return 204
-	cleanup_nocli || return $?
+	cleanup
 }
-run_test 23 "add a new ost before a client has started"
-
-test_24() {
-        setup
-	add_ost2
-	start_ost2
-
-	check_mount || return 41
-
-	# cleanup
- 	umount_client $MOUNT || return 200
-	stop_ost2 || return 204
-	cleanup_nocli || return $?
-}
-run_test 24 "add a new ost after a client has started"
+run_test 21 "start a client before osts"
 
 
 umount_client $MOUNT	

@@ -18,7 +18,9 @@ UPCALL=${UPCALL:-DEFAULT}
 
 build_test_filter
 
-assert_env mds_HOST ost1_HOST ost2_HOST client_HOST LIVE_CLIENT 
+assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
+assert_env ost1_HOST ost2_HOST OST_MKFS_OPTS OSTDEV
+assert_env LIVE_CLIENT FSNAME
 
 ####
 # Initialize all the ostN_HOST 
@@ -111,48 +113,36 @@ reintegrate_clients() {
     DOWN_NUM=0
 }
 
-gen_config() {
-    rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE --journal-size $MDSJOURNALSIZE
-
-    if [ ! -z "$mdsfailover_HOST" ]; then
-	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
-    fi
-
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
-	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    for i in `seq $NUMOST`; do
-	dev=`printf $OSTDEV $i`
-	add_ost ost$i --lov lov1 --dev $dev --size $OSTSIZE \
-	    --journal-size $OSTJOURNALSIZE
-    done
-     
-
-    add_client client mds --lov lov1 --path $MOUNT
+start_ost() {
+    local dev=`printf $OSTDEV $1`
+    start ost$1 $dev $OST_MOUNT_OPTS
 }
 
 setup() {
-    gen_config
-
+    cleanup
     rm -rf logs/*
+    wait_for mds
+    add mds $MDS_MKFS_OPTS --reformat $MDSDEV >> /dev/null
+    start mds $MDSDEV $MDS_MOUNT_OPTS
     for i in `seq $NUMOST`; do
+	local dev=`printf $OSTDEV $i`
+	local index=$((i - 1))
 	wait_for ost$i
-	start ost$i ${REFORMAT} $OSTLCONFARGS 
+	echo Adding ost$i at index $index dev $dev
+	add ost$i $OST_MKFS_OPTS --reformat --index=$index $dev >> /dev/null
+	start ost$i $dev $OST_MOUNT_OPTS
     done
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-    wait_for mds
-    start mds $MDSLCONFARGS ${REFORMAT}
+
     while ! do_node $CLIENTS "ls -d $LUSTRE" > /dev/null; do sleep 5; done
     grep " $MOUNT " /proc/mounts || zconf_mount $CLIENTS $MOUNT
-
 }
 
 cleanup() {
     zconf_umount $CLIENTS $MOUNT
-
-    stop mds ${FORCE} $MDSLCONFARGS || :
+    stop mds -f
     for i in `seq $NUMOST`; do
-        stop ost$i ${FORCE} $OSTLCONFARGS  || :
+        stop ost$i -f
     done
 }
 
@@ -205,9 +195,7 @@ node_to_ost() {
     done
     echo "No ost found for node; $node"
     return 1
-    
 }
-
 
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -230,17 +218,14 @@ fi
 echo "Starting Test 17 at `date`"
 
 test_0() {
-    echo "Failover MDS"
     facet_failover mds
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 1; }
 
-    echo "Failing OST1"
     facet_failover ost1
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 2; }
 
-    echo "Failing OST2"
     facet_failover ost2
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 3; }
@@ -261,7 +246,6 @@ test_2() {
     echo "Verify Lustre filesystem is up and running"
     client_df
 
-    echo "Failing MDS"
     shutdown_facet mds
     reboot_facet mds
 
@@ -273,17 +257,15 @@ test_2() {
     DFPID=$!
     sleep 5
 
-    echo "Failing OST"
     shutdown_facet ost1
 
     echo "Reintegrating OST"
     reboot_facet ost1
     wait_for ost1
-    start ost1
+    start_ost 1
 
-    echo "Failover MDS"
     wait_for mds
-    start mds
+    start mds $MDSDEV $MDS_MOUNT_OPTS
 
     #Check FS
     wait $DFPID
@@ -331,7 +313,6 @@ test_4() {
     echo "Fourth Failure Mode: OST/MDS `date`"
 
     #OST Portion
-    echo "Failing OST ost1"
     shutdown_facet ost1
  
     #Check FS
@@ -341,7 +322,6 @@ test_4() {
     sleep 5
 
     #MDS Portion
-    echo "Failing MDS"
     shutdown_facet mds
     reboot_facet mds
 
@@ -357,11 +337,10 @@ test_4() {
     echo "Reintegrating OST"
     reboot_facet ost1
     wait_for ost1
-    start ost1
+    start_ost 1
     
-    echo "Failover MDS"
     wait_for mds
-    start mds
+    start mds $MDSDEV $MDS_MOUNT_OPTS
     #Check FS
     
     wait $DFPIDA
@@ -382,7 +361,6 @@ test_5() {
     client_df
     
     #OST Portion
-    echo "Failing OST"
     shutdown_facet ost1
     reboot_facet ost1
     
@@ -393,7 +371,6 @@ test_5() {
     sleep 5
     
     #OST Portion
-    echo "Failing OST"
     shutdown_facet ost2
     reboot_facet ost2
 
@@ -406,9 +383,9 @@ test_5() {
     #Reintegration
     echo "Reintegrating OSTs"
     wait_for ost1
-    start ost1
+    start_ost 1
     wait_for ost2
-    start ost2
+    start_ost 2
     
     clients_recover_osts ost1
     clients_recover_osts ost2
@@ -431,7 +408,6 @@ test_6() {
     client_touch testfile || return 2
 	
     #OST Portion
-    echo "Failing OST"
     shutdown_facet ost1
     reboot_facet ost1
 
@@ -454,7 +430,7 @@ test_6() {
     #Reintegration
     echo "Reintegrating OST/CLIENTs"
     wait_for ost1
-    start ost1
+    start_ost 1
     reintegrate_clients
     sleep 5 
 
@@ -496,7 +472,6 @@ test_7() {
     client_rm testfile
 
     #MDS Portion
-    echo "Failing MDS"
     facet_failover mds
 
     #Check FS
@@ -548,7 +523,6 @@ test_8() {
 
 
     #OST Portion
-    echo "Failing OST"
     shutdown_facet ost1
     reboot_facet ost1
 
@@ -565,7 +539,7 @@ test_8() {
     echo "Reintegrating CLIENTs/OST"
     reintegrate_clients
     wait_for ost1
-    start ost1
+    start_ost 1
     wait $DFPID
     client_df || return 1
     client_touch testfile2 || return 2
@@ -637,5 +611,4 @@ test_10() {
 run_test 10 "Running Availability for 6 hours..."
 
 equals_msg "Done, cleaning up"
-# we need to force cleanup for the stale MDS conns until bug 5921 is fixed
-FORCE=--force $CLEANUP
+$CLEANUP

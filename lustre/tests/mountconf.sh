@@ -8,24 +8,23 @@
 #LUSTRE=${LUSTRE:-`dirname $0`/..}
 #. $LUSTRE/tests/test-framework.sh
 #init_test_env $@
-#. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
-
-stop_all() {
-    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
+mcstopall() {
+    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
     stop ost -f
     stop ost2 -f
     stop mds -f
+    return 0
 }
 
 mccleanup() {
     echo "mountconf cleanup $*"
-    stop_all
+    mcstopall $*
     unload_modules
 }
 
 mcformat() {
-    stop_all
+    mcstopall
     echo Formatting mds, ost, ost2
     add mds $MDS_MKFS_OPTS --reformat $MDSDEV    > /dev/null || exit 10
     add ost $OST_MKFS_OPTS --reformat $OSTDEV    > /dev/null || exit 10

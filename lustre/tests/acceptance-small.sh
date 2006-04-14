@@ -5,7 +5,7 @@ set -vxe
 
 PATH=`dirname $0`/../utils:$PATH
 
-[ "$CONFIGS" ] || CONFIGS="local lov"
+[ "$CONFIGS" ] || CONFIGS="local"  #"local lov"
 [ "$MAX_THREADS" ] || MAX_THREADS=10
 if [ -z "$THREADS" ]; then
 	KB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
@@ -19,19 +19,29 @@ fi
 [ "$MOUNT2" ] || MOUNT2=${MOUNT}2
 [ "$TMP" ] || TMP=/tmp
 [ "$COUNT" ] || COUNT=1000
-#[ "$DEBUG_LVL" ] || DEBUG_LVL=0x370200
 [ "$DEBUG_LVL" ] || DEBUG_LVL=0
 [ "$DEBUG_OFF" ] || DEBUG_OFF="sysctl -w lnet.debug=$DEBUG_LVL"
-[ "$DEBUG_ON" ] || DEBUG_ON="sysctl -w lnet.debug=0x33f0480"
+[ "$DEBUG_ON" ] || DEBUG_ON="sysctl -w lnet.debug=0x33f0484"
 
 LIBLUSTRE=${LIBLUSTRE:-../liblustre}
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-$LIBLUSTRE/tests}
 
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. mountconf.sh
+
+SETUP=${SETUP:-mcsetup}
+FORMAT=${FORMAT:-mcformat}
+CLEANUP=${CLEANUP:-mcstopall}
+
 for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
-	[ -e $NAME.sh ] && sh $NAME.sh
-	[ ! -e $NAME.xml ] && [ -z "$LDAPURL" ] && \
-		echo "no config '$NAME.xml'" 1>&2 && exit 1
+	. $LUSTRE/tests/cfg/$NAME.sh
+	
+	assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
+	assert_env ost_HOST ost2_HOST OST_MKFS_OPTS OSTDEV
+	assert_env FSNAME
 
 	if [ "$RUNTESTS" != "no" ]; then
 		sh runtests
@@ -42,7 +52,7 @@ for NAME in $CONFIGS; do
 	fi
 
 	if [ "$DBENCH" != "no" ]; then
-		mount | grep $MOUNT || sh llmount.sh
+ 	        mount_client $MOUNT
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		DB_THREADS=`expr $SPACE / 50000`
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
@@ -50,44 +60,44 @@ for NAME in $CONFIGS; do
 		$DEBUG_OFF
 		sh rundbench 1
 		$DEBUG_ON
-		sh llmountcleanup.sh
-		sh llmount.sh
+		$CLEANUP
+		$SETUP
 		if [ $DB_THREADS -gt 1 ]; then
 			$DEBUG_OFF
 			sh rundbench $DB_THREADS
 			$DEBUG_ON
-			sh llmountcleanup.sh
-			sh llmount.sh
+			$CLEANUP
+			$SETUP
 		fi
 		rm -f /mnt/lustre/`hostname`/client.txt
 	fi
 
 	chown $UID $MOUNT && chmod 700 $MOUNT
 	if [ "$BONNIE" != "no" ]; then
-		mount | grep $MOUNT || sh llmount.sh
+ 	        mount_client $MOUNT
 		$DEBUG_OFF
 		bonnie++ -f -r 0 -s $(($SIZE / 1024)) -n 10 -u $UID -d $MOUNT
 		$DEBUG_ON
-		sh llmountcleanup.sh
-		sh llmount.sh
+		$CLEANUP
+		$SETUP
 	fi
 
 	IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
 	IOZFILE="-f $MOUNT/iozone"
 	if [ "$IOZONE" != "no" ]; then
-		mount | grep $MOUNT || sh llmount.sh
+ 	        mount_client $MOUNT
 		$DEBUG_OFF
 		iozone $IOZONE_OPTS $IOZFILE
 		$DEBUG_ON
-		sh llmountcleanup.sh
-		sh llmount.sh
+		$CLEANUP
+		$SETUP
 
 		if [ "$O_DIRECT" != "no" -a "$IOZONE_DIR" != "no" ]; then
 			$DEBUG_OFF
 			iozone -I $IOZONE_OPTS $IOZFILE.odir
 			$DEBUG_ON
-			sh llmountcleanup.sh
-			sh llmount.sh
+			$CLEANUP
+			$SETUP
 		fi
 
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
@@ -104,8 +114,8 @@ for NAME in $CONFIGS; do
 			done
 			iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE
 			$DEBUG_ON
-			sh llmountcleanup.sh
-			sh llmount.sh
+			$CLEANUP
+			$SETUP
 		elif [ $IOZVER -lt 3145 ]; then
 			VER=`iozone -v | awk '/Revision:/ { print $3 }'`
 			echo "iozone $VER too old for multi-thread test"
@@ -113,13 +123,13 @@ for NAME in $CONFIGS; do
 	fi
 
 	if [ "$FSX" != "no" ]; then
-		mount | grep $MOUNT || sh llmount.sh
+		mount | grep $MOUNT || $SETUP
 		$DEBUG_OFF
 		./fsx -c 50 -p 1000 -P $TMP -l $SIZE \
 			-N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
-		sh llmountcleanup.sh
-		sh llmount.sh
+		$CLEANUP
+		$SETUP
 	fi	
 
 	mkdir -p $MOUNT2
@@ -134,11 +144,11 @@ for NAME in $CONFIGS; do
 	esac
 
 	if [ "$SANITYN" != "no" ]; then
-		mount | grep $MOUNT || sh llmount.sh
+ 	        mount_client $MOUNT
 		$DEBUG_OFF
 
 		if [ "$MDSNODE" -a "$MDSNAME" -a "$CLIENT" ]; then
-			llmount $MDSNODE:/$MDSNAME/$CLIENT $MOUNT2
+		        mount_client $MOUNT2
 			SANITYLOG=$TMP/sanity.log START=: CLEAN=: sh sanityN.sh
 			umount $MOUNT2
 		else
@@ -147,12 +157,12 @@ for NAME in $CONFIGS; do
 		fi
 
 		$DEBUG_ON
-		sh llmountcleanup.sh
-		sh llmount.sh
+		$CLEANUP
+		$SETUP
 	fi
 
 	if [ "$LIBLUSTRE" != "no" ]; then
-		mount | grep $MOUNT || sh llmount.sh
+ 	        mount_client $MOUNT
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_TARGET=$MDSNODE:/$MDSNAME/$CLIENT
 		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
@@ -160,11 +170,11 @@ for NAME in $CONFIGS; do
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 		fi
-		sh llmountcleanup.sh
-		#sh llmount.sh
+		$CLEANUP
+		#$SETUP
 	fi
 
-	mount | grep $MOUNT && sh llmountcleanup.sh
+	$CLEANUP
 done
 
 if [ "$REPLAY_SINGLE" != "no" ]; then

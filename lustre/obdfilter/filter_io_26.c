@@ -419,7 +419,7 @@ static int filter_clear_page_cache(struct inode *inode,
         return 0;
 }
 
-/* Must be called with i_sem taken for writes; this will drop it */
+/* Must be called with i_mutex taken for writes; this will drop it */
 int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle)
@@ -479,7 +479,7 @@ remap:
                                             oti->oti_handle, attr, 0);
                 }
 
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
 
                 rc2 = filter_finish_transno(exp, oti, 0);
                 if (rc2 != 0) {
@@ -550,6 +550,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
+        if (IS_ERR(iobuf))
+                GOTO(cleanup, rc = PTR_ERR(iobuf));
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -580,9 +582,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 this_size = lnb->offset + lnb->len;
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
-                
+
                 /* if one page is a write-back page from client cache, or it's
-                 * written by root, then mark the whole io request as ignore 
+                 * written by root, then mark the whole io request as ignore
                  * quota request */
                 if (lnb->flags & (OBD_BRW_FROM_GRANT | OBD_BRW_NOQUOTA))
                         iobuf->dr_ignore_quota = 1;
@@ -591,12 +593,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
-        down(&inode->i_sem);
-        fsfilt_check_slow(now, obd_timeout, "i_sem");
+        LOCK_INODE_MUTEX(inode);
+        fsfilt_check_slow(now, obd_timeout, "i_mutex");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
                 rc = PTR_ERR(oti->oti_handle);
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error starting transaction: rc = %d\n", rc);
@@ -635,7 +637,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 rc = filter_update_fidea(exp, inode, oti->oti_handle, oa);
         }
 
-        /* filter_direct_io drops i_sem */
+        /* filter_direct_io drops i_mutex */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
         if (rc == 0)
@@ -652,7 +654,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (err)
                 rc = err;
 
-        if (obd_sync_filter && !err)
+        if (obd->obd_replayable && !err)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);

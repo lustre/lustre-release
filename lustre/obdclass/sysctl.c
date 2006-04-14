@@ -107,8 +107,6 @@ static ctl_table obd_table[] = {
                 &proc_dostring, &sysctl_string },
         {OBD_MEMUSED, "memused", (int *)&obd_memory.counter,
                 sizeof(int), 0644, NULL, &proc_dointvec},
-        {OBD_SYNCFILTER, "filter_sync_on_commit", &obd_sync_filter, sizeof(int),
-                0644, NULL, &proc_dointvec},
         {OBD_LDLM_TIMEOUT, "ldlm_timeout", &ldlm_timeout, sizeof(int), 0644,
                 NULL, &proc_set_timeout},
         { 0 }

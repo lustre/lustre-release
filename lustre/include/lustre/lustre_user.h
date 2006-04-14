@@ -45,6 +45,8 @@
 #define EXT3_IOC_SETVERSION_OLD         _IOW('v', 2, long)
 #endif
 
+struct obd_statfs;
+
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)

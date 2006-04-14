@@ -94,10 +94,9 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
         else
                 pc = &ptlrpcd_recovery_pc;
 
-        ptlrpc_set_add_new_req(pc->pc_set, req);
         req->rq_ptlrpcd_data = pc;
-
-        ptlrpcd_wake(req);
+        ptlrpc_set_add_new_req(pc->pc_set, req);
+        wake_up(&pc->pc_waitq);
 }
 
 static int ptlrpcd_check(struct ptlrpcd_ctl *pc)

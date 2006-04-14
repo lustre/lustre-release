@@ -692,6 +692,7 @@ static int ll_ra_stats_seq_show(struct seq_file *seq, void *v)
                 [RA_STAT_ZERO_WINDOW] = "zero size window",
                 [RA_STAT_EOF] = "read-ahead to EOF",
                 [RA_STAT_MAX_IN_FLIGHT] = "hit max r-a issue",
+                [RA_STAT_WRONG_GRAB_PAGE] = "wrong page from grab_cache_page",
         };
 
         do_gettimeofday(&now);

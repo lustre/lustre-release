@@ -55,6 +55,8 @@ int llog_cleanup(struct llog_ctxt *ctxt)
                 rc = CTXTP(ctxt, cleanup)(ctxt);
 
         ctxt->loc_obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
+        if (ctxt->loc_exp)
+                class_export_put(ctxt->loc_exp);
         OBD_FREE(ctxt, sizeof(*ctxt));
 
         RETURN(rc);
@@ -88,7 +90,7 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
 
         obd->obd_llog_ctxt[index] = ctxt;
         ctxt->loc_obd = obd;
-        ctxt->loc_exp = disk_obd->obd_self_export;
+        ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
         ctxt->loc_idx = index;
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);

@@ -181,6 +181,31 @@ static ssize_t ll_special_write(struct file *filp, const char *buf,
         RETURN(rc);
 }
 
+#ifdef HAVE_UNLOCKED_IOCTL
+static long ll_special_unlocked_ioctl(struct file *filp, unsigned int cmd,
+                                     unsigned long arg)
+{
+        struct file_operations **pfop;
+        int rc = -ENOTTY;
+
+        lock_kernel();
+        pfop = get_save_fops(filp, INODE_OPS);
+        unlock_kernel();
+        if (pfop && *pfop && (*pfop)->unlocked_ioctl) {
+                struct file_operations *sfops = filp->f_op;
+
+                rc = (*pfop)->unlocked_ioctl(filp, cmd, arg);
+
+                /* sometimes, file_operations will be changed in ioctl */
+                lock_kernel();
+                save_fops(filp, filp->f_dentry->d_inode, sfops);
+                unlock_kernel();
+        }
+
+        RETURN(rc);
+}
+#endif
+
 static int ll_special_ioctl(struct inode *inode, struct file *filp,
                             unsigned int cmd, unsigned long arg)
 {
@@ -349,6 +374,9 @@ struct file_operations ll_special_blk_inode_fops = {
         .read           = ll_special_read,
         .write          = ll_special_write,
         .ioctl          = ll_special_ioctl,
+#ifdef HAVE_UNLOCKED_IOCTL
+        .unlocked_ioctl = ll_special_unlocked_ioctl,
+#endif
         .open           = ll_special_open,
         .release        = ll_special_release,
         .mmap           = ll_special_mmap,

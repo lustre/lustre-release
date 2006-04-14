@@ -102,7 +102,7 @@ struct lov_stripe_md {
         struct {
                 /* Public members. */
                 __u64 lw_object_id;        /* lov object id */
-                __u64 lw_object_gr;        /* lov object id */
+                __u64 lw_object_gr;        /* lov object group */
                 __u64 lw_maxbytes;         /* maximum possible file size */
                 unsigned long lw_xfersize; /* optimal transfer size */
 
@@ -159,7 +159,7 @@ struct brw_page {
 enum async_flags {
         ASYNC_READY = 0x1, /* ap_make_ready will not be called before this
                               page is added to an rpc */
-        ASYNC_URGENT = 0x2,
+        ASYNC_URGENT = 0x2, /* page must be put into an RPC before return */
         ASYNC_COUNT_STABLE = 0x4, /* ap_refresh_count will not be called
                                      to give the caller a chance to update
                                      or cancel the size of the io */
@@ -305,8 +305,10 @@ struct filter_obd {
 #define OSC_MAX_DIRTY_MB_MAX   2048     /* totally arbitrary */
 
 struct mdc_rpc_lock;
+struct obd_import;
 struct client_obd {
-        struct obd_import       *cl_import;
+        struct obd_uuid          cl_target_uuid;
+        struct obd_import       *cl_import; /* ptlrpc connection state */
         struct semaphore         cl_sem;
         int                      cl_conn_count;
         /* max_mds_easize is purely a performance thing so we don't have to
@@ -366,8 +368,8 @@ struct client_obd {
 
         /* used by quotacheck */
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
-        struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
 };
+#define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
 #define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
 
@@ -377,9 +379,8 @@ struct mgs_obd {
         struct super_block              *mgs_sb;
         struct dentry                   *mgs_configs_dir;
         struct dentry                   *mgs_fid_de;
-        spinlock_t                       mgs_fs_db_lock; /* add/remove db's */
         struct list_head                 mgs_fs_db_list;
-        struct semaphore                 mgs_log_sem;    /* unused */
+        struct semaphore                 mgs_sem;
 };
 
 struct mds_obd {
@@ -701,17 +702,19 @@ struct obd_device {
 #define OBD_LLOG_FL_SENDNOW     0x0001
 
 
+enum obd_cleanup_stage {
 /* Special case hack for MDS LOVs */
-#define OBD_CLEANUP_EARLY       0
+        OBD_CLEANUP_EARLY,
 /* Precleanup stage 1, we must make sure all exports (other than the
    self-export) get destroyed. */
-#define OBD_CLEANUP_EXPORTS     1
+        OBD_CLEANUP_EXPORTS,
 /* Precleanup stage 2,  do other type-specific cleanup requiring the
    self-export. */
-#define OBD_CLEANUP_SELF_EXP    2
+        OBD_CLEANUP_SELF_EXP,
 /* FIXME we should eliminate the "precleanup" function and make them stages
    of the "cleanup" function. */
-#define OBD_CLEANUP_OBD         3
+        OBD_CLEANUP_OBD,
+};
 
 struct obd_ops {
         struct module *o_owner;
@@ -724,7 +727,8 @@ struct obd_ops {
         int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
         int (*o_detach)(struct obd_device *dev);
         int (*o_setup) (struct obd_device *dev, struct lustre_cfg *cfg);
-        int (*o_precleanup)(struct obd_device *dev, int cleanup_stage);
+        int (*o_precleanup)(struct obd_device *dev,
+                            enum obd_cleanup_stage cleanup_stage);
         int (*o_cleanup)(struct obd_device *dev);
         int (*o_process_config)(struct obd_device *dev, obd_count len,
                                 void *data);

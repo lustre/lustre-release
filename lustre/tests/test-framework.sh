@@ -41,6 +41,7 @@ init_test_env() {
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
+    export LPROC=/proc/fs/lustre
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
@@ -70,13 +71,11 @@ init_test_env() {
 }
 
 unload_modules() {
-    $LCTL dk $TMP/debug
-    $LCTL modules | awk '{ print $2 }' | xargs rmmod >/dev/null 2>&1 
+    lsmod | grep lnet > /dev/null && $LCTL dk $TMP/debug
+    local MODULES=`$LCTL modules | awk '{ print $2 }'`
+    rmmod $MODULES >/dev/null 2>&1 
      # do it again, in case we tried to unload ksocklnd too early
-    LNET=$(lsmod | grep -c lnet) 
-    if [ $LNET -ne 0 ]; then
-	$LCTL modules | awk '{ print $2 }' | xargs rmmod
-    fi
+    lsmod | grep lnet > /dev/null && rmmod $MODULES >/dev/null 2>&1 
     lsmod | grep lnet && echo "modules still loaded" && return 1
 
     LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked"`
@@ -108,7 +107,9 @@ start() {
 	echo mount -t lustre $@ ${device} /mnt/${facet} 
         echo Start of ${device} on ${facet} failed ${RC}
     else 
-	label=`do_facet ${facet} e2label ${device}`
+	do_facet ${facet} sync
+	# need the awk in case running with -v 
+	label=`do_facet ${facet} "e2label ${device}" | awk '{print $(NF)}'`
 	eval export ${facet}_svc=${label}
 	eval export ${facet}_dev=${device}
 	eval export ${facet}_opt=\"$@\"
@@ -120,14 +121,14 @@ start() {
 stop() {
     facet=$1
     shift
-    local running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts"`
+    # the following line fails with VERBOSE set 
+    local running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts" | awk '{print $(NF)}'`
     if [ $running -ne 0 ]; then
 	echo "Stopping /mnt/${facet} (opts:$@)"
 	do_facet ${facet} umount -d $@ /mnt/${facet}
     fi
-    #do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
-    #    --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
-    #    $@ --cleanup $XMLCONFIG
+    #do_facet ${facet} umount -d $@ /mnt/${facet} >> /dev/null 2>&1 || :
+    [ -e /proc/fs/lustre ] && grep "ST " /proc/fs/lustre/devices && echo "service didn't stop" && exit 1
     return 0
 }
 
@@ -135,22 +136,21 @@ zconf_mount() {
     local OPTIONS
     local client=$1
     local mnt=$2
-    if [ -z "$mnt" ]; then
-	echo No mount point given: zconf_mount $*
-	exit 1
-    fi
     # Only supply -o to mount if we have options
     if [ -n "$MOUNTOPT" ]; then
         OPTIONS="-o $MOUNTOPT"
     fi
+    local device=`facet_nid mgs`:/$FSNAME
+    if [ -z "$mnt" -o -z "$FSNAME" ]; then
+	echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
+	exit 1
+    fi
 
-    echo "Starting client: $OPTIONS `facet_nid mgs`:/$FSNAME $mnt" 
+    echo "Starting client: $OPTIONS $device $mnt" 
     do_node $client mkdir -p $mnt
-    do_node $client mount -t lustre $OPTIONS \
-	`facet_nid mgs`:/$FSNAME $mnt || return 1
+    do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
 
     do_node $client "sysctl -w lnet.debug=$PTLDEBUG; sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }"
-
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
     return 0
 }
@@ -159,7 +159,11 @@ zconf_umount() {
     client=$1
     mnt=$2
     [ "$3" ] && force=-f
-    do_node $client umount $force $mnt
+    local running=`do_node $client "grep -c $mnt' ' /proc/mounts" | awk '{print $(NF)}'`
+    if [ $running -ne 0 ]; then
+	echo "Stopping client $mnt (opts:$force)"
+	do_node $client umount $force $mnt
+    fi
 }
 
 shutdown_facet() {
@@ -396,16 +400,6 @@ do_facet() {
     do_node $HOST $@
 }
 
-add_facet() {
-    local facet=$1
-    shift
-    echo "add facet $facet: `facet_host $facet`"
-    do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
-        --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
-    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
-        --nettype lnet $PORT_OPT
-}
-
 add() {
     local facet=$1
     shift
@@ -413,16 +407,6 @@ add() {
     stop ${facet} -f
     rm -f ${facet}active
     $MKFS $*
-}
-
-add_client() {
-    local MOUNT_OPTS
-    local facet=$1
-    mds=$2
-    shift; shift
-    [ "x$CLIENTOPT" != "x" ] && MOUNT_OPTS="--clientoptions $CLIENTOPT"
-    add_facet $facet --lustre_upcall $UPCALL
-    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $* $MOUNT_OPTS
 }
 
 
@@ -561,7 +545,7 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
-	sysctl -w lustre.fail_loc=0 > /dev/null 2>&1 || true
+	sysctl -w lustre.fail_loc=0 2> /dev/null || true
 	echo "${TESTSUITE}: **** FAIL:" $@
 	log "FAIL: $@"
 	exit 1
@@ -629,6 +613,7 @@ equals_msg() {
 
 log() {
 	echo "$*"
+	lsmod | grep lnet > /dev/null || modprobe lnet
 	$LCTL mark "$*" 2> /dev/null || true
 }
 

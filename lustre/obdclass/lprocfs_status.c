@@ -339,7 +339,7 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
         imp_state_name = ptlrpc_import_state_name(imp->imp_state);
         *eof = 1;
         return snprintf(page, count, "%s\t%s%s\n",
-                        imp->imp_target_uuid.uuid, imp_state_name,
+                        obd2cli_tgt(obd), imp_state_name,
                         imp->imp_deactive ? "\tDEACTIVATED" : "");
 }
 

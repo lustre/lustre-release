@@ -113,6 +113,11 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         int log_pri = D_HA;
         ENTRY;
 
+        if (IS_ERR(handle)) {
+                LASSERT(rc != 0);
+                RETURN(rc);
+        }
+
         /* if the export has already been failed, we have no last_rcvd slot */
         if (req->rq_export->exp_failed) {
                 CWARN("commit transaction for disconnected client %s: rc %d\n",
@@ -123,9 +128,6 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                         GOTO(commit, rc);
                 RETURN(rc);
         }
-
-        if (IS_ERR(handle))
-                RETURN(rc);
 
         if (handle == NULL) {
                 /* if we're starting our own xaction, use our own inode */
@@ -511,7 +513,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
             rec->ur_eadata != NULL) {
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
                 need_lock = 0;
         }
 
@@ -652,7 +654,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         case 1:
                 if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
                     rec->ur_eadata != NULL)
-                        up(&inode->i_sem);
+                        UNLOCK_INODE_MUTEX(inode);
                 l_dput(de);
                 if (locked) {
                         if (rc) {
@@ -809,7 +811,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 int rdev = rec->ur_rdev;
                 handle = fsfilt_start(obd, dir, FSFILT_OP_MKNOD, NULL);
                 if (IS_ERR(handle))
-                        GOTO(cleanup, (handle = NULL, rc = PTR_ERR(handle)));
+                        GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
                 EXIT;
                 break;
@@ -869,10 +871,10 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         int lmm_size = sizeof(lmm);
                         rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1);
                         if (rc > 0) {
-                                down(&inode->i_sem);
+                                LOCK_INODE_MUTEX(inode);
                                 rc = fsfilt_set_md(obd, inode, handle,
                                                    &lmm, lmm_size, "lov");
-                                up(&inode->i_sem);
+                                UNLOCK_INODE_MUTEX(inode);
                         }
                         if (rc)
                                 CERROR("error on copy stripe info: rc = %d\n",
@@ -1307,7 +1309,7 @@ retry_locks:
         if (rc > 0)
                 goto retry_locks;
         if (rc < 0) {
-                cleanup_phase = 3;
+                cleanup_phase = 2;
                 GOTO(cleanup, rc);
         }
 
@@ -1341,8 +1343,8 @@ void mds_reconstruct_generic(struct ptlrpc_request *req)
  * part thereof, because we don't have the inode to check for link
  * count/open status until after it is locked.
  *
- * For lock ordering, caller must get child->i_sem first, then pending->i_sem
- * before starting journal transaction.
+ * For lock ordering, caller must get child->i_mutex first, then
+ * pending->i_mutex before starting journal transaction.
  *
  * returns 1 on success
  * returns 0 if we lost a race and didn't make a new link
@@ -1362,9 +1364,9 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
         LASSERT(inode != NULL);
         LASSERT(!mds_inode_is_orphan(inode));
 #ifndef HAVE_I_ALLOC_SEM
-        LASSERT(down_trylock(&inode->i_sem) != 0);
+        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
 #endif
-        LASSERT(down_trylock(&pending_dir->i_sem) != 0);
+        LASSERT(TRYLOCK_INODE_MUTEX(pending_dir) == 0);
 
         fidlen = mds_fid2str(fidname, inode->i_ino, inode->i_generation);
 
@@ -1540,8 +1542,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
             child_inode->i_nlink == 1) {
                 if (mds_orphan_open_count(child_inode) > 0) {
                         /* need to lock pending_dir before transaction */
-                        down(&mds->mds_pending_dir->d_inode->i_sem);
-                        cleanup_phase = 5; /* up(&pending_dir->i_sem) */
+                        LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
+                        cleanup_phase = 5; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
                 } else if (S_ISREG(child_inode->i_mode)) {
                         mds_pack_inode2fid(&body->fid1, child_inode);
                         mds_pack_inode2body(body, child_inode);
@@ -1636,7 +1638,7 @@ cleanup:
                                    "unlinked", 0, NULL);
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
-                up(&mds->mds_pending_dir->d_inode->i_sem);
+                UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
         case 4: /* child inode semaphore */
                 MDS_UP_READ_ORPHAN_SEM(child_inode);
         case 3: /* child ino-reuse lock */
@@ -1769,10 +1771,8 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -EROFS);
 
         handle = fsfilt_start(obd, de_tgt_dir->d_inode, FSFILT_OP_LINK, NULL);
-        if (IS_ERR(handle)) {
-                rc = PTR_ERR(handle);
-                GOTO(cleanup, rc);
-        }
+        if (IS_ERR(handle))
+                GOTO(cleanup, rc = PTR_ERR(handle));
 
         rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
         if (rc && rc != -EPERM && rc != -EACCES)
@@ -2103,8 +2103,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
             new_inode->i_nlink == 1) {
                 if (mds_orphan_open_count(new_inode) > 0) {
                         /* need to lock pending_dir before transaction */
-                        down(&mds->mds_pending_dir->d_inode->i_sem);
-                        cleanup_phase = 4; /* up(&pending_dir->i_sem) */
+                        LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
+                        cleanup_phase = 4; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
                 } else if (S_ISREG(new_inode->i_mode)) {
                         mds_pack_inode2fid(&body->fid1, new_inode);
                         mds_pack_inode2body(body, new_inode);
@@ -2167,7 +2167,7 @@ cleanup:
 
         switch (cleanup_phase) {
         case 4:
-                up(&mds->mds_pending_dir->d_inode->i_sem);
+                UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
         case 3:
                 MDS_UP_READ_ORPHAN_SEM(new_inode);
         case 2:

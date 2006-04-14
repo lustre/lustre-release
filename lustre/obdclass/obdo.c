@@ -247,8 +247,11 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 LTIME_S(dst->i_ctime) = src->o_ctime;
         if (valid & OBD_MD_FLSIZE)
                 dst->i_size = src->o_size;
-        if (valid & OBD_MD_FLBLOCKS) /* allocation of space */
+        if (valid & OBD_MD_FLBLOCKS) { /* allocation of space */
                 dst->i_blocks = src->o_blocks;
+                if (dst->i_blocks < src->o_blocks) /* overflow */
+                        dst->i_blocks = -1;
+        }
         if (valid & OBD_MD_FLBLKSZ)
                 dst->i_blksize = src->o_blksize;
         if (valid & OBD_MD_FLTYPE)

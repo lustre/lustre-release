@@ -72,6 +72,7 @@ struct obd_export {
         int                       exp_flags;
         unsigned int              exp_failed:1,
                                   exp_disconnected:1,
+                                  exp_connecting:1,
                                   exp_replay_needed:1,
                                   exp_libclient:1; /* liblustre client? */
         union {
@@ -81,7 +82,6 @@ struct obd_export {
         } u;
 };
 
-#define exp_mgs_data    u.eu_mgs_data
 #define exp_mds_data    u.eu_mds_data
 #define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data

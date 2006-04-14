@@ -223,7 +223,6 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_ASYNC       0x40
 
 /* Connect flags */
-#define OBD_CONNECT_RDONLY       0x1ULL
 #define OBD_CONNECT_RDONLY       0x1ULL /* client allowed read-only access */
 #define OBD_CONNECT_INDEX        0x2ULL /* connect to specific LOV idx */
 #define OBD_CONNECT_GRANT        0x8ULL /* OSC acquires grant at connect */
@@ -387,7 +386,6 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         __u32 lmm_stripe_count;   /* num stripes in use for this object */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
-
 
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
@@ -847,9 +845,7 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define FMODE_READ               00000001
 #define FMODE_WRITE              00000002
 #endif
-#ifndef FMODE_EXEC
-#define FMODE_EXEC               00000004
-#endif
+#define MDS_FMODE_EXEC           00000004
 #define MDS_OPEN_CREAT           00000100
 #define MDS_OPEN_EXCL            00000200
 #define MDS_OPEN_TRUNC           00001000

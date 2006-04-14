@@ -95,7 +95,6 @@ unsigned int obd_timeout = 100; /* seconds */
 unsigned int ldlm_timeout = 20; /* seconds */
 unsigned int obd_health_check_timeout = 120; /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
-unsigned int obd_sync_filter; /* = 0, don't sync by default */
 
 DECLARE_WAIT_QUEUE_HEAD(obd_race_waitq);
 
@@ -383,9 +382,7 @@ EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
 EXPORT_SYMBOL(obd_health_check_timeout);
 EXPORT_SYMBOL(obd_lustre_upcall);
-EXPORT_SYMBOL(obd_sync_filter);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
-EXPORT_SYMBOL(ptlrpc_abort_inflight_superhack);
 
 struct proc_dir_entry *proc_lustre_root;
 EXPORT_SYMBOL(proc_lustre_root);
@@ -419,7 +416,8 @@ EXPORT_SYMBOL(class_handle_hash);
 EXPORT_SYMBOL(class_handle_unhash);
 EXPORT_SYMBOL(class_handle2object);
 
-/* config.c */
+/* obd_config.c */
+EXPORT_SYMBOL(class_incref);
 EXPORT_SYMBOL(class_decref);
 EXPORT_SYMBOL(class_get_profile);
 EXPORT_SYMBOL(class_del_profile);
@@ -480,7 +478,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 if (obd->obd_stopping)
                         continue;
 
-                atomic_inc(&obd->obd_refcount);
+                class_incref(obd);
                 spin_unlock(&obd_dev_lock);
 
                 if (obd_health_check(obd)) {
@@ -756,11 +754,9 @@ int init_obdclass(void)
 /* liblustre doesn't call cleanup_obdclass, apparently.  we carry on in this
  * ifdef to the end of the file to cover module and versioning goo.*/
 #ifdef __KERNEL__
-
 static void cleanup_obdclass(void)
 {
         int i;
-        int leaked;
         int lustre_unregister_fs(void);
         ENTRY;
 
@@ -786,11 +782,6 @@ static void cleanup_obdclass(void)
 
         class_handle_cleanup();
         class_exit_uuidlist();
-
-        leaked = atomic_read(&obd_memory);
-        CDEBUG(leaked ? D_ERROR : D_INFO,
-               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
-
         EXIT;
 }
 

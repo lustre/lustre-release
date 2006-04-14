@@ -173,7 +173,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* Internal mgs setup */
         mgs_init_fsdb_list(obd);
-        sema_init(&mgs->mgs_log_sem, 1);
+        sema_init(&mgs->mgs_sem, 1);
 
         /* Start the service threads */
         mgs->mgs_service =
@@ -188,7 +188,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_fs, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(obd, mgs->mgs_service, "lustre_mgs");
+        rc = ptlrpc_start_threads(obd, mgs->mgs_service, "ll_mgs");
         if (rc)
                 GOTO(err_thread, rc);
 
@@ -196,7 +196,6 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lprocfs_init_vars(mgs, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
-        ldlm_timeout = 6;
         ping_evictor_start();
 
         LCONSOLE_INFO("MGS %s started\n", obd->obd_name);
@@ -219,17 +218,33 @@ err_put:
         return rc;
 }
 
-static int mgs_precleanup(struct obd_device *obd, int stage)
+static int mgs_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
         ENTRY;
 
         switch (stage) {
+        case OBD_CLEANUP_EARLY:
+        case OBD_CLEANUP_EXPORTS:
+                break;
         case OBD_CLEANUP_SELF_EXP:
-                mgs_cleanup_fsdb_list(obd);
                 llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
                 rc = obd_llog_finish(obd, 0);
+                break;
+        case OBD_CLEANUP_OBD:
+                break;
         }
+        RETURN(rc);
+}
+
+static int mgs_ldlm_nsfree(void *data)
+{
+        struct ldlm_namespace *ns = (struct ldlm_namespace *)data;
+        int rc;
+        ENTRY;
+
+        ptlrpc_daemonize("ll_mgs_nsfree");
+        rc = ldlm_namespace_free(ns, 1 /* obd_force should always be on */);
         RETURN(rc);
 }
 
@@ -245,26 +260,28 @@ static int mgs_cleanup(struct obd_device *obd)
                 RETURN(0);
 
         save_dev = lvfs_sbdev(mgs->mgs_sb);
+        
+        ptlrpc_unregister_service(mgs->mgs_service);
 
         lprocfs_obd_cleanup(obd);
 
-        ptlrpc_unregister_service(mgs->mgs_service);
+        mgs_cleanup_fsdb_list(obd);
 
         mgs_fs_cleanup(obd);
 
         server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
         mgs->mgs_sb = NULL;
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
-
-        LASSERT(!obd->obd_recovering);
+        /* Free the namespace in it's own thread, so that if the 
+           ldlm_cancel_handler put the last mgs obd ref, we won't 
+           deadlock here. */
+        kernel_thread(mgs_ldlm_nsfree, obd->obd_namespace, CLONE_VM | CLONE_FS);
 
         lvfs_clear_rdonly(save_dev);
 
         fsfilt_put_ops(obd->obd_fsops);
 
         LCONSOLE_INFO("%s has stopped.\n", obd->obd_name);
-
         RETURN(0);
 }
 

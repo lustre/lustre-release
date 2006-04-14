@@ -1,19 +1,141 @@
-03-16-2006  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.6.1
-       * Support for newer kernels: 2.6.9-34.EL (RHEL 4), 2.6.5-7.252 (SLES 9)
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.7
+       * bug fixes
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 5719, 9635, 9792, 9684, 
+Description: OST (or MDS) trips assertions in (re)connection under heavy load
+Details    : If a server is under heavy load and cannot reply to new
+	     connection requests before the client resends the (re)connect,
+	     the connection handling code can behave badly if two service
+	     threads are concurrently handing separate (re)connections from
+	     the same client.  Add better locking to the connection handling
+	     code, and ensure that only a single connection will be processed
+	     for a given client UUID, even if the lock is dropped.
+
+Severity   : enhancement
+Bugzilla   : 3627
+Description: add TCP zero-copy support to kernel
+Details    : Add support to the kernel TCP stack to allow zero-copy bulk
+	     sends if the hardware supports scatter-gather and checksumming.
+	     This allows socklnd to do client-write and server-read more
+	     efficiently and reduce CPU utilization from skbuf copying.
+
+Severity   : minor
+Frequency  : only if NFS exporting from client
+Bugzilla   : 10258
+Description: NULL pointer deref in ll_iocontrol() if chattr mknod file
+Details    : If setting attributes on a file created under NFS that had
+	     never been opened it would be possible to oops the client
+	     if the file had no objects.
+
+Severity   : minor
+Frequency  : always for liblustre
+Bugzilla   : 10290
+Description: liblustre client does MDS+OSTs setattr RPC for each write
+Details    : When doing a write from a liblustre client, the client
+	     incorrectly issued an RPC to the MDS and each OST the file was
+	     striped over in order to update the timestamps.  When writing
+	     with small chunks and many clients this could overwhelm the MDS
+	     with RPCs.  In all cases it would slow down the write because
+	     these RPCs are unnecessary.
+
+Severity   : enhancement
+Bugzilla   : 9340
+Description: allow number of MDS service threads to be changed at module load
+Details    : It is now possible to change the number of MDS service threads
+	     running.  Adding "options mds mds_num_threads=N" will set the
+	     number of threads for the next time Lustre is restarted (assuming
+	     the "mds" module is also reloaded at that time).  The default
+	     number of threads will stay the same, 32 for most systems.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 10300
+Description: OST crash if filesystem is unformatted or corrupt
+Details    : If an OST is started on a device that has never been formatted
+	     or if the filesystem is corrupt and cannot even mount then the
+	     error handling cleanup routines would dereference a NULL pointer.
+
+Severity   : medium
+Frequency  : rare
+Bugzilla   : 10047
+Description: NULL pointer deref in llap_from_page.
+Details    : get_cache_page_nowait can return a page with NULL (or otherwise
+	     incorrect) mapping if the page was truncated/reclaimed while it was
+	     searched for. Check for this condition and skip such pages when
+	     doing readahead. Introduce extra check to llap_from_page() to
+	     verify page->mapping->host is non-NULL (so page is not anonymous).
+
+Severity   : minor
+Frequency  : Sometimes when using sys_sendfile
+Bugzilla   : 7020
+Description: "page not covered by a lock" warnings from ll_readpage
+Details    : sendfile called ll_readpage without right page locks present.
+	     Now we introduced ll_file_sendfile that does necessary locking
+	     around call to generic_file_sendfile() much like we do in
+	     ll_file_read().
+
+Severity   : medium
+Frequency  : with certain MDS communication failures at client mount time
+Bugzilla   : 10268
+Description: NULL pointer deref after failed client mount
+Details    : a client connection request may delayed by the network layer
+	     and not be sent until after the PTLRPC layer has timed out the
+	     request.  If the client fails the mount immediately it will try
+	     to clean up before the network times out the request.  Add a
+	     reference from the request import to the obd device and delay
+	     the cleanup until the network drops the request.
+
+Severity   : medium
+Frequency  : occasionally during client (re)connect
+Bugzilla   : 9387
+Description: assertion failure during client (re)connect
+Details    : processing a client connection request may be delayed by the
+	     client or server longer than the client connect timeout.  This
+	     causes the client to resend the connection request.  If the
+	     original connection request is replied in this interval, the
+	     client may trip an assertion failure in ptlrpc_connect_interpret()
+	     which thought it would be the only running connect process.
+
+Severity   : medium
+Frequency  : only with obd_echo servers and clients that are rebooted
+Bugzilla   : 10140
+Description: kernel BUG accessing uninitialized data structure
+Details    : When running an obd_echo server it did not start the ping_evictor
+	     thread, and when a client was evicted an uninitialized data
+	     structure was accessed.  Start the ping_evictor in the RPC
+	     service startup instead of the OBD startup.
+
+Severity   : enhancement
+Bugzilla   : 10393 (patchless)
+Description: Remove dependency on various unexported kernel interfaces.
+Details    : No longer need reparent_to_init, exit_mm, exit_files,
+	     sock_getsockopt, filemap_populate, FMODE_EXEC, put_filp.
+
+Severity   : minor
+Frequency  : rare (only users of deprecated and unsupported LDAP config)
+Bugzilla   : 9337
+Description: write_conf for zeroconf mount queried LDAP incorrectly for client
+Details    : LDAP apparently contains 'lustreName' attributes instead of
+	     'name'.  A simple remapping of the name is sufficient.
+
+------------------------------------------------------------------------------
 
 02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * WIRE PROTOCOL CHANGE.  This version of Lustre networking WILL NOT
-	 INTEROPERATE with older versions automatically.  Please read the 
+	 INTEROPERATE with older versions automatically.  Please read the
 	 user documentation before upgrading any part of a live system.
        * WARNING: Lustre networking configuration changes are required with
 	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052
 	 for details.
        * bug fixes
-       * Support for newer kernels: 2.6.9-22.0.2.EL (RHEL 4),
-         2.6.5-7.244 (SLES 9) - same as 1.4.5.2.
+       * Support for newer kernels:
+	2.6.9-22.0.2.EL (RHEL 4),
+	2.6.5-7.244 (SLES 9) - same as 1.4.5.2.
+	2.6.12.6 vanilla (kernel.org)
 
 
 Severity   : enhancement
@@ -25,6 +147,17 @@ Details    : LNET is new networking infrastructure for Lustre, it includes
 	     between different network fabrics.  Lustre Networking Devices
 	     (LNDs) for the supported network fabrics have also been
 	     created for this new infrastructure.
+
+Severity   : enhancement
+Description: Introduced Access control lists
+Details    : clients can set ACLs on files and directories in order to have
+	     more fine-grained permissions than the standard Unix UGO+RWX.
+	     The MDS must be started with the "-o acl" mount option.
+
+Severity   : enhancement
+Description: Introduced filesystem quotas
+Details    : Administrators may now establish per-user quotas on the
+	     filesystem.
 
 Severity   : enhancement
 Bugzilla   : 7982
@@ -604,7 +737,6 @@ Description: Implement 'lfs df' to report actual free space on per-OST basis
 Details    : Add sub-command 'df' on 'lfs' to report the disk space usage of
 	     MDS/OSDs. Usage: lfs df [-i][-h]. Command Options: '-i' to report
 	     usage of objects; '-h' to report in human readable format.
-
 
 ------------------------------------------------------------------------------
 

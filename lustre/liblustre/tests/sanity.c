@@ -468,7 +468,7 @@ int t18(char *name)
         char buf[128];
         int fd, i;
         struct stat statbuf[3];
-        ENTRY("write should change mtime/atime");
+        ENTRY("write should change mtime/ctime");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t18_file", lustre_path);
 
         for (i = 0; i < 3; i++) {
@@ -486,13 +486,13 @@ int t18(char *name)
                         printf("Error stat\n");
                         return(1);
                 }
-                printf("atime %lu, mtime %lu\n",
-                        statbuf[i].st_atime, statbuf[i].st_mtime);
+                printf("ctime %lu, mtime %lu\n",
+                        statbuf[i].st_ctime, statbuf[i].st_mtime);
                 sleep(2);
         }
 
         for (i = 1; i < 3; i++) {
-                if ((statbuf[i].st_atime <= statbuf[i-1].st_atime) ||
+                if ((statbuf[i].st_ctime <= statbuf[i-1].st_ctime) ||
                     (statbuf[i].st_mtime <= statbuf[i-1].st_mtime)) {
                         printf("time error\n");
                         return(-1);
@@ -1035,6 +1035,7 @@ int t51(char *name)
         printf("\n");
         LEAVE();
 }
+
 /*
  * check atime update during read
  */
@@ -1078,15 +1079,90 @@ int t52(char *name)
         LEAVE();
 }
 
+#define NEW_TIME        10000
+int t53(char *name)
+{
+        char file[MAX_PATH_LENGTH] = "";
+        struct utimbuf times;   /* struct. buffer for utime() */
+        struct stat stat_buf;   /* struct buffer to hold file info. */
+        time_t mtime, atime;
+ 
+        ENTRY("mtime/atime should be updated by utime() call");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t53_file", lustre_path);
+
+        t_echo_create(file, "check mtime/atime update by utime() call");
+ 
+        /* Initialize the modification and access time in the times arg */
+        times.actime = NEW_TIME+10;
+        times.modtime = NEW_TIME;
+ 
+        /* file modification/access time */
+        utime(file, &times);
+ 
+        if (stat(file, &stat_buf) < 0) {
+                printf("stat(2) of %s failed, error:%d %s\n",
+                        file, errno, strerror(errno)); 
+        }
+        mtime = stat_buf.st_mtime;
+        atime = stat_buf.st_atime;
+ 
+        if ((mtime == NEW_TIME) && (atime == NEW_TIME + 10)) {
+                t_unlink(file);
+                LEAVE();
+        }
+
+        printf("mod time %ld, expected %ld\n", mtime, (long)NEW_TIME);
+        printf("acc time %ld, expected %ld\n", atime, (long)NEW_TIME + 10);
+ 
+        t_unlink(file);
+        return (-1);
+}
+
+int t54(char *name)
+{
+        char file[MAX_PATH_LENGTH] = "";
+        struct flock lock;
+        int fd, err;
+
+        ENTRY("fcntl should return 0 when succeed in getting flock");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t54_file", lustre_path);
+
+        t_echo_create(file, "fcntl should return 0 when succeed");
+
+        fd = open(file, O_RDWR);
+        if (fd < 0) {
+                printf("\nerror open file: %s\n", strerror(errno));
+                return(-1);
+        }
+        lock.l_type   = F_WRLCK;
+        lock.l_start  = 0;
+        lock.l_whence = 0;
+        lock.l_len    = 1;
+        if ((err = t_fcntl(fd, F_SETLKW, &lock)) != 0) {
+                fprintf(stderr, "fcntl returned: %d (%s)\n", 
+                        err, strerror(err));
+                close(fd);
+                t_unlink(file);
+                return (-1);
+        }
+
+        lock.l_type   = F_UNLCK;
+        t_fcntl(fd, F_SETLKW, &lock);
+        close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
 
 void usage(char *cmd)
 {
-        printf("\n");
-        printf("Usage: \t%s --target mdsnid:/mdsname/profile\n", cmd);
-        printf("       \t%s --dumpfile dumpfile\n", cmd);
+        printf("\n"
+               "usage: %s [--only {test}] --target mdsnid:/mdsname/profile\n",
+               cmd);
+        printf("       %s --dumpfile dumpfile\n", cmd);
         exit(-1);
 }
 
@@ -1121,6 +1197,8 @@ struct testlist {
         { t50, "50" },
         { t50b, "50b" },
         { t51, "51" },
+        { t53, "53" },
+        { t54, "54" },
         { NULL, NULL }
 };
 
@@ -1189,12 +1267,21 @@ int main(int argc, char * const argv[])
                         run = 0;
                         len = strlen(test->name);
                         for (i = 0; i < numonly; i++) {
-                                if (len < strlen(only[i]))
+                                int olen = strlen(only[i]);
+
+                                if (len < olen)
                                         continue;
-                                if (strncmp(only[i], test->name,
-                                            strlen(only[i])) == 0) {
-                                        run = 1;
-                                        break;
+
+                                if (strncmp(only[i], test->name, olen) == 0) {
+                                        switch(test->name[olen]) {
+                                        case '0': case '1': case '2': case '3':
+                                        case '4': case '5': case '6': case '7':
+                                        case '8': case '9':
+                                                break;
+                                        default:
+                                                run = 1;
+                                                break;
+                                        }
                                 }
                         }
                 }

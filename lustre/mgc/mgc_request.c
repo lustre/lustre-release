@@ -28,7 +28,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_MGC
-#define D_MGC D_CONFIG/*|D_WARNING*/
+#define D_MGC D_CONFIG /*|D_WARNING*/
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -63,6 +63,10 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
                 CERROR("fsname too long: %s\n", logname);
                 return -EINVAL;
         }
+        if (len <= 0) {
+                CERROR("missing fsname: %s\n", logname);
+                return -EINVAL;
+        }
         memcpy(&resname, logname, len);
 
         memset(res_id, 0, sizeof(*res_id));
@@ -78,19 +82,20 @@ EXPORT_SYMBOL(mgc_logname2resid);
 static struct list_head config_llog_list = LIST_HEAD_INIT(config_llog_list);
 static spinlock_t       config_list_lock = SPIN_LOCK_UNLOCKED;
 
+/* Take a reference to a config log */
 static int config_log_get(struct config_llog_data *cld)
 {
         ENTRY;
         CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
                atomic_read(&cld->cld_refcount));
-        atomic_inc(&cld->cld_refcount);
-        if (cld->cld_stopping) {
-                atomic_dec(&cld->cld_refcount);
+        if (cld->cld_stopping)
                 RETURN(1);
-        }
+        atomic_inc(&cld->cld_refcount);
         RETURN(0);
 }
 
+/* Drop a reference to a config log.  When no longer referenced, 
+   we can free the config log data */
 static void config_log_put(struct config_llog_data *cld)
 {
         ENTRY;
@@ -107,7 +112,8 @@ static void config_log_put(struct config_llog_data *cld)
         EXIT;
 }
 
-static struct config_llog_data *config_log_find(char *logname,
+/* Find a config log by name */
+static struct config_llog_data *config_log_find(char *logname, 
                                                struct config_llog_instance *cfg)
 {
         struct list_head *tmp;
@@ -240,14 +246,14 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct client_obd *cli = &obd->u.cli;
         struct dentry *dentry;
+        char *label;
         int err = 0;
         ENTRY;
 
         LASSERT(lsi);
         LASSERT(lsi->lsi_srv_mnt == mnt);
 
-        /* The mgc fs exclusion sem. Only one fs can be setup at a time.
-           Maybe just overload the cl_sem? */
+        /* The mgc fs exclusion sem. Only one fs can be setup at a time. */
         down(&cli->cl_mgc_sem);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
@@ -259,8 +265,8 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         }
 
         cli->cl_mgc_vfsmnt = mnt;
-        // FIXME which is the right SB? - filter_common_setup also
-        CDEBUG(D_MGC, "SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb,
+        // FIXME which is the right SB? - filter_common_setup also 
+        CDEBUG(D_MGC, "SB's: fill=%p mnt=%p == root=%p\n", sb, mnt->mnt_sb,
                mnt->mnt_root->d_inode->i_sb);
         fsfilt_setup(obd, mnt->mnt_sb);
 
@@ -280,6 +286,14 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
                 GOTO(err_ops, err);
         }
         cli->cl_mgc_configs_dir = dentry;
+
+        /* We take an obd ref to insure that we can't get to mgc_cleanup
+           without calling mgc_fs_cleanup first. */
+        class_incref(obd);
+
+        label = fsfilt_get_label(obd, mnt->mnt_sb);
+        if (label)
+                CDEBUG(D_MGC, "MGC using disk labelled=%s\n", label);
 
         /* We keep the cl_mgc_sem until mgc_fs_cleanup */
         RETURN(0);
@@ -306,6 +320,7 @@ static int mgc_fs_cleanup(struct obd_device *obd)
                 l_dput(cli->cl_mgc_configs_dir);
                 cli->cl_mgc_configs_dir = NULL;
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                class_decref(obd);
         }
 
         cli->cl_mgc_vfsmnt = NULL;
@@ -316,24 +331,40 @@ static int mgc_fs_cleanup(struct obd_device *obd)
         RETURN(rc);
 }
 
+static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
+{
+        int rc = 0;
+        ENTRY;
+
+        switch (stage) {
+        case OBD_CLEANUP_EARLY: 
+        case OBD_CLEANUP_EXPORTS:
+                break;
+        case OBD_CLEANUP_SELF_EXP:
+                rc = obd_llog_finish(obd, 0);
+                if (rc != 0)
+                        CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        case OBD_CLEANUP_OBD:
+                break;
+        }
+        RETURN(rc);
+}
+
 static int mgc_cleanup(struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
         int rc;
+        ENTRY;
 
-        /* FIXME calls to mgc_fs_setup must take an obd ref to insure there's
-           no fs by the time we get here. */
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
-
-        rc = obd_llog_finish(obd, 0);
-        if (rc != 0)
-                CERROR("failed to cleanup llogging subsystems\n");
+        
+        config_log_end_all();
 
         ptlrpcd_decref();
 
-        config_log_end_all();
-
-        return client_obd_cleanup(obd);
+        rc = client_obd_cleanup(obd);
+        RETURN(rc);
 }
 
 static struct obd_device *the_mgc;
@@ -376,7 +407,7 @@ static int mgc_async_requeue(void *data)
         wait_queue_head_t   waitq;
         struct l_wait_info  lwi;
         struct config_llog_data *cld = (struct config_llog_data *)data;
-        unsigned long flags;
+        char name[24];
         int rc = 0;
         ENTRY;
 
@@ -385,15 +416,9 @@ static int mgc_async_requeue(void *data)
         if (cld->cld_stopping)
                 GOTO(out, rc = 0);
 
-        lock_kernel();
-        ptlrpc_daemonize();
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "reQ %s",
-                    cld->cld_logname);
-        unlock_kernel();
+        snprintf(name, sizeof(name), "ll_log_%s", cld->cld_logname);
+        name[sizeof(name)-1] = '\0';
+        ptlrpc_daemonize(name);
 
         CDEBUG(D_MGC, "requeue "LPX64" %s:%s\n",
                cld->cld_resid.name[0], cld->cld_logname,
@@ -660,17 +685,17 @@ int mgc_set_info(struct obd_export *exp, obd_count keylen,
         }
         /* Turn off initial_recov after we try all backup servers once */
         if (KEY_IS(KEY_INIT_RECOV_BACKUP)) {
+                int value;
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
-                imp->imp_initial_recov_bk = *(int *)val;
-                CDEBUG(D_HA, "%s: set imp_initial_recov_bk = %d\n",
-                       exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
-                if (imp->imp_invalid) {
+                value = *(int *)val;
+                imp->imp_initial_recov_bk = value > 0;
+                if (imp->imp_invalid || value > 1) {
                         /* Resurrect if we previously died */
-                        CDEBUG(D_MGC, "Reactivate %s %d:%d:%d\n",
-                               imp->imp_obd->obd_name,
-                               imp->imp_deactive, imp->imp_invalid,
-                               imp->imp_state);
+                        CDEBUG(D_MGC, "Reactivate %s %d:%d:%d:%s\n", 
+                               imp->imp_obd->obd_name, value,
+                               imp->imp_deactive, imp->imp_invalid, 
+                               ptlrpc_import_state_name(imp->imp_state));
                         /* can't put this in obdclass, module loop with ptlrpc*/
                         /* This seems to be necessary when restarting a
                            combo mgs/mdt while the mgc is alive */
@@ -730,14 +755,15 @@ static int mgc_import_event(struct obd_device *obd,
         switch (event) {
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
-
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
-
                 break;
         }
-        case IMP_EVENT_DISCON:
-        case IMP_EVENT_INACTIVE:
-        case IMP_EVENT_ACTIVE:
+        case IMP_EVENT_DISCON: 
+                /* MGC imports should not wait for recovery */
+                ptlrpc_invalidate_import(imp);
+                break;
+        case IMP_EVENT_INACTIVE: 
+        case IMP_EVENT_ACTIVE: 
         case IMP_EVENT_OCD:
                 break;
         default:
@@ -886,7 +912,7 @@ static int mgc_process_log(struct obd_device *mgc,
         struct client_obd *cli = &mgc->u.cli;
         struct lvfs_run_ctxt saved;
         struct lustre_sb_info *lsi;
-        int rc, rcl, flags = 0, must_pop = 0;
+        int rc = 0, rcl, flags = 0, must_pop = 0;
         ENTRY;
 
         if (!cld || !cld->cld_cfg.cfg_sb) {
@@ -1056,6 +1082,7 @@ out:
 struct obd_ops mgc_obd_ops = {
         .o_owner        = THIS_MODULE,
         .o_setup        = mgc_setup,
+        .o_precleanup   = mgc_precleanup,
         .o_cleanup      = mgc_cleanup,
         .o_add_conn     = client_import_add_conn,
         .o_del_conn     = client_import_del_conn,

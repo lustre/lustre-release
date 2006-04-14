@@ -261,13 +261,13 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 }
                 mount_count = le64_to_cpu(lsd->lsd_mount_count);
         }
+
         if (lsd->lsd_feature_incompat & ~cpu_to_le32(MDT_INCOMPAT_SUPP)) {
                 CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
                        obd->obd_name, le32_to_cpu(lsd->lsd_feature_incompat) &
                        ~MDT_INCOMPAT_SUPP);
                 GOTO(err_msd, rc = -EINVAL);
         }
-
         if (lsd->lsd_feature_rocompat & ~cpu_to_le32(MDT_ROCOMPAT_SUPP)) {
                 CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
                        obd->obd_name, le32_to_cpu(lsd->lsd_feature_rocompat) &
@@ -275,7 +275,6 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 /* Do something like remount filesystem read-only */
                 GOTO(err_msd, rc = -EINVAL);
         }
-
         if (!(lsd->lsd_feature_incompat & cpu_to_le32(OBD_INCOMPAT_COMMON_LR))){
                 CDEBUG(D_WARNING, "using old last_rcvd format\n");
                 lsd->lsd_mount_count = lsd->lsd_last_transno;
@@ -285,10 +284,10 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_feature_incompat |= cpu_to_le32(LR_INCOMPAT_COMMON_LR);
                 */
         }
-
+        lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
+        
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
 
-        lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
                obd->obd_name, mds->mds_last_transno);
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
@@ -355,23 +354,19 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        last_transno, le64_to_cpu(lsd->lsd_last_transno),
                        le64_to_cpu(mcd->mcd_last_xid));
 
-                exp = class_new_export(obd);
-                if (exp == NULL)
-                        GOTO(err_client, rc = -ENOMEM);
+                exp = class_new_export(obd, (struct obd_uuid *)mcd->mcd_uuid);
+                if (IS_ERR(exp))
+                        GOTO(err_client, rc = PTR_ERR(exp));
 
-                memcpy(&exp->exp_client_uuid.uuid, mcd->mcd_uuid,
-                       sizeof exp->exp_client_uuid.uuid);
                 med = &exp->exp_mds_data;
                 med->med_mcd = mcd;
                 rc = mds_client_add(obd, mds, med, cl_idx);
                 LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 
-                /* create helper if export init gets more complex */
-                INIT_LIST_HEAD(&med->med_open_head);
-                spin_lock_init(&med->med_open_lock);
 
                 mcd = NULL;
                 exp->exp_replay_needed = 1;
+                exp->exp_connecting = 0;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
                 class_export_put(exp);
@@ -674,7 +669,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
         namelen = mds_fid2str(fidname, oa->o_id, oa->o_generation);
 
-        down(&parent_inode->i_sem);
+        LOCK_INODE_MUTEX(parent_inode);
         new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
 
         if (IS_ERR(new_child)) {
@@ -709,7 +704,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 out_dput:
         dput(new_child);
 out_close:
-        up(&parent_inode->i_sem);
+        UNLOCK_INODE_MUTEX(parent_inode);
         err = filp_close(filp, 0);
         if (err) {
                 CERROR("closing tmpfile %u: rc %d\n", tmpname, rc);
@@ -741,7 +736,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 
         namelen = mds_fid2str(fidname, oa->o_id, oa->o_generation);
 
-        down(&parent_inode->i_sem);
+        LOCK_INODE_MUTEX(parent_inode);
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
         if (IS_ERR(de)) {
                 rc = IS_ERR(de);
@@ -775,7 +770,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 out_dput:
         if (de != NULL)
                 l_dput(de);
-        up(&parent_inode->i_sem);
+        UNLOCK_INODE_MUTEX(parent_inode);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
         RETURN(rc);

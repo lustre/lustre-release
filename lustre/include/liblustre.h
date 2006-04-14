@@ -100,6 +100,12 @@ typedef unsigned short umode_t;
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
 #define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
 
+#ifndef page_private
+#define page_private(page) ((page)->private)
+#define set_page_private(page, v) ((page)->private = (v))
+#endif
+
+
 static inline void inter_module_put(void *a)
 {
         return;

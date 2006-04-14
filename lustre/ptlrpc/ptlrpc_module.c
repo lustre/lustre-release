@@ -63,7 +63,6 @@ __init int ptlrpc_init(void)
         cleanup_phase = 2;
 
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
-        ptlrpc_abort_inflight_superhack = ptlrpc_abort_inflight;
 
         rc = ptlrpc_start_pinger();
         if (rc)

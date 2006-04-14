@@ -46,6 +46,8 @@ setup() {
     start mds $MDSDEV $MDS_MOUNT_OPTS
     start ost $OSTDEV $OST_MOUNT_OPTS
     start ost2 $OSTDEV2 $OST2_MOUNT_OPTS
+    # client actions will get EIO until MDT contacts OSTs, so give it a sec
+    sleep 5
     zconf_mount `hostname` $MOUNT
     zconf_mount `hostname` $MOUNT2
 }

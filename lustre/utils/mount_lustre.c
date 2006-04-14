@@ -381,11 +381,19 @@ int main(int argc, char *const argv[])
                 if (errno == ENOTBLK)
                         fprintf(stderr,"Does this filesystem have any OSTs?\n");
                 if (errno == ENOENT)
-                        fprintf(stderr,"Is the mgs specification correct? "
+                        fprintf(stderr,"Is the MGS specification correct? "
                                 "(%s)\n", source);
                 if (errno == EALREADY)
-                        fprintf(stderr,"This service is already running. "
+                        fprintf(stderr,"The target service is already running. "
                                 "(%s)\n", source);
+                if (errno == ENXIO)
+                        fprintf(stderr,"The target service failed to start "
+                                "(bad config log?) (%s)\n", source);
+                if (errno == EIO)
+                        fprintf(stderr,"Is the MGS running? (%s)\n", source);
+                if (errno == EADDRINUSE)
+                        fprintf(stderr,"The target service's index is already "
+                                "in use. (%s)\n", source);
                 rc = errno;
         } else if (!nomtab) {
                 rc = update_mtab_entry(source, target, "lustre", options,0,0,0);

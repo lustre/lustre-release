@@ -179,7 +179,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if (err)
                 GOTO(out_mdc, err);
 
-        /* async connect is surely finished by now */
+        /* MDC connect is surely finished by now */
         *data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
         *md_data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
 
@@ -214,8 +214,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
          * on all clients. */
         /* s_dev is also used in lt_compare() to compare two fs, but that is
          * only a node-local comparison. */
-        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
-                         strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
+        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
+                                 strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
 #endif
 
         obd = class_name2obd(osc);
@@ -674,7 +674,8 @@ out_free:
         if (err) {
                 struct obd_device *obd;
                 int next = 0;
-                /* like client_put_super below */
+                /* like ll_put_super below */
+                lustre_end_log(sb, NULL, &cfg);
                 while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
                        != NULL) {
                         class_manual_cleanup(obd);
@@ -682,6 +683,7 @@ out_free:
                 class_del_profile(profilenm);
                 ll_free_sbi(sb);
                 lsi->lsi_llsbi = NULL;
+                lustre_common_put_super(sb);
         }
         RETURN(err);
 } /* ll_fill_super */
@@ -983,15 +985,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (attr->ia_size == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
 
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
                 UP_WRITE_I_ALLOC_SEM(inode);
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 DOWN_WRITE_I_ALLOC_SEM(inode);
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
 #else
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
                 DOWN_WRITE_I_ALLOC_SEM(inode);
 #endif
                 if (rc != 0)
@@ -1400,10 +1402,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
                                  &attr, NULL, 0, NULL, 0, &req);
-                if (rc) {
+                if (rc || lsm == NULL) {
                         ptlrpc_req_finished(req);
-                        if (rc != -EPERM && rc != -EACCES)
-                                CERROR("mdc_setattr fails: rc = %d\n", rc);
                         obdo_free(oa);
                         RETURN(rc);
                 }
@@ -1588,7 +1588,6 @@ int ll_obd_statfs(struct inode *inode, void *arg)
         struct ll_sb_info *sbi = NULL;
         struct obd_device *client_obd = NULL, *lov_obd = NULL;
         struct lov_obd *lov = NULL;
-        struct obd_import *client_imp = NULL;
         struct obd_statfs stat_buf = {0};
         char *buf = NULL;
         struct obd_ioctl_data *data = NULL;
@@ -1614,7 +1613,6 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 if (index > 0)
                         GOTO(out_statfs, rc = -ENODEV);
                 client_obd = class_exp2obd(sbi->ll_mdc_exp);
-                client_imp = class_exp2cliimp(sbi->ll_mdc_exp);
         } else if (type == LL_STATFS_LOV) {
                 lov_obd = class_exp2obd(sbi->ll_osc_exp);
                 lov = &lov_obd->u.lov;
@@ -1623,12 +1621,11 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                         GOTO(out_statfs, rc = -ENODEV);
 
                 client_obd = class_exp2obd(lov->tgts[index].ltd_exp);
-                client_imp = class_exp2cliimp(lov->tgts[index].ltd_exp);
                 if (!lov->tgts[index].active)
                         GOTO(out_uuid, rc = -ENODATA);
         }
 
-        if (!client_obd || !client_imp)
+        if (!client_obd)
                 GOTO(out_statfs, rc = -EINVAL);
 
         rc = obd_statfs(client_obd, &stat_buf, jiffies - 1);
@@ -1639,7 +1636,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 GOTO(out_statfs, rc = -EFAULT);
 
 out_uuid:
-        if (copy_to_user(data->ioc_pbuf2, &client_imp->imp_target_uuid,
+        if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(client_obd),
                          data->ioc_plen2))
                 rc = -EFAULT;
 
@@ -1648,9 +1645,3 @@ out_statfs:
                 obd_ioctl_freedata(buf, len);
         return rc;
 }
-
-EXPORT_SYMBOL(ll_fill_super);
-EXPORT_SYMBOL(ll_put_super);
-EXPORT_SYMBOL(ll_remount_fs);
-EXPORT_SYMBOL(ll_umount_begin);
-

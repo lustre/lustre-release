@@ -147,10 +147,10 @@ void llu_update_inode(struct inode *inode, struct mdt_body *body,
                 }
         }
 
-        if (body->valid & OBD_MD_FLATIME &&
+        if (body->valid & OBD_MD_FLMTIME &&
             body->mtime > LTIME_S(st->st_mtime))
                 LTIME_S(st->st_mtime) = body->mtime;
-        if (body->valid & OBD_MD_FLMTIME &&
+        if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = body->atime;
         if (body->valid & OBD_MD_FLCTIME &&
@@ -810,11 +810,11 @@ static int llu_iop_setattr(struct pnode *pno,
         }
         if (mask & SETATTR_MTIME) {
                 iattr.ia_mtime = stbuf->st_mtime;
-                iattr.ia_valid |= ATTR_MTIME;
+                iattr.ia_valid |= ATTR_MTIME | ATTR_MTIME_SET;
         }
         if (mask & SETATTR_ATIME) {
                 iattr.ia_atime = stbuf->st_atime;
-                iattr.ia_valid |= ATTR_ATIME;
+                iattr.ia_valid |= ATTR_ATIME | ATTR_ATIME_SET;
         }
         if (mask & SETATTR_UID) {
                 iattr.ia_uid = stbuf->st_uid;

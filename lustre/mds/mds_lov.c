@@ -221,17 +221,15 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         /* Don't change the mds_lov_desc until the objids size matches the
            count (paranoia) */
         mds->mds_lov_desc = *ld;
-        
-        CDEBUG(D_HA, "updated lov_desc, tgt_count: %d\n",
+        CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d\n",
                mds->mds_lov_desc.ld_tgt_count);
 
-        stripes = min(mds->mds_lov_desc.ld_tgt_count,
-                      (__u32)LOV_MAX_STRIPE_COUNT);
-
+        stripes = min((__u32)LOV_MAX_STRIPE_COUNT, 
+                      max(mds->mds_lov_desc.ld_tgt_count,
+                          mds->mds_lov_objids_in_file));
         mds->mds_max_mdsize = lov_mds_md_size(stripes);
         mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
-      
-        CDEBUG(D_HA|D_WARNING, "updated max_mdsize/max_cookiesize: %d/%d\n",
+        CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize: %d/%d\n",
                mds->mds_max_mdsize, mds->mds_max_cookiesize);
 
 out:
@@ -257,7 +255,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_ERROR, "idx=%d, recov=%d/%d, cnt=%d/%d\n",
+        CDEBUG(D_CONFIG, "idx=%d, recov=%d/%d, cnt=%d/%d\n",
                idx, obd->obd_recovering, obd->obd_async_recov, old_count, 
                mds->mds_lov_desc.ld_tgt_count);
 
@@ -294,7 +292,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
         /* If we added a target we have to reconnect the llogs */
         /* Only do this at first add (idx), or the first time after recovery */
         if (idx != MDSLOV_NO_INDEX || 1/*FIXME*/) {
-                CDEBUG(D_CONFIG|D_WARNING, "reset llogs idx=%d\n", idx);
+                CDEBUG(D_CONFIG, "reset llogs idx=%d\n", idx);
                 /* These two must be atomic */
                 down(&mds->mds_orphan_recovery_sem);
                 obd_llog_finish(obd, old_count);
@@ -330,7 +328,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 RETURN(-ENOMEM);
-        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX;
+        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX |
+                                  OBD_CONNECT_REQPORTAL;
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, data);
@@ -636,7 +635,7 @@ static int __mds_lov_synchronize(void *data)
         ENTRY;
 
         if (watched) 
-                uuid = &watched->u.cli.cl_import->imp_target_uuid;
+                uuid = &watched->u.cli.cl_target_uuid;
 
         OBD_FREE(mlsi, sizeof(*mlsi));
 
@@ -668,7 +667,7 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
         }
 
-        CWARN("MDS %s: %s now active, resetting orphans\n",
+        LCONSOLE_INFO("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, (char *)uuid->uuid);
 
         if (obd->obd_stopping)
@@ -688,17 +687,11 @@ out:
 
 int mds_lov_synchronize(void *data)
 {
-        unsigned long flags;
-        ENTRY;
+        struct mds_lov_sync_info *mlsi = data;
+        char name[20];
 
-        lock_kernel();
-        ptlrpc_daemonize();
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-        unlock_kernel();
+        sprintf(name, "ll_mlov_sync_%02u", mlsi->mlsi_index);
+        ptlrpc_daemonize(name);
 
         RETURN(__mds_lov_synchronize(data));
 }
@@ -733,7 +726,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
            still disconnected. Taking an obd reference insures that we don't
            disconnect the LOV.  This of course means a cleanup won't
            finish for as long as the sync is blocking. */
-        atomic_inc(&obd->obd_refcount);
+        class_incref(obd);
 
         if (nonblock) {
                 /* Synchronize in the background */
@@ -781,8 +774,8 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
 
         if (obd->obd_recovering) {
                 CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
-                      obd->obd_name,
-                      watched->u.cli.cl_import->imp_target_uuid.uuid);
+                      obd->obd_name, 
+                      obd_uuid2str(&watched->u.cli.cl_target_uuid));
                 /* We still have to fix the lov descriptor for ost's added 
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */

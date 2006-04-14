@@ -271,7 +271,7 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
                 if (error)
                         GOTO(cleanup_mfd, error);
                 body->io_epoch = MDS_FILTERDATA(dentry->d_inode)->io_epoch;
-        } else if (flags & FMODE_EXEC) {
+        } else if (flags & MDS_FMODE_EXEC) {
                 error = mds_deny_write_access(mds, dentry->d_inode);
                 if (error)
                         GOTO(cleanup_mfd, error);
@@ -303,7 +303,7 @@ cleanup_dentry:
         return ERR_PTR(error);
 }
 
-/* Must be called with i_sem held */
+/* Must be called with i_mutex held */
 static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
@@ -361,11 +361,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
                 rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
                 lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
-                if (!lmm_buf) {
-                        if (!rc) rc = -ENOMEM;
-                } else {
-                        memcpy(lmm_buf, lmm, lmm_size);
-                }
+                LASSERT(lmm_buf);
+                memcpy(lmm_buf, lmm, lmm_size);
                 if (rc)
                         CERROR("open replay failed to set md:%d\n", rc);
                 RETURN(rc);
@@ -480,11 +477,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
-        if (!lmm_buf) {
-                if (!rc) rc = -ENOMEM;
-        } else {
-                memcpy(lmm_buf, lmm, lmm_size);
-        }
+        LASSERT(lmm_buf);
+        memcpy(lmm_buf, lmm, lmm_size);
         obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
@@ -661,7 +655,7 @@ static int accmode(struct inode *inode, int flags)
                 res = MAY_READ;
         if (flags & (FMODE_WRITE|MDS_OPEN_TRUNC))
                 res |= MAY_WRITE;
-        if (flags & FMODE_EXEC)
+        if (flags & MDS_FMODE_EXEC)
                 res = MAY_EXEC;
         return res;
 }
@@ -680,38 +674,38 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         ENTRY;
 
         /* atomically create objects if necessary */
-        down(&dchild->d_inode->i_sem);
+        LOCK_INODE_MUTEX(dchild->d_inode);
 
         if (S_ISREG(dchild->d_inode->i_mode) &&
             !(body->valid & OBD_MD_FLEASIZE)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                  dchild->d_inode, 0);
                 if (rc) {
-                        up(&dchild->d_inode->i_sem);
+                        UNLOCK_INODE_MUTEX(dchild->d_inode);
                         RETURN(rc);
                 }
         }
         if (rec != NULL) {
                 if ((body->valid & OBD_MD_FLEASIZE) &&
                     (rec->ur_flags & MDS_OPEN_HAS_EA)) {
-                        up(&dchild->d_inode->i_sem);
+                        UNLOCK_INODE_MUTEX(dchild->d_inode);
                         RETURN(-EEXIST);
                 }
-                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
-                        up(&dchild->d_inode->i_sem);
-                        rc = mds_join_file(rec, req, dchild, lockh);
+                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) { 
+                        UNLOCK_INODE_MUTEX(dchild->d_inode);
+                        rc = mds_join_file(rec, req, dchild, lockh); 
                         if (rc)
                                 RETURN(rc);
-                        down(&dchild->d_inode->i_sem);
-                }
-                if (!(body->valid & OBD_MD_FLEASIZE) &&
+                        LOCK_INODE_MUTEX(dchild->d_inode);
+                } 
+                if (!(body->valid & OBD_MD_FLEASIZE) && 
                     !(body->valid & OBD_MD_FLMODEASIZE)) {
                         /* no EA: create objects */
                         rc = mds_create_objects(req, 2, rec, mds, obd,
                                                 dchild, handle, &ids);
                         if (rc) {
                                 CERROR("mds_create_objects: rc = %d\n", rc);
-                                up(&dchild->d_inode->i_sem);
+                                UNLOCK_INODE_MUTEX(dchild->d_inode);
                                 RETURN(rc);
                         }
                 }
@@ -722,7 +716,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                 OBD_MD_FLATIME | OBD_MD_FLMTIME);
         }
-        up(&dchild->d_inode->i_sem);
+        UNLOCK_INODE_MUTEX(dchild->d_inode);
 
         if (!(rec->ur_flags & MDS_OPEN_JOIN_FILE))
                 lustre_shrink_reply(req, 2, body->eadatasize, 0);
@@ -1146,7 +1140,7 @@ found_child:
 }
 
 /* Close a "file descriptor" and possibly unlink an orphan from the
- * PENDING directory.  Caller must hold child->i_sem, this drops it.
+ * PENDING directory.  Caller must hold child->i_mutex, this drops it.
  *
  * If we are being called from mds_disconnect() because the client has
  * disappeared, then req == NULL and we do not update last_rcvd because
@@ -1189,7 +1183,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
         if (mfd->mfd_mode & FMODE_WRITE) {
                 rc = mds_put_write_access(mds, inode, request_body,
                                           last_orphan && unlink_orphan);
-        } else if (mfd->mfd_mode & FMODE_EXEC) {
+        } else if (mfd->mfd_mode & MDS_FMODE_EXEC) {
                 mds_allow_write_access(inode);
         }
 
@@ -1209,8 +1203,8 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
                 /* Sadly, there is no easy way to save pending_child from
                  * mds_reint_unlink() into mfd, so we need to re-lookup,
                  * but normally it will still be in the dcache. */
-                down(&pending_dir->i_sem);
-                cleanup_phase = 1; /* up(&pending_dir->i_sem) when finished */
+                LOCK_INODE_MUTEX(pending_dir);
+                cleanup_phase = 1; /* UNLOCK_INODE_MUTEX(pending_dir) when finished */
                 pending_child = lookup_one_len(fidname, mds->mds_pending_dir,
                                                fidlen);
                 if (IS_ERR(pending_child))
@@ -1330,7 +1324,7 @@ out:
         case 2:
                 dput(pending_child);
         case 1:
-                up(&pending_dir->i_sem);
+                UNLOCK_INODE_MUTEX(pending_dir);
         }
         RETURN(rc);
 }

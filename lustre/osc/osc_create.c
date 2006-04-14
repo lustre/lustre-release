@@ -91,7 +91,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_ERROR, req,
                           "unknown rc %d from async create: failing oscc", rc);
-                ptlrpc_fail_import(req->rq_import, req->rq_import_generation);
+                ptlrpc_fail_import(req->rq_import, req->rq_reqmsg->conn_cnt);
         } else {
                 if (rc == 0) {
                         oscc->oscc_flags &= ~OSCC_FLAG_LOW;
@@ -357,8 +357,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 
         if (rc == 0)
                 CDEBUG(D_HA, "%s: returning objid "LPU64"\n",
-                       oscc->oscc_obd->u.cli.cl_import->imp_target_uuid.uuid,
-                       lsm->lsm_object_id);
+                       obd2cli_tgt(oscc->oscc_obd), lsm->lsm_object_id);
         else if (*ea == NULL)
                 obd_free_memmd(exp, &lsm);
         RETURN(rc);

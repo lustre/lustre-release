@@ -51,14 +51,14 @@ int ptlrpc_ping(struct obd_import *imp)
         if (req) {
                 DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
-                          imp->imp_target_uuid.uuid);
+                          obd2cli_tgt(imp->imp_obd));
                 req->rq_no_resend = req->rq_no_delay = 1;
                 req->rq_replen = lustre_msg_size(0, NULL);
                 ptlrpcd_add_req(req);
         } else {
                 CERROR("OOM trying to ping %s->%s\n",
                        imp->imp_obd->obd_uuid.uuid,
-                       imp->imp_target_uuid.uuid);
+                       obd2cli_tgt(imp->imp_obd));
                 rc = -ENOMEM;
         }
 
@@ -82,22 +82,9 @@ static int ptlrpc_pinger_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct ptlrpc_thread *thread = data->thread;
-        unsigned long flags;
         ENTRY;
 
-        lock_kernel();
-        ptlrpc_daemonize();
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-
-        LASSERTF(strlen(data->name) < sizeof(current->comm),
-                 "name %d > len %d\n",
-                 (int)strlen(data->name), (int)sizeof(current->comm));
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
-        unlock_kernel();
+        ptlrpc_daemonize(data->name);
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
@@ -146,7 +133,7 @@ static int ptlrpc_pinger_main(void *arg)
                                         CDEBUG(D_HA, "not pinging %s "
                                                "(in recovery: %s or recovery "
                                                "disabled: %u/%u)\n",
-                                               imp->imp_target_uuid.uuid,
+                                               obd2cli_tgt(imp->imp_obd),
                                                ptlrpc_import_state_name(level),
                                                imp->imp_deactive,
                                                imp->imp_obd->obd_no_recov);
@@ -158,7 +145,7 @@ static int ptlrpc_pinger_main(void *arg)
                                         continue;
                                 CDEBUG(D_INFO,
                                        "don't need to ping %s (%lu > %lu)\n",
-                                       imp->imp_target_uuid.uuid,
+                                       obd2cli_tgt(imp->imp_obd),
                                        imp->imp_next_ping, this_ping);
                         }
 
@@ -171,7 +158,7 @@ static int ptlrpc_pinger_main(void *arg)
 
                 /* Wait until the next ping time, or until we're stopped. */
                 time_to_next_ping = this_ping + (PING_INTERVAL * HZ) - jiffies;
-                
+
                 /* The ping sent by ptlrpc_send_rpc may get sent out
                    say .01 second after this.
                    ptlrpc_pinger_eending_on_import will then set the
@@ -279,7 +266,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
 
         down(&pinger_sem);
         CDEBUG(D_HA, "adding pingable import %s->%s\n",
-               imp->imp_obd->obd_uuid.uuid, imp->imp_target_uuid.uuid);
+               imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         ptlrpc_update_next_ping(imp);
         /* XXX sort, blah blah */
         list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
@@ -300,7 +287,7 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         down(&pinger_sem);
         list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
-               imp->imp_obd->obd_uuid.uuid, imp->imp_target_uuid.uuid);
+               imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         class_import_put(imp);
         up(&pinger_sem);
         RETURN(0);
@@ -314,6 +301,137 @@ void ptlrpc_pinger_wake_up()
 #endif
 }
 
+/* Ping evictor thread */
+#define PET_READY     1
+#define PET_TERMINATE 2
+
+static int               pet_refcount = 0;
+static int               pet_state;
+static wait_queue_head_t pet_waitq;
+static struct obd_export *pet_exp = NULL;
+static spinlock_t        pet_lock = SPIN_LOCK_UNLOCKED;
+
+int ping_evictor_wake(struct obd_export *exp)
+{
+        spin_lock(&pet_lock);
+        if (pet_exp) {
+                /* eventually the new obd will call here again. */
+                spin_unlock(&pet_lock);
+                return 1;
+        }
+
+        /* We have to make sure the obd isn't destroyed between now and when
+         * the ping evictor runs.  We'll take a reference here, and drop it
+         * when we finish in the evictor.  We don't really care about this
+         * export in particular; we just need one to keep the obd alive. */
+        pet_exp = class_export_get(exp);
+        spin_unlock(&pet_lock);
+
+        wake_up(&pet_waitq);
+        return 0;
+}
+
+static int ping_evictor_main(void *arg)
+{
+        struct obd_device *obd;
+        struct obd_export *exp;
+        struct l_wait_info lwi = { 0 };
+        time_t expire_time;
+        ENTRY;
+
+        ptlrpc_daemonize("ll_evictor");
+
+        CDEBUG(D_HA, "Starting Ping Evictor\n");
+        pet_exp = NULL;
+        pet_state = PET_READY;
+        while (1) {
+                l_wait_event(pet_waitq, pet_exp ||
+                             (pet_state == PET_TERMINATE), &lwi);
+                if (pet_state == PET_TERMINATE)
+                        break;
+
+                /* we only get here if pet_exp != NULL, and the end of this
+                 * loop is the only place which sets it NULL again, so lock
+                 * is not strictly necessary. */
+                spin_lock(&pet_lock);
+                obd = pet_exp->exp_obd;
+                spin_unlock(&pet_lock);
+
+                expire_time = CURRENT_SECONDS - (3 * obd_timeout / 2);
+
+                CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
+                       obd->obd_name, expire_time);
+
+                /* Exports can't be deleted out of the list while we hold
+                 * the obd lock (class_unlink_export), which means we can't
+                 * lose the last ref on the export.  If they've already been
+                 * removed from the list, we won't find them here. */
+                spin_lock(&obd->obd_dev_lock);
+                while (!list_empty(&obd->obd_exports_timed)) {
+                        exp = list_entry(obd->obd_exports_timed.next,
+                                         struct obd_export,exp_obd_chain_timed);
+
+                        if (expire_time > exp->exp_last_request_time) {
+                                class_export_get(exp);
+                                spin_unlock(&obd->obd_dev_lock);
+                                LCONSOLE_WARN("%s: haven't heard from %s in %ld"
+                                              " seconds. Last request was at %ld. "
+                                              "I think it's dead, and I am evicting "
+                                              "it.\n", obd->obd_name,
+                                              obd_export_nid2str(exp),
+                                              (long)(CURRENT_SECONDS -
+                                                     exp->exp_last_request_time),
+                                              exp->exp_last_request_time);
+
+
+                                class_fail_export(exp);
+                                class_export_put(exp);
+
+                                spin_lock(&obd->obd_dev_lock);
+                        } else {
+                                /* List is sorted, so everyone below is ok */
+                                break;
+                        }
+                }
+                spin_unlock(&obd->obd_dev_lock);
+
+                class_export_put(pet_exp);
+
+                spin_lock(&pet_lock);
+                pet_exp = NULL;
+                spin_unlock(&pet_lock);
+        }
+        CDEBUG(D_HA, "Exiting Ping Evictor\n");
+
+        RETURN(0);
+}
+
+void ping_evictor_start(void)
+{
+        int rc;
+
+        if (++pet_refcount > 1)
+                return;
+
+        init_waitqueue_head(&pet_waitq);
+
+        rc = kernel_thread(ping_evictor_main, NULL, CLONE_VM | CLONE_FS);
+        if (rc < 0) {
+                pet_refcount--;
+                CERROR("Cannot start ping evictor thread: %d\n", rc);
+        }
+}
+EXPORT_SYMBOL(ping_evictor_start);
+
+void ping_evictor_stop(void)
+{
+        if (--pet_refcount > 0)
+                return;
+
+        pet_state = PET_TERMINATE;
+        wake_up(&pet_waitq);
+}
+EXPORT_SYMBOL(ping_evictor_stop);
 #else /* !__KERNEL__ */
 
 /* XXX
@@ -382,7 +500,7 @@ static int pinger_check_rpcs(void *arg)
                         if (level != LUSTRE_IMP_FULL) {
                                 CDEBUG(D_HA,
                                        "not pinging %s (in recovery)\n",
-                                       imp->imp_target_uuid.uuid);
+                                       obd2cli_tgt(imp->imp_obd));
                                 continue;
                         }
 
@@ -400,7 +518,7 @@ static int pinger_check_rpcs(void *arg)
                         ptlrpc_set_add_req(set, req);
                 } else {
                         CDEBUG(D_HA, "don't need to ping %s (%lu > "
-                               "%lu)\n", imp->imp_target_uuid.uuid,
+                               "%lu)\n", obd2cli_tgt(imp->imp_obd),
                                imp->imp_next_ping, pd->pd_this_ping);
                 }
         }
@@ -417,7 +535,7 @@ static int pinger_check_rpcs(void *arg)
                                    rq_set_chain);
                 DEBUG_REQ(D_HA, req, "pinging %s->%s",
                           req->rq_import->imp_obd->obd_uuid.uuid,
-                          req->rq_import->imp_target_uuid.uuid);
+                          obd2cli_tgt(req->rq_import->imp_obd));
                 (void)ptl_send_rpc(req, 0);
         }
 
@@ -425,7 +543,7 @@ do_check_set:
         rc = ptlrpc_check_set(set);
 
         /* not finished, and we are not expired, simply return */
-        if (!rc && time_before(curtime, pd->pd_this_ping + PING_INTERVAL * HZ)) {
+        if (!rc && time_before(curtime, pd->pd_this_ping + PING_INTERVAL * HZ)){
                 CDEBUG(D_HA, "not finished, but also not expired\n");
                 pd->pd_recursion--;
                 return 0;
@@ -509,7 +627,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
                 RETURN(-EALREADY);
 
         CDEBUG(D_HA, "adding pingable import %s->%s\n",
-               imp->imp_obd->obd_uuid.uuid, imp->imp_target_uuid.uuid);
+               imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         ptlrpc_pinger_sending_on_import(imp);
 
         down(&pinger_sem);
@@ -529,7 +647,7 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         down(&pinger_sem);
         list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
-               imp->imp_obd->obd_uuid.uuid, imp->imp_target_uuid.uuid);
+               imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         class_import_put(imp);
         up(&pinger_sem);
         RETURN(0);

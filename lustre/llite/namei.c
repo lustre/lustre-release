@@ -253,6 +253,12 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
         __d_rehash(de, 0);
 }
 
+/* 2.6.15 and prior versions have buggy d_instantiate_unique that leaks an inode
+ * if suitable alias is found. But we are not going to fix it by just freeing
+ * such inode, because if some vendor's kernel contains this bugfix already,
+ * we will break everything then. We will use our own reimplementation
+ * instead. */
+#if !defined(HAVE_D_ADD_UNIQUE) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
 /* Search "inode"'s alias list for a dentry that has the same name and parent as
  * de.  If found, return it.  If not found, return de. */
 struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
@@ -299,6 +305,21 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 
         return de;
 }
+#else
+struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
+{
+        struct dentry *dentry;
+
+        dentry = d_add_unique(de, inode);
+        if (dentry) {
+                lock_dentry(dentry);
+                dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                unlock_dentry(dentry);
+        }
+
+        return dentry?dentry:de;
+}
+#endif
 
 static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                             struct lookup_intent *it, void *data)

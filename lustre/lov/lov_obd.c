@@ -380,7 +380,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                                watched->obd_name);
                         RETURN(-EINVAL);
                 }
-                uuid = &watched->u.cli.cl_import->imp_target_uuid;
+                uuid = &watched->u.cli.cl_target_uuid;
 
                 /* Set OSC as active before notifying the observer, so the
                  * observer can use the OSC normally.
@@ -392,7 +392,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 if (rc) {
                         CERROR("%sactivation of %s failed: %d\n",
                                (ev == OBD_NOTIFY_ACTIVE) ? "" : "de",
-                               uuid->uuid, rc);
+                               obd_uuid2str(uuid), rc);
                         RETURN(rc);
                 }
         }
@@ -700,7 +700,7 @@ static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(0);
 }
 
-static int lov_precleanup(struct obd_device *obd, int stage)
+static int lov_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
         ENTRY;
@@ -717,10 +717,15 @@ static int lov_precleanup(struct obd_device *obd, int stage)
                 }
                 break;
         }
+        case OBD_CLEANUP_EXPORTS:
+                break;
         case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        case OBD_CLEANUP_OBD:
+                break;
         }
         RETURN(rc);
 }

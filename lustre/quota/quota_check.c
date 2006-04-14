@@ -70,7 +70,6 @@ static int target_quotacheck_callback(struct obd_export *exp,
 
 static int target_quotacheck_thread(void *data)
 {
-        unsigned long flags;
         struct quotacheck_thread_args *qta = data;
         struct obd_export *exp;
         struct obd_device *obd;
@@ -78,17 +77,7 @@ static int target_quotacheck_thread(void *data)
         struct lvfs_run_ctxt saved;
         int rc;
 
-        lock_kernel();
-        ptlrpc_daemonize();
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-
-        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX, "%s",
-                    "quotacheck");
-        unlock_kernel();
+        ptlrpc_daemonize("quotacheck");
 
         exp = qta->qta_exp;
         obd = exp->exp_obd;
@@ -211,7 +200,7 @@ int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk)
         if (rc == CL_NOT_QUOTACHECKED)
                 rc = -EINTR;
 
-        qchk->obd_uuid = cli->cl_import->imp_target_uuid;
+        qchk->obd_uuid = cli->cl_target_uuid;
         if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME,
             strlen(LUSTRE_OSC_NAME)))
                 memcpy(qchk->obd_type, LUSTRE_FILTER_NAME,

@@ -121,7 +121,6 @@ int class_attach(struct lustre_cfg *lcfg)
 
         INIT_LIST_HEAD(&obd->obd_exports);
         INIT_LIST_HEAD(&obd->obd_exports_timed);
-        obd->obd_num_exports = 0;
         spin_lock_init(&obd->obd_dev_lock);
         spin_lock_init(&obd->obd_osfs_lock);
         obd->obd_osfs_age = jiffies - 1000 * HZ;
@@ -157,8 +156,8 @@ int class_attach(struct lustre_cfg *lcfg)
 
         obd->obd_attached = 1;
         type->typ_refcnt++;
-        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
-               obd->obd_minor, typename);
+        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
+               obd->obd_minor, typename, atomic_read(&obd->obd_refcount));
         RETURN(0);
  out:
         switch (cleanup_phase) {
@@ -205,13 +204,9 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_starting = 1;
         spin_unlock(&obd->obd_dev_lock);
 
-        exp = class_new_export(obd);
-        if (!exp){
-                CERROR("Fail to build export.\n");
-                RETURN(-ENOMEM);
-        }
-        memcpy(&exp->exp_client_uuid, &obd->obd_uuid,
-               sizeof(exp->exp_client_uuid));
+        exp = class_new_export(obd, &obd->obd_uuid);
+        if (IS_ERR(exp))
+                RETURN(PTR_ERR(exp));
         obd->obd_self_export = exp;
         list_del_init(&exp->exp_obd_chain_timed);
         class_export_put(exp);
@@ -224,7 +219,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_set_up = 1;
         spin_lock(&obd->obd_dev_lock);
         /* cleanup drops this */
-        atomic_inc(&obd->obd_refcount);
+        class_incref(obd);
         spin_unlock(&obd->obd_dev_lock);
 
         CDEBUG(D_IOCTL, "finished setup of obd %s (uuid %s)\n",
@@ -400,6 +395,15 @@ out:
         RETURN(err);
 }
 
+struct obd_device *class_incref(struct obd_device *obd)
+{
+        atomic_inc(&obd->obd_refcount);
+        CDEBUG(D_INFO, "incref %s (%p) now %d\n", obd->obd_name, obd,
+               atomic_read(&obd->obd_refcount));
+
+        return obd;
+}
+
 void class_decref(struct obd_device *obd)
 {
         int err;
@@ -410,7 +414,7 @@ void class_decref(struct obd_device *obd)
         refs = atomic_read(&obd->obd_refcount);
         spin_unlock(&obd->obd_dev_lock);
 
-        CDEBUG(D_INFO, "Decref %s now %d\n", obd->obd_name, refs);
+        CDEBUG(D_INFO, "Decref %s (%p) now %d\n", obd->obd_name, obd, refs);
 
         if ((refs == 1) && obd->obd_stopping) {
                 /* All exports (other than the self-export) have been
@@ -720,7 +724,7 @@ extern int lustre_check_exclusion(struct super_block *sb, char *svname);
 static int class_config_llog_handler(struct llog_handle * handle,
                                      struct llog_rec_hdr *rec, void *data)
 {
-        struct config_llog_instance *cfg = data;
+        struct config_llog_instance *clli = data;
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         int rc = 0;
@@ -748,59 +752,58 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
                         CDEBUG(D_CONFIG, "Marker, cfg_flg=%#x\n",
-                               cfg->cfg_flags);
+                               clli->cfg_flags);
                         if (marker->cm_flags & CM_START) {
                                 /* all previous flags off */
-                                cfg->cfg_flags = CFG_F_MARKER;
-                                if (marker->cm_flags & CM_SKIP) {
-                                        cfg->cfg_flags |= CFG_F_SKIP;
+                                clli->cfg_flags = CFG_F_MARKER;
+                                if (marker->cm_flags & CM_SKIP) { 
+                                        clli->cfg_flags |= CFG_F_SKIP;
                                         CDEBUG(D_CONFIG, "SKIP #%d\n",
                                                marker->cm_step);
-                                } else if (lustre_check_exclusion(cfg->cfg_sb,
+                                } else if (lustre_check_exclusion(clli->cfg_sb, 
                                                           marker->cm_svname)) {
-                                        cfg->cfg_flags |= CFG_F_EXCLUDE;
+                                        clli->cfg_flags |= CFG_F_EXCLUDE;
                                         CDEBUG(D_CONFIG, "EXCLUDE %d\n",
                                                marker->cm_step);
                                 }
                         } else if (marker->cm_flags & CM_END) {
-                                cfg->cfg_flags = 0;
+                                clli->cfg_flags = 0;
                         }
                 }
                 /* A config command without a start marker before it is
                    illegal (1.4.6. compat must set it artificially) */
-                if (!(cfg->cfg_flags & CFG_F_MARKER) &&
+                if (!(clli->cfg_flags & CFG_F_MARKER) && 
                     (lcfg->lcfg_command != LCFG_MARKER)) {
-                        CWARN("Config not inside markers, ignoring! (%#x)\n",
-                              cfg->cfg_flags);
-                        cfg->cfg_flags |= CFG_F_SKIP;
+                        CWARN("Config not inside markers, ignoring! (%#x)\n", 
+                              clli->cfg_flags);
+                        clli->cfg_flags |= CFG_F_SKIP;
                 }
-
-                if (cfg->cfg_flags & CFG_F_SKIP) {
+                if (clli->cfg_flags & CFG_F_SKIP) {
                         // FIXME warning
                         CDEBUG(D_CONFIG|D_WARNING, "skipping %#x\n",
-                               cfg->cfg_flags);
+                               clli->cfg_flags);
                         rc = 0;
                         /* No processing! */
                         break;
                 }
 
-                if ((cfg->cfg_flags & CFG_F_EXCLUDE) &&
+                if ((clli->cfg_flags & CFG_F_EXCLUDE) && 
                     (lcfg->lcfg_command == LCFG_LOV_ADD_OBD))
                         /* Add inactive instead */
                         lcfg->lcfg_command = LCFG_LOV_ADD_INA;
 
                 lustre_cfg_bufs_init(&bufs, lcfg);
 
-                if (cfg && cfg->cfg_instance && LUSTRE_CFG_BUFLEN(lcfg, 0) > 0){
+                if (clli && clli->cfg_instance && LUSTRE_CFG_BUFLEN(lcfg, 0) > 0){
                         inst = 1;
                         inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
-                                strlen(cfg->cfg_instance) + 1;
+                                strlen(clli->cfg_instance) + 1;
                         OBD_ALLOC(inst_name, inst_len);
                         if (inst_name == NULL)
                                 GOTO(out, rc = -ENOMEM);
                         sprintf(inst_name, "%s-%s",
                                 lustre_cfg_string(lcfg, 0),
-                                cfg->cfg_instance);
+                                clli->cfg_instance);
                         lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
                         CDEBUG(D_CONFIG, "cmd %x, instance name: %s\n",
                                lcfg->lcfg_command, inst_name);
@@ -808,10 +811,10 @@ static int class_config_llog_handler(struct llog_handle * handle,
 
                 /* we override the llog's uuid for clients, to insure they
                 are unique */
-                if (cfg && cfg->cfg_instance &&
+                if (clli && clli->cfg_instance && 
                     lcfg->lcfg_command == LCFG_ATTACH) {
                         lustre_cfg_bufs_set_string(&bufs, 2,
-                                                   cfg->cfg_uuid.uuid);
+                                                   clli->cfg_uuid.uuid);
                 }
 
                 lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);

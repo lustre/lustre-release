@@ -49,7 +49,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         ENTRY;
 
         LASSERT(res);
-        LASSERT(down_trylock(&res->lr_lvb_sem) != 0);
+        LASSERT_SEM_LOCKED(&res->lr_lvb_sem);
 
         /* we only want lvb's for object resources */
         /* check for internal locks: these have name[1] != 0 */

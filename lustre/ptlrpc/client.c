@@ -459,6 +459,7 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
         list_add_tail(&req->rq_set_chain, &set->set_requests);
         req->rq_set = set;
         set->set_remaining++;
+
         atomic_inc(&req->rq_import->imp_inflight);
 }
 
@@ -982,7 +983,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
                 RETURN(1);
         }
 
-        ptlrpc_fail_import(imp, req->rq_import_generation);
+        ptlrpc_fail_import(imp, req->rq_reqmsg->conn_cnt);
 
         RETURN(0);
 }

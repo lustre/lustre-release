@@ -479,13 +479,17 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                        request->rq_reply_portal);
         }
 
-        ptlrpc_request_addref(request);       /* +1 ref for the SENT callback */
+        /* add references on request and import for request_out_callback */
+        ptlrpc_request_addref(request);
+        atomic_inc(&request->rq_import->imp_inflight);
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
 
         request->rq_sent = CURRENT_SECONDS;
         ptlrpc_pinger_sending_on_import(request->rq_import);
-        rc = ptl_send_buf(&request->rq_req_md_h, 
+        rc = ptl_send_buf(&request->rq_req_md_h,
                           request->rq_reqmsg, request->rq_reqlen,
-                          LNET_NOACK_REQ, &request->rq_req_cbid, 
+                          LNET_NOACK_REQ, &request->rq_req_cbid,
                           connection,
                           request->rq_request_portal,
                           request->rq_xid);
@@ -494,7 +498,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 RETURN(rc);
         }
 
-        ptlrpc_req_finished (request);          /* drop callback ref */
+         /* drop request_out_callback refs, we couldn't start the send */
+        atomic_dec(&request->rq_import->imp_inflight);
+        ptlrpc_req_finished (request);
 
         if (noreply)
                 RETURN(rc);

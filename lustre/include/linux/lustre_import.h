@@ -73,7 +73,6 @@ struct obd_import {
         __u32                     imp_conn_cnt;
         __u64                     imp_max_transno;
         __u64                     imp_peer_committed_transno;
-        struct obd_uuid           imp_target_uuid; /* XXX -> lustre_name */
         struct lustre_handle      imp_remote_handle;
         unsigned long             imp_next_ping;   /* jiffies */
 
@@ -85,14 +84,22 @@ struct obd_import {
         spinlock_t                imp_lock;
 
         /* flags */
-        unsigned int              imp_invalid:1, imp_replayable:1,
-                                  imp_dlm_fake:1, imp_server_timeout:1,
-                                  imp_initial_recov:1, imp_initial_recov_bk:1,
-                                  imp_force_verify:1, imp_pingable:1,
-                                  imp_resend_replay:1, imp_deactive:1;
+        unsigned int             
+                imp_invalid:1,          /* evicted */
+                imp_replayable:1,       /* try to recover the import */
+                imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
+                imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
+                imp_initial_recov:1,    /* retry the initial connection */  
+                imp_initial_recov_bk:1, /* turn off init_recov after trying all failover nids */
+                imp_force_verify:1,     /* force an immidiate ping */
+                imp_pingable:1,         /* pingable */
+                imp_resend_replay:1,    /* resend for replay */
+                imp_deactive:1;         /* administratively disabled */
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;
+
+        struct ptlrpc_request_pool *imp_rq_pool; /* emergency request pool */
 };
 
 typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,

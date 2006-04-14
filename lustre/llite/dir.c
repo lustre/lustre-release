@@ -162,10 +162,9 @@ out:
         /* Too bad, we had an error */
 
 Ebadsize:
-        CERROR("ext2_check_page"
-                "size of directory #%lu is not a multiple of chunk size\n",
-                dir->i_ino
-        );
+        CERROR("%s: directory %lu/%u size %llu is not a multiple of %u\n",
+               ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
+               dir->i_generation, dir->i_size, chunk_size);
         goto fail;
 Eshort:
         error = "rec_len is smaller than minimal";
@@ -182,10 +181,11 @@ Espan:
         //Einumber:
         // error = "inode out of bounds";
 bad_entry:
-        CERROR("ext2_check_page: bad entry in directory #%lu: %s - "
+        CERROR("%s: bad entry in directory %lu/%u: %s - "
                 "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d",
-                dir->i_ino, error, (page->index<<PAGE_CACHE_SHIFT), offs,
-                (unsigned long) le32_to_cpu(p->inode),
+                ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
+                dir->i_generation, error, (page->index<<PAGE_CACHE_SHIFT), offs,
+                (unsigned long)le32_to_cpu(p->inode),
                 rec_len, p->name_len);
         goto fail;
 Eend:
@@ -237,16 +237,17 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
         page = read_cache_page(mapping, n,
                                (filler_t*)mapping->a_ops->readpage, NULL);
-        if (!IS_ERR(page)) {
-                wait_on_page(page);
-                (void)kmap(page);
-                if (!PageUptodate(page))
-                        goto fail;
-                if (!PageChecked(page))
-                        ext2_check_page(page);
-                if (PageError(page))
-                        goto fail;
-        }
+        if (IS_ERR(page))
+                GOTO(out_unlock, page);
+
+        wait_on_page(page);
+        (void)kmap(page);
+        if (!PageUptodate(page))
+                goto fail;
+        if (!PageChecked(page))
+                ext2_check_page(page);
+        if (PageError(page))
+                goto fail;
 
 out_unlock:
         ldlm_lock_decref(&lockh, LCK_CR);
@@ -288,7 +289,7 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 };
 
 
-int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
+int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
 {
         struct inode *inode = filp->f_dentry->d_inode;
         loff_t pos = filp->f_pos;
@@ -330,6 +331,7 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
 
                 kaddr = page_address(page);
                 if (need_revalidate) {
+                        /* page already checked from ll_get_dir_page() */
                         offset = ext2_validate_entry(kaddr, offset, chunk_mask);
                         need_revalidate = 0;
                 }
@@ -359,7 +361,8 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
 done:
         filp->f_pos = (n << PAGE_CACHE_SHIFT) | offset;
         filp->f_version = inode->i_version;
-        update_atime(inode);
+        touch_atime(filp->f_vfsmnt, filp->f_dentry);
+
         RETURN(rc);
 }
 
@@ -541,7 +544,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(PTR_ERR(filename));
 
                 rc = ll_get_max_mdsize(sbi, &lmmsize);
-                if (rc) 
+                if (rc)
                         RETURN(rc);
 
                 rc = mdc_getattr_name(sbi->ll_mdc_exp, ll_inode2fid(inode),
@@ -586,39 +589,39 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         int lmj_size, i, aindex = 0, rc;
  
                         rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
-                        if (rc < 0) 
+                        if (rc < 0)
                                 GOTO(out_req, rc = -ENOMEM);
                         rc = obd_checkmd(sbi->ll_osc_exp, sbi->ll_mdc_exp, lsm);
-                        if (rc) 
-                                GOTO(out_free_memmd, rc); 
-                        
+                        if (rc)
+                                GOTO(out_free_memmd, rc);
+
                         lmj_size = sizeof(struct lov_user_md_join) +
                                    lsm->lsm_stripe_count *
                                    sizeof(struct lov_user_ost_data_join);
                         OBD_ALLOC(lmj, lmj_size);
-                        if (!lmj) 
+                        if (!lmj)
                                 GOTO(out_free_memmd, rc = -ENOMEM);
-                        
+
                         memcpy(lmj, lmm, sizeof(struct lov_user_md_join));
-                        for(i = 0; i < lsm->lsm_stripe_count; i++) {
+                        for (i = 0; i < lsm->lsm_stripe_count; i++) {
                                 struct lov_array_info *lai = lsm->lsm_array;
                                 if ((lai->lai_ext_array[aindex].le_loi_idx +
                                      lai->lai_ext_array[aindex].le_stripe_count)<=i){
                                         aindex ++;
                                 }
-                                CDEBUG(D_INFO, "aindex %d i %d l_extent_start"LPU64""
-                                               "len %d \n", aindex, i, 
-                                               lai->lai_ext_array[aindex].le_start,
-                                               (int)lai->lai_ext_array[aindex].le_len);
+                                CDEBUG(D_INFO, "aindex %d i %d l_extent_start"
+                                       LPU64"len %d \n", aindex, i,
+                                       lai->lai_ext_array[aindex].le_start,
+                                       (int)lai->lai_ext_array[aindex].le_len);
                                 lmj->lmm_objects[i].l_extent_start =
                                         lai->lai_ext_array[aindex].le_start;
- 
+
                                 if ((int)lai->lai_ext_array[aindex].le_len == -1) {
                                         lmj->lmm_objects[i].l_extent_end = -1;
                                 } else {
-                                        lmj->lmm_objects[i].l_extent_end =  
-                                        lai->lai_ext_array[aindex].le_start + 
-                                        lai->lai_ext_array[aindex].le_len;
+                                        lmj->lmm_objects[i].l_extent_end =
+                                          lai->lai_ext_array[aindex].le_start +
+                                          lai->lai_ext_array[aindex].le_len;
                                 }
                                 lmj->lmm_objects[i].l_object_id =
                                         lsm->lsm_oinfo[i].loi_id;
@@ -815,9 +818,8 @@ out_free_memmd:
                         /* XXX: dqb_valid is borrowed as a flag to mark that
                          *      only mds quota is wanted */
                         if (qctl->qc_dqblk.dqb_valid)
-                                qctl->obd_uuid = 
-                                       sbi->ll_mdc_exp->exp_obd->u.cli.
-                                       cl_import->imp_target_uuid;
+                                qctl->obd_uuid = sbi->ll_mdc_exp->exp_obd->
+                                                        u.cli.cl_target_uuid;
                         break;
                 case Q_GETINFO:
                         break;

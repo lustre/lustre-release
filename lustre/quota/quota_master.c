@@ -396,10 +396,10 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
 
                 /* lookup quota file */
                 rc = 0;
-                down(&iparent->i_sem);
+                LOCK_INODE_MUTEX(iparent);
                 de = lookup_one_len(quotafiles[i], dparent,
                                     strlen(quotafiles[i]));
-                up(&iparent->i_sem);
+                UNLOCK_INODE_MUTEX(iparent);
                 if (IS_ERR(de) || de->d_inode == NULL || 
                     !S_ISREG(de->d_inode->i_mode))
                         rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT;
@@ -1018,21 +1018,11 @@ static int qmaster_recovery_main(void *arg)
 {
         struct qmaster_recov_thread_data *data = arg;
         struct obd_device *obd = data->obd;
-        unsigned long flags;
         int rc = 0;
         unsigned short type;
         ENTRY;
 
-        lock_kernel();
-        ptlrpc_daemonize();
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1, "%s", 
-                    "qmaster_recovd");
-        unlock_kernel();
+        ptlrpc_daemonize("qmaster_recovd");
 
         complete(&data->comp);
 

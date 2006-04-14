@@ -486,7 +486,7 @@ static int mntdf(char *mntdir, int ishow, int cooked)
         __u32 index;
         __u64 avail_sum, used_sum, total_sum;
         char tbuf[10], ubuf[10], abuf[10], rbuf[10];        
-        double ratio_sum;
+        double ratio_sum = 0;
         int rc;
 
         if (ishow)
@@ -554,7 +554,8 @@ static int mntdf(char *mntdir, int ishow, int cooked)
         }
 
         used_sum = total_sum - avail_sum;
-        ratio_sum = (double)(total_sum - avail_sum) / (double)total_sum;
+        if (total_sum > 0)
+                ratio_sum = (double)(total_sum - avail_sum) / (double)total_sum;
         sprintf(rbuf, RDF, (int)(ratio_sum * 100));
         if (cooked) {
                 int i;
@@ -840,7 +841,7 @@ static int lfs_quotacheck(int argc, char **argv)
 
         if (check_type)
                 check_type--;
-        else /* check both user & group quota by default */
+        else    /* do quotacheck for both user & group quota by default */
                 check_type = 0x02;
 
         if (argc == optind)

@@ -103,7 +103,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
 
 /* this isn't where truncate starts.   roughly:
  * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate. setattr_raw grabs
- * DLM lock on [size, EOF], i_sem, ->lli_size_sem, and WRITE_I_ALLOC_SEM to
+ * DLM lock on [size, EOF], i_mutex, ->lli_size_sem, and WRITE_I_ALLOC_SEM to
  * avoid races.
  *
  * must be called under ->lli_size_sem */
@@ -391,11 +391,11 @@ static struct obd_async_page_ops ll_async_page_ops = {
 
 struct ll_async_page *llap_cast_private(struct page *page)
 {
-        struct ll_async_page *llap = (struct ll_async_page *)page->private;
+        struct ll_async_page *llap = (struct ll_async_page *)page_private(page);
 
         LASSERTF(llap == NULL || llap->llap_magic == LLAP_MAGIC,
                  "page %p private %lu gave magic %d which != %d\n",
-                 page, page->private, llap->llap_magic, LLAP_MAGIC);
+                 page, page_private(page), llap->llap_magic, LLAP_MAGIC);
 
         return llap;
 }
@@ -519,10 +519,22 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         struct ll_async_page *llap;
         struct obd_export *exp;
         struct inode *inode = page->mapping->host;
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_sb_info *sbi;
         int rc;
         ENTRY;
 
+        if (!inode) {
+                static int triggered;
+
+                if (!triggered) {
+                        LL_CDEBUG_PAGE(D_ERROR, page, "Bug 10047. Wrong anon "
+                                       "page received\n");
+                        libcfs_debug_dumpstack(NULL);
+                        triggered = 1;
+                }
+                RETURN(ERR_PTR(-EINVAL));
+        }
+        sbi = ll_i2sbi(inode);
         LASSERT(ll_async_page_slab);
         LASSERTF(origin < LLAP__ORIGIN_MAX, "%u\n", origin);
 
@@ -847,7 +859,7 @@ void ll_removepage(struct page *page)
 
         /* sync pages or failed read pages can leave pages in the page
          * cache that don't have our data associated with them anymore */
-        if (page->private == 0) {
+        if (page_private(page) == 0) {
                 EXIT;
                 return;
         }
@@ -1120,6 +1132,13 @@ static int ll_readahead(struct ll_readahead_state *ras,
                         continue;
                 }
 
+                /* Check if page was truncated or reclaimed */
+                if (page->mapping != mapping) {
+                        ll_ra_stats_inc(mapping, RA_STAT_WRONG_GRAB_PAGE);
+                        CDEBUG(D_READA, "g_c_p_n returned invalid page\n");
+                        goto next_page;
+                }
+
                 /* we do this first so that we can see the page in the /proc
                  * accounting */
                 llap = llap_from_page(page, LLAP_ORIGIN_READAHEAD);
@@ -1367,17 +1386,19 @@ int ll_readpage(struct file *filp, struct page *page)
                 GOTO(out_oig, rc = 0);
         }
 
-        rc = ll_page_matches(page, fd->fd_flags);
-        if (rc < 0) {
-                LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n", rc);
-                GOTO(out, rc);
-        }
+        if (likely((fd->fd_flags & LL_FILE_IGNORE_LOCK) == 0)) {
+                rc = ll_page_matches(page, fd->fd_flags);
+                if (rc < 0) {
+                        LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n", rc);
+                        GOTO(out, rc);
+                }
 
-        if (rc == 0) {
-                CWARN("ino %lu page %lu (%llu) not covered by "
-                      "a lock (mmap?).  check debug logs.\n",
-                      inode->i_ino, page->index,
-                      (long long)page->index << PAGE_CACHE_SHIFT);
+                if (rc == 0) {
+                        CWARN("ino %lu page %lu (%llu) not covered by "
+                              "a lock (mmap?).  check debug logs.\n",
+                              inode->i_ino, page->index,
+                              (long long)page->index << PAGE_CACHE_SHIFT);
+                }
         }
 
         rc = ll_issue_page_read(exp, llap, oig, 0);

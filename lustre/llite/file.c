@@ -605,14 +605,14 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 lsm->lsm_oinfo[stripe].loi_rss = lvb->lvb_size;
 
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
                 kms = MAX(lsm->lsm_oinfo[stripe].loi_kms, lvb->lvb_size);
                 kms = ldlm_extent_shift_kms(NULL, kms);
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         }
 
@@ -972,7 +972,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         if (rc != 0)
                 RETURN(rc);
 
-        /* this is ok, g_f_w will overwrite this under i_sem if it races
+        /* this is ok, g_f_w will overwrite this under i_mutex if it races
          * with a local truncate, it just makes our maxbyte checking easier */
         if (file->f_flags & O_APPEND)
                 *ppos = inode->i_size;
@@ -989,7 +989,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, count, *ppos);
 
-        /* generic_file_write handles O_APPEND after getting i_sem */
+        /* generic_file_write handles O_APPEND after getting i_mutex */
         retval = generic_file_write(file, buf, count, ppos);
 
 out:
@@ -998,6 +998,98 @@ out:
                             retval > 0 ? retval : 0);
         RETURN(retval);
 }
+
+/*
+ * Send file content (through pagecache) somewhere with helper
+ */
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
+                                read_actor_t actor, void *target)
+{
+        struct inode *inode = in_file->f_dentry->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct ll_lock_tree tree;
+        struct ll_lock_tree_node *node;
+        struct ost_lvb lvb;
+        struct ll_ra_read bead;
+        int rc;
+        ssize_t retval;
+        __u64 kms;
+        ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
+               inode->i_ino, inode->i_generation, inode, count, *ppos);
+
+        /* "If nbyte is 0, read() will return 0 and have no other results."
+         *                      -- Single Unix Spec */
+        if (count == 0)
+                RETURN(0);
+
+        lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_READ_BYTES,
+                            count);
+
+        node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
+        tree.lt_fd = LUSTRE_FPRIVATE(in_file);
+        rc = ll_tree_lock(&tree, node, NULL, count,
+                          in_file->f_flags & O_NONBLOCK?LDLM_FL_BLOCK_NOWAIT:0);
+        if (rc != 0)
+                RETURN(rc);
+
+        ll_inode_size_lock(inode, 1);
+        /*
+         * Consistency guarantees: following possibilities exist for the
+         * relation between region being read and real file size at this
+         * moment:
+         *
+         *  (A): the region is completely inside of the file;
+         *
+         *  (B-x): x bytes of region are inside of the file, the rest is
+         *  outside;
+         *
+         *  (C): the region is completely outside of the file.
+         *
+         * This classification is stable under DLM lock acquired by
+         * ll_tree_lock() above, because to change class, other client has to
+         * take DLM lock conflicting with our lock. Also, any updates to
+         * ->i_size by other threads on this client are serialized by
+         * ll_inode_size_lock(). This guarantees that short reads are handled
+         * correctly in the face of concurrent writes and truncates.
+         */
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(ll_i2sbi(inode)->ll_osc_exp, lsm, &lvb, 1);
+        kms = lvb.lvb_size;
+        if (*ppos + count - 1 > kms) {
+                /* A glimpse is necessary to determine whether we return a
+                 * short read (B) or some zeroes at the end of the buffer (C) */
+                ll_inode_size_unlock(inode, 1);
+                retval = ll_glimpse_size(inode, 0);
+                if (retval)
+                        goto out;
+        } else {
+                /* region is within kms and, hence, within real file size (A) */
+                inode->i_size = kms;
+                ll_inode_size_unlock(inode, 1);
+        }
+
+        CDEBUG(D_INFO, "Send ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
+               inode->i_ino, count, *ppos, inode->i_size);
+
+        /* turn off the kernel's read-ahead */
+        in_file->f_ra.ra_pages = 0;
+
+        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
+        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+        ll_ra_read_in(in_file, &bead);
+        /* BUG: 5972 */
+        file_accessed(in_file);
+        retval = generic_file_sendfile(in_file, ppos, count, actor, target);
+        ll_ra_read_ex(in_file, &bead);
+
+ out:
+        ll_tree_unlock(&tree);
+        RETURN(retval);
+}
+#endif
 
 static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                                unsigned long arg)
@@ -1086,8 +1178,8 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         if (!f)
                 GOTO(out, -ENOMEM);
 
-        f->f_dentry = file->f_dentry;
-        f->f_vfsmnt = file->f_vfsmnt;
+        f->f_dentry = dget(file->f_dentry);
+        f->f_vfsmnt = mntget(file->f_vfsmnt);
 
         rc = ll_intent_file_open(f, lum, lum_size, &oit);
         if (rc)
@@ -1115,7 +1207,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 
  out:
         if (f)
-                put_filp(f);
+                fput(f);
         ll_file_data_put(fd);
         up(&lli->lli_open_sem);
         if (req != NULL)
@@ -1306,8 +1398,8 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         if (f == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        f->f_dentry = head_filp->f_dentry;
-        f->f_vfsmnt = head_filp->f_vfsmnt;
+        f->f_dentry = dget(head_filp->f_dentry);
+        f->f_vfsmnt = mntget(head_filp->f_vfsmnt);
 
         ll_prepare_mdc_op_data(op_data, head_inode, tail_parent,
                                tail_dentry->d_name.name,
@@ -1337,7 +1429,7 @@ out:
         if (op_data)
                 OBD_FREE_PTR(op_data);
         if (f)
-                put_filp(f);
+                fput(f);
         ll_file_data_put(fd);
         ptlrpc_req_finished(req);
         RETURN(rc);
@@ -1435,6 +1527,7 @@ cleanup:
         }
         RETURN(rc);
 }
+
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
@@ -1463,10 +1556,18 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 if (get_user(flags, (int *) arg))
                         RETURN(-EFAULT);
 
-                if (cmd == LL_IOC_SETFLAGS)
+                if (cmd == LL_IOC_SETFLAGS) {
+                        if ((flags & LL_FILE_IGNORE_LOCK) &&
+                            !(file->f_flags & O_DIRECT)) {
+                                CERROR("%s: unable to disable locking on "
+                                       "non-O_DIRECT file\n", current->comm);
+                                RETURN(-EINVAL);
+                        }
+
                         fd->fd_flags |= flags;
-                else
+                } else {
                         fd->fd_flags &= ~flags;
+                }
                 RETURN(0);
         case LL_IOC_LOV_SETSTRIPE:
                 RETURN(ll_lov_setstripe(inode, file, arg));
@@ -1910,7 +2011,7 @@ struct file_operations ll_file_operations = {
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-        .sendfile       = generic_file_sendfile,
+        .sendfile       = ll_file_sendfile,
 #endif
         .fsync          = ll_fsync,
         /* .lock           = ll_file_flock */
@@ -1925,7 +2026,7 @@ struct file_operations ll_file_operations_flock = {
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-        .sendfile       = generic_file_sendfile,
+        .sendfile       = ll_file_sendfile,
 #endif
         .fsync          = ll_fsync,
         .lock           = ll_file_flock

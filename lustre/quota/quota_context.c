@@ -685,20 +685,11 @@ static int qslave_recovery_main(void *arg)
         struct qslave_recov_thread_data *data = arg;
         struct obd_device *obd = data->obd;
         struct lustre_quota_ctxt *qctxt = data->qctxt;
-        unsigned long flags;
         unsigned int type; 
         int rc = 0;
         ENTRY;
 
-        lock_kernel();
-        ptlrpc_daemonize();
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1, "%s", "qslave_recovd");
-        unlock_kernel();
+        ptlrpc_daemonize("qslave_recovd");
 
         complete(&data->comp);
 

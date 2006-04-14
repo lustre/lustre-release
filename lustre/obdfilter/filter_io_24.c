@@ -381,8 +381,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 GOTO(cleanup, rc);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
-        if (iobuf == NULL)
-                GOTO(cleanup, rc = -ENOMEM);
+        if (IS_ERR(iobuf))
+                GOTO(cleanup, rc = PTR_ERR(iobuf));
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -467,7 +467,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 CERROR("Failure to commit OST transaction (%d)?\n", err);
                 rc = err;
         }
-        if (obd_sync_filter && !err)
+        if (obd->obd_replayable && !err)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);

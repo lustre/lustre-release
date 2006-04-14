@@ -2,6 +2,15 @@ Index: linux-2.6.12-rc6/fs/nfs/dir.c
 ===================================================================
 --- linux-2.6.12-rc6.orig/fs/nfs/dir.c	2005-06-14 14:22:14.585699648 +0200
 +++ linux-2.6.12-rc6/fs/nfs/dir.c	2005-06-14 14:26:39.884524523 +0200
+@@ -727,7 +727,7 @@
+ 		return 0;
+ 	if (nd == NULL || nfs_lookup_check_intent(nd, LOOKUP_CREATE) == 0)
+ 		return 0;
+-	return (nd->intent.open.flags & O_EXCL) != 0;
++	return (nd->intent.it_flags & O_EXCL) != 0;
+ }
+ 
+ static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *nd)
 @@ -783,7 +783,7 @@
  	if (nd->flags & LOOKUP_DIRECTORY)
  		return 0;
@@ -47,6 +56,15 @@ Index: linux-2.6.12-rc6/fs/nfs/dir.c
  	/* We cannot do exclusive creation on a positive dentry */
  	if ((openflags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL))
  		goto no_open;
+@@ -1028,7 +1028,7 @@
+ 	attr.ia_valid = ATTR_MODE;
+ 
+ 	if (nd && (nd->flags & LOOKUP_CREATE))
+-		open_flags = nd->intent.open.flags;
++		open_flags = nd->intent.it_flags;
+ 
+ 	lock_kernel();
+ 	nfs_begin_data_update(dir);
 Index: linux-2.6.12-rc6/fs/nfs/nfs4proc.c
 ===================================================================
 --- linux-2.6.12-rc6.orig/fs/nfs/nfs4proc.c	2005-06-06 17:22:29.000000000 +0200

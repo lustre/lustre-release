@@ -40,7 +40,7 @@ static void interrupted_completion_wait(void *data)
 
 struct lock_wait_data {
         struct ldlm_lock *lwd_lock;
-        int               lwd_generation;
+        __u32             lwd_conn_cnt;
 };
 
 int ldlm_expired_completion_wait(void *data)
@@ -69,11 +69,10 @@ int ldlm_expired_completion_wait(void *data)
 
         obd = lock->l_conn_export->exp_obd;
         imp = obd->u.cli.cl_import;
-        ptlrpc_fail_import(imp, lwd->lwd_generation);
+        ptlrpc_fail_import(imp, lwd->lwd_conn_cnt);
         LDLM_ERROR(lock, "lock timed out (enqueued %lus ago), entering "
                    "recovery for %s@%s", lock->l_enqueued_time.tv_sec,
-                   imp->imp_target_uuid.uuid,
-                   imp->imp_connection->c_remote_uuid.uuid);
+                   obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
 
         RETURN(0);
 }
@@ -127,7 +126,7 @@ noreproc:
 
         if (imp != NULL) {
                 spin_lock_irqsave(&imp->imp_lock, irqflags);
-                lwd.lwd_generation = imp->imp_generation;
+                lwd.lwd_conn_cnt = imp->imp_conn_cnt;
                 spin_unlock_irqrestore(&imp->imp_lock, irqflags);
         }
 
@@ -254,7 +253,6 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
         lock->l_flags |= LDLM_FL_LOCAL;
-        lock->l_flags |= *flags & LDLM_INHERIT_FLAGS;
         lock->l_lvb_swabber = lvb_swabber;
         if (policy != NULL)
                 lock->l_policy_data = *policy;

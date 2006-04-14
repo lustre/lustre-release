@@ -42,6 +42,7 @@ init_test_env $@
 
 cleanup() {
 	echo -n "cln.."
+	grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 ${FORCE}
 	$MCCLEANUP ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
 }
 CLEANUP=${CLEANUP:-:}
@@ -83,6 +84,26 @@ run_one() {
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
 	$CLEANUP
+}
+
+build_test_filter() {
+	[ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
+	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITYN_EXCEPT`"
+
+        for O in $ONLY; do
+            eval ONLY_${O}=true
+        done
+        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_EXCEPT; do
+            eval EXCEPT_${E}=true
+        done
+}
+
+_basetest() {
+    echo $*
+}
+
+basetest() {
+    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
 build_test_filter() {
@@ -541,7 +562,7 @@ run_test 23 " others should see updated atime while another read===="
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
 if [ "$I_MOUNTED" = "yes" ]; then
-    $MCCLEANUP || error "cleanup failed"
+    cleanup
 fi
 
 echo '=========================== finished ==============================='

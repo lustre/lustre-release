@@ -131,6 +131,7 @@ enum ra_stat {
         RA_STAT_ZERO_WINDOW,
         RA_STAT_EOF,
         RA_STAT_MAX_IN_FLIGHT,
+        RA_STAT_WRONG_GRAB_PAGE,
         _NR_RA_STAT,
 };
 

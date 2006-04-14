@@ -672,9 +672,9 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 rc = llog_lvfs_close(handle);
 
                 if (rc == 0) {
-                        down(&inode->i_sem);
+                        LOCK_INODE_MUTEX(inode);
                         rc = vfs_unlink(inode, fdentry);
-                        up(&inode->i_sem);
+                        UNLOCK_INODE_MUTEX(inode);
                 }
 
                 dput(fdentry);
@@ -729,7 +729,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                 GOTO(out, rc = -ENOENT);
         }
 
-        CERROR("cat list: disk size=%d, read=%d\n", 
+        CDEBUG(D_CONFIG, "cat list: disk size=%d, read=%d\n", 
                (int)file->f_dentry->d_inode->i_size, size);
 
         rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);

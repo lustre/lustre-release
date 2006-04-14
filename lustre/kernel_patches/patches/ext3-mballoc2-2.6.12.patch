@@ -1674,7 +1674,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +		 */
 +
 +		/*if (ac.ac_found > ext3_mb_max_to_scan)
-+			printk(KERN_ERR "EXT3-fs: too long searching at "
++			printk(KERN_DEBUG "EXT3-fs: too long searching at "
 +				"%u (%d/%d)\n", cr, ac.ac_b_ex.fe_len,
 +				ac.ac_g_ex.fe_len);*/
 +		ext3_mb_try_best_found(&ac, &e3b);
@@ -1683,8 +1683,8 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +			 * Someone more lucky has already allocated it.
 +			 * The only thing we can do is just take first
 +			 * found block(s)
++			printk(KERN_DEBUG "EXT3-fs: someone won our chunk\n");
 +			 */
-+			printk(KERN_ERR "EXT3-fs: and someone won our chunk\n");
 +			ac.ac_b_ex.fe_group = 0;
 +			ac.ac_b_ex.fe_start = 0;
 +			ac.ac_b_ex.fe_len = 0;
@@ -1703,9 +1703,9 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +		*errp = -ENOSPC;
 +		block = 0;
 +#if 1
-+		printk(KERN_ERR "EXT3-fs: cant allocate: status %d, flags %d\n",
++		printk(KERN_ERR "EXT3-fs: can't allocate: status %d flags %d\n",
 +			ac.ac_status, ac.ac_flags);
-+		printk(KERN_ERR "EXT3-fs: goal %d, best found %d/%d/%d, cr %d\n",
++		printk(KERN_ERR "EXT3-fs: goal %d, best found %d/%d/%d cr %d\n",
 +			ac.ac_g_ex.fe_len, ac.ac_b_ex.fe_group,
 +			ac.ac_b_ex.fe_start, ac.ac_b_ex.fe_len, cr);
 +		printk(KERN_ERR "EXT3-fs: %lu block reserved, %d found\n",
@@ -2078,12 +2078,12 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +
 +		sbi->s_group_info[i] = kmalloc(len, GFP_KERNEL);
 +		if (sbi->s_group_info[i] == NULL) {
-+			printk(KERN_ERR "EXT3-fs: cant allocate mem for buddy\n");
++			printk(KERN_ERR "EXT3-fs: can't allocate buddy mem\n");
 +			goto err_out;
 +		}
 +		desc = ext3_get_group_desc(sb, i, NULL);
 +		if (desc == NULL) {
-+			printk(KERN_ERR "EXT3-fs: cant read descriptor %u\n", i);
++			printk(KERN_ERR"EXT3-fs: can't read descriptor %u\n",i);
 +			goto err_out;
 +		}
 +		memset(sbi->s_group_info[i], 0, len);
@@ -2599,7 +2599,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	char str[32];
 +
 +	if (count >= sizeof(str)) {
-+		printk(KERN_ERR "EXT3: %s string to long, max %u bytes\n",
++		printk(KERN_ERR "EXT3-fs: %s string too long, max %u bytes\n",
 +		       EXT3_MB_STATS_NAME, (int)sizeof(str));
 +		return -EOVERFLOW;
 +	}
@@ -2633,7 +2633,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	long value;
 +
 +	if (count >= sizeof(str)) {
-+		printk(KERN_ERR "EXT3: %s string to long, max %u bytes\n",
++		printk(KERN_ERR "EXT3-fs: %s string too long, max %u bytes\n",
 +		       EXT3_MB_MAX_TO_SCAN_NAME, (int)sizeof(str));
 +		return -EOVERFLOW;
 +	}
@@ -2672,7 +2672,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	long value;
 +
 +	if (count >= sizeof(str)) {
-+		printk(KERN_ERR "EXT3: %s string to long, max %u bytes\n",
++		printk(KERN_ERR "EXT3-fs: %s string too long, max %u bytes\n",
 +		       EXT3_MB_MIN_TO_SCAN_NAME, (int)sizeof(str));
 +		return -EOVERFLOW;
 +	}
@@ -2698,7 +2698,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +
 +	proc_root_ext3 = proc_mkdir(EXT3_ROOT, proc_root_fs);
 +	if (proc_root_ext3 == NULL) {
-+		printk(KERN_ERR "EXT3: Unable to create %s\n", EXT3_ROOT);
++		printk(KERN_ERR "EXT3-fs: Unable to create %s\n", EXT3_ROOT);
 +		return -EIO;
 +	}
 +
@@ -2706,7 +2706,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	proc_ext3_mb_stats = create_proc_entry(EXT3_MB_STATS_NAME,
 +			S_IFREG | S_IRUGO | S_IWUSR, proc_root_ext3);
 +	if (proc_ext3_mb_stats == NULL) {
-+		printk(KERN_ERR "EXT3: Unable to create %s\n",
++		printk(KERN_ERR "EXT3-fs: Unable to create %s\n",
 +				EXT3_MB_STATS_NAME);
 +		remove_proc_entry(EXT3_ROOT, proc_root_fs);
 +		return -EIO;
@@ -2721,7 +2721,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +			EXT3_MB_MAX_TO_SCAN_NAME,
 +			S_IFREG | S_IRUGO | S_IWUSR, proc_root_ext3);
 +	if (proc_ext3_mb_max_to_scan == NULL) {
-+		printk(KERN_ERR "EXT3: Unable to create %s\n",
++		printk(KERN_ERR "EXT3-fs: Unable to create %s\n",
 +				EXT3_MB_MAX_TO_SCAN_NAME);
 +		remove_proc_entry(EXT3_MB_STATS_NAME, proc_root_ext3);
 +		remove_proc_entry(EXT3_ROOT, proc_root_fs);
@@ -2737,7 +2737,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +			EXT3_MB_MIN_TO_SCAN_NAME,
 +			S_IFREG | S_IRUGO | S_IWUSR, proc_root_ext3);
 +	if (proc_ext3_mb_min_to_scan == NULL) {
-+		printk(KERN_ERR "EXT3: Unable to create %s\n",
++		printk(KERN_ERR "EXT3-fs: Unable to create %s\n",
 +				EXT3_MB_MIN_TO_SCAN_NAME);
 +		remove_proc_entry(EXT3_MB_MAX_TO_SCAN_NAME, proc_root_ext3);
 +		remove_proc_entry(EXT3_MB_STATS_NAME, proc_root_ext3);

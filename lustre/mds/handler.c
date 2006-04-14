@@ -63,6 +63,10 @@
 
 #include "mds_internal.h"
 
+int mds_num_threads;
+CFS_MODULE_PARM(mds_num_threads, "i", int, 0444,
+                "number of MDS service threads to start");
+
 static int mds_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
                              ldlm_mode_t mode, int flags, void *data);
@@ -371,12 +375,13 @@ out:
         RETURN(rc);
 }
 
-static int mds_init_export(struct obd_export *exp)
+int mds_init_export(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
 
         INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
+        exp->exp_connecting = 1;
         RETURN(0);
 }
 
@@ -392,7 +397,7 @@ static int mds_destroy_export(struct obd_export *export)
         target_destroy_export(export);
 
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
-                GOTO(out, 0);
+                RETURN(0);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         /* Close any open files (which may also cause orphan unlinking). */
@@ -425,7 +430,6 @@ static int mds_destroy_export(struct obd_export *export)
         }
         spin_unlock(&med->med_open_lock);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-out:
         mds_client_free(export);
 
         RETURN(rc);
@@ -486,6 +490,10 @@ static int mds_getstatus(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+/* get the LOV EA from @inode and store it into @md.  It can be at most
+ * @size bytes, and @size is updated with the actual EA size.
+ * The EA size is also returned on success, and -ve errno on failure. 
+ * If there is no EA then 0 is returned. */
 int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                int *size, int lock)
 {
@@ -493,7 +501,7 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
         int lmm_size;
 
         if (lock)
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
         rc = fsfilt_get_md(obd, inode, md, *size, "lov");
 
         if (rc < 0) {
@@ -513,14 +521,14 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                 *size = 0;
         }
         if (lock)
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
 
         RETURN (rc);
 }
 
 
-/* Call with lock=1 if you want mds_pack_md to take the i_sem.
- * Call with lock=0 if the caller has already taken the i_sem. */
+/* Call with lock=1 if you want mds_pack_md to take the i_mutex.
+ * Call with lock=0 if the caller has already taken the i_mutex. */
 int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
                 struct mds_body *body, struct inode *inode, int lock)
 {
@@ -708,10 +716,10 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
 
         if ((S_ISREG(inode->i_mode) && (body->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))) {
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
                 rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0,
                                    "lov");
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
                 CDEBUG(D_INODE, "got %d bytes MD data for inode %lu\n",
                        rc, inode->i_ino);
                 if (rc < 0) {
@@ -1895,7 +1903,6 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 
                 strncpy(mds->mds_profile, lustre_cfg_string(lcfg, 3),
                         LUSTRE_CFG_BUFLEN(lcfg, 3));
-
         }
 
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
@@ -1931,7 +1938,8 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 str = "no UUID";
         }
 
-        label = fsfilt_label(obd, obd->u.obt.obt_sb);
+        label = fsfilt_get_label(obd, obd->u.obt.obt_sb);
+
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("MDT %s now serving %s (%s%s%s), but will be in "
                               "recovery until %d %s reconnect, or if no clients"
@@ -1942,8 +1950,8 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                               obd->obd_name, lustre_cfg_string(lcfg, 1),
                               label ?: "", label ? "/" : "", str,
                               obd->obd_recoverable_clients,
-                              (obd->obd_recoverable_clients == 1)
-                              ? "client" : "clients",
+                              (obd->obd_recoverable_clients == 1) ?
+                              "client" : "clients",
                               (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
                               (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
                               obd->obd_name);
@@ -1955,7 +1963,6 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         }
 
         ldlm_timeout = 2;
-        ping_evictor_start();
 
         RETURN(0);
 
@@ -2111,12 +2118,14 @@ static int mds_lov_early_clean(struct obd_device *obd)
         return (obd_precleanup(osc, OBD_CLEANUP_EARLY));
 }
 
-static int mds_precleanup(struct obd_device *obd, int stage)
+static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
         ENTRY;
 
         switch (stage) {
+        case OBD_CLEANUP_EARLY:
+                break;
         case OBD_CLEANUP_EXPORTS:
                 target_cleanup_recovery(obd);
                 mds_lov_early_clean(obd);
@@ -2127,6 +2136,9 @@ static int mds_precleanup(struct obd_device *obd, int stage)
                 llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
                 llog_cleanup(llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT));
                 rc = obd_llog_finish(obd, 0);
+                break;
+        case OBD_CLEANUP_OBD:
+                break;
         }
         RETURN(rc);
 }
@@ -2138,8 +2150,6 @@ static int mds_cleanup(struct obd_device *obd)
         int must_put = 0;
         int must_relock = 0;
         ENTRY;
-
-        ping_evictor_stop();
 
         if (obd->u.obt.obt_sb == NULL)
                 RETURN(0);
@@ -2444,12 +2454,17 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         sema_init(&mds->mds_health_sem, 1);
 
+        if (mds_num_threads < 2)
+                mds_num_threads = MDT_NUM_THREADS;
+        if (mds_num_threads > MDT_MAX_THREADS)
+                mds_num_threads = MDT_MAX_THREADS;
+
         mds->mds_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_MAXREPSIZE, MDS_REQUEST_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, LUSTRE_MDS_NAME,
-                                obd->obd_proc_entry, NULL, MDT_NUM_THREADS);
+                                obd->obd_proc_entry, NULL, mds_num_threads);
 
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
@@ -2465,7 +2480,7 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 MDS_MAXREPSIZE, MDS_SETATTR_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_setattr",
-                                obd->obd_proc_entry, NULL, MDT_NUM_THREADS);
+                                obd->obd_proc_entry, NULL, mds_num_threads);
         if (!mds->mds_setattr_service) {
                 CERROR("failed to start getattr service\n");
                 GOTO(err_thread, rc = -ENOMEM);
@@ -2481,7 +2496,7 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 MDS_MAXREPSIZE, MDS_READPAGE_PORTAL,
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_readpage",
-                                obd->obd_proc_entry, NULL, MDT_NUM_THREADS);
+                                obd->obd_proc_entry, NULL, mds_num_threads);
         if (!mds->mds_readpage_service) {
                 CERROR("failed to start readpage service\n");
                 GOTO(err_thread2, rc = -ENOMEM);
@@ -2492,6 +2507,8 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         if (rc)
                 GOTO(err_thread3, rc);
+
+        ping_evictor_start();
 
         RETURN(0);
 
@@ -2513,6 +2530,8 @@ static int mdt_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
+
+        ping_evictor_stop();
 
         down(&mds->mds_health_sem);
         ptlrpc_unregister_service(mds->mds_readpage_service);

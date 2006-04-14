@@ -160,6 +160,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_PTLRPC_BULK_GET_NET     0x503
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET     0x504
 #define OBD_FAIL_PTLRPC_DROP_RPC         0x505
+#define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -169,6 +170,9 @@ extern wait_queue_head_t obd_race_waitq;
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701
+#define OBD_FAIL_TGT_FORCE_RECONNECT     0x702
+#define OBD_FAIL_TGT_DELAY_CONNECT       0x703
+#define OBD_FAIL_TGT_DELAY_RECONNECT     0x704
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 

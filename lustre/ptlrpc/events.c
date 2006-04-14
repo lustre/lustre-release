@@ -61,12 +61,14 @@ void request_out_callback(lnet_event_t *ev)
                 spin_lock_irqsave(&req->rq_lock, flags);
                 req->rq_net_err = 1;
                 spin_unlock_irqrestore(&req->rq_lock, flags);
-                
+
                 ptlrpc_wake_client_req(req);
         }
 
-        /* this balances the atomic_inc in ptl_send_rpc() */
+        /* these balance the references in ptl_send_rpc() */
+        atomic_dec(&req->rq_import->imp_inflight);
         ptlrpc_req_finished(req);
+
         EXIT;
 }
 

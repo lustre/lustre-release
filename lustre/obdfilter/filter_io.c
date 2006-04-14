@@ -296,19 +296,20 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 spin_unlock(&obd->obd_osfs_lock);
         }
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
+        if (IS_ERR(iobuf))
+                RETURN(PTR_ERR(iobuf));
 
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = filter_oa2dentry(obd, oa);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 dentry = NULL;
                 GOTO(cleanup, rc);
         }
-        
+
         inode = dentry->d_inode;
-        
+
         if (oa)
                 obdo_to_inode(inode, oa, OBD_MD_FLATIME);
 
@@ -520,8 +521,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         iobuf = filter_iobuf_get(&exp->exp_obd->u.filter, oti);
-        if (iobuf == NULL)
-                GOTO(cleanup, rc = -ENOMEM);
+        if (IS_ERR(iobuf))
+                GOTO(cleanup, rc = PTR_ERR(iobuf));
         cleanup_phase = 1;
 
         dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,

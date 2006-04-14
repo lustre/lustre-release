@@ -278,7 +278,6 @@ static void mgs_free_fsdb(struct fs_db *fsdb)
 int mgs_init_fsdb_list(struct obd_device *obd)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
-        spin_lock_init(&mgs->mgs_fs_db_lock);
         INIT_LIST_HEAD(&mgs->mgs_fs_db_list);
         return 0;
 }
@@ -288,12 +287,12 @@ int mgs_cleanup_fsdb_list(struct obd_device *obd)
         struct mgs_obd *mgs = &obd->u.mgs;
         struct fs_db *fsdb;
         struct list_head *tmp, *tmp2;
-        spin_lock(&mgs->mgs_fs_db_lock);
+        down(&mgs->mgs_sem);
         list_for_each_safe(tmp, tmp2, &mgs->mgs_fs_db_list) {
                 fsdb = list_entry(tmp, struct fs_db, fsdb_list);
                 mgs_free_fsdb(fsdb);
         }
-        spin_unlock(&mgs->mgs_fs_db_lock);
+        up(&mgs->mgs_sem);
         return 0;
 }
 
@@ -322,17 +321,17 @@ static int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
         char *cliname;
         int rc = 0;
 
-        spin_lock(&mgs->mgs_fs_db_lock);
+        down(&mgs->mgs_sem);
         fsdb = mgs_find_fsdb(obd, name);
         if (fsdb) {
-                spin_unlock(&mgs->mgs_fs_db_lock);
+                up(&mgs->mgs_sem);
                 *dbh = fsdb;
                 return 0;
         }
 
         CDEBUG(D_MGS, "Creating new db\n");
         fsdb = mgs_new_fsdb(obd, name);
-        spin_unlock(&mgs->mgs_fs_db_lock);
+        up(&mgs->mgs_sem);
         if (!fsdb) 
                 return -ENOMEM;
 
@@ -2202,11 +2201,11 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
         }
                                                                                 
         /* Delete the fs db */
-        spin_lock(&mgs->mgs_fs_db_lock);
+        down(&mgs->mgs_sem);
         fsdb = mgs_find_fsdb(obd, fsname);
         if (fsdb) 
                 mgs_free_fsdb(fsdb);
-        spin_unlock(&mgs->mgs_fs_db_lock);
+        up(&mgs->mgs_sem);
 
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 list_del(&dirent->lld_list);

@@ -15,8 +15,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-# bug number: 2766 9930
-ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
+# bug number: 2766
+ALWAYS_EXCEPT="0b   $REPLAY_SINGLE_EXCEPT"
 
 build_test_filter
 
@@ -902,13 +902,29 @@ run_test 43 "mds osc import failure during recovery; don't LBUG"
 
 test_44() {
     mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
-    $LCTL --device $mdcdev recover
-    df $MOUNT
+    for i in `seq 1 10`; do
+        #define OBD_FAIL_TGT_CONN_RACE     0x701
+        do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
+        $LCTL --device $mdcdev recover
+        df $MOUNT
+    done
     do_facet mds "sysctl -w lustre.fail_loc=0"
     return 0
 }
 run_test 44 "race in target handle connect"
+
+test_44b() {
+    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
+    for i in `seq 1 10`; do
+        #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
+        do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
+        $LCTL --device $mdcdev recover
+        df $MOUNT
+    done
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    return 0
+}
+run_test 44b "race in target handle connect"
 
 # Handle failed close
 test_45() {

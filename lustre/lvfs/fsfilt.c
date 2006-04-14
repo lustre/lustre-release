@@ -87,7 +87,7 @@ struct fsfilt_operations *fsfilt_get_ops(const char *type)
 
                 if (rc) {
                         CERROR("Can't find %s interface\n", name);
-                        RETURN(ERR_PTR(rc));
+                        RETURN(ERR_PTR(rc < 0 ? rc : -rc));
                         /* unlock fsfilt_types list */
                 }
         }

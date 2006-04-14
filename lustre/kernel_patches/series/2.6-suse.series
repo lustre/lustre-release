@@ -13,4 +13,3 @@ header-guards-2.6-suse.patch
 md_path_lookup-2.6-suse.patch
 ext3-super-ntohl.patch
 export-show_task-2.6-vanilla.patch
-export-filemap_populate.patch

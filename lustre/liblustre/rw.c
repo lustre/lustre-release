@@ -797,19 +797,8 @@ int llu_iop_read(struct inode *ino,
 int llu_iop_write(struct inode *ino,
                   struct ioctx *ioctx)
 {
-        struct iattr iattr;
-        int rc;
-
-        memset(&iattr, 0, sizeof(iattr));
-        iattr.ia_mtime = iattr.ia_atime = CURRENT_TIME;
-        iattr.ia_valid = ATTR_MTIME | ATTR_ATIME | ATTR_RAW;
-
-        liblustre_wait_event(0);
-        rc = llu_setattr_raw(ino, &iattr);
-        if (rc) {
-                CERROR("failed to set mtime/atime during write: %d", rc);
-                /* XXX should continue or return error? */
-        }
+        struct intnl_stat *st = llu_i2stat(ino);
+        st->st_mtime = st->st_ctime = CURRENT_TIME;
 
         return llu_file_rwx(ino, ioctx, 0);
 }
