@@ -48,6 +48,9 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_disk.h>
 
+/* fid_is_local() */
+#include <linux/lustre_fid.h>
+
 #include "osd_internal.h"
 
 static int   osd_root_get      (struct lu_context *ctxt,
@@ -67,6 +70,8 @@ static int   osd_object_print  (struct lu_context *ctx,
 static void  osd_device_free   (struct lu_device *m);
 static void  osd_device_fini   (struct lu_device *d);
 static int   osd_device_init   (struct lu_device *d, const char *conf);
+static void *osd_key_init      (struct lu_context *ctx);
+static void  osd_key_fini      (struct lu_context *ctx, void *data);
 
 static struct osd_object *osd_obj         (const struct lu_object *o);
 static struct osd_device *osd_dev         (const struct lu_device *d);
@@ -83,7 +88,7 @@ static struct obd_ops                   osd_obd_device_ops;
 static struct lprocfs_vars              lprocfs_osd_module_vars[];
 static struct lprocfs_vars              lprocfs_osd_obd_vars[];
 static struct lu_device_operations      osd_lu_ops;
-
+static struct lu_context_key            osd_key;
 
 static struct lu_fid *lu_inode_get_fid(const struct inode *inode)
 {
@@ -94,6 +99,10 @@ static struct lu_fid *lu_inode_get_fid(const struct inode *inode)
         };
         return &stub;
 }
+
+struct osd_thread_info {
+        char oti_name[64];
+};
 
 /*
  * DT methods.
@@ -163,14 +172,16 @@ static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 
 static void osd_object_free(struct lu_context *ctx, struct lu_object *l)
 {
-        struct osd_object  *o = osd_obj(l);
-
-        if (o->oo_dentry != NULL)
-                dput(o->oo_dentry);
+        struct osd_object *obj = osd_obj(l);
+        OBD_FREE_PTR(obj);
 }
 
 static void osd_object_delete(struct lu_context *ctx, struct lu_object *l)
 {
+        struct osd_object *o = osd_obj(l);
+
+        if (o->oo_dentry != NULL)
+                dput(o->oo_dentry);
 }
 
 static int osd_inode_unlinked(const struct inode *inode)
@@ -260,11 +271,33 @@ static struct dt_device_operations osd_dt_ops = {
  */
 static int osd_type_init(struct lu_device_type *t)
 {
-        return 0;
+        return lu_context_key_register(&osd_key);
 }
 
 static void osd_type_fini(struct lu_device_type *t)
 {
+        lu_context_key_degister(&osd_key);
+}
+
+static struct lu_context_key osd_key = {
+        .lct_init = osd_key_init,
+        .lct_fini = osd_key_fini
+};
+
+static void *osd_key_init(struct lu_context *ctx)
+{
+        struct osd_thread_info *info;
+
+        OBD_ALLOC_PTR(info);
+        if (info == NULL)
+                info = ERR_PTR(-ENOMEM);
+        return info;
+}
+
+static void osd_key_fini(struct lu_context *ctx, void *data)
+{
+        struct osd_thread_info *info = data;
+        OBD_FREE_PTR(info);
 }
 
 static int osd_device_init(struct lu_device *d, const char *top)
@@ -331,6 +364,57 @@ static void osd_device_free(struct lu_device *d)
 
         lu_device_fini(d);
         OBD_FREE_PTR(o);
+}
+
+/*
+ *
+ */
+
+static int osd_fid_lookup(struct lu_context *ctx,
+                          struct osd_object *obj, struct lu_fid *fid)
+{
+        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+        struct lu_device       *ldev = obj->oo_dt.do_lu.lo_dev;
+        struct osd_device      *dev;
+        struct dentry          *dentry;
+        struct dentry          *parent;
+        int                     len;
+        int                     result;
+
+        LASSERT(obj->oo_dentry == NULL);
+        LASSERT(fid_is_sane(fid));
+        LASSERT(fid_is_local(ldev->ld_site, fid));
+
+        dev    = osd_dev(ldev);
+        parent = dev->od_objdir;
+
+        ENTRY;
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
+                RETURN(-ENOENT);
+
+        len = snprintf(info->oti_name, sizeof info->oti_name, "%llx:%x:%x",
+                       fid_seq(fid), fid_oid(fid), fid_ver(fid));
+        LASSERT(len < sizeof info->oti_name);
+
+        CDEBUG(D_INODE, "looking up object %s\n", info->oti_name);
+        down(&parent->d_inode->i_sem);
+        dentry = lookup_one_len(info->oti_name, parent, len);
+        up(&parent->d_inode->i_sem);
+
+        if (IS_ERR(dentry)) {
+                result = PTR_ERR(dentry);
+                CERROR("error getting %s: %d\n", info->oti_name, result);
+        } else if (dentry->d_inode != NULL && is_bad_inode(dentry->d_inode)) {
+                CERROR("got bad object %s inode %lu\n",
+                       info->oti_name, dentry->d_inode->i_ino);
+                dput(dentry);
+                result = -ENOENT;
+        } else {
+                obj->oo_dentry = dentry;
+                result = 0;
+        }
+        RETURN(result);
 }
 
 /*
@@ -412,7 +496,7 @@ static int __init osd_mod_init(void)
 
         lprocfs_init_vars(osd, &lvars);
         return class_register_type(&osd_obd_device_ops, lvars.module_vars,
-                                     LUSTRE_OSD0_NAME, &osd_device_type);
+                                   LUSTRE_OSD0_NAME, &osd_device_type);
 }
 
 static void __exit osd_mod_exit(void)
