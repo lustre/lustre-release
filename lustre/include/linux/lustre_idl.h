@@ -560,6 +560,7 @@ typedef enum {
         MDS_QUOTACTL     = 48,
         MDS_GETXATTR     = 49,
         MDS_SETXATTR     = 50,
+        MDS_GET_INFO     = 51,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -1072,6 +1073,11 @@ extern void lustre_swab_lmv_desc (struct lmv_desc *ld);
 extern void lustre_swab_cmm_desc (struct cmm_desc *ld);
 /*end adding MDT by huanghua@clusterfs.com*/
 
+struct md_fld {
+        __u64 mf_seq;
+        __u64 mf_mds;
+};
+extern void lustre_swab_md_fld (struct md_fld *mf);
 extern void lustre_swab_lov_desc (struct lov_desc *ld);
 
 /*

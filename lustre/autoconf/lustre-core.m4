@@ -695,6 +695,8 @@ lustre/cmm/Makefile
 lustre/cmm/autoMakefile
 lustre/mdd/Makefile
 lustre/mdd/autoMakefile
+lustre/fld/Makefile
+lustre/fld/autoMakefile
 lustre/obdclass/Makefile
 lustre/obdclass/autoMakefile
 lustre/obdecho/Makefile

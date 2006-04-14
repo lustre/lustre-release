@@ -10,7 +10,7 @@ ALWAYS_SUBDIRS := include fid lvfs obdclass ldlm ptlrpc osc lov obdecho \
 
 SERVER_SUBDIRS := ldiskfs obdfilter ost mds mgs mdt cmm mdd osd
 
-CLIENT_SUBDIRS := mdc llite
+CLIENT_SUBDIRS := mdc llite fld
 
 QUOTA_SUBDIRS := quota
 

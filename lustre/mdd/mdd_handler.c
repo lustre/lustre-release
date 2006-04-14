@@ -239,7 +239,6 @@ mdd_object_destroy(struct lu_context *ctxt, struct md_object *obj)
 static void mdd_object_release(struct lu_context *ctxt, struct lu_object *o)
 {
         struct mdd_object *obj = mdd_obj(o);
-
         int rc;
         int nlink;
 
@@ -680,8 +679,134 @@ static int mdd_statfs(struct lu_context *ctx,
         RETURN(rc);
 }
 
-static struct md_device_operations mdd_ops = {
+/*XXX use linked list temp for fld in this prototype*/
+struct fld_list {
+        struct list_head fld_list;
+        spinlock_t       fld_lock;
+};
+struct fld_item{
+        struct list_head fld_list;
+        __u64 fld_seq;
+        __u64 fld_mds;
+};
+
+struct fld_list fld_list_head;
+
+static void mdd_fld_init(struct mdd_device *mdd)
+{
+        INIT_LIST_HEAD(&fld_list_head.fld_list);
+        spin_lock_init(&fld_list_head.fld_lock);
+}
+
+static void mdd_fld_fini(struct mdd_device *mdd)
+{
+        struct list_head *pos, *n;
+       
+        spin_lock(&fld_list_head.fld_lock);
+        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
+                struct fld_item *fld = list_entry(pos, struct fld_item,
+                                                  fld_list);
+                list_del_init(&fld->fld_list);
+                OBD_FREE_PTR(fld);
+        }
+        spin_unlock(&fld_list_head.fld_lock); 
+}
+
+static int mdd_fld_create(struct mdd_device *mdd, __u64 seq_num, __u64 mds_num)
+{
+        struct fld_item *fld;
+        
+        OBD_ALLOC_PTR(fld);
+        fld->fld_seq = seq_num;
+        fld->fld_mds = mds_num;
+        INIT_LIST_HEAD(&fld->fld_list); 
+        spin_lock(&fld_list_head.fld_lock);
+        list_add_tail(&fld_list_head.fld_list, &fld->fld_list);
+        spin_unlock(&fld_list_head.fld_lock);
+        return 0;
+}
+
+static int mdd_fld_delete(struct mdd_device *mdd, __u64 seq_num, __u64 mds_num)
+{
+        struct list_head *pos, *n;
+        spin_lock(&fld_list_head.fld_lock);
+        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
+                struct fld_item *fld = list_entry(pos, struct fld_item,
+                                                  fld_list);
+                if (fld->fld_seq == seq_num) {
+                        LASSERT(fld->fld_mds == mds_num);
+                        list_del_init(&fld->fld_list);
+                        OBD_FREE_PTR(fld);
+                        spin_unlock(&fld_list_head.fld_lock);
+                        RETURN(0);
+                }
+        }
+        spin_unlock(&fld_list_head.fld_lock);
+        RETURN(0);
+}
+
+static int mdd_fld_get(struct mdd_device *mdd, __u64 seq_num, __u64 *mds_num)
+{
+        struct list_head *pos, *n;
+       
+        spin_lock(&fld_list_head.fld_lock);
+        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
+                struct fld_item *fld = list_entry(pos, struct fld_item,
+                                                  fld_list);
+                if (fld->fld_seq == seq_num) {
+                        *mds_num = fld->fld_mds;
+                        spin_unlock(&fld_list_head.fld_lock);
+                        RETURN(0);
+                }
+        }
+        spin_unlock(&fld_list_head.fld_lock);
+        return -ENOENT;
+}
+
+static int mdd_get_info(struct lu_context *ctx, struct md_device *m, 
+                        __u32 keylen, void *key, __u32 *vallen, void *val)
+{
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        int rc;
+
+        ENTRY;
+        if (keylen >= strlen("fld_get") && 
+            memcmp(key, "fld_get", 7) == 0) {
+                struct md_fld *mf = val;
+                rc = mdd_fld_get(mdd, mf->mf_seq, &mf->mf_mds);
+                RETURN(rc);
+        } 
+        RETURN(-EINVAL);
+}
+
+static int mdd_set_info(struct lu_context *ctx, struct md_device *m, 
+                        __u32 keylen, void *key, __u32 vallen, void *val)
+{
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        int rc;
+        ENTRY;
+        
+        if (keylen >= strlen("fld_create") && 
+            memcmp(key, "fld_create", 10) == 0) {
+                struct md_fld *mf = val;
+                rc = mdd_fld_create(mdd, mf->mf_seq, mf->mf_mds);
+                RETURN(rc);
+        } 
+        
+        if (keylen >= strlen("fld_delete") && 
+            memcmp(key, "fld_delete", 10) == 0) {
+                struct md_fld *mf = val;
+                rc = mdd_fld_delete(mdd, mf->mf_seq, mf->mf_mds);
+                RETURN(rc);
+        } 
+
+        RETURN(-EINVAL);
+}
+
+struct md_device_operations mdd_ops = {
         .mdo_root_get   = mdd_root_get,
+        .mdo_get_info   = mdd_get_info,
+        .mdo_set_info   = mdd_set_info,
         .mdo_config     = mdd_config,
         .mdo_statfs     = mdd_statfs
 };
@@ -719,7 +844,7 @@ struct lu_device *mdd_device_alloc(struct lu_device_type *t,
                 l = mdd2lu_dev(m);
 	        l->ld_ops = &mdd_lu_ops;
                 m->mdd_md_dev.md_ops = &mdd_ops;
-
+                mdd_fld_init(m);
                 /* get next layer */
                 obd = class_name2obd(child);
                 if (obd && obd->obd_lu_dev) {
@@ -740,7 +865,8 @@ void mdd_device_free(struct lu_device *lu)
         struct mdd_device *m = lu2mdd_dev(lu);
 
         LASSERT(atomic_read(&lu->ld_ref) == 0);
-	md_device_fini(&m->mdd_md_dev);
+        mdd_fld_fini(m);	
+        md_device_fini(&m->mdd_md_dev);
 
         OBD_FREE_PTR(m);
 }

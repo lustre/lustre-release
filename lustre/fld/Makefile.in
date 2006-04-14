@@ -1,0 +1,4 @@
+MODULES := fld 
+fld-objs := fld_seq.o
+
+@INCLUDE_RULES@

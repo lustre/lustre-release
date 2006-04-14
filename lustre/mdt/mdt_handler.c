@@ -222,6 +222,80 @@ static int mdt_getattr(struct mdt_thread_info *info,
         RETURN(result);
 }
 
+static int mdt_set_info(struct mdt_thread_info *info,
+                        struct ptlrpc_request *req, int offset)
+{
+        struct md_device *next  = info->mti_mdt->mdt_child;
+        char *key;
+        int keylen, rc = 0;
+        ENTRY;
+        
+        key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
+        if (key == NULL) {
+                DEBUG_REQ(D_HA, req, "no set_info key");
+                RETURN(-EFAULT);
+        }
+        keylen = req->rq_reqmsg->buflens[0];
+       
+        if (((keylen >= strlen("fld_create") &&
+            memcmp(key, "fld_create", keylen) == 0)) || 
+            ((keylen >= strlen("fld_delete") &&
+            memcmp(key, "fld_delete", keylen) == 0))) {
+                struct md_fld mf, *p;
+                __u32 size = sizeof(struct md_fld);
+
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                if (rc)
+                        RETURN(rc);
+                
+                p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
+                mf = *p;
+                rc = next->md_ops->mdo_get_info(&info->mti_ctxt, next, keylen, 
+                                                key, &size, &mf);
+                RETURN(rc); 
+        }
+
+        CDEBUG(D_IOCTL, "invalid key\n");
+        RETURN(-EINVAL);
+
+}
+
+static int mdt_get_info(struct mdt_thread_info *info,
+                        struct ptlrpc_request *req, int offset)
+{
+        struct md_device *next  = info->mti_mdt->mdt_child;
+        char *key;
+        int keylen, rc = 0;
+        ENTRY;
+        
+        key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
+        if (key == NULL) {
+                DEBUG_REQ(D_HA, req, "no set_info key");
+                RETURN(-EFAULT);
+        }
+        keylen = req->rq_reqmsg->buflens[0];
+       
+        if (((keylen >= strlen("fld_get") &&
+            memcmp(key, "fld_get", keylen) == 0))) {
+                struct md_fld mf, *p, *reply;
+                int size = sizeof(*reply);
+               
+                rc = lustre_pack_reply(req, 1, &size, NULL);
+                if (rc)
+                        RETURN(rc);
+                p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
+                mf = *p;
+                rc = next->md_ops->mdo_get_info(&info->mti_ctxt, next, keylen, 
+                                                key, &size, &mf);
+                reply = lustre_msg_buf(req->rq_repmsg, 0, size);
+                *reply = mf;
+                RETURN(rc); 
+        }
+
+        CDEBUG(D_IOCTL, "invalid key\n");
+        RETURN(-EINVAL);
+}
+
 static struct lu_device_operations mdt_lu_ops;
 
 static int lu_device_is_mdt(struct lu_device *d)
@@ -311,12 +385,6 @@ static int mdt_pin(struct mdt_thread_info *info,
 
 static int mdt_sync(struct mdt_thread_info *info,
                     struct ptlrpc_request *req, int offset)
-{
-        return -EOPNOTSUPP;
-}
-
-static int mdt_set_info(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
 {
         return -EOPNOTSUPP;
 }
@@ -1417,6 +1485,7 @@ static struct mdt_handler mdt_mds_ops[] = {
         DEF_MDT_HNDL(0,            PIN,            mdt_pin),
         DEF_MDT_HNDL(HABEO_CORPUS, SYNC,           mdt_sync),
         DEF_MDT_HNDL(0,            SET_INFO,       mdt_set_info),
+        DEF_MDT_HNDL(0,            GET_INFO,       mdt_get_info),
         DEF_MDT_HNDL(0,            QUOTACHECK,     mdt_handle_quotacheck),
         DEF_MDT_HNDL(0,            QUOTACTL,       mdt_handle_quotactl)
 };

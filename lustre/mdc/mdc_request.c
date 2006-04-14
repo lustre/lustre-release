@@ -38,6 +38,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_mdc.h>
+#include <linux/md_object.h>
 #include <linux/lustre_acl.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
@@ -850,7 +851,26 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
+        if (KEY_IS("fld_create") || KEY_IS("fld_delete")) {
+                struct ptlrpc_request *req;
+                int size[2] = {keylen, vallen};
+                char *bufs[2] = {key, val};
+                ENTRY;
 
+                req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, 
+                                      MDS_SET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+                
+                req->rq_replen = lustre_msg_size(0, NULL);
+                rc = ptlrpc_queue_wait(req);
+                if (rc)
+                        GOTO(out_req, rc);
+out_req:
+                ptlrpc_req_finished(req);
+                RETURN(rc);
+
+        }
         RETURN(rc);
 }
 
@@ -871,6 +891,34 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
                 max_easize = val;
                 *max_easize = exp->exp_obd->u.cli.cl_max_mds_easize;
                 RETURN(0);
+        }
+        if (KEY_IS("fld_get")) {
+                struct ptlrpc_request *req;
+                int size[2] = {keylen, *vallen};
+                char *bufs[2] = {key, val};
+                struct md_fld *reply;
+                ENTRY;
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
+                                      MDS_GET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+                
+                req->rq_replen = lustre_msg_size(1, (int *)vallen);
+                rc = ptlrpc_queue_wait(req);
+                if (rc)
+                        GOTO(out_req, rc);
+
+                reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
+                                           lustre_swab_md_fld);
+                if (reply == NULL) {
+                        CERROR("Can't unpack %s\n", (char *)key);
+                        GOTO(out_req, rc = -EPROTO);
+                }
+                *((struct md_fld *)val) = *reply;
+out_req:
+                ptlrpc_req_finished(req);
+                RETURN(rc);
         }
         RETURN(rc);
 }

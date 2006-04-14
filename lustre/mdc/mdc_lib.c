@@ -74,18 +74,6 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
         b->eadatasize = ea_size;
         mdc_pack_body(b);
 }
-
-#ifdef FLD_PROTO_TYPE
-void mdc_fld_pack(struct ptlrpc_request *req, int offset, __u64 mds_num, 
-                  __u64 seq_num, int op)
-{
-        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
-
-        b->size = seq_num;
-        b->valid = mds_num;
-        b->fsuid = op; 
-}
-#endif
 /* packing of MDS records */
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *op_data, const void *data, int datalen,

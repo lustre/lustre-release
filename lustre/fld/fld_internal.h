@@ -23,20 +23,17 @@
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   license text for more details.
  */
-#ifndef _MDD_INTERNAL_H
-#define _MDD_INTERNAL_H
+#ifndef _FLD_INTERNAL_H
+#define _FLD_INTERNAL_H
 
 struct fld_cache {
-        struct hlist_node fld_hash;
+        struct hlist_node fld_list;
         __u64             fld_mds;
         __u64             fld_seq;
-}
+};
 struct fld_cache_info {
-        struct hlist_head *fld_list;
+        struct hlist_head *fld_hash;
         spinlock_t fld_lock;
         int fld_hash_mask;
-}
-#define FLD_CREATE 0
-#define FLD_DELETE 1
-#define FLD_GET 3
+};
 #endif
