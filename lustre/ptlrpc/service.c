@@ -34,6 +34,8 @@
 #include <lnet/types.h>
 #include "ptlrpc_internal.h"
 
+#include <linux/lu_object.h>
+
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
 
@@ -860,79 +862,6 @@ ptlrpc_retry_rqbds(void *arg)
         return (-ETIMEDOUT);
 }
 
-enum {
-        /*
-         * Maximal number of tld slots.
-         */
-        PTLRPC_THREAD_KEY_NR = 16
-};
-
-static struct ptlrpc_thread_key *keys[PTLRPC_THREAD_KEY_NR] = { NULL, };
-
-static int keys_nr = 0;
-static spinlock_t keys_guard = SPIN_LOCK_UNLOCKED;
-
-int ptlrpc_thread_key_register(struct ptlrpc_thread_key *key)
-{
-        int result;
-
-        spin_lock(&keys_guard);
-        if (keys_nr < ARRAY_SIZE(keys)) {
-                key->ptk_index = keys_nr;
-                keys[keys_nr] = key;
-                keys_nr++;
-                result = 0;
-        } else
-                result = -ENFILE;
-        spin_unlock(&keys_guard);
-        return result;
-}
-EXPORT_SYMBOL(ptlrpc_thread_key_register);
-
-void *ptlrpc_thread_key_get(struct ptlrpc_thread *t,
-                            struct ptlrpc_thread_key *key)
-{
-        return t->t_key_values[key->ptk_index];
-}
-EXPORT_SYMBOL(ptlrpc_thread_key_get);
-
-static void keys_fini(struct ptlrpc_thread *t)
-{
-        int i;
-
-        for (i = 0; i < ARRAY_SIZE(keys); ++i) {
-                if (t->t_key_values[i] != NULL) {
-                        LASSERT(keys[i] != NULL);
-                        LASSERT(keys[i]->ptk_fini != NULL);
-
-                        keys[i]->ptk_fini(t, t->t_key_values[i]);
-                        t->t_key_values[i] = NULL;
-                }
-        }
-}
-
-static int keys_init(struct ptlrpc_thread *t)
-{
-        int i;
-
-        for (i = 0; i < ARRAY_SIZE(keys); ++i) {
-                if (keys[i] != NULL) {
-                        void *value;
-
-                        LASSERT(keys[i]->ptk_init != NULL);
-                        LASSERT(keys[i]->ptk_index == i);
-
-                        value = keys[i]->ptk_init(t);
-                        if (IS_ERR(value)) {
-                                keys_fini(t);
-                                return PTR_ERR(value);
-                        }
-                        t->t_key_values[i] = value;
-                }
-        }
-        return 0;
-}
-
 static int ptlrpc_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
@@ -944,8 +873,7 @@ static int ptlrpc_main(void *arg)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         struct group_info *ginfo = NULL;
 #endif
-
-        void *tld[PTLRPC_THREAD_KEY_NR] = { NULL, };
+        struct lu_context ctx;
         int rc = 0;
         ENTRY;
 
@@ -985,10 +913,12 @@ static int ptlrpc_main(void *arg)
                         goto out;
         }
 
-        thread->t_key_values = tld;
-        rc = keys_init(thread);
+        rc = lu_context_init(&ctx);
         if (rc)
                 goto out_srv_init;
+
+        thread->t_ctx = &ctx;
+        ctx.lc_thread = thread;
 
         /* Alloc reply state structure for this one */
         OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, GFP_KERNEL);
@@ -1072,7 +1002,7 @@ out_srv_init:
                 svc->srv_done(thread);
 
 out:
-        keys_fini(thread);
+        lu_context_fini(&ctx);
 
         CDEBUG(D_NET, "service thread %d exiting: rc %d\n", thread->t_id, rc);
 

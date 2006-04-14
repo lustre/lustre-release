@@ -471,21 +471,7 @@ struct ptlrpc_bulk_desc {
 #endif
 };
 
-struct ptlrpc_thread;
-
-/*
- * Descriptor of per-thread data.
- */
-struct ptlrpc_thread_key {
-        void *(*ptk_init)(struct ptlrpc_thread *t);
-        void  (*ptk_fini)(struct ptlrpc_thread *t, void *data);
-        int     ptk_index;
-};
-
-int ptlrpc_thread_key_register(struct ptlrpc_thread_key *key);
-void *ptlrpc_thread_key_get(struct ptlrpc_thread *t,
-                            struct ptlrpc_thread_key *key);
-
+struct lu_context;
 struct ptlrpc_thread {
 
         struct list_head t_link; /* active threads for service, from svc->srv_threads */
@@ -495,8 +481,7 @@ struct ptlrpc_thread {
 
         unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
         wait_queue_head_t t_ctl_waitq;
-
-        void **t_key_values;
+        struct lu_context *t_ctx;
 };
 
 struct ptlrpc_request_buffer_desc {
