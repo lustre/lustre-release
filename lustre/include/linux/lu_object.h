@@ -476,9 +476,11 @@ struct lu_context_key {
         void  *(*lct_init)(struct lu_context *ctx);
         void   (*lct_fini)(struct lu_context *ctx, void *data);
         int      lct_index;
+        unsigned lct_used;
 };
 
 int   lu_context_key_register(struct lu_context_key *key);
+void  lu_context_key_degister(struct lu_context_key *key);
 void *lu_context_key_get(struct lu_context *ctx, struct lu_context_key *key);
 
 int  lu_context_init(struct lu_context *ctx);

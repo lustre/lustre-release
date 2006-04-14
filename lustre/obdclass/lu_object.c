@@ -392,36 +392,47 @@ enum {
         LU_CONTEXT_KEY_NR = 16
 };
 
-static struct lu_context_key *keys[LU_CONTEXT_KEY_NR] = { NULL, };
+static struct lu_context_key *lu_keys[LU_CONTEXT_KEY_NR] = { NULL, };
 
-static int keys_nr = 0;
-static spinlock_t keys_guard = SPIN_LOCK_UNLOCKED;
-static int key_registration_over = 0;
+static spinlock_t lu_keys_guard = SPIN_LOCK_UNLOCKED;
 
 int lu_context_key_register(struct lu_context_key *key)
 {
         int result;
+        int i;
 
-        if (!key_registration_over) {
-                spin_lock(&keys_guard);
-                if (keys_nr < ARRAY_SIZE(keys)) {
-                        key->lct_index = keys_nr;
-                        keys[keys_nr] = key;
-                        keys_nr++;
+        result = -ENFILE;
+        spin_lock(&lu_keys_guard);
+        for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
+                if (lu_keys[i] == NULL) {
+                        key->lct_index = i;
+                        key->lct_used = 1;
+                        lu_keys[i] = key;
                         result = 0;
-                } else
-                        result = -ENFILE;
-                spin_unlock(&keys_guard);
-        } else {
-                CERROR("Too late to register a key.\n");
-                result = -EBUSY;
+                        break;
+                }
         }
+        spin_unlock(&lu_keys_guard);
         return result;
 }
 EXPORT_SYMBOL(lu_context_key_register);
 
+void lu_context_key_degister(struct lu_context_key *key)
+{
+        LASSERT(key->lct_used >= 1);
+        LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
+
+        if (key->lct_used > 1)
+                CERROR("key has instances.\n");
+        spin_lock(&lu_keys_guard);
+        lu_keys[key->lct_index] = NULL;
+        spin_unlock(&lu_keys_guard);
+}
+EXPORT_SYMBOL(lu_context_key_degister);
+
 void *lu_context_key_get(struct lu_context *ctx, struct lu_context_key *key)
 {
+        LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
         return ctx->lc_value[key->lct_index];
 }
 EXPORT_SYMBOL(lu_context_key_get);
@@ -431,16 +442,22 @@ static void keys_fini(struct lu_context *ctx)
         int i;
 
         if (ctx->lc_value != NULL) {
-                for (i = 0; i < keys_nr; ++i) {
+                for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
                         if (ctx->lc_value[i] != NULL) {
-                                LASSERT(keys[i] != NULL);
-                                LASSERT(keys[i]->lct_fini != NULL);
+                                struct lu_context_key *key;
 
-                                keys[i]->lct_fini(ctx, ctx->lc_value[i]);
+                                key = lu_keys[i];
+                                LASSERT(key != NULL);
+                                LASSERT(key->lct_fini != NULL);
+                                LASSERT(key->lct_used > 1);
+
+                                key->lct_fini(ctx, ctx->lc_value[i]);
+                                key->lct_used--;
                                 ctx->lc_value[i] = NULL;
                         }
                 }
-                OBD_FREE(ctx->lc_value, keys_nr * sizeof ctx->lc_value[0]);
+                OBD_FREE(ctx->lc_value,
+                         ARRAY_SIZE(lu_keys) * sizeof ctx->lc_value[0]);
                 ctx->lc_value = NULL;
         }
 }
@@ -450,22 +467,24 @@ static int keys_init(struct lu_context *ctx)
         int i;
         int result;
 
-        key_registration_over = 1;
-
-        OBD_ALLOC(ctx->lc_value, keys_nr * sizeof ctx->lc_value[0]);
+        OBD_ALLOC(ctx->lc_value, ARRAY_SIZE(lu_keys) * sizeof ctx->lc_value[0]);
         if (ctx->lc_value != NULL) {
-                for (i = 0; i < ARRAY_SIZE(keys); ++i) {
-                        if (keys[i] != NULL) {
+                for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
+                        struct lu_context_key *key;
+
+                        key = lu_keys[i];
+                        if (key != NULL) {
                                 void *value;
 
-                                LASSERT(keys[i]->lct_init != NULL);
-                                LASSERT(keys[i]->lct_index == i);
+                                LASSERT(key->lct_init != NULL);
+                                LASSERT(key->lct_index == i);
 
-                                value = keys[i]->lct_init(ctx);
+                                value = key->lct_init(ctx);
                                 if (IS_ERR(value)) {
                                         keys_fini(ctx);
                                         return PTR_ERR(value);
                                 }
+                                key->lct_used++;
                                 ctx->lc_value[i] = value;
                         }
                 }
