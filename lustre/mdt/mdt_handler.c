@@ -321,12 +321,15 @@ static int mdt_connect(struct mdt_thread_info *info,
 
         result = target_handle_connect(req, mdt_handle);
         if (result == 0) {
-                struct mdt_device *mdt = info->mti_mdt;
                 struct obd_connect_data *data;
+
+                LASSERT(req->rq_export != NULL);
+                info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
 
                 data = lustre_msg_buf(req->rq_repmsg, 0, sizeof *data);
                 result = seq_mgr_alloc(info->mti_ctxt,
-                                       mdt->mdt_seq_mgr, &data->ocd_seq);
+                                       info->mti_mdt->mdt_seq_mgr,
+                                       &data->ocd_seq);
         }
         return result;
 }
