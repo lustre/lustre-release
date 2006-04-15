@@ -286,7 +286,7 @@ static int ll_special_release_internal(struct inode *inode, struct file *filp,
 
         lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_RELEASE);
 
-        err = ll_mdc_close(sbi->ll_mdc_exp, inode, filp);
+        err = ll_mdc_close(sbi->ll_md_exp, inode, filp);
         if (err && rc == 0)
                 rc = err;
 
@@ -324,7 +324,7 @@ static int ll_special_open(struct inode *inode, struct file *filp)
         err = ll_local_open(filp, it, fd);
         if (rc != 0) {
                 CERROR("error opening special file: rc %d\n", rc);
-                ll_mdc_close(ll_i2sbi(inode)->ll_mdc_exp, inode, filp);
+                ll_mdc_close(ll_i2sbi(inode)->ll_md_exp, inode, filp);
         } else if (err) {
                 if (pfop && *pfop && (*pfop)->release)
                         (*pfop)->release(inode, filp);

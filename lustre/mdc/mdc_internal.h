@@ -5,28 +5,28 @@ void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
 		      __u32 size, struct lu_fid *fid);
 void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
-                      int flags, struct mdc_op_data *data);
+                      int flags, struct md_op_data *op_data);
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
-                      struct mdc_op_data *data,
+                      struct md_op_data *op_data,
                       struct iattr *iattr, void *ea, int ealen,
 		      void *ea2, int ea2len);
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *op_data, const void *data, int datalen,
+                     struct md_op_data *op_data, const void *data, int datalen,
 		     __u32 mode, __u32 uid, __u32 gid, __u32 cap_effective,
 		     __u64 rdev);
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
+                   struct md_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *data, int datalen);
 void mdc_join_pack(struct ptlrpc_request *req, int offset, 
-                   struct mdc_op_data *op_data, __u64 head_size);
+                   struct md_op_data *op_data, __u64 head_size);
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *data);
+                     struct md_op_data *op_data);
 void mdc_link_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *data);
+                   struct md_op_data *op_data);
 void mdc_rename_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *data,
+                     struct md_op_data *op_data,
                      const char *old, int oldlen, const char *new, int newlen);
-void mdc_close_pack(struct ptlrpc_request *req, int offset, struct mdc_op_data *op_data,
+void mdc_close_pack(struct ptlrpc_request *req, int offset, struct md_op_data *op_data,
 		    int valid, struct obd_client_handle *och);
 
 struct mdc_open_data {

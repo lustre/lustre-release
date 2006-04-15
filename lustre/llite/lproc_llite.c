@@ -280,7 +280,7 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         else
                 sbi->ll_flags &= ~LL_SBI_CHECKSUM;
 
-        rc = obd_set_info(sbi->ll_osc_exp, strlen("checksum"), "checksum",
+        rc = obd_set_info(sbi->ll_dt_exp, strlen("checksum"), "checksum",
                           sizeof(val), &val);
         if (rc)
                 CWARN("Failed to set OSC checksum flags: %d\n", rc);

@@ -113,7 +113,7 @@ static int ll_direct_IO_24(int rw,
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, iobuf->length);
-        rc = obd_brw_async(rw, ll_i2obdexp(inode), &oa, lsm, iobuf->nr_pages,
+        rc = obd_brw_async(rw, ll_i2dtexp(inode), &oa, lsm, iobuf->nr_pages,
                            pga, set, NULL);
         if (rc) {
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
@@ -128,7 +128,7 @@ static int ll_direct_IO_24(int rw,
                 rc = iobuf->length;
                 if (rw == OBD_BRW_WRITE) {
                         lov_stripe_lock(lsm);
-                        obd_adjust_kms(ll_i2obdexp(inode), lsm, offset, 0);
+                        obd_adjust_kms(ll_i2dtexp(inode), lsm, offset, 0);
                         lov_stripe_unlock(lsm);
                 }
         }

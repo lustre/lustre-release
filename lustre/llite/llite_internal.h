@@ -156,8 +156,8 @@ struct ll_sb_info {
          * grab from interrupt contexts */
         spinlock_t                ll_lock;
         struct obd_uuid           ll_sb_uuid;
-        struct obd_export        *ll_mdc_exp;
-        struct obd_export        *ll_osc_exp;
+        struct obd_export        *ll_md_exp;
+        struct obd_export        *ll_dt_exp;
         struct proc_dir_entry*    ll_proc_root;
         struct lu_fid             ll_root_fid; /* root object fid */
 
@@ -347,9 +347,9 @@ int ll_mdc_cancel_unused(struct lustre_handle *, struct inode *, int flags,
                          void *opaque);
 int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                         void *data, int flag);
-void ll_prepare_mdc_op_data(struct mdc_op_data *op_data, struct inode *i1,
-                            struct inode *i2, const char *name, int namelen,
-                            int mode);
+void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
+                           struct inode *i2, const char *name, int namelen,
+                           int mode);
 
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
@@ -513,20 +513,20 @@ static inline __u64 ll_ts2u64(time_t *time)
 #endif
 
 /* don't need an addref as the sb_info should be holding one */
-static inline struct obd_export *ll_s2obdexp(struct super_block *sb)
+static inline struct obd_export *ll_s2dtexp(struct super_block *sb)
 {
-        return ll_s2sbi(sb)->ll_osc_exp;
+        return ll_s2sbi(sb)->ll_dt_exp;
 }
 
 /* don't need an addref as the sb_info should be holding one */
-static inline struct obd_export *ll_s2mdcexp(struct super_block *sb)
+static inline struct obd_export *ll_s2mdexp(struct super_block *sb)
 {
-        return ll_s2sbi(sb)->ll_mdc_exp;
+        return ll_s2sbi(sb)->ll_md_exp;
 }
 
 static inline struct client_obd *sbi2mdc(struct ll_sb_info *sbi)
 {
-        struct obd_device *obd = sbi->ll_mdc_exp->exp_obd;
+        struct obd_device *obd = sbi->ll_md_exp->exp_obd;
         if (obd == NULL)
                 LBUG();
         return &obd->u.cli;
@@ -538,14 +538,14 @@ static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
         return ll_s2sbi(inode->i_sb);
 }
 
-static inline struct obd_export *ll_i2obdexp(struct inode *inode)
+static inline struct obd_export *ll_i2dtexp(struct inode *inode)
 {
-        return ll_s2obdexp(inode->i_sb);
+        return ll_s2dtexp(inode->i_sb);
 }
 
-static inline struct obd_export *ll_i2mdcexp(struct inode *inode)
+static inline struct obd_export *ll_i2mdexp(struct inode *inode)
 {
-        return ll_s2mdcexp(inode->i_sb);
+        return ll_s2mdexp(inode->i_sb);
 }
 
 static inline struct lu_fid *ll_inode2fid(struct inode *inode)

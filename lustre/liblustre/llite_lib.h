@@ -195,7 +195,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr);
 extern struct fssw_ops llu_fssw_ops;
 
 /* file.c */
-void llu_prepare_mdc_op_data(struct mdc_op_data *data,
+void llu_prepare_mdc_op_data(struct md_op_data *op_data,
                              struct inode *i1,
                              struct inode *i2,
                              const char *name,

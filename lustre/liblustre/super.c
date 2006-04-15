@@ -622,7 +622,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int ia_valid = attr->ia_valid;
         int rc = 0;
         ENTRY;
@@ -847,7 +847,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int err = -EMLINK;
         ENTRY;
 
@@ -964,7 +964,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         struct ptlrpc_request *request = NULL;
         struct inode *dir = pno->p_parent->p_base->pb_ino;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int err = -EMLINK;
         ENTRY;
 
@@ -1017,7 +1017,7 @@ static int llu_iop_link_raw(struct pnode *old, struct pnode *new)
         const char *name = new->p_base->pb_name.name;
         int namelen = new->p_base->pb_name.len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1044,7 +1044,7 @@ static int llu_iop_unlink_raw(struct pnode *pno)
         int len = qstr->len;
         struct inode *target = pno->p_base->pb_ino;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1070,7 +1070,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         const char *newname = new->p_base->pb_name.name;
         int newnamelen = new->p_base->pb_name.len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 
@@ -1213,7 +1213,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
         struct intnl_stat *st = llu_i2stat(dir);
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int err = -EMLINK;
         ENTRY;
 
@@ -1246,7 +1246,7 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
         const char *name = qstr->name;
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 

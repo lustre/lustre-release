@@ -122,7 +122,7 @@ static void ll_close_done_writing(struct inode *inode)
         struct ll_inode_info *lli = ll_i2info(inode);
         ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        struct mdc_op_data op_data;
+        struct md_op_data op_data;
         struct obdo obdo;
         obd_flag valid;
         int rc, ast_flags = 0;
@@ -141,7 +141,7 @@ static void ll_close_done_writing(struct inode *inode)
                 GOTO(out, rc);
         }
 
-        rc = ll_lsm_getattr(ll_i2obdexp(inode), lli->lli_smd, &obdo);
+        rc = ll_lsm_getattr(ll_i2dtexp(inode), lli->lli_smd, &obdo);
         if (rc) {
                 CERROR("inode_getattr failed (%d): unable to send DONE_WRITING "
                        "for inode %lu/%u\n", rc, inode->i_ino,
@@ -168,7 +168,7 @@ static void ll_close_done_writing(struct inode *inode)
         op_data.blocks = inode->i_blocks;
         op_data.valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-        rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &op_data);
+        rc = mdc_done_writing(ll_i2sbi(inode)->ll_md_exp, &op_data);
  out:
 }
 #endif

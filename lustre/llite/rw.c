@@ -93,7 +93,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_BRW_READ, pg.count);
-        rc = obd_brw(cmd, ll_i2obdexp(inode), oa, lsm, 1, &pg, NULL);
+        rc = obd_brw(cmd, ll_i2dtexp(inode), oa, lsm, 1, &pg, NULL);
         if (rc == 0)
                 obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
         else if (rc != -EIO)
@@ -135,7 +135,7 @@ void ll_truncate(struct inode *inode)
          * race condition. */
         lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 0);
+        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 0);
         if (lvb.lvb_size == inode->i_size) {
                 CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
                        lsm->lsm_object_id, inode->i_size, inode->i_size);
@@ -143,7 +143,7 @@ void ll_truncate(struct inode *inode)
                 GOTO(out_unlock, 0);
         }
 
-        obd_adjust_kms(ll_i2obdexp(inode), lsm, inode->i_size, 1);
+        obd_adjust_kms(ll_i2dtexp(inode), lsm, inode->i_size, 1);
         lov_stripe_unlock(lsm);
 
         if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
@@ -175,7 +175,7 @@ void ll_truncate(struct inode *inode)
 
         ll_inode_size_unlock(inode, 0);
 
-        rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
+        rc = obd_punch(ll_i2dtexp(inode), &oa, lsm, inode->i_size,
                        OBD_OBJECT_EOF, NULL);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
@@ -216,7 +216,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
         obdo_from_inode(&oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), &oa, lsm,
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode), &oa, lsm,
                      1, &pga, NULL);
         if (rc)
                 RETURN(rc);
@@ -239,7 +239,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
          * treat it like i_size. */
         lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 0);
+        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 0);
         lov_stripe_unlock(lsm);
         if (lvb.lvb_size <= offset) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "kms "LPU64" <= offset "LPU64"\n",
@@ -332,7 +332,7 @@ static int ll_ap_refresh_count(void *data, int cmd)
 
         lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
+        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 1);
         kms = lvb.lvb_size;
         lov_stripe_unlock(lsm);
 
@@ -552,7 +552,7 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
                 GOTO(out, llap);
         }
 
-        exp = ll_i2obdexp(page->mapping->host);
+        exp = ll_i2dtexp(page->mapping->host);
         if (exp == NULL)
                 RETURN(ERR_PTR(-EINVAL));
 
@@ -725,7 +725,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
-        exp = ll_i2obdexp(inode);
+        exp = ll_i2dtexp(inode);
         if (exp == NULL)
                 RETURN(-EINVAL);
 
@@ -866,7 +866,7 @@ void ll_removepage(struct page *page)
 
         LL_CDEBUG_PAGE(D_PAGE, page, "being evicted\n");
 
-        exp = ll_i2obdexp(inode);
+        exp = ll_i2dtexp(inode);
         if (exp == NULL) {
                 CERROR("page %p ind %lu gave null export\n", page, page->index);
                 EXIT;
@@ -918,7 +918,7 @@ static int ll_page_matches(struct page *page, int fd_flags)
         flags = LDLM_FL_TEST_LOCK | LDLM_FL_BLOCK_GRANTED;
         if (!(fd_flags & LL_FILE_READAHEAD))
                 flags |= LDLM_FL_CBPENDING;
-        matches = obd_match(ll_i2sbi(inode)->ll_osc_exp,
+        matches = obd_match(ll_i2sbi(inode)->ll_dt_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                             &page_extent, LCK_PR | LCK_PW, &flags, inode,
                             &match_lockh);
@@ -1065,7 +1065,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
         lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
+        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 1);
         kms = lvb.lvb_size;
         lov_stripe_unlock(lsm);
         if (kms == 0) {
@@ -1299,7 +1299,7 @@ int ll_writepage(struct page *page)
         LASSERT(!PageDirty(page));
         LASSERT(PageLocked(page));
 
-        exp = ll_i2obdexp(inode);
+        exp = ll_i2dtexp(inode);
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
@@ -1361,7 +1361,7 @@ int ll_readpage(struct file *filp, struct page *page)
         if (rc < 0)
                 GOTO(out, rc);
 
-        exp = ll_i2obdexp(inode);
+        exp = ll_i2dtexp(inode);
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 

@@ -69,7 +69,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) off "LPU64"\n",
                inode->i_ino, inode->i_generation, inode, offset);
 
-        rc = mdc_readpage(ll_i2sbi(inode)->ll_mdc_exp, ll_inode2fid(inode),
+        rc = mdc_readpage(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode),
                           offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
@@ -163,7 +163,7 @@ out:
 
 Ebadsize:
         CERROR("%s: directory %lu/%u size %llu is not a multiple of %u\n",
-               ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
+               ll_i2mdexp(dir)->exp_obd->obd_name, dir->i_ino,
                dir->i_generation, dir->i_size, chunk_size);
         goto fail;
 Eshort:
@@ -183,7 +183,7 @@ Espan:
 bad_entry:
         CERROR("%s: bad entry in directory %lu/%u: %s - "
                 "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d",
-                ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
+                ll_i2mdexp(dir)->exp_obd->obd_name, dir->i_ino,
                 dir->i_generation, error, (page->index<<PAGE_CACHE_SHIFT), offs,
                 (unsigned long)le32_to_cpu(p->inode),
                 rec_len, p->name_len);
@@ -205,7 +205,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         struct ldlm_res_id res_id =
                 { .name = { fid_seq(ll_inode2fid(dir)), fid_num(ll_inode2fid(dir)) } };
         struct lustre_handle lockh;
-        struct obd_device *obddev = class_exp2obd(ll_i2sbi(dir)->ll_mdc_exp);
+        struct obd_device *obddev = class_exp2obd(ll_i2sbi(dir)->ll_md_exp);
         struct address_space *mapping = dir->i_mapping;
         struct page *page;
         ldlm_policy_data_t policy = {.l_inodebits = {MDS_INODELOCK_UPDATE} };
@@ -216,12 +216,12 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
                 struct ptlrpc_request *request;
-                struct mdc_op_data data = { { 0 } };
+                struct md_op_data op_data = { { 0 } };
 
-                ll_prepare_mdc_op_data(&data, dir, NULL, NULL, 0, 0);
+                ll_prepare_md_op_data(&op_data, dir, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(ll_i2sbi(dir)->ll_mdc_exp, LDLM_IBITS, &it,
-                                 LCK_CR, &data, &lockh, NULL, 0,
+                rc = mdc_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
+                                 LCK_CR, &op_data, &lockh, NULL, 0,
                                  ldlm_completion_ast, ll_mdc_blocking_ast, dir,
                                  0);
 
@@ -423,7 +423,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                rc = mdc_getattr_name(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                rc = mdc_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
                                       filename, namelen, OBD_MD_FLID, 0,
                                       &request);
                 if (rc < 0) {
@@ -440,13 +440,13 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case LL_IOC_LOV_SETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
-                struct mdc_op_data op_data = { { 0 } };
+                struct md_op_data op_data = { { 0 } };
                 struct iattr attr = { 0 };
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
                 int rc = 0;
 
-                ll_prepare_mdc_op_data(&op_data, inode,
-                                       NULL, NULL, 0, 0);
+                ll_prepare_md_op_data(&op_data, inode,
+                                      NULL, NULL, 0, 0);
 
                 LASSERT(sizeof(lum) == sizeof(*lump));
                 LASSERT(sizeof(lum.lmm_objects[0]) ==
@@ -467,7 +467,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lustre_swab_lov_user_md(&lum);
 
                 /* swabbing is done in lov_setstripe() on server side */
-                rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
+                rc = mdc_setattr(sbi->ll_md_exp, &op_data,
                                  &attr, &lum, sizeof(lum), NULL, 0, &request);
                 if (rc) {
                         ptlrpc_req_finished(request);
@@ -490,7 +490,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         RETURN(rc);
 
-                rc = mdc_getattr(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                rc = mdc_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
                                  OBD_MD_FLDIREA, lmmsize, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr failed: rc = %d\n", rc);
@@ -547,7 +547,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         RETURN(rc);
 
-                rc = mdc_getattr_name(sbi->ll_mdc_exp, ll_inode2fid(inode),
+                rc = mdc_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
                                       filename, strlen(filename) + 1,
                                       OBD_MD_FLEASIZE, lmmsize, &request);
                 if (rc < 0) {
@@ -588,10 +588,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         struct lov_user_md_join *lmj;
                         int lmj_size, i, aindex = 0, rc;
  
-                        rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
+                        rc = obd_unpackmd(sbi->ll_dt_exp, &lsm, lmm, lmmsize);
                         if (rc < 0)
                                 GOTO(out_req, rc = -ENOMEM);
-                        rc = obd_checkmd(sbi->ll_osc_exp, sbi->ll_mdc_exp, lsm);
+                        rc = obd_checkmd(sbi->ll_dt_exp, sbi->ll_md_exp, lsm);
                         if (rc)
                                 GOTO(out_free_memmd, rc);
 
@@ -635,7 +635,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lmm = (struct lov_mds_md *)lmj;
                         lmmsize = lmj_size;
 out_free_memmd:
-                        obd_free_memmd(sbi->ll_osc_exp, &lsm);
+                        obd_free_memmd(sbi->ll_dt_exp, &lsm);
                         if (rc)
                                 GOTO(out_req, rc);
                 }
@@ -734,13 +734,13 @@ out_free_memmd:
                 if (!oqctl)
                         RETURN(-ENOMEM);
                 oqctl->qc_type = arg;
-                rc = obd_quotacheck(sbi->ll_mdc_exp, oqctl);
+                rc = obd_quotacheck(sbi->ll_md_exp, oqctl);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_quotacheck failed: rc %d\n", rc);
                         error = rc;
                 }
 
-                rc = obd_quotacheck(sbi->ll_osc_exp, oqctl);
+                rc = obd_quotacheck(sbi->ll_dt_exp, oqctl);
                 if (rc < 0)
                         CDEBUG(D_INFO, "osc_quotacheck failed: rc %d\n", rc);
 
@@ -758,7 +758,7 @@ out_free_memmd:
                 if (!check)
                         RETURN(-ENOMEM);
 
-                rc = obd_iocontrol(cmd, sbi->ll_mdc_exp, 0, (void *)check,
+                rc = obd_iocontrol(cmd, sbi->ll_md_exp, 0, (void *)check,
                                    NULL);
                 if (rc) {
                         CDEBUG(D_QUOTA, "mdc ioctl %d failed: %d\n", cmd, rc);
@@ -767,7 +767,7 @@ out_free_memmd:
                         GOTO(out_poll, rc);
                 }
 
-                rc = obd_iocontrol(cmd, sbi->ll_osc_exp, 0, (void *)check,
+                rc = obd_iocontrol(cmd, sbi->ll_dt_exp, 0, (void *)check,
                                    NULL);
                 if (rc) {
                         CDEBUG(D_QUOTA, "osc ioctl %d failed: %d\n", cmd, rc);
@@ -818,7 +818,7 @@ out_free_memmd:
                         /* XXX: dqb_valid is borrowed as a flag to mark that
                          *      only mds quota is wanted */
                         if (qctl->qc_dqblk.dqb_valid)
-                                qctl->obd_uuid = sbi->ll_mdc_exp->exp_obd->
+                                qctl->obd_uuid = sbi->ll_md_exp->exp_obd->
                                                         u.cli.cl_target_uuid;
                         break;
                 case Q_GETINFO:
@@ -835,7 +835,7 @@ out_free_memmd:
                         struct obd_uuid *uuid = &qctl->obd_uuid;
 
                         obd = class_find_client_notype(uuid,
-                                         &sbi->ll_osc_exp->exp_obd->obd_uuid);
+                                         &sbi->ll_dt_exp->exp_obd->obd_uuid);
                         if (!obd)
                                 GOTO(out_quotactl, rc = -ENOENT);
 
@@ -846,12 +846,12 @@ out_free_memmd:
                         else
                                 GOTO(out_quotactl, rc = -EINVAL);
 
-                        if (sbi->ll_mdc_exp->exp_obd == obd) {
-                                rc = obd_quotactl(sbi->ll_mdc_exp, oqctl);
+                        if (sbi->ll_md_exp->exp_obd == obd) {
+                                rc = obd_quotactl(sbi->ll_md_exp, oqctl);
                         } else {
                                 int i;
                                 struct obd_export *exp;
-                                struct lov_obd *lov = &sbi->ll_osc_exp->
+                                struct lov_obd *lov = &sbi->ll_dt_exp->
                                                             exp_obd->u.lov;
 
                                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
@@ -876,10 +876,10 @@ out_free_memmd:
                         GOTO(out_quotactl, rc);
                 }
 
-                rc = obd_quotactl(sbi->ll_mdc_exp, oqctl);
+                rc = obd_quotactl(sbi->ll_md_exp, oqctl);
                 if (rc && rc != -EBUSY && cmd == Q_QUOTAON) {
                         oqctl->qc_cmd = Q_QUOTAOFF;
-                        obd_quotactl(sbi->ll_mdc_exp, oqctl);
+                        obd_quotactl(sbi->ll_md_exp, oqctl);
                 }
 
                 QCTL_COPY(qctl, oqctl);
@@ -893,7 +893,7 @@ out_free_memmd:
         }
 #endif /* HAVE_QUOTA_SUPPORT */
         case OBD_IOC_GETNAME: {  
-                struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
+                struct obd_device *obd = class_exp2obd(sbi->ll_dt_exp);
                 if (!obd)
                         RETURN(-EFAULT);
                 if (copy_to_user((void *)arg, obd->obd_name, 
@@ -902,7 +902,7 @@ out_free_memmd:
                 RETURN(0);
         }
         default:
-                RETURN(obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg));
+                RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp,0,NULL,(void *)arg));
         }
 }
 

@@ -71,7 +71,7 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         }
 }
 
-void llu_prepare_mdc_op_data(struct mdc_op_data *data,
+void llu_prepare_mdc_op_data(struct md_op_data *op_data,
                              struct inode *i1,
                              struct inode *i2,
                              const char *name,
@@ -80,16 +80,16 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
 {
         LASSERT(i1);
 
-        ll_i2gids(data->suppgids, i1, i2);
-        data->fid1 = *ll_inode2fid(i1);
+        ll_i2gids(op_data->suppgids, i1, i2);
+        op_data->fid1 = *ll_inode2fid(i1);
 
         if (i2)
-                data->fid2 = *ll_inode2fid(i2);
+                op_data->fid2 = *ll_inode2fid(i2);
 
-        data->name = name;
-        data->namelen = namelen;
-        data->create_mode = mode;
-        data->mod_time = CURRENT_TIME;
+        op_data->name = name;
+        op_data->namelen = namelen;
+        op_data->create_mode = mode;
+        op_data->mod_time = CURRENT_TIME;
 }
 
 void obdo_refresh_inode(struct inode *dst,
@@ -302,7 +302,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
         struct intnl_stat *st = llu_i2stat(inode);
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         int rc;
         ENTRY;
 

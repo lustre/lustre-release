@@ -76,7 +76,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
 }
 /* packing of MDS records */
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *op_data, const void *data, int datalen,
+                     struct md_op_data *op_data, const void *data, int datalen,
                      __u32 mode, __u32 uid, __u32 gid, __u32 cap_effective,
                      __u64 rdev)
 {
@@ -125,7 +125,7 @@ static __u32 mds_pack_open_flags(__u32 flags)
 
 /* packing of MDS records */
 void mdc_join_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *op_data, __u64 head_size)
+                   struct md_op_data *op_data, __u64 head_size)
 {
         struct mdt_rec_join *rec;
 
@@ -136,7 +136,7 @@ void mdc_join_pack(struct ptlrpc_request *req, int offset,
 }
 
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
+                   struct md_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *lmm, int lmmlen)
 {
         struct mdt_rec_create *rec;
@@ -171,7 +171,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
 }
 
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
-                      struct mdc_op_data *data, struct iattr *iattr,
+                      struct md_op_data *op_data, struct iattr *iattr,
                       void *ea, int ealen, void *ea2, int ea2len)
 {
         struct mdt_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset,
@@ -180,7 +180,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
         rec->sa_fsuid = current->fsuid;
         rec->sa_fsgid = current->fsgid;
         rec->sa_cap = current->cap_effective;
-        rec->sa_fid = data->fid1;
+        rec->sa_fid = op_data->fid1;
         rec->sa_suppgid = -1;
 
         if (iattr) {
@@ -196,7 +196,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
                 else
-                        rec->sa_suppgid = data->suppgids[0];
+                        rec->sa_suppgid = op_data->suppgids[0];
         }
 
         if (ealen == 0)
@@ -211,7 +211,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
 }
 
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *data)
+                     struct md_op_data *op_data)
 {
         struct mdt_rec_unlink *rec;
         char *tmp;
@@ -223,19 +223,19 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_fsuid = current->fsuid;
         rec->ul_fsgid = current->fsgid;
         rec->ul_cap = current->cap_effective;
-        rec->ul_mode = data->create_mode;
-        rec->ul_suppgid = data->suppgids[0];
-        rec->ul_fid1 = data->fid1;
-        rec->ul_fid2 = data->fid2;
-        rec->ul_time = data->mod_time;
+        rec->ul_mode = op_data->create_mode;
+        rec->ul_suppgid = op_data->suppgids[0];
+        rec->ul_fid1 = op_data->fid1;
+        rec->ul_fid2 = op_data->fid2;
+        rec->ul_time = op_data->mod_time;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
         LASSERT (tmp != NULL);
-        LOGL0(data->name, data->namelen, tmp);
+        LOGL0(op_data->name, op_data->namelen, tmp);
 }
 
 void mdc_link_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *data)
+                   struct md_op_data *op_data)
 {
         struct mdt_rec_link *rec;
         char *tmp;
@@ -246,18 +246,18 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_fsuid = current->fsuid;
         rec->lk_fsgid = current->fsgid;
         rec->lk_cap = current->cap_effective;
-        rec->lk_suppgid1 = data->suppgids[0];
-        rec->lk_suppgid2 = data->suppgids[1];
-        rec->lk_fid1 = data->fid1;
-        rec->lk_fid2 = data->fid2;
-        rec->lk_time = data->mod_time;
+        rec->lk_suppgid1 = op_data->suppgids[0];
+        rec->lk_suppgid2 = op_data->suppgids[1];
+        rec->lk_fid1 = op_data->fid1;
+        rec->lk_fid2 = op_data->fid2;
+        rec->lk_time = op_data->mod_time;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
-        LOGL0(data->name, data->namelen, tmp);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
+        LOGL0(op_data->name, op_data->namelen, tmp);
 }
 
 void mdc_rename_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *data,
+                     struct md_op_data *op_data,
                      const char *old, int oldlen, const char *new, int newlen)
 {
         struct mdt_rec_rename *rec;
@@ -270,11 +270,11 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fsuid = current->fsuid;
         rec->rn_fsgid = current->fsgid;
         rec->rn_cap = current->cap_effective;
-        rec->rn_suppgid1 = data->suppgids[0];
-        rec->rn_suppgid2 = data->suppgids[1];
-        rec->rn_fid1 = data->fid1;
-        rec->rn_fid2 = data->fid2;
-        rec->rn_time = data->mod_time;
+        rec->rn_suppgid1 = op_data->suppgids[0];
+        rec->rn_suppgid2 = op_data->suppgids[1];
+        rec->rn_fid1 = op_data->fid1;
+        rec->rn_fid2 = op_data->fid2;
+        rec->rn_time = op_data->mod_time;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, oldlen + 1);
         LOGL0(old, oldlen, tmp);
@@ -286,7 +286,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
 }
 
 void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
-                      int flags, struct mdc_op_data *data)
+                      int flags, struct md_op_data *op_data)
 {
         struct mdt_body *b;
         b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*b));
@@ -296,19 +296,19 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
         b->capability = current->cap_effective;
         b->valid = valid;
         b->flags = flags;
-        b->suppgid = data->suppgids[0];
+        b->suppgid = op_data->suppgids[0];
 
-        b->fid1 = data->fid1;
-        if (data->name) {
+        b->fid1 = op_data->fid1;
+        if (op_data->name) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
-                                     data->namelen + 1);
-                LOGL0(data->name, data->namelen, tmp);
+                                     op_data->namelen + 1);
+                LOGL0(op_data->name, op_data->namelen, tmp);
         }
 }
 
 void mdc_close_pack(struct ptlrpc_request *req, int offset,
-                    struct mdc_op_data *op_data, int valid,
+                    struct md_op_data *op_data, int valid,
                     struct obd_client_handle *och)
 {
         struct mdt_body *body;

@@ -583,7 +583,7 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         spin_unlock(&open_req->rq_lock);
 }
 
-int mdc_close(struct obd_export *exp, struct mdc_op_data *op_data,
+int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -659,7 +659,7 @@ int mdc_close(struct obd_export *exp, struct mdc_op_data *op_data,
         return rc;
 }
 
-int mdc_done_writing(struct obd_export *exp, struct mdc_op_data *op_data)
+int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data)
 {
         struct ptlrpc_request *req;
         struct mdt_body *body;

@@ -231,7 +231,7 @@ static int revalidate_it_finish(struct ptlrpc_request *request, int offset,
                 RETURN(-ENOENT);
 
         sbi = ll_i2sbi(de->d_inode);
-        rc = ll_prep_inode(sbi->ll_osc_exp, &de->d_inode, request, offset, NULL);
+        rc = ll_prep_inode(sbi->ll_dt_exp, &de->d_inode, request, offset, NULL);
 
         RETURN(rc);
 }
@@ -282,7 +282,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 {
         int rc;
         struct it_cb_data icbd;
-        struct mdc_op_data op_data = { { 0 } };
+        struct md_op_data op_data = { { 0 } };
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -296,7 +296,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         if (de->d_inode == NULL)
                 RETURN(0);
 
-        exp = ll_i2mdcexp(de->d_inode);
+        exp = ll_i2mdexp(de->d_inode);
         icbd.icbd_parent = de->d_parent->d_inode;
         icbd.icbd_childp = &de;
 
@@ -311,8 +311,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
         parent = de->d_parent->d_inode;
                 
-        ll_prepare_mdc_op_data(&op_data, parent, NULL, de->d_name.name,
-                               de->d_name.len, 0);
+        ll_prepare_md_op_data(&op_data, parent, NULL, de->d_name.name,
+                              de->d_name.len, 0);
 
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
                              &req, ll_mdc_blocking_ast, 0);
@@ -398,7 +398,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        rc = obd_pin(sbi->ll_mdc_exp, &ll_i2info(inode)->lli_fid, 
+        rc = obd_pin(sbi->ll_md_exp, &ll_i2info(inode)->lli_fid, 
                      handle, flag);
 
         if (rc) {
@@ -448,7 +448,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 return;
         }
 
-        rc = obd_unpin(sbi->ll_mdc_exp, &handle, flag);
+        rc = obd_unpin(sbi->ll_md_exp, &handle, flag);
         EXIT;
         return;
 }

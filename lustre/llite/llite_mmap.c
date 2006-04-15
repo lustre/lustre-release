@@ -399,7 +399,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
+        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 1);
         kms = lvb.lvb_size;
 
         pgoff = ((address - vma->vm_start) >> PAGE_CACHE_SHIFT) + vma->vm_pgoff;
@@ -460,7 +460,7 @@ static void ll_vm_open(struct vm_area_struct * vma)
                 int count;
 
                 spin_unlock(&lli->lli_lock);
-                count = obd_join_lru(sbi->ll_osc_exp, lsm, 0);
+                count = obd_join_lru(sbi->ll_dt_exp, lsm, 0);
                 VMA_DEBUG(vma, "split %d unused locks from lru\n", count);
         } else {
                 spin_unlock(&lli->lli_lock);
@@ -486,7 +486,7 @@ static void ll_vm_close(struct vm_area_struct *vma)
                 int count;
 
                 spin_unlock(&lli->lli_lock);
-                count = obd_join_lru(sbi->ll_osc_exp, lsm, 1);
+                count = obd_join_lru(sbi->ll_dt_exp, lsm, 1);
                 VMA_DEBUG(vma, "join %d unused locks to lru\n", count);
         } else {
                 spin_unlock(&lli->lli_lock);
