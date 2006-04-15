@@ -57,6 +57,7 @@ int seq_mgr_read(struct lu_context *, struct lu_seq_mgr *);
 int seq_mgr_write(struct lu_context *, struct lu_seq_mgr *);
 int seq_mgr_alloc(struct lu_context *, struct lu_seq_mgr *, __u64 *);
 
+struct lu_site;
 #if 0
 int fid_is_local(struct lu_site *site, const struct lu_fid *fid);
 #else
@@ -65,5 +66,7 @@ static inline int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
         return 1;
 }
 #endif
+
+void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
 
 #endif /* __LINUX_OBD_CLASS_H */
