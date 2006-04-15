@@ -97,23 +97,6 @@ static int mdt_md_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
         return result;
 }
 #endif
-static int mdt_md_getattr(struct mdt_thread_info *info, struct lu_fid *fid)
-{
-        struct mdt_device *d = info->mti_mdt;
-        struct mdt_object *o;
-        int               result;
-
-        ENTRY;
-
-        o = mdt_object_find(info->mti_ctxt, d, fid);
-        if (IS_ERR(o))
-                return PTR_ERR(o);
-        /* attr are in mti_ctxt */
-        result = 0;
-        mdt_object_put(info->mti_ctxt, o);
-
-        RETURN(result);
-}
 
 static int mdt_getstatus(struct mdt_thread_info *info,
                          struct ptlrpc_request *req, int offset)
@@ -196,31 +179,25 @@ static void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
 static int mdt_getattr(struct mdt_thread_info *info,
                        struct ptlrpc_request *req, int offset)
 {
-        struct mdt_body        *body;
-        int                    size = sizeof (*body);
-        struct lu_attr  *attr;
-        int result;
+        struct mdt_body *body;
+        int              size = sizeof (*body);
+        int              result;
+
+        LASSERT(info->mti_object != NULL);
 
         ENTRY;
 
-        OBD_ALLOC_PTR(attr);
-        if (attr == NULL)
-                return -ENOMEM;
-
         result = lustre_pack_reply(req, 1, &size, NULL);
         if (result)
-                CERROR(LUSTRE_MDT0_NAME" out of memory for statfs: size=%d\n",
-                       size);
+                CERROR(LUSTRE_MDT0_NAME" cannot pack size=%d, rc=%d\n",
+                       size, result);
         else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR(LUSTRE_MDT0_NAME": statfs lustre_pack_reply failed\n");
                 result = -ENOMEM;
         } else {
                 body = lustre_msg_buf(req->rq_repmsg, 0, size);
-                result = mdt_md_getattr(info, &body->fid1);
-                if (result == 0)
-                        mdt_pack_attr2body(body, &info->mti_ctxt->lc_attr);
+                mdt_pack_attr2body(body, &info->mti_ctxt->lc_attr);
         }
-        OBD_FREE_PTR(attr);
         RETURN(result);
 }
 
@@ -693,8 +670,10 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                         info->mti_object = mdt_object_find(info->mti_ctxt,
                                                            info->mti_mdt,
                                                            &body->fid1);
-                        if (IS_ERR(info->mti_object))
+                        if (IS_ERR(info->mti_object)) {
                                 result = PTR_ERR(info->mti_object);
+                                info->mti_object = NULL;
+                        }
                 } else {
                         CERROR("Can't unpack body\n");
                         result = -EFAULT;
