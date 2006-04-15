@@ -72,15 +72,20 @@ static void  osd_device_fini   (struct lu_device *d);
 static int   osd_device_init   (struct lu_device *d, const char *conf);
 static void *osd_key_init      (struct lu_context *ctx);
 static void  osd_key_fini      (struct lu_context *ctx, void *data);
+static int   osd_fid_lookup    (struct lu_context *ctx, struct osd_object *obj,
+                                const struct lu_fid *fid);
 
-static struct osd_object *osd_obj         (const struct lu_object *o);
-static struct osd_device *osd_dev         (const struct lu_device *d);
-static struct osd_device *osd_dt_dev      (const struct dt_device *d);
-static struct lu_device  *osd_device_alloc(struct lu_device_type *t,
-                                           struct lustre_cfg *cfg);
-static struct lu_object  *osd_object_alloc(struct lu_context *ctx,
-                                           struct lu_device *d);
-
+static struct osd_object  *osd_obj         (const struct lu_object *o);
+static struct osd_device  *osd_dev         (const struct lu_device *d);
+static struct osd_device  *osd_dt_dev      (const struct dt_device *d);
+static struct lu_device   *osd_device_alloc(struct lu_device_type *t,
+                                            struct lustre_cfg *cfg);
+static struct lu_object   *osd_object_alloc(struct lu_context *ctx,
+                                            struct lu_device *d);
+static struct inode       *osd_iget        (struct osd_thread_info *info,
+                                            struct osd_device *dev,
+                                            const struct osd_inode_id *id);
+static struct super_block *osd_sb          (const struct osd_device *dev);
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
@@ -100,10 +105,6 @@ static struct lu_fid *lu_inode_get_fid(const struct inode *inode)
         return &stub;
 }
 
-struct osd_thread_info {
-        char oti_name[64];
-};
-
 /*
  * DT methods.
  */
@@ -111,8 +112,13 @@ static int osd_root_get(struct lu_context *ctx,
                         struct dt_device *dev, struct lu_fid *f)
 {
         struct osd_device *od = osd_dt_dev(dev);
+        extern const struct lu_fid root_fid;
 
-        *f = *lu_inode_get_fid(od->od_mount->lmi_sb->s_root->d_inode);
+        /*
+         * XXX hack. Should return fid associated with
+         * osd_sb(od)->s_root->d_inode.
+         */
+        *f = root_fid;
         return 0;
 }
 
@@ -156,18 +162,14 @@ static int osd_getattr(struct lu_context *ctx,
 static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 {
         struct osd_device  *d = osd_dev(l->lo_dev);
-        struct osd_object  *o = osd_obj(l);
-        struct lu_fid      *f = lu_object_fid(l);
+        int result;
 
-        /* fill lu_attr in ctxt */
-        //XXX temporary hack for proto only
-        osd_getattr(ctxt,
-                    d->od_mount->lmi_sb->s_root->d_inode, &ctxt->lc_attr);
-
-        /*
-         * use object index to locate dentry/inode by fid.
-         */
-        return 0;
+        result = osd_fid_lookup(ctxt, osd_obj(l), lu_object_fid(l));
+        if (result == 0)
+                /* fill lu_attr in ctxt */
+                result = osd_getattr(ctxt, osd_sb(d)->s_root->d_inode,
+                                     &ctxt->lc_attr);
+        return result;
 }
 
 static void osd_object_free(struct lu_context *ctx, struct lu_object *l)
@@ -180,8 +182,8 @@ static void osd_object_delete(struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
 
-        if (o->oo_dentry != NULL)
-                dput(o->oo_dentry);
+        if (o->oo_inode != NULL)
+                iput(o->oo_inode);
 }
 
 static int osd_inode_unlinked(const struct inode *inode)
@@ -193,7 +195,7 @@ static void osd_object_release(struct lu_context *ctxt, struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
 
-        if (o->oo_dentry != NULL && osd_inode_unlinked(o->oo_dentry->d_inode))
+        if (o->oo_inode != NULL && osd_inode_unlinked(o->oo_inode))
                 set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
@@ -202,20 +204,14 @@ static int osd_object_print(struct lu_context *ctx,
 {
         struct osd_object  *o = osd_obj(l);
 
-        return seq_printf(f, LUSTRE_OSD0_NAME"-object@%p(d:%p)",
-                          o, o->oo_dentry);
+        return seq_printf(f, LUSTRE_OSD0_NAME"-object@%p(i:%p)",
+                          o, o->oo_inode);
 }
 
 static int osd_config(struct lu_context *ctx,
                       struct dt_device *d, const char *name,
                       void *buf, int size, int mode)
 {
-	struct osd_device *osd = dt2osd_dev(d);
-        //struct super_block *sb = osd->od_mount->lmi_sb;
-        int result = -EOPNOTSUPP;
-
-        ENTRY;
-
         if (mode == LUSTRE_CONFIG_GET) {
                 /* to be continued */
                 return 0;
@@ -223,15 +219,13 @@ static int osd_config(struct lu_context *ctx,
                 /* to be continued */
                 return 0;
         }
-
-        RETURN (result);
 }
 
 static int osd_statfs(struct lu_context *ctx,
                       struct dt_device *d, struct kstatfs *sfs)
 {
 	struct osd_device *osd = dt2osd_dev(d);
-        struct super_block *sb = osd->od_mount->lmi_sb;
+        struct super_block *sb = osd_sb(osd);
         int result;
 
         ENTRY;
@@ -248,8 +242,8 @@ static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
 {
 	struct osd_object *o = dt2osd_obj(dt);
         struct osd_device *dev = osd_obj2dev(o);
-        //struct super_block *sb = dev->od_mount->lmi_sb;
-        struct inode *inode = o->oo_dentry->d_inode;
+        //struct super_block *sb = osd_sb(dev);
+        struct inode *inode = o->oo_inode;
         int result = -EOPNOTSUPP;
 
         ENTRY;
@@ -304,7 +298,6 @@ static int osd_device_init(struct lu_device *d, const char *top)
 {
         struct osd_device *o = osd_dev(d);
         struct lustre_mount_info *lmi;
-        struct vfsmount          *mnt;
         int result;
 
         ENTRY;
@@ -322,23 +315,29 @@ static int osd_device_init(struct lu_device *d, const char *top)
 
                 CDEBUG(D_INFO, "OSD info: device=%s,\n opts=%s,\n",
                        lmd->lmd_dev, ldd->ldd_mount_opts);
-                mnt = lmi->lmi_mnt;
 
-                /* save lustre_moint_info in dt_device */
+                /* save lustre_mount_info in dt_device */
                 o->od_mount = lmi;
-                result = 0;
+                result = osd_oi_init(&o->od_oi, osd_sb(o)->s_root,
+                                     o->od_dt_dev.dd_lu_dev.ld_site);
         } else {
                 CERROR("Cannot get mount info for %s!\n", top);
                 result = -EFAULT;
         }
+        if (result != 0)
+                osd_device_fini(d);
         RETURN(result);
 }
 
 static void osd_device_fini(struct lu_device *d)
 {
-        /*
-         * umount file system.
-         */
+        struct osd_device *o = osd_dev(d);
+
+        if (o->od_mount != NULL) {
+                server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
+                o->od_mount = NULL;
+        }
+        osd_oi_fini(&o->od_oi);
 }
 
 static struct lu_device *osd_device_alloc(struct lu_device_type *t,
@@ -370,50 +369,82 @@ static void osd_device_free(struct lu_device *d)
  *
  */
 
-static int osd_fid_lookup(struct lu_context *ctx,
-                          struct osd_object *obj, struct lu_fid *fid)
+struct dentry *osd_lookup(struct dentry *parent, const char *name, int len)
 {
-        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+        struct dentry *dentry;
+
+        CDEBUG(D_INODE, "looking up object %s\n", name);
+        down(&parent->d_inode->i_sem);
+        dentry = lookup_one_len(name, parent, len);
+        up(&parent->d_inode->i_sem);
+
+        if (IS_ERR(dentry)) {
+                CERROR("error getting %s: %ld\n", name, PTR_ERR(dentry));
+        } else if (dentry->d_inode != NULL && is_bad_inode(dentry->d_inode)) {
+                CERROR("got bad object %s inode %lu\n",
+                       name, dentry->d_inode->i_ino);
+                dput(dentry);
+                dentry = ERR_PTR(-ENOENT);
+        }
+        return dentry;
+}
+
+static struct inode *osd_iget(struct osd_thread_info *info,
+                              struct osd_device *dev,
+                              const struct osd_inode_id *id)
+{
+        struct inode *inode;
+
+	inode = iget(osd_sb(dev), id->oii_ino);
+	if (inode == NULL) {
+                CERROR("no inode\n");
+		inode = ERR_PTR(-EACCES);
+	} else if (is_bad_inode(inode)) {
+                CERROR("bad inode\n");
+		iput(inode);
+		inode = ERR_PTR(-ENOENT);
+	} else if (inode->i_generation != id->oii_gen) {
+                CERROR("stale inode\n");
+		iput(inode);
+		inode = ERR_PTR(-ESTALE);
+        }
+        return inode;
+
+}
+
+static int osd_fid_lookup(struct lu_context *ctx,
+                          struct osd_object *obj, const struct lu_fid *fid)
+{
+        struct osd_thread_info *info;
         struct lu_device       *ldev = obj->oo_dt.do_lu.lo_dev;
         struct osd_device      *dev;
-        struct dentry          *dentry;
-        struct dentry          *parent;
-        int                     len;
+        struct osd_inode_id     id;
+        struct inode           *inode;
         int                     result;
 
-        LASSERT(obj->oo_dentry == NULL);
+        LASSERT(obj->oo_inode == NULL);
         LASSERT(fid_is_sane(fid));
         LASSERT(fid_is_local(ldev->ld_site, fid));
 
-        dev    = osd_dev(ldev);
-        parent = dev->od_objdir;
-
         ENTRY;
+
+        info = lu_context_key_get(ctx, &osd_key);
+        dev  = osd_dev(ldev);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
                 RETURN(-ENOENT);
 
-        len = snprintf(info->oti_name, sizeof info->oti_name, "%llx:%x:%x",
-                       fid_seq(fid), fid_oid(fid), fid_ver(fid));
-        LASSERT(len < sizeof info->oti_name);
-
-        CDEBUG(D_INODE, "looking up object %s\n", info->oti_name);
-        down(&parent->d_inode->i_sem);
-        dentry = lookup_one_len(info->oti_name, parent, len);
-        up(&parent->d_inode->i_sem);
-
-        if (IS_ERR(dentry)) {
-                result = PTR_ERR(dentry);
-                CERROR("error getting %s: %d\n", info->oti_name, result);
-        } else if (dentry->d_inode != NULL && is_bad_inode(dentry->d_inode)) {
-                CERROR("got bad object %s inode %lu\n",
-                       info->oti_name, dentry->d_inode->i_ino);
-                dput(dentry);
-                result = -ENOENT;
-        } else {
-                obj->oo_dentry = dentry;
-                result = 0;
+        osd_oi_read_lock(&dev->od_oi);
+        result = osd_oi_lookup(info, &dev->od_oi, fid, &id);
+        if (result == 0) {
+                inode = osd_iget(info, dev, &id);
+                if (!IS_ERR(inode)) {
+                        obj->oo_inode = inode;
+                        result = 0;
+                } else
+                        result = PTR_ERR(inode);
         }
+        osd_oi_read_unlock(&dev->od_oi);
         RETURN(result);
 }
 
@@ -445,6 +476,11 @@ static struct osd_device *osd_dev(const struct lu_device *d)
 {
         LASSERT(lu_device_is_osd(d));
         return osd_dt_dev(container_of(d, struct dt_device, dd_lu_dev));
+}
+
+static struct super_block *osd_sb(const struct osd_device *dev)
+{
+        return dev->od_mount->lmi_mnt->mnt_sb;
 }
 
 static struct lu_device_operations osd_lu_ops = {

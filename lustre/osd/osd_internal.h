@@ -36,22 +36,24 @@
 
 #include <linux/lu_object.h>
 
-struct dentry;
+#include "osd_oi.h"
+
+struct inode;
 
 struct osd_object {
         struct dt_object     oo_dt;
         /*
-         * Dentry for file system object represented by this osd_object. This
-         * dentry is pinned for the whole duration of lu_object life.
+         * Inode for file system object represented by this osd_object. This
+         * inode is pinned for the whole duration of lu_object life.
          */
-        struct dentry       *oo_dentry;
+        struct inode        *oo_inode;
         struct rw_semaphore  oo_sem;
 };
 
 struct osd_device {
         struct dt_device          od_dt_dev;
         struct lustre_mount_info *od_mount;
-        struct dentry            *od_objdir;
+        struct osd_oi             od_oi;
 };
 
 static inline struct osd_object * dt2osd_obj(struct dt_object *o)
@@ -78,6 +80,13 @@ static inline struct lu_device * osd2lu_dev(struct osd_device * osd)
 {
         return &osd->od_dt_dev.dd_lu_dev;
 }
+
+struct dentry *osd_lookup(struct dentry *parent, const char *name, int len);
+
+struct osd_thread_info {
+        char          oti_name[64];
+        struct lu_fid oti_fid;
+};
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */
