@@ -52,6 +52,10 @@ struct osd_inode_id {
         __u32 oii_gen;
 };
 
+enum {
+        OSD_GEN_IGNORE = (__u32)~0
+};
+
 int  osd_oi_init(struct osd_oi *oi, struct dentry *root, struct lu_site *s);
 void osd_oi_fini(struct osd_oi *oi);
 

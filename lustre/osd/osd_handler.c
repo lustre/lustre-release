@@ -75,17 +75,19 @@ static void  osd_key_fini      (struct lu_context *ctx, void *data);
 static int   osd_fid_lookup    (struct lu_context *ctx, struct osd_object *obj,
                                 const struct lu_fid *fid);
 
-static struct osd_object  *osd_obj         (const struct lu_object *o);
-static struct osd_device  *osd_dev         (const struct lu_device *d);
-static struct osd_device  *osd_dt_dev      (const struct dt_device *d);
-static struct lu_device   *osd_device_alloc(struct lu_device_type *t,
-                                            struct lustre_cfg *cfg);
-static struct lu_object   *osd_object_alloc(struct lu_context *ctx,
-                                            struct lu_device *d);
-static struct inode       *osd_iget        (struct osd_thread_info *info,
-                                            struct osd_device *dev,
-                                            const struct osd_inode_id *id);
-static struct super_block *osd_sb          (const struct osd_device *dev);
+static struct osd_object  *osd_obj          (const struct lu_object *o);
+static struct osd_device  *osd_dev          (const struct lu_device *d);
+static struct osd_device  *osd_dt_dev       (const struct dt_device *d);
+static struct lu_device   *osd_device_alloc (struct lu_device_type *t,
+                                             struct lustre_cfg *cfg);
+static struct lu_object   *osd_object_alloc (struct lu_context *ctx,
+                                             struct lu_device *d);
+static struct inode       *osd_iget         (struct osd_thread_info *info,
+                                             struct osd_device *dev,
+                                             const struct osd_inode_id *id);
+static struct super_block *osd_sb           (const struct osd_device *dev);
+static struct lu_fid      *osd_inode_get_fid(const struct inode *inode,
+                                             struct lu_fid *fid);
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
@@ -95,30 +97,13 @@ static struct lprocfs_vars              lprocfs_osd_obd_vars[];
 static struct lu_device_operations      osd_lu_ops;
 static struct lu_context_key            osd_key;
 
-static struct lu_fid *lu_inode_get_fid(const struct inode *inode)
-{
-        static struct lu_fid stub = {
-                .f_seq = 42,
-                .f_oid = 42,
-                .f_ver = 0
-        };
-        return &stub;
-}
-
 /*
  * DT methods.
  */
 static int osd_root_get(struct lu_context *ctx,
                         struct dt_device *dev, struct lu_fid *f)
 {
-        struct osd_device *od = osd_dt_dev(dev);
-        extern const struct lu_fid root_fid;
-
-        /*
-         * XXX hack. Should return fid associated with
-         * osd_sb(od)->s_root->d_inode.
-         */
-        *f = root_fid;
+        osd_inode_get_fid(osd_dt_dev(dev)->od_root_dir->d_inode, f);
         return 0;
 }
 
@@ -240,10 +225,10 @@ static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
                         void *buf, int size, const char *name,
                         struct md_params *arg)
 {
-	struct osd_object *o = dt2osd_obj(dt);
-        struct osd_device *dev = osd_obj2dev(o);
+	//struct osd_object *o = dt2osd_obj(dt);
+        //struct osd_device *dev = osd_obj2dev(o);
         //struct super_block *sb = osd_sb(dev);
-        struct inode *inode = o->oo_inode;
+        //struct inode *inode = o->oo_inode;
         int result = -EOPNOTSUPP;
 
         ENTRY;
@@ -320,6 +305,14 @@ static int osd_device_init(struct lu_device *d, const char *top)
                 o->od_mount = lmi;
                 result = osd_oi_init(&o->od_oi, osd_sb(o)->s_root,
                                      o->od_dt_dev.dd_lu_dev.ld_site);
+                if (result == 0) {
+                        o->od_root_dir = osd_open(osd_sb(o)->s_root,
+                                                  "ROOT", S_IFDIR);
+                        if (IS_ERR(o->od_root_dir)) {
+                                result = PTR_ERR(o->od_root_dir);
+                                o->od_root_dir = NULL;
+                        }
+                }
         } else {
                 CERROR("Cannot get mount info for %s!\n", top);
                 result = -EFAULT;
@@ -333,11 +326,15 @@ static void osd_device_fini(struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
 
+        if (o->od_root_dir != NULL) {
+                dput(o->od_root_dir);
+                o->od_root_dir = NULL;
+        }
+        osd_oi_fini(&o->od_oi);
         if (o->od_mount != NULL) {
                 server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
                 o->od_mount = NULL;
         }
-        osd_oi_fini(&o->od_oi);
 }
 
 static struct lu_device *osd_device_alloc(struct lu_device_type *t,
@@ -366,16 +363,50 @@ static void osd_device_free(struct lu_device *d)
 }
 
 /*
- *
+ * fid<->inode<->object functions.
  */
 
-struct dentry *osd_lookup(struct dentry *parent, const char *name, int len)
+static struct lu_fid *osd_inode_get_fid(const struct inode *inode,
+                                        struct lu_fid *fid)
+{
+        /*
+         * XXX: Should return fid stored together with inode in memory.
+         */
+        fid->f_seq = inode->i_ino;
+        fid->f_oid = inode->i_generation;
+        return fid;
+}
+
+struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode)
+{
+        struct dentry *dentry;
+        struct dentry *result;
+
+        result = dentry = osd_lookup(parent, name);
+        if (IS_ERR(dentry)) {
+                CERROR("Error opening %s: %ld\n", name, PTR_ERR(dentry));
+                dentry = NULL; /* dput(NULL) below is OK */
+        } else if (dentry->d_inode == NULL) {
+                CERROR("Not found: %s\n", name);
+                result = ERR_PTR(-ENOENT);
+        } else if ((dentry->d_inode->i_mode & S_IFMT) != mode) {
+                CERROR("Wrong mode: %s: %o != %o\n", name,
+                       dentry->d_inode->i_mode, mode);
+                result = ERR_PTR(mode == S_IFDIR ? -ENOTDIR : -EISDIR);
+        }
+
+        if (IS_ERR(result))
+                dput(dentry);
+        return result;
+}
+
+struct dentry *osd_lookup(struct dentry *parent, const char *name)
 {
         struct dentry *dentry;
 
         CDEBUG(D_INODE, "looking up object %s\n", name);
         down(&parent->d_inode->i_sem);
-        dentry = lookup_one_len(name, parent, len);
+        dentry = lookup_one_len(name, parent, strlen(name));
         up(&parent->d_inode->i_sem);
 
         if (IS_ERR(dentry)) {
@@ -403,7 +434,8 @@ static struct inode *osd_iget(struct osd_thread_info *info,
                 CERROR("bad inode\n");
 		iput(inode);
 		inode = ERR_PTR(-ENOENT);
-	} else if (inode->i_generation != id->oii_gen) {
+	} else if (inode->i_generation != id->oii_gen &&
+                   id->oii_gen != OSD_GEN_IGNORE) {
                 CERROR("stale inode\n");
 		iput(inode);
 		inode = ERR_PTR(-ESTALE);

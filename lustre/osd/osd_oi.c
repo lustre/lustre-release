@@ -50,7 +50,6 @@
 
 static struct lu_fid *oi_fid_key(struct osd_thread_info *info,
                                  const struct lu_fid *fid);
-static void osd_oi_init0(struct osd_oi *oi);
 
 static const char osd_oi_dirname[] = "oi";
 
@@ -58,8 +57,7 @@ int osd_oi_init(struct osd_oi *oi, struct dentry *root, struct lu_site *site)
 {
         int result;
 
-        oi->oi_dir = osd_lookup(root,
-                                osd_oi_dirname, (sizeof osd_oi_dirname) - 1);
+        oi->oi_dir = osd_open(root, osd_oi_dirname, S_IFDIR);
         if (IS_ERR(oi->oi_dir)) {
                 result = PTR_ERR(oi->oi_dir);
                 oi->oi_dir = NULL;
@@ -68,10 +66,6 @@ int osd_oi_init(struct osd_oi *oi, struct dentry *root, struct lu_site *site)
                 init_rwsem(&oi->oi_lock);
                 oi->oi_site = site;
         }
-        /*
-         * XXX prototype stuff: add root fid.
-         */
-        osd_oi_init0(oi);
         return result;
 }
 
@@ -114,42 +108,15 @@ static struct lu_fid *oi_fid_key(struct osd_thread_info *info,
  * XXX prototype.
  ****************************************************************************/
 
-struct oi_entry {
-        struct lu_fid       oe_key;
-        struct osd_inode_id oe_rec;
-        struct list_head    oe_linkage;
-};
-
-static CFS_LIST_HEAD(oi_head);
-
-static struct oi_entry *oi_lookup(const struct lu_fid *fid)
-{
-        struct oi_entry *entry;
-
-        list_for_each_entry(entry, &oi_head, oe_linkage) {
-                if (lu_fid_eq(fid, &entry->oe_key))
-                        return entry;
-        }
-        return NULL;
-}
-
 /*
  * Locking: requires at least read lock on oi.
  */
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
-        struct oi_entry *entry;
-        int result;
-
-        LASSERT(fid_is_local(oi->oi_site, fid));
-        entry = oi_lookup(fid);
-        if (entry != NULL) {
-                *id = entry->oe_rec;
-                result = 0;
-        } else
-                result = -ENOENT;
-        return result;
+        id->oii_ino = fid_seq(fid);
+        id->oii_gen = fid_oid(fid);
+        return 0;
 }
 
 /*
@@ -158,23 +125,9 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
 int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, const struct osd_inode_id *id)
 {
-        struct oi_entry *entry;
-        int result;
-
-        LASSERT(fid_is_local(oi->oi_site, fid));
-        entry = oi_lookup(fid);
-        if (entry == NULL) {
-                OBD_ALLOC_PTR(entry);
-                if (entry != NULL) {
-                        entry->oe_key = *fid;
-                        entry->oe_rec = *id;
-                        list_add(&entry->oe_linkage, &oi_head);
-                        result = 0;
-                } else
-                        result = -ENOMEM;
-        } else
-                result = -EEXIST;
-        return result;
+        LASSERT(id->oii_ino == fid_seq(fid));
+        LASSERT(id->oii_gen == fid_oid(fid));
+        return 0;
 }
 
 /*
@@ -183,37 +136,5 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
 int osd_oi_delete(struct osd_thread_info *info,
                   struct osd_oi *oi, const struct lu_fid *fid)
 {
-        struct oi_entry *entry;
-        int result;
-
-        LASSERT(fid_is_local(oi->oi_site, fid));
-        entry = oi_lookup(fid);
-        if (entry != NULL) {
-                list_del(&entry->oe_linkage);
-                OBD_FREE_PTR(entry);
-                result = 0;
-        } else
-                result = -ENOENT;
-        return result;
-}
-
-#define LDISKFS_ROOT_INO 2 /* Root inode */
-
-/* XXX used by osd_root_get() */
-const struct lu_fid root_fid = {
-        .f_seq = LUSTRE_ROOT_FID_SEQ,
-        .f_oid = LUSTRE_ROOT_FID_OID,
-        .f_ver = 0
-};
-
-static const struct osd_inode_id root_id = {
-        .oii_ino = LDISKFS_ROOT_INO,
-        .oii_gen = 0
-};
-
-static void osd_oi_init0(struct osd_oi *oi)
-{
-        int result;
-        result = osd_oi_insert(NULL, oi, &root_fid, &root_id);
-        LASSERT(result == 0);
+        return 0;
 }

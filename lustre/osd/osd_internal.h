@@ -39,6 +39,7 @@
 #include "osd_oi.h"
 
 struct inode;
+struct dentry;
 
 struct osd_object {
         struct dt_object     oo_dt;
@@ -54,6 +55,7 @@ struct osd_device {
         struct dt_device          od_dt_dev;
         struct lustre_mount_info *od_mount;
         struct osd_oi             od_oi;
+        struct dentry            *od_root_dir;
 };
 
 static inline struct osd_object * dt2osd_obj(struct dt_object *o)
@@ -81,7 +83,9 @@ static inline struct lu_device * osd2lu_dev(struct osd_device * osd)
         return &osd->od_dt_dev.dd_lu_dev;
 }
 
-struct dentry *osd_lookup(struct dentry *parent, const char *name, int len);
+struct dentry *osd_lookup(struct dentry *parent, const char *name);
+struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
+
 
 struct osd_thread_info {
         char          oti_name[64];
