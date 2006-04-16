@@ -102,9 +102,9 @@ int cmm_statfs(struct lu_context *ctx,
                struct md_device *m, struct kstatfs *sfs);
 int cmm_mkdir(struct lu_context *ctxt, struct md_object *o, const char *name,
               struct md_object *child);
-int cmm_attr_get(struct lu_context *ctxt,
-                 struct md_object *obj, void *buf, int size,
-                 const char *name, struct md_params *);
+int cmm_xattr_get(struct lu_context *ctxt,
+                  struct md_object *obj, void *buf, int size,
+                  const char *name, struct md_params *);
 
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */

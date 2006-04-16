@@ -144,9 +144,9 @@ static void mdd_object_free(struct lu_context *ctxt, struct lu_object *o)
 }
 
 static int
-mdd_attr_get(struct lu_context *ctxt, struct md_object *obj, void *buf,
-             int buf_len, const char *name,
-             struct md_params *arg)
+mdd_xattr_get(struct lu_context *ctxt, struct md_object *obj, void *buf,
+              int buf_len, const char *name,
+              struct md_params *arg)
 {
         struct mdd_object *mdd_obj = mdo2mddo(obj);
         struct dt_object  *next = mdd_object_child(mdd_obj);
@@ -154,7 +154,7 @@ mdd_attr_get(struct lu_context *ctxt, struct md_object *obj, void *buf,
 
         ENTRY;
 
-        rc = next->do_ops->do_attr_get(ctxt, next, buf, buf_len, name, arg);
+        rc = next->do_ops->do_xattr_get(ctxt, next, buf, buf_len, name, arg);
         RETURN(rc);
 }
 
@@ -242,7 +242,7 @@ static void mdd_object_release(struct lu_context *ctxt, struct lu_object *o)
         int rc;
         int nlink;
 
-        rc = mdd_attr_get(ctxt, &obj->mod_obj, &nlink,
+        rc = mdd_xattr_get(ctxt, &obj->mod_obj, &nlink,
                           sizeof(nlink), "NLINK", NULL);
         if (rc == 0) {
                 if (nlink == 0)
@@ -402,19 +402,19 @@ mdd_object_create(struct lu_context *ctxt, struct md_object *pobj,
 }
 
 static int
-__mdd_attr_set(struct lu_context *ctxt, struct mdd_device *mdd,
-               struct mdd_object *obj, void *buf,
-               int buf_len, const char *name, struct md_params *arg,
-               struct thandle *handle)
+__mdd_xattr_set(struct lu_context *ctxt, struct mdd_device *mdd,
+                struct mdd_object *obj, void *buf,
+                int buf_len, const char *name, struct md_params *arg,
+                struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(obj);
-        return next->do_ops->do_attr_set(ctxt, next, buf, buf_len,
-                                         name, arg, handle);
+        return next->do_ops->do_xattr_set(ctxt, next, buf, buf_len,
+                                          name, arg, handle);
 }
 
 static int
-mdd_attr_set(struct lu_context *ctxt, struct md_object *obj, void *buf,
-             int buf_len, const char *name, struct md_params *arg)
+mdd_xattr_set(struct lu_context *ctxt, struct md_object *obj, void *buf,
+              int buf_len, const char *name, struct md_params *arg)
 {
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -425,8 +425,8 @@ mdd_attr_set(struct lu_context *ctxt, struct md_object *obj, void *buf,
         if (!handle)
                 RETURN(-ENOMEM);
 
-        rc = __mdd_attr_set(ctxt, mdd, mdo2mddo(obj), buf, buf_len, name,
-                            arg, handle);
+        rc = __mdd_xattr_set(ctxt, mdd, mdo2mddo(obj), buf, buf_len, name,
+                             arg, handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -546,11 +546,11 @@ mdd_link(struct lu_context *ctxt, struct md_object *tgt_obj,
         if (rc)
                 GOTO(exit, rc);
 
-        rc = mdd_attr_get(ctxt, src_obj, &nlink, sizeof(nlink), "NLINK", arg);
+        rc = mdd_xattr_get(ctxt, src_obj, &nlink, sizeof(nlink), "NLINK", arg);
         ++nlink;
 
-        rc = __mdd_attr_set(ctxt, mdd, mdd_sobj, &nlink, sizeof(nlink), "NLINK",
-                            arg, handle);
+        rc = __mdd_xattr_set(ctxt, mdd, mdd_sobj,
+                             &nlink, sizeof(nlink), "NLINK", arg, handle);
 exit:
         mdd_unlock2(ctxt, mdd_tobj, mdd_sobj);
 
@@ -689,8 +689,8 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_mkdir      = mdd_mkdir,
         .moo_rename     = mdd_rename,
         .moo_link       = mdd_link,
-        .moo_attr_get   = mdd_attr_get,
-        .moo_attr_set   = mdd_attr_set,
+        .moo_xattr_get  = mdd_xattr_get,
+        .moo_xattr_set  = mdd_xattr_set,
         .moo_index_insert = mdd_index_insert,
         .moo_index_delete = mdd_index_delete,
         .moo_object_create = mdd_object_create,

@@ -146,14 +146,13 @@ static int osd_getattr(struct lu_context *ctx,
 
 static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 {
-        struct osd_device  *d = osd_dev(l->lo_dev);
+        struct osd_object *o = osd_obj(l);
         int result;
 
-        result = osd_fid_lookup(ctxt, osd_obj(l), lu_object_fid(l));
+        result = osd_fid_lookup(ctxt, o, lu_object_fid(l));
         if (result == 0)
                 /* fill lu_attr in ctxt */
-                result = osd_getattr(ctxt, osd_sb(d)->s_root->d_inode,
-                                     &ctxt->lc_attr);
+                result = osd_getattr(ctxt, o->oo_inode, &ctxt->lc_attr);
         return result;
 }
 
@@ -189,8 +188,10 @@ static int osd_object_print(struct lu_context *ctx,
 {
         struct osd_object  *o = osd_obj(l);
 
-        return seq_printf(f, LUSTRE_OSD0_NAME"-object@%p(i:%p)",
-                          o, o->oo_inode);
+        return seq_printf(f, LUSTRE_OSD0_NAME"-object@%p(i:%p:%lu/%u)",
+                          o, o->oo_inode,
+                          o->oo_inode ? o->oo_inode->i_ino : 0UL,
+                          o->oo_inode ? o->oo_inode->i_generation : 0);
 }
 
 static int osd_config(struct lu_context *ctx,
@@ -221,9 +222,9 @@ static int osd_statfs(struct lu_context *ctx,
         RETURN (result);
 }
 
-static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
-                        void *buf, int size, const char *name,
-                        struct md_params *arg)
+static int osd_xattr_get(struct lu_context *ctxt, struct dt_object *dt,
+                         void *buf, int size, const char *name,
+                         struct md_params *arg)
 {
 	//struct osd_object *o = dt2osd_obj(dt);
         //struct osd_device *dev = osd_obj2dev(o);
