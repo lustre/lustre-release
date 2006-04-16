@@ -85,8 +85,8 @@ struct md_device_operations {
         int (*mdo_statfs)(struct lu_context *ctx,
                           struct md_device *m, struct kstatfs *sfs);
 
-        int (*mdo_get_info)(struct lu_context *ctx, struct md_device *m, 
-                            __u32 keylen, void *key, __u32 *vallen, void *val);
+        int (*mdo_fld)(struct lu_context *ctx, struct md_device *m, 
+                       __u32 opt, void *mf);
         
         int (*mdo_set_info)(struct lu_context *ctx, struct md_device *m, 
                             __u32 keylen, void *key, __u32 vallen, void *val);
@@ -145,4 +145,9 @@ static inline void md_device_fini(struct md_device *md)
 	lu_device_fini(&md->md_lu_dev);
 }
 
+enum fld_op {
+        FLD_CREATE = 0,
+        FLD_DELETE = 1,
+        FLD_GET    = 2
+};
 #endif /* _LINUX_MD_OBJECT_H */

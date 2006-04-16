@@ -97,6 +97,7 @@
 #define MGS_REQUEST_PORTAL             26
 #define MGS_REPLY_PORTAL               27
 #define OST_REQUEST_PORTAL             28
+#define MDS_FLD_PORTAL                 29
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -515,6 +516,7 @@ struct ost_body {
 
 extern void lustre_swab_ost_body (struct ost_body *b);
 extern void lustre_swab_ost_last_id(obd_id *id);
+extern void lustre_swab_generic_32s(__u32 *val);
 
 /* lock value block communicated between the filter and llite */
 
@@ -560,7 +562,7 @@ typedef enum {
         MDS_QUOTACTL     = 48,
         MDS_GETXATTR     = 49,
         MDS_SETXATTR     = 50,
-        MDS_GET_INFO     = 51,
+        MDS_FLD          = 51,
         MDS_LAST_OPC
 } mds_cmd_t;
 

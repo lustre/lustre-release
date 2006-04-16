@@ -63,6 +63,7 @@ struct mdt_device {
         /* super-class */
         struct md_device           mdt_md_dev;
         struct ptlrpc_service     *mdt_service;
+        struct ptlrpc_service     *mdt_fld_service;
         struct ptlrpc_service_conf mdt_service_conf;
         /* DLM name-space for meta-data locks maintained by this server */
         struct ldlm_namespace     *mdt_namespace;

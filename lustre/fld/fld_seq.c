@@ -4,6 +4,7 @@
  *  fld/fld.c 
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: WangDi <wangdi@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -37,6 +38,7 @@
 #include <linux/lprocfs_status.h>
 
 #include <linux/md_object.h>
+#include <linux/lustre_mdc.h>
 #include "fld_internal.h"
  
 /*XXX maybe these 2 items should go to sbi*/
@@ -164,8 +166,7 @@ int fld_create(struct obd_export *exp, __u64 seq, __u64 mds_num)
         md_fld.mf_seq = seq;
         md_fld.mf_mds = mds_num;
 
-        rc = obd_set_info(fld_exp, strlen("fld_create"), "fld_create", 
-                          sizeof(struct md_fld), &md_fld);
+        rc = mdc_fld(fld_exp, &md_fld, FLD_CREATE);
         fld_cache_insert(fld_cache, seq, mds_num);
 
         RETURN(rc);
@@ -186,8 +187,7 @@ int fld_delete(struct obd_export *exp, __u64 seq, __u64 mds_num)
         md_fld.mf_seq = seq;
         md_fld.mf_mds = mds_num;
 
-        rc = obd_set_info(fld_exp, strlen("fld_delete"), "fld_delete",
-                          sizeof(struct md_fld), &md_fld);
+        rc = mdc_fld(fld_exp, &md_fld, FLD_DELETE);
 
         RETURN(rc);
 }
@@ -206,9 +206,8 @@ int fld_get(struct obd_export *exp, __u64 lu_seq, __u64 *mds_num)
        
         vallen = sizeof(struct md_fld);
  
-        rc = obd_get_info(fld_exp, strlen("fld_delete"), "fld_delete",
-                          &vallen, &md_fld);
-
+        rc = mdc_fld(fld_exp, &md_fld, FLD_GET);
+        
         *mds_num = md_fld.mf_mds;
  
         RETURN(rc);

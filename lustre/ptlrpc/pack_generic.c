@@ -584,6 +584,11 @@ void lustre_swab_ost_last_id(obd_id *id)
         __swab64s(id);
 }
 
+void lustre_swab_generic_32s(__u32 *val)
+{
+        __swab32s(val);
+}
+
 void lustre_swab_ost_lvb(struct ost_lvb *lvb)
 {
         __swab64s(&lvb->lvb_size);

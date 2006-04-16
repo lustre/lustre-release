@@ -201,78 +201,30 @@ static int mdt_getattr(struct mdt_thread_info *info,
         RETURN(result);
 }
 
-static int mdt_set_info(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
+static int mdt_fld(struct mdt_thread_info *info,
+                   struct ptlrpc_request *req, int offset)
 {
         struct md_device *next  = info->mti_mdt->mdt_child;
-        char *key;
-        int keylen, rc = 0;
+        struct md_fld mf, *p, *reply;
+        int size = sizeof(*reply);
+        __u32 *opt; 
+        int rc;
         ENTRY;
 
-        key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
-        if (key == NULL) {
-                DEBUG_REQ(D_HA, req, "no set_info key");
-                RETURN(-EFAULT);
-        }
-        keylen = req->rq_reqmsg->buflens[0];
-
-        if (((keylen >= strlen("fld_create") &&
-            memcmp(key, "fld_create", keylen) == 0)) ||
-            ((keylen >= strlen("fld_delete") &&
-            memcmp(key, "fld_delete", keylen) == 0))) {
-                struct md_fld mf, *p;
-                __u32 size = sizeof(struct md_fld);
-
-                rc = lustre_pack_reply(req, 0, NULL, NULL);
-                if (rc)
-                        RETURN(rc);
-
-                p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
-                mf = *p;
-                rc = next->md_ops->mdo_get_info(info->mti_ctxt, next, keylen,
-                                                key, &size, &mf);
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc)
                 RETURN(rc);
-        }
 
-        CDEBUG(D_IOCTL, "invalid key\n");
-        RETURN(-EINVAL);
+        opt = lustre_swab_reqbuf(req, 0, sizeof(*opt), 
+                                         lustre_swab_generic_32s);
 
-}
+        p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
+        mf = *p;
+        rc = next->md_ops->mdo_fld(info->mti_ctxt, next, *opt, &mf);
+        reply = lustre_msg_buf(req->rq_repmsg, 0, size);
+        *reply = mf;
 
-static int mdt_get_info(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
-{
-        struct md_device *next  = info->mti_mdt->mdt_child;
-        char *key;
-        int keylen, rc = 0;
-        ENTRY;
-
-        key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
-        if (key == NULL) {
-                DEBUG_REQ(D_HA, req, "no set_info key");
-                RETURN(-EFAULT);
-        }
-        keylen = req->rq_reqmsg->buflens[0];
-
-        if (((keylen >= strlen("fld_get") &&
-            memcmp(key, "fld_get", keylen) == 0))) {
-                struct md_fld mf, *p, *reply;
-                int size = sizeof(*reply);
-
-                rc = lustre_pack_reply(req, 1, &size, NULL);
-                if (rc)
-                        RETURN(rc);
-                p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
-                mf = *p;
-                rc = next->md_ops->mdo_get_info(info->mti_ctxt, next, keylen,
-                                                key, &size, &mf);
-                reply = lustre_msg_buf(req->rq_repmsg, 0, size);
-                *reply = mf;
-                RETURN(rc);
-        }
-
-        CDEBUG(D_IOCTL, "invalid key\n");
-        RETURN(-EINVAL);
+        RETURN(rc);
 }
 
 static struct lu_device_operations mdt_lu_ops;
@@ -1062,18 +1014,27 @@ struct lu_seq_mgr_ops seq_mgr_ops = {
         .smo_write = mdt_seq_mgr_write
 };
 
+static void mdt_stop_ptlrpc_service(struct mdt_device *m)
+{
+        if (m->mdt_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_service);
+                m->mdt_service = NULL;
+        }
+        if (m->mdt_fld_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_fld_service);
+                m->mdt_fld_service = NULL;
+        }
+}
+
 static void mdt_fini(struct mdt_device *m)
 {
         struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
 
+        mdt_stop_ptlrpc_service(m);
         if (d->ld_site != NULL) {
                 lu_site_fini(d->ld_site);
                 OBD_FREE_PTR(d->ld_site);
                 d->ld_site = NULL;
-        }
-        if (m->mdt_service != NULL) {
-                ptlrpc_unregister_service(m->mdt_service);
-                m->mdt_service = NULL;
         }
         if (m->mdt_namespace != NULL) {
                 ldlm_namespace_free(m->mdt_namespace, 0);
@@ -1092,6 +1053,68 @@ static void mdt_fini(struct mdt_device *m)
 
         LASSERT(atomic_read(&d->ld_ref) == 0);
         md_device_fini(&m->mdt_md_dev);
+}
+
+static int mdt_start_ptlrpc_service(struct mdt_device *m)
+{
+        int rc;
+        ENTRY;
+
+        m->mdt_service_conf.psc_nbufs            = MDS_NBUFS;
+        m->mdt_service_conf.psc_bufsize          = MDS_BUFSIZE;
+        m->mdt_service_conf.psc_max_req_size     = MDS_MAXREQSIZE;
+        m->mdt_service_conf.psc_max_reply_size   = MDS_MAXREPSIZE;
+        m->mdt_service_conf.psc_req_portal       = MDS_REQUEST_PORTAL;
+        m->mdt_service_conf.psc_rep_portal       = MDC_REPLY_PORTAL;
+        m->mdt_service_conf.psc_watchdog_timeout = MDS_SERVICE_WATCHDOG_TIMEOUT;
+        /*
+         * We'd like to have a mechanism to set this on a per-device basis,
+         * but alas...
+         */
+        m->mdt_service_conf.psc_num_threads = min(max(mdt_num_threads,
+                                                      MDT_MIN_THREADS),
+                                                  MDT_MAX_THREADS);
+
+        ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
+                           "mdt_ldlm_client", &m->mdt_ldlm_client);
+
+        m->mdt_service =
+                ptlrpc_init_svc_conf(&m->mdt_service_conf, mdt_handle,
+                                     LUSTRE_MDT0_NAME,
+                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
+                                     NULL);
+        if (m->mdt_service == NULL)
+                RETURN(-ENOMEM);
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT0_NAME);
+        if (rc)
+                GOTO(err_mdt_svc, rc);
+
+        /*start mdt fld service */
+
+        m->mdt_service_conf.psc_req_portal = MDS_FLD_PORTAL;
+
+        m->mdt_fld_service =
+                ptlrpc_init_svc_conf(&m->mdt_service_conf, mdt_handle,
+                                     LUSTRE_FLD0_NAME,
+                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
+                                     NULL);
+        if (m->mdt_fld_service == NULL)
+                RETURN(-ENOMEM);
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_fld_service, LUSTRE_FLD0_NAME);
+        if (rc)
+                GOTO(err_fld_svc, rc);
+
+        RETURN(rc);
+err_fld_svc:
+        ptlrpc_unregister_service(m->mdt_fld_service);
+        m->mdt_fld_service = NULL;
+err_mdt_svc:
+        ptlrpc_unregister_service(m->mdt_service);
+        m->mdt_service = NULL;
+
+        RETURN(rc);
 }
 
 static int mdt_init0(struct mdt_device *m,
@@ -1127,44 +1150,12 @@ static int mdt_init0(struct mdt_device *m,
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
         lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
 
-        m->mdt_service_conf.psc_nbufs            = MDS_NBUFS;
-        m->mdt_service_conf.psc_bufsize          = MDS_BUFSIZE;
-        m->mdt_service_conf.psc_max_req_size     = MDS_MAXREQSIZE;
-        m->mdt_service_conf.psc_max_reply_size   = MDS_MAXREPSIZE;
-        m->mdt_service_conf.psc_req_portal       = MDS_REQUEST_PORTAL;
-        m->mdt_service_conf.psc_rep_portal       = MDC_REPLY_PORTAL;
-        m->mdt_service_conf.psc_watchdog_timeout = MDS_SERVICE_WATCHDOG_TIMEOUT;
-        /*
-         * We'd like to have a mechanism to set this on a per-device basis,
-         * but alas...
-         */
-        m->mdt_service_conf.psc_num_threads = min(max(mdt_num_threads,
-                                                      MDT_MIN_THREADS),
-                                                  MDT_MAX_THREADS);
-        snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
-        m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
-        if (m->mdt_namespace == NULL)
-                GOTO(err_fini_site, rc = -ENOMEM);
-
-        ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
-
-        ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                           "mdt_ldlm_client", &m->mdt_ldlm_client);
-
-        m->mdt_service =
-                ptlrpc_init_svc_conf(&m->mdt_service_conf, mdt_handle,
-                                     LUSTRE_MDT0_NAME,
-                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
-                                     NULL);
-        if (m->mdt_service == NULL)
-                GOTO(err_free_ns, rc = -ENOMEM);
-
         /* init the stack */
         LASSERT(mdt_child->ld_type->ldt_ops->ldto_device_init != NULL);
         rc = mdt_child->ld_type->ldt_ops->ldto_device_init(mdt_child, top);
         if (rc) {
                 CERROR("can't init device stack, rc %d\n", rc);
-                GOTO(err_free_svc, rc);
+                GOTO(err_fini_site, rc);
         }
 
         m->mdt_seq_mgr = seq_mgr_init(&seq_mgr_ops, m);
@@ -1184,13 +1175,22 @@ static int mdt_init0(struct mdt_device *m,
         if (rc)
                 GOTO(err_fini_ctx, rc);
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT0_NAME);
-        if (rc)
-                GOTO(err_fini_ctx, rc);
-
         lu_context_fini(&ctx);
-        RETURN(0);
+ 
+        snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
+        m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
+        if (m->mdt_namespace == NULL)
+                GOTO(err_fini_site, rc = -ENOMEM);
 
+        ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
+
+        rc = mdt_start_ptlrpc_service(m);
+        if (rc)
+                GOTO(err_free_ns, rc);
+        RETURN(0);
+err_free_ns:
+        ldlm_namespace_free(m->mdt_namespace, 0);
+        m->mdt_namespace = NULL;
 err_fini_ctx:
         lu_context_fini(&ctx);
 err_fini_mgr:
@@ -1198,12 +1198,7 @@ err_fini_mgr:
         m->mdt_seq_mgr = NULL;
 err_fini_child:
         mdt_child->ld_type->ldt_ops->ldto_device_fini(mdt_child);
-err_free_svc:
-        ptlrpc_unregister_service(m->mdt_service);
-        m->mdt_service = NULL;
-err_free_ns:
-        ldlm_namespace_free(m->mdt_namespace, 0);
-        m->mdt_namespace = NULL;
+
 err_fini_site:
         lu_site_fini(s);
         OBD_FREE_PTR(s);
@@ -1470,8 +1465,7 @@ static struct mdt_handler mdt_mds_ops[] = {
         DEF_MDT_HNDL(HABEO_CORPUS, DONE_WRITING,   mdt_done_writing),
         DEF_MDT_HNDL(0,            PIN,            mdt_pin),
         DEF_MDT_HNDL(HABEO_CORPUS, SYNC,           mdt_sync),
-        DEF_MDT_HNDL(0,            SET_INFO,       mdt_set_info),
-        DEF_MDT_HNDL(0,            GET_INFO,       mdt_get_info),
+        DEF_MDT_HNDL(0,            FLD,            mdt_fld),
         DEF_MDT_HNDL(0,            QUOTACHECK,     mdt_handle_quotacheck),
         DEF_MDT_HNDL(0,            QUOTACTL,       mdt_handle_quotactl)
 };

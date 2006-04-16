@@ -763,50 +763,35 @@ static int mdd_fld_get(struct mdd_device *mdd, __u64 seq_num, __u64 *mds_num)
         return -ENOENT;
 }
 
-static int mdd_get_info(struct lu_context *ctx, struct md_device *m, 
-                        __u32 keylen, void *key, __u32 *vallen, void *val)
+static int mdd_fld(struct lu_context *ctx, struct md_device *m,
+                   __u32 opts, void *mf)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        int rc;
-
-        ENTRY;
-        if (keylen >= strlen("fld_get") && 
-            memcmp(key, "fld_get", 7) == 0) {
-                struct md_fld *mf = val;
-                rc = mdd_fld_get(mdd, mf->mf_seq, &mf->mf_mds);
-                RETURN(rc);
-        } 
-        RETURN(-EINVAL);
-}
-
-static int mdd_set_info(struct lu_context *ctx, struct md_device *m, 
-                        __u32 keylen, void *key, __u32 vallen, void *val)
-{
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct md_fld *pmf = mf;
         int rc;
         ENTRY;
-        
-        if (keylen >= strlen("fld_create") && 
-            memcmp(key, "fld_create", 10) == 0) {
-                struct md_fld *mf = val;
-                rc = mdd_fld_create(mdd, mf->mf_seq, mf->mf_mds);
-                RETURN(rc);
-        } 
-        
-        if (keylen >= strlen("fld_delete") && 
-            memcmp(key, "fld_delete", 10) == 0) {
-                struct md_fld *mf = val;
-                rc = mdd_fld_delete(mdd, mf->mf_seq, mf->mf_mds);
-                RETURN(rc);
-        } 
 
-        RETURN(-EINVAL);
+        switch (opts) {
+        case FLD_CREATE:
+                rc = mdd_fld_create(mdd, pmf->mf_seq, pmf->mf_mds);
+                break;
+        case FLD_DELETE:
+                rc = mdd_fld_delete(mdd, pmf->mf_seq, pmf->mf_mds);
+                break;
+        case FLD_GET:
+                rc = mdd_fld_get(mdd, pmf->mf_seq, &pmf->mf_mds);
+                break;
+        default:
+                rc = -EINVAL;
+                break; 
+        }
+        RETURN(rc);
+
 }
 
 struct md_device_operations mdd_ops = {
         .mdo_root_get   = mdd_root_get,
-        .mdo_get_info   = mdd_get_info,
-        .mdo_set_info   = mdd_set_info,
+        .mdo_fld        = mdd_fld,
         .mdo_config     = mdd_config,
         .mdo_statfs     = mdd_statfs
 };

@@ -851,75 +851,37 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
-        if (KEY_IS("fld_create") || KEY_IS("fld_delete")) {
-                struct ptlrpc_request *req;
-                int size[2] = {keylen, vallen};
-                char *bufs[2] = {key, val};
-                ENTRY;
-
-                req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, 
-                                      MDS_SET_INFO, 2, size, bufs);
-                if (req == NULL)
-                        RETURN(-ENOMEM);
-                
-                req->rq_replen = lustre_msg_size(0, NULL);
-                rc = ptlrpc_queue_wait(req);
-                if (rc)
-                        GOTO(out_req, rc);
-out_req:
-                ptlrpc_req_finished(req);
-                RETURN(rc);
-
-        }
         RETURN(rc);
 }
 
-int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
-                 __u32 *vallen, void *val)
+int mdc_fld(struct obd_export *exp, struct md_fld *mf, __u32 fld_op)
 {
-        int rc = -EINVAL;
+        struct ptlrpc_request *req;
+        struct md_fld *pmf;
+        int mf_size = sizeof(*mf);
+        __u32 *op;
+        int size[2] = {sizeof(op), mf_size}, rc;
+        ENTRY;
 
-        if (keylen == strlen("max_easize") &&
-            memcmp(key, "max_easize", strlen("max_easize")) == 0) {
-                int mdsize, *max_easize;
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION, 
+                              MDS_FLD, 2, size, NULL);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+        
+        op = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*op));
+        *op = fld_op;
 
-                if (*vallen != sizeof(int))
-                        RETURN(-EINVAL);
-                mdsize = *(int*)val;
-                if (mdsize > exp->exp_obd->u.cli.cl_max_mds_easize)
-                        exp->exp_obd->u.cli.cl_max_mds_easize = mdsize;
-                max_easize = val;
-                *max_easize = exp->exp_obd->u.cli.cl_max_mds_easize;
-                RETURN(0);
-        }
-        if (KEY_IS("fld_get")) {
-                struct ptlrpc_request *req;
-                int size[2] = {keylen, *vallen};
-                char *bufs[2] = {key, val};
-                struct md_fld *reply;
-                ENTRY;
-
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                                      MDS_GET_INFO, 2, size, bufs);
-                if (req == NULL)
-                        RETURN(-ENOMEM);
-                
-                req->rq_replen = lustre_msg_size(1, (int *)vallen);
-                rc = ptlrpc_queue_wait(req);
-                if (rc)
-                        GOTO(out_req, rc);
-
-                reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
-                                           lustre_swab_md_fld);
-                if (reply == NULL) {
-                        CERROR("Can't unpack %s\n", (char *)key);
-                        GOTO(out_req, rc = -EPROTO);
-                }
-                *((struct md_fld *)val) = *reply;
+        pmf = lustre_msg_buf(req->rq_reqmsg, 1, sizeof (*pmf));
+        memcpy(pmf, mf, sizeof(*mf));
+ 
+        req->rq_replen = lustre_msg_size(1, &mf_size);
+        rc = ptlrpc_queue_wait(req);
+        if (rc)
+                GOTO(out_req, rc);
+        
+        pmf = lustre_swab_repbuf(req, 0, sizeof(*pmf), lustre_swab_md_fld);
 out_req:
-                ptlrpc_req_finished(req);
-                RETURN(rc);
-        }
+        ptlrpc_req_finished(req);
         RETURN(rc);
 }
 
@@ -1273,7 +1235,6 @@ struct obd_ops mdc_obd_ops = {
         .o_disconnect   = client_disconnect_export,
         .o_iocontrol    = mdc_iocontrol,
         .o_set_info     = mdc_set_info,
-        .o_get_info     = mdc_get_info,
         .o_statfs       = mdc_statfs,
         .o_pin          = mdc_pin,
         .o_unpin        = mdc_unpin,
@@ -1335,6 +1296,7 @@ EXPORT_SYMBOL(mdc_clear_open_replay_data);
 EXPORT_SYMBOL(mdc_init_ea_size);
 EXPORT_SYMBOL(mdc_getxattr);
 EXPORT_SYMBOL(mdc_setxattr);
+EXPORT_SYMBOL(mdc_fld);
 
 module_init(mdc_init);
 module_exit(mdc_exit);

@@ -130,6 +130,9 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request);
 int mdc_sync(struct obd_export *exp, struct lu_fid *fid,
              struct ptlrpc_request **);
+
+int mdc_fld(struct obd_export *exp, struct md_fld *mf, __u32 fld_op);
+
 int mdc_create_client(struct obd_uuid uuid, struct ptlrpc_client *cl);
 
 int mdc_llog_process(struct obd_export *, char *logname, llog_cb_t, void *data);

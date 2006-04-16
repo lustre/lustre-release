@@ -101,8 +101,8 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_SETXATTR_WRITE      0x134
 #define OBD_FAIL_MDS_SET_INFO_NET        0x135
 #define OBD_FAIL_MDS_SET_INFO_PACK       0x136
-#define OBD_FAIL_MDS_GET_INFO_NET        0x137
-#define OBD_FAIL_MDS_GET_INFO_PACK       0x138
+#define OBD_FAIL_MDS_FLD_NET             0x137
+#define OBD_FAIL_MDS_FLD_PACK            0x138
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
