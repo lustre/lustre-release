@@ -74,6 +74,8 @@ static void *osd_key_init      (struct lu_context *ctx);
 static void  osd_key_fini      (struct lu_context *ctx, void *data);
 static int   osd_fid_lookup    (struct lu_context *ctx, struct osd_object *obj,
                                 const struct lu_fid *fid);
+static int   osd_inode_getattr (struct lu_context *ctx,
+                                struct inode *inode, struct lu_attr *attr);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -96,6 +98,7 @@ static struct lprocfs_vars              lprocfs_osd_module_vars[];
 static struct lprocfs_vars              lprocfs_osd_obd_vars[];
 static struct lu_device_operations      osd_lu_ops;
 static struct lu_context_key            osd_key;
+static struct dt_object_operations      osd_obj_ops;
 
 /*
  * DT methods.
@@ -123,37 +126,15 @@ static struct lu_object *osd_object_alloc(struct lu_context *ctx,
 
                 l = &mo->oo_dt.do_lu;
                 lu_object_init(l, NULL, d);
+                mo->oo_dt.do_ops = &osd_obj_ops;
                 return l;
         } else
                 return NULL;
 }
 
-static int osd_getattr(struct lu_context *ctx,
-                       struct inode *inode, struct lu_attr *attr)
-{
-        //attr->la_atime      = inode->i_atime;
-        //attr->la_mtime      = inode->i_mtime;
-        //attr->la_ctime      = inode->i_ctime;
-        attr->la_mode       = inode->i_mode;
-        attr->la_size       = inode->i_size;
-        attr->la_blocks     = inode->i_blocks;
-        attr->la_uid        = inode->i_uid;
-        attr->la_gid        = inode->i_gid;
-        attr->la_flags      = inode->i_flags;
-        attr->la_nlink      = inode->i_nlink;
-        return 0;
-}
-
 static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 {
-        struct osd_object *o = osd_obj(l);
-        int result;
-
-        result = osd_fid_lookup(ctxt, o, lu_object_fid(l));
-        if (result == 0)
-                /* fill lu_attr in ctxt */
-                result = osd_getattr(ctxt, o->oo_inode, &ctxt->lc_attr);
-        return result;
+        return osd_fid_lookup(ctxt, osd_obj(l), lu_object_fid(l));
 }
 
 static void osd_object_free(struct lu_context *ctx, struct lu_object *l)
@@ -222,23 +203,15 @@ static int osd_statfs(struct lu_context *ctx,
         RETURN (result);
 }
 
-static int osd_xattr_get(struct lu_context *ctxt, struct dt_object *dt,
-                         void *buf, int size, const char *name,
-                         struct md_params *arg)
+static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
+                        struct lu_attr *attr)
 {
-	//struct osd_object *o = dt2osd_obj(dt);
-        //struct osd_device *dev = osd_obj2dev(o);
-        //struct super_block *sb = osd_sb(dev);
-        //struct inode *inode = o->oo_inode;
-        int result = -EOPNOTSUPP;
-
-        ENTRY;
-
-        memset(buf, 0, size);
-	//TODO
-        RETURN (result);
-
+        return osd_inode_getattr(ctxt, dt2osd_obj(dt)->oo_inode, attr);
 }
+
+static struct dt_object_operations osd_obj_ops = {
+        .do_attr_get = osd_attr_get
+};
 
 static struct dt_device_operations osd_dt_ops = {
         .dt_root_get = osd_root_get,
@@ -479,6 +452,22 @@ static int osd_fid_lookup(struct lu_context *ctx,
         }
         osd_oi_read_unlock(&dev->od_oi);
         RETURN(result);
+}
+
+static int osd_inode_getattr(struct lu_context *ctx,
+                             struct inode *inode, struct lu_attr *attr)
+{
+        //attr->la_atime      = inode->i_atime;
+        //attr->la_mtime      = inode->i_mtime;
+        //attr->la_ctime      = inode->i_ctime;
+        attr->la_mode       = inode->i_mode;
+        attr->la_size       = inode->i_size;
+        attr->la_blocks     = inode->i_blocks;
+        attr->la_uid        = inode->i_uid;
+        attr->la_gid        = inode->i_gid;
+        attr->la_flags      = inode->i_flags;
+        attr->la_nlink      = inode->i_nlink;
+        return 0;
 }
 
 /*

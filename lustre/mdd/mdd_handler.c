@@ -144,6 +144,20 @@ static void mdd_object_free(struct lu_context *ctxt, struct lu_object *o)
 }
 
 static int
+mdd_attr_get(struct lu_context *ctxt,
+             struct md_object *obj, struct lu_attr *attr)
+{
+        struct mdd_object *mdd_obj = mdo2mddo(obj);
+        struct dt_object  *next = mdd_object_child(mdd_obj);
+        int rc;
+
+        ENTRY;
+
+        rc = next->do_ops->do_attr_get(ctxt, next, attr);
+        RETURN(rc);
+}
+
+static int
 mdd_xattr_get(struct lu_context *ctxt, struct md_object *obj, void *buf,
               int buf_len, const char *name,
               struct md_params *arg)
@@ -200,6 +214,7 @@ enum {
         MDD_OBJECT_DESTROY_CREDITS = 10,
         MDD_OBJECT_CREATE_CREDITS  = 10,
         MDD_ATTR_SET_CREDITS       = 10,
+        MDD_XATTR_SET_CREDITS      = 10,
         MDD_INDEX_INSERT_CREDITS   = 10,
         MDD_INDEX_DELETE_CREDITS   = 10,
         MDD_LINK_CREDITS           = 10,
@@ -238,17 +253,6 @@ mdd_object_destroy(struct lu_context *ctxt, struct md_object *obj)
 
 static void mdd_object_release(struct lu_context *ctxt, struct lu_object *o)
 {
-        struct mdd_object *obj = mdd_obj(o);
-        int rc;
-        int nlink;
-
-        rc = mdd_xattr_get(ctxt, &obj->mod_obj, &nlink,
-                          sizeof(nlink), "NLINK", NULL);
-        if (rc == 0) {
-                if (nlink == 0)
-                        rc = mdd_object_destroy(ctxt, &obj->mod_obj);
-        } else
-                CERROR("Failed to get nlink: %d. Pretending nonzero.\n", rc);
 }
 
 static int mdd_object_print(struct lu_context *ctxt,
@@ -401,6 +405,37 @@ mdd_object_create(struct lu_context *ctxt, struct md_object *pobj,
         RETURN(rc);
 }
 
+
+static int
+__mdd_attr_set(struct lu_context *ctxt, struct md_object *obj,
+               struct lu_attr *attr, struct thandle *handle)
+{
+        struct dt_object *next = mdd_object_child(mdo2mddo(obj));
+        return next->do_ops->do_attr_set(ctxt, next, attr, handle);
+}
+
+static int
+mdd_attr_set(struct lu_context *ctxt,
+             struct md_object *obj, struct lu_attr *attr)
+{
+        struct mdd_device *mdd = mdo2mdd(obj);
+        struct thandle *handle;
+        int  rc;
+        ENTRY;
+
+        handle = mdd_trans_start(ctxt, mdd, &TXN_PARAM(MDD_ATTR_SET_CREDITS));
+        if (!handle)
+                RETURN(-ENOMEM);
+
+        rc = __mdd_attr_set(ctxt, obj, attr, handle);
+
+        mdd_trans_stop(ctxt, mdd, handle);
+
+        RETURN(rc);
+}
+
+
+
 static int
 __mdd_xattr_set(struct lu_context *ctxt, struct mdd_device *mdd,
                 struct mdd_object *obj, void *buf,
@@ -421,7 +456,7 @@ mdd_xattr_set(struct lu_context *ctxt, struct md_object *obj, void *buf,
         int  rc;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd, &TXN_PARAM(MDD_ATTR_SET_CREDITS));
+        handle = mdd_trans_start(ctxt, mdd, &TXN_PARAM(MDD_XATTR_SET_CREDITS));
         if (!handle)
                 RETURN(-ENOMEM);
 
@@ -689,6 +724,8 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_mkdir      = mdd_mkdir,
         .moo_rename     = mdd_rename,
         .moo_link       = mdd_link,
+        .moo_attr_get   = mdd_attr_get,
+        .moo_attr_set   = mdd_attr_set,
         .moo_xattr_get  = mdd_xattr_get,
         .moo_xattr_set  = mdd_xattr_set,
         .moo_index_insert = mdd_index_insert,

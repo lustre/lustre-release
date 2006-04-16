@@ -150,19 +150,21 @@ int cmm_mkdir(struct lu_context *ctxt, struct md_object *md_parent,
         return next->mo_ops->moo_mkdir(ctxt, next, name, md_child);
 }
 
-int cmm_xattr_get(struct lu_context *ctxt, struct md_object *obj,
-                  void *buf, int size, const char *name, struct md_params *arg)
+int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,
+                 struct lu_attr *attr)
 {
         struct md_object *next = cmm2child_obj(md2cmm_obj(obj));
 
-        return next->mo_ops->moo_xattr_get(ctxt, next, buf, size, name, arg);
+        return next->mo_ops->moo_attr_get(ctxt, next, attr);
 }
 
 static struct md_object_operations cmm_mo_ops = {
         .moo_mkdir      = cmm_mkdir,
-        .moo_xattr_get   = cmm_xattr_get,
+        .moo_attr_get   = cmm_attr_get,
+//        .moo_attr_set   = cmm_attr_set,
 //        .moo_rename     = cmm_rename,
 //        .moo_link       = cmm_link,
+//        .moo_xattr_get   = cmm_xattr_get,
 //        .moo_xattr_set   = cmm_xattr_set,
 //        .moo_index_insert = cmm_index_insert,
 //        .moo_index_delete = cmm_index_delete,

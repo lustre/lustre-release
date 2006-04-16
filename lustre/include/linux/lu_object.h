@@ -540,6 +540,11 @@ struct dt_object_operations {
                                    struct dt_object *dt,
                                    struct thandle *th);
 
+        int   (*do_attr_get)(struct lu_context *ctxt, struct dt_object *dt,
+                             struct lu_attr *attr);
+        int   (*do_attr_set)(struct lu_context *ctxt, struct dt_object *dt,
+                             struct lu_attr *attr, struct thandle *handle);
+
         int   (*do_xattr_get)(struct lu_context *ctxt, struct dt_object *dt,
                               void *buf, int buf_len, const char *name,
                               struct md_params *arg);

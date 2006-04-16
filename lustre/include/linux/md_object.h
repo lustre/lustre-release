@@ -51,6 +51,11 @@ struct md_object_operations {
                         struct md_object *sobj, const char *name,
                         struct md_params *arg);
 
+        int (*moo_attr_get)(struct lu_context *ctxt, struct md_object *dt,
+                            struct lu_attr *attr);
+        int (*moo_attr_set)(struct lu_context *ctxt, struct md_object *dt,
+                            struct lu_attr *attr);
+
         int (*moo_xattr_get)(struct lu_context *ctxt, struct md_object *obj,
                              void *buf, int buf_len, const char *name,
                              struct md_params *arg);
