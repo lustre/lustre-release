@@ -60,8 +60,9 @@
  */
 unsigned long mdt_num_threads;
 
-static int mdt_handle(struct ptlrpc_request *req);
-static struct mdt_device *mdt_dev(struct lu_device *d);
+static int                mdt_handle    (struct ptlrpc_request *req);
+static struct mdt_device *mdt_dev       (struct lu_device *d);
+static struct lu_fid     *mdt_object_fid(struct mdt_object *o);
 
 static struct lu_context_key mdt_thread_key;
 
@@ -195,8 +196,15 @@ static int mdt_getattr(struct mdt_thread_info *info,
                 CERROR(LUSTRE_MDT0_NAME": statfs lustre_pack_reply failed\n");
                 result = -ENOMEM;
         } else {
-                body = lustre_msg_buf(req->rq_repmsg, 0, size);
-                mdt_pack_attr2body(body, &info->mti_ctxt->lc_attr);
+                struct md_object *next = mdt_object_child(info->mti_object);
+
+                result = next->mo_ops->moo_attr_get(info->mti_ctxt, next,
+                                                    &info->mti_ctxt->lc_attr);
+                if (result == 0) {
+                        body = lustre_msg_buf(req->rq_repmsg, 0, size);
+                        mdt_pack_attr2body(body, &info->mti_ctxt->lc_attr);
+                        body->fid1 = *mdt_object_fid(info->mti_object);
+                }
         }
         RETURN(result);
 }
@@ -326,7 +334,7 @@ static int mdt_enqueue(struct mdt_thread_info *info,
          * info->mti_dlm_req already contains swapped and (if necessary)
          * converted dlm request.
          */
-        LASSERT(info->mti_dlm_req);
+        LASSERT(info->mti_dlm_req != NULL);
 
         info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
         return ldlm_handle_enqueue0(req, info->mti_dlm_req, &cbs);
@@ -441,7 +449,7 @@ void mdt_object_put(struct lu_context *ctxt, struct mdt_object *o)
         lu_object_put(ctxt, &o->mot_obj.mo_lu);
 }
 
-struct lu_fid *mdt_object_fid(struct mdt_object *o)
+static struct lu_fid *mdt_object_fid(struct mdt_object *o)
 {
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
@@ -567,7 +575,6 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 {
         int result;
         int off;
-        int lock_conv;
 
         ENTRY;
 
@@ -581,9 +588,6 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 OBD_FAIL_RETURN(h->mh_fail_id, 0);
 
         off = MDS_REQ_REC_OFF + shift;
-        lock_conv =
-                h->mh_flags & HABEO_CLAVIS &&
-                info->mti_mdt->mdt_flags & MDT_CL_COMPAT_RESNAME;
 
         result = 0;
         if (h->mh_flags & HABEO_CORPUS) {
@@ -604,7 +608,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                         CERROR("Can't unpack body\n");
                         result = -EFAULT;
                 }
-        } else if (lock_conv) {
+        } else if (h->mh_flags & HABEO_CLAVIS) {
                 struct ldlm_request *dlm;
 
                 LASSERT(shift == 0);
@@ -612,9 +616,11 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                         lustre_swab_reqbuf(req, MDS_REQ_INTENT_LOCKREQ_OFF,
                                            sizeof *dlm,
                                            lustre_swab_ldlm_request);
-                if (dlm != NULL)
-                        result = mdt_lock_resname_compat(info->mti_mdt, dlm);
-                else {
+                if (dlm != NULL) {
+                        if (info->mti_mdt->mdt_flags & MDT_CL_COMPAT_RESNAME)
+                                result = mdt_lock_resname_compat(info->mti_mdt,
+                                                                 dlm);
+                } else {
                         CERROR("Can't unpack dlm request\n");
                         result = -EFAULT;
                 }
@@ -635,7 +641,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         LASSERT(current->journal_info == NULL);
 
-        if (lock_conv) {
+        if (h->mh_flags & HABEO_CLAVIS &&
+            info->mti_mdt->mdt_flags & MDT_CL_COMPAT_RESNAME) {
                 struct ldlm_reply *rep;
 
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof *rep);
