@@ -287,6 +287,7 @@ void lu_site_fini(struct lu_site *s)
        }
        if (s->ls_top_dev != NULL) {
                lu_device_put(s->ls_top_dev);
+               s->ls_top_dev->ld_site = NULL;
                s->ls_top_dev = NULL;
        }
  }
