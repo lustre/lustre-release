@@ -66,9 +66,9 @@ static struct mdt_device *mdt_dev(struct lu_device *d);
 static struct lu_context_key mdt_thread_key;
 
 /* object operations */
-#if 0
 static int mdt_md_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
-                        struct lu_fid *pfid, const char *name, struct lu_fid *cfid)
+                        struct lu_fid *pfid, const char *name,
+                        struct lu_fid *cfid)
 {
         struct mdt_object      *o;
         struct mdt_object      *child;
@@ -79,24 +79,24 @@ static int mdt_md_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
 
-        o = mdt_object_find_lock(d, pfid, lh, MDS_INODELOCK_UPDATE);
+        o = mdt_object_find_lock(info->mti_ctxt,
+                                 d, pfid, lh, MDS_INODELOCK_UPDATE);
         if (IS_ERR(o))
                 return PTR_ERR(o);
 
-        child = mdt_object_find(d, cfid);
+        child = mdt_object_find(info->mti_ctxt, d, cfid);
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(o);
 
                 result = next->mo_ops->moo_mkdir(info->mti_ctxt, next, name,
                                                  mdt_object_child(child));
-                mdt_object_put(child);
+                mdt_object_put(info->mti_ctxt, child);
         } else
                 result = PTR_ERR(child);
         mdt_object_unlock(d->mdt_namespace, o, lh);
-        mdt_object_put(o);
+        mdt_object_put(info->mti_ctxt, o);
         return result;
 }
-#endif
 
 static int mdt_getstatus(struct mdt_thread_info *info,
                          struct ptlrpc_request *req, int offset)
@@ -1097,7 +1097,7 @@ static int mdt_fld(struct mdt_thread_info *info,
         struct lu_site *ls  = info->mti_mdt->mdt_md_dev.md_lu_dev.ld_site;
         struct md_fld mf, *p, *reply;
         int size = sizeof(*reply);
-        __u32 *opt; 
+        __u32 *opt;
         int rc;
         ENTRY;
 
@@ -1108,10 +1108,10 @@ static int mdt_fld(struct mdt_thread_info *info,
         opt = lustre_swab_reqbuf(req, 0, sizeof(*opt), lustre_swab_generic_32s);
         p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
         mf = *p;
-        
+
         rc = fld_handle(ls->ls_fld, *opt, &mf);
         if (rc)
-                RETURN(rc);        
+                RETURN(rc);
 
         reply = lustre_msg_buf(req->rq_repmsg, 0, size);
         *reply = mf;
@@ -1132,29 +1132,27 @@ static int mdt_fld_init(struct mdt_device *m)
         ENTRY;
 
         dt = md2_bottom_dev(m);
-       
+
         ls = m->mdt_md_dev.md_lu_dev.ld_site;
-        
+
         OBD_ALLOC_PTR(ls->ls_fld);
-        
+
         if (!ls->ls_fld)
-             RETURN(-ENOMEM);
-        
-        rc = fld_server_init(ls->ls_fld, dt);
-        
+                rc = -ENOMEM;
+        else
+                rc = fld_server_init(ls->ls_fld, dt);
+
         RETURN(rc);
 }
 
-static int mdt_fld_fini(struct mdt_device *m)
+static void mdt_fld_fini(struct mdt_device *m)
 {
         struct lu_site *ls = m->mdt_md_dev.md_lu_dev.ld_site;
-        int rc = 0;
- 
+
         if (ls && ls->ls_fld) {
                 fld_server_fini(ls->ls_fld);
                 OBD_FREE_PTR(ls->ls_fld);
         }
-        RETURN(rc);
 }
 
 static int mdt_init0(struct mdt_device *m,
@@ -1216,16 +1214,16 @@ static int mdt_init0(struct mdt_device *m,
                 GOTO(err_fini_ctx, rc);
 
         lu_context_fini(&ctx);
- 
+
         snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (m->mdt_namespace == NULL)
                 GOTO(err_fini_site, rc = -ENOMEM);
 
         ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
-       
-        rc = mdt_fld_init(m); 
-        if (rc) 
+
+        rc = mdt_fld_init(m);
+        if (rc)
                 GOTO(err_free_ns, rc);
 
         rc = mdt_start_ptlrpc_service(m);
