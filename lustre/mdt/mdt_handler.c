@@ -201,32 +201,6 @@ static int mdt_getattr(struct mdt_thread_info *info,
         RETURN(result);
 }
 
-static int mdt_fld(struct mdt_thread_info *info,
-                   struct ptlrpc_request *req, int offset)
-{
-        struct md_device *next  = info->mti_mdt->mdt_child;
-        struct md_fld mf, *p, *reply;
-        int size = sizeof(*reply);
-        __u32 *opt; 
-        int rc;
-        ENTRY;
-
-        rc = lustre_pack_reply(req, 1, &size, NULL);
-        if (rc)
-                RETURN(rc);
-
-        opt = lustre_swab_reqbuf(req, 0, sizeof(*opt), 
-                                         lustre_swab_generic_32s);
-
-        p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
-        mf = *p;
-        rc = next->md_ops->mdo_fld(info->mti_ctxt, next, *opt, &mf);
-        reply = lustre_msg_buf(req->rq_repmsg, 0, size);
-        *reply = mf;
-
-        RETURN(rc);
-}
-
 static struct lu_device_operations mdt_lu_ops;
 
 static int lu_device_is_mdt(struct lu_device *d)
@@ -1117,6 +1091,72 @@ err_mdt_svc:
         RETURN(rc);
 }
 
+static int mdt_fld(struct mdt_thread_info *info,
+                   struct ptlrpc_request *req, int offset)
+{
+        struct lu_site *ls  = info->mti_mdt->mdt_md_dev.md_lu_dev.ld_site;
+        struct md_fld mf, *p, *reply;
+        int size = sizeof(*reply);
+        __u32 *opt; 
+        int rc;
+        ENTRY;
+
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc)
+                RETURN(rc);
+
+        opt = lustre_swab_reqbuf(req, 0, sizeof(*opt), lustre_swab_generic_32s);
+        p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
+        mf = *p;
+        
+        rc = fld_handle(ls->ls_fld, *opt, &mf);
+        if (rc)
+                RETURN(rc);        
+
+        reply = lustre_msg_buf(req->rq_repmsg, 0, size);
+        *reply = mf;
+        RETURN(rc);
+}
+
+struct dt_device *md2_bottom_dev(struct mdt_device *m)
+{
+        /*FIXME: get dt device here*/
+        RETURN (NULL);
+}
+
+static int mdt_fld_init(struct mdt_device *m)
+{
+        struct dt_device *dt;
+        struct lu_site   *ls;
+        int rc;
+        ENTRY;
+
+        dt = md2_bottom_dev(m);
+       
+        ls = m->mdt_md_dev.md_lu_dev.ld_site;
+        
+        OBD_ALLOC_PTR(ls->ls_fld);
+        
+        if (!ls->ls_fld)
+             RETURN(-ENOMEM);
+        
+        rc = fld_server_init(ls->ls_fld, dt);
+        
+        RETURN(rc);
+}
+
+static int mdt_fld_fini(struct mdt_device *m)
+{
+        struct lu_site *ls = m->mdt_md_dev.md_lu_dev.ld_site;
+        int rc = 0;
+ 
+        if (ls && ls->ls_fld) {
+                fld_server_fini(ls->ls_fld);
+                OBD_FREE_PTR(ls->ls_fld);
+        }
+        RETURN(rc);
+}
+
 static int mdt_init0(struct mdt_device *m,
                      struct lu_device_type *t, struct lustre_cfg *cfg)
 {
@@ -1183,11 +1223,17 @@ static int mdt_init0(struct mdt_device *m,
                 GOTO(err_fini_site, rc = -ENOMEM);
 
         ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
+       
+        rc = mdt_fld_init(m); 
+        if (rc) 
+                GOTO(err_free_ns, rc);
 
         rc = mdt_start_ptlrpc_service(m);
         if (rc)
-                GOTO(err_free_ns, rc);
+                GOTO(err_free_fld, rc);
         RETURN(0);
+err_free_fld:
+        mdt_fld_fini(m);
 err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
         m->mdt_namespace = NULL;

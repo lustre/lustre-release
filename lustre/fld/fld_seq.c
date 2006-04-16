@@ -275,6 +275,109 @@ static void __exit fld_mod_exit(void)
         return;
 }
 
+
+struct fld_list fld_list_head;
+
+int fld_server_init(struct fld *fld, struct dt_device *dt)
+{
+        fld->fld_dt = dt;
+        INIT_LIST_HEAD(&fld_list_head.fld_list);
+        spin_lock_init(&fld_list_head.fld_lock);
+        return 0;
+}
+EXPORT_SYMBOL(fld_server_init);
+
+void fld_server_fini(struct fld *fld)
+{
+        struct list_head *pos, *n;
+       
+        spin_lock(&fld_list_head.fld_lock);
+        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
+                struct fld_item *fld = list_entry(pos, struct fld_item,
+                                                  fld_list);
+                list_del_init(&fld->fld_list);
+                OBD_FREE_PTR(fld);
+        }
+        spin_unlock(&fld_list_head.fld_lock); 
+}
+EXPORT_SYMBOL(fld_server_fini);
+
+static int fld_handle_create(struct fld *pfld, __u64 seq_num, __u64 mds_num)
+{
+        struct fld_item *fld;
+        
+        OBD_ALLOC_PTR(fld);
+        fld->fld_seq = seq_num;
+        fld->fld_mds = mds_num;
+        INIT_LIST_HEAD(&fld->fld_list); 
+        spin_lock(&fld_list_head.fld_lock);
+        list_add_tail(&fld_list_head.fld_list, &fld->fld_list);
+        spin_unlock(&fld_list_head.fld_lock);
+        return 0;
+}
+
+static int fld_handle_delete(struct fld *pfld, __u64 seq_num, __u64 mds_num)
+{
+        struct list_head *pos, *n;
+        spin_lock(&fld_list_head.fld_lock);
+        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
+                struct fld_item *fld = list_entry(pos, struct fld_item,
+                                                  fld_list);
+                if (fld->fld_seq == seq_num) {
+                        LASSERT(fld->fld_mds == mds_num);
+                        list_del_init(&fld->fld_list);
+                        OBD_FREE_PTR(fld);
+                        spin_unlock(&fld_list_head.fld_lock);
+                        RETURN(0);
+                }
+        }
+        spin_unlock(&fld_list_head.fld_lock);
+        RETURN(0);
+}
+
+static int fld_handle_get(struct fld *pfld, __u64 seq_num, __u64 *mds_num)
+{
+        struct list_head *pos, *n;
+       
+        spin_lock(&fld_list_head.fld_lock);
+        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
+                struct fld_item *fld = list_entry(pos, struct fld_item,
+                                                  fld_list);
+                if (fld->fld_seq == seq_num) {
+                        *mds_num = fld->fld_mds;
+                        spin_unlock(&fld_list_head.fld_lock);
+                        RETURN(0);
+                }
+        }
+        spin_unlock(&fld_list_head.fld_lock);
+        return -ENOENT;
+}
+
+int fld_handle(struct fld *fld, __u32 opts, void *mf)
+{
+        struct md_fld *pmf = mf;
+        int rc;
+        ENTRY;
+
+        switch (opts) {
+        case FLD_CREATE:
+                rc = fld_handle_create(fld, pmf->mf_seq, pmf->mf_mds);
+                break;
+        case FLD_DELETE:
+                rc = fld_handle_delete(fld, pmf->mf_seq, pmf->mf_mds);
+                break;
+        case FLD_GET:
+                rc = fld_handle_get(fld, pmf->mf_seq, &pmf->mf_mds);
+                break;
+        default:
+                rc = -EINVAL;
+                break; 
+        }
+        RETURN(rc);
+
+}
+EXPORT_SYMBOL(fld_handle);
+
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre fld Prototype");
 MODULE_LICENSE("GPL");

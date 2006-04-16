@@ -319,6 +319,7 @@ struct lu_object_header {
 	struct list_head  loh_layers;
 };
 
+struct fld;
 /*
  * lu_site is a "compartment" within which objects are unique, and LRU
  * discipline is maintained.
@@ -373,6 +374,11 @@ struct lu_site {
 	 * Top-level device for this stack.
 	 */
 	struct lu_device  *ls_top_dev;
+
+        /*
+         * Fid location database
+         */
+        struct fld        *ls_fld;
 
 	/* statistical counters. Protected by nothing, races are accepted. */
 	struct {
@@ -568,6 +574,14 @@ struct dt_object {
 struct txn_param {
         unsigned int tp_credits;
 };
+
+struct fld {
+        struct dt_device        *fld_dt;
+};
+
+extern int fld_server_init(struct fld *fld, struct dt_device *dt);
+extern void fld_server_fini(struct fld *fld);
+extern int fld_handle(struct fld *fld, __u32 opts, void *mf);
 
 #define TXN_PARAM_INIT(credits) {               \
         .tp_credits = (credits)                 \
