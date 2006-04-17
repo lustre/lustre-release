@@ -105,6 +105,11 @@ static inline struct md_object *mdt_object_child(struct mdt_object *o)
         return lu2md(lu_object_next(&o->mot_obj.mo_lu));
 }
 
+static inline struct mdt_object *lu2mdt_obj(struct lu_object *o)
+{
+        return (container_of(lu2md(o),struct mdt_object, mot_obj));
+}
+
 struct mdt_lock_handle {
         struct lustre_handle    mlh_lh;
         ldlm_mode_t             mlh_mode;
@@ -112,10 +117,6 @@ struct mdt_lock_handle {
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh);
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
-
-struct mdd_object {
-        struct md_object  mod_obj;
-};
 
 int md_device_init(struct md_device *md, struct lu_device_type *t);
 void md_device_fini(struct md_device *md);
