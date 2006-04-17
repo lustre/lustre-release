@@ -1516,7 +1516,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_start_log(obd, &llh, log);
         rc = record_marker(obd, llh, fsdb, CM_START, dev, "add mdt"); 
         rc = record_attach(obd, llh, dev, LUSTRE_MDT0_NAME, uuid);
-        rc = record_setup(obd, llh, dev, child, uuid, 0, 0);
+        rc = record_setup(obd, llh, dev, uuid, 0, 0, 0);
         rc = record_marker(obd, llh, fsdb, CM_END, dev, "add mdt"); 
         rc = record_end_log(obd, &llh);
         
@@ -1540,14 +1540,14 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
         CDEBUG(D_MGS, "writing new mds %s\n", mti->mti_svname);
 
         /* Make up our own uuid */
-        snprintf(mti->mti_uuid, sizeof(mti->mti_uuid), "%s_UUID", mti->mti_svname);
-        
+        snprintf(mti->mti_uuid, sizeof(mti->mti_uuid), "%s_UUID", mti->mti_svname);        
         name_create(mti->mti_fsname, "-mdtcmm", &cmmname);
         name_create(mti->mti_fsname, "-mdtmdd", &mddname);
         name_create(mti->mti_fsname, "-mdtosd", &osdname);
         name_create(mti->mti_fsname, "-mdtmdt", &mdtname);
         name_create(mti->mti_fsname, "-mdtlov", &lovname);
 
+#if 0
         /* add osd */
         rc = mgs_write_log_osd(obd, fsdb, mti->mti_svname, osdname);
         /* add lov */
@@ -1557,8 +1557,9 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
                                osdname, lovname);
         /* add cmm */
         rc = mgs_write_log_cmm0(obd, fsdb, mti->mti_svname, cmmname, mddname);
+#endif
         /* add mdt */
-        rc = mgs_write_log_mdt0(obd, fsdb, mti->mti_svname, mti->mti_svname, cmmname);
+        rc = mgs_write_log_mdt0(obd, fsdb, mti->mti_svname, mti->mti_svname, NULL);
         name_destroy(lovname);
         name_destroy(osdname);
         name_destroy(mddname);
