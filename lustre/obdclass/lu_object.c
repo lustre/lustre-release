@@ -251,34 +251,40 @@ enum {
 int lu_site_init(struct lu_site *s, struct lu_device *top,
                  struct lustre_cfg *cfg)
 {
+        int result;
         const char *dev   = lustre_cfg_string(cfg, 0);
         struct lustre_mount_info *lmi;
+
+        ENTRY;
 
         memset(s, 0, sizeof *s);
         /* get mount */
         lmi = server_get_mount(dev);
-        if (lmi == NULL) {
+        if (lmi != NULL) {
+                s->ls_lmi = lmi;
+                spin_lock_init(&s->ls_guard);
+                CFS_INIT_LIST_HEAD(&s->ls_lru);
+                s->ls_top_dev = top;
+                top->ld_site = s;
+                lu_device_get(top);
+                /*
+                 * XXX nikita: fixed size hash-table.
+                 */
+                s->ls_hash_mask = LU_SITE_HTABLE_MASK;
+                OBD_ALLOC(s->ls_hash,
+                          LU_SITE_HTABLE_SIZE * sizeof s->ls_hash[0]);
+                if (s->ls_hash != NULL) {
+                        int i;
+                        for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
+                                INIT_HLIST_HEAD(&s->ls_hash[i]);
+                        result = 0;
+                } else
+                        result = -ENOMEM;
+        } else {
                 CERROR("Cannot get mount info for %s!\n", dev);
-                RETURN(-EFAULT);
+                result = -EFAULT;
         }
-        s->ls_lmi = lmi;
-        spin_lock_init(&s->ls_guard);
-        CFS_INIT_LIST_HEAD(&s->ls_lru);
-        s->ls_top_dev = top;
-        top->ld_site = s;
-        lu_device_get(top);
-        /*
-         * XXX nikita: fixed size hash-table.
-         */
-        s->ls_hash_mask = LU_SITE_HTABLE_MASK;
-        OBD_ALLOC(s->ls_hash, LU_SITE_HTABLE_SIZE * sizeof s->ls_hash[0]);
-        if (s->ls_hash != NULL) {
-                int i;
-                for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
-                        INIT_HLIST_HEAD(&s->ls_hash[i]);
-                return 0;
-        } else
-                return -ENOMEM;
+        RETURN(result);
 }
 EXPORT_SYMBOL(lu_site_init);
 
