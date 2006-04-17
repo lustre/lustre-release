@@ -176,8 +176,6 @@ struct mdt_object *mdt_object_find(struct lu_context *, struct mdt_device *,
                                    struct lu_fid *);
 void mdt_object_put(struct lu_context *ctxt, struct mdt_object *);
 
-struct lu_fid *mdt_object_fid(struct mdt_object *);
-
 int mdt_object_lock(struct ldlm_namespace *, struct mdt_object *,
                     struct mdt_lock_handle *, __u64);
 
