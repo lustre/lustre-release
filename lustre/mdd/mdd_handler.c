@@ -271,21 +271,14 @@ static int mdd_fs_cleanup(struct mdd_device *mdd)
         return 0;
 }
 
-static int mdd_device_init(struct lu_device *d, const char *top)
+static int mdd_device_init(struct lu_device *d, struct lu_device *next)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
-        struct lu_device *next;
         int rc = -EFAULT;
 
         ENTRY;
 
-        LASSERT(mdd->mdd_child);
-        next = &mdd->mdd_child->dd_lu_dev;
-
-        LASSERT(next->ld_type->ldt_ops->ldto_device_init != NULL);
-        rc = next->ld_type->ldt_ops->ldto_device_init(next, top);
-        if (rc)
-                GOTO(err, rc);
+        mdd->mdd_child = lu2dt_dev(next);
 
         rc = mdd_fs_setup(mdd);
         if (rc)
@@ -297,16 +290,12 @@ err:
         RETURN(rc);
 }
 
-static void mdd_device_fini(struct lu_device *d)
+static struct lu_device *mdd_device_fini(struct lu_device *d)
 {
 	struct mdd_device *m = lu2mdd_dev(d);
-        struct lu_device *next;
+        struct lu_device *next = &m->mdd_child->dd_lu_dev;
 
-	LASSERT(m->mdd_child);
-        next = &m->mdd_child->dd_lu_dev;
-
-        LASSERT(next->ld_type->ldt_ops->ldto_device_fini != NULL);
-        next->ld_type->ldt_ops->ldto_device_fini(next);
+        return next;
 }
 
 static struct lu_device_operations mdd_lu_ops = {
@@ -742,29 +731,15 @@ struct lu_device *mdd_device_alloc(struct lu_device_type *t,
 {
         struct lu_device  *l;
         struct mdd_device *m;
-        struct obd_device *obd;
-        char *child = lustre_cfg_string(lcfg, 1);
-        char *lov = lustre_cfg_string(lcfg, 2);
 
         OBD_ALLOC_PTR(m);
         if (m == NULL) {
                 l = ERR_PTR(-ENOMEM);
         } else {
-                //err = mdd_init(m, t, cfg);
-        	md_device_init(&m->mdd_md_dev, t);
+                md_device_init(&m->mdd_md_dev, t);
                 l = mdd2lu_dev(m);
 	        l->ld_ops = &mdd_lu_ops;
                 m->mdd_md_dev.md_ops = &mdd_ops;
-                /* get next layer */
-                obd = class_name2obd(child);
-                if (obd && obd->obd_lu_dev) {
-                        CDEBUG(D_INFO, "Child device is %s\n", child);
-                        m->mdd_child = container_of(obd->obd_lu_dev,
-                                              struct dt_device, dd_lu_dev);
-                } else {
-                        CDEBUG(D_INFO, "Child device %s not found\n", child);
-                        l = ERR_PTR(-EINVAL);
-                }
         }
 
         return l;
