@@ -248,42 +248,31 @@ enum {
         LU_SITE_HTABLE_MASK = LU_SITE_HTABLE_SIZE - 1
 };
 
-int lu_site_init(struct lu_site *s, struct lu_device *top,
-                 struct lustre_cfg *cfg)
+int lu_site_init(struct lu_site *s, struct lu_device *top)
 {
         int result;
-        const char *dev   = lustre_cfg_string(cfg, 0);
-        struct lustre_mount_info *lmi;
-
         ENTRY;
 
         memset(s, 0, sizeof *s);
-        /* get mount */
-        lmi = server_get_mount(dev);
-        if (lmi != NULL) {
-                s->ls_lmi = lmi;
-                spin_lock_init(&s->ls_guard);
-                CFS_INIT_LIST_HEAD(&s->ls_lru);
-                s->ls_top_dev = top;
-                top->ld_site = s;
-                lu_device_get(top);
-                /*
-                 * XXX nikita: fixed size hash-table.
-                 */
-                s->ls_hash_mask = LU_SITE_HTABLE_MASK;
-                OBD_ALLOC(s->ls_hash,
-                          LU_SITE_HTABLE_SIZE * sizeof s->ls_hash[0]);
-                if (s->ls_hash != NULL) {
-                        int i;
-                        for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
-                                INIT_HLIST_HEAD(&s->ls_hash[i]);
-                        result = 0;
-                } else
-                        result = -ENOMEM;
+        spin_lock_init(&s->ls_guard);
+        CFS_INIT_LIST_HEAD(&s->ls_lru);
+        s->ls_top_dev = top;
+        top->ld_site = s;
+        lu_device_get(top);
+        /*
+         * XXX nikita: fixed size hash-table.
+         */
+        s->ls_hash_mask = LU_SITE_HTABLE_MASK;
+        OBD_ALLOC(s->ls_hash, LU_SITE_HTABLE_SIZE * sizeof s->ls_hash[0]);
+        if (s->ls_hash != NULL) {
+                int i;
+                for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
+                        INIT_HLIST_HEAD(&s->ls_hash[i]);
+                result = 0;
         } else {
-                CERROR("Cannot get mount info for %s!\n", dev);
-                result = -EFAULT;
+                result = -ENOMEM;
         }
+
         RETURN(result);
 }
 EXPORT_SYMBOL(lu_site_init);
@@ -293,9 +282,6 @@ void lu_site_fini(struct lu_site *s)
         LASSERT(list_empty(&s->ls_lru));
         LASSERT(s->ls_total == 0);
         LASSERT(s->ls_busy == 0);
-
-        if (s->ls_lmi)
-                server_put_mount(s->ls_lmi->lmi_name, s->ls_lmi->lmi_mnt);
 
         if (s->ls_hash != NULL) {
                 int i;

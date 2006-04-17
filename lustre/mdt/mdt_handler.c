@@ -1247,9 +1247,16 @@ out:
 static void mdt_fini(struct mdt_device *m)
 {
         struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
-
+        
         mdt_stop_ptlrpc_service(m);
+        
+        /* finish the stack */
+        mdt_stack_fini(m);
+
         if (d->ld_site != NULL) {
+                struct lustre_mount_info *lmi = d->ld_site->ls_lmi;
+                if (lmi)
+                        server_put_mount(lmi->lmi_name, lmi->lmi_mnt);
                 lu_site_fini(d->ld_site);
                 OBD_FREE_PTR(d->ld_site);
                 d->ld_site = NULL;
@@ -1258,9 +1265,6 @@ static void mdt_fini(struct mdt_device *m)
                 ldlm_namespace_free(m->mdt_namespace, 0);
                 m->mdt_namespace = NULL;
         }
-
-        /* finish the stack */
-        mdt_stack_fini(m);
 
         if (m->mdt_seq_mgr) {
                 seq_mgr_fini(m->mdt_seq_mgr);
@@ -1278,6 +1282,9 @@ static int mdt_init0(struct mdt_device *m,
         struct lu_site *s;
         char   ns_name[48];
         struct lu_context ctx;
+        const char *dev = lustre_cfg_string(cfg, 0);
+        struct lustre_mount_info *lmi;
+
         ENTRY;
 
         OBD_ALLOC_PTR(s);
@@ -1287,16 +1294,26 @@ static int mdt_init0(struct mdt_device *m,
         md_device_init(&m->mdt_md_dev, t);
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
         
-        rc = lu_site_init(s, &m->mdt_md_dev.md_lu_dev, cfg);
+        rc = lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
         if (rc) {
                 CERROR("can't init lu_site, rc %d\n", rc);
                 GOTO(err_fini_site, rc);
         }
+        
+        /* get mount */
+        lmi = server_get_mount(dev);
+        if (lmi == NULL) {
+                CERROR("Cannot get mount info for %s!\n", dev);
+                GOTO(err_fini_site, rc = -EFAULT);
+        }
+        //put lmi into lu_site
+        s->ls_lmi = lmi;
+        
         /* init the stack */
         rc = mdt_stack_init(m, cfg);
         if (rc) {
                 CERROR("can't init device stack, rc %d\n", rc);
-                GOTO(err_fini_site, rc);
+                GOTO(err_fini_mount, rc);
         }
 
         m->mdt_seq_mgr = seq_mgr_init(&seq_mgr_ops, m);
@@ -1346,7 +1363,8 @@ err_fini_mgr:
         m->mdt_seq_mgr = NULL;
 err_fini_stack:
         mdt_stack_fini(m);
-
+err_fini_mount:
+        server_put_mount(lmi->lmi_name, lmi->lmi_mnt);
 err_fini_site:
         lu_site_fini(s);
         OBD_FREE_PTR(s);

@@ -446,7 +446,7 @@ int lu_object_print(struct lu_context *ctxt,
 struct lu_object *lu_object_find(struct lu_context *ctxt,
                                  struct lu_site *s, const struct lu_fid *f);
 
-int  lu_site_init(struct lu_site *, struct lu_device *, struct lustre_cfg *);
+int  lu_site_init(struct lu_site *, struct lu_device *);
 void lu_site_fini(struct lu_site *s);
 
 void lu_device_get(struct lu_device *d);
