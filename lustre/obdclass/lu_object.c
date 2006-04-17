@@ -35,8 +35,9 @@
 #include <linux/seq_file.h>
 #include <linux/module.h>
 #include <linux/obd_support.h>
-#include <linux/lu_object.h>
+#include <linux/lustre_disk.h>
 
+#include <linux/lu_object.h>
 #include <libcfs/list.h>
 
 static void lu_object_free(struct lu_context *ctx, struct lu_object *o);
@@ -247,10 +248,20 @@ enum {
         LU_SITE_HTABLE_MASK = LU_SITE_HTABLE_SIZE - 1
 };
 
-int lu_site_init(struct lu_site *s, struct lu_device *top)
+int lu_site_init(struct lu_site *s, struct lu_device *top,
+                 struct lustre_cfg *cfg)
 {
-        memset(s, 0, sizeof *s);
+        const char *dev   = lustre_cfg_string(cfg, 0);
+        struct lustre_mount_info *lmi;
 
+        memset(s, 0, sizeof *s);
+        /* get mount */
+        lmi = server_get_mount(dev);
+        if (lmi == NULL) {
+                CERROR("Cannot get mount info for %s!\n", dev);
+                RETURN(-EFAULT);
+        }
+        s->ls_lmi = lmi;
         spin_lock_init(&s->ls_guard);
         CFS_INIT_LIST_HEAD(&s->ls_lru);
         s->ls_top_dev = top;
@@ -277,6 +288,9 @@ void lu_site_fini(struct lu_site *s)
         LASSERT(s->ls_total == 0);
         LASSERT(s->ls_busy == 0);
 
+        if (s->ls_lmi)
+                server_put_mount(s->ls_lmi->lmi_name, s->ls_lmi->lmi_mnt);
+
         if (s->ls_hash != NULL) {
                 int i;
                 for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
@@ -287,7 +301,6 @@ void lu_site_fini(struct lu_site *s)
        }
        if (s->ls_top_dev != NULL) {
                lu_device_put(s->ls_top_dev);
-               s->ls_top_dev->ld_site = NULL;
                s->ls_top_dev = NULL;
        }
  }
@@ -337,7 +350,7 @@ void lu_object_fini(struct lu_object *o)
         LASSERT(list_empty(&o->lo_linkage));
 
         if (o->lo_dev != NULL) {
-                lu_device_get(o->lo_dev);
+                lu_device_put(o->lo_dev);
                 o->lo_dev = NULL;
         }
 }
