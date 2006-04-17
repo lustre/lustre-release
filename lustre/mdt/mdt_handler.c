@@ -1390,7 +1390,7 @@ static int mdt_object_init(struct lu_context *ctxt, struct lu_object *o)
 
 static void mdt_object_free(struct lu_context *ctxt, struct lu_object *o)
 {
-        struct mdt_object *mo = lu2mdt_obj(o);
+        struct mdt_object *mo = mdt_obj(o);
         struct lu_object_header *h;
 
         h = o->lo_header;

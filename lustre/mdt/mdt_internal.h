@@ -105,11 +105,6 @@ static inline struct md_object *mdt_object_child(struct mdt_object *o)
         return lu2md(lu_object_next(&o->mot_obj.mo_lu));
 }
 
-static inline struct mdt_object *lu2mdt_obj(struct lu_object *o)
-{
-        return (container_of(lu2md(o),struct mdt_object, mot_obj));
-}
-
 struct mdt_lock_handle {
         struct lustre_handle    mlh_lh;
         ldlm_mode_t             mlh_mode;
