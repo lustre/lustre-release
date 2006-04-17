@@ -209,6 +209,7 @@ struct lu_device_type {
         __u32                             ldt_tags;
         char                             *ldt_name;
         struct lu_device_type_operations *ldt_ops;
+        struct obd_type                  *obd_type;
 };
 
 struct lu_device_type_operations {
@@ -220,8 +221,8 @@ struct lu_device_type_operations {
          * Initialize the devices after allocation
          * called from top device, when all layers are linked
          */
-        int  (*ldto_device_init)(struct lu_device *, const char *);
-        void (*ldto_device_fini)(struct lu_device *);
+        int  (*ldto_device_init)(struct lu_device *, struct lu_device *);
+        struct lu_device *(*ldto_device_fini)(struct lu_device *);
 
         int  (*ldto_init)(struct lu_device_type *t);
         void (*ldto_fini)(struct lu_device_type *t);
@@ -374,7 +375,7 @@ struct lu_site {
 	 * Top-level device for this stack.
 	 */
 	struct lu_device  *ls_top_dev;
-
+        struct lustre_mount_info *ls_lmi;
         /*
          * Fid location database
          */
@@ -445,7 +446,7 @@ int lu_object_print(struct lu_context *ctxt,
 struct lu_object *lu_object_find(struct lu_context *ctxt,
                                  struct lu_site *s, const struct lu_fid *f);
 
-int  lu_site_init(struct lu_site *s, struct lu_device *top);
+int  lu_site_init(struct lu_site *, struct lu_device *, struct lustre_cfg *);
 void lu_site_fini(struct lu_site *s);
 
 void lu_device_get(struct lu_device *d);
@@ -570,6 +571,17 @@ struct dt_device {
 	struct lu_device             dd_lu_dev;
 	struct dt_device_operations *dd_ops;
 };
+
+static inline int lu_device_is_dt(const struct lu_device *d)
+{
+        return d->ld_type->ldt_tags & LU_DEVICE_DT;
+}
+
+static inline struct dt_device * lu2dt_dev(struct lu_device *l)
+{
+        LASSERT(lu_device_is_dt(l));
+        return container_of(l, struct dt_device, dd_lu_dev);
+}
 
 struct dt_object {
         struct lu_object             do_lu;
