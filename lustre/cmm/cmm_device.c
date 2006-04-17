@@ -61,32 +61,26 @@ static struct md_device_operations cmm_md_ops = {
         .mdo_statfs     = cmm_statfs
 };
 
-static int cmm_device_init(struct lu_device *d, const char *top)
+static int cmm_device_init(struct lu_device *d, struct lu_device *next)
 {
         struct cmm_device *m = lu2cmm_dev(d);
-        struct lu_device *next;
-        int err;
+        int err = 0;
 
         ENTRY;
 
-        LASSERT(m->cmm_child);
-        next = md2lu_dev(m->cmm_child);
+        m->cmm_child = lu2md_dev(next);
 
-        LASSERT(next->ld_type->ldt_ops->ldto_device_init != NULL);
-        err = next->ld_type->ldt_ops->ldto_device_init(next, top);
         RETURN(err);
 }
 
-static void cmm_device_fini(struct lu_device *d)
+static struct lu_device *cmm_device_fini(struct lu_device *d)
 {
 	struct cmm_device *m = lu2cmm_dev(d);
-        struct lu_device *next;
+        struct lu_device *next = md2lu_dev(m->cmm_child);
 
-	LASSERT(m->cmm_child);
-        next = md2lu_dev(m->cmm_child);
-
-        LASSERT(next->ld_type->ldt_ops->ldto_device_fini != NULL);
-        next->ld_type->ldt_ops->ldto_device_fini(next);
+        ENTRY;
+        EXIT;
+        return next;
 }
 
 static struct lu_device_operations cmm_lu_ops = {
@@ -102,8 +96,6 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
 {
         struct lu_device  *l;
         struct cmm_device *m;
-        struct obd_device * obd = NULL;
-        char * child = lustre_cfg_string(cfg, 1);
 
         ENTRY;
 
@@ -115,16 +107,6 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
                 m->cmm_md_dev.md_ops = &cmm_md_ops;
 	        l = cmm2lu_dev(m);
                 l->ld_ops = &cmm_lu_ops;
-
-                /* get next layer */
-                obd = class_name2obd(child);
-                if (obd && obd->obd_lu_dev) {
-                        CDEBUG(D_INFO, "Child device is %s\n", child);
-                        m->cmm_child = lu2md_dev(obd->obd_lu_dev);
-                } else {
-                        CDEBUG(D_INFO, "Child device %s not found\n", child);
-                        l = ERR_PTR(-EINVAL);
-                }
         }
 
         EXIT;

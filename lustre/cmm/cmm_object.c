@@ -36,7 +36,8 @@
 
 static struct md_object_operations cmm_mo_ops;
 
-struct lu_object *cmm_object_alloc(struct lu_context *ctx, struct lu_device *d)
+struct lu_object *cmm_object_alloc(struct lu_context *ctx,
+                                   struct lu_device *d)
 {
 	struct cmm_object *mo;
         ENTRY;
@@ -58,10 +59,21 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
 	struct cmm_device *d = lu2cmm_dev(o->lo_dev);
 	struct lu_device  *under;
 	struct lu_object  *below;
+        //struct lu_fid     *fid = &o->lo_header->loh_fid;
+        //int mds_index;
         ENTRY;
-
-	under = &d->cmm_child->md_lu_dev;
-	below = under->ld_ops->ldo_object_alloc(ctxt, under);
+        
+        /* under device can be MDD or MDC */
+#if 0
+        mds = cmm_fld_lookup(fid);
+        if (mds_index != d->local_index)
+	        under = &d->cmm_lmv->md_lu_dev;
+        else 
+#endif
+                under = &d->cmm_child->md_lu_dev;
+        
+        
+        below = under->ld_ops->ldo_object_alloc(ctxt, under);
 	if (below != NULL) {
 		lu_object_add(o, below);
 		RETURN(0);
@@ -71,7 +83,9 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
 
 void cmm_object_free(struct lu_context *ctx, struct lu_object *o)
 {
+        struct cmm_object *mo = lu2cmm_obj(o);
 	lu_object_fini(o);
+        OBD_FREE_PTR(mo);
 }
 
 void cmm_object_release(struct lu_context *ctxt, struct lu_object *o)
