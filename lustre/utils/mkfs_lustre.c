@@ -581,6 +581,26 @@ int write_local_files(struct mkfs_opts *mop)
                 ret = 0;
         }
 
+        sprintf(filepnm, "%s/%s", mntpt, "oi");
+        ret = mkdir(filepnm, 0777);
+        if ((ret != 0) && (errno != EEXIST)) {
+                fprintf(stderr, "%s: Can't make oi dir %s (%d)\n",
+                        progname, filepnm, ret);
+                goto out_umnt;
+        } else if (errno == EEXIST) {
+                ret = 0;
+        }
+
+        sprintf(filepnm, "%s/%s", mntpt, "ROOT");
+        ret = mkdir(filepnm, 0777);
+        if ((ret != 0) && (errno != EEXIST)) {
+                fprintf(stderr, "%s: Can't make ROOT dir %s (%d)\n",
+                        progname, filepnm, ret);
+                goto out_umnt;
+        } else if (errno == EEXIST) {
+                ret = 0;
+        }
+
         /* Save the persistent mount data into a file. Lustre must pre-read
            this file to get the real mount options. */
         vprint("Writing %s\n", MOUNT_DATA_FILE);
