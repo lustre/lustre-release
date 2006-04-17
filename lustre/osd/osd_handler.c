@@ -68,8 +68,8 @@ static void  osd_object_release(struct lu_context *ctxt, struct lu_object *l);
 static int   osd_object_print  (struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (struct lu_device *m);
-static void  osd_device_fini   (struct lu_device *d);
-static int   osd_device_init   (struct lu_device *d, const char *conf);
+static struct lu_device *osd_device_fini   (struct lu_device *d);
+static int   osd_device_init   (struct lu_device *d, struct lu_device *);
 static void *osd_key_init      (struct lu_context *ctx);
 static void  osd_key_fini      (struct lu_context *ctx, void *data);
 static int   osd_fid_lookup    (struct lu_context *ctx, struct osd_object *obj,
@@ -253,7 +253,7 @@ static void osd_key_fini(struct lu_context *ctx, void *data)
         OBD_FREE_PTR(info);
 }
 
-static int osd_device_init(struct lu_device *d, const char *top)
+static int osd_device_init(struct lu_device *d, struct lu_device *top)
 {
         struct osd_device *o = osd_dev(d);
         struct lustre_mount_info *lmi;
@@ -261,42 +261,29 @@ static int osd_device_init(struct lu_device *d, const char *top)
 
         ENTRY;
 
-        lmi = server_get_mount(top);
-        if (lmi != NULL) {
-                struct lustre_sb_info    *lsi;
-                struct lustre_disk_data  *ldd;
-                struct lustre_mount_data *lmd;
+        lmi = d->ld_site->ls_lmi;
+        LASSERT(lmi != NULL);
+        /* save lustre_mount_info in dt_device */
+        o->od_mount = lmi;
+        result = osd_oi_init(&o->od_oi, osd_sb(o)->s_root,
+                             o->od_dt_dev.dd_lu_dev.ld_site);
 
-                /* We already mounted in lustre_fill_super */
-                lsi = s2lsi(lmi->lmi_sb);
-                ldd = lsi->lsi_ldd;
-                lmd = lsi->lsi_lmd;
-
-                CDEBUG(D_INFO, "OSD info: device=%s,\n opts=%s,\n",
-                       lmd->lmd_dev, ldd->ldd_mount_opts);
-
-                /* save lustre_mount_info in dt_device */
-                o->od_mount = lmi;
-                result = osd_oi_init(&o->od_oi, osd_sb(o)->s_root,
-                                     o->od_dt_dev.dd_lu_dev.ld_site);
-                if (result == 0) {
-                        o->od_root_dir = osd_open(osd_sb(o)->s_root,
-                                                  "ROOT", S_IFDIR);
-                        if (IS_ERR(o->od_root_dir)) {
-                                result = PTR_ERR(o->od_root_dir);
-                                o->od_root_dir = NULL;
-                        }
+        if (result == 0) {
+                o->od_root_dir = osd_open(osd_sb(o)->s_root,
+                                          "ROOT", S_IFDIR);
+                if (IS_ERR(o->od_root_dir)) {
+                        result = PTR_ERR(o->od_root_dir);
+                        o->od_root_dir = NULL;
                 }
-        } else {
-                CERROR("Cannot get mount info for %s!\n", top);
-                result = -EFAULT;
         }
+
         if (result != 0)
                 osd_device_fini(d);
+
         RETURN(result);
 }
 
-static void osd_device_fini(struct lu_device *d)
+static struct lu_device *osd_device_fini(struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
 
@@ -305,10 +292,9 @@ static void osd_device_fini(struct lu_device *d)
                 o->od_root_dir = NULL;
         }
         osd_oi_fini(&o->od_oi);
-        if (o->od_mount != NULL) {
-                server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
-                o->od_mount = NULL;
-        }
+        o->od_mount = NULL;
+
+	return NULL;
 }
 
 static struct lu_device *osd_device_alloc(struct lu_device_type *t,
