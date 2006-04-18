@@ -1370,6 +1370,19 @@ err_fini_site:
         RETURN(rc);
 }
 
+static int mdt_device_config(struct lu_device *d, struct lustre_cfg *cfg) 
+{
+        struct lu_device *next = md2lu_dev(mdt_dev(d)->mdt_child);
+        int err;
+        ENTRY;
+        switch(cfg->lcfg_command) {
+        default:
+                err = next->ld_type->ldt_ops->ldto_device_config(next, cfg);
+        }
+out:
+        RETURN(err);
+}
+
 static struct lu_object *mdt_object_alloc(struct lu_context *ctxt,
                                           struct lu_device *d)
 {
@@ -1585,7 +1598,8 @@ static struct lu_device_type_operations mdt_device_type_ops = {
         .ldto_fini = mdt_type_fini,
 
         .ldto_device_alloc = mdt_device_alloc,
-        .ldto_device_free  = mdt_device_free
+        .ldto_device_free  = mdt_device_free,
+        .ldto_device_config = mdt_device_config
 };
 
 static struct lu_device_type mdt_device_type = {
