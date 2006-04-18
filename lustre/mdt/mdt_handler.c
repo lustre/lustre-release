@@ -1004,7 +1004,7 @@ static int mdt_fld(struct mdt_thread_info *info,
         struct lu_site *ls  = info->mti_mdt->mdt_md_dev.md_lu_dev.ld_site;
         struct md_fld mf, *p, *reply;
         int size = sizeof(*reply);
-        __u32 *opt; 
+        __u32 *opt;
         int rc;
         ENTRY;
 
@@ -1015,10 +1015,10 @@ static int mdt_fld(struct mdt_thread_info *info,
         opt = lustre_swab_reqbuf(req, 0, sizeof(*opt), lustre_swab_generic_32s);
         p = lustre_swab_reqbuf(req, 1, sizeof(mf), lustre_swab_md_fld);
         mf = *p;
-        
+
         rc = fld_handle(ls->ls_fld, *opt, &mf);
         if (rc)
-                RETURN(rc);        
+                RETURN(rc);
 
         reply = lustre_msg_buf(req->rq_repmsg, 0, size);
         *reply = mf;
@@ -1039,16 +1039,16 @@ static int mdt_fld_init(struct mdt_device *m)
         ENTRY;
 
         dt = md2_bottom_dev(m);
-       
+
         ls = m->mdt_md_dev.md_lu_dev.ld_site;
-        
+
         OBD_ALLOC_PTR(ls->ls_fld);
-        
+
         if (!ls->ls_fld)
              RETURN(-ENOMEM);
-        
+
         rc = fld_server_init(ls->ls_fld, dt);
-        
+
         RETURN(rc);
 }
 
@@ -1056,7 +1056,7 @@ static int mdt_fld_fini(struct mdt_device *m)
 {
         struct lu_site *ls = m->mdt_md_dev.md_lu_dev.ld_site;
         int rc = 0;
- 
+
         if (ls && ls->ls_fld) {
                 fld_server_fini(ls->ls_fld);
                 OBD_FREE_PTR(ls->ls_fld);
@@ -1149,11 +1149,11 @@ static void mdt_stack_fini(struct mdt_device *m)
                         struct lu_device_type *ldt = d->ld_type;
 
                         lu_device_put(d);
-                        
-                        /* each fini() returns next device in stack of layers 
+
+                        /* each fini() returns next device in stack of layers
                          * so we can avoid the recursion */
-                        n = d->ld_type->ldt_ops->ldto_device_fini(d);
-                        d->ld_type->ldt_ops->ldto_device_free(d);
+                        n = ldt->ldt_ops->ldto_device_fini(d);
+                        ldt->ldt_ops->ldto_device_free(d);
 
                         type = ldt->obd_type;
                         type->typ_refcnt--;
@@ -1162,7 +1162,6 @@ static void mdt_stack_fini(struct mdt_device *m)
                         d = n;
                 }
         }
-        return;
 }
 
 static struct lu_device *mdt_layer_setup(const char *typename,
@@ -1187,13 +1186,13 @@ static struct lu_device *mdt_layer_setup(const char *typename,
                 CERROR("type: '%s'\n", typename);
                 GOTO(out_type, rc = -EINVAL);
         }
-                
+
         d = ldt->ldt_ops->ldto_device_alloc(ldt, cfg);
         if (IS_ERR(d)) {
                 CERROR("Cannot allocate device: '%s'\n", typename);
                 GOTO(out_type, rc = -ENODEV);
         }
-        
+
         LASSERT(child->ld_site);
         d->ld_site = child->ld_site;
 
@@ -1215,11 +1214,11 @@ out:
         RETURN(ERR_PTR(rc));
 }
 
-static int mdt_stack_init(struct mdt_device *m, struct lustre_cfg *cfg) 
+static int mdt_stack_init(struct mdt_device *m, struct lustre_cfg *cfg)
 {
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
         int rc;
-        
+
         /* init the stack */
         d = mdt_layer_setup(LUSTRE_OSD0_NAME, d, cfg);
         if (IS_ERR(d)) {
@@ -1247,9 +1246,9 @@ out:
 static void mdt_fini(struct mdt_device *m)
 {
         struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
-        
+
         mdt_stop_ptlrpc_service(m);
-        
+
         /* finish the stack */
         mdt_stack_fini(m);
 
@@ -1293,13 +1292,13 @@ static int mdt_init0(struct mdt_device *m,
 
         md_device_init(&m->mdt_md_dev, t);
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
-        
+
         rc = lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
         if (rc) {
                 CERROR("can't init lu_site, rc %d\n", rc);
                 GOTO(err_fini_site, rc);
         }
-        
+
         /* get mount */
         lmi = server_get_mount(dev);
         if (lmi == NULL) {
@@ -1308,7 +1307,7 @@ static int mdt_init0(struct mdt_device *m,
         }
         //put lmi into lu_site
         s->ls_lmi = lmi;
-        
+
         /* init the stack */
         rc = mdt_stack_init(m, cfg);
         if (rc) {
@@ -1459,7 +1458,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         exp = class_conn2export(conn);
         LASSERT(exp);
         med = &exp->exp_mds_data;
-        
+
         OBD_ALLOC_PTR(mcd);
         if (!mcd)
                 GOTO(out, rc = -ENOMEM);
@@ -1505,7 +1504,7 @@ static int mdt_obd_disconnect(struct obd_export *exp)
                 spin_unlock(&svc->srv_lock);
         }
         spin_unlock_irqrestore(&exp->exp_lock, irqflags);
-        
+
         OBD_FREE_PTR(med->med_mcd);
 
         class_export_put(exp);
