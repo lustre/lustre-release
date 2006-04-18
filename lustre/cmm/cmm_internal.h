@@ -84,6 +84,9 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
         return lu2md(lu_object_next(&o->cmo_obj.mo_lu));
 }
 
+/* cmm device */
+int cmm_add_mdc(struct cmm_device *, struct lustre_cfg *);
+
 /* cmm_object.c */
 int cmm_object_init(struct lu_context *ctxt, struct lu_object*);
 struct lu_object *cmm_object_alloc(struct lu_context *ctx, struct lu_device *);

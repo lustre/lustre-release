@@ -1,4 +1,4 @@
 MODULES := cmm
-cmm-objs := cmm_device.o cmm_object.o
+cmm-objs := cmm_device.o cmm_object.o cmm_mdc.o
 
 @INCLUDE_RULES@
