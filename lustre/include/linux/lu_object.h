@@ -219,13 +219,15 @@ struct lu_device_type_operations {
 
         /*
          * Initialize the devices after allocation
-         * called from top device, when all layers are linked
          */
         int  (*ldto_device_init)(struct lu_device *, struct lu_device *);
         struct lu_device *(*ldto_device_fini)(struct lu_device *);
 
         int  (*ldto_init)(struct lu_device_type *t);
         void (*ldto_fini)(struct lu_device_type *t);
+        /* configure device */
+        int  (*ldto_device_config)(struct lu_device *, struct lustre_cfg *);
+
 };
 
 /*

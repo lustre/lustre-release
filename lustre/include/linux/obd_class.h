@@ -365,12 +365,21 @@ static inline int
 obd_process_config(struct obd_device *obd, int datalen, void *data)
 {
         int rc;
+        struct lu_device *d;
+        struct lu_device_type *ldt;
         ENTRY;
 
-        OBD_CHECK_OP(obd, process_config, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, process_config);
+        OBD_CHECK_DEV(obd);
 
-        rc = OBP(obd, process_config)(obd, datalen, data);
+        ldt = obd->obd_type->typ_lu;
+        d = obd->obd_lu_dev;
+        if (ldt != NULL && d != NULL) {
+                rc = ldt->ldt_ops->ldto_device_config(d, (struct lustre_cfg *)data);
+        } else {
+                OBD_CHECK_OP(obd, process_config, -EOPNOTSUPP);
+                OBD_COUNTER_INCREMENT(obd, process_config);
+                rc = OBP(obd, process_config)(obd, datalen, data);
+        }
         RETURN(rc);
 }
 
