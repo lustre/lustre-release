@@ -1140,27 +1140,25 @@ err_mdt_svc:
 
 static void mdt_stack_fini(struct mdt_device *m)
 {
-        if (m->mdt_child) {
-                struct lu_device *d = md2lu_dev(m->mdt_child);
-                /* goes through all stack */
-                while (d != NULL) {
-                        struct lu_device *n;
-                        struct obd_type *type;
-                        struct lu_device_type *ldt = d->ld_type;
-
-                        lu_device_put(d);
-
-                        /* each fini() returns next device in stack of layers
-                         * so we can avoid the recursion */
-                        n = ldt->ldt_ops->ldto_device_fini(d);
-                        ldt->ldt_ops->ldto_device_free(d);
-
-                        type = ldt->obd_type;
-                        type->typ_refcnt--;
-                        class_put_type(type);
-                        /* switch to the next device in the layer */
-                        d = n;
-                }
+        struct lu_device *d = md2lu_dev(m->mdt_child);
+        /* goes through all stack */
+        while (d != NULL) {
+                struct lu_device *n;
+                struct obd_type *type;
+                struct lu_device_type *ldt = d->ld_type;
+                
+                lu_device_put(d);
+                
+                /* each fini() returns next device in stack of layers
+                 * * so we can avoid the recursion */
+                n = ldt->ldt_ops->ldto_device_fini(d);
+                ldt->ldt_ops->ldto_device_free(d);
+                
+                type = ldt->obd_type;
+                type->typ_refcnt--;
+                class_put_type(type);
+                /* switch to the next device in the layer */
+                d = n;
         }
 }
 
@@ -1217,29 +1215,36 @@ out:
 static int mdt_stack_init(struct mdt_device *m, struct lustre_cfg *cfg)
 {
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
+        struct lu_device  *tmp;
         int rc;
 
         /* init the stack */
-        d = mdt_layer_setup(LUSTRE_OSD0_NAME, d, cfg);
-        if (IS_ERR(d)) {
-                GOTO(out, rc = PTR_ERR(d));
+        tmp = mdt_layer_setup(LUSTRE_OSD0_NAME, d, cfg);
+        if (IS_ERR(tmp)) {
+                RETURN (PTR_ERR(tmp));
         }
-
-        d = mdt_layer_setup(LUSTRE_MDD0_NAME, d, cfg);
-        if (IS_ERR(d)) {
-                GOTO(out, rc = PTR_ERR(d));
+        d = tmp;
+        tmp = mdt_layer_setup(LUSTRE_MDD0_NAME, d, cfg);
+        if (IS_ERR(tmp)) {
+                GOTO(out, rc = PTR_ERR(tmp));
         }
-
-        d = mdt_layer_setup(LUSTRE_CMM0_NAME, d, cfg);
-        if (IS_ERR(d)) {
-                GOTO(out, rc = PTR_ERR(d));
+        d = tmp;
+        tmp = mdt_layer_setup(LUSTRE_CMM0_NAME, d, cfg);
+        if (IS_ERR(tmp)) {
+                GOTO(out, rc = PTR_ERR(tmp));
         }
-
+        d = tmp;
         m->mdt_child = lu2md_dev(d);
 
-        RETURN(0);
+        /* process setup config */
+        tmp = &m->mdt_md_dev.md_lu_dev;
+        rc = tmp->ld_ops->ldo_process_config(tmp, cfg);
+        
 out:
-        mdt_stack_fini(m);
+        /* fini from last known good lu_device */
+        if (rc)
+                mdt_stack_fini(d);
+        
         return rc;
 }
 
@@ -1247,15 +1252,14 @@ static void mdt_fini(struct mdt_device *m)
 {
         struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
 
+        ENTRY;
+
         mdt_stop_ptlrpc_service(m);
 
         /* finish the stack */
         mdt_stack_fini(m);
 
         if (d->ld_site != NULL) {
-                struct lustre_mount_info *lmi = d->ld_site->ls_lmi;
-                if (lmi)
-                        server_put_mount(lmi->lmi_name, lmi->lmi_mnt);
                 lu_site_fini(d->ld_site);
                 OBD_FREE_PTR(d->ld_site);
                 d->ld_site = NULL;
@@ -1272,6 +1276,7 @@ static void mdt_fini(struct mdt_device *m)
 
         LASSERT(atomic_read(&d->ld_ref) == 0);
         md_device_fini(&m->mdt_md_dev);
+        EXIT;
 }
 
 static int mdt_init0(struct mdt_device *m,
@@ -1281,8 +1286,6 @@ static int mdt_init0(struct mdt_device *m,
         struct lu_site *s;
         char   ns_name[48];
         struct lu_context ctx;
-        const char *dev = lustre_cfg_string(cfg, 0);
-        struct lustre_mount_info *lmi;
 
         ENTRY;
 
@@ -1299,20 +1302,11 @@ static int mdt_init0(struct mdt_device *m,
                 GOTO(err_fini_site, rc);
         }
 
-        /* get mount */
-        lmi = server_get_mount(dev);
-        if (lmi == NULL) {
-                CERROR("Cannot get mount info for %s!\n", dev);
-                GOTO(err_fini_site, rc = -EFAULT);
-        }
-        //put lmi into lu_site
-        s->ls_lmi = lmi;
-
         /* init the stack */
         rc = mdt_stack_init(m, cfg);
         if (rc) {
                 CERROR("can't init device stack, rc %d\n", rc);
-                GOTO(err_fini_mount, rc);
+                GOTO(err_fini_site, rc);
         }
 
         m->mdt_seq_mgr = seq_mgr_init(&seq_mgr_ops, m);
@@ -1362,22 +1356,22 @@ err_fini_mgr:
         m->mdt_seq_mgr = NULL;
 err_fini_stack:
         mdt_stack_fini(m);
-err_fini_mount:
-        server_put_mount(lmi->lmi_name, lmi->lmi_mnt);
 err_fini_site:
         lu_site_fini(s);
         OBD_FREE_PTR(s);
         RETURN(rc);
 }
-
-static int mdt_device_config(struct lu_device *d, struct lustre_cfg *cfg) 
+/* used by MGS to process specific configurations */
+static int mdt_process_config(struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct lu_device *next = md2lu_dev(mdt_dev(d)->mdt_child);
         int err;
         ENTRY;
         switch(cfg->lcfg_command) {
+                /* all MDT specific commands should be here */
         default:
-                err = next->ld_type->ldt_ops->ldto_device_config(next, cfg);
+                /* others are passed further */
+                err = next->ld_ops->ldo_process_config(next, cfg);
         }
 out:
         RETURN(err);
@@ -1444,7 +1438,8 @@ static struct lu_device_operations mdt_lu_ops = {
         .ldo_object_init    = mdt_object_init,
         .ldo_object_free    = mdt_object_free,
         .ldo_object_release = mdt_object_release,
-        .ldo_object_print   = mdt_object_print
+        .ldo_object_print   = mdt_object_print,
+        .ldo_process_config = mdt_process_config
 };
 
 /* mds_connect copy */
@@ -1598,8 +1593,7 @@ static struct lu_device_type_operations mdt_device_type_ops = {
         .ldto_fini = mdt_type_fini,
 
         .ldto_device_alloc = mdt_device_alloc,
-        .ldto_device_free  = mdt_device_free,
-        .ldto_device_config = mdt_device_config
+        .ldto_device_free  = mdt_device_free
 };
 
 static struct lu_device_type mdt_device_type = {
