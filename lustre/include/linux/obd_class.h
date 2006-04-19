@@ -374,7 +374,7 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
-                rc = ldt->ldt_ops->ldto_device_config(d, (struct lustre_cfg *)data);
+                rc = d->ld_ops->ldo_process_config(d, (struct lustre_cfg *)data);
         } else {
                 OBD_CHECK_OP(obd, process_config, -EOPNOTSUPP);
                 OBD_COUNTER_INCREMENT(obd, process_config);

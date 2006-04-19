@@ -169,6 +169,10 @@ struct lu_device_operations {
 	 */
 	int (*ldo_object_print)(struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
+
+        /* process config specific for device */
+        int  (*ldo_process_config)(struct lu_device *, struct lustre_cfg *);
+
 };
 
 /*
@@ -225,9 +229,6 @@ struct lu_device_type_operations {
 
         int  (*ldto_init)(struct lu_device_type *t);
         void (*ldto_fini)(struct lu_device_type *t);
-        /* configure device */
-        int  (*ldto_device_config)(struct lu_device *, struct lustre_cfg *);
-
 };
 
 /*
