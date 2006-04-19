@@ -253,15 +253,26 @@ static void osd_key_fini(struct lu_context *ctx, void *data)
         OBD_FREE_PTR(info);
 }
 
-static int osd_device_init(struct lu_device *d, struct lu_device *top)
+static int osd_device_init(struct lu_device *d, struct lu_device *next)
 {
-        struct osd_device *o = osd_dev(d);
+        return 0;
+}
+
+static int osd_mount(struct osd_device *o, struct lustre_cfg *cfg)
+{
         struct lustre_mount_info *lmi;
+        const char *dev = lustre_cfg_string(cfg, 0);
         int result;
 
         ENTRY;
+        
+        /* get mount */
+        lmi = server_get_mount(dev);
+        if (lmi == NULL) {
+                CERROR("Cannot get mount info for %s!\n", dev);
+                RETURN(-EFAULT);
+        }
 
-        lmi = d->ld_site->ls_lmi;
         LASSERT(lmi != NULL);
         /* save lustre_mount_info in dt_device */
         o->od_mount = lmi;
@@ -277,21 +288,21 @@ static int osd_device_init(struct lu_device *d, struct lu_device *top)
                 }
         }
 
-        if (result != 0)
-                osd_device_fini(d);
-
         RETURN(result);
 }
 
 static struct lu_device *osd_device_fini(struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
-
+        ENTRY;
         if (o->od_root_dir != NULL) {
                 dput(o->od_root_dir);
                 o->od_root_dir = NULL;
         }
         osd_oi_fini(&o->od_oi);
+        
+        server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
+
         o->od_mount = NULL;
 
 	return NULL;
@@ -320,6 +331,19 @@ static void osd_device_free(struct lu_device *d)
 
         lu_device_fini(d);
         OBD_FREE_PTR(o);
+}
+
+static int osd_process_config(struct lu_device *d, struct lustre_cfg *cfg) 
+{
+        struct osd_device *o = lu2osd_dev(d);
+        int err;
+
+        switch(cfg->lcfg_command) {
+        case LCFG_SETUP:
+                err = osd_mount(o, cfg);
+        }
+out:
+        RETURN(err);
 }
 
 /*
@@ -497,7 +521,8 @@ static struct lu_device_operations osd_lu_ops = {
         .ldo_object_free    = osd_object_free,
         .ldo_object_release = osd_object_release,
         .ldo_object_delete  = osd_object_delete,
-        .ldo_object_print   = osd_object_print
+        .ldo_object_print   = osd_object_print,
+        .ldo_process_config = osd_process_config
 };
 
 static struct lu_device_type_operations osd_device_type_ops = {
