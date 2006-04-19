@@ -342,7 +342,7 @@ static int osd_process_config(struct lu_device *d, struct lustre_cfg *cfg)
         case LCFG_SETUP:
                 err = osd_mount(o, cfg);
         }
-out:
+
         RETURN(err);
 }
 

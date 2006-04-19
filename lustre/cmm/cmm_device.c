@@ -96,7 +96,7 @@ static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg)
         default:
                 err = next->ld_ops->ldo_process_config(next, cfg);
         }
-out:
+
         RETURN(err);
 }
 
