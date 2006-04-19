@@ -298,12 +298,28 @@ static struct lu_device *mdd_device_fini(struct lu_device *d)
         return next;
 }
 
+static int mdd_process_config(struct lu_device *d, struct lustre_cfg *cfg) 
+{
+        struct mdd_device *m = lu2mdd_dev(d);
+        struct lu_device *next = &m->mdd_child->dd_lu_dev;
+        int err;
+
+        switch(cfg->lcfg_command) {
+
+        default:
+                err = next->ld_ops->ldo_process_config(next, cfg);
+        }
+out:
+        RETURN(err);
+}
+
 static struct lu_device_operations mdd_lu_ops = {
 	.ldo_object_alloc   = mdd_object_alloc,
 	.ldo_object_init    = mdd_object_init,
 	.ldo_object_free    = mdd_object_free,
 	.ldo_object_release = mdd_object_release,
-	.ldo_object_print   = mdd_object_print
+	.ldo_object_print   = mdd_object_print,
+        .ldo_process_config = mdd_process_config
 };
 
 static struct dt_object* mdd_object_child(struct mdd_object *o)
