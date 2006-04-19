@@ -56,10 +56,8 @@ enum lcfg_command_type {
         LCFG_LOG_START      = 0x00ce011,
         LCFG_LOG_END        = 0x00ce012,
         LCFG_LOV_ADD_INA    = 0x00ce013,
-        LCFG_LMV_ADD_MDC    = 0x00cf014,
-        LCFG_LMV_DEL_MDC    = 0x00cf015,
-        LCFG_CMM_ADD_MDC    = 0x00cf016,
-        LCFG_CMM_DEL_MDC    = 0x00cf017,
+        LCFG_ADD_MDC        = 0x00cf014,
+        LCFG_DEL_MDC        = 0x00cf015,
 };
 
 struct lustre_cfg_bufs {

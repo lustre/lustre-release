@@ -83,17 +83,18 @@ static struct lu_device *cmm_device_fini(struct lu_device *d)
         return next;
 }
 
-static int cmm_device_config(struct lu_device *d, struct lustre_cfg *cfg) 
+static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg) 
 {
         struct cmm_device *m = lu2cmm_dev(d);
+        struct lu_device *next = md2lu_dev(m->cmm_child);
         int err;
 
         switch(cfg->lcfg_command) {
-        case LCFG_CMM_ADD_MDC:
+        case LCFG_ADD_MDC:
                 err = cmm_add_mdc(m, cfg);
                 break;
         default:
-                err = -EOPNOTSUPP;
+                err = next->ld_ops->ldo_process_config(next, cfg);
         }
 out:
         RETURN(err);
@@ -105,7 +106,9 @@ static struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_init    = cmm_object_init,
 	.ldo_object_free    = cmm_object_free,
 	.ldo_object_release = cmm_object_release,
-	.ldo_object_print   = cmm_object_print
+	.ldo_object_print   = cmm_object_print,
+
+        .ldo_process_config = cmm_process_config
 };
 
 struct lu_device *cmm_device_alloc(struct lu_device_type *t,
@@ -157,8 +160,7 @@ static struct lu_device_type_operations cmm_device_type_ops = {
         .ldto_device_free  = cmm_device_free,
 
         .ldto_device_init = cmm_device_init,
-        .ldto_device_fini = cmm_device_fini,
-        .ldto_device_config = cmm_device_config
+        .ldto_device_fini = cmm_device_fini
 };
 
 static struct lu_device_type cmm_device_type = {

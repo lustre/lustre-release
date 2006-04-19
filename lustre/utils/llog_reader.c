@@ -321,23 +321,13 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 print_1_cfg(lcfg);
                 break;
         }
-        case(LCFG_LMV_ADD_MDC):{
-                printf("lmv_modify_tgts add ");
+        case(LCFG_ADD_MDC):{
+                printf("modify_mdc_tgts add ");
                 print_1_cfg(lcfg);
                 break;
         }
-        case(LCFG_LMV_DEL_MDC):{
-                printf("lmv_modify_tgts del ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_CMM_ADD_MDC):{
-                printf("cmm_modify_tgts add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_CMM_DEL_MDC):{
-                printf("cmm_modify_tgts del ");
+        case(LCFG_DEL_MDC):{
+                printf("modify_mdc_tgts del ");
                 print_1_cfg(lcfg);
                 break;
         }
