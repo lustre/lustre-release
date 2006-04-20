@@ -247,12 +247,13 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         /* warn zero available space/inode every 30 min */
         if (cfs_time_sub(now, last_warn) > 60 * 30)
                 warn = 1;
+        /* Find all the OSTs big enough to be stripe candidates */
         list_for_each_entry(tgt, &lov->qos_bavail_list, qos_bavail_list) {
                 if (!tgt->active)
                         continue;
                 if (!TGT_BAVAIL(tgt)) {
                         if (warn) {
-                                CWARN("avail space on %s is zero\n", 
+                                CWARN("no free space on %s\n", 
                                       tgt->uuid.uuid);
                                 last_warn = now;
                         }
@@ -260,12 +261,14 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
                 }
                 if (!TGT_FFREE(tgt)) {
                         if (warn) {
-                                CWARN("free inode on %s is zero\n", 
+                                CWARN("no free inodes on %s\n", 
                                       tgt->uuid.uuid);
                                 last_warn = now;
                         }
                         continue;
                 }
+                /* We can stop if we have enough good osts and our osts
+                   are getting too small */ 
                 if ((TGT_BAVAIL(tgt) <= QOS_MIN) && (good_osts >= *stripe_cnt))
                         break;
                 availspace[good_osts] = TGT_BAVAIL(tgt);
@@ -286,20 +289,31 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         if (!*stripe_cnt) 
                 GOTO(out_free, rc = -EAGAIN);
         
+        /* The point of all this shift and rand is to choose a 64-bit 
+           random number between 0 and total_bavail. Apparently '%' doesn't
+           work for 64bit numbers. */
         nfound = shift = 0;
         while ((total_bavail >> shift) > 0)
                 shift++;
         shift++;
-        /* search enough OSTs with free space weighted random allocation */
+        /* Find enough OSTs with free space weighted random allocation */
         while (nfound < *stripe_cnt) {
                 cur_bavail = 0;
 
+                /* If the total storage left is < 4GB, don't use random order, 
+                   store in biggest OST first. (Low storage situation.) 
+                   Otherwise, choose a 64bit random number... */
                 rand = (shift < 32 ? 0ULL : (__u64)ll_rand() << 32) | ll_rand();
+                /* ... mask everything above shift... */
                 if (shift < 64)
                         rand &= ((1ULL << shift) - 1);
+                /* ... and this while should execute at most once... */
                 while (rand > total_bavail)
                         rand -= total_bavail;
+                /* ... leaving us a 64bit number between 0 and total_bavail. */
                 
+                /* Try to fit in bigger OSTs first. On average, this will
+                   fill more toward the front of the OST array */
                 for (i = 0; i < good_osts; i++) {
                         cur_bavail += availspace[i];
                         if (cur_bavail >= rand) {
@@ -322,13 +336,14 @@ out_free:
         if (indexes)
                 OBD_FREE(indexes, sizeof(int) * require_stripes);
         if (rc != -EAGAIN)
+                /* rc == 0 or err */
                 RETURN(rc);
 
         rc = alloc_rr(lov, idx_arr, stripe_cnt);
         RETURN(rc);
 }
 
-/* return new alloced stripe count in success */
+/* return new alloced stripe count on success */
 static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm, 
                            int newea, int **idx_arr, int *arr_cnt)
 {
@@ -384,16 +399,22 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 int stripe_cnt = lov_get_stripecnt(lov, 0);
 
                 /* If the MDS file was truncated up to some size, stripe over
-                 * enough OSTs to allow the file to be created at that size. */
+                 * enough OSTs to allow the file to be created at that size. 
+                 * This may mean we use more than the default # of stripes. */
                 if (src_oa->o_valid & OBD_MD_FLSIZE) {
                         struct lov_tgt_desc *tgt;
-                        stripes = 1;
                         
+                        /* Find the smallest number of stripes we can use 
+                           (up to # of active osts). */
+                        stripes = 1;
                         mutex_down(&lov->lov_lock);
                         list_for_each_entry(tgt, &lov->qos_bavail_list, 
                                             qos_bavail_list) {
                                 if (!tgt->active)
                                         continue;
+                                /* All earlier tgts have at least this many 
+                                   bytes available also, since our list is
+                                   sorted by size  */
                                 if (TGT_BAVAIL(tgt) * stripes > src_oa->o_size)
                                         break;
                                 stripes++;

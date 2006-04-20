@@ -148,6 +148,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         RETURN(lmm_size);
 }
 
+/* Find the max stripecount we should use */
 int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
 {
         if (!stripe_count)
