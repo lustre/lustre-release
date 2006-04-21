@@ -128,7 +128,9 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
                 GOTO (failed, rc);
 
         *(type->typ_dt_ops) = *dt_ops;
-        *(type->typ_md_ops) = *md_ops;
+        /* md_ops is optional */
+        if (md_ops)
+                *(type->typ_md_ops) = *md_ops;
         strcpy(type->typ_name, name);
 
 #ifdef LPROCFS
