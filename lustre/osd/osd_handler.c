@@ -301,7 +301,8 @@ static struct lu_device *osd_device_fini(struct lu_device *d)
         }
         osd_oi_fini(&o->od_oi);
         
-        server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
+        if (o->od_mount)
+                server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
 
         o->od_mount = NULL;
 
