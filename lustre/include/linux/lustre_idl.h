@@ -191,7 +191,7 @@ static inline int fid_is_sane(const struct lu_fid *fid)
 
 extern void lustre_swab_lu_fid (struct lu_fid *fid);
 
-static inline int lu_fid_eq(const struct lu_fid *f0, 
+static inline int lu_fid_eq(const struct lu_fid *f0,
                             const struct lu_fid *f1)
 {
 	/* check that there is no alignment padding */
@@ -350,6 +350,10 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
+
+#define MDT_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
+                                OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
+                                OBD_CONNECT_IBITS | OBD_CONNECT_JOIN)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
                                                 ((patch)<<8) + (fix))
@@ -687,7 +691,6 @@ typedef enum {
         MDS_QUOTACTL     = 48,
         MDS_GETXATTR     = 49,
         MDS_SETXATTR     = 50,
-        MDS_FLD          = 51,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -1530,6 +1533,12 @@ enum llogd_rpc_ops {
         LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
         LLOG_ORIGIN_HANDLE_DESTROY      = 509,  /* for destroy llog object*/
         LLOG_LAST_OPC
+};
+
+enum fld_rpc_opc {
+        FLD_QUERY                       = 600,
+        FLD_LAST_OPC,
+        FLD_FIRST_OPC                   = FLD_QUERY
 };
 
 struct llogd_body {
