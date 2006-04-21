@@ -996,8 +996,7 @@ struct lu_seq_mgr_ops seq_mgr_ops = {
 
 static int mdt_fld_init(struct mdt_device *m)
 {
-        struct dt_device *dt;
-        struct lu_site   *ls;
+        struct lu_site *ls;
         int rc;
         ENTRY;
 
@@ -1079,10 +1078,8 @@ err_mdt_svc:
         RETURN(rc);
 }
 
-static void mdt_stack_fini(struct mdt_device *m)
+static void mdt_stack_fini(struct mdt_device *m, struct lu_device *d)
 {
-        struct lu_device *d = md2lu_dev(m->mdt_child);
-
         /* goes through all stack */
         while (d != NULL) {
                 struct lu_device *n;
@@ -1187,7 +1184,7 @@ static int mdt_stack_init(struct mdt_device *m, struct lustre_cfg *cfg)
 out:
         /* fini from last known good lu_device */
         if (rc)
-                mdt_stack_fini(m);
+                mdt_stack_fini(m, d);
 
         return rc;
 }
@@ -1201,7 +1198,7 @@ static void mdt_fini(struct mdt_device *m)
         mdt_stop_ptlrpc_service(m);
 
         /* finish the stack */
-        mdt_stack_fini(m);
+        mdt_stack_fini(m, md2lu_dev(m->mdt_child));
 
         if (d->ld_site != NULL) {
                 lu_site_fini(d->ld_site);
@@ -1304,7 +1301,7 @@ err_fini_mgr:
         seq_mgr_fini(m->mdt_seq_mgr);
         m->mdt_seq_mgr = NULL;
 err_fini_stack:
-        mdt_stack_fini(md2lu_dev(m->mdt_child));
+        mdt_stack_fini(m, md2lu_dev(m->mdt_child));
 err_fini_site:
         lu_site_fini(s);
         OBD_FREE_PTR(s);
