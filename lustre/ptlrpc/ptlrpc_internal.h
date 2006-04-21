@@ -81,6 +81,13 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < FLD_LAST_OPC) {
+                /* FLD opcode */
+                return (opc - FLD_FIRST_OPC +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
@@ -90,7 +97,8 @@ static inline int opcode_offset(__u32 opc) {
 #define LUSTRE_MAX_OPCODES ((LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
                             (OST_LAST_OPC - OST_FIRST_OPC)     + \
-                            (OBD_LAST_OPC - OBD_FIRST_OPC))
+                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
+                            (FLD_LAST_OPC - FLD_FIRST_OPC))
 
 enum {
         PTLRPC_REQWAIT_CNTR = 0,
@@ -104,7 +112,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
 /* pers.c */
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page, 
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
                           int pageoffset, int len);
 void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
 

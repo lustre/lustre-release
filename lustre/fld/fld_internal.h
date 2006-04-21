@@ -1,7 +1,7 @@
 /* -*- MODE: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  fld/fld.c 
+ *  fld/fld.c
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
  *
@@ -52,5 +52,7 @@ enum fld_op {
         FLD_DELETE = 1,
         FLD_GET    = 2
 };
+
+#define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
 #endif

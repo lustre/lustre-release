@@ -516,7 +516,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         struct mdt_body *body = lustre_msg_buf(open_req->rq_repmsg, 1,
                                                sizeof(*body));
         ENTRY;
-        
+
         LASSERT(body != NULL);
         /* incoming message in my byte order (it's been swabbed) */
         LASSERT(rec != NULL);
@@ -869,22 +869,22 @@ int mdc_fld(struct obd_export *exp, struct md_fld *mf, __u32 fld_op)
         int size[2] = {sizeof(op), mf_size}, rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION, 
-                              MDS_FLD, 2, size, NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
+                              FLD_QUERY, 2, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
-        
+
         op = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*op));
         *op = fld_op;
 
         pmf = lustre_msg_buf(req->rq_reqmsg, 1, sizeof (*pmf));
         memcpy(pmf, mf, sizeof(*mf));
- 
+
         req->rq_replen = lustre_msg_size(1, &mf_size);
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out_req, rc);
-        
+
         pmf = lustre_swab_repbuf(req, 0, sizeof(*pmf), lustre_swab_md_fld);
 out_req:
         ptlrpc_req_finished(req);
@@ -1145,7 +1145,7 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         ENTRY;
 
         switch (stage) {
-        case OBD_CLEANUP_EARLY: 
+        case OBD_CLEANUP_EARLY:
         case OBD_CLEANUP_EXPORTS:
                 break;
         case OBD_CLEANUP_SELF_EXP:

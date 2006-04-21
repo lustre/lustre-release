@@ -76,7 +76,6 @@ struct ll_rpc_opcode {
         { MDS_QUOTACTL,     "mds_quotactl" },
         { MDS_GETXATTR,     "mds_getxattr" },
         { MDS_SETXATTR,     "mds_setxattr" },
-        { MDS_FLD,          "mds_fld" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
@@ -84,7 +83,9 @@ struct ll_rpc_opcode {
         { LDLM_CP_CALLBACK, "ldlm_cp_callback" },
         { LDLM_GL_CALLBACK, "ldlm_gl_callback" },
         { OBD_PING,         "obd_ping" },
-        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel"},
+        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
+        { OBD_QC_CALLBACK,  "obd_qc_callback" },
+        { FLD_QUERY,        "fld_query" }
 };
 
 const char* ll_opcode2str(__u32 opcode)
