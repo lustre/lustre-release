@@ -430,6 +430,10 @@ EXPORT_SYMBOL(class_cleanup);
 EXPORT_SYMBOL(class_detach);
 EXPORT_SYMBOL(class_manual_cleanup);
 
+/* mea.c */
+EXPORT_SYMBOL(mea_name2idx);
+EXPORT_SYMBOL(raw_name2idx);
+
 #ifdef LPROCFS
 int obd_proc_read_version(char *page, char **start, off_t off, int count,
                           int *eof, void *data)

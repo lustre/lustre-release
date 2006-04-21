@@ -231,21 +231,25 @@ static int revalidate_it_finish(struct ptlrpc_request *request, int offset,
                 RETURN(-ENOENT);
 
         sbi = ll_i2sbi(de->d_inode);
-        rc = ll_prep_inode(sbi->ll_dt_exp, &de->d_inode, request, offset, NULL);
+        rc = ll_prep_inode(&de->d_inode, request, offset, NULL);
 
         RETURN(rc);
 }
 
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 {
+        struct ll_sb_info *sbi;
+
         LASSERT(it != NULL);
         LASSERT(dentry != NULL);
 
+        sbi = ll_i2sbi(dentry->d_inode);
+        
         if (it->d.lustre.it_lock_mode && dentry->d_inode != NULL) {
                 struct inode *inode = dentry->d_inode;
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
-                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+                md_set_lock_data(sbi->ll_md_exp, &it->d.lustre.it_lock_handle, inode);
         }
 
         /* drop lookup or getattr locks immediately */
@@ -314,8 +318,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         ll_prepare_md_op_data(&op_data, parent, NULL, de->d_name.name,
                               de->d_name.len, 0);
 
-        rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
-                             &req, ll_mdc_blocking_ast, 0);
+        rc = md_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
+                            &req, ll_mdc_blocking_ast, 0);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)

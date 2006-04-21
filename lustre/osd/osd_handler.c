@@ -564,7 +564,7 @@ static int __init osd_mod_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(osd, &lvars);
-        return class_register_type(&osd_obd_device_ops, lvars.module_vars,
+        return class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_OSD0_NAME, &osd_device_type);
 }
 

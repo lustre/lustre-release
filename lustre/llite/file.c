@@ -47,8 +47,8 @@ static void ll_file_data_put(struct ll_file_data *fd)
                 OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof *fd);
 }
 
-int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
-                        struct file *file)
+int ll_mdc_close(struct obd_export *md_exp, struct inode *inode,
+                 struct file *file)
 {
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct ptlrpc_request *req = NULL;
@@ -84,7 +84,7 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                 op_data.valid |= OBD_MD_FLFLAGS;
         }
         
-        rc = mdc_close(mdc_exp, &op_data, och, &req);
+        rc = md_close(md_exp, &op_data, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
@@ -101,7 +101,7 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                                inode->i_ino, rc);
         }
 
-        mdc_clear_open_replay_data(och);
+        md_clear_open_replay_data(md_exp, och);
         ptlrpc_req_finished(req);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         LUSTRE_FPRIVATE(file) = NULL;
@@ -162,9 +162,9 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         ll_prepare_md_op_data(&op_data, parent->d_inode, NULL, 
                               name, len, O_RDWR);
 
-        rc = mdc_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, &op_data,
-                         &lockh, lmm, lmmsize, ldlm_completion_ast,
-                         ll_mdc_blocking_ast, NULL, 0);
+        rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, &op_data,
+                        &lockh, lmm, lmmsize, ldlm_completion_ast,
+                        ll_mdc_blocking_ast, NULL, 0);
         if (rc < 0)
                 CERROR("lock enqueue: err: %d\n", rc);
         RETURN(rc);
@@ -174,7 +174,9 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
                   struct ll_file_data *fd)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
-        struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
+        struct inode *inode = file->f_dentry->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct mdt_body *body;
         ENTRY;
 
@@ -189,11 +191,12 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
         memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
         LUSTRE_FPRIVATE(file) = fd;
-        ll_readahead_init(file->f_dentry->d_inode, &fd->fd_ras);
+        ll_readahead_init(inode, &fd->fd_ras);
 
         lli->lli_io_epoch = body->io_epoch;
 
-        mdc_set_open_replay_data(&fd->fd_mds_och, it->d.lustre.it_data);
+        md_set_open_replay_data(sbi->ll_md_exp, &fd->fd_mds_och,
+                                it->d.lustre.it_data);
 
         RETURN(0);
 }
@@ -205,7 +208,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
  * stripe MD to the MDS, or try to destroy the objects if that fails.
  *
  * If we already have the stripe MD locally then we don't request it in
- * mdc_open(), by passing a lmm_size = 0.
+ * md_open(), by passing a lmm_size = 0.
  *
  * It is up to the application to ensure no other processes open this file
  * in the O_LOV_DELAY_CREATE case, or the default striping pattern will be
@@ -248,7 +251,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
         rc = it_open_error(DISP_OPEN_OPEN, it);
-        /* mdc_intent_lock() didn't get a request ref if there was an open
+        /* md_intent_lock() didn't get a request ref if there was an open
          * error, so don't do cleanup on the request here (bug 3430) */
         if (rc) {
                 ll_file_data_put(fd);
@@ -1153,7 +1156,8 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct file *f = NULL;
-        struct obd_export *exp = ll_i2dtexp(inode);
+        struct obd_export *dt_exp = ll_i2dtexp(inode);
+        struct obd_export *md_exp = ll_i2mdexp(inode);
         struct lov_stripe_md *lsm;
         struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
         struct ptlrpc_request *req = NULL;
@@ -1193,7 +1197,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = mdc_req2lustre_md(req, 1, exp, &md);
+        rc = md_get_lustre_md(md_exp, req, 1, dt_exp, &md);
         if (rc)
                 GOTO(out, rc);
         ll_update_inode(f->f_dentry->d_inode, &md);
@@ -1406,9 +1410,9 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
                               tail_dentry->d_name.name,
                               tail_dentry->d_name.len, 0);
         
-        rc = mdc_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_PW,
-                         op_data, &lockh, &tsize, 0, ldlm_completion_ast,
-                         ll_mdc_blocking_ast, &hsize, 0);
+        rc = md_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_PW,
+                        op_data, &lockh, &tsize, 0, ldlm_completion_ast,
+                        ll_mdc_blocking_ast, &hsize, 0);
 
         if (rc < 0)
                 GOTO(out, rc);
@@ -1691,8 +1695,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                         rc = err;
         }
 
-        err = mdc_sync(ll_i2sbi(inode)->ll_md_exp,
-                       ll_inode2fid(inode), &req);
+        err = md_sync(ll_i2sbi(inode)->ll_md_exp,
+                      ll_inode2fid(inode), &req);
         if (!rc)
                 rc = err;
         if (!err)
@@ -1863,13 +1867,13 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                                 RETURN(rc); 
                         valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
                 }
-                rc = mdc_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
-                                 valid, ealen, &req);
+                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
+                                valid, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));
                 }
-                rc = ll_prep_inode(sbi->ll_dt_exp, &inode, req, 0, NULL);
+                rc = ll_prep_inode(&inode, req, 0, NULL);
                 if (rc) {
                         ptlrpc_req_finished(req);
                         RETURN(rc);

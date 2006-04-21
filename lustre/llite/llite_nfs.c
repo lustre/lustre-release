@@ -79,14 +79,14 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
                 valid |= OBD_MD_FLEASIZE;
         }
 
-        rc = mdc_getattr(sbi->ll_md_exp, fid, valid, eadatalen, &req);
+        rc = md_getattr(sbi->ll_md_exp, fid, valid, eadatalen, &req);
         if (rc) {
                 CERROR("can't get object attrs, fid "DFID3", rc %d\n",
                        PFID3(fid), rc);
                 return ERR_PTR(rc);
         }
 
-        rc = ll_prep_inode(sbi->ll_dt_exp, &inode, req, 0, sb);
+        rc = ll_prep_inode(&inode, req, 0, sb);
         if (rc) {
                 ptlrpc_req_finished(req);
                 return ERR_PTR(rc);

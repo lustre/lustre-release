@@ -104,8 +104,8 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if (rc)
                 RETURN(rc);
 
-        rc = mdc_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid,
-                          name, value, size, 0, flags, &req);
+        rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid,
+                         name, value, size, 0, flags, &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -179,8 +179,8 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 RETURN(rc);
 
 do_getxattr:
-        rc = mdc_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid,
-                          name, NULL, 0, size, &req);
+        rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid,
+                         name, NULL, 0, size, 0, &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "

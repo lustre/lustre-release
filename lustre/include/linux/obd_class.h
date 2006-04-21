@@ -57,8 +57,9 @@ struct lu_device_type;
 
 /* genops.c */
 struct obd_export *class_conn2export(struct lustre_handle *);
-int class_register_type(struct obd_ops *ops, struct lprocfs_vars *,
-                        const char *nm, struct lu_device_type *ldt);
+int class_register_type(struct obd_ops *, struct md_ops *,
+                        struct lprocfs_vars *, const char *nm, 
+                        struct lu_device_type *ldt);
 int class_unregister_type(const char *nm);
 
 struct obd_device *class_newdev(struct obd_type *type, char *name);
@@ -193,7 +194,8 @@ void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);
 
 
 #define OBT(dev)        (dev)->obd_type
-#define OBP(dev, op)    (dev)->obd_type->typ_ops->o_ ## op
+#define OBP(dev, op)    (dev)->obd_type->typ_dt_ops->o_ ## op
+#define MDP(dev, op)    (dev)->obd_type->typ_md_ops->m_ ## op
 #define CTXTP(ctxt, op) (ctxt)->loc_logops->lop_##op
 
 /* Ensure obd_setup: used for cleanup which must be called
@@ -232,22 +234,67 @@ do {                                                            \
                 LASSERT(coffset < obd->obd_stats->ls_num);      \
                 lprocfs_counter_incr(obd->obd_stats, coffset);  \
         }
+
+#define MD_COUNTER_OFFSET(op)                                  \
+        ((offsetof(struct md_ops, m_ ## op) -                  \
+          offsetof(struct md_ops, m_getstatus))                \
+         / sizeof(((struct md_ops *)(0))->m_getstatus))
+
+#define MD_COUNTER_INCREMENT(obd, op)                           \
+        if ((obd)->md_stats != NULL) {                          \
+                unsigned int coffset;                           \
+                coffset = (unsigned int)(obd)->md_cntr_base +   \
+                        MD_COUNTER_OFFSET(op);                  \
+                LASSERT(coffset < (obd)->md_stats->ls_num);     \
+                lprocfs_counter_incr((obd)->md_stats, coffset); \
+        }
+
 #else
 #define OBD_COUNTER_OFFSET(op)
 #define OBD_COUNTER_INCREMENT(obd, op)
+#define MD_COUNTER_INCREMENT(obd, op)
 #endif
 
-#define OBD_CHECK_OP(obd, op, err)                              \
+#define OBD_CHECK_MD_OP(obd, op, err)                           \
 do {                                                            \
-        if (!OBT(obd) || !OBP((obd), op)) {\
+        if (!OBT(obd) || !MDP((obd), op)) {                     \
                 if (err)                                        \
-                        CERROR("obd_" #op ": dev %d no operation\n",    \
-                               obd->obd_minor);                         \
+                        CERROR("md_" #op ": dev %s/%d no operation\n", \
+                               obd->obd_name, obd->obd_minor);  \
                 RETURN(err);                                    \
         }                                                       \
 } while (0)
 
-#define EXP_CHECK_OP(exp, op)                                   \
+#define EXP_CHECK_MD_OP(exp, op)                                \
+do {                                                            \
+        if ((exp) == NULL) {                                    \
+                CERROR("obd_" #op ": NULL export\n");           \
+                RETURN(-ENODEV);                                \
+        }                                                       \
+        if ((exp)->exp_obd == NULL || !OBT((exp)->exp_obd)) {   \
+                CERROR("obd_" #op ": cleaned up obd\n");        \
+                RETURN(-EOPNOTSUPP);                            \
+        }                                                       \
+        if (!OBT((exp)->exp_obd) || !MDP((exp)->exp_obd, op)) { \
+                CERROR("obd_" #op ": dev %s/%d no operation\n", \
+                       (exp)->exp_obd->obd_name,                \
+		       (exp)->exp_obd->obd_minor);              \
+                RETURN(-EOPNOTSUPP);                            \
+        }                                                       \
+} while (0)
+
+
+#define OBD_CHECK_DT_OP(obd, op, err)                           \
+do {                                                            \
+        if (!OBT(obd) || !OBP((obd), op)) {                     \
+                if (err)                                        \
+                        CERROR("obd_" #op ": dev %d no operation\n",    \
+                               obd->obd_minor);                 \
+                RETURN(err);                                    \
+        }                                                       \
+} while (0)
+
+#define EXP_CHECK_DT_OP(exp, op)                                \
 do {                                                            \
         if ((exp) == NULL) {                                    \
                 CERROR("obd_" #op ": NULL export\n");           \
@@ -280,7 +327,7 @@ static inline int obd_get_info(struct obd_export *exp, __u32 keylen,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, get_info);
+        EXP_CHECK_DT_OP(exp, get_info);
         OBD_COUNTER_INCREMENT(exp->exp_obd, get_info);
 
         rc = OBP(exp->exp_obd, get_info)(exp, keylen, key, vallen, val);
@@ -293,7 +340,7 @@ static inline int obd_set_info(struct obd_export *exp, obd_count keylen,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, set_info);
+        EXP_CHECK_DT_OP(exp, set_info);
         OBD_COUNTER_INCREMENT(exp->exp_obd, set_info);
 
         rc = OBP(exp->exp_obd, set_info)(exp, keylen, key, vallen, val);
@@ -318,7 +365,7 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 } else
                         rc = PTR_ERR(d);
         } else {
-                OBD_CHECK_OP(obd, setup, -EOPNOTSUPP);
+                OBD_CHECK_DT_OP(obd, setup, -EOPNOTSUPP);
                 OBD_COUNTER_INCREMENT(obd, setup);
                 rc = OBP(obd, setup)(obd, cfg);
         }
@@ -331,7 +378,7 @@ static inline int obd_precleanup(struct obd_device *obd,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(obd, precleanup, 0);
+        OBD_CHECK_DT_OP(obd, precleanup, 0);
         OBD_COUNTER_INCREMENT(obd, precleanup);
 
         rc = OBP(obd, precleanup)(obd, cleanup_stage);
@@ -354,7 +401,7 @@ static inline int obd_cleanup(struct obd_device *obd)
                 obd->obd_lu_dev = NULL;
                 rc = 0;
         } else {
-                OBD_CHECK_OP(obd, cleanup, 0);
+                OBD_CHECK_DT_OP(obd, cleanup, 0);
                 rc = OBP(obd, cleanup)(obd);
         }
         OBD_COUNTER_INCREMENT(obd, cleanup);
@@ -370,13 +417,15 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
         ENTRY;
 
         OBD_CHECK_DEV(obd);
+        OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, process_config);
 
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
                 rc = d->ld_ops->ldo_process_config(d, (struct lustre_cfg *)data);
         } else {
-                OBD_CHECK_OP(obd, process_config, -EOPNOTSUPP);
+                OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
                 OBD_COUNTER_INCREMENT(obd, process_config);
                 rc = OBP(obd, process_config)(obd, datalen, data);
         }
@@ -397,7 +446,7 @@ static inline int obd_packmd(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, packmd);
+        EXP_CHECK_DT_OP(exp, packmd);
         OBD_COUNTER_INCREMENT(exp->exp_obd, packmd);
 
         rc = OBP(exp->exp_obd, packmd)(exp, disk_tgt, mem_src);
@@ -442,7 +491,7 @@ static inline int obd_unpackmd(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, unpackmd);
+        EXP_CHECK_DT_OP(exp, unpackmd);
         OBD_COUNTER_INCREMENT(exp->exp_obd, unpackmd);
 
         rc = OBP(exp->exp_obd, unpackmd)(exp, mem_tgt, disk_src, disk_len);
@@ -473,7 +522,7 @@ static inline int obd_checkmd(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, checkmd);
+        EXP_CHECK_DT_OP(exp, checkmd);
         OBD_COUNTER_INCREMENT(exp->exp_obd, checkmd);
 
         rc = OBP(exp->exp_obd, checkmd)(exp, md_exp, mem_tgt);
@@ -487,7 +536,7 @@ static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, create);
+        EXP_CHECK_DT_OP(exp, create);
         OBD_COUNTER_INCREMENT(exp->exp_obd, create);
 
         rc = OBP(exp->exp_obd, create)(exp, obdo, ea, oti);
@@ -502,7 +551,7 @@ static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, destroy);
+        EXP_CHECK_DT_OP(exp, destroy);
         OBD_COUNTER_INCREMENT(exp->exp_obd, destroy);
 
         rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti, md_exp);
@@ -515,7 +564,7 @@ static inline int obd_getattr(struct obd_export *exp, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, getattr);
+        EXP_CHECK_DT_OP(exp, getattr);
         OBD_COUNTER_INCREMENT(exp->exp_obd, getattr);
 
         rc = OBP(exp->exp_obd, getattr)(exp, obdo, ea);
@@ -529,7 +578,7 @@ static inline int obd_getattr_async(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, getattr);
+        EXP_CHECK_DT_OP(exp, getattr);
         OBD_COUNTER_INCREMENT(exp->exp_obd, getattr);
 
         rc = OBP(exp->exp_obd, getattr_async)(exp, obdo, ea, set);
@@ -543,7 +592,7 @@ static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, setattr);
+        EXP_CHECK_DT_OP(exp, setattr);
         OBD_COUNTER_INCREMENT(exp->exp_obd, setattr);
 
         rc = OBP(exp->exp_obd, setattr)(exp, obdo, ea, oti);
@@ -558,7 +607,7 @@ static inline int obd_setattr_async(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, setattr_async);
+        EXP_CHECK_DT_OP(exp, setattr_async);
         OBD_COUNTER_INCREMENT(exp->exp_obd, setattr_async);
 
         rc = OBP(exp->exp_obd, setattr_async)(exp, obdo, ea, oti);
@@ -573,7 +622,7 @@ static inline int obd_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
         ENTRY;
 
         OBD_CHECK_DEV_ACTIVE(obd);
-        OBD_CHECK_OP(obd, add_conn, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(obd, add_conn, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, add_conn);
 
         rc = OBP(obd, add_conn)(imp, uuid, priority);
@@ -587,7 +636,7 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
         ENTRY;
 
         OBD_CHECK_DEV_ACTIVE(obd);
-        OBD_CHECK_OP(obd, del_conn, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(obd, del_conn, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, del_conn);
 
         rc = OBP(obd, del_conn)(imp, uuid);
@@ -603,7 +652,7 @@ static inline int obd_connect(struct lustre_handle *conn,struct obd_device *obd,
         ENTRY;
 
         OBD_CHECK_DEV_ACTIVE(obd);
-        OBD_CHECK_OP(obd, connect, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
         rc = OBP(obd, connect)(conn, obd, cluuid, d);
@@ -623,7 +672,7 @@ static inline int obd_reconnect(struct obd_export *exp,
         ENTRY;
 
         OBD_CHECK_DEV_ACTIVE(obd);
-        OBD_CHECK_OP(obd, reconnect, 0);
+        OBD_CHECK_DT_OP(obd, reconnect, 0);
         OBD_COUNTER_INCREMENT(obd, reconnect);
 
         rc = OBP(obd, reconnect)(exp, obd, cluuid, d);
@@ -638,7 +687,7 @@ static inline int obd_disconnect(struct obd_export *exp)
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, disconnect);
+        EXP_CHECK_DT_OP(exp, disconnect);
         OBD_COUNTER_INCREMENT(exp->exp_obd, disconnect);
 
         rc = OBP(exp->exp_obd, disconnect)(exp);
@@ -702,7 +751,7 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         if (obd == NULL)
                 RETURN(-EINVAL);
 
-        OBD_CHECK_OP(obd, statfs, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(obd, statfs, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
         CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
@@ -730,7 +779,7 @@ static inline int obd_sync(struct obd_export *exp, struct obdo *oa,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, sync, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, sync, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, sync);
 
         rc = OBP(exp->exp_obd, sync)(exp, oa, ea, start, end);
@@ -744,7 +793,7 @@ static inline int obd_punch(struct obd_export *exp, struct obdo *oa,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, punch);
+        EXP_CHECK_DT_OP(exp, punch);
         OBD_COUNTER_INCREMENT(exp->exp_obd, punch);
 
         rc = OBP(exp->exp_obd, punch)(exp, oa, ea, start, end, oti);
@@ -758,7 +807,7 @@ static inline int obd_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, brw);
+        EXP_CHECK_DT_OP(exp, brw);
         OBD_COUNTER_INCREMENT(exp->exp_obd, brw);
 
         if (!(cmd & (OBD_BRW_RWMASK | OBD_BRW_CHECK))) {
@@ -780,7 +829,7 @@ static inline int obd_brw_async(int cmd, struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, brw_async);
+        EXP_CHECK_DT_OP(exp, brw_async);
         OBD_COUNTER_INCREMENT(exp->exp_obd, brw_async);
 
         if (!(cmd & OBD_BRW_RWMASK)) {
@@ -803,7 +852,7 @@ static inline  int obd_prep_async_page(struct obd_export *exp,
         int ret;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, prep_async_page, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, prep_async_page, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, prep_async_page);
 
         ret = OBP(exp->exp_obd, prep_async_page)(exp, lsm, loi, page, offset,
@@ -820,7 +869,7 @@ static inline int obd_queue_async_io(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, queue_async_io, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, queue_async_io, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, queue_async_io);
         LASSERT(cmd & OBD_BRW_RWMASK);
 
@@ -837,7 +886,7 @@ static inline int obd_set_async_flags(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, set_async_flags, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, set_async_flags, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, set_async_flags);
 
         rc = OBP(exp->exp_obd, set_async_flags)(exp, lsm, loi, cookie,
@@ -856,7 +905,7 @@ static inline int obd_queue_group_io(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, queue_group_io, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, queue_group_io, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, queue_group_io);
         LASSERT(cmd & OBD_BRW_RWMASK);
 
@@ -874,7 +923,7 @@ static inline int obd_trigger_group_io(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, trigger_group_io, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, trigger_group_io, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, trigger_group_io);
 
         rc = OBP(exp->exp_obd, trigger_group_io)(exp, lsm, loi, oig);
@@ -888,7 +937,7 @@ static inline int obd_teardown_async_page(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, teardown_async_page, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, teardown_async_page, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, teardown_async_page);
 
         rc = OBP(exp->exp_obd, teardown_async_page)(exp, lsm, loi, cookie);
@@ -904,7 +953,7 @@ static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, preprw, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, preprw, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, preprw);
 
         rc = OBP(exp->exp_obd, preprw)(cmd, exp, oa, objcount, obj, niocount,
@@ -919,7 +968,7 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
 {
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, commitrw, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, commitrw, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, commitrw);
 
         rc = OBP(exp->exp_obd, commitrw)(cmd, exp, oa, objcount, obj, niocount,
@@ -934,7 +983,7 @@ static inline int obd_merge_lvb(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, merge_lvb, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, merge_lvb, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, merge_lvb);
 
         rc = OBP(exp->exp_obd, merge_lvb)(exp, lsm, lvb, kms_only);
@@ -948,7 +997,7 @@ static inline int obd_adjust_kms(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, adjust_kms, -EOPNOTSUPP);
+        OBD_CHECK_DT_OP(exp->exp_obd, adjust_kms, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, adjust_kms);
 
         rc = OBP(exp->exp_obd, adjust_kms)(exp, lsm, size, shrink);
@@ -961,7 +1010,7 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, iocontrol);
+        EXP_CHECK_DT_OP(exp, iocontrol);
         OBD_COUNTER_INCREMENT(exp->exp_obd, iocontrol);
 
         rc = OBP(exp->exp_obd, iocontrol)(cmd, exp, len, karg, uarg);
@@ -977,7 +1026,7 @@ static inline int obd_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, enqueue);
+        EXP_CHECK_DT_OP(exp, enqueue);
         OBD_COUNTER_INCREMENT(exp->exp_obd, enqueue);
 
         rc = OBP(exp->exp_obd, enqueue)(exp, ea, type, policy, mode, flags,
@@ -993,7 +1042,7 @@ static inline int obd_match(struct obd_export *exp, struct lov_stripe_md *ea,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, match);
+        EXP_CHECK_DT_OP(exp, match);
         OBD_COUNTER_INCREMENT(exp->exp_obd, match);
 
         rc = OBP(exp->exp_obd, match)(exp, ea, type, policy, mode, flags, data,
@@ -1008,7 +1057,7 @@ static inline int obd_change_cbdata(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, change_cbdata);
+        EXP_CHECK_DT_OP(exp, change_cbdata);
         OBD_COUNTER_INCREMENT(exp->exp_obd, change_cbdata);
 
         rc = OBP(exp->exp_obd, change_cbdata)(exp, lsm, it, data);
@@ -1022,7 +1071,7 @@ static inline int obd_cancel(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, cancel);
+        EXP_CHECK_DT_OP(exp, cancel);
         OBD_COUNTER_INCREMENT(exp->exp_obd, cancel);
 
         rc = OBP(exp->exp_obd, cancel)(exp, ea, mode, lockh);
@@ -1036,7 +1085,7 @@ static inline int obd_cancel_unused(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, cancel_unused);
+        EXP_CHECK_DT_OP(exp, cancel_unused);
         OBD_COUNTER_INCREMENT(exp->exp_obd, cancel_unused);
 
         rc = OBP(exp->exp_obd, cancel_unused)(exp, ea, flags, opaque);
@@ -1049,7 +1098,7 @@ static inline int obd_join_lru(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, join_lru);
+        EXP_CHECK_DT_OP(exp, join_lru);
         OBD_COUNTER_INCREMENT(exp->exp_obd, join_lru);
 
         rc = OBP(exp->exp_obd, join_lru)(exp, ea, join);
@@ -1063,7 +1112,7 @@ static inline int obd_san_preprw(int cmd, struct obd_export *exp,
 {
         int rc;
 
-        EXP_CHECK_OP(exp, preprw);
+        EXP_CHECK_DT_OP(exp, preprw);
         OBD_COUNTER_INCREMENT(exp->exp_obd, preprw);
 
         rc = OBP(exp->exp_obd, san_preprw)(cmd, exp, oa, objcount, obj,
@@ -1077,7 +1126,7 @@ static inline int obd_pin(struct obd_export *exp, struct lu_fid *fid,
 {
         int rc;
 
-        EXP_CHECK_OP(exp, pin);
+        EXP_CHECK_DT_OP(exp, pin);
         OBD_COUNTER_INCREMENT(exp->exp_obd, pin);
 
         rc = OBP(exp->exp_obd, pin)(exp, fid, handle, flag);
@@ -1089,7 +1138,7 @@ static inline int obd_unpin(struct obd_export *exp,
 {
         int rc;
 
-        EXP_CHECK_OP(exp, unpin);
+        EXP_CHECK_DT_OP(exp, unpin);
         OBD_COUNTER_INCREMENT(exp->exp_obd, unpin);
 
         rc = OBP(exp->exp_obd, unpin)(exp, handle, flag);
@@ -1169,7 +1218,7 @@ static inline int obd_quotacheck(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, quotacheck);
+        EXP_CHECK_DT_OP(exp, quotacheck);
         OBD_COUNTER_INCREMENT(exp->exp_obd, quotacheck);
 
         rc = OBP(exp->exp_obd, quotacheck)(exp, oqctl);
@@ -1182,7 +1231,7 @@ static inline int obd_quotactl(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, quotactl);
+        EXP_CHECK_DT_OP(exp, quotactl);
         OBD_COUNTER_INCREMENT(exp->exp_obd, quotactl);
 
         rc = OBP(exp->exp_obd, quotactl)(exp, oqctl);
@@ -1226,8 +1275,310 @@ static inline int obd_register_observer(struct obd_device *obd,
         RETURN(0);
 }
 
-/* OBD Metadata Support */
+/* metadata helpers */
+static inline int md_getstatus(struct obd_export *exp, struct lu_fid *fid)
+{
+        int rc;
+        ENTRY;
 
+        EXP_CHECK_MD_OP(exp, getstatus);
+        MD_COUNTER_INCREMENT(exp->exp_obd, getstatus);
+        rc = MDP(exp->exp_obd, getstatus)(exp, fid);
+        RETURN(rc);
+}
+
+static inline int md_delete(struct obd_export *exp,
+                            struct lu_fid *fid)
+{
+        int rc;
+        ENTRY;
+
+        if (MDP(exp->exp_obd, delete) == NULL)
+                RETURN(0);
+        
+        MD_COUNTER_INCREMENT(exp->exp_obd, delete);
+        rc = MDP(exp->exp_obd, delete)(exp, fid);
+        RETURN(rc);
+}
+
+static inline int md_getattr(struct obd_export *exp, struct lu_fid *fid,
+                             obd_valid valid, int ea_size,
+                             struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, getattr);
+        MD_COUNTER_INCREMENT(exp->exp_obd, getattr);
+        rc = MDP(exp->exp_obd, getattr)(exp, fid, valid, 
+                                        ea_size, request);
+        RETURN(rc);
+}
+
+static inline int md_change_cbdata(struct obd_export *exp, struct lu_fid *fid,
+                                   ldlm_iterator_t it, void *data)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, change_cbdata);
+        MD_COUNTER_INCREMENT(exp->exp_obd, change_cbdata);
+        rc = MDP(exp->exp_obd, change_cbdata)(exp, fid, it, data);
+        RETURN(rc);
+}
+
+static inline int md_close(struct obd_export *exp,
+                           struct md_op_data *op_data,
+                           struct obd_client_handle *och,
+                           struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, close);
+        MD_COUNTER_INCREMENT(exp->exp_obd, close);
+        rc = MDP(exp->exp_obd, close)(exp, op_data, och, request);
+        RETURN(rc);
+}
+
+static inline int md_create(struct obd_export *exp, struct md_op_data *op_data,
+                            const void *data, int datalen, int mode,
+                            __u32 uid, __u32 gid, __u32 cap_effective, __u64 rdev,
+                            struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, create);
+        MD_COUNTER_INCREMENT(exp->exp_obd, create);
+        rc = MDP(exp->exp_obd, create)(exp, op_data, data, datalen, mode,
+                                       uid, gid, cap_effective, rdev, request);
+        RETURN(rc);
+}
+
+static inline int md_done_writing(struct obd_export *exp, 
+                                  struct md_op_data *op_data)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, done_writing);
+        MD_COUNTER_INCREMENT(exp->exp_obd, done_writing);
+        rc = MDP(exp->exp_obd, done_writing)(exp, op_data);
+        RETURN(rc);
+}
+
+static inline int md_enqueue(struct obd_export *exp, int lock_type,
+                             struct lookup_intent *it, int lock_mode,
+                             struct md_op_data *op_data,
+                             struct lustre_handle *lockh,
+                             void *lmm, int lmmsize,
+                             ldlm_completion_callback cb_completion,
+                             ldlm_blocking_callback cb_blocking,
+                             void *cb_data, int extra_lock_flags)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, enqueue);
+        MD_COUNTER_INCREMENT(exp->exp_obd, enqueue);
+        rc = MDP(exp->exp_obd, enqueue)(exp, lock_type, it, lock_mode,
+                                        op_data, lockh, lmm, lmmsize,
+                                        cb_completion, cb_blocking,
+                                        cb_data, extra_lock_flags);
+        RETURN(rc);
+}
+
+static inline int md_getattr_name(struct obd_export *exp, struct lu_fid *fid,
+                                  const char *filename, int namelen,
+                                  obd_valid valid, int ea_size,
+                                  struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, getattr_name);
+        MD_COUNTER_INCREMENT(exp->exp_obd, getattr_name);
+        rc = MDP(exp->exp_obd, getattr_name)(exp, fid, filename, namelen,
+                                             valid, ea_size, request);
+        RETURN(rc);
+}
+
+static inline int md_intent_lock(struct obd_export *exp, 
+                                 struct md_op_data *op_data,
+                                 void *lmm, int lmmsize,
+                                 struct lookup_intent *it,
+                                 int flags, struct ptlrpc_request **reqp,
+                                 ldlm_blocking_callback cb_blocking,
+                                 int extra_lock_flags)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, intent_lock);
+        MD_COUNTER_INCREMENT(exp->exp_obd, intent_lock);
+        rc = MDP(exp->exp_obd, intent_lock)(exp, op_data, lmm, lmmsize,
+                                            it, flags, reqp, cb_blocking, 
+                                            extra_lock_flags);
+        RETURN(rc);
+}
+
+static inline int md_link(struct obd_export *exp, 
+                          struct md_op_data *op_data,
+                          struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, link);
+        MD_COUNTER_INCREMENT(exp->exp_obd, link);
+        rc = MDP(exp->exp_obd, link)(exp, op_data, request);
+        RETURN(rc);
+}
+
+static inline int md_rename(struct obd_export *exp, 
+                            struct md_op_data *op_data,
+                            const char *old, int oldlen,
+                            const char *new, int newlen,
+                            struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, rename);
+        MD_COUNTER_INCREMENT(exp->exp_obd, rename);
+        rc = MDP(exp->exp_obd, rename)(exp, op_data, old, oldlen, new,
+                                       newlen, request);
+        RETURN(rc);
+}
+
+static inline int md_setattr(struct obd_export *exp, struct md_op_data *op_data,
+                             struct iattr *iattr, void *ea, int ealen,
+                             void *ea2, int ea2len, struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, setattr);
+        MD_COUNTER_INCREMENT(exp->exp_obd, setattr);
+        rc = MDP(exp->exp_obd, setattr)(exp, op_data, iattr, ea, ealen,
+                                        ea2, ea2len, request);
+        RETURN(rc);
+}
+
+static inline int md_sync(struct obd_export *exp, struct lu_fid *fid,
+                          struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, sync);
+        MD_COUNTER_INCREMENT(exp->exp_obd, sync);
+        rc = MDP(exp->exp_obd, sync)(exp, fid, request);
+        RETURN(rc);
+}
+
+static inline int md_readpage(struct obd_export *exp, struct lu_fid *fid,
+                              __u64 offset, struct page *page,
+                              struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, readpage);
+        MD_COUNTER_INCREMENT(exp->exp_obd, readpage);
+        rc = MDP(exp->exp_obd, readpage)(exp, fid, offset, page, request);
+        RETURN(rc);
+}
+
+static inline int md_unlink(struct obd_export *exp, struct md_op_data *op_data,
+                            struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, unlink);
+        MD_COUNTER_INCREMENT(exp->exp_obd, unlink);
+        rc = MDP(exp->exp_obd, unlink)(exp, op_data, request);
+        RETURN(rc);
+}
+
+static inline int md_get_lustre_md(struct obd_export *exp,
+                                   struct ptlrpc_request *req,
+                                   int offset, struct obd_export *dt_exp,
+                                   struct lustre_md *md)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, get_lustre_md);
+        MD_COUNTER_INCREMENT(exp->exp_obd, get_lustre_md);
+        RETURN(MDP(exp->exp_obd, get_lustre_md)(exp, req, offset, 
+                                                dt_exp, md));
+}
+
+static inline int md_free_lustre_md(struct obd_export *exp,
+                                    struct lustre_md *md)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, free_lustre_md);
+        MD_COUNTER_INCREMENT(exp->exp_obd, free_lustre_md);
+        RETURN(MDP(exp->exp_obd, free_lustre_md)(exp, md));
+}
+
+static inline int md_setxattr(struct obd_export *exp, struct lu_fid *fid,
+                              obd_valid valid, const char *name,
+                              const char *input, int input_size,
+                              int output_size, int flags,
+                              struct ptlrpc_request **request)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, setxattr);
+        MD_COUNTER_INCREMENT(exp->exp_obd, setxattr);
+        RETURN(MDP(exp->exp_obd, setxattr)(exp, fid, valid, name, input,
+                                           input_size, output_size, flags,
+                                           request));
+}
+
+static inline int md_getxattr(struct obd_export *exp, struct lu_fid *fid,
+                              obd_valid valid, const char *name,
+                              const char *input, int input_size,
+                              int output_size, int flags,
+                              struct ptlrpc_request **request)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, getxattr);
+        MD_COUNTER_INCREMENT(exp->exp_obd, getxattr);
+        RETURN(MDP(exp->exp_obd, getxattr)(exp, fid, valid, name, input,
+                                           input_size, output_size, flags,
+                                           request));
+}
+
+static inline int md_set_open_replay_data(struct obd_export *exp,
+                                          struct obd_client_handle *och,
+                                          struct ptlrpc_request *open_req)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, set_open_replay_data);
+        MD_COUNTER_INCREMENT(exp->exp_obd, set_open_replay_data);
+        RETURN(MDP(exp->exp_obd, set_open_replay_data)(exp, och, open_req));
+}
+
+static inline int md_clear_open_replay_data(struct obd_export *exp,
+                                            struct obd_client_handle *och)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, clear_open_replay_data);
+        MD_COUNTER_INCREMENT(exp->exp_obd, clear_open_replay_data);
+        RETURN(MDP(exp->exp_obd, clear_open_replay_data)(exp, och));
+}
+
+static inline int md_set_lock_data(struct obd_export *exp,
+                                   __u64 *lockh, void *data)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, set_lock_data);
+        MD_COUNTER_INCREMENT(exp->exp_obd, set_lock_data);
+        RETURN(MDP(exp->exp_obd, set_lock_data)(exp, lockh, data));
+}
+
+static inline int md_init_ea_size(struct obd_export *exp,
+                                  int easize, int def_asize,
+                                  int cookiesize)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, init_ea_size);
+        MD_COUNTER_INCREMENT(exp->exp_obd, init_ea_size);
+        RETURN(MDP(exp->exp_obd, init_ea_size)(exp, easize,
+                                               def_asize,
+                                               cookiesize));
+}
+
+/* OBD Metadata Support */
 extern int obd_init_caches(void);
 extern void obd_cleanup_caches(void);
 
@@ -1245,6 +1596,18 @@ static inline struct obdo *obdo_alloc(void)
 static inline void obdo_free(struct obdo *oa)
 {
         OBD_SLAB_FREE(oa, obdo_cachep, sizeof(*oa));
+}
+
+static inline void obdo2fid(struct obdo *oa,
+                            struct lu_fid *fid)
+{
+        /* something here */
+}
+
+static inline void fid2obdo(struct lu_fid *fid,
+                            struct obdo *oa)
+{
+        /* something here */
 }
 
 #if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -1273,5 +1636,9 @@ int class_add_uuid(const char *uuid, __u64 nid);
 int class_del_uuid (const char *uuid);
 void class_init_uuidlist(void);
 void class_exit_uuidlist(void);
+
+/* mea.c */
+int mea_name2idx(struct lmv_stripe_md *mea, char *name, int namelen);
+int raw_name2idx(int hashtype, int count, const char *name, int namelen);
 
 #endif /* __LINUX_OBD_CLASS_H */

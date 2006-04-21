@@ -22,6 +22,8 @@
 #ifndef _LMV_INTERNAL_H_
 #define _LMV_INTERNAL_H_
 
+#include <linux/lustre_idl.h>
+
 #define LMV_MAX_TGT_COUNT 128
 
 #define lmv_init_lock(lmv)   down(&lmv->init_sem);
@@ -32,7 +34,7 @@
 
 #define MEA_SIZE_LMV(lmv)				\
         ((lmv)->desc.ld_tgt_count *			\
-	 sizeof(struct lu_fid) + sizeof(struct mea))
+	 sizeof(struct lu_fid) + sizeof(struct lmv_stripe_md))
         
 struct lmv_inode {
         struct lu_fid      li_fid;        /* id of dirobj */
@@ -55,78 +57,83 @@ struct lmv_obj {
         struct obd_device *lo_obd;        /* pointer to LMV itself */
 };
 
+int lmv_mgr_setup(struct obd_device *obd);
+void lmv_mgr_cleanup(struct obd_device *obd);
+
 static inline void
-lmv_lock_obj(struct lmv_obj *obj)
+lmv_obj_lock(struct lmv_obj *obj)
 {
         LASSERT(obj);
         down(&obj->lo_guard);
 }
 
 static inline void
-lmv_unlock_obj(struct lmv_obj *obj)
+lmv_obj_unlock(struct lmv_obj *obj)
 {
         LASSERT(obj);
         up(&obj->lo_guard);
 }
 
-void lmv_add_obj(struct lmv_obj *obj);
-void lmv_del_obj(struct lmv_obj *obj);
+void lmv_obj_add(struct lmv_obj *obj);
+void lmv_obj_del(struct lmv_obj *obj);
 
-void lmv_put_obj(struct lmv_obj *obj);
-void lmv_free_obj(struct lmv_obj *obj);
+void lmv_obj_put(struct lmv_obj *obj);
+void lmv_obj_free(struct lmv_obj *obj);
 
-int lmv_setup_mgr(struct obd_device *obd);
-void lmv_cleanup_mgr(struct obd_device *obd);
-int lmv_check_connect(struct obd_device *obd);
+struct lmv_obj *lmv_obj_get(struct lmv_obj *obj);
 
-struct lmv_obj *lmv_get_obj(struct lmv_obj *obj);
-
-struct lmv_obj *lmv_grab_obj(struct obd_device *obd,
+struct lmv_obj *lmv_obj_grab(struct obd_device *obd,
 			     struct lu_fid *fid);
 
-struct lmv_obj *lmv_alloc_obj(struct obd_device *obd,
+struct lmv_obj *lmv_obj_alloc(struct obd_device *obd,
 			      struct lu_fid *fid,
-			      struct mea *mea);
+			      struct lmv_stripe_md *mea);
 
-struct lmv_obj *lmv_create_obj(struct obd_export *exp,
+struct lmv_obj *lmv_obj_create(struct obd_export *exp,
 			       struct lu_fid *fid,
-			       struct mea *mea);
+			       struct lmv_stripe_md *mea);
 
-int lmv_delete_obj(struct obd_export *exp, struct lu_fid *fid);
+int lmv_obj_delete(struct obd_export *exp, struct lu_fid *fid);
 
-int lmv_intent_lock(struct obd_export *, struct lu_fid *, 
-		    const char *, int, void *, int,
-		    struct lu_fid *, struct lookup_intent *, int,
-		    struct ptlrpc_request **, ldlm_blocking_callback);
+int lmv_check_connect(struct obd_device *obd);
+
+int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
+                    void *lmm, int lmmsize, struct lookup_intent *it,
+                    int flags, struct ptlrpc_request **reqp,
+                    ldlm_blocking_callback cb_blocking,
+                    int extra_lock_flags);
 
 int lmv_intent_lookup(struct obd_export *, struct lu_fid *, 
 		      const char *, int, void *, int,
 		      struct lu_fid *, struct lookup_intent *, int,
-		      struct ptlrpc_request **, ldlm_blocking_callback);
+		      struct ptlrpc_request **, ldlm_blocking_callback,
+                      int extra_lock_flags);
 
-int lmv_intent_getattr(struct obd_export *, struct lu_fid *, 
-		       const char *, int, void *, int,
-		       struct lu_fid *, struct lookup_intent *, int,
-		       struct ptlrpc_request **, ldlm_blocking_callback);
+int lmv_intent_getattr(struct obd_export *, struct lu_fid *, const char *,
+                       int, void *, int, struct lu_fid *, struct lookup_intent *,
+                       int, struct ptlrpc_request **, ldlm_blocking_callback,
+                       int extra_lock_flags);
 
 int lmv_intent_open(struct obd_export *, struct lu_fid *, const char *, 
 		    int, void *, int, struct lu_fid *, struct lookup_intent *, 
-		    int, struct ptlrpc_request **, ldlm_blocking_callback);
+		    int, struct ptlrpc_request **, ldlm_blocking_callback,
+                    int extra_lock_flags);
 
 int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
                           struct lu_fid *, struct lookup_intent *, int,
-			  ldlm_blocking_callback cb_blocking);
+			  ldlm_blocking_callback cb_blocking,
+                          int extra_lock_flags);
 
 int lmv_get_mea_and_update_object(struct obd_export *, struct lu_fid *);
 int lmv_dirobj_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 			    void *, int);
-int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid)
+int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid);
 
-static inline struct mea * 
+static inline struct lmv_stripe_md * 
 lmv_splitted_dir_body(struct ptlrpc_request *req, int offset)
 {
 	struct mdt_body *body;
-	struct mea *mea;
+	struct lmv_stripe_md *mea;
 
 	LASSERT(req);
 

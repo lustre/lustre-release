@@ -689,7 +689,7 @@ static int __init mgs_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(mgs, &lvars);
-        class_register_type(&mgs_obd_ops,
+        class_register_type(&mgs_obd_ops, NULL,
                             lvars.module_vars, LUSTRE_MGS_NAME, NULL);
 
         return 0;

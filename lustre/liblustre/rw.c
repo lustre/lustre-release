@@ -232,7 +232,7 @@ int llu_glimpse_size(struct inode *inode)
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %llu\n", (long long)st->st_ino);
 
-        rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
+        rc = obd_enqueue(sbi->ll_dt_exp, lli->lli_smd, LDLM_EXTENT, &policy,
                          LCK_PR, &flags, llu_extent_lock_callback,
                          ldlm_completion_ast, llu_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
@@ -242,7 +242,7 @@ int llu_glimpse_size(struct inode *inode)
         }
 
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
+        obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
         st->st_size = lvb.lvb_size;
         st->st_blocks = lvb.lvb_blocks;
         st->st_mtime = lvb.lvb_mtime;
@@ -252,7 +252,7 @@ int llu_glimpse_size(struct inode *inode)
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
                (long long)st->st_size, (long long)st->st_blocks);
 
-        obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
+        obd_cancel(sbi->ll_dt_exp, lli->lli_smd, LCK_PR, &lockh);
 
         RETURN(rc);
 }
@@ -280,7 +280,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                (long long)st->st_ino, policy->l_extent.start,
                policy->l_extent.end);
 
-        rc = obd_enqueue(sbi->ll_osc_exp, lsm, LDLM_EXTENT, policy, mode,
+        rc = obd_enqueue(sbi->ll_dt_exp, lsm, LDLM_EXTENT, policy, mode,
                          &ast_flags, llu_extent_lock_callback,
                          ldlm_completion_ast, llu_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, lockh);
@@ -288,7 +288,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                 rc = -EIO;
 
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(sbi->ll_osc_exp, lsm, &lvb, 1);
+        obd_merge_lvb(sbi->ll_dt_exp, lsm, &lvb, 1);
         if (policy->l_extent.start == 0 &&
             policy->l_extent.end == OBD_OBJECT_EOF)
                 st->st_size = lvb.lvb_size;
@@ -317,7 +317,7 @@ int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
             (sbi->ll_flags & LL_SBI_NOLCK) || mode == LCK_NL)
                 RETURN(0);
 
-        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh);
+        rc = obd_cancel(sbi->ll_dt_exp, lsm, mode, lockh);
 
         RETURN(rc);
 }

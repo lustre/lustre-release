@@ -3154,12 +3154,12 @@ static int __init obdfilter_init(void)
         init_obd_quota_ops(quota_interface, &filter_obd_ops);
         init_obd_quota_ops(quota_interface, &filter_sanobd_ops);
 
-        rc = class_register_type(&filter_obd_ops, lvars.module_vars,
+        rc = class_register_type(&filter_obd_ops, NULL, lvars.module_vars,
                                  LUSTRE_OST_NAME, NULL);
         if (rc)
                 GOTO(out, rc);
 
-        rc = class_register_type(&filter_sanobd_ops, lvars.module_vars,
+        rc = class_register_type(&filter_sanobd_ops, NULL, lvars.module_vars,
                                  LUSTRE_OSTSAN_NAME, NULL);
         if (rc) {
                 class_unregister_type(LUSTRE_OST_NAME);

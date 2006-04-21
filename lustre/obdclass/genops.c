@@ -86,24 +86,27 @@ struct obd_type *class_get_type(const char *name)
         }
 #endif
         if (type)
-                try_module_get(type->typ_ops->o_owner);
+                try_module_get(type->typ_dt_ops->o_owner);
         return type;
 }
 
 void class_put_type(struct obd_type *type)
 {
         LASSERT(type);
-        module_put(type->typ_ops->o_owner);
+        module_put(type->typ_dt_ops->o_owner);
 }
 
-int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
-                        const char *name, struct lu_device_type *ldt)
+#define CLASS_MAX_NAME 1024
+
+int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops, 
+                        struct lprocfs_vars *vars, const char *name, 
+                        struct lu_device_type *ldt)
 {
         struct obd_type *type;
         int rc = 0;
         ENTRY;
 
-        LASSERT(strnlen(name, 1024) < 1024);    /* sanity check */
+        LASSERT(strnlen(name, CLASS_MAX_NAME) < CLASS_MAX_NAME);    /* sanity check */
 
         if (class_search_type(name)) {
                 CDEBUG(D_IOCTL, "Type %s already registered\n", name);
@@ -115,12 +118,17 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
         if (type == NULL)
                 RETURN(rc);
 
-        OBD_ALLOC(type->typ_ops, sizeof(*type->typ_ops));
+        OBD_ALLOC(type->typ_dt_ops, sizeof(*type->typ_dt_ops));
+        OBD_ALLOC(type->typ_md_ops, sizeof(*type->typ_md_ops));
         OBD_ALLOC(type->typ_name, strlen(name) + 1);
-        if (type->typ_ops == NULL || type->typ_name == NULL)
+        
+        if (type->typ_dt_ops == NULL || 
+            type->typ_md_ops == NULL || 
+            type->typ_name == NULL)
                 GOTO (failed, rc);
 
-        *(type->typ_ops) = *ops;
+        *(type->typ_dt_ops) = *dt_ops;
+        *(type->typ_md_ops) = *md_ops;
         strcpy(type->typ_name, name);
 
 #ifdef LPROCFS
@@ -148,8 +156,10 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
  failed:
         if (type->typ_name != NULL)
                 OBD_FREE(type->typ_name, strlen(name) + 1);
-        if (type->typ_ops != NULL)
-                OBD_FREE (type->typ_ops, sizeof (*type->typ_ops));
+        if (type->typ_md_ops != NULL)
+                OBD_FREE (type->typ_md_ops, sizeof (*type->typ_md_ops));
+        if (type->typ_dt_ops != NULL)
+                OBD_FREE (type->typ_dt_ops, sizeof (*type->typ_dt_ops));
         OBD_FREE(type, sizeof(*type));
         RETURN(rc);
 }
@@ -168,7 +178,8 @@ int class_unregister_type(const char *name)
                 CERROR("type %s has refcount (%d)\n", name, type->typ_refcnt);
                 /* This is a bad situation, let's make the best of it */
                 /* Remove ops, but leave the name for debugging */
-                OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
+                OBD_FREE(type->typ_dt_ops, sizeof(*type->typ_dt_ops));
+                OBD_FREE(type->typ_md_ops, sizeof(*type->typ_md_ops));
                 RETURN(-EBUSY);
         }
 
@@ -184,8 +195,10 @@ int class_unregister_type(const char *name)
         list_del(&type->typ_chain);
         spin_unlock(&obd_types_lock);
         OBD_FREE(type->typ_name, strlen(name) + 1);
-        if (type->typ_ops != NULL)
-                OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
+        if (type->typ_dt_ops != NULL)
+                OBD_FREE(type->typ_dt_ops, sizeof(*type->typ_dt_ops));
+        if (type->typ_md_ops != NULL)
+                OBD_FREE(type->typ_md_ops, sizeof(*type->typ_md_ops));
         OBD_FREE(type, sizeof(*type));
         RETURN(0);
 } /* class_unregister_type */

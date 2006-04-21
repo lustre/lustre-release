@@ -352,7 +352,7 @@ int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
 {
         int rc;
         ENTRY;
-        OBD_CHECK_OP(obd, llog_init, 0);
+        OBD_CHECK_DT_OP(obd, llog_init, 0);
         OBD_COUNTER_INCREMENT(obd, llog_init);
 
         rc = OBP(obd, llog_init)(obd, disk_obd, count, logid);
@@ -364,7 +364,7 @@ int obd_llog_finish(struct obd_device *obd, int count)
 {
         int rc;
         ENTRY;
-        OBD_CHECK_OP(obd, llog_finish, 0);
+        OBD_CHECK_DT_OP(obd, llog_finish, 0);
         OBD_COUNTER_INCREMENT(obd, llog_finish);
 
         rc = OBP(obd, llog_finish)(obd, count);

@@ -383,7 +383,7 @@ int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
                   struct lookup_intent *it, struct ll_file_data *fd);
-int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
+int ll_mdc_close(struct obd_export *md_exp, struct inode *inode,
                  struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
@@ -427,8 +427,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
 int ll_remount_fs(struct super_block *sb, int *flags, char *data);
-int ll_prep_inode(struct obd_export *exp, struct inode **inode,
-                  struct ptlrpc_request *req, int offset, struct super_block *);
+int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req, 
+                  int offset, struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);
 struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,

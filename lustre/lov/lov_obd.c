@@ -2478,7 +2478,7 @@ int __init lov_init(void)
         quota_interface = PORTAL_SYMBOL_GET(lov_quota_interface);
         init_obd_quota_ops(quota_interface, &lov_obd_ops);
 
-        rc = class_register_type(&lov_obd_ops, lvars.module_vars,
+        rc = class_register_type(&lov_obd_ops, NULL, lvars.module_vars,
                                  OBD_LOV_DEVICENAME, NULL);
         if (rc && quota_interface)
                 PORTAL_SYMBOL_PUT(osc_quota_interface);

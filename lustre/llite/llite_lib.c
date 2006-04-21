@@ -105,6 +105,40 @@ static struct dentry_operations ll_d_root_ops = {
         .d_compare = ll_dcompare,
 };
 
+/* Initialize the default and maximum LOV EA and cookie sizes.  This allows
+ * us to make MDS RPCs with large enough reply buffers to hold the
+ * maximum-sized (= maximum striped) EA and cookie without having to
+ * calculate this (via a call into the LOV + OSCs) each time we make an RPC. */
+static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
+{
+        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC };
+        __u32 valsize = sizeof(struct lov_desc);
+        int rc, easize, def_easize, cookiesize;
+        struct lov_desc desc;
+        __u32 stripes;
+        ENTRY;
+
+        rc = obd_get_info(dt_exp, strlen(KEY_LOVDESC) + 1, KEY_LOVDESC,
+                          &valsize, &desc);
+        if (rc)
+                RETURN(rc);
+
+        stripes = min(desc.ld_tgt_count, (__u32)LOV_MAX_STRIPE_COUNT);
+        lsm.lsm_stripe_count = stripes;
+        easize = obd_size_diskmd(dt_exp, &lsm);
+
+        lsm.lsm_stripe_count = desc.ld_default_stripe_count;
+        def_easize = obd_size_diskmd(dt_exp, &lsm);
+
+        cookiesize = stripes * sizeof(struct llog_cookie);
+
+        CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
+               easize, cookiesize);
+
+        rc = md_init_ea_size(md_exp, easize, def_easize, cookiesize);
+        RETURN(rc);
+}
+
 int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 {
         struct inode *root = 0;
@@ -162,6 +196,9 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         data->ocd_connect_flags |= OBD_CONNECT_VERSION;
         data->ocd_version = LUSTRE_VERSION_CODE;
+
+        /* real client */
+        data->ocd_connect_flags |= OBD_CONNECT_REAL;
 
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
@@ -251,7 +288,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         spin_unlock(&sbi->ll_lco.lco_lock);
 
-        mdc_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);
+        ll_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);
 
         err = obd_prep_async_page(sbi->ll_dt_exp, NULL, NULL, NULL,
                                   0, NULL, NULL, NULL);
@@ -272,7 +309,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                         GOTO(out_osc, -ENOMEM);
         }
 
-        err = mdc_getstatus(sbi->ll_md_exp, &rootfid);
+        err = md_getstatus(sbi->ll_md_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_osc, err);
@@ -292,16 +329,16 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         /* make root inode
          * XXX: move this to after cbd setup? */
-        err = mdc_getattr(sbi->ll_md_exp, &rootfid,
-                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS |
-                          (sbi->ll_flags & LL_SBI_ACL ? OBD_MD_FLACL : 0),
-                          0, &request);
+        err = md_getattr(sbi->ll_md_exp, &rootfid,
+                         OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS |
+                         (sbi->ll_flags & LL_SBI_ACL ? OBD_MD_FLACL : 0),
+                         0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_osc, err);
         }
 
-        err = mdc_req2lustre_md(request, 0, sbi->ll_dt_exp, &md);
+        err = md_get_lustre_md(sbi->ll_md_exp, request, 0, sbi->ll_dt_exp, &md);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n", err);
                 ptlrpc_req_finished (request);
@@ -313,7 +350,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         ptlrpc_req_finished(request);
 
         if (root == NULL || is_bad_inode(root)) {
-                mdc_free_lustre_md(sbi->ll_dt_exp, &md);
+                md_free_lustre_md(sbi->ll_dt_exp, &md);
                 CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_root, err = -EBADF);
         }
@@ -805,8 +842,8 @@ void ll_clear_inode(struct inode *inode)
                inode->i_generation, inode);
 
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
-        mdc_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
-                          null_if_equal, inode);
+        md_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
+                         null_if_equal, inode);
 
         if (lli->lli_smd) {
                 obd_change_cbdata(sbi->ll_dt_exp, lli->lli_smd,
@@ -915,8 +952,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 struct lustre_md md;
                 ll_prepare_md_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_setattr(sbi->ll_md_exp, &op_data,
-                                 attr, NULL, 0, NULL, 0, &request);
+                rc = md_setattr(sbi->ll_md_exp, &op_data,
+                                attr, NULL, 0, NULL, 0, &request);
 
                 if (rc) {
                         ptlrpc_req_finished(request);
@@ -925,7 +962,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
                 }
 
-                rc = mdc_req2lustre_md(request, 0, sbi->ll_dt_exp, &md);
+                rc = md_get_lustre_md(sbi->ll_md_exp, request, 0, sbi->ll_dt_exp, &md);
                 if (rc) {
                         ptlrpc_req_finished(request);
                         RETURN(rc);
@@ -1361,8 +1398,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         case EXT3_IOC_GETFLAGS: {
                 struct mdt_body *body;
 
-                rc = mdc_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
-                                 OBD_MD_FLFLAGS, 0, &req);
+                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
+                                OBD_MD_FLFLAGS, 0, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));
@@ -1400,8 +1437,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 attr.ia_attr_flags = flags;
                 attr.ia_valid |= ATTR_ATTR_FLAG;
 
-                rc = mdc_setattr(sbi->ll_md_exp, &op_data,
-                                 &attr, NULL, 0, NULL, 0, &req);
+                rc = md_setattr(sbi->ll_md_exp, &op_data,
+                                &attr, NULL, 0, NULL, 0, &req);
                 if (rc || lsm == NULL) {
                         ptlrpc_req_finished(req);
                         obdo_free(oa);
@@ -1514,9 +1551,8 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
         return 0;
 }
 
-int ll_prep_inode(struct obd_export *exp, struct inode **inode,
-                  struct ptlrpc_request *req, int offset,
-                  struct super_block *sb)
+int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
+                  int offset, struct super_block *sb)
 {
         struct ll_sb_info *sbi = NULL;
         struct lustre_md md;
@@ -1527,7 +1563,8 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
         sbi = sb ? ll_s2sbi(sb) : ll_i2sbi(*inode);
         prune_deathrow(sbi, 1);
 
-        rc = mdc_req2lustre_md(req, offset, exp, &md);
+        rc = md_get_lustre_md(sbi->ll_md_exp, req, offset,
+                              sbi->ll_dt_exp, &md);
         if (rc)
                 RETURN(rc);
 
@@ -1543,7 +1580,7 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                 
                 *inode = ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1), &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
-                        mdc_free_lustre_md(exp, &md);
+                        md_free_lustre_md(sbi->ll_dt_exp, &md);
                         rc = -ENOMEM;
                         CERROR("new_inode -fatal: rc %d\n", rc);
                         GOTO(out, rc);
@@ -1551,7 +1588,7 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                 ll_i2info(*inode)->lli_fid = md.body->fid1;
         }
 
-        rc = obd_checkmd(exp, ll_i2mdexp(*inode),
+        rc = obd_checkmd(sbi->ll_dt_exp, sbi->ll_md_exp,
                          ll_i2info(*inode)->lli_smd);
 out:
         RETURN(rc);

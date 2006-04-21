@@ -147,7 +147,8 @@ static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
         lli->lli_file_data = fd;
 
-        mdc_set_open_replay_data(&fd->fd_mds_och, it->d.lustre.it_data);
+        md_set_open_replay_data(lli->lli_sbi->ll_md_exp,
+                                &fd->fd_mds_och, it->d.lustre.it_data);
 
         RETURN(0);
 }
@@ -295,7 +296,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         return rc;
 }
 
-int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
+int llu_mdc_close(struct obd_export *md_exp, struct inode *inode)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
@@ -335,7 +336,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                 op_data.flags = MDS_BFLAG_UNCOMMITTED_WRITES;
                 op_data.valid |= OBD_MD_FLFLAGS;
         }
-        rc = mdc_close(mdc_exp, &op_data, och, &req);
+        rc = md_close(md_exp, &op_data, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
@@ -351,7 +352,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                                (long long)st->st_ino, rc);
         }
 
-        mdc_clear_open_replay_data(och);
+        md_clear_open_replay_data(md_exp, och);
         ptlrpc_req_finished(req);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         lli->lli_file_data = NULL;
@@ -382,7 +383,7 @@ static int llu_file_release(struct inode *inode)
         if (!fd) /* no process opened the file after an mcreate */
                 RETURN(0);
 
-        rc2 = llu_mdc_close(sbi->ll_mdc_exp, inode);
+        rc2 = llu_mdc_close(sbi->ll_md_exp, inode);
         if (rc2 && !rc)
                 rc = rc2;
 

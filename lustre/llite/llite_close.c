@@ -168,7 +168,7 @@ static void ll_close_done_writing(struct inode *inode)
         op_data.blocks = inode->i_blocks;
         op_data.valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-        rc = mdc_done_writing(ll_i2sbi(inode)->ll_md_exp, &op_data);
+        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, &op_data);
  out:
 }
 #endif

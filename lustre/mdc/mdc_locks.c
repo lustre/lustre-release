@@ -109,18 +109,17 @@ int it_open_error(int phase, struct lookup_intent *it)
 EXPORT_SYMBOL(it_open_error);
 
 /* this must be called on a lockh that is known to have a referenced lock */
-void mdc_set_lock_data(__u64 *l, void *data)
+int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
 {
         struct ldlm_lock *lock;
-        struct lustre_handle *lockh = (struct lustre_handle *)l;
         ENTRY;
 
-        if (!*l) {
+        if (!*lockh) {
                 EXIT;
-                return;
+                RETURN(0);
         }
 
-        lock = ldlm_handle2lock(lockh);
+        lock = ldlm_handle2lock((struct lustre_handle *)lockh);
 
         LASSERT(lock != NULL);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
@@ -140,9 +139,8 @@ void mdc_set_lock_data(__u64 *l, void *data)
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
 
-        EXIT;
+        RETURN(0);
 }
-EXPORT_SYMBOL(mdc_set_lock_data);
 
 int mdc_change_cbdata(struct obd_export *exp, struct lu_fid *fid, 
                       ldlm_iterator_t it, void *data)
@@ -499,8 +497,6 @@ int mdc_enqueue(struct obd_export *exp,
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(mdc_enqueue);
-
 /* 
  * This long block is all about fixing up the lock and request state
  * so that it is correct as of the moment _before_ the operation was
@@ -531,14 +527,15 @@ EXPORT_SYMBOL(mdc_enqueue);
 int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                     void *lmm, int lmmsize, struct lookup_intent *it,
                     int lookup_flags, struct ptlrpc_request **reqp,
-                    ldlm_blocking_callback cb_blocking, int extra_lock_flags)
+                    ldlm_blocking_callback cb_blocking,
+                    int extra_lock_flags)
 {
-        struct lustre_handle lockh;
         struct ptlrpc_request *request;
-        int rc = 0;
-        struct mdt_body *mdt_body;
         struct lustre_handle old_lock;
+        struct lustre_handle lockh;
+        struct mdt_body *mdt_body;
         struct ldlm_lock *lock;
+        int rc = 0;
         ENTRY;
         LASSERT(it);
 
@@ -591,7 +588,6 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
          * this and use the request from revalidate.  In this case, revalidate
          * never dropped its reference, so the refcounts are all OK */
         if (!it_disposition(it, DISP_ENQ_COMPLETE)) {
-
                 rc = mdc_enqueue(exp, LDLM_IBITS, it, it_to_lock_mode(it),
                                  op_data, &lockh, lmm, lmmsize,
                                  ldlm_completion_ast, cb_blocking, NULL,
@@ -693,4 +689,3 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(mdc_intent_lock);

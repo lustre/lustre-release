@@ -1471,7 +1471,7 @@ int echo_client_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(echo, &lvars);
-        return class_register_type(&echo_obd_ops, lvars.module_vars,
+        return class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
                                    OBD_ECHO_CLIENT_DEVICENAME, NULL);
 }
 

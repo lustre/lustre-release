@@ -25,8 +25,8 @@ struct ll_file_data {
 
 struct llu_sb_info {
         struct obd_uuid          ll_sb_uuid;
-        struct obd_export       *ll_mdc_exp;
-        struct obd_export       *ll_osc_exp;
+        struct obd_export       *ll_md_exp;
+        struct obd_export       *ll_dt_exp;
         struct lu_fid            ll_root_fid;
         int                      ll_flags;
         struct lustre_client_ocd ll_lco;
@@ -97,12 +97,12 @@ static inline struct llu_sb_info *llu_i2sbi(struct inode *inode)
 
 static inline struct obd_export *llu_i2obdexp(struct inode *inode)
 {
-        return llu_i2info(inode)->lli_sbi->ll_osc_exp;
+        return llu_i2info(inode)->lli_sbi->ll_dt_exp;
 }
 
 static inline struct obd_export *llu_i2mdcexp(struct inode *inode)
 {
-        return llu_i2info(inode)->lli_sbi->ll_mdc_exp;
+        return llu_i2info(inode)->lli_sbi->ll_md_exp;
 }
 
 static inline int llu_is_root_inode(struct inode *inode)
@@ -203,7 +203,7 @@ void llu_prepare_mdc_op_data(struct md_op_data *op_data,
                              int mode);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
-int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode);
+int llu_mdc_close(struct obd_export *md_exp, struct inode *inode);
 int llu_iop_close(struct inode *inode);
 _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
 int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag obd_flags);

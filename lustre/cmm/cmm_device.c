@@ -186,7 +186,7 @@ static int __init cmm_mod_init(void)
         printk(KERN_INFO "Lustre: Clustered Metadata Manager; info@clusterfs.com\n");
 
         lprocfs_init_vars(cmm, &lvars);
-        return class_register_type(&cmm_obd_device_ops, lvars.module_vars,
+        return class_register_type(&cmm_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_CMM0_NAME, &cmm_device_type);
 }
 

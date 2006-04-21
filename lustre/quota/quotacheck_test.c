@@ -199,7 +199,7 @@ static int __init quotacheck_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(quotacheck_test, &lvars);
-        return class_register_type(&quotacheck_obd_ops, lvars.module_vars,
+        return class_register_type(&quotacheck_obd_ops, NULL, lvars.module_vars,
                                    "quotacheck_test", NULL);
 }
 

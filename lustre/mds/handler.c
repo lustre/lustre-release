@@ -2644,10 +2644,10 @@ static int __init mds_init(void)
         init_obd_quota_ops(quota_interface, &mds_obd_ops);
 
         lprocfs_init_vars(mds, &lvars);
-        class_register_type(&mds_obd_ops,
+        class_register_type(&mds_obd_ops, NULL,
                             lvars.module_vars, LUSTRE_MDS_NAME, NULL);
         lprocfs_init_vars(mdt, &lvars);
-        class_register_type(&mdt_obd_ops,
+        class_register_type(&mdt_obd_ops, NULL,
                             lvars.module_vars, LUSTRE_MDT_NAME, NULL);
 
         return 0;
@@ -2695,7 +2695,7 @@ static int __init mds_cmd_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(mds, &lvars);
-        class_register_type(&mds_cmd_obd_ops, lvars.module_vars,
+        class_register_type(&mds_cmd_obd_ops, NULL, lvars.module_vars,
                             LUSTRE_MDS_NAME, NULL);
 
         return 0;

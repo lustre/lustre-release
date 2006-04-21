@@ -42,6 +42,9 @@
 #ifdef __KERNEL__
 # include <linux/types.h>
 # include <linux/fs.h>    /* to check for FMODE_EXEC, dev_t, lest we redefine */
+# ifdef CONFIG_FS_POSIX_ACL
+# include <linux/xattr_acl.h>
+# endif
 #else
 #ifdef __CYGWIN__
 # include <sys/types.h>
@@ -123,6 +126,103 @@
 #define LUSTRE_LOG_VERSION  0x00050000
 #define LUSTRE_MGS_VERSION  0x00060000
 
+struct lu_fid {
+        __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
+                       * objects, thus even if one sequence has one object we
+                       * reach this value. */
+        __u32 f_oid;  /* fid number within its sequence. */
+        __u32 f_ver;  /* holds fid version. */
+};
+
+/*
+ * fid constants
+ */
+enum {
+        LUSTRE_ROOT_FID_SEQ  = 1ULL, /* XXX: should go into mkfs. */
+        LUSTRE_ROOT_FID_OID  = 2UL,  /* XXX: should go into mkfs. */
+
+        /* maximal objects in sequence */
+        LUSTRE_FID_SEQ_WIDTH = 10000,
+
+        /* initial fid id value */
+        LUSTRE_FID_INIT_OID  = 1UL,
+
+        /* shift of version component */
+        LUSTRE_FID_VER_SHIFT = (sizeof(((struct lu_fid *)0)->f_ver) * 8)
+};
+
+/* get object sequence */
+static inline __u64 fid_seq(const struct lu_fid *fid)
+{
+        return fid->f_seq;
+}
+
+/* get object id */
+static inline __u32 fid_oid(const struct lu_fid *fid)
+{
+        return fid->f_oid;
+}
+
+/* get object version */
+static inline __u32 fid_ver(const struct lu_fid *fid)
+{
+        return fid->f_ver;
+}
+
+/* get complex object number (oid + version) */
+static inline __u64 fid_num(const struct lu_fid *fid)
+{
+        __u64 f_ver = fid_ver(fid);
+        f_ver = f_ver << LUSTRE_FID_VER_SHIFT;
+        return f_ver | fid_oid(fid);
+}
+
+static inline int fid_is_sane(const struct lu_fid *fid)
+{
+        return fid != NULL && fid_seq(fid) != 0 && fid_oid(fid) != 0;
+}
+
+#define DFID3 "["LPU64"/%u:%u]"
+
+#define PFID3(fid)    \
+        fid_seq(fid), \
+        fid_oid(fid), \
+        fid_ver(fid)
+
+extern void lustre_swab_lu_fid (struct lu_fid *fid);
+
+static inline int lu_fid_eq(const struct lu_fid *f0, 
+                            const struct lu_fid *f1)
+{
+	/* check that there is no alignment padding */
+	CLASSERT(sizeof *f0 ==
+                 sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
+	return memcmp(f0, f1, sizeof *f0) == 0;
+}
+
+static inline void fid_cpu_to_le(struct lu_fid *fid)
+{
+        fid->f_seq = cpu_to_le64(fid_seq(fid));
+        fid->f_oid = cpu_to_le32(fid_oid(fid));
+        fid->f_ver = cpu_to_le32(fid_ver(fid));
+}
+
+static inline void fid_le_to_cpu(struct lu_fid *fid)
+{
+        fid->f_seq = le64_to_cpu(fid_seq(fid));
+        fid->f_oid = le32_to_cpu(fid_oid(fid));
+        fid->f_ver = le32_to_cpu(fid_ver(fid));
+}
+
+#define MEA_MAGIC_LAST_CHAR      0xb2221ca1
+#define MEA_MAGIC_ALL_CHARS      0xb222a11c
+
+struct lmv_stripe_md {
+        __u32         mea_magic;
+        __u32         mea_count;
+        __u32         mea_master;
+        struct lu_fid mea_ids[0];
+};
 
 struct lustre_handle {
         __u64 cookie;
@@ -237,6 +337,8 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_TRANSNO    0x800ULL /* replay is sending initial transno */
 #define OBD_CONNECT_IBITS     0x1000ULL /* support for inodebits locks */
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
+#define OBD_CONNECT_REAL      0x4000ULL /* show MD stack that real connect is
+                                         * performed */
 #define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags() */
 
@@ -359,6 +461,29 @@ struct obdo {
 
 extern void lustre_swab_obdo (struct obdo *o);
 
+struct md_op_data {
+        struct lu_fid         fid1;
+        struct lu_fid         fid2;
+        __u64                 mod_time;
+        const char           *name;
+        int                   namelen;
+        __u32                 create_mode;
+        struct lmv_stripe_md *mea1;
+        struct lmv_stripe_md *mea2;
+        __u32                 suppgids[2];
+
+        /* part of obdo fields for md stack */
+        obd_valid             valid;
+        obd_size              size;
+        obd_blocks            blocks;
+        obd_flag              flags;
+        obd_time              mtime;
+        obd_time              atime;
+        obd_time              ctime;
+};
+
+#define MDS_MODE_DONT_LOCK (1 << 30)
+#define MDS_MODE_REPLAY    (1 << 31)
 
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
@@ -388,40 +513,40 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
 
-#define OBD_MD_FLID        (0x00000001ULL) /* object ID */
-#define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
-#define OBD_MD_FLMTIME     (0x00000004ULL) /* data modification time */
-#define OBD_MD_FLCTIME     (0x00000008ULL) /* change time */
-#define OBD_MD_FLSIZE      (0x00000010ULL) /* size */
-#define OBD_MD_FLBLOCKS    (0x00000020ULL) /* allocated blocks count */
-#define OBD_MD_FLBLKSZ     (0x00000040ULL) /* block size */
-#define OBD_MD_FLMODE      (0x00000080ULL) /* access bits (mode & ~S_IFMT) */
-#define OBD_MD_FLTYPE      (0x00000100ULL) /* object type (mode & S_IFMT) */
-#define OBD_MD_FLUID       (0x00000200ULL) /* user ID */
-#define OBD_MD_FLGID       (0x00000400ULL) /* group ID */
-#define OBD_MD_FLFLAGS     (0x00000800ULL) /* flags word */
-#define OBD_MD_FLNLINK     (0x00002000ULL) /* link count */
-#define OBD_MD_FLGENER     (0x00004000ULL) /* generation number */
-#define OBD_MD_FLINLINE    (0x00008000ULL) /* inline data */
-#define OBD_MD_FLRDEV      (0x00010000ULL) /* device number */
-#define OBD_MD_FLEASIZE    (0x00020000ULL) /* extended attribute data */
-#define OBD_MD_LINKNAME    (0x00040000ULL) /* symbolic link target */
-#define OBD_MD_FLHANDLE    (0x00080000ULL) /* file handle */
-#define OBD_MD_FLCKSUM     (0x00100000ULL) /* bulk data checksum */
-#define OBD_MD_FLQOS       (0x00200000ULL) /* quality of service stats */
-#define OBD_MD_FLOSCOPQ    (0x00400000ULL) /* osc opaque data */
-#define OBD_MD_FLCOOKIE    (0x00800000ULL) /* log cancellation cookie */
-#define OBD_MD_FLGROUP     (0x01000000ULL) /* group */
-#define OBD_MD_FLFID       (0x02000000ULL) /* ->ost write inline fid */
-#define OBD_MD_FLEPOCH     (0x04000000ULL) /* ->ost write easize is epoch */
-#define OBD_MD_FLGRANT     (0x08000000ULL) /* ost preallocation space grant */
-#define OBD_MD_FLDIREA     (0x10000000ULL) /* dir's extended attribute data */
-#define OBD_MD_FLUSRQUOTA  (0x20000000ULL) /* over quota flags sent from ost */
-#define OBD_MD_FLGRPQUOTA  (0x40000000ULL) /* over quota flags sent from ost */
-#define OBD_MD_FLMODEASIZE (0x80000000ULL) /* EA size will be changed */
-
+#define OBD_MD_FLID        (0x0000000000000001ULL) /* object ID */
+#define OBD_MD_FLATIME     (0x0000000000000002ULL) /* access time */
+#define OBD_MD_FLMTIME     (0x0000000000000004ULL) /* data modification time */
+#define OBD_MD_FLCTIME     (0x0000000000000008ULL) /* change time */
+#define OBD_MD_FLSIZE      (0x0000000000000010ULL) /* size */
+#define OBD_MD_FLBLOCKS    (0x0000000000000020ULL) /* allocated blocks count */
+#define OBD_MD_FLBLKSZ     (0x0000000000000040ULL) /* block size */
+#define OBD_MD_FLMODE      (0x0000000000000080ULL) /* access bits (mode & ~S_IFMT) */
+#define OBD_MD_FLTYPE      (0x0000000000000100ULL) /* object type (mode & S_IFMT) */
+#define OBD_MD_FLUID       (0x0000000000000200ULL) /* user ID */
+#define OBD_MD_FLGID       (0x0000000000000400ULL) /* group ID */
+#define OBD_MD_FLFLAGS     (0x0000000000000800ULL) /* flags word */
+#define OBD_MD_FLNLINK     (0x0000000000002000ULL) /* link count */
+#define OBD_MD_FLGENER     (0x0000000000004000ULL) /* generation number */
+#define OBD_MD_FLINLINE    (0x0000000000008000ULL) /* inline data */
+#define OBD_MD_FLRDEV      (0x0000000000010000ULL) /* device number */
+#define OBD_MD_FLEASIZE    (0x0000000000020000ULL) /* extended attribute data */
+#define OBD_MD_LINKNAME    (0x0000000000040000ULL) /* symbolic link target */
+#define OBD_MD_FLHANDLE    (0x0000000000080000ULL) /* file handle */
+#define OBD_MD_FLCKSUM     (0x0000000000100000ULL) /* bulk data checksum */
+#define OBD_MD_FLQOS       (0x0000000000200000ULL) /* quality of service stats */
+#define OBD_MD_FLOSCOPQ    (0x0000000000400000ULL) /* osc opaque data */
+#define OBD_MD_FLCOOKIE    (0x0000000000800000ULL) /* log cancellation cookie */
+#define OBD_MD_FLGROUP     (0x0000000001000000ULL) /* group */
+#define OBD_MD_FLFID       (0x0000000002000000ULL) /* ->ost write inline fid */
+#define OBD_MD_FLEPOCH     (0x0000000004000000ULL) /* ->ost write easize is epoch */
+#define OBD_MD_FLGRANT     (0x0000000008000000ULL) /* ost preallocation space grant */
+#define OBD_MD_FLDIREA     (0x0000000010000000ULL) /* dir's extended attribute data */
+#define OBD_MD_FLUSRQUOTA  (0x0000000020000000ULL) /* over quota flags sent from ost */
+#define OBD_MD_FLGRPQUOTA  (0x0000000040000000ULL) /* over quota flags sent from ost */
+#define OBD_MD_FLMODEASIZE (0x0000000080000000ULL) /* EA size will be changed */
 #define OBD_MD_MDS         (0x0000000100000000ULL) /* where an inode lives on */
 #define OBD_MD_REINT       (0x0000000200000000ULL) /* reintegrate oa */
+#define OBD_MD_MEA         (0x0000000400000000ULL) /* CMD EA  */
 
 #define OBD_MD_FLXATTR     (0x0000001000000000ULL) /* xattr */
 #define OBD_MD_FLXATTRLS   (0x0000002000000000ULL) /* xattr list */
@@ -609,69 +734,6 @@ typedef enum {
 #define LUSTRE_CONFIG_METASEQ "metaseq"
 #define LUSTRE_CONFIG_TRANSNO "transno"
 
-struct lu_fid {
-        __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
-                       * objects, thus even if one sequence has one object we
-                       * reach this value. */
-        __u32 f_oid;  /* fid number within its sequence. */
-        __u32 f_ver;  /* holds fid version. */
-};
-
-/*
- * fid constants
- */
-enum {
-        LUSTRE_ROOT_FID_SEQ  = 1ULL, /* XXX: should go into mkfs. */
-        LUSTRE_ROOT_FID_OID  = 2UL,  /* XXX: should go into mkfs. */
-
-        /* maximal objects in sequence */
-        LUSTRE_FID_SEQ_WIDTH = 10000,
-
-        /* initial fid id value */
-        LUSTRE_FID_INIT_OID  = 1UL,
-
-        /* shift of version component */
-        LUSTRE_FID_VER_SHIFT = (sizeof(((struct lu_fid *)0)->f_ver) * 8)
-};
-
-/* get object sequence */
-static inline __u64 fid_seq(const struct lu_fid *fid)
-{
-        return fid->f_seq;
-}
-
-/* get object id */
-static inline __u32 fid_oid(const struct lu_fid *fid)
-{
-        return fid->f_oid;
-}
-
-/* get object version */
-static inline __u32 fid_ver(const struct lu_fid *fid)
-{
-        return fid->f_ver;
-}
-
-/* get complex object number (oid + version) */
-static inline __u64 fid_num(const struct lu_fid *fid)
-{
-        __u64 f_ver = fid_ver(fid);
-        f_ver = f_ver << LUSTRE_FID_VER_SHIFT;
-        return f_ver | fid_oid(fid);
-}
-
-static inline int fid_is_sane(const struct lu_fid *fid)
-{
-        return fid != NULL && fid_seq(fid) != 0 && fid_oid(fid) != 0;
-}
-
-#define DFID3 "["LPU64"/%u:%u]"
-
-#define PFID3(fid)    \
-        fid_seq(fid), \
-        fid_oid(fid), \
-        fid_ver(fid)
-
 /* temporary stuff for compatibility */
 struct ll_fid {
         __u64 id;         /* holds object id */
@@ -683,16 +745,6 @@ struct ll_fid {
 
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
-extern void lustre_swab_lu_fid (struct lu_fid *fid);
-
-static inline int lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
-{
-	/* check that there is no alignment padding */
-	CLASSERT(sizeof *f0 ==
-                 sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
-	return memcmp(f0, f1, sizeof *f0) == 0;
-}
-
 /* This structure is used for both request and reply.
  *
  * If we eventually have separate connect data for different types, which we
@@ -784,6 +836,15 @@ struct mds_body {
 
 extern void lustre_swab_mds_body (struct mds_body *b);
 extern void lustre_swab_mdt_body (struct mdt_body *b);
+
+struct lustre_md {
+        struct mdt_body         *body;
+        struct lov_stripe_md    *lsm;
+        struct lmv_stripe_md    *mea;
+#ifdef CONFIG_FS_POSIX_ACL
+        struct posix_acl        *posix_acl;
+#endif
+};
 
 #define Q_QUOTACHECK    0x800100
 #define Q_INITQUOTA     0x800101        /* init slave limits */

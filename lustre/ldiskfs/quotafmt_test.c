@@ -486,7 +486,7 @@ static int __init quotfmt_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(quotfmt_test, &lvars);
-        return class_register_type(&quotfmt_obd_ops, lvars.module_vars,
+        return class_register_type(&quotfmt_obd_ops, NULL, lvars.module_vars,
                                    "quotfmt_test", NULL);
 }
 

@@ -812,7 +812,7 @@ static int __init mdd_mod_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(mdd, &lvars);
-        return class_register_type(&mdd_obd_device_ops, lvars.module_vars,
+        return class_register_type(&mdd_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_MDD0_NAME, &mdd_device_type);
 }
 

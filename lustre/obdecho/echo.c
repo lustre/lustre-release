@@ -597,7 +597,7 @@ static int __init obdecho_init(void)
         if (rc != 0)
                 goto failed_0;
 
-        rc = class_register_type(&echo_obd_ops, lvars.module_vars,
+        rc = class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
                                  OBD_ECHO_DEVICENAME, NULL);
         if (rc != 0)
                 goto failed_1;

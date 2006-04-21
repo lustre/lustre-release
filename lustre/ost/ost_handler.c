@@ -1768,7 +1768,7 @@ static int __init ost_init(void)
         ENTRY;
 
         lprocfs_init_vars(ost, &lvars);
-        rc = class_register_type(&ost_obd_ops, lvars.module_vars,
+        rc = class_register_type(&ost_obd_ops, NULL, lvars.module_vars,
                                  LUSTRE_OSS_NAME, NULL);
         RETURN(rc);
 }

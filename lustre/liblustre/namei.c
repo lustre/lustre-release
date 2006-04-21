@@ -104,16 +104,19 @@ void unhook_stale_inode(struct pnode *pno)
 
 void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 {
+        struct llu_sb_info *sbi;
         struct inode *inode;
         LASSERT(it);
         LASSERT(pnode);
 
         inode = pnode->p_base->pb_ino;
+        sbi = llu_i2sbi(inode);
         if (it->d.lustre.it_lock_mode && inode != NULL) {
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%llu/%lu)\n",
                        inode, (long long)llu_i2stat(inode)->st_ino,
                        llu_i2info(inode)->lli_st_generation);
-                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+                md_set_lock_data(sbi->ll_md_exp,
+                                 &it->d.lustre.it_lock_handle, inode);
         }
 
         /* drop lookup/getattr locks */
@@ -131,8 +134,8 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                          struct ldlm_lock_desc *desc,
                          void *data, int flag)
 {
-        int rc;
         struct lustre_handle lockh;
+        int rc;
         ENTRY;
 
 
@@ -208,7 +211,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
         if (it_disposition(it, DISP_LOOKUP_NEG))
                 RETURN(-ENOENT);
 
-        rc = mdc_req2lustre_md(req, offset, llu_i2sbi(inode)->ll_osc_exp, &md);
+        rc = md_get_lustre_md(llu_i2sbi(inode)->ll_md_exp, req,
+                              offset, llu_i2sbi(inode)->ll_dt_exp, &md);
         if (rc)
                 RETURN(rc);
 
@@ -269,9 +273,9 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
         llu_prepare_mdc_op_data(&op_data, pnode->p_parent->p_base->pb_ino,
                                 pb->pb_ino, pb->pb_name.name,pb->pb_name.len,0);
 
-        rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, flags,
-                             &req, llu_mdc_blocking_ast,
-                             LDLM_FL_CANCEL_ON_BLOCK);
+        rc = md_intent_lock(exp, &op_data, NULL, 0, it, flags,
+                            &req, llu_mdc_blocking_ast,
+                            LDLM_FL_CANCEL_ON_BLOCK);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -351,7 +355,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (it_disposition(it, DISP_OPEN_CREATE))
                         ptlrpc_req_finished(request);
 
-                rc = mdc_req2lustre_md(request, offset, sbi->ll_osc_exp, &md);
+                rc = md_get_lustre_md(sbi->ll_md_exp, request, offset,
+                                      sbi->ll_dt_exp, &md);
                 if (rc)
                         RETURN(rc);
 
@@ -359,11 +364,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (!inode || IS_ERR(inode)) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
-                                obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
+                                obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
                         RETURN(inode ? PTR_ERR(inode) : -ENOMEM);
                 } else if (md.lsm != NULL &&
                            llu_i2info(inode)->lli_smd != md.lsm) {
-                        obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
+                        obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
                 }
 
                 lli = llu_i2info(inode);
@@ -447,9 +452,9 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                                 pnode->p_base->pb_name.name,
                                 pnode->p_base->pb_name.len, flags);
 
-        rc = mdc_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
-                             flags, &req, llu_mdc_blocking_ast,
-                             LDLM_FL_CANCEL_ON_BLOCK);
+        rc = md_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
+                            flags, &req, llu_mdc_blocking_ast,
+                            LDLM_FL_CANCEL_ON_BLOCK);
         if (rc < 0)
                 GOTO(out, rc);
 

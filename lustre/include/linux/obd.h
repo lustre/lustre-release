@@ -142,7 +142,8 @@ void lov_stripe_unlock(struct lov_stripe_md *md);
 
 struct obd_type {
         struct list_head typ_chain;
-        struct obd_ops *typ_ops;
+        struct obd_ops *typ_dt_ops;
+        struct md_ops *typ_md_ops;
         struct proc_dir_entry *typ_procroot;
         char *typ_name;
         int  typ_refcnt;
@@ -475,6 +476,30 @@ struct lov_obd {
         struct lov_tgt_desc *tgts;
 };
 
+struct lmv_tgt_desc {
+        struct obd_uuid         uuid;
+        struct obd_export      *ltd_exp;
+        int                     active;   /* is this target up for requests */
+};
+
+struct lmv_obd {
+        int                     refcount;
+        spinlock_t              lmv_lock;
+        struct lmv_desc         desc;
+        struct lmv_tgt_desc     *tgts;
+        struct obd_uuid         cluuid;
+        struct obd_export       *exp;
+
+        int                     tgts_size;
+        int                     connected;
+        int                     max_easize;
+        int                     max_def_easize;
+        int                     max_cookiesize;
+        int                     server_timeout;
+        struct semaphore        init_sem;
+        struct obd_connect_data conn_data;
+};
+
 struct niobuf_local {
         __u64 offset;
         __u32 len;
@@ -498,6 +523,7 @@ struct niobuf_local {
 #define LUSTRE_FLD0_NAME "fld0"
 
 #define LUSTRE_MDC_NAME "mdc"
+#define LUSTRE_LMV_NAME "lmv"
 
 /* FIXME just the names need to be changed */
 #define LUSTRE_OSS_NAME "ost" /*FIXME oss*/
@@ -688,11 +714,17 @@ struct obd_device {
                 struct echo_client_obd echo_client;
                 struct echo_obd echo;
                 struct lov_obd lov;
+                struct lmv_obd lmv;
                 struct mgs_obd mgs;
         } u;
+
         /* Fields used by LProcFS */
         unsigned int           obd_cntr_base;
         struct lprocfs_stats  *obd_stats;
+
+        unsigned int           md_cntr_base;
+        struct lprocfs_stats  *md_stats;
+
         struct proc_dir_entry *obd_svc_procroot;
         struct lprocfs_stats  *obd_svc_stats;
 };
@@ -886,6 +918,75 @@ struct obd_ops {
          * Also note that if you add it to the END, you also have to change
          * the num_stats calculation.
          *
+         */
+};
+
+struct md_ops {
+        int (*m_getstatus)(struct obd_export *, struct lu_fid *);
+        int (*m_change_cbdata)(struct obd_export *, struct lu_fid *,
+                               ldlm_iterator_t, void *);
+        int (*m_close)(struct obd_export *, struct md_op_data *,
+                       struct obd_client_handle *, struct ptlrpc_request **);
+        int (*m_create)(struct obd_export *, struct md_op_data *,
+                        const void *, int, int, __u32, __u32, __u32,
+                        __u64, struct ptlrpc_request **);
+        int (*m_done_writing)(struct obd_export *, struct md_op_data *);
+        int (*m_enqueue)(struct obd_export *, int, struct lookup_intent *,
+                         int, struct md_op_data *, struct lustre_handle *,
+                         void *, int, ldlm_completion_callback,
+                         ldlm_blocking_callback, void *, int);
+        int (*m_getattr)(struct obd_export *, struct lu_fid *,
+                         obd_valid, int, struct ptlrpc_request **);
+        int (*m_getattr_name)(struct obd_export *, struct lu_fid *,
+                              const char *, int, obd_valid,
+                              int, struct ptlrpc_request **);
+        int (*m_intent_lock)(struct obd_export *, struct md_op_data *,
+                             void *, int, struct lookup_intent *, int,
+                             struct ptlrpc_request **,
+                             ldlm_blocking_callback, int);
+        int (*m_link)(struct obd_export *, struct md_op_data *,
+                      struct ptlrpc_request **);
+        int (*m_rename)(struct obd_export *, struct md_op_data *,
+                        const char *, int, const char *, int,
+                        struct ptlrpc_request **);
+        int (*m_setattr)(struct obd_export *, struct md_op_data *,
+                         struct iattr *, void *, int , void *, int,
+                         struct ptlrpc_request **);
+        int (*m_sync)(struct obd_export *, struct lu_fid *,
+                      struct ptlrpc_request **);
+        int (*m_readpage)(struct obd_export *, struct lu_fid *,
+                          __u64, struct page *, struct ptlrpc_request **);
+        int (*m_unlink)(struct obd_export *, struct md_op_data *,
+                        struct ptlrpc_request **);
+
+        int (*m_setxattr)(struct obd_export *, struct lu_fid *,
+                          obd_valid, const char *, const char *,
+                          int, int, int, struct ptlrpc_request **);
+
+        int (*m_getxattr)(struct obd_export *, struct lu_fid *,
+                          obd_valid, const char *, const char *,
+                          int, int, int, struct ptlrpc_request **);
+
+        int (*m_init_ea_size)(struct obd_export *, int, int, int);
+        
+        int (*m_get_lustre_md)(struct obd_export *, struct ptlrpc_request *,
+                               int, struct obd_export *, struct lustre_md *);
+        
+        int (*m_free_lustre_md)(struct obd_export *, struct lustre_md *);
+        
+        int (*m_set_open_replay_data)(struct obd_export *,
+                                      struct obd_client_handle *,
+                                      struct ptlrpc_request *);
+        int (*m_clear_open_replay_data)(struct obd_export *,
+                                        struct obd_client_handle *);
+        int (*m_set_lock_data)(struct obd_export *, __u64 *, void *);
+
+        int (*m_delete)(struct obd_export *, struct lu_fid *);
+
+        /*
+         * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to
+         * lprocfs_alloc_md_stats() in obdclass/lprocfs_status.c. Also, add a
+         * wrapper function in include/linux/obd_class.h.
          */
 };
 

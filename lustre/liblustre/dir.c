@@ -74,7 +74,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct mdt_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
         struct md_op_data op_data = { { 0 } };
-        struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
+        struct obd_device *obddev = class_exp2obd(sbi->ll_md_exp);
         struct ldlm_res_id res_id =
                 { .name = {fid_seq(&lli->lli_fid), fid_num(&lli->lli_fid)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
@@ -85,10 +85,10 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         if (!rc) {
                 llu_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, &it, LCK_CR,
-                                 &op_data, &lockh, NULL, 0,
-                                 ldlm_completion_ast, llu_mdc_blocking_ast,
-                                 inode, LDLM_FL_CANCEL_ON_BLOCK);
+                rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, &it, LCK_CR,
+                                &op_data, &lockh, NULL, 0,
+                                ldlm_completion_ast, llu_mdc_blocking_ast,
+                                inode, LDLM_FL_CANCEL_ON_BLOCK);
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
                         ptlrpc_req_finished(request);
@@ -100,8 +100,8 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
         offset = page->index << PAGE_SHIFT;
-        rc = mdc_readpage(sbi->ll_mdc_exp, &lli->lli_fid,
-                          offset, page, &request);
+        rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid,
+                         offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
                 LASSERT (body != NULL);         /* checked by mdc_readpage() */

@@ -69,12 +69,12 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) off "LPU64"\n",
                inode->i_ino, inode->i_generation, inode, offset);
 
-        rc = mdc_readpage(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode),
-                          offset, page, &request);
+        rc = md_readpage(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode),
+                         offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
-                LASSERT (body != NULL);         /* checked by mdc_readpage() */
-                LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_readpage() */
+                LASSERT (body != NULL);         /* checked by md_readpage() */
+                LASSERT_REPSWABBED (request, 0); /* swabbed by md_readpage() */
 
                 inode->i_size = body->size;
                 SetPageUptodate(page);
@@ -220,10 +220,10 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
                 ll_prepare_md_op_data(&op_data, dir, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
-                                 LCK_CR, &op_data, &lockh, NULL, 0,
-                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir,
-                                 0);
+                rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
+                                LCK_CR, &op_data, &lockh, NULL, 0,
+                                ldlm_completion_ast, ll_mdc_blocking_ast, dir,
+                                0);
 
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
@@ -423,9 +423,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                rc = mdc_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
-                                      filename, namelen, OBD_MD_FLID, 0,
-                                      &request);
+                rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
+                                     filename, namelen, OBD_MD_FLID, 0,
+                                     &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr_name: %d\n", rc);
                         GOTO(out, rc);
@@ -467,8 +467,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lustre_swab_lov_user_md(&lum);
 
                 /* swabbing is done in lov_setstripe() on server side */
-                rc = mdc_setattr(sbi->ll_md_exp, &op_data,
-                                 &attr, &lum, sizeof(lum), NULL, 0, &request);
+                rc = md_setattr(sbi->ll_md_exp, &op_data,
+                                &attr, &lum, sizeof(lum), NULL, 0, &request);
                 if (rc) {
                         ptlrpc_req_finished(request);
                         if (rc != -EPERM && rc != -EACCES)
@@ -490,8 +490,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         RETURN(rc);
 
-                rc = mdc_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
-                                 OBD_MD_FLDIREA, lmmsize, &request);
+                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
+                                OBD_MD_FLDIREA, lmmsize, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr failed: rc = %d\n", rc);
                         RETURN(rc);
@@ -547,9 +547,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         RETURN(rc);
 
-                rc = mdc_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
-                                      filename, strlen(filename) + 1,
-                                      OBD_MD_FLEASIZE, lmmsize, &request);
+                rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
+                                     filename, strlen(filename) + 1,
+                                     OBD_MD_FLEASIZE, lmmsize, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr_name failed on %s: rc %d\n",
                                filename, rc);
