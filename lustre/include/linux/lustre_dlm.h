@@ -457,7 +457,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data);
 int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
                         ldlm_blocking_callback, ldlm_glimpse_callback);
-int ldlm_handle_enqueue0(struct ptlrpc_request *req,
+int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
                          struct ldlm_request *dlm_req,
                          struct ldlm_callback_suite *cbs);
 int ldlm_handle_convert(struct ptlrpc_request *req);

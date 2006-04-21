@@ -671,11 +671,11 @@ find_existing_lock(struct obd_export *exp, struct lustre_handle *remote_hdl)
  * Main server-side entry point into LDLM. This is called by ptlrpc service
  * threads to carry out client lock enqueueing requests.
  */
-int ldlm_handle_enqueue0(struct ptlrpc_request *req,
+int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
+                         struct ptlrpc_request *req,
                          struct ldlm_request *dlm_req,
                          struct ldlm_callback_suite *cbs)
 {
-        struct obd_device *obddev = req->rq_export->exp_obd;
         struct ldlm_reply *dlm_rep;
         int rc = 0, size[2] = {sizeof(*dlm_rep)};
         __u32 flags;
@@ -745,7 +745,7 @@ int ldlm_handle_enqueue0(struct ptlrpc_request *req,
         }
 
         /* The lock's callback data might be set in the policy function */
-        lock = ldlm_lock_create(obddev->obd_namespace, &dlm_req->lock_handle2,
+        lock = ldlm_lock_create(ns, &dlm_req->lock_handle2,
                                 dlm_req->lock_desc.l_resource.lr_name,
                                 dlm_req->lock_desc.l_resource.lr_type,
                                 dlm_req->lock_desc.l_req_mode,
@@ -801,7 +801,7 @@ existing_lock:
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 lock->l_req_extent = lock->l_policy_data.l_extent;
 
-        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie, &flags);
+        err = ldlm_lock_enqueue(ns, &lock, cookie, &flags);
         if (err)
                 GOTO(out, err);
 
@@ -925,7 +925,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         dlm_req = lustre_swab_reqbuf(req, MDS_REQ_INTENT_LOCKREQ_OFF,
                                      sizeof *dlm_req, lustre_swab_ldlm_request);
         if (dlm_req != NULL) {
-                rc = ldlm_handle_enqueue0(req, dlm_req, &cbs);
+                rc = ldlm_handle_enqueue0(req->rq_export->exp_obd->obd_namespace,
+                                          req, dlm_req, &cbs);
         } else {
                 CERROR ("Can't unpack dlm_req\n");
                 rc = -EFAULT;
