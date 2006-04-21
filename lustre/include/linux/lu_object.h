@@ -85,14 +85,6 @@ struct lustre_cfg;
  *     Generic code tries to replace recursion through layers by iterations
  *     where possible.
  *
- *
- *
- *
- *
- *
- *
- *
- *
  */
 
 struct lu_site;
@@ -191,8 +183,17 @@ struct lu_device {
          * XXX which means that atomic_t is probably too small.
          */
         atomic_t                     ld_ref;
+        /*
+         * Pointer to device type. Never modified once set.
+         */
         struct lu_device_type       *ld_type;
+        /*
+         * Operation vector for this device.
+         */
 	struct lu_device_operations *ld_ops;
+        /*
+         * Stack this device belongs to.
+         */
 	struct lu_site              *ld_site;
         struct proc_dir_entry       *ld_proc_entry;
 
@@ -202,32 +203,71 @@ struct lu_device {
 
 struct lu_device_type_operations;
 
-enum {
+/*
+ * Tag bits for device type. They are used to distinguish certain groups of
+ * device types.
+ */
+enum lu_device_tag {
         /* this is meta-data device */
         LU_DEVICE_MD = (1 << 0),
         /* this is data device */
         LU_DEVICE_DT = (1 << 1)
 };
 
+/*
+ * Type of device.
+ */
 struct lu_device_type {
+        /*
+         * Tag bits. Taken from enum lu_device_tag. Never modified once set.
+         */
         __u32                             ldt_tags;
+        /*
+         * Name of this class. Unique system-wide. Never modified once set.
+         */
         char                             *ldt_name;
+        /*
+         * Operations for this type.
+         */
         struct lu_device_type_operations *ldt_ops;
-        struct obd_type                  *obd_type;
+        /*
+         * XXX: temporary pointer to associated obd_type.
+         */
+        struct obd_type                  *ldt_obd_type;
 };
 
+/*
+ * Operations on a device type.
+ */
 struct lu_device_type_operations {
+        /*
+         * Allocate new device.
+         */
         struct lu_device *(*ldto_device_alloc)(struct lu_device_type *t,
                                                struct lustre_cfg *lcfg);
+        /*
+         * Free device. Dual to ->ldto_device_alloc().
+         */
         void (*ldto_device_free)(struct lu_device *d);
 
         /*
          * Initialize the devices after allocation
          */
         int  (*ldto_device_init)(struct lu_device *, struct lu_device *);
+        /*
+         * Finalize device. Dual to ->ldto_device_init(). Returns pointer to
+         * the next device in the stack.
+         */
         struct lu_device *(*ldto_device_fini)(struct lu_device *);
 
+        /*
+         * Initialize device type. This is called on module load.
+         */
         int  (*ldto_init)(struct lu_device_type *t);
+        /*
+         * Finalize device type. Dual to ->ldto_init(). Called on module
+         * unload.
+         */
         void (*ldto_fini)(struct lu_device_type *t);
 };
 
@@ -242,18 +282,21 @@ enum lu_object_flags {
 	LU_OBJECT_ALLOCATED = (1 << 0)
 };
 
-/* attr */
+/*
+ * Common object attributes.
+ */
 struct lu_attr {
-        __u64          la_size;
-        __u64          la_mtime;
-        __u64          la_atime;
-        __u64          la_ctime;
-        __u64          la_blocks;
-        __u32          la_mode;
-        __u32          la_uid;
-        __u32          la_gid;
-        __u32          la_flags;
-        __u32          la_nlink;
+        __u64          la_size;   /* size in bytes */
+        __u64          la_mtime;  /* modification time in seconds since Epoch */
+        __u64          la_atime;  /* access time in seconds since Epoch */
+        __u64          la_ctime;  /* change time in seconds since Epoch */
+        __u64          la_blocks; /* 512-byte blocks allocated to object */
+        __u32          la_mode;   /* permission bits and file type */
+        __u32          la_uid;    /* owner id */
+        __u32          la_gid;    /* group id */
+        __u32          la_flags;  /* object flags */
+        __u32          la_nlink;  /* number of persistent references to this
+                                   * object */
 };
 
 /*
@@ -331,6 +374,8 @@ struct fld;
  * lu_site exists so that multiple layered stacks can co-exist in the same
  * address space.
  *
+ * lu_site has the same relation to lu_device as lu_object_header to
+ * lu_object.
  */
 struct lu_site {
 	/*
@@ -378,7 +423,6 @@ struct lu_site {
 	 * Top-level device for this stack.
 	 */
 	struct lu_device  *ls_top_dev;
-        struct lustre_mount_info *ls_lmi;
         /*
          * Fid location database
          */
@@ -413,22 +457,34 @@ lu_object_ops(const struct lu_object *o)
 	return o->lo_dev->ld_ops;
 }
 
+/*
+ * Next sub-object in the layering
+ */
 static inline struct lu_object *lu_object_next(const struct lu_object *o)
 {
-	return container_of(o->lo_linkage.next, struct lu_object, lo_linkage);
+	return container_of0(o->lo_linkage.next, struct lu_object, lo_linkage);
 }
 
+/*
+ * Pointer to the fid of this object.
+ */
 static inline struct lu_fid *lu_object_fid(const struct lu_object *o)
 {
 	return &o->lo_header->loh_fid;
 }
 
+/*
+ * First (topmost) sub-object of given compound object
+ */
 static inline struct lu_object *lu_object_top(struct lu_object_header *h)
 {
 	LASSERT(!list_empty(&h->loh_layers));
-	return container_of(h->loh_layers.next, struct lu_object, lo_linkage);
+	return container_of0(h->loh_layers.next, struct lu_object, lo_linkage);
 }
 
+/*
+ * Acquire additional reference to the given object
+ */
 static inline void lu_object_get(struct lu_object *o)
 {
 	LASSERT(o->lo_header->loh_ref > 0);
@@ -577,13 +633,13 @@ struct dt_device {
 
 static inline int lu_device_is_dt(const struct lu_device *d)
 {
-        return d->ld_type->ldt_tags & LU_DEVICE_DT;
+        return ergo(d != NULL, d->ld_type->ldt_tags & LU_DEVICE_DT);
 }
 
 static inline struct dt_device * lu2dt_dev(struct lu_device *l)
 {
         LASSERT(lu_device_is_dt(l));
-        return container_of(l, struct dt_device, dd_lu_dev);
+        return container_of0(l, struct dt_device, dd_lu_dev);
 }
 
 struct dt_object {
@@ -595,18 +651,20 @@ struct txn_param {
         unsigned int tp_credits;
 };
 
-struct fld {
-        struct dt_device        *fld_dt;
-};
-
-extern int fld_server_init(struct fld *fld, struct dt_device *dt);
-extern void fld_server_fini(struct fld *fld);
-extern int fld_handle(struct fld *fld, __u32 opts, void *mf);
-
 #define TXN_PARAM_INIT(credits) {               \
         .tp_credits = (credits)                 \
 }
 
 #define TXN_PARAM(...) ((struct txn_param)TXN_PARAM_INIT(__VA_ARGS__))
+
+struct fld {
+        struct proc_dir_entry   *fld_proc_entry;
+        struct ptlrpc_service   *fld_service;
+        struct dt_device        *fld_dt;
+};
+
+int  fld_server_init(struct fld *fld, struct dt_device *dt);
+void fld_server_fini(struct fld *fld);
+
 
 #endif /* __LINUX_OBD_CLASS_H */
