@@ -265,6 +265,20 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
         return (-1);
 }
 
+struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
+                                            svc_handler_t h, char *name,
+                                            struct proc_dir_entry *proc_entry,
+                                            svcreq_printfn_t prntfn)
+{
+        return ptlrpc_init_svc(c->psc_nbufs, c->psc_bufsize,
+                               c->psc_max_req_size, c->psc_max_reply_size,
+                               c->psc_req_portal, c->psc_rep_portal,
+                               c->psc_watchdog_timeout,
+                               h, name, proc_entry,
+                               prntfn, c->psc_num_threads);
+}
+EXPORT_SYMBOL(ptlrpc_init_svc_conf);
+
 struct ptlrpc_service *
 ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
                 int req_portal, int rep_portal, int watchdog_timeout,

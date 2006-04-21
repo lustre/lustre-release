@@ -93,6 +93,8 @@
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, MDT_MAX_THREADS, \
                                   num_physpages >> (25 - PAGE_SHIFT)), 2UL)
+#define FLD_NUM_THREADS max(min_t(unsigned long, MDT_MAX_THREADS, \
+                                  num_physpages >> (25 - PAGE_SHIFT)), 2UL)
 
 #define MDS_NBUFS       (64 * smp_num_cpus)
 #define MDS_BUFSIZE     (8 * 1024)
@@ -120,7 +122,7 @@
 #define MGS_MAX_THREADS 8UL
 #define MGS_NUM_THREADS max(2UL, min_t(unsigned long, MGS_MAX_THREADS, \
                             num_physpages * smp_num_cpus >> (26 - PAGE_SHIFT)))
-                                  
+
 #define MGS_NBUFS       (64 * smp_num_cpus)
 #define MGS_BUFSIZE     (8 * 1024)
 #define MGS_MAXREQSIZE  (5 * 1024)
@@ -698,11 +700,29 @@ __u64 ptlrpc_next_xid(void);
 __u64 ptlrpc_sample_next_xid(void);
 __u64 ptlrpc_req_xid(struct ptlrpc_request *request);
 
+struct ptlrpc_service_conf {
+        int psc_nbufs;
+        int psc_bufsize;
+        int psc_max_req_size;
+        int psc_max_reply_size;
+        int psc_req_portal;
+        int psc_rep_portal;
+        int psc_watchdog_timeout; /* in ms */
+        int psc_num_threads;
+};
+
+
 /* ptlrpc/service.c */
 void ptlrpc_save_lock (struct ptlrpc_request *req,
                        struct lustre_handle *lock, int mode);
 void ptlrpc_commit_replies (struct obd_device *obd);
 void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
+
+struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
+                                            svc_handler_t h, char *name,
+                                            struct proc_dir_entry *proc_entry,
+                                            svcreq_printfn_t prntfn);
+
 struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                                        int max_reply_size,
                                        int req_portal, int rep_portal,
