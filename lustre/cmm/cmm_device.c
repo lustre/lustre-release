@@ -52,7 +52,7 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	/*
 	 * XXX for now. Tags in lu_device_type->ldt_something are needed.
 	 */
-	return ergo(d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
+	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
 static struct md_device_operations cmm_md_ops = {
@@ -83,7 +83,7 @@ static struct lu_device *cmm_device_fini(struct lu_device *d)
         return next;
 }
 
-static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg) 
+static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct cmm_device *m = lu2cmm_dev(d);
         struct lu_device *next = md2lu_dev(m->cmm_child);
@@ -96,7 +96,6 @@ static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg)
         default:
                 err = next->ld_ops->ldo_process_config(next, cfg);
         }
-
         RETURN(err);
 }
 

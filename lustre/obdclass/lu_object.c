@@ -118,7 +118,7 @@ static void lu_object_free(struct lu_context *ctx, struct lu_object *o)
         INIT_LIST_HEAD(&splice);
         list_splice_init(&o->lo_header->loh_layers, &splice);
         while (!list_empty(&splice)) {
-                o = container_of(splice.next, struct lu_object, lo_linkage);
+                o = container_of0(splice.next, struct lu_object, lo_linkage);
                 list_del_init(&o->lo_linkage);
                 LASSERT(lu_object_ops(o)->ldo_object_free != NULL);
                 lu_object_ops(o)->ldo_object_free(ctx, o);
@@ -143,7 +143,7 @@ void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr)
         }
         spin_unlock(&s->ls_guard);
         while (!list_empty(&dispose)) {
-                h = container_of(dispose.next,
+                h = container_of0(dispose.next,
                                  struct lu_object_header, loh_lru);
                 list_del_init(&h->loh_lru);
                 lu_object_free(ctx, lu_object_top(h));
@@ -292,6 +292,7 @@ void lu_site_fini(struct lu_site *s)
                 s->ls_hash = NULL;
        }
        if (s->ls_top_dev != NULL) {
+               s->ls_top_dev->ld_site = NULL;
                lu_device_put(s->ls_top_dev);
                s->ls_top_dev = NULL;
        }

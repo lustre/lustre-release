@@ -103,13 +103,13 @@ struct md_object {
 
 static inline int lu_device_is_md(const struct lu_device *d)
 {
-        return d->ld_type->ldt_tags & LU_DEVICE_MD;
+        return ergo(d != NULL, d->ld_type->ldt_tags & LU_DEVICE_MD);
 }
 
 static inline struct md_device *lu2md_dev(const struct lu_device *d)
 {
         LASSERT(lu_device_is_md(d));
-        return container_of(d, struct md_device, md_lu_dev);
+        return container_of0(d, struct md_device, md_lu_dev);
 }
 
 static inline struct lu_device *md2lu_dev(struct md_device *d)
@@ -120,7 +120,7 @@ static inline struct lu_device *md2lu_dev(struct md_device *d)
 static inline struct md_object *lu2md(const struct lu_object *o)
 {
         LASSERT(lu_device_is_md(o->lo_dev));
-        return container_of(o, struct md_object, mo_lu);
+        return container_of0(o, struct md_object, mo_lu);
 }
 
 static inline struct md_object *md_object_next(const struct md_object *obj)
@@ -131,7 +131,7 @@ static inline struct md_object *md_object_next(const struct md_object *obj)
 static inline struct md_device *md_device_get(const struct md_object *o)
 {
         LASSERT(lu_device_is_md(o->mo_lu.lo_dev));
-        return container_of(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
+        return container_of0(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
 }
 
 static inline int md_device_init(struct md_device *md, struct lu_device_type *t)

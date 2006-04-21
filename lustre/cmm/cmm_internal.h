@@ -44,13 +44,13 @@ static inline struct md_device_operations *cmm_child_ops(struct cmm_device *d)
 
 static inline struct cmm_device *md2cmm_dev(struct md_device *m)
 {
-        return container_of(m, struct cmm_device, cmm_md_dev);
+        return container_of0(m, struct cmm_device, cmm_md_dev);
 }
 
-static struct cmm_device *lu2cmm_dev(struct lu_device *d)
+static inline struct cmm_device *lu2cmm_dev(struct lu_device *d)
 {
 	//LASSERT(lu_device_is_cmm(d));
-	return container_of(d, struct cmm_device, cmm_md_dev.md_lu_dev);
+	return container_of0(d, struct cmm_device, cmm_md_dev.md_lu_dev);
 }
 
 static inline struct lu_device *cmm2lu_dev(struct cmm_device *d)
@@ -70,13 +70,13 @@ static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)
 static inline struct cmm_object *lu2cmm_obj(struct lu_object *o)
 {
 	//LASSERT(lu_device_is_cmm(o->lo_dev));
-	return container_of(o, struct cmm_object, cmo_obj.mo_lu);
+	return container_of0(o, struct cmm_object, cmo_obj.mo_lu);
 }
 
 /* get cmm object from md_object */
 static inline struct cmm_object *md2cmm_obj(struct md_object *o)
 {
-	return container_of(o, struct cmm_object, cmo_obj);
+	return container_of0(o, struct cmm_object, cmo_obj);
 }
 /* get lower-layer object */
 static inline struct md_object *cmm2child_obj(struct cmm_object *o)

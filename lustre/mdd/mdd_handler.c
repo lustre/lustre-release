@@ -63,13 +63,13 @@ static int lu_device_is_mdd(struct lu_device *d)
 	/*
 	 * XXX for now. Tags in lu_device_type->ldt_something are needed.
 	 */
-	return ergo(d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
+	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
 }
 
 static struct mdd_device* lu2mdd_dev(struct lu_device *d)
 {
 	LASSERT(lu_device_is_mdd(d));
-	return container_of(d, struct mdd_device, mdd_md_dev.md_lu_dev);
+	return container_of0(d, struct mdd_device, mdd_md_dev.md_lu_dev);
 }
 
 static inline struct lu_device *mdd2lu_dev(struct mdd_device *d)
@@ -80,7 +80,7 @@ static inline struct lu_device *mdd2lu_dev(struct mdd_device *d)
 static struct mdd_object *mdd_obj(struct lu_object *o)
 {
 	LASSERT(lu_device_is_mdd(o->lo_dev));
-	return container_of(o, struct mdd_object, mod_obj.mo_lu);
+	return container_of0(o, struct mdd_object, mod_obj.mo_lu);
 }
 
 static struct mdd_device* mdo2mdd(struct md_object *mdo)
@@ -90,7 +90,7 @@ static struct mdd_device* mdo2mdd(struct md_object *mdo)
 
 static struct mdd_object* mdo2mddo(struct md_object *mdo)
 {
-        return container_of(mdo, struct mdd_object, mod_obj);
+        return container_of0(mdo, struct mdd_object, mod_obj);
 }
 
 static inline struct dt_device_operations *mdd_child_ops(struct mdd_device *d)
@@ -298,7 +298,7 @@ static struct lu_device *mdd_device_fini(struct lu_device *d)
         return next;
 }
 
-static int mdd_process_config(struct lu_device *d, struct lustre_cfg *cfg) 
+static int mdd_process_config(struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct mdd_device *m = lu2mdd_dev(d);
         struct lu_device *next = &m->mdd_child->dd_lu_dev;
@@ -324,8 +324,8 @@ static struct lu_device_operations mdd_lu_ops = {
 
 static struct dt_object* mdd_object_child(struct mdd_object *o)
 {
-        return container_of(lu_object_next(&o->mod_obj.mo_lu),
-                            struct dt_object, do_lu);
+        return container_of0(lu_object_next(&o->mod_obj.mo_lu),
+                             struct dt_object, do_lu);
 }
 
 static void mdd_lock(struct lu_context *ctxt,

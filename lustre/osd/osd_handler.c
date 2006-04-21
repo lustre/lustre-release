@@ -68,7 +68,6 @@ static void  osd_object_release(struct lu_context *ctxt, struct lu_object *l);
 static int   osd_object_print  (struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (struct lu_device *m);
-static struct lu_device *osd_device_fini   (struct lu_device *d);
 static int   osd_device_init   (struct lu_device *d, struct lu_device *);
 static void *osd_key_init      (struct lu_context *ctx);
 static void  osd_key_fini      (struct lu_context *ctx, void *data);
@@ -80,6 +79,7 @@ static int   osd_inode_getattr (struct lu_context *ctx,
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
 static struct osd_device  *osd_dt_dev       (const struct dt_device *d);
+static struct lu_device   *osd_device_fini  (struct lu_device *d);
 static struct lu_device   *osd_device_alloc (struct lu_device_type *t,
                                              struct lustre_cfg *cfg);
 static struct lu_object   *osd_object_alloc (struct lu_context *ctx,
@@ -265,7 +265,7 @@ static int osd_mount(struct osd_device *o, struct lustre_cfg *cfg)
         int result;
 
         ENTRY;
-        
+
         /* get mount */
         lmi = server_get_mount(dev);
         if (lmi == NULL) {
@@ -300,7 +300,7 @@ static struct lu_device *osd_device_fini(struct lu_device *d)
                 o->od_root_dir = NULL;
         }
         osd_oi_fini(&o->od_oi);
-        
+
         if (o->od_mount)
                 server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
 
@@ -334,7 +334,7 @@ static void osd_device_free(struct lu_device *d)
         OBD_FREE_PTR(o);
 }
 
-static int osd_process_config(struct lu_device *d, struct lustre_cfg *cfg) 
+static int osd_process_config(struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct osd_device *o = lu2osd_dev(d);
         int err;
@@ -342,6 +342,9 @@ static int osd_process_config(struct lu_device *d, struct lustre_cfg *cfg)
         switch(cfg->lcfg_command) {
         case LCFG_SETUP:
                 err = osd_mount(o, cfg);
+                break;
+        default:
+                err = -ENOTTY;
         }
 
         RETURN(err);
@@ -490,25 +493,25 @@ static int lu_device_is_osd(const struct lu_device *d)
         /*
          * XXX for now. Tags in lu_device_type->ldt_something are needed.
          */
-        return ergo(d->ld_ops != NULL, d->ld_ops == &osd_lu_ops);
+        return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &osd_lu_ops);
 }
 
 static struct osd_object *osd_obj(const struct lu_object *o)
 {
         LASSERT(lu_device_is_osd(o->lo_dev));
-        return container_of(o, struct osd_object, oo_dt.do_lu);
+        return container_of0(o, struct osd_object, oo_dt.do_lu);
 }
 
 static struct osd_device *osd_dt_dev(const struct dt_device *d)
 {
         LASSERT(lu_device_is_osd(&d->dd_lu_dev));
-        return container_of(d, struct osd_device, od_dt_dev);
+        return container_of0(d, struct osd_device, od_dt_dev);
 }
 
 static struct osd_device *osd_dev(const struct lu_device *d)
 {
         LASSERT(lu_device_is_osd(d));
-        return osd_dt_dev(container_of(d, struct dt_device, dd_lu_dev));
+        return osd_dt_dev(container_of0(d, struct dt_device, dd_lu_dev));
 }
 
 static struct super_block *osd_sb(const struct osd_device *dev)
