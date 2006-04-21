@@ -1138,9 +1138,8 @@ err_mdt_svc:
         RETURN(rc);
 }
 
-static void mdt_stack_fini(struct mdt_device *m)
+static void mdt_stack_fini(struct lu_device *d)
 {
-        struct lu_device *d = md2lu_dev(m->mdt_child);
         /* goes through all stack */
         while (d != NULL) {
                 struct lu_device *n;
@@ -1251,13 +1250,13 @@ out:
 static void mdt_fini(struct mdt_device *m)
 {
         struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
-
+        
         ENTRY;
 
         mdt_stop_ptlrpc_service(m);
 
         /* finish the stack */
-        mdt_stack_fini(m);
+        mdt_stack_fini(md2lu_dev(m->mdt_child));
 
         if (d->ld_site != NULL) {
                 lu_site_fini(d->ld_site);
@@ -1286,8 +1285,12 @@ static int mdt_init0(struct mdt_device *m,
         struct lu_site *s;
         char   ns_name[48];
         struct lu_context ctx;
-
+        const char *dev = lustre_cfg_string(cfg, 0);
+        struct obd_device *obd;
         ENTRY;
+
+        obd = class_name2obd(dev);
+        m->mdt_md_dev.md_lu_dev.ld_obd = obd;
 
         OBD_ALLOC_PTR(s);
         if (s == NULL)
@@ -1355,7 +1358,7 @@ err_fini_mgr:
         seq_mgr_fini(m->mdt_seq_mgr);
         m->mdt_seq_mgr = NULL;
 err_fini_stack:
-        mdt_stack_fini(m);
+        mdt_stack_fini(md2lu_dev(m->mdt_child));
 err_fini_site:
         lu_site_fini(s);
         OBD_FREE_PTR(s);
