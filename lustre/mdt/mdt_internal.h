@@ -48,23 +48,10 @@
 #include <linux/md_object.h>
 #include <linux/lustre_fid.h>
 
-struct ptlrpc_service_conf {
-        int psc_nbufs;
-        int psc_bufsize;
-        int psc_max_req_size;
-        int psc_max_reply_size;
-        int psc_req_portal;
-        int psc_rep_portal;
-        int psc_watchdog_timeout; /* in ms */
-        int psc_num_threads;
-};
-
 struct mdt_device {
         /* super-class */
         struct md_device           mdt_md_dev;
         struct ptlrpc_service     *mdt_service;
-        struct ptlrpc_service     *mdt_fld_service;
-        struct ptlrpc_service_conf mdt_service_conf;
         /* DLM name-space for meta-data locks maintained by this server */
         struct ldlm_namespace     *mdt_namespace;
         /* ptlrpc handle for MDS->client connections (for lock ASTs). */
@@ -79,6 +66,15 @@ struct mdt_device {
 
         /* Seq management related stuff */
         struct lu_seq_mgr         *mdt_seq_mgr;
+
+        struct dt_device          *mdt_bottom;
+        /*
+         * Options bit-fields.
+         */
+        struct {
+                signed int         mo_user_xattr :1;
+                signed int         mo_acl        :1;
+        } mdt_opts;
 };
 
 static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
