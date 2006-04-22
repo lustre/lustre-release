@@ -1146,7 +1146,7 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
                 GOTO(out, rc = 0);
         }
 
-        rc = obd_set_info(exp, keylen, key, vallen, val);
+        rc = obd_set_info_async(exp, keylen, key, vallen, val, NULL);
 out:
         req->rq_repmsg->status = 0;
         RETURN(rc);
@@ -1677,6 +1677,8 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(out_io, rc = -EINVAL);
 
+        ping_evictor_start();
+
         RETURN(0);
 
 out_io:
@@ -1698,6 +1700,8 @@ static int ost_cleanup(struct obd_device *obd)
         struct ost_obd *ost = &obd->u.ost;
         int err = 0;
         ENTRY;
+
+        ping_evictor_stop();
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {

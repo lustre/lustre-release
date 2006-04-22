@@ -203,13 +203,6 @@ ptlrpc_commit_replies (struct obd_device *obd)
         spin_unlock_irqrestore (&obd->obd_uncommitted_replies_lock, flags);
 }
 
-static long
-timeval_sub(struct timeval *large, struct timeval *small)
-{
-        return (large->tv_sec - small->tv_sec) * 1000000 +
-                (large->tv_usec - small->tv_usec);
-}
-
 static int
 ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 {
@@ -430,6 +423,85 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
 
 }
 
+/* This function makes sure dead exports are evicted in a timely manner.
+   This function is only called when some export receives a message (i.e.,
+   the network is up.) */
+static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
+{
+        struct obd_export *oldest_exp;
+        time_t oldest_time;
+
+        ENTRY;
+
+        LASSERT(exp);
+
+        /* Compensate for slow machines, etc, by faking our request time
+           into the future.  Although this can break the strict time-ordering
+           of the list, we can be really lazy here - we don't have to evict
+           at the exact right moment.  Eventually, all silent exports
+           will make it to the top of the list. */
+        exp->exp_last_request_time = max(exp->exp_last_request_time,
+                                         (time_t)CURRENT_SECONDS + extra_delay);
+
+        CDEBUG(D_INFO, "updating export %s at %ld\n",
+               exp->exp_client_uuid.uuid,
+               exp->exp_last_request_time);
+
+        /* exports may get disconnected from the chain even though the
+           export has references, so we must keep the spin lock while
+           manipulating the lists */
+        spin_lock(&exp->exp_obd->obd_dev_lock);
+
+        if (list_empty(&exp->exp_obd_chain_timed)) {
+                /* this one is not timed */
+                spin_unlock(&exp->exp_obd->obd_dev_lock);
+                EXIT;
+                return;
+        }
+
+        list_move_tail(&exp->exp_obd_chain_timed,
+                       &exp->exp_obd->obd_exports_timed);
+
+        oldest_exp = list_entry(exp->exp_obd->obd_exports_timed.next,
+                                struct obd_export, exp_obd_chain_timed);
+        oldest_time = oldest_exp->exp_last_request_time;
+        spin_unlock(&exp->exp_obd->obd_dev_lock);
+
+        if (exp->exp_obd->obd_recovering) {
+                /* be nice to everyone during recovery */
+                EXIT;
+                return;
+        }
+
+        /* Note - racing to start/reset the obd_eviction timer is safe */
+        if (exp->exp_obd->obd_eviction_timer == 0) {
+                /* Check if the oldest entry is expired. */
+                if (CURRENT_SECONDS > (oldest_time +
+                                       (3 * obd_timeout / 2) + extra_delay)) {
+                        /* We need a second timer, in case the net was down and
+                         * it just came back. Since the pinger may skip every
+                         * other PING_INTERVAL (see note in ptlrpc_pinger_main),
+                         * we better wait for 3. */
+                        exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
+                                3 * PING_INTERVAL;
+                        CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
+                               exp->exp_obd->obd_name, obd_export_nid2str(exp),
+                               oldest_time);
+                }
+        } else {
+                if (CURRENT_SECONDS > (exp->exp_obd->obd_eviction_timer +
+                                       extra_delay)) {
+                        /* The evictor won't evict anyone who we've heard from
+                         * recently, so we don't have to check before we start
+                         * it. */
+                        if (!ping_evictor_wake(exp))
+                                exp->exp_obd->obd_eviction_timer = 0;
+                }
+        }
+
+        EXIT;
+}
+
 static int
 ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                              struct ptlrpc_thread *thread)
@@ -464,7 +536,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         spin_unlock_irqrestore (&svc->srv_lock, flags);
 
         do_gettimeofday(&work_start);
-        timediff = timeval_sub(&work_start, &request->rq_arrival_time);
+        timediff = cfs_timeval_sub(&work_start, &request->rq_arrival_time,NULL);
         if (svc->srv_stats != NULL) {
                 lprocfs_counter_add(svc->srv_stats, PTLRPC_REQWAIT_CNTR,
                                     timediff);
@@ -519,8 +591,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                         goto put_conn;
                 }
 
-                class_update_export_timer(request->rq_export,
-                                          (time_t)(timediff / 500000));
+                ptlrpc_update_export_timer(request->rq_export, timediff/500000);
         }
 
         /* Discard requests queued for longer than my timeout.  If the
@@ -567,15 +638,15 @@ put_conn:
  out:
         do_gettimeofday(&work_end);
 
-        timediff = timeval_sub(&work_end, &work_start);
+        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
 
         if (timediff / 1000000 > (long)obd_timeout)
                 CERROR("request "LPU64" opc %u from %s processed in %lds "
                        "trans "LPU64" rc %d/%d\n",
                        request->rq_xid, request->rq_reqmsg->opc,
                        libcfs_id2str(request->rq_peer),
-                       timeval_sub(&work_end,
-                                   &request->rq_arrival_time) / 1000000,
+                       cfs_timeval_sub(&work_end, &request->rq_arrival_time,
+                                       NULL) / 1000000,
                        request->rq_repmsg ? request->rq_repmsg->transno :
                        request->rq_transno, request->rq_status,
                        request->rq_repmsg ? request->rq_repmsg->status : -999);
@@ -584,7 +655,8 @@ put_conn:
                        "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
                        request->rq_xid, request->rq_reqmsg->opc,
                        libcfs_id2str(request->rq_peer), timediff,
-                       timeval_sub(&work_end, &request->rq_arrival_time),
+                       cfs_timeval_sub(&work_end, &request->rq_arrival_time,
+                                       NULL),
                        request->rq_transno, request->rq_status,
                        request->rq_repmsg ? request->rq_repmsg->status : -999);
 
@@ -742,16 +814,15 @@ liblustre_check_services (void *arg)
 #else /* __KERNEL__ */
 
 /* Don't use daemonize, it removes fs struct from new thread (bug 418) */
-void ptlrpc_daemonize(void)
+void ptlrpc_daemonize(char *name)
 {
-        exit_mm(cfs_current());
-        lustre_daemonize_helper();
-#if LINUX_
-        /* XXX Liang: */
+        struct fs_struct *fs = current->fs;
+
+        atomic_inc(&fs->count);
+        cfs_daemonize(name);
+        exit_fs(cfs_current());
+        current->fs = fs;
         set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
-#endif
-        exit_files(cfs_current());
-        reparent_to_init();
 }
 
 static void
@@ -796,16 +867,7 @@ static int ptlrpc_main(void *arg)
         int rc = 0;
         ENTRY;
 
-        lock_kernel();
-        ptlrpc_daemonize();
-
-        cfs_block_allsigs();
-
-        LASSERTF(strlen(data->name) < CFS_CURPROC_COMM_MAX,
-                 "name %d > len %d\n",
-                 (int)strlen(data->name), CFS_CURPROC_COMM_MAX);
-        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1, "%s", data->name);
-        unlock_kernel();
+        ptlrpc_daemonize(data->name);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9) && CONFIG_NUMA
         /* we need to do this before any per-thread allocation is done so that
@@ -1189,7 +1251,7 @@ int ptlrpc_service_health_check(struct ptlrpc_service *svc)
                              struct ptlrpc_request, rq_list);
 
         do_gettimeofday(&right_now);
-        timediff = timeval_sub(&right_now, &request->rq_arrival_time);
+        timediff = cfs_timeval_sub(&right_now, &request->rq_arrival_time, NULL);
 
         cutoff = obd_health_check_timeout;
 

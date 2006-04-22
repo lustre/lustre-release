@@ -603,6 +603,8 @@ int osc_quota_exit(void)
 
         rc = cfs_mem_cache_destroy(qinfo_cachep);
         LASSERTF(rc == 0, "couldn't destory qinfo_cachep slab\n");
+        qinfo_cachep = NULL;
+
         RETURN(0);
 }
 

@@ -443,6 +443,49 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+AC_DEFUN([LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL],
+[AC_MSG_CHECKING([if struct file_operations has an unlocked_ioctl field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct file_operations fops;
+        &fops.unlocked_ioctl;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_UNLOCKED_IOCTL, 1, [struct file_operations has an unlock ed_ioctl field])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_FILEMAP_POPULATE],
+[AC_MSG_CHECKING([for exported filemap_populate])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/page.h>
+        #include <linux/mm.h>
+],[
+       filemap_populate(NULL, 0, 0, __pgprot(0), 0, 0);
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_FILEMAP_POPULATE, 1, [Kernel exports filemap_populate])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_D_ADD_UNIQUE],
+[AC_MSG_CHECKING([for d_add_unique])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/dcache.h>
+],[
+       d_add_unique(NULL, NULL);
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_D_ADD_UNIQUE, 1, [Kernel has d_add_unique])
+],[
+        AC_MSG_RESULT([no])
+])
+])
 
 #
 # LC_PROG_LINUX
@@ -469,6 +512,9 @@ LC_FUNC_DEV_SET_RDONLY
 LC_FUNC_FILEMAP_FDATAWRITE
 LC_STRUCT_STATFS
 LC_FUNC_PAGE_MAPPED
+LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL
+LC_FILEMAP_POPULATE
+LC_D_ADD_UNIQUE
 ])
 
 #

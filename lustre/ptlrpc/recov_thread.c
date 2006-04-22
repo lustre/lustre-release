@@ -227,17 +227,13 @@ static int log_commit_thread(void *arg)
         if (lcd == NULL)
                 RETURN(-ENOMEM);
 
-        lock_kernel();
-        ptlrpc_daemonize(); /* thread never needs to do IO */
-
-        cfs_block_allsigs();
-
         spin_lock(&lcm->lcm_thread_lock);
         THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1,
                     "ll_log_comt_%02d", atomic_read(&lcm->lcm_thread_total));
         atomic_inc(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
-        unlock_kernel();
+
+        ptlrpc_daemonize(cfs_curproc_comm()); /* thread never needs to do IO */
 
         CFS_INIT_LIST_HEAD(&lcd->lcd_lcm_list);
         CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
@@ -344,7 +340,8 @@ static int log_commit_thread(void *arg)
                         }
                         mutex_up(&llcd->llcd_ctxt->loc_sem);
 
-                        if (!import || (import == LP_POISON)) {
+                        if (!import || (import == LP_POISON) ||
+                            (import->imp_client == LP_POISON)) {
                                 CERROR("No import %p (llcd=%p, ctxt=%p)\n",
                                        import, llcd, llcd->llcd_ctxt);
                                 llcd_put(llcd);
@@ -501,12 +498,7 @@ static int log_process_thread(void *args)
         ENTRY;
 
         mutex_up(&data->llpa_sem);
-        lock_kernel();
-        ptlrpc_daemonize();     /* thread does IO to log files */
-        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1, "llog_process");
-
-        cfs_block_allsigs();
-        unlock_kernel();
+        ptlrpc_daemonize("llog_process");     /* thread does IO to log files */
 
         rc = llog_create(ctxt, &llh, &logid, NULL);
         if (rc) {

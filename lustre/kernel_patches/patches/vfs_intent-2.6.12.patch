@@ -580,28 +580,6 @@ Index: linux-2.6.12.5/fs/stat.c
  		fput(f);
  	}
  	return error;
-Index: linux-2.6.12.5/fs/nfs/dir.c
-===================================================================
---- linux-2.6.12.5.orig/fs/nfs/dir.c	2005-08-17 17:51:28.000000000 +0200
-+++ linux-2.6.12.5/fs/nfs/dir.c	2005-08-17 17:51:44.000000000 +0200
-@@ -727,7 +727,7 @@
- 		return 0;
- 	if (nd == NULL || nfs_lookup_check_intent(nd, LOOKUP_CREATE) == 0)
- 		return 0;
--	return (nd->intent.open.flags & O_EXCL) != 0;
-+	return (nd->intent.it_flags & O_EXCL) != 0;
- }
- 
- static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *nd)
-@@ -1028,7 +1028,7 @@
- 	attr.ia_valid = ATTR_MODE;
- 
- 	if (nd && (nd->flags & LOOKUP_CREATE))
--		open_flags = nd->intent.open.flags;
-+		open_flags = nd->intent.it_flags;
- 
- 	lock_kernel();
- 	nfs_begin_data_update(dir);
 Index: linux-2.6.12.5/fs/inode.c
 ===================================================================
 --- linux-2.6.12.5.orig/fs/inode.c	2005-08-17 17:51:28.000000000 +0200

@@ -40,7 +40,7 @@ static void interrupted_completion_wait(void *data)
 
 struct lock_wait_data {
         struct ldlm_lock *lwd_lock;
-        int               lwd_generation;
+        __u32             lwd_conn_cnt;
 };
 
 int ldlm_expired_completion_wait(void *data)
@@ -70,11 +70,10 @@ int ldlm_expired_completion_wait(void *data)
 
         obd = lock->l_conn_export->exp_obd;
         imp = obd->u.cli.cl_import;
-        ptlrpc_fail_import(imp, lwd->lwd_generation);
+        ptlrpc_fail_import(imp, lwd->lwd_conn_cnt);
         LDLM_ERROR(lock, "lock timed out (enqueued %lus ago), entering "
                    "recovery for %s@%s", lock->l_enqueued_time.tv_sec,
-                   imp->imp_target_uuid.uuid,
-                   imp->imp_connection->c_remote_uuid.uuid);
+                   obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
 
         RETURN(0);
 }
@@ -117,8 +116,7 @@ noreproc:
         lwd.lwd_lock = lock;
 
         if (unlikely(flags & LDLM_FL_NO_TIMEOUT)) {
-                LDLM_DEBUG(lock, "waiting indefinitely because CW lock was"
-                           " met\n");
+                LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
                 lwi = LWI_INTR(interrupted_completion_wait, &lwd);
         } else {
                 lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout),
@@ -128,7 +126,7 @@ noreproc:
 
         if (imp != NULL) {
                 spin_lock_irqsave(&imp->imp_lock, irqflags);
-                lwd.lwd_generation = imp->imp_generation;
+                lwd.lwd_conn_cnt = imp->imp_conn_cnt;
                 spin_unlock_irqrestore(&imp->imp_lock, irqflags);
         }
 
@@ -452,9 +450,11 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         /* lock enqueued on the server */
         cleanup_phase = 1;
 
+        l_lock(&ns->ns_lock);
         lock->l_remote_handle = reply->lock_handle;
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
+        l_unlock(&ns->ns_lock);
 
         CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%x\n",
                lock, reply->lock_handle.cookie, *flags);
@@ -1101,7 +1101,9 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
         /* we use l_pending_chain here, because it's unused on clients. */
         LASSERTF(list_empty(&lock->l_pending_chain),"lock %p next %p prev %p\n",
                  lock, &lock->l_pending_chain.next,&lock->l_pending_chain.prev);
-        list_add(&lock->l_pending_chain, list);
+        /* bug 9573: don't replay locks left after eviction */
+        if (!(lock->l_flags & LDLM_FL_FAILED))
+                list_add(&lock->l_pending_chain, list);
         return LDLM_ITER_CONTINUE;
 }
 

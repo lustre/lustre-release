@@ -115,7 +115,6 @@ int class_attach(struct lustre_cfg *lcfg)
 
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
-        obd->obd_num_exports = 0;
         spin_lock_init(&obd->obd_dev_lock);
         spin_lock_init(&obd->obd_osfs_lock);
         obd->obd_osfs_age = cfs_time_shift(-1000);
@@ -151,8 +150,8 @@ int class_attach(struct lustre_cfg *lcfg)
 
         obd->obd_attached = 1;
         type->typ_refcnt++;
-        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
-               obd->obd_minor, typename);
+        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
+               obd->obd_minor, typename, atomic_read(&obd->obd_refcount));
         RETURN(0);
  out:
         switch (cleanup_phase) {
@@ -214,7 +213,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_set_up = 1;
         spin_lock(&obd->obd_dev_lock);
         /* cleanup drops this */
-        atomic_inc(&obd->obd_refcount);
+        class_incref(obd);
         spin_unlock(&obd->obd_dev_lock);
 
         CDEBUG(D_IOCTL, "finished setup of obd %s (uuid %s)\n",
@@ -389,6 +388,15 @@ out:
         RETURN(err);
 }
 
+struct obd_device *class_incref(struct obd_device *obd)
+{
+        atomic_inc(&obd->obd_refcount);
+        CDEBUG(D_INFO, "incref %s (%p) now %d\n", obd->obd_name, obd,
+               atomic_read(&obd->obd_refcount));
+
+        return obd;
+}
+
 void class_decref(struct obd_device *obd)
 {
         int err;
@@ -399,7 +407,7 @@ void class_decref(struct obd_device *obd)
         refs = atomic_read(&obd->obd_refcount);
         spin_unlock(&obd->obd_dev_lock);
 
-        CDEBUG(D_INFO, "Decref %s now %d\n", obd->obd_name, refs);
+        CDEBUG(D_INFO, "Decref %s (%p) now %d\n", obd->obd_name, obd, refs);
 
         if ((refs == 1) && obd->obd_stopping) {
                 /* All exports (other than the self-export) have been

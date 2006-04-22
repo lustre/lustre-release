@@ -24,7 +24,7 @@ if LIBLUSTRE
 
 noinst_LIBRARIES = libptlrpc.a
 libptlrpc_a_SOURCES = $(COMMON_SOURCES)
-libptlrpc_a_CPPFLAGS = $(LLCPPFLGS)
+libptlrpc_a_CPPFLAGS = $(LLCPPFLAGS)
 libptlrpc_a_CFLAGS = $(LLCFLAGS)
 
 endif
@@ -71,6 +71,5 @@ endif # DARWIN
 endif # MODULES
 
 install-data-hook: $(install_data_hook)
-
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c
 DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c

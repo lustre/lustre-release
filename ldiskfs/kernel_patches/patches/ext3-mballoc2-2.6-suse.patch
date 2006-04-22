@@ -2570,7 +2570,7 @@ Index: linux-2.6.5-7.201/fs/ext3/mballoc.c
 +	int freed;
 +
 +	sb = inode->i_sb;
-+	if (!test_opt(sb, MBALLOC))
++	if (!test_opt(sb, MBALLOC) || !EXT3_SB(sb)->s_group_info)
 +		ext3_free_blocks_old(handle, inode, block, count);
 +	else {
 +		ext3_mb_free_blocks(handle, inode, block, count, metadata, &freed);

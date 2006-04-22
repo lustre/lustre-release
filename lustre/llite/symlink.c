@@ -159,7 +159,7 @@ struct inode_operations ll_fast_symlink_inode_operations = {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         .revalidate_it  = ll_inode_revalidate_it,
 #else 
-        .getattr_it     = ll_getattr,
+        .getattr_it     = ll_getattr_it,
 #endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,

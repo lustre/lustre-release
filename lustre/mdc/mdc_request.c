@@ -41,6 +41,8 @@
 #include <lprocfs_status.h>
 #include "mdc_internal.h"
 
+static quota_interface_t *quota_interface;
+
 #define REQUEST_MINOR 244
 
 static int mdc_cleanup(struct obd_device *obd);
@@ -681,6 +683,9 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         EXIT;
         *request = req;
  out:
+        if (rc != 0 && req && req->rq_commit_cb)
+                req->rq_commit_cb(req);
+
         return rc;
 }
 
@@ -826,8 +831,9 @@ out:
         return rc;
 }
 
-int mdc_set_info(struct obd_export *exp, obd_count keylen,
-                 void *key, obd_count vallen, void *val)
+int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
+                       void *key, obd_count vallen, void *val,
+                       struct ptlrpc_request_set *set)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
@@ -873,8 +879,14 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                         RETURN(-ENOMEM);
 
                 req->rq_replen = lustre_msg_size(0, NULL);
-                rc = ptlrpc_queue_wait(req);
-                ptlrpc_req_finished(req);
+                if (set) {
+                        rc = 0;
+                        ptlrpc_set_add_req(set, req);
+                        ptlrpc_check_set(set);
+                } else {
+                        rc = ptlrpc_queue_wait(req);
+                        ptlrpc_req_finished(req);
+                }
                 RETURN(rc);
         }
 
@@ -1170,7 +1182,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         RETURN(0);
 }
 
-static int mdc_precleanup(struct obd_device *obd, int stage)
+static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
         ENTRY;
@@ -1246,7 +1258,7 @@ struct obd_ops mdc_obd_ops = {
         .o_connect      = client_connect_import,
         .o_disconnect   = client_disconnect_export,
         .o_iocontrol    = mdc_iocontrol,
-        .o_set_info     = mdc_set_info,
+        .o_set_info_async = mdc_set_info_async,
         .o_get_info     = mdc_get_info,
         .o_statfs       = mdc_statfs,
         .o_pin          = mdc_pin,
@@ -1256,7 +1268,6 @@ struct obd_ops mdc_obd_ops = {
         .o_llog_finish  = mdc_llog_finish,
 };
 
-static quota_interface_t *quota_interface;
 extern quota_interface_t mdc_quota_interface;
 
 int __init mdc_init(void)

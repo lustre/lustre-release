@@ -1,18 +1,8 @@
 #!/bin/sh
 
-rmmod llite
-rmmod mdc
-rmmod lov
-rmmod osc
-rmmod obdfilter
-rmmod fsfilt_ext3
-rmmod fsfilt_ldiskfs
-rmmod ldiskfs
-rmmod ost
-rmmod mds
-rmmod ptlrpc
-rmmod obdclass
-rmmod lvfs
-rmmod ksocklnd
-rmmod lnet
-rmmod libcfs
+SRCDIR=`dirname $0`
+PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+
+lctl modules | awk '{ print $2 }' | xargs rmmod >/dev/null 2>&1 
+# do it again, in case we tried to unload ksocklnd too early
+lctl modules | awk '{ print $2 }' | xargs rmmod

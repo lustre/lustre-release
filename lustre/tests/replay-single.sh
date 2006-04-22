@@ -15,7 +15,7 @@ init_test_env $@
 
 # Skip these tests
 # bug number: 2766 9930
-ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
+ALWAYS_EXCEPT="0b   $REPLAY_SINGLE_EXCEPT"
 
 gen_config() {
     rm -f $XMLCONFIG

@@ -1253,7 +1253,10 @@ class MDSDEV(Module):
         self.nspath = self.db.get_val('nspath', '')
         self.mkfsoptions = '-i 4096 ' + self.db.get_val('mkfsoptions', '')
         self.mountfsoptions = self.db.get_val('mountfsoptions', '')
-        self.quota = self.db.get_val('quota', '')
+        if config.quota:
+            self.quota = config.quota
+        else:
+            self.quota = self.db.get_val('quota', '')
         # overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
         target_uuid = self.db.get_first_ref('target')
         mds = self.db.lookup(target_uuid)
@@ -1511,14 +1514,19 @@ class OSD(Module):
         self.journal_size = self.db.get_val_int('journalsize', 0)
 
         # now as we store fids in EA on OST we need to make inode bigger
-        self.inode_size = self.db.get_val_int('inodesize', 256)
+        self.inode_size = self.db.get_val_int('inodesize', 0)
+        if self.inode_size == 0:
+                self.inode_size = 256
         self.mkfsoptions = self.db.get_val('mkfsoptions', '')
         # Allocate fewer inodes on large OST devices.  Most filesystems
         # can be much more aggressive than this, but by default we can't.
         if self.size > 1000000:
                 self.mkfsoptions = '-i 16384 ' + self.mkfsoptions
         self.mountfsoptions = self.db.get_val('mountfsoptions', '')
-        self.quota = self.db.get_val('quota', '')
+        if config.quota:
+            self.quota = config.quota
+        else:
+            self.quota = self.db.get_val('quota', '')
 
         self.fstype = self.db.get_val('fstype', '')
         if sys_get_branch() == '2.4' and self.fstype == 'ldiskfs':
@@ -1734,7 +1742,6 @@ class Client(Module):
             else:
                 for srv in this_nets:
                     lctl.connect(srv)
-                    break
             if srv:
                  lctl.add_conn(self.name, srv.nid_uuid);
 
@@ -1787,8 +1794,10 @@ class COBD(Module):
 
 # virtual interface for  OSC and LOV
 class VOSC(Module):
-    def __init__(self, db, uuid, fs_name, name_override = None):
+    def __init__(self, db, uuid, fs_name, name_override = None, quota = None):
         Module.__init__(self, 'VOSC', db)
+        if quota:
+            self.add_lustre_module('quota', 'lquota')
         if db.get_class() == 'lov':
             self.osc = LOV(db, uuid, fs_name, name_override)
         else:
@@ -1802,9 +1811,11 @@ class VOSC(Module):
     def cleanup(self):
         self.osc.cleanup()
     def load_module(self):
+        Module.load_module(self)
         self.osc.load_module()
     def cleanup_module(self):
         self.osc.cleanup_module()
+        Module.cleanup_module(self)
 
 
 class ECHO_CLIENT(Module):
@@ -1874,16 +1885,17 @@ class Mountpoint(Module):
         self.fs_uuid = self.db.get_first_ref('filesystem')
         fs = self.db.lookup(self.fs_uuid)
         self.mds_uuid = fs.get_first_ref('mds')
+        mds_db = self.db.lookup(self.mds_uuid)
+        if config.quota:
+            quota = config.quota
+        else:
+            quota = mds_db.get_val('quota', config.quota)
         self.obd_uuid = fs.get_first_ref('obd')
         obd = self.db.lookup(self.obd_uuid)
         client_uuid = generate_client_uuid(self.name)
-        self.vosc = VOSC(obd, client_uuid, self.name)
+        self.vosc = VOSC(obd, client_uuid, self.name, quota=quota)
         self.mdc = get_mdc(db, client_uuid, self.name, self.mds_uuid)
 
-        mds_db = self.db.lookup(self.mds_uuid)
-        quota = mds_db.get_val('quota', '')
-        if quota:
-                self.add_lustre_module('quota', 'lquota')
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('llite', 'llite')
 
@@ -2742,6 +2754,7 @@ lconf_options = [
                 PARAMLIST),
     ('user_xattr', """Enable user_xattr support on MDS""", FLAG, 0),
     ('acl', """Enable ACL support on MDS""", FLAG, 0),
+    ('quota', "Enable quota support for client file system", PARAM), 
     ]
 
 def main():

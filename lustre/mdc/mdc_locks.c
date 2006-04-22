@@ -341,7 +341,8 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[repbufcnt++] = obddev->u.cli.cl_max_mds_cookiesize;
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
-                                  OBD_MD_FLACL | OBD_MD_FLMODEASIZE;
+                                  OBD_MD_FLACL | OBD_MD_FLMODEASIZE |
+                                  OBD_MD_FLDIREA;
                 size[req_buffers++] = sizeof(struct mds_body);
                 size[req_buffers++] = data->namelen + 1;
 

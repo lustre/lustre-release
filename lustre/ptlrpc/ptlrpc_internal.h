@@ -38,7 +38,7 @@ struct ptlrpc_request_set;
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
 int ptlrpc_import_in_recovery(struct obd_import *imp);
-int ptlrpc_set_import_discon(struct obd_import *imp);
+int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt);
 void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
 void ptlrpc_initiate_recovery(struct obd_import *imp);
@@ -56,7 +56,7 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #define ptlrpc_lprocfs_unregister_service(params...) do{}while(0)
 #define ptlrpc_lprocfs_rpc_sent(params...) do{}while(0)
 #define ptlrpc_lprocfs_do_request_stat(params...) do{}while(0)
-#endif /* __KERNEL__ */
+#endif /* LPROCFS */
 
 /* recovd_thread.c */
 int llog_init_commit_master(void);
@@ -114,5 +114,10 @@ int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 void ptlrpc_pinger_wake_up(void);
 void ptlrpc_ping_import_soon(struct obd_import *imp);
+#ifdef __KERNEL__
+int ping_evictor_wake(struct obd_export *exp);
+#else
+#define ping_evictor_wake(exp)     1
+#endif
 
 #endif /* PTLRPC_INTERNAL_H */

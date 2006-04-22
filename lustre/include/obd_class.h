@@ -77,15 +77,6 @@ void oig_complete_one(struct obd_io_group *oig,
                       struct oig_callback_context *occ, int rc);
 void oig_release(struct obd_io_group *oig);
 int oig_wait(struct obd_io_group *oig);
-/* ping evictor */
-#ifdef __KERNEL__
-void ping_evictor_start(void);
-void ping_evictor_stop(void);
-#else
-#define ping_evictor_start()    do {} while (0)
-#define ping_evictor_stop()     do {} while (0)
-#endif
-
 
 char *obd_export_nid2str(struct obd_export *exp);
 
@@ -98,6 +89,7 @@ int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);
+struct obd_device *class_incref(struct obd_device *obd);
 void class_decref(struct obd_device *obd);
 
 /* Passed as data param to class_config_parse_llog */
@@ -142,11 +134,10 @@ void __class_export_put(struct obd_export *);
 struct obd_export *class_new_export(struct obd_device *obddev,
                                     struct obd_uuid *cluuid);
 void class_unlink_export(struct obd_export *exp);
-void class_update_export_timer(struct obd_export *exp, time_t extra_delay);
 
 struct obd_import *class_import_get(struct obd_import *);
 void class_import_put(struct obd_import *);
-struct obd_import *class_new_import(void);
+struct obd_import *class_new_import(struct obd_device *obd);
 void class_destroy_import(struct obd_import *exp);
 
 struct obd_type *class_get_type(char *name);
@@ -260,16 +251,18 @@ static inline int obd_get_info(struct obd_export *exp, __u32 keylen,
         RETURN(rc);
 }
 
-static inline int obd_set_info(struct obd_export *exp, obd_count keylen,
-                               void *key, obd_count vallen, void *val)
+static inline int obd_set_info_async(struct obd_export *exp, obd_count keylen,
+                                     void *key, obd_count vallen, void *val,
+                                     struct ptlrpc_request_set *set)
 {
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, set_info);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, set_info);
+        EXP_CHECK_OP(exp, set_info_async);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, set_info_async);
 
-        rc = OBP(exp->exp_obd, set_info)(exp, keylen, key, vallen, val);
+        rc = OBP(exp->exp_obd, set_info_async)(exp, keylen, key, vallen, val, 
+                                               set);
         RETURN(rc);
 }
 
@@ -285,7 +278,8 @@ static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
         RETURN(rc);
 }
 
-static inline int obd_precleanup(struct obd_device *obd, int cleanup_stage)
+static inline int obd_precleanup(struct obd_device *obd, 
+                                 enum obd_cleanup_stage cleanup_stage)
 {
         int rc;
         ENTRY;
@@ -1180,7 +1174,6 @@ static inline void obdo_free(struct obdo *oa)
  * <shaver> // XXX do not look into _superhack with remaining eye
  * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
-extern void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
 
 /* sysctl.c */
 extern void obd_sysctl_init (void);

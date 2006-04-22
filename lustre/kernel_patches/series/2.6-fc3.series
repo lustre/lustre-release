@@ -1,7 +1,7 @@
 uml-2.6.10-fc3.patch
 lustre_version.patch
 fc3_to_rhel4_updates.patch 
-vfs_intent-2.6-rhel4.patch
+vfs_intent-2.6-fc3.patch
 vfs_nointent-2.6-rhel4.patch
 vfs_races-2.6-fc3.patch
 ext3-wantedi-misc-2.6-suse.patch

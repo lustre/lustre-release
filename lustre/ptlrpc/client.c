@@ -464,6 +464,7 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
         list_add_tail(&req->rq_set_chain, &set->set_requests);
         req->rq_set = set;
         set->set_remaining++;
+
         atomic_inc(&req->rq_import->imp_inflight);
 }
 
@@ -651,9 +652,6 @@ static int after_reply(struct ptlrpc_request *req)
                         req->rq_commit_cb(req);
                         spin_lock_irqsave(&imp->imp_lock, flags);
                 }
-
-                if (req->rq_transno > imp->imp_max_transno)
-                        imp->imp_max_transno = req->rq_transno;
 
                 /* Replay-enabled imports return commit-status information. */
                 if (req->rq_repmsg->last_committed)
@@ -987,7 +985,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
                 RETURN(1);
         }
 
-        ptlrpc_fail_import(imp, req->rq_import_generation);
+        ptlrpc_fail_import(imp, req->rq_reqmsg->conn_cnt);
 
         RETURN(0);
 }
@@ -1093,7 +1091,9 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
         int                    rc, timeout;
         ENTRY;
 
-        LASSERT(!list_empty(&set->set_requests));
+        if (list_empty(&set->set_requests))
+                RETURN(0);
+
         list_for_each(tmp, &set->set_requests) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_set_chain);
                 if (req->rq_phase == RQ_PHASE_NEW)
@@ -1309,8 +1309,19 @@ void ptlrpc_free_committed(struct obd_import *imp)
 
         LASSERT_SPIN_LOCKED(&imp->imp_lock);
 
-        CDEBUG(D_HA, "%s: committing for last_committed "LPU64"\n",
-               imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
+
+        if (imp->imp_peer_committed_transno == imp->imp_last_transno_checked &&
+            imp->imp_generation == imp->imp_last_generation_checked) {
+                CDEBUG(D_HA, "%s: skip recheck for last_committed "LPU64"\n",
+                       imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
+                return;
+        }
+        
+        CDEBUG(D_HA, "%s: committing for last_committed "LPU64" gen %d\n",
+               imp->imp_obd->obd_name, imp->imp_peer_committed_transno,
+               imp->imp_generation);
+        imp->imp_last_transno_checked = imp->imp_peer_committed_transno;
+        imp->imp_last_generation_checked = imp->imp_generation;
 
         list_for_each_safe(tmp, saved, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);

@@ -41,7 +41,6 @@ EXPORT_SYMBOL(obdo_cachep);
 cfs_mem_cache_t *import_cachep = NULL;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
-void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
 
 /*
  * support functions: we could use inter-module communication, but this
@@ -196,8 +195,8 @@ struct obd_device *class_newdev(struct obd_type *type, char *name)
                         obd->obd_minor = i;
                         obd->obd_type = type;
                         obd->obd_name = name;
-                        CDEBUG(D_IOCTL, "Adding new device %s\n",
-                               obd->obd_name);
+                        CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
+                               obd->obd_name, obd);
                         result = obd;
                 }
         }
@@ -291,9 +290,8 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                         continue;
                 if ((strncmp(obd->obd_type->typ_name, typ_name,
                              strlen(typ_name)) == 0)) {
-                        struct client_obd *cli = &obd->u.cli;
-                        struct obd_import *imp = cli->cl_import;
-                        if (obd_uuid_equals(tgt_uuid, &imp->imp_target_uuid) &&
+                        if (obd_uuid_equals(tgt_uuid,
+                                            &obd->u.cli.cl_target_uuid) &&
                             ((grp_uuid)? obd_uuid_equals(grp_uuid,
                                                          &obd->obd_uuid) : 1)) {
                                 spin_unlock(&obd_dev_lock);
@@ -519,7 +517,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
                 }
         }
         LASSERT(!obd->obd_stopping); /* shouldn't happen, but might race */
-        atomic_inc(&obd->obd_refcount);
+        class_incref(obd);
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
         list_add_tail(&export->exp_obd_chain_timed,
                       &export->exp_obd->obd_exports_timed);
@@ -590,12 +588,13 @@ void class_import_put(struct obd_import *import)
         }
 
         LASSERT(list_empty(&import->imp_handle.h_link));
+        class_decref(import->imp_obd);
         OBD_FREE(import, sizeof(*import));
         EXIT;
 }
 EXPORT_SYMBOL(class_import_put);
 
-struct obd_import *class_new_import(void)
+struct obd_import *class_new_import(struct obd_device *obd)
 {
         struct obd_import *imp;
 
@@ -607,10 +606,8 @@ struct obd_import *class_new_import(void)
         CFS_INIT_LIST_HEAD(&imp->imp_sending_list);
         CFS_INIT_LIST_HEAD(&imp->imp_delayed_list);
         spin_lock_init(&imp->imp_lock);
-        imp->imp_conn_cnt = 0;
-        imp->imp_max_transno = 0;
-        imp->imp_peer_committed_transno = 0;
         imp->imp_state = LUSTRE_IMP_NEW;
+        imp->imp_obd = class_incref(obd);
         cfs_waitq_init(&imp->imp_recovery_waitq);
 
         atomic_set(&imp->imp_refcount, 2);
@@ -631,13 +628,7 @@ void class_destroy_import(struct obd_import *import)
 
         class_handle_unhash(&import->imp_handle);
 
-        /* Abort any inflight DLM requests and NULL out their (about to be
-         * freed) import. */
-        /* Invalidate all requests on import, would be better to call
-           ptlrpc_set_import_active(imp, 0); */
         import->imp_generation++;
-        ptlrpc_abort_inflight_superhack(import);
-
         class_import_put(import);
 }
 EXPORT_SYMBOL(class_destroy_import);
@@ -711,7 +702,7 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
 
         /* It's possible that an export may disconnect itself, but
          * nothing else will be added to this list. */
-        while(!list_empty(list)) {
+        while (!list_empty(list)) {
                 exp = list_entry(list->next, struct obd_export, exp_obd_chain);
                 class_export_get(exp);
                 exp->exp_flags = flags;
@@ -980,234 +971,6 @@ char *obd_export_nid2str(struct obd_export *exp)
         return "(no nid)";
 }
 EXPORT_SYMBOL(obd_export_nid2str);
-
-/* Ping evictor thread */
-#ifdef __KERNEL__
-#define PET_READY     1
-#define PET_TERMINATE 2
-
-static int               pet_refcount = 0;
-static int               pet_state;
-static cfs_waitq_t       pet_waitq;
-static struct obd_export *pet_exp = NULL;
-static spinlock_t        pet_lock;
-
-static int ping_evictor_wake(struct obd_export *exp)
-{
-        spin_lock(&pet_lock);
-        if (pet_exp) {
-                /* eventually the new obd will call here again. */
-                spin_unlock(&pet_lock);
-                return 1;
-        }
-
-        /* We have to make sure the obd isn't destroyed between now and when
-         * the ping evictor runs.  We'll take a reference here, and drop it
-         * when we finish in the evictor.  We don't really care about this
-         * export in particular; we just need one to keep the obd alive. */
-        pet_exp = class_export_get(exp);
-        spin_unlock(&pet_lock);
-
-        cfs_waitq_signal(&pet_waitq);
-        return 0;
-}
-
-static int ping_evictor_main(void *arg)
-{
-        struct obd_device *obd;
-        struct obd_export *exp;
-        struct l_wait_info lwi = { 0 };
-        time_t expire_time;
-        ENTRY;
-
-        lock_kernel();
-
-        /* ptlrpc_daemonize() */
-        exit_mm(current);
-        lustre_daemonize_helper();
-        set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
-        exit_files(current);
-        reparent_to_init();
-        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX-1, "ping_evictor");
-
-        cfs_block_allsigs();
-        unlock_kernel();
-
-        CDEBUG(D_HA, "Starting Ping Evictor\n");
-        pet_exp = NULL;
-        pet_state = PET_READY;
-        while (1) {
-                l_wait_event(pet_waitq, pet_exp ||
-                             (pet_state == PET_TERMINATE), &lwi);
-                if (pet_state == PET_TERMINATE)
-                        break;
-
-                /* we only get here if pet_exp != NULL, and the end of this
-                 * loop is the only place which sets it NULL again, so lock
-                 * is not strictly necessary. */
-                spin_lock(&pet_lock);
-                obd = pet_exp->exp_obd;
-                spin_unlock(&pet_lock);
-
-                expire_time = CURRENT_SECONDS - (3 * obd_timeout / 2);
-
-                CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
-                       obd->obd_name, expire_time);
-
-                /* Exports can't be deleted out of the list while we hold
-                 * the obd lock (class_unlink_export), which means we can't
-                 * lose the last ref on the export.  If they've already been
-                 * removed from the list, we won't find them here. */
-                spin_lock(&obd->obd_dev_lock);
-                while (!list_empty(&obd->obd_exports_timed)) {
-                        exp = list_entry(obd->obd_exports_timed.next,
-                                         struct obd_export,exp_obd_chain_timed);
-
-                        if (expire_time > exp->exp_last_request_time) {
-                                class_export_get(exp);
-                                spin_unlock(&obd->obd_dev_lock);
-                                LCONSOLE_WARN("%s: haven't heard from %s in %ld"
-                                              " seconds. Last request was at %ld. "
-                                              "I think it's dead, and I am evicting "
-                                              "it.\n", obd->obd_name,
-                                              obd_export_nid2str(exp),
-                                              (long)(CURRENT_SECONDS -
-                                                     exp->exp_last_request_time),
-                                              exp->exp_last_request_time);
-
-
-                                class_fail_export(exp);
-                                class_export_put(exp);
-
-                                spin_lock(&obd->obd_dev_lock);
-                        } else {
-                                /* List is sorted, so everyone below is ok */
-                                break;
-                        }
-                }
-                spin_unlock(&obd->obd_dev_lock);
-
-                class_export_put(pet_exp);
-
-                spin_lock(&pet_lock);
-                pet_exp = NULL;
-                spin_unlock(&pet_lock);
-        }
-        CDEBUG(D_HA, "Exiting Ping Evictor\n");
-
-        RETURN(0);
-}
-
-void ping_evictor_start(void)
-{
-        int rc;
-
-        if (++pet_refcount > 1)
-                return;
-
-        spin_lock_init(&pet_lock);
-        cfs_waitq_init(&pet_waitq);
-
-        rc = cfs_kernel_thread(ping_evictor_main, NULL, CLONE_VM | CLONE_FS);
-        if (rc < 0) {
-                pet_refcount--;
-                CERROR("Cannot start ping evictor thread: %d\n", rc);
-        }
-}
-EXPORT_SYMBOL(ping_evictor_start);
-
-void ping_evictor_stop(void)
-{
-        if (--pet_refcount > 0)
-                return;
-
-        pet_state = PET_TERMINATE;
-        cfs_waitq_signal(&pet_waitq);
-}
-EXPORT_SYMBOL(ping_evictor_stop);
-#else /* !__KERNEL__ */
-#define ping_evictor_wake(exp)     1
-#endif
-
-/* This function makes sure dead exports are evicted in a timely manner.
-   This function is only called when some export receives a message (i.e.,
-   the network is up.) */
-void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
-{
-        struct obd_export *oldest_exp;
-        time_t oldest_time;
-
-        ENTRY;
-
-        LASSERT(exp);
-
-        /* Compensate for slow machines, etc, by faking our request time
-           into the future.  Although this can break the strict time-ordering
-           of the list, we can be really lazy here - we don't have to evict
-           at the exact right moment.  Eventually, all silent exports
-           will make it to the top of the list. */
-        exp->exp_last_request_time = max(exp->exp_last_request_time,
-                                         (time_t)CURRENT_SECONDS + extra_delay);
-
-        CDEBUG(D_INFO, "updating export %s at %ld\n",
-               exp->exp_client_uuid.uuid,
-               exp->exp_last_request_time);
-
-        /* exports may get disconnected from the chain even though the
-           export has references, so we must keep the spin lock while
-           manipulating the lists */
-        spin_lock(&exp->exp_obd->obd_dev_lock);
-
-        if (list_empty(&exp->exp_obd_chain_timed)) {
-                /* this one is not timed */
-                spin_unlock(&exp->exp_obd->obd_dev_lock);
-                EXIT;
-                return;
-        }
-
-        list_move_tail(&exp->exp_obd_chain_timed,
-                       &exp->exp_obd->obd_exports_timed);
-
-        oldest_exp = list_entry(exp->exp_obd->obd_exports_timed.next,
-                                struct obd_export, exp_obd_chain_timed);
-        oldest_time = oldest_exp->exp_last_request_time;
-        spin_unlock(&exp->exp_obd->obd_dev_lock);
-
-        if (exp->exp_obd->obd_recovering) {
-                /* be nice to everyone during recovery */
-                EXIT;
-                return;
-        }
-
-        /* Note - racing to start/reset the obd_eviction timer is safe */
-        if (exp->exp_obd->obd_eviction_timer == 0) {
-                /* Check if the oldest entry is expired. */
-                if (CURRENT_SECONDS > (oldest_time +
-                                       (3 * obd_timeout / 2) + extra_delay)) {
-                        /* We need a second timer, in case the net was down and
-                         * it just came back. Since the pinger may skip every
-                         * other PING_INTERVAL (see note in ptlrpc_pinger_main),
-                         * we better wait for 3. */
-                        exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
-                                3 * PING_INTERVAL;
-                        CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
-                               exp->exp_obd->obd_name, obd_export_nid2str(exp),
-                               oldest_time);
-                }
-        } else {
-                if (CURRENT_SECONDS > (exp->exp_obd->obd_eviction_timer +
-                                       extra_delay)) {
-                        /* The evictor won't evict anyone who we've heard from
-                         * recently, so we don't have to check before we start
-                         * it. */
-                        if (!ping_evictor_wake(exp))
-                                exp->exp_obd->obd_eviction_timer = 0;
-                }
-        }
-
-        EXIT;
-}
-EXPORT_SYMBOL(class_update_export_timer);
 
 #define EVICT_BATCH 32
 int obd_export_evict_by_nid(struct obd_device *obd, char *nid)

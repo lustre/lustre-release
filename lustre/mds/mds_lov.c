@@ -141,8 +141,9 @@ int mds_lov_set_nextid(struct obd_device *obd)
 
         LASSERT(mds->mds_lov_objids != NULL);
 
-        rc = obd_set_info(mds->mds_osc_exp, strlen("next_id"), "next_id",
-                          mds->mds_lov_desc.ld_tgt_count, mds->mds_lov_objids);
+        rc = obd_set_info_async(mds->mds_osc_exp, strlen("next_id"), "next_id",
+                                mds->mds_lov_desc.ld_tgt_count,
+                                mds->mds_lov_objids, NULL);
         RETURN(rc);
 }
 
@@ -202,7 +203,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 RETURN(-ENOMEM);
-        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX;
+        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX |
+                                  OBD_CONNECT_REQPORTAL;
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid, data);
@@ -459,8 +461,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
-                rc2 = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"),
-                                   "mds_conn", 0, NULL);
+                rc2 = obd_set_info_async(mds->mds_osc_exp, strlen("mds_conn"),
+                                         "mds_conn", 0, NULL, NULL);
                 if (!rc)
                         rc = rc2;
                 RETURN(rc);
@@ -510,8 +512,8 @@ static int __mds_lov_syncronize(void *data)
 
         LASSERT(obd != NULL);
 
-        rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"),
-                          "mds_conn", 0, uuid);
+        rc = obd_set_info_async(obd->u.mds.mds_osc_exp, strlen("mds_conn"),
+                          "mds_conn", 0, uuid, NULL);
         if (rc != 0)
                 GOTO(out, rc);
 
@@ -524,8 +526,8 @@ static int __mds_lov_syncronize(void *data)
                 GOTO(out, rc);
         }
 
-        CWARN("MDS %s: %s now active, resetting orphans\n",
-              obd->obd_name, uuid ? (char *)uuid->uuid : "All OSC's");
+        LCONSOLE_INFO("MDS %s: %s now active, resetting orphans\n",
+                      obd->obd_name, uuid ? (char *)uuid->uuid : "All OSCs");
 
         if (obd->obd_stopping)
                 GOTO(out, rc = -ENODEV);
@@ -545,16 +547,7 @@ out:
 
 int mds_lov_synchronize(void *data)
 {
-        unsigned long flags;
-
-        lock_kernel();
-        ptlrpc_daemonize();
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-        unlock_kernel();
+        ptlrpc_daemonize("mds_lov_sync");
 
         return (__mds_lov_syncronize(data));
 }
@@ -582,7 +575,7 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid,
            still disconnected. Taking an obd reference insures that we don't
            disconnect the LOV.  This of course means a cleanup won't
            finish for as long as the sync is blocking. */
-        atomic_inc(&obd->obd_refcount);
+        class_incref(obd);
 
         if (nonblock) {
                 /* Syncronize in the background */
@@ -620,7 +613,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 RETURN(-EINVAL);
         }
 
-        uuid = &watched->u.cli.cl_import->imp_target_uuid;
+        uuid = &watched->u.cli.cl_target_uuid;
         if (obd->obd_recovering) {
                 /* in the case OBD is in recovery we do not reinit desc and
                  * easize, as that will be done in mds_lov_connect() after

@@ -42,18 +42,6 @@ Index: linux-2.6.9-5.0.3.EL/include/linux/ext2_fs_sb.h
  /*
   * second extended-fs super-block data in memory
   */
-Index: linux-2.6.9-5.0.3.EL/net/core/sock.c
-===================================================================
---- linux-2.6.9-5.0.3.EL.orig/net/core/sock.c	2005-02-26 13:24:35.490810168 +0200
-+++ linux-2.6.9-5.0.3.EL/net/core/sock.c	2005-02-26 13:53:13.801587224 +0200
-@@ -602,6 +602,7 @@
-   		return -EFAULT;
-   	return 0;
- }
-+EXPORT_SYMBOL(sock_getsockopt);
- 
- static kmem_cache_t *sk_cachep;
- 
 Index: linux-2.6.9-5.0.3.EL/fs/namespace.c
 ===================================================================
 --- linux-2.6.9-5.0.3.EL.orig/fs/namespace.c	2005-02-26 13:47:31.282658016 +0200
@@ -79,23 +67,6 @@ Index: linux-2.6.9-5.0.3.EL/kernel/exit.c
  void __set_special_pids(pid_t session, pid_t pgrp)
  {
  	struct task_struct *curr = current;
-@@ -428,6 +430,8 @@
- 	__exit_files(tsk);
- }
- 
-+EXPORT_SYMBOL(exit_files);
-+
- static inline void __put_fs_struct(struct fs_struct *fs)
- {
- 	/* No need to hold fs->lock if we are killing it */
-@@ -516,6 +516,7 @@
- {
- 	__exit_mm(tsk);
- }
-+EXPORT_SYMBOL(exit_mm);
- 
- static inline void choose_new_parent(task_t *p, task_t *reaper, task_t *child_reaper)
- {
 Index: linux-2.6.9-5.0.3.EL/fs/dcache.c
 ===================================================================
 --- linux-2.6.9-5.0.3.EL.orig/fs/dcache.c	2005-02-26 13:49:04.365507272 +0200
@@ -108,50 +79,3 @@ Index: linux-2.6.9-5.0.3.EL/fs/dcache.c
  
  void d_genocide(struct dentry *root)
  {
-Index: linux-2.6.9-5.0.3.EL/mm/filemap.c
-===================================================================
---- linux-2.6.9-5.0.3.EL.orig/mm/filemap.c	2005-02-26 13:24:35.502808344 +0200
-+++ linux-2.6.9-5.0.3.EL/mm/filemap.c	2005-02-26 13:53:59.787596288 +0200
-@@ -1473,7 +1473,7 @@
- 	return NULL;
- }
- 
--static int filemap_populate(struct vm_area_struct *vma,
-+int filemap_populate(struct vm_area_struct *vma,
- 			unsigned long addr,
- 			unsigned long len,
- 			pgprot_t prot,
-@@ -1520,6 +1520,7 @@
- 
- 	return 0;
- }
-+EXPORT_SYMBOL_GPL(filemap_populate);
- 
- struct vm_operations_struct generic_file_vm_ops = {
- 	.nopage		= filemap_nopage,
-Index: linux-2.6.9-5.0.3.EL/fs/file_table.c
-===================================================================
---- linux-2.6.9-5.0.3.EL.orig/fs/file_table.c	2005-02-26 13:24:35.512806824 +0200
-+++ linux-2.6.9-5.0.3.EL/fs/file_table.c	2005-02-26 13:53:13.811585704 +0200
-@@ -196,6 +196,7 @@
- 		file_free(file);
- 	}
- }
-+EXPORT_SYMBOL(put_filp);
- 
- void file_move(struct file *file, struct list_head *list)
- {
-Index: linux-2.6.9-5.0.3.EL/include/linux/mm.h
-===================================================================
---- linux-2.6.9-5.0.3.EL.orig/include/linux/mm.h	2005-02-26 13:49:05.823285656 +0200
-+++ linux-2.6.9-5.0.3.EL/include/linux/mm.h	2005-02-26 13:53:54.181448552 +0200
-@@ -721,6 +721,9 @@
- 
- /* generic vm_area_ops exported for stackable file systems */
- struct page *filemap_nopage(struct vm_area_struct *, unsigned long, int *);
-+int filemap_populate(struct vm_area_struct *vma, unsigned long addr,
-+                        unsigned long len, pgprot_t prot, unsigned long pgoff,
-+                        int nonblock);
- 
- /* mm/page-writeback.c */
- int write_one_page(struct page *page, int wait);

@@ -107,7 +107,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
 static __u32 mds_pack_open_flags(__u32 flags)
 {
         return
-                (flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC |
+                (flags & (FMODE_READ | FMODE_WRITE |
                           MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
                           MDS_OPEN_HAS_OBJS | MDS_OPEN_OWNEROVERRIDE)) |
                 ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
@@ -117,6 +117,9 @@ static __u32 mds_pack_open_flags(__u32 flags)
                 ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
                 ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
                 ((flags & O_JOIN_FILE) ? MDS_OPEN_JOIN_FILE : 0) |
+#ifdef FMODE_EXEC
+                ((flags & FMODE_EXEC) ? MDS_FMODE_EXEC : 0) |
+#endif
                 0;
 }
 
@@ -189,7 +192,9 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                 rec->sa_atime = LTIME_S(iattr->ia_atime);
                 rec->sa_mtime = LTIME_S(iattr->ia_mtime);
                 rec->sa_ctime = LTIME_S(iattr->ia_ctime);
-                rec->sa_attr_flags = iattr->ia_attr_flags;
+                rec->sa_attr_flags =
+                               ((struct ll_iattr_struct *)iattr)->ia_attr_flags;
+
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
                 else

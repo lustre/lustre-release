@@ -252,8 +252,10 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         GOTO(err_msd, rc);
                 }
                 if (strcmp(msd->msd_uuid, obd->obd_uuid.uuid) != 0) {
-                        CERROR("OBD UUID %s does not match last_rcvd UUID %s\n",
-                               obd->obd_uuid.uuid, msd->msd_uuid);
+                        LCONSOLE_ERROR("Trying to start OBD %s using the wrong"
+                                       " disk %s. Were the /dev/ assignments "
+                                       "rearranged?\n",
+                                       obd->obd_uuid.uuid, msd->msd_uuid);
                         GOTO(err_msd, rc = -EINVAL);
                 }
                 mount_count = le64_to_cpu(msd->msd_mount_count);
@@ -648,7 +650,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
-        down(&parent_inode->i_sem);
+        LOCK_INODE_MUTEX(parent_inode);
         new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
 
         if (IS_ERR(new_child)) {
@@ -683,7 +685,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 out_dput:
         dput(new_child);
 out_close:
-        up(&parent_inode->i_sem);
+        UNLOCK_INODE_MUTEX(parent_inode);
         err = filp_close(filp, 0);
         if (err) {
                 CERROR("closing tmpfile %u: rc %d\n", tmpname, rc);
@@ -715,7 +717,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
-        down(&parent_inode->i_sem);
+        LOCK_INODE_MUTEX(parent_inode);
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
         if (IS_ERR(de)) {
                 rc = IS_ERR(de);
@@ -749,7 +751,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 out_dput:
         if (de != NULL)
                 l_dput(de);
-        up(&parent_inode->i_sem);
+        UNLOCK_INODE_MUTEX(parent_inode);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
         RETURN(rc);

@@ -505,6 +505,7 @@ static void __exit lvfs_linux_exit(void)
         CDEBUG(leaked ? D_ERROR : D_INFO,
                "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
 
+        EXIT;
         return;
 }
 

@@ -396,7 +396,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                        watched->obd_name);
                 RETURN(-EINVAL);
         }
-        uuid = &watched->u.cli.cl_import->imp_target_uuid;
+        uuid = &watched->u.cli.cl_target_uuid;
 
         if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE) {
                 /* Set OSC as active before notifying the observer, so the
@@ -520,8 +520,8 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_set_info(obd->obd_observer->obd_self_export,
-                          strlen("next_id"),"next_id", 2, params);
+        rc = obd_set_info_async(obd->obd_observer->obd_self_export,
+                                strlen("next_id"),"next_id", 2, params, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -703,7 +703,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(0);
 }
 
-static int lov_precleanup(struct obd_device *obd, int stage)
+static int lov_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
         ENTRY;
@@ -720,10 +720,15 @@ static int lov_precleanup(struct obd_device *obd, int stage)
                 }
                 break;
         }
+        case OBD_CLEANUP_EXPORTS:
+                break;
         case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        case OBD_CLEANUP_OBD:
+                break;
         }
         RETURN(rc);
 }
@@ -2150,13 +2155,21 @@ out:
         RETURN(rc);
 }
 
-static int lov_set_info(struct obd_export *exp, obd_count keylen,
-                        void *key, obd_count vallen, void *val)
+static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
+                              void *key, obd_count vallen, void *val,
+                              struct ptlrpc_request_set *set)
 {
         struct obd_device *obddev = class_exp2obd(exp);
         struct lov_obd *lov = &obddev->u.lov;
         int i, rc = 0, err;
+        int no_set = !set;
         ENTRY;
+
+        if (no_set) {
+                set = ptlrpc_prep_set();
+                if (!set)
+                        RETURN(-ENOMEM);
+        }
 
         if (KEY_IS("next_id")) {
                 if (vallen != lov->desc.ld_tgt_count)
@@ -2173,8 +2186,9 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                                 continue;
 
                         /* hit all OSCs, even inactive ones */
-                        err = obd_set_info(lov->tgts[i].ltd_exp, keylen, key,
-                                           vallen, ((obd_id*)val) + i);
+                        err = obd_set_info_async(lov->tgts[i].ltd_exp, keylen,
+                                                 key, vallen,
+                                                 ((obd_id*)val) + i, set);
                         if (!rc)
                                 rc = err;
                 }
@@ -2187,8 +2201,8 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         if (!lov->tgts[i].ltd_exp || !lov->tgts[i].active)
                                 continue;
 
-                        err = obd_set_info(lov->tgts[i].ltd_exp, keylen, key,
-                                           vallen, val);
+                        err = obd_set_info_async(lov->tgts[i].ltd_exp, keylen,
+                                                 key, vallen, val, set);
                         if (!rc)
                                 rc = err;
                 }
@@ -2213,13 +2227,19 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                 if (!val && !lov->tgts[i].active)
                         continue;
 
-                err = obd_set_info(lov->tgts[i].ltd_exp,
-                                  keylen, key, vallen, val);
+                err = obd_set_info_async(lov->tgts[i].ltd_exp,
+                                         keylen, key, vallen, val, set);
                 if (!rc)
                         rc = err;
         }
 out:
         lov_putref(obddev);
+        if (no_set) {
+                err = ptlrpc_set_wait(set);
+                if (!rc)
+                        rc = err;
+                ptlrpc_set_destroy(set);
+        }
         RETURN(rc);
 }
 
@@ -2398,7 +2418,7 @@ struct obd_ops lov_obd_ops = {
         .o_join_lru            = lov_join_lru,
         .o_iocontrol           = lov_iocontrol,
         .o_get_info            = lov_get_info,
-        .o_set_info            = lov_set_info,
+        .o_set_info_async      = lov_set_info_async,
         .o_llog_init           = lov_llog_init,
         .o_llog_finish         = lov_llog_finish,
         .o_notify              = lov_notify,

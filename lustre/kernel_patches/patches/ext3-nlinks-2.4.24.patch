@@ -24,7 +24,7 @@
  	int err;
  
 -	if (dir->i_nlink >= EXT3_LINK_MAX)
-+	if (EXT3_DIR_LINK_MAXED(dir))
++	if (EXT3_DIR_LINK_MAX(dir))
  		return -EMLINK;
  
  	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS +
@@ -96,7 +96,7 @@
  		return -EPERM;
  
 -	if (inode->i_nlink >= EXT3_LINK_MAX) {
-+	if (EXT3_DIR_LINK_MAXED(inode))
++	if (EXT3_DIR_LINK_MAX(inode))
  		return -EMLINK;
 -	}
  
@@ -109,7 +109,7 @@
 -		if (!new_inode && new_dir!=old_dir &&
 -				new_dir->i_nlink >= EXT3_LINK_MAX)
 +		if (!new_inode && new_dir != old_dir &&
-+		    EXT3_DIR_LINK_MAXED(new_dir))
++		    EXT3_DIR_LINK_MAX(new_dir))
  			goto end_rename;
  	}
  	if (!new_bh) {
@@ -150,24 +150,3 @@
  
  /*
   * Macro-instructions used to manage several block sizes
-@@ -581,14 +581,15 @@
-  */
- 
- #ifdef CONFIG_EXT3_INDEX
--  #define is_dx(dir) (EXT3_HAS_COMPAT_FEATURE(dir->i_sb, \
--					      EXT3_FEATURE_COMPAT_DIR_INDEX) && \
-+#define is_dx(dir) (EXT3_HAS_COMPAT_FEATURE(dir->i_sb, \
-+					    EXT3_FEATURE_COMPAT_DIR_INDEX) && \
- 		      (EXT3_I(dir)->i_flags & EXT3_INDEX_FL))
--#define EXT3_DIR_LINK_MAX(dir) (!is_dx(dir) && (dir)->i_nlink >= EXT3_LINK_MAX)
--#define EXT3_DIR_LINK_EMPTY(dir) ((dir)->i_nlink == 2 || (dir)->i_nlink == 1)
-+#define EXT3_DIR_LINK_MAXED(dir) (!is_dx(dir) && (dir)->i_nlink >=EXT3_LINK_MAX)
-+#define EXT3_DIR_LINK_EMPTY(dir) ((dir)->i_nlink == 2 || \
-+				  (is_dx(dir) && (dir)->i_nlink == 1))
- #else
-   #define is_dx(dir) 0
--#define EXT3_DIR_LINK_MAX(dir) ((dir)->i_nlink >= EXT3_LINK_MAX)
-+#define EXT3_DIR_LINK_MAXED(dir) ((dir)->i_nlink >= EXT3_LINK_MAX)
- #define EXT3_DIR_LINK_EMPTY(dir) ((dir)->i_nlink == 2)
- #endif
- 

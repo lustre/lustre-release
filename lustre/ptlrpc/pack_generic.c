@@ -1783,8 +1783,8 @@ void lustre_assert_wire_constants(void)
                  (long long)FMODE_READ);
         LASSERTF(FMODE_WRITE == 2, " found %lld\n",
                  (long long)FMODE_WRITE);
-        LASSERTF(FMODE_EXEC == 4, " found %lld\n",
-                 (long long)FMODE_EXEC);
+        LASSERTF(MDS_FMODE_EXEC == 4, " found %lld\n",
+                 (long long)MDS_FMODE_EXEC);
         CLASSERT(MDS_OPEN_CREAT == 00000100);
         CLASSERT(MDS_OPEN_EXCL == 00000200);
         CLASSERT(MDS_OPEN_TRUNC == 00001000);

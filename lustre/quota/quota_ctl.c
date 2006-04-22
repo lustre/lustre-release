@@ -91,6 +91,7 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct obd_device *obd = exp->exp_obd;
+        struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
         int rc = 0;
         ENTRY;
@@ -98,6 +99,12 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
         case Q_QUOTAOFF:
+                if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
+                        CDEBUG(D_INFO, "other people are doing quotacheck\n");
+                        atomic_inc(&obt->obt_quotachecking);
+                        rc = -EBUSY;
+                        break;
+                }
         case Q_GETOINFO:
         case Q_GETOQUOTA:
         case Q_GETQUOTA:
@@ -113,6 +120,9 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF)
+                        atomic_inc(&obt->obt_quotachecking);
                 break;
         case Q_INITQUOTA:
                 {

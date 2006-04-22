@@ -653,9 +653,9 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 rc = llog_lvfs_close(handle);
 
                 if (rc == 0) {
-                        down(&inode->i_sem);
+                        LOCK_INODE_MUTEX(inode);
                         rc = vfs_unlink(inode, fdentry);
-                        up(&inode->i_sem);
+                        UNLOCK_INODE_MUTEX(inode);
                 }
 
                 dput(fdentry);

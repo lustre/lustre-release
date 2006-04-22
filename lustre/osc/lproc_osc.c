@@ -86,6 +86,7 @@ static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
+        struct ptlrpc_request_pool *pool = cli->cl_import->imp_rq_pool;
         int val, rc;
 
         rc = lprocfs_write_helper(buffer, count, &val);
@@ -95,9 +96,8 @@ static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         if (val < 1 || val > OSC_MAX_RIF_MAX)
                 return -ERANGE;
 
-        if (cli->cl_rq_pool && val > cli->cl_max_rpcs_in_flight)
-                cli->cl_rq_pool->prp_populate(cli->cl_rq_pool,
-                                              val - cli->cl_max_rpcs_in_flight);
+        if (pool && val > cli->cl_max_rpcs_in_flight)
+                pool->prp_populate(pool, val-cli->cl_max_rpcs_in_flight);
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;

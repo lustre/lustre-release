@@ -194,18 +194,12 @@ static int ll_close_thread(void *arg)
         struct ll_close_queue *lcq = arg;
         ENTRY;
 
-        /* XXX boiler-plate */
         {
-                char name[sizeof(current->comm)];
-                unsigned long flags;
+                char name[CFS_CURPROC_COMM_MAX];
                 snprintf(name, sizeof(name) - 1, "ll_close");
                 cfs_daemonize(name);
-                SIGNAL_MASK_LOCK(current, flags);
-                sigfillset(&current->blocked);
-                RECALC_SIGPENDING;
-                SIGNAL_MASK_UNLOCK(current, flags);
         }
-
+        
         complete(&lcq->lcq_comp);
 
         while (1) {

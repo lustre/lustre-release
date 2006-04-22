@@ -111,11 +111,7 @@ static int expired_lock_main(void *arg)
         struct l_wait_info lwi = { 0 };
 
         ENTRY;
-        lock_kernel();
         cfs_daemonize("ldlm_elt");
-        cfs_block_allsigs();
-
-        unlock_kernel();
 
         expired_lock_thread.elt_state = ELT_READY;
         cfs_waitq_signal(&expired_lock_thread.elt_waitq);
@@ -184,9 +180,6 @@ static void waiting_locks_callback(unsigned long unused)
 {
         struct ldlm_lock *lock, *last = NULL;
 
-        if (obd_dump_on_timeout)
-                libcfs_debug_dumplog();
-
         spin_lock_bh(&waiting_locks_spinlock);
         while (!list_empty(&waiting_locks_list)) {
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
@@ -212,7 +205,6 @@ static void waiting_locks_callback(unsigned long unused)
 
                         CFS_INIT_LIST_HEAD(&waiting_locks_list);    /* HACK */
                         expired_lock_thread.elt_dump = __LINE__;
-                        spin_unlock_bh(&waiting_locks_spinlock);
 
                         /* LBUG(); */
                         CEMERG("would be an LBUG, but isn't (bug 5653)\n");
@@ -226,6 +218,11 @@ static void waiting_locks_callback(unsigned long unused)
                 list_del(&lock->l_pending_chain);
                 list_add(&lock->l_pending_chain,
                          &expired_lock_thread.elt_expired_locks);
+        }
+
+        if (!list_empty(&expired_lock_thread.elt_expired_locks)) {
+                if (obd_dump_on_timeout)
+                        expired_lock_thread.elt_dump = __LINE__;
 
                 cfs_waitq_signal(&expired_lock_thread.elt_waitq);
         }
@@ -518,7 +515,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LASSERT(lock != NULL);
 
         do_gettimeofday(&granted_time);
-        total_enqueue_wait = cfs_timeval_sub(&granted_time,&lock->l_enqueued_time, NULL);
+        total_enqueue_wait = cfs_timeval_sub(&granted_time,
+                                             &lock->l_enqueued_time, NULL);
 
         if (total_enqueue_wait / 1000000 > obd_timeout)
                 LDLM_ERROR(lock, "enqueue wait took %luus from %lu",
@@ -1422,14 +1420,12 @@ static int ldlm_bl_thread_main(void *arg)
         struct ldlm_bl_pool *blp = bltd->bltd_blp;
         ENTRY;
 
-        /* XXX boiler-plate */
         {
                 char name[CFS_CURPROC_COMM_MAX];
                 snprintf(name, sizeof(name) - 1, "ldlm_bl_%02d",
                          bltd->bltd_num);
                 cfs_daemonize(name);
         }
-        cfs_block_allsigs();
 
         atomic_inc(&blp->blp_num_threads);
         complete(&blp->blp_comp);

@@ -390,11 +390,15 @@ static int filter_clear_page_cache(struct inode *inode,
         rc = generic_osync_inode(inode, inode->i_mapping,
                                  OSYNC_DATA|OSYNC_METADATA);
          */
+        down(&inode->i_sem);
+        current->flags |= PF_SYNCWRITE;
         rc = filemap_fdatawrite(inode->i_mapping);
         rc2 = sync_mapping_buffers(inode->i_mapping);
         if (rc == 0)
                 rc = rc2;
         rc2 = filemap_fdatawait(inode->i_mapping);
+        current->flags &= ~PF_SYNCWRITE;
+        up(&inode->i_sem);
         if (rc == 0)
                 rc = rc2;
         if (rc != 0)
@@ -419,7 +423,7 @@ static int filter_clear_page_cache(struct inode *inode,
         return 0;
 }
 
-/* Must be called with i_sem taken for writes; this will drop it */
+/* Must be called with i_mutex taken for writes; this will drop it */
 int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle)
@@ -479,7 +483,7 @@ remap:
                                             oti->oti_handle, attr, 0);
                 }
 
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
 
                 rc2 = filter_finish_transno(exp, oti, 0);
                 if (rc2 != 0) {
@@ -593,12 +597,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
-        down(&inode->i_sem);
-        fsfilt_check_slow(now, obd_timeout, "i_sem");
+        LOCK_INODE_MUTEX(inode);
+        fsfilt_check_slow(now, obd_timeout, "i_mutex");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
                 rc = PTR_ERR(oti->oti_handle);
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error starting transaction: rc = %d\n", rc);
@@ -637,7 +641,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 rc = filter_update_fidea(exp, inode, oti->oti_handle, oa);
         }
 
-        /* filter_direct_io drops i_sem */
+        /* filter_direct_io drops i_mutex */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
         if (rc == 0)
@@ -654,7 +658,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (err)
                 rc = err;
 
-        if (obd_sync_filter && !err)
+        if (obd->obd_replayable && !err)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);

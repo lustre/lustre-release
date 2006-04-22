@@ -71,7 +71,3 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
                 up(&lck->rpcl_sem);
         }
 }
-
-/* Quota stuff */
-extern quota_interface_t *quota_interface;
-

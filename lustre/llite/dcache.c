@@ -146,7 +146,6 @@ void ll_intent_release(struct lookup_intent *it)
 void ll_unhash_aliases(struct inode *inode)
 {
         struct list_head *tmp, *head;
-        struct ll_sb_info *sbi;
         ENTRY;
 
         if (inode == NULL) {
@@ -157,7 +156,6 @@ void ll_unhash_aliases(struct inode *inode)
         CDEBUG(D_INODE, "marking dentries for ino %lu/%u(%p) invalid\n",
                inode->i_ino, inode->i_generation, inode);
 
-        sbi = ll_i2sbi(inode);
         head = &inode->i_dentry;
 restart:
         spin_lock(&dcache_lock);
@@ -207,7 +205,7 @@ restart:
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                         __d_drop(dentry);
                         hlist_add_head(&dentry->d_hash,
-                                       &sbi->ll_orphan_dentry_list);
+                                       &ll_i2sbi(inode)->ll_orphan_dentry_list);
 #endif
                 }
                 unlock_dentry(dentry);
@@ -220,7 +218,6 @@ static int revalidate_it_finish(struct ptlrpc_request *request, int offset,
                                 struct lookup_intent *it,
                                 struct dentry *de)
 {
-        struct ll_sb_info *sbi;
         int rc = 0;
         ENTRY;
 
@@ -230,8 +227,8 @@ static int revalidate_it_finish(struct ptlrpc_request *request, int offset,
         if (it_disposition(it, DISP_LOOKUP_NEG))
                 RETURN(-ENOENT);
 
-        sbi = ll_i2sbi(de->d_inode);
-        rc = ll_prep_inode(sbi->ll_osc_exp, &de->d_inode, request, offset,NULL);
+        rc = ll_prep_inode(ll_i2sbi(de->d_inode)->ll_osc_exp, &de->d_inode,
+                           request, offset,NULL);
 
         RETURN(rc);
 }
@@ -330,6 +327,11 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc = 0);
+        }
+        if ((it->it_op & IT_OPEN) && de->d_inode && 
+            !S_ISREG(de->d_inode->i_mode) && 
+            !S_ISDIR(de->d_inode->i_mode)) {
+                ll_release_openhandle(de, it);
         }
         rc = 1;
 

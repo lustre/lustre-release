@@ -92,7 +92,7 @@ setup() {
 }
 
 cleanup() {
- 	umount_client $MOUNT || return 200
+ 	umount_client $MOUNT $FORCE || return 200
 	stop_mds $FORCE || return 201
 	stop_ost $FORCE || return 202
 	# catch case where these return just fine, but modules are still not unloaded
@@ -202,11 +202,22 @@ test_5() {
 	# if all the modules have unloaded.
  	umount $MOUNT &
 	UMOUNT_PID=$!
-	sleep 2
+	sleep 6
 	echo "killing umount"
 	kill -TERM $UMOUNT_PID
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
+	if grep " $MOUNT " /etc/mtab; then
+		echo "test 5: mtab after failed umount"
+		umount $MOUNT &
+		UMOUNT_PID=$!
+		sleep 2
+		echo "killing umount"
+		kill -TERM $UMOUNT_PID
+		echo "waiting for umount to finish"
+		wait $UMOUNT_PID
+		grep " $MOUNT " /etc/mtab && echo "test 5: mtab after second umount" && return 11
+	fi
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -224,8 +235,11 @@ test_5b() {
 	start_ost
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
+	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab before lconf" && return 9
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
+	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab before mount" && return 10
+	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST:/mds_svc/client_facet $MOUNT  && return 1
+	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab after failed mount" && return 11
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -245,8 +259,11 @@ test_5c() {
 	start_mds
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
+	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab before lconf" && return 9
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && return 1
+	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab before mount" && return 10
+	llmount -vv -o nettype=$NETTYPE,$MOUNTOPT $mds_HOST:/wrong_mds_svc/client_facet $MOUNT && return 1
+	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab after failed mount" && return 11
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -266,10 +283,13 @@ test_5d() {
 	stop_ost --force
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
+	grep " $MOUNT " /etc/mtab && echo "test 5d: mtab before lconf" && return 9
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount -o nettype=$NETTYPE,$MOUNTOPT `facet_nid mds`://mds_svc/client_facet $MOUNT  || return 1
+	grep " $MOUNT " /etc/mtab && echo "test 5d: mtab before mount" && return 10
+	llmount -vv -o nettype=$NETTYPE,$MOUNTOPT `facet_nid mds`:/mds_svc/client_facet $MOUNT || return 1
 
 	umount_client $MOUNT || return 2
+	grep " $MOUNT " /etc/mtab && echo "test 5d: mtab after unmount" && return 11
 	
 	stop_mds || return 3
 
@@ -278,6 +298,26 @@ test_5d() {
 
 }
 run_test 5d "ost down, don't crash during mount attempt"
+
+test_5e() {
+	start_ost
+	start_mds
+	sleep 5	# give MDS a chance to connect to OSTs before delaying requests
+
+#define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
+	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
+	grep " $MOUNT " /etc/mtab && echo "test 5e: mtab before mount" && return 10
+	mount_client $MOUNT || echo "mount failed (not fatal)"
+	umount_client $MOUNT || return 2
+	grep " $MOUNT " /etc/mtab && echo "test 5e: mtab after unmount" && return 11
+	
+	stop_mds || return 3
+	stop_ost || return 3
+
+	lsmod | grep -q lnet && return 4
+	return 0
+}
+run_test 5e "delayed connect, don't crash (bug 10268)"
 
 test_6() {
 	setup
@@ -324,8 +364,7 @@ test_9() {
         # check the result of lmc --ptldebug/subsystem
         start_ost
         start_mds
-        mount_client $MOUNT
-        CHECK_PTLDEBUG="`do_facet mds sysctl lnet.debug | sed -e 's/.* = //'`"
+        CHECK_PTLDEBUG="`do_facet mds sysctl lnet.debug|cut -d= -f2`"
         if [ "$CHECK_PTLDEBUG" ] && [ $CHECK_PTLDEBUG -eq 1 ]; then
            echo "lmc --debug success"
         else
@@ -340,7 +379,6 @@ test_9() {
            echo "lmc --subsystem: want 2, have $CHECK_SUBSYS"
            return 1
         fi
-        check_mount || return 41
         cleanup || return $?
 
         # the new PTLDEBUG/SUBSYSTEM used for lconf --ptldebug/subsystem
@@ -364,8 +402,6 @@ test_9() {
            echo "lconf --subsystem: want 20, have $CHECK_SUBSYS"
            return 1
         fi
-        mount_client $MOUNT
-        check_mount || return 41
         cleanup || return $?
 
         # resume the old configuration
@@ -607,16 +643,18 @@ cleanup_15() {
 }
 
 test_15() {
-	start_ost
-	start_mds
 	echo "mount lustre on ${MOUNT} with $MOUNTLUSTRE....."
 	if [ -f "$MOUNTLUSTRE" ]; then
 		echo "save $MOUNTLUSTRE to $MOUNTLUSTRE.sav"
-		mv $MOUNTLUSTRE $MOUNTLUSTRE.sav
+		mv $MOUNTLUSTRE $MOUNTLUSTRE.sav && trap cleanup_15 EXIT INT
+		if [ -f $MOUNTLUSTRE ]; then
+			echo "$MOUNTLUSTRE cannot be moved, skipping test"
+			return 0
+		fi
 	fi
-	[ -f "$MOUNTLUSTRE" ] && echo "can't move $MOUNTLUSTRE" && return 40
-	trap cleanup_15 EXIT INT
 	[ ! `cp $(which llmount) $MOUNTLUSTRE` ] || return $?
+	start_ost
+	start_mds
 	do_facet client "mkdir -p $MOUNT 2> /dev/null"
 	# load llite module on the client if it isn't in /lib/modules
 	do_facet client "$LCONF --nosetup --node client_facet $XMLCONFIG"
@@ -638,7 +676,7 @@ test_15() {
 run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 
 test_16() {
-        TMPMTPT="/mnt/conf16"
+        TMPMTPT="${MOUNT%/*}/conf16"
 
         if [ ! -f "$MDSDEV" ]; then
             echo "no $MDSDEV existing, so mount Lustre to create one"
@@ -691,7 +729,7 @@ test_16() {
 run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
 
 test_17() {
-        TMPMTPT="/mnt/conf17"
+        TMPMTPT="${MOUNT%/*}/conf17"
 
         if [ ! -f "$MDSDEV" ]; then
             echo "no $MDSDEV existing, so mount Lustre to create one"

@@ -489,11 +489,7 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 {
         int rc;
 
-        LASSERT_SEM_LOCKED(&inode->i_sem);
-
-        if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
-                CWARN("setting EA on %lu/%u again... interesting\n",
-                       inode->i_ino, inode->i_generation);
+        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
 
         lock_24kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
@@ -507,13 +503,13 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
         return rc;
 }
 
-/* Must be called with i_sem held */
+/* Must be called with i_mutex held */
 static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size,
                               const char *name)
 {
         int rc;
 
-        LASSERT_SEM_LOCKED(&inode->i_sem);
+        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
         lock_24kernel();
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
@@ -831,7 +827,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 return EXT_CONTINUE;
         }
 
-        tgen = EXT_GENERATION(tree);
+        tgen = EXT_GENERATION(EXT_ROOT_HDR(tree));
         count = ext3_ext_calc_credits_for_insert(tree, path);
         ext3_up_truncate_sem(inode);
 
@@ -844,7 +840,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         ext3_down_truncate_sem(inode);
-        if (tgen != EXT_GENERATION(tree)) {
+        if (tgen != EXT_GENERATION(EXT_ROOT_HDR(tree))) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
                 journal_stop(handle);

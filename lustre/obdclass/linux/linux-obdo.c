@@ -124,11 +124,6 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
                 attr->ia_gid = oa->o_gid;
                 attr->ia_valid |= ATTR_GID;
         }
-
-        if (valid & OBD_MD_FLFLAGS) {
-                attr->ia_attr_flags = oa->o_flags;
-                attr->ia_valid |= ATTR_ATTR_FLAG;
-        }
 }
 EXPORT_SYMBOL(iattr_from_obdo);
 
@@ -247,8 +242,12 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 LTIME_S(dst->i_ctime) = src->o_ctime;
         if (valid & OBD_MD_FLSIZE)
                 dst->i_size = src->o_size;
-        if (valid & OBD_MD_FLBLOCKS) /* allocation of space */
+        if (valid & OBD_MD_FLBLOCKS) { /* allocation of space */
                 dst->i_blocks = src->o_blocks;
+                if (dst->i_blocks < src->o_blocks) /* overflow */
+                        dst->i_blocks = -1;
+
+        }
         if (valid & OBD_MD_FLBLKSZ)
                 dst->i_blksize = src->o_blksize;
         if (valid & OBD_MD_FLTYPE)

@@ -45,13 +45,13 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                 int namelen = strlen(name);
 
                 /* remove the stale test quotafile */
-                down(&parent_inode->i_sem);
+                LOCK_INODE_MUTEX(parent_inode);
                 de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
                 if (!IS_ERR(de) && de->d_inode)
                         vfs_unlink(parent_inode, de);
                 if (!IS_ERR(de))
                         dput(de);
-                up(&parent_inode->i_sem);
+                UNLOCK_INODE_MUTEX(parent_inode);
 
                 /* create quota file */
                 fp = filp_open(name, O_CREAT | O_EXCL, 0644);
@@ -99,7 +99,7 @@ static int quotfmt_finalize(struct lustre_quota_info *lqi,
                 filp_close(lqi->qi_files[i], 0);
 
                 /* unlink quota file */
-                down(&parent_inode->i_sem);
+                LOCK_INODE_MUTEX(parent_inode);
 
                 de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
                 if (IS_ERR(de) || de->d_inode == NULL) {
@@ -116,7 +116,7 @@ static int quotfmt_finalize(struct lustre_quota_info *lqi,
               dput:
                 if (!IS_ERR(de))
                         dput(de);
-                up(&parent_inode->i_sem);
+                UNLOCK_INODE_MUTEX(parent_inode);
         }
 
         pop_ctxt(saved, &tgt->obd_lvfs_ctxt, NULL);

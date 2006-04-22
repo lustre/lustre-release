@@ -380,7 +380,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                 GOTO(cleanup, rc);
         }
 
-        down(&head_inode->i_sem);
+        LOCK_INODE_MUTEX(head_inode);
         cleanup_phase = 1;
         rc = mds_get_md(obd, head_inode, head_lmm, &size, 0);
         if (rc < 0)
@@ -486,7 +486,7 @@ cleanup:
 
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         case 1:
-                up(&head_inode->i_sem);
+                UNLOCK_INODE_MUTEX(head_inode);
         case 0:
                 if (tail_lmm != NULL)
                         OBD_FREE(tail_lmm, lmm_size);

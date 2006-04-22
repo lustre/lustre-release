@@ -281,11 +281,11 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd,
         spin_lock (&ec->ec_lock);
         eco = echo_find_object_locked (obd, oa->o_id);
         if (eco != NULL) {
-                if (eco->eco_deleted) {            /* being deleted */
-                        spin_unlock(&ec->ec_lock); /* (see comment in cleanup) */
+                if (eco->eco_deleted) {           /* being deleted */
+                        spin_unlock(&ec->ec_lock);/* (see comment in cleanup) */
                         return (-EAGAIN);
                 }
-                
+
                 eco->eco_refcount++;
                 spin_unlock (&ec->ec_lock);
                 *ecop = eco;
@@ -1353,7 +1353,8 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
                        lustre_cfg_string(lcfg, 1));
                 return -ENOMEM;
         }
-        
+
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
         rc = obd_connect(&conn, tgt, &echo_uuid, ocd);

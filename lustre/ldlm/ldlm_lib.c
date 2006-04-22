@@ -278,16 +278,14 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         ptlrpc_init_client(rq_portal, rp_portal, name,
                            &obddev->obd_ldlm_client);
 
-        imp = class_new_import();
+        imp = class_new_import(obddev);
         if (imp == NULL)
                 GOTO(err_ldlm, rc = -ENOENT);
         imp->imp_client = &obddev->obd_ldlm_client;
-        imp->imp_obd = obddev;
         imp->imp_connect_op = connect_op;
-        imp->imp_generation = 0;
         imp->imp_initial_recov = 1;
         CFS_INIT_LIST_HEAD(&imp->imp_pinger_chain);
-        memcpy(imp->imp_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
+        memcpy(cli->cl_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
                LUSTRE_CFG_BUFLEN(lcfg, 1));
         class_import_put(imp);
 
@@ -307,7 +305,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 if (!strcmp(lustre_cfg_string(lcfg, 3), "inactive")) {
                         CDEBUG(D_HA, "marking %s %s->%s as inactive\n",
                                name, obddev->obd_name,
-                               imp->imp_target_uuid.uuid);
+                               cli->cl_target_uuid.uuid);
                         imp->imp_invalid = 1;
                 }
         }
@@ -327,15 +325,7 @@ err:
 
 int client_obd_cleanup(struct obd_device *obddev)
 {
-        struct client_obd *cli = &obddev->u.cli;
-
         ENTRY;
-        if (!cli->cl_import)
-                RETURN(-EINVAL);
-        class_destroy_import(cli->cl_import);
-        cli->cl_import = NULL;
-        client_obd_list_lock_done(&cli->cl_loi_list_lock);
-
         ldlm_put_ref(obddev->obd_force);
 
         RETURN(0);
@@ -454,10 +444,14 @@ int client_disconnect_export(struct obd_export *exp)
         }
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
-        if (obd->obd_no_recov)
-                ptlrpc_invalidate_import(imp);
-        else
+        if (!obd->obd_no_recov)
                 rc = ptlrpc_disconnect_import(imp);
+
+        ptlrpc_invalidate_import(imp);
+        imp->imp_deactive = 1;
+        ptlrpc_free_rq_pool(imp->imp_rq_pool);
+        class_destroy_import(imp);
+        cli->cl_import = NULL;
 
         EXIT;
  out_no_disconnect:
@@ -757,11 +751,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (export->exp_imp_reverse != NULL)
                 class_destroy_import(export->exp_imp_reverse);
-        revimp = export->exp_imp_reverse = class_new_import();
+        revimp = export->exp_imp_reverse = class_new_import(target);
         revimp->imp_connection = ptlrpc_connection_addref(export->exp_connection);
         revimp->imp_client = &export->exp_obd->obd_ldlm_client;
         revimp->imp_remote_handle = conn;
-        revimp->imp_obd = target;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
         class_import_put(revimp);

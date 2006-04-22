@@ -85,14 +85,14 @@
  */
 
 #define LDLM_NUM_THREADS min((int)(smp_num_cpus * smp_num_cpus * 8), 64)
-#define LDLM_NBUFS       64
+#define LDLM_NBUFS      (64 * smp_num_cpus)
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
 #define LDLM_MAXREPSIZE (1024)
 
-#define MDT_MAX_THREADS 32UL
-#define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
-                                  MDT_MAX_THREADS), 2UL)
+#define MDS_MAX_THREADS 512UL
+#define MDS_DEF_THREADS max(2UL, min_t(unsigned long, 32, \
+                            num_physpages * smp_num_cpus >> (26 - PAGE_SHIFT)))
 #define MDS_NBUFS       (64 * smp_num_cpus)
 #define MDS_BUFSIZE     (8 * 1024)
 /* Assume file name length = FNAME_MAX = 256 (true for ext3).
@@ -398,7 +398,7 @@ CDEB_TYPE(level, "@@@ " fmt                                                    \
        REQ_FLAGS_FMT"/%x/%x rc %d/%d\n" , ## args, req, req->rq_xid,           \
        req->rq_transno,                                                        \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
-       req->rq_import ? (char *)req->rq_import->imp_target_uuid.uuid : "<?>",  \
+       req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) : "<?>",  \
        req->rq_import ?                                                        \
           (char *)req->rq_import->imp_connection->c_remote_uuid.uuid : "<?>",  \
        (req->rq_import && req->rq_import->imp_client) ?                        \
@@ -707,7 +707,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name, int id);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int liblustre_check_services (void *arg);
-void ptlrpc_daemonize(void);
+void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
 
 
@@ -774,6 +774,13 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
+#ifdef __KERNEL__
+void ping_evictor_start(void);
+void ping_evictor_stop(void);
+#else
+#define ping_evictor_start()    do {} while (0)
+#define ping_evictor_stop()     do {} while (0)
+#endif
 
 /* ptlrpc/ptlrpcd.c */
 void ptlrpcd_wake(struct ptlrpc_request *req);

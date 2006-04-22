@@ -92,6 +92,8 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
                 sbi->ll_async_page_max = (num_physpages / 4) * 3;
         sbi->ll_ra_info.ra_max_pages = min(num_physpages / 8,
                                            SBI_DEFAULT_READAHEAD_MAX);
+        sbi->ll_ra_info.ra_max_read_ahead_whole_pages = 
+                                           SBI_DEFAULT_READAHEAD_WHOLE_MAX;
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
@@ -162,7 +164,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
 
         /* indicate that inodebits locking is supported by this client */
-        data->ocd_connect_flags |= OBD_CONNECT_IBITS;
+        data->ocd_connect_flags |= OBD_CONNECT_IBITS | OBD_CONNECT_NODEVOH;
         data->ocd_ibits_known = MDS_INODELOCK_FULL;
 
         if (sb->s_flags & MS_RDONLY)
@@ -230,18 +232,18 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
          * on all clients. */
         /* s_dev is also used in lt_compare() to compare two fs, but that is
          * only a node-local comparison. */
-        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
-                         strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
+        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
+                                 strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
 #endif
 
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
-                GOTO(out_mdc, err);
+                GOTO(out_mdc, err = -ENODEV);
         }
 
         data->ocd_connect_flags =
-                OBD_CONNECT_GRANT|OBD_CONNECT_VERSION|OBD_CONNECT_REQPORTAL;
+                OBD_CONNECT_GRANT | OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL;
 
         CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
                "ocd_grant: %d\n", data->ocd_connect_flags,
@@ -288,6 +290,9 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sbi->ll_rootino = rootfid.id;
 
         sb->s_op = &lustre_super_operations;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        sb->s_export_op = &lustre_export_operations;
+#endif
 
         /* make root inode
          * XXX: move this to after cbd setup? */
@@ -731,9 +736,9 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         }
 
         /* Try all connections, but only once. */
-        rc = obd_set_info(obd->obd_self_export,
-                          strlen("init_recov_bk"), "init_recov_bk",
-                          sizeof(recov_bk), &recov_bk);
+        rc = obd_set_info_async(obd->obd_self_export,
+                                strlen("init_recov_bk"), "init_recov_bk",
+                                sizeof(recov_bk), &recov_bk, NULL);
         if (rc)
                 GOTO(out_cleanup, rc);
 
@@ -761,13 +766,17 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 break;
         case -EINVAL:
                 LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
-                               "from the MDS.  Make sure this client and the "
-                               "MDS are running compatible versions of "
+                               "from the MDS '%s'.  Make sure this client and "
+                               "the MDS are running compatible versions of "
                                "Lustre.\n",
-                               obd->obd_name, profile);
+                               obd->obd_name, profile, lmd->lmd_mds);
                 /* fall through */
         default:
-                CERROR("class_config_parse_llog failed: rc = %d\n", rc);
+                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
+                               "from the MDS '%s'.  This may be the result of "
+                               "communication errors between the client and "
+                               "the MDS, or if the MDS is not running.\n",
+                               obd->obd_name, profile, lmd->lmd_mds);
                 break;
         }
 
@@ -1113,7 +1122,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
                        CURRENT_SECONDS);
 
-
         /* NB: ATTR_SIZE will only be set after this point if the size
          * resides on the MDS, ie, this file has no objects. */
         if (lsm)
@@ -1131,8 +1139,17 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                 if (rc) {
                         ptlrpc_req_finished(request);
-                        if (rc != -EPERM && rc != -EACCES)
+                        if (rc == -ENOENT) {
+                                inode->i_nlink = 0;
+                                /* Unlinked special device node? Or just a race?
+                                 * Pretend we done everything. */
+                                if (!S_ISREG(inode->i_mode) &&
+                                    !S_ISDIR(inode->i_mode) &&
+                                    !S_ISDIR(inode->i_mode))
+                                        rc = inode_setattr(inode, attr);
+                        } else if (rc != -EPERM && rc != -EACCES) {
                                 CERROR("mdc_setattr fails: rc = %d\n", rc);
+                        }
                         RETURN(rc);
                 }
 
@@ -1196,15 +1213,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (attr->ia_size == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
 
-                up(&inode->i_sem);
+                UNLOCK_INODE_MUTEX(inode);
                 UP_WRITE_I_ALLOC_SEM(inode);
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 DOWN_WRITE_I_ALLOC_SEM(inode);
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
 #else
-                down(&inode->i_sem);
+                LOCK_INODE_MUTEX(inode);
                 DOWN_WRITE_I_ALLOC_SEM(inode);
 #endif
                 if (rc != 0)
@@ -1251,8 +1268,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
-        LBUG(); /* code is unused, but leave this in case of VFS changes */
-        RETURN(-ENOSYS);
+        return ll_setattr_raw(de->d_inode, attr);
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
@@ -1550,16 +1566,6 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
 #endif
-                lli->ll_save_ifop = inode->i_fop;
-
-                if (S_ISCHR(inode->i_mode))
-                        inode->i_fop = &ll_special_chr_inode_fops;
-                else if (S_ISBLK(inode->i_mode))
-                        inode->i_fop = &ll_special_blk_inode_fops;
-                else if (S_ISFIFO(inode->i_mode))
-                        inode->i_fop = &ll_special_fifo_inode_fops;
-                else if (S_ISSOCK(inode->i_mode))
-                        inode->i_fop = &ll_special_sock_inode_fops;
                 EXIT;
         }
 }
@@ -1599,7 +1605,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         }
         case EXT3_IOC_SETFLAGS: {
                 struct mdc_op_data op_data;
-                struct iattr attr;
+                struct ll_iattr_struct attr;
                 struct obdo *oa;
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
 
@@ -1614,10 +1620,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 memset(&attr, 0x0, sizeof(attr));
                 attr.ia_attr_flags = flags;
-                attr.ia_valid |= ATTR_ATTR_FLAG;
+                ((struct iattr *)&attr)->ia_valid |= ATTR_ATTR_FLAG;
 
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
-                                 &attr, NULL, 0, NULL, 0, &req);
+                                 (struct iattr *)&attr, NULL, 0, NULL, 0, &req);
                 if (rc || lsm == NULL) {
                         ptlrpc_req_finished(req);
                         obdo_free(oa);
@@ -1709,8 +1715,9 @@ int lustre_remount_fs(struct super_block *sb, int *flags, char *data)
 
         if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
                 read_only = *flags & MS_RDONLY;
-                err = obd_set_info(sbi->ll_mdc_exp, strlen("read-only"),
-                                   "read-only", sizeof(read_only), &read_only);
+                err = obd_set_info_async(sbi->ll_mdc_exp, strlen("read-only"),
+                                         "read-only", sizeof(read_only),
+                                         &read_only, NULL);
                 if (err) {
                         CERROR("Failed to change the read-only flag during "
                                "remount: %d\n", err);
@@ -1791,7 +1798,6 @@ int ll_obd_statfs(struct inode *inode, void *arg)
         struct ll_sb_info *sbi = NULL;
         struct obd_device *client_obd = NULL, *lov_obd = NULL;
         struct lov_obd *lov = NULL;
-        struct obd_import *client_imp = NULL;
         struct obd_statfs stat_buf = {0};
         char *buf = NULL;
         struct obd_ioctl_data *data = NULL;
@@ -1817,7 +1823,6 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 if (index > 0)
                         GOTO(out_statfs, rc = -ENODEV);
                 client_obd = class_exp2obd(sbi->ll_mdc_exp);
-                client_imp = class_exp2cliimp(sbi->ll_mdc_exp);
         } else if (type == LL_STATFS_LOV) {
                 lov_obd = class_exp2obd(sbi->ll_osc_exp);
                 lov = &lov_obd->u.lov;
@@ -1826,12 +1831,11 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                         GOTO(out_statfs, rc = -ENODEV);
 
                 client_obd = class_exp2obd(lov->tgts[index].ltd_exp);
-                client_imp = class_exp2cliimp(lov->tgts[index].ltd_exp);
                 if (!lov->tgts[index].active)
                         GOTO(out_uuid, rc = -ENODATA);
         }
 
-        if (!client_obd || !client_imp)
+        if (!client_obd)
                 GOTO(out_statfs, rc = -EINVAL);
 
         rc = obd_statfs(client_obd, &stat_buf, jiffies - 1);
@@ -1842,7 +1846,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 GOTO(out_statfs, rc = -EFAULT);
 
 out_uuid:
-        if (copy_to_user(data->ioc_pbuf2, &client_imp->imp_target_uuid,
+        if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(client_obd),
                          data->ioc_plen2))
                 rc = -EFAULT;
 

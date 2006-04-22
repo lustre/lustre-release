@@ -145,7 +145,6 @@ static int ptlrpcd(void *arg)
         ENTRY;
 
         cfs_daemonize(pc->pc_name);
-        cfs_block_allsigs();
 
         complete(&pc->pc_starting);
 

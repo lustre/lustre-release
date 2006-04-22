@@ -65,15 +65,16 @@ struct obd_import {
 
         struct obd_device        *imp_obd;
         cfs_waitq_t               imp_recovery_waitq;
-        __u64                     imp_last_replay_transno;
+
         atomic_t                  imp_inflight;
         atomic_t                  imp_replay_inflight;
         enum lustre_imp_state     imp_state;
         int                       imp_generation;
         __u32                     imp_conn_cnt;
-        __u64                     imp_max_transno;
+        int                       imp_last_generation_checked;
+        __u64                     imp_last_replay_transno;
         __u64                     imp_peer_committed_transno;
-        struct obd_uuid           imp_target_uuid; /* XXX -> lustre_name */
+        __u64                     imp_last_transno_checked;
         struct lustre_handle      imp_remote_handle;
         cfs_time_t                imp_next_ping;   /* jiffies */
 
@@ -93,6 +94,8 @@ struct obd_import {
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;
+
+        struct ptlrpc_request_pool *imp_rq_pool; /* emergency request pool */
 };
 
 typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,

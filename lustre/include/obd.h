@@ -22,8 +22,8 @@
 
 #define IOC_MDC_TYPE         'i'
 #define IOC_MDC_MIN_NR       20
-#define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
 /* Moved to lustre_user.h
+#define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
 #define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *) */
 #define IOC_MDC_MAX_NR       50
 
@@ -157,7 +157,7 @@ struct brw_page {
 enum async_flags {
         ASYNC_READY = 0x1, /* ap_make_ready will not be called before this
                               page is added to an rpc */
-        ASYNC_URGENT = 0x2,
+        ASYNC_URGENT = 0x2, /* page must be put into an RPC before return */
         ASYNC_COUNT_STABLE = 0x4, /* ap_refresh_count will not be called
                                      to give the caller a chance to update
                                      or cancel the size of the io */
@@ -305,9 +305,11 @@ struct mds_server_data;
 #define OSC_MAX_DIRTY_MB_MAX   2048     /* totally arbitrary */
 
 struct mdc_rpc_lock;
+struct obd_import;
 struct client_obd {
-        struct obd_import       *cl_import;
         struct semaphore         cl_sem;
+        struct obd_uuid          cl_target_uuid;
+        struct obd_import       *cl_import; /* ptlrpc connection state */
         int                      cl_conn_count;
         /* max_mds_easize is purely a performance thing so we don't have to
          * call obd_size_diskmd() all the time. */
@@ -374,8 +376,8 @@ struct client_obd {
 
         /* used by quotacheck */
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
-        struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
 };
+#define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
 #define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
 
@@ -678,17 +680,19 @@ struct obd_device {
 
 #define OBD_LLOG_FL_SENDNOW     0x0001
 
+enum obd_cleanup_stage {
 /* Special case hack for MDS LOVs */
-#define OBD_CLEANUP_EARLY       0
+        OBD_CLEANUP_EARLY,
 /* Precleanup stage 1, we must make sure all exports (other than the
    self-export) get destroyed. */
-#define OBD_CLEANUP_EXPORTS     1
+        OBD_CLEANUP_EXPORTS,
 /* Precleanup stage 2,  do other type-specific cleanup requiring the
    self-export. */
-#define OBD_CLEANUP_SELF_EXP    2
+        OBD_CLEANUP_SELF_EXP,
 /* FIXME we should eliminate the "precleanup" function and make them stages
    of the "cleanup" function. */
-#define OBD_CLEANUP_OBD         3
+        OBD_CLEANUP_OBD,
+};
 
 struct obd_ops {
         struct module *o_owner;
@@ -696,12 +700,14 @@ struct obd_ops {
                            void *karg, void *uarg);
         int (*o_get_info)(struct obd_export *, __u32 keylen, void *key,
                           __u32 *vallen, void *val);
-        int (*o_set_info)(struct obd_export *, __u32 keylen, void *key,
-                          __u32 vallen, void *val);
+        int (*o_set_info_async)(struct obd_export *, __u32 keylen, void *key,
+                                __u32 vallen, void *val,
+                                struct ptlrpc_request_set *set);
         int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
         int (*o_detach)(struct obd_device *dev);
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
-        int (*o_precleanup)(struct obd_device *dev, int cleanup_stage);
+        int (*o_precleanup)(struct obd_device *dev,
+                            enum obd_cleanup_stage cleanup_stage);
         int (*o_cleanup)(struct obd_device *dev);
         int (*o_process_config)(struct obd_device *dev, obd_count len,
                                 void *data);

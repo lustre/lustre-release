@@ -101,7 +101,9 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
 {
         struct inode *inode;
         struct dentry *result;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct list_head *lp;
+#endif
 
         if (ino == 0)
                 return ERR_PTR(-ESTALE);
@@ -121,6 +123,13 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 return ERR_PTR(-ESTALE);
         }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        result = d_alloc_anon(inode);
+        if (!result) {
+                iput(inode);
+                return ERR_PTR(-ENOMEM);
+        }
+#else
         /* now to find a dentry.
          * If possible, get a well-connected one
          */
@@ -146,6 +155,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         }
         result->d_flags |= DCACHE_DISCONNECTED;
 
+#endif
         ll_set_dd(result);
         result->d_op = &ll_d_ops;
         return result;
@@ -194,3 +204,57 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
         *lenp = 3;
         return 1;
 }
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+struct dentry *ll_get_dentry(struct super_block *sb, void *data)
+{
+        __u32 *inump = (__u32*)data;
+        return ll_iget_for_nfs(sb, inump[0], inump[1], S_IFREG);
+}
+
+struct dentry *ll_get_parent(struct dentry *dchild)
+{
+        struct ptlrpc_request *req = NULL;
+        struct inode *dir = dchild->d_inode;
+        struct ll_sb_info *sbi;
+        struct dentry *result = NULL;
+        struct ll_fid fid;
+        struct mds_body *body;
+        char dotdot[] = "..";
+        int  rc = 0;
+        ENTRY;
+        
+        LASSERT(dir && S_ISDIR(dir->i_mode));
+        
+        sbi = ll_s2sbi(dir->i_sb);       
+ 
+        fid.id = (__u64)dir->i_ino;
+        fid.generation = dir->i_generation;
+        fid.f_type = S_IFDIR;
+
+        rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, dotdot, strlen(dotdot) + 1,
+                              0, 0, &req);
+        if (rc) {
+                CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
+                return ERR_PTR(rc);
+        }
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body)); 
+       
+        LASSERT((body->valid & OBD_MD_FLGENER) && (body->valid & OBD_MD_FLID));
+        
+        result = ll_iget_for_nfs(dir->i_sb, body->ino, body->generation, S_IFDIR);
+
+        if (IS_ERR(result))
+                rc = PTR_ERR(result);
+
+        ptlrpc_req_finished(req);
+        if (rc)
+                return ERR_PTR(rc);
+        RETURN(result);
+} 
+
+struct export_operations lustre_export_operations = {
+       .get_parent = ll_get_parent,
+       .get_dentry = ll_get_dentry, 
+};
+#endif

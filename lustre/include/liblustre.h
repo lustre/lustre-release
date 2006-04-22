@@ -99,6 +99,12 @@ typedef unsigned short umode_t;
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
 #define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
 
+#ifndef page_private
+#define page_private(page) ((page)->private)
+#define set_page_private(page, v) ((page)->private = (v))
+#endif
+
+
 static inline void inter_module_put(void *a)
 {
         return;
@@ -472,6 +478,7 @@ struct iattr {
         time_t          ia_ctime;
         unsigned int    ia_attr_flags;
 };
+#define ll_iattr_struct iattr
 
 #define IT_OPEN     0x0001
 #define IT_CREAT    0x0002

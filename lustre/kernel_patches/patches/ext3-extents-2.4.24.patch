@@ -179,9 +179,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +static inline void ext3_ext_tree_changed(struct ext3_extents_tree *tree)
 +{
-+	struct ext3_extent_header *neh;
-+	neh = EXT_ROOT_HDR(tree);
-+	neh->eh_generation++;
++	struct ext3_extent_header *neh = EXT_ROOT_HDR(tree);
++	neh->eh_generation = ((EXT_FLAGS(neh) & ~EXT_FLAGS_CLR_UNKNOWN) << 24) |
++			     (EXT_GENERATION(neh) + 1);
 +}
 +
 +static inline int ext3_ext_space_block(struct ext3_extents_tree *tree)
@@ -2577,7 +2577,7 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
 +++ linux-2.4.24/include/linux/ext3_extents.h	2004-11-02 20:32:17.000000000 +0300
-@@ -0,0 +1,263 @@
+@@ -0,0 +1,261 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2675,7 +2675,7 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 +	__u16	eh_entries;	/* number of valid entries */
 +	__u16	eh_max;		/* capacity of store in entries */
 +	__u16	eh_depth;	/* has tree real underlaying blocks? */
-+	__u32	eh_generation;	/* generation of the tree */
++	__u32	eh_generation;	/* flags(8 bits) | generation of the tree */
 +};
 +
 +#define EXT3_EXT_MAGIC		0xf30a
@@ -2776,15 +2776,13 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 +	(EXT_FIRST_EXTENT((__hdr__)) + (__hdr__)->eh_max - 1)
 +#define EXT_MAX_INDEX(__hdr__) \
 +	(EXT_FIRST_INDEX((__hdr__)) + (__hdr__)->eh_max - 1)
++#define EXT_GENERATION(__hdr__) ((__hdr__)->eh_generation & 0x00ffffff)
++#define EXT_FLAGS(__hdr__)	((__hdr__)->eh_generation >> 24)
++#define EXT_FLAGS_CLR_UNKNOWN	0x7	/* Flags cleared on modification */
 +
-+#define EXT_ROOT_HDR(tree) \
-+	((struct ext3_extent_header *) (tree)->root)
-+#define EXT_BLOCK_HDR(bh) \
-+	((struct ext3_extent_header *) (bh)->b_data)
-+#define EXT_DEPTH(_t_)	\
-+	(((struct ext3_extent_header *)((_t_)->root))->eh_depth)
-+#define EXT_GENERATION(_t_)	\
-+	(((struct ext3_extent_header *)((_t_)->root))->eh_generation)
++#define EXT_BLOCK_HDR(__bh__) 	((struct ext3_extent_header *)(__bh__)->b_data)
++#define EXT_ROOT_HDR(__tree__)	((struct ext3_extent_header *)(__tree__)->root)
++#define EXT_DEPTH(__tree__)	(EXT_ROOT_HDR(__tree__)->eh_depth)
 +
 +
 +#define EXT_ASSERT(__x__) if (!(__x__)) BUG();

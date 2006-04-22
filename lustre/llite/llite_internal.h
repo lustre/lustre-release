@@ -78,11 +78,6 @@ struct ll_inode_info {
         /* for writepage() only to communicate to fsync */
         int                     lli_async_rc;
 
-        struct file_operations *ll_save_ifop;
-        struct file_operations *ll_save_ffop;
-        struct file_operations *ll_save_wfop;
-        struct file_operations *ll_save_wrfop;
-
         struct posix_acl       *lli_posix_acl;
 
         struct list_head        lli_dead_list;
@@ -117,6 +112,10 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - PAGE_CACHE_SHIFT))
+
+/* default to read-ahead full files smaller than 2MB on the second read */
+#define SBI_DEFAULT_READAHEAD_WHOLE_MAX (2UL << (20 - PAGE_CACHE_SHIFT))
+
 enum ra_stat {
         RA_STAT_HIT = 0,
         RA_STAT_MISS,
@@ -129,12 +128,14 @@ enum ra_stat {
         RA_STAT_ZERO_WINDOW,
         RA_STAT_EOF,
         RA_STAT_MAX_IN_FLIGHT,
+        RA_STAT_WRONG_GRAB_PAGE,
         _NR_RA_STAT,
 };
 
 struct ll_ra_info {
         unsigned long             ra_cur_pages;
         unsigned long             ra_max_pages;
+        unsigned long             ra_max_read_ahead_whole_pages;
         unsigned long             ra_stats[_NR_RA_STAT];
 };
 
@@ -211,7 +212,13 @@ struct ll_readahead_state {
          * case, it probably doesn't make sense to expand window to
          * PTLRPC_MAX_BRW_PAGES on the third access.
          */
-        unsigned long   ras_consecutive;
+        unsigned long   ras_consecutive_pages;
+        /*
+         * number of read requests after the last read-ahead window reset
+         * As window is reset on each seek, this is effectively the number 
+         * on consecutive read request and is used to trigger read-ahead.
+         */
+        unsigned long   ras_consecutive_requests;
         /*
          * Parameters of current read-ahead window. Handled by
          * ras_update(). On the initial access to the file or after a seek,
@@ -228,6 +235,17 @@ struct ll_readahead_state {
          * not covered by DLM lock.
          */
         unsigned long   ras_next_readahead;
+        /*
+         * Total number of ll_file_read requests issued, reads originating
+         * due to mmap are not counted in this total.  This value is used to
+         * trigger full file read-ahead after multiple reads to a small file.
+         */
+        unsigned long   ras_requests;
+        /*
+         * Page index with respect to the current request, these value 
+         * will not be accurate when dealing with reads issued via mmap.
+         */
+        unsigned long   ras_request_index;
         /*
          * list of struct ll_ra_read's one per read(2) call current in
          * progress against this file descriptor. Used by read-ahead code,
@@ -377,11 +395,13 @@ int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
                   struct lookup_intent *it, struct ll_file_data *fd);
+int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                  struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-int ll_getattr(struct vfsmount *mnt, struct dentry *de,
+int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
+int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
 struct ll_file_data *ll_file_data_get(void);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
@@ -433,6 +453,7 @@ int ll_obd_statfs(struct inode *inode, void *arg);
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 
 /* llite/llite_nfs.c */
+extern struct export_operations lustre_export_operations;
 __u32 get_uuid2int(const char *name, int len);
 struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
                                int fhtype, int parent);
@@ -493,7 +514,6 @@ int ll_tree_unlock(struct ll_lock_tree *tree);
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#define    ll_s2sbi(sb)        ((struct ll_sb_info *)((sb)->s_fs_info))
 #define    ll_s2sbi_nocast(sb) ((sb)->s_fs_info)
 void __d_rehash(struct dentry * entry, int lock);
 static inline __u64 ll_ts2u64(struct timespec *time)
@@ -502,13 +522,13 @@ static inline __u64 ll_ts2u64(struct timespec *time)
         return t;
 }
 #else  /* 2.4 here */
-#define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->u.generic_sbp))
 #define    ll_s2sbi_nocast(sb) ((sb)->u.generic_sbp)
 static inline __u64 ll_ts2u64(time_t *time)
 {
         return *time;
 }
 #endif
+#define    ll_s2sbi(sb)        ((struct ll_sb_info *)ll_s2sbi_nocast(sb))
 
 /* don't need an addref as the sb_info should be holding one */
 static inline struct obd_export *ll_s2obdexp(struct super_block *sb)

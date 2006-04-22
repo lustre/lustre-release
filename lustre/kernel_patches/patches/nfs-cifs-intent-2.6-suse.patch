@@ -2,6 +2,15 @@ Index: linux-2.6.5-7.108/fs/nfs/dir.c
 ===================================================================
 --- linux-2.6.5-7.108.orig/fs/nfs/dir.c	2004-09-15 19:26:43.012732408 +0300
 +++ linux-2.6.5-7.108/fs/nfs/dir.c	2004-09-15 20:03:32.882781096 +0300
+@@ -709,7 +709,7 @@
+ 		return 0;
+ 	if (!nd || (nd->flags & LOOKUP_CONTINUE) || !(nd->flags & LOOKUP_CREATE))
+ 		return 0;
+-	return (nd->intent.open.flags & O_EXCL) != 0;
++	return (nd->intent.it_flags & O_EXCL) != 0;
+ }
+ 
+ static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *nd)
 @@ -782,7 +782,7 @@
  	if (nd->flags & LOOKUP_DIRECTORY)
  		return 0;
@@ -47,6 +56,15 @@ Index: linux-2.6.5-7.108/fs/nfs/dir.c
  	if (openflags & O_CREAT) {
  		/* If this is a negative dentry, just drop it */
  		if (!inode)
+@@ -1026,7 +1026,7 @@
+ 	attr.ia_valid = ATTR_MODE;
+ 
+ 	if (nd && (nd->flags & LOOKUP_CREATE))
+-		open_flags = nd->intent.open.flags;
++		open_flags = nd->intent.it_flags;
+ 
+ 	/*
+ 	 * The 0 argument passed into the create function should one day
 Index: linux-2.6.5-7.108/fs/nfs/nfs4proc.c
 ===================================================================
 --- linux-2.6.5-7.108.orig/fs/nfs/nfs4proc.c	2004-04-04 06:37:39.000000000 +0300

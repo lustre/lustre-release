@@ -31,6 +31,8 @@
 #define EXT3_IOC_SETVERSION_OLD         _IOW('v', 2, long)
 #endif
 
+struct obd_statfs;
+
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
@@ -50,6 +52,7 @@
 #define LL_STATFS_LOV           2
 
 #define IOC_MDC_TYPE            'i'
+#define IOC_MDC_LOOKUP          _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
 #define IOC_MDC_GETSTRIPE       _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
 #define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_mds_data *)
 

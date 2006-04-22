@@ -148,6 +148,8 @@ static inline __u8 *fsfilt_uuid(struct obd_device *obd, struct super_block *sb)
 do {                                                                    \
         if (time_before(jiffies, start + 15 * HZ))                      \
                 break;                                                  \
+        else if (time_before(jiffies, start + 30 * HZ))                 \
+                CDEBUG(D_VFSTRACE,"slow %s %lus\n", msg,(jiffies-start)/HZ);\
         else if (time_before(jiffies, start + timeout / 2 * HZ))        \
                 CWARN("slow %s %lus\n", msg, (jiffies - start) / HZ);   \
         else                                                            \

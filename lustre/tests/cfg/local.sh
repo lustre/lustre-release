@@ -19,9 +19,10 @@ PTLDEBUG=${PTLDEBUG:-0x3f0400}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 PDSH=${PDSH:-no_dsh}
 
-MDSDEV=${MDSDEV:-$ROOT/tmp/mds1-`hostname`}
+TMP=${TMP:-/tmp}
+MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 MDSSIZE=${MDSSIZE:-100000}
-OSTDEV=${OSTDEV:-$ROOT/tmp/ost1-`hostname`}
+OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-200000}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-20}

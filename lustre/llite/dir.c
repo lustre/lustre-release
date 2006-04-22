@@ -113,9 +113,8 @@ static inline unsigned long dir_pages(struct inode *inode)
 }
 
 
-static void ext2_check_page(struct page *page)
+static void ext2_check_page(struct inode *dir, struct page *page)
 {
-        struct inode *dir = page->mapping->host;
         unsigned chunk_size = ext2_chunk_size(dir);
         char *kaddr = page_address(page);
         //      u32 max_inumber = le32_to_cpu(sb->u.ext2_sb.s_es->s_inodes_count);
@@ -164,10 +163,9 @@ out:
         /* Too bad, we had an error */
 
 Ebadsize:
-        CERROR("ext2_check_page"
-                "size of directory #%lu is not a multiple of chunk size\n",
-                dir->i_ino
-        );
+        CERROR("%s: directory %lu/%u size %llu is not a multiple of %u\n",
+               ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
+               dir->i_generation, dir->i_size, chunk_size);
         goto fail;
 Eshort:
         error = "rec_len is smaller than minimal";
@@ -184,10 +182,11 @@ Espan:
         //Einumber:
         // error = "inode out of bounds";
 bad_entry:
-        CERROR("ext2_check_page: bad entry in directory #%lu: %s - "
+        CERROR("%s: bad entry in directory %lu/%u: %s - "
                 "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d",
-                dir->i_ino, error, (page->index<<PAGE_CACHE_SHIFT), offs,
-                (unsigned long) le32_to_cpu(p->inode),
+                ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
+                dir->i_generation, error, (page->index<<PAGE_CACHE_SHIFT), offs,
+                (unsigned long)le32_to_cpu(p->inode),
                 rec_len, p->name_len);
         goto fail;
 Eend:
@@ -239,16 +238,17 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
         page = read_cache_page(mapping, n,
                                (filler_t*)mapping->a_ops->readpage, NULL);
-        if (!IS_ERR(page)) {
-                wait_on_page(page);
-                (void)kmap(page);
-                if (!PageUptodate(page))
-                        goto fail;
-                if (!PageChecked(page))
-                        ext2_check_page(page);
-                if (PageError(page))
-                        goto fail;
-        }
+        if (IS_ERR(page))
+                GOTO(out_unlock, page);
+
+        wait_on_page(page);
+        (void)kmap(page);
+        if (!PageUptodate(page))
+                goto fail;
+        if (!PageChecked(page))
+                ext2_check_page(dir, page);
+        if (PageError(page))
+                goto fail;
 
 out_unlock:
         ldlm_lock_decref(&lockh, LCK_CR);
@@ -290,7 +290,7 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 };
 
 
-int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
+int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
 {
         struct inode *inode = filp->f_dentry->d_inode;
         loff_t pos = filp->f_pos;
@@ -332,6 +332,7 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
 
                 kaddr = page_address(page);
                 if (need_revalidate) {
+                        /* page already checked from ll_get_dir_page() */
                         offset = ext2_validate_entry(kaddr, offset, chunk_mask);
                         need_revalidate = 0;
                 }
@@ -361,7 +362,8 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
 done:
         filp->f_pos = (n << PAGE_CACHE_SHIFT) | offset;
         filp->f_version = inode->i_version;
-        update_atime(inode);
+        touch_atime(filp->f_vfsmnt, filp->f_dentry);
+
         RETURN(rc);
 }
 
@@ -823,9 +825,8 @@ out_free_memmd:
                         /* XXX: dqb_valid is borrowed as a flag to mark that
                          *      only mds quota is wanted */
                         if (qctl->qc_dqblk.dqb_valid)
-                                qctl->obd_uuid = 
-                                       sbi->ll_mdc_exp->exp_obd->u.cli.
-                                       cl_import->imp_target_uuid;
+                                qctl->obd_uuid = sbi->ll_mdc_exp->exp_obd->
+                                                        u.cli.cl_target_uuid;
                         break;
                 case Q_GETINFO:
                         break;

@@ -305,6 +305,12 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
         __d_rehash(de, 0);
 }
 
+/* 2.6.15 and prior versions have buggy d_instantiate_unique that leaks an inode
+ * if suitable alias is found. But we are not going to fix it by just freeing
+ * such inode, because if some vendor's kernel contains this bugfix already,
+ * we will break everything then. We will use our own reimplementation
+ * instead. */
+#if !defined(HAVE_D_ADD_UNIQUE) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
 /* Search "inode"'s alias list for a dentry that has the same name and parent as
  * de.  If found, return it.  If not found, return de. */
 struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
@@ -351,6 +357,21 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 
         return de;
 }
+#else
+struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
+{
+        struct dentry *dentry;
+
+        dentry = d_add_unique(de, inode);
+        if (dentry) {
+                lock_dentry(dentry);
+                dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                unlock_dentry(dentry);
+        }
+
+        return dentry?dentry:de;
+}
+#endif
 
 static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                             struct lookup_intent *it, void *data)
@@ -442,6 +463,11 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                 GOTO(out, retval = ERR_PTR(rc));
         }
 
+        if ((it->it_op & IT_OPEN) && dentry->d_inode &&
+            !S_ISREG(dentry->d_inode->i_mode) &&
+            !S_ISDIR(dentry->d_inode->i_mode)) {
+                ll_release_openhandle(dentry, it);
+        }
         ll_lookup_finish_locks(it, dentry);
 
         if (dentry == save)
@@ -544,13 +570,6 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
         RETURN(0);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
-{
-        return ll_create_it(dir, dentry, mode, &nd->intent);
-}
-#endif
-
 static void ll_update_times(struct ptlrpc_request *request, int offset,
                             struct inode *inode)
 {
@@ -569,17 +588,18 @@ static void ll_update_times(struct ptlrpc_request *request, int offset,
                 LTIME_S(inode->i_ctime) = body->ctime;
 }
 
-static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
+static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
+                            unsigned rdev, struct dentry *dchild)
 {
         struct ptlrpc_request *request = NULL;
-        struct inode *dir = nd->dentry->d_inode;
+        struct inode *inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data op_data;
         int err;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p) mode %o dev %x\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir,
+               name->len, name->name, dir->i_ino, dir->i_generation, dir,
                mode, rdev);
 
         mode &= ~current->fs->umask;
@@ -592,14 +612,23 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                                       nd->last.len, 0);
+                ll_prepare_mdc_op_data(&op_data, dir, NULL, name->name,
+                                       name->len, 0);
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
                                  current->cap_effective, rdev, &request);
-                if (err == 0)
-                        ll_update_times(request, 0, dir);
-                ptlrpc_req_finished(request);
+                if (err)
+                        break;
+                ll_update_times(request, 0, dir);
+
+                if (dchild) {
+                        err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0,
+                                            dchild->d_sb);
+                        if (err)
+                                break;
+
+                        d_instantiate(dchild, inode);
+                }
                 break;
         case S_IFDIR:
                 err = -EPERM;
@@ -607,64 +636,26 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         default:
                 err = -EINVAL;
         }
-        RETURN(err);
-}
-
-static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
-                    ll_dev_t rdev)
-{
-        struct ptlrpc_request *request = NULL;
-        struct inode *inode = NULL;
-        struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data;
-        int err;
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
-               dchild->d_name.len, dchild->d_name.name,
-               dir->i_ino, dir->i_generation, dir);
-
-        mode &= ~current->fs->umask;
-
-        switch (mode & S_IFMT) {
-        case 0:
-        case S_IFREG:
-                mode |= S_IFREG; /* for mode = 0 case, fallthrough */
-        case S_IFCHR:
-        case S_IFBLK:
-        case S_IFIFO:
-        case S_IFSOCK:
-                ll_prepare_mdc_op_data(&op_data, dir, NULL, dchild->d_name.name,
-                                       dchild->d_name.len, 0);
-                err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
-                                 current->fsuid, current->fsgid,
-                                 current->cap_effective, rdev, &request);
-                if (err)
-                        GOTO(out_err, err);
-
-                ll_update_times(request, 0, dir);
-
-                err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0, 
-                                    dchild->d_sb);
-                if (err)
-                        GOTO(out_err, err);
-                break;
-        case S_IFDIR:
-                RETURN(-EPERM);
-                break;
-        default:
-                RETURN(-EINVAL);
-        }
-
-        d_instantiate(dchild, inode);
- out_err:
         ptlrpc_req_finished(request);
         RETURN(err);
 }
 
-static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
-        struct inode *dir = nd->dentry->d_inode;
+
+        if (!nd || !nd->intent.d.lustre.it_disposition) {
+                /* No saved request? Just mknod the file */
+                return ll_mknod_generic(dir, &dentry->d_name, mode, 0, dentry);
+        }
+
+        return ll_create_it(dir, dentry, mode, &nd->intent);
+}
+#endif
+
+static int ll_symlink_generic(struct inode *dir, struct qstr *name,
+                              const char *tgt)
+{
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data op_data;
@@ -672,11 +663,11 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),target=%s\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation,
+               name->len, name->name, dir->i_ino, dir->i_generation,
                dir, tgt);
 
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                               nd->last.len, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, name->name,
+                               name->len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                          current->fsuid, current->fsgid, current->cap_effective,
@@ -688,10 +679,9 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         RETURN(err);
 }
 
-static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
+static int ll_link_generic(struct inode *src,  struct inode *dir,
+                           struct qstr *name)
 {
-        struct inode *src = srcnd->dentry->d_inode;
-        struct inode *dir = tgtnd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
         int err;
@@ -701,10 +691,10 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         CDEBUG(D_VFSTRACE,
                "VFS Op: inode=%lu/%u(%p), dir=%lu/%u(%p), target=%.*s\n",
                src->i_ino, src->i_generation, src, dir->i_ino,
-               dir->i_generation, dir, tgtnd->last.len, tgtnd->last.name);
+               dir->i_generation, dir, name->len, name->name);
 
-        ll_prepare_mdc_op_data(&op_data, src, dir, tgtnd->last.name,
-                               tgtnd->last.len, 0);
+        ll_prepare_mdc_op_data(&op_data, src, dir, name->name,
+                               name->len, 0);
         err = mdc_link(sbi->ll_mdc_exp, &op_data, &request);
         if (err == 0)
                 ll_update_times(request, 0, dir);
@@ -714,54 +704,67 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         RETURN(err);
 }
 
+static int ll_mkdir_generic(struct inode *dir, struct qstr *name, int mode,
+                            struct dentry *dchild)
 
-static int ll_mkdir_raw(struct nameidata *nd, int mode)
 {
-        struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data op_data;
+        struct inode *inode = NULL;
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
+               name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                               nd->last.len, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, name->name,
+                               name->len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                          current->fsuid, current->fsgid, current->cap_effective,
                          0, &request);
-        if (err == 0)
-                ll_update_times(request, 0, dir);
+        if (err)
+                GOTO(out, err);
 
+        ll_update_times(request, 0, dir);
+        if (dchild) {
+                err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0,
+                                    dchild->d_sb);
+                if (err)
+                        GOTO(out, err);
+                d_instantiate(dchild, inode);
+        }
+        EXIT;
+out:
         ptlrpc_req_finished(request);
-        RETURN(err);
+        return err;
 }
 
-static int ll_rmdir_raw(struct nameidata *nd)
+static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
+                            struct qstr *name)
 {
-        struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
         struct dentry *dentry;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
+               name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
         /* Check if we have something mounted at the dir we are going to delete
          * In such a case there would always be dentry present. */
-        dentry = d_lookup(nd->dentry, &nd->last);
-        if (dentry) {
-                int mounted = d_mountpoint(dentry);
-                dput(dentry);
-                if (mounted)
-                        RETURN(-EBUSY);
+        if (dparent) {
+                dentry = d_lookup(dparent, name);
+                if (dentry) {
+                        int mounted = d_mountpoint(dentry);
+                        dput(dentry);
+                        if (mounted)
+                                RETURN(-EBUSY);
+                }
         }
                 
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                               nd->last.len, S_IFDIR);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, name->name,
+                               name->len, S_IFDIR);
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc == 0)
                 ll_update_times(request, 0, dir);
@@ -843,18 +846,17 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         return rc;
 }
 
-static int ll_unlink_raw(struct nameidata *nd)
+static int ll_unlink_generic(struct inode * dir, struct qstr *name)
 {
-        struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
+               name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
-                               nd->last.len, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, name->name,
+                               name->len, 0);
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc)
                 GOTO(out, rc);
@@ -867,24 +869,23 @@ static int ll_unlink_raw(struct nameidata *nd)
         RETURN(rc);
 }
 
-static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
+static int ll_rename_generic(struct inode *src, struct qstr *src_name,
+                             struct inode *tgt, struct qstr *tgt_name)
 {
-        struct inode *src = srcnd->dentry->d_inode;
-        struct inode *tgt = tgtnd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(src);
         struct mdc_op_data op_data;
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE,"VFS Op:oldname=%.*s,src_dir=%lu/%u(%p),newname=%.*s,"
-               "tgt_dir=%lu/%u(%p)\n", srcnd->last.len, srcnd->last.name,
-               src->i_ino, src->i_generation, src, tgtnd->last.len,
-               tgtnd->last.name, tgt->i_ino, tgt->i_generation, tgt);
+               "tgt_dir=%lu/%u(%p)\n", src_name->len, src_name->name,
+               src->i_ino, src->i_generation, src, tgt_name->len,
+               tgt_name->name, tgt->i_ino, tgt->i_generation, tgt);
 
         ll_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
         err = mdc_rename(sbi->ll_mdc_exp, &op_data,
-                         srcnd->last.name, srcnd->last.len,
-                         tgtnd->last.name, tgtnd->last.len, &request);
+                         src_name->name, src_name->len,
+                         tgt_name->name, tgt_name->len, &request);
         if (!err) {
                 ll_update_times(request, 0, src);
                 ll_update_times(request, 0, tgt);
@@ -895,6 +896,75 @@ static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 
         RETURN(err);
 }
+
+static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
+{
+        return ll_mknod_generic(nd->dentry->d_inode, &nd->last, mode,rdev,NULL);
+}
+static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
+{
+        return ll_rename_generic(srcnd->dentry->d_inode, &srcnd->last,
+                                 tgtnd->dentry->d_inode, &tgtnd->last);
+}
+static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
+{
+        return ll_link_generic(srcnd->dentry->d_inode, tgtnd->dentry->d_inode,
+                               &tgtnd->last);
+}
+static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
+{
+        return ll_symlink_generic(nd->dentry->d_inode, &nd->last, tgt);
+}
+static int ll_rmdir_raw(struct nameidata *nd)
+{
+        return ll_rmdir_generic(nd->dentry->d_inode, nd->dentry, &nd->last);
+}
+static int ll_mkdir_raw(struct nameidata *nd, int mode)
+{
+        return ll_mkdir_generic(nd->dentry->d_inode, &nd->last, mode, NULL);
+}
+static int ll_unlink_raw(struct nameidata *nd)
+{
+        return ll_unlink_generic(nd->dentry->d_inode, &nd->last);
+}
+
+static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
+                    ll_dev_t rdev)
+{
+        return ll_mknod_generic(dir, &dchild->d_name, mode,
+                                old_encode_dev(rdev), dchild);
+}
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+static int ll_unlink(struct inode * dir, struct dentry *dentry)
+{
+        return ll_unlink_generic(dir, &dentry->d_name);
+}
+static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
+{
+        return ll_mkdir_generic(dir, &dentry->d_name, mode, dentry);
+}
+static int ll_rmdir(struct inode *dir, struct dentry *dentry)
+{
+        return ll_rmdir_generic(dir, NULL, &dentry->d_name);
+}
+static int ll_symlink(struct inode *dir, struct dentry *dentry,
+                      const char *oldname)
+{
+        return ll_symlink_generic(dir, &dentry->d_name, oldname);
+}
+static int ll_link(struct dentry *old_dentry, struct inode *dir, 
+                   struct dentry *new_dentry)
+{
+        return ll_link_generic(old_dentry->d_inode, dir, &new_dentry->d_name);
+}
+static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
+                     struct inode *new_dir, struct dentry *new_dentry)
+{
+        return ll_rename_generic(old_dir, &old_dentry->d_name, new_dir, 
+                               &new_dentry->d_name);
+}
+#endif
 
 struct inode_operations ll_dir_inode_operations = {
         .link_raw           = ll_link_raw,
@@ -914,11 +984,35 @@ struct inode_operations ll_dir_inode_operations = {
 #else
         .lookup             = ll_lookup_nd,
         .create             = ll_create_nd,
-        .getattr_it         = ll_getattr,
+        .getattr_it         = ll_getattr_it,
+        /* We need all these non-raw things for NFSD, to not patch it. */
+        .unlink             = ll_unlink,
+        .mkdir              = ll_mkdir,
+        .rmdir              = ll_rmdir,
+        .symlink            = ll_symlink,
+        .link               = ll_link,
+        .rename             = ll_rename,
+        .setattr            = ll_setattr,
+        .getattr            = ll_getattr,
 #endif
         .permission         = ll_inode_permission,
         .setxattr           = ll_setxattr,
         .getxattr           = ll_getxattr,
         .listxattr          = ll_listxattr,
         .removexattr        = ll_removexattr,
+};
+
+struct inode_operations ll_special_inode_operations = {
+        .setattr_raw    = ll_setattr_raw,
+        .setattr        = ll_setattr,
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        .getattr_it     = ll_getattr_it,
+#else   
+        .revalidate_it  = ll_inode_revalidate_it,
+#endif
+        .permission     = ll_inode_permission,
+        .setxattr       = ll_setxattr,
+        .getxattr       = ll_getxattr,
+        .listxattr      = ll_listxattr,
+        .removexattr    = ll_removexattr,
 };

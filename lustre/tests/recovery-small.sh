@@ -393,7 +393,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 }
 run_test 24 "fsync error (should return error)"
 
-test_26() {      # bug 5921 - evict dead exports 
+test_26() {      # bug 5921 - evict dead exports by pinger
 # this test can only run from a client on a separate node.
 	[ "`lsmod | grep obdfilter`" ] && \
 	    echo "skipping test 26 (local OST)" && return
@@ -418,6 +418,28 @@ test_26() {      # bug 5921 - evict dead exports
 	return 0
 }
 run_test 26 "evict dead exports"
+
+test_26b() {      # bug 10140 - evict dead exports by pinger
+	zconf_mount `hostname` $MOUNT2
+	MDS_FILE=/proc/fs/lustre/mds/mds_svc/num_exports
+        MDS_NEXP1="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
+	OST_FILE=/proc/fs/lustre/obdfilter/ost_svc/num_exports
+        OST_NEXP1="`do_facet ost cat $OST_FILE | cut -d' ' -f2`"
+	echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
+	zconf_umount `hostname` $MOUNT2 -f
+	# evictor takes up to 2.25x to evict.  But if there's a 
+	# race to start the evictor from various obds, the loser
+	# might have to wait for the next ping.
+	echo Waiting for $(($TIMEOUT * 4)) secs
+	sleep $(($TIMEOUT * 4))
+        OST_NEXP2="`do_facet ost cat $OST_FILE | cut -d' ' -f2`"
+        MDS_NEXP2="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
+	echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
+        [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted from OST"
+        [ $MDS_NEXP1 -le $MDS_NEXP2 ] && error "client not evicted from MDS"
+	return 0
+}
+run_test 26b "evict dead exports"
 
 test_27() {
 	[ "`lsmod | grep mds`" ] || \

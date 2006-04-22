@@ -329,7 +329,7 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
         imp_state_name = ptlrpc_import_state_name(imp->imp_state);
         *eof = 1;
         return snprintf(page, count, "%s\t%s%s\n",
-                        imp->imp_target_uuid.uuid, imp_state_name,
+                        obd2cli_tgt(obd), imp_state_name,
                         imp->imp_deactive ? "\tDEACTIVATED" : "");
 }
 
@@ -361,6 +361,8 @@ static const char *obd_connect_names[] = {
         "initial_transno",
         "inode_bit_locks",
         "join_file",
+        "",
+        "no_oh_for_devices",
         NULL
 };
 
@@ -652,7 +654,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
 
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, iocontrol);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, get_info);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_info);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_info_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, attach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, detach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setup);

@@ -36,7 +36,6 @@ extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;
 extern unsigned int obd_health_check_timeout;
 extern char obd_lustre_upcall[128];
-extern unsigned int obd_sync_filter;
 extern cfs_waitq_t obd_race_waitq;
 
 #define OBD_FAIL_MDS                     0x100
@@ -151,6 +150,7 @@ extern cfs_waitq_t obd_race_waitq;
 #define OBD_FAIL_PTLRPC_BULK_GET_NET     0x503
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET     0x504
 #define OBD_FAIL_PTLRPC_DROP_RPC         0x505
+#define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601

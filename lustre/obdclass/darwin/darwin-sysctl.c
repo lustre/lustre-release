@@ -56,9 +56,6 @@ SYSCTL_STRING(_lustre,		OID_AUTO,	upcall,
 SYSCTL_INT(_lustre,		OID_AUTO,	memused, 
 	   CTLTYPE_INT | CTLFLAG_RW,		(int *)&obd_memory.counter,
 	   0,		"lustre_memory_used");
-SYSCTL_INT(_lustre,		OID_AUTO,	filter_sync_on_commit, 
-	   CTLTYPE_INT | CTLFLAG_RW,		&obd_sync_filter,
-	   0,		"filter_sync_on_commit");
 SYSCTL_INT(_lustre,		OID_AUTO,	ldlm_timeout, 
 	   CTLTYPE_INT | CTLFLAG_RW,		&ldlm_timeout,
 	   0,		"ldlm_timeout");

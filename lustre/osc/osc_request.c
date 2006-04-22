@@ -773,7 +773,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
 
         ENTRY;
         opc = ((cmd & OBD_BRW_WRITE) != 0) ? OST_WRITE : OST_READ;
-        pool = ((cmd & OBD_BRW_WRITE) != 0) ? cli->cl_rq_pool : NULL;
+        pool = ((cmd & OBD_BRW_WRITE) != 0) ? imp->imp_rq_pool : NULL;
 
         for (niocount = i = 1; i < page_count; i++)
                 if (!can_merge_pages(&pga[i - 1], &pga[i]))
@@ -826,9 +826,9 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                          "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
                          " prev_pg %p [pri %lu ind %lu] off "LPU64"\n",
                          i, page_count,
-                         pg->pg, pg->pg->private, pg->pg->index, pg->off,
-                         pg_prev->pg, pg_prev->pg->private, pg_prev->pg->index,
-                                 pg_prev->off);
+                         pg->pg, page_private(pg->pg), pg->pg->index, pg->off,
+                         pg_prev->pg, page_private(pg_prev->pg),
+                         pg_prev->pg->index, pg_prev->off);
 #else
                 LASSERTF(i == 0 || pg->off > pg_prev->off,
                          "i %d p_c %u\n", i, page_count);
@@ -1200,14 +1200,12 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                         *oa = *saved_oa;
                 } else if (page_count > pages_per_brw) {
                         /* save a copy of oa (brw will clobber it) */
-                        OBD_ALLOC(saved_oa, sizeof(*saved_oa));
-                        if (saved_oa == NULL) {
-                                CERROR("Can't save oa (ENOMEM)\n");
+                        saved_oa = obdo_alloc();
+                        if (saved_oa == NULL)
                                 RETURN(-ENOMEM);
-                        }
                         *saved_oa = *oa;
                 }
-                
+
                 rc = osc_brw_internal(cmd, exp, oa, md, pages_per_brw, pga);
 
                 if (rc != 0)
@@ -1218,7 +1216,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         }
 
         if (saved_oa != NULL)
-                OBD_FREE(saved_oa, sizeof(*saved_oa));
+                obdo_free(saved_oa);
 
         RETURN(rc);
 }
@@ -1374,12 +1372,11 @@ static void osc_occ_interrupted(struct oig_callback_context *occ)
                 GOTO(unlock, 0);
         }
 
-        /* we don't get interruption callbacks until osc_trigger_sync_io()
+        /* we don't get interruption callbacks until osc_trigger_group_io()
          * has been called and put the sync oaps in the pending/urgent lists.*/
         if (!list_empty(&oap->oap_pending_item)) {
                 list_del_init(&oap->oap_pending_item);
-                if (oap->oap_async_flags & ASYNC_URGENT)
-                        list_del_init(&oap->oap_urgent_item);
+                list_del_init(&oap->oap_urgent_item);
 
                 loi = oap->oap_loi;
                 lop = (oap->oap_cmd & OBD_BRW_WRITE) ?
@@ -2262,7 +2259,8 @@ static void osc_group_to_pending(struct client_obd *cli, struct lov_oinfo *loi,
                 oap = list_entry(pos, struct osc_async_page, oap_pending_item);
                 list_del(&oap->oap_pending_item);
                 list_add_tail(&oap->oap_pending_item, &lop->lop_pending);
-                list_add(&oap->oap_urgent_item, &lop->lop_urgent);
+                if (oap->oap_async_flags & ASYNC_URGENT)
+                        list_add(&oap->oap_urgent_item, &lop->lop_urgent);
                 lop_update_pending(cli, lop, cmd, 1);
         }
         loi_list_maint(cli, loi);
@@ -2479,7 +2477,6 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
                             struct lov_stripe_md *lsm, obd_count page_count,
                             struct brw_page *pga)
 {
-        struct client_obd *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *request = NULL;
         struct ost_body *body;
         struct niobuf_remote *nioptr;
@@ -2494,7 +2491,7 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
 
         request = ptlrpc_prep_req_pool(class_exp2cliimp(exp),
                                        LUSTRE_OST_VERSION, OST_SAN_WRITE,
-                                       3, size, NULL, cli->cl_rq_pool);
+                                       3, size, NULL, imp->imp_rq_pool);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -2692,8 +2689,8 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 goto no_match;
 
         /* Next, search for already existing extent locks that will cover us */
-        rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type, policy, mode,
-                             lockh);
+        rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type, policy,
+                             mode, lockh);
         if (rc == 1) {
                 osc_set_data_with_check(lockh, data, *flags);
                 if (*flags & LDLM_FL_HAS_INTENT) {
@@ -2718,7 +2715,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
          * locks out from other users right now, too. */
 
         if (mode == LCK_PR) {
-                rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type,
+                rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
                                      policy, LCK_PW, lockh);
                 if (rc == 1) {
                         /* FIXME: This is not incredibly elegant, but it might
@@ -2744,6 +2741,9 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 size[0] = sizeof(*rep);
                 req->rq_replen = lustre_msg_size(2, size);
         }
+
+        /* users of osc_enqueue() can pass this flag for ldlm_lock_match() */
+        *flags &= ~LDLM_FL_BLOCK_GRANTED;
 
         rc = ldlm_cli_enqueue(exp, req, obd->obd_namespace, res_id, type,
                               policy, mode, flags, bl_cb, cp_cb, gl_cb, data,
@@ -3065,14 +3065,40 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         RETURN(-EINVAL);
 }
 
-static int osc_set_info(struct obd_export *exp, obd_count keylen,
-                        void *key, obd_count vallen, void *val)
+static int osc_setinfo_mds_conn_interpret(struct ptlrpc_request *req,
+                                          void *aa, int rc)
+{
+        struct llog_ctxt *ctxt;
+        struct obd_import *imp = req->rq_import;
+        ENTRY;
+
+        if (rc != 0)
+                RETURN(rc);
+
+        ctxt = llog_get_context(imp->imp_obd, LLOG_MDS_OST_ORIG_CTXT);
+        if (ctxt) {
+                if (rc == 0)
+                        rc = llog_initiator_connect(ctxt);
+                else
+                        CERROR("cannot establish connection for "
+                               "ctxt %p: %d\n", ctxt, rc);
+        }
+
+        imp->imp_server_timeout = 1;
+        CDEBUG(D_HA, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
+        imp->imp_pingable = 1;
+
+        RETURN(rc);
+}
+
+static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
+                              void *key, obd_count vallen, void *val,
+                              struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request *req;
         struct obd_device  *obd = exp->exp_obd;
         struct obd_import *imp = class_exp2cliimp(exp);
-        struct llog_ctxt *ctxt;
-        int rc, size[2] = {keylen, vallen};
+        int size[2] = {keylen, vallen};
         char *bufs[2] = {key, val};
         ENTRY;
 
@@ -3088,7 +3114,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
 
                 RETURN(0);
         }
-        
+
         if (KEY_IS("unlinked")) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
@@ -3098,7 +3124,6 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         }
 
         if (KEY_IS("initial_recov")) {
-                struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
@@ -3115,9 +3140,15 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (!KEY_IS("mds_conn") && !KEY_IS("evict_by_nid"))
+        if (!set)
                 RETURN(-EINVAL);
 
+        /* We pass all other commands directly to OST. Since nobody calls osc
+           methods directly and everybody is supposed to go through LOV, we
+           assume lov checked invalid values for us.
+           The only recognised values so far are evict_by_nid and mds_conn.
+           Even if something bad goes through, we'd get a -EINVAL from OST
+           anyway. */
 
         req = ptlrpc_prep_req(imp, LUSTRE_OST_VERSION, OST_SET_INFO,
                               2, size, bufs);
@@ -3125,23 +3156,13 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-ENOMEM);
 
         req->rq_replen = lustre_msg_size(0, NULL);
-        rc = ptlrpc_queue_wait(req);
-        ptlrpc_req_finished(req);
 
-        ctxt = llog_get_context(exp->exp_obd, LLOG_MDS_OST_ORIG_CTXT);
-        if (ctxt) {
-                if (rc == 0)
-                        rc = llog_initiator_connect(ctxt);
-                else
-                        CERROR("cannot establish connection for ctxt %p: %d\n",
-                               ctxt, rc);
-        }
+        if (KEY_IS("mds_conn"))
+                req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
+        ptlrpc_set_add_req(set, req);
+        ptlrpc_check_set(set);
 
-        imp->imp_server_timeout = 1;
-        CDEBUG(D_HA, "pinging OST %s\n", imp->imp_target_uuid.uuid);
-        imp->imp_pingable = 1;
-
-        RETURN(rc);
+        RETURN(0);
 }
 
 
@@ -3310,6 +3331,7 @@ static int osc_import_event(struct obd_device *obd,
 int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         int rc;
+        ENTRY;
 
         ENTRY;
         rc = ptlrpcd_addref();
@@ -3335,15 +3357,16 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
                    previous ones. Ideally we want to have 2x max_rpcs_in_flight
                    reserved, but I afraid that might be too much wasted RAM
                    in fact, so 2 is just my guess and still should work. */
-                cli->cl_rq_pool = ptlrpc_init_rq_pool(cli->cl_max_rpcs_in_flight + 2,
-                                                      OST_MAXREQSIZE,
-                                                      ptlrpc_add_rqs_to_pool);
+                cli->cl_import->imp_rq_pool =
+                        ptlrpc_init_rq_pool(cli->cl_max_rpcs_in_flight + 2,
+                                            OST_MAXREQSIZE,
+                                            ptlrpc_add_rqs_to_pool);
         }
 
         RETURN(rc);
 }
 
-static int osc_precleanup(struct obd_device *obd, int stage)
+static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
         ENTRY;
@@ -3357,10 +3380,15 @@ static int osc_precleanup(struct obd_device *obd, int stage)
                 ptlrpc_deactivate_import(imp);
                 break;
         }
+        case OBD_CLEANUP_EXPORTS:
+                break;
         case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        case OBD_CLEANUP_OBD:
+                break;
         }
         RETURN(rc);
 }
@@ -3368,7 +3396,6 @@ static int osc_precleanup(struct obd_device *obd, int stage)
 int osc_cleanup(struct obd_device *obd)
 {
         struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-        struct client_obd *cli = &obd->u.cli;
         int rc;
 
         ENTRY;
@@ -3384,8 +3411,6 @@ int osc_cleanup(struct obd_device *obd)
         lquota_cleanup(quota_interface, obd);
 
         rc = client_obd_cleanup(obd);
-
-        ptlrpc_free_rq_pool(cli->cl_rq_pool);
 
         ptlrpcd_decref();
         RETURN(rc);
@@ -3429,7 +3454,7 @@ struct obd_ops osc_obd_ops = {
         .o_join_lru             = osc_join_lru,
         .o_iocontrol            = osc_iocontrol,
         .o_get_info             = osc_get_info,
-        .o_set_info             = osc_set_info,
+        .o_set_info_async       = osc_set_info_async,
         .o_import_event         = osc_import_event,
         .o_llog_init            = osc_llog_init,
         .o_llog_finish          = osc_llog_finish,
@@ -3438,7 +3463,9 @@ struct obd_ops osc_obd_ops = {
 #if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 struct obd_ops sanosc_obd_ops = {
         .o_owner                = THIS_MODULE,
-        .o_cleanup              = client_obd_cleanup,
+        .o_setup                = client_sanobd_setup,
+        .o_precleanup           = osc_precleanup,
+        .o_cleanup              = osc_cleanup,
         .o_add_conn             = client_import_add_conn,
         .o_del_conn             = client_import_del_conn,
         .o_connect              = client_connect_import,
@@ -3452,7 +3479,6 @@ struct obd_ops sanosc_obd_ops = {
         .o_getattr              = osc_getattr,
         .o_getattr_async        = osc_getattr_async,
         .o_setattr              = osc_setattr,
-        .o_setup                = client_sanobd_setup,
         .o_brw                  = sanosc_brw,
         .o_punch                = osc_punch,
         .o_sync                 = osc_sync,
@@ -3469,7 +3495,6 @@ struct obd_ops sanosc_obd_ops = {
 };
 #endif
 
-static quota_interface_t *quota_interface;
 extern quota_interface_t osc_quota_interface;
 
 int __init osc_init(void)

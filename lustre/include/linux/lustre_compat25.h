@@ -31,6 +31,27 @@
 
 #include <libcfs/linux/portals_compat25.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+struct ll_iattr_struct {
+        struct iattr    iattr;
+        unsigned int    ia_attr_flags;
+};
+#else
+#define ll_iattr_struct iattr
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16)
+#define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
+#define LOCK_INODE_MUTEX(inode) do {mutex_lock(&(inode)->i_mutex); } while(0)
+#define TRYLOCK_INODE_MUTEX(inode) mutex_trylock(&(inode)->i_mutex)
+#define d_child d_u.d_child
+#define d_rcu d_u.d_rcu
+#else
+#define UNLOCK_INODE_MUTEX(inode) do {up(&(inode)->i_sem); } while(0)
+#define LOCK_INODE_MUTEX(inode) do {down(&(inode)->i_sem); } while(0)
+#define TRYLOCK_INODE_MUTEX(inode) (!down_trylock(&(inode)->i_sem))
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
 #define NGROUPS_SMALL           NGROUPS
 #define NGROUPS_PER_BLOCK       ((int)(EXEC_PAGESIZE / sizeof(gid_t)))
@@ -52,6 +73,15 @@ void groups_free(struct group_info *ginfo);
 #define current_ngroups current->group_info->ngroups
 #define current_groups current->group_info->small_block
 
+#endif
+
+#ifndef page_private
+#define page_private(page) ((page)->private)
+#define set_page_private(page, v) ((page)->private = (v))
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
+#define gfp_t int
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
@@ -103,17 +133,6 @@ void groups_free(struct group_info *ginfo);
 
 #include <linux/writeback.h>
 
-static inline void lustre_daemonize_helper(void)
-{
-        LASSERT(current->signal != NULL);
-        current->signal->session = 1;
-        if (current->group_leader)
-                current->group_leader->signal->pgrp = 1;
-        else
-                CERROR("we aren't group leader\n");
-        current->signal->tty = NULL;
-}
-
 static inline int cleanup_group_info(void)
 {
         struct group_info *ginfo;
@@ -132,12 +151,12 @@ static inline int cleanup_group_info(void)
         do {       \
                 page_cache_get(page); \
                 SetPagePrivate(page); \
-                page->private = (unsigned long)llap; \
+                set_page_private(page, (unsigned long)llap); \
         } while (0)
 #define __clear_page_ll_data(page) \
         do {       \
                 ClearPagePrivate(page); \
-                page->private = 0; \
+                set_page_private(page, 0); \
                 page_cache_release(page); \
         } while(0)
 
@@ -171,6 +190,7 @@ static inline int cleanup_group_info(void)
 #define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
 #define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
 #define ll_dev_t                            int
+#define old_encode_dev(dev)                 (dev)
 
 /* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
  * as 2.5 and let macros drop back.. */
@@ -248,15 +268,7 @@ static inline void ll_redirty_page(struct page *page)
 
 static inline void __d_drop(struct dentry *dentry)
 {
-        list_del(&dentry->d_hash);
-        INIT_LIST_HEAD(&dentry->d_hash);
-}
-
-static inline void lustre_daemonize_helper(void)
-{
-        current->session = 1;
-        current->pgrp = 1;
-        current->tty = NULL;
+        list_del_init(&dentry->d_hash);
 }
 
 static inline int cleanup_group_info(void)
@@ -282,8 +294,8 @@ static inline void cond_resched(void)
 #define PDE(ii)         ((ii)->u.generic_ip)
 #endif
 
-#define __set_page_ll_data(page, llap) page->private = (unsigned long)llap
-#define __clear_page_ll_data(page) page->private = 0
+#define __set_page_ll_data(page, llap) set_page_private(page, (unsigned long)llap)
+#define __clear_page_ll_data(page) set_page_private(page, 0)
 #define PageWriteback(page) 0
 #define set_page_writeback(page) do {} while (0)
 #define end_page_writeback(page) do {} while (0)
@@ -314,13 +326,20 @@ static inline int page_mapped(struct page *page)
 }
 #endif /* !HAVE_PAGE_MAPPED */
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
+static inline void touch_atime(struct vfsmount *mnt, struct dentry *dentry)
+{
+        update_atime(dentry->d_inode);
+}
+#endif
+
 static inline void file_accessed(struct file *file)
 {
 #ifdef O_NOATIME
         if (file->f_flags & O_NOATIME)
                 return;
 #endif
-        update_atime(file->f_dentry->d_inode);
+        touch_atime(file->f_vfsmnt, file->f_dentry);
 }
 
 #endif /* end of 2.4 compat macros */

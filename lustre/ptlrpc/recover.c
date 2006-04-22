@@ -94,7 +94,7 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
 
         argv[0] = obd_lustre_upcall;
         argv[1] = "FAILED_IMPORT";
-        argv[2] = imp->imp_target_uuid.uuid;
+        argv[2] = obd2cli_tgt(imp->imp_obd);
         argv[3] = imp->imp_obd->obd_name;
         argv[4] = imp->imp_connection->c_remote_uuid.uuid;
         argv[5] = imp->imp_obd->obd_uuid.uuid;
@@ -132,14 +132,14 @@ void ptlrpc_initiate_recovery(struct obd_import *imp)
 
         if (strcmp(obd_lustre_upcall, "DEFAULT") == 0) {
                 CDEBUG(D_HA, "%s: starting recovery without upcall\n",
-                        imp->imp_target_uuid.uuid);
+                        obd2cli_tgt(imp->imp_obd));
                 ptlrpc_connect_import(imp, NULL);
         } else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
                 CDEBUG(D_HA, "%s: recovery disabled\n",
-                        imp->imp_target_uuid.uuid);
+                        obd2cli_tgt(imp->imp_obd));
         } else {
                 CDEBUG(D_HA, "%s: calling upcall to start recovery\n",
-                        imp->imp_target_uuid.uuid);
+                        obd2cli_tgt(imp->imp_obd));
                 ptlrpc_run_failed_import_upcall(imp);
         }
 
@@ -161,13 +161,14 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          * get rid of them now.
          */
         spin_lock_irqsave(&imp->imp_lock, flags);
+        imp->imp_last_transno_checked = 0;
         ptlrpc_free_committed(imp);
         last_transno = imp->imp_last_replay_transno;
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         CDEBUG(D_HA, "import %p from %s committed "LPU64" last "LPU64"\n",
-               imp, imp->imp_target_uuid.uuid, imp->imp_peer_committed_transno,
-               last_transno);
+               imp, obd2cli_tgt(imp->imp_obd),
+               imp->imp_peer_committed_transno, last_transno);
 
         /* Do I need to hold a lock across this iteration?  We shouldn't be
          * racing with any additions to the list, because we're in recovery
@@ -273,15 +274,14 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
         ENTRY;
 
         CDEBUG(D_HA, "import %s of %s@%s abruptly disconnected: reconnecting\n",
-               imp->imp_obd->obd_name,
-               imp->imp_target_uuid.uuid,
+               imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
                imp->imp_connection->c_remote_uuid.uuid);
 
-        if (ptlrpc_set_import_discon(imp)) {
+        if (ptlrpc_set_import_discon(imp, failed_req->rq_reqmsg->conn_cnt)) {
                 if (!imp->imp_replayable) {
                         CDEBUG(D_HA, "import %s@%s for %s not replayable, "
                                "auto-deactivating\n",
-                               imp->imp_target_uuid.uuid,
+                               obd2cli_tgt(imp->imp_obd),
                                imp->imp_connection->c_remote_uuid.uuid,
                                imp->imp_obd->obd_name);
                         ptlrpc_deactivate_import(imp);
@@ -317,7 +317,7 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
          * requests. */
         if (!active) {
                 CWARN("setting import %s INACTIVE by administrator request\n",
-                      imp->imp_target_uuid.uuid);
+                      obd2cli_tgt(imp->imp_obd));
                 ptlrpc_invalidate_import(imp);
                 imp->imp_deactive = 1;
         }
@@ -326,7 +326,7 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         if (active) {
                 imp->imp_deactive = 0;
                 CDEBUG(D_HA, "setting import %s VALID\n",
-                       imp->imp_target_uuid.uuid);
+                       obd2cli_tgt(imp->imp_obd));
                 rc = ptlrpc_recover_import(imp, NULL);
         }
 
@@ -339,7 +339,7 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
         ENTRY;
 
         /* force import to be disconnected. */
-        ptlrpc_set_import_discon(imp);
+        ptlrpc_set_import_discon(imp, 0);
 
         imp->imp_deactive = 0;
         rc = ptlrpc_recover_import_no_retry(imp, new_uuid);
@@ -383,14 +383,14 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
                 RETURN(rc);
 
         CDEBUG(D_HA, "%s: recovery started, waiting\n",
-               imp->imp_target_uuid.uuid);
+               obd2cli_tgt(imp->imp_obd));
 
         lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
                           NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           !ptlrpc_import_in_recovery(imp), &lwi);
         CDEBUG(D_HA, "%s: recovery finished\n",
-               imp->imp_target_uuid.uuid);
+               obd2cli_tgt(imp->imp_obd));
 
         RETURN(rc);
 }

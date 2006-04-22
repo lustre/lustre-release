@@ -224,11 +224,13 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_TRANSNO    0x800ULL /* replay is sending initial transno */
 #define OBD_CONNECT_IBITS     0x1000ULL /* support for inodebits locks */
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
+#define OBD_CONNECT_NODEVOH   0x8000ULL /* No open handle for special nodes */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags() */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
-                                OBD_CONNECT_IBITS | OBD_CONNECT_JOIN)
+                                OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
+                                OBD_CONNECT_NODEVOH)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX)
@@ -713,9 +715,7 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 #define FMODE_READ               00000001
 #define FMODE_WRITE              00000002
 #endif
-#ifndef FMODE_EXEC
-#define FMODE_EXEC               00000004
-#endif
+#define MDS_FMODE_EXEC           00000004
 #define MDS_OPEN_CREAT           00000100
 #define MDS_OPEN_EXCL            00000200
 #define MDS_OPEN_TRUNC           00001000

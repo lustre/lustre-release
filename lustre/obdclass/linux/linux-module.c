@@ -258,7 +258,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 if (obd->obd_type == NULL)
                         continue;
 
-                atomic_inc(&obd->obd_refcount);
+                class_incref(obd);
                 spin_unlock(&obd_dev_lock);
 
                 if (obd_health_check(obd)) {

@@ -347,6 +347,9 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 struct intnl_stat *st;
                 ENTRY;
 
+                if (it_disposition(it, DISP_OPEN_CREATE))
+                        ptlrpc_req_finished(request);
+
                 rc = mdc_req2lustre_md(request, offset, sbi->ll_osc_exp, &md);
                 if (rc)
                         RETURN(rc);
