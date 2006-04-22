@@ -1,0 +1,545 @@
+diff -Nur linux-2.6.5-7.244-orig/include/linux/skbuff.h linux-2.6.5-7.244/include/linux/skbuff.h
+--- linux-2.6.5-7.244-orig/include/linux/skbuff.h	2005-12-13 07:50:31.000000000 +0800
++++ linux-2.6.5-7.244/include/linux/skbuff.h	2006-03-13 16:31:30.000000000 +0800
+@@ -135,6 +135,30 @@
+ 	__u16 size;
+ };
+ 
++/* Support for callback when skb data has been released */
++typedef struct zccd                            /* Zero Copy Callback Descriptor */
++{                                              /* (embed as first member of custom struct) */
++	atomic_t        zccd_count;             /* reference count */
++	void           (*zccd_destructor)(struct zccd *); /* callback when refcount reaches zero */
++} zccd_t;
++
++static inline void zccd_init (zccd_t *d, void (*callback)(zccd_t *))
++{
++	atomic_set (&d->zccd_count, 1);
++	d->zccd_destructor = callback;
++}
++
++static inline void zccd_get (zccd_t *d)                /* take a reference */
++{
++	atomic_inc (&d->zccd_count);
++}
++
++static inline void zccd_put (zccd_t *d)                /* release a reference */
++{
++	if (atomic_dec_and_test (&d->zccd_count))
++		(d->zccd_destructor)(d);
++}
++
+ /* This data is invariant across clones and lives at
+  * the end of the header data, ie. at skb->end.
+  */
+@@ -144,6 +168,12 @@
+ 	unsigned short	tso_size;
+ 	unsigned short	tso_segs;
+ 	struct sk_buff	*frag_list;
++	zccd_t          *zccd;                  /* zero copy descriptor */
++	zccd_t          *zccd2;                 /* 2nd zero copy descriptor */
++	/* NB we expect zero-copy data to be at least 1 packet, so
++	* having 2 zccds means we don't unneccessarily split the packet
++	* where consecutive zero-copy sends abutt.
++	*/
+ 	skb_frag_t	frags[MAX_SKB_FRAGS];
+ };
+ 
+diff -Nur linux-2.6.5-7.244-orig/include/net/sock.h linux-2.6.5-7.244/include/net/sock.h
+--- linux-2.6.5-7.244-orig/include/net/sock.h	2005-12-13 07:50:33.000000000 +0800
++++ linux-2.6.5-7.244/include/net/sock.h	2006-03-13 16:32:36.000000000 +0800
+@@ -413,6 +413,18 @@
+ 	(__skb)->next = NULL;					\
+ } while(0)
+ 
++#define sk_wait_event(__sk, __timeo, __condition)               \
++({      int rc;                                                 \
++        release_sock(__sk);                                     \
++        rc = __condition;                                       \
++        if (!rc) {                                              \
++                *(__timeo) = schedule_timeout(*(__timeo));      \
++                rc = __condition;                               \
++        }                                                       \
++        lock_sock(__sk);                                        \
++        rc;                                                     \
++})
++
+ /* IP protocol blocks we attach to sockets.
+  * socket layer -> transport layer interface
+  * transport -> network interface is defined by struct inet_proto
+@@ -1037,6 +1049,20 @@
+ 		sk->sk_stamp = *stamp;
+ }
+ 
++/**
++ * sk_eat_skb - Release a skb if it is no longer needed
++ * @sk - socket to eat this skb from
++ * @skb - socket buffer to eat
++ *
++ * This routine must be called with interrupts disabled or with the socket
++ * locked so that the sk_buff queue operation is ok.
++*/
++static inline void sk_eat_skb(struct sock *sk, struct sk_buff *skb)
++{
++        __skb_unlink(skb, &sk->sk_receive_queue);
++        __kfree_skb(skb);
++}
++
+ extern atomic_t netstamp_needed;
+ extern void sock_enable_timestamp(struct sock *sk);
+ extern void sock_disable_timestamp(struct sock *sk);
+diff -Nur linux-2.6.5-7.244-orig/include/net/tcp.h linux-2.6.5-7.244/include/net/tcp.h
+--- linux-2.6.5-7.244-orig/include/net/tcp.h	2005-12-13 07:50:21.000000000 +0800
++++ linux-2.6.5-7.244/include/net/tcp.h	2006-03-13 16:31:37.000000000 +0800
+@@ -764,6 +764,9 @@
+ extern int			tcp_sendmsg(struct kiocb *iocb, struct sock *sk,
+ 					    struct msghdr *msg, size_t size);
+ extern ssize_t			tcp_sendpage(struct socket *sock, struct page *page, int offset, size_t size, int flags);
++extern ssize_t			tcp_sendpage_zccd(struct socket *sock, struct page *page, int offset, size_t size,
++						int flags, zccd_t *zccd);
++
+ 
+ extern int			tcp_ioctl(struct sock *sk, 
+ 					  int cmd, 
+@@ -861,6 +864,10 @@
+ 					    size_t len, int nonblock, 
+ 					    int flags, int *addr_len);
+ 
++extern int			tcp_recvpackets(struct sock *sk,
++						struct sk_buff_head *packets,
++						int len, int nonblock);
++
+ extern int			tcp_listen_start(struct sock *sk);
+ 
+ extern void			tcp_parse_options(struct sk_buff *skb,
+diff -Nur linux-2.6.5-7.244-orig/net/core/dev.c linux-2.6.5-7.244/net/core/dev.c
+--- linux-2.6.5-7.244-orig/net/core/dev.c	2005-12-13 07:50:38.000000000 +0800
++++ linux-2.6.5-7.244/net/core/dev.c	2006-03-13 16:31:56.000000000 +0800
+@@ -1322,6 +1322,9 @@
+ 	ninfo->tso_segs = skb_shinfo(skb)->tso_segs;
+ 	ninfo->nr_frags = 0;
+ 	ninfo->frag_list = NULL;
++	ninfo->zccd = NULL;             /* copied data => no user zero copy descriptor */
++	ninfo->zccd2 = NULL;
++
+ 
+ 	/* Offset between the two in bytes */
+ 	offset = data - skb->head;
+diff -Nur linux-2.6.5-7.244-orig/net/core/skbuff.c linux-2.6.5-7.244/net/core/skbuff.c
+--- linux-2.6.5-7.244-orig/net/core/skbuff.c	2004-04-04 11:37:37.000000000 +0800
++++ linux-2.6.5-7.244/net/core/skbuff.c	2006-03-13 16:31:46.000000000 +0800
+@@ -152,6 +152,9 @@
+ 	skb_shinfo(skb)->tso_size = 0;
+ 	skb_shinfo(skb)->tso_segs = 0;
+ 	skb_shinfo(skb)->frag_list = NULL;
++	skb_shinfo(skb)->zccd = NULL;           /* skbuffs kick off with NO user zero copy descriptors */
++	skb_shinfo(skb)->zccd2 = NULL;
++
+ out:
+ 	return skb;
+ nodata:
+@@ -186,6 +189,10 @@
+ {
+ 	if (!skb->cloned ||
+ 	    atomic_dec_and_test(&(skb_shinfo(skb)->dataref))) {
++		if (skb_shinfo(skb)->zccd != NULL) /* zero copy callback descriptor? */
++			zccd_put (skb_shinfo(skb)->zccd); /* release hold */
++		if (skb_shinfo(skb)->zccd2 != NULL) /* 2nd zero copy callback descriptor? */
++			zccd_put (skb_shinfo(skb)->zccd2); /* release hold */
+ 		if (skb_shinfo(skb)->nr_frags) {
+ 			int i;
+ 			for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
+@@ -449,6 +456,14 @@
+ 	n->data_len  = skb->data_len;
+ 	n->len	     = skb->len;
+ 
++	if (skb_shinfo(skb)->zccd != NULL)      /* user zero copy descriptor? */
++		zccd_get (skb_shinfo(skb)->zccd); /* 1 more ref (pages are shared) */
++	skb_shinfo(n)->zccd = skb_shinfo(skb)->zccd;
++
++	if (skb_shinfo(skb)->zccd2 != NULL)     /* 2nd user zero copy descriptor? */
++		zccd_get (skb_shinfo(skb)->zccd2); /* 1 more ref (pages are shared) */
++	skb_shinfo(n)->zccd2 = skb_shinfo(skb)->zccd2;
++
+ 	if (skb_shinfo(skb)->nr_frags) {
+ 		int i;
+ 
+@@ -493,6 +508,9 @@
+ 	u8 *data;
+ 	int size = nhead + (skb->end - skb->head) + ntail;
+ 	long off;
++	zccd_t *zccd = skb_shinfo(skb)->zccd;   /* stash user zero copy descriptor */
++	zccd_t *zccd2 = skb_shinfo(skb)->zccd2; /* stash 2nd user zero copy descriptor */
++
+ 
+ 	if (skb_shared(skb))
+ 		BUG();
+@@ -514,6 +532,11 @@
+ 	if (skb_shinfo(skb)->frag_list)
+ 		skb_clone_fraglist(skb);
+ 
++	if (zccd != NULL)                       /* user zero copy descriptor? */
++		zccd_get (zccd);                /* extra ref (pages are shared) */
++	if (zccd2 != NULL)                      /* 2nd user zero copy descriptor? */
++		zccd_get (zccd2);               /* extra ref (pages are shared) */
++
+ 	skb_release_data(skb);
+ 
+ 	off = (data + nhead) - skb->head;
+@@ -527,6 +550,9 @@
+ 	skb->nh.raw  += off;
+ 	skb->cloned   = 0;
+ 	atomic_set(&skb_shinfo(skb)->dataref, 1);
++	skb_shinfo(skb)->zccd = zccd;
++	skb_shinfo(skb)->zccd2 = zccd2;
++
+ 	return 0;
+ 
+ nodata:
+diff -Nur linux-2.6.5-7.244-orig/net/core/sock.c linux-2.6.5-7.244/net/core/sock.c
+--- linux-2.6.5-7.244-orig/net/core/sock.c	2005-12-13 07:50:10.000000000 +0800
++++ linux-2.6.5-7.244/net/core/sock.c	2006-03-13 16:32:44.000000000 +0800
+@@ -917,6 +917,31 @@
+ 	} while((skb = sk->sk_backlog.head) != NULL);
+ }
+ 
++/**
++ * sk_wait_data - wait for data to arrive at sk_receive_queue
++ * sk - sock to wait on
++ * timeo - for how long
++ *
++ * Now socket state including sk->sk_err is changed only under lock,
++ * hence we may omit checks after joining wait queue.
++ * We check receive queue before schedule() only as optimization;
++ * it is very likely that release_sock() added new data.
++ */
++int sk_wait_data(struct sock *sk, long *timeo)
++{
++        int rc;
++        DEFINE_WAIT(wait);
++
++        prepare_to_wait(sk->sk_sleep, &wait, TASK_INTERRUPTIBLE);
++        set_bit(SOCK_ASYNC_WAITDATA, &sk->sk_socket->flags);
++        rc = sk_wait_event(sk, timeo, !skb_queue_empty(&sk->sk_receive_queue));
++        clear_bit(SOCK_ASYNC_WAITDATA, &sk->sk_socket->flags);
++        finish_wait(sk->sk_sleep, &wait);
++        return rc;
++}
++
++EXPORT_SYMBOL(sk_wait_data);
++
+ /*
+  * Set of default routines for initialising struct proto_ops when
+  * the protocol does not support a particular function. In certain
+diff -Nur linux-2.6.5-7.244-orig/net/ipv4/tcp.c linux-2.6.5-7.244/net/ipv4/tcp.c
+--- linux-2.6.5-7.244-orig/net/ipv4/tcp.c	2005-12-13 07:50:28.000000000 +0800
++++ linux-2.6.5-7.244/net/ipv4/tcp.c	2006-03-13 16:32:04.000000000 +0800
+@@ -799,7 +799,7 @@
+ }
+ 
+ ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset,
+-			 size_t psize, int flags);
++			 size_t psize, int flags,zccd_t *zccd);
+ 
+ static inline int can_coalesce(struct sk_buff *skb, int i, struct page *page,
+ 			       int off)
+@@ -881,8 +881,9 @@
+ 	return err;
+ }
+ 
++/* Extra parameter: user zero copy descriptor (or NULL if not doing that) */
+ ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset,
+-			 size_t psize, int flags)
++			 size_t psize, int flags,zccd_t *zccd)
+ {
+ 	struct tcp_opt *tp = tcp_sk(sk);
+ 	int mss_now;
+@@ -929,6 +930,17 @@
+ 			copy = size;
+ 
+ 		i = skb_shinfo(skb)->nr_frags;
++
++		if (zccd != NULL &&             /* this is a zcc I/O */
++				skb_shinfo(skb)->zccd != NULL && /* skb is part of a zcc I/O */
++				skb_shinfo(skb)->zccd2 != NULL &&
++				skb_shinfo(skb)->zccd != zccd && /* not the same one */
++				skb_shinfo(skb)->zccd2 != zccd)
++		{
++			tcp_mark_push (tp, skb);
++			goto new_segment;
++		}
++
+ 		if (can_coalesce(skb, i, page, offset)) {
+ 			skb_shinfo(skb)->frags[i - 1].size += copy;
+ 		} else if (i < MAX_SKB_FRAGS) {
+@@ -939,6 +951,20 @@
+ 			goto new_segment;
+ 		}
+ 
++		if (zccd != NULL &&     /* this is a zcc I/O */
++			skb_shinfo(skb)->zccd != zccd && /* not already referencing this zccd */
++			skb_shinfo(skb)->zccd2 != zccd)
++		{
++			zccd_get (zccd);        /* bump ref count */
++
++			BUG_TRAP (skb_shinfo(skb)->zccd2 == NULL);
++
++			if (skb_shinfo(skb)->zccd == NULL) /* reference this zccd */
++				skb_shinfo(skb)->zccd = zccd;
++			else
++				skb_shinfo(skb)->zccd2 = zccd;
++		}
++
+ 		skb->len += copy;
+ 		skb->data_len += copy;
+ 		skb->ip_summed = CHECKSUM_HW;
+@@ -1003,12 +1029,36 @@
+ 
+ 	lock_sock(sk);
+ 	TCP_CHECK_TIMER(sk);
+-	res = do_tcp_sendpages(sk, &page, offset, size, flags);
++	res = do_tcp_sendpages(sk, &page, offset, size, flags,NULL);
+ 	TCP_CHECK_TIMER(sk);
+ 	release_sock(sk);
+ 	return res;
+ }
+ 
++ssize_t tcp_sendpage_zccd(struct socket *sock, struct page *page, int offset, size_t size,
++				int flags, zccd_t *zccd)
++{
++	ssize_t res;
++	struct sock *sk = sock->sk;
++
++#define TCP_ZC_CSUM_FLAGS (NETIF_F_IP_CSUM|NETIF_F_NO_CSUM|NETIF_F_HW_CSUM)
++
++	if (!(sk->sk_route_caps & NETIF_F_SG) ||        /* caller shouldn't waste her time */
++            !(sk->sk_route_caps & TCP_ZC_CSUM_FLAGS)) /* on double mapping */
++		BUG ();
++
++#undef TCP_ZC_CSUM_FLAGS
++
++	lock_sock(sk);
++	TCP_CHECK_TIMER(sk);
++
++	res = do_tcp_sendpages(sk, &page, offset, size, flags, zccd);
++	TCP_CHECK_TIMER(sk);
++	release_sock(sk);
++	return res;
++}
++
++
+ #define TCP_PAGE(sk)	(inet_sk(sk)->sndmsg_page)
+ #define TCP_OFF(sk)	(inet_sk(sk)->sndmsg_off)
+ 
+@@ -1849,6 +1899,202 @@
+ 	err = tcp_recv_urg(sk, timeo, msg, len, flags, addr_len);
+ 	goto out;
+ }
++ 
++int tcp_recvpackets (struct sock *sk, struct sk_buff_head *packets,
++int len, int nonblock)
++{
++	struct tcp_opt *tp = tcp_sk(sk);
++	int copied;
++	long timeo;
++
++	BUG_TRAP (len > 0);
++	/*BUG_TRAP ((flags & (MSG_OOB | MSG_PEEK | MSG_TRUNC)) == 0);*/
++
++	lock_sock(sk);
++
++	TCP_CHECK_TIMER(sk);
++
++	copied = -ENOTCONN;
++	if (sk->sk_state == TCP_LISTEN)
++		goto out;
++
++	copied = 0;
++	timeo = sock_rcvtimeo(sk, nonblock);
++
++	do {
++		struct sk_buff * skb;
++		u32 offset;
++		unsigned long used;
++		int exhausted;
++		int eaten;
++
++		/* Are we at urgent data? Stop if we have read anything. */
++		if (copied && tp->urg_data && tp->urg_seq == tp->copied_seq)
++			break;
++
++		/* We need to check signals first, to get correct SIGURG
++		 * handling. FIXME: Need to check this doesnt impact 1003.1g
++		 * and move it down to the bottom of the loop
++		 */
++		if (signal_pending(current)) {
++			if (copied)
++				break;
++			copied = timeo ? sock_intr_errno(timeo) : -EAGAIN;
++			break;
++		}
++
++		/* Next get a buffer. */
++
++		skb = skb_peek(&sk->sk_receive_queue);
++
++		if (skb == NULL)		/* nothing ready */
++		{
++			if (copied) {
++				if (sk->sk_err ||
++				    sk->sk_state == TCP_CLOSE ||
++				    (sk->sk_shutdown & RCV_SHUTDOWN) ||
++				    !timeo ||
++				    (0))
++					break;
++			} else {
++				if (sock_flag(sk, SOCK_DONE))
++					break;
++
++				if (sk->sk_err) {
++					copied = sock_error(sk);
++					break;
++				}
++
++				if (sk->sk_shutdown & RCV_SHUTDOWN)
++					break;
++
++				if (sk->sk_state == TCP_CLOSE) {
++					if (!(sock_flag(sk, SOCK_DONE))) {
++						/* This occurs when user tries to read
++						 * from never connected socket.
++						 */
++						copied = -ENOTCONN;
++						break;
++					}
++					break;
++				}
++
++				if (!timeo) {
++					copied = -EAGAIN;
++					break;
++				}
++			}
++
++			cleanup_rbuf(sk, copied);
++			sk_wait_data(sk, &timeo);
++			continue;
++		}
++
++		BUG_TRAP (atomic_read (&skb->users) == 1);
++
++		exhausted = eaten = 0;
++
++		offset = tp->copied_seq - TCP_SKB_CB(skb)->seq;
++		if (skb->h.th->syn)
++			offset--;
++
++		used = skb->len - offset;
++
++		if (tp->urg_data) {
++			u32 urg_offset = tp->urg_seq - tp->copied_seq;
++			if (urg_offset < used) {
++				if (!urg_offset) { /* at urgent date */
++					if (!(sock_flag(sk, SOCK_URGINLINE))) {
++						tp->copied_seq++; /* discard the single byte of urgent data */
++						offset++;
++						used--;
++					}
++				} else		/* truncate read */
++					used = urg_offset;
++			}
++		}
++
++		BUG_TRAP (used >= 0);
++		if (len < used)
++			used = len;
++
++		if (used == 0)
++			exhausted = 1;
++		else
++		{
++			if (skb_is_nonlinear (skb))
++			{
++				int   rc = skb_linearize (skb, GFP_KERNEL);
++
++				printk ("tcp_recvpackets(): linearising: %d\n", rc);
++
++				if (rc)
++				{
++					if (!copied)
++						copied = rc;
++					break;
++				}
++			}
++
++			if ((offset + used) == skb->len) /* consuming the whole packet */
++			{
++				__skb_unlink (skb, &sk->sk_receive_queue);
++				dst_release (skb->dst);
++				skb_orphan (skb);
++				__skb_pull (skb, offset);
++				__skb_queue_tail (packets, skb);
++				exhausted = eaten = 1;
++			}
++			else			/* consuming only part of the packet */
++			{
++				struct sk_buff *skb2 = skb_clone (skb, GFP_KERNEL);
++
++				if (skb2 == NULL)
++				{
++					if (!copied)
++						copied = -ENOMEM;
++					break;
++				}
++
++				dst_release (skb2->dst);
++				__skb_pull (skb2, offset);
++				__skb_trim (skb2, used);
++				__skb_queue_tail (packets, skb2);
++			}
++
++			tp->copied_seq += used;
++			copied += used;
++			len -= used;
++		}
++
++		if (tp->urg_data && after(tp->copied_seq,tp->urg_seq)) {
++			tp->urg_data = 0;
++			tcp_fast_path_check(sk, tp);
++		}
++
++		if (!exhausted)
++			continue;
++
++		if (skb->h.th->fin)
++		{
++			tp->copied_seq++;
++			if (!eaten)
++				sk_eat_skb (sk, skb);
++			break;
++		}
++
++		if (!eaten)
++			sk_eat_skb (sk, skb);
++
++	} while (len > 0);
++
++ out:
++	/* Clean up data we have read: This will do ACK frames. */
++	cleanup_rbuf(sk, copied);
++	TCP_CHECK_TIMER(sk);
++	release_sock(sk);
++	return copied;
++}
+ 
+ /*
+  *	State processing on a close. This implements the state shift for
+@@ -2872,6 +3118,8 @@
+ EXPORT_SYMBOL(tcp_recvmsg);
+ EXPORT_SYMBOL(tcp_sendmsg);
+ EXPORT_SYMBOL(tcp_sendpage);
++EXPORT_SYMBOL(tcp_sendpage_zccd);
++EXPORT_SYMBOL(tcp_recvpackets);
+ EXPORT_SYMBOL(tcp_setsockopt);
+ EXPORT_SYMBOL(tcp_shutdown);
+ EXPORT_SYMBOL(tcp_sockets_allocated);
