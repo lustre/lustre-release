@@ -83,7 +83,9 @@ struct lustre_cfg;
  * 3. avoiding recursion.
  *
  *     Generic code tries to replace recursion through layers by iterations
- *     where possible.
+ *     where possible. Additionally to the end of reducing stack consumption,
+ *     data, when practically possible, are allocated through lu_context_key
+ *     interface rather than on stack.
  *
  */
 
@@ -156,15 +158,18 @@ struct lu_device_operations {
 	 */
 	void (*ldo_object_release)(struct lu_context *ctx, struct lu_object *o);
 
-	/*
-	 * Debugging helper. Print given object.
-	 */
-	int (*ldo_object_print)(struct lu_context *ctx,
-                                struct seq_file *f, const struct lu_object *o);
-
         /* process config specific for device */
         int  (*ldo_process_config)(struct lu_device *, struct lustre_cfg *);
 
+};
+
+struct lu_object_operations {
+        int (*loo_object_exists)(struct lu_context *ctx, struct lu_object *o);
+	/*
+	 * Debugging helper. Print given object.
+	 */
+	int (*loo_object_print)(struct lu_context *ctx,
+                                struct seq_file *f, const struct lu_object *o);
 };
 
 /*
@@ -306,23 +311,27 @@ struct lu_object {
 	/*
 	 * Header for this object.
 	 */
-	struct lu_object_header *lo_header;
+	struct lu_object_header     *lo_header;
 	/*
 	 * Device for this layer.
 	 */
-	struct lu_device        *lo_dev;
+	struct lu_device            *lo_dev;
+        /*
+         * Operations for this object.
+         */
+        struct lu_object_operations *lo_ops;
 	/*
 	 * Linkage into list of all layers.
 	 */
-	struct list_head         lo_linkage;
+	struct list_head             lo_linkage;
 	/*
 	 * Depth. Top level layer depth is 0.
 	 */
-	int                      lo_depth;
+	int                          lo_depth;
 	/*
 	 * Flags from enum lu_object_flags.
 	 */
-	unsigned long            lo_flags;
+	unsigned long                lo_flags;
 };
 
 enum lu_object_header_flags {
@@ -336,6 +345,14 @@ enum lu_object_header_flags {
 
 /*
  * "Compound" object, consisting of multiple layers.
+ *
+ * Compound object with given fid is unique with given lu_site.
+ *
+ * Note, that object does *not* necessary correspond to the real object in the
+ * persistent storage: object is an anchor for locking and method calling, so
+ * it is created for things like not-yet-existing child created by mkdir or
+ * create calls. ->loo_exists() can be used to check whether object is backed
+ * by persistent storage entity.
  */
 struct lu_object_header {
 	/*
@@ -493,6 +510,10 @@ static inline void lu_object_get(struct lu_object *o)
 	spin_unlock(&o->lo_dev->ld_site->ls_guard);
 }
 
+/*
+ * Return true of object will not be cached after last reference to it is
+ * released.
+ */
 static inline int lu_object_is_dying(struct lu_object_header *h)
 {
 	return test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
@@ -529,19 +550,80 @@ struct lu_object *lu_object_locate(struct lu_object_header *h,
 /*
  * lu_context. Execution context for lu_object methods. Currently associated
  * with thread.
+ *
+ * All lu_object methods, except device and device type methods (called during
+ * system initialization and shutdown) are executed "within" some
+ * lu_context. This means, that pointer to some "current" lu_context is passed
+ * as an argument to all methods.
+ *
+ * All service ptlrpc threads create lu_context as part of their
+ * initialization. It is possible to create "stand-alone" context for other
+ * execution environments (like system calls).
+ *
+ * lu_object methods mainly use lu_context through lu_context_key interface
+ * that allows each layer to associate arbitrary pieces of data with each
+ * context (see pthread_key_create(3) for similar interface).
+ *
  */
 struct lu_context {
+        /*
+         * Theoretically we'd want to use lu_objects and lu_contexts on the
+         * client side too. On the other hand, we don't want to allocate
+         * values of server-side keys for the client contexts and vice versa.
+         *
+         * To achieve this, set of tags in introduced. Contexts and keys are
+         * marked with tags. Key value are created only for context whose set
+         * of tags has non-empty intersection with one for key. NOT YET
+         * IMPLEMENTED.
+         */
         __u32                  lc_tags;
+        /*
+         * Object attribute. This is stuffed directly into context, because we
+         * know it advance it will be needed. As an alternative, it can be
+         * allocated through special key.
+         */
         struct lu_attr         lc_attr;
+        /*
+         * Pointer to the home service thread. NULL for other execution
+         * contexts.
+         */
         struct ptlrpc_thread  *lc_thread;
+        /*
+         * Pointer to an array with key values. Internal implementation
+         * detail.
+         */
         void                 **lc_value;
 };
 
+/*
+ * lu_context_key interface. Similar to pthread_key.
+ */
 
+
+/*
+ * Key. Represents per-context value slot.
+ */
 struct lu_context_key {
+        /*
+         * Value constructor. This is called when new value is created for a
+         * context. Returns pointer to new value of error pointer.
+         */
         void  *(*lct_init)(struct lu_context *ctx);
+        /*
+         * Value destructor. Called when context with previously allocated
+         * value of this slot is destroyed. @data is a value that was returned
+         * by matching call to ->lct_init().
+         */
         void   (*lct_fini)(struct lu_context *ctx, void *data);
+        /*
+         * Internal implementation detail: index within ->lc_value[] reserved
+         * for this key.
+         */
         int      lct_index;
+        /*
+         * Internal implementation detail: number of values created for this
+         * key.
+         */
         unsigned lct_used;
 };
 
@@ -555,116 +637,5 @@ void lu_context_fini(struct lu_context *ctx);
 void lu_context_enter(struct lu_context *ctx);
 void lu_context_exit(struct lu_context *ctx);
 
-/*
- * DT device interface. XXX Probably should go elsewhere.
- */
-struct md_params;
-struct thandle;
-struct txn_param;
-struct dt_device;
-struct dt_object;
 
-enum dt_lock_mode {
-        DT_WRITE_LOCK = 1,
-        DT_READ_LOCK  = 2,
-};
-
-struct dt_device_operations {
-        /* method for getting/setting device wide back stored config data, like
-         * last used meta-sequence, etc. */
-        int (*dt_config) (struct lu_context *ctx,
-                          struct dt_device *dev, const char *name,
-                          void *buf, int size, int mode);
-        int   (*dt_statfs)(struct lu_context *ctx,
-                           struct dt_device *dev, struct kstatfs *sfs);
-        struct thandle *(*dt_trans_start)(struct lu_context *ctx,
-                                          struct dt_device *dev,
-                                          struct txn_param *param);
-        void  (*dt_trans_stop)(struct lu_context *ctx, struct thandle *th);
-        int   (*dt_root_get)(struct lu_context *ctx,
-                             struct dt_device *dev, struct lu_fid *f);
-};
-
-struct dt_object_operations {
-        void  (*do_object_lock)(struct lu_context *ctx,
-                                struct dt_object *dt, enum dt_lock_mode mode);
-        void  (*do_object_unlock)(struct lu_context *ctx,
-                                  struct dt_object *dt, enum dt_lock_mode mode);
-
-        int   (*do_object_create)(struct lu_context *ctxt,
-                                  struct dt_object *dt,
-                                  struct dt_object *child,
-                                  struct md_params *arg, struct thandle *th);
-
-        int   (*do_object_destroy)(struct lu_context *ctxt,
-                                   struct dt_object *dt,
-                                   struct thandle *th);
-
-        int   (*do_attr_get)(struct lu_context *ctxt, struct dt_object *dt,
-                             struct lu_attr *attr);
-        int   (*do_attr_set)(struct lu_context *ctxt, struct dt_object *dt,
-                             struct lu_attr *attr, struct thandle *handle);
-
-        int   (*do_xattr_get)(struct lu_context *ctxt, struct dt_object *dt,
-                              void *buf, int buf_len, const char *name,
-                              struct md_params *arg);
-
-        int   (*do_xattr_set)(struct lu_context *ctxt, struct dt_object *dt,
-                              void *buf, int buf_len, const char *name,
-                              struct md_params *arg, struct thandle *handle);
-
-        int   (*do_index_insert)(struct lu_context *ctxt,
-                                 struct dt_object *dt,
-                                 struct lu_fid *fid, const char *name,
-                                 struct md_params *arg,
-                                 struct thandle *handle);
-
-        int   (*do_index_delete)(struct lu_context *ctxt,
-                                 struct dt_object *dt,
-                                 struct lu_fid *fid, const char *name,
-                                 struct md_params *arg,
-                                 struct thandle *handle);
-};
-
-struct dt_device {
-	struct lu_device             dd_lu_dev;
-	struct dt_device_operations *dd_ops;
-};
-
-static inline int lu_device_is_dt(const struct lu_device *d)
-{
-        return ergo(d != NULL, d->ld_type->ldt_tags & LU_DEVICE_DT);
-}
-
-static inline struct dt_device * lu2dt_dev(struct lu_device *l)
-{
-        LASSERT(lu_device_is_dt(l));
-        return container_of0(l, struct dt_device, dd_lu_dev);
-}
-
-struct dt_object {
-        struct lu_object             do_lu;
-	struct dt_object_operations *do_ops;
-};
-
-struct txn_param {
-        unsigned int tp_credits;
-};
-
-#define TXN_PARAM_INIT(credits) {               \
-        .tp_credits = (credits)                 \
-}
-
-#define TXN_PARAM(...) ((struct txn_param)TXN_PARAM_INIT(__VA_ARGS__))
-
-struct fld {
-        struct proc_dir_entry   *fld_proc_entry;
-        struct ptlrpc_service   *fld_service;
-        struct dt_device        *fld_dt;
-};
-
-int  fld_server_init(struct fld *fld, struct dt_device *dt);
-void fld_server_fini(struct fld *fld);
-
-
-#endif /* __LINUX_OBD_CLASS_H */
+#endif /* __LINUX_LU_OBJECT_H */

@@ -37,8 +37,10 @@
 #include <linux/obd_support.h>
 #include <linux/lprocfs_status.h>
 
+#include <linux/dt_object.h>
 #include <linux/md_object.h>
 #include <linux/lustre_mdc.h>
+#include <linux/lustre_fid.h>
 #include "fld_internal.h"
 
 static int fld_handle(struct lu_context *ctx,

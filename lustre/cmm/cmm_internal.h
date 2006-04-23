@@ -94,8 +94,6 @@ void cmm_object_free(struct lu_context *ctx, struct lu_object *o);
 void cmm_object_release(struct lu_context *ctxt, struct lu_object *o);
 //int cmm_getattr(struct lu_object *o, struct lu_attr *a);
 //int cmm_setattr(struct lu_object *o, struct lu_attr *a);
-int cmm_object_print(struct lu_context *ctx,
-                     struct seq_file *f, const struct lu_object *o);
 
 /* cmm md operations */
 int cmm_config(struct lu_context *ctx, struct md_device *md, const char *name,

@@ -63,18 +63,6 @@ struct md_object_operations {
         int (*moo_xattr_set)(struct lu_context *ctxt, struct md_object *obj,
                              void *buf, int buf_len, const char *name,
                              struct md_params *arg);
-
-        /* FLD maintanence related handlers */
-        int (*moo_index_insert)(struct lu_context *ctxt,
-                                struct md_object *pobj, struct md_object *obj,
-                                const char *name, struct md_params *arg);
-
-        int (*moo_index_delete)(struct lu_context *ctxt,
-                                struct md_object *pobj, struct md_object *obj,
-                                const char *name, struct md_params *arg);
-
-        int (*moo_object_create)(struct lu_context *, struct md_object *,
-                                 struct md_object *, struct md_params *);
 };
 
 struct md_device_operations {

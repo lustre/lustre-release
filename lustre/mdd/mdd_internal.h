@@ -4,6 +4,16 @@
 #ifndef _MDD_INTERNAL_H
 #define _MDD_INTERNAL_H
 
+#include <linux/md_object.h>
+
+#include <asm/semaphore.h>
+
+struct dt_device;
+struct file;
+struct lr_server_data;
+struct dentry;
+struct llog_handle;
+
 struct mdd_device {
         struct md_device                 mdd_md_dev;
         struct dt_device                *mdd_child;
@@ -31,6 +41,4 @@ struct mdd_object {
         struct md_object  mod_obj;
 };
 
-int mdd_object_put(struct mdd_device *mdd, struct mdd_object *obj);
-void mdd_object_get(struct mdd_device *mdd, struct mdd_object *obj);
 #endif

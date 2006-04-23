@@ -166,9 +166,9 @@ int lu_object_print(struct lu_context *ctx,
                 depth = scan->lo_depth;
                 if (depth <= o->lo_depth && scan != o)
                         break;
-                LASSERT(lu_object_ops(scan)->ldo_object_print != NULL);
+                LASSERT(scan->lo_ops->loo_object_print != NULL);
                 nob += seq_printf(f, "%*.*s", depth, depth, ruler);
-                nob += lu_object_ops(scan)->ldo_object_print(ctx, f, scan);
+                nob += scan->lo_ops->loo_object_print(ctx, f, scan);
                 nob += seq_printf(f, "\n");
         }
         return nob;

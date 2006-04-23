@@ -105,7 +105,6 @@ static struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_init    = cmm_object_init,
 	.ldo_object_free    = cmm_object_free,
 	.ldo_object_release = cmm_object_release,
-	.ldo_object_print   = cmm_object_print,
 
         .ldo_process_config = cmm_process_config
 };

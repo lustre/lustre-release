@@ -65,6 +65,7 @@ static int   osd_type_init     (struct lu_device_type *t);
 static void  osd_type_fini     (struct lu_device_type *t);
 static int   osd_object_init   (struct lu_context *ctxt, struct lu_object *l);
 static void  osd_object_release(struct lu_context *ctxt, struct lu_object *l);
+static int   osd_object_exists (struct lu_context *ctx, struct lu_object *o);
 static int   osd_object_print  (struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (struct lu_device *m);
@@ -93,12 +94,15 @@ static struct lu_fid      *osd_inode_get_fid(const struct inode *inode,
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
+static struct lu_object_operations      osd_lu_obj_ops;
 static struct obd_ops                   osd_obd_device_ops;
 static struct lprocfs_vars              lprocfs_osd_module_vars[];
 static struct lprocfs_vars              lprocfs_osd_obd_vars[];
 static struct lu_device_operations      osd_lu_ops;
 static struct lu_context_key            osd_key;
 static struct dt_object_operations      osd_obj_ops;
+static struct dt_body_operations        osd_body_ops;
+static struct dt_index_operations       osd_index_ops;
 
 /*
  * DT methods.
@@ -127,6 +131,7 @@ static struct lu_object *osd_object_alloc(struct lu_context *ctx,
                 l = &mo->oo_dt.do_lu;
                 lu_object_init(l, NULL, d);
                 mo->oo_dt.do_ops = &osd_obj_ops;
+                l->lo_ops = &osd_lu_obj_ops;
                 return l;
         } else
                 return NULL;
@@ -134,7 +139,19 @@ static struct lu_object *osd_object_alloc(struct lu_context *ctx,
 
 static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 {
-        return osd_fid_lookup(ctxt, osd_obj(l), lu_object_fid(l));
+        struct osd_object *obj = osd_obj(l);
+        int result;
+
+        result = osd_fid_lookup(ctxt, obj, lu_object_fid(l));
+        if (result == 0) {
+                if (obj->oo_inode != NULL) {
+                        if (S_ISDIR(obj->oo_inode->i_mode))
+                                obj->oo_dt.do_index_ops = &osd_index_ops;
+                        else
+                                obj->oo_dt.do_body_ops = &osd_body_ops;
+                }
+        }
+        return result;
 }
 
 static void osd_object_free(struct lu_context *ctx, struct lu_object *l)
@@ -162,6 +179,11 @@ static void osd_object_release(struct lu_context *ctxt, struct lu_object *l)
 
         if (o->oo_inode != NULL && osd_inode_unlinked(o->oo_inode))
                 set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
+}
+
+static int osd_object_exists(struct lu_context *ctx, struct lu_object *o)
+{
+        return osd_obj(o)->oo_inode != NULL;
 }
 
 static int osd_object_print(struct lu_context *ctx,
@@ -211,6 +233,12 @@ static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
 
 static struct dt_object_operations osd_obj_ops = {
         .do_attr_get = osd_attr_get
+};
+
+static struct dt_body_operations osd_body_ops = {
+};
+
+static struct dt_index_operations osd_index_ops = {
 };
 
 static struct dt_device_operations osd_dt_ops = {
@@ -519,13 +547,17 @@ static struct super_block *osd_sb(const struct osd_device *dev)
         return dev->od_mount->lmi_mnt->mnt_sb;
 }
 
+static struct lu_object_operations osd_lu_obj_ops = {
+        .loo_object_print   = osd_object_print,
+        .loo_object_exists  = osd_object_exists
+};
+
 static struct lu_device_operations osd_lu_ops = {
         .ldo_object_alloc   = osd_object_alloc,
         .ldo_object_init    = osd_object_init,
         .ldo_object_free    = osd_object_free,
         .ldo_object_release = osd_object_release,
         .ldo_object_delete  = osd_object_delete,
-        .ldo_object_print   = osd_object_print,
         .ldo_process_config = osd_process_config
 };
 

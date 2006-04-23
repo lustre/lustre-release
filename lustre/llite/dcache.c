@@ -244,7 +244,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
         LASSERT(dentry != NULL);
 
         sbi = ll_i2sbi(dentry->d_inode);
-        
+
         if (it->d.lustre.it_lock_mode && dentry->d_inode != NULL) {
                 struct inode *inode = dentry->d_inode;
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
@@ -314,7 +314,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         LASSERT(it);
 
         parent = de->d_parent->d_inode;
-                
+
         ll_prepare_md_op_data(&op_data, parent, NULL, de->d_name.name,
                               de->d_name.len, 0);
 
@@ -402,7 +402,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        rc = obd_pin(sbi->ll_md_exp, &ll_i2info(inode)->lli_fid, 
+        rc = obd_pin(sbi->ll_md_exp, &ll_i2info(inode)->lli_fid,
                      handle, flag);
 
         if (rc) {

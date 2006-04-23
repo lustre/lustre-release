@@ -34,7 +34,7 @@
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
 
-#include <linux/lu_object.h>
+#include <linux/dt_object.h>
 
 #include "osd_oi.h"
 

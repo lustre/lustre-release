@@ -35,6 +35,7 @@
 #include "cmm_internal.h"
 
 static struct md_object_operations cmm_mo_ops;
+static struct lu_object_operations cmm_obj_ops;
 
 struct lu_object *cmm_object_alloc(struct lu_context *ctx,
                                    struct lu_device *d)
@@ -49,6 +50,7 @@ struct lu_object *cmm_object_alloc(struct lu_context *ctx,
 		o = &mo->cmo_obj.mo_lu;
                 lu_object_init(o, NULL, d);
                 mo->cmo_obj.mo_ops = &cmm_mo_ops;
+                o->lo_ops = &cmm_obj_ops;
 		RETURN(o);
 	} else
 		RETURN(NULL);
@@ -62,17 +64,17 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
         //struct lu_fid     *fid = &o->lo_header->loh_fid;
         //int mds_index;
         ENTRY;
-        
+
         /* under device can be MDD or MDC */
 #if 0
         mds = cmm_fld_lookup(fid);
         if (mds_index != d->local_index)
 	        under = &d->cmm_lmv->md_lu_dev;
-        else 
+        else
 #endif
                 under = &d->cmm_child->md_lu_dev;
-        
-        
+
+
         below = under->ld_ops->ldo_object_alloc(ctxt, under);
 	if (below != NULL) {
 		lu_object_add(o, below);
@@ -93,8 +95,15 @@ void cmm_object_release(struct lu_context *ctxt, struct lu_object *o)
         return;
 }
 
-int cmm_object_print(struct lu_context *ctx,
-                     struct seq_file *f, const struct lu_object *o)
+static int cmm_object_exists(struct lu_context *ctx, struct lu_object *o)
+{
+        struct lu_object *next = lu_object_next(o);
+
+        return next->lo_ops->loo_object_exists(ctx, next);
+}
+
+static int cmm_object_print(struct lu_context *ctx,
+                            struct seq_file *f, const struct lu_object *o)
 {
 	return seq_printf(f, LUSTRE_CMM0_NAME"-object@%p", o);
 }
@@ -180,9 +189,10 @@ static struct md_object_operations cmm_mo_ops = {
 //        .moo_link       = cmm_link,
 //        .moo_xattr_get   = cmm_xattr_get,
 //        .moo_xattr_set   = cmm_xattr_set,
-//        .moo_index_insert = cmm_index_insert,
-//        .moo_index_delete = cmm_index_delete,
-//        .moo_object_create = cmm_object_create,
 };
 
+static struct lu_object_operations cmm_obj_ops = {
+	.loo_object_print   = cmm_object_print,
+	.loo_object_exists  = cmm_object_exists
+};
 

@@ -50,6 +50,9 @@
 #include <linux/lustre_export.h>
 /* struct obd_device */
 #include <linux/obd.h>
+/* lu2dt_dev() */
+#include <linux/dt_object.h>
+
 
 /* struct mds_client_data */
 #include "../mds/mds_internal.h"
@@ -64,7 +67,8 @@ static int                mdt_handle    (struct ptlrpc_request *req);
 static struct mdt_device *mdt_dev       (struct lu_device *d);
 static struct lu_fid     *mdt_object_fid(struct mdt_object *o);
 
-static struct lu_context_key mdt_thread_key;
+static struct lu_context_key       mdt_thread_key;
+static struct lu_object_operations mdt_obj_ops;
 
 /* object operations */
 static int mdt_md_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
@@ -1339,6 +1343,7 @@ static struct lu_object *mdt_object_alloc(struct lu_context *ctxt,
                 lu_object_header_init(h);
                 lu_object_init(o, h, d);
                 lu_object_add_top(h, o);
+                o->lo_ops = &mdt_obj_ops;
                 return o;
         } else
                 return NULL;
@@ -1374,6 +1379,13 @@ static void mdt_object_release(struct lu_context *ctxt, struct lu_object *o)
 {
 }
 
+static int mdt_object_exists(struct lu_context *ctx, struct lu_object *o)
+{
+        struct lu_object *next = lu_object_next(o);
+
+        return next->lo_ops->loo_object_exists(ctx, next);
+}
+
 static int mdt_object_print(struct lu_context *ctxt,
                             struct seq_file *f, const struct lu_object *o)
 {
@@ -1385,8 +1397,12 @@ static struct lu_device_operations mdt_lu_ops = {
         .ldo_object_init    = mdt_object_init,
         .ldo_object_free    = mdt_object_free,
         .ldo_object_release = mdt_object_release,
-        .ldo_object_print   = mdt_object_print,
         .ldo_process_config = mdt_process_config
+};
+
+static struct lu_object_operations mdt_obj_ops = {
+        .loo_object_print   = mdt_object_print,
+        .loo_object_exists  = mdt_object_exists
 };
 
 /* mds_connect_internal */
