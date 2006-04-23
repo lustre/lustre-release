@@ -1,0 +1,646 @@
+Index: linux-2.6.9/fs/ext3/namei.c
+===================================================================
+--- linux-2.6.9.orig/fs/ext3/namei.c	2006-04-23 22:05:38.000000000 +0800
++++ linux-2.6.9/fs/ext3/namei.c	2006-04-23 22:22:58.000000000 +0800
+@@ -82,13 +82,16 @@
+  *
+  * Entries in index node are sorted by their key value.
+  *
++ * Format of leaf node:
+  *
+- *
+- *
+- *
+- *
+- *
+- *
++ * +-----+-------+-------+-------+------+-------+------------+
++ * |     | count |       |       |      |       |            |
++ * | gap |   /   | leaf  | leaf  | .... | leaf  | free space |
++ * |     | limit |       |       |      |       |            |
++ * +-----+-------+-------+-------+------+-------+------------+
++
++ *       leaf          For leaf entry: consists of a rec immediately followd by 
++ *                     a key. size of a key and size of a rec depends on container.  
+  *
+  *
+  *
+@@ -241,6 +244,7 @@
+ };
+ 
+ /* leaf node reached by tree lookup */
++#define iam_leaf_entry iam_rec
+ struct iam_leaf {
+ 	struct buffer_head *bh;
+ 	struct iam_leaf_entry *entries;
+@@ -508,6 +512,11 @@
+ 	IAM_IT_ATTACHED
+ };
+ 
++struct htree_cookie {
++	struct dx_hash_info *hinfo;
++	struct dentry       *dentry;
++};
++
+ /*
+  * Iterator.
+  *
+@@ -704,7 +713,7 @@
+ 			     struct inode *inode);
+ 
+ static inline void iam_path_init(struct iam_path *path,
+-				 struct iam_container *c);
++				 struct iam_container *c, struct htree_cookie *hc);
+ static inline void iam_path_fini(struct iam_path *path);
+ 
+ 
+@@ -865,11 +874,6 @@
+ 	return 0;
+ }
+ 
+-struct htree_cookie {
+-	struct dx_hash_info *hinfo;
+-	struct dentry       *dentry;
+-};
+-
+ static int htree_node_check(struct iam_path *path, struct iam_frame *frame)
+ {
+ 	void *data;
+@@ -1171,11 +1175,13 @@
+ 	}
+ }
+ 
+-static inline void iam_path_init(struct iam_path *path, struct iam_container *c)
++static inline void iam_path_init(struct iam_path *path, struct iam_container *c, 
++				 struct htree_cookie *hc)
+ {
+ 	memset(path, 0, sizeof *path);
+ 	path->ip_container = c;
+ 	path->ip_frame = path->ip_frames;
++	path->ip_descr_data = hc;
+ }
+ 
+ static inline void iam_path_fini(struct iam_path *path)
+@@ -1201,7 +1207,7 @@
+ 	 * iam_path_fini().
+ 	 */
+ 	iput(inode);
+-	iam_path_init(&path->ipc_path, &path->ipc_container);
++	iam_path_init(&path->ipc_path, &path->ipc_container, NULL);
+ 	for (i = 0; i < ARRAY_SIZE(path->ipc_path.ip_key_scratch); ++i)
+ 		path->ipc_path.ip_key_scratch[i] =
+ 			(struct iam_key *)&path->ipc_scrach[i];
+@@ -1213,6 +1219,382 @@
+ 	iam_container_fini(&path->ipc_container);
+ }
+ 
++static int iam_leaf_init(struct iam_path *path, struct iam_leaf *leaf)
++{
++	int block, err;
++	struct buffer_head *bh;
++	
++	block = dx_get_block(path, path->ip_frame->at);
++	err = path_descr(path)->id_node_read(path->ip_container, block, 
++				             NULL, &bh);
++	if (err)
++		return err;
++
++	leaf->bh = bh;
++	leaf->entries = (struct iam_leaf_entry *)bh->b_data;
++	return 0;
++}
++
++static void iam_leaf_fini(struct iam_leaf *leaf)
++{
++	if (leaf->bh)
++		brelse(leaf->bh);
++}
++
++int iam_lookup(struct iam_container *c, struct iam_key *k, struct iam_rec *r)
++{
++	struct dx_hash_info	hinfo;
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
++	struct htree_cookie hc = {
++		.hinfo  = &hinfo
++	};
++	int err, i;
++
++	iam_path_init(path, c, &hc);
++	for (i = 0; i < ARRAY_SIZE(path->ip_key_scratch); ++i)
++		path->ip_key_scratch[i] =
++			(struct iam_key *)&cpath.ipc_scrach[i];
++	err = dx_lookup(path);
++	do {
++		struct iam_leaf leaf;
++		err = iam_leaf_init(path, &leaf);
++		if (err)
++			goto errout;
++
++		for (path_descr(path)->id_leaf.start(c, &leaf);
++		     !path_descr(path)->id_leaf.at_end(c, &leaf);
++		     path_descr(path)->id_leaf.next(c, &leaf)) {
++			struct iam_key *key;
++
++			key = kmalloc(path_descr(path)->id_key_size, GFP_KERNEL);
++			path_descr(path)->id_leaf.key(c, &leaf, key);
++			if (keycmp(c, k, key) == 0) {
++				memcpy(r, path_descr(path)->id_leaf.rec(c, &leaf),
++				       path_descr(path)->id_rec_size);
++				iam_path_fini(path);
++				iam_leaf_fini(&leaf);
++				return 0;
++			}
++		}
++
++		iam_leaf_fini(&leaf);
++		/* Check to see if we should continue to search */
++		err = ext3_htree_next_block(c->ic_object, hinfo.hash, path, NULL);
++		if (err < 0)
++			goto errout;
++	} while (err == 1);
++errout:
++	iam_path_fini(path);
++	return(err);
++}
++
++static inline size_t iam_leaf_entry_size(struct iam_path *p)
++{
++	return path_descr(p)->id_rec_size + path_descr(p)->id_key_size;
++}
++
++static inline ptrdiff_t iam_leaf_entry_diff(struct iam_path *p,
++				      struct iam_leaf_entry *e1, struct iam_leaf_entry *e2)
++{
++	ptrdiff_t diff;
++
++	diff = (void *)e1 - (void *)e2;
++	assert(diff / iam_leaf_entry_size(p) * iam_leaf_entry_size(p) == diff);
++	return diff / iam_leaf_entry_size(p);
++}
++
++static inline struct iam_leaf_entry* 
++iam_leaf_entry_shift(struct iam_path *p, struct iam_leaf_entry *entry, int shift)
++{
++	void *e = entry;
++	return e + shift * iam_leaf_entry_size(p);
++}
++
++static inline struct iam_key *
++dx_leaf_get_key(struct iam_path *p, struct iam_leaf_entry *e, struct iam_key *key)
++{
++	memcpy(key, e, path_descr(p)->id_key_size);
++	return key;
++}
++
++static inline struct iam_key *
++iam_leaf_key_at(struct iam_path *p, struct iam_leaf_entry *entry)
++{
++	void *e = entry;
++	return e + path_descr(p)->id_rec_size;
++}
++static inline struct iam_leaf_entry *
++iam_leaf_entry_at(struct iam_path *p, struct iam_leaf_entry *entry)
++{
++	return entry; 
++}
++
++static int iam_leaf_lookup(struct iam_path *path, struct iam_leaf *leaf, 
++			   struct iam_key *k)
++{
++	struct iam_leaf_entry *p, *q, *m;
++	struct iam_leaf_entry *entries = leaf->entries;
++	int count = dx_get_count((struct iam_entry *)entries);
++	
++	p = iam_leaf_entry_shift(path, entries, 1);
++	q = iam_leaf_entry_shift(path, entries, count - 1);
++	while (p <= q) {
++		m = iam_leaf_entry_shift(path,
++				   p, iam_leaf_entry_diff(path, q, p) / 2);
++		dxtrace(printk("."));
++		if (keycmp(path->ip_container, iam_leaf_key_at(path, m),
++			   path->ip_key_target) > 0)
++			q = iam_leaf_entry_shift(path, m, -1);
++		else
++			p = iam_leaf_entry_shift(path, m, +1);
++	}
++	leaf->at = q; 
++	return 0;
++}
++
++/*XXX what kind of lock should this entry be locked: WangDi */
++static int iam_leaf_insert(handle_t *handle, struct iam_path *path, 
++			   struct iam_key *k, struct iam_rec *r)
++{
++	struct iam_leaf leaf;
++	struct iam_leaf_entry *p, *q;
++	int err, count;
++
++	err = iam_leaf_init(path, &leaf);
++	if (err)
++		goto errout;
++	path_descr(path)->id_leaf.start(path->ip_container, &leaf);
++	count = dx_get_count((struct iam_entry *)leaf.entries);
++	if (dx_get_count((struct iam_entry *)leaf.entries) >= 
++	    dx_get_limit((struct iam_entry *)leaf.entries)){
++		err = -ENOSPC;
++		goto errout;
++	}
++
++	err = iam_leaf_lookup(path, &leaf, k);
++	if (err)
++		goto errout;
++	
++	/*insert the k/r to leaf entries*/
++	p = iam_leaf_entry_shift(path, leaf.at, 1);
++	q = iam_leaf_entry_shift(path, leaf.entries, count - 1);
++	while (q < p) {
++		memcpy(iam_leaf_entry_shift(path, q, 1), q, iam_leaf_entry_size(path));
++		q = iam_leaf_entry_shift(path, q, -1); 	
++	}
++	memcpy(iam_leaf_entry_at(path, p), r, path_descr(path)->id_rec_size);
++	memcpy(iam_leaf_key_at(path, p), k, path_descr(path)->id_key_size);
++
++	dx_set_count((struct iam_entry*)leaf.entries, count + 1);
++	err = ext3_journal_dirty_metadata(handle, leaf.bh);
++	if (err)
++		ext3_std_error(path->ip_container->ic_object->i_sb, err);
++errout:	
++	iam_leaf_fini(&leaf);
++	return err;
++} 
++
++static int split_leaf_node(handle_t *handle, struct iam_path *path)
++{
++	struct inode *dir = path_obj(path);
++	unsigned continued = 0;
++	struct buffer_head *bh2;
++	u32 newblock, hash_split;
++	char *data2;
++	struct iam_leaf leaf;
++	unsigned split;
++	int	err;
++
++	bh2 = ext3_append (handle, dir, &newblock, &err);
++	if (!(bh2)) {
++		err = -ENOSPC;
++		goto errout;
++	}
++	err = iam_leaf_init(path, &leaf);
++	if (err)
++		goto errout;
++
++	BUFFER_TRACE(leaf.bh, "get_write_access");
++	err = ext3_journal_get_write_access(handle, leaf.bh);
++	if (err) {
++	journal_error:
++		iam_leaf_fini(&leaf);
++		brelse(bh2);
++		ext3_std_error(dir->i_sb, err);
++		err = -EIO;
++		goto errout;
++	}
++	data2 = bh2->b_data;
++	split = dx_get_count((struct iam_entry*)leaf.entries)/2;
++	hash_split = *(__u32*)iam_leaf_key_at(path, iam_leaf_entry_shift(path, leaf.entries, split));
++	if (keycmp(path->ip_container, iam_leaf_key_at(path, iam_leaf_entry_shift(path, leaf.entries, split)),
++		   iam_leaf_key_at(path, iam_leaf_entry_shift(path, leaf.entries, split -1))) == 0)
++		continued = 1;
++
++	memcpy(iam_leaf_entry_shift(path, (struct iam_leaf_entry *)data2, 1),
++	       iam_leaf_entry_shift(path, leaf.entries, split),
++	       split * iam_leaf_entry_size(path));
++ 
++	/* Which block gets the new entry? */
++	dx_insert_block(path, path->ip_frame, hash_split + continued, newblock);
++	err = ext3_journal_dirty_metadata (handle, bh2);
++	if (err)
++		goto journal_error;
++	err = ext3_journal_dirty_metadata (handle, leaf.bh);
++	if (err)
++		goto journal_error;
++	brelse (bh2);
++	iam_leaf_fini(&leaf);
++errout:
++	return err;
++}
++
++static int split_index_node(handle_t *handle, struct iam_path *path);
++int iam_insert(handle_t *handle, struct iam_container *c, struct iam_key *k, 
++	       struct iam_rec *r)
++{
++	struct dx_hash_info	hinfo;
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
++	struct htree_cookie hc = {
++		.hinfo  = &hinfo
++	};
++	int err, i;
++
++	iam_path_init(path, c, &hc);
++	for (i = 0; i < ARRAY_SIZE(path->ip_key_scratch); ++i)
++		path->ip_key_scratch[i] =
++			(struct iam_key *)&cpath.ipc_scrach[i];
++	err = dx_lookup(path);
++	if (err)
++		goto errout; 
++
++	err = iam_leaf_insert(handle, path, k, r);
++	
++	if (err != -ENOSPC) 
++		goto errout;	
++
++	err = split_index_node(handle, path);
++	if (err)
++		goto errout;	
++
++	err = split_leaf_node(handle, path);
++	if (err)
++		goto errout;
++	
++	err = iam_leaf_insert(handle, path, k, r);
++errout:
++	iam_path_fini(path);
++	return(err);
++}
++
++static int iam_leaf_delete(handle_t *handle, struct iam_path *path, 
++			   struct iam_key *k)
++{
++	struct iam_leaf leaf;
++	struct iam_leaf_entry *p, *q;
++	int err, count;
++
++	err = iam_leaf_init(path, &leaf);
++	if (err)
++		goto errout;
++	
++	err = iam_leaf_lookup(path, &leaf, k);
++	if (err)
++		goto errout;
++
++	count = dx_get_count((struct iam_entry*)leaf.entries);
++	/*delete the k to leaf entries*/
++	p = iam_leaf_entry_shift(path, leaf.at, 1);
++	q = iam_leaf_entry_shift(path, leaf.entries, count - 1);
++	while (p < q) {
++		memcpy(p, iam_leaf_entry_shift(path, p, 1), iam_leaf_entry_size(path));
++		p = iam_leaf_entry_shift(path, p, 1);
++	}
++	dx_set_count((struct iam_entry*)leaf.entries, count - 1);
++
++	err = ext3_journal_dirty_metadata(handle, leaf.bh);
++	if (err)
++		ext3_std_error(path_obj(path)->i_sb, err);
++errout:	
++	iam_leaf_fini(&leaf);
++	return err;
++}
++
++int iam_delete(handle_t *h, struct iam_container *c, struct iam_key *k)
++{
++	struct dx_hash_info	hinfo;
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
++	struct htree_cookie hc = {
++		.hinfo  = &hinfo
++	};
++	int err, i;
++
++	iam_path_init(path, c, &hc);
++	for (i = 0; i < ARRAY_SIZE(path->ip_key_scratch); ++i)
++		path->ip_key_scratch[i] =
++			(struct iam_key *)&cpath.ipc_scrach[i];
++	err = dx_lookup(path);
++	if (err)
++		goto errout; 
++
++	err = iam_leaf_delete(h, path, k);
++errout:
++	iam_path_fini(path);
++	return err;
++}
++
++static int iam_leaf_update(handle_t *handle, struct iam_path *path, 
++			   struct iam_key *k, struct iam_rec *r)
++{
++	struct iam_leaf leaf;
++	int err;
++
++	err = iam_leaf_init(path, &leaf);
++	if (err)
++		goto errout;
++	
++	err = iam_leaf_lookup(path, &leaf, k);
++	if (err)
++		goto errout;
++
++	memcpy(iam_leaf_entry_at(path, leaf.at), r, path_descr(path)->id_rec_size);
++	memcpy(iam_leaf_key_at(path, leaf.at), k, path_descr(path)->id_key_size);
++
++	err = ext3_journal_dirty_metadata(handle, leaf.bh);
++	if (err)
++		ext3_std_error(path_obj(path)->i_sb, err);
++errout:	
++	iam_leaf_fini(&leaf);
++	return err;
++}
++
++int iam_update(handle_t *h, struct iam_container *c,
++	       struct iam_key *k, struct iam_rec *r)
++{
++	struct dx_hash_info	hinfo;
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
++	struct htree_cookie hc = {
++		.hinfo  = &hinfo
++	};
++	int err, i;
++	
++	iam_path_init(path, c, &hc);
++	for (i = 0; i < ARRAY_SIZE(path->ip_key_scratch); ++i)
++		path->ip_key_scratch[i] =
++			(struct iam_key *)&cpath.ipc_scrach[i];
++	err = dx_lookup(path);
++	if (err)
++		goto errout; 
++
++	err = iam_leaf_update(h, path, k, r);
++errout:
++	iam_path_fini(path);
++	return err;
++}
+ /*
+  * This function increments the frame pointer to search the next leaf
+  * block, and reads in the necessary intervening nodes if the search
+@@ -2213,59 +2595,21 @@
+ }
+ 
+ #ifdef CONFIG_EXT3_INDEX
+-/*
+- * Returns 0 for success, or a negative error value
+- */
+-static int ext3_dx_add_entry(handle_t *handle, struct dentry *dentry,
+-			     struct inode *inode)
+-{
+-	struct iam_path_compat cpath;
+-	struct iam_path *path = &cpath.ipc_path;
+-	struct iam_descr *param;
+-	struct iam_frame *frame, *safe;
++static int split_index_node(handle_t *handle, struct iam_path *path)
++{ 
++
+ 	struct iam_entry *entries;   /* old block contents */
+ 	struct iam_entry *entries2;  /* new block contents */
+-	struct dx_hash_info hinfo;
+-	struct buffer_head * bh;
++ 	struct iam_frame *frame, *safe;
+ 	struct buffer_head *bh_new[DX_MAX_TREE_HEIGHT] = {0};
+-	struct inode *dir = dentry->d_parent->d_inode;
+-	struct super_block * sb = dir->i_sb;
+-	struct ext3_dir_entry_2 *de;
+ 	u32 newblock[DX_MAX_TREE_HEIGHT] = {0};
+-	int err;
++	struct inode *dir = path_obj(path);
+ 	int nr_splet;
+-	int i;
+-	size_t isize;
++	int i, err;
+ 
+-	iam_path_compat_init(&cpath, dir);
+-	param = path_descr(path);
+-
+-	err = dx_probe(dentry, NULL, &hinfo, path);
+-	if (err != 0)
+-		return err;
+ 	frame = path->ip_frame;
+ 	entries = frame->entries;
+ 
+-	/* XXX nikita: global serialization! */
+-	isize = dir->i_size;
+-
+-	err = param->id_node_read(path->ip_container, 
+-				  (iam_ptr_t)dx_get_block(path, 
+-				  frame->at), handle, &bh);
+-	if (err != 0)
+-		goto cleanup;
+-
+-	BUFFER_TRACE(bh, "get_write_access");
+-	err = ext3_journal_get_write_access(handle, bh);
+-	if (err)
+-		goto journal_error;
+-
+-	err = add_dirent_to_buf(handle, dentry, inode, NULL, bh);
+-	if (err != -ENOSPC) {
+-		bh = NULL;
+-		goto cleanup;
+-	}
+-
+ 	/*
+ 	 * Tall-tree handling: we might have to split multiple index blocks
+ 	 * all the way up to tree root. Tricky point here is error handling:
+@@ -2288,7 +2632,7 @@
+ 	     dx_get_count(frame->entries) == dx_get_limit(frame->entries);
+ 	     --frame, ++nr_splet) {
+ 		if (nr_splet == DX_MAX_TREE_HEIGHT) {
+-			ext3_warning(sb, __FUNCTION__,
++			ext3_warning(dir->i_sb, __FUNCTION__,
+ 				     "Directory index full!\n");
+ 			err = -ENOSPC;
+ 			goto cleanup;
+@@ -2301,7 +2645,7 @@
+ 	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
+ 		bh_new[i] = ext3_append (handle, dir, &newblock[i], &err);
+ 		if (!bh_new[i] ||
+-		    param->id_node_init(path->ip_container, bh_new[i], 0) != 0)
++		    path_descr(path)->id_node_init(path->ip_container, bh_new[i], 0) != 0)
+ 			goto cleanup;
+ 		BUFFER_TRACE(frame->bh, "get_write_access");
+ 		err = ext3_journal_get_write_access(handle, frame->bh);
+@@ -2407,23 +2751,81 @@
+ 				goto journal_error;
+ 		}
+ 	}
++	goto cleanup;
++journal_error:
++	ext3_std_error(dir->i_sb, err);
++
++cleanup:
++	for (i = 0; i < ARRAY_SIZE(bh_new); ++i) {
++		if (bh_new[i] != NULL)
++			brelse(bh_new[i]);
++	}
++	return err;
++}
++
++/*
++ * Returns 0 for success, or a negative error value
++ */
++static int ext3_dx_add_entry(handle_t *handle, struct dentry *dentry,
++			     struct inode *inode)
++{
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
++	struct iam_descr *param;
++	struct iam_frame *frame;
++	struct dx_hash_info hinfo;
++	struct buffer_head * bh = NULL;
++	struct inode *dir = dentry->d_parent->d_inode;
++	struct ext3_dir_entry_2 *de;
++	int err;
++	size_t isize;
++
++	iam_path_compat_init(&cpath, dir);
++	param = path_descr(path);
++
++	err = dx_probe(dentry, NULL, &hinfo, path);
++	if (err != 0)
++		return err;
++	frame = path->ip_frame;
++
++	/* XXX nikita: global serialization! */
++	isize = dir->i_size;
++
++	err = param->id_node_read(path->ip_container, (iam_ptr_t)dx_get_block(path, frame->at), 
++				  handle, &bh);
++	if (err != 0)
++		goto cleanup;
++
++	BUFFER_TRACE(bh, "get_write_access");
++	err = ext3_journal_get_write_access(handle, bh);
++	if (err)
++		goto journal_error;
++
++	err = add_dirent_to_buf(handle, dentry, inode, NULL, bh);
++	if (err != -ENOSPC) {
++		bh = NULL;
++		goto cleanup;
++	}
++	
++	err = split_index_node(handle, path);
++	if (err)
++		goto cleanup;	
++
++	/*copy split inode too*/
+ 	de = do_split(handle, path, &bh, --frame, &hinfo, &err);
+ 	if (!de)
+ 		goto cleanup;
++
+ 	assert(dx_node_check(path, frame));
+ 	err = add_dirent_to_buf(handle, dentry, inode, de, bh);
+ 	goto cleanup2;
+ 
+ journal_error:
+-	ext3_std_error(dir->i_sb, err);
++        ext3_std_error(dir->i_sb, err);
+ cleanup:
+ 	if (bh)
+ 		brelse(bh);
+ cleanup2:
+-	for (i = 0; i < ARRAY_SIZE(bh_new); ++i) {
+-		if (bh_new[i] != NULL)
+-			brelse(bh_new[i]);
+-	}
+ 	if (err)
+ 		inode->i_size = isize;
+ 	iam_path_fini(path);
