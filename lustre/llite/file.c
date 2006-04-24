@@ -1808,39 +1808,14 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         RETURN(rc);
 }
 
-static int ll_have_md_lock(struct dentry *de)
-{
-        struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
-        struct lustre_handle lockh;
-        struct ldlm_res_id res_id = { .name = {0} };
-        struct obd_device *obddev;
-        ldlm_policy_data_t policy = { .l_inodebits = {MDS_INODELOCK_UPDATE}};
-        int flags;
-        ENTRY;
-
-        if (!de->d_inode)
-               RETURN(0);
-
-        obddev = sbi->ll_md_exp->exp_obd;
-        res_id.name[0] = fid_seq(ll_inode2fid(de->d_inode));
-        res_id.name[1] = fid_num(ll_inode2fid(de->d_inode));
-
-        CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
-
-        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
-                            &policy, LCK_CR|LCK_CW|LCK_PR, &lockh)) {
-                RETURN(1);
-        }
-
-        RETURN(0);
-}
-
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 {
+        struct lookup_intent oit = { .it_op = IT_GETATTR };
+        struct md_op_data op_data = { { 0 } };
         struct inode *inode = dentry->d_inode;
+        struct ptlrpc_request *req = NULL;
         struct ll_inode_info *lli;
-        struct lov_stripe_md *lsm;
+        struct ll_sb_info *sbi;
         int rc;
         ENTRY;
 
@@ -1848,47 +1823,40 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 CERROR("REPORT THIS LINE TO PETER\n");
                 RETURN(0);
         }
+        sbi = ll_i2sbi(inode);
         lli = ll_i2info(inode);
+        
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_REVALIDATE);
 #endif
 
-        if (!ll_have_md_lock(dentry)) {
-                struct ptlrpc_request *req = NULL;
-                struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-                obd_valid valid = OBD_MD_FLGETATTR;
-                int ealen = 0;
+        ll_prepare_md_op_data(&op_data, inode, inode, NULL, 0, 0);
+        
+        rc = md_intent_lock(sbi->ll_md_exp, &op_data, NULL, 0, &oit, 0,
+                            &req, ll_mdc_blocking_ast, 0);
 
-                if (S_ISREG(inode->i_mode)) {
-                        rc = ll_get_max_mdsize(sbi, &ealen);
-                        if (rc) 
-                                RETURN(rc); 
-                        valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
-                }
-                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
-                                valid, ealen, &req);
-                if (rc) {
-                        CERROR("failure %d inode %lu\n", rc, inode->i_ino);
-                        RETURN(-abs(rc));
-                }
-                rc = ll_prep_inode(&inode, req, 0, NULL);
-                if (rc) {
-                        ptlrpc_req_finished(req);
-                        RETURN(rc);
-                }
-                ptlrpc_req_finished(req);
+        if (rc < 0)
+                GOTO(out, rc);
+
+        rc = ll_revalidate_it_finish(req, 1, &oit, dentry);
+        if (rc)
+                GOTO(out, rc);
+
+        ll_lookup_finish_locks(&oit, dentry);
+        
+        /* object is allocated, validate size */
+        if (lli->lli_smd) {
+                /* ll_glimpse_size will prefer locally cached writes if they
+                 * extend the file */
+                rc = ll_glimpse_size(inode, 0);
         }
-
-        lsm = lli->lli_smd;
-        if (lsm == NULL) /* object not yet allocated, don't validate size */
-                RETURN(0);
-
-        /* ll_glimpse_size will prefer locally cached writes if they extend
-         * the file */
-        rc = ll_glimpse_size(inode, 0);
-        RETURN(rc);
+        EXIT;
+out:
+        if (req)
+                ptlrpc_req_finished(req);
+        return rc;
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))

@@ -216,9 +216,9 @@ restart:
         EXIT;
 }
 
-static int revalidate_it_finish(struct ptlrpc_request *request, int offset,
-                                struct lookup_intent *it,
-                                struct dentry *de)
+int ll_revalidate_it_finish(struct ptlrpc_request *request,
+                            int offset, struct lookup_intent *it,
+                            struct dentry *de)
 {
         struct ll_sb_info *sbi;
         int rc = 0;
@@ -333,7 +333,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 GOTO(out, rc = 0);
         }
 
-        rc = revalidate_it_finish(req, 1, it, de);
+        rc = ll_revalidate_it_finish(req, 1, it, de);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc = 0);

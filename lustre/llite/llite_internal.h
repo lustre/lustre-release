@@ -404,6 +404,8 @@ void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name);
+int ll_revalidate_it_finish(struct ptlrpc_request *request, int offset,
+                            struct lookup_intent *it, struct dentry *de);
 
 /* llite/llite_lib.c */
 
