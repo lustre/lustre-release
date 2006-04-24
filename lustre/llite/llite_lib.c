@@ -217,8 +217,9 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
 
         /* MDC connect is surely finished by now */
-        *data = class_exp2cliimp(sbi->ll_md_exp)->imp_connect_data;
-        *md_data = class_exp2cliimp(sbi->ll_md_exp)->imp_connect_data;
+        //LASSERT(class_conn2cliimp(&mdc_conn)->imp_connect_data);
+        //*data = class_conn2cliimp(&mdc_conn)->imp_connect_data;
+        //*md_data = class_exp2cliimp(sbi->ll_md_exp)->imp_connect_data;
 
         LASSERT(osfs.os_bsize);
         sb->s_blocksize = osfs.os_bsize;
