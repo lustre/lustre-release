@@ -716,7 +716,7 @@ static int lmv_process_config(struct obd_device *obd, obd_count len, void *buf)
         ENTRY;
 
         switch(lcfg->lcfg_command) {
-        case LCFG_LMV_ADD_OBD:
+        case LCFG_ADD_MDC:
                 if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(tgt_uuid.uuid))
                         GOTO(out, rc = -EINVAL);
 

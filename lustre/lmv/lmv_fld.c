@@ -48,5 +48,6 @@
 int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid)
 {
         ENTRY;
-        RETURN(-ENOTSUPP);
+        /* MDS0 will be used until lookup will works */
+        RETURN(0);
 }
