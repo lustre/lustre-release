@@ -37,6 +37,25 @@
 static struct md_object_operations cmm_mo_ops;
 static struct lu_object_operations cmm_obj_ops;
 
+static int cmm_fld_lookup(struct lu_fid *fid) 
+{
+        /* return master MDS for now */
+        return 0;
+}
+
+/* get child device by mdsnum*/
+static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
+{
+        struct lu_device *next;
+
+        if (likely(num != d->local_num)) {
+	        next = &d->cmm_child->md_lu_dev;
+        } else {
+                next = &d->cmm_child->md_lu_dev;
+        }
+        return next;
+}
+
 struct lu_object *cmm_object_alloc(struct lu_context *ctx,
                                    struct lu_device *d)
 {
@@ -61,19 +80,13 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
 	struct cmm_device *d = lu2cmm_dev(o->lo_dev);
 	struct lu_device  *under;
 	struct lu_object  *below;
-        //struct lu_fid     *fid = &o->lo_header->loh_fid;
-        //int mds_index;
+        struct lu_fid     *fid = &o->lo_header->loh_fid;
+        int mdsnum;
         ENTRY;
 
         /* under device can be MDD or MDC */
-#if 0
-        mds = cmm_fld_lookup(fid);
-        if (mds_index != d->local_index)
-	        under = &d->cmm_lmv->md_lu_dev;
-        else
-#endif
-                under = &d->cmm_child->md_lu_dev;
-
+        mdsnum = cmm_fld_lookup(fid);
+        under = cmm_get_child(d, mdsnum);
 
         below = under->ld_ops->ldo_object_alloc(ctxt, under);
 	if (below != NULL) {

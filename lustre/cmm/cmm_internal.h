@@ -28,14 +28,22 @@
 #include <linux/obd.h>
 #include <linux/md_object.h>
 
-struct cmm_device {
-        struct md_device        cmm_md_dev;
-        /* underlaying device in MDS stack, usually MDD */
-        struct md_device        *cmm_child;
+struct cmm_mdc_device {
+        struct md_device mdc_md_dev;
         /* other MD servers in cluster */
-        struct md_device        *cmm_cluster;
+        __u32            cmm_tgt_count;
+        struct list_head cmm_tgt_linkage;
 };
 
+struct cmm_device {
+        struct md_device cmm_md_dev;
+        /* underlaying device in MDS stack, usually MDD */
+        struct md_device *cmm_child;
+        /* other MD servers in cluster */
+        __u32            local_num;
+        __u32            cmm_tgt_count;
+        struct list_head cmm_targets;
+};
 
 static inline struct md_device_operations *cmm_child_ops(struct cmm_device *d)
 {
