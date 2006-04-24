@@ -925,12 +925,6 @@ void lustre_swab_lmv_desc (struct lmv_desc *ld)
         __swab32s (&ld->ld_active_tgt_count);
         /* uuid endian insensitive */
 }
-void lustre_swab_cmm_desc (struct cmm_desc *ld)
-{
-        __swab32s (&ld->ld_tgt_count);
-        __swab32s (&ld->ld_active_tgt_count);
-        /* uuid endian insensitive */
-}
 /*end adding MDT by huanghua@clusterfs.com*/
 void lustre_swab_md_fld (struct md_fld *mf)
 {

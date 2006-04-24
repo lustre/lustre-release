@@ -248,14 +248,6 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
                 lmvdesc = (struct lmv_desc*)(lustre_cfg_string(lcfg, 1));
                 printf("count=%d ", lmvdesc->ld_tgt_count);
                 printf("atcive_count=%d", lmvdesc->ld_active_tgt_count);
-        } else if (!strcmp(type,"cmm")){
-                struct cmm_desc *cmmdesc;
-                printf("cmm_setup ");
-                printf("0:%s  ", name);
-                printf("1:(struct cmm_desc)\n");
-                cmmdesc = (struct cmm_desc*)(lustre_cfg_string(lcfg, 1));
-                printf("count=%d ", cmmdesc->ld_tgt_count);
-                printf("atcive_count=%d", cmmdesc->ld_active_tgt_count);
         } else {
                 printf("setup ");
                 print_1_cfg(lcfg);
