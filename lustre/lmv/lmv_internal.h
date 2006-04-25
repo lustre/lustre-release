@@ -53,7 +53,7 @@ struct lmv_obj {
         void              *lo_update;     /* bitmap of status (up-to-date) */
 	__u32		   lo_hashtype;
         int                lo_objcount;   /* number of slaves */
-        struct lmv_inode  *lo_objs;       /* array of dirobjs */
+        struct lmv_inode  *lo_inodes;     /* array of sub-objs */
         struct obd_device *lo_obd;        /* pointer to LMV itself */
 };
 
@@ -125,8 +125,8 @@ int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
                           int extra_lock_flags);
 
 int lmv_handle_split(struct obd_export *, struct lu_fid *);
-int lmv_dirobj_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
-			    void *, int);
+int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
+		     void *, int);
 int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid);
 
 static inline struct lmv_stripe_md * 

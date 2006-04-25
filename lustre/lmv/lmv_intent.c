@@ -158,7 +158,7 @@ repeat:
                 
                 CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n",
                        mds, PFID3(&rpid));
-                rpid = obj->lo_objs[mds].li_fid;
+                rpid = obj->lo_inodes[mds].li_fid;
                 lmv_obj_put(obj);
         }
 
@@ -276,7 +276,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                         /* in fact, we need not this with current intent_lock(),
                          * but it may change some day */
                         if (!lu_fid_eq(pid, cid)){
-                                rpid = obj->lo_objs[mds].li_fid;
+                                rpid = obj->lo_inodes[mds].li_fid;
                                 mds = lmv_fld_lookup(obd, &rpid);
                         }
                         lmv_obj_put(obj);
@@ -291,7 +291,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                         /* directory is already splitted. calculate mds */
                         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                            (char *)name, len);
-                        rpid = obj->lo_objs[mds].li_fid;
+                        rpid = obj->lo_inodes[mds].li_fid;
                         mds = lmv_fld_lookup(obd, &rpid);
                         lmv_obj_put(obj);
 
@@ -378,10 +378,10 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         RETURN(rc);
 }
 
-void lmv_update_body_from_obj(struct mdt_body *body, struct lmv_inode *obj)
+void lmv_update_body(struct mdt_body *body, struct lmv_inode *lino)
 {
         /* update size */
-        body->size += obj->li_size;
+        body->size += lino->li_size;
 }
 
 /* this is not used currently */
@@ -423,7 +423,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         lmv_obj_lock(obj);
         
         for (i = 0; i < obj->lo_objcount; i++) {
-                struct lu_fid fid = obj->lo_objs[i].li_fid;
+                struct lu_fid fid = obj->lo_inodes[i].li_fid;
                 struct md_op_data op_data = { { 0 } };
                 struct ptlrpc_request *req = NULL;
                 struct lookup_intent it;
@@ -445,7 +445,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 mds = lmv_fld_lookup(obd, &fid);
                 rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data,
                                     NULL, 0, &it, 0, &req,
-                                    lmv_dirobj_blocking_ast, 0);
+                                    lmv_blocking_ast, 0);
                 
                 lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
                 if (rc > 0 && req == NULL) {
@@ -467,17 +467,17 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 body2 = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body2));
                 LASSERT(body2);
 
-                obj->lo_objs[i].li_size = body2->size;
+                obj->lo_inodes[i].li_size = body2->size;
                 
                 CDEBUG(D_OTHER, "fresh: %lu\n",
-                       (unsigned long)obj->lo_objs[i].li_size);
+                       (unsigned long)obj->lo_inodes[i].li_size);
 
                 LDLM_LOCK_PUT(lock);
 
                 if (req)
                         ptlrpc_req_finished(req);
 release_lock:
-                lmv_update_body_from_obj(body, obj->lo_objs + i);
+                lmv_update_body(body, obj->lo_inodes + i);
 
                 if (it.d.lustre.it_lock_mode)
                         ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
@@ -523,7 +523,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
                 if (obj) {
                         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)name, len);
-                        rpid = obj->lo_objs[mds].li_fid;
+                        rpid = obj->lo_inodes[mds].li_fid;
                         lmv_obj_put(obj);
                 }
                 mds = lmv_fld_lookup(obd, &rpid);
@@ -546,7 +546,7 @@ repeat:
                                 /* directory is already splitted. calculate mds */
                                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
                                                    (char *)name, len);
-                                rpid = obj->lo_objs[mds].li_fid;
+                                rpid = obj->lo_inodes[mds].li_fid;
                                 mds = lmv_fld_lookup(obd, &rpid);
                         }
                         lmv_obj_put(obj);
@@ -693,7 +693,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         lmv_obj_lock(obj);
         
         for (i = 0; i < obj->lo_objcount; i++) {
-                struct lu_fid fid = obj->lo_objs[i].li_fid;
+                struct lu_fid fid = obj->lo_inodes[i].li_fid;
                 struct md_op_data op_data = { { 0 } };
                 struct lustre_handle *lockh = NULL;
                 struct ptlrpc_request *req = NULL;
@@ -707,7 +707,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
 
-                cb = lmv_dirobj_blocking_ast;
+                cb = lmv_blocking_ast;
 
                 if (lu_fid_eq(&fid, &obj->lo_fid)) {
                         if (master_valid) {
@@ -777,15 +777,15 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 LASSERT(body);
                 
 update:
-                obj->lo_objs[i].li_size = body->size;
+                obj->lo_inodes[i].li_size = body->size;
                 
                 CDEBUG(D_OTHER, "fresh: %lu\n",
-                       (unsigned long)obj->lo_objs[i].li_size);
+                       (unsigned long)obj->lo_inodes[i].li_size);
                 
                 if (req)
                         ptlrpc_req_finished(req);
 release_lock:
-                size += obj->lo_objs[i].li_size;
+                size += obj->lo_inodes[i].li_size;
 
                 if (it.d.lustre.it_lock_mode)
                         ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);

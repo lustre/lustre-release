@@ -85,18 +85,18 @@ lmv_obj_alloc(struct obd_device *obd,
         obj_size = sizeof(struct lmv_inode) *
                 lmv->desc.ld_tgt_count;
         
-        OBD_ALLOC(obj->lo_objs, obj_size);
-        if (!obj->lo_objs)
+        OBD_ALLOC(obj->lo_inodes, obj_size);
+        if (!obj->lo_inodes)
                 goto err_obj;
 
-        memset(obj->lo_objs, 0, obj_size);
+        memset(obj->lo_inodes, 0, obj_size);
 
         /* put all ids in */
         for (i = 0; i < mea->mea_count; i++) {
                 CDEBUG(D_OTHER, "subobj "DFID3"\n",
                        PFID3(&mea->mea_ids[i]));
-                obj->lo_objs[i].li_fid = mea->mea_ids[i];
-                LASSERT(fid_num(&obj->lo_objs[i].li_fid));
+                obj->lo_inodes[i].li_fid = mea->mea_ids[i];
+                LASSERT(fid_num(&obj->lo_inodes[i].li_fid));
         }
 
         return obj;
@@ -118,7 +118,7 @@ lmv_obj_free(struct lmv_obj *obj)
         obj_size = sizeof(struct lmv_inode) *
                 lmv->desc.ld_tgt_count;
         
-        OBD_FREE(obj->lo_objs, obj_size);
+        OBD_FREE(obj->lo_inodes, obj_size);
         OBD_SLAB_FREE(obj, obj_cache, sizeof(*obj));
         atomic_dec(&obj_cache_count);
 }
