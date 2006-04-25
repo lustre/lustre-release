@@ -635,8 +635,8 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         LASSERT(it);
 
-        pid = &op_data->fid1;
-        cid = &op_data->fid2;
+        pid = fid_num(&op_data->fid1) != 0 ? &op_data->fid1 : NULL;
+        cid = fid_num(&op_data->fid2) != 0 ? &op_data->fid2 : NULL;
 
         i = lmv_fld_lookup(obd, pid);
         CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID3" -> %d\n",
