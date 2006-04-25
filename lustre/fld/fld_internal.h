@@ -26,6 +26,15 @@
 #ifndef _FLD_INTERNAL_H
 #define _FLD_INTERNAL_H
 
+#define mdsno_t  __u64
+#define fidseq_t __u64
+
+#define key_cmp(e1, e2) ({                              \
+        typeof(e1) __e1 = (e1);                         \
+        typeof(e2) __e2 = (e2);                         \
+        __e1 > __e2 ? +1 : (__e1 < __e2 ? -1 : 0);      \
+})
+
 struct fld_cache {
         struct hlist_node fld_list;
         __u64             fld_mds;
@@ -55,4 +64,15 @@ enum fld_op {
 
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
+
+struct fld_info {
+        struct iam_container fi_container;
+};
+
+int fld_handle_insert(struct fld_info *fld, fidseq_t seq_num, mdsno_t mdsno);
+int fld_handle_delete(struct fld_info *fld, fidseq_t seq_num, mdsno_t mdsno);
+int fld_handle_lookup(struct fld_info *fld, fidseq_t seq_num, mdsno_t *mds);
+ 
+int fld_info_init(struct fld_info *fld_info);
+void fld_info_fini(struct fld_info *fld_info);
 #endif

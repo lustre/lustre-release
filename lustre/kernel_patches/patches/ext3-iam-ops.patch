@@ -1,7 +1,7 @@
 Index: linux-2.6.9/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.9.orig/fs/ext3/namei.c	2006-04-23 22:05:38.000000000 +0800
-+++ linux-2.6.9/fs/ext3/namei.c	2006-04-23 22:22:58.000000000 +0800
+--- linux-2.6.9.orig/fs/ext3/namei.c	2006-04-25 15:43:37.000000000 +0800
++++ linux-2.6.9/fs/ext3/namei.c	2006-04-25 15:44:27.000000000 +0800
 @@ -82,13 +82,16 @@
   *
   * Entries in index node are sorted by their key value.
@@ -25,15 +25,292 @@ Index: linux-2.6.9/fs/ext3/namei.c
   *
   *
   *
-@@ -241,6 +244,7 @@
+@@ -96,6 +99,7 @@
+  *
+  */
+ 
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/pagemap.h>
+ #include <linux/jbd.h>
+@@ -111,7 +115,7 @@
+ #include "xattr.h"
+ #include "iopen.h"
+ #include "acl.h"
+-
++#include <linux/lustre_iam.h>
+ /*
+  * define how far ahead to read directories while searching them.
+  */
+@@ -120,13 +124,6 @@
+ #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
+ #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
+ 
+-/*
+- * Maximal number of non-leaf levels in htree. In the stock ext3 this is 2.
+- */
+-enum {
+-	DX_MAX_TREE_HEIGHT = 5,
+-	DX_SCRATCH_KEYS    = 2
+-};
+ 
+ static struct buffer_head *ext3_append(handle_t *handle,
+ 					struct inode *inode,
+@@ -205,194 +202,6 @@
+ 	u32 offs;
  };
  
- /* leaf node reached by tree lookup */
-+#define iam_leaf_entry iam_rec
- struct iam_leaf {
- 	struct buffer_head *bh;
- 	struct iam_leaf_entry *entries;
-@@ -508,6 +512,11 @@
+-/*
+- * Entry within index tree node. Consists of a key immediately followed
+- * (without padding) by a pointer to the child node.
+- *
+- * Both key and pointer are of variable size, hence incomplete type.
+- */
+-struct iam_entry;
+-
+-struct iam_entry_compat {
+-	__le32 hash;
+-	__le32 block;
+-};
+-
+-/*
+- * Incomplete type used to refer to keys in iam container.
+- *
+- * As key size can be different from container to container, iam has to use
+- * incomplete type. Clients cast pointer to iam_key to real key type and back.
+- */
+-struct iam_key;
+-
+-/* Incomplete type use to refer to the records stored in iam containers. */
+-struct iam_rec;
+-
+-typedef __u64 iam_ptr_t;
+-
+-/*
+- * Index node traversed during tree lookup.
+- */
+-struct iam_frame {
+-	struct buffer_head *bh;    /* buffer holding node data */
+-	struct iam_entry *entries; /* array of entries */
+-	struct iam_entry *at;      /* target entry, found by binary search */
+-};
+-
+-/* leaf node reached by tree lookup */
+-struct iam_leaf {
+-	struct buffer_head *bh;
+-	struct iam_leaf_entry *entries;
+-	struct iam_leaf_entry *at;
+-};
+-
+-struct iam_path;
+-struct iam_container;
+-
+-/*
+- * Parameters, describing a flavor of iam container.
+- */
+-struct iam_descr {
+-	/*
+-	 * Size of a key in this container, in bytes.
+-	 */
+- 	size_t       id_key_size;
+-	/*
+-	 * Size of a pointer to the next level (stored in index nodes), in
+-	 * bytes.
+-	 */
+-	size_t       id_ptr_size;
+-	/*
+-	 * Size of a record (stored in leaf nodes), in bytes.
+-	 */
+-	size_t       id_rec_size;
+-	/*
+-	 * Size of unused (by iam) space at the beginning of every non-root
+-	 * node, in bytes. Used for compatibility with ext3.
+-	 */
+-	size_t       id_node_gap;
+-	/*
+-	 * Size of unused (by iam) space at the beginning of root node, in
+-	 * bytes. Used for compatibility with ext3.
+-	 */
+-	size_t       id_root_gap;
+-
+-	/*
+-	 * Returns pointer (in the same sense as pointer in index entry) to
+-	 * the root node.
+-	 */
+-	__u32 (*id_root_ptr)(struct iam_container *c);
+-
+-	/*
+-	 * Check validity and consistency of index node. This is called when
+-	 * iam just loaded new node into frame.
+-	 */
+-	int (*id_node_check)(struct iam_path *path, struct iam_frame *frame);
+-	/*
+-	 * Initialize new node (stored in @bh) that is going to be added into
+-	 * tree.
+-	 */
+-	int (*id_node_init)(struct iam_container *c,
+-			    struct buffer_head *bh, int root);
+-	int (*id_node_read)(struct iam_container *c, iam_ptr_t ptr,
+-			    handle_t *h, struct buffer_head **bh);
+-	/*
+-	 * Key comparison function. Returns -1, 0, +1.
+-	 */
+-	int (*id_keycmp)(struct iam_container *c,
+-			 struct iam_key *k1, struct iam_key *k2);
+-	/*
+-	 * Create new container.
+-	 *
+-	 * Newly created container has a root node and a single leaf. Leaf
+-	 * contains single record with the smallest possible key.
+-	 */
+-	int (*id_create)(struct iam_container *c);
+-	struct {
+-		/*
+-		 * leaf operations.
+-		 */
+-		/*
+-		 * returns true iff leaf is positioned at the last entry.
+-		 */
+-		int (*at_end)(struct iam_container *c, struct iam_leaf *l);
+-		/* position leaf at the first entry */
+-		void (*start)(struct iam_container *c, struct iam_leaf *l);
+-		/* more leaf to the next entry. */
+-		void (*next)(struct iam_container *c, struct iam_leaf *l);
+-		/* return key of current leaf record in @k */
+-		void (*key)(struct iam_container *c, struct iam_leaf *l,
+-			    struct iam_key *k);
+-		/* return pointer to entry body */
+-		struct iam_rec *(*rec)(struct iam_container *c,
+-				       struct iam_leaf *l);
+-	} id_leaf;
+-};
+-
+-struct iam_container {
+-	/*
+-	 * Underlying flat file. IO against this object is issued to
+-	 * read/write nodes.
+-	 */
+-	struct inode     *ic_object;
+-	/*
+-	 * container flavor.
+-	 */
+-	struct iam_descr *ic_descr;
+-	/*
+-	 * pointer to flavor-specific per-container data.
+-	 */
+-	void             *ic_descr_data;
+-};
+-
+-/*
+- * Structure to keep track of a path drilled through htree.
+- */
+-struct iam_path {
+-	/*
+-	 * Parent container.
+-	 */
+-	struct iam_container  *ip_container;
+-	/*
+-	 * Number of index levels minus one.
+-	 */
+-	int                    ip_indirect;
+-	/*
+-	 * Nodes that top-to-bottom traversal passed through.
+-	 */
+-	struct iam_frame       ip_frames[DX_MAX_TREE_HEIGHT];
+-	/*
+-	 * Last filled frame in ->ip_frames. Refers to the 'twig' node (one
+-	 * immediately above leaf).
+-	 */
+-	struct iam_frame      *ip_frame;
+-	/*
+-	 * Leaf node: a child of ->ip_frame.
+-	 */
+-	struct iam_leaf       *ip_leaf;
+-	/*
+-	 * Key searched for.
+-	 */
+-	struct iam_key        *ip_key_target;
+-	/*
+-	 * Scratch-pad area for temporary keys.
+-	 */
+-	struct iam_key        *ip_key_scratch[DX_SCRATCH_KEYS];
+-	/*
+-	 * pointer to flavor-specific per-container data.
+-	 */
+-	void                  *ip_descr_data;
+-};
+-
+-/*
+- * Helper structure for legacy htrees.
+- */
+-struct iam_path_compat {
+-	struct iam_path      ipc_path;
+-	struct iam_container ipc_container;
+-	__u32                ipc_scrach[DX_SCRATCH_KEYS];
+-};
+ 
+ static u32 htree_root_ptr(struct iam_container *c);
+ static int htree_node_check(struct iam_path *path, struct iam_frame *frame);
+@@ -427,58 +236,7 @@
+ struct iam_container;
+ struct iam_path;
+ 
+-/*
+- * Initialize container @c, acquires additional reference on @inode.
+- */
+-int iam_container_init(struct iam_container *c,
+-		       struct iam_descr *descr, struct inode *inode);
+-/*
+- * Finalize container @c, release all resources.
+- */
+-void iam_container_fini(struct iam_container *c);
+ 
+-/*
+- * Search container @c for record with key @k. If record is found, its data
+- * are moved into @r.
+- *
+- *
+- *
+- * Return values: +ve: found, 0: not-found, -ve: error
+- */
+-int iam_lookup(struct iam_container *c, struct iam_key *k, struct iam_rec *r);
+-/*
+- * Insert new record @r with key @k into container @c (within context of
+- * transaction @h.
+- *
+- * Return values: 0: success, -ve: error, including -EEXIST when record with
+- * given key is already present.
+- *
+- * postcondition: ergo(result == 0 || result == -EEXIST,
+- *                                  iam_lookup(c, k, r2) > 0 &&
+- *                                  !memcmp(r, r2, c->ic_descr->id_rec_size));
+- */
+-int iam_insert(handle_t *h, struct iam_container *c,
+-	       struct iam_key *k, struct iam_rec *r);
+-/*
+- * Replace existing record with key @k, or insert new one. New record data are
+- * in @r.
+- *
+- * Return values: 0: success, -ve: error.
+- *
+- * postcondition: ergo(result == 0, iam_lookup(c, k, r2) > 0 &&
+- *                                  !memcmp(r, r2, c->ic_descr->id_rec_size));
+- */
+-int iam_update(handle_t *h, struct iam_container *c,
+-	       struct iam_key *k, struct iam_rec *r);
+-/*
+- * Delete existing record with key @k.
+- *
+- * Return values: 0: success, -ENOENT: not-found, -ve: other error.
+- *
+- * postcondition: ergo(result == 0 || result == -ENOENT,
+- *                                 !iam_lookup(c, k, *));
+- */
+-int iam_delete(handle_t *h, struct iam_container *c, struct iam_key *k);
+ 
+ /*
+  * iam cursor (iterator) api.
+@@ -508,6 +266,11 @@
  	IAM_IT_ATTACHED
  };
  
@@ -45,7 +322,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  /*
   * Iterator.
   *
-@@ -704,7 +713,7 @@
+@@ -704,7 +467,7 @@
  			     struct inode *inode);
  
  static inline void iam_path_init(struct iam_path *path,
@@ -54,7 +331,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  static inline void iam_path_fini(struct iam_path *path);
  
  
-@@ -865,11 +874,6 @@
+@@ -865,11 +628,6 @@
  	return 0;
  }
  
@@ -66,7 +343,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  static int htree_node_check(struct iam_path *path, struct iam_frame *frame)
  {
  	void *data;
-@@ -1171,11 +1175,13 @@
+@@ -1171,11 +929,13 @@
  	}
  }
  
@@ -81,7 +358,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  }
  
  static inline void iam_path_fini(struct iam_path *path)
-@@ -1201,7 +1207,7 @@
+@@ -1201,7 +961,7 @@
  	 * iam_path_fini().
  	 */
  	iput(inode);
@@ -90,7 +367,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	for (i = 0; i < ARRAY_SIZE(path->ipc_path.ip_key_scratch); ++i)
  		path->ipc_path.ip_key_scratch[i] =
  			(struct iam_key *)&path->ipc_scrach[i];
-@@ -1213,6 +1219,382 @@
+@@ -1213,6 +973,425 @@
  	iam_container_fini(&path->ipc_container);
  }
  
@@ -115,6 +392,15 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +	if (leaf->bh)
 +		brelse(leaf->bh);
 +}
++
++/*
++ * Search container @c for record with key @k. If record is found, its data
++ * are moved into @r.
++ *
++ *
++ *
++ * Return values: +ve: found, 0: not-found, -ve: error
++ */
 +
 +int iam_lookup(struct iam_container *c, struct iam_key *k, struct iam_rec *r)
 +{
@@ -163,6 +449,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +	iam_path_fini(path);
 +	return(err);
 +}
++EXPORT_SYMBOL(iam_lookup);
 +
 +static inline size_t iam_leaf_entry_size(struct iam_path *p)
 +{
@@ -326,6 +613,17 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +}
 +
 +static int split_index_node(handle_t *handle, struct iam_path *path);
++/*
++ * Insert new record @r with key @k into container @c (within context of
++ * transaction @h.
++ *
++ * Return values: 0: success, -ve: error, including -EEXIST when record with
++ * given key is already present.
++ *
++ * postcondition: ergo(result == 0 || result == -EEXIST,
++ *                                  iam_lookup(c, k, r2) > 0 &&
++ *                                  !memcmp(r, r2, c->ic_descr->id_rec_size));
++ */
 +int iam_insert(handle_t *handle, struct iam_container *c, struct iam_key *k, 
 +	       struct iam_rec *r)
 +{
@@ -364,6 +662,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +	return(err);
 +}
 +
++EXPORT_SYMBOL(iam_insert);
 +static int iam_leaf_delete(handle_t *handle, struct iam_path *path, 
 +			   struct iam_key *k)
 +{
@@ -397,6 +696,14 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +	return err;
 +}
 +
++/*
++ * Delete existing record with key @k.
++ *
++ * Return values: 0: success, -ENOENT: not-found, -ve: other error.
++ *
++ * postcondition: ergo(result == 0 || result == -ENOENT,
++ *                                 !iam_lookup(c, k, *));
++ */
 +int iam_delete(handle_t *h, struct iam_container *c, struct iam_key *k)
 +{
 +	struct dx_hash_info	hinfo;
@@ -420,6 +727,8 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +	iam_path_fini(path);
 +	return err;
 +}
++
++EXPORT_SYMBOL(iam_delete);
 +
 +static int iam_leaf_update(handle_t *handle, struct iam_path *path, 
 +			   struct iam_key *k, struct iam_rec *r)
@@ -445,7 +754,15 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +	iam_leaf_fini(&leaf);
 +	return err;
 +}
-+
++/*
++ * Replace existing record with key @k, or insert new one. New record data are
++ * in @r.
++ *
++ * Return values: 0: success, -ve: error.
++ *
++ * postcondition: ergo(result == 0, iam_lookup(c, k, r2) > 0 &&
++ *                                  !memcmp(r, r2, c->ic_descr->id_rec_size));
++ */
 +int iam_update(handle_t *h, struct iam_container *c,
 +	       struct iam_key *k, struct iam_rec *r)
 +{
@@ -470,10 +787,13 @@ Index: linux-2.6.9/fs/ext3/namei.c
 +	iam_path_fini(path);
 +	return err;
 +}
++
++EXPORT_SYMBOL(iam_update);
++
  /*
   * This function increments the frame pointer to search the next leaf
   * block, and reads in the necessary intervening nodes if the search
-@@ -2213,59 +2595,21 @@
+@@ -2213,59 +2392,21 @@
  }
  
  #ifdef CONFIG_EXT3_INDEX
@@ -505,11 +825,11 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	int nr_splet;
 -	int i;
 -	size_t isize;
-+	int i, err;
- 
+-
 -	iam_path_compat_init(&cpath, dir);
 -	param = path_descr(path);
--
++	int i, err;
+ 
 -	err = dx_probe(dentry, NULL, &hinfo, path);
 -	if (err != 0)
 -		return err;
@@ -539,7 +859,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	/*
  	 * Tall-tree handling: we might have to split multiple index blocks
  	 * all the way up to tree root. Tricky point here is error handling:
-@@ -2288,7 +2632,7 @@
+@@ -2288,7 +2429,7 @@
  	     dx_get_count(frame->entries) == dx_get_limit(frame->entries);
  	     --frame, ++nr_splet) {
  		if (nr_splet == DX_MAX_TREE_HEIGHT) {
@@ -548,7 +868,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  				     "Directory index full!\n");
  			err = -ENOSPC;
  			goto cleanup;
-@@ -2301,7 +2645,7 @@
+@@ -2301,7 +2442,7 @@
  	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
  		bh_new[i] = ext3_append (handle, dir, &newblock[i], &err);
  		if (!bh_new[i] ||
@@ -557,7 +877,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  			goto cleanup;
  		BUFFER_TRACE(frame->bh, "get_write_access");
  		err = ext3_journal_get_write_access(handle, frame->bh);
-@@ -2407,23 +2751,81 @@
+@@ -2407,23 +2548,81 @@
  				goto journal_error;
  		}
  	}
@@ -644,3 +964,220 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	if (err)
  		inode->i_size = isize;
  	iam_path_fini(path);
+Index: linux-2.6.9/include/linux/lustre_iam.h
+===================================================================
+--- linux-2.6.9.orig/include/linux/lustre_iam.h	2006-04-25 19:24:03.246335296 +0800
++++ linux-2.6.9/include/linux/lustre_iam.h	2006-04-25 15:44:44.000000000 +0800
+@@ -0,0 +1,212 @@
++/*
++ * Maximal number of non-leaf levels in htree. In the stock ext3 this is 2.
++ */
++enum {
++	DX_MAX_TREE_HEIGHT = 5,
++	DX_SCRATCH_KEYS    = 2
++};
++
++/*
++ * Entry within index tree node. Consists of a key immediately followed
++ * (without padding) by a pointer to the child node.
++ *
++ * Both key and pointer are of variable size, hence incomplete type.
++ */
++struct iam_entry;
++
++struct iam_entry_compat {
++	__le32 hash;
++	__le32 block;
++};
++
++/*
++ * Incomplete type used to refer to keys in iam container.
++ *
++ * As key size can be different from container to container, iam has to use
++ * incomplete type. Clients cast pointer to iam_key to real key type and back.
++ */
++struct iam_key;
++
++/* Incomplete type use to refer to the records stored in iam containers. */
++struct iam_rec;
++
++typedef __u64 iam_ptr_t;
++
++/*
++ * Index node traversed during tree lookup.
++ */
++struct iam_frame {
++	struct buffer_head *bh;    /* buffer holding node data */
++	struct iam_entry *entries; /* array of entries */
++	struct iam_entry *at;      /* target entry, found by binary search */
++};
++
++/* leaf node reached by tree lookup */
++#define iam_leaf_entry iam_rec
++struct iam_leaf {
++	struct buffer_head *bh;
++	struct iam_leaf_entry *entries;
++	struct iam_leaf_entry *at;
++};
++
++struct iam_path;
++struct iam_container;
++
++/*
++ * Parameters, describing a flavor of iam container.
++ */
++struct iam_descr {
++	/*
++	 * Size of a key in this container, in bytes.
++	 */
++ 	size_t       id_key_size;
++	/*
++	 * Size of a pointer to the next level (stored in index nodes), in
++	 * bytes.
++	 */
++	size_t       id_ptr_size;
++	/*
++	 * Size of a record (stored in leaf nodes), in bytes.
++	 */
++	size_t       id_rec_size;
++	/*
++	 * Size of unused (by iam) space at the beginning of every non-root
++	 * node, in bytes. Used for compatibility with ext3.
++	 */
++	size_t       id_node_gap;
++	/*
++	 * Size of unused (by iam) space at the beginning of root node, in
++	 * bytes. Used for compatibility with ext3.
++	 */
++	size_t       id_root_gap;
++
++	/*
++	 * Returns pointer (in the same sense as pointer in index entry) to
++	 * the root node.
++	 */
++	__u32 (*id_root_ptr)(struct iam_container *c);
++
++	/*
++	 * Check validity and consistency of index node. This is called when
++	 * iam just loaded new node into frame.
++	 */
++	int (*id_node_check)(struct iam_path *path, struct iam_frame *frame);
++	/*
++	 * Initialize new node (stored in @bh) that is going to be added into
++	 * tree.
++	 */
++	int (*id_node_init)(struct iam_container *c,
++			    struct buffer_head *bh, int root);
++	int (*id_node_read)(struct iam_container *c, iam_ptr_t ptr,
++			    handle_t *h, struct buffer_head **bh);
++	/*
++	 * Key comparison function. Returns -1, 0, +1.
++	 */
++	int (*id_keycmp)(struct iam_container *c,
++			 struct iam_key *k1, struct iam_key *k2);
++	/*
++	 * Create new container.
++	 *
++	 * Newly created container has a root node and a single leaf. Leaf
++	 * contains single record with the smallest possible key.
++	 */
++	int (*id_create)(struct iam_container *c);
++	struct {
++		/*
++		 * leaf operations.
++		 */
++		/*
++		 * returns true iff leaf is positioned at the last entry.
++		 */
++		int (*at_end)(struct iam_container *c, struct iam_leaf *l);
++		/* position leaf at the first entry */
++		void (*start)(struct iam_container *c, struct iam_leaf *l);
++		/* more leaf to the next entry. */
++		void (*next)(struct iam_container *c, struct iam_leaf *l);
++		/* return key of current leaf record in @k */
++		void (*key)(struct iam_container *c, struct iam_leaf *l,
++			    struct iam_key *k);
++		/* return pointer to entry body */
++		struct iam_rec *(*rec)(struct iam_container *c,
++				       struct iam_leaf *l);
++	} id_leaf;
++};
++
++struct iam_container {
++	/*
++	 * Underlying flat file. IO against this object is issued to
++	 * read/write nodes.
++	 */
++	struct inode     *ic_object;
++	/*
++	 * container flavor.
++	 */
++	struct iam_descr *ic_descr;
++	/*
++	 * pointer to flavor-specific per-container data.
++	 */
++	void             *ic_descr_data;
++};
++
++/*
++ * Structure to keep track of a path drilled through htree.
++ */
++struct iam_path {
++	/*
++	 * Parent container.
++	 */
++	struct iam_container  *ip_container;
++	/*
++	 * Number of index levels minus one.
++	 */
++	int                    ip_indirect;
++	/*
++	 * Nodes that top-to-bottom traversal passed through.
++	 */
++	struct iam_frame       ip_frames[DX_MAX_TREE_HEIGHT];
++	/*
++	 * Last filled frame in ->ip_frames. Refers to the 'twig' node (one
++	 * immediately above leaf).
++	 */
++	struct iam_frame      *ip_frame;
++	/*
++	 * Leaf node: a child of ->ip_frame.
++	 */
++	struct iam_leaf       *ip_leaf;
++	/*
++	 * Key searched for.
++	 */
++	struct iam_key        *ip_key_target;
++	/*
++	 * Scratch-pad area for temporary keys.
++	 */
++	struct iam_key        *ip_key_scratch[DX_SCRATCH_KEYS];
++	/*
++	 * pointer to flavor-specific per-container data.
++	 */
++	void                  *ip_descr_data;
++};
++
++/*
++ * Helper structure for legacy htrees.
++ */
++struct iam_path_compat {
++	struct iam_path      ipc_path;
++	struct iam_container ipc_container;
++	__u32                ipc_scrach[DX_SCRATCH_KEYS];
++};
++
++int iam_lookup(struct iam_container *c, struct iam_key *k, struct iam_rec *r);
++int iam_delete(handle_t *h, struct iam_container *c, struct iam_key *k);
++int iam_update(handle_t *h, struct iam_container *c, struct iam_key *k, struct iam_rec *r);
++int iam_insert(handle_t *handle, struct iam_container *c, struct iam_key *k, struct iam_rec *r);
++/*
++ * Initialize container @c, acquires additional reference on @inode.
++ */
++int iam_container_init(struct iam_container *c,
++		       struct iam_descr *descr, struct inode *inode);
++/*
++ * Finalize container @c, release all resources.
++ */
++void iam_container_fini(struct iam_container *c);
++

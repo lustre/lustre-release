@@ -36,11 +36,13 @@
 #include <linux/lustre_ver.h>
 #include <linux/obd_support.h>
 #include <linux/lprocfs_status.h>
+#include <linux/jbd.h>
 
 #include <linux/dt_object.h>
 #include <linux/md_object.h>
 #include <linux/lustre_mdc.h>
 #include <linux/lustre_fid.h>
+#include <linux/lustre_iam.h>
 #include "fld_internal.h"
 
 static int fld_handle(struct lu_context *ctx,
@@ -354,11 +356,18 @@ int fld_server_init(struct fld *fld, struct dt_device *dt)
                 .psc_watchdog_timeout = FLD_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads      = FLD_NUM_THREADS
         };
+        struct fld_info *fld_info;
 
         fld->fld_dt = dt;
         lu_device_get(&dt->dd_lu_dev);
         INIT_LIST_HEAD(&fld_list_head.fld_list);
         spin_lock_init(&fld_list_head.fld_lock);
+        
+        OBD_ALLOC_PTR(fld_info);
+        if(!fld_info)
+                return -ENOMEM;
+        fld_info_init(fld_info); 
+        fld->fld_info = fld_info;
 
         fld->fld_service =
                 ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
@@ -369,8 +378,10 @@ int fld_server_init(struct fld *fld, struct dt_device *dt)
                                               LUSTRE_FLD0_NAME);
         else
                 result = -ENOMEM;
-        if (result != 0)
+        if (result != 0) {
                 fld_server_fini(fld);
+                fld_info_fini(fld_info);
+        }
         return result;
 }
 EXPORT_SYMBOL(fld_server_init);
@@ -393,76 +404,27 @@ void fld_server_fini(struct fld *fld)
         }
         spin_unlock(&fld_list_head.fld_lock);
         lu_device_put(&fld->fld_dt->dd_lu_dev);
+        fld_info_fini(fld->fld_info);
         fld->fld_dt = NULL;
 }
 EXPORT_SYMBOL(fld_server_fini);
 
-static int fld_handle_create(struct fld *pfld, __u64 seq_num, __u64 mds_num)
-{
-        struct fld_item *fld;
-
-        OBD_ALLOC_PTR(fld);
-        fld->fld_seq = seq_num;
-        fld->fld_mds = mds_num;
-        INIT_LIST_HEAD(&fld->fld_list);
-        spin_lock(&fld_list_head.fld_lock);
-        list_add_tail(&fld_list_head.fld_list, &fld->fld_list);
-        spin_unlock(&fld_list_head.fld_lock);
-        return 0;
-}
-
-static int fld_handle_delete(struct fld *pfld, __u64 seq_num, __u64 mds_num)
-{
-        struct list_head *pos, *n;
-        spin_lock(&fld_list_head.fld_lock);
-        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
-                struct fld_item *fld = list_entry(pos, struct fld_item,
-                                                  fld_list);
-                if (fld->fld_seq == seq_num) {
-                        LASSERT(fld->fld_mds == mds_num);
-                        list_del_init(&fld->fld_list);
-                        OBD_FREE_PTR(fld);
-                        spin_unlock(&fld_list_head.fld_lock);
-                        RETURN(0);
-                }
-        }
-        spin_unlock(&fld_list_head.fld_lock);
-        RETURN(0);
-}
-
-static int fld_handle_get(struct fld *pfld, __u64 seq_num, __u64 *mds_num)
-{
-        struct list_head *pos, *n;
-
-        spin_lock(&fld_list_head.fld_lock);
-        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
-                struct fld_item *fld = list_entry(pos, struct fld_item,
-                                                  fld_list);
-                if (fld->fld_seq == seq_num) {
-                        *mds_num = fld->fld_mds;
-                        spin_unlock(&fld_list_head.fld_lock);
-                        RETURN(0);
-                }
-        }
-        spin_unlock(&fld_list_head.fld_lock);
-        return -ENOENT;
-}
-
 static int fld_handle(struct lu_context *ctx,
                       struct fld *fld, __u32 opts, struct md_fld *mf)
 {
+        struct fld_info *fld_info = fld->fld_info;
         int rc;
         ENTRY;
 
         switch (opts) {
         case FLD_CREATE:
-                rc = fld_handle_create(fld, mf->mf_seq, mf->mf_mds);
+                rc = fld_handle_insert(fld_info, mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_DELETE:
-                rc = fld_handle_delete(fld, mf->mf_seq, mf->mf_mds);
+                rc = fld_handle_delete(fld_info, mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_GET:
-                rc = fld_handle_get(fld, mf->mf_seq, &mf->mf_mds);
+                rc = fld_handle_lookup(fld_info, mf->mf_seq, &mf->mf_mds);
                 break;
         default:
                 rc = -EINVAL;
