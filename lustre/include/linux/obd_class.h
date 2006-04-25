@@ -417,18 +417,17 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
         ENTRY;
 
         OBD_CHECK_DEV(obd);
-        OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, process_config);
-
+        
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
                 rc = d->ld_ops->ldo_process_config(d, (struct lustre_cfg *)data);
         } else {
                 OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
-                OBD_COUNTER_INCREMENT(obd, process_config);
                 rc = OBP(obd, process_config)(obd, datalen, data);
         }
+        OBD_COUNTER_INCREMENT(obd, process_config);
+
         RETURN(rc);
 }
 
