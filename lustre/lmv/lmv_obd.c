@@ -906,8 +906,9 @@ static int lmv_close(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-int lmv_get_mea_and_update_object(struct obd_export *exp, 
-                                  struct lu_fid *fid)
+/* called in the case MDS returns -ERESTART on create on open, what means that
+ * directory is splitted and its LMV presentation object has to be updated. */
+int lmv_handle_split(struct obd_export *exp, struct lu_fid *fid)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1004,11 +1005,9 @@ repeat:
                 
                 CDEBUG(D_OTHER, "created. "DFID3"\n", PFID3(&op_data->fid1));
         } else if (rc == -ERESTART) {
-                /*
-                 * directory got splitted. time to update local object and
-                 * repeat the request with proper MDS.
-                 */
-                rc = lmv_get_mea_and_update_object(exp, &op_data->fid1);
+                /* directory got splitted. time to update local object and
+                 * repeat the request with proper MDS. */
+                rc = lmv_handle_split(exp, &op_data->fid1);
                 if (rc == 0) {
                         ptlrpc_req_finished(*request);
                         goto repeat;
@@ -1250,7 +1249,7 @@ repeat:
         } else if (rc == -ERESTART) {
                 /* directory got splitted. time to update local object and
                  * repeat the request with proper MDS */
-                rc = lmv_get_mea_and_update_object(exp, &rid);
+                rc = lmv_handle_split(exp, &rid);
                 if (rc == 0) {
                         ptlrpc_req_finished(*request);
                         goto repeat;

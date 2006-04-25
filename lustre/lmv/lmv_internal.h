@@ -124,13 +124,13 @@ int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
 			  ldlm_blocking_callback cb_blocking,
                           int extra_lock_flags);
 
-int lmv_get_mea_and_update_object(struct obd_export *, struct lu_fid *);
+int lmv_handle_split(struct obd_export *, struct lu_fid *);
 int lmv_dirobj_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 			    void *, int);
 int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid);
 
 static inline struct lmv_stripe_md * 
-lmv_splitted_dir_body(struct ptlrpc_request *req, int offset)
+lmv_get_mea(struct ptlrpc_request *req, int offset)
 {
 	struct mdt_body *body;
 	struct lmv_stripe_md *mea;

@@ -175,7 +175,7 @@ repeat:
                 /* directory got splitted. time to update local object and
                  * repeat the request with proper MDS */
                 LASSERT(lu_fid_eq(pid, &rpid));
-                rc = lmv_get_mea_and_update_object(exp, &rpid);
+                rc = lmv_handle_split(exp, &rpid);
                 if (rc == 0) {
                         ptlrpc_req_finished(*reqp);
                         goto repeat;
@@ -223,7 +223,7 @@ repeat:
         
         cid = &body->fid1;
         obj = lmv_obj_grab(obd, cid);
-        if (!obj && (mea = lmv_splitted_dir_body(*reqp, 1))) {
+        if (!obj && (mea = lmv_get_mea(*reqp, 1))) {
                 /* wow! this is splitted dir, we'd like to handle it */
                 obj = lmv_obj_create(exp, &body->fid1, mea);
                 if (IS_ERR(obj))
@@ -356,7 +356,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         cid = &body->fid1;
         obj2 = lmv_obj_grab(obd, cid);
 
-        if (!obj2 && (mea = lmv_splitted_dir_body(*reqp, 1))) {
+        if (!obj2 && (mea = lmv_get_mea(*reqp, 1))) {
                 /* wow! this is splitted dir, we'd like to handle it. */
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body != NULL);
@@ -602,7 +602,7 @@ repeat:
         rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags, reqp,
                                cb_blocking, extra_lock_flags);
 
-        if (rc == 0 && (mea = lmv_splitted_dir_body(*reqp, 1))) {
+        if (rc == 0 && (mea = lmv_get_mea(*reqp, 1))) {
                 /* wow! this is splitted dir, we'd like to handle it */
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body != NULL);
