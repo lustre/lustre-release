@@ -192,6 +192,14 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_sync(struct obd_export *exp, struct lu_fid *fid,
              struct ptlrpc_request **);
 
+int mdc_lock_match(struct obd_export *exp, int flags,
+                   struct lu_fid *fid, ldlm_type_t type,
+                   ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                   struct lustre_handle *lockh);
+
+int mdc_cancel_unused(struct obd_export *exp, struct lu_fid *fid,
+                      int flags, void *opaque);
+
 int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data);
 
 #endif

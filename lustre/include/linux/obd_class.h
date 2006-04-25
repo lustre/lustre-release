@@ -1079,8 +1079,8 @@ static inline int obd_cancel(struct obd_export *exp,
 }
 
 static inline int obd_cancel_unused(struct obd_export *exp,
-                                    struct lov_stripe_md *ea, int flags,
-                                    void *opaque)
+                                    struct lov_stripe_md *ea,
+                                    int flags, void *opaque)
 {
         int rc;
         ENTRY;
@@ -1564,6 +1564,32 @@ static inline int md_set_lock_data(struct obd_export *exp,
         EXP_CHECK_MD_OP(exp, set_lock_data);
         MD_COUNTER_INCREMENT(exp->exp_obd, set_lock_data);
         RETURN(MDP(exp->exp_obd, set_lock_data)(exp, lockh, data));
+}
+
+static inline int md_cancel_unused(struct obd_export *exp,
+                                   struct lu_fid *fid,
+                                   int flags, void *opaque)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_MD_OP(exp, cancel_unused);
+        MD_COUNTER_INCREMENT(exp->exp_obd, cancel_unused);
+
+        rc = MDP(exp->exp_obd, cancel_unused)(exp, fid, flags, opaque);
+        RETURN(rc);
+}
+
+static inline int md_lock_match(struct obd_export *exp, int flags,
+                                struct lu_fid *fid, ldlm_type_t type,
+                                ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                                struct lustre_handle *lockh)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, lock_match);
+        MD_COUNTER_INCREMENT(exp->exp_obd, lock_match);
+        RETURN(MDP(exp->exp_obd, lock_match)(exp, flags, fid, type,
+                                             policy, mode, lockh));
 }
 
 static inline int md_init_ea_size(struct obd_export *exp,

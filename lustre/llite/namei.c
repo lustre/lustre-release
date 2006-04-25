@@ -155,18 +155,6 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
-int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
-                         int flags, void *opaque)
-{
-        struct ldlm_res_id res_id =
-                { .name = {fid_seq(ll_inode2fid(inode)), fid_num(ll_inode2fid(inode))} };
-        struct obd_device *obddev = class_conn2obd(conn);
-        ENTRY;
-
-        RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, &res_id, flags,
-                                      opaque));
-}
-
 /* Pack the required supplementary groups into the supplied groups array.
  * If we don't need to use the groups from the target inode(s) then we
  * instead pack one or more groups from the user's supplementary group

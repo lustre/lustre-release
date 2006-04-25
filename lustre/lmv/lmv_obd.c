@@ -874,12 +874,10 @@ static int lmv_change_cbdata(struct obd_export *exp,
                 RETURN(rc);
         
         CDEBUG(D_OTHER, "CBDATA for "DFID3"\n", PFID3(fid));
-        i = lmv_fld_lookup(obd, fid);
-        LASSERT(i < lmv->desc.ld_tgt_count);
 
-        /* with CMD every object can have two locks in different
-         * namespaces: lookup lock in space of mds storing direntry
-         * and update/open lock in space of mds storing inode */
+        /* with CMD every object can have two locks in different namespaces:
+         * lookup lock in space of mds storing direntry and update/open lock in
+         * space of mds storing inode */
         for (i = 0; i < lmv->desc.ld_tgt_count; i++)
                 md_change_cbdata(lmv->tgts[i].ltd_exp, fid, it, data);
         
@@ -2193,22 +2191,22 @@ int lmv_brw(int rw, struct obd_export *exp, struct obdo *oa,
 #endif
 
 static int lmv_cancel_unused(struct obd_export *exp,
-                             struct lov_stripe_md *lsm, 
-			     int flags, void *opaque)
+                             struct lu_fid *fid,
+                             int flags, void *opaque)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         int rc = 0, err, i;
         ENTRY;
 
-        LASSERT(lsm == NULL);
+        LASSERT(fid != NULL);
         
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
                 if (!lmv->tgts[i].ltd_exp || !lmv->tgts[i].active)
                         continue;
                 
-                err = obd_cancel_unused(lmv->tgts[i].ltd_exp,
-                                        NULL, flags, opaque);
+                err = md_cancel_unused(lmv->tgts[i].ltd_exp,
+                                       fid, flags, opaque);
                 if (!rc)
                         rc = err;
         }
@@ -2222,6 +2220,32 @@ int lmv_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
 
         ENTRY;
         RETURN(md_set_lock_data(lmv->tgts[0].ltd_exp, lockh, data));
+}
+
+int lmv_lock_match(struct obd_export *exp, int flags,
+                   struct lu_fid *fid, ldlm_type_t type,
+                   ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                   struct lustre_handle *lockh)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        int i, rc = 0;
+        ENTRY;
+
+        CDEBUG(D_OTHER, "lock match for "DFID3"\n", PFID3(fid));
+
+        /* with CMD every object can have two locks in different namespaces:
+         * lookup lock in space of mds storing direntry and update/open lock in
+         * space of mds storing inode. Thus we check all targets, not only that
+         * one fid was created in. */
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                rc = md_lock_match(lmv->tgts[i].ltd_exp, flags, fid,
+                                   type, policy, mode, lockh);
+                if (rc)
+                        RETURN(1);
+        }
+
+        RETURN(rc);
 }
 
 int lmv_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
@@ -2284,7 +2308,6 @@ struct obd_ops lmv_obd_ops = {
         .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,
         .o_iocontrol            = lmv_iocontrol,
-        .o_cancel_unused        = lmv_cancel_unused,
 };
 
 struct md_ops lmv_md_ops = {
@@ -2305,7 +2328,9 @@ struct md_ops lmv_md_ops = {
         .m_unlink               = lmv_unlink,
         .m_init_ea_size         = lmv_init_ea_size,
         .m_delete               = lmv_delete,
+        .m_cancel_unused        = lmv_cancel_unused,
         .m_set_lock_data        = lmv_set_lock_data,
+        .m_lock_match           = lmv_lock_match,
         .m_get_lustre_md        = lmv_get_lustre_md,
         .m_free_lustre_md       = lmv_free_lustre_md,
         .m_set_open_replay_data = lmv_set_open_replay_data,

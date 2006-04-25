@@ -1862,10 +1862,11 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 
 static int lov_cancel_unused(struct obd_export *exp,
-                             struct lov_stripe_md *lsm, int flags, void *opaque)
+                             struct lov_stripe_md *lsm,
+                             int flags, void *opaque)
 {
-        struct lov_obd *lov;
         struct lov_oinfo *loi;
+        struct lov_obd *lov;
         int rc = 0, i;
         ENTRY;
 

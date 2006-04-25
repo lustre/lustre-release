@@ -980,7 +980,13 @@ struct md_ops {
         int (*m_clear_open_replay_data)(struct obd_export *,
                                         struct obd_client_handle *);
         int (*m_set_lock_data)(struct obd_export *, __u64 *, void *);
-
+        
+        int (*m_lock_match)(struct obd_export *, int, struct lu_fid *,
+                            ldlm_type_t, ldlm_policy_data_t *, ldlm_mode_t,
+                            struct lustre_handle *);
+                
+        int (*m_cancel_unused)(struct obd_export *, struct lu_fid *,
+                               int flags, void *opaque);
         int (*m_delete)(struct obd_export *, struct lu_fid *);
 
         /*

@@ -202,21 +202,18 @@ fail:
 
 static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 {
-        struct ldlm_res_id res_id =
-                { .name = { fid_seq(ll_inode2fid(dir)), fid_num(ll_inode2fid(dir)) } };
-        struct lustre_handle lockh;
-        struct obd_device *obddev = class_exp2obd(ll_i2sbi(dir)->ll_md_exp);
-        struct address_space *mapping = dir->i_mapping;
-        struct page *page;
         ldlm_policy_data_t policy = {.l_inodebits = {MDS_INODELOCK_UPDATE} };
+        struct address_space *mapping = dir->i_mapping;
+        struct lustre_handle lockh;
+        struct page *page;
         int rc;
 
-        rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
+        rc = md_lock_match(ll_i2sbi(dir)->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
+                           ll_inode2fid(dir), LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
-                struct ptlrpc_request *request;
                 struct md_op_data op_data = { { 0 } };
+                struct ptlrpc_request *request;
 
                 ll_prepare_md_op_data(&op_data, dir, NULL, NULL, 0, 0);
 

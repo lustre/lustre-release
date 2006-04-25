@@ -788,6 +788,8 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr_name);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_lock);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, lock_match);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, cancel_unused);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, link);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, rename);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, setattr);

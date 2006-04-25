@@ -2819,13 +2819,14 @@ static int osc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
 }
 
 static int osc_cancel_unused(struct obd_export *exp,
-                             struct lov_stripe_md *lsm, int flags, void *opaque)
+                             struct lov_stripe_md *lsm,
+                             int flags, void *opaque)
 {
-        struct obd_device *obd = class_exp2obd(exp);
         struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+        struct obd_device *obd = class_exp2obd(exp);
 
-        return ldlm_cli_cancel_unused(obd->obd_namespace, &res_id, flags,
-                                      opaque);
+        return ldlm_cli_cancel_unused(obd->obd_namespace, &res_id,
+                                      flags, opaque);
 }
 
 static int osc_join_lru(struct obd_export *exp,
