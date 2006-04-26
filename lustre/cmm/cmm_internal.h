@@ -113,7 +113,7 @@ int cmm_mkdir(struct lu_context *ctxt, struct md_object *o, const char *name,
               struct md_object *child);
 int cmm_xattr_get(struct lu_context *ctxt,
                   struct md_object *obj, void *buf, int size,
-                  const char *name, struct md_params *);
+                  const char *name);
 
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */

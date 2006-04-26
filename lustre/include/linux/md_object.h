@@ -45,14 +45,6 @@ struct md_device;
 struct md_device_operations;
 struct md_object;
 
-/*
- * Common parameters for md operations.
- */
-struct md_params {
-        __u32 mode;
-        __u32 flags;
-};
-
 struct md_object_operations {
 
         /* meta-data object operations related handlers */
@@ -62,11 +54,10 @@ struct md_object_operations {
         int (*moo_rename)(struct lu_context *ctxt, struct md_object *spobj,
                           struct md_object *tpobj, struct md_object *sobj,
                           const char *sname, struct md_object *tobj,
-                          const char *tname, struct md_params *arg);
+                          const char *tname);
 
         int (*moo_link)(struct lu_context *ctxt, struct md_object *tobj,
-                        struct md_object *sobj, const char *name,
-                        struct md_params *arg);
+                        struct md_object *sobj, const char *name);
 
         int (*moo_attr_get)(struct lu_context *ctxt, struct md_object *dt,
                             struct lu_attr *attr);
@@ -74,12 +65,10 @@ struct md_object_operations {
                             struct lu_attr *attr);
 
         int (*moo_xattr_get)(struct lu_context *ctxt, struct md_object *obj,
-                             void *buf, int buf_len, const char *name,
-                             struct md_params *arg);
+                             void *buf, int buf_len, const char *name);
 
         int (*moo_xattr_set)(struct lu_context *ctxt, struct md_object *obj,
-                             void *buf, int buf_len, const char *name,
-                             struct md_params *arg);
+                             void *buf, int buf_len, const char *name);
 };
 
 struct md_device_operations {
