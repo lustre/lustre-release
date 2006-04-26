@@ -25,12 +25,29 @@
 #ifndef _LINUX_MD_OBJECT_H
 #define _LINUX_MD_OBJECT_H
 
+/*
+ * Sub-class of lu_object with methods common for "meta-data" objects in MDT
+ * stack.
+ *
+ * Meta-data objects implement namespace operations: you can link, unlink
+ * them, and treat them as directories.
+ *
+ * Examples: mdt, cmm, and mdt are implementations of md interface.
+ */
+
+
+/*
+ * super-class definitions.
+ */
 #include <linux/lu_object.h>
 
 struct md_device;
 struct md_device_operations;
 struct md_object;
 
+/*
+ * Common parameters for md operations.
+ */
 struct md_params {
         __u32 mode;
         __u32 flags;

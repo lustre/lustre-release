@@ -228,6 +228,7 @@ static int osd_statfs(struct lu_context *ctx,
 static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
                         struct lu_attr *attr)
 {
+        LASSERT(dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu));
         return osd_inode_getattr(ctxt, dt2osd_obj(dt)->oo_inode, attr);
 }
 

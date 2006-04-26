@@ -31,7 +31,7 @@
  * implement some form of garbage collection, normally reference counting
  * (nlink) based one.
  *
- * Examples: osd (lustre/osd) is am implementation of dt interface.
+ * Examples: osd (lustre/osd) is an implementation of dt interface.
  */
 
 
@@ -68,6 +68,8 @@ struct dt_device_operations {
         /*
          * Method for getting/setting device wide back stored config data,
          * like last used meta-sequence, etc.
+         *
+         * XXX this is ioctl()-like interface we want to get rid of.
          */
         int (*dt_config) (struct lu_context *ctx,
                           struct dt_device *dev, const char *name,
@@ -92,50 +94,108 @@ struct dt_device_operations {
          */
         int   (*dt_root_get)(struct lu_context *ctx,
                              struct dt_device *dev, struct lu_fid *f);
-
+        /*
+         * Create new object on this device.
+         *
+         * postcondition: ergo(result == 0,
+         *                     dt->do_lu.lo_ops->loo_object_exists(ctxt,
+         *                                                         &dt->do_lu));
+         */
         int   (*dt_object_create)(struct lu_context *ctxt, struct dt_object *dt,
                                   struct md_params *arg, struct thandle *th);
-
+        /*
+         * Destroy existing object.
+         *
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int   (*dt_object_destroy)(struct lu_context *ctxt,
                                    struct dt_object *dt, struct thandle *th);
 
 };
 
+/*
+ * Per-dt-object operations.
+ */
 struct dt_object_operations {
         void  (*do_object_lock)(struct lu_context *ctx,
                                 struct dt_object *dt, enum dt_lock_mode mode);
         void  (*do_object_unlock)(struct lu_context *ctx,
                                   struct dt_object *dt, enum dt_lock_mode mode);
+        /*
+         * Note: following ->do_{x,}attr_{set,get}() operations are very
+         * similar to ->moo_{x,}attr_{set,get}() operations in struct
+         * md_object_operations (see md_object.h). These operations are not in
+         * lu_object_operations, because ->do_{x,}attr_set() versions take
+         * transaction handle as an argument (this transaction is started by
+         * caller). We might factor ->do_{x,}attr_get() into
+         * lu_object_operations, but that would break existing symmetry.
+         */
 
+        /*
+         * Return standard attributes.
+         *
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int   (*do_attr_get)(struct lu_context *ctxt, struct dt_object *dt,
                              struct lu_attr *attr);
+        /*
+         * Set standard attributes.
+         *
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int   (*do_attr_set)(struct lu_context *ctxt, struct dt_object *dt,
                              struct lu_attr *attr, struct thandle *handle);
-
+        /*
+         * Return a value of an extended attribute.
+         *
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int   (*do_xattr_get)(struct lu_context *ctxt, struct dt_object *dt,
                               void *buf, int buf_len, const char *name,
                               struct md_params *arg);
-
+        /*
+         * Set value of an extended attribute.
+         *
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int   (*do_xattr_set)(struct lu_context *ctxt, struct dt_object *dt,
                               void *buf, int buf_len, const char *name,
                               struct md_params *arg, struct thandle *handle);
-
 };
 
+/*
+ * Per-dt-object operations on "file body".
+ */
 struct dt_body_operations {
+        /*
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int (*dbo_read)(struct lu_context *ctxt, struct dt_object *dt, ...);
+        /*
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int (*dbo_write)(struct lu_context *ctxt, struct dt_object *dt, ...);
+        /*
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int (*dbo_truncate)(struct lu_context *ctxt, struct dt_object *dt, ...);
-        int (*dbo_seek)(struct lu_context *ctxt, struct dt_object *dt, ...);
 };
 
+/*
+ * Per-dt-object operations on object as index.
+ */
 struct dt_index_operations {
+        /*
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int   (*dio_index_insert)(struct lu_context *ctxt,
                                   struct dt_object *dt,
                                   struct lu_fid *fid, const char *name,
                                   struct md_params *arg,
                                   struct thandle *handle);
-
+        /*
+         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         */
         int   (*dio_index_delete)(struct lu_context *ctxt,
                                   struct dt_object *dt,
                                   struct lu_fid *fid, const char *name,

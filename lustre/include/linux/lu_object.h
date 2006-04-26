@@ -158,12 +158,17 @@ struct lu_device_operations {
 	 */
 	void (*ldo_object_release)(struct lu_context *ctx, struct lu_object *o);
 
-        /* process config specific for device */
+        /*
+         * process config specific for device
+         */
         int  (*ldo_process_config)(struct lu_device *, struct lustre_cfg *);
 
 };
 
 struct lu_object_operations {
+        /*
+         * Return true off object @o exists on a storage.
+         */
         int (*loo_object_exists)(struct lu_context *ctx, struct lu_object *o);
 	/*
 	 * Debugging helper. Print given object.
@@ -500,7 +505,9 @@ static inline struct lu_object *lu_object_top(struct lu_object_header *h)
 }
 
 /*
- * Acquire additional reference to the given object
+ * Acquire additional reference to the given object. This function is used to
+ * attain additional reference. To acquire initial reference use
+ * lu_object_find().
  */
 static inline void lu_object_get(struct lu_object *o)
 {
@@ -577,12 +584,6 @@ struct lu_context {
          * IMPLEMENTED.
          */
         __u32                  lc_tags;
-        /*
-         * Object attribute. This is stuffed directly into context, because we
-         * know it advance it will be needed. As an alternative, it can be
-         * allocated through special key.
-         */
-        struct lu_attr         lc_attr;
         /*
          * Pointer to the home service thread. NULL for other execution
          * contexts.
