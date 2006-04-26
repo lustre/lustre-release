@@ -102,9 +102,7 @@ static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg)
 
 static struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_alloc   = cmm_object_alloc,
-	.ldo_object_init    = cmm_object_init,
 	.ldo_object_free    = cmm_object_free,
-	.ldo_object_release = cmm_object_release,
 
         .ldo_process_config = cmm_process_config
 };

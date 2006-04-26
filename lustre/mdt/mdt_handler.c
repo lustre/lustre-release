@@ -252,7 +252,6 @@ static int mdt_connect(struct mdt_thread_info *info,
 static int mdt_disconnect(struct mdt_thread_info *info,
                           struct ptlrpc_request *req, int offset)
 {
-        //return -EOPNOTSUPP;
         return target_handle_disconnect(req);
 }
 
@@ -522,7 +521,7 @@ enum mdt_handler_flags {
          * struct ldlm_request is passed in MDS_REQ_INTENT_LOCKREQ_OFF-th
          * incoming buffer.
          */
-        HABEO_CLAVIS   = (1 << 1)
+        HABEO_CLAVIS = (1 << 1)
 };
 
 struct mdt_opc_slice {
@@ -972,8 +971,7 @@ static int mdt_seq_mgr_hpr(struct lu_context *ctx, void *opaque, __u64 *seq,
         ENTRY;
 
         rc = mdt_config(ctx, m, LUSTRE_CONFIG_METASEQ,
-                        seq, sizeof(*seq),
-                        mode);
+                        seq, sizeof(*seq), mode);
         RETURN(rc);
 }
 
@@ -1394,13 +1392,13 @@ static int mdt_object_print(struct lu_context *ctxt,
 
 static struct lu_device_operations mdt_lu_ops = {
         .ldo_object_alloc   = mdt_object_alloc,
-        .ldo_object_init    = mdt_object_init,
         .ldo_object_free    = mdt_object_free,
-        .ldo_object_release = mdt_object_release,
         .ldo_process_config = mdt_process_config
 };
 
 static struct lu_object_operations mdt_obj_ops = {
+        .loo_object_init    = mdt_object_init,
+        .loo_object_release = mdt_object_release,
         .loo_object_print   = mdt_object_print,
         .loo_object_exists  = mdt_object_exists
 };

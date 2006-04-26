@@ -96,10 +96,8 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 int cmm_add_mdc(struct cmm_device *, struct lustre_cfg *);
 
 /* cmm_object.c */
-int cmm_object_init(struct lu_context *ctxt, struct lu_object*);
 struct lu_object *cmm_object_alloc(struct lu_context *ctx, struct lu_device *);
 void cmm_object_free(struct lu_context *ctx, struct lu_object *o);
-void cmm_object_release(struct lu_context *ctxt, struct lu_object *o);
 //int cmm_getattr(struct lu_object *o, struct lu_attr *a);
 //int cmm_setattr(struct lu_object *o, struct lu_attr *a);
 

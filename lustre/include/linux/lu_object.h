@@ -112,15 +112,44 @@ struct lu_device_operations {
          *  - then lu_object_alloc() sets fid in the header of newly created
          *  object.
 	 *
-	 *  - then ->ldo_object_init() is called. It has to allocate
-	 *  lower-layer object(s). To do this, ->ldo_object_init() calls
+	 *  - then ->loo_object_init() (a method from struct
+	 *  lu_object_operations) is called. It has to allocate lower-layer
+	 *  object(s). To do this, ->loo_object_init() calls
 	 *  ldo_object_alloc() of the lower-layer device(s).
 	 *
-	 *  - for all new objects allocated by ->ldo_object_init() (and
-	 *  inserted into object stack), ->ldo_object_init() is called again
+	 *  - for all new objects allocated by ->loo_object_init() (and
+	 *  inserted into object stack), ->loo_object_init() is called again
 	 *  repeatedly, until no new objects are created.
 	 *
 	 */
+
+	/*
+	 * Allocate object for the given device (without lower-layer
+	 * parts). This is called by ->loo_object_init() from the parent
+	 * layer, and should setup at least ->lo_dev and ->lo_ops fields of
+	 * resulting lu_object.
+         *
+         * postcondition: ergo(!IS_ERR(result), result->lo_dev ==  d &&
+         *                                      result->lo_ops != NULL);
+	 */
+	struct lu_object *(*ldo_object_alloc)(struct lu_context *ctx,
+                                              struct lu_device *d);
+	/*
+	 * Dual to ->ldo_object_alloc(). Called when object is removed from
+	 * memory.
+	 */
+	void (*ldo_object_free)(struct lu_context *ctx, struct lu_object *o);
+
+        /*
+         * process config specific for device
+         */
+        int  (*ldo_process_config)(struct lu_device *, struct lustre_cfg *);
+};
+
+/*
+ * Operations specific for particular lu_object.
+ */
+struct lu_object_operations {
 
 	/*
 	 * Allocate lower-layer parts of the object by calling
@@ -130,42 +159,19 @@ struct lu_device_operations {
 	 * stack. It's responsibility of this method to insert lower-layer
 	 * object(s) it create into appropriate places of object stack.
 	 */
-	int (*ldo_object_init)(struct lu_context *, struct lu_object *);
-
-	/*
-	 * Allocate object for the given device (without lower-layer
-	 * parts). This is called by ->ldo_object_init() from the parent
-	 * layer.
-	 */
-	struct lu_object *(*ldo_object_alloc)(struct lu_context *,
-                                              struct lu_device *);
-
+	int (*loo_object_init)(struct lu_context *ctx, struct lu_object *o);
 	/*
 	 * Called before ->ldo_object_free() to signal that object is being
-	 * destroyed.
+	 * destroyed. Dual to ->loo_object_init().
 	 */
-	void (*ldo_object_delete)(struct lu_context *ctx, struct lu_object *o);
-
-	/*
-	 * Dual to ->ldo_object_alloc(). Called when object is removed from
-	 * memory.
-	 */
-	void (*ldo_object_free)(struct lu_context *ctx, struct lu_object *o);
+	void (*loo_object_delete)(struct lu_context *ctx, struct lu_object *o);
 
 	/*
 	 * Called when last active reference to the object is released (and
 	 * object returns to the cache).
 	 */
-	void (*ldo_object_release)(struct lu_context *ctx, struct lu_object *o);
+	void (*loo_object_release)(struct lu_context *ctx, struct lu_object *o);
 
-        /*
-         * process config specific for device
-         */
-        int  (*ldo_process_config)(struct lu_device *, struct lustre_cfg *);
-
-};
-
-struct lu_object_operations {
         /*
          * Return true off object @o exists on a storage.
          */
@@ -286,7 +292,7 @@ struct lu_device_type_operations {
  */
 enum lu_object_flags {
 	/*
-	 * this flags is set if ->ldo_object_init() has been called for this
+	 * this flags is set if ->loo_object_init() has been called for this
 	 * layer. Used by lu_object_alloc().
 	 */
 	LU_OBJECT_ALLOCATED = (1 << 0)

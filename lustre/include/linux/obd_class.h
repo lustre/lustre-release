@@ -58,7 +58,7 @@ struct lu_device_type;
 /* genops.c */
 struct obd_export *class_conn2export(struct lustre_handle *);
 int class_register_type(struct obd_ops *, struct md_ops *,
-                        struct lprocfs_vars *, const char *nm, 
+                        struct lprocfs_vars *, const char *nm,
                         struct lu_device_type *ldt);
 int class_unregister_type(const char *nm);
 
@@ -417,11 +417,12 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
         ENTRY;
 
         OBD_CHECK_DEV(obd);
-        
+
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
-                rc = d->ld_ops->ldo_process_config(d, (struct lustre_cfg *)data);
+                rc = d->ld_ops->ldo_process_config(d,
+                                                   (struct lustre_cfg *)data);
         } else {
                 OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
                 rc = OBP(obd, process_config)(obd, datalen, data);
@@ -1294,7 +1295,7 @@ static inline int md_delete(struct obd_export *exp,
 
         if (MDP(exp->exp_obd, delete) == NULL)
                 RETURN(0);
-        
+
         MD_COUNTER_INCREMENT(exp->exp_obd, delete);
         rc = MDP(exp->exp_obd, delete)(exp, fid);
         RETURN(rc);
@@ -1308,7 +1309,7 @@ static inline int md_getattr(struct obd_export *exp, struct lu_fid *fid,
         ENTRY;
         EXP_CHECK_MD_OP(exp, getattr);
         MD_COUNTER_INCREMENT(exp->exp_obd, getattr);
-        rc = MDP(exp->exp_obd, getattr)(exp, fid, valid, 
+        rc = MDP(exp->exp_obd, getattr)(exp, fid, valid,
                                         ea_size, request);
         RETURN(rc);
 }
@@ -1351,7 +1352,7 @@ static inline int md_create(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-static inline int md_done_writing(struct obd_export *exp, 
+static inline int md_done_writing(struct obd_export *exp,
                                   struct md_op_data *op_data)
 {
         int rc;
@@ -1396,7 +1397,7 @@ static inline int md_getattr_name(struct obd_export *exp, struct lu_fid *fid,
         RETURN(rc);
 }
 
-static inline int md_intent_lock(struct obd_export *exp, 
+static inline int md_intent_lock(struct obd_export *exp,
                                  struct md_op_data *op_data,
                                  void *lmm, int lmmsize,
                                  struct lookup_intent *it,
@@ -1409,12 +1410,12 @@ static inline int md_intent_lock(struct obd_export *exp,
         EXP_CHECK_MD_OP(exp, intent_lock);
         MD_COUNTER_INCREMENT(exp->exp_obd, intent_lock);
         rc = MDP(exp->exp_obd, intent_lock)(exp, op_data, lmm, lmmsize,
-                                            it, flags, reqp, cb_blocking, 
+                                            it, flags, reqp, cb_blocking,
                                             extra_lock_flags);
         RETURN(rc);
 }
 
-static inline int md_link(struct obd_export *exp, 
+static inline int md_link(struct obd_export *exp,
                           struct md_op_data *op_data,
                           struct ptlrpc_request **request)
 {
@@ -1426,7 +1427,7 @@ static inline int md_link(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int md_rename(struct obd_export *exp, 
+static inline int md_rename(struct obd_export *exp,
                             struct md_op_data *op_data,
                             const char *old, int oldlen,
                             const char *new, int newlen,
@@ -1496,7 +1497,7 @@ static inline int md_get_lustre_md(struct obd_export *exp,
         ENTRY;
         EXP_CHECK_MD_OP(exp, get_lustre_md);
         MD_COUNTER_INCREMENT(exp->exp_obd, get_lustre_md);
-        RETURN(MDP(exp->exp_obd, get_lustre_md)(exp, req, offset, 
+        RETURN(MDP(exp->exp_obd, get_lustre_md)(exp, req, offset,
                                                 dt_exp, md));
 }
 

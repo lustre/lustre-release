@@ -109,7 +109,6 @@ struct dt_device_operations {
          */
         int   (*dt_object_destroy)(struct lu_context *ctxt,
                                    struct dt_object *dt, struct thandle *th);
-
 };
 
 /*

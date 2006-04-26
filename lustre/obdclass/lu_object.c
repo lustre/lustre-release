@@ -52,8 +52,8 @@ void lu_object_put(struct lu_context *ctxt, struct lu_object *o)
         spin_lock(&site->ls_guard);
         if (-- top->loh_ref == 0) {
                 list_for_each_entry(o, &top->loh_layers, lo_linkage) {
-                        if (lu_object_ops(o)->ldo_object_release != NULL)
-                                lu_object_ops(o)->ldo_object_release(ctxt, o);
+                        if (o->lo_ops->ldo_object_release != NULL)
+                                o->lo_ops->ldo_object_release(ctxt, o);
                 }
                 -- site->ls_busy;
                 if (lu_object_is_dying(top)) {
@@ -91,8 +91,7 @@ struct lu_object *lu_object_alloc(struct lu_context *ctxt,
                                 continue;
                         clean = 0;
                         scan->lo_header = top->lo_header;
-                        result = lu_object_ops(scan)->ldo_object_init(ctxt,
-                                                                      scan);
+                        result = scan->lo_ops->loo_object_init(ctxt, scan);
                         if (result != 0) {
                                 lu_object_free(ctxt, top);
                                 RETURN(ERR_PTR(result));
@@ -111,8 +110,8 @@ static void lu_object_free(struct lu_context *ctx, struct lu_object *o)
 
         list_for_each_entry_reverse(scan,
                                     &o->lo_header->loh_layers, lo_linkage) {
-                if (lu_object_ops(scan)->ldo_object_delete != NULL)
-                        lu_object_ops(scan)->ldo_object_delete(ctx, scan);
+                if (scan->lo_ops->ldo_object_delete != NULL)
+                        scan->lo_ops->ldo_object_delete(ctx, scan);
         }
         -- o->lo_dev->ld_site->ls_total;
         INIT_LIST_HEAD(&splice);

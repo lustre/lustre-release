@@ -37,7 +37,7 @@
 static struct md_object_operations cmm_mo_ops;
 static struct lu_object_operations cmm_obj_ops;
 
-static int cmm_fld_lookup(struct lu_fid *fid) 
+static int cmm_fld_lookup(struct lu_fid *fid)
 {
         /* return master MDS for now */
         return 0;
@@ -205,6 +205,8 @@ static struct md_object_operations cmm_mo_ops = {
 };
 
 static struct lu_object_operations cmm_obj_ops = {
+	.loo_object_init    = cmm_object_init,
+	.loo_object_release = cmm_object_release,
 	.loo_object_print   = cmm_object_print,
 	.loo_object_exists  = cmm_object_exists
 };
