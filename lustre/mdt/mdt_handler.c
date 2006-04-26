@@ -203,10 +203,10 @@ static int mdt_getattr(struct mdt_thread_info *info,
                 struct md_object *next = mdt_object_child(info->mti_object);
 
                 result = next->mo_ops->moo_attr_get(info->mti_ctxt, next,
-                                                    &info->mti_ctxt->lc_attr);
+                                                    &info->mti_attr);
                 if (result == 0) {
                         body = lustre_msg_buf(req->rq_repmsg, 0, size);
-                        mdt_pack_attr2body(body, &info->mti_ctxt->lc_attr);
+                        mdt_pack_attr2body(body, &info->mti_attr);
                         body->fid1 = *mdt_object_fid(info->mti_object);
                 }
         }

@@ -150,6 +150,10 @@ struct mdt_thread_info {
          */
         struct mdt_object     *mti_object;
         /*
+         * Object attributes.
+         */
+        struct lu_attr         mti_attr;
+        /*
          * Additional fail id that can be set by handler. Passed to
          * target_send_reply().
          */
