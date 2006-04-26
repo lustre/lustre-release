@@ -42,7 +42,6 @@
 #include <linux/md_object.h>
 #include <linux/lustre_mdc.h>
 #include <linux/lustre_fid.h>
-#include <linux/lustre_iam.h>
 #include "fld_internal.h"
 
 static int fld_handle(struct lu_context *ctx,
@@ -362,11 +361,11 @@ int fld_server_init(struct fld *fld, struct dt_device *dt)
         lu_device_get(&dt->dd_lu_dev);
         INIT_LIST_HEAD(&fld_list_head.fld_list);
         spin_lock_init(&fld_list_head.fld_lock);
-        
+
         OBD_ALLOC_PTR(fld_info);
         if(!fld_info)
                 return -ENOMEM;
-        fld_info_init(fld_info); 
+        fld_info_init(fld_info);
         fld->fld_info = fld_info;
 
         fld->fld_service =

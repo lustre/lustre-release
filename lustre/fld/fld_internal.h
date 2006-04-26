@@ -66,13 +66,13 @@ enum fld_op {
 
 
 struct fld_info {
-        struct iam_container fi_container;
+        /* XXX doesn't exist yet struct iam_container fi_container; */
 };
 
 int fld_handle_insert(struct fld_info *fld, fidseq_t seq_num, mdsno_t mdsno);
 int fld_handle_delete(struct fld_info *fld, fidseq_t seq_num, mdsno_t mdsno);
 int fld_handle_lookup(struct fld_info *fld, fidseq_t seq_num, mdsno_t *mds);
- 
+
 int fld_info_init(struct fld_info *fld_info);
 void fld_info_fini(struct fld_info *fld_info);
 #endif

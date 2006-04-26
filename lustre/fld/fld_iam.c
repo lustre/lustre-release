@@ -42,9 +42,28 @@
 #include <linux/md_object.h>
 #include <linux/lustre_mdc.h>
 #include <linux/lustre_fid.h>
-#include <linux/lustre_iam.h>
+/* XXX doesn't exist yet #include <linux/lustre_iam.h> */
 #include "fld_internal.h"
 
+#if 1
+int fld_handle_insert(struct fld_info *fld_info,
+                      fidseq_t seq_num, mdsno_t mdsno)
+{
+        return 0;
+}
+
+int fld_handle_delete(struct fld_info *fld_info,
+                      fidseq_t seq_num, mdsno_t mds_num)
+{
+        return 0;
+}
+
+int fld_handle_lookup(struct fld_info *fld_info,
+                      fidseq_t seq_num, mdsno_t *mds_num)
+{
+        return 0;
+}
+#else
 struct iam_key;
 struct iam_rec;
 
@@ -60,7 +79,7 @@ int fld_handle_insert(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t mdsno
 int fld_handle_delete(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t mds_num)
 {
         handle_t *handle = NULL;
-        return iam_delete(handle, &fld_info->fi_container, 
+        return iam_delete(handle, &fld_info->fi_container,
                           (struct iam_key *)&seq_num);
 }
 
@@ -87,7 +106,7 @@ static int fld_node_check(struct iam_path *path, struct iam_frame *frame)
 {
         return 0;
 }
-static int fld_node_init(struct iam_container *c, struct buffer_head *bh, 
+static int fld_node_init(struct iam_container *c, struct buffer_head *bh,
                            int root)
 {
         return 0;
@@ -137,3 +156,4 @@ void fld_info_fini(struct fld_info *fld_info)
 }
 
 
+#endif
