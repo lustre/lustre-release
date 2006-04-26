@@ -63,6 +63,16 @@ int fld_handle_lookup(struct fld_info *fld_info,
 {
         return 0;
 }
+
+int fld_info_init(struct fld_info *fld_info)
+{
+        return 0;
+}
+
+void fld_info_fini(struct fld_info *fld_info)
+{
+}
+
 #else
 struct iam_key;
 struct iam_rec;
