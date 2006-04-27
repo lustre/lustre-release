@@ -155,6 +155,10 @@ struct mdt_thread_info {
          */
         struct lu_attr         mti_attr;
         /*
+         * some addtional attributes for reint.
+         */
+        struct mdt_reint_record mti_rr;
+        /*
          * Additional fail id that can be set by handler. Passed to
          * target_send_reply().
          */
@@ -186,11 +190,11 @@ void mdt_object_unlock(struct ldlm_namespace *, struct mdt_object *,
 struct mdt_object *mdt_object_find_lock(struct lu_context *, struct mdt_device *,
                                         struct lu_fid *,
                                         struct mdt_lock_handle *, __u64);
-int mdt_reint_unpack(struct mdt_thread_info *info, struct ptlrpc_request *req, int offset,
-                      struct mdt_reint_record *rec);
+int mdt_reint_unpack(struct mdt_thread_info *, 
+                     struct ptlrpc_request *, 
+                     int);
 
-int mdt_reint_rec(struct mdt_thread_info *, struct mdt_reint_record *,
-                  int, struct ptlrpc_request *,
+int mdt_reint_rec(struct mdt_thread_info *,
                   struct lustre_handle *);
 
 #endif /* __KERNEL__ */

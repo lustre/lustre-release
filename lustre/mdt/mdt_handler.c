@@ -77,22 +77,21 @@ static int mdt_getstatus(struct mdt_thread_info *info,
                          struct ptlrpc_request *req, int offset)
 {
         struct md_device *next  = info->mti_mdt->mdt_child;
-        struct mdt_body  *body;
-        int               size = sizeof *body;
         int               result;
 
         ENTRY;
 
-        result = lustre_pack_reply(req, 1, &size, NULL);
+        info->mti_rep_buf_size[0] = sizeof (struct mdt_body);
+        result = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
         if (result)
                 CERROR(LUSTRE_MDT0_NAME" out of memory for message: size=%d\n",
-                       size);
+                       sizeof (struct mdt_body));
         else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
                 result = -ENOMEM;
         else {
-                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof *body);
+                info->mti_body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (struct mdt_body));
                 result = next->md_ops->mdo_root_get(info->mti_ctxt,
-                                                    next, &body->fid1);
+                                                    next, &info->mti_body->fid1);
         }
 
         /* the last_committed and last_xid fields are filled in for all
@@ -106,24 +105,28 @@ static int mdt_statfs(struct mdt_thread_info *info,
 {
         struct md_device  *next  = info->mti_mdt->mdt_child;
         struct obd_statfs *osfs;
-        struct kstatfs    sfs;
+        struct kstatfs    *sfs;
         int               result;
-        int               size = sizeof(struct obd_statfs);
 
         ENTRY;
 
-        result = lustre_pack_reply(req, 1, &size, NULL);
+        info->mti_rep_buf_size[0] = sizeof(struct obd_statfs);
+        result = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
         if (result)
                 CERROR(LUSTRE_MDT0_NAME" out of memory for statfs: size=%d\n",
-                       size);
+                       sizeof(struct obd_statfs));
         else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
                 CERROR(LUSTRE_MDT0_NAME": statfs lustre_pack_reply failed\n");
                 result = -ENOMEM;
         } else {
-                osfs = lustre_msg_buf(req->rq_repmsg, 0, size);
+                osfs = lustre_msg_buf(req->rq_repmsg, 0,  sizeof(struct obd_statfs));
+                OBD_ALLOC_PTR(sfs);
+                if(sfs == NULL)
+                        RETURN(-ENOMEM);
                 /* XXX max_age optimisation is needed here. See mds_statfs */
-                result = next->md_ops->mdo_statfs(info->mti_ctxt, next, &sfs);
-                statfs_pack(osfs, &sfs);
+                result = next->md_ops->mdo_statfs(info->mti_ctxt, next, sfs);
+                statfs_pack(osfs, sfs);
+                OBD_FREE_PTR(sfs);
         }
 
         RETURN(result);
@@ -154,18 +157,17 @@ static void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
 static int mdt_getattr(struct mdt_thread_info *info,
                        struct ptlrpc_request *req, int offset)
 {
-        struct mdt_body *body;
-        int              size = sizeof (*body);
         int              result;
 
         LASSERT(info->mti_object != NULL);
 
         ENTRY;
 
-        result = lustre_pack_reply(req, 1, &size, NULL);
+        info->mti_rep_buf_size[0] = sizeof(struct mdt_body);
+        result = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
         if (result)
                 CERROR(LUSTRE_MDT0_NAME" cannot pack size=%d, rc=%d\n",
-                       size, result);
+                       sizeof(struct mdt_body), result);
         else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR(LUSTRE_MDT0_NAME": statfs lustre_pack_reply failed\n");
                 result = -ENOMEM;
@@ -175,9 +177,9 @@ static int mdt_getattr(struct mdt_thread_info *info,
                 result = next->mo_ops->moo_attr_get(info->mti_ctxt, next,
                                                     &info->mti_attr);
                 if (result == 0) {
-                        body = lustre_msg_buf(req->rq_repmsg, 0, size);
-                        mdt_pack_attr2body(body, &info->mti_attr);
-                        body->fid1 = *mdt_object_fid(info->mti_object);
+                        info->mti_body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(struct mdt_body));
+                        mdt_pack_attr2body(info->mti_body, &info->mti_attr);
+                        info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
                 }
         }
         RETURN(result);
@@ -249,27 +251,19 @@ static int mdt_readpage(struct mdt_thread_info *info,
         return -EOPNOTSUPP;
 }
 
-int mdt_reint_internal(struct mdt_thread_info *info,
+static int mdt_reint_internal(struct mdt_thread_info *info,
                        struct ptlrpc_request *req, 
                        int offset,
                        struct lustre_handle *lockh)
 {
-        struct mdt_reint_record *rec; /* 116 bytes on the stack?  no sir! */
         int rc;
 
-        OBD_ALLOC(rec, sizeof(*rec));
-        if (rec == NULL)
-                RETURN(-ENOMEM);
-
-        rc = mdt_reint_unpack(info, req, offset, rec);
+        rc = mdt_reint_unpack(info, req, offset);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
                 CERROR("invalid record\n");
-                GOTO(out, rc = -EINVAL);
+                RETURN(rc = -EINVAL);
         }
-
-        rc = mdt_reint_rec(info, rec, offset, req, lockh);
-out:
-        OBD_FREE(rec, sizeof(*rec));
+        rc = mdt_reint_rec(info, lockh);
         RETURN(rc);
 }
 
@@ -279,9 +273,7 @@ static int mdt_reint(struct mdt_thread_info *info,
         __u32 *opcp = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF,
                                      sizeof (*opcp));
         __u32  opc;
-        int size[] = { sizeof(struct mdt_body), sizeof(struct lov_mds_md), /*FIXME*/
-                       sizeof(struct llog_cookie)};
-        int bufcount,rc;
+        int rc;
 
         ENTRY;
 
@@ -299,10 +291,15 @@ static int mdt_reint(struct mdt_thread_info *info,
         OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
         if (opc == REINT_UNLINK || opc == REINT_RENAME)
-                bufcount = 3;
+                info->mti_rep_buf_nr = 3;
         else if (opc == REINT_OPEN)
-                bufcount = 2;
-        rc = lustre_pack_reply(req, bufcount, size, NULL);
+                info->mti_rep_buf_nr = 2;
+        else
+                info->mti_rep_buf_nr = 1;
+        info->mti_rep_buf_size[0] = sizeof(struct mdt_body);
+        info->mti_rep_buf_size[1] = sizeof(struct lov_mds_md); /*FIXME:See mds*/
+        info->mti_rep_buf_size[2] = sizeof(struct llog_cookie);/*FIXME:See mds*/
+        rc = lustre_pack_reply(req, info->mti_rep_buf_nr, info->mti_rep_buf_size, NULL);
         if (rc)
                 RETURN (rc);
         rc = mdt_reint_internal(info, req, offset, NULL);
@@ -1050,19 +1047,18 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         struct lustre_handle lockh = { 0 };
         struct ldlm_lock *new_lock = NULL;
         int getattr_part = MDS_INODELOCK_UPDATE;
-        int repsize[4] = {sizeof(*rep),
-                          sizeof(struct mdt_body),
-                          sizeof(struct lov_mds_md)};/*FIXME:See mds*/
-        int repbufcnt = 3, offset = MDS_REQ_INTENT_REC_OFF;
+        int offset = MDS_REQ_INTENT_REC_OFF;
         int rc;
-        struct mdt_thread_info *info = NULL;
-        /*FIXME:How to get this pointer?
-                from the request? or passed in by @data*/ 
-
+        struct mdt_thread_info *info;
 
         ENTRY;
 
         LASSERT(req != NULL);
+
+        /* We already got it in mdt_handle. But we have to do it again*/
+        info = lu_context_key_get(req->rq_svc_thread->t_ctx, &mdt_thread_key);
+        mdt_thread_info_init(info);
+
 
         if (req->rq_reqmsg->bufcount <= MDS_REQ_INTENT_IT_OFF) {
                 /* No intent was provided */
@@ -1080,15 +1076,25 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         }
 
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
+        info->mti_rep_buf_nr = 3;
+        info->mti_rep_buf_size[0] = sizeof(*rep);
+        info->mti_rep_buf_size[1] = sizeof(struct mdt_body);
+        info->mti_rep_buf_size[2] = sizeof(struct lov_mds_md);/*FIXME:See mds*/
 
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
-            (it->opc & (IT_OPEN | IT_GETATTR | IT_LOOKUP)))
+            (it->opc & (IT_OPEN | IT_GETATTR | IT_LOOKUP))){
                 /* we should never allow OBD_CONNECT_ACL if not configured */
-                repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
-        else if (it->opc & IT_UNLINK)
-                repsize[repbufcnt++] = sizeof(struct llog_cookie); /*FIXME:See mds*/
+                info->mti_rep_buf_size[info->mti_rep_buf_nr++] = 
+                                        LUSTRE_POSIX_ACL_MAX_SIZE;
+        }
+        else if (it->opc & IT_UNLINK){
+                info->mti_rep_buf_size[info->mti_rep_buf_nr++] = 
+                                        sizeof(struct llog_cookie); 
+                                        /*FIXME:See mds*/
+        }
 
-        rc = lustre_pack_reply(req, repbufcnt, repsize, NULL);
+        rc = lustre_pack_reply(req, info->mti_rep_buf_nr, 
+                               info->mti_rep_buf_size, NULL);
         if (rc)
                 RETURN(req->rq_status = rc);
 

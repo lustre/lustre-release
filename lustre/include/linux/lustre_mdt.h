@@ -24,47 +24,22 @@
 
 
 struct mdt_reint_record {
-        __u32 ur_opcode;
-        struct lu_fid *ur_fid1;
-        struct lu_fid *ur_fid2;
-        int ur_namelen;
-        char *ur_name;
-        int ur_tgtlen;
-        char *ur_tgt;
-        int ur_eadatalen;
-        void *ur_eadata;
-        int ur_cookielen;
-        struct llog_cookie *ur_logcookies;
-        struct iattr ur_iattr;
-        struct lvfs_ucred ur_uc;
-        __u64 ur_rdev;
-        __u64 ur_time;
-        __u32 ur_mode;
-        __u32 ur_flags;
-        struct lvfs_grp_hash_entry *ur_grp_entry;
+        __u32 rr_opcode;
+        struct lu_fid *rr_fid1;
+        struct lu_fid *rr_fid2;
+        int rr_namelen;
+        char *rr_name;
+        int rr_tgtlen;
+        char *rr_tgt;
+        int rr_eadatalen;
+        void *rr_eadata;
+        int rr_cookielen;
+        struct llog_cookie *rr_logcookies;
+        struct lvfs_ucred rr_uc;
+        __u64 rr_rdev;
+        __u64 rr_time;
+        __u32 rr_mode;
+        __u32 rr_flags;
 };
-
-/* file data for open files on MDT */
-struct mdt_file_data {
-        struct portals_handle mfd_handle; /* must be first */
-        atomic_t              mfd_refcount;
-        struct list_head      mfd_list; /* protected by med_open_lock */
-        __u64                 mfd_xid;
-        int                   mfd_mode;
-        struct dentry        *mfd_dentry;
-};
-
-
-/* ioctls for trying requests */
-#define IOC_REQUEST_TYPE                   'f'
-#define IOC_REQUEST_MIN_NR                 30
-
-#define IOC_REQUEST_GETATTR             _IOWR('f', 30, long)
-#define IOC_REQUEST_READPAGE            _IOWR('f', 31, long)
-#define IOC_REQUEST_SETATTR             _IOWR('f', 32, long)
-#define IOC_REQUEST_CREATE              _IOWR('f', 33, long)
-#define IOC_REQUEST_OPEN                _IOWR('f', 34, long)
-#define IOC_REQUEST_CLOSE               _IOWR('f', 35, long)
-#define IOC_REQUEST_MAX_NR               35
 
 #endif

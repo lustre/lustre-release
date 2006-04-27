@@ -1,7 +1,17 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2003 Cluster File Systems, Inc.
+ *  lustre/mdt/mdt_lib.c
+ *  Lustre Metadata Target (mdt) request unpacking helper.
+ *
+ *  Copyright (c) 2006 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
+ *   Author: Phil Schwan <phil@clusterfs.com>
+ *   Author: Mike Shaver <shaver@clusterfs.com>
+ *   Author: Nikita Danilov <nikita@clusterfs.com>
+ *   Author: Huang Hua <huanghua@clusterfs.com>
+ *
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -28,106 +38,90 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
-#include <linux/module.h>
-
-/* LUSTRE_VERSION_CODE */
-#include <linux/lustre_ver.h>
-/*
- * struct OBD_{ALLOC,FREE}*()
- * OBD_FAIL_CHECK
- */
-#include <linux/obd_support.h>
-/* struct ptlrpc_request */
-#include <linux/lustre_net.h>
-/* struct obd_export */
-#include <linux/lustre_export.h>
-/* struct obd_device */
-#include <linux/obd.h>
-/* lu2dt_dev() */
-#include <linux/dt_object.h>
-
-
-#include "../mds/mds_internal.h"
 #include "mdt_internal.h"
 
 
 /* unpacking */
-static int mdt_setattr_unpack(struct ptlrpc_request *req, int offset,
-                              struct mdt_reint_record *r)
+static int mdt_setattr_unpack(struct mdt_thread_info *info,
+                              struct ptlrpc_request *req, 
+                              int offset)
 {
-        struct iattr *attr = &r->ur_iattr;
+        struct lu_attr *attr = &info->mti_attr;
+        struct mdt_reint_record *r = &info->mti_rr;
         struct mdt_rec_setattr *rec;
         ENTRY;
 
         rec = lustre_swab_reqbuf(req, offset, sizeof(*rec),
                                  lustre_swab_mdt_rec_setattr);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
-        r->ur_uc.luc_fsuid = rec->sa_fsuid;
-        r->ur_uc.luc_fsgid = rec->sa_fsgid;
-        r->ur_uc.luc_cap = rec->sa_cap;
-        r->ur_uc.luc_suppgid1 = rec->sa_suppgid;
-        r->ur_uc.luc_suppgid2 = -1;
-        r->ur_fid1 = &rec->sa_fid;
-        attr->ia_valid = rec->sa_valid;
-        attr->ia_mode = rec->sa_mode;
-        attr->ia_uid = rec->sa_uid;
-        attr->ia_gid = rec->sa_gid;
-        attr->ia_size = rec->sa_size;
-        LTIME_S(attr->ia_atime) = rec->sa_atime;
-        LTIME_S(attr->ia_mtime) = rec->sa_mtime;
-        LTIME_S(attr->ia_ctime) = rec->sa_ctime;
-        attr->ia_attr_flags = rec->sa_attr_flags;
+        r->rr_uc.luc_fsuid = rec->sa_fsuid;
+        r->rr_uc.luc_fsgid = rec->sa_fsgid;
+        r->rr_uc.luc_cap = rec->sa_cap;
+        r->rr_uc.luc_suppgid1 = rec->sa_suppgid;
+        r->rr_uc.luc_suppgid2 = -1;
+        r->rr_fid1 = &rec->sa_fid;
+/*FIXME        attr->la_valid = rec->sa_valid; */
+        attr->la_mode = rec->sa_mode;
+        attr->la_uid = rec->sa_uid;
+        attr->la_gid = rec->sa_gid;
+        attr->la_size = rec->sa_size;
+        attr->la_atime = rec->sa_atime;
+        attr->la_mtime = rec->sa_mtime;
+        attr->la_ctime = rec->sa_ctime;
+/*FIXME        attr->la_attr_flags = rec->sa_attr_flags;*/
 
         LASSERT_REQSWAB (req, offset + 1);
         if (req->rq_reqmsg->bufcount > offset + 1) {
-                r->ur_eadata = lustre_msg_buf (req->rq_reqmsg,
+                r->rr_eadata = lustre_msg_buf (req->rq_reqmsg,
                                                offset + 1, 0);
-                if (r->ur_eadata == NULL)
-                        RETURN (-EFAULT);
-                r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 1];
+                if (r->rr_eadata == NULL)
+                        RETURN(-EFAULT);
+                r->rr_eadatalen = req->rq_reqmsg->buflens[offset + 1];
         }
 
         if (req->rq_reqmsg->bufcount > offset + 2) {
-                r->ur_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2,0);
-                if (r->ur_eadata == NULL)
-                        RETURN (-EFAULT);
+                r->rr_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2,0);
+                if (r->rr_logcookies == NULL)
+                        RETURN(-EFAULT);
 
-                r->ur_cookielen = req->rq_reqmsg->buflens[offset + 2];
+                r->rr_cookielen = req->rq_reqmsg->buflens[offset + 2];
         }
 
         RETURN(0);
 }
 
-static int mdt_create_unpack(struct ptlrpc_request *req, int offset,
-                             struct mdt_reint_record *r)
+static int mdt_create_unpack(struct mdt_thread_info *info,
+                             struct ptlrpc_request *req, 
+                             int offset)
 {
         struct mdt_rec_create *rec;
+        struct mdt_reint_record *r = &info->mti_rr;
         ENTRY;
 
         rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
                                   lustre_swab_mdt_rec_create);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
-        r->ur_uc.luc_fsuid = rec->cr_fsuid;
-        r->ur_uc.luc_fsgid = rec->cr_fsgid;
-        r->ur_uc.luc_cap = rec->cr_cap;
-        r->ur_uc.luc_suppgid1 = rec->cr_suppgid;
-        r->ur_uc.luc_suppgid2 = -1;
-        r->ur_fid1 = &rec->cr_fid;
-        r->ur_fid2 = &rec->cr_replayfid;
-        r->ur_mode = rec->cr_mode;
-        r->ur_rdev = rec->cr_rdev;
-        r->ur_time = rec->cr_time;
-        r->ur_flags = rec->cr_flags;
+        r->rr_uc.luc_fsuid = rec->cr_fsuid;
+        r->rr_uc.luc_fsgid = rec->cr_fsgid;
+        r->rr_uc.luc_cap = rec->cr_cap;
+        r->rr_uc.luc_suppgid1 = rec->cr_suppgid;
+        r->rr_uc.luc_suppgid2 = -1;
+        r->rr_fid1 = &rec->cr_fid;
+        r->rr_fid2 = &rec->cr_replayfid;
+        r->rr_mode = rec->cr_mode;
+        r->rr_rdev = rec->cr_rdev;
+        r->rr_time = rec->cr_time;
+        r->rr_flags = rec->cr_flags;
 
         LASSERT_REQSWAB (req, offset + 1);
-        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
-        if (r->ur_name == NULL)
-                RETURN (-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->rr_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        if (r->rr_name == NULL)
+                RETURN(-EFAULT);
+        r->rr_namelen = req->rq_reqmsg->buflens[offset + 1];
 
         LASSERT_REQSWAB (req, offset + 2);
         if (req->rq_reqmsg->bufcount > offset + 2) {
@@ -136,48 +130,52 @@ static int mdt_create_unpack(struct ptlrpc_request *req, int offset,
                  * to stop checking for a buffer filled completely with a
                  * NULL terminated string here, and make the callers check
                  * depending on what they expect.  We should probably stash
-                 * it in r->ur_eadata in that case, so it's obvious... -eeb
+                 * it in r->rr_eadata in that case, so it's obvious... -eeb
                  */
-                r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
-                if (r->ur_tgt == NULL)
-                        RETURN (-EFAULT);
-                r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
+                r->rr_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
+                if (r->rr_tgt == NULL)
+                        RETURN(-EFAULT);
+                r->rr_tgtlen = req->rq_reqmsg->buflens[offset + 2];
         }
         RETURN(0);
 }
 
-static int mdt_link_unpack(struct ptlrpc_request *req, int offset,
-                           struct mdt_reint_record *r)
+static int mdt_link_unpack(struct mdt_thread_info *info,
+                           struct ptlrpc_request *req, 
+                           int offset)
 {
         struct mdt_rec_link *rec;
+        struct mdt_reint_record *r = &info->mti_rr;
         ENTRY;
 
         rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
                                   lustre_swab_mdt_rec_link);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
-        r->ur_uc.luc_fsuid = rec->lk_fsuid;
-        r->ur_uc.luc_fsgid = rec->lk_fsgid;
-        r->ur_uc.luc_cap = rec->lk_cap;
-        r->ur_uc.luc_suppgid1 = rec->lk_suppgid1;
-        r->ur_uc.luc_suppgid2 = rec->lk_suppgid2;
-        r->ur_fid1 = &rec->lk_fid1;
-        r->ur_fid2 = &rec->lk_fid2;
-        r->ur_time = rec->lk_time;
+        r->rr_uc.luc_fsuid = rec->lk_fsuid;
+        r->rr_uc.luc_fsgid = rec->lk_fsgid;
+        r->rr_uc.luc_cap = rec->lk_cap;
+        r->rr_uc.luc_suppgid1 = rec->lk_suppgid1;
+        r->rr_uc.luc_suppgid2 = rec->lk_suppgid2;
+        r->rr_fid1 = &rec->lk_fid1;
+        r->rr_fid2 = &rec->lk_fid2;
+        r->rr_time = rec->lk_time;
 
         LASSERT_REQSWAB (req, offset + 1);
-        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
-        if (r->ur_name == NULL)
-                RETURN (-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->rr_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        if (r->rr_name == NULL)
+                RETURN(-EFAULT);
+        r->rr_namelen = req->rq_reqmsg->buflens[offset + 1];
         RETURN(0);
 }
 
-static int mdt_unlink_unpack(struct ptlrpc_request *req, int offset,
-                             struct mdt_reint_record *r)
+static int mdt_unlink_unpack(struct mdt_thread_info *info,
+                             struct ptlrpc_request *req, 
+                             int offset)
 {
         struct mdt_rec_unlink *rec;
+        struct mdt_reint_record *r = &info->mti_rr;
         ENTRY;
 
         rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
@@ -185,28 +183,30 @@ static int mdt_unlink_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->ur_uc.luc_fsuid = rec->ul_fsuid;
-        r->ur_uc.luc_fsgid = rec->ul_fsgid;
-        r->ur_uc.luc_cap = rec->ul_cap;
-        r->ur_uc.luc_suppgid1 = rec->ul_suppgid;
-        r->ur_uc.luc_suppgid2 = -1;
-        r->ur_mode = rec->ul_mode;
-        r->ur_fid1 = &rec->ul_fid1;
-        r->ur_fid2 = &rec->ul_fid2;
-        r->ur_time = rec->ul_time;
+        r->rr_uc.luc_fsuid = rec->ul_fsuid;
+        r->rr_uc.luc_fsgid = rec->ul_fsgid;
+        r->rr_uc.luc_cap = rec->ul_cap;
+        r->rr_uc.luc_suppgid1 = rec->ul_suppgid;
+        r->rr_uc.luc_suppgid2 = -1;
+        r->rr_mode = rec->ul_mode;
+        r->rr_fid1 = &rec->ul_fid1;
+        r->rr_fid2 = &rec->ul_fid2;
+        r->rr_time = rec->ul_time;
 
         LASSERT_REQSWAB (req, offset + 1);
-        r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
-        if (r->ur_name == NULL)
+        r->rr_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
+        if (r->rr_name == NULL)
                 RETURN(-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->rr_namelen = req->rq_reqmsg->buflens[offset + 1];
         RETURN(0);
 }
 
-static int mdt_rename_unpack(struct ptlrpc_request *req, int offset,
-                             struct mdt_reint_record *r)
+static int mdt_rename_unpack(struct mdt_thread_info *info,
+                             struct ptlrpc_request *req, 
+                             int offset)
 {
         struct mdt_rec_rename *rec;
+        struct mdt_reint_record *r = &info->mti_rr;
         ENTRY;
 
         rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
@@ -214,84 +214,89 @@ static int mdt_rename_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->ur_uc.luc_fsuid = rec->rn_fsuid;
-        r->ur_uc.luc_fsgid = rec->rn_fsgid;
-        r->ur_uc.luc_cap = rec->rn_cap;
-        r->ur_uc.luc_suppgid1 = rec->rn_suppgid1;
-        r->ur_uc.luc_suppgid2 = rec->rn_suppgid2;
-        r->ur_fid1 = &rec->rn_fid1;
-        r->ur_fid2 = &rec->rn_fid2;
-        r->ur_time = rec->rn_time;
+        r->rr_uc.luc_fsuid = rec->rn_fsuid;
+        r->rr_uc.luc_fsgid = rec->rn_fsgid;
+        r->rr_uc.luc_cap = rec->rn_cap;
+        r->rr_uc.luc_suppgid1 = rec->rn_suppgid1;
+        r->rr_uc.luc_suppgid2 = rec->rn_suppgid2;
+        r->rr_fid1 = &rec->rn_fid1;
+        r->rr_fid2 = &rec->rn_fid2;
+        r->rr_time = rec->rn_time;
 
         LASSERT_REQSWAB (req, offset + 1);
-        r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
-        if (r->ur_name == NULL)
+        r->rr_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
+        if (r->rr_name == NULL)
                 RETURN(-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->rr_namelen = req->rq_reqmsg->buflens[offset + 1];
 
         LASSERT_REQSWAB (req, offset + 2);
-        r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
-        if (r->ur_tgt == NULL)
+        r->rr_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
+        if (r->rr_tgt == NULL)
                 RETURN(-EFAULT);
-        r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
+        r->rr_tgtlen = req->rq_reqmsg->buflens[offset + 2];
         RETURN(0);
 }
 
-static int mdt_open_unpack(struct ptlrpc_request *req, int offset,
-                           struct mdt_reint_record *r)
+static int mdt_open_unpack(struct mdt_thread_info *info,
+                           struct ptlrpc_request *req, 
+                           int offset)
 {
         struct mdt_rec_create *rec;
+        struct mdt_reint_record *r = &info->mti_rr;
         ENTRY;
 
         rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
                                   lustre_swab_mdt_rec_create);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
-        r->ur_uc.luc_fsuid = rec->cr_fsuid;
-        r->ur_uc.luc_fsgid = rec->cr_fsgid;
-        r->ur_uc.luc_cap = rec->cr_cap;
-        r->ur_uc.luc_suppgid1 = rec->cr_suppgid;
-        r->ur_uc.luc_suppgid2 = -1;
-        r->ur_fid1 = &rec->cr_fid;
-        r->ur_fid2 = &rec->cr_replayfid;
-        r->ur_mode = rec->cr_mode;
-        r->ur_rdev = rec->cr_rdev;
-        r->ur_time = rec->cr_time;
-        r->ur_flags = rec->cr_flags;
+        r->rr_uc.luc_fsuid = rec->cr_fsuid;
+        r->rr_uc.luc_fsgid = rec->cr_fsgid;
+        r->rr_uc.luc_cap = rec->cr_cap;
+        r->rr_uc.luc_suppgid1 = rec->cr_suppgid;
+        r->rr_uc.luc_suppgid2 = -1;
+        r->rr_fid1 = &rec->cr_fid;
+        r->rr_fid2 = &rec->cr_replayfid;
+        r->rr_mode = rec->cr_mode;
+        r->rr_rdev = rec->cr_rdev;
+        r->rr_time = rec->cr_time;
+        r->rr_flags = rec->cr_flags;
 
         LASSERT_REQSWAB (req, offset + 1);
-        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
-        if (r->ur_name == NULL)
-                RETURN (-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->rr_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        if (r->rr_name == NULL)
+                RETURN(-EFAULT);
+        r->rr_namelen = req->rq_reqmsg->buflens[offset + 1];
 
         LASSERT_REQSWAB (req, offset + 2);
         if (req->rq_reqmsg->bufcount > offset + 2) {
-                r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
-                if (r->ur_eadata == NULL)
-                        RETURN (-EFAULT);
-                r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 2];
+                r->rr_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
+                if (r->rr_eadata == NULL)
+                        RETURN(-EFAULT);
+                r->rr_eadatalen = req->rq_reqmsg->buflens[offset + 2];
         }
         RETURN(0);
 }
 
-typedef int (*reint_unpacker)(struct ptlrpc_request *req, int offset,
-                               struct mdt_reint_record *r);
+typedef int (*reint_unpacker)(struct mdt_thread_info *info,
+                              struct ptlrpc_request *req, 
+                              int offset);
 
 static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
-        [REINT_SETATTR] mdt_setattr_unpack,
-        [REINT_CREATE] mdt_create_unpack,
-        [REINT_LINK] mdt_link_unpack,
-        [REINT_UNLINK] mdt_unlink_unpack,
-        [REINT_RENAME] mdt_rename_unpack,
-        [REINT_OPEN] mdt_open_unpack,
+        [REINT_SETATTR]  = mdt_setattr_unpack,
+        [REINT_CREATE] = mdt_create_unpack,
+        [REINT_LINK] = mdt_link_unpack,
+        [REINT_UNLINK] = mdt_unlink_unpack,
+        [REINT_RENAME] = mdt_rename_unpack,
+        [REINT_OPEN] = mdt_open_unpack
 };
 
-int mdt_reint_unpack(struct mdt_thread_info *info, struct ptlrpc_request *req, int offset,
-                      struct mdt_reint_record *rec)
+int mdt_reint_unpack(struct mdt_thread_info *info,
+                     struct ptlrpc_request *req, 
+                     int offset)
 {
-        mdt_reint_t opcode, *opcodep;
+        mdt_reint_t opcode;
+        mdt_reint_t *opcodep;
         int rc;
         ENTRY;
 
@@ -311,8 +316,8 @@ int mdt_reint_unpack(struct mdt_thread_info *info, struct ptlrpc_request *req, i
                 RETURN(-EFAULT);
         }
 
-        rec->ur_opcode = opcode;
-        rc = mdt_reint_unpackers[opcode](req, offset, rec);
+        info->mti_rr.rr_opcode = opcode;
+        rc = mdt_reint_unpackers[opcode](info, req, offset);
 
         RETURN(rc);
 }
