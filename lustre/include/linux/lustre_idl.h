@@ -710,7 +710,7 @@ typedef enum {
 //      REINT_CLOSE    = 7,
 //      REINT_WRITE    = 8,
         REINT_MAX
-} mds_reint_t;
+} mds_reint_t,mdt_reint_t;
 
 /* the disposition of the intent outlines what was executed */
 #define DISP_IT_EXECD     0x01

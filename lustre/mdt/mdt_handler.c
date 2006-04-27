@@ -70,39 +70,6 @@ static struct lu_fid     *mdt_object_fid(struct mdt_object *o);
 static struct lu_context_key       mdt_thread_key;
 static struct lu_object_operations mdt_obj_ops;
 
-/* object operations */
-static int mdt_md_mkdir(struct mdt_thread_info *info, struct mdt_device *d,
-                        struct lu_fid *pfid, const char *name,
-                        struct lu_fid *cfid)
-{
-        struct mdt_object      *o;
-        struct mdt_object      *child;
-        struct mdt_lock_handle *lh;
-
-        int result;
-
-        lh = &info->mti_lh[MDT_LH_PARENT];
-        lh->mlh_mode = LCK_PW;
-
-        o = mdt_object_find_lock(info->mti_ctxt,
-                                 d, pfid, lh, MDS_INODELOCK_UPDATE);
-        if (IS_ERR(o))
-                return PTR_ERR(o);
-
-        child = mdt_object_find(info->mti_ctxt, d, cfid);
-        if (!IS_ERR(child)) {
-                struct md_object *next = mdt_object_child(o);
-
-                result = next->mo_ops->moo_mkdir(info->mti_ctxt, next, name,
-                                                 mdt_object_child(child));
-                mdt_object_put(info->mti_ctxt, child);
-        } else
-                result = PTR_ERR(child);
-        mdt_object_unlock(d->mdt_namespace, o, lh);
-        mdt_object_put(info->mti_ctxt, o);
-        return result;
-}
-
 static int mdt_getstatus(struct mdt_thread_info *info,
                          struct ptlrpc_request *req, int offset)
 {
@@ -282,7 +249,51 @@ static int mdt_readpage(struct mdt_thread_info *info,
 static int mdt_reint(struct mdt_thread_info *info,
                      struct ptlrpc_request *req, int offset)
 {
-        return -EOPNOTSUPP;
+        __u32 *opcp = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF,
+                                     sizeof (*opcp));
+        __u32  opc;
+        int size[] = { sizeof(struct mdt_body), sizeof(struct lov_mds_md), /*FIXME*/
+                       sizeof(struct llog_cookie)};
+        int bufcount,rc;
+        struct mdt_reint_record *rec; /* 116 bytes on the stack?  no sir! */
+
+        ENTRY;
+
+        /* NB only peek inside req now; mdt_XXX_unpack() will swab it */
+        if (opcp == NULL) {
+                CERROR ("Can't inspect opcode\n");
+                RETURN (-EINVAL);
+        }
+        opc = *opcp;
+        if (lustre_msg_swabbed (req->rq_reqmsg))
+                __swab32s(&opc);
+
+        DEBUG_REQ(D_INODE, req, "reint opt = %d", opc);
+
+        OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
+
+        if (opc == REINT_UNLINK || opc == REINT_RENAME)
+                bufcount = 3;
+        else if (opc == REINT_OPEN)
+                bufcount = 2;
+        rc = lustre_pack_reply(req, bufcount, size, NULL);
+        if (rc)
+                RETURN (rc);
+
+        OBD_ALLOC(rec, sizeof(*rec));
+        if (rec == NULL)
+                RETURN(-ENOMEM);
+
+        rc = mdt_reint_unpack(info, req, offset, rec);
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
+                CERROR("invalid record\n");
+                GOTO(out, req->rq_status = -EINVAL);
+        }
+
+        rc = mdt_reint_rec(info, rec, offset, req, NULL);
+out:
+        OBD_FREE(rec, sizeof(*rec));
+        RETURN(rc);
 }
 
 static int mdt_close(struct mdt_thread_info *info,

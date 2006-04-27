@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mds/handler.c
+ *  lustre/mdt/mdt_internal.h
  *  Lustre Metadata Target (mdt) request handler
  *
  *  Copyright (c) 2006 Cluster File Systems, Inc.
@@ -47,6 +47,7 @@
 #include <linux/lustre_idl.h>
 #include <linux/md_object.h>
 #include <linux/lustre_fid.h>
+#include <linux/lustre_mdt.h>
 
 struct mdt_device {
         /* super-class */
@@ -185,5 +186,12 @@ void mdt_object_unlock(struct ldlm_namespace *, struct mdt_object *,
 struct mdt_object *mdt_object_find_lock(struct lu_context *, struct mdt_device *,
                                         struct lu_fid *,
                                         struct mdt_lock_handle *, __u64);
+int mdt_reint_unpack(struct mdt_thread_info *info, struct ptlrpc_request *req, int offset,
+                      struct mdt_reint_record *rec);
+
+int mdt_reint_rec(struct mdt_thread_info *, struct mdt_reint_record *,
+                  int, struct ptlrpc_request *,
+                  struct lustre_handle *);
+
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */
