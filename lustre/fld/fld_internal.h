@@ -1,7 +1,7 @@
 /* -*- MODE: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  fld/fld.c
+ *  fld/fld_internal.h
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
  *
@@ -25,6 +25,8 @@
  */
 #ifndef _FLD_INTERNAL_H
 #define _FLD_INTERNAL_H
+
+#include <linux/lustre_iam.h>
 
 #define mdsno_t  __u64
 #define fidseq_t __u64
@@ -66,7 +68,7 @@ enum fld_op {
 
 
 struct fld_info {
-        /* XXX doesn't exist yet struct iam_container fi_container; */
+        struct iam_container fi_container;
 };
 
 int fld_handle_insert(struct fld_info *fld, fidseq_t seq_num, mdsno_t mdsno);

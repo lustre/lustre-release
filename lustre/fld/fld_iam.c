@@ -42,38 +42,9 @@
 #include <linux/md_object.h>
 #include <linux/lustre_mdc.h>
 #include <linux/lustre_fid.h>
-/* XXX doesn't exist yet #include <linux/lustre_iam.h> */
+#include <linux/lustre_iam.h>
 #include "fld_internal.h"
 
-#if 1
-int fld_handle_insert(struct fld_info *fld_info,
-                      fidseq_t seq_num, mdsno_t mdsno)
-{
-        return 0;
-}
-
-int fld_handle_delete(struct fld_info *fld_info,
-                      fidseq_t seq_num, mdsno_t mds_num)
-{
-        return 0;
-}
-
-int fld_handle_lookup(struct fld_info *fld_info,
-                      fidseq_t seq_num, mdsno_t *mds_num)
-{
-        return 0;
-}
-
-int fld_info_init(struct fld_info *fld_info)
-{
-        return 0;
-}
-
-void fld_info_fini(struct fld_info *fld_info)
-{
-}
-
-#else
 struct iam_key;
 struct iam_rec;
 
@@ -165,5 +136,3 @@ void fld_info_fini(struct fld_info *fld_info)
         OBD_FREE_PTR(fld_info);
 }
 
-
-#endif
