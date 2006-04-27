@@ -342,7 +342,7 @@ static int ping_evictor_main(void *arg)
         time_t expire_time;
         ENTRY;
 
-        ptlrpc_daemonize("ping_evictor");
+        ptlrpc_daemonize("ll_evictor");
 
         CDEBUG(D_HA, "Starting Ping Evictor\n");
         pet_exp = NULL;
@@ -418,7 +418,7 @@ void ping_evictor_start(void)
 
         init_waitqueue_head(&pet_waitq);
 
-        rc = kernel_thread(ping_evictor_main, NULL, CLONE_VM | CLONE_FS);
+        rc = cfs_kernel_thread(ping_evictor_main, NULL, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 pet_refcount--;
                 CERROR("Cannot start ping evictor thread: %d\n", rc);

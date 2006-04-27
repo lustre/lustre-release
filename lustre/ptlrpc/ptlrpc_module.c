@@ -216,6 +216,7 @@ EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_request);
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_qdata);
+EXPORT_SYMBOL(lustre_swab_mgs_target_info);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);

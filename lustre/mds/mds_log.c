@@ -83,7 +83,7 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_cancel(lctxt, lsm, count, cookies,flags);
+        rc = llog_cancel(lctxt, lsm, count, cookies, flags);
         RETURN(rc);
 }
 

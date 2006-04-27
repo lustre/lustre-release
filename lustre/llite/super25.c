@@ -35,20 +35,6 @@
 #include <lprocfs_status.h>
 #include "llite_internal.h"
 
-struct super_block * ll_get_sb(struct file_system_type *fs_type,
-                               int flags, const char *devname, void * data)
-{
-        /* calls back in fill super */
-        return get_sb_nodev(fs_type, flags, data, ll_fill_super);
-}
-
-struct super_block * lustre_get_sb(struct file_system_type *fs_type,
-                               int flags, const char *devname, void * data)
-{
-        /* calls back in fill super */
-        return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
-}
-
 static kmem_cache_t *ll_inode_cachep;
 
 static struct inode *ll_alloc_inode(struct super_block *sb)
@@ -105,33 +91,17 @@ struct super_operations lustre_super_operations =
         .alloc_inode   = ll_alloc_inode,
         .destroy_inode = ll_destroy_inode,
         .clear_inode   = ll_clear_inode,
-        .put_super     = lustre_put_super,
+        .put_super     = ll_put_super,
         .statfs        = ll_statfs,
         .umount_begin  = ll_umount_begin,
-        .remount_fs    = lustre_remount_fs,
+        .remount_fs    = ll_remount_fs,
 };
 
-
-struct file_system_type lustre_lite_fs_type = {
-        .owner        = THIS_MODULE,
-        .name         = "lustre_lite",
-        .get_sb       = ll_get_sb,
-        .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA,
-};
-
-struct file_system_type lustre_fs_type = {
-        .owner        = THIS_MODULE,
-        .name         = "lustre",
-        .get_sb       = lustre_get_sb,
-        .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA,
-};
 
 static int __init init_lustre_lite(void)
 {
         int rc, seed[2];
-        printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
+        printk(KERN_INFO "Lustre: Lustre Client File System; "
                "info@clusterfs.com\n");
         rc = ll_init_inodecache();
         if (rc)
@@ -148,19 +118,12 @@ static int __init init_lustre_lite(void)
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
         ll_register_cache(&ll_cache_definition);
-
-        rc = register_filesystem(&lustre_lite_fs_type);
-        if (rc == 0)
-                rc = register_filesystem(&lustre_fs_type);
-        if (rc) {
-                /* This is safe even if lustre_lite_fs_type isn't registered */
-                unregister_filesystem(&lustre_lite_fs_type);
-                ll_unregister_cache(&ll_cache_definition);
-        }
-
+        
+        lustre_register_client_fill_super(ll_fill_super);
+        
         get_random_bytes(seed, sizeof(seed));
         ll_srand(seed[0], seed[1]);
-
+        
         return rc;
 }
 
@@ -168,8 +131,7 @@ static void __exit exit_lustre_lite(void)
 {
         int rc;
 
-        unregister_filesystem(&lustre_fs_type);
-        unregister_filesystem(&lustre_lite_fs_type);
+        lustre_register_client_fill_super(NULL);
 
         ll_unregister_cache(&ll_cache_definition);
 

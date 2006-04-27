@@ -207,6 +207,10 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
                 connect_op = MDS_CONNECT;
+        } else if (!strcmp(name, LUSTRE_MGC_NAME)) {
+                rq_portal = MGS_REQUEST_PORTAL;
+                rp_portal = MGC_REPLY_PORTAL;
+                connect_op = MGS_CONNECT;
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);
@@ -234,6 +238,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         }
 
         sema_init(&cli->cl_sem, 1);
+        sema_init(&cli->cl_mgc_sem, 1);
         cli->cl_conn_count = 0;
         memcpy(server_uuid.uuid, lustre_cfg_buf(lcfg, 2),
                min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),
@@ -284,6 +289,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_client = &obddev->obd_ldlm_client;
         imp->imp_connect_op = connect_op;
         imp->imp_initial_recov = 1;
+        imp->imp_initial_recov_bk = 0;
         CFS_INIT_LIST_HEAD(&imp->imp_pinger_chain);
         memcpy(cli->cl_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
                LUSTRE_CFG_BUFLEN(lcfg, 1));
@@ -331,7 +337,7 @@ int client_obd_cleanup(struct obd_device *obddev)
         RETURN(0);
 }
 
-/* ->o_connect() method for client side (OSC and MDC) */
+/* ->o_connect() method for client side (OSC and MDC and MGC) */
 int client_connect_import(struct lustre_handle *dlm_handle,
                           struct obd_device *obd, struct obd_uuid *cluuid,
                           struct obd_connect_data *data)
@@ -531,8 +537,16 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         obd_str2uuid (&tgtuuid, str);
         target = class_uuid2obd(&tgtuuid);
+        /* COMPAT_146 */
+        /* old (pre 1.6) lustre_process_log tries to connect to mdsname
+           (eg. mdsA) instead of uuid. */
+        if (!target) {
+                snprintf((char *)tgtuuid.uuid, sizeof(tgtuuid), "%s_UUID", str);
+                target = class_uuid2obd(&tgtuuid);
+        }
         if (!target)
                 target = class_name2obd(str);
+        /* end COMPAT_146 */
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "
@@ -585,12 +599,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 if (!data) {
-                        DEBUG_REQ(D_INFO, req, "Refusing old (unversioned) "
+                        DEBUG_REQ(D_WARNING, req, "Refusing old (unversioned) "
                                   "libclient connection attempt\n");
                         GOTO(out, rc = -EPROTO);
                 } else if (data->ocd_version < LUSTRE_VERSION_CODE -
                                                LUSTRE_VERSION_ALLOWED_OFFSET) {
-                        DEBUG_REQ(D_INFO, req, "Refusing old (%d.%d.%d.%d) "
+                        DEBUG_REQ(D_WARNING, req, "Refusing old (%d.%d.%d.%d) "
                                   "libclient connection attempt\n",
                                   OBD_OCD_VERSION_MAJOR(data->ocd_version),
                                   OBD_OCD_VERSION_MINOR(data->ocd_version),

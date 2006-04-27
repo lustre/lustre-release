@@ -33,6 +33,9 @@
 #define LCFG_HDR_SIZE(count) \
     size_round(offsetof (struct lustre_cfg, lcfg_buflens[(count)]))
 
+/* If not LCFG_REQUIRED, we can ignore this cmd and go on. */
+#define LCFG_REQUIRED         0x0001000
+
 enum lcfg_command_type {
         LCFG_ATTACH         = 0x00cf001,
         LCFG_DETACH         = 0x00cf002,
@@ -48,8 +51,11 @@ enum lcfg_command_type {
         LCFG_DEL_CONN       = 0x00cf00c,
         LCFG_LOV_ADD_OBD    = 0x00cf00d,
         LCFG_LOV_DEL_OBD    = 0x00cf00e,
-        LCFG_PARAM          = 0x00cf00f,
-        LCFG_MARKER         = 0x00cf010
+        LCFG_PARAM          = 0x00ce00f,
+        LCFG_MARKER         = 0x00ce010,
+        LCFG_LOG_START      = 0x00ce011,
+        LCFG_LOG_END        = 0x00ce012,
+        LCFG_LOV_ADD_INA    = 0x00ce013,
 };
 
 struct lustre_cfg_bufs {
@@ -151,9 +157,14 @@ static inline char *lustre_cfg_string(struct lustre_cfg *lcfg, int index)
                 return NULL;
 
         /* make sure it's NULL terminated, even if this kills a char
-         * of data
+         * of data.  Try to use the padding first though.
          */
-        s[lcfg->lcfg_buflens[index] - 1] = '\0';
+        if (s[lcfg->lcfg_buflens[index] - 1] != '\0') {
+                int last = min((int)lcfg->lcfg_buflens[index], 
+                               size_round(lcfg->lcfg_buflens[index]) - 1);
+                s[last] = '\0';
+                CWARN("Truncating buf %d to '%s'\n", index, s);
+        }
         return s;
 }
 
@@ -223,6 +234,7 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 
         if (lcfg->lcfg_version != LUSTRE_CFG_VERSION)
                 RETURN(-EINVAL);
+        
         if (lcfg->lcfg_bufcount >= LUSTRE_CFG_MAX_BUFCOUNT)
                 RETURN(-EINVAL);
 
@@ -236,51 +248,5 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 
         RETURN(0);
 }
-
-
-#define LMD_MAGIC       0xbdacbd03
-#define LMD_MAGIC_MASK (0xffffff00 & LMD_MAGIC)
-
-#define lmd_bad_magic(LMDP)                                             \
-({                                                                      \
-        struct lustre_mount_data *_lmd__ = (LMDP);                      \
-        int _ret__ = 0;                                                 \
-        if (!_lmd__) {                                                  \
-                LCONSOLE_ERROR("Missing mount data: "                   \
-                       "check that /sbin/mount.lustre is installed.\n");\
-                _ret__ = 1;                                             \
-        } else if (_lmd__->lmd_magic == LMD_MAGIC) {                    \
-                _ret__ = 0;                                             \
-        } else if ((_lmd__->lmd_magic & LMD_MAGIC_MASK) == LMD_MAGIC_MASK) { \
-                LCONSOLE_ERROR("You're using an old version of "        \
-                       "/sbin/mount.lustre.  Please install version "   \
-                       "1.%d\n", LMD_MAGIC & 0xFF);                     \
-                _ret__ = 1;                                             \
-        } else {                                                        \
-                LCONSOLE_ERROR("Invalid mount data (%#x != %#x): "      \
-                       "check that /sbin/mount.lustre is installed\n",  \
-                       _lmd__->lmd_magic, LMD_MAGIC);                   \
-                _ret__ = 1;                                             \
-        }                                                               \
-        _ret__;                                                         \
-})
-
-#define MAX_FAILOVER_NIDS 10
-
-/* Passed by mount */
-/* Any changes in the alignment of elements in this stuct require a change to
-   LMD_MAGIC */
-struct lustre_mount_data {
-        uint32_t   lmd_magic;
-        uint32_t   lmd_flags;
-        uint16_t   lmd_nid_count; /* how many failover nids we have for the MDS */
-        lnet_nid_t lmd_nid[MAX_FAILOVER_NIDS];
-        char       lmd_mds[64];
-        char       lmd_profile[64];
-};
-
-#define LMD_FLG_FLOCK           0x0001
-#define LMD_FLG_USER_XATTR      0x0002
-#define LMD_FLG_ACL             0x0004
 
 #endif // _LUSTRE_CFG_H

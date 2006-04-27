@@ -889,9 +889,12 @@ int llapi_catinfo(char *dir, char *keyword, char *node_name)
         return rc;
 }
 
-int llapi_is_lustre_mnttype(char *type)
+/* Is this a lustre client fs? */
+int llapi_is_lustre_mnttype(struct mntent *mnt)
 {
-        return (strcmp(type,"lustre") == 0 || strcmp(type,"lustre_lite") == 0);
+        char *type = mnt->mnt_type;
+        return ((strcmp(type, "lustre") == 0 || strcmp(type,"lustre_lite") == 0)
+                && (strstr(mnt->mnt_fsname, ":/") != NULL));
 }
 
 int llapi_quotacheck(char *mnt, int check_type)

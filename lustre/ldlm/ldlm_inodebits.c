@@ -44,7 +44,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
         int compat = 1;
         ENTRY;
 
-        LASSERT(req_bits); /* There is no sence in lock with no bits set,
+        LASSERT(req_bits); /* There is no sense in lock with no bits set,
                               I think. Also such a lock would be compatible
                                with any other bit lock */
         list_for_each(tmp, queue) {

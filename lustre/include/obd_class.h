@@ -62,6 +62,7 @@ int class_name2dev(char *name);
 struct obd_device *class_name2obd(char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
+void class_obd_list(void);
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           char * typ_name,
                                           struct obd_uuid *grp_uuid);
@@ -83,7 +84,7 @@ char *obd_export_nid2str(struct obd_export *exp);
 int obd_export_evict_by_nid(struct obd_device *obd, char *nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid);
 
-/* config.c */
+/* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
@@ -92,15 +93,35 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);
 struct obd_device *class_incref(struct obd_device *obd);
 void class_decref(struct obd_device *obd);
 
+#define CFG_F_START     0x01   /* Set when we start updating from a log */
+#define CFG_F_MARKER    0x02   /* We are within a maker */
+#define CFG_F_SKIP      0x04   /* We should ignore this cfg command */
+#define CFG_F_COMPAT146 0x08   /* Translation to new obd names required */
+#define CFG_F_EXCLUDE   0x10   /* OST exclusion list */
+
+
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
-        char * cfg_instance;
-        struct obd_uuid cfg_uuid;
+        char *              cfg_instance;
+        struct super_block *cfg_sb;
+        struct obd_uuid     cfg_uuid;
+        int                 cfg_last_idx; /* for partial llog processing */
+        int                 cfg_flags; 
 };
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg);
 int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
                            struct config_llog_instance *cfg);
+
+/* list of active configuration logs  */
+struct config_llog_data {
+        char               *cld_logname;
+        struct ldlm_res_id  cld_resid;
+        struct config_llog_instance cld_cfg;
+        struct list_head    cld_list_chain;
+        atomic_t            cld_refcount;
+        unsigned int        cld_stopping:1;
+};
 
 struct lustre_profile {
         struct list_head lp_list;
@@ -112,6 +133,7 @@ struct lustre_profile {
 struct lustre_profile *class_get_profile(char * prof);
 void class_del_profile(char *prof);
 
+/* genops.c */
 #define class_export_get(exp)                                                  \
 ({                                                                             \
         struct obd_export *exp_ = exp;                                         \
@@ -140,6 +162,7 @@ void class_import_put(struct obd_import *);
 struct obd_import *class_new_import(struct obd_device *obd);
 void class_destroy_import(struct obd_import *exp);
 
+struct obd_type *class_search_type(char *name);
 struct obd_type *class_get_type(char *name);
 void class_put_type(struct obd_type *type);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
@@ -148,7 +171,7 @@ int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 void class_disconnect_stale_exports(struct obd_device *obddev);
-void class_manual_cleanup(struct obd_device *obd);
+int class_manual_cleanup(struct obd_device *obd);
 
 /* obdo.c */
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
@@ -1042,11 +1065,16 @@ static inline void obd_import_event(struct obd_device *obd,
 
 static inline int obd_notify(struct obd_device *obd,
                              struct obd_device *watched,
-                             enum obd_notify_event ev)
+                             enum obd_notify_event ev, void *data)
 {
         ENTRY;
         OBD_CHECK_DEV(obd);
-        if (!obd->obd_set_up) {
+
+        /* the check for async_recov is a complete hack - I'm hereby
+           overloading the meaning to also mean "this was called from
+           mds_postsetup".  I know that my mds is able to handle notifies
+           by this point, and it needs to get them to execute mds_postrecov. */                                                                                
+        if (!obd->obd_set_up && !obd->obd_async_recov) {
                 CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
                 RETURN(-EINVAL);
         }
@@ -1057,12 +1085,12 @@ static inline int obd_notify(struct obd_device *obd,
         }
 
         OBD_COUNTER_INCREMENT(obd, notify);
-        RETURN(OBP(obd, notify)(obd, watched, ev));
+        RETURN(OBP(obd, notify)(obd, watched, ev, data));
 }
 
 static inline int obd_notify_observer(struct obd_device *observer,
                                       struct obd_device *observed,
-                                      enum obd_notify_event ev)
+                                      enum obd_notify_event ev, void *data)
 {
         int rc1;
         int rc2;
@@ -1070,7 +1098,7 @@ static inline int obd_notify_observer(struct obd_device *observer,
         struct obd_notify_upcall *onu;
 
         if (observer->obd_observer)
-                rc1 = obd_notify(observer->obd_observer, observed, ev);
+                rc1 = obd_notify(observer->obd_observer, observed, ev, data);
         else
                 rc1 = 0;
         /*
@@ -1181,7 +1209,7 @@ extern void obd_sysctl_clean (void);
 
 /* uuid.c  */
 typedef __u8 class_uuid_t[16];
-//int class_uuid_parse(struct obd_uuid in, class_uuid_t out);
+void class_generate_random_uuid(class_uuid_t uuid);
 void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
 
 /* lustre_peer.c    */

@@ -142,8 +142,11 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         rc = llog_read_header(handle);
         if (rc == 0) {
                 flags = llh->llh_flags;
-                if (uuid)
-                        LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
+                if (uuid && !obd_uuid_equals(uuid, &llh->llh_tgtuuid)) {
+                        CERROR("uuid mismatch: %s/%s\n", (char *)uuid->uuid,
+                               (char *)llh->llh_tgtuuid.uuid);
+                        rc = -EEXIST;
+                }
                 GOTO(out, rc);
         } else if (rc != LLOG_EEMPTY || !flags) {
                 /* set a pesudo flag for initialization */
@@ -209,15 +212,19 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         char *buf;
         __u64 cur_offset = LLOG_CHUNK_SIZE;
         int rc = 0, index = 1, last_index;
-        int saved_index = 0;
+        int saved_index = 0, last_called_index = 0;
         ENTRY;
+
+        LASSERT(llh);
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
         if (!buf)
                 RETURN(-ENOMEM);
 
-        if (cd != NULL)
+        if (cd != NULL) {
+                last_called_index = cd->first_idx;
                 index = cd->first_idx + 1;
+        }
         if (cd != NULL && cd->last_idx)
                 last_index = cd->last_idx;
         else
@@ -285,6 +292,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                         /* if set, process the callback on this record */
                         if (ext2_test_bit(index, llh->llh_bitmap)) {
                                 rc = cb(loghandle, rec, data);
+                                last_called_index = index;
                                 if (rc == LLOG_PROC_BREAK) {
                                         CWARN("recovery from log: "LPX64":%x"
                                               " stopped\n",
@@ -309,11 +317,21 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         }
 
  out:
+        if (cd != NULL)
+                cd->last_idx = last_called_index;
         if (buf)
                 OBD_FREE(buf, LLOG_CHUNK_SIZE);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_process);
+
+inline int llog_get_size(struct llog_handle *loghandle)
+{
+        if (loghandle && loghandle->lgh_hdr)
+                return loghandle->lgh_hdr->llh_count;
+        return 0;
+}
+EXPORT_SYMBOL(llog_get_size);
 
 int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                          void *data, void *catdata)

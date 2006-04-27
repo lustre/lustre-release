@@ -34,11 +34,9 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
-#include <linux/module.h>
 #include <lustre_mds.h>
-#include <lustre_dlm.h>
+#include <linux/module.h>
 #include <linux/init.h>
-#include <obd_class.h>
 #include <linux/random.h>
 #include <linux/fs.h>
 #include <linux/jbd.h>
@@ -51,12 +49,15 @@
 #else
 # include <linux/locks.h>
 #endif
+
+#include <obd_class.h>
+#include <lustre_dlm.h>
 #include <obd_lov.h>
-#include <lustre_mds.h>
 #include <lustre_fsfilt.h>
 #include <lprocfs_status.h>
 #include <lustre_commit_confd.h>
 #include <lustre_quota.h>
+#include <lustre_disk.h>
 #include <lustre_ver.h>
 
 #include "mds_internal.h"
@@ -995,7 +996,6 @@ out_ucred:
         return rc;
 }
 
-
 static int mds_obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                           unsigned long max_age)
 {
@@ -1228,7 +1228,7 @@ static char *reint_names[] = {
         [REINT_OPEN]    "open",
 };
 
-static int mds_set_info(struct obd_export *exp, struct ptlrpc_request *req)
+static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
 {
         char *key;
         __u32 *val;
@@ -1585,7 +1585,7 @@ int mds_handle(struct ptlrpc_request *req)
 
         case MDS_SET_INFO:
                 DEBUG_REQ(D_INODE, req, "set_info");
-                rc = mds_set_info(req->rq_export, req);
+                rc = mds_set_info_rpc(req->rq_export, req);
                 break;
 
         case MDS_QUOTACHECK:
@@ -1708,22 +1708,44 @@ int mds_handle(struct ptlrpc_request *req)
 int mds_update_server_data(struct obd_device *obd, int force_sync)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct mds_server_data *msd = mds->mds_server_data;
+        struct lr_server_data *lsd = mds->mds_server_data;
+        struct lr_server_data *lsd_copy = NULL;
         struct file *filp = mds->mds_rcvd_filp;
         struct lvfs_run_ctxt saved;
         loff_t off = 0;
         int rc;
         ENTRY;
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        msd->msd_last_transno = cpu_to_le64(mds->mds_last_transno);
-
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
                mds->mds_mount_count, mds->mds_last_transno);
-        rc = fsfilt_write_record(obd, filp, msd, sizeof(*msd), &off,force_sync);
+
+        lsd->lsd_last_transno = cpu_to_le64(mds->mds_last_transno);
+
+        if (!(lsd->lsd_feature_incompat & cpu_to_le32(OBD_INCOMPAT_COMMON_LR))){
+                /* Swap to the old mds_server_data format, in case
+                   someone wants to revert to a pre-1.6 lustre */
+                CDEBUG(D_CONFIG, "writing old last_rcvd format\n");
+                /* malloc new struct instead of swap in-place because 
+                   we don't have a lock on the last_trasno or mount count -
+                   someone may modify it while we're here, and we don't want
+                   them to inc the wrong thing. */
+                OBD_ALLOC(lsd_copy, sizeof(*lsd_copy));
+                if (!lsd_copy) 
+                        RETURN(-ENOMEM);
+                *lsd_copy = *lsd;
+                lsd_copy->lsd_unused = lsd->lsd_last_transno;
+                lsd_copy->lsd_last_transno = lsd->lsd_mount_count;
+                lsd = lsd_copy;
+        }
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = fsfilt_write_record(obd, filp, lsd, sizeof(*lsd), &off,force_sync);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 CERROR("error writing MDS server data: rc = %d\n", rc);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        if (lsd_copy) 
+                OBD_FREE(lsd_copy, sizeof(*lsd_copy));
 
         RETURN(rc);
 }
@@ -1768,6 +1790,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
         struct mds_obd *mds = &obd->u.mds;
+        struct lustre_mount_info *lmi;
         struct vfsmount *mnt;
         struct obd_uuid uuid;
         __u8 *uuid_ptr;
@@ -1776,6 +1799,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         unsigned long page;
         int rc = 0;
         ENTRY;
+
+        /* setup 1:/dev/loop/0 2:ext3 3:mdsA 4:errors=remount-ro,iopen_nopriv */
 
         CLASSERT(offsetof(struct obd_device, u.obt) ==
                  offsetof(struct obd_device, u.mds.mds_obt));
@@ -1786,37 +1811,50 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) == 0 || LUSTRE_CFG_BUFLEN(lcfg, 2) == 0)
                 RETURN(rc = -EINVAL);
 
-        obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
+        lmi = server_get_mount(obd->obd_name);
+        if (lmi) {
+                /* We already mounted in lustre_fill_super.
+                   lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
+                struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
+                mnt = lmi->lmi_mnt;
+                obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+        } else {
+                /* old path - used by lctl */
+                CERROR("Using old MDS mount method\n");
+                page = __get_free_page(GFP_KERNEL);
+                if (!page)
+                        RETURN(-ENOMEM);
+
+                options = (char *)page;
+                memset(options, 0, PAGE_SIZE);
+
+                /* here we use "iopen_nopriv" hardcoded, because it affects
+                 * MDS utility and the rest of options are passed by mount
+                 * options. Probably this should be moved to somewhere else
+                 * like startup scripts or lconf. */
+                strcpy(options, "iopen_nopriv");
+
+                if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4)) {
+                        sprintf(options + strlen(options), ",%s",
+                                lustre_cfg_string(lcfg, 4));
+                        fsoptions_to_mds_flags(mds, options);
+                }
+                
+                mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
+                                    lustre_cfg_string(lcfg, 1), 
+                                    (void *)options);
+                free_page(page);
+                if (IS_ERR(mnt)) {
+                        rc = PTR_ERR(mnt);
+                        LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
+                                       lustre_cfg_string(lcfg, 1), rc);
+                        RETURN(rc);
+                }
+
+                obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
+        }
         if (IS_ERR(obd->obd_fsops))
-                RETURN(rc = PTR_ERR(obd->obd_fsops));
-
-        page = __get_free_page(GFP_KERNEL);
-        if (!page)
-                RETURN(-ENOMEM);
-
-        options = (char *)page;
-        memset(options, 0, PAGE_SIZE);
-
-        /* here we use "iopen_nopriv" hardcoded, because it affects MDS utility
-         * and the rest of options are passed by mount options. Probably this
-         * should be moved to somewhere else like startup scripts or lconf. */
-        strcpy(options, "iopen_nopriv");
-
-        if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4)) {
-                sprintf(options + strlen(options), ",%s",
-                        lustre_cfg_string(lcfg, 4));
-                fsoptions_to_mds_flags(mds, options);
-        }
-
-        mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
-                            lustre_cfg_string(lcfg, 1), (void *)options);
-        free_page(page);
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
-                               lustre_cfg_string(lcfg, 1), rc);
-                GOTO(err_ops, rc);
-        }
+                GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
@@ -1833,7 +1871,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL) {
                 mds_cleanup(obd);
-                GOTO(err_put, rc = -ENOMEM);
+                GOTO(err_ops, rc = -ENOMEM);
         }
         ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
 
@@ -1880,9 +1918,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Don't wait for mds_postrecov trying to clear orphans */
         obd->obd_async_recov = 1;
         rc = mds_postsetup(obd);
+        obd->obd_async_recov = 0;
         if (rc)
                 GOTO(err_qctxt, rc);
-        obd->obd_async_recov = 0;
 
         lprocfs_init_vars(mds, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -1895,7 +1933,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 str = "no UUID";
         }
 
-        label = fsfilt_label(obd, obd->u.obt.obt_sb);
+        label = fsfilt_get_label(obd, obd->u.obt.obt_sb);
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("MDT %s now serving %s (%s%s%s), but will be in "
                               "recovery until %d %s reconnect, or if no clients"
@@ -1932,13 +1970,18 @@ err_fs:
 err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
-err_put:
-        unlock_kernel();
-        mntput(mds->mds_vfsmnt);
-        obd->u.obt.obt_sb = NULL;
-        lock_kernel();
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
+err_put:
+        if (lmi) {
+                server_put_mount(obd->obd_name, mds->mds_vfsmnt);
+        } else {
+                /* old method */
+                unlock_kernel();
+                mntput(mds->mds_vfsmnt);
+                lock_kernel();
+        }               
+        obd->u.obt.obt_sb = NULL;
         return rc;
 }
 
@@ -1957,7 +2000,6 @@ static int mds_lov_clean(struct obd_device *obd)
         /* There better be a lov */
         if (!osc)
                 RETURN(0);
-        
         if (IS_ERR(osc))
                 RETURN(PTR_ERR(osc));
 
@@ -1992,33 +2034,12 @@ static int mds_postsetup(struct obd_device *obd)
                 RETURN(rc);
 
         if (mds->mds_profile) {
-                struct lvfs_run_ctxt saved;
                 struct lustre_profile *lprof;
-                struct config_llog_instance cfg;
-
-                cfg.cfg_instance = NULL;
-                cfg.cfg_uuid = mds->mds_lov_uuid;
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                             mds->mds_profile, &cfg);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                switch (rc) {
-                case 0:
-                        break;
-                case -EINVAL:
-                        LCONSOLE_ERROR("%s: the profile %s could not be read. "
-                                       "If you recently installed a new "
-                                       "version of Lustre, you may need to "
-                                       "re-run 'lconf --write_conf "
-                                       "<yourconfig>.xml' command line before "
-                                       "restarting the MDS.\n",
-                                       obd->obd_name, mds->mds_profile);
-                        /* fall through */
-                default:
-                        GOTO(err_llog, rc);
-                        break;
-                }
-
+                /* The profile defines which osc and mdc to connect to, for a 
+                   client.  We reuse that here to figure out the name of the
+                   lov to use (and ignore lprof->lp_mdc).
+                   The profile was set in the config log with 
+                   LCFG_MOUNTOPT profilenm oscnm mdcnm */
                 lprof = class_get_profile(mds->mds_profile);
                 if (lprof == NULL) {
                         CERROR("No profile found: %s\n", mds->mds_profile);
@@ -2033,7 +2054,6 @@ static int mds_postsetup(struct obd_device *obd)
 
 err_cleanup:
         mds_lov_clean(obd);
-err_llog:
         llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
         llog_cleanup(llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT));
         RETURN(rc);
@@ -2050,11 +2070,12 @@ int mds_postrecov(struct obd_device *obd)
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
 
+        /* FIXME why not put this in the synchronize? */
         /* set nextid first, so we are sure it happens */
         rc = mds_lov_set_nextid(obd);
         if (rc) {
-                CERROR("%s: mds_lov_set_nextid failed\n",
-                       obd->obd_name);
+                CERROR("%s: mds_lov_set_nextid failed %d\n",
+                       obd->obd_name, rc);
                 GOTO(out, rc);
         }
 
@@ -2063,8 +2084,13 @@ int mds_postrecov(struct obd_device *obd)
         if (rc < 0)
                 GOTO(out, rc);
 
-        /* Does anyone need this to be synchronous ever? */
-        mds_lov_start_synchronize(obd, NULL, obd->obd_async_recov);
+        /* FIXME Does target_finish_recovery really need this to block? */
+        /* Notify the LOV, which will in turn call mds_notify for each tgt */
+        /* This means that we have to hack obd_notify to think we're obd_set_up
+           during mds_lov_connect. */
+        obd_notify(obd->u.mds.mds_osc_obd, NULL, 
+                   obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
+                   OBD_NOTIFY_SYNC, NULL);
 
         /* quota recovery */
         lquota_recovery(quota_interface, obd);
@@ -2115,6 +2141,7 @@ static int mds_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         lvfs_sbdev_type save_dev;
+        int must_put = 0;
         int must_relock = 0;
         ENTRY;
 
@@ -2132,20 +2159,15 @@ static int mds_cleanup(struct obd_device *obd)
         lquota_cleanup(quota_interface, obd);
 
         mds_update_server_data(obd, 1);
-        if (mds->mds_lov_objids != NULL) {
-                OBD_FREE(mds->mds_lov_objids,
-                         mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
-        }
+        if (mds->mds_lov_objids != NULL) 
+                OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
         mds_fs_cleanup(obd);
 
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
 
-        /* 2 seems normal on mds, (may_umount() also expects 2
-          fwiw), but we only see 1 at this point in obdfilter. */
-        if (atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count) > 2)
-                CERROR("%s: mount busy, mnt_count %d != 2\n", obd->obd_name,
-                       atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count));
+        must_put = server_put_mount(obd->obd_name, mds->mds_vfsmnt);
+        /* must_put is for old method (l_p_m returns non-0 on err) */
 
         /* We can only unlock kernel if we are in the context of sys_ioctl,
            otherwise we never called lock_kernel */
@@ -2153,8 +2175,10 @@ static int mds_cleanup(struct obd_device *obd)
                 unlock_kernel();
                 must_relock++;
         }
-
-        mntput(mds->mds_vfsmnt);
+        
+        if (must_put) 
+                /* In case we didn't mount with lustre_get_mount -- old method*/
+                mntput(mds->mds_vfsmnt);
         obd->u.obt.obt_sb = NULL;
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);

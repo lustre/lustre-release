@@ -486,6 +486,8 @@ static void ost_nio_pages_put(struct ptlrpc_request *req,
         EXIT;
 }
 
+#if 0
+/* see ldlm_blocking_ast */
 /* cut-n-paste of mds_blocking_ast() */
 static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, int flag)
@@ -529,7 +531,8 @@ static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         }
         RETURN(0);
 }
-
+#endif
+                           
 static int ost_brw_lock_get(int mode, struct obd_export *exp,
                             struct obd_ioobj *obj, struct niobuf_remote *nb,
                             struct lustre_handle *lh)
@@ -1629,7 +1632,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_REQUEST_PORTAL,
                                 OSC_REPLY_PORTAL,
-                                obd_timeout * 1000, ost_handle, LUSTRE_OST_NAME,
+                                obd_timeout * 1000, ost_handle, LUSTRE_OSS_NAME,
                                 obd->obd_proc_entry, ost_print_req,
                                 ost_num_threads);
         if (ost->ost_service == NULL) {
@@ -1764,15 +1767,15 @@ static int __init ost_init(void)
         int rc;
         ENTRY;
 
-        lprocfs_init_vars(ost,&lvars);
+        lprocfs_init_vars(ost, &lvars);
         rc = class_register_type(&ost_obd_ops, lvars.module_vars,
-                                 LUSTRE_OST_NAME);
+                                 LUSTRE_OSS_NAME);
         RETURN(rc);
 }
 
 static void /*__exit*/ ost_exit(void)
 {
-        class_unregister_type(LUSTRE_OST_NAME);
+        class_unregister_type(LUSTRE_OSS_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

@@ -92,6 +92,7 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                          void *data, void *catdata);
 extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
 extern int llog_close(struct llog_handle *cathandle);
+extern int llog_get_size(struct llog_handle *loghandle);
 
 /* llog_cat.c   -  catalog api */
 struct llog_process_data {
@@ -217,7 +218,7 @@ static inline void llog_gen_init(struct llog_ctxt *ctxt)
 
         if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
                 ctxt->loc_gen.mnt_cnt = obd->u.mds.mds_mount_count;
-        else if (!strstr(obd->obd_type->typ_name, LUSTRE_FILTER_NAME))
+        else if (!strstr(obd->obd_type->typ_name, LUSTRE_OST_NAME))
                 ctxt->loc_gen.mnt_cnt = obd->u.filter.fo_mount_count;
         else
                 ctxt->loc_gen.mnt_cnt = 0;

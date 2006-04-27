@@ -408,7 +408,7 @@ void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
 
         bufcount = m->bufcount;
         if (n >= bufcount) {
-                CDEBUG(D_INFO, "msg %p buffer[%d] not present (count %d)\n",
+                CERROR("msg %p buffer[%d] not present (count %d)\n",
                        m, n, bufcount);
                 return NULL;
         }
@@ -626,6 +626,24 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->max_mdsize);
         __swab32s (&b->max_cookiesize);
         __swab32s (&b->padding_4);
+}
+
+void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
+{
+        int i;
+        LASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
+        for (i = 0; i < MTI_NIDS_MAX; i++) {
+                __swab64s(&mti->mti_nids[i]);
+                __swab64s(&mti->mti_failnids[i]);
+        }
+        for (i = 0; i < 8; i++) {
+                __swab16s(&mti->mti_failnodes[i]);
+        }
+        __swab32s(&mti->mti_stripe_index);
+        __swab32s(&mti->mti_nid_count);
+        __swab32s(&mti->mti_failnid_count);
+        __swab32s(&mti->mti_config_ver);
+        __swab32s(&mti->mti_flags);
 }
 
 static void lustre_swab_obd_dqinfo (struct obd_dqinfo *i)
@@ -1070,6 +1088,16 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_STATUS_CONN);
         LASSERTF(MDS_STATUS_LOV == 2, " found %lld\n",
                  (long long)MDS_STATUS_LOV);
+        LASSERTF(MGS_CONNECT == 250, " found %lld\n",
+                 (long long)MGS_CONNECT);
+        LASSERTF(MGS_DISCONNECT == 251, " found %lld\n",
+                 (long long)MGS_DISCONNECT);
+        LASSERTF(MGS_EXCEPTION == 252, " found %lld\n",
+                 (long long)MGS_EXCEPTION);
+        LASSERTF(MGS_TARGET_REG == 253, " found %lld\n",
+                 (long long)MGS_TARGET_REG);
+        LASSERTF(MGS_TARGET_DEL == 254, " found %lld\n",
+                 (long long)MGS_TARGET_DEL);
         LASSERTF(LDLM_ENQUEUE == 101, " found %lld\n",
                  (long long)LDLM_ENQUEUE);
         LASSERTF(LDLM_CONVERT == 102, " found %lld\n",

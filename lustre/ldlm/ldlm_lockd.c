@@ -713,6 +713,11 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 GOTO(out, rc = -EPROTO);
         }
 
+#if 0
+        /* FIXME this makes it impossible to use LDLM_PLAIN locks -- check 
+           against server's _CONNECT_SUPPORTED flags? (I don't want to use
+           ibits for mgc/mgs) */
+
         /* INODEBITS_INTEROP: Perform conversion from plain lock to
          * inodebits lock if client does not support them. */
         if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS) &&
@@ -723,6 +728,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 if (dlm_req->lock_desc.l_req_mode == LCK_PR)
                         dlm_req->lock_desc.l_req_mode = LCK_CR;
         }
+#endif
 
         if (flags & LDLM_FL_REPLAY) {
                 lock = find_existing_lock(req->rq_export,
@@ -1579,6 +1585,9 @@ static int ldlm_setup(void)
         spin_lock_init(&waiting_locks_spinlock);
         cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, 0);
 
+        /* Using CLONE_FILES instead of CLONE_FS here causes failures in 
+           conf-sanity test 21.  But using CLONE_FS can cause problems
+           if the daemonize happens between push/pop_ctxt... */
         rc = cfs_kernel_thread(expired_lock_main, NULL, CLONE_VM | CLONE_FS);
         if (rc < 0) {
                 CERROR("Cannot start ldlm expired-lock thread: %d\n", rc);

@@ -128,7 +128,7 @@ pass() {
 }
 
 mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre") { print $2 }' /proc/mounts
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
 MOUNT="`mounted_lustre_filesystems`"
 if [ -z "$MOUNT" ]; then
@@ -589,8 +589,7 @@ test_7()
 	echo 0 > /proc/sys/lustre/fail_loc
 
 	echo "  Trigger recovery..."
-	OSC0_UUID="`$LCTL dl | awk '/.* OSC_[^ ]+_OST.* / { print $1 }'`"
-	[ -z "$OSC0_UUID" ] && OSC0_UUID="`$LCTL dl | awk '/.* OSC_[^ ]+_ost1.* / { print $1 }'`"
+	OSC0_UUID="`$LCTL dl | awk '/.* *-osc-* / { print $1 }'`"
 	for i in $OSC0_UUID; do
 		$LCTL --device $i activate > /dev/null 2>&1 || error "activate osc failed!"
 	done

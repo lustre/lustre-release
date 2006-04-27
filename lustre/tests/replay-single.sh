@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -e
+#set -v
 
 #
 # This test needs to be run on the client
@@ -12,57 +13,26 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. mountconf.sh 
 
 # Skip these tests
-# bug number: 2766 9930
+# bug number: 2766
 ALWAYS_EXCEPT="0b   $REPLAY_SINGLE_EXCEPT"
-
-gen_config() {
-    rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE
-    if [ ! -z "$mdsfailover_HOST" ]; then
-	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
-    fi
-    
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
-	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_client client mds --lov lov1 --path $MOUNT
-}
 
 build_test_filter
 
-cleanup() {
-    # make sure we are using the primary MDS, so the config log will
-    # be able to clean up properly.
-    activemds=`facet_active mds`
-    if [ $activemds != "mds" ]; then
-        fail mds
-    fi
-    zconf_umount `hostname` $MOUNT
-    stop mds ${FORCE} $MDSLCONFARGS
-    stop ost2 ${FORCE}
-    stop ost ${FORCE} --dump $TMP/replay-single-`hostname`.log
-}
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"mcstopall"}
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0 || true
-    FORCE=--force cleanup
-    exit
+    $CLEANUP
+    exit 0
 fi
 
-SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
-
 setup() {
-    gen_config
-
-    start ost --reformat $OSTLCONFARGS 
-    start ost2 --reformat $OSTLCONFARGS 
-    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-    start mds $MDSLCONFARGS --reformat
-    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+    mcformat
+    mcsetup
 }
 
 $SETUP
@@ -101,20 +71,20 @@ test_1a() {
     do_facet ost "sysctl -w lustre.fail_loc=0"
 
     rm -fr $DIR/$tfile
-    local old_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    local old_last_id=`cat $LPROC/obdfilter/*/last_id`
     touch -o $DIR/$tfile 1
     sync
-    local new_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    local new_last_id=`cat $LPROC/obdfilter/*/last_id`
     
     test "$old_last_id" = "$new_last_id" || {
 	echo "OST object create is caused by MDS"
 	return 1
     }
     
-    old_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    old_last_id=`cat $LPROC/obdfilter/*/last_id`
     echo "data" > $DIR/$tfile
     sync
-    new_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    new_last_id=`cat $LPROC/obdfilter/*/last_id`
     test "$old_last_id" = "$new_last_id "&& {
 	echo "CROW does not work on write"
 	return 1
@@ -126,10 +96,10 @@ test_1a() {
     do_facet ost "sysctl -w lustre.fail_loc=0x80000801"
 
     rm -fr $DIR/1a1
-    old_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    old_last_id=`cat $LPROC/obdfilter/*/last_id`
     echo "data" > $DIR/1a1
     sync
-    new_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    new_last_id=`cat $LPROC/obdfilter/*/last_id`
     test "$old_last_id" = "$new_last_id" || {
 	echo "CROW does work with fail_loc=0x80000801"
 	return 1
@@ -760,7 +730,7 @@ test_36() {
     touch $DIR/$tfile
     checkstat $DIR/$tfile
     facet_failover mds
-    cancel_lru_locks MDC
+    cancel_lru_locks mdc
     if dmesg | grep "unknown lock cookie"; then 
 	echo "cancel after replay failed"
 	return 1
@@ -812,8 +782,7 @@ test_39() { # bug 4176
 run_test 39 "test recovery from unlink llog (test llog_gen_rec) "
 
 count_ost_writes() {
-        cat /proc/fs/lustre/osc/*/stats |
-            awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }'
+    awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }' $LPROC/osc/*/stats
 }
 
 #b=2477,2532
@@ -864,13 +833,13 @@ test_41() {
     # make sure the start of the file is ost1
     lfs setstripe $f $((128 * 1024)) 0 0 
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
-    cancel_lru_locks OSC
+    cancel_lru_locks osc
     # fail ost2 and read from ost1
-    local osc2_dev=`$LCTL device_list | \
-		awk '(/ost2.*client_facet/){print $4}' `
-    $LCTL --device %$osc2_dev deactivate
+    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    [ "$osc2dev" ] || return 4
+    $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
-    $LCTL --device %$osc2_dev activate
+    $LCTL --device $osc2dev activate || return 2
     return 0
 }
 run_test 41 "read from a valid osc while other oscs are invalid"
@@ -911,8 +880,10 @@ test_43() { # bug 2530
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
 test_44() {
-    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
+    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
+	echo iteration $i
         #define OBD_FAIL_TGT_CONN_RACE     0x701
         do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
         $LCTL --device $mdcdev recover
@@ -924,8 +895,10 @@ test_44() {
 run_test 44 "race in target handle connect"
 
 test_44b() {
-    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
+    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
+	echo iteration $i
         #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
         do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
         $LCTL --device $mdcdev recover
@@ -938,7 +911,8 @@ run_test 44b "race in target handle connect"
 
 # Handle failed close
 test_45() {
-    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
+    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    [ "$mdcdev" ] || exit 2
     $LCTL --device $mdcdev recover
 
     multiop $DIR/$tfile O_c &
@@ -947,13 +921,13 @@ test_45() {
 
     # This will cause the CLOSE to fail before even 
     # allocating a reply buffer
-    $LCTL --device $mdcdev deactivate
+    $LCTL --device $mdcdev deactivate || return 4
 
     # try the close
     kill -USR1 $pid
     wait $pid || return 1
 
-    $LCTL --device $mdcdev activate
+    $LCTL --device $mdcdev activate || return 5
     sleep 1
 
     $CHECKSTAT -t file $DIR/$tfile || return 2
@@ -1012,9 +986,9 @@ test_48() {
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local osc_dev=`$LCTL device_list | \
-		awk '(/ost_svc_mds_svc/){print $4}' `
-    $LCTL --device %$osc_dev recover &&  $LCTL --device %$osc_dev recover
+    local oscdev=`grep ${ost_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    [ "$oscdev" ] || return 1
+    $LCTL --device $oscdev recover &&  $LCTL --device $oscdev recover
     # give the mds_lov_sync threads a chance to run
     sleep 5
 }
@@ -1023,7 +997,7 @@ run_test 50 "Double OSC recovery, don't LASSERT (3812)"
 # b3764 timed out lock replay
 test_52() {
     touch $DIR/$tfile
-    cancel_lru_locks MDC
+    cancel_lru_locks mdc
 
     multiop $DIR/$tfile s
     replay_barrier mds
@@ -1092,4 +1066,4 @@ test_58() {
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 
 equals_msg test complete, cleaning up
-FORCE=--force $CLEANUP
+$CLEANUP

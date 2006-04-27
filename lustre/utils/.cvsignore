@@ -15,9 +15,15 @@ obdbarrier
 lload
 wirecheck
 lfs
+mkfs.lustre
+mkfs_lustre
+mount.lustre
+mount_lustre
+tunefs.lustre
+tunefs_lustre
+llog_reader
 llmount
 l_getgroups
-mount.lustre
 wiretest
 llog_reader
 .*.cmd

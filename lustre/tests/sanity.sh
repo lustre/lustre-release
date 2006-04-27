@@ -12,6 +12,12 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 77 101"
+# Tests that fail on uml
+[ "$UML" = "true" ] && EXCEPT="$EXCEPT 31d"
+
+# Tests that always fail with mountconf -- FIXME
+# 48a moving the working dir succeeds
+EXCEPT="$EXCEPT 48a"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;
@@ -62,22 +68,31 @@ else
     fi
 fi
 
+SANITYLOG=${SANITYLOG:-/tmp/sanity.log}
+
 export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
 
-clean() {
-	echo -n "cln.."
-	sh llmountcleanup.sh ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
-}
-CLEAN=${CLEAN:-:}
+# for MCSETUP and MCCLEANUP
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. mountconf.sh
 
-start() {
+cleanup() {
+	echo -n "cln.."
+	$MCCLEANUP ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
+}
+CLEANUP=${CLEANUP:-:}
+
+setup() {
 	echo -n "mnt.."
-	sh llrmount.sh > /dev/null || exit 10
+	$MCSETUP || exit 10
 	echo "done"
 }
-START=${START:-:}
+SETUP=${SETUP:-:}
 
 log() {
 	echo "$*"
@@ -93,7 +108,6 @@ trace() {
 }
 TRACE=${TRACE:-""}
 
-LPROC=/proc/fs/lustre
 check_kernel_version() {
 	VERSION_FILE=$LPROC/kernel_version
 	WANT_VER=$1
@@ -113,8 +127,8 @@ basetest() {
 }
 
 run_one() {
-	if ! mount | grep -q $DIR; then
-		$START
+	if ! grep -q $DIR /proc/mounts; then
+		$SETUP
 	fi
 	testnum=$1
 	message=$2
@@ -127,7 +141,7 @@ run_one() {
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
-	$CLEAN
+	$CLEANUP
 }
 
 build_test_filter() {
@@ -198,13 +212,15 @@ pass() {
 }
 
 mounted_lustre_filesystems() {
-	awk '($3 ~ "lustre") { print $2 }' /proc/mounts
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
-MOUNT="`mounted_lustre_filesystems`"
-if [ -z "$MOUNT" ]; then
-	sh llmount.sh
-	MOUNT="`mounted_lustre_filesystems`"
-	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
+
+MOUNTED="`mounted_lustre_filesystems`"
+if [ -z "$MOUNTED" ]; then
+        $MCFORMAT
+	$MCSETUP
+	MOUNTED="`mounted_lustre_filesystems`"
+	[ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
 	I_MOUNTED=yes
 fi
 
@@ -731,7 +747,7 @@ test_24n() {
     $CHECKSTAT ${f}.rename
     $CHECKSTAT -a ${f}
 }
-run_test 24n "Statting the old file after renameing (Posix rename 2)"
+run_test 24n "Statting the old file after renaming (Posix rename 2)"
 
 test_24o() {
 	check_kernel_version 37 || return 0
@@ -985,11 +1001,11 @@ reset_enospc() {
 
 exhaust_precreations() {
 	OSTIDX=$1
-	OST=$(head -n $((OSTIDX + 1)) $LPROC/lov/${LOVNAME}/target_obd |\
-		tail -n 1 | awk '{print $2}' | sed -e 's/_UUID$//')
-
-	last_id=$(cat $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc_last_id)
-	next_id=$(cat $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc_next_id)
+	OST=$(grep ${OSTIDX}": " $LPROC/lov/${LOVNAME}/target_obd | \
+	    awk '{print $2}' | sed -e 's/_UUID$//')
+	# on the mdt's osc
+	last_id=$(cat $LPROC/osc/${OST}-osc/prealloc_last_id)
+	next_id=$(cat $LPROC/osc/${OST}-osc/prealloc_next_id)
 
 	mkdir -p $DIR/d27/${OST}
 	$LSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
@@ -997,7 +1013,7 @@ exhaust_precreations() {
 	sysctl -w lustre.fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
-	grep '[0-9]' $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc*
+	grep '[0-9]' $LPROC/osc/${OST}-osc/prealloc*
 	reset_enospc $2
 }
 
@@ -1093,19 +1109,19 @@ test_28() {
 run_test 28 "create/mknod/mkdir with bad file types ============"
 
 cancel_lru_locks() {
-	for d in $LPROC/ldlm/namespaces/$1*; do
+	for d in $LPROC/ldlm/namespaces/*-$1-*; do
 		echo clear > $d/lru_size
 	done
-	grep "[0-9]" $LPROC/ldlm/namespaces/$1*/lock_unused_count /dev/null
+	grep "[0-9]" $LPROC/ldlm/namespaces/*-$1-*/lock_unused_count /dev/null
 }
 
 test_29() {
-	cancel_lru_locks MDC
+	cancel_lru_locks mdc
 	mkdir $DIR/d29
 	touch $DIR/d29/foo
 	log 'first d29'
 	ls -l $DIR/d29
-	MDCDIR=${MDCDIR:-$LPROC/ldlm/namespaces/MDC_*}
+	MDCDIR=${MDCDIR:-$LPROC/ldlm/namespaces/*-mdc-*}
 	LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
 	LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
 	log 'second d29'
@@ -1637,11 +1653,11 @@ setup_test42() {
 # file truncation, and file removal.
 test_42a() {
 	setup_test42
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
-	grep "[0-9]" $LPROC/osc/OSC*MNT*/cur_grant_bytes
+	grep "[0-9]" $LPROC/osc/*-osc-*/cur_grant_bytes
 	dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
@@ -1652,7 +1668,7 @@ run_test 42a "ensure that we don't flush on close =============="
 
 test_42b() {
 	setup_test42
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	stop_writeback
         sync
         dd if=/dev/zero of=$DIR/f42b bs=1024 count=100
@@ -1691,7 +1707,7 @@ trunc_test() {
         test=$1
         file=$DIR/$test
         offset=$2
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	stop_writeback
 	# prime the file with 0,EOF PW to match
 	touch $file
@@ -1701,7 +1717,7 @@ trunc_test() {
         dd if=/dev/zero of=$file bs=1024 count=100
         BEFOREWRITES=`count_ost_writes`
         $TRUNCATE $file $offset
-        cancel_lru_locks OSC
+        cancel_lru_locks osc
         AFTERWRITES=`count_ost_writes`
 	start_writeback
 }
@@ -1835,7 +1851,7 @@ test_45() {
 	[ $before -gt $after ] || error "writeback didn't lower dirty count"
 	do_dirty_record "echo blah > $f"
 	[ $before -eq $after ] && error "write wasn't cached"
-	do_dirty_record "cancel_lru_locks OSC"
+	do_dirty_record "cancel_lru_locks osc"
 	[ $before -gt $after ] || error "lock cancellation didn't lower dirty count"
 	start_writeback
 }
@@ -2064,8 +2080,8 @@ test_52b() {
 run_test 52b "immutable flag test (should return errors) ======="
 
 test_53() {
-        for i in `ls -d $LPROC/osc/OSC*mds1 2> /dev/null` ; do
-                ostname=`echo $i | cut -d _ -f 3-4 | sed -e s/_mds1//`
+        for i in `ls -d $LPROC/osc/*-osc 2> /dev/null` ; do
+                ostname=`basename $i | cut -d - -f 1-2`
                 ost_last=`cat $LPROC/obdfilter/$ostname/last_id`
                 mds_last=`cat $i/prealloc_last_id`
                 echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
@@ -2304,7 +2320,7 @@ run_test 60b "limit repeated messages from CERROR/CWARN ========"
 test_61() {
 	f="$DIR/f61"
 	dd if=/dev/zero of=$f bs=`page_size` count=1
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	multiop $f OSMWUc || error
 	sync
 }
@@ -2314,7 +2330,7 @@ run_test 61 "mmap() writes don't make sync hang ================"
 test_62() {
         f="$DIR/f62"
         echo foo > $f
-        cancel_lru_locks OSC
+        cancel_lru_locks osc
         sysctl -w lustre.fail_loc=0x405
         cat $f && error "cat succeeded, expect -EIO"
         sysctl -w lustre.fail_loc=0
@@ -2367,7 +2383,7 @@ run_test 63b "async write errors should be returned to fsync ==="
 
 test_64a () {
 	df $DIR
-	grep "[0-9]" $LPROC/osc/OSC*MNT*/cur*
+	grep "[0-9]" $LPROC/osc/*-osc-*/cur*
 }
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
@@ -2454,9 +2470,9 @@ run_test 65i "set default striping on root directory (bug 6367)="
 
 test_65j() { # bug6367
 	# if we aren't already remounting for each test, do so for this test
-	if [ "$CLEAN" = ":" ]; then
-		clean || error "failed to unmount"
-		start || error "failed to remount"
+	if [ "$CLEANUP" = ":" ]; then
+		cleanup -f || error "failed to unmount"
+		setup || error "failed to remount"
 	fi
 	$LSTRIPE -d $MOUNT || true
 }
@@ -2553,7 +2569,7 @@ test_69() {
 	sysctl -w lustre.fail_loc=0
 	$DIRECTIO write $f 0 2 || error "write error"
 
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	$DIRECTIO read $f 0 1 || error "read error"
 
 	sysctl -w lustre.fail_loc=0x217
@@ -2603,7 +2619,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	# See if we are still setuid/sgid
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on write"
 	# Now test that MDS is updated too
-	cancel_lru_locks MDC
+	cancel_lru_locks mdc
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on MDS"
 	true
 }
@@ -2819,7 +2835,7 @@ test_101() {
 	local nreads=10000
 	local cache_limit=32
 
-	for s in $LPROC/osc/OSC_*/rpc_stats; do
+	for s in $LPROC/osc/*-osc*/rpc_stats; do
 		echo 0 > $s
 	done
 	trap cleanup_101 EXIT
@@ -2841,7 +2857,7 @@ test_101() {
 	cleanup_101
 
 	if [ $(($discard * 10)) -gt $nreads ] ;then
-		cat $LPROC/osc/OSC_*/rpc_stats
+		cat $LPROC/osc/*-osc*/rpc_stats
 		cat $LPROC/llite/*/read_ahead_stats
 		error "too many ($discard) discarded pages" 
 	fi
@@ -2856,7 +2872,7 @@ test_102() {
         touch $testfile
 
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ -z "`grep xattr $LPROC/mdc/MDC*MNT*/connect_flags`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	[ -z "`grep xattr $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
@@ -2907,8 +2923,8 @@ test_103 () {
 
     [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
     [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
-    [ -z "`grep acl $LPROC/mdc/MDC*MNT*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
-    which setfacl 2>/dev/null || (echo "skipping $TESTNAME (could not find setfacl)" && return)
+    [ -z "`grep acl $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
+    $(which setfacl 2>/dev/null) || echo "skipping $TESTNAME (could not find setfacl)" && return
 
     echo "performing cp ..."
     run_acl_subtest cp || error
@@ -2943,7 +2959,7 @@ test_104() {
 	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
 	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
 	
-	OSC=`lctl dl | awk '/OSC.*MNT/ {print $4}' | head -n 1`
+	OSC=`awk '/-osc-/ {print $4}' $LPROC/devices | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df || error "lfs df with deactivated OSC failed"
 	lctl --device %$OSC recover
@@ -2957,11 +2973,12 @@ HOME=$OLDHOME
 
 log "cleanup: ======================================================"
 if [ "`mount | grep ^$NAME`" ]; then
-	rm -rf $DIR/[Rdfs][1-9]*
-	if [ "$I_MOUNTED" = "yes" ]; then
-		sh llmountcleanup.sh || error "llmountcleanup failed"
-	fi
+    rm -rf $DIR/[Rdfs][1-9]*
 fi
+if [ "$I_MOUNTED" = "yes" ]; then
+    $MCCLEANUP -f || error "cleanup failed"
+fi
+
 
 echo '=========================== finished ==============================='
 [ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true

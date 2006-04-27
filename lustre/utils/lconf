@@ -1457,7 +1457,6 @@ class MDSDEV(Module):
                 log(self.module_name, "create mtime LOGS cmdfile failed: ", self.name)
             else:
                 mtimecmdfile = string.split(mktemp[0])[0]
-                #mtimecmdfile="/tmp/lustre-cmd.XXXXXXXX"
                 fd = os.open(mtimecmdfile, os.O_RDWR | os.O_CREAT)
                 os.write(fd, "\n\n\n\n\n%s\n\n" %mtime)
                 os.close(fd)
@@ -2186,7 +2185,7 @@ def doMakeServiceScript(services):
                 extra_error = ""
             panic("Error creating " + target_symlink + ": " + e[1] + extra_error)
 
-# Check mtime of LLOG
+# Check mtime of config logs
 def doCheckMtime(lustreDB, hosts):
     for h in hosts:
         node_db = lustreDB.lookup_name(h, 'node')

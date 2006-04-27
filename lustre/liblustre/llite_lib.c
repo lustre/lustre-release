@@ -101,7 +101,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
                 GOTO(out, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);//FIXME connect to mgc
         lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         rc = class_process_config(lcfg);
@@ -131,7 +131,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
 
         /* Disable initial recovery on this import */
         rc = obd_set_info_async(obd->obd_self_export,
-                                strlen("initial_recov"), "initial_recov",
+                                strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
                                 sizeof(allow_recov), &allow_recov, NULL);
 
         rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);

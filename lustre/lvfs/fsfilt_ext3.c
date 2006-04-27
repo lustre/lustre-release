@@ -73,9 +73,42 @@ struct fsfilt_cb_data {
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
 
-static char *fsfilt_ext3_label(struct super_block *sb)
+static char *fsfilt_ext3_get_label(struct super_block *sb)
 {
         return EXT3_SB(sb)->s_es->s_volume_name;
+}
+
+static int fsfilt_ext3_set_label(struct super_block *sb, char *label)
+{
+        /* see e.g. fsfilt_ext3_write_record() */
+        journal_t *journal;
+        handle_t *handle;
+        int err;
+
+        journal = EXT3_SB(sb)->s_journal;
+        lock_24kernel();
+        handle = journal_start(journal, 1);
+        unlock_24kernel();
+        if (IS_ERR(handle)) {
+                CERROR("can't start transaction\n");
+                return(PTR_ERR(handle));
+        }
+
+        err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
+        if (err)
+                goto out;
+
+        memcpy(EXT3_SB(sb)->s_es->s_volume_name, label,
+               sizeof(EXT3_SB(sb)->s_es->s_volume_name));
+
+        err = ext3_journal_dirty_metadata(handle, EXT3_SB(sb)->s_sbh);
+
+out:
+        lock_24kernel();
+        journal_stop(handle);
+        unlock_24kernel();
+
+        return(err);
 }
 
 static char *fsfilt_ext3_uuid(struct super_block *sb)
@@ -693,7 +726,7 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #undef EXT3_MULTIBLOCK_ALLOCATOR
 #endif
 #ifndef EXT3_EXTENTS_FL
-#define EXT3_EXTENTS_FL			0x00080000 /* Inode uses extents */
+#define EXT3_EXTENTS_FL                 0x00080000 /* Inode uses extents */
 #endif
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
@@ -1924,7 +1957,8 @@ static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
 static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_type                = "ext3",
         .fs_owner               = THIS_MODULE,
-        .fs_label               = fsfilt_ext3_label,
+        .fs_getlabel            = fsfilt_ext3_get_label,
+        .fs_setlabel            = fsfilt_ext3_set_label,
         .fs_uuid                = fsfilt_ext3_uuid,
         .fs_start               = fsfilt_ext3_start,
         .fs_brw_start           = fsfilt_ext3_brw_start,

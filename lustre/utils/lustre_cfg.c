@@ -98,23 +98,14 @@ int jt_lcfg_attach(int argc, char **argv)
         struct lustre_cfg *lcfg;
         int rc;
 
-        if (argc != 2 && argc != 3 && argc != 4)
+        if (argc != 4)
                 return CMD_HELP;
 
         lustre_cfg_bufs_reset(&bufs, NULL);
 
         lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
-        if (argc >= 3) {
-                lustre_cfg_bufs_set_string(&bufs, 0, argv[2]);
-        } else {
-                fprintf(stderr, "error: %s: LCFG_ATTACH requires a name\n",
-                        jt_cmdname(argv[0])); 
-                return -EINVAL;
-        }
-
-        if (argc == 4) {
-                lustre_cfg_bufs_set_string(&bufs, 2, argv[3]);
-        }
+        lustre_cfg_bufs_set_string(&bufs, 0, argv[2]);
+        lustre_cfg_bufs_set_string(&bufs, 2, argv[3]);
 
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
@@ -548,6 +539,12 @@ int jt_lcfg_set_timeout(int argc, char **argv)
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
 
+        fprintf(stderr, "%s has been deprecated. Use conf_param instead.\n"
+                "e.g. conf_param lustre-MDT0000 obd_timeout=50\n",
+                jt_cmdname(argv[0]));
+        return CMD_HELP;
+
+
         if (argc != 2)
                 return CMD_HELP;
 
@@ -556,6 +553,8 @@ int jt_lcfg_set_timeout(int argc, char **argv)
         lcfg->lcfg_num = atoi(argv[1]);
         
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        //rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
+
         lustre_cfg_free(lcfg);
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
@@ -659,3 +658,77 @@ int jt_lcfg_del_conn(int argc, char **argv)
 
         return rc;
 }
+
+/* Param set locally, directly on target */
+int jt_lcfg_param(int argc, char **argv)
+{
+        int i, rc;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+
+        if (argc >= LUSTRE_CFG_MAX_BUFCOUNT)
+                return CMD_HELP;
+
+        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+
+        for (i = 1; i < argc; i++) {
+                lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
+        }
+
+        lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+        
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        lustre_cfg_free(lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+        return rc;
+}
+
+/* Param set in config log on MGS */
+/* conf_param <cfg_device> key1=value1 [key2=value2...] */
+int jt_lcfg_mgsparam(int argc, char **argv)
+{
+        int i, rc, index_offset = 0;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+
+        if ((argc >= LUSTRE_CFG_MAX_BUFCOUNT) || (argc <= 1))
+                return CMD_HELP;
+
+        if (!strchr(argv[1], '=')) {
+                /* Not key=val, assume <cfg_device> */
+                rc = jt_lcfg_device(2, argv);
+                if (rc) 
+                        return rc;
+                index_offset = 1;
+        }
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+                return -EINVAL;
+        }
+
+        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+
+        for (i = 1; i < (argc - index_offset); i++) {
+                lustre_cfg_bufs_set_string(&bufs, i, argv[i + index_offset]);
+        }
+
+        /* We could put other opcodes here. */
+        lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+
+        rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        lustre_cfg_free(lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+        
+        return rc;
+}
+
+

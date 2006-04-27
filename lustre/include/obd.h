@@ -101,7 +101,7 @@ struct lov_stripe_md {
         struct {
                 /* Public members. */
                 __u64 lw_object_id;        /* lov object id */
-                __u64 lw_object_gr;        /* lov object id */
+                __u64 lw_object_gr;        /* lov object group */
                 __u64 lw_maxbytes;         /* maximum possible file size */
                 unsigned long lw_xfersize; /* optimal transfer size */
 
@@ -235,7 +235,7 @@ struct filter_obd {
         spinlock_t           fo_translock;      /* protect fsd_last_transno */
         struct file         *fo_rcvd_filp;
         struct file         *fo_health_check_filp;
-        struct filter_server_data *fo_fsd;
+        struct lr_server_data *fo_fsd;
         unsigned long       *fo_last_rcvd_slots;
         __u64                fo_mount_count;
 
@@ -296,8 +296,6 @@ struct filter_obd {
         spinlock_t               fo_quotacheck_lock;
         atomic_t                 fo_quotachecking;
 };
-
-struct mds_server_data;
 
 #define OSC_MAX_RIF_DEFAULT       8
 #define OSC_MAX_RIF_MAX         256
@@ -368,6 +366,13 @@ struct client_obd {
         struct mdc_rpc_lock     *cl_setattr_lock;
         struct osc_creator       cl_oscc;
 
+        /* mgc datastruct */
+        struct semaphore         cl_mgc_sem;
+        struct vfsmount         *cl_mgc_vfsmnt;
+        struct dentry           *cl_mgc_configs_dir;
+        atomic_t                 cl_mgc_refcount;
+        struct obd_export       *cl_mgc_mgsexp;
+
         /* Flags section */
         unsigned int             cl_checksum:1; /* debug checksums */
 
@@ -380,6 +385,16 @@ struct client_obd {
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
 #define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
+
+struct mgs_obd {
+        struct ptlrpc_service           *mgs_service;
+        struct vfsmount                 *mgs_vfsmnt;
+        struct super_block              *mgs_sb;
+        struct dentry                   *mgs_configs_dir;
+        struct dentry                   *mgs_fid_de;
+        struct list_head                 mgs_fs_db_list;
+        struct semaphore                 mgs_sem;
+};
 
 struct mds_obd {
         /* NB this field MUST be first */
@@ -399,7 +414,7 @@ struct mds_obd {
         unsigned long                    mds_atime_diff;
         struct semaphore                 mds_epoch_sem;
         struct ll_fid                    mds_rootfid;
-        struct mds_server_data          *mds_server_data;
+        struct lr_server_data           *mds_server_data;
         cfs_dentry_t                    *mds_pending_dir;
         cfs_dentry_t                    *mds_logs_dir;
         cfs_dentry_t                    *mds_objects_dir;
@@ -409,9 +424,11 @@ struct mds_obd {
         struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
         struct obd_export               *mds_osc_exp; /* XXX lov_exp */
-        int                              mds_has_lov_desc;
         struct lov_desc                  mds_lov_desc;
         obd_id                          *mds_lov_objids;
+        int                              mds_lov_objids_size;
+        __u32                            mds_lov_objids_in_file;
+        unsigned int                     mds_lov_objids_dirty:1;
         int                              mds_lov_nextid_set;
         struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
@@ -464,6 +481,7 @@ struct lov_obd {
         struct semaphore lov_lock;
         atomic_t refcount;
         struct lov_desc desc;
+        struct obd_connect_data ocd;
         int bufsize;
         int connects;
         int death_row;      /* Do we have tgts scheduled to be deleted?
@@ -484,19 +502,27 @@ struct niobuf_local {
 };
 
 /* obd device type names */
+ /* FIXME all the references to LUSTRE_MDS_NAME should be swapped with LUSTRE_MDT_NAME */
 #define LUSTRE_MDS_NAME         "mds"
 #define LUSTRE_MDT_NAME         "mdt"
 #define LUSTRE_MDC_NAME         "mdc"
-#define LUSTRE_FILTER_NAME      "obdfilter"
-#define LUSTRE_OST_NAME         "ost"
+#define LUSTRE_OSS_NAME         "ost" /*FIXME change name to oss*/
+#define LUSTRE_OST_NAME         "obdfilter" /* FIXME change name to ost*/
 #define LUSTRE_OSC_NAME         "osc"
+#define LUSTRE_LOV_NAME         "lov"
+#define LUSTRE_MGS_NAME         "mgs"
+#define LUSTRE_MGC_NAME         "mgc"
+
+#define LUSTRE_OSTSAN_NAME      "sanobdfilter"
 #define LUSTRE_SANOSC_NAME      "sanosc"
 #define LUSTRE_SANOST_NAME      "sanost"
-#define LUSTRE_LOV_NAME         "lov"
 #define LUSTRE_CACHEOBD_NAME    "cobd"
 #define LUSTRE_ECHO_NAME        "obdecho"
 #define LUSTRE_ECHO_CLIENT_NAME "echo_client"
 
+/* Constant obd names */
+#define LUSTRE_MGS_OBDNAME "MGS"
+#define LUSTRE_MGC_OBDNAME "MGC"
 
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
 #define N_LOCAL_TEMP_PAGE 0x10000000
@@ -589,7 +615,10 @@ enum obd_notify_event {
         /* Device deactivated */
         OBD_NOTIFY_INACTIVE,
         /* Connect data for import were changed */
-        OBD_NOTIFY_OCD
+        OBD_NOTIFY_OCD,
+        /* Sync request */
+        OBD_NOTIFY_SYNC_NONBLOCK,
+        OBD_NOTIFY_SYNC
 };
 
 /*
@@ -605,13 +634,12 @@ struct obd_notify_upcall {
 
 /* corresponds to one of the obd's */
 struct obd_device {
-        struct obd_type *obd_type;
-
+        struct obd_type        *obd_type;
         /* common and UUID name of this device */
-        char *obd_name;
-        struct obd_uuid obd_uuid;
+        char                   *obd_name;
+        struct obd_uuid         obd_uuid;
 
-        int obd_minor;
+        int                     obd_minor;
         unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
                 obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
                 obd_no_recov:1, obd_stopping:1, obd_starting:1,
@@ -667,6 +695,7 @@ struct obd_device {
                 struct echo_client_obd echo_client;
                 struct echo_obd echo;
                 struct lov_obd lov;
+                struct mgs_obd mgs;
         } u;
         /* Fields used by LProcFS */
         unsigned int           obd_cntr_base;
@@ -693,6 +722,13 @@ enum obd_cleanup_stage {
    of the "cleanup" function. */
         OBD_CLEANUP_OBD,
 };
+
+/* get/set_info keys */
+#define KEY_MDS_CONN "mds_conn"
+#define KEY_NEXT_ID  "next_id"
+#define KEY_LOVDESC  "lovdesc"
+#define KEY_INIT_RECOV "initial_recov"
+#define KEY_INIT_RECOV_BACKUP "init_recov_bk"
 
 struct obd_ops {
         struct module *o_owner;
@@ -848,7 +884,7 @@ struct obd_ops {
                               enum obd_import_event);
 
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
-                        enum obd_notify_event ev);
+                        enum obd_notify_event ev, void *data);
 
         int (*o_health_check)(struct obd_device *);
 

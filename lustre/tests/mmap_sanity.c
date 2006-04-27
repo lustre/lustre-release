@@ -198,7 +198,7 @@ out_close:
         return rc;
 }
 
-/* cocurrent mmap operations on two nodes */
+/* concurrent mmap operations on two nodes */
 static int mmap_tst3(char *mnt)
 {
         char *ptr, mmap_file[256];
@@ -403,7 +403,7 @@ static int cancel_lru_locks(char *prefix)
         }
 
         if (prefix)
-                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/%s_*/lru_size", prefix);
+                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*-%s-*/lru_size", prefix);
         else
                 sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size");
 
@@ -472,7 +472,7 @@ static int mmap_tst5(char *mnt)
         memset(ptr, 'a', region);
 
         /* cancel unused locks */
-        cancel_lru_locks("OSC");
+        cancel_lru_locks("osc");
         if (rc)
                 goto out_unmap;
 
@@ -538,7 +538,7 @@ static int mmap_tst6(char *mnt)
                 goto out;
         }
 
-        cancel_lru_locks("OSC");
+        cancel_lru_locks("osc");
         if (rc)
                 goto out;
 
@@ -594,11 +594,11 @@ struct test_case {
 struct test_case tests[] = {
         { 1, "mmap test1: basic mmap operation", mmap_tst1, 1 },
         { 2, "mmap test2: MAP_PRIVATE not write back", mmap_tst2, 1 },
-        { 3, "mmap test3: cocurrent mmap ops on two nodes", mmap_tst3, 2 },
-        { 4, "mmap test4: c1 write to f1 from mmaped f2, " 
-             "c2 write to f1 from mmaped f1", mmap_tst4, 2 },
+        { 3, "mmap test3: concurrent mmap ops on two nodes", mmap_tst3, 2 },
+        { 4, "mmap test4: c1 write to f1 from mmapped f2, " 
+             "c2 write to f1 from mmapped f1", mmap_tst4, 2 },
         { 5, "mmap test5: read/write file to/from the buffer "
-             "which mmaped to just this file", mmap_tst5, 1 },
+             "which mmapped to just this file", mmap_tst5, 1 },
         { 6, "mmap test6: check mmap write/read content on two nodes", 
                 mmap_tst6, 2 },
         { 0, NULL, 0, 0 }

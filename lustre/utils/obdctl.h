@@ -69,6 +69,7 @@ int jt_llog_remove(int argc, char **argv);
 int jt_llog_check(int argc, char **argv);
 
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg);
+int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg);
 int parse_devname(char *func, char *name);
 char *jt_cmdname(char *func);
 
@@ -88,6 +89,8 @@ int jt_lcfg_set_timeout(int argc, char **argv);
 int jt_lcfg_set_lustre_upcall(int argc, char **argv);
 int jt_lcfg_add_conn(int argc, char **argv);
 int jt_lcfg_del_conn(int argc, char **argv);
+int jt_lcfg_param(int argc, char **argv);
+int jt_lcfg_mgsparam(int argc, char **argv);
 
 int obd_add_uuid(char *uuid, lnet_nid_t nid);
 

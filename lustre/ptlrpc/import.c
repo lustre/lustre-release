@@ -88,6 +88,7 @@ int ptlrpc_init_import(struct obd_import *imp)
 
         return 0;
 }
+EXPORT_SYMBOL(ptlrpc_init_import);
 
 #define UUID_STR "_UUID"
 static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uuid_len)
@@ -209,6 +210,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 }
 
+/* unset imp_invalid */
 void ptlrpc_activate_import(struct obd_import *imp)
 {
         struct obd_device *obd = imp->imp_obd;
@@ -366,7 +368,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                 /* Don't retry if connect fails */
                 rc = 0;
                 obd_set_info_async(obd->obd_self_export,
-                                   strlen("initial_recov"), "initial_recov",
+                                   strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
                                    sizeof(rc), &rc, NULL);
         }
 
@@ -414,6 +416,7 @@ out:
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(ptlrpc_connect_import);
 
 static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 {
@@ -845,6 +848,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         switch (imp->imp_connect_op) {
         case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
         case MDS_CONNECT: rq_opc = MDS_DISCONNECT; break;
+        case MGS_CONNECT: rq_opc = MGS_DISCONNECT; break;
         default:
                 CERROR("don't know how to disconnect from %s (connect_op %d)\n",
                        obd2cli_tgt(imp->imp_obd), imp->imp_connect_op);

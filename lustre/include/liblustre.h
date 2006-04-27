@@ -318,12 +318,14 @@ static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
 #ifndef min_t
 #define min_t(type,x,y) \
-	({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
 #endif
 #ifndef max_t
 #define max_t(type,x,y) \
-	({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
+        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
+
+#define simple_strtol strtol
 
 /* registering symbols */
 #ifndef ERESTARTSYS
@@ -664,7 +666,7 @@ static inline int schedule_timeout(signed long t)
 })
 #define time_after(a, b) ((long)(b) - (long)(a) < 0)
 #define time_before(a, b) time_after(b,a)
-#define time_after_eq(a,b)	((long)(a) - (long)(b) >= 0)
+#define time_after_eq(a,b)      ((long)(a) - (long)(b) >= 0)
 
 struct timer_list {
         struct list_head tl_list;

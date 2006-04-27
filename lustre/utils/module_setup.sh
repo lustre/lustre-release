@@ -1,6 +1,7 @@
 #!/bin/sh
 
 MDIR=/lib/modules/`uname -r`/lustre
+mkdir -p $MDIR
 
 KVER=24
 EXT=o
@@ -15,29 +16,31 @@ fi
 
 echo "Copying modules from local build dir to "$MDIR
 
-mkdir -p $MDIR
+cp -u ../../lnet/libcfs/libcfs.$EXT $MDIR
+cp -u ../../lnet/lnet/lnet.$EXT $MDIR
+cp -u ../../lnet/klnds/socklnd/ksocklnd.$EXT $MDIR
+cp -u ../lvfs/lvfs.$EXT $MDIR
+cp -u ../obdclass/obdclass.$EXT $MDIR
+cp -u ../ptlrpc/ptlrpc.$EXT $MDIR
+cp -u ../mdc/mdc.$EXT $MDIR
+cp -u ../osc/osc.$EXT $MDIR
+cp -u ../lov/lov.$EXT $MDIR
+cp -u ../mds/mds.$EXT $MDIR
+cp -u ../lvfs/$FSFLT.$EXT $MDIR
+[ $KVER == "26" ] && cp -u ../ldiskfs/ldiskfs.$EXT $MDIR
+cp -u ../ost/ost.$EXT $MDIR
+cp -u ../obdfilter/obdfilter.$EXT $MDIR
+cp -u ../llite/llite.$EXT $MDIR
+cp -u ../mgc/mgc.$EXT $MDIR
+cp -u ../mgs/mgs.$EXT $MDIR
 
-cp ../../lnet/libcfs/libcfs.$EXT $MDIR
-cp ../../lnet/lnet/lnet.$EXT $MDIR
-cp ../../lnet/klnds/socklnd/ksocklnd.$EXT $MDIR
-cp ../lvfs/lvfs.$EXT $MDIR
-cp ../obdclass/obdclass.$EXT $MDIR
-cp ../ptlrpc/ptlrpc.$EXT $MDIR
-cp ../mdc/mdc.$EXT $MDIR
-cp ../osc/osc.$EXT $MDIR
-cp ../lov/lov.$EXT $MDIR
-cp ../mds/mds.$EXT $MDIR
-cp ../lvfs/$FSFLT.$EXT $MDIR
-[ $KVER == "26" ] && cp ../ldiskfs/ldiskfs.$EXT $MDIR
-cp ../ost/ost.$EXT $MDIR
-cp ../obdfilter/obdfilter.$EXT $MDIR
-cp ../llite/llite.$EXT $MDIR
-
+# prevent warnings on my uml
+rm -f /lib/modules/`uname -r`/modules.*
 echo "Depmod"
 depmod -a -e
 
 echo "Copying mount from local build dir to "$MDIR
-cp ../utils/mount.lustre /sbin/.
+cp -u ../utils/mount.lustre /sbin/.
 
 MP="/sbin/modprobe"
 MPI="$MP --ignore-install"
@@ -51,3 +54,8 @@ if [ `egrep -c "lustre|lnet" $MODFILE` -eq 0 ]; then
     echo "alias lustre llite" >> $MODFILE
     echo "# end Lustre modules" >> $MODFILE
 fi
+
+#  To generate gdb debug file:
+# modprobe lustre; modprobe mds; modprobe obdfilter; modprobe mgs; modprobe mgc
+# rm -f /r/tmp/ogdb-`hostname`
+# ./lctl modules > /r/tmp/ogdb-`hostname`

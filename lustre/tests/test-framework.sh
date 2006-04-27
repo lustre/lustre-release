@@ -2,6 +2,7 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
+#set -vx
 
 export REFORMAT=""
 export VERBOSE=false
@@ -36,12 +37,11 @@ init_test_env() {
     export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
-    export LLMOUNT=${LLMOUNT:-"llmount"}
-    export LCONF=${LCONF:-"lconf"}
-    export LMC=${LMC:-"lmc"}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
+    export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
+    export LPROC=/proc/fs/lustre
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
@@ -70,55 +70,87 @@ init_test_env() {
 #    echo "CONFIG=`canonical_path $CONFIG`"  > $LUSTRE/tests/CONFIG
 }
 
+unload_modules() {
+    lsmod | grep lnet > /dev/null && $LCTL dk $TMP/debug
+    local MODULES=`$LCTL modules | awk '{ print $2 }'`
+    rmmod $MODULES >/dev/null 2>&1 
+     # do it again, in case we tried to unload ksocklnd too early
+    lsmod | grep lnet > /dev/null && rmmod $MODULES >/dev/null 2>&1 
+    lsmod | grep lnet && echo "modules still loaded" && return 1
+
+    LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked"`
+    LEAK_PORTALS=`dmesg | tail -n 20 | grep "Portals memory leaked"`
+    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
+	echo "$LEAK_LUSTRE" 1>&2
+	echo "$LEAK_PORTALS" 1>&2
+	mv $TMP/debug $TMP/debug-leak.`date +%s`
+	echo "Memory leaks detected"
+	return 254
+    fi
+}
+
 # Facet functions
+# start facet device options 
 start() {
     facet=$1
     shift
-    active=`facet_active $facet`
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
-        --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
-        $@ $XMLCONFIG
+    device=$1
+    shift
+    echo "Starting ${facet}: $@ ${device} /mnt/${facet}"
+    do_facet ${facet} mkdir -p /mnt/${facet}
+    do_facet ${facet} mount -t lustre $@ ${device} /mnt/${facet} 
+    #do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
+    #    --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
+    #    $@ $XMLCONFIG
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
-        # maybe acceptor error, dump tcp port usage
-        netstat -tpn
+	echo mount -t lustre $@ ${device} /mnt/${facet} 
+        echo Start of ${device} on ${facet} failed ${RC}
+    else 
+	do_facet ${facet} sync
+	# need the awk in case running with -v 
+	label=`do_facet ${facet} "e2label ${device}" | awk '{print $(NF)}'`
+	eval export ${facet}_svc=${label}
+	eval export ${facet}_dev=${device}
+	eval export ${facet}_opt=\"$@\"
+	echo Started ${label}
     fi
     return $RC
 }
 
 stop() {
     facet=$1
-    active=`facet_active $facet`
     shift
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
-        --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
-        $@ --cleanup $XMLCONFIG
+    # the following line fails with VERBOSE set 
+    local running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts" | awk '{print $(NF)}'`
+    if [ $running -ne 0 ]; then
+	echo "Stopping /mnt/${facet} (opts:$@)"
+	do_facet ${facet} umount -d $@ /mnt/${facet}
+    fi
+    #do_facet ${facet} umount -d $@ /mnt/${facet} >> /dev/null 2>&1 || :
+    [ -e /proc/fs/lustre ] && grep "ST " /proc/fs/lustre/devices && echo "service didn't stop" && exit 1
+    return 0
 }
 
 zconf_mount() {
     local OPTIONS
-    client=$1
-    mnt=$2
-
-    do_node $client mkdir $mnt 2> /dev/null || :
-
+    local client=$1
+    local mnt=$2
     # Only supply -o to mount if we have options
     if [ -n "$MOUNTOPT" ]; then
         OPTIONS="-o $MOUNTOPT"
     fi
-
-    if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre $OPTIONS \
-		`facet_nid mds`:/mds_svc/client_facet $mnt || return 1
-        do_node $client "sysctl -w lnet.debug=$PTLDEBUG; sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }"
-    else
-	# this is so cheating
-	do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG > \
-		/dev/null || return 2
-	do_node $client $LLMOUNT $OPTIONS \
-		`facet_nid mds`:/mds_svc/client_facet $mnt || return 4
+    local device=`facet_nid mgs`:/$FSNAME
+    if [ -z "$mnt" -o -z "$FSNAME" ]; then
+	echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
+	exit 1
     fi
 
+    echo "Starting client: $OPTIONS $device $mnt" 
+    do_node $client mkdir -p $mnt
+    do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
+
+    do_node $client "sysctl -w lnet.debug=$PTLDEBUG; sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }"
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
     return 0
 }
@@ -127,8 +159,11 @@ zconf_umount() {
     client=$1
     mnt=$2
     [ "$3" ] && force=-f
-    do_node $client umount $force  $mnt || :
-    do_node $client $LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null || :
+    local running=`do_node $client "grep -c $mnt' ' /proc/mounts" | awk '{print $(NF)}'`
+    if [ $running -ne 0 ]; then
+	echo "Stopping client $mnt (opts:$force)"
+	do_node $client umount $force $mnt
+    fi
 }
 
 shutdown_facet() {
@@ -137,7 +172,7 @@ shutdown_facet() {
        $POWER_DOWN `facet_active_host $facet`
        sleep 2 
     elif [ "$FAILURE_MODE" = SOFT ]; then
-       stop $facet --force --failover --nomod
+       stop $facet
     fi
 }
 
@@ -182,7 +217,7 @@ client_reconnect() {
 
 facet_failover() {
     facet=$1
-    echo "Failing $facet node `facet_active_host $facet`"
+    echo "Failing $facet on node `facet_active_host $facet`"
     shutdown_facet $facet
     reboot_facet $facet
     client_df &
@@ -192,52 +227,64 @@ facet_failover() {
     TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
     wait_for $facet
-    start $facet
+    local dev=${facet}_dev
+    local opt=${facet}_opt
+    start $facet ${!dev} ${!opt}
+}
+
+obd_name() {
+    local facet=$1
 }
 
 replay_barrier() {
     local facet=$1
     do_facet $facet sync
     df $MOUNT
-    do_facet $facet $LCTL --device %${facet}_svc readonly
-    do_facet $facet $LCTL --device %${facet}_svc notransno
-    do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
-    $LCTL mark "local REPLAY BARRIER"
+    local svc=${facet}_svc
+    do_facet $facet $LCTL --device %${!svc} readonly
+    do_facet $facet $LCTL --device %${!svc} notransno
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
+    $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
 replay_barrier_nodf() {
     local facet=$1
     do_facet $facet sync
-    do_facet $facet $LCTL --device %${facet}_svc readonly
-    do_facet $facet $LCTL --device %${facet}_svc notransno
-    do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
-    $LCTL mark "local REPLAY BARRIER"
+    local svc=${facet}_svc
+    echo Replay barrier on ${!svc}
+    do_facet $facet $LCTL --device %${!svc} readonly
+    do_facet $facet $LCTL --device %${!svc} notransno
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
+    $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
 mds_evict_client() {
     UUID=`cat /proc/fs/lustre/mdc/*_MNT_*/uuid`
-    do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds_svc/evict_client"
+    do_facet mds "echo $UUID > /proc/fs/lustre/mds/${mds_svc}/evict_client"
 }
 
 fail() {
-    local facet=$1
-    facet_failover $facet
+    facet_failover $*
     df $MOUNT || error "post-failover df: $?"
 }
 
 fail_abort() {
     local facet=$1
-    stop $facet --force --failover --nomod
+    stop $facet
     change_active $facet
-    start $facet
-    do_facet $facet lctl --device %${facet}_svc abort_recovery
+    local svc=${facet}_svc
+    local dev=${facet}_dev
+    local opt=${facet}_opt
+    start $facet ${!dev} ${!opt}
+    do_facet $facet lctl --device %${!svc} abort_recovery
     df $MOUNT || echo "first df failed: $?"
     sleep 1
     df $MOUNT || error "post-failover df: $?"
 }
 
 do_lmc() {
-    $LMC -m ${XMLCONFIG} $@
+    echo There is no lmc.  This is mountconf, baby.
+    exit 1
 }
 
 h2gm () {
@@ -353,69 +400,13 @@ do_facet() {
     do_node $HOST $@
 }
 
-add_facet() {
+add() {
     local facet=$1
     shift
-    echo "add facet $facet: `facet_host $facet`"
-    do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
-        --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
-    do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
-        --nettype lnet $PORT_OPT
-}
-
-add_mds() {
-    local MOUNT_OPTS
-    local facet=$1
-    shift
+    # failsafe
+    stop ${facet} -f
     rm -f ${facet}active
-    add_facet $facet
-    [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
-    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc \
-    	--fstype $FSTYPE $* $MOUNT_OPTS
-}
-
-add_mdsfailover() {
-    local MOUNT_OPTS
-    local facet=$1
-    shift
-    add_facet ${facet}failover  --lustre_upcall $UPCALL
-    [ "x$MDSOPT" != "x" ] && MOUNT_OPTS="--mountfsoptions $MDSOPT"
-    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc \
-    	--fstype $FSTYPE $* $MOUNT_OPTS
-}
-
-add_ost() {
-    facet=$1
-    shift
-    rm -f ${facet}active
-    add_facet $facet
-    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc \
-    	--fstype $FSTYPE $* $OSTOPT
-}
-
-add_ostfailover() {
-    facet=$1
-    shift
-    add_facet ${facet}failover
-    do_lmc --add ost --failover --node ${facet}failover_facet \
-    	--ost ${facet}_svc --fstype $FSTYPE $* $OSTOPT
-}
-
-add_lov() {
-    lov=$1
-    mds_facet=$2
-    shift; shift
-    do_lmc --add lov --mds ${mds_facet}_svc --lov $lov $* $LOVOPT
-}
-
-add_client() {
-    local MOUNT_OPTS
-    local facet=$1
-    mds=$2
-    shift; shift
-    [ "x$CLIENTOPT" != "x" ] && MOUNT_OPTS="--clientoptions $CLIENTOPT"
-    add_facet $facet --lustre_upcall $UPCALL
-    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $* $MOUNT_OPTS
+    $MKFS $*
 }
 
 
@@ -622,6 +613,7 @@ equals_msg() {
 
 log() {
 	echo "$*"
+	lsmod | grep lnet > /dev/null || modprobe lnet
 	$LCTL mark "$*" 2> /dev/null || true
 }
 

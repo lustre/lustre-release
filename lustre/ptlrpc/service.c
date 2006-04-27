@@ -841,7 +841,9 @@ ptlrpc_check_rqbd_pool(struct ptlrpc_service *svc)
         if (avail <= low_water)
                 ptlrpc_grow_req_bufs(svc);
 
-        lprocfs_counter_add(svc->srv_stats, PTLRPC_REQBUF_AVAIL_CNTR, avail);
+        if (svc->srv_stats)
+                lprocfs_counter_add(svc->srv_stats, PTLRPC_REQBUF_AVAIL_CNTR,
+                                    avail);
 }
 
 static int

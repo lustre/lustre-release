@@ -838,16 +838,16 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
         struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
 
-        if (KEY_IS("initial_recov")) {
+        if (KEY_IS(KEY_INIT_RECOV)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
-                CDEBUG(D_HA, "%s: set imp_no_init_recov = %d\n",
+                CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
                        exp->exp_obd->obd_name, imp->imp_initial_recov);
                 RETURN(0);
         }
         /* Turn off initial_recov after we try all backup servers once */
-        if (KEY_IS("init_recov_bk")) {
+        if (KEY_IS(KEY_INIT_RECOV_BACKUP)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov_bk = *(int *)val;
@@ -1074,7 +1074,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                 break;
         }
         case IMP_EVENT_INACTIVE: {
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE, NULL);
                 break;
         }
         case IMP_EVENT_INVALIDATE: {
@@ -1085,7 +1085,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                 break;
         }
         case IMP_EVENT_ACTIVE: {
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);
                 break;
         }
         case IMP_EVENT_OCD:
@@ -1154,7 +1154,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         int rc, size;
         ENTRY;
 
-        rc = obd_get_info(lov_exp, strlen("lovdesc") + 1, "lovdesc",
+        rc = obd_get_info(lov_exp, strlen(KEY_LOVDESC) + 1, KEY_LOVDESC,
                           &valsize, &desc);
         if (rc)
                 RETURN(rc);
@@ -1187,13 +1187,17 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         int rc = 0;
         ENTRY;
 
-        if (stage < OBD_CLEANUP_SELF_EXP)
-                RETURN(0);
-
-        rc = obd_llog_finish(obd, 0);
-        if (rc != 0)
-                CERROR("failed to cleanup llogging subsystems\n");
-
+        switch (stage) {
+        case OBD_CLEANUP_EARLY: 
+        case OBD_CLEANUP_EXPORTS:
+                break;
+        case OBD_CLEANUP_SELF_EXP:
+                rc = obd_llog_finish(obd, 0);
+                if (rc != 0)
+                        CERROR("failed to cleanup llogging subsystems\n");
+        case OBD_CLEANUP_OBD:
+                break;
+        }
         RETURN(rc);
 }
 

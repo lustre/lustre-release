@@ -8,6 +8,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
 
+/* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_client_data;
 
 struct mds_export_data {

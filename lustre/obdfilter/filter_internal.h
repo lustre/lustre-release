@@ -8,22 +8,13 @@
 #ifdef __KERNEL__
 # include <linux/spinlock.h>
 #endif
-#include <linux/lustre_disk.h>
+#include <lustre_disk.h>
 #include <lustre_handles.h>
 #include <lustre_debug.h>
 #include <obd.h>
 
 #define FILTER_LAYOUT_VERSION "2"
 
-#ifndef OBD_FILTER_DEVICENAME
-# define OBD_FILTER_DEVICENAME "obdfilter"
-#endif
-
-#ifndef OBD_FILTER_SAN_DEVICENAME
-# define OBD_FILTER_SAN_DEVICENAME "sanobdfilter"
-#endif
-
-#define HEALTH_CHECK "health_check"
 #define FILTER_INIT_OBJID 0
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
@@ -33,32 +24,11 @@
 
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
-#define FILTER_INCOMPAT_SUPP   (OBD_INCOMPAT_GROUPS)
+#define FILTER_INCOMPAT_SUPP (OBD_INCOMPAT_GROUPS | OBD_INCOMPAT_OST | \
+                              OBD_INCOMPAT_COMMON_LR)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
 #define GRANT_FOR_LLOG(obd) 16
-
-/* Data stored per server at the head of the last_rcvd file.  In le32 order.
- * Try to keep this the same as mds_server_data so we might one day merge. */
-struct filter_server_data {
-/* 00*/ __u8  fsd_uuid[40];        /* server UUID */
-/* 28*/ __u64 fsd_last_transno_new;/* future last completed transaction ID */
-/* 30*/ __u64 fsd_last_transno;    /* last completed transaction ID */
-        __u64 fsd_mount_count;     /* FILTER incarnation number */
-/* 40*/ __u32 fsd_feature_compat;  /* compatible feature flags */
-        __u32 fsd_feature_rocompat;/* read-only compatible feature flags */
-        __u32 fsd_feature_incompat;/* incompatible feature flags */
-        __u32 fsd_server_size;     /* size of server data area */
-/* 50*/ __u32 fsd_client_start;    /* start of per-client data area */
-        __u16 fsd_client_size;     /* size of per-client data area */
-        __u16 fsd_subdir_count;    /* number of subdirectories for objects */
-        __u64 fsd_catalog_oid;     /* recovery catalog object id */
-/* 60*/ __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  fsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-/* 8c*/ __u32 fsd_ost_index;       /* index number of OST in LOV */
-        __u32 fsd_mds_index;       /* index number of MDS in LMV */
-/* 94*/ __u8  fsd_padding[LR_SERVER_SIZE - 148];
-};
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct filter_client_data {
@@ -107,7 +77,7 @@ __u64 filter_last_id(struct filter_obd *, struct obdo *);
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                         void *handle, struct obdo *oa);
 int filter_update_server_data(struct obd_device *, struct file *,
-                              struct filter_server_data *, int force_sync);
+                              struct lr_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         void *option);
@@ -133,8 +103,8 @@ int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *, int rc);
 int filter_brw(int cmd, struct obd_export *, struct obdo *,
-	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
-	       struct obd_trans_info *);
+               struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
+               struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
 
 /* filter_io_*.c */

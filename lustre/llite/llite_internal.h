@@ -13,7 +13,8 @@
 #include <lustre_debug.h>
 #include <lustre_ver.h>
 #include <linux/lustre_version.h>
-
+#include <lustre_disk.h>  /* for s2sbi */
+ 
 /*
 struct lustre_intent_data {
         __u64 it_lock_handle[2];
@@ -157,8 +158,6 @@ struct ll_sb_info {
         struct obd_export        *ll_osc_exp;
         struct proc_dir_entry*    ll_proc_root;
         obd_id                    ll_rootino; /* number of root inode */
-
-        struct lustre_mount_data *ll_lmd;
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
@@ -424,12 +423,10 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name);
 extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
-int ll_set_opt(const char *opt, char *data, int fl);
-void ll_options(char *options, char **ost, char **mds, int *flags);
+void ll_options(char *options, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
-int ll_fill_super(struct super_block *sb, void *data, int silent);
-int lustre_fill_super(struct super_block *sb, void *data, int silent);
-void lustre_put_super(struct super_block *sb);
+int ll_fill_super(struct super_block *sb);
+void ll_put_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_setattr_raw(struct inode *inode, struct iattr *attr);
@@ -442,7 +439,7 @@ void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
-int lustre_remount_fs(struct super_block *sb, int *flags, char *data);
+int ll_remount_fs(struct super_block *sb, int *flags, char *data);
 int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset, struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);
@@ -513,8 +510,9 @@ int ll_tree_unlock(struct ll_lock_tree *tree);
 
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 
+#define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
+
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#define    ll_s2sbi_nocast(sb) ((sb)->s_fs_info)
 void __d_rehash(struct dentry * entry, int lock);
 static inline __u64 ll_ts2u64(struct timespec *time)
 {
@@ -522,13 +520,11 @@ static inline __u64 ll_ts2u64(struct timespec *time)
         return t;
 }
 #else  /* 2.4 here */
-#define    ll_s2sbi_nocast(sb) ((sb)->u.generic_sbp)
 static inline __u64 ll_ts2u64(time_t *time)
 {
         return *time;
 }
 #endif
-#define    ll_s2sbi(sb)        ((struct ll_sb_info *)ll_s2sbi_nocast(sb))
 
 /* don't need an addref as the sb_info should be holding one */
 static inline struct obd_export *ll_s2obdexp(struct super_block *sb)

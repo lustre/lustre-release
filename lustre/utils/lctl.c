@@ -96,7 +96,7 @@ command_t cmdlist[] = {
          "setup for elan/myrinet networks.\n"
          "usage: mynid [<nid>]"},
         {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
-         "usage: add_uuid <uuid> <nid> <net_type>"},
+         "usage: add_uuid <uuid> <nid>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
          "usage: close_uuid <uuid> <net_type>"},
         {"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
@@ -144,8 +144,8 @@ command_t cmdlist[] = {
         /* Device configuration commands */
         {"==== device config =====", jt_noop, 0, "device config"},
         {"attach", jt_lcfg_attach, 0,
-         "set the type of the current device (with <name> and <uuid>)\n"
-         "usage: attach type [name [uuid]]"},
+         "set the type, name, and uuid of the current device\n"
+         "usage: attach type name uuid"},
         {"setup", jt_lcfg_setup, 0,
          "type specific device configuration information\n"
          "usage: setup <args...>"},
@@ -172,6 +172,9 @@ command_t cmdlist[] = {
          "usage: dump_log config-uuid-name"},
         {"clear_log", jt_cfg_clear_log, 0, "delete current config log of recorded commands\n"
          "usage: clear_log config-name"},
+        {"conf_param", jt_lcfg_mgsparam, 0, "set a permanent config param\n"
+         "usage: conf_param <keyword=val> ...\n"},
+
 
         /* Device operations */
         {"=== device operations ==", jt_noop, 0, "device operations"},
@@ -231,14 +234,16 @@ command_t cmdlist[] = {
         {"del_mount_option", jt_lcfg_del_mount_option, 0,
          "usage: del_mount_option profile\n"},
         {"set_timeout", jt_lcfg_set_timeout, 0,
-         "usage: set_timeout <secs>\n"},
+         "usage: conf_param obd_timeout=<secs>\n"},
         {"set_lustre_upcall", jt_lcfg_set_lustre_upcall, 0,
          "usage: set_lustre_upcall </full/path/to/upcall> \n"},
         {"add_conn ", jt_lcfg_add_conn, 0,
          "usage: add_conn <conn_uuid> [priority]\n"},
         {"del_conn ", jt_lcfg_del_conn, 0,
          "usage: del_conn <conn_uuid> \n"},
-
+        {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
+         "usage: local_param <keyword=val> ...\n"},
+       
         /* Llog operations */ 
         {"llog_catlist", jt_llog_catlist, 0, 
          "list all catalog logs on current device.\n"

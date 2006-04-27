@@ -49,7 +49,8 @@ struct fsfilt_operations {
         struct list_head fs_list;
         struct module *fs_owner;
         char   *fs_type;
-        char   *(* fs_label)(struct super_block *sb);
+        char   *(* fs_getlabel)(struct super_block *sb);
+        int     (* fs_setlabel)(struct super_block *sb, char *label);
         char   *(* fs_uuid)(struct super_block *sb);
         void   *(* fs_start)(struct inode *inode, int op, void *desc_private,
                              int logs);
@@ -113,14 +114,23 @@ extern void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops);
 extern struct fsfilt_operations *fsfilt_get_ops(const char *type);
 extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 
-static inline char *fsfilt_label(struct obd_device *obd, struct super_block *sb)
+static inline char *fsfilt_get_label(struct obd_device *obd,
+                                     struct super_block *sb)
 {
-        if (obd->obd_fsops->fs_label == NULL)
+        if (obd->obd_fsops->fs_getlabel == NULL)
                 return NULL;
-        if (obd->obd_fsops->fs_label(sb)[0] == '\0')
+        if (obd->obd_fsops->fs_getlabel(sb)[0] == '\0')
                 return NULL;
 
-        return obd->obd_fsops->fs_label(sb);
+        return obd->obd_fsops->fs_getlabel(sb);
+}
+
+static inline int fsfilt_set_label(struct obd_device *obd,
+                                   struct super_block *sb, char *label)
+{
+        if (obd->obd_fsops->fs_setlabel == NULL)
+                return -ENOSYS;
+        return (obd->obd_fsops->fs_setlabel(sb, label));
 }
 
 static inline __u8 *fsfilt_uuid(struct obd_device *obd, struct super_block *sb)

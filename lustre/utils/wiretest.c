@@ -15,12 +15,12 @@ void lustre_assert_wire_constants(void);
 
 int main()
 {
-	lustre_assert_wire_constants();
+        lustre_assert_wire_constants();
 
-	if (ret == 0)
-		printf("wire constants OK\n");
+        if (ret == 0)
+                printf("wire constants OK\n");
 
-	return ret;
+        return ret;
 }
 
 void lustre_assert_wire_constants(void)
@@ -159,6 +159,16 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_STATUS_CONN);
         LASSERTF(MDS_STATUS_LOV == 2, " found %lld\n",
                  (long long)MDS_STATUS_LOV);
+        LASSERTF(MGS_CONNECT == 250, " found %lld\n",
+                 (long long)MGS_CONNECT);
+        LASSERTF(MGS_DISCONNECT == 251, " found %lld\n",
+                 (long long)MGS_DISCONNECT);
+        LASSERTF(MGS_EXCEPTION == 252, " found %lld\n",
+                 (long long)MGS_EXCEPTION);
+        LASSERTF(MGS_TARGET_REG == 253, " found %lld\n",
+                 (long long)MGS_TARGET_REG);
+        LASSERTF(MGS_TARGET_DEL == 254, " found %lld\n",
+                 (long long)MGS_TARGET_DEL);
         LASSERTF(LDLM_ENQUEUE == 101, " found %lld\n",
                  (long long)LDLM_ENQUEUE);
         LASSERTF(LDLM_CONVERT == 102, " found %lld\n",

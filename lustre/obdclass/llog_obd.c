@@ -39,34 +39,6 @@
 
 /* helper functions for calling the llog obd methods */
 
-int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
-               int count, struct llog_logid *logid, struct llog_operations *op)
-{
-        int rc = 0;
-        struct llog_ctxt *ctxt;
-        ENTRY;
-
-        if (index < 0 || index >= LLOG_MAX_CTXTS)
-                RETURN(-EFAULT);
-
-        OBD_ALLOC(ctxt, sizeof(*ctxt));
-        if (!ctxt)
-                RETURN(-ENOMEM);
-
-        obd->obd_llog_ctxt[index] = ctxt;
-        ctxt->loc_obd = obd;
-        ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
-        ctxt->loc_idx = index;
-        ctxt->loc_logops = op;
-        sema_init(&ctxt->loc_sem, 1);
-
-        if (op->lop_setup)
-                rc = op->lop_setup(obd, index, disk_obd, count, logid);
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(llog_setup);
-
 int llog_cleanup(struct llog_ctxt *ctxt)
 {
         int rc = 0;
@@ -88,6 +60,45 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cleanup);
+
+int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
+               int count, struct llog_logid *logid, struct llog_operations *op)
+{
+        int rc = 0;
+        struct llog_ctxt *ctxt;
+        ENTRY;
+
+        if (index < 0 || index >= LLOG_MAX_CTXTS)
+                RETURN(-EFAULT);
+
+        if (obd->obd_llog_ctxt[index]) {
+        /* During an mds_lov_add_ost, we try to tear down and resetup llogs.
+           But the mdt teardown does not flow down to the lov/osc's as the 
+           setup does, because the lov/osc must clean up only when they are
+           done, not when the mdt is done. So instead, we just assume that
+           if the lov llogs are already set up then we must cleanup first. */
+                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
+                       obd->obd_name, index);
+                llog_cleanup(obd->obd_llog_ctxt[index]);
+        }
+
+        OBD_ALLOC(ctxt, sizeof(*ctxt));
+        if (!ctxt)
+                RETURN(-ENOMEM);
+
+        obd->obd_llog_ctxt[index] = ctxt;
+        ctxt->loc_obd = obd;
+        ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
+        ctxt->loc_idx = index;
+        ctxt->loc_logops = op;
+        sema_init(&ctxt->loc_sem, 1);
+
+        if (op->lop_setup)
+                rc = op->lop_setup(obd, index, disk_obd, count, logid);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_setup);
 
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
 {

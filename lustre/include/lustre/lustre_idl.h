@@ -43,6 +43,8 @@
 #error Unsupported operating system.
 #endif
 
+#include <lnet/types.h>   /* for lnet_nid_t */
+
 /* Defn's shared with user-space. */
 #include <lustre/lustre_user.h>
 
@@ -86,6 +88,9 @@
 #define MDS_SETATTR_PORTAL             22
 #define MDS_READPAGE_PORTAL            23
 
+#define MGC_REPLY_PORTAL               25
+#define MGS_REQUEST_PORTAL             26
+#define MGS_REPLY_PORTAL               27
 #define OST_REQUEST_PORTAL             28
 
 #define SVC_KILLED               1
@@ -110,6 +115,8 @@
 #define LUSTRE_OST_VERSION  0x00030000
 #define LUSTRE_DLM_VERSION  0x00040000
 #define LUSTRE_LOG_VERSION  0x00050000
+#define LUSTRE_MGS_VERSION  0x00060000
+
 
 struct lustre_handle {
         __u64 cookie;
@@ -225,6 +232,8 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_IBITS     0x1000ULL /* support for inodebits locks */
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
 #define OBD_CONNECT_NODEVOH   0x8000ULL /* No open handle for special nodes */
+#define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
+
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags() */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
@@ -235,6 +244,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX)
 #define ECHO_CONNECT_SUPPORTED (0)
+#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
                                                 ((patch)<<8) + (fix))
@@ -963,6 +973,57 @@ struct ldlm_reply {
 };
 
 extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
+
+
+/*
+ * Opcodes for mountconf (mgs and mgc)
+ */
+typedef enum {
+        MGS_CONNECT = 250,
+        MGS_DISCONNECT,
+        MGS_EXCEPTION,         /* node died, etc. */
+        MGS_TARGET_REG,        /* whenever target starts up */
+        MGS_TARGET_DEL,
+        MGS_LAST_OPC
+} mgs_cmd_t;
+
+#define MTI_NAME_MAXLEN 64
+#define MTI_UUID_MAXLEN MTI_NAME_MAXLEN + 5
+/* each host can have multiple nids, and multiple failover hosts, and I don't
+   want to run out of room... */
+#define MTI_NIDS_MAX 64 /* match lustre_disk.h */
+
+struct mgs_target_info {
+        char             mti_fsname[MTI_NAME_MAXLEN];
+        char             mti_svname[MTI_NAME_MAXLEN];
+        char             mti_uuid[sizeof(struct obd_uuid)];
+        lnet_nid_t       mti_nids[MTI_NIDS_MAX];     /* host nids */
+        lnet_nid_t       mti_failnids[MTI_NIDS_MAX]; /* partner nids */
+        __u16            mti_failnodes[8];  /* last nid index of each partner */
+        __u32            mti_stripe_index;
+        __u32            mti_nid_count;
+        __u32            mti_failnid_count;
+        __u32            mti_config_ver;
+        __u32            mti_flags;
+        char             mti_params[2048];
+};
+
+extern void lustre_swab_mgs_target_info(struct mgs_target_info *oinfo);
+
+#define CM_START       0x01
+#define CM_END         0x02
+#define CM_SKIP        0x04
+#define CM_UPGRADE146  0x08
+#define CM_START_SKIP (CM_START | CM_SKIP)
+
+struct cfg_marker {
+        __u32             cm_step;  /* aka config version */
+        __u32             cm_flags;
+        time_t            cm_createtime; /*when this record was first created */
+        time_t            cm_canceltime; /*when this record is no longer valid*/
+        char              cm_svname[16];
+        char              cm_comment[40];
+};
 
 /*
  * Opcodes for multiple servers.

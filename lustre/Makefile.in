@@ -6,9 +6,10 @@ subdir-m += lov
 subdir-m += ptlrpc
 subdir-m += osc
 subdir-m += obdecho
+subdir-m += mgc
 
-@SERVER_TRUE@subdir-m += mds obdfilter ost
-@CLIENT_TRUE@subdir-m += mdc llite
+@SERVER_TRUE@subdir-m += mds obdfilter ost mgs
+@CLIENT_TRUE@subdir-m += mdc llite 
 @QUOTA_TRUE@subdir-m += quota
 
 @INCLUDE_RULES@

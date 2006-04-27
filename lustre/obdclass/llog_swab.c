@@ -239,11 +239,9 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
         }
 
         __swab32s(&lcfg->lcfg_command);
-
         __swab32s(&lcfg->lcfg_num);
         __swab32s(&lcfg->lcfg_flags);
         __swab64s(&lcfg->lcfg_nid);
-
         __swab32s(&lcfg->lcfg_bufcount);
         for (i = 0; i < lcfg->lcfg_bufcount && i < LUSTRE_CFG_MAX_BUFCOUNT; i++)
                 __swab32s(&lcfg->lcfg_buflens[i]);

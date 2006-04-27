@@ -386,12 +386,14 @@ EXPORT_SYMBOL(proc_lustre_root);
 
 EXPORT_SYMBOL(class_register_type);
 EXPORT_SYMBOL(class_unregister_type);
+EXPORT_SYMBOL(class_search_type);
 EXPORT_SYMBOL(class_get_type);
 EXPORT_SYMBOL(class_put_type);
 EXPORT_SYMBOL(class_name2dev);
 EXPORT_SYMBOL(class_name2obd);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
+EXPORT_SYMBOL(class_obd_list);
 EXPORT_SYMBOL(class_find_client_obd);
 EXPORT_SYMBOL(class_find_client_notype);
 EXPORT_SYMBOL(class_devices_in_group);
@@ -403,6 +405,7 @@ EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
 
 /* uuid.c */
+EXPORT_SYMBOL(class_generate_random_uuid);
 EXPORT_SYMBOL(class_uuid_unparse);
 EXPORT_SYMBOL(lustre_uuid_to_peer);
 
@@ -410,7 +413,7 @@ EXPORT_SYMBOL(class_handle_hash);
 EXPORT_SYMBOL(class_handle_unhash);
 EXPORT_SYMBOL(class_handle2object);
 
-/* config.c */
+/* obd_config.c */
 EXPORT_SYMBOL(class_incref);
 EXPORT_SYMBOL(class_decref);
 EXPORT_SYMBOL(class_get_profile);
@@ -508,17 +511,18 @@ static int __init init_obdclass(void)
 int init_obdclass(void)
 #endif
 {
+        int i, err;
         struct obd_device *obd;
-        int err;
-        int i;
-
 #ifdef __KERNEL__
+        int lustre_register_fs(void);
+
         printk(KERN_INFO "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
 #else
         CDEBUG(D_INFO, "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
 #endif
+
         spin_lock_init(&obd_types_lock);
         spin_lock_init(&handle_lock);
         cfs_waitq_init(&obd_race_waitq);
@@ -550,6 +554,7 @@ int init_obdclass(void)
                 return err;
 #ifdef __KERNEL__
         err = class_procfs_init();
+        lustre_register_fs();
 #endif
 
         return err;
@@ -561,7 +566,10 @@ int init_obdclass(void)
 static void cleanup_obdclass(void)
 {
         int i;
+        int lustre_unregister_fs(void);
         ENTRY;
+
+        lustre_unregister_fs();
 
         cfs_psdev_deregister(&obd_psdev);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {

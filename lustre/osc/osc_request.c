@@ -3104,7 +3104,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
 
-        if (KEY_IS("next_id")) {
+        if (KEY_IS(KEY_NEXT_ID)) {
                 if (vallen != sizeof(obd_id))
                         RETURN(-EINVAL);
                 obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
@@ -3123,11 +3123,11 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("initial_recov")) {
+        if (KEY_IS(KEY_INIT_RECOV)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 imp->imp_initial_recov = *(int *)val;
-                CDEBUG(D_HA, "%s: set imp_no_init_recov = %d\n",
+                CDEBUG(D_HA, "%s: set imp_initial_recov = %d\n",
                        exp->exp_obd->obd_name,
                        imp->imp_initial_recov);
                 RETURN(0);
@@ -3277,7 +3277,7 @@ static int osc_import_event(struct obd_device *obd,
                 break;
         }
         case IMP_EVENT_INACTIVE: {
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE, NULL);
                 break;
         }
         case IMP_EVENT_INVALIDATE: {
@@ -3305,7 +3305,7 @@ static int osc_import_event(struct obd_device *obd,
                         oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
                         spin_unlock(&oscc->oscc_lock);
                 }
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);
                 break;
         }
         case IMP_EVENT_OCD: {
@@ -3318,7 +3318,7 @@ static int osc_import_event(struct obd_device *obd,
                 if (ocd->ocd_connect_flags & OBD_CONNECT_REQPORTAL)
                         imp->imp_client->cli_request_portal =OST_REQUEST_PORTAL;
 
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD);
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
                 break;
         }
         default:

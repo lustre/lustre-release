@@ -30,8 +30,12 @@ fi
 
 [ "$MOUNT2" ] && umount $MOUNT2
 
-${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt --cleanup $@ \
+#${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt --cleanup $@ \
     --dump $TMP/debug $conf_opt
+
+echo FIXME llmountcleanup should be replaced with $CLEANUP
+exit 1
+
 rc=$?
 echo "lconf DONE"
 BUSY=`dmesg | grep -i destruct`

@@ -52,7 +52,7 @@ struct llu_inode_info {
         char                   *lli_symlink_name;
         struct semaphore        lli_open_sem;
         __u64                   lli_maxbytes;
-        unsigned long        	lli_flags;
+        unsigned long           lli_flags;
 
         /* for libsysio */
         struct file_identifier  lli_sysio_fid;

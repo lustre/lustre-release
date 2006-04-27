@@ -41,60 +41,25 @@
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 
-static struct super_block *ll_read_super(struct super_block *sb,
-                                         void *data, int silent)
-{
-        int err;
-        ENTRY;
-        err = ll_fill_super(sb, data, silent);
-        if (err)
-                RETURN(NULL);
-        RETURN(sb);
-}
-
-static struct super_block *lustre_read_super(struct super_block *sb,
-                                             void *data, int silent)
-{
-        int err;
-        ENTRY;
-        err = lustre_fill_super(sb, data, silent);
-        if (err)
-                RETURN(NULL);
-        RETURN(sb);
-}
-
-static struct file_system_type lustre_lite_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "lustre_lite",
-        .fs_flags       = FS_NFSEXP_FSID,
-        .read_super     = ll_read_super,
-};
 
 /* exported operations */
 struct super_operations lustre_super_operations =
 {
         .read_inode2    = ll_read_inode2,
         .clear_inode    = ll_clear_inode,
-        .put_super      = lustre_put_super,
+        .put_super      = ll_put_super,
         .statfs         = ll_statfs,
         .umount_begin   = ll_umount_begin,
         .fh_to_dentry   = ll_fh_to_dentry,
         .dentry_to_fh   = ll_dentry_to_fh,
-        .remount_fs     = lustre_remount_fs,
-};
-
-static struct file_system_type lustre_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "lustre",
-        .fs_flags       = FS_NFSEXP_FSID,
-        .read_super     = lustre_read_super,
+        .remount_fs     = ll_remount_fs,
 };
 
 static int __init init_lustre_lite(void)
 {
         int rc, seed[2];
 
-        printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
+        printk(KERN_INFO "Lustre: Lustre Client File System; "
                "info@clusterfs.com\n");
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
@@ -107,14 +72,7 @@ static int __init init_lustre_lite(void)
 
         ll_register_cache(&ll_cache_definition);
 
-        rc = register_filesystem(&lustre_lite_fs_type);
-        if (rc == 0)
-                rc = register_filesystem(&lustre_fs_type);
-        if (rc) {
-                /* This is safe even if lustre_lite_fs_type isn't registered */
-                unregister_filesystem(&lustre_lite_fs_type);
-                ll_unregister_cache(&ll_cache_definition);
-        }
+        lustre_register_client_fill_super(ll_fill_super);
 
         get_random_bytes(seed, sizeof(seed));
         ll_srand(seed[0], seed[1]);
@@ -126,9 +84,8 @@ static void __exit exit_lustre_lite(void)
 {
         int rc;
 
-        unregister_filesystem(&lustre_lite_fs_type);
-        unregister_filesystem(&lustre_fs_type);
-
+        lustre_register_client_fill_super(NULL);
+        
         ll_unregister_cache(&ll_cache_definition);
 
         rc = kmem_cache_destroy(ll_file_data_slab);

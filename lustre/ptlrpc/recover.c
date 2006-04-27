@@ -302,8 +302,10 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 }
 
 /*
+ * Administratively active/deactive a client. 
  * This should only be called by the ioctl interface, currently
- * with the lctl deactivate and activate commands.
+ * with the lctl deactivate and activate commands, and
+ * client umount -f (ll_umount_begin)
  */
 int ptlrpc_set_import_active(struct obd_import *imp, int active)
 {
@@ -333,6 +335,7 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         RETURN(rc);
 }
 
+/* Attempt to reconnect an import */
 int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 {
         int rc;
@@ -370,6 +373,7 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
         ENTRY;
 
         spin_lock_irqsave(&imp->imp_lock, flags);
+        /* Check if reconnect is already in progress */
         if (imp->imp_state != LUSTRE_IMP_DISCON) {
                 in_recovery = 1;
         }

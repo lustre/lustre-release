@@ -702,6 +702,10 @@ lustre/osc/Makefile
 lustre/osc/autoMakefile
 lustre/ost/Makefile
 lustre/ost/autoMakefile
+lustre/mgc/Makefile
+lustre/mgc/autoMakefile
+lustre/mgs/Makefile
+lustre/mgs/autoMakefile
 lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
 lustre/quota/Makefile

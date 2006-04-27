@@ -46,7 +46,7 @@ int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
  * support functions: we could use inter-module communication, but this
  * is more portable to other OS's
  */
-static struct obd_type *class_search_type(char *name)
+struct obd_type *class_search_type(char *name)
 {
         struct list_head *tmp;
         struct obd_type *type;
@@ -69,11 +69,15 @@ struct obd_type *class_get_type(char *name)
 
 #ifdef CONFIG_KMOD
         if (!type) {
-                if (!request_module(name)) {
-                        CDEBUG(D_INFO, "Loaded module '%s'\n", name);
+                char *modname = name;
+                if (strcmp(modname, LUSTRE_MDT_NAME) == 0) 
+                        modname = LUSTRE_MDS_NAME;
+                if (!request_module(modname)) {
+                        CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
                         type = class_search_type(name);
-                } else
-                        CDEBUG(D_INFO, "Can't load module '%s'\n", name);
+                } else {
+                        LCONSOLE_ERROR("Can't load module '%s'\n", modname);
+                }
         }
 #endif
         if (type)
@@ -272,6 +276,33 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
         if (dev < 0)
                 return NULL;
         return &obd_dev[dev];
+}
+
+void class_obd_list(void)
+{
+        char *status;
+        int i;
+
+        spin_lock(&obd_dev_lock);
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if (obd->obd_type == NULL)
+                        continue;
+                if (obd->obd_stopping)
+                        status = "ST";
+                else if (obd->obd_set_up)
+                        status = "UP";
+                else if (obd->obd_attached)
+                        status = "AT";
+                else
+                        status = "--";
+                LCONSOLE(D_CONFIG, "%3d %s %s %s %s %d\n",
+                         i, status, obd->obd_type->typ_name,
+                         obd->obd_name, obd->obd_uuid.uuid,
+                         atomic_read(&obd->obd_refcount));
+        }
+        spin_unlock(&obd_dev_lock);
+        return;
 }
 
 /* Search for a client OBD connected to tgt_uuid.  If grp_uuid is

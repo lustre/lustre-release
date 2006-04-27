@@ -115,6 +115,16 @@
 #define MDS_MAXREQSIZE  (5 * 1024)
 #define MDS_MAXREPSIZE  max(9 * 1024, 280 + LOV_MAX_STRIPE_COUNT * 56)
 
+/* FIXME fix all constants here.  Andreas suggests dyamically adding threads. */
+#define MGS_MAX_THREADS 8UL
+#define MGS_NUM_THREADS max(2UL, min_t(unsigned long, MGS_MAX_THREADS, \
+                            num_physpages * smp_num_cpus >> (26 - PAGE_SHIFT)))
+                                  
+#define MGS_NBUFS       (64 * smp_num_cpus)
+#define MGS_BUFSIZE     (8 * 1024)
+#define MGS_MAXREQSIZE  (5 * 1024)
+#define MGS_MAXREPSIZE  (9 * 1024)
+
 #define OST_MAX_THREADS 512UL
 #define OST_DEF_THREADS max_t(unsigned long, 2, \
                               (num_physpages >> (26-PAGE_SHIFT)) * smp_num_cpus)

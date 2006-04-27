@@ -46,6 +46,7 @@
 #include <libcfs/list.h>
 #include <lvfs.h>
 #include <lustre_fsfilt.h>
+#include <lustre_disk.h>
 #include "llog_internal.h"
 
 #if defined(__KERNEL__) && defined(LLOG_LVFS)
@@ -494,7 +495,7 @@ static int llog_lvfs_prev_block(struct llog_handle *loghandle,
         RETURN(-EIO);
 }
 
-static struct file *llog_filp_open(char *name, int flags, int mode)
+static struct file *llog_filp_open(char *dir, char *name, int flags, int mode)
 {
         char *logname;
         struct file *filp;
@@ -504,7 +505,7 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
         if (logname == NULL)
                 return ERR_PTR(-ENOMEM);
 
-        len = snprintf(logname, PATH_MAX, "LOGS/%s", name);
+        len = snprintf(logname, PATH_MAX, "%s/%s", dir, name);
         if (len >= PATH_MAX - 1) {
                 filp = ERR_PTR(-ENAMETOOLONG);
         } else {
@@ -513,7 +514,6 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
                         CERROR("logfile creation %s: %ld\n", logname,
                                PTR_ERR(filp));
         }
-
         OBD_FREE(logname, PATH_MAX);
         return filp;
 }
@@ -572,7 +572,16 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                handle->lgh_file = llog_filp_open(name, open_flags, 0644);
+                /* COMPAT_146 */
+                if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0) {
+                        handle->lgh_file = llog_filp_open(MDT_LOGS_DIR, name, 
+                                                          open_flags, 0644);
+                } else {
+                        /* end COMPAT_146 */
+                        handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR,
+                                                          name, open_flags, 
+                                                          0644);
+                }
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
 
@@ -639,12 +648,20 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 {
         struct dentry *fdentry;
         struct obdo *oa;
+        struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
+        char *dir;
         int rc;
         ENTRY;
 
+        /* COMPAT_146 */
+        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0)
+                dir = MDT_LOGS_DIR;
+        else
+                /* end COMPAT_146 */
+                dir = MOUNT_CONFIGS_DIR;
+
         fdentry = handle->lgh_file->f_dentry;
-        if (!strcmp(fdentry->d_parent->d_name.name, "LOGS")) {
-                struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
+        if (strcmp(fdentry->d_parent->d_name.name, dir) == 0) {
                 struct inode *inode = fdentry->d_parent->d_inode;
                 struct lvfs_run_ctxt saved;
 
@@ -692,7 +709,8 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
 
-        LASSERT(count);
+        if (!count) 
+                return (0);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
@@ -702,17 +720,19 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                        name, rc);
                 GOTO(out, rc);
         }
-
+        
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", name,
                        file->f_dentry->d_inode->i_mode);
                 GOTO(out, rc = -ENOENT);
         }
 
+        CDEBUG(D_CONFIG, "cat list: disk size=%d, read=%d\n", 
+               (int)file->f_dentry->d_inode->i_size, size);
+
         rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);
         if (rc) {
-                CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
-                       name, rc);
+                CERROR("OBD filter: error reading %s: rc %d\n", name, rc);
                 GOTO(out, rc);
         }
 
@@ -734,7 +754,8 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
 
-        LASSERT(count);
+        if (!count) 
+                return (0);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);

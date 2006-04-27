@@ -322,7 +322,7 @@ static int lfs_osts(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) ==0) {
-                        if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                        if (llapi_is_lustre_mnttype(mnt)) {
                                 rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0);
                                 if (rc)
                                         fprintf(stderr,
@@ -370,7 +370,7 @@ static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
         len = 0;
         mnt = getmntent(fp);
         while (feof(fp) == 0 && ferror(fp) == 0) {
-                if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                if (llapi_is_lustre_mnttype(mnt)) {
                         len = strlen(mnt->mnt_dir);
                         if (len > out_len &&
                             !strncmp(rpath, mnt->mnt_dir, len)) {
@@ -585,7 +585,7 @@ static int lfs_df(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) == 0) {
-                        if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                        if (llapi_is_lustre_mnttype(mnt)) {
                                 rc = mntdf(mnt->mnt_dir, ishow, cooked);
                                 if (rc)
                                         break;
@@ -636,7 +636,7 @@ static int lfs_check(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) ==0) {
-                        if (llapi_is_lustre_mnttype(mnt->mnt_type))
+                        if (llapi_is_lustre_mnttype(mnt))
                                 break;
                         mnt = getmntent(fp);
                 }
@@ -677,7 +677,7 @@ static int lfs_catinfo(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) == 0) {
-                        if (llapi_is_lustre_mnttype(mnt->mnt_type))
+                        if (llapi_is_lustre_mnttype(mnt))
                                 break;
                         mnt = getmntent(fp);
                 }

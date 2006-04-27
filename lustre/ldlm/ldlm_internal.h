@@ -50,7 +50,6 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 int ldlm_process_flock_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
 
-
 /* ldlm_inodebits.c */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                                 int first_enq, ldlm_error_t *err);

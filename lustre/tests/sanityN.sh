@@ -7,6 +7,9 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+# Tests that fail on uml
+[ "$UML" = "true" ] && EXCEPT="$EXCEPT 7"
+
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
@@ -33,18 +36,26 @@ fi
 
 SAVE_PWD=$PWD
 
-clean() {
-	echo -n "cln.."
-	sh llmountcleanup.sh ${FORCE} > /dev/null || exit 20
-}
-CLEAN=${CLEAN:-}
+# for MCSETUP and MCCLEANUP
+LUSTRE=${LUSTRE:-`dirname $0`/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. mountconf.sh
 
-start() {
+cleanup() {
+	echo -n "cln.."
+	grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 ${FORCE}
+	$MCCLEANUP ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
+}
+CLEANUP=${CLEANUP:-:}
+
+setup() {
 	echo -n "mnt.."
-	sh llrmount.sh > /dev/null || exit 10
+	$MCSETUP || exit 10
 	echo "done"
 }
-START=${START:-}
+SETUP=${SETUP:-:}
 
 log() {
 	echo "$*"
@@ -61,8 +72,8 @@ trace() {
 TRACE=${TRACE:-""}
 
 run_one() {
-	if ! mount | grep -q $DIR1; then
-		$START
+	if ! grep -q $DIR /proc/mounts; then
+		$SETUP
 	fi
 	testnum=$1
 	message=$2
@@ -75,7 +86,27 @@ run_one() {
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
-	$CLEAN
+	$CLEANUP
+}
+
+build_test_filter() {
+	[ "$ALWAYS_EXCEPT$EXCEPT$SANITYN_EXCEPT" ] && \
+	    echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT $SANITYN_EXCEPT`"
+
+        for O in $ONLY; do
+            eval ONLY_${O}=true
+        done
+        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_EXCEPT; do
+            eval EXCEPT_${E}=true
+        done
+}
+
+_basetest() {
+    echo $*
+}
+
+basetest() {
+    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
 build_test_filter() {
@@ -143,11 +174,23 @@ pass() {
 	echo PASS $@
 }
 
-export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -n 1`
-export MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -n 1`
+mounted_lustre_filesystems() {
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
+}
+MOUNTED="`mounted_lustre_filesystems`"
+if [ -z "$MOUNTED" ]; then
+    $MCFORMAT
+    $MCSETUP
+    mount_client $MOUNT2
+    MOUNTED="`mounted_lustre_filesystems`"
+    [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
+    I_MOUNTED=yes
+fi
+export MOUNT1=`mounted_lustre_filesystems | head -n 1`
 [ -z "$MOUNT1" ] && error "NAME=$NAME not mounted once"
+export MOUNT2=`mounted_lustre_filesystems | tail -n 1`
 [ "$MOUNT1" = "$MOUNT2" ] && error "NAME=$NAME not mounted twice"
-[ `mount| awk '/ lustre/ { print $3 }'| wc -l` -ne 2 ] && \
+[ `mounted_lustre_filesystems | wc -l` -ne 2 ] && \
 	error "NAME=$NAME mounted more than twice"
 
 export DIR1=${DIR1:-$MOUNT1}
@@ -387,17 +430,17 @@ test_16() {
 run_test 16 "2500 iterations of dual-mount fsx ================="
 
 cancel_lru_locks() {
-	for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
+	for d in /proc/fs/lustre/ldlm/namespaces/*-$1-*; do
 		echo clear > $d/lru_size
 	done
-	grep "[0-9]" /proc/fs/lustre/ldlm/namespaces/$1*/lock_unused_count /dev/null
+	grep "[0-9]" /proc/fs/lustre/ldlm/namespaces/*-$1-*/lock_unused_count /dev/null
 }
 
 test_17() { # bug 3513, 3667
 	[ ! -d /proc/fs/lustre/ost ] && echo "skipping OST-only test" && return
 
 	cp /etc/termcap $DIR1/f17
-	cancel_lru_locks OSC > /dev/null
+	cancel_lru_locks osc > /dev/null
 	#define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
 	echo 0x8000030a > /proc/sys/lustre/fail_loc
 	ls -ls $DIR1/f17 | awk '{ print $1,$6 }' > $DIR1/f17-1 & \
@@ -417,7 +460,7 @@ test_19() { # bug3811
 	[ -d /proc/fs/lustre/obdfilter ] || return 0
 
 	MAX=`cat /proc/fs/lustre/obdfilter/*/readcache_max_filesize | head -n 1`
-	for O in /proc/fs/lustre/obdfilter/OST*; do
+	for O in /proc/fs/lustre/obdfilter/*OST*; do
 		echo 4096 > $O/readcache_max_filesize
 	done
 	dd if=/dev/urandom of=$TMP/f19b bs=512k count=32
@@ -425,7 +468,7 @@ test_19() { # bug3811
 	cp $TMP/f19b $DIR1/f19b
 	for i in `seq 1 20`; do
 		[ $((i % 5)) -eq 0 ] && log "test_18 loop $i"
-		cancel_lru_locks OSC > /dev/null
+		cancel_lru_locks osc > /dev/null
 		cksum $DIR1/f19b | cut -d" " -f 1,2 > $TMP/sum1 & \
 		cksum $DIR2/f19b | cut -d" " -f 1,2 > $TMP/sum2
 		wait
@@ -434,7 +477,7 @@ test_19() { # bug3811
 		[ "`cat $TMP/sum2`" = "$SUM" ] || \
 			error "$DIR2/f19b `cat $TMP/sum2` != $SUM"
 	done
-	for O in /proc/fs/lustre/obdfilter/OST*; do
+	for O in /proc/fs/lustre/obdfilter/*OST*; do
 		echo $MAX > $O/readcache_max_filesize
 	done
 	rm $DIR1/f19b
@@ -443,12 +486,12 @@ test_19() { # bug3811
 
 test_20() {
 	mkdir $DIR1/d20
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	CNT=$((`cat /proc/fs/lustre/llite/fs0/dump_page_cache | wc -l`))
 	multiop $DIR1/f20 Ow8190c
 	multiop $DIR2/f20 Oz8194w8190c
 	multiop $DIR1/f20 Oz0r8190c
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	CNTD=$((`cat /proc/fs/lustre/llite/fs0/dump_page_cache | wc -l` - $CNT))
 	[ $CNTD -gt 0 ] && \
 	    error $CNTD" page left in cache after lock cancel" || true
@@ -497,7 +540,7 @@ test_23() { # Bug 5972
 	echo "others should see updated atime while another read" > $DIR1/f23
 	
 	# clear the lock(mode: LCK_PW) gotten from creating operation
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	
 	time1=`date +%s`	
 	sleep 2
@@ -560,6 +603,10 @@ run_test 25 "change ACL on one mountpoint be seen on another ==="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
+if [ "$I_MOUNTED" = "yes" ]; then
+    cleanup
+fi
 
 echo '=========================== finished ==============================='
 [ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true
+

@@ -347,7 +347,7 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
 static struct inode* llu_new_inode(struct filesys *fs,
                                    struct ll_fid *fid)
 {
-	struct inode *inode;
+        struct inode *inode;
         struct llu_inode_info *lli;
         struct intnl_stat st = {
                 .st_dev  = 0,
@@ -377,11 +377,11 @@ static struct inode* llu_new_inode(struct filesys *fs,
         lli->lli_fid = *fid;
 
         /* file identifier is needed by functions like _sysio_i_find() */
-	inode = _sysio_i_new(fs, &lli->lli_sysio_fid,
+        inode = _sysio_i_new(fs, &lli->lli_sysio_fid,
                              &st, 0, &llu_inode_ops, lli);
 
-	if (!inode)
-		OBD_FREE(lli, sizeof(*lli));
+        if (!inode)
+                OBD_FREE(lli, sizeof(*lli));
 
         return inode;
 }
@@ -719,10 +719,10 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                                     (rc = ll_permission(inode, MAY_WRITE)) != 0)
                                         RETURN(rc);
                         } else {
-				/* from inode_change_ok() */
-				if (current->fsuid != st->st_uid &&
-				    !capable(CAP_FOWNER))
-					RETURN(-EPERM);
+                                /* from inode_change_ok() */
+                                if (current->fsuid != st->st_uid &&
+                                    !capable(CAP_FOWNER))
+                                        RETURN(-EPERM);
                         }
                 }
 
@@ -1692,7 +1692,7 @@ llu_fsswop_mount(const char *source,
         struct config_llog_instance cfg;
         char ll_instance[sizeof(sbi) * 2 + 1];
         struct lustre_profile *lprof;
-	char *zconf_mdsnid, *zconf_mdsname, *zconf_profile;
+        char *zconf_mdsnid, *zconf_mdsname, *zconf_profile;
         char *osc = NULL, *mdc = NULL;
         int async = 1, err = -EINVAL;
         struct obd_connect_data ocd = {0,};
@@ -1842,19 +1842,19 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_request, err = -EBADF);
         }
 
-	/*
-	 * Generate base path-node for root.
-	 */
-	rootpb = _sysio_pb_new(&noname, NULL, root);
-	if (!rootpb) {
-		err = -ENOMEM;
-		goto out_inode;
-	}
+        /*
+         * Generate base path-node for root.
+         */
+        rootpb = _sysio_pb_new(&noname, NULL, root);
+        if (!rootpb) {
+                err = -ENOMEM;
+                goto out_inode;
+        }
 
-	err = _sysio_do_mount(fs, rootpb, flags, tocover, mntp);
-	if (err) {
+        err = _sysio_do_mount(fs, rootpb, flags, tocover, mntp);
+        if (err) {
                 _sysio_pb_gone(rootpb);
-		goto out_inode;
+                goto out_inode;
         }
 
         ptlrpc_req_finished(request);

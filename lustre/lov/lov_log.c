@@ -107,8 +107,12 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         int i, rc = 0;
         ENTRY;
 
-        LASSERT(lov->desc.ld_tgt_count  == count);
-        for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
+        /* We might have added an osc and not told the mds yet */
+        if (count != lov->desc.ld_tgt_count)
+                CERROR("Origin connect mds cnt %d != lov cnt %d\n", count,
+                       lov->desc.ld_tgt_count);
+
+        for (i = 0, tgt = lov->tgts; i < count; i++, tgt++) {
                 struct obd_device *child;
                 struct llog_ctxt *cctxt;
                 
@@ -121,7 +125,7 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 
                 rc = llog_connect(cctxt, 1, logid, gen, uuid);
                 if (rc) {
-                        CERROR("error osc_llog_connect %d\n", i);
+                        CERROR("error osc_llog_connect tgt %d (%d)\n", i, rc);
                         break;
                 }
         }
@@ -188,6 +192,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc)
                 RETURN(rc);
 
+        CDEBUG(D_CONFIG, "llog init with %d targets\n", count);
         LASSERT(lov->desc.ld_tgt_count == count);
         for (i = 0, ctgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, ctgt++) {
                 struct obd_device *child;
@@ -196,7 +201,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 child = ctgt->ltd_exp->exp_obd;
                 rc = obd_llog_init(child, tgt, 1, logid + i);
                 if (rc) {
-                        CERROR("error osc_llog_init %d\n", i);
+                        CERROR("error osc_llog_init %d (%d)\n", i, rc);
                         break;
                 }
         }

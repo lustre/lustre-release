@@ -81,6 +81,8 @@ int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index)
         return -ENOENT;
 }
 
+/* Add a nid to a niduuid.  Multiple nids can be added to a single uuid; 
+   LNET will choose the best one. */
 int class_add_uuid(char *uuid, __u64 nid)
 {
         struct uuid_nid_data *data;
@@ -114,7 +116,7 @@ int class_add_uuid(char *uuid, __u64 nid)
         return 0;
 }
 
-/* delete only one entry if uuid is specified, otherwise delete all */
+/* Delete the nids for one uuid if specified, otherwise delete all */
 int class_del_uuid (char *uuid)
 {
         struct list_head  deathrow;
