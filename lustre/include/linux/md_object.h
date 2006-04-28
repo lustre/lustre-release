@@ -48,7 +48,8 @@ struct md_object;
 struct md_object_operations {
 
         /* meta-data object operations related handlers */
-        int (*moo_mkdir)(struct lu_context *ctxt, struct md_object *obj,
+        int (*moo_mkdir)(struct lu_context *ctxt, struct lu_attr*, 
+                         struct md_object *obj,
                          const char *name, struct md_object *child);
 
         int (*moo_rename)(struct lu_context *ctxt, struct md_object *spobj,
