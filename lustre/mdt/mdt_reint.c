@@ -38,7 +38,7 @@
 
 
 /* object operations */
-static int mdt_md_mkdir(struct mdt_thread_info *info)
+static int mdt_md_mkdir(struct mdt_thread_info *info, struct lustre_handle *lockh)
 {
         struct mdt_device      *mdt = info->mti_mdt;
         struct mdt_object      *parent;
@@ -71,7 +71,7 @@ static int mdt_md_mkdir(struct mdt_thread_info *info)
 
 
 static int mdt_reint_setattr(struct mdt_thread_info *info,
-                             struct lustre_handle *lh)
+                             struct lustre_handle *lockh)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
@@ -79,7 +79,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
 
 static int mdt_reint_create(struct mdt_thread_info *info,
-                            struct lustre_handle *lh)
+                            struct lustre_handle *lockh)
 {
         int rc;
         ENTRY;
@@ -90,7 +90,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
                 break;
         }
         case S_IFDIR:{
-                rc = mdt_md_mkdir(info);
+                rc = mdt_md_mkdir(info,lockh);
                 break;
         }
         case S_IFLNK:{
@@ -112,14 +112,14 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 
 
 static int mdt_reint_unlink(struct mdt_thread_info *info,
-                            struct lustre_handle *lh)
+                            struct lustre_handle *lockh)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
 
 static int mdt_reint_link(struct mdt_thread_info *info,
-                          struct lustre_handle *lh)
+                          struct lustre_handle *lockh)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);

@@ -1057,14 +1057,16 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 
         /* We already got it in mdt_handle. But we have to do it again*/
         info = lu_context_key_get(req->rq_svc_thread->t_ctx, &mdt_thread_key);
+        LASSERT(info != NULL);
         mdt_thread_info_init(info);
 
 
         if (req->rq_reqmsg->bufcount <= MDS_REQ_INTENT_IT_OFF) {
                 /* No intent was provided */
-                int size = sizeof(struct ldlm_reply);
-                rc = lustre_pack_reply(req, 1, &size, NULL);
+                info->mti_rep_buf_size[0] =  sizeof(struct ldlm_reply);
+                rc = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
                 LASSERT(rc == 0);
+                mdt_thread_info_fini(info);
                 RETURN(0);
         }
 
@@ -1072,6 +1074,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                                 lustre_swab_ldlm_intent);
         if (it == NULL) {
                 CERROR("Intent missing\n");
+                mdt_thread_info_fini(info);
                 RETURN(req->rq_status = -EFAULT);
         }
 
@@ -1095,8 +1098,10 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 
         rc = lustre_pack_reply(req, info->mti_rep_buf_nr, 
                                info->mti_rep_buf_size, NULL);
-        if (rc)
+        if (rc){
+                mdt_thread_info_fini(info);
                 RETURN(req->rq_status = rc);
+        }
 
         rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
         intent_set_disposition(rep, DISP_IT_EXECD);
