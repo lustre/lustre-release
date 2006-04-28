@@ -1585,10 +1585,7 @@ static int ldlm_setup(void)
         spin_lock_init(&waiting_locks_spinlock);
         cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, 0);
 
-        /* Using CLONE_FILES instead of CLONE_FS here causes failures in 
-           conf-sanity test 21.  But using CLONE_FS can cause problems
-           if the daemonize happens between push/pop_ctxt... */
-        rc = cfs_kernel_thread(expired_lock_main, NULL, CLONE_VM | CLONE_FS);
+        rc = cfs_kernel_thread(expired_lock_main, NULL, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("Cannot start ldlm expired-lock thread: %d\n", rc);
                 GOTO(out_thread, rc);

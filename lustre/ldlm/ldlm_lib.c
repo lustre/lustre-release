@@ -511,7 +511,7 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
 
 int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 {
-        struct obd_device *target;
+        struct obd_device *target, *targref = NULL;
         struct obd_export *export = NULL;
         struct obd_import *revimp;
         struct lustre_handle conn;
@@ -555,6 +555,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                           (target->obd_stopping ? "stopping" : "not set up"));
                 GOTO(out, rc = -ENODEV);
         }
+
+        /* Make sure the target isn't cleaned up while we're here. Yes, 
+           there's still a race between the above check and our incref here. 
+           Really, class_uuid2obd should take the ref. */
+        targref = class_incref(target);
 
         LASSERT_REQSWAB (req, 1);
         str = lustre_msg_string(req->rq_reqmsg, 1, sizeof(cluuid) - 1);
@@ -715,7 +720,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
          * drop any previous reference the request had, but we don't want
          * that to go to zero before we get our new export reference. */
         export = class_conn2export(&conn);
-        LASSERT(export != NULL);
+
+        /* It's possible that the connection fails if this target is shutting
+           down. */
+        if (!export)
+                GOTO(out, rc = -ENODEV);
 
         /* If the client and the server are the same node, we will already
          * have an export that really points to the client's DLM export,
@@ -775,6 +784,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 out:
         if (export)
                 export->exp_connecting = 0;
+        if (targref) 
+                class_decref(targref);
         if (rc)
                 req->rq_status = rc;
         RETURN(rc);
