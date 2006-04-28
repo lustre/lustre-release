@@ -64,7 +64,7 @@ SYSIO_INTERFACE_NAME(symlink)(const char *oldpath, const char *newpath)
 
 	SYSIO_INTERFACE_ENTER;
 	INTENT_INIT(&intent, INT_CREAT, NULL, NULL);
-	err = _sysio_namei(_sysio_cwd, newpath, ND_NEGOK, &intent, &pno);
+	err = _sysio_namei(_sysio_cwd, newpath, ND_NOFOLLOW | ND_NEGOK, &intent, &pno);
 	if (err)
 		goto out;
 	if (pno->p_base->pb_ino) {
