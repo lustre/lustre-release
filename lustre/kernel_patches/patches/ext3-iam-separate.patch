@@ -1093,7 +1093,7 @@ Index: linux-2.6.9/fs/ext3/iam.c
 ===================================================================
 --- linux-2.6.9.orig/fs/ext3/iam.c	2006-04-28 19:25:01.957835224 +0800
 +++ linux-2.6.9/fs/ext3/iam.c	2006-04-28 16:54:18.000000000 +0800
-@@ -0,0 +1,610 @@
+@@ -0,0 +1,612 @@
 +/*
 + * iam: big theory statement.
 + *
@@ -1232,6 +1232,7 @@ Index: linux-2.6.9/fs/ext3/iam.c
 +	else
 +		return -ENOENT;
 +}
++EXPORT_SYMBOL(iam_container_init);
 +
 +/*
 + * Finalize container @c, release all resources.
@@ -1243,6 +1244,7 @@ Index: linux-2.6.9/fs/ext3/iam.c
 +		c->ic_object = NULL;
 +	}
 +}
++EXPORT_SYMBOL(iam_container_fini);
 +
 +void iam_path_init(struct iam_path *path, struct iam_container *c, void *cookie)
 +{
