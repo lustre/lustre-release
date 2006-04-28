@@ -313,7 +313,19 @@ struct lu_attr {
         __u32          la_flags;  /* object flags */
         __u32          la_nlink;  /* number of persistent references to this
                                    * object */
+        __u64          la_rdev;
+        mdt_reint_t    la_opcode;
+        struct lu_fid *la_fid1;
+        struct lu_fid *la_fid2;
+        char          *la_name;
+        char          *la_tgt;
+        int            la_eadatalen;
+        void          *la_eadata;
+        struct llog_cookie *la_logcookies;
+        int            la_logcookielen;
+        struct lvfs_ucred la_uc;
 };
+
 
 /*
  * Layer in the layered object.
