@@ -53,14 +53,14 @@ struct fld_info fld_info;
 int fld_handle_insert(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t mdsno)
 {
         handle_t *handle = NULL;
-        return iam_insert(handle, &fld_info->fi_container,
+        return iam_insert(handle, fld_info->fi_container,
                           (struct iam_key *)&seq_num, (struct iam_rec *)&mdsno);
 }
 
 int fld_handle_delete(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t mds_num)
 {
         handle_t *handle = NULL;
-        return iam_delete(handle, &fld_info->fi_container,
+        return iam_delete(handle, fld_info->fi_container,
                           (struct iam_key *)&seq_num);
 }
 
@@ -69,7 +69,7 @@ int fld_handle_lookup(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t *mds_
         mdsno_t mdsno;
         int result;
 
-        result = iam_lookup(&fld_info->fi_container, (struct iam_key *)&seq_num,
+        result = iam_lookup(fld_info->fi_container, (struct iam_key *)&seq_num,
                             (struct iam_rec *)&mdsno);
         if (result == 0)
                 return -ENOENT;
@@ -79,32 +79,58 @@ int fld_handle_lookup(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t *mds_
                 return result;
 }
 
-static u32 fld_root_ptr(struct iam_container *c)
+static __u32 fld_root_ptr(struct iam_container *c)
 {
         return 0;
 }
+
 static int fld_node_check(struct iam_path *path, struct iam_frame *frame)
 {
+        void *data;
+        struct iam_entry *entries;
+        struct super_block *sb;
+
+        data = frame->bh->b_data;
+        entries = dx_node_get_entries(path, frame);
+        sb = path_obj(path)->i_sb;
+        if (frame == path->ip_frames) {
+                struct iam_cookie *ic = path->ip_descr_data;
+               /* root node */
+                path->ip_key_target = ic->ic_key;
+        } else {
+                /* non-root index */
+                assert(entries == data + path_descr(path)->id_node_gap);
+                assert(dx_get_limit(entries) == dx_node_limit(path));
+        }
+        frame->entries = frame->at = entries;
         return 0;
 }
+
 static int fld_node_init(struct iam_container *c, struct buffer_head *bh,
                            int root)
 {
         return 0;
 }
+
 static int fld_keycmp(struct iam_container *c,
-                        struct iam_key *k1, struct iam_key *k2)
+                      struct iam_key *k1, struct iam_key *k2)
 {
         return key_cmp(le64_to_cpu(*(__u64 *)k1), le64_to_cpu(*(__u64 *)k2));
 }
+
 static int fld_node_read(struct iam_container *c, iam_ptr_t ptr,
-                           handle_t *h, struct buffer_head **bh)
+                         handle_t *h, struct buffer_head **bh)
 {
-        return 0;
+        int result = 0;
+#if 0
+        *bh = ext3_bread(h, c->ic_object, (int)ptr, 0, &result);
+        if (*bh == NULL)
+                result = -EIO;
+#endif
+        return result;
 }
 
-
-static struct iam_descr fld_param = {
+struct iam_descr fld_param = {
         .id_key_size = sizeof ((struct lu_fid *)0)->f_seq,
         .id_ptr_size = 4, /* 32 bit block numbers for now */
         .id_rec_size = sizeof(mdsno_t),
@@ -117,22 +143,30 @@ static struct iam_descr fld_param = {
         .id_node_read  = fld_node_read,
         .id_node_check = fld_node_check,
         .id_node_init  = fld_node_init,
-        .id_keycmp     = fld_keycmp
+        .id_keycmp     = fld_keycmp,
 };
 
 int fld_info_init(struct fld_info *fld_info)
 {
         struct file *fld_file;
+        int rc;
+        ENTRY;
 
         fld_file = filp_open("/fld", O_RDWR, S_IRWXU);
         /* sanity and security checks... */
-        return iam_container_init(&fld_info->fi_container, &fld_param,
-                                  fld_file->f_dentry->d_inode);
+        OBD_ALLOC(fld_info->fi_container, sizeof(struct iam_container));
+        if (!fld_info->fi_container)
+                RETURN(-ENOMEM);
+
+        rc =iam_container_init(fld_info->fi_container, &fld_param,
+                               fld_file->f_dentry->d_inode);
+        RETURN(rc);
 }
 
 void fld_info_fini(struct fld_info *fld_info)
 {
-        iam_container_fini(&fld_info->fi_container);
+        iam_container_fini(fld_info->fi_container);
+        OBD_FREE(fld_info->fi_container, sizeof(struct iam_container));       
         OBD_FREE_PTR(fld_info);
 }
 

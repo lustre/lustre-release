@@ -1,7 +1,7 @@
 /* -*- MODE: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  fld/fld.c
+ *  fld/fld_handle.c
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
  *   Author: WangDi <wangdi@clusterfs.com>
