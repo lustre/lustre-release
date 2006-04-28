@@ -59,10 +59,10 @@ static int mdt_md_mkdir(struct mdt_thread_info *info, struct lustre_handle *lock
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
-                result = next->mo_ops->moo_mkdir(info->mti_ctxt, 
-                                                 &info->mti_attr,
-                                                 next, info->mti_rr.rr_name,
-                                                 mdt_object_child(child));
+                result = next->mo_dir_ops->mdo_mkdir(info->mti_ctxt,
+                                                     &info->mti_attr,
+                                                     next, info->mti_rr.rr_name,
+                                                     mdt_object_child(child));
                 mdt_object_put(info->mti_ctxt, child);
         } else
                 result = PTR_ERR(child);

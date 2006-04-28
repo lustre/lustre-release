@@ -58,6 +58,7 @@ static void mdd_unlock(struct lu_context *ctx,
                        struct mdd_object *obj, enum dt_lock_mode mode);
 
 static struct md_object_operations mdd_obj_ops;
+static struct md_dir_operations    mdd_dir_ops;
 static struct lu_object_operations mdd_lu_obj_ops;
 
 static int lu_device_is_mdd(struct lu_device *d)
@@ -113,6 +114,7 @@ static struct lu_object *mdd_object_alloc(struct lu_context *ctxt,
                 o = &mdo->mod_obj.mo_lu;
                 lu_object_init(o, NULL, d);
                 mdo->mod_obj.mo_ops = &mdd_obj_ops;
+                mdo->mod_obj.mo_dir_ops = &mdd_dir_ops;
                 o->lo_ops = &mdd_lu_obj_ops;
                 return &mdo->mod_obj.mo_lu;
         } else
@@ -725,10 +727,13 @@ struct md_device_operations mdd_ops = {
         .mdo_statfs     = mdd_statfs
 };
 
+static struct md_dir_operations mdd_dir_ops = {
+        .mdo_mkdir         = mdd_mkdir,
+        .mdo_rename        = mdd_rename,
+        .mdo_link          = mdd_link
+};
+
 static struct md_object_operations mdd_obj_ops = {
-        .moo_mkdir         = mdd_mkdir,
-        .moo_rename        = mdd_rename,
-        .moo_link          = mdd_link,
         .moo_attr_get      = mdd_attr_get,
         .moo_attr_set      = mdd_attr_set,
         .moo_xattr_get     = mdd_xattr_get,

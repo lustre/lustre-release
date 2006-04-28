@@ -50,25 +50,31 @@ struct iam_rec;
 
 struct fld_info fld_info;
 
-int fld_handle_insert(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t mdsno)
+int fld_handle_insert(struct fld_info *fld_info,
+                      fidseq_t seq_num, mdsno_t mdsno)
 {
         handle_t *handle = NULL;
+        return 0;
         return iam_insert(handle, fld_info->fi_container,
                           (struct iam_key *)&seq_num, (struct iam_rec *)&mdsno);
 }
 
-int fld_handle_delete(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t mds_num)
+int fld_handle_delete(struct fld_info *fld_info,
+                      fidseq_t seq_num, mdsno_t mds_num)
 {
         handle_t *handle = NULL;
+        return 0;
         return iam_delete(handle, fld_info->fi_container,
                           (struct iam_key *)&seq_num);
 }
 
-int fld_handle_lookup(struct fld_info *fld_info, fidseq_t seq_num, mdsno_t *mds_num)
+int fld_handle_lookup(struct fld_info *fld_info,
+                      fidseq_t seq_num, mdsno_t *mds_num)
 {
         mdsno_t mdsno;
         int result;
 
+        return 0;
         result = iam_lookup(fld_info->fi_container, (struct iam_key *)&seq_num,
                             (struct iam_rec *)&mdsno);
         if (result == 0)
@@ -152,21 +158,21 @@ int fld_info_init(struct fld_info *fld_info)
         int rc;
         ENTRY;
 
-        fld_file = filp_open("/fld", O_RDWR, S_IRWXU);
+        fld_file = filp_open("/dev/null", O_RDWR, S_IRWXU);
         /* sanity and security checks... */
         OBD_ALLOC(fld_info->fi_container, sizeof(struct iam_container));
         if (!fld_info->fi_container)
                 RETURN(-ENOMEM);
 
-        rc =iam_container_init(fld_info->fi_container, &fld_param,
-                               fld_file->f_dentry->d_inode);
+        rc = iam_container_init(fld_info->fi_container, &fld_param,
+                                fld_file->f_dentry->d_inode);
         RETURN(rc);
 }
 
 void fld_info_fini(struct fld_info *fld_info)
 {
         iam_container_fini(fld_info->fi_container);
-        OBD_FREE(fld_info->fi_container, sizeof(struct iam_container));       
+        OBD_FREE(fld_info->fi_container, sizeof(struct iam_container));
         OBD_FREE_PTR(fld_info);
 }
 

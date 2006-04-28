@@ -35,6 +35,7 @@
 #include "cmm_internal.h"
 
 static struct md_object_operations cmm_mo_ops;
+static struct md_dir_operations    cmm_dir_ops;
 static struct lu_object_operations cmm_obj_ops;
 
 static int cmm_fld_lookup(struct lu_fid *fid)
@@ -69,6 +70,7 @@ struct lu_object *cmm_object_alloc(struct lu_context *ctx,
 		o = &mo->cmo_obj.mo_lu;
                 lu_object_init(o, NULL, d);
                 mo->cmo_obj.mo_ops = &cmm_mo_ops;
+                mo->cmo_obj.mo_dir_ops = &cmm_dir_ops;
                 o->lo_ops = &cmm_obj_ops;
 		RETURN(o);
 	} else
@@ -184,7 +186,7 @@ int cmm_mkdir(struct lu_context *ctxt, struct lu_attr* attr,
 	struct cmm_object *cmm_parent = md2cmm_obj(md_parent);
         struct md_object  *next       = cmm2child_obj(cmm_parent);
 
-        return next->mo_ops->moo_mkdir(ctxt, attr, next, name, md_child);
+        return next->mo_dir_ops->mdo_mkdir(ctxt, attr, next, name, md_child);
 }
 
 int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,
@@ -195,12 +197,15 @@ int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,
         return next->mo_ops->moo_attr_get(ctxt, next, attr);
 }
 
+static struct md_dir_operations cmm_dir_ops = {
+        .mdo_mkdir      = cmm_mkdir
+//        .mdo_rename     = cmm_rename,
+//        .mdo_link       = cmm_link,
+};
+
 static struct md_object_operations cmm_mo_ops = {
-        .moo_mkdir      = cmm_mkdir,
         .moo_attr_get   = cmm_attr_get,
 //        .moo_attr_set   = cmm_attr_set,
-//        .moo_rename     = cmm_rename,
-//        .moo_link       = cmm_link,
 //        .moo_xattr_get   = cmm_xattr_get,
 //        .moo_xattr_set   = cmm_xattr_set,
 };

@@ -45,21 +45,10 @@ struct md_device;
 struct md_device_operations;
 struct md_object;
 
+/*
+ * Operations implemented for each md object (both directory and leaf).
+ */
 struct md_object_operations {
-
-        /* meta-data object operations related handlers */
-        int (*moo_mkdir)(struct lu_context *ctxt, struct lu_attr*, 
-                         struct md_object *obj,
-                         const char *name, struct md_object *child);
-
-        int (*moo_rename)(struct lu_context *ctxt, struct md_object *spobj,
-                          struct md_object *tpobj, struct md_object *sobj,
-                          const char *sname, struct md_object *tobj,
-                          const char *tname);
-
-        int (*moo_link)(struct lu_context *ctxt, struct md_object *tobj,
-                        struct md_object *sobj, const char *name);
-
         int (*moo_attr_get)(struct lu_context *ctxt, struct md_object *dt,
                             struct lu_attr *attr);
         int (*moo_attr_set)(struct lu_context *ctxt, struct md_object *dt,
@@ -70,6 +59,24 @@ struct md_object_operations {
 
         int (*moo_xattr_set)(struct lu_context *ctxt, struct md_object *obj,
                              void *buf, int buf_len, const char *name);
+};
+
+/*
+ * Operations implemented for each directory object.
+ */
+struct md_dir_operations {
+        int (*mdo_mkdir)(struct lu_context *ctxt, struct lu_attr *attr,
+                         struct md_object *obj,
+                         const char *name, struct md_object *child);
+
+        int (*mdo_rename)(struct lu_context *ctxt, struct md_object *spobj,
+                          struct md_object *tpobj, struct md_object *sobj,
+                          const char *sname, struct md_object *tobj,
+                          const char *tname);
+
+        int (*mdo_link)(struct lu_context *ctxt, struct md_object *tobj,
+                        struct md_object *sobj, const char *name);
+
 };
 
 struct md_device_operations {
@@ -94,6 +101,7 @@ struct md_device {
 struct md_object {
         struct lu_object             mo_lu;
         struct md_object_operations *mo_ops;
+        struct md_dir_operations    *mo_dir_ops;
 };
 
 static inline int lu_device_is_md(const struct lu_device *d)
