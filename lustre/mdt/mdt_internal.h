@@ -122,6 +122,14 @@ enum {
         MDT_LH_NR
 };
 
+struct mdt_reint_record {
+        mdt_reint_t    rr_opcode;
+        struct lu_fid *rr_fid1;
+        struct lu_fid *rr_fid2;
+        char          *rr_name;
+        char          *rr_tgt;
+};
+
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
  * reduce stack consumption.
@@ -153,6 +161,10 @@ struct mdt_thread_info {
          * Object attributes.
          */
         struct lu_attr         mti_attr;
+        /*
+         * reint record. Containing information for reint operations.
+         */
+        struct mdt_reint_record mti_rr;
         /*
          * Additional fail id that can be set by handler. Passed to
          * target_send_reply().

@@ -51,17 +51,17 @@ static int mdt_md_mkdir(struct mdt_thread_info *info, struct lustre_handle *lock
         lh->mlh_mode = LCK_PW;
 
         parent = mdt_object_find_lock(info->mti_ctxt,
-                                      mdt, info->mti_attr.la_fid1, lh, MDS_INODELOCK_UPDATE);
+                                      mdt, info->mti_rr.rr_fid1, lh, MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 return PTR_ERR(parent);
 
-        child = mdt_object_find(info->mti_ctxt, mdt, info->mti_attr.la_fid2);
+        child = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid2);
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
                 result = next->mo_ops->moo_mkdir(info->mti_ctxt, 
                                                  &info->mti_attr,
-                                                 next, info->mti_attr.la_name,
+                                                 next, info->mti_rr.rr_name,
                                                  mdt_object_child(child));
                 mdt_object_put(info->mti_ctxt, child);
         } else
@@ -161,7 +161,7 @@ int mdt_reint_rec(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        rc = reinters[info->mti_attr.la_opcode] (info, lockh);
+        rc = reinters[info->mti_rr.rr_opcode] (info, lockh);
 
         RETURN(rc);
 }
