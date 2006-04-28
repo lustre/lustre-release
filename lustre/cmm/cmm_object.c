@@ -177,13 +177,14 @@ int cmm_statfs(struct lu_context *ctxt,
         RETURN (result);
 }
 
-int cmm_mkdir(struct lu_context *ctxt, struct md_object *md_parent,
+int cmm_mkdir(struct lu_context *ctxt, struct lu_attr* attr,
+              struct md_object *md_parent,
               const char *name, struct md_object *md_child)
 {
 	struct cmm_object *cmm_parent = md2cmm_obj(md_parent);
         struct md_object  *next       = cmm2child_obj(cmm_parent);
 
-        return next->mo_ops->moo_mkdir(ctxt, next, name, md_child);
+        return next->mo_ops->moo_mkdir(ctxt, attr, next, name, md_child);
 }
 
 int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,

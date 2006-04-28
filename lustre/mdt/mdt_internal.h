@@ -47,7 +47,6 @@
 #include <linux/lustre_idl.h>
 #include <linux/md_object.h>
 #include <linux/lustre_fid.h>
-#include <linux/lustre_mdt.h>
 
 struct mdt_device {
         /* super-class */
@@ -154,10 +153,6 @@ struct mdt_thread_info {
          * Object attributes.
          */
         struct lu_attr         mti_attr;
-        /*
-         * some addtional attributes for reint.
-         */
-        struct mdt_reint_record mti_rr;
         /*
          * Additional fail id that can be set by handler. Passed to
          * target_send_reply().

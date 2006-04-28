@@ -658,7 +658,7 @@ cleanup:
 }
 
 static int
-mdd_mkdir(struct lu_context *ctxt, struct md_object *pobj,
+mdd_mkdir(struct lu_context *ctxt, struct lu_attr* attr, struct md_object *pobj,
           const char *name, struct md_object *child)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
