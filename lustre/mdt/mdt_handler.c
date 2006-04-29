@@ -89,9 +89,11 @@ static int mdt_getstatus(struct mdt_thread_info *info,
         else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
                 result = -ENOMEM;
         else {
-                info->mti_body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (struct mdt_body));
+                info->mti_body = lustre_msg_buf(req->rq_repmsg, 0, 
+                                                sizeof (struct mdt_body));
                 result = next->md_ops->mdo_root_get(info->mti_ctxt,
-                                                    next, &info->mti_body->fid1);
+                                                    next, 
+                                                    &info->mti_body->fid1);
         }
 
         /* the last_committed and last_xid fields are filled in for all
@@ -119,7 +121,8 @@ static int mdt_statfs(struct mdt_thread_info *info,
                 CERROR(LUSTRE_MDT0_NAME": statfs lustre_pack_reply failed\n");
                 result = -ENOMEM;
         } else {
-                osfs = lustre_msg_buf(req->rq_repmsg, 0,  sizeof(struct obd_statfs));
+                osfs = lustre_msg_buf(req->rq_repmsg, 0,  
+                                      sizeof(struct obd_statfs));
                 OBD_ALLOC_PTR(sfs);
                 if(sfs == NULL)
                         RETURN(-ENOMEM);
@@ -177,7 +180,8 @@ static int mdt_getattr(struct mdt_thread_info *info,
                 result = next->mo_ops->moo_attr_get(info->mti_ctxt, next,
                                                     &info->mti_attr);
                 if (result == 0) {
-                        info->mti_body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(struct mdt_body));
+                        info->mti_body = lustre_msg_buf(req->rq_repmsg, 0, 
+                                                       sizeof(struct mdt_body));
                         mdt_pack_attr2body(info->mti_body, &info->mti_attr);
                         info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
                 }
@@ -254,7 +258,7 @@ static int mdt_readpage(struct mdt_thread_info *info,
 static int mdt_reint_internal(struct mdt_thread_info *info,
                        struct ptlrpc_request *req, 
                        int offset,
-                       struct lustre_handle *lockh)
+                       struct mdt_lock_handle *lockh)
 {
         int rc;
 
@@ -299,7 +303,8 @@ static int mdt_reint(struct mdt_thread_info *info,
         info->mti_rep_buf_size[0] = sizeof(struct mdt_body);
         info->mti_rep_buf_size[1] = sizeof(struct lov_mds_md); /*FIXME:See mds*/
         info->mti_rep_buf_size[2] = sizeof(struct llog_cookie);/*FIXME:See mds*/
-        rc = lustre_pack_reply(req, info->mti_rep_buf_nr, info->mti_rep_buf_size, NULL);
+        rc = lustre_pack_reply(req, info->mti_rep_buf_nr,
+                               info->mti_rep_buf_size, NULL);
         if (rc)
                 RETURN (rc);
         rc = mdt_reint_internal(info, req, offset, NULL);
@@ -988,7 +993,7 @@ static void fixup_handle_for_resent_req(struct mdt_thread_info *info,
                                         int offset,
                                         struct ldlm_lock *new_lock,
                                         struct ldlm_lock **old_lock,
-                                        struct lustre_handle *lockh)
+                                        struct mdt_lock_handle *lockh)
 {
         struct obd_export *exp = req->rq_export;
         struct mdt_device * mdt = info->mti_mdt;
@@ -1007,10 +1012,10 @@ static void fixup_handle_for_resent_req(struct mdt_thread_info *info,
                 if (lock == new_lock)
                         continue;
                 if (lock->l_remote_handle.cookie == remote_hdl.cookie) {
-                        lockh->cookie = lock->l_handle.h_cookie;
+                        lockh->mlh_lh.cookie = lock->l_handle.h_cookie;
                         LDLM_DEBUG(lock, "restoring lock cookie");
                         DEBUG_REQ(D_HA, req, "restoring lock cookie "LPX64,
-                                  lockh->cookie);
+                                  lockh->mlh_lh.cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
                         l_unlock(&mdt->mdt_namespace->ns_lock);
@@ -1044,7 +1049,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_lock *lock = *lockp;
         struct ldlm_intent *it;
         struct ldlm_reply *rep;
-        struct lustre_handle lockh = { 0 };
+        struct mdt_lock_handle lockh = { {0} };
         struct ldlm_lock *new_lock = NULL;
         int getattr_part = MDS_INODELOCK_UPDATE;
         int offset = MDS_REQ_INTENT_REC_OFF;
@@ -1111,7 +1116,8 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         switch ((long)it->opc) {
         case IT_OPEN:
         case IT_CREAT|IT_OPEN:
-                fixup_handle_for_resent_req(info,req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                fixup_handle_for_resent_req(info, req, 
+                                            MDS_REQ_INTENT_LOCKREQ_OFF,
                                             lock, NULL, &lockh);
                 /* XXX swab here to assert that an mds_open reint
                  * packet is following */
@@ -1133,7 +1139,8 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                         getattr_part |= MDS_INODELOCK_LOOKUP;
         case IT_READDIR:
 #if 0
-                fixup_handle_for_resent_req(info, req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                fixup_handle_for_resent_req(info, req, 
+                                            MDS_REQ_INTENT_LOCKREQ_OFF,
                                             lock, &new_lock, &lockh);
 
                 /* INODEBITS_INTEROP: if this lock was converted from a
@@ -1176,12 +1183,12 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
          * client afterwards.  For regular RPCs we want to give the new lock to
          * the client instead of whatever lock it was about to get. */
         if (new_lock == NULL)
-                new_lock = ldlm_handle2lock(&lockh);
+                new_lock = ldlm_handle2lock(&lockh.mlh_lh);
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
                 RETURN(0);
 
         LASSERTF(new_lock != NULL, "op "LPX64" lockh "LPX64"\n",
-                 it->opc, lockh.cookie);
+                 it->opc, lockh.mlh_lh.cookie);
 
         /* If we've already given this lock to a client once, then we should
          * have no readers or writers.  Otherwise, we should have one reader

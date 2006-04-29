@@ -38,7 +38,8 @@
 
 
 /* object operations */
-static int mdt_md_mkdir(struct mdt_thread_info *info, struct lustre_handle *lockh)
+static int mdt_md_mkdir(struct mdt_thread_info *info,
+                        struct mdt_lock_handle *lockh)
 {
         struct mdt_device      *mdt = info->mti_mdt;
         struct mdt_object      *parent;
@@ -51,7 +52,9 @@ static int mdt_md_mkdir(struct mdt_thread_info *info, struct lustre_handle *lock
         lh->mlh_mode = LCK_PW;
 
         parent = mdt_object_find_lock(info->mti_ctxt,
-                                      mdt, info->mti_rr.rr_fid1, lh, MDS_INODELOCK_UPDATE);
+                                      mdt, info->mti_rr.rr_fid1, 
+                                      lh, 
+                                      MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 return PTR_ERR(parent);
 
@@ -73,7 +76,7 @@ static int mdt_md_mkdir(struct mdt_thread_info *info, struct lustre_handle *lock
 
 
 static int mdt_reint_setattr(struct mdt_thread_info *info,
-                             struct lustre_handle *lockh)
+                             struct mdt_lock_handle *lockh)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
@@ -81,7 +84,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
 
 static int mdt_reint_create(struct mdt_thread_info *info,
-                            struct lustre_handle *lockh)
+                            struct mdt_lock_handle *lockh)
 {
         int rc;
         ENTRY;
@@ -114,14 +117,14 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 
 
 static int mdt_reint_unlink(struct mdt_thread_info *info,
-                            struct lustre_handle *lockh)
+                            struct mdt_lock_handle *lockh)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
 
 static int mdt_reint_link(struct mdt_thread_info *info,
-                          struct lustre_handle *lockh)
+                          struct mdt_lock_handle *lockh)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
@@ -129,14 +132,14 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
 
 static int mdt_reint_rename(struct mdt_thread_info *info,
-                            struct lustre_handle *lockh)
+                            struct mdt_lock_handle *lockh)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
 
 static int mdt_reint_open(struct mdt_thread_info *info,
-                          struct lustre_handle *lockh)
+                          struct mdt_lock_handle *lockh)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
@@ -144,7 +147,7 @@ static int mdt_reint_open(struct mdt_thread_info *info,
 
 
 typedef int (*mdt_reinter)(struct mdt_thread_info *info,
-                           struct lustre_handle *);
+                           struct mdt_lock_handle *);
 
 static mdt_reinter reinters[REINT_MAX] = {
         [REINT_SETATTR]  = mdt_reint_setattr,
@@ -156,7 +159,7 @@ static mdt_reinter reinters[REINT_MAX] = {
 };
 
 int mdt_reint_rec(struct mdt_thread_info *info,
-                  struct lustre_handle *lockh)
+                  struct mdt_lock_handle *lockh)
 {
         int rc;
         ENTRY;

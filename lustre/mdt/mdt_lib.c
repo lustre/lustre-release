@@ -47,7 +47,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info,
                               int offset)
 {
         ENTRY;
-        RETURN(0);
+        RETURN(-EOPNOTSUPP);
 }
 
 static int mdt_create_unpack(struct mdt_thread_info *info,
@@ -59,8 +59,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info,
         struct mdt_reint_record *rr = &info->mti_rr;
         ENTRY;
 
-        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mdt_rec_create);
+        rec = lustre_swab_reqbuf(req, offset, sizeof (*rec),
+                                 lustre_swab_mdt_rec_create);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -68,7 +68,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info,
         rr->rr_fid2 = &rec->cr_replayfid;
         attr->la_mode = rec->cr_mode;
 
-        rr->rr_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        rr->rr_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (rr->rr_name == NULL)
                 RETURN(-EFAULT);
         RETURN(0);
@@ -79,7 +79,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info,
                            int offset)
 {
         ENTRY;
-        RETURN(0);
+        RETURN(-EOPNOTSUPP);
 }
 
 static int mdt_unlink_unpack(struct mdt_thread_info *info,
@@ -87,7 +87,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info,
                              int offset)
 {
         ENTRY;
-        RETURN(0);
+        RETURN(-EOPNOTSUPP);
 }
 
 static int mdt_rename_unpack(struct mdt_thread_info *info,
@@ -95,7 +95,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info,
                              int offset)
 {
         ENTRY;
-        RETURN(0);
+        RETURN(-EOPNOTSUPP);
 }
 
 static int mdt_open_unpack(struct mdt_thread_info *info,
@@ -103,7 +103,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info,
                            int offset)
 {
         ENTRY;
-        RETURN(0);
+        RETURN(-EOPNOTSUPP);
 }
 
 typedef int (*reint_unpacker)(struct mdt_thread_info *info,

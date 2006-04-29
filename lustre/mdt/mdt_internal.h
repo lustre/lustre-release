@@ -202,7 +202,7 @@ int mdt_reint_unpack(struct mdt_thread_info *,
                      int);
 
 int mdt_reint_rec(struct mdt_thread_info *,
-                  struct lustre_handle *);
+                  struct mdt_lock_handle *);
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */
