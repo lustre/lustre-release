@@ -283,11 +283,11 @@ static int mdt_reint(struct mdt_thread_info *info,
 
         /* NB only peek inside req now; mdt_XXX_unpack() will swab it */
         if (opcp == NULL) {
-                CERROR ("Can't inspect opcode\n");
-                RETURN (-EINVAL);
+                CERROR("Can't inspect opcode\n");
+                RETURN(-EINVAL);
         }
         opc = *opcp;
-        if (lustre_msg_swabbed (req->rq_reqmsg))
+        if (lustre_msg_swabbed(req->rq_reqmsg))
                 __swab32s(&opc);
 
         DEBUG_REQ(D_INODE, req, "reint opt = %d", opc);
@@ -306,7 +306,7 @@ static int mdt_reint(struct mdt_thread_info *info,
         rc = lustre_pack_reply(req, info->mti_rep_buf_nr,
                                info->mti_rep_buf_size, NULL);
         if (rc)
-                RETURN (rc);
+                RETURN(rc);
         rc = mdt_reint_internal(info, req, offset, NULL);
         RETURN(rc);
 }
@@ -1068,7 +1068,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 
         if (req->rq_reqmsg->bufcount <= MDS_REQ_INTENT_IT_OFF) {
                 /* No intent was provided */
-                info->mti_rep_buf_size[0] =  sizeof(struct ldlm_reply);
+                info->mti_rep_buf_size[0] = sizeof(struct ldlm_reply);
                 rc = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
                 LASSERT(rc == 0);
                 mdt_thread_info_fini(info);
@@ -1122,7 +1122,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 /* XXX swab here to assert that an mds_open reint
                  * packet is following */
                 rep->lock_policy_res2 = mdt_reint_internal(info, req,
-                                                offset, &lockh);
+                                                           offset, &lockh);
 #if 0
                 /* We abort the lock if the lookup was negative and
                  * we did not make it to the OPEN portion */
@@ -1184,8 +1184,10 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
          * the client instead of whatever lock it was about to get. */
         if (new_lock == NULL)
                 new_lock = ldlm_handle2lock(&lockh.mlh_lh);
-        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
+        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY)) {
+                mdt_thread_info_fini(info);
                 RETURN(0);
+        }
 
         LASSERTF(new_lock != NULL, "op "LPX64" lockh "LPX64"\n",
                  it->opc, lockh.mlh_lh.cookie);
@@ -1208,6 +1210,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                  * reconstructed a reply. */
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
                         MSG_RESENT);
+                mdt_thread_info_fini(info);
                 RETURN(ELDLM_LOCK_REPLACED);
         }
 
@@ -1231,6 +1234,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         LDLM_LOCK_PUT(new_lock);
         l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
 
+        mdt_thread_info_fini(info);
         RETURN(ELDLM_LOCK_REPLACED);
 }
 

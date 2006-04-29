@@ -164,7 +164,7 @@ int mdt_reint_rec(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        rc = reinters[info->mti_rr.rr_opcode] (info, lockh);
+        rc = reinters[info->mti_rr.rr_opcode](info, lockh);
 
         RETURN(rc);
 }

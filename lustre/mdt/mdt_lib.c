@@ -131,12 +131,12 @@ int mdt_reint_unpack(struct mdt_thread_info *info,
         /* NB don't lustre_swab_reqbuf() here.  We're just taking a peek
          * and we want to leave it to the specific unpacker once we've
          * identified the message type */
-        opcodep = lustre_msg_buf (req->rq_reqmsg, offset, sizeof (*opcodep));
+        opcodep = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*opcodep));
         if (opcodep == NULL)
                 RETURN(-EFAULT);
 
         opcode = *opcodep;
-        if (lustre_msg_swabbed (req->rq_reqmsg))
+        if (lustre_msg_swabbed(req->rq_reqmsg))
                 __swab32s (&opcode);
 
         if (opcode >= REINT_MAX || mdt_reint_unpackers[opcode] == NULL) {
