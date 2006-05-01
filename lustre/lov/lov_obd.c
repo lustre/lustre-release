@@ -1547,7 +1547,7 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
                 while (!lov->tgts[i].ltd_exp) {
                         i++;
                         if (i >= lov->desc.ld_tgt_count) 
-                                RETURN(-ENOTBLK);
+                                RETURN(-ENOMEDIUM);
                 }
                 rc = size_round(sizeof(*lap)) +
                         obd_prep_async_page(lov->tgts[i].ltd_exp, NULL, NULL,

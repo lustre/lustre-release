@@ -49,6 +49,21 @@
 #define MAX_LOOP_DEVICES 16
 #define L_BLOCK_SIZE 4096
 #define INDEX_UNASSIGNED 0xFFFF
+#define MO_IS_LOOP     0x01
+#define MO_FORCEFORMAT 0x02
+
+/* used to describe the options to format the lustre disk, not persistent */
+struct mkfs_opts {
+        struct lustre_disk_data mo_ldd; /* to be written in MOUNT_DATA_FILE */
+        char  mo_mount_type_string[20]; /* "ext3", "ldiskfs", ... */
+        char  mo_device[128];           /* disk device name */
+        char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
+        char  mo_loopdev[128];          /* in case a loop dev is needed */
+        __u64 mo_device_sz;             /* in KB */
+        int   mo_stripe_count;
+        int   mo_flags; 
+        int   mo_mgs_failnodes;
+};
 
 static char *progname;
 static int verbose = 1;

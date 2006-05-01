@@ -380,7 +380,9 @@ int main(int argc, char *const argv[])
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");
                 if (errno == ENOTBLK)
-                        fprintf(stderr,"Does this filesystem have any OSTs?\n");
+                        fprintf(stderr,"Do you need -o loop?\n");
+                if (errno == ENOMEDIUM)
+                        fprintf(stderr,"This filesystem needs at least 1 OST\n");
                 if (errno == ENOENT)
                         fprintf(stderr,"Is the MGS specification correct? "
                                 "(%s)\n", source);
@@ -389,7 +391,8 @@ int main(int argc, char *const argv[])
                                 "(%s)\n", source);
                 if (errno == ENXIO)
                         fprintf(stderr,"The target service failed to start "
-                                "(bad config log?) (%s)\n", source);
+                                "(bad config log?) (%s).  "
+                                "See /var/log/messages.\n", source);
                 if (errno == EIO)
                         fprintf(stderr,"Is the MGS running? (%s)\n", source);
                 if (errno == EADDRINUSE)
