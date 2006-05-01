@@ -37,6 +37,7 @@
 #include <linux/obd_class.h>
 
 #include "cmm_internal.h"
+#include "mdc_internal.h"
 
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_ver.h>
@@ -68,20 +69,68 @@ static int cmm_device_init(struct lu_device *d, struct lu_device *next)
 
         ENTRY;
 
+        INIT_LIST_HEAD(&m->cmm_targets);
+        m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
 
         RETURN(err);
 }
 
-static struct lu_device *cmm_device_fini(struct lu_device *d)
+static struct lu_device *cmm_device_fini(struct lu_device *ld)
 {
-	struct cmm_device *m = lu2cmm_dev(d);
-        struct lu_device *next = md2lu_dev(m->cmm_child);
-
+	struct cmm_device *cm = lu2cmm_dev(ld);
+        struct mdc_device *mc, *tmp;
         ENTRY;
+        
+        /* finish all mdc devices */
+        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
+                struct lu_device *ld_m = mdc2lu_dev(mc);
+
+                list_del(&mc->mc_linkage);
+                lu_device_put(cmm2lu_dev(cm));
+                ld->ld_type->ldt_ops->ldto_device_fini(ld_m);
+                ld->ld_type->ldt_ops->ldto_device_free(ld_m);
+        }
+
         EXIT;
-        return next;
+        return md2lu_dev(cm->cmm_child);
 }
+
+/* add new MDC to the CMM, create MDC lu_device and connect it to mdc_obd */
+static int cmm_add_mdc(struct cmm_device * cm, struct lustre_cfg *cfg)
+{
+        struct lu_device_type *ldt;
+        struct lu_device *ld;
+        struct obd_device *obd;
+        const char *name = lustre_cfg_string(cfg, 1);
+        int rc;
+        ENTRY;
+        
+        /*TODO check this MDC exists already */
+        obd = class_name2obd(name);
+        if (obd) {
+                ld = obd->obd_lu_dev;
+        } else {
+                RETURN(-ENOENT);
+        }
+        
+        ldt = ld->ld_type;
+        ld->ld_site = cmm2lu_dev(cm)->ld_site;
+
+        rc = ldt->ldt_ops->ldto_device_init(ld, NULL);
+        if (rc)
+                ldt->ldt_ops->ldto_device_free(ld);
+
+        /* pass config to the just created MDC */
+        rc = ld->ld_ops->ldo_process_config(ld, cfg);
+        if (rc == 0) {
+                struct mdc_device *mc = lu2mdc_dev(ld);
+                list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
+                lu_device_get(cmm2lu_dev(cm));
+        }
+        RETURN(rc);
+}
+
 
 static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg)
 {

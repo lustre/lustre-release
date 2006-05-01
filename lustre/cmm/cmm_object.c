@@ -33,6 +33,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include "cmm_internal.h"
+#include "mdc_internal.h"
 
 static struct md_object_operations cmm_mo_ops;
 static struct md_dir_operations    cmm_dir_ops;
@@ -47,12 +48,18 @@ static int cmm_fld_lookup(struct lu_fid *fid)
 /* get child device by mdsnum*/
 static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
 {
-        struct lu_device *next;
+        struct lu_device *next = NULL;
 
-        if (likely(num != d->local_num)) {
+        if (likely(num == d->cmm_local_num)) {
 	        next = &d->cmm_child->md_lu_dev;
         } else {
-                next = &d->cmm_child->md_lu_dev;
+                struct mdc_device *mdc;
+                list_for_each_entry(mdc, &d->cmm_targets, mc_linkage) {
+                        if (mdc->mc_num == num) { 
+                                next = mdc2lu_dev(mdc);
+                                break;
+                        }
+                }
         }
         return next;
 }
@@ -89,10 +96,15 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
         /* under device can be MDD or MDC */
         mdsnum = cmm_fld_lookup(fid);
         under = cmm_get_child(d, mdsnum);
+        if (under == NULL) 
+                RETURN(-ENOENT);
 
         below = under->ld_ops->ldo_object_alloc(ctxt, under);
 	if (below != NULL) {
+                struct cmm_object *co = lu2cmm_obj(o);
+
 		lu_object_add(o, below);
+                co->cmo_num = mdsnum;
 		RETURN(0);
 	} else
 		RETURN(-ENOMEM);
@@ -123,29 +135,6 @@ static int cmm_object_print(struct lu_context *ctx,
 	return seq_printf(f, LUSTRE_CMM0_NAME"-object@%p", o);
 }
 
-/* Locking API */
-#if 0
-static void cmm_lock(struct lu_context *ctxt, struct md_object *obj, __u32 mode)
-{
-        struct cmm_object *cmm_obj = md2cmm_obj(obj);
-        struct cmm_device *cmm_dev = cmm_obj2dev(cmm_obj);
-        struct md_object  *next    = cmm2child_obj(cmm_obj);
-
-        next->mo_ops->moo_object_lock(ctxt, next, mode);
-}
-
-static void cmm_unlock(struct lu_context *ctxt,
-                       struct md_object *obj, __u32 mode)
-{
-        struct cmm_object *cmm_obj = md2cmm_obj(obj);
-        struct cmm_device *cmm_dev = cmm_obj2dev(cmm_obj);
-        struct md_object  *next    = cmm2child_obj(cmm_obj);
-
-        next->mo_ops->moo_object_unlock(ctxt, next, mode);
-}
-#endif
-/* Llog API */
-/* Object API */
 /* Metadata API */
 int cmm_root_get(struct lu_context *ctx,
                  struct md_device *md, struct lu_fid *fid)
@@ -179,14 +168,24 @@ int cmm_statfs(struct lu_context *ctxt,
         RETURN (result);
 }
 
-int cmm_mkdir(struct lu_context *ctxt, struct lu_attr* attr,
-              struct md_object *md_parent,
-              const char *name, struct md_object *md_child)
+int cmm_mkdir(struct lu_context *ctxt, struct lu_attr *attr,
+              struct md_object *p, const char *name, struct md_object *c)
 {
-	struct cmm_object *cmm_parent = md2cmm_obj(md_parent);
-        struct md_object  *next       = cmm2child_obj(cmm_parent);
+	struct cmm_object *cmm_p = md2cmm_obj(p);
+        struct cmm_object *cmm_c = md2cmm_obj(c);
+        struct md_object  *local = cmm2child_obj(cmm_p);
+        int result;
 
-        return next->mo_dir_ops->mdo_mkdir(ctxt, attr, next, name, md_child);
+        if (cmm_is_local_obj(cmm_c)) {
+                /* fully local mkdir */
+                result = local->mo_dir_ops->mdo_mkdir(ctxt, attr, local, name,
+                                                      cmm2child_obj(cmm_c));
+        } else {
+                /* remote object creation and local name insert */
+                result = -EOPNOTSUPP;
+        }
+
+        RETURN(result);
 }
 
 int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,

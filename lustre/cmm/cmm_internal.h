@@ -28,19 +28,12 @@
 #include <linux/obd.h>
 #include <linux/md_object.h>
 
-struct cmm_mdc_device {
-        struct md_device mdc_md_dev;
-        /* other MD servers in cluster */
-        __u32            cmm_tgt_count;
-        struct list_head cmm_tgt_linkage;
-};
-
 struct cmm_device {
         struct md_device cmm_md_dev;
         /* underlaying device in MDS stack, usually MDD */
         struct md_device *cmm_child;
         /* other MD servers in cluster */
-        __u32            local_num;
+        __u32            cmm_local_num;
         __u32            cmm_tgt_count;
         struct list_head cmm_targets;
 };
@@ -67,7 +60,9 @@ static inline struct lu_device *cmm2lu_dev(struct cmm_device *d)
 }
 
 struct cmm_object {
-	struct md_object        cmo_obj;
+	struct md_object cmo_obj;
+        /* mds number where object is placed */
+        __u32            cmo_num;
 };
 
 static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)
@@ -81,6 +76,11 @@ static inline struct cmm_object *lu2cmm_obj(struct lu_object *o)
 	return container_of0(o, struct cmm_object, cmo_obj.mo_lu);
 }
 
+static inline int cmm_is_local_obj(struct cmm_object *c)
+{
+        return (c->cmo_num == cmm_obj2dev(c)->cmm_local_num);
+}
+
 /* get cmm object from md_object */
 static inline struct cmm_object *md2cmm_obj(struct md_object *o)
 {
@@ -91,9 +91,6 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 {
         return lu2md(lu_object_next(&o->cmo_obj.mo_lu));
 }
-
-/* cmm device */
-int cmm_add_mdc(struct cmm_device *, struct lustre_cfg *);
 
 /* cmm_object.c */
 struct lu_object *cmm_object_alloc(struct lu_context *ctx, struct lu_device *);
