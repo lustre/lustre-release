@@ -89,10 +89,10 @@ static int mdt_getstatus(struct mdt_thread_info *info,
         else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
                 result = -ENOMEM;
         else {
-                info->mti_body = lustre_msg_buf(req->rq_repmsg, 0, 
+                info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
                                                 sizeof (struct mdt_body));
                 result = next->md_ops->mdo_root_get(info->mti_ctxt,
-                                                    next, 
+                                                    next,
                                                     &info->mti_body->fid1);
         }
 
@@ -121,7 +121,7 @@ static int mdt_statfs(struct mdt_thread_info *info,
                 CERROR(LUSTRE_MDT0_NAME": statfs lustre_pack_reply failed\n");
                 result = -ENOMEM;
         } else {
-                osfs = lustre_msg_buf(req->rq_repmsg, 0,  
+                osfs = lustre_msg_buf(req->rq_repmsg, 0,
                                       sizeof(struct obd_statfs));
                 OBD_ALLOC_PTR(sfs);
                 if(sfs == NULL)
@@ -163,6 +163,8 @@ static int mdt_getattr(struct mdt_thread_info *info,
         int              result;
 
         LASSERT(info->mti_object != NULL);
+        LASSERT(lu_object_exists(info->mti_ctxt,
+                                 &info->mti_object->mot_obj.mo_lu));
 
         ENTRY;
 
@@ -180,7 +182,7 @@ static int mdt_getattr(struct mdt_thread_info *info,
                 result = next->mo_ops->moo_attr_get(info->mti_ctxt, next,
                                                     &info->mti_attr);
                 if (result == 0) {
-                        info->mti_body = lustre_msg_buf(req->rq_repmsg, 0, 
+                        info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
                                                        sizeof(struct mdt_body));
                         mdt_pack_attr2body(info->mti_body, &info->mti_attr);
                         info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
@@ -256,7 +258,7 @@ static int mdt_readpage(struct mdt_thread_info *info,
 }
 
 static int mdt_reint_internal(struct mdt_thread_info *info,
-                       struct ptlrpc_request *req, 
+                       struct ptlrpc_request *req,
                        int offset,
                        struct mdt_lock_handle *lockh)
 {
@@ -547,7 +549,12 @@ enum mdt_handler_flags {
          * struct ldlm_request is passed in MDS_REQ_INTENT_LOCKREQ_OFF-th
          * incoming buffer.
          */
-        HABEO_CLAVIS = (1 << 1)
+        HABEO_CLAVIS = (1 << 1),
+        /*
+         * object, identified by fid passed in mdt_body already exists (on
+         * disk)..
+         */
+        HABEO_DISCUS = HABEO_CORPUS | (1 << 2)
 };
 
 struct mdt_opc_slice {
@@ -607,6 +614,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         int result;
         int off;
 
+        __u32 flags;
+
         ENTRY;
 
         LASSERT(h->mh_act != NULL);
@@ -621,25 +630,33 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         off = MDS_REQ_REC_OFF + shift;
 
         result = 0;
-        if (h->mh_flags & HABEO_CORPUS) {
-                struct mdt_body *body;
+        flags = h->mh_flags;
+        if (flags & HABEO_CORPUS) {
+                struct mdt_body   *body;
+                struct lu_context *ctx;
+                struct mdt_object *obj;
 
+                ctx = info->mti_ctxt;
                 body = info->mti_body =
                         lustre_swab_reqbuf(req, off, sizeof *info->mti_body,
                                            lustre_swab_mdt_body);
                 if (body != NULL) {
-                        info->mti_object = mdt_object_find(info->mti_ctxt,
-                                                           info->mti_mdt,
-                                                           &body->fid1);
-                        if (IS_ERR(info->mti_object)) {
+                        obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
+                        if (!IS_ERR(obj)) {
+                                if ((flags & HABEO_DISCUS) == HABEO_DISCUS &&
+                                    !lu_object_exists(ctx,
+                                                      &obj->mot_obj.mo_lu)) {
+                                        mdt_object_put(ctx, obj);
+                                        result = -ENOENT;
+                                } else
+                                        info->mti_object = obj;
+                        } else
                                 result = PTR_ERR(info->mti_object);
-                                info->mti_object = NULL;
-                        }
                 } else {
                         CERROR("Can't unpack body\n");
                         result = -EFAULT;
                 }
-        } else if (h->mh_flags & HABEO_CLAVIS) {
+        } else if (flags & HABEO_CLAVIS) {
                 struct ldlm_request *dlm;
 
                 LASSERT(shift == 0);
@@ -672,7 +689,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         LASSERT(current->journal_info == NULL);
 
-        if (h->mh_flags & HABEO_CLAVIS &&
+        if (flags & HABEO_CLAVIS &&
             info->mti_mdt->mdt_flags & MDT_CL_COMPAT_RESNAME) {
                 struct ldlm_reply *rep;
 
@@ -1033,7 +1050,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         info->mti_rep_buf_size[2] = sizeof(struct lov_mds_md);/*FIXME:See mds*/
 
 
-        rc = lustre_pack_reply(req, info->mti_rep_buf_nr, 
+        rc = lustre_pack_reply(req, info->mti_rep_buf_nr,
                                info->mti_rep_buf_size, NULL);
         if (rc){
                 RETURN(req->rq_status = rc);
@@ -1529,9 +1546,7 @@ static void mdt_object_release(struct lu_context *ctxt, struct lu_object *o)
 
 static int mdt_object_exists(struct lu_context *ctx, struct lu_object *o)
 {
-        struct lu_object *next = lu_object_next(o);
-
-        return next->lo_ops->loo_object_exists(ctx, next);
+        return lu_object_exists(ctx, lu_object_next(o));
 }
 
 static int mdt_object_print(struct lu_context *ctxt,
@@ -1791,17 +1806,17 @@ static struct mdt_handler mdt_mds_ops[] = {
         DEF_MDT_HNDL(0,            CONNECT,        mdt_connect),
         DEF_MDT_HNDL(0,            DISCONNECT,     mdt_disconnect),
         DEF_MDT_HNDL(0,            GETSTATUS,      mdt_getstatus),
-        DEF_MDT_HNDL(HABEO_CORPUS, GETATTR,        mdt_getattr),
-        DEF_MDT_HNDL(HABEO_CORPUS, GETATTR_NAME,   mdt_getattr_name),
-        DEF_MDT_HNDL(HABEO_CORPUS, SETXATTR,       mdt_setxattr),
-        DEF_MDT_HNDL(HABEO_CORPUS, GETXATTR,       mdt_getxattr),
+        DEF_MDT_HNDL(HABEO_DISCUS, GETATTR,        mdt_getattr),
+        DEF_MDT_HNDL(HABEO_DISCUS, GETATTR_NAME,   mdt_getattr_name),
+        DEF_MDT_HNDL(HABEO_DISCUS, SETXATTR,       mdt_setxattr),
+        DEF_MDT_HNDL(HABEO_DISCUS, GETXATTR,       mdt_getxattr),
         DEF_MDT_HNDL(0,            STATFS,         mdt_statfs),
-        DEF_MDT_HNDL(HABEO_CORPUS, READPAGE,       mdt_readpage),
+        DEF_MDT_HNDL(HABEO_DISCUS, READPAGE,       mdt_readpage),
         DEF_MDT_HNDL(0,            REINT,          mdt_reint),
-        DEF_MDT_HNDL(HABEO_CORPUS, CLOSE,          mdt_close),
+        DEF_MDT_HNDL(HABEO_DISCUS, CLOSE,          mdt_close),
         DEF_MDT_HNDL(HABEO_CORPUS, DONE_WRITING,   mdt_done_writing),
         DEF_MDT_HNDL(0,            PIN,            mdt_pin),
-        DEF_MDT_HNDL(HABEO_CORPUS, SYNC,           mdt_sync),
+        DEF_MDT_HNDL(HABEO_DISCUS, SYNC,           mdt_sync),
         DEF_MDT_HNDL(0,            QUOTACHECK,     mdt_handle_quotacheck),
         DEF_MDT_HNDL(0,            QUOTACTL,       mdt_handle_quotactl)
 };
