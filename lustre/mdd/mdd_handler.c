@@ -398,9 +398,10 @@ __mdd_object_create(struct lu_context *ctxt, struct mdd_object *obj,
         RETURN(rc);
 }
 
-static int mdd_object_create(struct lu_context *ctxt, struct mdd_object *obj)
+static int mdd_object_create(struct lu_context *ctxt, struct md_object *obj)
 {
-        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        
+        struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         int rc;
         ENTRY;
@@ -410,7 +411,7 @@ static int mdd_object_create(struct lu_context *ctxt, struct mdd_object *obj)
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_object_create(ctxt, obj, handle);
+        rc = __mdd_object_create(ctxt, mdo2mddo(obj), handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
