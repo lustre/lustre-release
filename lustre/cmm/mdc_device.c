@@ -80,10 +80,20 @@ static int mdc_statfs(struct lu_context *ctxt,
         RETURN (rc);
 }
 
+static int mdc_object_create(struct lu_context *ctxt, struct mdc_object *mco)
+{
+        int rc;
+
+        rc = -EOPNOTSUPP;
+
+        RETURN(rc);
+}
+
 static struct md_device_operations mdc_md_ops = {
-        .mdo_root_get   = mdc_root_get,
-        .mdo_config     = mdc_config,
-        .mdo_statfs     = mdc_statfs
+        .mdo_root_get       = mdc_root_get,
+        .mdo_config         = mdc_config,
+        .mdo_statfs         = mdc_statfs,
+        .mdo_object_create  = mdc_object_create
 };
 
 static int mdc_process_config(struct lu_device *ld, struct lustre_cfg *cfg)
