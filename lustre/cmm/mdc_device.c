@@ -80,7 +80,7 @@ static int mdc_statfs(struct lu_context *ctxt,
         RETURN (rc);
 }
 
-static int mdc_object_create(struct lu_context *ctxt, struct mdc_object *mco)
+static int mdc_object_create(struct lu_context *ctxt, struct md_object *mo)
 {
         int rc;
 
