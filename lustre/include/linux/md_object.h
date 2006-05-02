@@ -76,7 +76,13 @@ struct md_dir_operations {
 
         int (*mdo_link)(struct lu_context *ctxt, struct md_object *tobj,
                         struct md_object *sobj, const char *name);
-
+        
+        /* partial ops for cross-ref case */
+        int (*mdo_name_insert)(struct lu_context *, struct md_object *,
+                               const char *name, struct lu_fid *,
+                               struct lu_attr *);
+        int (*mdo_name_remove)(struct lu_context *, struct md_object *,
+                               const char *name, struct lu_attr *);
 };
 
 struct md_device_operations {
@@ -91,6 +97,11 @@ struct md_device_operations {
                             struct md_device *m, struct lu_fid *f);
         int (*mdo_statfs)(struct lu_context *ctx,
                           struct md_device *m, struct kstatfs *sfs);
+        
+        /* part of cross-ref operation */
+        int (*mdo_object_create)(struct lu_context *, struct md_object *);
+        int (*mdo_object_destroy)(struct lu_context *, struct md_object *);
+
 };
 
 struct md_device {
