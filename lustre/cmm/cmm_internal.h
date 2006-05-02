@@ -104,6 +104,7 @@ int cmm_config(struct lu_context *ctx, struct md_device *md, const char *name,
 int cmm_root_get(struct lu_context *ctx, struct md_device *m, struct lu_fid *f);
 int cmm_statfs(struct lu_context *ctx,
                struct md_device *m, struct kstatfs *sfs);
+int cmm_object_create(struct lu_context *, struct md_object *);
 int cmm_mkdir(struct lu_context *ctxt, struct lu_attr*,
               struct md_object *o, const char *name,
               struct md_object *child);

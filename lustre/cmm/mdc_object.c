@@ -58,7 +58,7 @@ struct lu_object *mdc_object_alloc(struct lu_context *ctx,
 		RETURN(NULL);
 }
 
-int mdc_object_init(struct lu_context *ctxt, struct lu_object *lo)
+int mdc_object_init(struct lu_context *ctx, struct lu_object *lo)
 {
 	//struct mdc_device *d = lu2mdc_dev(o->lo_dev);
 	//struct lu_device  *under;
@@ -76,7 +76,7 @@ void mdc_object_free(struct lu_context *ctx, struct lu_object *lo)
         OBD_FREE_PTR(mco);
 }
 
-void mdc_object_release(struct lu_context *ctxt, struct lu_object *lo)
+void mdc_object_release(struct lu_context *ctx, struct lu_object *lo)
 {
         return;
 }

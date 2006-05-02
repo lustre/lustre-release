@@ -56,10 +56,44 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
+int cmm_root_get(struct lu_context *ctx,
+                 struct md_device *md, struct lu_fid *fid)
+{
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+
+        return cmm_child_ops(cmm_dev)->mdo_root_get(ctx,
+                                                    cmm_dev->cmm_child, fid);
+}
+
+int cmm_config(struct lu_context *ctxt,
+               struct md_device *md, const char *name,
+               void *buf, int size, int mode)
+{
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+        int rc;
+        ENTRY;
+        rc = cmm_child_ops(cmm_dev)->mdo_config(ctxt, cmm_dev->cmm_child,
+                                                    name, buf, size, mode);
+        RETURN(rc);
+}
+
+int cmm_statfs(struct lu_context *ctxt,
+               struct md_device *md, struct kstatfs *sfs) {
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+	int rc;
+
+        ENTRY;
+        rc = cmm_child_ops(cmm_dev)->mdo_statfs(ctxt,
+                                                    cmm_dev->cmm_child, sfs);
+        RETURN (rc);
+}
+
 static struct md_device_operations cmm_md_ops = {
-        .mdo_root_get   = cmm_root_get,
-        .mdo_config     = cmm_config,
-        .mdo_statfs     = cmm_statfs
+        .mdo_root_get       = cmm_root_get,
+        .mdo_config         = cmm_config,
+        .mdo_statfs         = cmm_statfs,
+        .mdo_object_create  = cmm_object_create
+
 };
 
 static int cmm_device_init(struct lu_device *d, struct lu_device *next)

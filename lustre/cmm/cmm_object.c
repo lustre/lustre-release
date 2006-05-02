@@ -136,56 +136,47 @@ static int cmm_object_print(struct lu_context *ctx,
 }
 
 /* Metadata API */
-int cmm_root_get(struct lu_context *ctx,
-                 struct md_device *md, struct lu_fid *fid)
+int cmm_object_create(struct lu_context *ctxt, struct md_object *mo)
 {
-        struct cmm_device *cmm_dev = md2cmm_dev(md);
-
-        return cmm_child_ops(cmm_dev)->mdo_root_get(ctx,
-                                                    cmm_dev->cmm_child, fid);
-}
-
-int cmm_config(struct lu_context *ctxt,
-               struct md_device *md, const char *name,
-               void *buf, int size, int mode)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(md);
-        int result;
-        ENTRY;
-        result = cmm_child_ops(cmm_dev)->mdo_config(ctxt, cmm_dev->cmm_child,
-                                                    name, buf, size, mode);
-        RETURN(result);
-}
-
-int cmm_statfs(struct lu_context *ctxt,
-               struct md_device *md, struct kstatfs *sfs) {
-        struct cmm_device *cmm_dev = md2cmm_dev(md);
-	int result;
+        struct cmm_object *cmo = md2cmm_obj(mo);
+        struct md_object  *nxo = cmm2child_obj(cmo);
+        int rc;
 
         ENTRY;
-        result = cmm_child_ops(cmm_dev)->mdo_statfs(ctxt,
-                                                    cmm_dev->cmm_child, sfs);
-        RETURN (result);
-}
 
+        LASSERT (cmm_is_local_obj(cmo));
+        
+        rc = md_device_get(nxo)->md_ops->mdo_object_create(ctxt, nxo);
+        
+        RETURN(rc);
+}
 int cmm_mkdir(struct lu_context *ctxt, struct lu_attr *attr,
               struct md_object *p, const char *name, struct md_object *c)
 {
 	struct cmm_object *cmm_p = md2cmm_obj(p);
         struct cmm_object *cmm_c = md2cmm_obj(c);
         struct md_object  *local = cmm2child_obj(cmm_p);
-        int result;
+        int rc;
 
         if (cmm_is_local_obj(cmm_c)) {
                 /* fully local mkdir */
-                result = local->mo_dir_ops->mdo_mkdir(ctxt, attr, local, name,
+                rc = local->mo_dir_ops->mdo_mkdir(ctxt, attr, local, name,
                                                       cmm2child_obj(cmm_c));
         } else {
+                struct lu_fid *fid = &c->mo_lu.lo_header->loh_fid;
+                struct md_object *remote = cmm2child_obj(cmm_c);
+
                 /* remote object creation and local name insert */
-                result = -EOPNOTSUPP;
+                rc = md_device_get(remote)->md_ops->mdo_object_create(ctxt,
+                                                                      remote);
+                if (rc == 0) {
+                        rc = local->mo_dir_ops->mdo_name_insert(ctxt, local,
+                                                                name, fid,
+                                                                attr);
+                }
         }
 
-        RETURN(result);
+        RETURN(rc);
 }
 
 int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,
@@ -197,16 +188,11 @@ int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,
 }
 
 static struct md_dir_operations cmm_dir_ops = {
-        .mdo_mkdir      = cmm_mkdir
-//        .mdo_rename     = cmm_rename,
-//        .mdo_link       = cmm_link,
+        .mdo_mkdir      = cmm_mkdir,
 };
 
 static struct md_object_operations cmm_mo_ops = {
-        .moo_attr_get   = cmm_attr_get,
-//        .moo_attr_set   = cmm_attr_set,
-//        .moo_xattr_get   = cmm_xattr_get,
-//        .moo_xattr_set   = cmm_xattr_set,
+        .moo_attr_get      = cmm_attr_get,
 };
 
 static struct lu_object_operations cmm_obj_ops = {

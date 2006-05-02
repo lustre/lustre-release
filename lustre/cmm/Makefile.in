@@ -1,5 +1,5 @@
 MODULES := cmm cmmmdc
 cmm-objs := cmm_device.o cmm_object.o
-cmmmdc-objs := cmm_mdc.o mdc_object.o
+cmmmdc-objs := mdc_device.o mdc_object.o
 
 @INCLUDE_RULES@
