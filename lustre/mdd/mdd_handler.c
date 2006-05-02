@@ -398,9 +398,9 @@ __mdd_object_create(struct lu_context *ctxt, struct mdd_object *obj,
         RETURN(rc);
 }
 
-static int mdd_object_create(struct lu_context *ctxt, struct mdd_device *mdd,
-                             struct mdd_object *child)
+static int mdd_object_create(struct lu_context *ctxt, struct mdd_object *obj)
 {
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
         struct thandle *handle;
         int rc;
         ENTRY;
@@ -410,7 +410,7 @@ static int mdd_object_create(struct lu_context *ctxt, struct mdd_device *mdd,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_object_create(ctxt, child, handle);
+        rc = __mdd_object_create(ctxt, obj, handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -688,6 +688,32 @@ cleanup:
         RETURN(rc);
 }
 
+static int mdd_mkname(struct lu_context *ctxt, struct md_object *pobj,
+          const char *name, struct lu_fid *fid, struct lu_attr *attr)
+{
+        struct mdd_device *mdd = mdo2mdd(pobj);
+        struct thandle *handle;
+        int rc = 0;
+        ENTRY;
+
+        handle = mdd_trans_start(ctxt, mdd,
+                                 &TXN_PARAM(MDD_INDEX_INSERT_CREDITS));
+        if (IS_ERR(handle))
+                RETURN(PTR_ERR(handle));
+
+        mdd_lock(ctxt, mdo2mddo(pobj), DT_WRITE_LOCK);
+
+#if 0
+        rc = __mdd_index_insert(ctxt, mdd, mdo2mddo(pobj), mdo2mddo(child),
+                                name, handle);
+#endif 
+        rc = -EOPNOTSUPP;
+
+        mdd_unlock(ctxt, mdo2mddo(pobj), DT_WRITE_LOCK);
+        mdd_trans_stop(ctxt, mdd, handle);
+        RETURN(rc);
+}
+
 static int mdd_root_get(struct lu_context *ctx,
                         struct md_device *m, struct lu_fid *f)
 {
@@ -722,15 +748,17 @@ static int mdd_statfs(struct lu_context *ctx,
 }
 
 struct md_device_operations mdd_ops = {
-        .mdo_root_get   = mdd_root_get,
-        .mdo_config     = mdd_config,
-        .mdo_statfs     = mdd_statfs
+        .mdo_root_get       = mdd_root_get,
+        .mdo_config         = mdd_config,
+        .mdo_statfs         = mdd_statfs,
+        .mdo_object_create  = mdd_object_create
 };
 
 static struct md_dir_operations mdd_dir_ops = {
         .mdo_mkdir         = mdd_mkdir,
         .mdo_rename        = mdd_rename,
-        .mdo_link          = mdd_link
+        .mdo_link          = mdd_link,
+        .mdo_name_insert   = mdd_mkname
 };
 
 static struct md_object_operations mdd_obj_ops = {
