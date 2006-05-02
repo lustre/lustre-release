@@ -259,9 +259,7 @@ static void mdd_object_release(struct lu_context *ctxt, struct lu_object *o)
 
 static int mdd_object_exists(struct lu_context *ctx, struct lu_object *o)
 {
-        struct lu_object *next = lu_object_next(o);
-
-        return next->lo_ops->loo_object_exists(ctx, next);
+        return lu_object_exists(ctx, lu_object_next(o));
 }
 
 static int mdd_object_print(struct lu_context *ctxt,
@@ -400,7 +398,7 @@ __mdd_object_create(struct lu_context *ctxt, struct mdd_object *obj,
 
 static int mdd_object_create(struct lu_context *ctxt, struct md_object *obj)
 {
-        
+
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         int rc;
@@ -707,7 +705,7 @@ static int mdd_mkname(struct lu_context *ctxt, struct md_object *pobj,
 #if 0
         rc = __mdd_index_insert(ctxt, mdd, mdo2mddo(pobj), mdo2mddo(child),
                                 name, handle);
-#endif 
+#endif
         rc = -EOPNOTSUPP;
 
         mdd_unlock(ctxt, mdo2mddo(pobj), DT_WRITE_LOCK);

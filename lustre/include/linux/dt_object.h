@@ -96,16 +96,14 @@ struct dt_device_operations {
         /*
          * Create new object on this device.
          *
-         * postcondition: ergo(result == 0,
-         *                     dt->do_lu.lo_ops->loo_object_exists(ctxt,
-         *                                                         &dt->do_lu));
+         * postcondition: ergo(result == 0, lu_object_exists(ctxt, &dt->do_lu));
          */
         int   (*dt_object_create)(struct lu_context *ctxt, struct dt_object *dt,
                                   struct thandle *th);
         /*
          * Destroy existing object.
          *
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*dt_object_destroy)(struct lu_context *ctxt,
                                    struct dt_object *dt, struct thandle *th);
@@ -132,28 +130,28 @@ struct dt_object_operations {
         /*
          * Return standard attributes.
          *
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*do_attr_get)(struct lu_context *ctxt, struct dt_object *dt,
                              struct lu_attr *attr);
         /*
          * Set standard attributes.
          *
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*do_attr_set)(struct lu_context *ctxt, struct dt_object *dt,
                              struct lu_attr *attr, struct thandle *handle);
         /*
          * Return a value of an extended attribute.
          *
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*do_xattr_get)(struct lu_context *ctxt, struct dt_object *dt,
                               void *buf, int buf_len, const char *name);
         /*
          * Set value of an extended attribute.
          *
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*do_xattr_set)(struct lu_context *ctxt, struct dt_object *dt,
                               void *buf, int buf_len, const char *name,
@@ -165,15 +163,15 @@ struct dt_object_operations {
  */
 struct dt_body_operations {
         /*
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int (*dbo_read)(struct lu_context *ctxt, struct dt_object *dt, ...);
         /*
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int (*dbo_write)(struct lu_context *ctxt, struct dt_object *dt, ...);
         /*
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int (*dbo_truncate)(struct lu_context *ctxt, struct dt_object *dt, ...);
 };
@@ -183,14 +181,14 @@ struct dt_body_operations {
  */
 struct dt_index_operations {
         /*
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*dio_index_insert)(struct lu_context *ctxt,
                                   struct dt_object *dt,
                                   struct lu_fid *fid, const char *name,
                                   struct thandle *handle);
         /*
-         * precondition: dt->do_lu.lo_ops->loo_object_exists(ctxt, &dt->do_lu);
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*dio_index_delete)(struct lu_context *ctxt,
                                   struct dt_object *dt,

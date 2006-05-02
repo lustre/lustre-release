@@ -55,7 +55,7 @@ static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
         } else {
                 struct mdc_device *mdc;
                 list_for_each_entry(mdc, &d->cmm_targets, mc_linkage) {
-                        if (mdc->mc_num == num) { 
+                        if (mdc->mc_num == num) {
                                 next = mdc2lu_dev(mdc);
                                 break;
                         }
@@ -96,7 +96,7 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
         /* under device can be MDD or MDC */
         mdsnum = cmm_fld_lookup(fid);
         under = cmm_get_child(d, mdsnum);
-        if (under == NULL) 
+        if (under == NULL)
                 RETURN(-ENOENT);
 
         below = under->ld_ops->ldo_object_alloc(ctxt, under);
@@ -124,9 +124,7 @@ void cmm_object_release(struct lu_context *ctxt, struct lu_object *o)
 
 static int cmm_object_exists(struct lu_context *ctx, struct lu_object *o)
 {
-        struct lu_object *next = lu_object_next(o);
-
-        return next->lo_ops->loo_object_exists(ctx, next);
+        return lu_object_exists(ctx, lu_object_next(o));
 }
 
 static int cmm_object_print(struct lu_context *ctx,
