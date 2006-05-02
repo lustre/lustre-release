@@ -1064,6 +1064,12 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 }
                 GOTO(out, rc);
         }
+        if (rc == -EINVAL) {
+                LCONSOLE_ERROR("The MGS is refusing to allow this server (%s) "
+                               "to start.  Please see messages on the MGS node."
+                               "\n", lsi->lsi_ldd->ldd_svname);
+                GOTO(out, rc);
+        }
 
         /* Let the target look up the mount using the target's name 
            (we can't pass the sb or mnt through class_process_config.) */

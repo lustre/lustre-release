@@ -313,7 +313,9 @@ static int mgs_put_cfg_lock(struct lustre_handle *lockh)
         RETURN(0);
 }
 
-/* rc=0 means ok */
+/* rc=0 means ok
+      1 means update
+     -1 means error */
 static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
 {
         int rc;
@@ -321,11 +323,11 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
 
         rc = mgs_check_index(obd, mti);
         if (rc == 0) {
-                LCONSOLE_ERROR("Index for %s has disappeared!  "
-                               "Regenerating this portion of the logs."
-                               "\n", mti->mti_svname);
-                mti->mti_flags |= LDD_F_UPDATE;
-                rc = 1;
+                LCONSOLE_ERROR("%s claims to have registered, but this MGS "
+                               "does not know about it.  Resolve this issue "
+                               "with tunefs.lustre on that device\n",
+                               mti->mti_svname);
+                rc = -EINVAL;
         } else if (rc == -1) {
                 LCONSOLE_ERROR("Client log %s-client has disappeared! "
                                "Regenerating all logs.\n",
@@ -339,7 +341,6 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
                    them as failover nids */
                 rc = mgs_check_failnid(obd, mti);
         }
-
 
         RETURN(rc);
 }
@@ -364,8 +365,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                        mti->mti_svname, obd_export_nid2str(req->rq_export));
                 rc = mgs_check_target(obd, mti);
                 /* above will set appropriate mti flags */
-                if (!rc) 
-                        /* Nothing wrong, don't revoke lock */
+                if (rc <= 0) 
+                        /* Nothing wrong, or fatal error */
                         GOTO(out_nolock, rc);
         }
 
