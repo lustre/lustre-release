@@ -42,6 +42,11 @@
 
 static void lu_object_free(struct lu_context *ctx, struct lu_object *o);
 
+/*
+ * Decrease reference counter on object. If last reference is freed, return
+ * object to the cache, unless lu_object_is_dying(o) holds. In the latter
+ * case, free object immediately.
+ */
 void lu_object_put(struct lu_context *ctxt, struct lu_object *o)
 {
         struct lu_object_header *top;
@@ -124,6 +129,9 @@ static void lu_object_free(struct lu_context *ctx, struct lu_object *o)
         }
 }
 
+/*
+ * Free @nr objects from the cold end of the site LRU list.
+ */
 void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr)
 {
         struct list_head         dispose;
@@ -151,6 +159,9 @@ void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr)
 }
 EXPORT_SYMBOL(lu_site_purge);
 
+/*
+ * Print human readable representation of the @o to the @f.
+ */
 int lu_object_print(struct lu_context *ctx,
                     struct seq_file *f, const struct lu_object *o)
 {
@@ -173,6 +184,7 @@ int lu_object_print(struct lu_context *ctx,
         return nob;
 }
 EXPORT_SYMBOL(lu_object_print);
+
 
 static struct lu_object *htable_lookup(struct lu_site *s,
                                        const struct hlist_head *bucket,
@@ -204,6 +216,11 @@ static __u32 fid_hash(const struct lu_fid *f)
         return (fid_seq(f) - 1) * LUSTRE_FID_SEQ_WIDTH + fid_oid(f);
 }
 
+/*
+ * Search cache for an object with the fid @f. If such object is found, return
+ * it. Otherwise, create new object, insert it into cache and return it. In
+ * any case, additional reference is acquired on the returned object.
+ */
 struct lu_object *lu_object_find(struct lu_context *ctxt, struct lu_site *s,
                                  const struct lu_fid *f)
 {
@@ -247,6 +264,9 @@ enum {
         LU_SITE_HTABLE_MASK = LU_SITE_HTABLE_SIZE - 1
 };
 
+/*
+ * Initialize site @s, with @d as the top level device.
+ */
 int lu_site_init(struct lu_site *s, struct lu_device *top)
 {
         int result;
@@ -276,6 +296,9 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 }
 EXPORT_SYMBOL(lu_site_init);
 
+/*
+ * Finalize @s and release its resources.
+ */
 void lu_site_fini(struct lu_site *s)
 {
         LASSERT(list_empty(&s->ls_lru));
@@ -298,18 +321,27 @@ void lu_site_fini(struct lu_site *s)
  }
 EXPORT_SYMBOL(lu_site_fini);
 
+/*
+ * Acquire additional reference on device @d
+ */
 void lu_device_get(struct lu_device *d)
 {
         atomic_inc(&d->ld_ref);
 }
 EXPORT_SYMBOL(lu_device_get);
 
+/*
+ * Release reference on device @d.
+ */
 void lu_device_put(struct lu_device *d)
 {
         atomic_dec(&d->ld_ref);
 }
 EXPORT_SYMBOL(lu_device_put);
 
+/*
+ * Initialize device @d of type @t.
+ */
 int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 {
         memset(d, 0, sizeof *d);
@@ -319,12 +351,19 @@ int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 }
 EXPORT_SYMBOL(lu_device_init);
 
+/*
+ * Finalize device @d.
+ */
 void lu_device_fini(struct lu_device *d)
 {
         LASSERT(atomic_read(&d->ld_ref) == 0);
 }
 EXPORT_SYMBOL(lu_device_fini);
 
+/*
+ * Initialize object @o that is part of compound object @h and was created by
+ * device @d.
+ */
 int lu_object_init(struct lu_object *o,
                    struct lu_object_header *h, struct lu_device *d)
 {
@@ -337,6 +376,9 @@ int lu_object_init(struct lu_object *o,
 }
 EXPORT_SYMBOL(lu_object_init);
 
+/*
+ * Finalize object and release its resources.
+ */
 void lu_object_fini(struct lu_object *o)
 {
         LASSERT(list_empty(&o->lo_linkage));
@@ -348,18 +390,33 @@ void lu_object_fini(struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_fini);
 
+/*
+ * Add object @o as first layer of compound object @h
+ *
+ * This is typically called by the ->ldo_object_alloc() method of top-level
+ * device.
+ */
 void lu_object_add_top(struct lu_object_header *h, struct lu_object *o)
 {
         list_move(&o->lo_linkage, &h->loh_layers);
 }
 EXPORT_SYMBOL(lu_object_add_top);
 
+/*
+ * Add object @o as a layer of compound object, going after @before.1
+ *
+ * This is typically called by the ->ldo_object_alloc() method of
+ * @before->lo_dev.
+ */
 void lu_object_add(struct lu_object *before, struct lu_object *o)
 {
         list_move(&o->lo_linkage, &before->lo_linkage);
 }
 EXPORT_SYMBOL(lu_object_add);
 
+/*
+ * Initialize compound object.
+ */
 int lu_object_header_init(struct lu_object_header *h)
 {
         memset(h, 0, sizeof *h);
@@ -370,6 +427,9 @@ int lu_object_header_init(struct lu_object_header *h)
 }
 EXPORT_SYMBOL(lu_object_header_init);
 
+/*
+ * Finalize compound object.
+ */
 void lu_object_header_fini(struct lu_object_header *h)
 {
         LASSERT(list_empty(&h->loh_layers));
@@ -378,6 +438,10 @@ void lu_object_header_fini(struct lu_object_header *h)
 }
 EXPORT_SYMBOL(lu_object_header_fini);
 
+/*
+ * Given a compound object, find its slice, corresponding to the device type
+ * @dtype.
+ */
 struct lu_object *lu_object_locate(struct lu_object_header *h,
                                    struct lu_device_type *dtype)
 {
@@ -402,6 +466,9 @@ static struct lu_context_key *lu_keys[LU_CONTEXT_KEY_NR] = { NULL, };
 
 static spinlock_t lu_keys_guard = SPIN_LOCK_UNLOCKED;
 
+/*
+ * Register new key.
+ */
 int lu_context_key_register(struct lu_context_key *key)
 {
         int result;
@@ -423,6 +490,9 @@ int lu_context_key_register(struct lu_context_key *key)
 }
 EXPORT_SYMBOL(lu_context_key_register);
 
+/*
+ * Deregister key.
+ */
 void lu_context_key_degister(struct lu_context_key *key)
 {
         LASSERT(key->lct_used >= 1);
@@ -436,6 +506,9 @@ void lu_context_key_degister(struct lu_context_key *key)
 }
 EXPORT_SYMBOL(lu_context_key_degister);
 
+/*
+ * Return value associated with key @key in context @ctx.
+ */
 void *lu_context_key_get(struct lu_context *ctx, struct lu_context_key *key)
 {
         LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
@@ -500,6 +573,9 @@ static int keys_init(struct lu_context *ctx)
         return result;
 }
 
+/*
+ * Initialize context data-structure. Create values for all keys.
+ */
 int lu_context_init(struct lu_context *ctx)
 {
         memset(ctx, 0, sizeof *ctx);
@@ -508,17 +584,26 @@ int lu_context_init(struct lu_context *ctx)
 }
 EXPORT_SYMBOL(lu_context_init);
 
+/*
+ * Finalize context data-structure. Destroy key values.
+ */
 void lu_context_fini(struct lu_context *ctx)
 {
         keys_fini(ctx);
 }
 EXPORT_SYMBOL(lu_context_fini);
 
+/*
+ * Called before entering context.
+ */
 void lu_context_enter(struct lu_context *ctx)
 {
 }
 EXPORT_SYMBOL(lu_context_enter);
 
+/*
+ * Called after exiting from @ctx
+ */
 void lu_context_exit(struct lu_context *ctx)
 {
 }
