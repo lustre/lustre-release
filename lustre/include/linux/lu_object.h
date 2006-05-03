@@ -612,7 +612,7 @@ static inline struct lu_object *lu_object_next(const struct lu_object *o)
 /*
  * Pointer to the fid of this object.
  */
-static inline struct lu_fid *lu_object_fid(const struct lu_object *o)
+static inline const struct lu_fid *lu_object_fid(const struct lu_object *o)
 {
         return &o->lo_header->loh_fid;
 }
