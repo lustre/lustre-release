@@ -56,12 +56,29 @@ void lu_object_put(struct lu_context *ctxt, struct lu_object *o)
         site = o->lo_dev->ld_site;
         spin_lock(&site->ls_guard);
         if (-- top->loh_ref == 0) {
+                /*
+                 * When last reference is released, iterate over object
+                 * layers, and notify them that object is no longer busy.
+                 */
                 list_for_each_entry(o, &top->loh_layers, lo_linkage) {
                         if (o->lo_ops->loo_object_release != NULL)
                                 o->lo_ops->loo_object_release(ctxt, o);
                 }
                 -- site->ls_busy;
                 if (lu_object_is_dying(top)) {
+                        /*
+                         * If object is dying (will not be cached), removed it
+                         * from hash table and LRU.
+                         *
+                         * This is done with hash table and LRU lists
+                         * locked. As the only way to acquire first reference
+                         * to previously unreferenced object is through
+                         * hash-table lookup (lu_object_find()), or LRU
+                         * scanning (lu_site_purge()), that are done under
+                         * hash-table and LRU lock, no race with concurrent
+                         * object lookup is possible and we can safely destroy
+                         * object below.
+                         */
                         hlist_del_init(&top->loh_hash);
                         list_del_init(&top->loh_lru);
                 }
@@ -76,6 +93,12 @@ void lu_object_put(struct lu_context *ctxt, struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_put);
 
+/*
+ * Allocate new object.
+ *
+ * This follows object creation protocol, described in the comment within
+ * struct lu_device_operations definition.
+ */
 struct lu_object *lu_object_alloc(struct lu_context *ctxt,
                                   struct lu_site *s, const struct lu_fid *f)
 {
@@ -84,11 +107,23 @@ struct lu_object *lu_object_alloc(struct lu_context *ctxt,
         int clean;
         int result;
 
+        /*
+         * Create top-level object slice. This will also create
+         * lu_object_header.
+         */
         top = s->ls_top_dev->ld_ops->ldo_object_alloc(ctxt, s->ls_top_dev);
         if (IS_ERR(top))
                 RETURN(top);
-        *lu_object_fid(top) = *f;
+        /*
+         * This is the only place where object fid is assigned. It's constant
+         * after this point.
+         */
+        top->lo_header->loh_fid = *f;
         do {
+                /*
+                 * Call ->loo_object_init() repeatedly, until no more new
+                 * object slices are created.
+                 */
                 clean = 1;
                 list_for_each_entry(scan,
                                     &top->lo_header->loh_layers, lo_linkage) {
@@ -108,17 +143,29 @@ struct lu_object *lu_object_alloc(struct lu_context *ctxt,
         RETURN(top);
 }
 
+/*
+ * Free object.
+ */
 static void lu_object_free(struct lu_context *ctx, struct lu_object *o)
 {
         struct list_head splice;
         struct lu_object *scan;
 
+        /*
+         * First call ->loo_object_delete() method to release all resources.
+         */
         list_for_each_entry_reverse(scan,
                                     &o->lo_header->loh_layers, lo_linkage) {
                 if (scan->lo_ops->loo_object_delete != NULL)
                         scan->lo_ops->loo_object_delete(ctx, scan);
         }
         -- o->lo_dev->ld_site->ls_total;
+        /*
+         * Then, splice object layers into stand-alone list, and call
+         * ->ldo_object_free() on all layers to free memory. Splice is
+         * necessary, because lu_object_header is freed together with the
+         * top-level slice.
+         */
         INIT_LIST_HEAD(&splice);
         list_splice_init(&o->lo_header->loh_layers, &splice);
         while (!list_empty(&splice)) {
@@ -139,6 +186,10 @@ void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr)
         struct lu_object_header *temp;
 
         INIT_LIST_HEAD(&dispose);
+        /*
+         * Under LRU list lock, scan LRU list and move unreferenced objects to
+         * the dispose list, removing them from LRU and hash table.
+         */
         spin_lock(&s->ls_guard);
         list_for_each_entry_safe(h, temp, &s->ls_lru, loh_lru) {
                 if (nr-- == 0)
@@ -149,6 +200,10 @@ void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr)
                 list_move(&h->loh_lru, &dispose);
         }
         spin_unlock(&s->ls_guard);
+        /*
+         * Free everything on the dispose list. This is safe against races due
+         * to the reasons described in lu_object_put().
+         */
         while (!list_empty(&dispose)) {
                 h = container_of0(dispose.next,
                                  struct lu_object_header, loh_lru);
@@ -177,6 +232,9 @@ int lu_object_print(struct lu_context *ctx,
                 if (depth <= o->lo_depth && scan != o)
                         break;
                 LASSERT(scan->lo_ops->loo_object_print != NULL);
+                /*
+                 * print `.' @depth times.
+                 */
                 nob += seq_printf(f, "%*.*s", depth, depth, ruler);
                 nob += scan->lo_ops->loo_object_print(ctx, f, scan);
                 nob += seq_printf(f, "\n");
@@ -228,13 +286,30 @@ struct lu_object *lu_object_find(struct lu_context *ctxt, struct lu_site *s,
         struct lu_object  *shadow;
         struct hlist_head *bucket;
 
+        /*
+         * This uses standard index maintenance protocol:
+         *
+         *     - search index under lock, and return object if found;
+         *     - otherwise, unlock index, allocate new object;
+         *     - lock index and search again;
+         *     - if nothing is found (usual case), insert newly created
+         *       object into index;
+         *     - otherwise (race: other thread inserted object), free
+         *       object just allocated.
+         *     - unlock index;
+         *     - return object.
+         */
+
         bucket = s->ls_hash + (fid_hash(f) & s->ls_hash_mask);
         spin_lock(&s->ls_guard);
         o = htable_lookup(s, bucket, f);
         spin_unlock(&s->ls_guard);
         if (o != NULL)
                 return o;
-
+        /*
+         * Allocate new object. This may result in rather complicated
+         * operations, including fld queries, inode loading, etc.
+         */
         o = lu_object_alloc(ctxt, s, f);
         if (IS_ERR(o))
                 return o;
