@@ -23,7 +23,7 @@ MOUNT=${MOUNT:-/mnt/lustre}
 FSTYPE=${FSTYPE:-ext3}
 
 MDS_MOUNT_OPTS="user_xattr,acl,${MDS_MOUNT_OPTS:-""}"
-CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
+CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
 
 NETTYPE=${NETTYPE:-tcp}
 NIDTYPE=${NIDTYPE:-$NETTYPE}

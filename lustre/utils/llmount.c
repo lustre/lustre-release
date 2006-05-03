@@ -61,7 +61,7 @@ void usage(FILE *out)
                 "\t-v|--verbose: print verbose config settings\n"
                 "\t-o: filesystem mount options:\n"
                 "\t\tflock/noflock: enable/disable flock support\n"
-                "\t\troute=<gw>[-<gw>]:<low>[-<high>]: portal route to MDS\n"
+                "\t\tretry=<num>: number of times mount is retried by client\n"
                 "\t\tuser_xattr/nouser_xattr: enable/disable user extended "
                 "attributes\n"
                 );
@@ -251,10 +251,10 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
                         val = atoi(opteq + 1);
                         *opteq = '\0';
                         if (!strcmp(opt, "retry")) {
-                                if (val >= 0 || val < MAX_RETRIES)
+                                if (val > MAX_RETRIES)
+                                        retry = MAX_RETRIES;
+                                else if (val >= 0)
                                         retry = val;
-                                else
-                                        retry = 0;
                         } else {
                                 fprintf(stderr, "%s: unknown option '%s'. "
                                         "Ignoring.\n", progname, opt);
@@ -446,8 +446,11 @@ int main(int argc, char *const argv[])
                 if (modpipe != NULL)
                         pclose(modpipe);
                 /* use <= to include the initial mount before we retry */
-                for (i = 0, rc = -EAGAIN; i <= retry && rc != 0; i++)
+                for (i = 0, rc = -EAGAIN; i <= retry && rc != 0; i++) {
                         rc = mount(source, target, "lustre", flags, &lmd);
+                        if (rc && retry)
+                                sleep(1 << max((i/2), 5));
+                }
         }
         if (rc) {
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname,

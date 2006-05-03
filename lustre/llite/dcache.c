@@ -135,7 +135,12 @@ void ll_intent_release(struct lookup_intent *it)
         it->it_magic = 0;
         it->it_op_release = 0;
         /* We are still holding extra reference on a request, need to free it */
-        if (it_disposition(it, DISP_ENQ_COMPLETE))
+        if (it_disposition(it, DISP_ENQ_OPEN_REF)) /* open req for llfile_open*/
+                ptlrpc_req_finished(it->d.lustre.it_data);
+        if (it_disposition(it, DISP_ENQ_CREATE_REF)) /* create rec */
+                ptlrpc_req_finished(it->d.lustre.it_data);
+        if (it_disposition(it, DISP_ENQ_COMPLETE)) /* saved req from revalidate
+                                                    * to lookup */
                 ptlrpc_req_finished(it->d.lustre.it_data);
 
         it->d.lustre.it_disposition = 0;
@@ -214,9 +219,8 @@ restart:
         EXIT;
 }
 
-static int revalidate_it_finish(struct ptlrpc_request *request, int offset,
-                                struct lookup_intent *it,
-                                struct dentry *de)
+int revalidate_it_finish(struct ptlrpc_request *request, int offset,
+                         struct lookup_intent *it, struct dentry *de)
 {
         int rc = 0;
         ENTRY;

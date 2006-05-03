@@ -162,7 +162,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
-        int rc, size[] = { sizeof(struct mds_rec_unlink), data->namelen + 1};
+        int rc, size[] = { sizeof(struct mds_rec_unlink), data->namelen + 1, 0};
         ENTRY;
 
         LASSERT(req == NULL);

@@ -84,6 +84,7 @@ for NAME in $CONFIGS; do
 
 	IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
 	IOZFILE="-f $MOUNT/iozone"
+	export O_DIRECT
 	if [ "$IOZONE" != "no" ]; then
  	        mount_client $MOUNT
 		$DEBUG_OFF
@@ -92,6 +93,14 @@ for NAME in $CONFIGS; do
 		$CLEANUP
 		$SETUP
 
+		# check if O_DIRECT support is implemented in kernel
+		if [ -z "$O_DIRECT" ]; then
+			touch $MOUNT/f.iozone
+			if ! ./directio write $MOUNT/f.iozone 0 1; then
+				O_DIRECT=no
+			fi
+			rm -f $MOUNT/f.iozone
+		fi
 		if [ "$O_DIRECT" != "no" -a "$IOZONE_DIR" != "no" ]; then
 			$DEBUG_OFF
 			iozone -I $IOZONE_OPTS $IOZFILE.odir

@@ -795,10 +795,11 @@ static void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long len)
 }
 
 /* called for each page in a completed rpc.*/
-void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
+int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct ll_async_page *llap;
         struct page *page;
+        int ret = 0;
         ENTRY;
 
         llap = LLAP_FROM_COOKIE(data);
@@ -823,6 +824,7 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                         llap->llap_defer_uptodate = 0;
                 } else {
                         ll_redirty_page(page);
+                        ret = 1;
                 }
                 SetPageError(page);
         }
@@ -838,7 +840,8 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                 end_page_writeback(page);
         }
         page_cache_release(page);
-        EXIT;
+
+        RETURN(ret);
 }
 
 /* the kernel calls us here when a page is unhashed from the page cache.

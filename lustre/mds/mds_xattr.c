@@ -41,7 +41,11 @@
 #include <lustre_fsfilt.h>
 #include <lustre_ucache.h>
 
-#include "mds_internal.h"
+#include "mds_internal.h" 
+
+#ifndef XATTR_NAME_ACL_ACCESS
+#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+#endif
 
 static int mds_getxattr_pack_msg(struct ptlrpc_request *req,
                                  struct dentry *de,

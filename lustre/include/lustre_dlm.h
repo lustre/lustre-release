@@ -441,8 +441,9 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
                                ldlm_res_iterator_t iter, void *closure);
 
 int ldlm_replay_locks(struct obd_import *imp);
-void ldlm_change_cbdata(struct ldlm_namespace *, struct ldlm_res_id *,
-                        ldlm_iterator_t iter, void *data);
+void ldlm_resource_iterate(struct ldlm_namespace *, struct ldlm_res_id *,
+                           ldlm_iterator_t iter, void *data);
+
 
 /* ldlm_flock.c */
 int ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data);
@@ -461,6 +462,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
 int ldlm_handle_convert(struct ptlrpc_request *req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
 int ldlm_get_ref(void);
 void ldlm_put_ref(int force);
 

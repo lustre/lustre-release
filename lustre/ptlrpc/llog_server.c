@@ -194,7 +194,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         if (ctxt == NULL)
-                GOTO(out, rc = -EINVAL);
+                GOTO(out_free, rc = -EINVAL);
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
@@ -232,6 +232,7 @@ out_close:
 
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+out_free:
         OBD_FREE(buf, LLOG_CHUNK_SIZE);
 out:
         RETURN(rc);

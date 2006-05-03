@@ -2,6 +2,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.7
        * bug fixes
 
+Severity   : enhancement
+Bugzilla   : 9292
+Description: Getattr by fid
+Details    : Getting a file attributes by its fid, obtaining UPDATE|LOOKUP 
+             locks, avoids extra getattr rpc requests to MDS, allows '/' to 
+             have locks and avoids getattr rpc requests for it on every stat.
+
 Severity   : major
 Frequency  : rare
 Bugzilla   : 5719, 9635, 9792, 9684, 
@@ -45,10 +52,11 @@ Severity   : enhancement
 Bugzilla   : 9340
 Description: allow number of MDS service threads to be changed at module load
 Details    : It is now possible to change the number of MDS service threads
-	     running.  Adding "options mds mds_num_threads=N" will set the
-	     number of threads for the next time Lustre is restarted (assuming
-	     the "mds" module is also reloaded at that time).  The default
-	     number of threads will stay the same, 32 for most systems.
+	     running.  Adding "options mds mds_num_threads={N}" to the MDS's
+	     /etc/modprobe.conf will set the number of threads for the next
+	     time Lustre is restarted (assuming the "mds" module is also
+	     reloaded at that time).  The default number of threads will
+	     stay the same, 32 for most systems.
 
 Severity   : major
 Frequency  : rare
@@ -109,7 +117,7 @@ Details    : When running an obd_echo server it did not start the ping_evictor
 	     service startup instead of the OBD startup.
 
 Severity   : enhancement
-Bugzilla   : 10393 (patchless)
+Bugzilla   : 10193 (patchless)
 Description: Remove dependency on various unexported kernel interfaces.
 Details    : No longer need reparent_to_init, exit_mm, exit_files,
 	     sock_getsockopt, filemap_populate, FMODE_EXEC, put_filp.
@@ -157,6 +165,7 @@ Details    : Use asynchronous set_info RPCs to send the "evict_by_nid" to
 	     and also offers similar improvements for other set_info RPCs.
 
 Severity   : minor
+Frequency  : common
 Bugzilla   : 10265
 Description: excessive CPU usage during initial read phase on client
 Details    : During the initial read phase on a client, it would agressively
@@ -167,9 +176,42 @@ Details    : During the initial read phase on a client, it would agressively
 	     /proc/fs/lustre/llite/*/max_read_ahead_whole_mb, 2MB by default).
 
 Severity   : minor
+Frequency  : rare
 Bugzilla   : 10450
 Description: MDS crash when receiving packet with unknown intent.
 Details    : Do not LBUG in unknown intent case, just return -EFAULT
+
+Severity   : enhancement
+Bugzilla   : 9293
+Description: MDS RPCs are serialised on client. This is unnecessary for some.
+Details    : Do not serialize getattr (non-intent version) and statfs.
+
+Severity   : minor
+Frequency  : occasional, when OST network is overloaded/intermittent
+Bugzilla   : 10416 
+Description: client evicted by OST after bulk IO timeout
+Details    : If a client sends a bulk IO request (read or write) the OST
+	     may evict the client if it is unresposive to its data GET/PUT
+	     request.  This is incorrect if the network is overloaded (takes
+	     too long to transfer the RPC data) or dropped the OST GET/PUT
+	     request.  There is no need to evict the client at all, since
+	     the pinger and/or lock callbacks will handle this, and the
+	     client can restart the bulk request.
+
+Severity   : minor
+Frequency  : Always when mmapping file with no objects
+Bugzilla   : 10438 
+Description: client crashes when mmapping file with no objects
+Details    : Check that we actually have objects in a file before doing any
+	     operations on objects in ll_vm_open, ll_vm_close and
+	     ll_glimpse_size.
+
+Severity   : minor
+Frequency  : Rare
+Bugzilla   : 10484 
+Description: Request leak when working with deleted CWD
+Details    : Introduce advanced request refcount tracking for requests
+	     referenced from lustre intent.
 
 
 ------------------------------------------------------------------------------
@@ -574,8 +616,8 @@ Severity   : enhancement
 Bugzilla   : 4928, 7341, 9758
 Description: allow number of OST service threads to be specified
 Details    : a module parameter allows the number of OST service threads
-	     to be specified via "options ost ost_num_threads=X" in
-	     /etc/modules.conf or /etc/modutils.conf.
+	     to be specified via "options ost ost_num_threads={N}" in the
+	     OSS's /etc/modules.conf or /etc/modprobe.conf.
 
 Severity   : major
 Frequency  : rare

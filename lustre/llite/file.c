@@ -311,6 +311,8 @@ int ll_file_open(struct inode *inode, struct file *file)
  out:
         req = it->d.lustre.it_data;
         ptlrpc_req_finished(req);
+        if (req)
+                it_clear_disposition(it, DISP_ENQ_OPEN_REF);
         if (rc == 0)
                 ll_open_complete(inode);
         return rc;
@@ -731,6 +733,11 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %lu\n", inode->i_ino);
+
+        if (!lli->lli_smd) {
+                CDEBUG(D_DLMTRACE, "No objects for inode %lu\n", inode->i_ino);
+                RETURN(0);
+        }
 
         ast_flags |= LDLM_FL_HAS_INTENT;
 
@@ -1598,6 +1605,7 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
  out:
         /* this one is in place of ll_file_open */
         ptlrpc_req_finished(it->d.lustre.it_data);
+        it_clear_disposition(it, DISP_ENQ_OPEN_REF);
         RETURN(rc);
 }
 
@@ -1881,7 +1889,8 @@ static int ll_have_md_lock(struct dentry *de)
         struct lustre_handle lockh;
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obddev;
-        ldlm_policy_data_t policy = { .l_inodebits = {MDS_INODELOCK_UPDATE}};
+        ldlm_policy_data_t policy = { .l_inodebits = {
+                MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP}};
         int flags;
         ENTRY;
 
@@ -1903,11 +1912,32 @@ static int ll_have_md_lock(struct dentry *de)
         RETURN(0);
 }
 
+static int ll_inode_revalidate_fini(struct inode *inode, int rc) {
+        if (rc == -ENOENT) { /* Already unlinked. Just update nlink
+                              * and return success */
+                inode->i_nlink = 0;
+                /* This path cannot be hit for regular files unless in
+                 * case of obscure races, so no need to to validate
+                 * size. */
+                if (!S_ISREG(inode->i_mode) &&
+                    !S_ISDIR(inode->i_mode))
+                        return 0;
+        }
+
+        if (rc) {
+                CERROR("failure %d inode %lu\n", rc, inode->i_ino);
+                return -abs(rc);
+
+        }
+
+        return 0;
+}
+
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 {
         struct inode *inode = dentry->d_inode;
-        struct ll_inode_info *lli;
-        struct lov_stripe_md *lsm;
+        struct ptlrpc_request *req = NULL;
+        struct obd_export *exp;
         int rc;
         ENTRY;
 
@@ -1915,15 +1945,39 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 CERROR("REPORT THIS LINE TO PETER\n");
                 RETURN(0);
         }
-        lli = ll_i2info(inode);
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_REVALIDATE);
 #endif
 
-        if (!ll_have_md_lock(dentry)) {
-                struct ptlrpc_request *req = NULL;
+        exp = ll_i2mdcexp(inode);
+
+        if (exp->exp_connect_flags & OBD_CONNECT_ATTRFID) {
+                struct lookup_intent oit = { .it_op = IT_GETATTR };
+                struct mdc_op_data op_data;
+
+                /* Call getattr by fid, so do not provide name at all. */
+                ll_prepare_mdc_op_data(&op_data, dentry->d_parent->d_inode,
+                                       dentry->d_inode, NULL, 0, 0);
+                rc = mdc_intent_lock(exp, &op_data, NULL, 0,
+                                     /* we are not interested in name 
+                                        based lookup */
+                                     &oit, 0, &req, 
+                                     ll_mdc_blocking_ast, 0);
+                if (rc < 0) {
+                        rc = ll_inode_revalidate_fini(inode, rc);
+                        GOTO (out, rc);
+                }
+                
+                rc = revalidate_it_finish(req, 1, &oit, dentry);
+                if (rc != 0) {
+                        ll_intent_release(&oit);
+                        GOTO(out, rc);
+                }
+
+                ll_lookup_finish_locks(&oit, dentry);
+        } else if (!ll_have_md_lock(dentry)) {
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 struct ll_fid fid;
                 obd_valid valid = OBD_MD_FLGETATTR;
@@ -1937,37 +1991,26 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 }
                 ll_inode2fid(&fid, inode);
                 rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, ealen, &req);
-                if (rc == -ENOENT) { /* Already unlinked. Just update nlink
-                                      * and return success */
-                        inode->i_nlink = 0;
-                        /* This path cannot be hit for regular files unless in
-                         * case of obscure races, so * no need to to validate
-                         * size. */
-                        if (!S_ISREG(inode->i_mode) &&
-                            !S_ISDIR(inode->i_mode) &&
-                            !S_ISDIR(inode->i_mode))
-                                RETURN(0);
-                }
-
                 if (rc) {
-                        CERROR("failure %d inode %lu\n", rc, inode->i_ino);
-                        RETURN(-abs(rc));
-                }
-                rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, 0, NULL);
-                if (rc) {
-                        ptlrpc_req_finished(req);
+                        rc = ll_inode_revalidate_fini(inode, rc);
                         RETURN(rc);
                 }
-                ptlrpc_req_finished(req);
+                
+                rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, 0, NULL);
+                if (rc)
+                        GOTO(out, rc);
         }
 
-        lsm = lli->lli_smd;
-        if (lsm == NULL) /* object not yet allocated, don't validate size */
-                RETURN(0);
+        /* if object not yet allocated, don't validate size */
+        if (ll_i2info(inode)->lli_smd == NULL) 
+                GOTO(out, rc = 0);
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
         rc = ll_glimpse_size(inode, 0);
+
+out:
+        ptlrpc_req_finished(req);
         RETURN(rc);
 }
 

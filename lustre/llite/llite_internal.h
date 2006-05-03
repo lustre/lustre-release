@@ -367,7 +367,7 @@ int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
-void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
+int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction);
 extern struct cache_definition ll_cache_definition;
 void ll_removepage(struct page *page);
@@ -417,7 +417,8 @@ void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name);
-
+int revalidate_it_finish(struct ptlrpc_request *request, int offset,
+                         struct lookup_intent *it, struct dentry *de);
 /* llite/llite_lib.c */
 
 extern struct super_operations lustre_super_operations;

@@ -104,6 +104,7 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 /* mdc/mdc_locks.c */
 int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
+void it_clear_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
 void mdc_set_lock_data(__u64 *lockh, void *data);
 int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,

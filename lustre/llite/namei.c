@@ -78,19 +78,17 @@ static int ll_test_inode(struct inode *inode, void *opaque)
 
                 if (inode->i_state & (I_FREEING | I_CLEAR))
                         return 0;
+                if (inode->i_nlink == 0)
+                        return 0;
 
-                atomic_inc(&inode->i_count);
-                inode->i_nlink = 0;
-                inode->i_state |= I_FREEING;
-                LASSERT(list_empty(&lli->lli_dead_list));
                 /* add "duplicate" inode into deathrow for destroy */
                 spin_lock(&sbi->ll_deathrow_lock);
-                list_add(&lli->lli_dead_list, &sbi->ll_deathrow);
+                if (list_empty(&lli->lli_dead_list)) {
+                        atomic_inc(&inode->i_count);
+                        list_add(&lli->lli_dead_list, &sbi->ll_deathrow);
+                }
                 spin_unlock(&sbi->ll_deathrow_lock);
 
-                /* remove inode from dirty/io lists */
-                list_del_init(&inode->i_list);
-                
                 return 0;
         }
 
@@ -510,7 +508,9 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         LASSERT(it && it->d.lustre.it_disposition);
 
+        LASSERT(it_disposition(it, DISP_ENQ_CREATE_REF));
         request = it->d.lustre.it_data;
+        it_clear_disposition(it, DISP_ENQ_CREATE_REF);
         rc = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 1, dir->i_sb);
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));

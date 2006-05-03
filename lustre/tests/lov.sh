@@ -29,7 +29,7 @@ STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-$((OSTCOUNT -1))}
 
 MDS_MOUNT_OPTS="user_xattr,acl,${MDS_MOUNT_OPTS:-""}"
-CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
+CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
 
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}

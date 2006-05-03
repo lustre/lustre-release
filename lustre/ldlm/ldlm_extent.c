@@ -394,6 +394,10 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
+                /* this way we force client to wait for the lock
+                 * endlessly once the lock is enqueued -bzzz */
+                *flags |= LDLM_FL_NO_TIMEOUT;
+
         }
         rc = 0;
 out:

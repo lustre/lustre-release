@@ -860,7 +860,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 return EXT_CONTINUE;
         }
 
-        tgen = EXT_GENERATION(EXT_ROOT_HDR(tree));
+        tgen = EXT_GENERATION(tree);
         count = ext3_ext_calc_credits_for_insert(tree, path);
         ext3_up_truncate_sem(inode);
 
@@ -873,7 +873,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         ext3_down_truncate_sem(inode);
-        if (tgen != EXT_GENERATION(EXT_ROOT_HDR(tree))) {
+        if (tgen != EXT_GENERATION(tree)) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
                 journal_stop(handle);

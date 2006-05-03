@@ -125,9 +125,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
 
         req->rq_replen = lustre_msg_size(bufcount, size);
 
-        mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);
-        mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         if (rc != 0)
                 RETURN (rc);
 
@@ -935,9 +933,7 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 
         req->rq_replen = lustre_msg_size(1, &size);
 
-        mdc_get_rpc_lock(obd->u.cli.cl_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);
-        mdc_put_rpc_lock(obd->u.cli.cl_rpc_lock, NULL);
 
         if (rc)
                 GOTO(out, rc);

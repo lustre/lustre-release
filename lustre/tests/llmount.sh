@@ -40,5 +40,5 @@ exit 1
 #}
 
 #if [ "$MOUNT2" ]; then
-#	$LLMOUNT -v -o user_xattr,acl `hostname`:/mds1/client $MOUNT2 || exit 3
+#	$LLMOUNT -v -o user_xattr `hostname`:/mds1/client $MOUNT2 || exit 3
 #fi

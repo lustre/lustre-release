@@ -21,7 +21,7 @@ OSTSIZE=${OSTSIZE:-400000}
 OSTDEV2=${OSTDEV2:-$TMP/ost1-${FSNAME}}
 
 MDS_MOUNT_OPTS="user_xattr,acl,${MDS_MOUNT_OPTS:-""}"
-CLIENTOPT="user_xattr,acl,${CLIENTOPT:-""}"
+CLIENTOPT="user_xattr,${CLIENTOPT:-""}"
 
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}

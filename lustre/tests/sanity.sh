@@ -21,7 +21,7 @@ EXCEPT="$EXCEPT 48a"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;
-2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 60 69" ;;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 48b" ;;
 *) error "unsupported kernel" ;;
 esac
 
@@ -2559,8 +2559,13 @@ test_69() {
 	[ -z "`lsmod|grep obdfilter`" ] &&
 		echo "skipping $TESTNAME (remote OST)" && return
 
-	f="$DIR/f69"
+	f="$DIR/$tfile"
 	touch $f
+
+	if ! $DIRECTIO write ${f}.2 0 1; then
+		echo "skipping $TESTNAME - O_DIRECT not implemented"
+		return 0
+	fi
 
 	sysctl -w lustre.fail_loc=0x217
 	truncate $f 1 # vmtruncate() will ignore truncate() error.
@@ -2702,7 +2707,7 @@ test_75() {
 
 	ls -l $F*
 }
-run_test 75 "TEST join file"
+run_test 75 "TEST join file ===================================="
 
 num_inodes() {
 	awk '/lustre_inode_cache|^inode_cache/ {print $2; exit}' /proc/slabinfo
@@ -2922,7 +2927,6 @@ test_103 () {
     cd $DIR
 
     [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-    [ -z "`mount | grep " $DIR .*\<acl\>"`" ] && echo "skipping $TESTNAME (must have acl)" && return
     [ -z "`grep acl $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have acl)" && return
     $(which setfacl 2>/dev/null) || echo "skipping $TESTNAME (could not find setfacl)" && return
 

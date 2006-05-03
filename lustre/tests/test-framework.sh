@@ -263,6 +263,11 @@ mds_evict_client() {
     do_facet mds "echo $UUID > /proc/fs/lustre/mds/${mds_svc}/evict_client"
 }
 
+ost_evict_client() {
+    UUID=`cat /proc/fs/lustre/osc/*_MNT_*/uuid | head -n 1`
+    do_facet ost "echo $UUID > /proc/fs/lustre/obdfilter/ost_svc/evict_client"
+}
+
 fail() {
     facet_failover $*
     df $MOUNT || error "post-failover df: $?"

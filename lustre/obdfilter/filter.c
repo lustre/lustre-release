@@ -2263,8 +2263,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         int rc;
         ENTRY;
 
-        dentry = __filter_oa2dentry(exp->exp_obd, oa,
-                                    __FUNCTION__, 1);
+        dentry = __filter_oa2dentry(exp->exp_obd, oa, __FUNCTION__, 1);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
@@ -2739,6 +2738,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                         llog_cancel(llog_get_context(obd, fcc->lgc_subsys + 1),
                                     NULL, 1, fcc, 0);
                 }
+                fcc = NULL;
                 GOTO(cleanup, rc = -ENOENT);
         }
 
@@ -2807,6 +2807,7 @@ cleanup:
                         fsfilt_add_journal_cb(obd, 0,
                                               oti ? oti->oti_handle : handle,
                                               filter_cancel_cookies_cb, fcc);
+                        fcc = NULL;
                 }
                 rc = filter_finish_transno(exp, oti, rc);
                 rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
@@ -2819,6 +2820,8 @@ cleanup:
                 filter_parent_unlock(dparent);
         case 2:
                 f_dput(dchild);
+                if (fcc != NULL)
+                        OBD_FREE(fcc, sizeof(*fcc));
         case 1:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 break;

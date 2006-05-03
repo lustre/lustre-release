@@ -231,6 +231,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_TRANSNO    0x800ULL /* replay is sending initial transno */
 #define OBD_CONNECT_IBITS     0x1000ULL /* support for inodebits locks */
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
+#define OBD_CONNECT_ATTRFID   0x4000ULL /* Server supports GetAttr By Fid */
 #define OBD_CONNECT_NODEVOH   0x8000ULL /* No open handle for special nodes */
 #define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
 
@@ -239,7 +240,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
-                                OBD_CONNECT_NODEVOH)
+                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX)
@@ -601,13 +602,15 @@ typedef enum {
 } mds_reint_t;
 
 /* the disposition of the intent outlines what was executed */
-#define DISP_IT_EXECD     0x01
-#define DISP_LOOKUP_EXECD 0x02
-#define DISP_LOOKUP_NEG   0x04
-#define DISP_LOOKUP_POS   0x08
-#define DISP_OPEN_CREATE  0x10
-#define DISP_OPEN_OPEN    0x20
-#define DISP_ENQ_COMPLETE 0x40
+#define DISP_IT_EXECD        0x00000001
+#define DISP_LOOKUP_EXECD    0x00000002
+#define DISP_LOOKUP_NEG      0x00000004
+#define DISP_LOOKUP_POS      0x00000008
+#define DISP_OPEN_CREATE     0x00000010
+#define DISP_OPEN_OPEN       0x00000020
+#define DISP_ENQ_COMPLETE    0x00400000
+#define DISP_ENQ_OPEN_REF    0x00800000
+#define DISP_ENQ_CREATE_REF  0x01000000
 
 /* INODE LOCK PARTS */
 #define MDS_INODELOCK_LOOKUP 0x000001       /* dentry, mode, owner, group */

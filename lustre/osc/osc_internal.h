@@ -9,20 +9,20 @@
 
 struct osc_async_page {
         int                     oap_magic;
-        int                     oap_cmd;
+        unsigned short          oap_cmd;
+        unsigned short          oap_interrupted:1;
+
         struct list_head        oap_pending_item;
         struct list_head        oap_urgent_item;
         struct list_head        oap_rpc_item;
 
         obd_off                 oap_obj_off;
-        obd_off                 oap_page_off;
-        int                     oap_count;
-        obd_flag                oap_brw_flags;
+        unsigned                oap_page_off;
         enum async_flags        oap_async_flags;
 
-        unsigned long           oap_interrupted:1;
+        struct brw_page         oap_brw_page;
+
         struct oig_callback_context oap_occ;
-        cfs_page_t              *oap_page;
         struct obd_io_group     *oap_oig;
         struct ptlrpc_request   *oap_request;
         struct client_obd       *oap_cli;
@@ -31,6 +31,10 @@ struct osc_async_page {
 	struct obd_async_page_ops *oap_caller_ops;
         void                    *oap_caller_data;
 };
+
+#define oap_page        oap_brw_page.pg
+#define oap_count       oap_brw_page.count
+#define oap_brw_flags   oap_brw_page.flag
 
 #define OAP_FROM_COOKIE(c)                                                    \
         (LASSERT(((struct osc_async_page *)(c))->oap_magic == OAP_MAGIC),     \
@@ -61,6 +65,11 @@ void osc_wake_cache_waiters(struct client_obd *cli);
 int lproc_osc_attach_seqstat(struct obd_device *dev);
 #else
 static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
+#endif
+
+#ifndef min_t
+#define min_t(type,x,y) \
+        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
 #endif
 
 #endif /* OSC_INTERNAL_H */

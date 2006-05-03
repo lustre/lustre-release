@@ -145,7 +145,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
         if (sbi->ll_flags & LL_SBI_USER_XATTR)
                 data->ocd_connect_flags |= OBD_CONNECT_XATTR;
-        data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_JOIN;
+        data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_JOIN | 
+                OBD_CONNECT_ATTRFID;
 
         if (sbi->ll_flags & LL_SBI_FLOCK) {
                 sbi->ll_fop = &ll_file_operations_flock;
@@ -417,43 +418,97 @@ void lustre_throw_orphan_dentries(struct super_block *sb)
 #define lustre_throw_orphan_dentries(sb)
 #endif
 
-static void prune_deathrow(struct ll_sb_info *sbi, int try)
+static void prune_dir_dentries(struct inode *inode)
 {
-        LIST_HEAD(throw_away);
-        int locked = 0;
-        ENTRY;
+        struct dentry *dentry, *prev = NULL;
 
-        if (try) {
-                locked = spin_trylock(&sbi->ll_deathrow_lock);
-        } else {
-                spin_lock(&sbi->ll_deathrow_lock);
-                locked = 1;
+        /* due to lustre specific logic, a directory
+         * can have few dentries - a bug from VFS POV */
+restart:
+        spin_lock(&dcache_lock);
+        if (!list_empty(&inode->i_dentry)) {
+                dentry = list_entry(inode->i_dentry.prev,
+                                    struct dentry, d_alias);
+                /* in order to prevent infinite loops we
+                 * break if previous dentry is busy */
+                if (dentry != prev) {
+                        prev = dentry;
+                        dget_locked(dentry);
+                        spin_unlock(&dcache_lock);
+
+                        /* try to kill all child dentries */
+                        lock_dentry(dentry);
+                        shrink_dcache_parent(dentry);
+                        unlock_dentry(dentry);
+                        dput(dentry);
+
+                        /* now try to get rid of current dentry */
+                        d_prune_aliases(inode);
+                        goto restart;
+                }
         }
+        spin_unlock(&dcache_lock);
+}
 
-        if (!locked) {
-                EXIT;
-                return;
-        }
+static void prune_deathrow_one(struct ll_inode_info *lli)
+{
+        struct inode *inode = ll_info2i(lli);
 
-        list_splice_init(&sbi->ll_deathrow, &throw_away);
-        spin_unlock(&sbi->ll_deathrow_lock);
-
-        while (!list_empty(&throw_away)) {
-                struct ll_inode_info *lli;
-                struct inode *inode;
-
-                lli = list_entry(throw_away.next, struct ll_inode_info,
-                                 lli_dead_list);
-                list_del_init(&lli->lli_dead_list);
-
-                inode = ll_info2i(lli);
+        /* first, try to drop any dentries - they hold a ref on the inode */
+        if (S_ISDIR(inode->i_mode))
+                prune_dir_dentries(inode);
+        else
                 d_prune_aliases(inode);
 
-                CDEBUG(D_INODE, "prune duplicate inode %p inum %lu count %u\n",
-                       inode, inode->i_ino, atomic_read(&inode->i_count));
-                iput(inode);
-        }
-        EXIT;
+
+        /* if somebody still uses it, leave it */
+        LASSERT(atomic_read(&inode->i_count) > 0);
+        if (atomic_read(&inode->i_count) > 1)
+                goto out;
+
+        CDEBUG(D_INODE, "inode %lu/%u(%d) looks a good candidate for prune\n",
+               inode->i_ino,inode->i_generation, atomic_read(&inode->i_count));
+
+        /* seems nobody uses it anymore */
+        inode->i_nlink = 0;
+
+out:
+        iput(inode);
+        return;
+}
+
+static void prune_deathrow(struct ll_sb_info *sbi, int try)
+{
+        struct ll_inode_info *lli;
+        int empty;
+
+        do {
+                if (need_resched())
+                        break;
+
+                if (try) {
+                        if (!spin_trylock(&sbi->ll_deathrow_lock))
+                                break;
+                } else {
+                        spin_lock(&sbi->ll_deathrow_lock);
+                }
+
+                empty = 1;
+                lli = NULL;
+                if (!list_empty(&sbi->ll_deathrow)) {
+                        lli = list_entry(sbi->ll_deathrow.next,
+                                         struct ll_inode_info,
+                                         lli_dead_list);
+                        list_del_init(&lli->lli_dead_list);
+                        if (!list_empty(&sbi->ll_deathrow))
+                                empty = 0;
+                }
+                spin_unlock(&sbi->ll_deathrow_lock);
+
+                if (lli)
+                        prune_deathrow_one(lli);
+
+        } while (empty == 0);
 }
 
 void client_common_put_super(struct super_block *sb)

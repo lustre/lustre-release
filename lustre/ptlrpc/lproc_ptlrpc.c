@@ -58,7 +58,7 @@ struct ll_rpc_opcode {
         { OST_QUOTACHECK,   "ost_quotacheck" },
         { OST_QUOTACTL,     "ost_quotactl" },
         { MDS_GETATTR,      "mds_getattr" },
-        { MDS_GETATTR_NAME, "mds_getattr_name" },
+        { MDS_GETATTR_NAME, "mds_getattr_lock" },
         { MDS_CLOSE,        "mds_close" },
         { MDS_REINT,        "mds_reint" },
         { MDS_READPAGE,     "mds_readpage" },

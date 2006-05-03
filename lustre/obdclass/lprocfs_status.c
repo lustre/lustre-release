@@ -361,7 +361,7 @@ static const char *obd_connect_names[] = {
         "initial_transno",
         "inode_bit_locks",
         "join_file",
-        "",
+        "getattr_by_fid",
         "no_oh_for_devices",
         NULL
 };

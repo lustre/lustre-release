@@ -786,7 +786,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         RETURN(0);
 }
 
-static int mds_getattr_name(int offset, struct ptlrpc_request *req,
+static int mds_getattr_lock(int offset, struct ptlrpc_request *req,
                             int child_part, struct lustre_handle *child_lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
@@ -820,6 +820,10 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 RETURN(-EFAULT);
         }
         namesize = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
+        /* namesize less than 2 means we have empty name, probably came from
+           revalidate by cfid, so no point in having name to be set */
+        if (namesize <= 1)
+                name = NULL;
 
         rc = mds_init_ucred(&uc, req, offset);
         if (rc)
@@ -865,26 +869,26 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         }
 
         if (resent_req == 0) {
-            if (name) {
-                rc = mds_get_parent_child_locked(obd, &obd->u.mds, &body->fid1,
-                                                 &parent_lockh, &dparent,
-                                                 LCK_CR,
-                                                 MDS_INODELOCK_UPDATE,
-                                                 name, namesize,
-                                                 child_lockh, &dchild, LCK_CR,
-                                                 child_part);
-            } else {
+                if (name) {
+                        rc = mds_get_parent_child_locked(obd, &obd->u.mds, 
+                                                         &body->fid1,
+                                                         &parent_lockh, 
+                                                         &dparent, LCK_CR,
+                                                         MDS_INODELOCK_UPDATE,
+                                                         name, namesize,
+                                                         child_lockh, &dchild,
+                                                         LCK_CR, child_part);
+                } else {
                         /* For revalidate by fid we always take UPDATE lock */
                         dchild = mds_fid2locked_dentry(obd, &body->fid2, NULL,
                                                        LCK_CR, child_lockh,
-                                                       NULL, 0,
-                                                       MDS_INODELOCK_UPDATE);
+                                                       NULL, 0, child_part);
                         LASSERT(dchild);
                         if (IS_ERR(dchild))
                                 rc = PTR_ERR(dchild);
-            }
-            if (rc)
-                    GOTO(cleanup, rc);
+                } 
+                if (rc)
+                        GOTO(cleanup, rc);
         } else {
                 struct ldlm_lock *granted_lock;
                 struct ll_fid child_fid;
@@ -932,8 +936,10 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 if (resent_req == 0) {
                         if (rc && dchild->d_inode)
                                 ldlm_lock_decref(child_lockh, LCK_CR);
-                        ldlm_lock_decref(&parent_lockh, LCK_CR);
-                        l_dput(dparent);
+                        if (name) {
+                                ldlm_lock_decref(&parent_lockh, LCK_CR);
+                                l_dput(dparent);
+                        }
                 }
                 l_dput(dchild);
         case 1:
@@ -1490,10 +1496,10 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NAME_NET, 0);
 
                 /* If this request gets a reconstructed reply, we won't be
-                 * acquiring any new locks in mds_getattr_name, so we don't
+                 * acquiring any new locks in mds_getattr_lock, so we don't
                  * want to cancel.
                  */
-                rc = mds_getattr_name(MDS_REQ_REC_OFF, req,
+                rc = mds_getattr_lock(MDS_REQ_REC_OFF, req,
                                       MDS_INODELOCK_UPDATE, &lockh);
                 /* this non-intent call (from an ioctl) is special */
                 req->rq_status = rc;
@@ -1765,12 +1771,22 @@ void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
                 if (len == sizeof("user_xattr") - 1 &&
                     memcmp(options, "user_xattr", len) == 0) {
                         mds->mds_fl_user_xattr = 1;
+                } else if (len == sizeof("nouser_xattr") - 1 &&
+                    memcmp(options, "nouser_xattr", len) == 0) {
+                        mds->mds_fl_user_xattr = 0;
                 } else if (len == sizeof("acl") - 1 &&
                          memcmp(options, "acl", len) == 0) {
 #ifdef CONFIG_FS_POSIX_ACL
                         mds->mds_fl_acl = 1;
 #else
                         CWARN("ignoring unsupported acl mount option\n");
+                        memmove(options, p, strlen(p) + 1);
+#endif
+                } else if (len == sizeof("noacl") - 1 &&
+                    memcmp(options, "noacl", len) == 0) {
+#ifdef CONFIG_FS_POSIX_ACL
+                        mds->mds_fl_acl = 0;
+#else
                         memmove(options, p, strlen(p) + 1);
 #endif
                 }
@@ -2356,7 +2372,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                         getattr_part = MDS_INODELOCK_LOOKUP |
                                        MDS_INODELOCK_UPDATE;
 
-                rep->lock_policy_res2 = mds_getattr_name(offset, req,
+                rep->lock_policy_res2 = mds_getattr_lock(offset, req,
                                                          getattr_part, &lockh);
                 /* FIXME: LDLM can set req->rq_status. MDS sets
                    policy_res{1,2} with disposition and status.

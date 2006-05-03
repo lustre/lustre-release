@@ -249,9 +249,30 @@ static void waiting_locks_callback(unsigned long unused)
  *
  * Called with the namespace lock held.
  */
-static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
+static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
         cfs_time_t timeout_rounded;
+
+        if (!list_empty(&lock->l_pending_chain))
+                return 0;
+
+        lock->l_callback_timeout =cfs_time_add(cfs_time_current(),
+                                               cfs_time_seconds(obd_timeout)/2);
+
+        timeout_rounded = round_timeout(lock->l_callback_timeout);
+
+        if (cfs_time_before(timeout_rounded, cfs_timer_deadline(&waiting_locks_timer)) ||
+            !cfs_timer_is_armed(&waiting_locks_timer)) {
+                cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
+
+        }
+        list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
+        return 1;
+}
+
+static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
+{
+        int ret;
 
         l_check_ns_lock(lock->l_resource->lr_namespace);
         LASSERT(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK));
@@ -268,25 +289,12 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 return 0;
         }
 
-        if (!list_empty(&lock->l_pending_chain)) {
-                spin_unlock_bh(&waiting_locks_spinlock);
-                LDLM_DEBUG(lock, "not re-adding to wait list");
-                return 0;
-        }
-
-        lock->l_callback_timeout =cfs_time_add(cfs_time_current(),
-                                               cfs_time_seconds(obd_timeout)/2);
-
-        timeout_rounded = round_timeout(lock->l_callback_timeout);
-
-        if (cfs_time_before(timeout_rounded, cfs_timer_deadline(&waiting_locks_timer)) ||
-            !cfs_timer_is_armed(&waiting_locks_timer)) {
-                cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
-        }
-        list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
+        ret = __ldlm_add_waiting_lock(lock);
         spin_unlock_bh(&waiting_locks_spinlock);
-        LDLM_DEBUG(lock, "adding to wait list");
-        return 1;
+
+        LDLM_DEBUG(lock, "%sadding to wait list",
+                   ret == 0 ? "not re-" : "");
+        return ret;
 }
 
 /*
@@ -296,25 +304,12 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
  *
  * Called with namespace lock held.
  */
-int ldlm_del_waiting_lock(struct ldlm_lock *lock)
+int __ldlm_del_waiting_lock(struct ldlm_lock *lock)
 {
         struct list_head *list_next;
 
-        l_check_ns_lock(lock->l_resource->lr_namespace);
-
-        if (lock->l_export == NULL) {
-                /* We don't have a "waiting locks list" on clients. */
-                LDLM_DEBUG(lock, "client lock: no-op");
+        if (list_empty(&lock->l_pending_chain))
                 return 0;
-        }
-
-        spin_lock_bh(&waiting_locks_spinlock);
-
-        if (list_empty(&lock->l_pending_chain)) {
-                spin_unlock_bh(&waiting_locks_spinlock);
-                LDLM_DEBUG(lock, "wasn't waiting");
-                return 0;
-        }
 
         list_next = lock->l_pending_chain.next;
         if (lock->l_pending_chain.prev == &waiting_locks_list) {
@@ -332,8 +327,57 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         }
         list_del_init(&lock->l_pending_chain);
 
+        return 1;
+}
+
+int ldlm_del_waiting_lock(struct ldlm_lock *lock)
+{
+        int ret;
+
+        l_check_ns_lock(lock->l_resource->lr_namespace);
+
+        if (lock->l_export == NULL) {
+                /* We don't have a "waiting locks list" on clients. */
+                LDLM_DEBUG(lock, "client lock: no-op");
+                return 0;
+        }
+
+        spin_lock_bh(&waiting_locks_spinlock);
+        ret = __ldlm_del_waiting_lock(lock);
         spin_unlock_bh(&waiting_locks_spinlock);
-        LDLM_DEBUG(lock, "removed");
+
+        LDLM_DEBUG(lock, "%s", ret == 0 ? "wasn't waiting" : "removed");
+        return ret;
+}
+
+/*
+ * Prolong the lock
+ * 
+ * Called with namespace lock held.
+ */
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
+{
+        l_check_ns_lock(lock->l_resource->lr_namespace);
+
+        if (lock->l_export == NULL) {
+                /* We don't have a "waiting locks list" on clients. */
+                LDLM_DEBUG(lock, "client lock: no-op");
+                return 0;
+        }
+
+        spin_lock_bh(&waiting_locks_spinlock);
+
+        if (list_empty(&lock->l_pending_chain)) {
+                spin_unlock_bh(&waiting_locks_spinlock);
+                LDLM_DEBUG(lock, "wasn't waiting");
+                return 0;
+        }
+
+        __ldlm_del_waiting_lock(lock);
+        __ldlm_add_waiting_lock(lock);
+        spin_unlock_bh(&waiting_locks_spinlock);
+
+        LDLM_DEBUG(lock, "refreshed");
         return 1;
 }
 
@@ -350,6 +394,10 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         RETURN(0);
 }
 
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
+{
+        RETURN(0);
+}
 #endif /* __KERNEL__ */
 
 static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
@@ -1736,7 +1784,7 @@ EXPORT_SYMBOL(ldlm_replay_locks);
 EXPORT_SYMBOL(ldlm_resource_foreach);
 EXPORT_SYMBOL(ldlm_namespace_foreach);
 EXPORT_SYMBOL(ldlm_namespace_foreach_res);
-EXPORT_SYMBOL(ldlm_change_cbdata);
+EXPORT_SYMBOL(ldlm_resource_iterate);
 
 /* ldlm_lockd.c */
 EXPORT_SYMBOL(ldlm_server_blocking_ast);
@@ -1748,6 +1796,7 @@ EXPORT_SYMBOL(ldlm_handle_convert);
 EXPORT_SYMBOL(ldlm_del_waiting_lock);
 EXPORT_SYMBOL(ldlm_get_ref);
 EXPORT_SYMBOL(ldlm_put_ref);
+EXPORT_SYMBOL(ldlm_refresh_waiting_lock);
 
 /* ldlm_resource.c */
 EXPORT_SYMBOL(ldlm_namespace_new);

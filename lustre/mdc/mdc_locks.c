@@ -58,6 +58,8 @@ void it_clear_disposition(struct lookup_intent *it, int flag)
         it->d.lustre.it_disposition &= ~flag;
 }
 
+EXPORT_SYMBOL(it_clear_disposition);
+
 static int it_to_lock_mode(struct lookup_intent *it)
 {
         /* CREAT needs to be tested before open (both could be set) */
@@ -151,8 +153,8 @@ int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
         res_id.name[0] = fid->id;
         res_id.name[1] = fid->generation;
 
-        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it,
-                           data);
+        ldlm_resource_iterate(class_exp2obd(exp)->obd_namespace, &res_id,
+                              it, data);
 
         EXIT;
         return 0;
@@ -556,8 +558,13 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                 ldlm_policy_data_t policy;
                 int mode = LCK_CR;
 
+                /* As not all attributes are kept under update lock, e.g. 
+                   owner/group/acls are under lookup lock, we need both 
+                   ibits for GETATTR. */
                 policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
-                                MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;
+                        MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP : 
+                        MDS_INODELOCK_LOOKUP;
+                
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                      LDLM_FL_BLOCK_GRANTED, &res_id,
                                      LDLM_IBITS, &policy, LCK_CR, &lockh);
@@ -578,7 +585,11 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                                sizeof(lockh));
                         it->d.lustre.it_lock_mode = mode;
                 }
-                RETURN(rc);
+
+                /* Only return failure if it was not GETATTR by cfid
+                   (from inode_revalidate) */
+                if (rc || op_data->namelen != 0)
+                        RETURN(rc);
         }
 
         /* lookup_it may be called only after revalidate_it has run, because
@@ -637,7 +648,7 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
-        if (op_data->fid2.id) {
+        if (op_data->fid2.id && (it->it_op != IT_GETATTR)) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
                 if (memcmp(&op_data->fid2, &mds_body->fid1, sizeof(op_data->fid2)))
@@ -651,12 +662,18 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
         /* keep requests around for the multiple phases of the call
          * this shows the DISP_XX must guarantee we make it into the call
          */
-        if (it_disposition(it, DISP_OPEN_CREATE) &&
-            !it_open_error(DISP_OPEN_CREATE, it))
+        if (!it_disposition(it, DISP_ENQ_CREATE_REF) &&
+            it_disposition(it, DISP_OPEN_CREATE) &&
+            !it_open_error(DISP_OPEN_CREATE, it)) {
+                it_set_disposition(it, DISP_ENQ_CREATE_REF);
                 ptlrpc_request_addref(request); /* balanced in ll_create_node */
-        if (it_disposition(it, DISP_OPEN_OPEN) &&
-            !it_open_error(DISP_OPEN_OPEN, it))
+        }
+        if (!it_disposition(it, DISP_ENQ_OPEN_REF) &&
+            it_disposition(it, DISP_OPEN_OPEN) &&
+            !it_open_error(DISP_OPEN_OPEN, it)) {
+                it_set_disposition(it, DISP_ENQ_OPEN_REF);
                 ptlrpc_request_addref(request); /* balanced in ll_file_open */
+        }
 
         if (it->it_op & IT_CREAT) {
                 /* XXX this belongs in ll_create_it */

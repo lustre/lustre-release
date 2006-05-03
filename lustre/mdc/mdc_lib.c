@@ -148,8 +148,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid = current->fsuid;
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
-        if (op_data != NULL)
-                rec->cr_fid = op_data->fid1;
+        rec->cr_fid = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_flags = mds_pack_open_flags(flags);
@@ -301,6 +300,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
         b->suppgid = data->suppgids[0];
 
         b->fid1 = data->fid1;
+        b->fid2 = data->fid2;
         if (data->name) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,

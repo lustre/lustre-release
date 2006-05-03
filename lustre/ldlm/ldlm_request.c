@@ -115,7 +115,7 @@ noreproc:
 
         lwd.lwd_lock = lock;
 
-        if (unlikely(flags & LDLM_FL_NO_TIMEOUT)) {
+        if (lock->l_flags & LDLM_FL_NO_TIMEOUT) {
                 LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
                 lwi = LWI_INTR(interrupted_completion_wait, &lwd);
         } else {
@@ -454,6 +454,9 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         lock->l_remote_handle = reply->lock_handle;
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
+        /* move NO_TIMEOUT flag to the lock to force ldlm_lock_match()
+         * to wait with no timeout as well */
+        lock->l_flags |= reply->lock_flags & LDLM_FL_NO_TIMEOUT;
         l_unlock(&ns->ns_lock);
 
         CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%x\n",
@@ -1068,8 +1071,8 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
 }
 
 /* non-blocking function to manipulate a lock whose cb_data is being put away.*/
-void ldlm_change_cbdata(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
-                        ldlm_iterator_t iter, void *data)
+void ldlm_resource_iterate(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
+                           ldlm_iterator_t iter, void *data)
 {
         struct ldlm_resource *res;
         ENTRY;

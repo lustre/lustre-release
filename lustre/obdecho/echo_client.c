@@ -705,7 +705,7 @@ static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         memcpy(oa, &eap->eap_eas->eas_oa, sizeof(*oa));
 }
 
-static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
+static int ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct echo_async_page *eap = EAP_FROM_COOKIE(data);
         struct echo_async_state *eas;
@@ -728,6 +728,7 @@ static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         list_add(&eap->eap_item, &eas->eas_avail);
         cfs_waitq_signal(&eas->eas_waitq);
         spin_unlock_irqrestore(&eas->eas_lock, flags);
+        return 0;
 }
 
 static struct obd_async_page_ops ec_async_page_ops = {

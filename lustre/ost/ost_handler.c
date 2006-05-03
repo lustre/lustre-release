@@ -580,6 +580,73 @@ static void ost_brw_lock_put(int mode,
         EXIT;
 }
 
+struct ost_prolong_data {
+        struct obd_export *opd_exp;
+        ldlm_policy_data_t opd_policy;
+        ldlm_mode_t opd_mode;
+};
+
+static int ost_prolong_locks_iter(struct ldlm_lock *lock, void *data)
+{
+        struct ost_prolong_data *opd = data;
+
+        LASSERT(lock->l_resource->lr_type == LDLM_EXTENT);
+
+        if (lock->l_req_mode != lock->l_granted_mode) {
+                /* scan granted locks only */
+                return LDLM_ITER_STOP;
+        }
+
+        if (lock->l_export != opd->opd_exp) {
+                /* prolong locks only for given client */
+                return LDLM_ITER_CONTINUE;
+        }
+
+        if (!(lock->l_granted_mode & opd->opd_mode)) {
+                /* we aren't interesting in all type of locks */
+                return LDLM_ITER_CONTINUE;
+        }
+
+        if (lock->l_policy_data.l_extent.end < opd->opd_policy.l_extent.start ||
+            lock->l_policy_data.l_extent.start > opd->opd_policy.l_extent.end) {
+                /* the request doesn't cross the lock, skip it */
+                return LDLM_ITER_CONTINUE;
+        }
+
+        if (!(lock->l_flags & LDLM_FL_AST_SENT)) {
+                /* ignore locks not being cancelled */
+                return LDLM_ITER_CONTINUE;
+        }
+
+        /* OK. this is a possible lock the user holds doing I/O
+         * let's refresh eviction timer for it */
+        ldlm_refresh_waiting_lock(lock);
+
+        return LDLM_ITER_CONTINUE;
+}
+
+static void ost_prolong_locks(struct obd_export *exp, struct obd_ioobj *obj,
+                              struct niobuf_remote *nb, ldlm_mode_t mode)
+{
+        struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
+        int nrbufs = obj->ioo_bufcnt;
+        struct ost_prolong_data opd;
+
+        ENTRY;
+
+        opd.opd_mode = mode;
+        opd.opd_exp = exp;
+        opd.opd_policy.l_extent.start = nb[0].offset & CFS_PAGE_MASK;
+        opd.opd_policy.l_extent.end = (nb[nrbufs - 1].offset +
+                                       nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
+
+        CDEBUG(D_DLMTRACE, "refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
+               res_id.name[0], res_id.name[1], opd.opd_policy.l_extent.start,
+               opd.opd_policy.l_extent.end);
+        ldlm_resource_iterate(exp->exp_obd->obd_namespace, &res_id,
+                              ost_prolong_locks_iter, &opd);
+}
+
 static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
         struct ptlrpc_bulk_desc *desc;
@@ -669,6 +736,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         ioo, npages, pp_rnb, local_nb, oti);
         if (rc != 0)
                 GOTO(out_lock, rc);
+
+        ost_prolong_locks(req->rq_export, ioo, pp_rnb, LCK_PW | LCK_PR);
 
         /* We're finishing using body->oa as an input variable */
         do_checksum = (body->oa.o_valid & OBD_MD_FLCKSUM);
@@ -777,20 +846,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         ptlrpc_rs_decref(req->rq_reply_state);
                         req->rq_reply_state = NULL;
                 }
-                if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
-                        CERROR("%s: bulk IO comm error evicting %s@%s id %s\n",
-                               req->rq_export->exp_obd->obd_name,
-                               req->rq_export->exp_client_uuid.uuid,
-                               req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               libcfs_id2str(req->rq_peer));
-                        class_fail_export(req->rq_export);
-                } else {
-                        CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s id %s\n",
-                               req->rq_export->exp_client_uuid.uuid,
-                               req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               libcfs_id2str(req->rq_peer));
-                }
+                CWARN("%s: ignoring bulk IO comm error with %s@%s id %s\n",
+                      req->rq_export->exp_obd->obd_name,
+                      req->rq_export->exp_client_uuid.uuid,
+                      req->rq_export->exp_connection->c_remote_uuid.uuid,
+                      libcfs_id2str(req->rq_peer));
         }
 
         RETURN(rc);
@@ -898,6 +958,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = ost_brw_lock_get(LCK_PW, req->rq_export, ioo, pp_rnb, &lockh);
         if (rc != 0)
                 GOTO(out_bulk, rc);
+
+        ost_prolong_locks(req->rq_export, ioo, pp_rnb, LCK_PW);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         do_checksum = (body->oa.o_valid & OBD_MD_FLCKSUM);
@@ -1020,20 +1082,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         ptlrpc_rs_decref(req->rq_reply_state);
                         req->rq_reply_state = NULL;
                 }
-                if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
-                        CERROR("%s: bulk IO comm error evicting %s@%s id %s\n",
-                               req->rq_export->exp_obd->obd_name,
-                               req->rq_export->exp_client_uuid.uuid,
-                               req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               libcfs_id2str(req->rq_peer));
-                        class_fail_export(req->rq_export);
-                } else {
-                        CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s id %s\n",
-                               req->rq_export->exp_client_uuid.uuid,
-                               req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               libcfs_id2str(req->rq_peer));
-                }
+                CWARN("%s: ignoring bulk IO comm error with %s@%s id %s\n",
+                      req->rq_export->exp_obd->obd_name,
+                      req->rq_export->exp_client_uuid.uuid,
+                      req->rq_export->exp_connection->c_remote_uuid.uuid,
+                      libcfs_id2str(req->rq_peer));
         }
         RETURN(rc);
 }

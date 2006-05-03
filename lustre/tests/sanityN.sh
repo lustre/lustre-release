@@ -71,6 +71,8 @@ trace() {
 }
 TRACE=${TRACE:-""}
 
+LPROC=/proc/fs/lustre
+
 run_one() {
 	if ! grep -q $DIR /proc/mounts; then
 		$SETUP
@@ -580,8 +582,7 @@ test_24() {
 run_test 24 "lfs df [-ih] [path] test ========================="
 
 test_25() {
-	[ -z "`mount | grep " $DIR1 .*\<acl\>"`" ] && echo "skipping $TESTNAME ($DIR1 must have acl)" && return
-	[ -z "`mount | grep " $DIR2 .*\<acl\>"`" ] && echo "skipping $TESTNAME ($DIR2 must have acl)" && return
+	[ `cat $LPROC/mdc/MDC*MNT*/connect_flags | grep -c acl` -lt 2 ] && echo "skipping $TESTNAME (must have acl)" && return
 
 	mkdir $DIR1/d25 || error
 	touch $DIR1/d25/f1 || error

@@ -307,7 +307,7 @@ cleanup_dentry:
 static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
-                              struct dentry *dchild, void **handle, 
+                              struct dentry *dchild, void **handle,
                               obd_id **ids)
 {
         struct inode *inode = dchild->d_inode;
@@ -691,14 +691,14 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
                         RETURN(-EEXIST);
                 }
-                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) { 
+                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
-                        rc = mds_join_file(rec, req, dchild, lockh); 
+                        rc = mds_join_file(rec, req, dchild, lockh);
                         if (rc)
                                 RETURN(rc);
                         LOCK_INODE_MUTEX(dchild->d_inode);
-                } 
-                if (!(body->valid & OBD_MD_FLEASIZE) && 
+                }
+                if (!(body->valid & OBD_MD_FLEASIZE) &&
                     !(body->valid & OBD_MD_FLMODEASIZE)) {
                         /* no EA: create objects */
                         rc = mds_create_objects(req, 2, rec, mds, obd,
@@ -1305,8 +1305,11 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
 
         if (iattr.ia_valid != 0) {
                 handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
-                if (IS_ERR(handle))
-                        GOTO(cleanup, rc = PTR_ERR(handle));
+                if (IS_ERR(handle)) {
+                        rc = PTR_ERR(handle);
+                        handle = NULL;
+                        GOTO(cleanup, rc);
+                }
                 rc = fsfilt_setattr(obd, mfd->mfd_dentry, handle, &iattr, 0);
                 if (rc)
                         CERROR("error in setattr(%s): rc %d\n", fidname, rc);

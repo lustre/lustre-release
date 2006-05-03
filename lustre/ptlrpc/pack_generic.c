@@ -1157,6 +1157,8 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_TRANSNO == 0x800ULL);
         CLASSERT(OBD_CONNECT_IBITS == 0x1000ULL);
         CLASSERT(OBD_CONNECT_JOIN == 0x2000ULL);
+        CLASSERT(OBD_CONNECT_ATTRFID == 0x4000ULL);
+        CLASSERT(OBD_CONNECT_NODEVOH == 0x8000ULL);
         /* Sizes and Offsets */
 
 

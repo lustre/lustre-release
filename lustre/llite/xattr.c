@@ -190,6 +190,7 @@ int ll_getxattr_common(struct inode *inode, const char *name,
          * we just have path resolution to the target inode, so we have great
          * chance that cached ACL is uptodate.
          */
+#ifdef CONFIG_FS_POSIX_ACL
         if (xattr_type == XATTR_ACL_ACCESS_T) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct posix_acl *acl;
@@ -205,6 +206,7 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 posix_acl_release(acl);
                 RETURN(rc);
         }
+#endif
 
 do_getxattr:
         ll_inode2fid(&fid, inode);

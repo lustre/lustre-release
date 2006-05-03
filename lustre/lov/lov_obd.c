@@ -1512,14 +1512,15 @@ static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         oa->o_stripe_idx = lap->lap_stripe;
 }
 
-static void lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
+static int lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct lov_async_page *lap = LAP_FROM_COOKIE(data);
 
         /* in a raid1 regime this would down a count of many ios
          * in flight, onl calling the caller_ops completion when all
          * the raid1 ios are complete */
-        lap->lap_caller_ops->ap_completion(lap->lap_caller_data, cmd, oa, rc);
+        rc = lap->lap_caller_ops->ap_completion(lap->lap_caller_data,cmd,oa,rc);
+        return rc;
 }
 
 static struct obd_async_page_ops lov_async_page_ops = {
@@ -1878,6 +1879,9 @@ static int lov_cancel_unused(struct obd_export *exp,
         int rc = 0, i;
         ENTRY;
 
+        if (!exp || !exp->exp_obd)
+                RETURN(-ENODEV);
+
         lov = &exp->exp_obd->u.lov;
         if (lsm == NULL) {
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
@@ -1894,9 +1898,6 @@ static int lov_cancel_unused(struct obd_export *exp,
         }
 
         ASSERT_LSM_MAGIC(lsm);
-
-        if (!exp || !exp->exp_obd)
-                RETURN(-ENODEV);
 
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md submd;
@@ -2186,7 +2187,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                          if (lov->tgts[loi->loi_ost_idx].ltd_exp ==
                              data->lock->l_conn_export &&
                              loi->loi_id == res_id->name[0] &&
-                             loi->loi_gr == res_id->name[2]) {
+                             loi->loi_gr == res_id->name[1]) {
                                 *stripe = i;
                                 GOTO(out, rc = 0);
                         }

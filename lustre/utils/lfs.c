@@ -393,7 +393,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                   char *uuid, int ishow, int cooked,
                   char *type, int index, int rc)
 {
-        __u64 avail, used, total;
+        long long avail, used, total;
         double ratio = 0;
         char *suffix = "KMGTPEZY";
         char tbuf[10], ubuf[10], abuf[10], rbuf[10];
@@ -715,7 +715,7 @@ int lfs_join(int argc, char **argv)
         size = lseek(fd, 0, SEEK_END);
         if (size % JOIN_FILE_ALIGN) {
                 fprintf(stderr,"head file %s size %llu must be mutiple of %d\n",
-                        name_head, size, JOIN_FILE_ALIGN);
+                        name_head, (long long)size, JOIN_FILE_ALIGN);
                 rc = -EINVAL;
                 goto out;
         }
@@ -1180,9 +1180,9 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
                         if (bover)
                                 diff2str(dqb->dqb_btime, timebuf, now);
 
-                        sprintf(numbuf[0], "%llu", toqb(dqb->dqb_curspace));
-                        sprintf(numbuf[1], "%llu", dqb->dqb_bsoftlimit);
-                        sprintf(numbuf[2], "%llu", dqb->dqb_bhardlimit);
+                        sprintf(numbuf[0], LPU64, toqb(dqb->dqb_curspace));
+                        sprintf(numbuf[1], LPU64, dqb->dqb_bsoftlimit);
+                        sprintf(numbuf[2], LPU64, dqb->dqb_bhardlimit);
                         printf(" %7s%c %6s %7s %7s",
                                numbuf[0], bover ? '*' : ' ', numbuf[1],
                                numbuf[2], bover > 1 ? timebuf : "");
@@ -1190,9 +1190,9 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
                         if (iover)
                                 diff2str(dqb->dqb_itime, timebuf, now);
 
-                        sprintf(numbuf[0], "%llu", dqb->dqb_curinodes);
-                        sprintf(numbuf[1], "%llu", dqb->dqb_isoftlimit);
-                        sprintf(numbuf[2], "%llu", dqb->dqb_ihardlimit);
+                        sprintf(numbuf[0], LPU64, dqb->dqb_curinodes);
+                        sprintf(numbuf[1], LPU64, dqb->dqb_isoftlimit);
+                        sprintf(numbuf[2], LPU64, dqb->dqb_ihardlimit);
                         if (!ost_only)
                                 printf(" %7s%c %6s %7s %7s",
                                        numbuf[0], iover ? '*' : ' ', numbuf[1],
