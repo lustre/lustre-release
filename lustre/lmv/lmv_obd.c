@@ -648,7 +648,7 @@ static int lmv_fids_balanced(struct obd_device *obd)
 
 /* returns number of target where new fid should be allocated using passed @hint
  * as input data for making decision. */
-static int lmv_plcament_policy(struct obd_device *obd,
+static int lmv_placment_policy(struct obd_device *obd,
                                struct placement_hint *hint)
 {
         ENTRY;
@@ -677,13 +677,13 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
         LASSERT(fid != NULL);
         LASSERT(hint != NULL);
 
-        mds = lmv_plcament_policy(obd, hint);
+        mds = lmv_placment_policy(obd, hint);
         if (mds < 0 || mds >= lmv->desc.ld_tgt_count) {
                 CERROR("can't get target for allocating fid\n");
                 RETURN(-EINVAL);
         }
 
-        /* asking underlaying tgt later to allocate new fid */
+        /* asking underlaying tgt layer to allocate new fid */
         rc = obd_fid_alloc(lmv->tgts[mds].ltd_exp, fid, hint);
         RETURN(rc);
 }
