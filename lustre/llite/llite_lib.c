@@ -149,9 +149,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct ptlrpc_request *request = NULL;
         struct lustre_handle osc_conn = {0, };
         struct lustre_handle mdc_conn = {0, };
-        struct lustre_md md;
         struct obd_connect_data *data = NULL;
-        struct obd_connect_data *md_data = NULL;
+        struct lustre_md md;
         int err;
         ENTRY;
 
@@ -165,12 +164,6 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if (data == NULL)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC_PTR(md_data);
-        if (md_data == NULL) {
-                OBD_FREE_PTR(data);
-                RETURN(-ENOMEM);
-        }
-        
         if (proc_lustre_fs_root) {
                 err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
                                                   osc, mdc);
@@ -215,11 +208,6 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         err = obd_statfs(obd, &osfs, jiffies - HZ);
         if (err)
                 GOTO(out_mdc, err);
-
-        /* MDC connect is surely finished by now */
-        //LASSERT(class_conn2cliimp(&mdc_conn)->imp_connect_data);
-        //*data = class_conn2cliimp(&mdc_conn)->imp_connect_data;
-        //*md_data = class_exp2cliimp(sbi->ll_md_exp)->imp_connect_data;
 
         LASSERT(osfs.os_bsize);
         sb->s_blocksize = osfs.os_bsize;
@@ -318,14 +306,6 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         CDEBUG(D_SUPER, "rootfid "DFID3"\n", PFID3(&rootfid));
         sbi->ll_root_fid = rootfid;
 
-        spin_lock_init(&sbi->ll_fid_lock);
-        
-        /* initializing ->ll_fid. It is known that root object has separate
-         * sequence, so that we use what MDS returned to us and do not check if
-         * f_oid collides with root or not. */
-        sbi->ll_fid.f_seq = md_data->ocd_seq;
-        sbi->ll_fid.f_oid = LUSTRE_FID_INIT_OID;
-
         sb->s_op = &lustre_super_operations;
 
         /* make root inode
@@ -389,8 +369,6 @@ out_mdc:
 out:
         if (data != NULL)
                 OBD_FREE_PTR(data);
-        if (md_data != NULL)
-                OBD_FREE_PTR(md_data);
         lprocfs_unregister_mountpoint(sbi);
         RETURN(err);
 }

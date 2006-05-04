@@ -385,7 +385,11 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         /* allocate new fid for child */
         if (it->it_op == IT_OPEN || it->it_op == IT_CREAT) {
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data.fid2);
+                struct placement_hint hint = { .ph_pname = NULL,
+                                               .ph_cname = &dentry->d_name,
+                                               .ph_opc = LUSTRE_OPC_CREATE };
+                
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data.fid2, &hint);
                 if (rc) {
                         CERROR("can't allocate new fid, rc %d\n", rc);
                         LBUG();
@@ -580,6 +584,10 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
 static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
                     ll_dev_t rdev)
 {
+        struct placement_hint hint = { .ph_pname = NULL,
+                                       .ph_cname = &dchild->d_name,
+                                       .ph_opc = LUSTRE_OPC_MKNODE };
+                
         struct ptlrpc_request *request = NULL;
         struct inode *inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
@@ -602,7 +610,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
         case S_IFIFO:
         case S_IFSOCK:
                 /* allocate new fid */
-                err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2);
+                err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2, &hint);
                 if (err) {
                         CERROR("can't allocate new fid, rc %d\n", err);
                         LBUG();
@@ -638,6 +646,10 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
 
 static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
 {
+        struct placement_hint hint = { .ph_pname = NULL,
+                                       .ph_cname = &nd->dentry->d_name,
+                                       .ph_opc = LUSTRE_OPC_SYMLINK };
+                
         struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
@@ -650,14 +662,14 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
                dir, tgt);
 
         /* allocate new fid */
-        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2);
+        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 LBUG();
         }
 
         ll_prepare_md_op_data(&op_data, dir, NULL,
-                               nd->last.name, nd->last.len, 0);
+                              nd->last.name, nd->last.len, 0);
 
         err = md_create(sbi->ll_md_exp, &op_data,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
@@ -700,6 +712,9 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 
 static int ll_mkdir_raw(struct nameidata *nd, int mode)
 {
+        struct placement_hint hint = { .ph_pname = NULL,
+                                       .ph_cname = &nd->dentry->d_name,
+                                       .ph_opc = LUSTRE_OPC_MKDIR };
         struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
@@ -712,7 +727,7 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
 
         /* allocate new fid */
-        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2);
+        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 LBUG();

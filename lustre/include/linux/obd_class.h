@@ -694,6 +694,34 @@ static inline int obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+static inline int obd_fid_alloc(struct obd_export *exp,
+                                struct lu_fid *fid,
+                                struct placement_hint *hint)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_DT_OP(exp, fid_alloc);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, fid_alloc);
+
+        rc = OBP(exp->exp_obd, fid_alloc)(exp, fid, hint);
+        RETURN(rc);
+}
+
+static inline int obd_fid_delete(struct obd_export *exp,
+                                 struct lu_fid *fid)
+{
+        int rc;
+        ENTRY;
+
+        if (OBP(exp->exp_obd, fid_delete) == NULL)
+                RETURN(0);
+
+        OBD_COUNTER_INCREMENT(exp->exp_obd, fid_delete);
+        rc = OBP(exp->exp_obd, fid_delete)(exp, fid);
+        RETURN(rc);
+}
+
 static inline int obd_init_export(struct obd_export *exp)
 {
         int rc = 0;
@@ -1284,20 +1312,6 @@ static inline int md_getstatus(struct obd_export *exp, struct lu_fid *fid)
         EXP_CHECK_MD_OP(exp, getstatus);
         MD_COUNTER_INCREMENT(exp->exp_obd, getstatus);
         rc = MDP(exp->exp_obd, getstatus)(exp, fid);
-        RETURN(rc);
-}
-
-static inline int md_delete(struct obd_export *exp,
-                            struct lu_fid *fid)
-{
-        int rc;
-        ENTRY;
-
-        if (MDP(exp->exp_obd, delete) == NULL)
-                RETURN(0);
-
-        MD_COUNTER_INCREMENT(exp->exp_obd, delete);
-        rc = MDP(exp->exp_obd, delete)(exp, fid);
         RETURN(rc);
 }
 

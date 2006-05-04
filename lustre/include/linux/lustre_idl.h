@@ -41,7 +41,7 @@
 
 #ifdef __KERNEL__
 # include <linux/types.h>
-# include <linux/fs.h>    /* to check for FMODE_EXEC, dev_t, lest we redefine */
+# include <linux/fs.h>     /* to check for FMODE_EXEC, dev_t, lest we redefine */
 # ifdef CONFIG_FS_POSIX_ACL
 # include <linux/xattr_acl.h>
 # endif

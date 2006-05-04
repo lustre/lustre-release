@@ -675,6 +675,8 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, connect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, reconnect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, disconnect);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_alloc);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_delete);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, packmd);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpackmd);
@@ -773,7 +775,7 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LASSERT(obd->obd_proc_entry != NULL);
         LASSERT(obd->md_cntr_base == 0);
 
-        num_stats = 1 + MD_COUNTER_OFFSET(delete) +
+        num_stats = 1 + MD_COUNTER_OFFSET(cancel_unused) +
                 num_private_stats;
         stats = lprocfs_alloc_stats(num_stats);
         if (stats == NULL)
@@ -804,7 +806,6 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LPROCFS_MD_OP_INIT(num_private_stats, stats, set_open_replay_data);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, clear_open_replay_data);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, set_lock_data);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, delete);
 
         for (i = num_private_stats; i < num_stats; i++) {
                 if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {

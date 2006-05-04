@@ -36,29 +36,35 @@
 #include "llite_internal.h"
 
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
-int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
+int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
+                    struct placement_hint *hint)
 {
+        int rc;
         ENTRY;
 
-        spin_lock(&sbi->ll_fid_lock);
-        if (sbi->ll_fid.f_oid < LUSTRE_FID_SEQ_WIDTH) {
-                sbi->ll_fid.f_oid += 1;
-                *fid = sbi->ll_fid;
-        } else {
-                CERROR("sequence is exhausted. Switching to "
-                       "new one is not yet implemented\n");
-                RETURN(-ERANGE);
+        rc = obd_fid_alloc(sbi->ll_md_exp, fid, hint);
+        if (rc) {
+                CERROR("cannot allocate new metadata fid, rc %d\n", rc);
+                RETURN(rc);
         }
-        spin_unlock(&sbi->ll_fid_lock);
         
-        RETURN(0);
+        RETURN(rc);
 }
 
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
-int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid)
+int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
+                    struct placement_hint *hint)
 {
+        int rc;
         ENTRY;
-        RETURN(-EOPNOTSUPP);
+
+        rc = obd_fid_alloc(sbi->ll_dt_exp, fid, hint);
+        if (rc) {
+                CERROR("cannot allocate new data fid, rc %d\n", rc);
+                RETURN(rc);
+        }
+        
+        RETURN(rc);
 }
 
 /* build inode number on passed @fid */

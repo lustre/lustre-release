@@ -20,8 +20,8 @@
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/list.h>
-# include <linux/sched.h> /* for struct task_struct, for current.h */
-# include <asm/current.h> /* for smp_lock.h */
+# include <linux/sched.h>  /* for struct task_struct, for current.h */
+# include <asm/current.h>  /* for smp_lock.h */
 # include <linux/smp_lock.h>
 # include <linux/proc_fs.h>
 # include <linux/mount.h>
@@ -478,25 +478,35 @@ struct lov_obd {
 
 struct lmv_tgt_desc {
         struct obd_uuid         uuid;
-        struct obd_export      *ltd_exp;
+        struct obd_export       *ltd_exp;
         int                     active;   /* is this target up for requests */
+        int                     idx;
 };
 
 struct lmv_obd {
         int                     refcount;
         spinlock_t              lmv_lock;
         struct lmv_desc         desc;
-        struct lmv_tgt_desc     *tgts;
         struct obd_uuid         cluuid;
         struct obd_export       *exp;
 
-        int                     tgts_size;
         int                     connected;
         int                     max_easize;
         int                     max_def_easize;
         int                     max_cookiesize;
         int                     server_timeout;
         struct semaphore        init_sem;
+        
+        struct lmv_tgt_desc     *tgts;
+        int                     tgts_size;
+
+        struct obd_connect_data *datas;
+        int                     datas_size;
+
+        struct lu_fid           *fids;
+        int                     fids_size;
+        spinlock_t              fids_lock;
+        
         struct obd_connect_data conn_data;
 };
 
@@ -510,6 +520,16 @@ struct niobuf_local {
         int rc;
 };
 
+#define LUSTRE_OPC_MKDIR     (1 << 0)
+#define LUSTRE_OPC_SYMLINK   (1 << 1)
+#define LUSTRE_OPC_MKNODE    (1 << 2)
+#define LUSTRE_OPC_CREATE    (1 << 3)
+        
+struct placement_hint {
+        struct qstr *ph_pname;
+        struct qstr *ph_cname;
+        int          ph_opc;
+};
 
 /* device types (not names--FIXME) */
 /* FIXME all the references to these defines need to be updated */
@@ -781,6 +801,12 @@ struct obd_ops {
                            struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
 
+        /* may be later these should be moved into separate fid_ops */
+        int (*o_fid_alloc)(struct obd_export *exp, struct lu_fid *fid,
+                           struct placement_hint *hint);
+        
+        int (*o_fid_delete)(struct obd_export *exp, struct lu_fid *fid);
+        
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         unsigned long max_age);
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,
@@ -988,7 +1014,6 @@ struct md_ops {
                 
         int (*m_cancel_unused)(struct obd_export *, struct lu_fid *,
                                int flags, void *opaque);
-        int (*m_delete)(struct obd_export *, struct lu_fid *);
 
         /*
          * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to

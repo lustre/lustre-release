@@ -191,6 +191,8 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
         lmv->exp = exp;
         lmv->connected = 0;
         lmv->cluuid = *cluuid;
+
+        /* saving */
         if (data)
                 memcpy(&lmv->conn_data, data, sizeof(*data));
 
@@ -292,6 +294,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_uuid *cluuid = &lmv->cluuid;
+        struct obd_connect_data *mdc_data = NULL;
         struct obd_uuid lmv_mdc_uuid = { "LMV_MDC_UUID" };
         struct lustre_handle conn = {0, };
         struct obd_device *mdc_obd;
@@ -334,6 +337,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         }
 
         mdc_exp = class_conn2export(&conn);
+        mdc_data = &class_exp2cliimp(mdc_exp)->imp_connect_data;
 
         rc = obd_register_observer(mdc_obd, obd);
         if (rc) {
@@ -353,9 +357,16 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 }
         }
 
-        tgt->ltd_exp = mdc_exp;
         tgt->active = 1; 
+        tgt->ltd_exp = mdc_exp;
         lmv->desc.ld_active_tgt_count++;
+
+        /* copy connect data, it may be used later */
+        lmv->datas[tgt->idx] = *mdc_data;
+
+        /* setup start fid for this target */
+        lmv->fids[tgt->idx].f_seq = mdc_data->ocd_seq;
+        lmv->fids[tgt->idx].f_oid = LUSTRE_FID_INIT_OID;
 
         md_init_ea_size(tgt->ltd_exp, lmv->max_easize,
                         lmv->max_def_easize, lmv->max_cookiesize);
@@ -633,12 +644,83 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
+static int lmv_fids_balanced(struct obd_device *obd)
+{
+        ENTRY;
+        RETURN(0);
+}
+
+/* returns number of target where new fid should be allocated using passed @hint
+ * as input data for making decision. */
+static int lmv_plcament_policy(struct obd_device *obd,
+                               struct placement_hint *hint)
+{
+        ENTRY;
+
+        /* here are some policies to allocate new fid */
+        if (hint->ph_cname && lmv_fids_balanced(obd)) {
+                /* allocate new fid basing on its name in the case fids are
+                 * balanced, that is all sequences have more or less equal
+                 * number of objects created. */
+        } else {
+                /* sequences among all tgts are not well balanced, allocate new
+                 * fid taking this into account to balance them. */
+        }
+        
+        RETURN(0);
+}
+
+static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
+                         struct placement_hint *hint)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct lu_fid *tgt_fid;
+        int rc = 0, i;
+        ENTRY;
+
+        LASSERT(fid != NULL);
+        LASSERT(hint != NULL);
+
+        i = lmv_plcament_policy(obd, hint);
+        if (i < 0 || i >= lmv->desc.ld_tgt_count) {
+                CERROR("can't get target for allocating fid\n");
+                RETURN(-EINVAL);
+        }
+        
+        tgt_fid = &lmv->fids[i];
+                
+        spin_lock(&lmv->fids_lock);
+        if (fid_oid(tgt_fid) < LUSTRE_FID_SEQ_WIDTH) {
+                tgt_fid->f_oid += 1;
+                *fid = *tgt_fid;
+        } else {
+                CERROR("sequence is exhausted. Switching to "
+                       "new one is not yet implemented\n");
+                rc = -ERANGE;
+        }
+        spin_unlock(&lmv->fids_lock);
+        RETURN(rc);
+}
+
+static int lmv_fid_delete(struct obd_export *exp, struct lu_fid *fid)
+{
+        ENTRY;
+
+        LASSERT(exp && fid);
+        if (lmv_obj_delete(exp, fid)) {
+                CDEBUG(D_OTHER, "lmv object "DFID3" is destroyed.\n",
+                       PFID3(fid));
+        }
+        RETURN(0);
+}
+
 static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lprocfs_static_vars lvars;
         struct lmv_desc *desc;
-        int rc = 0;
+        int rc, i = 0;
         ENTRY;
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
@@ -656,10 +738,23 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lmv->tgts_size = LMV_MAX_TGT_COUNT * sizeof(struct lmv_tgt_desc);
 
         OBD_ALLOC(lmv->tgts, lmv->tgts_size);
-        if (lmv->tgts == NULL) {
-                CERROR("Out of memory\n");
+        if (lmv->tgts == NULL)
                 RETURN(-ENOMEM);
-        }
+
+        for (i = 0; i < LMV_MAX_TGT_COUNT; i++)
+                lmv->tgts[i].idx = i;
+
+        lmv->datas_size = LMV_MAX_TGT_COUNT * sizeof(struct obd_connect_data);
+
+        OBD_ALLOC(lmv->datas, lmv->datas_size);
+        if (lmv->datas == NULL)
+                GOTO(out_free_tgts, rc = -ENOMEM);
+
+        lmv->fids_size = LMV_MAX_TGT_COUNT * sizeof(struct lu_fid);
+
+        OBD_ALLOC(lmv->fids, lmv->fids_size);
+        if (lmv->fids == NULL)
+                GOTO(out_free_datas, rc = -ENOMEM);
 
         obd_str2uuid(&lmv->desc.ld_uuid, desc->ld_uuid.uuid);
         lmv->desc.ld_tgt_count = 0;
@@ -668,6 +763,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lmv->max_def_easize = 0;
         lmv->max_easize = 0;
 
+        spin_lock_init(&lmv->fids_lock);
         spin_lock_init(&lmv->lmv_lock);
         sema_init(&lmv->init_sem, 1);
 
@@ -675,7 +771,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc) {
                 CERROR("Can't setup LMV object manager, "
                        "error %d.\n", rc);
-                OBD_FREE(lmv->tgts, lmv->tgts_size);
+                GOTO(out_free_datas, rc);
                 RETURN(rc);
         }
 
@@ -694,6 +790,14 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
        }
 #endif
         RETURN(0);
+
+out_free_datas:        
+        OBD_FREE(lmv->datas, lmv->datas_size);
+        lmv->datas = NULL;
+out_free_tgts:
+        OBD_FREE(lmv->tgts, lmv->tgts_size);
+        lmv->tgts = NULL;
+        return rc;
 }
 
 static int lmv_cleanup(struct obd_device *obd) 
@@ -703,6 +807,8 @@ static int lmv_cleanup(struct obd_device *obd)
 
         lprocfs_obd_cleanup(obd);
         lmv_mgr_cleanup(obd);
+        OBD_FREE(lmv->fids, lmv->fids_size);
+        OBD_FREE(lmv->datas, lmv->datas_size);
         OBD_FREE(lmv->tgts, lmv->tgts_size);
         
         RETURN(0);
@@ -1618,18 +1724,6 @@ static int lmv_unlink_slaves(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-static int lmv_delete(struct obd_export *exp, struct lu_fid *fid)
-{
-        ENTRY;
-
-        LASSERT(exp && fid);
-        if (lmv_obj_delete(exp, fid)) {
-                CDEBUG(D_OTHER, "lmv object "DFID3" is destroyed.\n",
-                       PFID3(fid));
-        }
-        RETURN(0);
-}
-
 static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                       struct ptlrpc_request **request)
 {
@@ -2307,7 +2401,9 @@ struct obd_ops lmv_obd_ops = {
         .o_packmd               = lmv_packmd,
         .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,
-        .o_iocontrol            = lmv_iocontrol,
+        .o_fid_alloc            = lmv_fid_alloc,
+        .o_fid_delete           = lmv_fid_delete,
+        .o_iocontrol            = lmv_iocontrol
 };
 
 struct md_ops lmv_md_ops = {
@@ -2327,7 +2423,6 @@ struct md_ops lmv_md_ops = {
         .m_readpage             = lmv_readpage,
         .m_unlink               = lmv_unlink,
         .m_init_ea_size         = lmv_init_ea_size,
-        .m_delete               = lmv_delete,
         .m_cancel_unused        = lmv_cancel_unused,
         .m_set_lock_data        = lmv_set_lock_data,
         .m_lock_match           = lmv_lock_match,

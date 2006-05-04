@@ -181,10 +181,6 @@ struct ll_sb_info {
 
         struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
         spinlock_t                ll_deathrow_lock;
-
-        /* last allocated fids */
-        spinlock_t                ll_fid_lock;
-        struct lu_fid             ll_fid;
 };
 
 struct ll_ra_read {
@@ -573,8 +569,12 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
 int ll_removexattr(struct dentry *dentry, const char *name);
 
 /* llite/llite_fid.c*/
-int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid);
-int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid);
+int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
+                    struct placement_hint *hint);
+
+int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
+                    struct placement_hint *hint);
+
 ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid);
 
 #endif /* LLITE_INTERNAL_H */
