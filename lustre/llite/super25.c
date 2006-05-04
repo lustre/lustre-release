@@ -89,6 +89,7 @@ struct super_operations lustre_super_operations =
         .alloc_inode   = ll_alloc_inode,
         .destroy_inode = ll_destroy_inode,
         .clear_inode   = ll_clear_inode,
+        .delete_inode  = ll_delete_inode,
         .put_super     = ll_put_super,
         .statfs        = ll_statfs,
         .umount_begin  = ll_umount_begin,
