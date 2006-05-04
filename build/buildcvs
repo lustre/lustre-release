@@ -53,7 +53,6 @@ case "$lustretag" in
         ;;
 
     b1_4 | b1_4-patchless | b1_4_*)
-        portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
         ;;
 
@@ -63,7 +62,6 @@ case "$lustretag" in
         ;;
 
     b1_5 | b1_5_*)
-        portalstag="b_hd_newconfig"
         lnettag="b_hd_newconfig"
         ;;
 
