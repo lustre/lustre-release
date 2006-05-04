@@ -64,8 +64,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        rr->rr_fid1 = &rec->cr_fid;
-        rr->rr_fid2 = &rec->cr_replayfid;
+        rr->rr_fid1 = &rec->cr_fid1;
+        rr->rr_fid2 = &rec->cr_fid2;
         attr->la_mode = rec->cr_mode;
 
         rr->rr_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);

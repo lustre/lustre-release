@@ -533,7 +533,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         mod->mod_och = och;
         mod->mod_open_req = open_req;
 
-        memcpy(&rec->cr_replayfid, &body->fid1, sizeof rec->cr_replayfid);
+        rec->cr_fid2 = body->fid1;
         open_req->rq_replay_cb = mdc_replay_open;
         open_req->rq_commit_cb = mdc_commit_open;
         open_req->rq_cb_data = mod;
@@ -1084,6 +1084,7 @@ static int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 
         LASSERT(fid != NULL);
         LASSERT(hint != NULL);
+        LASSERT(fid_seq(&cli->cl_fid));
 
         spin_lock(&cli->cl_fid_lock);
         if (fid_oid(&cli->cl_fid) < LUSTRE_FID_SEQ_WIDTH) {

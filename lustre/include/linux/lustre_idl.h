@@ -978,8 +978,8 @@ struct mdt_rec_create {
         __u32           cr_cap;
         __u32           cr_flags; /* for use with open */
         __u32           cr_mode;
-        struct lu_fid   cr_fid;
-        struct lu_fid   cr_replayfid;
+        struct lu_fid   cr_fid1;
+        struct lu_fid   cr_fid2;
         __u64           cr_time;
         __u64           cr_rdev;
         __u32           cr_suppgid;

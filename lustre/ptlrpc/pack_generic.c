@@ -793,8 +793,8 @@ void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr)
         __swab32s (&cr->cr_cap);
         __swab32s (&cr->cr_flags); /* for use with open */
         __swab32s (&cr->cr_mode);
-        lustre_swab_lu_fid (&cr->cr_fid);
-        lustre_swab_lu_fid (&cr->cr_replayfid);
+        lustre_swab_lu_fid (&cr->cr_fid1);
+        lustre_swab_lu_fid (&cr->cr_fid2);
         __swab64s (&cr->cr_time);
         __swab64s (&cr->cr_rdev);
         __swab32s (&cr->cr_suppgid);

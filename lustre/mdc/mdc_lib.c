@@ -88,8 +88,8 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid = uid;
         rec->cr_fsgid = gid;
         rec->cr_cap = cap_effective;
-        rec->cr_fid = op_data->fid1;
-        memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
+        rec->cr_fid1 = op_data->fid1;
+        rec->cr_fid2 = op_data->fid2;
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
         rec->cr_time = op_data->mod_time;
@@ -148,9 +148,10 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid = current->fsuid;
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
-        if (op_data != NULL)
-                rec->cr_fid = op_data->fid1;
-        memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
+        if (op_data != NULL) {
+                rec->cr_fid1 = op_data->fid1;
+                rec->cr_fid2 = op_data->fid2;
+        }
         rec->cr_mode = mode;
         rec->cr_flags = mds_pack_open_flags(flags);
         rec->cr_rdev = rdev;
