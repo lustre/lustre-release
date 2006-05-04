@@ -90,7 +90,7 @@ EOF
     ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/$dir/autoconf"
 done
 # some are optional
-for dir in snmp ; do
+for dir in snmp portals; do
     if [ -d "$dir" ] ; then
 	ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/$dir/autoconf"
     fi
