@@ -93,20 +93,6 @@ struct dt_device_operations {
          */
         int   (*dt_root_get)(struct lu_context *ctx,
                              struct dt_device *dev, struct lu_fid *f);
-        /*
-         * Create new object on this device.
-         *
-         * postcondition: ergo(result == 0, lu_object_exists(ctxt, &dt->do_lu));
-         */
-        int   (*dt_object_create)(struct lu_context *ctxt, struct dt_object *dt,
-                                  struct thandle *th);
-        /*
-         * Destroy existing object.
-         *
-         * precondition: lu_object_exists(ctxt, &dt->do_lu);
-         */
-        int   (*dt_object_destroy)(struct lu_context *ctxt,
-                                   struct dt_object *dt, struct thandle *th);
 };
 
 /*
@@ -156,6 +142,20 @@ struct dt_object_operations {
         int   (*do_xattr_set)(struct lu_context *ctxt, struct dt_object *dt,
                               void *buf, int buf_len, const char *name,
                               struct thandle *handle);
+        /*
+         * Create new object on this device.
+         *
+         * postcondition: ergo(result == 0, lu_object_exists(ctxt, &dt->do_lu));
+         */
+        int   (*do_object_create)(struct lu_context *ctxt, struct dt_object *dt,
+                                  struct thandle *th);
+        /*
+         * Destroy existing object.
+         *
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
+         */
+        int   (*do_object_destroy)(struct lu_context *ctxt,
+                                   struct dt_object *dt, struct thandle *th);
 };
 
 /*

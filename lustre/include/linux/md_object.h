@@ -59,6 +59,10 @@ struct md_object_operations {
 
         int (*moo_xattr_set)(struct lu_context *ctxt, struct md_object *obj,
                              void *buf, int buf_len, const char *name);
+        /* part of cross-ref operation */
+        int (*moo_object_create)(struct lu_context *, struct md_object *);
+        int (*moo_object_destroy)(struct lu_context *, struct md_object *);
+
 };
 
 /*
@@ -98,10 +102,6 @@ struct md_device_operations {
         int (*mdo_statfs)(struct lu_context *ctx,
                           struct md_device *m, struct kstatfs *sfs);
         
-        /* part of cross-ref operation */
-        int (*mdo_object_create)(struct lu_context *, struct md_object *);
-        int (*mdo_object_destroy)(struct lu_context *, struct md_object *);
-
 };
 
 struct md_device {
