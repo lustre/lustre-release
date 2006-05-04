@@ -369,6 +369,9 @@ struct client_obd {
 
         /* used by quotacheck */
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
+
+        struct lu_fid            cl_fid;
+        spinlock_t               cl_fids_lock;
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
@@ -503,10 +506,6 @@ struct lmv_obd {
         struct obd_connect_data *datas;
         int                     datas_size;
 
-        struct lu_fid           *fids;
-        int                     fids_size;
-        spinlock_t              fids_lock;
-        
         struct obd_connect_data conn_data;
 };
 

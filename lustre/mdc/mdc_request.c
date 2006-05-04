@@ -1075,6 +1075,29 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         RETURN(rc);
 }
 
+static int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
+                         struct placement_hint *hint)
+{
+        struct client_obd *cli = &exp->exp_obd->u.cli;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(fid != NULL);
+        LASSERT(hint != NULL);
+
+        spin_lock(&cli->cl_fids_lock);
+        if (fid_oid(&cli->cl_fid) < LUSTRE_FID_SEQ_WIDTH) {
+                cli->cl_fid.f_oid += 1;
+                *fid = cli->cl_fid;
+        } else {
+                CERROR("sequence is exhausted. Switching to "
+                       "new one is not yet implemented\n");
+                rc = -ERANGE;
+        }
+        spin_unlock(&cli->cl_fids_lock);
+        RETURN(rc);
+}
+
 static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -1223,6 +1246,7 @@ struct obd_ops mdc_obd_ops = {
         .o_statfs           = mdc_statfs,
         .o_pin              = mdc_pin,
         .o_unpin            = mdc_unpin,
+        .o_fid_alloc        = mdc_fid_alloc,
         .o_import_event     = mdc_import_event,
         .o_llog_init        = mdc_llog_init,
         .o_llog_finish      = mdc_llog_finish,

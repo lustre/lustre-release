@@ -701,7 +701,9 @@ static inline int obd_fid_alloc(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        EXP_CHECK_DT_OP(exp, fid_alloc);
+        if (OBP(exp->exp_obd, fid_alloc) == NULL)
+                RETURN(-ENOTSUPP);
+
         OBD_COUNTER_INCREMENT(exp->exp_obd, fid_alloc);
 
         rc = OBP(exp->exp_obd, fid_alloc)(exp, fid, hint);

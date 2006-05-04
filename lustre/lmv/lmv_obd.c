@@ -364,10 +364,6 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         /* copy connect data, it may be used later */
         lmv->datas[tgt->idx] = *mdc_data;
 
-        /* setup start fid for this target */
-        lmv->fids[tgt->idx].f_seq = mdc_data->ocd_seq;
-        lmv->fids[tgt->idx].f_oid = LUSTRE_FID_INIT_OID;
-
         md_init_ea_size(tgt->ltd_exp, lmv->max_easize,
                         lmv->max_def_easize, lmv->max_cookiesize);
         
@@ -675,31 +671,20 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct lu_fid *tgt_fid;
-        int rc = 0, i;
+        int rc = 0, mds;
         ENTRY;
 
         LASSERT(fid != NULL);
         LASSERT(hint != NULL);
 
-        i = lmv_plcament_policy(obd, hint);
-        if (i < 0 || i >= lmv->desc.ld_tgt_count) {
+        mds = lmv_plcament_policy(obd, hint);
+        if (mds < 0 || mds >= lmv->desc.ld_tgt_count) {
                 CERROR("can't get target for allocating fid\n");
                 RETURN(-EINVAL);
         }
-        
-        tgt_fid = &lmv->fids[i];
-                
-        spin_lock(&lmv->fids_lock);
-        if (fid_oid(tgt_fid) < LUSTRE_FID_SEQ_WIDTH) {
-                tgt_fid->f_oid += 1;
-                *fid = *tgt_fid;
-        } else {
-                CERROR("sequence is exhausted. Switching to "
-                       "new one is not yet implemented\n");
-                rc = -ERANGE;
-        }
-        spin_unlock(&lmv->fids_lock);
+
+        /* asking underlaying tgt later to allocate new fid */
+        rc = obd_fid_alloc(lmv->tgts[mds].ltd_exp, fid, hint);
         RETURN(rc);
 }
 
@@ -750,12 +735,6 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (lmv->datas == NULL)
                 GOTO(out_free_tgts, rc = -ENOMEM);
 
-        lmv->fids_size = LMV_MAX_TGT_COUNT * sizeof(struct lu_fid);
-
-        OBD_ALLOC(lmv->fids, lmv->fids_size);
-        if (lmv->fids == NULL)
-                GOTO(out_free_datas, rc = -ENOMEM);
-
         obd_str2uuid(&lmv->desc.ld_uuid, desc->ld_uuid.uuid);
         lmv->desc.ld_tgt_count = 0;
         lmv->desc.ld_active_tgt_count = 0;
@@ -763,7 +742,6 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lmv->max_def_easize = 0;
         lmv->max_easize = 0;
 
-        spin_lock_init(&lmv->fids_lock);
         spin_lock_init(&lmv->lmv_lock);
         sema_init(&lmv->init_sem, 1);
 
@@ -807,7 +785,6 @@ static int lmv_cleanup(struct obd_device *obd)
 
         lprocfs_obd_cleanup(obd);
         lmv_mgr_cleanup(obd);
-        OBD_FREE(lmv->fids, lmv->fids_size);
         OBD_FREE(lmv->datas, lmv->datas_size);
         OBD_FREE(lmv->tgts, lmv->tgts_size);
         

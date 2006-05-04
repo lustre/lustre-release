@@ -256,6 +256,10 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg)
         spin_lock_init(&cli->cl_loi_list_lock);
         cli->cl_r_in_flight = 0;
         cli->cl_w_in_flight = 0;
+
+        memset(&cli->cl_fid, 0, sizeof(struct lu_fid));
+        spin_lock_init(&cli->cl_fids_lock);
+
         spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);
@@ -375,6 +379,9 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 imp->imp_connect_flags_orig = data->ocd_connect_flags;
         }
 
+        /* zero out sequence to check it later for validness */
+        ocd->ocd_seq = 0;
+        
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
@@ -389,6 +396,17 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         }
 
         ptlrpc_pinger_add_import(imp);
+
+        /* XXX: in principle we initialize start cl_fid by seq from MDS and
+         * start oid. But as connect is asynchronous, we should make sure that
+         * by this time server answered already with correct data (wait for
+         * connect finish). */
+        LASSERTF(ocd->ocd_seq != 0, "Asynchronous connect was not in "
+                 "time to return correct sequnece\n");
+        
+        cli->cl_fid.f_seq = ocd->ocd_seq;
+        cli->cl_fid.f_oid = LUSTRE_FID_INIT_OID;
+
         EXIT;
 
         if (rc) {
