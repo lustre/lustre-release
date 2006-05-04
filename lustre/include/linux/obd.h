@@ -371,7 +371,7 @@ struct client_obd {
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
 
         struct lu_fid            cl_fid;
-        spinlock_t               cl_fids_lock;
+        spinlock_t               cl_fid_lock;
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 

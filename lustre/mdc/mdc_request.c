@@ -1085,7 +1085,7 @@ static int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
         LASSERT(fid != NULL);
         LASSERT(hint != NULL);
 
-        spin_lock(&cli->cl_fids_lock);
+        spin_lock(&cli->cl_fid_lock);
         if (fid_oid(&cli->cl_fid) < LUSTRE_FID_SEQ_WIDTH) {
                 cli->cl_fid.f_oid += 1;
                 *fid = cli->cl_fid;
@@ -1094,7 +1094,7 @@ static int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                        "new one is not yet implemented\n");
                 rc = -ERANGE;
         }
-        spin_unlock(&cli->cl_fids_lock);
+        spin_unlock(&cli->cl_fid_lock);
         RETURN(rc);
 }
 
