@@ -1,6 +1,6 @@
 # This file is sourced by lustre/lustrecvs
 
-portalstag="HEAD"
+portalstag=""
 lnettag="HEAD"
 libsysiotag="HEAD"
 snmptag="HEAD"
@@ -130,9 +130,15 @@ case "$lustretag" in
         snmptag=b_release_1_4_6
         ;;
 
+    b_release_1_4_6)
+        portalstag="$lustretag"
+        lnettag="$lustretag"
+        libsysiotag="$lustretag"
+        snmptag="$lustretag"
+        ;;
+
     # all later b_release_* tags
     b_release_*)
-        portalstag="$lustretag"
         lnettag="$lustretag"
         libsysiotag="$lustretag"
         snmptag="$lustretag"
@@ -154,9 +160,16 @@ case "$lustretag" in
         snmptag="$lustretag"
         ;;
 
+    # v1.4.6, v1.4.6.[1-91]
+    v1_4_6_[1-9]|v1_4_6_9[01])
+        portalstag="$lustretag"
+        lnettag=""
+        libsysiotag="$lustretag"
+        snmptag="$lustretag"
+        ;;
+
     # all later v* tags
     v[1-9]*)
-        portalstag="$lustretag"
         lnettag="$lustretag"
         libsysiotag="$lustretag"
         snmptag="$lustretag"
