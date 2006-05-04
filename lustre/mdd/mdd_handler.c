@@ -180,10 +180,9 @@ static int
 __mdd_object_destroy(struct lu_context *ctxt, struct mdd_object *obj,
                      struct thandle *handle)
 {
-        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        struct dt_object  *next = mdd_object_child(obj);
         int rc;
-        rc = mdd_child_ops(mdd)->dt_object_destroy(ctxt, mdd_object_child(obj),
-                                                   handle);
+        rc = next->do_ops->do_object_destroy(ctxt, next, handle);
         RETURN(rc);
 }
 
@@ -386,12 +385,11 @@ static int
 __mdd_object_create(struct lu_context *ctxt, struct mdd_object *obj,
                     struct thandle *handle)
 {
-        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        struct dt_object *next = mdd_object_child(obj);
         int rc;
         ENTRY;
 
-        rc = mdd_child_ops(mdd)->dt_object_create(ctxt, mdd_object_child(obj),
-                                                  handle);
+        rc = next->do_ops->do_object_create(ctxt, next, handle);
         /*XXX increase the refcount of the object or not?*/
         RETURN(rc);
 }
@@ -750,7 +748,6 @@ struct md_device_operations mdd_ops = {
         .mdo_root_get       = mdd_root_get,
         .mdo_config         = mdd_config,
         .mdo_statfs         = mdd_statfs,
-        .mdo_object_create  = mdd_object_create
 };
 
 static struct md_dir_operations mdd_dir_ops = {
@@ -765,6 +762,7 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_attr_set      = mdd_attr_set,
         .moo_xattr_get     = mdd_xattr_get,
         .moo_xattr_set     = mdd_xattr_set,
+        .moo_object_create  = mdd_object_create
 };
 
 static struct obd_ops mdd_obd_device_ops = {
