@@ -145,6 +145,7 @@ struct dt_object_operations {
         /*
          * Create new object on this device.
          *
+         * precondition: !lu_object_exists(ctxt, &dt->do_lu);
          * postcondition: ergo(result == 0, lu_object_exists(ctxt, &dt->do_lu));
          */
         int   (*do_object_create)(struct lu_context *ctxt, struct dt_object *dt,
@@ -153,6 +154,8 @@ struct dt_object_operations {
          * Destroy existing object.
          *
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
+         * postcondition: ergo(result == 0,
+         *                     !lu_object_exists(ctxt, &dt->do_lu));
          */
         int   (*do_object_destroy)(struct lu_context *ctxt,
                                    struct dt_object *dt, struct thandle *th);
