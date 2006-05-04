@@ -56,8 +56,8 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
-int cmm_root_get(struct lu_context *ctx,
-                 struct md_device *md, struct lu_fid *fid)
+int cmm_root_get(struct lu_context *ctx, struct md_device *md,
+                 struct lu_fid *fid)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 
@@ -65,9 +65,8 @@ int cmm_root_get(struct lu_context *ctx,
                                                     cmm_dev->cmm_child, fid);
 }
 
-int cmm_config(struct lu_context *ctxt,
-               struct md_device *md, const char *name,
-               void *buf, int size, int mode)
+int cmm_config(struct lu_context *ctxt, struct md_device *md,
+               const char *name, void *buf, int size, int mode)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         int rc;
@@ -77,8 +76,8 @@ int cmm_config(struct lu_context *ctxt,
         RETURN(rc);
 }
 
-int cmm_statfs(struct lu_context *ctxt,
-               struct md_device *md, struct kstatfs *sfs) {
+int cmm_statfs(struct lu_context *ctxt, struct md_device *md,
+               struct kstatfs *sfs) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 	int rc;
 
@@ -92,43 +91,7 @@ static struct md_device_operations cmm_md_ops = {
         .mdo_root_get       = cmm_root_get,
         .mdo_config         = cmm_config,
         .mdo_statfs         = cmm_statfs,
-        .mdo_object_create  = cmm_object_create
-
 };
-
-static int cmm_device_init(struct lu_device *d, struct lu_device *next)
-{
-        struct cmm_device *m = lu2cmm_dev(d);
-        int err = 0;
-
-        ENTRY;
-
-        INIT_LIST_HEAD(&m->cmm_targets);
-        m->cmm_tgt_count = 0;
-        m->cmm_child = lu2md_dev(next);
-
-        RETURN(err);
-}
-
-static struct lu_device *cmm_device_fini(struct lu_device *ld)
-{
-	struct cmm_device *cm = lu2cmm_dev(ld);
-        struct mdc_device *mc, *tmp;
-        ENTRY;
-        
-        /* finish all mdc devices */
-        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
-                struct lu_device *ld_m = mdc2lu_dev(mc);
-
-                list_del(&mc->mc_linkage);
-                lu_device_put(cmm2lu_dev(cm));
-                ld->ld_type->ldt_ops->ldto_device_fini(ld_m);
-                ld->ld_type->ldt_ops->ldto_device_free(ld_m);
-        }
-
-        EXIT;
-        return md2lu_dev(cm->cmm_child);
-}
 
 /* add new MDC to the CMM, create MDC lu_device and connect it to mdc_obd */
 static int cmm_add_mdc(struct cmm_device * cm, struct lustre_cfg *cfg)
@@ -182,13 +145,14 @@ static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg)
         RETURN(err);
 }
 
-
 static struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_alloc   = cmm_object_alloc,
 	.ldo_object_free    = cmm_object_free,
 
         .ldo_process_config = cmm_process_config
 };
+
+/* --- lu_device_type operations --- */
 
 struct lu_device *cmm_device_alloc(struct lu_device_type *t,
                                    struct lustre_cfg *cfg)
@@ -229,6 +193,40 @@ int cmm_type_init(struct lu_device_type *t)
 void cmm_type_fini(struct lu_device_type *t)
 {
         return;
+}
+
+static int cmm_device_init(struct lu_device *d, struct lu_device *next)
+{
+        struct cmm_device *m = lu2cmm_dev(d);
+        int err = 0;
+
+        ENTRY;
+
+        INIT_LIST_HEAD(&m->cmm_targets);
+        m->cmm_tgt_count = 0;
+        m->cmm_child = lu2md_dev(next);
+
+        RETURN(err);
+}
+
+static struct lu_device *cmm_device_fini(struct lu_device *ld)
+{
+	struct cmm_device *cm = lu2cmm_dev(ld);
+        struct mdc_device *mc, *tmp;
+        ENTRY;
+        
+        /* finish all mdc devices */
+        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
+                struct lu_device *ld_m = mdc2lu_dev(mc);
+
+                list_del(&mc->mc_linkage);
+                lu_device_put(cmm2lu_dev(cm));
+                ld->ld_type->ldt_ops->ldto_device_fini(ld_m);
+                ld->ld_type->ldt_ops->ldto_device_free(ld_m);
+        }
+
+        EXIT;
+        return md2lu_dev(cm->cmm_child);
 }
 
 static struct lu_device_type_operations cmm_device_type_ops = {

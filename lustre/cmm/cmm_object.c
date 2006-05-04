@@ -41,7 +41,9 @@ static struct lu_object_operations cmm_obj_ops;
 
 static int cmm_fld_lookup(struct lu_fid *fid)
 {
-        /* return master MDS for now */
+        int rc;
+        /* temporary hack for proto mkdir */
+        rc = fid_seq(fid) == LUSTRE_ROOT_FID_SEQ ? 0 : 1;
         return 0;
 }
 
@@ -84,7 +86,7 @@ struct lu_object *cmm_object_alloc(struct lu_context *ctx,
 		RETURN(NULL);
 }
 
-int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
+int cmm_object_init(struct lu_context *ctx, struct lu_object *o)
 {
 	struct cmm_device *d = lu2cmm_dev(o->lo_dev);
 	struct lu_device  *under;
@@ -99,7 +101,7 @@ int cmm_object_init(struct lu_context *ctxt, struct lu_object *o)
         if (under == NULL)
                 RETURN(-ENOENT);
 
-        below = under->ld_ops->ldo_object_alloc(ctxt, under);
+        below = under->ld_ops->ldo_object_alloc(ctx, under);
 	if (below != NULL) {
                 struct cmm_object *co = lu2cmm_obj(o);
 
@@ -117,7 +119,7 @@ void cmm_object_free(struct lu_context *ctx, struct lu_object *o)
         OBD_FREE_PTR(mo);
 }
 
-void cmm_object_release(struct lu_context *ctxt, struct lu_object *o)
+void cmm_object_release(struct lu_context *ctx, struct lu_object *o)
 {
         return;
 }
@@ -134,7 +136,7 @@ static int cmm_object_print(struct lu_context *ctx,
 }
 
 /* Metadata API */
-int cmm_object_create(struct lu_context *ctxt, struct md_object *mo)
+int cmm_object_create(struct lu_context *ctx, struct md_object *mo)
 {
         struct cmm_object *cmo = md2cmm_obj(mo);
         struct md_object  *nxo = cmm2child_obj(cmo);
@@ -144,11 +146,11 @@ int cmm_object_create(struct lu_context *ctxt, struct md_object *mo)
 
         LASSERT (cmm_is_local_obj(cmo));
         
-        rc = md_device_get(nxo)->md_ops->mdo_object_create(ctxt, nxo);
+        rc = nxo->mo_ops->moo_object_create(ctx, nxo);
         
         RETURN(rc);
 }
-int cmm_mkdir(struct lu_context *ctxt, struct lu_attr *attr,
+int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
               struct md_object *p, const char *name, struct md_object *c)
 {
 	struct cmm_object *cmm_p = md2cmm_obj(p);
@@ -158,17 +160,16 @@ int cmm_mkdir(struct lu_context *ctxt, struct lu_attr *attr,
 
         if (cmm_is_local_obj(cmm_c)) {
                 /* fully local mkdir */
-                rc = local->mo_dir_ops->mdo_mkdir(ctxt, attr, local, name,
+                rc = local->mo_dir_ops->mdo_mkdir(ctx, attr, local, name,
                                                       cmm2child_obj(cmm_c));
         } else {
                 struct lu_fid *fid = &c->mo_lu.lo_header->loh_fid;
                 struct md_object *remote = cmm2child_obj(cmm_c);
 
                 /* remote object creation and local name insert */
-                rc = md_device_get(remote)->md_ops->mdo_object_create(ctxt,
-                                                                      remote);
+                rc = remote->mo_ops->moo_object_create(ctx, remote);
                 if (rc == 0) {
-                        rc = local->mo_dir_ops->mdo_name_insert(ctxt, local,
+                        rc = local->mo_dir_ops->mdo_name_insert(ctx, local,
                                                                 name, fid,
                                                                 attr);
                 }
@@ -177,20 +178,22 @@ int cmm_mkdir(struct lu_context *ctxt, struct lu_attr *attr,
         RETURN(rc);
 }
 
-int cmm_attr_get(struct lu_context *ctxt, struct md_object *obj,
+int cmm_attr_get(struct lu_context *ctx, struct md_object *obj,
                  struct lu_attr *attr)
 {
         struct md_object *next = cmm2child_obj(md2cmm_obj(obj));
 
-        return next->mo_ops->moo_attr_get(ctxt, next, attr);
+        return next->mo_ops->moo_attr_get(ctx, next, attr);
 }
 
 static struct md_dir_operations cmm_dir_ops = {
-        .mdo_mkdir      = cmm_mkdir,
+        .mdo_mkdir         = cmm_mkdir,
 };
 
 static struct md_object_operations cmm_mo_ops = {
         .moo_attr_get      = cmm_attr_get,
+        .moo_object_create = cmm_object_create,
+
 };
 
 static struct lu_object_operations cmm_obj_ops = {

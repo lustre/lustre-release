@@ -59,7 +59,7 @@ static int mdc_root_get(struct lu_context *ctx, struct md_device *md,
         return -EOPNOTSUPP;
 }
 
-static int mdc_config(struct lu_context *ctxt,
+static int mdc_config(struct lu_context *ctx,
                       struct md_device *md, const char *name,
                       void *buf, int size, int mode)
 {
@@ -70,7 +70,7 @@ static int mdc_config(struct lu_context *ctxt,
         RETURN(rc);
 }
 
-static int mdc_statfs(struct lu_context *ctxt,
+static int mdc_statfs(struct lu_context *ctx,
                       struct md_device *md, struct kstatfs *sfs) {
         //struct mdc_device *mdc_dev = md2mdc_dev(md);
 	int rc;
@@ -80,20 +80,10 @@ static int mdc_statfs(struct lu_context *ctxt,
         RETURN (rc);
 }
 
-static int mdc_object_create(struct lu_context *ctxt, struct md_object *mo)
-{
-        int rc;
-
-        rc = -EOPNOTSUPP;
-
-        RETURN(rc);
-}
-
 static struct md_device_operations mdc_md_ops = {
         .mdo_root_get       = mdc_root_get,
         .mdo_config         = mdc_config,
         .mdo_statfs         = mdc_statfs,
-        .mdo_object_create  = mdc_object_create
 };
 
 static int mdc_process_config(struct lu_device *ld, struct lustre_cfg *cfg)

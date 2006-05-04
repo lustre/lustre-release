@@ -92,10 +92,61 @@ static int mdc_object_print(struct lu_context *ctx,
 	return seq_printf(f, LUSTRE_MDC0_NAME"-object@%p", lo);
 }
 
+static int mdc_object_create(struct lu_context *ctx, struct md_object *mo)
+{
+        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        int rc;
+        struct mdt_rec_create *rec;
+        struct ptlrpc_request *req;
+        int size = sizeof(struct mdt_rec_create);
+        int level;
+
+        req = ptlrpc_prep_req(mc->mc_desc.cl_import, LUSTRE_MDS_VERSION,
+                              MDS_REINT, 1, &size, NULL);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+/*
+        mdc_create_pack(req, MDS_REQ_REC_OFF, op_data, data, datalen, mode,
+                        uid, gid, cap_effective, rdev);
+*/
+        rec = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF, sizeof (*rec));
+        rec->cr_opcode = REINT_CREATE;
+        rec->cr_fsuid = 0;//uid;
+        rec->cr_fsgid = 0;//gid;
+        rec->cr_cap = 0;//cap_effective;
+        rec->cr_fid1 = mo->mo_lu.lo_header->loh_fid;
+        memset(&rec->cr_fid2, 0, sizeof(rec->cr_fid2));
+        rec->cr_mode = S_IFDIR;//mode;
+        rec->cr_rdev = 0;//rdev;
+        rec->cr_time = 0;//op_data->mod_time;
+        rec->cr_suppgid = 0;//op_data->suppgids[0];
+
+        
+        size = sizeof(struct mdt_body);
+        req->rq_replen = lustre_msg_size(1, &size);
+
+        level = LUSTRE_IMP_FULL;
+        req->rq_send_state = level;
+        //mdc_get_rpc_lock(rpc_lock, NULL);
+        rc = ptlrpc_queue_wait(req);
+        //mdc_put_rpc_lock(rpc_lock, NULL);
+        if (rc)
+                CDEBUG(D_INFO, "error in handling %d\n", rc);
+        else if (!lustre_swab_repbuf(req, 0, sizeof(struct mdt_body),
+                                     lustre_swab_mdt_body)) {
+                CERROR ("Can't unpack mdt_body\n");
+                rc = -EPROTO;
+        } else 
+                CDEBUG(D_INFO, "Done MDC req!\n");
+
+        RETURN(rc);
+}
+
 static struct md_dir_operations mdc_dir_ops = {
 };
 
 static struct md_object_operations mdc_mo_ops = {
+        .moo_object_create  = mdc_object_create
 };
 
 static struct lu_object_operations mdc_obj_ops = {
