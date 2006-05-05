@@ -258,9 +258,8 @@ static int mdt_readpage(struct mdt_thread_info *info,
 }
 
 static int mdt_reint_internal(struct mdt_thread_info *info,
-                       struct ptlrpc_request *req,
-                       int offset,
-                       struct mdt_lock_handle *lockh)
+                              struct ptlrpc_request *req,
+                              int offset)
 {
         int rc;
 
@@ -269,7 +268,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 CERROR("invalid record\n");
                 RETURN(rc = -EINVAL);
         }
-        rc = mdt_reint_rec(info, lockh);
+        rc = mdt_reint_rec(info);
         RETURN(rc);
 }
 
@@ -1014,11 +1013,11 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_lock *lock = *lockp;
         struct ldlm_intent *it;
         struct ldlm_reply *rep;
-        struct mdt_lock_handle lockh = { {0} };
         struct ldlm_lock *new_lock = NULL;
         int offset = MDS_REQ_INTENT_REC_OFF;
         int rc;
         struct mdt_thread_info *info;
+        int getattr_flags = 0;
 
         ENTRY;
 
@@ -1052,7 +1051,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 
         rc = lustre_pack_reply(req, info->mti_rep_buf_nr,
                                info->mti_rep_buf_size, NULL);
-        if (rc){
+        if (rc) {
                 RETURN(req->rq_status = rc);
         }
 
@@ -1063,63 +1062,15 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         /* execute policy */
         switch ((long)it->opc) {
         case IT_CREAT:
-                rep->lock_policy_res2 = mdt_reint_internal(info, req,
-                                                           offset, &lockh);
+                rep->lock_policy_res2 = mdt_reint_internal(info, req, offset);
+                RETURN(ELDLM_LOCK_ABORTED);
                 break;
         default:
                 CERROR("Unhandled intent till now "LPD64"\n", it->opc);
-                RETURN(ELDLM_LOCK_ABORTED);
-                /*LBUG();*/
+                LBUG();
         }
 
-        /* By this point, whatever function we called above must have either
-         * filled in 'lockh', been an intent replay, or returned an error.  We
-         * want to allow replayed RPCs to not get a lock, since we would just
-         * drop it below anyways because lock replay is done separately by the
-         * client afterwards.  For regular RPCs we want to give the new lock to
-         * the client instead of whatever lock it was about to get. */
-        if (new_lock == NULL)
-                new_lock = ldlm_handle2lock(&lockh.mlh_lh);
-        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY)) {
-                RETURN(ELDLM_OK);
-        }
-
-        LASSERTF(new_lock != NULL, "op "LPX64" lockh "LPX64"\n",
-                 it->opc, lockh.mlh_lh.cookie);
-
-        /* If we've already given this lock to a client once, then we should
-         * have no readers or writers.  Otherwise, we should have one reader
-         * _or_ writer ref (which will be zeroed below) before returning the
-         * lock to a client. */
-        if (new_lock->l_export == req->rq_export) {
-                LASSERT(new_lock->l_readers + new_lock->l_writers == 0);
-        } else {
-                LASSERT(new_lock->l_export == NULL);
-                LASSERT(new_lock->l_readers + new_lock->l_writers == 1);
-        }
-
-        *lockp = new_lock;
-
-        /* Fixup the lock to be given to the client */
-        l_lock(&new_lock->l_resource->lr_namespace->ns_lock);
-        new_lock->l_readers = 0;
-        new_lock->l_writers = 0;
-
-        new_lock->l_export = class_export_get(req->rq_export);
-        list_add(&new_lock->l_export_chain,
-                 &new_lock->l_export->exp_ldlm_data.led_held_locks);
-
-        new_lock->l_blocking_ast = lock->l_blocking_ast;
-        new_lock->l_completion_ast = lock->l_completion_ast;
-
-        new_lock->l_remote_handle = lock->l_remote_handle;
-
-        new_lock->l_flags &= ~LDLM_FL_LOCAL;
-
-        LDLM_LOCK_PUT(new_lock);
-        l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
-
-        RETURN(ELDLM_LOCK_REPLACED);
+        RETURN(ELDLM_OK);
 }
 
 static int mdt_config(struct lu_context *ctx, struct mdt_device *m,
