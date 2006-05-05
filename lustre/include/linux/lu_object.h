@@ -706,7 +706,7 @@ struct lu_context_key {
         /*
          * Value destructor. Called when context with previously allocated
          * value of this slot is destroyed. @data is a value that was returned
-         * by matching call to ->lct_init().
+         * by a matching call to ->lct_init().
          */
         void   (*lct_fini)(struct lu_context *ctx, void *data);
         /*
