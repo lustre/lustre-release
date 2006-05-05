@@ -50,14 +50,13 @@
 
 static struct lu_fid *oi_fid_key(struct osd_thread_info *info,
                                  const struct lu_fid *fid);
-
 static const char osd_oi_dirname[] = "oi";
 
 int osd_oi_init(struct osd_oi *oi, struct dentry *root, struct lu_site *site)
 {
         int result;
 
-        oi->oi_dir = osd_open(root, osd_oi_dirname, S_IFDIR);
+        oi->oi_dir = osd_lookup(root, osd_oi_dirname);
         if (IS_ERR(oi->oi_dir)) {
                 result = PTR_ERR(oi->oi_dir);
                 oi->oi_dir = NULL;
@@ -108,6 +107,131 @@ static struct lu_fid *oi_fid_key(struct osd_thread_info *info,
  * XXX prototype.
  ****************************************************************************/
 
+#if OI_IN_MEMORY
+struct oi_entry {
+        struct lu_fid       oe_key;
+        struct osd_inode_id oe_rec;
+        struct list_head    oe_linkage;
+};
+
+static CFS_LIST_HEAD(oi_head);
+
+static struct oi_entry *oi_lookup(const struct lu_fid *fid)
+{
+        struct oi_entry *entry;
+
+        list_for_each_entry(entry, &oi_head, oe_linkage) {
+                if (lu_fid_eq(fid, &entry->oe_key))
+                        return entry;
+        }
+        return NULL;
+}
+
+/*
+ * Locking: requires at least read lock on oi.
+ */
+int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
+                  const struct lu_fid *fid, struct osd_inode_id *id)
+{
+        struct oi_entry *entry;
+        int result;
+
+        LASSERT(fid_is_local(oi->oi_site, fid));
+        entry = oi_lookup(fid);
+        if (entry != NULL) {
+                *id = entry->oe_rec;
+                result = 0;
+        } else
+                result = -ENOENT;
+        return result;
+}
+
+/*
+ * Locking: requires write lock on oi.
+ */
+int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
+                  const struct lu_fid *fid, const struct osd_inode_id *id)
+{
+        struct oi_entry *entry;
+        int result;
+
+        LASSERT(fid_is_local(oi->oi_site, fid));
+        entry = oi_lookup(fid);
+        if (entry == NULL) {
+                OBD_ALLOC_PTR(entry);
+                if (entry != NULL) {
+                        entry->oe_key = *fid;
+                        entry->oe_rec = *id;
+                        list_add(&entry->oe_linkage, &oi_head);
+                        result = 0;
+                } else
+                        result = -ENOMEM;
+        } else
+                result = -EEXIST;
+        return result;
+}
+
+/*
+ * Locking: requires write lock on oi.
+ */
+int osd_oi_delete(struct osd_thread_info *info,
+                  struct osd_oi *oi, const struct lu_fid *fid)
+{
+        struct oi_entry *entry;
+        int result;
+
+        LASSERT(fid_is_local(oi->oi_site, fid));
+        entry = oi_lookup(fid);
+        if (entry != NULL) {
+                list_del(&entry->oe_linkage);
+                OBD_FREE_PTR(entry);
+                result = 0;
+        } else
+                result = -ENOENT;
+        return result;
+}
+
+const struct lu_fid root_fid = {
+        .f_seq = LUSTRE_ROOT_FID_SEQ,
+        .f_oid = LUSTRE_ROOT_FID_OID,
+        .f_ver = 0
+};
+
+void osd_oi_init0(struct osd_oi *oi, __u64 root_ino, __u32 root_gen)
+{
+        int result;
+        const struct osd_inode_id root_id = {
+                .oii_ino = root_ino,
+                .oii_gen = root_gen
+        };
+
+        result = osd_oi_insert(NULL, oi, &root_fid, &root_id);
+        LASSERT(result == 0);
+}
+
+int osd_oi_find_fid(struct osd_oi *oi, __u64 ino, __u32 gen, struct lu_fid *fid)
+{
+        struct oi_entry *entry;
+        int result;
+
+        result = -ENOENT;
+        osd_oi_read_lock(oi);
+        list_for_each_entry(entry, &oi_head, oe_linkage) {
+                if (entry->oe_rec.oii_ino == ino &&
+                    entry->oe_rec.oii_gen == gen) {
+                        *fid = entry->oe_key;
+                        result = 0;
+                        LASSERT(fid_is_local(oi->oi_site, fid));
+                        break;
+                }
+        }
+        osd_oi_read_unlock(oi);
+        return result;
+}
+
+/* OI_IN_MEMORY */
+#else
+
 /*
  * Locking: requires at least read lock on oi.
  */
@@ -138,3 +262,6 @@ int osd_oi_delete(struct osd_thread_info *info,
 {
         return 0;
 }
+
+/* OI_IN_MEMORY */
+#endif
