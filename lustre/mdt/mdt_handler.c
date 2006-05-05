@@ -66,9 +66,9 @@
  */
 unsigned long mdt_num_threads;
 
-static int                mdt_handle    (struct ptlrpc_request *req);
-static struct mdt_device *mdt_dev       (struct lu_device *d);
-static struct lu_fid     *mdt_object_fid(struct mdt_object *o);
+static int                  mdt_handle    (struct ptlrpc_request *req);
+static struct mdt_device   *mdt_dev       (struct lu_device *d);
+static const struct lu_fid *mdt_object_fid(struct mdt_object *o);
 
 static struct lu_context_key       mdt_thread_key;
 static struct lu_object_operations mdt_obj_ops;
@@ -482,7 +482,7 @@ void mdt_object_put(struct lu_context *ctxt, struct mdt_object *o)
         lu_object_put(ctxt, &o->mot_obj.mo_lu);
 }
 
-static struct lu_fid *mdt_object_fid(struct mdt_object *o)
+static const struct lu_fid *mdt_object_fid(struct mdt_object *o)
 {
         return lu_object_fid(&o->mot_obj.mo_lu);
 }

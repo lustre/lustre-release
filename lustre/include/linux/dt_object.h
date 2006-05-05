@@ -188,14 +188,14 @@ struct dt_index_operations {
          */
         int   (*dio_index_insert)(struct lu_context *ctxt,
                                   struct dt_object *dt,
-                                  struct lu_fid *fid, const char *name,
+                                  const struct lu_fid *fid, const char *name,
                                   struct thandle *handle);
         /*
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*dio_index_delete)(struct lu_context *ctxt,
                                   struct dt_object *dt,
-                                  struct lu_fid *fid, const char *name,
+                                  const struct lu_fid *fid, const char *name,
                                   struct thandle *handle);
 };
 

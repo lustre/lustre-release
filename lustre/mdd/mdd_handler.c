@@ -476,7 +476,7 @@ mdd_xattr_set(struct lu_context *ctxt, struct md_object *obj, void *buf,
         RETURN(rc);
 }
 
-static struct lu_fid *mdd_object_getfid(struct mdd_object *obj)
+static const struct lu_fid *mdd_object_getfid(struct mdd_object *obj)
 {
         return lu_object_fid(&obj->mod_obj.mo_lu);
 }
