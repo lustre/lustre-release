@@ -201,8 +201,7 @@ int mdt_reint_unpack(struct mdt_thread_info *,
                      struct ptlrpc_request *, 
                      int);
 
-int mdt_reint_rec(struct mdt_thread_info *,
-                  struct mdt_lock_handle *);
+int mdt_reint_rec(struct mdt_thread_info *);
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

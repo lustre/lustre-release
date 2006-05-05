@@ -308,7 +308,7 @@ static int mdt_reint(struct mdt_thread_info *info,
                                info->mti_rep_buf_size, NULL);
         if (rc)
                 RETURN(rc);
-        rc = mdt_reint_internal(info, req, offset, NULL);
+        rc = mdt_reint_internal(info, req, offset);
         RETURN(rc);
 }
 

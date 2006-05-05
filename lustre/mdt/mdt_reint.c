@@ -139,8 +139,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
 }
 
 
-typedef int (*mdt_reinter)(struct mdt_thread_info *info,
-                           struct mdt_lock_handle *);
+typedef int (*mdt_reinter)(struct mdt_thread_info *info);
 
 static mdt_reinter reinters[REINT_MAX] = {
         [REINT_SETATTR]  = mdt_reint_setattr,
