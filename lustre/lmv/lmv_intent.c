@@ -282,6 +282,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                         lmv_obj_put(obj);
                 }
 #endif
+                op_data.fid2 = *cid;
         } else {
                 CDEBUG(D_OTHER, "INTENT getattr for %*s on "DFID3"\n",
                        len, name, PFID3(pid));
@@ -301,7 +302,6 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         }
 
         op_data.fid1 = rpid;
-        op_data.fid2 = *cid;
         op_data.name = name;
         op_data.namelen = len;
         
