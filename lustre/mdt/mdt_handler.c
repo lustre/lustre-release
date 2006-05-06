@@ -1013,12 +1013,10 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_lock *lock = *lockp;
         struct ldlm_intent *it;
         struct ldlm_reply *rep;
-        struct ldlm_lock *new_lock = NULL;
         int offset = MDS_REQ_INTENT_REC_OFF;
         int rc;
         struct mdt_thread_info *info;
-        int getattr_flags = 0;
-
+        
         ENTRY;
 
         LASSERT(req != NULL);

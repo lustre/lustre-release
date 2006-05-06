@@ -226,6 +226,39 @@ static int osd_statfs(struct lu_context *ctx,
         RETURN (result);
 }
 
+static struct thandle *osd_trans_start(struct lu_context *ctx,
+                                       struct dt_device *d,
+                                       struct txn_param *p)
+{
+        RETURN (NULL);
+}
+
+static void osd_trans_stop(struct lu_context *ctx,
+                           struct thandle *th)
+{
+        EXIT;
+}
+
+static struct dt_device_operations osd_dt_ops = {
+        .dt_root_get    = osd_root_get,
+        .dt_config      = osd_config,
+        .dt_statfs      = osd_statfs,
+        .dt_trans_start = osd_trans_start,
+        .dt_trans_stop  = osd_trans_stop
+};
+
+static void osd_object_lock(struct lu_context *ctx, struct dt_object *dt,
+                           enum dt_lock_mode mode)
+{
+        return;
+}
+
+static void osd_object_unlock(struct lu_context *ctx, struct dt_object *dt,
+                             enum dt_lock_mode mode)
+{
+        return;
+}
+
 static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
                         struct lu_attr *attr)
 {
@@ -233,20 +266,45 @@ static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
         return osd_inode_getattr(ctxt, dt2osd_obj(dt)->oo_inode, attr);
 }
 
+static int osd_object_create(struct lu_context *ctxt, struct dt_object *dt,
+                             struct thandle *th)
+{
+        struct lu_fid *lf = &dt->do_lu.lo_header->loh_fid;
+        struct osd_device *osd = osd_obj2dev(dt2osd_obj(dt));
+        if (lu_object_exists(ctxt, &dt->do_lu))
+                RETURN(-EEXIST);
+        else {
+                
+                const struct osd_inode_id i_id = {
+                        .oii_ino = fid_seq(lf),
+                        .oii_gen = fid_oid(lf)
+                };
+                osd_oi_insert(NULL, &osd->od_oi, lf, &i_id);
+        }
+        return 0;
+}
+
 static struct dt_object_operations osd_obj_ops = {
-        .do_attr_get = osd_attr_get
+        .do_object_lock   = osd_object_lock,
+        .do_object_unlock = osd_object_unlock,
+        .do_attr_get      = osd_attr_get,
+        .do_object_create = osd_object_create,
 };
 
 static struct dt_body_operations osd_body_ops = {
 };
 
-static struct dt_index_operations osd_index_ops = {
-};
+static int osd_index_insert(struct lu_context *ctxt,
+                                struct dt_object *dt,
+                                const struct lu_fid *fid,
+                                const char *name,
+                                struct thandle *handle)
+{
+        return 0;
+}
 
-static struct dt_device_operations osd_dt_ops = {
-        .dt_root_get = osd_root_get,
-        .dt_config   = osd_config,
-        .dt_statfs   = osd_statfs
+static struct dt_index_operations osd_index_ops = {
+        .dio_index_insert       = osd_index_insert,
 };
 
 /*
