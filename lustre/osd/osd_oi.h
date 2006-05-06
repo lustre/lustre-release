@@ -71,5 +71,7 @@ int  osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
 int  osd_oi_delete(struct osd_thread_info *info,
                    struct osd_oi *oi, const struct lu_fid *fid);
 
+#define OI_IN_MEMORY (1)
+
 #endif /* __KERNEL__ */
 #endif /* _OSD_OI_H */

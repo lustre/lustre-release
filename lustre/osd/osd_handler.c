@@ -76,6 +76,8 @@ static int   osd_fid_lookup    (struct lu_context *ctx, struct osd_object *obj,
                                 const struct lu_fid *fid);
 static int   osd_inode_getattr (struct lu_context *ctx,
                                 struct inode *inode, struct lu_attr *attr);
+static int   osd_inode_get_fid (struct osd_device *d, const struct inode *inode,
+                                struct lu_fid *fid);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -89,8 +91,6 @@ static struct inode       *osd_iget         (struct osd_thread_info *info,
                                              struct osd_device *dev,
                                              const struct osd_inode_id *id);
 static struct super_block *osd_sb           (const struct osd_device *dev);
-static struct lu_fid      *osd_inode_get_fid(const struct inode *inode,
-                                             struct lu_fid *fid);
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
@@ -110,8 +110,9 @@ static struct dt_index_operations       osd_index_ops;
 static int osd_root_get(struct lu_context *ctx,
                         struct dt_device *dev, struct lu_fid *f)
 {
-        osd_inode_get_fid(osd_dt_dev(dev)->od_root_dir->d_inode, f);
-        return 0;
+        struct osd_device *d = osd_dt_dev(dev);
+
+        return osd_inode_get_fid(d, d->od_root_dir->d_inode, f);
 }
 
 
@@ -287,6 +288,10 @@ static int osd_device_init(struct lu_device *d, struct lu_device *next)
         return 0;
 }
 
+extern void osd_oi_init0(struct osd_oi *oi, __u64 root_ino, __u32 root_gen);
+extern int osd_oi_find_fid(struct osd_oi *oi,
+                           __u64 ino, __u32 gen, struct lu_fid *fid);
+
 static int osd_mount(struct osd_device *o, struct lustre_cfg *cfg)
 {
         struct lustre_mount_info *lmi;
@@ -309,12 +314,15 @@ static int osd_mount(struct osd_device *o, struct lustre_cfg *cfg)
                              o->od_dt_dev.dd_lu_dev.ld_site);
 
         if (result == 0) {
-                o->od_root_dir = osd_open(osd_sb(o)->s_root,
-                                          "ROOT", S_IFDIR);
-                if (IS_ERR(o->od_root_dir)) {
-                        result = PTR_ERR(o->od_root_dir);
-                        o->od_root_dir = NULL;
-                }
+                struct dentry *d;
+
+                d = osd_open(osd_sb(o)->s_root, "ROOT", S_IFDIR);
+                if (!IS_ERR(d)) {
+                        osd_oi_init0(&o->od_oi, d->d_inode->i_ino,
+                                     d->d_inode->i_generation);
+                        o->od_root_dir = d;
+                } else
+                        result = PTR_ERR(d);
         }
 
         RETURN(result);
@@ -383,15 +391,23 @@ static int osd_process_config(struct lu_device *d, struct lustre_cfg *cfg)
  * fid<->inode<->object functions.
  */
 
-static struct lu_fid *osd_inode_get_fid(const struct inode *inode,
-                                        struct lu_fid *fid)
+static int osd_inode_get_fid(struct osd_device *d, const struct inode *inode,
+                             struct lu_fid *fid)
 {
+        int result;
+
         /*
          * XXX: Should return fid stored together with inode in memory.
          */
-        fid->f_seq = inode->i_ino;
-        fid->f_oid = inode->i_generation;
-        return fid;
+        if (OI_IN_MEMORY) {
+                result = osd_oi_find_fid(&d->od_oi, inode->i_ino,
+                                         inode->i_generation, fid);
+        } else {
+                fid->f_seq = inode->i_ino;
+                fid->f_oid = inode->i_generation;
+                result = 0;
+        }
+        return result;
 }
 
 struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode)
@@ -492,7 +508,8 @@ static int osd_fid_lookup(struct lu_context *ctx,
                         result = 0;
                 } else
                         result = PTR_ERR(inode);
-        }
+        } else if (result == -ENOENT)
+                result = 0;
         osd_oi_read_unlock(&dev->od_oi);
         RETURN(result);
 }
