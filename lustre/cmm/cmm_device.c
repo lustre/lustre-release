@@ -139,6 +139,13 @@ static int cmm_process_config(struct lu_device *d, struct lustre_cfg *cfg)
         case LCFG_ADD_MDC:
                 err = cmm_add_mdc(m, cfg);
                 break;
+        case LCFG_SETUP: 
+        {
+                const char *index = lustre_cfg_string(cfg, 2);
+                LASSERT(index);
+                m->cmm_local_num = simple_strtol(index, NULL, 10);
+                /* no break; to pass cfg further */
+        }
         default:
                 err = next->ld_ops->ldo_process_config(next, cfg);
         }
