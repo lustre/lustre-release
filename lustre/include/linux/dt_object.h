@@ -200,8 +200,8 @@ struct dt_index_operations {
 };
 
 struct dt_device {
-	struct lu_device             dd_lu_dev;
-	struct dt_device_operations *dd_ops;
+        struct lu_device             dd_lu_dev;
+        struct dt_device_operations *dd_ops;
 };
 
 static inline int lu_device_is_dt(const struct lu_device *d)
@@ -217,9 +217,9 @@ static inline struct dt_device * lu2dt_dev(struct lu_device *l)
 
 struct dt_object {
         struct lu_object             do_lu;
-	struct dt_object_operations *do_ops;
-	struct dt_body_operations   *do_body_ops;
-	struct dt_index_operations  *do_index_ops;
+        struct dt_object_operations *do_ops;
+        struct dt_body_operations   *do_body_ops;
+        struct dt_index_operations  *do_index_ops;
 };
 
 struct txn_param {
@@ -231,5 +231,9 @@ struct txn_param {
 }
 
 #define TXN_PARAM(...) ((struct txn_param)TXN_PARAM_INIT(__VA_ARGS__))
+
+struct thandle {
+        struct dt_device *th_dev;
+};
 
 #endif /* __LINUX_DT_OBJECT_H */

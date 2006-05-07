@@ -36,6 +36,15 @@
 /* LUSTRE_VERSION_CODE */
 #include <linux/lustre_ver.h>
 /*
+ * XXX temporary stuff: direct access to ldiskfs/jdb. Interface between osd
+ * and file system is not yet specified.
+ */
+/* handle_t, journal_start(), journal_stop() */
+#include <linux/jbd.h>
+/* LDISKFS_SB() */
+#include <linux/ldiskfs_fs.h>
+
+/*
  * struct OBD_{ALLOC,FREE}*()
  * OBD_FAIL_CHECK
  */
@@ -91,6 +100,7 @@ static struct inode       *osd_iget         (struct osd_thread_info *info,
                                              struct osd_device *dev,
                                              const struct osd_inode_id *id);
 static struct super_block *osd_sb           (const struct osd_device *dev);
+static journal_t          *osd_journal      (const struct osd_device *dev);
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
@@ -103,6 +113,11 @@ static struct lu_context_key            osd_key;
 static struct dt_object_operations      osd_obj_ops;
 static struct dt_body_operations        osd_body_ops;
 static struct dt_index_operations       osd_index_ops;
+
+struct osd_thandle {
+        struct thandle  ot_super;
+        handle_t       *ot_handle;
+};
 
 /*
  * DT methods.
@@ -220,7 +235,7 @@ static int osd_statfs(struct lu_context *ctx,
 
         ENTRY;
 
-        memset(sfs, 0, sizeof(*sfs));
+        memset(sfs, 0, sizeof *sfs);
         result = sb->s_op->statfs(sb, sfs);
 
         RETURN (result);
@@ -230,12 +245,53 @@ static struct thandle *osd_trans_start(struct lu_context *ctx,
                                        struct dt_device *d,
                                        struct txn_param *p)
 {
-        RETURN (NULL);
+        struct osd_device  *dev = osd_dt_dev(d);
+        handle_t           *handle;
+        struct osd_thandle *oh;
+        struct thandle     *result;
+
+        ENTRY;
+
+        OBD_ALLOC_PTR(oh);
+        if (oh != NULL) {
+                /*
+                 * XXX temporary stuff. Some abstraction layer should be used.
+                 */
+                /*
+                 * XXX Here, run transaction start hook, so that modules can
+                 * change @p.
+                 */
+                handle = journal_start(osd_journal(dev), p->tp_credits);
+                if (!IS_ERR(handle)) {
+                        result = &oh->ot_super;
+                        result->th_dev = d;
+                        lu_device_get(&d->dd_lu_dev);
+                } else {
+                        OBD_FREE_PTR(oh);
+                        result = (void *)handle;
+                }
+        } else
+                result = ERR_PTR(-ENOMEM);
+
+        RETURN(result);
 }
 
-static void osd_trans_stop(struct lu_context *ctx,
-                           struct thandle *th)
+static void osd_trans_stop(struct lu_context *ctx, struct thandle *th)
 {
+        int result;
+        struct osd_thandle *oh;
+
+        ENTRY;
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        /*
+         * XXX temporary stuff. Some abstraction layer should be used.
+         */
+        /*
+         * XXX Here, run transaction stop hook.
+         */
+        result = journal_stop(oh->ot_handle);
+        if (result != 0)
+                CERROR("Failure to stop transaction: %d\n", result);
         EXIT;
 }
 
@@ -274,7 +330,7 @@ static int osd_object_create(struct lu_context *ctxt, struct dt_object *dt,
         if (lu_object_exists(ctxt, &dt->do_lu))
                 RETURN(-EEXIST);
         else {
-                
+
                 const struct osd_inode_id i_id = {
                         .oii_ino = fid_seq(lf),
                         .oii_gen = fid_oid(lf)
@@ -621,6 +677,11 @@ static struct osd_device *osd_dev(const struct lu_device *d)
 static struct super_block *osd_sb(const struct osd_device *dev)
 {
         return dev->od_mount->lmi_mnt->mnt_sb;
+}
+
+static journal_t *osd_journal(const struct osd_device *dev)
+{
+	return LDISKFS_SB(osd_sb(dev))->s_journal;
 }
 
 static struct lu_object_operations osd_lu_obj_ops = {
