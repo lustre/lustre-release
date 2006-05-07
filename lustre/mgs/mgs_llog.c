@@ -1205,26 +1205,29 @@ static int mgs_write_log_mdc_to_mds(struct obd_device *obd, struct fs_db *fsdb,
 }
 
 static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
-                              char *log, char *dev, char *child)
+                              struct mgs_target_info *mti)
 {
+        char *log = mti->mti_svname;
         struct llog_handle *llh = NULL;
         char *uuid;
+        char mdt_index[5];
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_MGS, "writing new mdt %s for %s\n", dev, log);
+        CDEBUG(D_MGS, "writing new mdt %s\n", log);
 
         OBD_ALLOC(uuid, sizeof(struct obd_uuid));
         if (uuid == NULL)
                 RETURN(-ENOMEM);
 
-        sprintf((char *)uuid, "%s_UUID", dev);
+        sprintf(uuid, "%s_UUID", log);
+        sprintf(mdt_index,"%d",mti->mti_stripe_index);
         /* add MDT itself */
         rc = record_start_log(obd, &llh, log);
-        rc = record_marker(obd, llh, fsdb, CM_START, dev, "add mdt");
-        rc = record_attach(obd, llh, dev, LUSTRE_MDT0_NAME, uuid);
-        rc = record_setup(obd, llh, dev, uuid, 0, 0, 0);
-        rc = record_marker(obd, llh, fsdb, CM_END, dev, "add mdt");
+        rc = record_marker(obd, llh, fsdb, CM_START, log, "add mdt");
+        rc = record_attach(obd, llh, log, LUSTRE_MDT0_NAME, uuid);
+        rc = record_setup(obd, llh, log, uuid, mdt_index, 0, 0);
+        rc = record_marker(obd, llh, fsdb, CM_END, log, "add mdt");
         rc = record_end_log(obd, &llh);
 
         OBD_FREE(uuid, sizeof(*uuid));
@@ -1249,7 +1252,7 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
         name_create(mti->mti_fsname, "-mdtlov", &lovname);
 
         /* add mdt */
-        rc = mgs_write_log_mdt0(obd, fsdb, mti->mti_svname, mti->mti_svname, NULL);
+        rc = mgs_write_log_mdt0(obd, fsdb, mti);//->mti_svname, mti->mti_svname, NULL);
         name_destroy(lovname);
         
         /* Append the mdt info to the client log */
