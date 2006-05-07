@@ -69,8 +69,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info,
         attr->la_mode = rec->cr_mode;
 
         rr->rr_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
-        if (rr->rr_name == NULL)
-                RETURN(-EFAULT);
+
         RETURN(0);
 }
 

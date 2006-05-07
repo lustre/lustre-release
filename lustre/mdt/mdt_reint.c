@@ -73,6 +73,29 @@ static int mdt_md_mkdir(struct mdt_thread_info *info)
         return result;
 }
 
+/* partial request to create object only */
+static int mdt_md_mkobj(struct mdt_thread_info *info)
+{
+        struct mdt_device      *mdt = info->mti_mdt;
+        struct mdt_object      *o;
+        struct mdt_lock_handle *lh;
+        int result;
+        
+        ENTRY;
+
+        o = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid1);
+        if (!IS_ERR(o)) {
+                struct md_object *next = mdt_object_child(o);
+
+                result = next->mo_ops->moo_object_create(info->mti_ctxt, next);
+                                                         //&info->mti_attr,
+                mdt_object_put(info->mti_ctxt, o);
+        } else
+                result = PTR_ERR(o);
+        
+        RETURN(result);
+}
+
 
 static int mdt_reint_setattr(struct mdt_thread_info *info)
 {
@@ -92,7 +115,10 @@ static int mdt_reint_create(struct mdt_thread_info *info)
                 break;
         }
         case S_IFDIR:{
-                rc = mdt_md_mkdir(info);
+                if (info->mti_rr.rr_name)
+                        rc = mdt_md_mkdir(info);
+                else
+                        rc = mdt_md_mkobj(info);
                 break;
         }
         case S_IFLNK:{
