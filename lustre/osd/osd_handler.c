@@ -280,18 +280,27 @@ static void osd_trans_stop(struct lu_context *ctx, struct thandle *th)
 {
         int result;
         struct osd_thandle *oh;
+        struct thandle     *th;
 
         ENTRY;
         oh = container_of0(th, struct osd_thandle, ot_super);
-        /*
-         * XXX temporary stuff. Some abstraction layer should be used.
-         */
-        /*
-         * XXX Here, run transaction stop hook.
-         */
-        result = journal_stop(oh->ot_handle);
-        if (result != 0)
-                CERROR("Failure to stop transaction: %d\n", result);
+        th = &oh->ot_super;
+        if (oh->ot_handle != NULL) {
+                /*
+                 * XXX temporary stuff. Some abstraction layer should be used.
+                 */
+                /*
+                 * XXX Here, run transaction stop hook.
+                 */
+                result = journal_stop(oh->ot_handle);
+                if (result != 0)
+                        CERROR("Failure to stop transaction: %d\n", result);
+                oh->ot_handle = NULL;
+        }
+        if (th->th_dev != NULL) {
+                lu_device_put(&th->th_dev->dd_lu_dev);
+                th->th_dev = NULL;
+        }
         EXIT;
 }
 
