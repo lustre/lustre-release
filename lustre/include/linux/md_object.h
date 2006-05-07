@@ -83,7 +83,7 @@ struct md_dir_operations {
         
         /* partial ops for cross-ref case */
         int (*mdo_name_insert)(struct lu_context *, struct md_object *,
-                               const char *name, struct lu_fid *,
+                               const char *name, const struct lu_fid *,
                                struct lu_attr *);
         int (*mdo_name_remove)(struct lu_context *, struct md_object *,
                                const char *name, struct lu_attr *);
