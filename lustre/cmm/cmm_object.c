@@ -44,14 +44,14 @@ static int cmm_fld_lookup(struct lu_fid *fid)
         int rc;
         /* temporary hack for proto mkdir */
         rc = fid_seq(fid) == LUSTRE_ROOT_FID_SEQ ? 0 : 1;
-        return 0;
+        RETURN(rc);
 }
 
 /* get child device by mdsnum*/
 static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
 {
         struct lu_device *next = NULL;
-
+        ENTRY;
         if (likely(num == d->cmm_local_num)) {
 	        next = &d->cmm_child->md_lu_dev;
         } else {
@@ -63,7 +63,7 @@ static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
                         }
                 }
         }
-        return next;
+        RETURN(next);
 }
 
 struct lu_object *cmm_object_alloc(struct lu_context *ctx,
@@ -157,6 +157,8 @@ int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
         struct cmm_object *cmm_c = md2cmm_obj(c);
         struct md_object  *local = cmm2child_obj(cmm_p);
         int rc;
+        
+        ENTRY;
 
         if (cmm_is_local_obj(cmm_c)) {
                 /* fully local mkdir */

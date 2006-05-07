@@ -111,22 +111,58 @@ static struct lu_device_operations mdc_lu_ops = {
         .ldo_process_config = mdc_process_config
 };
 
+static int mdc_device_connect(struct mdc_device *mc)
+{
+        struct mdc_cli_desc *desc = &mc->mc_desc;
+        struct obd_device *obd = mdc2lu_dev(mc)->ld_obd;
+        //struct client_obd *cli = &obd->u.cli;
+        struct obd_uuid mdc_uuid = { "MDT_MDC_UUID" };
+        struct lustre_handle conn = { 0 };
+        struct obd_import *imp = desc->cl_import;
+        int rc;
+
+        /* obd_connect */
+        rc = class_connect(&conn, obd, &mdc_uuid);
+        imp->imp_dlm_handle = conn;
+
+        rc = ptlrpc_init_import(imp);
+        if (rc != 0)
+                RETURN(rc);
+       
+        rc = ptlrpc_connect_import(imp, NULL);
+        if (rc != 0) {
+                LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
+                RETURN(rc);
+        }
+        
+        ptlrpc_pinger_add_import(imp);
+        //TODO other initializations
+        LASSERT(imp->imp_connection);
+
+        RETURN(0);
+}
+
 static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
         struct mdc_cli_desc *desc = &mc->mc_desc;
         struct obd_device *obd = ld->ld_obd;
-        int rc = 0;
+        struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp;
         int rq_portal, rp_portal, connect_op;
+        int rc = 0;
+
         ENTRY;
-        
-        //sema_init(&desc->cl_rpcl_sem, 1);
+        //alloc rpc_lock
         ptlrpcd_addref();
 
         rq_portal = MDS_REQUEST_PORTAL;
         rp_portal = MDC_REPLY_PORTAL;
         connect_op = MDS_CONNECT;
+
+        sema_init(&cli->cl_sem, 1);
+        cli->cl_conn_count = 0;
+        
         rc = ldlm_get_ref();
         if (rc != 0) {
                 CERROR("ldlm_get_ref failed: %d\n", rc);
@@ -145,6 +181,7 @@ static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
         imp->imp_initial_recov = 1;
         imp->imp_initial_recov_bk = 0;
         INIT_LIST_HEAD(&imp->imp_pinger_chain);
+        cli->cl_target_uuid = desc->cl_target_uuid;
         class_import_put(imp);
         rc = client_import_add_conn(imp, &desc->cl_server_uuid, 1);
         if (rc) {
@@ -153,9 +190,10 @@ static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
         }
 
         desc->cl_import = imp;
+        cli->cl_import = imp;
         
-        //TODO other initializations
-
+        rc = mdc_device_connect(mc);
+        
         RETURN(0);
         
 err_import:
@@ -163,6 +201,7 @@ err_import:
 err_ldlm:
         ldlm_put_ref(0);
 err:
+        //free rpc_lock
         ptlrpcd_decref();
         RETURN(rc);
 }
