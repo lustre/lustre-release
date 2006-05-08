@@ -149,7 +149,7 @@ struct dt_object_operations {
          * postcondition: ergo(result == 0, lu_object_exists(ctxt, &dt->do_lu));
          */
         int   (*do_object_create)(struct lu_context *ctxt, struct dt_object *dt,
-                                  struct thandle *th);
+                                  struct lu_attr *attr, struct thandle *th);
         /*
          * Destroy existing object.
          *
@@ -202,7 +202,16 @@ struct dt_index_operations {
 struct dt_device {
         struct lu_device             dd_lu_dev;
         struct dt_device_operations *dd_ops;
+        /*
+         * List of dt_txn_callback (see below). This is not protected in any
+         * way, because callbacks are supposed to be added/deleted only during
+         * single-threaded start-up shut-down procedures.
+         */
+        struct list_head             dd_txn_callbacks;
 };
+
+int  dt_device_init(struct dt_device *dev, struct lu_device_type *t);
+void dt_device_fini(struct dt_device *dev);
 
 static inline int lu_device_is_dt(const struct lu_device *d)
 {
@@ -235,5 +244,37 @@ struct txn_param {
 struct thandle {
         struct dt_device *th_dev;
 };
+
+/*
+ * Transaction call-backs.
+ *
+ * These are invoked by osd (or underlying transaction engine) when
+ * transaction changes state.
+ *
+ * Call-backs are used by upper layers to modify transaction parameters and to
+ * perform some actions on for each transaction state transition. Typical
+ * example is mdt registering call-back to write into last-received file
+ * before each transaction commit.
+ */
+struct dt_txn_callback {
+        int (*dtc_txn_start)(struct lu_context *ctx, struct dt_device *dev,
+                             struct txn_param *param, void *cookie);
+        int (*dtc_txn_stop)(struct lu_context *ctx, struct dt_device *dev,
+                            struct thandle *txn, void *cookie);
+        int (*dtc_txn_commit)(struct lu_context *ctx, struct dt_device *dev,
+                              struct thandle *txn, void *cookie);
+        void            *dtc_cookie;
+        struct list_head dtc_linkage;
+};
+
+void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb);
+void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb);
+
+int dt_txn_hook_start(struct lu_context *ctx,
+                      struct dt_device *dev, struct txn_param *param);
+int dt_txn_hook_stop(struct lu_context *ctx,
+                     struct dt_device *dev, struct thandle *txn);
+int dt_txn_hook_commit(struct lu_context *ctx,
+                       struct dt_device *dev, struct thandle *txn);
 
 #endif /* __LINUX_DT_OBJECT_H */
