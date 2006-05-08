@@ -40,6 +40,7 @@ struct dentry;
 struct lu_fid;
 struct osd_thread_info;
 struct lu_site;
+struct thandle;
 
 struct osd_oi {
         struct dentry       *oi_dir;
@@ -67,9 +68,11 @@ void osd_oi_write_unlock(struct osd_oi *oi);
 int  osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                    const struct lu_fid *fid, struct osd_inode_id *id);
 int  osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
-                   const struct lu_fid *fid, const struct osd_inode_id *id);
+                   const struct lu_fid *fid, const struct osd_inode_id *id,
+                   struct thandle *th);
 int  osd_oi_delete(struct osd_thread_info *info,
-                   struct osd_oi *oi, const struct lu_fid *fid);
+                   struct osd_oi *oi, const struct lu_fid *fid,
+                   struct thandle *th);
 
 #define OI_IN_MEMORY (1)
 
