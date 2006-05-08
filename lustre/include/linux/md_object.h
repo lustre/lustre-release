@@ -80,7 +80,7 @@ struct md_dir_operations {
 
         int (*mdo_link)(struct lu_context *ctxt, struct md_object *tobj,
                         struct md_object *sobj, const char *name);
-        
+
         /* partial ops for cross-ref case */
         int (*mdo_name_insert)(struct lu_context *, struct md_object *,
                                const char *name, const struct lu_fid *,
@@ -101,7 +101,7 @@ struct md_device_operations {
                             struct md_device *m, struct lu_fid *f);
         int (*mdo_statfs)(struct lu_context *ctx,
                           struct md_device *m, struct kstatfs *sfs);
-        
+
 };
 
 struct md_device {

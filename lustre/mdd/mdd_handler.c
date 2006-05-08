@@ -47,7 +47,8 @@
 
 
 static struct thandle* mdd_trans_start(struct lu_context *ctxt,
-                                       struct mdd_device *, struct txn_param *);
+                                       struct mdd_device *,
+                                       struct txn_param *);
 static void mdd_trans_stop(struct lu_context *ctxt,
                            struct mdd_device *mdd, struct thandle *handle);
 static struct dt_object* mdd_object_child(struct mdd_object *o);
@@ -234,6 +235,12 @@ mdd_object_destroy(struct lu_context *ctxt, struct md_object *obj)
         ENTRY;
 
         handle = mdd_trans_start(ctxt, mdd,
+                                 /*
+                                  * TXN_PARAM should probably go into
+                                  * lu_context_key to reduce stack
+                                  * consumption. Currently this is just one
+                                  * int, though.
+                                  */
                                  &TXN_PARAM(MDD_OBJECT_DESTROY_CREDITS));
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -383,18 +390,19 @@ static void mdd_trans_stop(struct lu_context *ctxt,
 
 static int
 __mdd_object_create(struct lu_context *ctxt, struct mdd_object *obj,
-                    struct thandle *handle)
+                    struct lu_attr *attr, struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(obj);
         int rc;
         ENTRY;
 
-        rc = next->do_ops->do_object_create(ctxt, next, handle);
+        rc = next->do_ops->do_object_create(ctxt, next, attr, handle);
         /*XXX increase the refcount of the object or not?*/
         RETURN(rc);
 }
 
-static int mdd_object_create(struct lu_context *ctxt, struct md_object *obj)
+static int mdd_object_create(struct lu_context *ctxt, struct md_object *obj,
+                             struct lu_attr *attr)
 {
 
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -407,7 +415,7 @@ static int mdd_object_create(struct lu_context *ctxt, struct md_object *obj)
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_object_create(ctxt, mdo2mddo(obj), handle);
+        rc = __mdd_object_create(ctxt, mdo2mddo(obj), attr, handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -483,7 +491,7 @@ static const struct lu_fid *mdd_object_getfid(struct mdd_object *obj)
 
 static int
 __mdd_index_insert(struct lu_context *ctxt, struct mdd_object *pobj,
-                   const struct lu_fid *lf, const char *name, 
+                   const struct lu_fid *lf, const char *name,
                    struct thandle *handle)
 {
         int rc;
@@ -645,7 +653,7 @@ static int mdd_mkdir(struct lu_context *ctxt, struct lu_attr* attr,
 
         mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
 
-        rc = __mdd_object_create(ctxt, mdo2mddo(child), handle);
+        rc = __mdd_object_create(ctxt, mdo2mddo(child), attr, handle);
         if (rc)
                 GOTO(cleanup, rc);
 
