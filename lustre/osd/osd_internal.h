@@ -56,40 +56,16 @@ struct osd_device {
         struct lustre_mount_info *od_mount;
         struct osd_oi             od_oi;
         struct dentry            *od_root_dir;
+        struct dentry            *od_obj_area;
 };
-
-static inline struct osd_object * dt2osd_obj(struct dt_object *o)
-{
-        return container_of0(o, struct osd_object, oo_dt);
-}
-
-static inline struct osd_device * osd_obj2dev(struct osd_object *o) {
-        struct lu_device *lu = o->oo_dt.do_lu.lo_dev;
-        struct dt_device *dt = container_of0(lu, struct dt_device, dd_lu_dev);
-
-        return container_of0(dt, struct osd_device, od_dt_dev);
-}
-
-static inline struct osd_device * dt2osd_dev(struct dt_device *dt) {
-        return container_of0(dt, struct osd_device, od_dt_dev);
-}
-
-static inline struct osd_device * lu2osd_dev(struct lu_device *d) {
-        return dt2osd_dev(container_of0(d, struct dt_device, dd_lu_dev));
-}
-
-static inline struct lu_device * osd2lu_dev(struct osd_device * osd)
-{
-        return &osd->od_dt_dev.dd_lu_dev;
-}
 
 struct dentry *osd_lookup(struct dentry *parent, const char *name);
 struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
 
 
 struct osd_thread_info {
-        char          oti_name[64];
-        struct lu_fid oti_fid;
+        struct lu_fid       oti_fid;
+        struct osd_inode_id oti_id;
 };
 
 #endif /* __KERNEL__ */
