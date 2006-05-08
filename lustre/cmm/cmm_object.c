@@ -44,7 +44,7 @@ static int cmm_fld_lookup(struct lu_fid *fid)
         int rc;
         /* temporary hack for proto mkdir */
         rc = fid_seq(fid) == LUSTRE_ROOT_FID_SEQ ? 0 : 1;
-        RETURN(rc);
+        RETURN(0);
 }
 
 /* get child device by mdsnum*/
