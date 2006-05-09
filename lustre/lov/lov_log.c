@@ -116,11 +116,11 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                 struct obd_device *child;
                 struct llog_ctxt *cctxt;
                 
-                if (!tgt->active)
+                if (!tgt->ltd_active)
                         continue;
                 child = tgt->ltd_exp->exp_obd;
                 cctxt = llog_get_context(child, ctxt->loc_idx);
-                if (uuid && !obd_uuid_equals(uuid, &lov->tgts[i].uuid))
+                if (uuid && !obd_uuid_equals(uuid, &lov->tgts[i].ltd_uuid))
                         continue;
 
                 rc = llog_connect(cctxt, 1, logid, gen, uuid);
@@ -154,7 +154,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
                 int err;
 
                 err = llog_cancel(cctxt, NULL, 1, cookies, flags);
-                if (err && lov->tgts[loi->loi_ost_idx].active) {
+                if (err && lov->tgts[loi->loi_ost_idx].ltd_active) {
                         CERROR("error: objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
                                loi->loi_id, loi->loi_ost_idx, err);
@@ -196,7 +196,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         LASSERT(lov->desc.ld_tgt_count == count);
         for (i = 0, ctgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, ctgt++) {
                 struct obd_device *child;
-                if (!ctgt->active)
+                if (!ctgt->ltd_active)
                         continue;
                 child = ctgt->ltd_exp->exp_obd;
                 rc = obd_llog_init(child, tgt, 1, logid + i);

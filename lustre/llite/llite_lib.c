@@ -1656,7 +1656,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                         GOTO(out_statfs, rc = -ENODEV);
 
                 client_obd = class_exp2obd(lov->tgts[index].ltd_exp);
-                if (!lov->tgts[index].active)
+                if (!lov->tgts[index].ltd_active)
                         GOTO(out_uuid, rc = -ENODATA);
         }
 

@@ -35,8 +35,340 @@
 
 #include <obd_class.h>
 #include <obd_lov.h>
-
 #include "lov_internal.h"
+
+               
+/* #define QOS_DEBUG 1 */
+#define D_QOS D_OTHER
+
+#define TGT_BAVAIL(tgt)         (tgt->ltd_exp->exp_obd->obd_osfs.os_bavail * \
+                                 tgt->ltd_exp->exp_obd->obd_osfs.os_bsize) 
+#define TGT_FFREE(tgt)          (tgt->ltd_exp->exp_obd->obd_osfs.os_ffree)
+
+
+int qos_add_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt)
+{
+        struct lov_obd *lov = &obd->u.lov;
+        struct lov_qos_oss *oss, *temposs;
+        int rc = 0, found = 0;
+        ENTRY;
+
+        if (!obd->obd_observer) 
+                /* QOS is only on MDT, not clients */
+                RETURN(0);
+
+        if (!tgt->ltd_exp || !tgt->ltd_exp->exp_connection) {
+                CERROR("Missing connection\n");
+                RETURN(-ENOTCONN);
+        }
+
+        mutex_down(&lov->lov_lock);
+        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+                if (obd_uuid_equals(&oss->lqo_uuid, 
+                                &tgt->ltd_exp->exp_connection->c_remote_uuid)) {
+                        found++;
+                        break;
+                }
+        }
+
+        if (!found) {
+                OBD_ALLOC_PTR(oss);
+                if (!oss) 
+                        GOTO(out, rc = -ENOMEM);
+                memcpy(&oss->lqo_uuid,
+                       &tgt->ltd_exp->exp_connection->c_remote_uuid,
+                       sizeof(oss->lqo_uuid));
+        } else {
+                /* Assume we have to move this one */
+                list_del(&oss->lqo_oss_list);
+        }
+                        
+        oss->lqo_ost_count++;
+        tgt->ltd_qos.ltq_oss = oss;
+
+        /* Add sorted by # of OSTs.  Find the first entry that we're
+           bigger than... */
+        list_for_each_entry(temposs, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+                if (oss->lqo_ost_count > temposs->lqo_ost_count) 
+                        break;
+        }
+        /* ...and add before it.  If we're the first or smallest, temposs
+           points to the list head, and we add to the end. */
+        list_add_tail(&oss->lqo_oss_list, &temposs->lqo_oss_list);
+
+        lov->lov_qos.lq_dirty = 1;
+        lov->lov_qos.lq_dirty_rr = 1;
+
+        CDEBUG(D_QOS, "add tgt %s to OSS %s (#%d)\n", 
+               obd_uuid2str(&tgt->ltd_uuid), obd_uuid2str(&oss->lqo_uuid),
+               oss->lqo_ost_count);
+
+out:
+        mutex_up(&lov->lov_lock);
+        RETURN(rc);
+}
+
+int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt)
+{
+        struct lov_obd *lov = &obd->u.lov;
+        struct lov_qos_oss *oss;
+        int rc = 0;
+        ENTRY;
+
+        oss = tgt->ltd_qos.ltq_oss;
+        if (!oss)
+                RETURN(-ENOENT);
+
+        oss->lqo_ost_count--;
+        if (oss->lqo_ost_count == 0) {
+                CDEBUG(D_QOS, "removing OSS %s\n", 
+                       obd_uuid2str(&oss->lqo_uuid));
+                list_del(&oss->lqo_oss_list);
+                OBD_FREE_PTR(oss);
+        }
+        
+        lov->lov_qos.lq_dirty = 1;
+        lov->lov_qos.lq_dirty_rr = 1;
+
+        RETURN(rc);
+}
+
+/* Recalculate per-object penalties for OSSs and OSTs, 
+   depends on size of each ost in an oss */  
+static int qos_calc_ppo(struct obd_device *obd)
+{
+        struct lov_obd *lov = &obd->u.lov;
+        struct lov_qos_oss *oss;
+        struct lov_tgt_desc *tgt;
+        __u64 ba_max, ba_min, temp;
+        __u32 num_active;
+        int rc, i, prio_wide;
+        ENTRY;
+        
+        if (!lov->lov_qos.lq_dirty) 
+                GOTO(out, rc = 0);
+                
+        num_active = lov->desc.ld_active_tgt_count - 1; 
+        if (num_active < 1)
+                GOTO(out, rc = -EAGAIN);
+
+        /* find bavail on each OSS */
+        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+                oss->lqo_bavail = 0;
+        }
+        lov->lov_qos.lq_active_oss_count = 0;
+
+        /* How badly user wants to select osts "widely" (not recently chosen
+           and not on recent oss's).  As opposed to "freely" (free space
+           avail.) 0-256. */
+        prio_wide = 256 - lov->lov_qos.lq_prio_free;
+
+        ba_min = (__u64)(-1);
+        ba_max = 0;
+        /* Calculate OST penalty per object */
+        for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
+                if (!tgt->ltd_active)
+                        continue;
+                temp = TGT_BAVAIL(tgt);
+                if (!temp)
+                        continue;
+                ba_min = min(temp, ba_min);
+                ba_max = max(temp, ba_max);
+                
+                /* Count the number of usable OSS's */
+                if (tgt->ltd_qos.ltq_oss->lqo_bavail == 0)
+                        lov->lov_qos.lq_active_oss_count++;
+                tgt->ltd_qos.ltq_oss->lqo_bavail += temp;
+
+                /* per-OST penalty is prio * TGT_bavail / (num_ost - 1) / 2 */
+                temp >>= 1;
+                do_div(temp, num_active);
+                tgt->ltd_qos.ltq_penalty_per_obj = (temp * prio_wide) >> 8;
+
+                if (lov->lov_qos.lq_reset == 0) 
+                        tgt->ltd_qos.ltq_penalty = 0;
+        }
+
+        num_active = lov->lov_qos.lq_active_oss_count - 1;
+        if (num_active < 1) {
+                /* If there's only 1 OSS, we can't penalize it, so instead
+                   we have to double the OST penalty */
+                num_active = 1;
+                for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; 
+                     i++, tgt++) 
+                        tgt->ltd_qos.ltq_penalty_per_obj <<= 1;
+        }
+        
+        /* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
+        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+                temp = oss->lqo_bavail >> 1;
+                do_div(temp, oss->lqo_ost_count * num_active);
+                oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
+                if (lov->lov_qos.lq_reset == 0) 
+                        oss->lqo_penalty = 0;
+        }
+
+        lov->lov_qos.lq_dirty = 0;
+        lov->lov_qos.lq_reset = 0;
+
+        /* If each ost has almost same free space, 
+         * do rr allocation for better creation performance */
+        lov->lov_qos.lq_same_space = 0;
+        temp = ba_max - ba_min;
+        ba_min = (ba_min * 51) >> 8;     /* 51/256 = .20 */  
+        if (temp < ba_min) {
+                /* Difference is less than 20% */ 
+                lov->lov_qos.lq_same_space = 1;
+                /* Reset weights for the next time we enter qos mode */
+                lov->lov_qos.lq_reset = 0;
+        }
+        rc = 0;
+
+out:
+        if (!rc && lov->lov_qos.lq_same_space)
+                RETURN(-EAGAIN);
+        RETURN(rc);
+}
+
+static int qos_calc_weight(struct lov_tgt_desc *tgt)
+{
+        __u64 temp, temp2;
+        
+        /* Final ost weight = TGT_BAVAIL - ost_penalty - oss_penalty */
+        temp = TGT_BAVAIL(tgt);
+        temp2 = tgt->ltd_qos.ltq_penalty + 
+                tgt->ltd_qos.ltq_oss->lqo_penalty;
+        if (temp < temp2) 
+                tgt->ltd_qos.ltq_weight = 0;
+        else
+                tgt->ltd_qos.ltq_weight = temp - temp2;
+        return 0;
+}
+
+/* We just used this index for a stripe; adjust everyone's weights */
+static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
+{
+        struct lov_qos_oss *oss;
+        struct lov_tgt_desc *tgt = &lov->tgts[index];
+        int i;
+        ENTRY;
+
+        /* Don't allocate from this stripe anymore, until the next alloc_qos */
+        tgt->ltd_qos.ltq_usable = 0;
+
+        oss = tgt->ltd_qos.ltq_oss;
+        
+        /* Decay old penalty by half (we're adding max penalty, and don't
+           want it to run away.) */
+        tgt->ltd_qos.ltq_penalty >>= 1;
+        oss->lqo_penalty >>= 1;
+
+        /* Set max penalties for this OST and OSS */
+        tgt->ltd_qos.ltq_penalty += tgt->ltd_qos.ltq_penalty_per_obj *
+                lov->desc.ld_active_tgt_count;
+        oss->lqo_penalty += oss->lqo_penalty_per_obj * 
+                lov->lov_qos.lq_active_oss_count;
+        
+        /* Decrease all OSS penalties */
+        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+                if (oss->lqo_penalty < oss->lqo_penalty_per_obj) 
+                        oss->lqo_penalty = 0;
+                else
+                        oss->lqo_penalty -= oss->lqo_penalty_per_obj;
+        }
+
+        *total_wt = 0;
+        /* Decrease all OST penalties */
+        for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
+                if (!tgt->ltd_active) 
+                        continue;
+                if (tgt->ltd_qos.ltq_penalty < tgt->ltd_qos.ltq_penalty_per_obj)
+                        tgt->ltd_qos.ltq_penalty = 0;
+                else
+                        tgt->ltd_qos.ltq_penalty -=
+                                tgt->ltd_qos.ltq_penalty_per_obj;
+                
+                qos_calc_weight(tgt);
+
+                /* Recalc the total weight of usable osts */
+                if (tgt->ltd_qos.ltq_usable)
+                        *total_wt += tgt->ltd_qos.ltq_weight;
+
+#ifdef QOS_DEBUG
+                CDEBUG(D_QOS, "recalc tgt %d avail="LPU64
+                       " ostppo="LPU64" ostp="LPU64" ossppo="LPU64
+                       " ossp="LPU64" wt="LPU64"\n",
+                       i, TGT_BAVAIL(tgt), 
+                       tgt->ltd_qos.ltq_penalty_per_obj,
+                       tgt->ltd_qos.ltq_penalty, 
+                       tgt->ltd_qos.ltq_oss->lqo_penalty_per_obj,
+                       tgt->ltd_qos.ltq_oss->lqo_penalty,
+                       tgt->ltd_qos.ltq_weight);
+#endif
+        }
+
+        RETURN(0);
+}
+
+#define LOV_QOS_EMPTY ((__u32)-1)
+/* compute optimal round-robin order, based on OSTs per OSS */
+static int qos_calc_rr(struct lov_obd *lov)
+{
+        struct lov_qos_oss *oss;
+        struct lov_tgt_desc *tgt;
+        unsigned ost_count;
+        int i;
+        ENTRY;
+
+        if (!lov->lov_qos.lq_dirty_rr) {
+                LASSERT(lov->lov_qos.lq_rr_size);
+                RETURN(0);
+        }
+
+        down_write(&lov->lov_qos.lq_rw_sem);
+        ost_count = lov->desc.ld_tgt_count;
+
+        if (lov->lov_qos.lq_rr_size) 
+                OBD_FREE(lov->lov_qos.lq_rr_array, lov->lov_qos.lq_rr_size);
+        lov->lov_qos.lq_rr_size = ost_count * 
+                sizeof(lov->lov_qos.lq_rr_array[0]);
+        OBD_ALLOC(lov->lov_qos.lq_rr_array, lov->lov_qos.lq_rr_size);
+        if (!lov->lov_qos.lq_rr_array) {
+                lov->lov_qos.lq_rr_size = 0;
+                up_write(&lov->lov_qos.lq_rw_sem);
+                RETURN(-ENOMEM);
+        }
+
+        for (i = 0; i < ost_count; i++) 
+                lov->lov_qos.lq_rr_array[i] = LOV_QOS_EMPTY;
+
+        /* Place all the OSTs from 1 OSS at the same time. */
+        list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
+                int j = 0;
+                for (i = 0, tgt = lov->tgts; i < ost_count; i++, tgt++) {
+                      if (tgt->ltd_qos.ltq_oss == oss) {
+                              /* Evenly space these OSTs across arrayspace */
+                              int next = j * ost_count / oss->lqo_ost_count;
+                              while (lov->lov_qos.lq_rr_array[next] != LOV_QOS_EMPTY)
+                                      next = (next + 1) % ost_count;
+                              lov->lov_qos.lq_rr_array[next] = i;
+                              j++;
+                      }
+                }
+                LASSERT(j == oss->lqo_ost_count);
+        }
+
+        lov->lov_qos.lq_dirty_rr = 0;
+
+        up_write(&lov->lov_qos.lq_rw_sem);
+
+#ifdef QOS_DEBUG
+        for (i = 0; i < ost_count; i++) 
+                CDEBUG(D_QOS, "idx %d rr %d\n", i, lov->lov_qos.lq_rr_array[i]);
+#endif        
+        RETURN(0);
+}
+
 
 void qos_shrink_lsm(struct lov_request_set *set)
 {
@@ -86,10 +418,8 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
 
         ost_idx = (req->rq_idx + lsm->lsm_stripe_count) % ost_count;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
-                if (lov->tgts[ost_idx].active == 0) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
+                if (lov->tgts[ost_idx].ltd_active == 0) 
                         continue;
-                }
                 /* check if objects has been created on this ost */
                 for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
                         if (stripe == req->rq_stripe)
@@ -119,7 +449,11 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
         unsigned ost_active_count = lov->desc.ld_active_tgt_count;
         int i, *idx_pos = idx_arr;
         ENTRY;
-        
+
+        i = qos_calc_rr(lov);
+        if (i) 
+                RETURN(i);
+
         if (--ost_start_count <= 0) {
                 ost_start_idx = ll_rand();
                 ost_start_count = 
@@ -132,20 +466,23 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
         }
         ost_idx = ost_start_idx % ost_count;
 
+        down_read(&lov->lov_qos.lq_rw_sem);
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 ++ost_start_idx;
                 
-                if (lov->tgts[ost_idx].active == 0) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
+                if (lov->tgts[ost_idx].ltd_active == 0) 
                         continue;
-                }
                 
-                *idx_pos = ost_idx;
+                *idx_pos = lov->lov_qos.lq_rr_array[ost_idx];
                 idx_pos++;
                 /* got enough ost */
-                if (idx_pos - idx_arr == *stripe_cnt)
+                if (idx_pos - idx_arr == *stripe_cnt) {
+                        up_read(&lov->lov_qos.lq_rw_sem);
                         RETURN(0);
+                }
         }
+        up_read(&lov->lov_qos.lq_rw_sem);
+
         *stripe_cnt = idx_pos - idx_arr;
         RETURN(0);
 }
@@ -160,8 +497,7 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
 
         ost_idx = lsm->lsm_oinfo[0].loi_ost_idx;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
-                if (lov->tgts[ost_idx].active == 0) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
+                if (lov->tgts[ost_idx].ltd_active == 0) {
                         continue;
                 }
                 *idx_pos = ost_idx;
@@ -181,165 +517,126 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
         RETURN(-EFBIG);
 }
 
-/* free space OST must have to be used for object allocation. */
-#define QOS_MIN                 (lov->desc.ld_qos_threshold << 20)
-
-#define TGT_BAVAIL(tgt)         (tgt->ltd_exp->exp_obd->obd_osfs.os_bavail * \
-                                 tgt->ltd_exp->exp_obd->obd_osfs.os_bsize) 
-#define TGT_FFREE(tgt)          (tgt->ltd_exp->exp_obd->obd_osfs.os_ffree)
-
-/* alloc objects on osts with free space weighted algorithm */
+/* Alloc objects on osts with optimization based on:
+   - free space
+   - network resources (shared OSS's)
+*/
 static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
-        unsigned ost_count = lov->desc.ld_tgt_count;
-        __u64 cur_bavail, rand, *availspace, total_bavail = 0;
-        int *indexes, nfound, good_osts, i, warn = 0, rc = 0;
         struct lov_tgt_desc *tgt;
-        int shift, require_stripes = *stripe_cnt;
         static time_t last_warn = 0;
         time_t now = cfs_time_current_sec();
+        __u64 cur_weight, temp, rand, bavail, total_bavail, total_weight = 0;
+        __u32 ost_count;
+        int nfound, good_osts, i, warn = 0, rc = 0;
         ENTRY;
         
-        availspace = NULL;
-        indexes = NULL;
-        OBD_ALLOC(availspace, sizeof(__u64) * ost_count);
-        OBD_ALLOC(indexes, sizeof(int) * require_stripes);
-        if (!availspace || !indexes)
-                GOTO(out_free, rc = -EAGAIN);
-        
-        mutex_down(&lov->lov_lock);
- 
-        /* if free space is below some threshold, just go
-         * to do round-robin allocation */
-        total_bavail = (exp->exp_obd->obd_osfs.os_bavail * \
-                        exp->exp_obd->obd_osfs.os_bsize);
-        if (ost_count < 2 || total_bavail <= QOS_MIN) {
-                mutex_up(&lov->lov_lock);
-                GOTO(out_free, rc = -EAGAIN);
-        }
+        lov_getref(exp->exp_obd);
+        down_write(&lov->lov_qos.lq_rw_sem);
 
-        /* if each ost has almost same free space, go to 
-         * do rr allocation for better creation performance */
-        if (!list_empty(&lov->qos_bavail_list)) {
-                __u64 max, min, val;
-                tgt = list_entry(lov->qos_bavail_list.next, 
-                                 struct lov_tgt_desc, qos_bavail_list);
-                max = TGT_BAVAIL(tgt);
-                tgt = list_entry(lov->qos_bavail_list.prev,
-                                 struct lov_tgt_desc, qos_bavail_list);
-                min = TGT_BAVAIL(tgt);
+        ost_count = lov->desc.ld_tgt_count;
 
-                val = (max >= min) ? (max - min) : (min - max);
-                min = (min * 13) >> 8;          /* less than 5% of gap */ 
+        if (lov->desc.ld_active_tgt_count < 2) 
+                GOTO(out, rc = -EAGAIN);
 
-                if (val < min) {
-                        mutex_up(&lov->lov_lock);
-                        GOTO(out_free, rc = -EAGAIN);
-                }
-        } else {
-                mutex_up(&lov->lov_lock);
-                GOTO(out_free, rc = -EAGAIN);
-        }
+        rc = qos_calc_ppo(exp->exp_obd);
+        if (rc) 
+                GOTO(out, rc);
         
         total_bavail = 0;
         good_osts = 0;
-        /* warn zero available space/inode every 30 min */
+        /* Warn users about zero available space/inode every 30 min */
         if (cfs_time_sub(now, last_warn) > 60 * 30)
                 warn = 1;
-        /* Find all the OSTs big enough to be stripe candidates */
-        list_for_each_entry(tgt, &lov->qos_bavail_list, qos_bavail_list) {
-                if (!tgt->active)
+        /* Find all the OSTs that are valid stripe candidates */
+        for (i = 0, tgt = lov->tgts; i < ost_count; i++, tgt++) {
+                if (!tgt->ltd_active)
                         continue;
-                if (!TGT_BAVAIL(tgt)) {
+                bavail = TGT_BAVAIL(tgt);
+                if (!bavail) {
                         if (warn) {
-                                CWARN("no free space on %s\n", 
-                                      tgt->uuid.uuid);
+                                CDEBUG(D_QOS, "no free space on %s\n", 
+                                       obd_uuid2str(&tgt->ltd_uuid));
                                 last_warn = now;
                         }
                         continue;
                 }
                 if (!TGT_FFREE(tgt)) {
                         if (warn) {
-                                CWARN("no free inodes on %s\n", 
-                                      tgt->uuid.uuid);
+                                CDEBUG(D_QOS, "no free inodes on %s\n", 
+                                       obd_uuid2str(&tgt->ltd_uuid));
                                 last_warn = now;
                         }
                         continue;
                 }
-                /* We can stop if we have enough good osts and our osts
-                   are getting too small */ 
-                if ((TGT_BAVAIL(tgt) <= QOS_MIN) && (good_osts >= *stripe_cnt))
-                        break;
-                availspace[good_osts] = TGT_BAVAIL(tgt);
-                indexes[good_osts] = tgt->index;
-                total_bavail += availspace[good_osts];
+
+                tgt->ltd_qos.ltq_usable = 1;
+                qos_calc_weight(tgt);
+                total_bavail += bavail;
+                total_weight += tgt->ltd_qos.ltq_weight;
+
                 good_osts++;
         }
         
-        mutex_up(&lov->lov_lock);
-        
         if (!total_bavail)
-                GOTO(out_free, rc = -ENOSPC);
+                GOTO(out, rc = -ENOSPC);
        
         /* if we don't have enough good OSTs, we reduce the stripe count. */
         if (good_osts < *stripe_cnt)
                 *stripe_cnt = good_osts;
 
         if (!*stripe_cnt) 
-                GOTO(out_free, rc = -EAGAIN);
+                GOTO(out, rc = -EAGAIN);
         
-        /* The point of all this shift and rand is to choose a 64-bit 
-           random number between 0 and total_bavail. Apparently '%' doesn't
-           work for 64bit numbers. */
-        nfound = shift = 0;
-        while ((total_bavail >> shift) > 0)
-                shift++;
-        shift++;
-        /* Find enough OSTs with free space weighted random allocation */
+        /* Find enough OSTs with weighted random allocation. */
+        nfound = 0;
         while (nfound < *stripe_cnt) {
-                cur_bavail = 0;
+                cur_weight = 0;
+                rc = -ENODEV;
 
-                /* If the total storage left is < 4GB, don't use random order, 
-                   store in biggest OST first. (Low storage situation.) 
-                   Otherwise, choose a 64bit random number... */
-                rand = (shift < 32 ? 0ULL : (__u64)ll_rand() << 32) | ll_rand();
-                /* ... mask everything above shift... */
-                if (shift < 64)
-                        rand &= ((1ULL << shift) - 1);
-                /* ... and this while should execute at most once... */
-                while (rand > total_bavail)
-                        rand -= total_bavail;
-                /* ... leaving us a 64bit number between 0 and total_bavail. */
-                
-                /* Try to fit in bigger OSTs first. On average, this will
-                   fill more toward the front of the OST array */
-                for (i = 0; i < good_osts; i++) {
-                        cur_bavail += availspace[i];
-                        if (cur_bavail >= rand) {
-                                total_bavail -= availspace[i];
-                                availspace[i] = 0;
-                                idx_arr[nfound] = indexes[i];
-                                nfound++;
+                if (total_weight) {
+                        /* If total_weight > 32-bit, make a 64-bit random # */
+                        temp = (total_weight & 0xffffffff00000000ULL ?
+                                (__u64)ll_rand() << 32 : 0ULL) | ll_rand();
+                        /* Random number between 0 and total_weight */
+                        rand = do_div(temp, total_weight); 
+                } else {
+                        rand = 0;
+                }
+
+                /* On average, this will hit larger-weighted osts more often.
+                   0-weight osts will always get used last (only when rand=0).*/
+                for (i = 0, tgt = lov->tgts; i < ost_count; i++, tgt++) {
+                        if (!tgt->ltd_qos.ltq_usable)
+                                continue;
+                        cur_weight += tgt->ltd_qos.ltq_weight;
+                        if (cur_weight >= rand) {
+#ifdef QOS_DEBUG
+                                CDEBUG(D_QOS, "assigned stripe=%d to idx=%d\n",
+                                       nfound, i);
+#endif
+                                idx_arr[nfound++] = i;
+                                qos_used(lov, i, &total_weight);
+                                rc = 0;
                                 break;
                         }
                 }
                 /* should never satisfy below condition */
-                if (cur_bavail == 0)
+                if (rc) {
+                        CERROR("Didn't find any OSTs?\n");
                         break;
+                }
         }
         LASSERT(nfound == *stripe_cnt);
         
-out_free:
-        if (availspace)
-                OBD_FREE(availspace, sizeof(__u64) * ost_count);
-        if (indexes)
-                OBD_FREE(indexes, sizeof(int) * require_stripes);
-        if (rc != -EAGAIN)
-                /* rc == 0 or err */
-                RETURN(rc);
-
-        rc = alloc_rr(lov, idx_arr, stripe_cnt);
+out:
+        up_write(&lov->lov_qos.lq_rw_sem);
+        
+        if (rc == -EAGAIN)
+                rc = alloc_rr(lov, idx_arr, stripe_cnt);
+        
+        lov_putref(exp->exp_obd);
         RETURN(rc);
 }
 
@@ -403,19 +700,18 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                  * This may mean we use more than the default # of stripes. */
                 if (src_oa->o_valid & OBD_MD_FLSIZE) {
                         struct lov_tgt_desc *tgt;
+                        obd_size min_bavail = (obd_size)-1;
                         
-                        /* Find the smallest number of stripes we can use 
+                        /* Find a small number of stripes we can use 
                            (up to # of active osts). */
                         stripes = 1;
                         mutex_down(&lov->lov_lock);
-                        list_for_each_entry(tgt, &lov->qos_bavail_list, 
-                                            qos_bavail_list) {
-                                if (!tgt->active)
+                        for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count;
+                              i++, tgt++) {
+                                if (!tgt->ltd_active)
                                         continue;
-                                /* All earlier tgts have at least this many 
-                                   bytes available also, since our list is
-                                   sorted by size  */
-                                if (TGT_BAVAIL(tgt) * stripes > src_oa->o_size)
+                                min_bavail = min(min_bavail, TGT_BAVAIL(tgt));
+                                if (min_bavail * stripes > src_oa->o_size)
                                         break;
                                 stripes++;
                         }
@@ -536,18 +832,7 @@ out_err:
 
 void qos_update(struct lov_obd *lov, int idx, struct obd_statfs *osfs)
 {
-        struct lov_tgt_desc *tgt = &lov->tgts[idx];
-        __u64 bavail;
         ENTRY;
-        
-        bavail = osfs->os_bavail * osfs->os_bsize;
-        if (!bavail) 
-                CWARN("ost %d has zero avail space!\n", idx);
-        
-        CDEBUG(D_OTHER, "QOS: bfree now "LPU64"\n", bavail);
-        
-        mutex_down(&lov->lov_lock);
-        list_adjust(tgt, lov, qos_bavail_list, TGT_BAVAIL);
-        mutex_up(&lov->lov_lock);
+        lov->lov_qos.lq_dirty = 1;
 }
 

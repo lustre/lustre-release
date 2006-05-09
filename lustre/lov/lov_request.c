@@ -97,7 +97,7 @@ int lov_update_common_set(struct lov_request_set *set,
         lov_update_set(set, req, rc);
 
         /* grace error on inactive ost */
-        if (rc && !lov->tgts[req->rq_idx].active)
+        if (rc && !lov->tgts[req->rq_idx].ltd_active)
                 rc = 0;
 
         /* FIXME in raid1 regime, should return 0 */
@@ -165,7 +165,7 @@ int lov_update_enqueue_set(struct lov_request_set *set,
                 struct lov_obd *lov = &exp->exp_obd->u.lov;
 
                 memset(lov_lockhp, 0, sizeof(*lov_lockhp));
-                if (lov->tgts[req->rq_idx].active) {
+                if (lov->tgts[req->rq_idx].ltd_active) {
                         CERROR("error: enqueue objid "LPX64" subobj "
                                 LPX64" on OST idx %d: rc = %d\n",
                                 set->set_md->lsm_object_id, loi->loi_id,
@@ -203,7 +203,7 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
 
                 rc = obd_cancel(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,
                                 mode, lov_lockhp);
-                if (rc && lov->tgts[req->rq_idx].active)
+                if (rc && lov->tgts[req->rq_idx].ltd_active)
                         CERROR("cancelling obdjid "LPX64" on OST "
                                "idx %d error: rc = %d\n",
                                req->rq_md->lsm_object_id, req->rq_idx, rc);
@@ -263,7 +263,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                                            policy->l_extent.end, &start, &end))
                         continue;
 
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }
@@ -372,7 +372,7 @@ int lov_prep_match_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                         continue;
 
                 /* FIXME raid1 should grace this error */
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         GOTO(out_set, rc = -EIO);
                 }
@@ -618,7 +618,7 @@ int lov_update_create_set(struct lov_request_set *set,
         req->rq_stripe = set->set_success;
         loi = &lsm->lsm_oinfo[req->rq_stripe];
 
-        if (rc && lov->tgts[req->rq_idx].active) {
+        if (rc && lov->tgts[req->rq_idx].ltd_active) {
                 CERROR("error creating fid "LPX64" sub-object"
                        " on OST idx %d/%d: rc = %d\n",
                        set->set_oa->o_id, req->rq_idx,
@@ -805,7 +805,7 @@ int lov_prep_brw_set(struct obd_export *exp, struct obdo *src_oa,
                 if (info[i].count == 0)
                         continue;
 
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         GOTO(out, rc = -EIO);
                 }
@@ -914,7 +914,7 @@ int lov_prep_getattr_set(struct obd_export *exp, struct obdo *src_oa,
         for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
                 struct lov_request *req;
 
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }
@@ -989,7 +989,7 @@ int lov_prep_destroy_set(struct obd_export *exp, struct obdo *src_oa,
         for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
                 struct lov_request *req;
 
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }
@@ -1066,7 +1066,7 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obdo *src_oa,
         for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
                 struct lov_request *req;
 
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }
@@ -1115,7 +1115,7 @@ int lov_update_setattr_set(struct lov_request_set *set,
         lov_update_set(set, req, rc);
 
         /* grace error on inactive ost */
-        if (rc && !lov->tgts[req->rq_idx].active)
+        if (rc && !lov->tgts[req->rq_idx].ltd_active)
                 rc = 0;
 
         /* FIXME: LOV STACKING update loi data should be done by OSC *
@@ -1142,7 +1142,7 @@ int lov_update_punch_set(struct lov_request_set *set, struct lov_request *req,
         ENTRY;
 
         lov_update_set(set, req, rc);
-        if (rc && !lov->tgts[req->rq_idx].active)
+        if (rc && !lov->tgts[req->rq_idx].ltd_active)
                 rc = 0;
         /* FIXME in raid1 regime, should return 0 */
         RETURN(rc);
@@ -1193,7 +1193,7 @@ int lov_prep_punch_set(struct obd_export *exp, struct obdo *src_oa,
                 struct lov_request *req;
                 obd_off rs, re;
 
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }
@@ -1275,7 +1275,7 @@ int lov_prep_sync_set(struct obd_export *exp, struct obdo *src_oa,
                 struct lov_request *req;
                 obd_off rs, re;
 
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }

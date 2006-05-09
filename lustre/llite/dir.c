@@ -864,7 +864,7 @@ out_free_memmd:
                                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                                         exp = lov->tgts[i].ltd_exp;
 
-                                        if (!lov->tgts[i].active)
+                                        if (!lov->tgts[i].ltd_active)
                                                 continue;
 
                                         if (exp->exp_obd == obd) {

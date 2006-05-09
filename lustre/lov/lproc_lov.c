@@ -118,8 +118,9 @@ static int lov_rd_desc_uuid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", lov->desc.ld_uuid.uuid);
 }
 
-static int lov_rd_qos_threshold(char *page, char **start, off_t off, int count,
-                                int *eof, void *data)
+/* free priority (0-255): how badly user wants to choose empty osts */ 
+static int lov_rd_qos_priofree(char *page, char **start, off_t off, int count,
+                               int *eof, void *data)
 {
         struct obd_device *dev = (struct obd_device*) data;
         struct lov_obd *lov;
@@ -127,11 +128,12 @@ static int lov_rd_qos_threshold(char *page, char **start, off_t off, int count,
         LASSERT(dev != NULL);
         lov = &dev->u.lov;
         *eof = 1;
-        return snprintf(page, count, "%u MB\n", lov->desc.ld_qos_threshold);
+        return snprintf(page, count, "%d%%\n", 
+                        (lov->lov_qos.lq_prio_free * 100) >> 8);
 }
 
-static int lov_wr_qos_threshold(struct file *file, const char *buffer,
-                                unsigned long count, void *data)
+static int lov_wr_qos_priofree(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
 {
         struct obd_device *dev = (struct obd_device *)data;
         struct lov_obd *lov;
@@ -143,9 +145,11 @@ static int lov_wr_qos_threshold(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val <= 0)
+        if (val > 100)
                 return -EINVAL;
-        lov->desc.ld_qos_threshold = val;
+        lov->lov_qos.lq_prio_free = (val << 8) / 100;
+        lov->lov_qos.lq_dirty = 1;
+        lov->lov_qos.lq_reset = 1;
         return count;
 }
 
@@ -208,8 +212,9 @@ static int lov_tgt_seq_show(struct seq_file *p, void *v)
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
         int idx = tgt - &(lov->tgts[0]);
-        return seq_printf(p, "%d: %s %sACTIVE\n", idx, tgt->uuid.uuid,
-                          tgt->active ? "" : "IN");
+        return seq_printf(p, "%d: %s %sACTIVE\n", idx, 
+                          obd_uuid2str(&tgt->ltd_uuid), 
+                          tgt->ltd_active ? "" : "IN");
 }
 
 struct seq_operations lov_tgt_sops = {
@@ -250,7 +255,7 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { "kbytesfree",   lprocfs_rd_kbytesfree,  0, 0 },
         { "kbytesavail",  lprocfs_rd_kbytesavail, 0, 0 },
         { "desc_uuid",    lov_rd_desc_uuid,       0, 0 },
-        { "qos_threshold",lov_rd_qos_threshold, lov_wr_qos_threshold, 0 },
+        { "qos_prio_free", lov_rd_qos_priofree, lov_wr_qos_priofree, 0 },
         { "qos_maxage",   lov_rd_qos_maxage, lov_wr_qos_maxage, 0 },
         { 0 }
 };

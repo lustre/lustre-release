@@ -131,6 +131,8 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
 int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
 
 /* lov_qos.c */
+int qos_add_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt);
+int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt);
 void qos_shrink_lsm(struct lov_request_set *set);
 int qos_prep_create(struct obd_export *exp, struct lov_request_set *set);
 void qos_update(struct lov_obd *lov, int idx, struct obd_statfs *osfs);
@@ -200,6 +202,8 @@ int lov_fini_cancel_set(struct lov_request_set *set);
 
 /* lov_obd.c */
 int lov_get_stripecnt(struct lov_obd *lov, int stripe_count);
+void lov_getref(struct obd_device *obd);
+void lov_putref(struct obd_device *obd);
 
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,

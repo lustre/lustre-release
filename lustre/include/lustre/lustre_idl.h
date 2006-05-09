@@ -838,14 +838,15 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
 
 #define LOV_DESC_MAGIC 0xB0CCDE5C
 
+/* LOV settings descriptor (should only contain static info) */
 struct lov_desc {
         __u32 ld_tgt_count;                /* how many OBD's */
         __u32 ld_active_tgt_count;         /* how many active */
         __u32 ld_default_stripe_count;     /* how many objects are used */
-        __u32 ld_pattern;                  /* PATTERN_RAID0, PATTERN_RAID1 */
+        __u32 ld_pattern;                  /* default PATTERN_RAID0 */
         __u64 ld_default_stripe_size;      /* in bytes */
         __u64 ld_default_stripe_offset;    /* in bytes */
-        __u32 ld_qos_threshold;            /* in MB */
+        __u32 ld_padding_0;                /* unused */
         __u32 ld_qos_maxage;               /* in second */
         __u32 ld_padding_1;                /* also fix lustre_swab_lov_desc */
         __u32 ld_padding_2;                /* also fix lustre_swab_lov_desc */

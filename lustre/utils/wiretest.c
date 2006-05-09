@@ -1170,10 +1170,6 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct lov_desc, ld_default_stripe_offset));
         LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_default_stripe_offset) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct lov_desc *)0)->ld_default_stripe_offset));
-        LASSERTF((int)offsetof(struct lov_desc, ld_qos_threshold) == 32, " found %lld\n",
-                 (long long)(int)offsetof(struct lov_desc, ld_qos_threshold));
-        LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_qos_threshold) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct lov_desc *)0)->ld_qos_threshold));
         LASSERTF((int)offsetof(struct lov_desc, ld_qos_maxage) == 36, " found %lld\n",
                  (long long)(int)offsetof(struct lov_desc, ld_qos_maxage));
         LASSERTF((int)sizeof(((struct lov_desc *)0)->ld_qos_maxage) == 4, " found %lld\n",

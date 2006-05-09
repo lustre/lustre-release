@@ -239,7 +239,7 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int err;
 
-                if (!lov->tgts[i].active) {
+                if (!lov->tgts[i].ltd_active) {
                         if (oqctl->qc_cmd == Q_GETOQUOTA) {
                                 CERROR("ost %d is inactive\n", i);
                                 rc = -EIO;
@@ -252,7 +252,7 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 
                 err = obd_quotactl(lov->tgts[i].ltd_exp, oqctl);
                 if (err) {
-                        if (lov->tgts[i].active && !rc)
+                        if (lov->tgts[i].ltd_active && !rc)
                                 rc = err;
                         continue;
                 }

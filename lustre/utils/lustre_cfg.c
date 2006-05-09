@@ -389,7 +389,6 @@ int jt_lcfg_lov_setup(int argc, char **argv)
                         jt_cmdname(argv[0]), argv[5]);
                 return CMD_HELP;
         }
-        desc.ld_qos_threshold = QOS_DEFAULT_THRESHOLD;
         desc.ld_qos_maxage = QOS_DEFAULT_MAXAGE;
 
         if (argc == 7) {

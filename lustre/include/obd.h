@@ -467,28 +467,59 @@ struct echo_client_obd {
         __u64                ec_unique;
 };
 
+struct lov_qos_oss {
+        struct obd_uuid     lqo_uuid;       /* ptlrpc's c_remote_uuid */
+        struct list_head    lqo_oss_list;   /* link to lov_qos */
+        __u32               lqo_ost_count;  /* number of osts on this oss */
+        __u64               lqo_bavail;     /* total bytes avail on OSS */
+        __u64               lqo_penalty;    /* current penalty */
+        __u64               lqo_penalty_per_obj; /* penalty decrease every obj*/
+};
+
+struct ltd_qos {
+        struct lov_qos_oss *ltq_oss;         /* oss info */
+        __u64               ltq_penalty;     /* current penalty */
+        __u64               ltq_penalty_per_obj; /* penalty decrease every obj*/
+        __u64               ltq_weight;      /* net weighting */
+        unsigned int        ltq_usable:1;    /* usable for striping */
+};
+
+struct lov_qos {
+        struct list_head    lq_oss_list;    /* list of OSSs that targets use */
+        struct rw_semaphore lq_rw_sem;
+        __u32               lq_active_oss_count;
+        __u32              *lq_rr_array;    /* round-robin optimized list */
+        unsigned int        lq_rr_size;     /* rr array size */
+        unsigned int        lq_prio_free;   /* priority for free space */
+        unsigned int        lq_dirty:1,     /* recalc qos data */
+                            lq_dirty_rr:1,  /* recalc round-robin list */
+                            lq_same_space:1,/* the ost's all have approx.
+                                               the same space avail */
+                            lq_reset:1;     /* zero current penalties */
+};
+
 struct lov_tgt_desc {
-        struct obd_uuid          uuid;
-        __u32                    ltd_gen;
-        struct obd_export       *ltd_exp;
-        unsigned int             active:1, /* is this target up for requests */
-                                 reap:1;   /* should this target be deleted */
-        int                      index;  /* index of target array in lov_obd */
-        struct list_head         qos_bavail_list; /* link entry to lov_obd */
+        struct obd_uuid     ltd_uuid;
+        struct obd_export  *ltd_exp;
+        struct ltd_qos      ltd_qos;     /* qos info per target */
+        __u32               ltd_gen;
+        __u32               ltd_index;   /* index in lov_obd->tgts */
+        unsigned int        ltd_active:1,/* is this target up for requests */
+                            ltd_reap:1;  /* should this target be deleted */
 };
 
 struct lov_obd {
-        struct semaphore lov_lock;
-        atomic_t refcount;
-        struct lov_desc desc;
-        struct obd_connect_data ocd;
-        int bufsize;
-        int connects;
-        int death_row;      /* Do we have tgts scheduled to be deleted?
-                               (Make this a linked list?) */
-        struct list_head qos_bavail_list; /* tgts list, sorted by available
-                                             space, protected by lov_lock */
-        struct lov_tgt_desc *tgts;
+        struct lov_desc         desc;
+        struct lov_tgt_desc    *tgts;
+        struct semaphore        lov_lock;
+        struct obd_connect_data lov_ocd;
+        struct lov_qos          lov_qos;               /* qos info per lov */
+        atomic_t                lov_refcount;
+        __u32                   lov_tgt_count;         /* how many OBD's */
+        __u32                   lov_active_tgt_count;  /* how many active */
+        int                     lov_connects;
+        int                     lov_death_row;/* tgts scheduled to be deleted */
+        int                     lov_tgt_bufsize;       /* size of tgts */
 };
 
 struct niobuf_local {
