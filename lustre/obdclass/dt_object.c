@@ -55,6 +55,8 @@ int dt_txn_hook_start(struct lu_context *ctx,
 
         result = 0;
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
+                if (cb->dtc_txn_start == NULL)
+                        continue;
                 result = cb->dtc_txn_start(ctx, dev, param, cb->dtc_cookie);
                 if (result < 0)
                         break;
@@ -71,6 +73,8 @@ int dt_txn_hook_stop(struct lu_context *ctx,
 
         result = 0;
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
+                if (cb->dtc_txn_stop == NULL)
+                        continue;
                 result = cb->dtc_txn_stop(ctx, dev, txn, cb->dtc_cookie);
                 if (result < 0)
                         break;
@@ -87,6 +91,8 @@ int dt_txn_hook_commit(struct lu_context *ctx,
 
         result = 0;
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
+                if (cb->dtc_txn_commit == NULL)
+                        continue;
                 result = cb->dtc_txn_commit(ctx, dev, txn, cb->dtc_cookie);
                 if (result < 0)
                         break;
