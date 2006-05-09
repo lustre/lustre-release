@@ -63,7 +63,7 @@ int mdc_object_init(struct lu_context *ctx, struct lu_object *lo)
 	//struct mdc_device *d = lu2mdc_dev(o->lo_dev);
 	//struct lu_device  *under;
         //struct lu_fid     *fid = &o->lo_header->loh_fid;
-       
+
         ENTRY;
 
         RETURN(0);
@@ -92,7 +92,8 @@ static int mdc_object_print(struct lu_context *ctx,
 	return seq_printf(f, LUSTRE_MDC0_NAME"-object@%p", lo);
 }
 
-static int mdc_object_create(struct lu_context *ctx, struct md_object *mo)
+static int mdc_object_create(struct lu_context *ctx, struct md_object *mo,
+                             struct lu_attr *attr)
 {
         struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
         int rc;
@@ -111,17 +112,17 @@ static int mdc_object_create(struct lu_context *ctx, struct md_object *mo)
 */
         rec = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF, sizeof (*rec));
         rec->cr_opcode = REINT_CREATE;
-        rec->cr_fsuid = 0;//uid;
-        rec->cr_fsgid = 0;//gid;
+        rec->cr_fsuid = attr->la_uid;
+        rec->cr_fsgid = attr->la_gid;
         rec->cr_cap = 0;//cap_effective;
         rec->cr_fid1 = mo->mo_lu.lo_header->loh_fid;
         memset(&rec->cr_fid2, 0, sizeof(rec->cr_fid2));
-        rec->cr_mode = S_IFDIR;//mode;
+        rec->cr_mode = attr->la_mode;
         rec->cr_rdev = 0;//rdev;
-        rec->cr_time = 0;//op_data->mod_time;
+        rec->cr_time = attr->la_mtime; //op_data->mod_time;
         rec->cr_suppgid = 0;//op_data->suppgids[0];
 
-        
+
         size = sizeof(struct mdt_body);
         req->rq_replen = lustre_msg_size(1, &size);
 
@@ -136,7 +137,7 @@ static int mdc_object_create(struct lu_context *ctx, struct md_object *mo)
                                      lustre_swab_mdt_body)) {
                 CERROR ("Can't unpack mdt_body\n");
                 rc = -EPROTO;
-        } else 
+        } else
                 CDEBUG(D_INFO, "Done MDC req!\n");
 
         RETURN(rc);

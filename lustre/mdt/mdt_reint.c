@@ -51,8 +51,8 @@ static int mdt_md_mkdir(struct mdt_thread_info *info)
         lh->mlh_mode = LCK_PW;
 
         parent = mdt_object_find_lock(info->mti_ctxt,
-                                      mdt, info->mti_rr.rr_fid1, 
-                                      lh, 
+                                      mdt, info->mti_rr.rr_fid1,
+                                      lh,
                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 return PTR_ERR(parent);
@@ -80,15 +80,15 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         struct mdt_object      *o;
         struct mdt_lock_handle *lh;
         int result;
-        
+
         ENTRY;
 
         o = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid1);
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
-                result = next->mo_ops->moo_object_create(info->mti_ctxt, next);
-                                                         //&info->mti_attr,
+                result = next->mo_ops->moo_object_create(info->mti_ctxt, next,
+                                                         &info->mti_attr);
                 mdt_object_put(info->mti_ctxt, o);
         } else
                 result = PTR_ERR(o);

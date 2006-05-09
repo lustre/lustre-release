@@ -136,7 +136,8 @@ static int cmm_object_print(struct lu_context *ctx,
 }
 
 /* Metadata API */
-int cmm_object_create(struct lu_context *ctx, struct md_object *mo)
+static int cmm_object_create(struct lu_context *ctx,
+                             struct md_object *mo, struct lu_attr *attr)
 {
         struct cmm_object *cmo = md2cmm_obj(mo);
         struct md_object  *nxo = cmm2child_obj(cmo);
@@ -145,9 +146,9 @@ int cmm_object_create(struct lu_context *ctx, struct md_object *mo)
         ENTRY;
 
         LASSERT (cmm_is_local_obj(cmo));
-        
-        rc = nxo->mo_ops->moo_object_create(ctx, nxo);
-        
+
+        rc = nxo->mo_ops->moo_object_create(ctx, nxo, attr);
+
         RETURN(rc);
 }
 int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
@@ -157,7 +158,7 @@ int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
         struct cmm_object *cmm_c = md2cmm_obj(c);
         struct md_object  *local = cmm2child_obj(cmm_p);
         int rc;
-        
+
         ENTRY;
 
         if (cmm_is_local_obj(cmm_c)) {
@@ -169,7 +170,7 @@ int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
                 struct md_object *remote = cmm2child_obj(cmm_c);
 
                 /* remote object creation and local name insert */
-                rc = remote->mo_ops->moo_object_create(ctx, remote);
+                rc = remote->mo_ops->moo_object_create(ctx, remote, attr);
                 if (rc == 0) {
                         rc = local->mo_dir_ops->mdo_name_insert(ctx, local,
                                                                 name, fid,
