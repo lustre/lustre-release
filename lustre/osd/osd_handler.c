@@ -43,6 +43,8 @@
 #include <linux/jbd.h>
 /* LDISKFS_SB() */
 #include <linux/ldiskfs_fs.h>
+/* simple_mkdir() */
+#include <linux/lvfs.h>
 
 /*
  * struct OBD_{ALLOC,FREE}*()
@@ -348,7 +350,7 @@ static void osd_object_lock(struct lu_context *ctx, struct dt_object *dt,
 }
 
 static void osd_object_unlock(struct lu_context *ctx, struct dt_object *dt,
-                             enum dt_lock_mode mode)
+                              enum dt_lock_mode mode)
 {
         struct osd_object *obj = osd_dt_obj(dt);
 
@@ -608,11 +610,11 @@ static int osd_mount(struct osd_device *o, struct lustre_cfg *cfg)
         if (result == 0) {
                 struct dentry *d;
 
-                d = osd_open(osd_sb(o)->s_root, "*OBJ-TEMP*", S_IFDIR);
+                d = simple_mkdir(osd_sb(o)->s_root, "*OBJ-TEMP*", 0777, 1);
                 if (!IS_ERR(d)) {
                         o->od_obj_area = d;
 
-                        d = osd_open(osd_sb(o)->s_root, "ROOT", S_IFDIR);
+                        d = simple_mkdir(osd_sb(o)->s_root, "ROOT", 0777, 1);
                         if (!IS_ERR(d)) {
                                 osd_oi_init0(&o->od_oi, d->d_inode->i_ino,
                                              d->d_inode->i_generation);

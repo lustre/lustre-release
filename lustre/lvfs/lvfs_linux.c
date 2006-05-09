@@ -232,7 +232,7 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix)
         int err = 0;
         ENTRY;
 
-        ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
+        // ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
         CDEBUG(D_INODE, "creating file %.*s\n", (int)strlen(name), name);
 
         dchild = ll_lookup_one_len(name, dir, strlen(name));
@@ -277,7 +277,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
         int err = 0;
         ENTRY;
 
-        ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
+        // ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
         CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
         dchild = ll_lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
@@ -408,7 +408,7 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
         int error;
 
         buf.lrc_dirent = NULL;
-        buf.lrc_list = dentry_list; 
+        buf.lrc_list = dentry_list;
 
         error = vfs_readdir(file, l_filldir, &buf);
         if (error < 0)
@@ -418,7 +418,7 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
         if (lastdirent)
                 lastdirent->lld_off = file->f_pos;
 
-        return 0; 
+        return 0;
 }
 EXPORT_SYMBOL(l_readdir);
 EXPORT_SYMBOL(obd_memory);
@@ -481,13 +481,13 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file)
         OBD_ALLOC(write_page, PAGE_SIZE);
         if (!write_page)
                 RETURN(-ENOMEM);
-        
+
         rc = fsfilt_write_record(obd, file, write_page, PAGE_SIZE, &offset, 1);
-       
+
         OBD_FREE(write_page, PAGE_SIZE);
 
         CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
-        RETURN(rc); 
+        RETURN(rc);
 }
 EXPORT_SYMBOL(lvfs_check_io_health);
 
