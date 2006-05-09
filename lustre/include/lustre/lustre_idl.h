@@ -991,24 +991,19 @@ typedef enum {
         MGS_LAST_OPC
 } mgs_cmd_t;
 
+/* We pass this info to the MGS so it can write config logs */
 #define MTI_NAME_MAXLEN 64
-#define MTI_UUID_MAXLEN MTI_NAME_MAXLEN + 5
-/* each host can have multiple nids, and multiple failover hosts, and I don't
-   want to run out of room... */
-#define MTI_NIDS_MAX 64 /* match lustre_disk.h */
-
+#define MTI_NIDS_MAX 32
 struct mgs_target_info {
+        __u32            mti_lustre_ver;
+        __u32            mti_stripe_index;
+        __u32            mti_config_ver;
+        __u32            mti_flags;
+        __u32            mti_nid_count;
         char             mti_fsname[MTI_NAME_MAXLEN];
         char             mti_svname[MTI_NAME_MAXLEN];
         char             mti_uuid[sizeof(struct obd_uuid)];
         lnet_nid_t       mti_nids[MTI_NIDS_MAX];     /* host nids */
-        lnet_nid_t       mti_failnids[MTI_NIDS_MAX]; /* partner nids */
-        __u16            mti_failnodes[8];  /* last nid index of each partner */
-        __u32            mti_stripe_index;
-        __u32            mti_nid_count;
-        __u32            mti_failnid_count;
-        __u32            mti_config_ver;
-        __u32            mti_flags;
         char             mti_params[2048];
 };
 
@@ -1297,7 +1292,7 @@ extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 
-/* qutoa */
+/* quota */
 struct qunit_data {
         __u32 qd_id;    /* ID appiles to (uid, gid) */
         __u32 qd_type;  /* Quota type (USRQUOTA, GRPQUOTA) */

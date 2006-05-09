@@ -72,10 +72,6 @@ static inline char *mt_str(enum ldd_mount_type mt)
         return mount_type_string[mt];
 }
 
-#ifndef MTI_NIDS_MAX  /* match lustre_idl.h */
-#define MTI_NIDS_MAX 64
-#endif
-
 #define LDD_INCOMPAT_SUPP 0
 #define LDD_ROCOMPAT_SUPP 0
 

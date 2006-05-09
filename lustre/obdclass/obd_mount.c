@@ -925,6 +925,7 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
                 }
         }    
 
+        mti->mti_lustre_ver = LUSTRE_VERSION_CODE;
         mti->mti_config_ver = 0;
         mti->mti_flags = ldd->ldd_flags;
         mti->mti_stripe_index = ldd->ldd_svindex;

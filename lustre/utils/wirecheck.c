@@ -7,6 +7,7 @@
 #include <liblustre.h>
 #include <lustre_lib.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_disk.h>
 
 #define BLANK_LINE()                                            \
 do {                                                            \
@@ -847,6 +848,43 @@ check_qunit_data(void)
 }
 
 static void
+check_mgs_target_info(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(mgs_target_info);
+        CHECK_MEMBER(mgs_target_info, mti_lustre_ver);
+        CHECK_MEMBER(mgs_target_info, mti_stripe_index);
+        CHECK_MEMBER(mgs_target_info, mti_config_ver);
+        CHECK_MEMBER(mgs_target_info, mti_flags);
+        CHECK_MEMBER(mgs_target_info, mti_nid_count);
+        CHECK_MEMBER(mgs_target_info, mti_fsname);
+        CHECK_MEMBER(mgs_target_info, mti_svname);
+        CHECK_MEMBER(mgs_target_info, mti_uuid);
+        CHECK_MEMBER(mgs_target_info, mti_nids);
+        CHECK_MEMBER(mgs_target_info, mti_params);
+}
+
+static void
+check_lustre_disk_data(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_disk_data);
+        CHECK_MEMBER(lustre_disk_data, ldd_magic);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_compat);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_rocompat);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_incompat);
+        CHECK_MEMBER(lustre_disk_data, ldd_config_ver);
+        CHECK_MEMBER(lustre_disk_data, ldd_flags);
+        CHECK_MEMBER(lustre_disk_data, ldd_svindex);
+        CHECK_MEMBER(lustre_disk_data, ldd_mount_type);
+        CHECK_MEMBER(lustre_disk_data, ldd_fsname);
+        CHECK_MEMBER(lustre_disk_data, ldd_svname);
+        CHECK_MEMBER(lustre_disk_data, ldd_uuid);
+        CHECK_MEMBER(lustre_disk_data, ldd_mount_opts);
+        CHECK_MEMBER(lustre_disk_data, ldd_params);
+}
+
+static void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -1026,6 +1064,12 @@ main(int argc, char **argv)
         CHECK_VALUE(QUOTA_DQACQ);
         CHECK_VALUE(QUOTA_DQREL);
 
+        CHECK_VALUE(MGS_CONNECT);
+        CHECK_VALUE(MGS_DISCONNECT);
+        CHECK_VALUE(MGS_EXCEPTION);   
+        CHECK_VALUE(MGS_TARGET_REG);
+        CHECK_VALUE(MGS_TARGET_DEL);
+
         CHECK_CDEFINE(OBD_CONNECT_RDONLY);
         CHECK_CDEFINE(OBD_CONNECT_INDEX);
         CHECK_CDEFINE(OBD_CONNECT_GRANT);
@@ -1093,6 +1137,9 @@ main(int argc, char **argv)
         check_llog_array_rec();
         check_mds_extent_desc();
         check_qunit_data();
+        check_mgs_target_info();
+        check_lustre_disk_data();
+
 
         printf("}\n\n");
 

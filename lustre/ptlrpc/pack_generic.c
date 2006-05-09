@@ -631,19 +631,14 @@ void lustre_swab_mds_body (struct mds_body *b)
 void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
 {
         int i;
-        LASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
-        for (i = 0; i < MTI_NIDS_MAX; i++) {
-                __swab64s(&mti->mti_nids[i]);
-                __swab64s(&mti->mti_failnids[i]);
-        }
-        for (i = 0; i < 8; i++) {
-                __swab16s(&mti->mti_failnodes[i]);
-        }
+        __swab32s(&mti->mti_lustre_ver);
         __swab32s(&mti->mti_stripe_index);
-        __swab32s(&mti->mti_nid_count);
-        __swab32s(&mti->mti_failnid_count);
         __swab32s(&mti->mti_config_ver);
         __swab32s(&mti->mti_flags);
+        __swab32s(&mti->mti_nid_count);
+        LASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
+        for (i = 0; i < MTI_NIDS_MAX; i++) 
+                __swab64s(&mti->mti_nids[i]);
 }
 
 static void lustre_swab_obd_dqinfo (struct obd_dqinfo *i)
