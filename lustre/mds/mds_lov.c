@@ -689,7 +689,12 @@ int mds_lov_synchronize(void *data)
         struct mds_lov_sync_info *mlsi = data;
         char name[20];
 
-        sprintf(name, "ll_mlov_sync_%02u", mlsi->mlsi_index);
+        if (mlsi->mlsi_index == MDSLOV_NO_INDEX)
+                /* There is still a watched target, 
+                but we don't know its index */
+                sprintf(name, "ll_sync_tgt");
+        else
+                snprintf(name, sizeof(name), "ll_sync_%02u", mlsi->mlsi_index);
         ptlrpc_daemonize(name);
 
         RETURN(__mds_lov_synchronize(data));
