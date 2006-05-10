@@ -295,11 +295,9 @@ static int mds_lov_update_mds(struct obd_device *obd,
         /* Only do this at first add (idx), or the first time after recovery */
         if (idx != MDSLOV_NO_INDEX || 1/*FIXME*/) {
                 CDEBUG(D_CONFIG, "reset llogs idx=%d\n", idx);
-                /* These two must be atomic */
-                down(&mds->mds_orphan_recovery_sem);
-                obd_llog_finish(obd, old_count);
+                /* Note that this will cause multiple mds/lov/osc_llog_init's
+                   with no llog_cleanup's, so fns should deal with that. */
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
-                up(&mds->mds_orphan_recovery_sem);
         }
 
         RETURN(rc);

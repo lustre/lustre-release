@@ -72,16 +72,17 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                 RETURN(-EFAULT);
 
         if (obd->obd_llog_ctxt[index]) {
-        /* During an mds_lov_add_ost, we try to tear down and resetup llogs.
-           But the mdt teardown does not flow down to the lov/osc's as the 
-           setup does, because the lov/osc must clean up only when they are
-           done, not when the mdt is done. So instead, we just assume that
-           if the lov llogs are already set up then we must cleanup first. */
+                /* mds_lov_update_mds might call here multiple times. So if the
+                   llog is already set up then don't to do it again. */
                 CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
                        obd->obd_name, index);
-                llog_cleanup(obd->obd_llog_ctxt[index]);
+                ctxt = obd->obd_llog_ctxt[index];
+                LASSERT(ctxt->loc_obd == obd);
+                LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
+                LASSERT(ctxt->loc_logops == op);
+                RETURN(0);
         }
-
+        
         OBD_ALLOC(ctxt, sizeof(*ctxt));
         if (!ctxt)
                 RETURN(-ENOMEM);

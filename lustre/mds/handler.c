@@ -1876,7 +1876,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
-        sema_init(&mds->mds_orphan_recovery_sem, 1);
         sema_init(&mds->mds_epoch_sem, 1);
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
