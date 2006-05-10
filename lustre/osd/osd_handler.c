@@ -961,9 +961,3 @@ MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD0_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(osd, "0.0.2", osd_mod_init, osd_mod_exit);
-
-int cdebug_test_foo(int x, int y)
-{
-        CDEBUG(D_INODE, "x: %d, y: %d\n", x, y);
-}
-
