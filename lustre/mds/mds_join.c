@@ -393,7 +393,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
         if (rc < 0)
                 GOTO(cleanup, rc);
 
-        LASSERT(le32_to_cpu(head_lmm->lmm_magic) == LOV_MAGIC_JOIN ||
+        LASSERTF(le32_to_cpu(head_lmm->lmm_magic) == LOV_MAGIC_JOIN ||
                 le32_to_cpu(head_lmm->lmm_magic) == LOV_MAGIC);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

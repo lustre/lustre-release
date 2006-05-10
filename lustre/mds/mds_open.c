@@ -414,7 +414,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         int level = D_ERROR;
                         if (rc == -ENOSPC)
                                 level = D_INODE;
-                        CDEBUG_EX(level, "error creating objects for "
+                        CDEBUG(level, "error creating objects for "
                                       "inode %lu: rc = %d\n",
                                inode->i_ino, rc);
                         if (rc > 0) {

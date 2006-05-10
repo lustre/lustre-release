@@ -502,7 +502,7 @@ static void __exit lvfs_linux_exit(void)
         ENTRY;
 
         leaked = atomic_read(&obd_memory);
-        CDEBUG_EX(leaked ? D_ERROR : D_INFO,
+        CDEBUG(leaked ? D_ERROR : D_INFO,
                "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
 
         return;

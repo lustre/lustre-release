@@ -1230,48 +1230,48 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                 return;
 
         if (!lock) {
-                CDEBUG_EX(level, "  NULL LDLM lock\n");
+                CDEBUG(level, "  NULL LDLM lock\n");
                 return;
         }
 
-        CDEBUG_EX(level," -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
+        CDEBUG(level," -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
                lock, lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                pos, lock->l_pid);
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {
-                CDEBUG_EX(level, "  Node: NID %s (rhandle: "LPX64")\n",
+                CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
                      libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid),
                      lock->l_remote_handle.cookie);
         } else if (obd == NULL) {
-                CDEBUG_EX(level, "  Node: local\n");
+                CDEBUG(level, "  Node: local\n");
         } else {
                 struct obd_import *imp = obd->u.cli.cl_import;
-                CDEBUG_EX(level, "  Node: NID %s (rhandle: "LPX64")\n",
+                CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
                        libcfs_nid2str(imp->imp_connection->c_peer.nid),
                        lock->l_remote_handle.cookie);
         }
-        CDEBUG_EX(level, "  Resource: %p ("LPU64"/"LPU64")\n", lock->l_resource,
+        CDEBUG(level, "  Resource: %p ("LPU64"/"LPU64")\n", lock->l_resource,
                lock->l_resource->lr_name.name[0],
                lock->l_resource->lr_name.name[1]);
-        CDEBUG_EX(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
+        CDEBUG(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
                "write: %d flags: %#x\n", ldlm_lockname[lock->l_req_mode],
                ldlm_lockname[lock->l_granted_mode],
                atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers,
                lock->l_flags);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
-                CDEBUG_EX(level, "  Extent: "LPU64" -> "LPU64
+                CDEBUG(level, "  Extent: "LPU64" -> "LPU64
                        " (req "LPU64"-"LPU64")\n",
                        lock->l_policy_data.l_extent.start,
                        lock->l_policy_data.l_extent.end,
                        lock->l_req_extent.start, lock->l_req_extent.end);
         else if (lock->l_resource->lr_type == LDLM_FLOCK)
-                CDEBUG_EX(level, "  Pid: %d Extent: "LPU64" -> "LPU64"\n",
+                CDEBUG(level, "  Pid: %d Extent: "LPU64" -> "LPU64"\n",
                        lock->l_policy_data.l_flock.pid,
                        lock->l_policy_data.l_flock.start,
                        lock->l_policy_data.l_flock.end);
        else if (lock->l_resource->lr_type == LDLM_IBITS)
-                CDEBUG_EX(level, "  Bits: "LPX64"\n",
+                CDEBUG(level, "  Bits: "LPX64"\n",
                        lock->l_policy_data.l_inodebits.bits);
 }
 

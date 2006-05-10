@@ -541,7 +541,7 @@ int mgs_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
 
-        CDEBUG_EX(D_CONFIG | (rc?D_ERROR:0), "MGS handle cmd=%d rc=%d\n",
+        CDEBUG(D_CONFIG | (rc?D_ERROR:0), "MGS handle cmd=%d rc=%d\n",
                req->rq_reqmsg->opc, rc);
 
  out:

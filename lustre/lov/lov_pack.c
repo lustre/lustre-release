@@ -42,15 +42,15 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
         struct lov_ost_data_v1 *lod;
         int i;
 
-        CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
-        CDEBUG_EX(level,"stripe_size %u, stripe_count %u\n",
+        CDEBUG(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
         for (i = 0, lod = lmm->lmm_objects;
              i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
-                CDEBUG_EX(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
+                CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                        i, le32_to_cpu(lod->l_ost_idx),
                        le64_to_cpu(lod->l_object_gr),
                        le64_to_cpu(lod->l_object_id));
@@ -59,11 +59,11 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
 {
 
-        CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
                le64_to_cpu(lmmj->lmmj_md.lmm_object_id),
                le32_to_cpu(lmmj->lmmj_md.lmm_magic),
                le32_to_cpu(lmmj->lmmj_md.lmm_pattern));
-        CDEBUG_EX(level,"stripe_size %u, stripe_count %u extent_count %u \n",
+        CDEBUG(level,"stripe_size %u, stripe_count %u extent_count %u \n",
                le32_to_cpu(lmmj->lmmj_md.lmm_stripe_size),
                le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count),
                le32_to_cpu(lmmj->lmmj_extent_count));
