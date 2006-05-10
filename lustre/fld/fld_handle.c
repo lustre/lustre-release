@@ -411,19 +411,18 @@ EXPORT_SYMBOL(fld_server_fini);
 static int fld_handle(struct lu_context *ctx,
                       struct fld *fld, __u32 opts, struct md_fld *mf)
 {
-        struct fld_info *fld_info = fld->fld_info;
         int rc;
         ENTRY;
 
         switch (opts) {
         case FLD_CREATE:
-                rc = fld_handle_insert(fld_info, mf->mf_seq, mf->mf_mds);
+                rc = fld_handle_insert(fld, mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_DELETE:
-                rc = fld_handle_delete(fld_info, mf->mf_seq, mf->mf_mds);
+                rc = fld_handle_delete(fld, mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_GET:
-                rc = fld_handle_lookup(fld_info, mf->mf_seq, &mf->mf_mds);
+                rc = fld_handle_lookup(fld, mf->mf_seq, &mf->mf_mds);
                 break;
         default:
                 rc = -EINVAL;

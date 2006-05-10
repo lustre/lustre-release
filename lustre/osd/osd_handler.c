@@ -61,6 +61,7 @@
 
 /* fid_is_local() */
 #include <linux/lustre_fid.h>
+#include <linux/lustre_iam.h>
 
 #include "osd_internal.h"
 
@@ -329,12 +330,30 @@ static void osd_trans_stop(struct lu_context *ctx, struct thandle *th)
         EXIT;
 }
 
+static int osd_iam_lookup(struct lu_context *ctx,struct dt_device *dev,
+                          void *container, void *key, int key_len,
+                          void *rec, int* rec_len)
+{
+        return iam_lookup(container, (struct iam_key *)key,
+                          (struct iam_rec *)rec);
+}
+
+static int osd_iam_insert(struct lu_context *ctx,struct dt_device *dev,
+                          void *container, void *key, int key_len,
+                          void *rec, int rec_len)
+{
+        return iam_insert(NULL, container, (struct iam_key *)key,
+                          (struct iam_rec *)rec);
+}
+
 static struct dt_device_operations osd_dt_ops = {
         .dt_root_get    = osd_root_get,
         .dt_config      = osd_config,
         .dt_statfs      = osd_statfs,
         .dt_trans_start = osd_trans_start,
-        .dt_trans_stop  = osd_trans_stop
+        .dt_trans_stop  = osd_trans_stop,
+        .dt_iam_lookup  = osd_iam_lookup,
+        .dt_iam_insert  = osd_iam_insert
 };
 
 static void osd_object_lock(struct lu_context *ctx, struct dt_object *dt,

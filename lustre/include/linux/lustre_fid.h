@@ -72,11 +72,14 @@ void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
 /*
  * fld (fid location database) interface.
  */
+struct fld_info {
+        void *fi_container;
+};
 struct fld {
         struct proc_dir_entry   *fld_proc_entry;
         struct ptlrpc_service   *fld_service;
         struct dt_device        *fld_dt;
-        void                    *fld_info;
+        struct fld_info         *fld_info;
 };
 
 int  fld_server_init(struct fld *fld, struct dt_device *dt);

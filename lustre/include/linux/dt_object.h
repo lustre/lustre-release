@@ -93,6 +93,24 @@ struct dt_device_operations {
          */
         int   (*dt_root_get)(struct lu_context *ctx,
                              struct dt_device *dev, struct lu_fid *f);
+        /*
+         * iam index operation
+         */
+        int   (*dt_iam_insert)(struct lu_context *ctx, struct dt_device *dev,
+                               void *container, void *key, int key_len, 
+                               void *rec, int rec_len);
+        
+        int   (*dt_iam_delete)(struct lu_context *ctx, struct dt_device *dev,
+                               void *container, void *key, int key_len,
+                               void *rec, int rec_len);
+
+        int   (*dt_iam_update)(struct lu_context *ctx, struct dt_device *dev,
+                               void *container, void *key, int key_len, 
+                               void *rec, int rec_len);
+
+        int   (*dt_iam_lookup)(struct lu_context *ctx, struct dt_device *dev,
+                               void *container, void *key, int key_len, 
+                               void *rec, int* rec_len);
 };
 
 /*
