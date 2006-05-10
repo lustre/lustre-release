@@ -52,6 +52,7 @@ struct iam_descr fld_param = {
         .id_node_gap = 0, /* no gaps in index nodes */
         .id_root_gap = 0,
 
+#if 0
         .id_root_ptr   = iam_root_ptr, /* returns 0: root is always at the
                                         * beginning of the file (as it
                                         * htree) */
@@ -59,40 +60,53 @@ struct iam_descr fld_param = {
         .id_node_check = iam_node_check,
         .id_node_init  = iam_node_init,
         .id_keycmp     = iam_keycmp,
+#endif
 };
 
-int fld_handle_insert(struct fld *fld,
+int fld_handle_insert(struct lu_context *ctx, struct fld *fld,
                       fidseq_t seq_num, mdsno_t mdsno)
 {
-        struct lu_context lctx; /*XXX init it*/
-
-        return fld->fld_dt->dd_ops->dt_iam_insert(&lctx, fld->fld_dt, 
+        /*
+         * XXX Use ->dio_index_insert() from struct dt_index_operations. The
+         * same below.
+         */
+#if 0
+        return fld->fld_dt->dd_ops->dt_iam_insert(&lctx, fld->fld_dt,
                                                   fld->fld_info->fi_container,
                                                   &seq_num, fld_param.id_key_size,
                                                   &mdsno, fld_param.id_rec_size);
+#else
+        return 0;
+#endif
 }
 
-int fld_handle_delete(struct fld *fld,
+int fld_handle_delete(struct lu_context *ctx, struct fld *fld,
                       fidseq_t seq_num, mdsno_t mds_num)
 {
-        struct lu_context lctx; /*XXX init it*/
-
-        return fld->fld_dt->dd_ops->dt_iam_delete(&lctx, fld->fld_dt, 
+#if 0
+        return fld->fld_dt->dd_ops->dt_iam_delete(&lctx, fld->fld_dt,
                                                   fld->fld_info->fi_container,
                                                   &seq_num, fld_param.id_key_size,
                                                   &mds_num, fld_param.id_rec_size);
+#else
+        return 0;
+#endif
 }
 
-int fld_handle_lookup(struct fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
+int fld_handle_lookup(struct lu_context *ctx,
+                      struct fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
 {
-        struct lu_context lctx; /*XXX init it*/
         int size;
 
+#if 0
         size = fld_param.id_rec_size;
         return fld->fld_dt->dd_ops->dt_iam_lookup(&lctx, fld->fld_dt,
                                                   fld->fld_info->fi_container,
                                                   &seq_num, fld_param.id_key_size,
                                                   mds_num, &size);
+#else
+        return 0;
+#endif
 }
 
 int fld_info_init(struct fld_info *fld_info)

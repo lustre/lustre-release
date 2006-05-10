@@ -416,13 +416,13 @@ static int fld_handle(struct lu_context *ctx,
 
         switch (opts) {
         case FLD_CREATE:
-                rc = fld_handle_insert(fld, mf->mf_seq, mf->mf_mds);
+                rc = fld_handle_insert(ctx, fld, mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_DELETE:
-                rc = fld_handle_delete(fld, mf->mf_seq, mf->mf_mds);
+                rc = fld_handle_delete(ctx, fld, mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_GET:
-                rc = fld_handle_lookup(fld, mf->mf_seq, &mf->mf_mds);
+                rc = fld_handle_lookup(ctx, fld, mf->mf_seq, &mf->mf_mds);
                 break;
         default:
                 rc = -EINVAL;
