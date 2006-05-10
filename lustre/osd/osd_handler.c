@@ -330,30 +330,12 @@ static void osd_trans_stop(struct lu_context *ctx, struct thandle *th)
         EXIT;
 }
 
-static int osd_iam_lookup(struct lu_context *ctx,struct dt_device *dev,
-                          void *container, void *key, int key_len,
-                          void *rec, int* rec_len)
-{
-        return iam_lookup(container, (struct iam_key *)key,
-                          (struct iam_rec *)rec);
-}
-
-static int osd_iam_insert(struct lu_context *ctx,struct dt_device *dev,
-                          void *container, void *key, int key_len,
-                          void *rec, int rec_len)
-{
-        return iam_insert(NULL, container, (struct iam_key *)key,
-                          (struct iam_rec *)rec);
-}
-
 static struct dt_device_operations osd_dt_ops = {
         .dt_root_get    = osd_root_get,
         .dt_config      = osd_config,
         .dt_statfs      = osd_statfs,
         .dt_trans_start = osd_trans_start,
         .dt_trans_stop  = osd_trans_stop,
-        .dt_iam_lookup  = osd_iam_lookup,
-        .dt_iam_insert  = osd_iam_insert
 };
 
 static void osd_object_lock(struct lu_context *ctx, struct dt_object *dt,
@@ -545,11 +527,9 @@ static struct dt_object_operations osd_obj_ops = {
 static struct dt_body_operations osd_body_ops = {
 };
 
-static int osd_index_insert(struct lu_context *ctxt,
-                                struct dt_object *dt,
-                                const struct lu_fid *fid,
-                                const char *name,
-                                struct thandle *handle)
+static int osd_index_insert(struct lu_context *ctxt, struct dt_object *dt,
+                            const struct lu_fid *fid, const char *name,
+                            struct thandle *handle)
 {
         return 0;
 }
@@ -981,3 +961,9 @@ MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD0_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(osd, "0.0.2", osd_mod_init, osd_mod_exit);
+
+int cdebug_test_foo(int x, int y)
+{
+        CDEBUG(D_INODE, "x: %d, y: %d\n", x, y);
+}
+
