@@ -381,7 +381,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 
         /* zero out sequence to check it later for validness */
         ocd->ocd_seq = 0;
-        
+
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
@@ -1428,7 +1428,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         struct qunit_data *qdata, *rep;
         int rc = 0, repsize = sizeof(struct qunit_data);
         ENTRY;
-        
+
         rc = lustre_pack_reply(req, 1, &repsize, NULL);
         if (rc) {
                 CERROR("packing reply failed!: rc = %d\n", rc);
@@ -1436,7 +1436,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         }
         rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep));
         LASSERT(rep);
-        
+
         qdata = lustre_swab_reqbuf(req, 0, sizeof(*qdata), lustre_swab_qdata);
         if (qdata == NULL) {
                 CERROR("unpacking request buffer failed!");
@@ -1447,19 +1447,19 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         LASSERT(obd->obd_observer && obd->obd_observer->obd_observer);
         master_obd = obd->obd_observer->obd_observer;
         qctxt = &master_obd->u.obt.obt_qctxt;
-        
+
         LASSERT(qctxt->lqc_handler);
         rc = qctxt->lqc_handler(master_obd, qdata, req->rq_reqmsg->opc);
         if (rc && rc != -EDQUOT)
-                CDEBUG(rc == -EBUSY  ? D_QUOTA : D_ERROR, 
+                CDEBUG_EX(rc == -EBUSY  ? D_QUOTA : D_ERROR,
                        "dqacq failed! (rc:%d)\n", rc);
-        
+
         /* the qd_count might be changed in lqc_handler */
         memcpy(rep, qdata, sizeof(*rep));
         req->rq_status = rc;
         rc = ptlrpc_reply(req);
-        
-        RETURN(rc);     
+
+        RETURN(rc);
 #else
         return 0;
 #endif /* !__KERNEL__ */

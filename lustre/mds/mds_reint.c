@@ -182,9 +182,9 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                         rc = err;
         }
 
-        DEBUG_REQ(log_pri, req,
-                  "wrote trans #"LPU64" rc %d client %s at idx %u: err = %d",
-                  transno, rc, mcd->mcd_uuid, med->med_lr_idx, err);
+        DEBUG_REQ_EX(log_pri, req,
+                     "wrote trans #"LPU64" rc %d client %s at idx %u: err = %d",
+                     transno, rc, mcd->mcd_uuid, med->med_lr_idx, err);
 
         err = mds_lov_write_objids(obd);
         if (err) {
@@ -192,7 +192,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 if (rc == 0)
                         rc = err;
         }
-        CDEBUG(log_pri, "wrote objids: err = %d\n", err);
+        CDEBUG_EX(log_pri, "wrote objids: err = %d\n", err);
 
 commit:
         err = fsfilt_commit(obd, inode, handle, 0);

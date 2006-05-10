@@ -710,7 +710,7 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
 {
         struct list_head *tmp;
 
-        CDEBUG(level, "--- Namespace: %s (rc: %d, client: %d)\n", ns->ns_name,
+        CDEBUG_EX(level, "--- Namespace: %s (rc: %d, client: %d)\n", ns->ns_name,
                atomic_read(&ns->ns_refcount), ns->ns_client);
 
         l_lock(&ns->ns_lock);
@@ -736,14 +736,14 @@ void ldlm_resource_dump(int level, struct ldlm_resource *res)
         if (RES_NAME_SIZE != 4)
                 LBUG();
 
-        CDEBUG(level, "--- Resource: %p ("LPU64"/"LPU64"/"LPU64"/"LPU64
+        CDEBUG_EX(level, "--- Resource: %p ("LPU64"/"LPU64"/"LPU64"/"LPU64
                ") (rc: %d)\n", res, res->lr_name.name[0], res->lr_name.name[1],
                res->lr_name.name[2], res->lr_name.name[3],
                atomic_read(&res->lr_refcount));
 
         if (!list_empty(&res->lr_granted)) {
                 pos = 0;
-                CDEBUG(level, "Granted locks:\n");
+                CDEBUG_EX(level, "Granted locks:\n");
                 list_for_each(tmp, &res->lr_granted) {
                         struct ldlm_lock *lock;
                         lock = list_entry(tmp, struct ldlm_lock, l_res_link);
@@ -752,7 +752,7 @@ void ldlm_resource_dump(int level, struct ldlm_resource *res)
         }
         if (!list_empty(&res->lr_converting)) {
                 pos = 0;
-                CDEBUG(level, "Converting locks:\n");
+                CDEBUG_EX(level, "Converting locks:\n");
                 list_for_each(tmp, &res->lr_converting) {
                         struct ldlm_lock *lock;
                         lock = list_entry(tmp, struct ldlm_lock, l_res_link);
@@ -761,7 +761,7 @@ void ldlm_resource_dump(int level, struct ldlm_resource *res)
         }
         if (!list_empty(&res->lr_waiting)) {
                 pos = 0;
-                CDEBUG(level, "Waiting locks:\n");
+                CDEBUG_EX(level, "Waiting locks:\n");
                 list_for_each(tmp, &res->lr_waiting) {
                         struct ldlm_lock *lock;
                         lock = list_entry(tmp, struct ldlm_lock, l_res_link);

@@ -260,7 +260,7 @@ static int mgs_cleanup(struct obd_device *obd)
                 RETURN(0);
 
         save_dev = lvfs_sbdev(mgs->mgs_sb);
-        
+
         ptlrpc_unregister_service(mgs->mgs_service);
 
         lprocfs_obd_cleanup(obd);
@@ -272,8 +272,8 @@ static int mgs_cleanup(struct obd_device *obd)
         server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
         mgs->mgs_sb = NULL;
 
-        /* Free the namespace in it's own thread, so that if the 
-           ldlm_cancel_handler put the last mgs obd ref, we won't 
+        /* Free the namespace in it's own thread, so that if the
+           ldlm_cancel_handler put the last mgs obd ref, we won't
            deadlock here. */
         kernel_thread(mgs_ldlm_nsfree, obd->obd_namespace, CLONE_VM | CLONE_FS);
 
@@ -541,7 +541,7 @@ int mgs_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
 
-        CDEBUG(D_CONFIG | (rc?D_ERROR:0), "MGS handle cmd=%d rc=%d\n",
+        CDEBUG_EX(D_CONFIG | (rc?D_ERROR:0), "MGS handle cmd=%d rc=%d\n",
                req->rq_reqmsg->opc, rc);
 
  out:

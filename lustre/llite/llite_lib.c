@@ -219,7 +219,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if ((sbi->ll_flags & LL_SBI_USER_XATTR) &&
             !(data->ocd_connect_flags & OBD_CONNECT_XATTR)) {
                 LCONSOLE_INFO("Disabling user_xattr feature because "
-                              "it is not supported on the server\n"); 
+                              "it is not supported on the server\n");
                 sbi->ll_flags &= ~LL_SBI_USER_XATTR;
         }
 
@@ -379,11 +379,11 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 
         *lmmsize = obd_size_diskmd(sbi->ll_dt_exp, NULL);
         size = sizeof(int);
-        rc = obd_get_info(sbi->ll_md_exp, strlen("max_easize"), "max_easize", 
+        rc = obd_get_info(sbi->ll_md_exp, strlen("max_easize"), "max_easize",
                           &size, lmmsize);
-        if (rc) 
+        if (rc)
                 CERROR("Get max mdsize error rc %d \n", rc);
-        
+
         RETURN(rc);
 }
 
@@ -603,13 +603,13 @@ void ll_options(char *options, int *flags)
 next:
                 /* Find next opt */
                 s2 = strchr(s1, ',');
-                if (s2 == NULL) 
+                if (s2 == NULL)
                         break;
                 s1 = s2 + 1;
         }
         EXIT;
 }
-                
+
 void ll_lli_init(struct ll_inode_info *lli)
 {
         sema_init(&lli->lli_open_sem, 1);
@@ -634,18 +634,18 @@ int ll_fill_super(struct super_block *sb)
         char   ll_instance[sizeof(sb) * 2 + 1];
         int    err;
         ENTRY;
-                                                                                 
+
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
 
         /* client additional sb info */
         lsi->lsi_llsbi = sbi = ll_init_sbi();
-        if (!sbi) 
+        if (!sbi)
                 RETURN(-ENOMEM);
 
         ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
-        
+
         /* Generate a string unique to this super, in case some joker tries
-           to mount the same fs at two mount points. 
+           to mount the same fs at two mount points.
            Use the address of the super itself.*/
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
@@ -664,24 +664,24 @@ int ll_fill_super(struct super_block *sb)
                 CERROR("No profile found: %s\n", profilenm);
                 GOTO(out_free, err = -EINVAL);
         }
-        CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm, 
+        CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm,
                lprof->lp_mdc, lprof->lp_osc);
 
         OBD_ALLOC(osc, strlen(lprof->lp_osc) +
                   strlen(ll_instance) + 2);
-        if (!osc) 
+        if (!osc)
                 GOTO(out_free, err = -ENOMEM);
         sprintf(osc, "%s-%s", lprof->lp_osc, ll_instance);
 
         OBD_ALLOC(mdc, strlen(lprof->lp_mdc) +
                   strlen(ll_instance) + 2);
-        if (!mdc) 
+        if (!mdc)
                 GOTO(out_free, err = -ENOMEM);
         sprintf(mdc, "%s-%s", lprof->lp_mdc, ll_instance);
-  
+
         /* connections, registrations, sb setup */
         err = client_common_fill_super(sb, mdc, osc);
-  
+
 out_free:
         if (mdc)
                 OBD_FREE(mdc, strlen(mdc) + 1);
@@ -692,10 +692,10 @@ out_free:
                 int next = 0;
                 /* like ll_put_super below */
                 lustre_end_log(sb, NULL, &cfg);
-                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
+                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next))
                        != NULL) {
                         class_manual_cleanup(obd);
-                }                       
+                }
                 class_del_profile(profilenm);
                 ll_free_sbi(sb);
                 lsi->lsi_llsbi = NULL;
@@ -717,30 +717,30 @@ void ll_put_super(struct super_block *sb)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
-        
+
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
         lustre_end_log(sb, NULL, &cfg);
-        
+
         obd = class_exp2obd(sbi->ll_md_exp);
         if (obd) {
                 int next = 0;
                 int force = obd->obd_no_recov;
-                /* We need to set force before the lov_disconnect in 
+                /* We need to set force before the lov_disconnect in
                 lustre_common_put_super, since l_d cleans up osc's as well. */
-                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
+                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next))
                        != NULL) {
                         obd->obd_force = force;
-                }                       
+                }
         }
 
         client_common_put_super(sb);
-                
+
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
                 class_manual_cleanup(obd);
-        }                       
-        
-        if (profilenm) 
+        }
+
+        if (profilenm)
                 class_del_profile(profilenm);
 
         ll_free_sbi(sb);
@@ -788,10 +788,15 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
                         inode = igrab(lock->l_ast_data);
                 } else {
                         inode = lock->l_ast_data;
-                        __LDLM_DEBUG(inode->i_state & I_FREEING ?
-                                     D_INFO : D_WARNING, lock,
+                        if (inode->i_state & I_FREEING)
+                                __LDLM_DEBUG(D_INFO, lock,
                                      "l_ast_data %p is bogus: magic %08x",
                                      lock->l_ast_data, lli->lli_inode_magic);
+                        else
+                                __LDLM_DEBUG(D_WARNING, lock,
+                                     "l_ast_data %p is bogus: magic %08x",
+                                     lock->l_ast_data, lli->lli_inode_magic);
+
                         inode = NULL;
                 }
         }

@@ -414,7 +414,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         int level = D_ERROR;
                         if (rc == -ENOSPC)
                                 level = D_INODE;
-                        CDEBUG(level, "error creating objects for "
+                        CDEBUG_EX(level, "error creating objects for "
                                       "inode %lu: rc = %d\n",
                                inode->i_ino, rc);
                         if (rc > 0) {
@@ -691,14 +691,14 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
                         RETURN(-EEXIST);
                 }
-                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) { 
+                if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
-                        rc = mds_join_file(rec, req, dchild, lockh); 
+                        rc = mds_join_file(rec, req, dchild, lockh);
                         if (rc)
                                 RETURN(rc);
                         LOCK_INODE_MUTEX(dchild->d_inode);
-                } 
-                if (!(body->valid & OBD_MD_FLEASIZE) && 
+                }
+                if (!(body->valid & OBD_MD_FLEASIZE) &&
                     !(body->valid & OBD_MD_FLMODEASIZE)) {
                         /* no EA: create objects */
                         rc = mds_create_objects(req, 2, rec, mds, obd,

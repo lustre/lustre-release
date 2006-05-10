@@ -42,15 +42,15 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
         struct lov_ost_data_v1 *lod;
         int i;
 
-        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+        CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
-        CDEBUG(level,"stripe_size %u, stripe_count %u\n",
+        CDEBUG_EX(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
         for (i = 0, lod = lmm->lmm_objects;
              i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
-                CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
+                CDEBUG_EX(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                        i, le32_to_cpu(lod->l_ost_idx),
                        le64_to_cpu(lod->l_object_gr),
                        le64_to_cpu(lod->l_object_id));
@@ -59,13 +59,13 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
 {
 
-        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
-               le64_to_cpu(lmmj->lmmj_md.lmm_object_id), 
+        CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+               le64_to_cpu(lmmj->lmmj_md.lmm_object_id),
                le32_to_cpu(lmmj->lmmj_md.lmm_magic),
                le32_to_cpu(lmmj->lmmj_md.lmm_pattern));
-        CDEBUG(level,"stripe_size %u, stripe_count %u extent_count %u \n",
+        CDEBUG_EX(level,"stripe_size %u, stripe_count %u extent_count %u \n",
                le32_to_cpu(lmmj->lmmj_md.lmm_stripe_size),
-               le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count), 
+               le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count),
                le32_to_cpu(lmmj->lmmj_extent_count));
 }
 
@@ -181,7 +181,7 @@ static int lov_verify_lmm(void *lmm, int lmm_bytes, int *stripe_count)
         return rc;
 }
 
-int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, 
+int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
                       int pattern, int magic)
 {
         int lsm_size = lov_stripe_md_size(stripe_count);
@@ -189,7 +189,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
         int i;
         ENTRY;
 
-        CDEBUG(D_INFO, "alloc lsm, stripe_count %d, lsm_size %d\n", 
+        CDEBUG(D_INFO, "alloc lsm, stripe_count %d, lsm_size %d\n",
                stripe_count, lsm_size);
 
         OBD_ALLOC(*lsmp, lsm_size);
@@ -206,7 +206,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
         (*lsmp)->lsm_xfersize = PTLRPC_MAX_BRW_SIZE * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
-        
+
         for (i = 0, loi = (*lsmp)->lsm_oinfo; i < stripe_count; i++, loi++)
                 loi_init(loi);
 
@@ -216,10 +216,10 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
 void lov_free_memmd(struct lov_stripe_md **lsmp)
 {
         struct lov_stripe_md *lsm = *lsmp;
-        
+
         LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
         lsm_op_find(lsm->lsm_magic)->lsm_free(lsm);
-        
+
         *lsmp = NULL;
 }
 
@@ -227,7 +227,7 @@ void lov_free_memmd(struct lov_stripe_md **lsmp)
 /* Unpack LOV object metadata from disk storage.  It is packed in LE byte
  * order and is opaque to the networking layer.
  */
-int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp, 
+int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                  struct lov_mds_md *lmm, int lmm_bytes)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -258,7 +258,7 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                 RETURN(0);
         }
 
-        lsm_size = lov_alloc_memmd(lsmp, stripe_count, LOV_PATTERN_RAID0, 
+        lsm_size = lov_alloc_memmd(lsmp, stripe_count, LOV_PATTERN_RAID0,
                                    magic);
         if (lsm_size < 0)
                 RETURN(lsm_size);

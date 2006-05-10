@@ -283,14 +283,14 @@ struct qunit_waiter {
 
 
 /* FIXME check if this mds is the master of specified id */
-static int 
-is_master(struct obd_device *obd, struct lustre_quota_ctxt *qctxt, 
+static int
+is_master(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
           unsigned int id, int type)
 {
         return qctxt->lqc_handler ? 1 : 0;
 }
 
-static int 
+static int
 schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                struct qunit_data *qdata, int opc, int wait);
 
@@ -402,7 +402,7 @@ out:
          *   - local dqacq/dqrel.
          *   - local disk io failure.
          */
-        if (err || (rc && rc != -EBUSY) || 
+        if (err || (rc && rc != -EBUSY) ||
             is_master(obd, qctxt, qdata->qd_id, qdata->qd_type))
                 RETURN(err);
 
@@ -480,18 +480,18 @@ schedule_dqacq(struct obd_device *obd,
 
         if ((empty = alloc_qunit(qctxt, qdata, opc)) == NULL)
                 RETURN(-ENOMEM);
-        
+
         spin_lock(&qunit_hash_lock);
 
         qunit = dqacq_in_flight(qctxt, qdata);
         if (qunit) {
-                if (wait) 
+                if (wait)
                         list_add_tail(&qw.qw_entry, &qunit->lq_waiters);
                 spin_unlock(&qunit_hash_lock);
-                
+
                 free_qunit(empty);
                 goto wait_completion;
-        } 
+        }
         qunit = empty;
         insert_qunit_nolock(qctxt, qunit);
         if (wait)
@@ -532,7 +532,7 @@ schedule_dqacq(struct obd_device *obd,
         req->rq_interpret_reply = dqacq_interpret;
         ptlrpcd_add_req(req);
 
-        QDATA_DEBUG(qdata, "%s scheduled.\n", 
+        QDATA_DEBUG(qdata, "%s scheduled.\n",
                     opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");
 wait_completion:
         if (wait && qunit) {
@@ -581,7 +581,7 @@ qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         RETURN(rc);
 }
 
-int 
+int
 qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                          unsigned short type, int isblk)
 {
@@ -656,7 +656,7 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
 
                         remove_qunit_nolock(qunit);
                         /* wake up all waiters */
-                        list_for_each_entry_safe(qw, tmp2, &qunit->lq_waiters, 
+                        list_for_each_entry_safe(qw, tmp2, &qunit->lq_waiters,
                                                  qw_entry) {
                                 list_del_init(&qw->qw_entry);
                                 qw->qw_rc = 0;
@@ -685,7 +685,7 @@ static int qslave_recovery_main(void *arg)
         struct qslave_recov_thread_data *data = arg;
         struct obd_device *obd = data->obd;
         struct lustre_quota_ctxt *qctxt = data->qctxt;
-        unsigned int type; 
+        unsigned int type;
         int rc = 0;
         ENTRY;
 
@@ -743,7 +743,7 @@ static int qslave_recovery_main(void *arg)
                                 rc = 0;
 
                         if (rc)
-                                CDEBUG(rc == -EBUSY ? D_QUOTA : D_ERROR, 
+                                CDEBUG_EX(rc == -EBUSY ? D_QUOTA : D_ERROR,
                                        "qslave recovery failed! (id:%d type:%d "
                                        " rc:%d)\n", dqid->di_id, type, rc);
 free:
@@ -755,7 +755,7 @@ free:
         RETURN(rc);
 }
 
-void 
+void
 qslave_start_recovery(struct obd_device *obd, struct lustre_quota_ctxt *qctxt)
 {
         struct qslave_recov_thread_data data;

@@ -107,7 +107,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         /* Add some margin, since there is a small race if other RPCs arrive
          * out-or-order and have already consumed some grant.  We want to
          * leave this here in case there is a large error in accounting. */
-        CDEBUG(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ? mask:D_CACHE,
+        CDEBUG_EX(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ? mask:D_CACHE,
                "%s: cli %s/%p reports grant: "LPU64" dropped: %u, local: %lu\n",
                obd->obd_name, exp->exp_client_uuid.uuid, exp, oa->o_grant,
                oa->o_dropped, fed->fed_grant);
@@ -458,7 +458,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         fed->fed_pending += used;
         exp->exp_obd->u.filter.fo_tot_pending += used;
 
-        CDEBUG(mask,
+        CDEBUG_EX(mask,
                "%s: cli %s/%p used: %lu ungranted: %lu grant: %lu dirty: %lu\n",
                exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp, used,
                ungranted, fed->fed_grant, fed->fed_dirty);

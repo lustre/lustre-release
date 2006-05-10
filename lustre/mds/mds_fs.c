@@ -173,7 +173,7 @@ int mds_client_free(struct obd_export *exp)
                                          sizeof(zero_mcd), &off, 1);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-                CDEBUG(rc == 0 ? D_INFO : D_ERROR,
+                CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
                        "zeroing out client %s idx %u in %s rc %d\n",
                        med->med_mcd->mcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
         }
@@ -279,13 +279,13 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 CDEBUG(D_WARNING, "using old last_rcvd format\n");
                 lsd->lsd_mount_count = lsd->lsd_last_transno;
                 lsd->lsd_last_transno = lsd->lsd_unused;
-                /* If we update the last_rcvd, we can never go back to 
+                /* If we update the last_rcvd, we can never go back to
                    an old install, so leave this in the old format for now.
                 lsd->lsd_feature_incompat |= cpu_to_le32(LR_INCOMPAT_COMMON_LR);
                 */
         }
         lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
-        
+
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
 
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
@@ -549,7 +549,7 @@ err_pop:
         return rc;
 
 err_health_check:
-        if (mds->mds_health_check_filp && 
+        if (mds->mds_health_check_filp &&
             filp_close(mds->mds_health_check_filp, 0))
                 CERROR("can't close %s after error\n", HEALTH_CHECK);
 err_lov_objid:
