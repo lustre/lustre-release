@@ -62,7 +62,9 @@ endif
 			linux-stage/include/linux/ext3$$i \
 			> linux/ldiskfs$$i ; \
 	done
-	cp linux-stage/include/linux/lustre_iam.h linux/
+	sed $(strip $(ldiskfs_sed_flags)) \
+        linux-stage/include/linux/lustre_iam.h \
+        > linux/lustre_iam.h
 	@echo
 	touch sources
 
