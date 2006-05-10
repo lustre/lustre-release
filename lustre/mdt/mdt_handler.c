@@ -1318,11 +1318,11 @@ static void mdt_fini(struct mdt_device *m)
         /* finish the stack */
         mdt_stack_fini(m, md2lu_dev(m->mdt_child));
 
-        if (d->ld_site != NULL) {
-                lu_site_fini(d->ld_site);
-                OBD_FREE_PTR(d->ld_site);
-                d->ld_site = NULL;
-        }
+        mdt_fld_fini(m);
+        
+        LASSERT(atomic_read(&d->ld_ref) == 0);
+        md_device_fini(&m->mdt_md_dev);
+
         if (m->mdt_namespace != NULL) {
                 ldlm_namespace_free(m->mdt_namespace, 0);
                 m->mdt_namespace = NULL;
@@ -1333,8 +1333,12 @@ static void mdt_fini(struct mdt_device *m)
                 m->mdt_seq_mgr = NULL;
         }
 
-        LASSERT(atomic_read(&d->ld_ref) == 0);
-        md_device_fini(&m->mdt_md_dev);
+        if (d->ld_site != NULL) {
+                lu_site_fini(d->ld_site);
+                OBD_FREE_PTR(d->ld_site);
+                d->ld_site = NULL;
+        }
+
         EXIT;
 }
 
@@ -1635,6 +1639,14 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_disconnect = mdt_obd_disconnect,
 };
 
+static void mdt_device_free(struct lu_device *d)
+{
+        struct mdt_device *m = mdt_dev(d);
+
+        mdt_fini(m);
+        OBD_FREE_PTR(m);
+}
+
 static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
 {
@@ -1648,7 +1660,7 @@ static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
                 l = &m->mdt_md_dev.md_lu_dev;
                 result = mdt_init0(m, t, cfg);
                 if (result != 0) {
-                        mdt_fini(m);
+                        mdt_device_free(l);
                         return ERR_PTR(result);
                 }
 
@@ -1657,13 +1669,6 @@ static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
         return l;
 }
 
-static void mdt_device_free(struct lu_device *d)
-{
-        struct mdt_device *m = mdt_dev(d);
-
-        mdt_fini(m);
-        OBD_FREE_PTR(m);
-}
 
 static void *mdt_thread_init(struct lu_context *ctx)
 {
