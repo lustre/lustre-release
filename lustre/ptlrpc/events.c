@@ -50,7 +50,7 @@ void request_out_callback(lnet_event_t *ev)
                  ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
 
-        DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
+        DEBUG_REQ_EX((ev->status == 0) ? D_NET : D_ERROR, req,
                      "type %d, status %d", ev->type, ev->status);
 
         if (ev->type == LNET_EVENT_UNLINK || ev->status != 0) {
@@ -89,7 +89,7 @@ void reply_in_callback(lnet_event_t *ev)
         LASSERT (ev->offset == 0);
         LASSERT (ev->mlength <= req->rq_replen);
 
-        DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
+        DEBUG_REQ_EX((ev->status == 0) ? D_NET : D_ERROR, req,
                      "type %d, status %d", ev->type, ev->status);
 
         spin_lock_irqsave (&req->rq_lock, flags);
@@ -127,7 +127,7 @@ void client_bulk_callback (lnet_event_t *ev)
                  ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
 
-        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
+        CDEBUG_EX((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, desc %p\n",
                ev->type, ev->status, desc);
 
@@ -167,7 +167,7 @@ void request_in_callback(lnet_event_t *ev)
         LASSERT ((char *)ev->md.start + ev->offset + ev->mlength <=
                  rqbd->rqbd_buffer + service->srv_buf_size);
 
-        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
+        CDEBUG_EX((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, service %s\n",
                ev->type, ev->status, service->srv_name);
 
@@ -301,7 +301,7 @@ void server_bulk_callback (lnet_event_t *ev)
                  (desc->bd_type == BULK_GET_SINK &&
                   ev->type == LNET_EVENT_REPLY));
 
-        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
+        CDEBUG_EX((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, desc %p\n",
                ev->type, ev->status, desc);
 

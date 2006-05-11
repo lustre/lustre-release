@@ -173,7 +173,7 @@ int mds_client_free(struct obd_export *exp)
                                          sizeof(zero_mcd), &off, 1);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-                CDEBUG(rc == 0 ? D_INFO : D_ERROR,
+                CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
                        "zeroing out client %s idx %u in %s rc %d\n",
                        med->med_mcd->mcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
         }

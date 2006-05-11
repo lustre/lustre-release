@@ -126,7 +126,7 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                         rc = err;
         }
 
-        CDEBUG(log_pri, "wrote trans "LPU64" for client %s at #%d: err = %d\n",
+        CDEBUG_EX(log_pri, "wrote trans "LPU64" for client %s at #%d: err = %d\n",
                last_rcvd, fcd->fcd_uuid, fed->fed_lr_idx, err);
 
         RETURN(rc);
@@ -281,7 +281,7 @@ static int filter_client_free(struct obd_export *exp)
                                                   filter->fo_fsd, 1);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-                CDEBUG(rc == 0 ? D_INFO : D_ERROR,
+                CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
                        "zeroing out client %s at idx %u (%llu) in %s rc %d\n",
                        fed->fed_fcd->fcd_uuid, fed->fed_lr_idx, fed->fed_lr_off,
                        LAST_RCVD, rc);
@@ -2242,7 +2242,7 @@ out_unlock:
                 unsigned int cur_ids[MAXQUOTAS] = {oa->o_uid, oa->o_gid};
                 int rc2 = lquota_adjust(quota_interface, exp->exp_obd, cur_ids,
                                         orig_ids, rc, FSFILT_OP_SETATTR);
-                CDEBUG(rc2 ? D_ERROR : D_QUOTA,
+                CDEBUG_EX(rc2 ? D_ERROR : D_QUOTA,
                        "filter adjust qunit. (rc:%d)\n", rc2);
         }
         return rc;
@@ -2830,7 +2830,7 @@ cleanup:
         qcids[GRPQUOTA] = oa->o_gid;
         rc2 = lquota_adjust(quota_interface, obd, qcids, NULL, rc,
                             FSFILT_OP_UNLINK);
-        CDEBUG(rc2 ? D_ERROR : D_QUOTA,
+        CDEBUG_EX(rc2 ? D_ERROR : D_QUOTA,
                "filter adjust qunit! (rc:%d)\n", rc2);
         return rc;
 }

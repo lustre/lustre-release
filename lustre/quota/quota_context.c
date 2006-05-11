@@ -743,7 +743,7 @@ static int qslave_recovery_main(void *arg)
                                 rc = 0;
 
                         if (rc)
-                                CDEBUG(rc == -EBUSY ? D_QUOTA : D_ERROR, 
+                                CDEBUG_EX(rc == -EBUSY ? D_QUOTA : D_ERROR,
                                        "qslave recovery failed! (id:%d type:%d "
                                        " rc:%d)\n", dqid->di_id, type, rc);
 free:

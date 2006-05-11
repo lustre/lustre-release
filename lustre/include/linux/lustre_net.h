@@ -432,6 +432,14 @@ do {                                                                           \
             __DEBUG_REQ(CDEBUG, level, req, fmt, ## args);                     \
 } while (0)
 
+#define DEBUG_REQ_EX(level, req, fmt, args...)                          \
+do {                                                                    \
+        if ((level) & (D_ERROR | D_WARNING))                            \
+            __DEBUG_REQ(CDEBUG_LIMIT, D_ERROR, req, fmt, ## args);      \
+        else                                                            \
+            __DEBUG_REQ(CDEBUG_EX, level, req, fmt, ## args);           \
+} while (0)
+
 struct ptlrpc_bulk_page {
         struct list_head bp_link;
         int bp_buflen;

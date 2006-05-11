@@ -111,7 +111,7 @@ static int ptlrpc_pinger_main(void *arg)
                         imp->imp_force_verify = 0;
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-                        CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
+                        CDEBUG_EX(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
                                "level %s/%u force %u deactive %u pingable %u\n",
                                ptlrpc_import_state_name(level), level,
                                force, imp->imp_deactive, imp->imp_pingable);

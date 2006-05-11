@@ -1451,7 +1451,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         LASSERT(qctxt->lqc_handler);
         rc = qctxt->lqc_handler(master_obd, qdata, req->rq_reqmsg->opc);
         if (rc && rc != -EDQUOT)
-                CDEBUG(rc == -EBUSY  ? D_QUOTA : D_ERROR, 
+                CDEBUG_EX(rc == -EBUSY  ? D_QUOTA : D_ERROR,
                        "dqacq failed! (rc:%d)\n", rc);
 
         /* the qd_count might be changed in lqc_handler */

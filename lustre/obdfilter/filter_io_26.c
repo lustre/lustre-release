@@ -600,7 +600,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(oti->oti_handle)) {
                 UNLOCK_INODE_MUTEX(inode);
                 rc = PTR_ERR(oti->oti_handle);
-                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
+                CDEBUG_EX(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error starting transaction: rc = %d\n", rc);
                 oti->oti_handle = NULL;
                 GOTO(cleanup, rc);
@@ -683,7 +683,7 @@ cleanup:
         qcids[GRPQUOTA] = oa->o_gid;
         err = lquota_adjust(quota_interface, obd, qcids, NULL, rc,
                             FSFILT_OP_CREATE);
-        CDEBUG(err ? D_ERROR : D_QUOTA,
+        CDEBUG_EX(err ? D_ERROR : D_QUOTA,
                "error filter adjust qunit! (rc:%d)\n", err);
 
         RETURN(rc);
