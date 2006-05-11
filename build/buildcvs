@@ -57,7 +57,7 @@ case "$lustretag" in
         ;;
 
     b_new_cmd)
-	portalstag="b_hd_newconfig"
+	portalstag="b_new_portals"
         lnettag="b_new_lnet"
         ;;
 
