@@ -190,7 +190,7 @@ int run_command(char *cmd)
         return rc;
 }                                                       
 
-static int check_mtab_entry(char *spec, char *type)
+static int check_mtab_entry(char *spec)
 {
         FILE *fp;
         struct mntent *mnt;
@@ -200,8 +200,7 @@ static int check_mtab_entry(char *spec, char *type)
                 return(0);
 
         while ((mnt = getmntent(fp)) != NULL) {
-                if (strcmp(mnt->mnt_fsname, spec) == 0 &&
-                        strcmp(mnt->mnt_type, type) == 0) {
+                if (strcmp(mnt->mnt_fsname, spec) == 0) {
                         endmntent(fp);
                         fprintf(stderr, "%s: according to %s %s is "
                                 "already mounted on %s\n",
@@ -789,7 +788,7 @@ int read_local_files(struct mkfs_opts *mop)
                                            (pre CMD) */
                                         mop->mo_ldd.ldd_svindex = 0;
                                 } else {
-                                        /* The index won't be correct */
+                                        /* The index may not be correct */
                                         mop->mo_ldd.ldd_flags =
                                         LDD_F_SV_TYPE_OST | LDD_F_NEED_INDEX;
                                         vprint("OST with unknown index\n");
@@ -1101,7 +1100,7 @@ int main(int argc, char *const argv[])
         /* device is last arg */
         strcpy(mop.mo_device, argv[argc - 1]);
 
-        if (check_mtab_entry(mop.mo_device, "lustre"))
+        if (check_mtab_entry(mop.mo_device))
                 return(EEXIST);
 
         /* Are we using a loop device? */
