@@ -215,7 +215,6 @@ static int mdt_connect(struct mdt_thread_info *info,
         result = target_handle_connect(req, mdt_handle);
         if (result == 0) {
                 struct obd_connect_data *data;
-                int range;
 
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);

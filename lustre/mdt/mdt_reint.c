@@ -78,7 +78,6 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 {
         struct mdt_device      *mdt = info->mti_mdt;
         struct mdt_object      *o;
-        struct mdt_lock_handle *lh;
         int result;
 
         ENTRY;
