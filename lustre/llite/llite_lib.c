@@ -936,21 +936,24 @@ void ll_put_super(struct super_block *sb)
         cfg.cfg_instance = ll_instance;
         lustre_end_log(sb, NULL, &cfg);
         
-        obd = class_exp2obd(sbi->ll_mdc_exp);
-        if (obd) {
-                int force = obd->obd_no_recov;
-                /* We need to set force before the lov_disconnect in 
-                lustre_common_put_super, since l_d cleans up osc's as well. */
-                next = 0;
-                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
-                       != NULL) {
-                        obd->obd_force = force;
-                }                       
-        }
+        if (sbi->ll_lcq) {
+                /* Only if client_common_fill_super succeeded */
 
-        if (sbi->ll_lcq) 
-                /* Only call if client_common_fill_super succeeded */
+                obd = class_exp2obd(sbi->ll_mdc_exp);
+                if (obd) {
+                        int force = obd->obd_no_recov;
+                       /* We need to set force before the lov_disconnect in 
+                          lustre_common_put_super, since l_d cleans up osc's
+                          as well. */
+                        next = 0;
+                        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid,
+                                                             &next)) != NULL) {
+                                obd->obd_force = force;
+                        }                       
+                }
+
                 client_common_put_super(sb);
+        }
                 
         next = 0;
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
