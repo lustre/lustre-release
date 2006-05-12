@@ -115,7 +115,7 @@ static int mdt_reint_create(struct mdt_thread_info *info)
                 break;
         }
         case S_IFDIR:{
-                if (info->mti_rr.rr_name)
+                if (strlen(info->mti_rr.rr_name) > 0)
                         rc = mdt_md_mkdir(info);
                 else
                         rc = mdt_md_mkobj(info);

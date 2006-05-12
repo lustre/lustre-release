@@ -215,11 +215,13 @@ static int mdt_connect(struct mdt_thread_info *info,
         result = target_handle_connect(req, mdt_handle);
         if (result == 0) {
                 struct obd_connect_data *data;
+                int range;
 
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
 
                 data = lustre_msg_buf(req->rq_repmsg, 0, sizeof *data);
+
                 result = seq_mgr_alloc(info->mti_ctxt,
                                        info->mti_mdt->mdt_seq_mgr,
                                        &data->ocd_seq);
@@ -1350,6 +1352,7 @@ static int mdt_init0(struct mdt_device *m,
         char   ns_name[48];
         struct lu_context ctx;
         const char *dev = lustre_cfg_string(cfg, 0);
+        const char *num = lustre_cfg_string(cfg, 2);
         struct obd_device *obd;
         ENTRY;
 
@@ -1376,12 +1379,18 @@ static int mdt_init0(struct mdt_device *m,
                 GOTO(err_fini_site, rc);
         }
 
+        /* set server index */
+        LASSERT(num);
+        s->ls_node_id = simple_strtol(num, NULL, 10);
+        
         m->mdt_seq_mgr = seq_mgr_init(&seq_mgr_ops, m);
         if (!m->mdt_seq_mgr) {
                 CERROR("can't initialize sequence manager\n");
                 GOTO(err_fini_stack, rc);
         }
-
+        /* set initial sequence by mds index */
+        m->mdt_seq_mgr->m_seq = s->ls_node_id * LUSTRE_SEQ_RANGE;
+        
         rc = lu_context_init(&ctx);
         if (rc != 0)
                 GOTO(err_fini_mgr, rc);
