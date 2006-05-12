@@ -29,12 +29,10 @@
 #include <linux/md_object.h>
 
 struct mdc_cli_desc {
-        struct obd_connect_data cl_conn_data;
-        struct semaphore        cl_rpcl_sem;
-        struct ptlrpc_client    cl_ldlm_client; 
-        struct obd_uuid         cl_server_uuid;
-        struct obd_uuid         cl_target_uuid;
-        struct obd_import       *cl_import;
+        struct obd_connect_data  cl_conn_data;
+        struct obd_uuid          cl_srv_uuid;
+        struct obd_uuid          cl_cli_uuid;
+        struct obd_export        *cl_exp;
 };
 
 struct mdc_device {

@@ -31,7 +31,11 @@
 #endif
 
 #define DEBUG_SUBSYSTEM S_MDS
-
+#include <linux/obd_support.h>
+#include <linux/lustre_lib.h>
+#include <linux/lustre_net.h>
+#include <linux/lustre_idl.h>
+#include <linux/obd_class.h>
 #include "mdc_internal.h"
 
 static struct md_object_operations mdc_mo_ops;
@@ -96,12 +100,19 @@ static int mdc_object_create(struct lu_context *ctx, struct md_object *mo,
                              struct lu_attr *attr)
 {
         struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
-        int rc;
-        struct mdt_rec_create *rec;
+        struct obd_export *exp = mc->mc_desc.cl_exp;
         struct ptlrpc_request *req;
-        int size = sizeof(struct mdt_rec_create);
-        int level;
+        struct md_op_data op_data = {
+                .fid1 = mo->mo_lu.lo_header->loh_fid,
+                .fid2 = { 0 },
+                .mod_time = attr->la_mtime,
+                .name = NULL,
+                .namelen = 0,
+        };
+        int rc;
 
+        
+#if 0
         req = ptlrpc_prep_req(mc->mc_desc.cl_import, LUSTRE_MDS_VERSION,
                               MDS_REINT, 1, &size, NULL);
         if (req == NULL)
@@ -139,7 +150,9 @@ static int mdc_object_create(struct lu_context *ctx, struct md_object *mo,
                 rc = -EPROTO;
         } else
                 CDEBUG(D_INFO, "Done MDC req!\n");
-
+#endif
+        rc = md_create(exp, &op_data, NULL, 0, attr->la_mode, attr->la_uid,
+                       attr->la_gid, 0, 0, &req);
         RETURN(rc);
 }
 

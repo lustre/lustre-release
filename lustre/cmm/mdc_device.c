@@ -37,7 +37,6 @@
 #include "mdc_internal.h"
 
 #include <linux/lprocfs_status.h>
-#include <linux/module.h>
 #include <linux/lustre_ver.h>
 
 static struct lu_device_operations mdc_lu_ops;
@@ -86,17 +85,64 @@ static struct md_device_operations mdc_md_ops = {
         .mdo_statfs         = mdc_statfs,
 };
 
+static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
+{
+        struct mdc_cli_desc *desc = &mc->mc_desc;
+        struct obd_device *mdc, *mdt;
+        const char *srv = lustre_cfg_string(cfg, 0);
+        const char *uuid_str = lustre_cfg_string(cfg, 1);
+        const char *index = lustre_cfg_string(cfg, 2);
+        struct obd_uuid uuid;
+        int rc = 0;
+
+        //find mdt obd to get group uuid
+        mdt = class_name2obd(srv);
+        if (mdt == NULL) {
+                CERROR("No such OBD %s\n", srv);
+                LBUG();
+        }
+        obd_str2uuid(&uuid, uuid_str);
+        mdc = class_find_client_obd(&uuid, LUSTRE_MDC_NAME, &mdt->obd_uuid);
+        if (!mdc) {
+                CERROR("Cannot find MDC OBD connected to %s\n", uuid_str);
+                rc = -ENOENT;
+        } else if (!mdc->obd_set_up) {
+                CERROR("target %s not set up\n", mdc->obd_name);
+                rc = -EINVAL;
+        } else {
+                struct lustre_handle conn = {0, };
+                struct obd_connect_data conn_data = {
+                        .ocd_connect_flags = OBD_CONNECT_SEQRNG
+                                             | OBD_CONNECT_VERSION,
+                        .ocd_version = LUSTRE_VERSION_CODE
+                };
+
+                CDEBUG(D_CONFIG, "connect to %s(%s)\n",
+                       mdc->obd_name, mdc->obd_uuid.uuid);
+                
+                rc = obd_connect(&conn, mdc, &mdt->obd_uuid, NULL);
+
+                if (rc) {
+                        CERROR("target %s connect error %d\n",
+                               mdc->obd_name, rc);
+                } else {
+                        desc->cl_exp = class_conn2export(&conn);
+                        mc->mc_num = simple_strtol(index, NULL, 10);
+                }
+        }
+        
+        RETURN(rc);
+}
+
 static int mdc_process_config(struct lu_device *ld, struct lustre_cfg *cfg)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
-        const char *index = lustre_cfg_string(cfg, 2);
         int rc;
 
         ENTRY;
         switch (cfg->lcfg_command) {
         case LCFG_ADD_MDC:
-                mc->mc_num = simple_strtol(index, NULL, 10);
-                rc = 0;
+                rc = mdc_add_obd(mc, cfg);
                 break;
         default:
                 rc = -EOPNOTSUPP;
@@ -110,7 +156,7 @@ static struct lu_device_operations mdc_lu_ops = {
 
         .ldo_process_config = mdc_process_config
 };
-
+#if 0
 static int mdc_device_connect(struct mdc_device *mc)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
@@ -250,7 +296,46 @@ struct lu_device *mdc_device_alloc(struct lu_device_type *ldt,
 
         RETURN (ld);
 }
+#endif
+static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
+{
+        struct mdc_device *mc = lu2mdc_dev(ld);
+        int rc = 0;
 
+        ENTRY;
+
+        RETURN(rc);
+}
+
+static struct lu_device *mdc_device_fini(struct lu_device *ld)
+{
+	struct mdc_device *mc = lu2mdc_dev(ld);
+       
+        ENTRY;
+
+        RETURN (NULL);
+}
+
+struct lu_device *mdc_device_alloc(struct lu_device_type *ldt,
+                                   struct lustre_cfg *cfg)
+{
+        struct lu_device  *ld;
+        struct mdc_device *mc;
+
+        ENTRY;
+
+        OBD_ALLOC_PTR(mc);
+        if (mc == NULL) {
+                ld = ERR_PTR(-ENOMEM);
+        } else {
+                md_device_init(&mc->mc_md_dev, ldt);
+                mc->mc_md_dev.md_ops = &mdc_md_ops;
+	        ld = mdc2lu_dev(mc);
+                ld->ld_ops = &mdc_lu_ops;
+        }
+
+        RETURN (ld);
+}
 void mdc_device_free(struct lu_device *ld)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
@@ -286,7 +371,7 @@ struct lu_device_type mdc_device_type = {
         .ldt_name = LUSTRE_MDC0_NAME,
         .ldt_ops  = &mdc_device_type_ops
 };
-
+#if 0
 static struct obd_ops mdc0_obd_device_ops = {
         .o_owner           = THIS_MODULE
 };
@@ -323,3 +408,4 @@ MODULE_DESCRIPTION("Lustre Metadata Client Prototype ("LUSTRE_MDC0_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(mdc, "0.0.1", mdc0_mod_init, mdc0_mod_exit);
+#endif

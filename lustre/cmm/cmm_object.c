@@ -43,8 +43,9 @@ static int cmm_fld_lookup(struct lu_fid *fid)
 {
         int rc;
         /* temporary hack for proto mkdir */
-        rc = fid_seq(fid) == LUSTRE_ROOT_FID_SEQ ? 0 : 1;
-        RETURN(0);
+        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_RANGE;
+        CWARN("Get MDS %d for sequence: "LPU64"\n", rc, fid_seq(fid));
+        RETURN(rc);
 }
 
 /* get child device by mdsnum*/

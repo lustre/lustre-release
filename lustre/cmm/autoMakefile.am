@@ -4,9 +4,8 @@
 # See the file COPYING in this distribution
 
 if MODULES
-modulefs_DATA = cmm$(KMODEXT) cmmmdc$(KMODEXT)
+modulefs_DATA = cmm$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(cmm-objs:%.o=%.c) $(cmmmdc-objs:%.o=%.c) \
-        cmm_internal.h mdc_internal.h
+DIST_SOURCES = $(cmm-objs:%.o=%.c) cmm_internal.h mdc_internal.h

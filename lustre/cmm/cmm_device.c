@@ -83,7 +83,7 @@ int cmm_statfs(struct lu_context *ctxt, struct md_device *md,
 
         ENTRY;
         rc = cmm_child_ops(cmm_dev)->mdo_statfs(ctxt,
-                                                    cmm_dev->cmm_child, sfs);
+                                                cmm_dev->cmm_child, sfs);
         RETURN (rc);
 }
 
@@ -93,25 +93,20 @@ static struct md_device_operations cmm_md_ops = {
         .mdo_statfs         = cmm_statfs,
 };
 
+extern struct lu_device_type mdc_device_type;
+
 /* add new MDC to the CMM, create MDC lu_device and connect it to mdc_obd */
 static int cmm_add_mdc(struct cmm_device * cm, struct lustre_cfg *cfg)
 {
-        struct lu_device_type *ldt;
+        struct lu_device_type *ldt = &mdc_device_type;
         struct lu_device *ld;
-        struct obd_device *obd;
-        const char *name = lustre_cfg_string(cfg, 1);
         int rc;
         ENTRY;
         
         /*TODO check this MDC exists already */
-        obd = class_name2obd(name);
-        if (obd) {
-                ld = obd->obd_lu_dev;
-        } else {
-                RETURN(-ENOENT);
-        }
+
+        ld = ldt->ldt_ops->ldto_device_alloc(ldt, cfg);
         
-        ldt = ld->ld_type;
         ld->ld_site = cmm2lu_dev(cm)->ld_site;
 
         rc = ldt->ldt_ops->ldto_device_init(ld, NULL);
