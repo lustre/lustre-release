@@ -71,8 +71,9 @@ int seq_mgr_read(struct lu_context *ctx, struct lu_seq_mgr *mgr)
 }
 EXPORT_SYMBOL(seq_mgr_read);
 
-/* manager functinality stuff */
-int seq_mgr_alloc(struct lu_context *ctx, struct lu_seq_mgr *mgr, __u64 *seq)
+/* manager functionality stuff */
+int seq_mgr_alloc(struct lu_context *ctx, struct lu_seq_mgr *mgr,
+                  __u64 *seq)
 {
         int rc = 0;
         ENTRY;
@@ -81,11 +82,15 @@ int seq_mgr_alloc(struct lu_context *ctx, struct lu_seq_mgr *mgr, __u64 *seq)
         LASSERT(seq != NULL);
 
         down(&mgr->m_seq_sem);
-        mgr->m_seq += 1;
-        *seq = mgr->m_seq;
+        if (mgr->m_seq > mgr->m_seq_last) {
+                /* new range of seqs should be got from master */
+                rc = -EOPNOTSUPP;
+        } else {
+                *seq = mgr->m_seq;
+                mgr->m_seq++;
 
-        rc = seq_mgr_write(ctx, mgr);
-
+                rc = seq_mgr_write(ctx, mgr);
+        }
         up(&mgr->m_seq_sem);
         RETURN(rc);
 }
@@ -99,8 +104,10 @@ int seq_mgr_setup(struct lu_context *ctx, struct lu_seq_mgr *mgr)
         int rc = 0;
         ENTRY;
 
+        /* set seq range */
+        mgr->m_seq_last = mgr->m_seq + LUSTRE_SEQ_RANGE;
         /* allocate next seq after root one */
-        mgr->m_seq = LUSTRE_ROOT_FID_SEQ + 1;
+        mgr->m_seq += LUSTRE_ROOT_FID_SEQ + 1;
 
         rc = seq_mgr_read(ctx, mgr);
         if (rc == -ENODATA) {
@@ -132,4 +139,4 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre FID Module");
 MODULE_LICENSE("GPL");
 
-cfs_module(fid, "0.0.1", fid_mod_init, fid_mod_exit);
+cfs_module(fid, "0.0.2", fid_mod_init, fid_mod_exit);
