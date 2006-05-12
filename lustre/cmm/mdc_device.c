@@ -111,10 +111,6 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
                 rc = -EINVAL;
         } else {
                 struct lustre_handle conn = {0, };
-                struct obd_connect_data conn_data = {
-                        .ocd_connect_flags = OBD_CONNECT_VERSION,
-                        .ocd_version = LUSTRE_VERSION_CODE
-                };
 
                 CDEBUG(D_CONFIG, "connect to %s(%s)\n",
                        mdc->obd_name, mdc->obd_uuid.uuid);
@@ -298,7 +294,7 @@ struct lu_device *mdc_device_alloc(struct lu_device_type *ldt,
 #endif
 static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
 {
-        struct mdc_device *mc = lu2mdc_dev(ld);
+        /* struct mdc_device *mc = lu2mdc_dev(ld); */
         int rc = 0;
 
         ENTRY;
@@ -308,7 +304,7 @@ static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
 
 static struct lu_device *mdc_device_fini(struct lu_device *ld)
 {
-	struct mdc_device *mc = lu2mdc_dev(ld);
+	/* struct mdc_device *mc = lu2mdc_dev(ld); */
        
         ENTRY;
 
