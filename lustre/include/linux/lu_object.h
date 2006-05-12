@@ -452,6 +452,8 @@ struct lu_site {
          * Top-level device for this stack.
          */
         struct lu_device  *ls_top_dev;
+        /* current server index */
+        __u32             ls_node_id;
         /*
          * Fid location database
          */

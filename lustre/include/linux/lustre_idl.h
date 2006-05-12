@@ -144,6 +144,9 @@ enum {
         /* maximal objects in sequence */
         LUSTRE_FID_SEQ_WIDTH = 10000,
 
+        /* range of seqs for one MDS */
+        LUSTRE_SEQ_RANGE = 1000,
+
         /* initial fid id value */
         LUSTRE_FID_INIT_OID  = 1UL,
 

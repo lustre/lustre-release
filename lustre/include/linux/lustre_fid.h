@@ -40,8 +40,11 @@ struct lu_seq_mgr_ops {
 struct lu_seq_mgr {
         /* seq management fields */
         struct semaphore       m_seq_sem;
+        /* each MDS has own range of seqs ended with this value
+         * if it is overflowed the new one should be got from master node */
+        __u64                  m_seq_last;
+        /* last allocated seq */
         __u64                  m_seq;
-
         /* ops related stuff */
         void                  *m_opaque;
         struct lu_seq_mgr_ops *m_ops;
@@ -56,7 +59,7 @@ int seq_mgr_setup(struct lu_context *, struct lu_seq_mgr *);
 int seq_mgr_read(struct lu_context *, struct lu_seq_mgr *);
 int seq_mgr_write(struct lu_context *, struct lu_seq_mgr *);
 int seq_mgr_alloc(struct lu_context *, struct lu_seq_mgr *, __u64 *);
-
+int seq_mgr_range_alloc(struct lu_context *, struct lu_seq_mgr *, __u64 *);
 struct lu_site;
 #if 0
 int fid_is_local(struct lu_site *site, const struct lu_fid *fid);
