@@ -1189,11 +1189,12 @@ static int mgs_write_log_mdc_to_mds(struct obd_device *obd, struct fs_db *fsdb,
                        libcfs_nid2str(mti->mti_nids[i]));
                 rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
         }
-        rc = record_attach(obd, llh, mdcname, LUSTRE_MDC0_NAME, mdcuuid);
+        rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, mdtuuid);
         rc = record_setup(obd, llh, mdcname, mti->mti_uuid, nodeuuid, 0, 0);
         rc = mgs_write_log_failnids(obd, mti, llh, mdcname);
         snprintf(index, sizeof(index), "%d", idx);
-        rc = record_mdc_add(obd, llh, logname, mdcname, index, "1");
+        rc = record_mdc_add(obd, llh, logname, mti->mti_uuid /*mdcname*/,
+                            index, "1");
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdc"); 
         rc = record_end_log(obd, &llh);
 
