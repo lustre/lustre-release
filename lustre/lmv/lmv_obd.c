@@ -651,6 +651,7 @@ static int lmv_fids_balanced(struct obd_device *obd)
 static int lmv_placment_policy(struct obd_device *obd,
                                struct placement_hint *hint)
 {
+        struct lmv_obd *lmv = &obd->u.lmv;
         ENTRY;
 
         /* here are some policies to allocate new fid */
@@ -662,7 +663,10 @@ static int lmv_placment_policy(struct obd_device *obd,
                 /* sequences among all tgts are not well balanced, allocate new
                  * fid taking this into account to balance them. */
         }
-        
+        //stub to place new dir on second MDS
+        if (hint->ph_opc == LUSTRE_OPC_MKDIR)
+                RETURN(lmv->desc.ld_tgt_count - 1);
+
         RETURN(0);
 }
 
