@@ -96,7 +96,7 @@ void class_decref(struct obd_device *obd);
 #define CFG_F_START     0x01   /* Set when we start updating from a log */
 #define CFG_F_MARKER    0x02   /* We are within a maker */
 #define CFG_F_SKIP      0x04   /* We should ignore this cfg command */
-#define CFG_F_COMPAT146 0x08   /* Translation to new obd names required */
+#define CFG_F_COMPAT146 0x08   /* Using old-style log */
 #define CFG_F_EXCLUDE   0x10   /* OST exclusion list */
 
 
@@ -132,6 +132,7 @@ struct lustre_profile {
 
 struct lustre_profile *class_get_profile(char * prof);
 void class_del_profile(char *prof);
+void class_del_profiles(void);
 
 /* genops.c */
 #define class_export_get(exp)                                                  \

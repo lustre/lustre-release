@@ -358,7 +358,11 @@ static int mgc_cleanup(struct obd_device *obd)
 
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
         
+        /* Failsafes called at EOW */
         config_log_end_all();
+        /* COMPAT_146 - old config logs may have added profiles we don't 
+           know about */
+        class_del_profiles();
 
         ptlrpcd_decref();
 
@@ -1051,9 +1055,8 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 }
                 
                 /* COMPAT_146 */
-                /* For old logs, there was no start marker. */
                 /* FIXME only set this for old logs! */
-                cld->cld_cfg.cfg_flags |= CFG_F_MARKER;
+                cld->cld_cfg.cfg_flags |= CFG_F_COMPAT146;
                 
                 rc = mgc_process_log(obd, cld);
                 config_log_put(cld);

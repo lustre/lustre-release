@@ -53,10 +53,10 @@ int qos_add_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt)
         int rc = 0, found = 0;
         ENTRY;
 
-        if (!obd->obd_observer) 
-                /* QOS is only on MDT, not clients */
-                RETURN(0);
-
+        /* We only need this QOS struct on MDT, not clients - but we may not
+           have registered the lov's observer yet, so there's no way to check
+           here. */
+                            
         if (!tgt->ltd_exp || !tgt->ltd_exp->exp_connection) {
                 CERROR("Missing connection\n");
                 RETURN(-ENOTCONN);
@@ -316,7 +316,7 @@ static int qos_calc_rr(struct lov_obd *lov)
 {
         struct lov_qos_oss *oss;
         struct lov_tgt_desc *tgt;
-        unsigned ost_count;
+        unsigned ost_count, placed;
         int i;
         ENTRY;
 
@@ -343,20 +343,27 @@ static int qos_calc_rr(struct lov_obd *lov)
                 lov->lov_qos.lq_rr_array[i] = LOV_QOS_EMPTY;
 
         /* Place all the OSTs from 1 OSS at the same time. */
+        placed = 0;
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 int j = 0;
                 for (i = 0, tgt = lov->tgts; i < ost_count; i++, tgt++) {
                       if (tgt->ltd_qos.ltq_oss == oss) {
                               /* Evenly space these OSTs across arrayspace */
                               int next = j * ost_count / oss->lqo_ost_count;
-                              while (lov->lov_qos.lq_rr_array[next] != LOV_QOS_EMPTY)
+                              while (lov->lov_qos.lq_rr_array[next] !=
+                                     LOV_QOS_EMPTY)
                                       next = (next + 1) % ost_count;
                               lov->lov_qos.lq_rr_array[next] = i;
                               j++;
+                              placed++;
+                              /* Protection against add races */
+                              if (placed >= ost_count) 
+                                      break;
                       }
                 }
                 LASSERT(j == oss->lqo_ost_count);
         }
+        LASSERT(placed == ost_count);
 
         lov->lov_qos.lq_dirty_rr = 0;
 

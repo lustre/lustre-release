@@ -37,7 +37,7 @@ cp -u ../mgs/mgs.$EXT $MDIR
 # prevent warnings on my uml
 rm -f /lib/modules/`uname -r`/modules.*
 echo "Depmod"
-depmod -a -e
+depmod -A -e
 
 echo "Copying mount from local build dir to "$MDIR
 cp -u ../utils/mount.lustre /sbin/.

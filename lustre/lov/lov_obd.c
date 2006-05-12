@@ -166,10 +166,6 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         tgt->ltd_reap = 0;
         lov->desc.ld_active_tgt_count++;
 
-        rc = qos_add_tgt(obd, tgt);
-        if (rc) 
-                CERROR("qos_add_tgt failed %d\n", rc);
-
 #ifdef __KERNEL__
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
@@ -510,6 +506,10 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         if (rc)
                 GOTO(out, rc);
 
+        rc = qos_add_tgt(obd, tgt);
+        if (rc) 
+                CERROR("qos_add_tgt failed %d\n", rc);
+
         idx = index;
         rc = lov_notify(obd, tgt->ltd_exp->exp_obd, 
                         active ? OBD_NOTIFY_ACTIVE : OBD_NOTIFY_INACTIVE,
@@ -686,6 +686,9 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         atomic_set(&lov->lov_refcount, 0);
         INIT_LIST_HEAD(&lov->lov_qos.lq_oss_list);
         init_rwsem(&lov->lov_qos.lq_rw_sem);
+        lov->lov_qos.lq_dirty = 1;
+        lov->lov_qos.lq_dirty_rr = 1;
+        lov->lov_qos.lq_reset = 1;
 
         lprocfs_init_vars(lov, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);

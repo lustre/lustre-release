@@ -461,6 +461,13 @@ int lustre_process_log(struct super_block *sb, char *logname,
         rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
         lustre_cfg_free(lcfg);
 
+        if (rc == -EINVAL) 
+                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
+                               "from the MGS (%d).  Make sure this client and "
+                               "the MGS are running compatible versions of "
+                               "Lustre.\n",
+                               mgc->obd_name, logname, rc);
+
         if (rc) 
                 LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
                                "from the MGS (%d).  This may be the result of "
@@ -499,8 +506,8 @@ int lustre_end_log(struct super_block *sb, char *logname,
 
 /**************** obd start *******************/
 
-static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
-                   char *s1, char *s2, char *s3, char *s4)
+int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
+            char *s1, char *s2, char *s3, char *s4)
 {
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg    * lcfg = NULL;
@@ -675,12 +682,13 @@ static int lustre_start_mgc(struct super_block *sb)
                         }
                 }
         } else { /* client */
-                /* use nids from mount line: uml1,1@elan:uml2,2@elan:/lustre */
+                /* Use nids from mount line: uml1,1@elan:uml2,2@elan:/lustre */
                 ptr = lsi->lsi_lmd->lmd_dev;
                 while (class_parse_nid(ptr, &nid, &ptr) == 0) {
                         rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid,
                                      LCFG_ADD_UUID, "mgsnid0", 0,0,0);
                         i++;
+                        /* Stop at the first failover nid */
                         if (*ptr == ':') 
                                 break;
                 }
@@ -1290,8 +1298,9 @@ static void server_wait_finished(struct vfsmount *mnt)
         init_waitqueue_head(&waitq);
 
         while ((atomic_read(&mnt->mnt_count) > 0) && retries--) {
-                CWARN("Mount still busy with %d refs\n",
-                       atomic_read(&mnt->mnt_count));
+                LCONSOLE_WARN("Mount still busy with %d refs, waiting for "
+                              "%d secs...\n",
+                              atomic_read(&mnt->mnt_count), 2 * retries);
 
                 /* Wait for a bit */
                 lwi = LWI_TIMEOUT(2 * HZ, NULL, NULL);
@@ -1922,5 +1931,6 @@ EXPORT_SYMBOL(server_mti_print);
 EXPORT_SYMBOL(class_find_param);
 EXPORT_SYMBOL(class_match_param);
 EXPORT_SYMBOL(class_parse_nid);
+EXPORT_SYMBOL(do_lcfg);
 
 

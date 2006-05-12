@@ -529,8 +529,10 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
 {
         struct lustre_profile *lprof;
         int err = 0;
-
         ENTRY;
+
+        CDEBUG(D_CONFIG, "Add profile %s\n", prof);
+
         OBD_ALLOC(lprof, sizeof(*lprof));
         if (lprof == NULL)
                 RETURN(-ENOMEM);
@@ -573,6 +575,9 @@ out:
 void class_del_profile(char *prof)
 {
         struct lustre_profile *lprof;
+        ENTRY;
+
+        CDEBUG(D_CONFIG, "Del profile %s\n", prof);
 
         lprof = class_get_profile(prof);
         if (lprof) {
@@ -583,6 +588,24 @@ void class_del_profile(char *prof)
                         OBD_FREE(lprof->lp_mdc, strlen(lprof->lp_mdc) + 1);
                 OBD_FREE(lprof, sizeof *lprof);
         }
+        EXIT;
+}
+
+/* COMPAT_146 */
+void class_del_profiles(void)
+{
+        struct lustre_profile *lprof, *n;
+        ENTRY;
+
+        list_for_each_entry_safe(lprof, n, &lustre_profile_list, lp_list) {
+                list_del(&lprof->lp_list);
+                OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
+                OBD_FREE(lprof->lp_osc, strlen(lprof->lp_osc) + 1);
+                if (lprof->lp_mdc)
+                        OBD_FREE(lprof->lp_mdc, strlen(lprof->lp_mdc) + 1);
+                OBD_FREE(lprof, sizeof *lprof);
+        }
+        EXIT;
 }
 
 int class_process_config(struct lustre_cfg *lcfg)
@@ -769,17 +792,17 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         }
                 }
                 /* A config command without a start marker before it is 
-                   illegal (1.4.6. compat must set it artificially) */
-                if (!(clli->cfg_flags & CFG_F_MARKER) && 
+                   illegal (post 146) */
+                if (!(clli->cfg_flags & CFG_F_COMPAT146) &&
+                    !(clli->cfg_flags & CFG_F_MARKER) && 
                     (lcfg->lcfg_command != LCFG_MARKER)) {
                         CWARN("Config not inside markers, ignoring! (%#x)\n", 
                               clli->cfg_flags);
                         clli->cfg_flags |= CFG_F_SKIP;
                 }
-                
+
                 if (clli->cfg_flags & CFG_F_SKIP) {
-                        // FIXME warning
-                        CDEBUG(D_CONFIG|D_WARNING, "skipping %#x\n",
+                        CDEBUG(D_CONFIG, "skipping %#x\n",
                                clli->cfg_flags);
                         rc = 0;
                         /* No processing! */

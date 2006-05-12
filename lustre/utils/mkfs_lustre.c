@@ -758,10 +758,15 @@ int read_local_files(struct mkfs_opts *mop)
                                 goto out_close;
                 }
                 ret = 0;
-                if (lsd.lsd_feature_compat & OBD_COMPAT_OST) {
+                vprint("Feature compat=%x, incompat=%x\n",
+                       lsd.lsd_feature_compat, lsd.lsd_feature_incompat);
+
+                if ((lsd.lsd_feature_compat & OBD_COMPAT_OST) ||
+                    (lsd.lsd_feature_incompat & OBD_INCOMPAT_OST)) {
                         mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
                         mop->mo_ldd.ldd_svindex = lsd.lsd_ost_index;
-                } else if (lsd.lsd_feature_compat & OBD_COMPAT_MDT) {
+                } else if ((lsd.lsd_feature_compat & OBD_COMPAT_MDT) ||
+                           (lsd.lsd_feature_incompat & OBD_INCOMPAT_MDT)) {
                         /* We must co-locate so mgs can see old logs.
                            If user doesn't want this, they can copy the old
                            logs manually and re-tunefs. */
@@ -787,6 +792,8 @@ int read_local_files(struct mkfs_opts *mop)
                                         /* The index won't be correct */
                                         mop->mo_ldd.ldd_flags =
                                         LDD_F_SV_TYPE_OST | LDD_F_NEED_INDEX;
+                                        vprint("OST with unknown index\n");
+
                                 }
                         }
                 }

@@ -418,6 +418,7 @@ EXPORT_SYMBOL(class_incref);
 EXPORT_SYMBOL(class_decref);
 EXPORT_SYMBOL(class_get_profile);
 EXPORT_SYMBOL(class_del_profile);
+EXPORT_SYMBOL(class_del_profiles);
 EXPORT_SYMBOL(class_process_config);
 EXPORT_SYMBOL(class_config_parse_llog);
 EXPORT_SYMBOL(class_config_dump_llog);

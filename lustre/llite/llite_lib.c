@@ -33,6 +33,7 @@
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
 #include <lustre_disk.h>
+#include <lustre_param.h>
 #include "llite_internal.h"
 
 kmem_cache_t *ll_file_data_slab;
@@ -643,13 +644,187 @@ void ll_lli_init(struct ll_inode_info *lli)
         INIT_LIST_HEAD(&lli->lli_dead_list);
 }
 
+/* COMPAT_146 */
+#define MDCDEV "mdc_dev"
+static int old_lustre_process_log(struct super_block *sb, char *newprofile,
+                                  struct config_llog_instance *cfg)
+{
+        struct lustre_sb_info *lsi = s2lsi(sb);
+        struct obd_device *obd;
+        struct lustre_handle mdc_conn = {0, };
+        struct obd_export *exp;
+        char *ptr, *mdt, *profile;
+        char niduuid[10] = "mdtnid0";
+        class_uuid_t uuid;
+        struct obd_uuid mdc_uuid;
+        struct llog_ctxt *ctxt;
+        struct obd_connect_data ocd = { 0 };
+        lnet_nid_t nid;
+        int i, rc = 0, recov_bk = 1, failnodes = 0;
+        ENTRY;
+
+        class_generate_random_uuid(uuid);
+        class_uuid_unparse(uuid, &mdc_uuid);
+        CDEBUG(D_HA, "generated uuid: %s\n", mdc_uuid.uuid);
+        
+        /* Figure out the old mdt and profile name from new-style profile
+           ("lustre" from "mds/lustre-client") */
+        mdt = newprofile;
+        profile = strchr(mdt, '/');
+        if (profile == NULL) {
+                CDEBUG(D_CONFIG, "Can't find MDT name in %s\n", newprofile);
+                GOTO(out, rc = -EINVAL);
+        }
+        *profile = '\0';
+        profile++;
+        ptr = strrchr(profile, '-');
+        if (ptr == NULL) {
+                CDEBUG(D_CONFIG, "Can't find client name in %s\n", newprofile);
+                GOTO(out, rc = -EINVAL);
+        }
+        *ptr = '\0';
+
+        LCONSOLE_WARN("This looks like an old mount command; I will try to "
+                      "contact MDT '%s' for profile '%s'\n", mdt, profile);
+
+        /* Use nids from mount line: uml1,1@elan:uml2,2@elan:/lustre */
+        i = 0;
+        ptr = lsi->lsi_lmd->lmd_dev;
+        while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+                rc = do_lcfg(MDCDEV, nid, LCFG_ADD_UUID, niduuid, 0,0,0);
+                i++;
+                /* Stop at the first failover nid */
+                if (*ptr == ':') 
+                        break;
+        }
+        if (i == 0) {
+                CERROR("No valid MDT nids found.\n");
+                GOTO(out, rc = -EINVAL);
+        }
+        failnodes++;
+
+        rc = do_lcfg(MDCDEV, 0, LCFG_ATTACH, LUSTRE_MDC_NAME,mdc_uuid.uuid,0,0);
+        if (rc < 0)
+                GOTO(out_del_uuid, rc);
+
+        rc = do_lcfg(MDCDEV, 0, LCFG_SETUP, mdt, niduuid, 0, 0);
+        if (rc < 0) {
+                LCONSOLE_ERROR("I couldn't establish a connection with the MDT."
+                               " Check that the MDT host NID is correct and the"
+                               " networks are up.\n");
+                GOTO(out_detach, rc);
+        }
+
+        obd = class_name2obd(MDCDEV);
+        if (obd == NULL)
+                GOTO(out_cleanup, rc = -EINVAL);
+
+        /* Add any failover nids */
+        while (*ptr == ':') {
+                /* New failover node */
+                sprintf(niduuid, "mdtnid%d", failnodes);
+                i = 0;
+                while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+                        i++;
+                        rc = do_lcfg(MDCDEV, nid, LCFG_ADD_UUID, niduuid,0,0,0);
+                        if (rc)
+                                CERROR("Add uuid for %s failed %d\n", 
+                                       libcfs_nid2str(nid), rc);
+                        if (*ptr == ':') 
+                                break;
+                }
+                if (i > 0) {
+                        rc = do_lcfg(MDCDEV, 0, LCFG_ADD_CONN, niduuid, 0, 0,0);
+                        if (rc) 
+                                CERROR("Add conn for %s failed %d\n", 
+                                       libcfs_nid2str(nid), rc);
+                        failnodes++;
+                } else {
+                        /* at ":/fsname" */
+                        break;
+                }
+        }
+
+        /* Try all connections, but only once. */
+        rc = obd_set_info_async(obd->obd_self_export,
+                                strlen("init_recov_bk"), "init_recov_bk",
+                                sizeof(recov_bk), &recov_bk, NULL);
+        if (rc)
+                GOTO(out_cleanup, rc);
+
+        ocd.ocd_connect_flags = OBD_CONNECT_ACL;
+
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, &ocd);
+        if (rc) {
+                CERROR("cannot connect to %s: rc = %d\n", mdt, rc);
+                GOTO(out_cleanup, rc);
+        }
+
+        exp = class_conn2export(&mdc_conn);
+
+        ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
+        
+        cfg->cfg_flags |= CFG_F_COMPAT146;
+
+#if 1
+        rc = class_config_parse_llog(ctxt, profile, cfg);
+#else
+        /*
+         * For debugging, it's useful to just dump the log
+         */
+        rc = class_config_dump_llog(ctxt, profile, cfg);
+#endif
+        switch (rc) {
+        case 0: {
+                /* Set the caller's profile name to the old-style */
+                memcpy(newprofile, profile, strlen(profile) + 1);
+                break;
+        }
+        case -EINVAL:
+                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
+                               "from the MDT '%s'.  Make sure this client and "
+                               "the MDT are running compatible versions of "
+                               "Lustre.\n",
+                               obd->obd_name, profile, mdt);
+                /* fall through */
+        default:
+                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
+                               "from the MDT '%s'.  This may be the result of "
+                               "communication errors between the client and "
+                               "the MDT, or if the MDT is not running.\n",
+                               obd->obd_name, profile, mdt);
+                break;
+        }
+
+        /* We don't so much care about errors in cleaning up the config llog
+         * connection, as we have already read the config by this point. */
+        obd_disconnect(exp);
+
+out_cleanup:
+        do_lcfg(MDCDEV, 0, LCFG_CLEANUP, 0, 0, 0, 0);
+
+out_detach:
+        do_lcfg(MDCDEV, 0, LCFG_DETACH, 0, 0, 0, 0);
+
+out_del_uuid:
+        /* class_add_uuid adds a nid even if the same uuid exists; we might
+           delete any copy here.  So they all better match. */
+        for (i = 0; i < failnodes; i++) {
+                sprintf(niduuid, "mdtnid%d", i);
+                do_lcfg(MDCDEV, 0, LCFG_DEL_UUID, niduuid, 0, 0, 0);
+        }
+        /* class_import_put will get rid of the additional connections */
+out:
+        RETURN(rc);
+}
+/* end COMPAT_146 */
+
 int ll_fill_super(struct super_block *sb)
 {
         struct lustre_profile *lprof;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi;
-        char  *osc = NULL;
-        char  *mdc = NULL;
+        char  *osc = NULL, *mdc = NULL;
         char  *profilenm = get_profile_name(sb);
         struct config_llog_instance cfg;
         char   ll_instance[sizeof(sb) * 2 + 1];
@@ -675,6 +850,36 @@ int ll_fill_super(struct super_block *sb)
 
         /* set up client obds */
         err = lustre_process_log(sb, profilenm, &cfg);
+        /* COMPAT_146 */
+        if (err < 0) {
+                char *oldname;
+                int rc, oldnamelen;
+                oldnamelen = strlen(profilenm) + 1;
+                /* Temp storage for 1.4.6 profile name */
+                OBD_ALLOC(oldname, oldnamelen);
+                if (oldname) {
+                        memcpy(oldname, profilenm, oldnamelen); 
+                        rc = old_lustre_process_log(sb, oldname, &cfg);
+                        if (rc >= 0) {
+                                /* That worked - update the profile name 
+                                   permanently */
+                                err = rc;
+                                OBD_FREE(lsi->lsi_lmd->lmd_profile, 
+                                         strlen(lsi->lsi_lmd->lmd_profile) + 1);
+                                OBD_ALLOC(lsi->lsi_lmd->lmd_profile, 
+                                         strlen(oldname) + 1);
+                                if (!lsi->lsi_lmd->lmd_profile) {
+                                        OBD_FREE(oldname, oldnamelen);
+                                        GOTO(out_free, err = -ENOMEM);
+                                }
+                                memcpy(lsi->lsi_lmd->lmd_profile, oldname,
+                                       strlen(oldname) + 1); 
+                                profilenm = get_profile_name(sb);
+                        }
+                        OBD_FREE(oldname, oldnamelen);
+                }
+        }
+        /* end COMPAT_146 */
         if (err < 0) {
                 CERROR("Unable to process log: %d\n", err);
                 GOTO(out_free, err);
@@ -708,20 +913,8 @@ out_free:
                 OBD_FREE(mdc, strlen(mdc) + 1);
         if (osc)
                 OBD_FREE(osc, strlen(osc) + 1);
-        if (err) {
-                struct obd_device *obd;
-                int next = 0;
-                /* like ll_put_super below */
-                lustre_end_log(sb, NULL, &cfg);
-                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
-                       != NULL) {
-                        class_manual_cleanup(obd);
-                }                       
-                class_del_profile(profilenm);
-                ll_free_sbi(sb);
-                lsi->lsi_llsbi = NULL;
-                lustre_common_put_super(sb);
-        }
+        if (err) 
+                ll_put_super(sb);
         RETURN(err);
 } /* ll_fill_super */
 
@@ -755,7 +948,9 @@ void ll_put_super(struct super_block *sb)
                 }                       
         }
 
-        client_common_put_super(sb);
+        if (sbi->ll_lcq) 
+                /* Only call if client_common_fill_super succeeded */
+                client_common_put_super(sb);
                 
         next = 0;
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
@@ -1680,3 +1875,5 @@ out_statfs:
                 obd_ioctl_freedata(buf, len);
         return rc;
 }
+
+

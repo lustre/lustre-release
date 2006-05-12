@@ -71,6 +71,7 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         if (index < 0 || index >= LLOG_MAX_CTXTS)
                 RETURN(-EFAULT);
 
+
         if (obd->obd_llog_ctxt[index]) {
                 /* mds_lov_update_mds might call here multiple times. So if the
                    llog is already set up then don't to do it again. */
