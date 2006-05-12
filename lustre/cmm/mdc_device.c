@@ -112,8 +112,7 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
         } else {
                 struct lustre_handle conn = {0, };
                 struct obd_connect_data conn_data = {
-                        .ocd_connect_flags = OBD_CONNECT_SEQRNG
-                                             | OBD_CONNECT_VERSION,
+                        .ocd_connect_flags = OBD_CONNECT_VERSION,
                         .ocd_version = LUSTRE_VERSION_CODE
                 };
 
