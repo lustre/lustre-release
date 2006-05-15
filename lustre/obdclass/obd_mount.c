@@ -1297,7 +1297,7 @@ static void server_wait_finished(struct vfsmount *mnt)
         
         init_waitqueue_head(&waitq);
 
-        while ((atomic_read(&mnt->mnt_count) > 0) && retries--) {
+        while ((atomic_read(&mnt->mnt_count) > 1) && retries--) {
                 LCONSOLE_WARN("Mount still busy with %d refs, waiting for "
                               "%d secs...\n",
                               atomic_read(&mnt->mnt_count), 2 * retries);
@@ -1306,8 +1306,8 @@ static void server_wait_finished(struct vfsmount *mnt)
                 lwi = LWI_TIMEOUT(2 * HZ, NULL, NULL);
                 l_wait_event(waitq, 0, &lwi);
         }
-        if (atomic_read(&mnt->mnt_count)) {
-                CERROR("Mount %p is still busy(%d refs), giving up.\n",
+        if (atomic_read(&mnt->mnt_count) > 1) {
+                CERROR("Mount %p is still busy (%d refs), giving up.\n",
                        mnt, atomic_read(&mnt->mnt_count));
         }
 }
@@ -1364,16 +1364,16 @@ static void server_put_super(struct super_block *sb)
                 server_stop_mgs(sb);
         }
 
-        /* clean the mgc and sb */
+        /* Clean the mgc and sb */
         rc = lustre_common_put_super(sb);
-        // FIXME how do I return a failure? 
-
-        /* drop the One True Mount */
-        unlock_mntput(mnt);
+        /* FIXME how can I report a failure to umount? */ 
 
         /* Wait for the targets to really clean up - can't exit (and let the
            sb get destroyed) while the mount is still in use */
         server_wait_finished(mnt);
+        
+        /* drop the One True Mount */
+        unlock_mntput(mnt);
         
         /* Stop the servers (MDS, OSS) if no longer needed.  We must wait
            until the target is really gone so that our type refcount check
