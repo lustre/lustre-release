@@ -232,7 +232,7 @@ int revalidate_it_finish(struct ptlrpc_request *request, int offset,
                 RETURN(-ENOENT);
 
         rc = ll_prep_inode(ll_i2sbi(de->d_inode)->ll_osc_exp, &de->d_inode,
-                           request, offset,NULL);
+                           request, offset, NULL);
 
         RETURN(rc);
 }
@@ -327,7 +327,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 GOTO(out, rc = 0);
         }
 
-        rc = revalidate_it_finish(req, 1, it, de);
+        rc = revalidate_it_finish(req, DLM_REPLY_REC_OFF, it, de);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc = 0);

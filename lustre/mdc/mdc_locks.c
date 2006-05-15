@@ -197,16 +197,16 @@ static int round_up(int val)
  * but this is incredibly unlikely, and questionable whether the client
  * could do MDS recovery under OOM anyways... */
 static void mdc_realloc_openmsg(struct ptlrpc_request *req,
-                                struct mds_body *body, int size[5])
+                                struct mds_body *body, int size[6])
 {
         int new_size, old_size;
         struct lustre_msg *new_msg;
 
         /* save old size */
-        old_size = lustre_msg_size(5, size);
+        old_size = lustre_msg_size(lustre_request_magic(req), 6, size);
 
-        size[4] = body->eadatasize;
-        new_size = lustre_msg_size(5, size);
+        size[DLM_INTENT_REC_OFF + 2] = body->eadatasize;
+        new_size = lustre_msg_size(lustre_request_magic(req), 6, size);
         OBD_ALLOC(new_msg, new_size);
         if (new_msg != NULL) {
                 struct lustre_msg *old_msg = req->rq_reqmsg;
@@ -215,7 +215,8 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
                 DEBUG_REQ(D_INFO, req, "replace reqmsg for larger EA %u\n",
                           body->eadatasize);
                 memcpy(new_msg, old_msg, old_size);
-                new_msg->buflens[4] = body->eadatasize;
+                lustre_msg_set_buflen(new_msg, DLM_INTENT_REC_OFF + 2,
+                                      body->eadatasize);
 
                 spin_lock_irqsave(&req->rq_lock, irqflags);
                 req->rq_reqmsg = new_msg;
@@ -250,16 +251,19 @@ int mdc_enqueue(struct obd_export *exp,
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
         struct ldlm_request *lockreq;
         struct ldlm_intent *lit;
-        int size[6] = {[MDS_REQ_INTENT_LOCKREQ_OFF] = sizeof(*lockreq),
-                       [MDS_REQ_INTENT_IT_OFF] = sizeof(*lit) };
-        struct ldlm_reply *dlm_rep;
-        int repsize[4] = {sizeof(*dlm_rep),
-                          sizeof(struct mds_body),
-                          obddev->u.cli.cl_max_mds_easize};
+        struct ldlm_reply *lockrep;
+        int size[7] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+                        [DLM_LOCKREQ_OFF]     = sizeof(*lockreq),
+                        [DLM_INTENT_IT_OFF]   = sizeof(*lit) };
+        int repsize[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+                           [DLM_LOCKREPLY_OFF]   = sizeof(*lockrep),
+                           [DLM_REPLY_REC_OFF]   = sizeof(struct mds_body),
+                           [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
+                                                   cl_max_mds_easize };
+        int flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
+        int repbufcnt = 4, rc;
         void *eadata;
         unsigned long irqflags;
-        int repbufcnt = 3, req_buffers = 2;
-        int rc, flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
         ENTRY;
 
         LASSERTF(lock_type == LDLM_IBITS, "lock type %d\n", lock_type);
@@ -269,21 +273,22 @@ int mdc_enqueue(struct obd_export *exp,
         if (it->it_op & IT_OPEN) {
                 it->it_create_mode |= S_IFREG;
 
-                size[req_buffers++] = sizeof(struct mds_rec_create);
-                size[req_buffers++] = data->namelen + 1;
+                size[DLM_INTENT_REC_OFF] = sizeof(struct mds_rec_create);
+                size[DLM_INTENT_REC_OFF + 1] = data->namelen + 1;
                 /* As an optimization, we allocate an RPC request buffer for
                  * at least a default-sized LOV EA even if we aren't sending
                  * one.  We grow the whole request to the next power-of-two
                  * size since we get that much from a slab allocation anyways.
                  * This avoids an allocation below in the common case where
                  * we need to save a default-sized LOV EA for open replay. */
-                size[req_buffers++] = max(lmmsize,
+                size[DLM_INTENT_REC_OFF + 2] = max(lmmsize,
                                           obddev->u.cli.cl_default_mds_easize);
-                rc = lustre_msg_size(req_buffers, size);
+                rc = lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic, 6,
+                                     size);
                 if (rc & (rc - 1))
-                        size[req_buffers - 1] = min(size[req_buffers - 1] +
-                                                    round_up(rc) - rc,
-                                        obddev->u.cli.cl_max_mds_easize);
+                        size[DLM_INTENT_REC_OFF + 2] =
+                                 min(size[DLM_INTENT_REC_OFF+2]+round_up(rc)-rc,
+                                     obddev->u.cli.cl_max_mds_easize);
 
                 if (it->it_flags & O_JOIN_FILE) {
                         __u64 head_size = *(__u32*)cb_data;
@@ -291,20 +296,23 @@ int mdc_enqueue(struct obd_export *exp,
 
                         /* join is like an unlink of the tail */
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                        size[req_buffers++] = sizeof(struct mds_rec_join);
+                        size[DLM_INTENT_REC_OFF + 3] =
+                                                 sizeof(struct mds_rec_join);
                         req = ptlrpc_prep_req(class_exp2cliimp(exp),
                                               LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
-                                              req_buffers, size, NULL);
+                                              7, size, NULL);
                         /* when joining file, cb_data and lmm args together
                          * indicate the head file size*/
-                        mdc_join_pack(req, req_buffers - 1, data,
+                        mdc_join_pack(req, DLM_INTENT_REC_OFF + 3, data,
                                       (head_size << 32) | tsize);
                         cb_data = NULL;
                         lmm = NULL;
-                } else
+                } else {
                         req = ptlrpc_prep_req(class_exp2cliimp(exp),
                                               LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
-                                              req_buffers, size, NULL);
+                                              6, size, NULL);
+                }
+
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -313,75 +321,73 @@ int mdc_enqueue(struct obd_export *exp,
                 spin_unlock_irqrestore (&req->rq_lock, irqflags);
 
                 /* pack the intent */
-                lit = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_INTENT_IT_OFF,
-                                     sizeof (*lit));
+                lit = lustre_msg_buf(req->rq_reqmsg, DLM_INTENT_IT_OFF,
+                                     sizeof(*lit));
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mdc_open_pack(req, MDS_REQ_INTENT_REC_OFF, data,
-                              it->it_create_mode, 0,
-                              it->it_flags, lmm, lmmsize);
+                mdc_open_pack(req, DLM_INTENT_REC_OFF, data, it->it_create_mode,
+                              0, it->it_flags, lmm, lmmsize);
 
                 repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
         } else if (it->it_op & IT_UNLINK) {
-                size[req_buffers++] = sizeof(struct mds_rec_unlink);
-                size[req_buffers++] = data->namelen + 1;
+                size[DLM_INTENT_REC_OFF] = sizeof(struct mds_rec_unlink);
+                size[DLM_INTENT_REC_OFF + 1] = data->namelen + 1;
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, req_buffers, size, NULL);
+                                      LDLM_ENQUEUE, 5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
                 /* pack the intent */
-                lit = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_INTENT_IT_OFF,
-                                     sizeof (*lit));
+                lit = lustre_msg_buf(req->rq_reqmsg, DLM_INTENT_IT_OFF,
+                                     sizeof(*lit));
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mdc_unlink_pack(req, MDS_REQ_INTENT_REC_OFF, data);
-                /* get ready for the reply */
+                mdc_unlink_pack(req, DLM_INTENT_REC_OFF, data);
+
                 repsize[repbufcnt++] = obddev->u.cli.cl_max_mds_cookiesize;
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
                                   OBD_MD_FLACL | OBD_MD_FLMODEASIZE |
                                   OBD_MD_FLDIREA;
-                size[req_buffers++] = sizeof(struct mds_body);
-                size[req_buffers++] = data->namelen + 1;
+                size[DLM_INTENT_REC_OFF] = sizeof(struct mds_body);
+                size[DLM_INTENT_REC_OFF + 1] = data->namelen + 1;
 
                 if (it->it_op & IT_GETATTR)
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
 
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, req_buffers, size, NULL);
+                                      LDLM_ENQUEUE, 5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
                 /* pack the intent */
-                lit = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_INTENT_IT_OFF,
-                                     sizeof (*lit));
+                lit = lustre_msg_buf(req->rq_reqmsg, DLM_INTENT_IT_OFF,
+                                     sizeof(*lit));
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mdc_getattr_pack(req, MDS_REQ_INTENT_REC_OFF, valid,
+                mdc_getattr_pack(req, DLM_INTENT_REC_OFF, valid,
                                  it->it_flags, data);
-                /* get ready for the reply */
+
                 repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
         } else if (it->it_op == IT_READDIR) {
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 1, size, NULL);
+                                      LDLM_ENQUEUE, 2, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
-                /* get ready for the reply */
-                repbufcnt = 1;
+                repbufcnt = 2;
         } else {
                 LBUG();
                 RETURN(-EINVAL);
         }
 
         /* get ready for the reply */
-        req->rq_replen = lustre_msg_size(repbufcnt, repsize);
+        ptlrpc_req_set_repsize(req, repbufcnt, repsize);
 
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         rc = ldlm_cli_enqueue(exp, req, obddev->obd_namespace, res_id,
@@ -393,8 +399,7 @@ int mdc_enqueue(struct obd_export *exp,
         /* Similarly, if we're going to replay this request, we don't want to
          * actually get a lock, just perform the intent. */
         if (req->rq_transno || req->rq_replay) {
-                lockreq = lustre_msg_buf(req->rq_reqmsg,
-                                         MDS_REQ_INTENT_LOCKREQ_OFF,
+                lockreq = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF,
                                          sizeof(*lockreq));
                 lockreq->lock_flags |= LDLM_FL_INTENT_ONLY;
         }
@@ -427,12 +432,13 @@ int mdc_enqueue(struct obd_export *exp,
                 LDLM_LOCK_PUT(lock);
         }
 
-        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*dlm_rep));
-        LASSERT(dlm_rep != NULL);           /* checked by ldlm_cli_enqueue() */
-        LASSERT_REPSWABBED(req, 0);         /* swabbed by ldlm_cli_enqueue() */
+        lockrep = lustre_msg_buf(req->rq_repmsg, DLM_LOCKREPLY_OFF,
+                                 sizeof(*lockrep));
+        LASSERT(lockrep != NULL);                 /* checked by ldlm_cli_enqueue() */
+        LASSERT_REPSWABBED(req, DLM_LOCKREPLY_OFF); /* swabbed by ldlm_cli_enqueue() */
 
-        it->d.lustre.it_disposition = (int) dlm_rep->lock_policy_res1;
-        it->d.lustre.it_status = (int) dlm_rep->lock_policy_res2;
+        it->d.lustre.it_disposition = (int)lockrep->lock_policy_res1;
+        it->d.lustre.it_status = (int)lockrep->lock_policy_res2;
         it->d.lustre.it_lock_mode = lock_mode;
         it->d.lustre.it_data = req;
 
@@ -443,12 +449,12 @@ int mdc_enqueue(struct obd_export *exp,
                   it->it_op,it->d.lustre.it_disposition,it->d.lustre.it_status);
 
         /* We know what to expect, so we do any byte flipping required here */
-        LASSERT(repbufcnt == 4 || repbufcnt == 1);
-        if (repbufcnt == 4) {
+        LASSERT(repbufcnt == 5 || repbufcnt == 2);
+        if (repbufcnt == 5) {
                 struct mds_body *body;
 
-                body = lustre_swab_repbuf(req, 1, sizeof (*body),
-                                          lustre_swab_mds_body);
+                body = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF, sizeof(*body),
+                                         lustre_swab_mds_body);
                 if (body == NULL) {
                         CERROR ("Can't swab mds_body\n");
                         RETURN (-EPROTO);
@@ -457,8 +463,8 @@ int mdc_enqueue(struct obd_export *exp,
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
                         /* The eadata is opaque; just check that it is there.
                          * Eventually, obd_unpackmd() will check the contents */
-                        eadata = lustre_swab_repbuf(req, 2, body->eadatasize,
-                                                    NULL);
+                        eadata = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF + 1,
+                                                    body->eadatasize, NULL);
                         if (eadata == NULL) {
                                 CERROR ("Missing/short eadata\n");
                                 RETURN (-EPROTO);
@@ -484,13 +490,13 @@ int mdc_enqueue(struct obd_export *exp,
                          * large enough request buffer above we need to
                          * reallocate it here to hold the actual LOV EA. */
                         if (it->it_op & IT_OPEN) {
-                                int pos = MDS_REQ_INTENT_REC_OFF + 2;
+                                int offset = DLM_INTENT_REC_OFF + 2;
 
-                                if (req->rq_reqmsg->buflens[pos] <
+                                if (lustre_msg_buflen(req->rq_reqmsg, offset) <
                                     body->eadatasize)
                                         mdc_realloc_openmsg(req, body, size);
 
-                                lmm = lustre_msg_buf(req->rq_reqmsg, pos,
+                                lmm = lustre_msg_buf(req->rq_reqmsg, offset,
                                                      body->eadatasize);
                                 if (lmm)
                                         memcpy(lmm, eadata, body->eadatasize);
@@ -642,7 +648,8 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
         if (rc)
                 RETURN(rc);
 
-        mds_body = lustre_msg_buf(request->rq_repmsg, 1, sizeof(*mds_body));
+        mds_body = lustre_msg_buf(request->rq_repmsg, DLM_REPLY_REC_OFF,
+                                  sizeof(*mds_body));
         LASSERT(mds_body != NULL);           /* mdc_enqueue checked */
         LASSERT_REPSWABBED(request, 1); /* mdc_enqueue swabbed */
 

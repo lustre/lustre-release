@@ -64,9 +64,10 @@ static struct llog_commit_master *lcm = &lustre_lcm;
 static int llcd_alloc(void)
 {
         struct llog_canceld_ctxt *llcd;
-        int llcd_size = 0;
+        int llcd_size;
 
-        llcd_size = 4096 - lustre_msg_size(1, &llcd_size);
+        /* payload of lustre_msg V2 is bigger */
+        llcd_size = 4096 - lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, NULL);
         OBD_ALLOC(llcd,
                   llcd_size + offsetof(struct llog_canceld_ctxt, llcd_cookies));
         if (llcd == NULL)
@@ -320,7 +321,9 @@ static int log_commit_thread(void *arg)
 
                 /* We are the only one manipulating our local list - no lock */
                 list_for_each_entry_safe(llcd,n, &lcd->lcd_llcd_list,llcd_list){
-                        char *bufs[1] = {(char *)llcd->llcd_cookies};
+                        int size[2] = { sizeof(struct ptlrpc_body),
+                                        llcd->llcd_cookiebytes };
+                        char *bufs[2] = { NULL, (char *)llcd->llcd_cookies };
 
                         list_del(&llcd->llcd_list);
                         if (llcd->llcd_cookiebytes == 0) {
@@ -349,9 +352,7 @@ static int log_commit_thread(void *arg)
                         }
 
                         request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
-                                                  OBD_LOG_CANCEL, 1,
-                                                  &llcd->llcd_cookiebytes,
-                                                  bufs);
+                                                  OBD_LOG_CANCEL, 2, size,bufs);
                         if (request == NULL) {
                                 rc = -ENOMEM;
                                 CERROR("error preparing commit: rc %d\n", rc);
@@ -368,7 +369,7 @@ static int log_commit_thread(void *arg)
                         request->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
                         request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
-                        request->rq_replen = lustre_msg_size(0, NULL);
+                        ptlrpc_req_set_repsize(request, 1, NULL);
                         mutex_down(&llcd->llcd_ctxt->loc_sem);
                         if (llcd->llcd_ctxt->loc_imp == NULL) {
                                 mutex_up(&llcd->llcd_ctxt->loc_sem);

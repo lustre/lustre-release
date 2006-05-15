@@ -62,7 +62,7 @@ do {                                                            \
 #define CHECK_MEMBER(s,m)                                       \
 do {                                                            \
         CHECK_MEMBER_OFFSET(s, m);                              \
-                CHECK_MEMBER_SIZEOF(s, m);                      \
+        CHECK_MEMBER_SIZEOF(s, m);                              \
 } while(0)
 
 #define CHECK_STRUCT(s)                                         \
@@ -80,23 +80,54 @@ check_lustre_handle(void)
         CHECK_MEMBER(lustre_handle, cookie);
 }
 
-static void
-check_lustre_msg(void)
+void
+check_lustre_msg_v1(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(lustre_msg);
-        CHECK_MEMBER(lustre_msg, handle);
-        CHECK_MEMBER(lustre_msg, magic);
-        CHECK_MEMBER(lustre_msg, type);
-        CHECK_MEMBER(lustre_msg, version);
-        CHECK_MEMBER(lustre_msg, opc);
-        CHECK_MEMBER(lustre_msg, last_xid);
-        CHECK_MEMBER(lustre_msg, last_committed);
-        CHECK_MEMBER(lustre_msg, transno);
-        CHECK_MEMBER(lustre_msg, status);
-        CHECK_MEMBER(lustre_msg, flags);
-        CHECK_MEMBER(lustre_msg, bufcount);
-        CHECK_MEMBER(lustre_msg, buflens[7]);
+        CHECK_STRUCT(lustre_msg_v1);
+        CHECK_MEMBER(lustre_msg_v1, lm_handle);
+        CHECK_MEMBER(lustre_msg_v1, lm_magic);
+        CHECK_MEMBER(lustre_msg_v1, lm_type);
+        CHECK_MEMBER(lustre_msg_v1, lm_version);
+        CHECK_MEMBER(lustre_msg_v1, lm_opc);
+        CHECK_MEMBER(lustre_msg_v1, lm_last_xid);
+        CHECK_MEMBER(lustre_msg_v1, lm_last_committed);
+        CHECK_MEMBER(lustre_msg_v1, lm_transno);
+        CHECK_MEMBER(lustre_msg_v1, lm_status);
+        CHECK_MEMBER(lustre_msg_v1, lm_flags);
+        CHECK_MEMBER(lustre_msg_v1, lm_conn_cnt);
+        CHECK_MEMBER(lustre_msg_v1, lm_bufcount);
+        CHECK_MEMBER(lustre_msg_v1, lm_buflens[7]);
+}
+
+void
+check_lustre_msg_v2(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_msg_v2);
+        CHECK_MEMBER(lustre_msg_v2, lm_bufcount);
+        CHECK_MEMBER(lustre_msg_v2, lm_secflvr);
+        CHECK_MEMBER(lustre_msg_v2, lm_magic);
+        CHECK_MEMBER(lustre_msg_v2, lm_buflens[7]);
+}
+
+void
+check_ptlrpc_body(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ptlrpc_body);
+        CHECK_MEMBER(ptlrpc_body, pb_handle);
+        CHECK_MEMBER(ptlrpc_body, pb_type);
+        CHECK_MEMBER(ptlrpc_body, pb_version);
+        CHECK_MEMBER(ptlrpc_body, pb_opc);
+        CHECK_MEMBER(ptlrpc_body, pb_status);
+        CHECK_MEMBER(ptlrpc_body, pb_last_xid);
+        CHECK_MEMBER(ptlrpc_body, pb_last_committed);
+        CHECK_MEMBER(ptlrpc_body, pb_transno);
+        CHECK_MEMBER(ptlrpc_body, pb_flags);
+        CHECK_MEMBER(ptlrpc_body, pb_op_flags);
+        CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
+        CHECK_MEMBER(ptlrpc_body, pb_paddings[3]);
 }
 
 static void
@@ -954,7 +985,8 @@ main(int argc, char **argv)
         BLANK_LINE ();
 
         COMMENT("Constants...");
-        CHECK_DEFINE(PTLRPC_MSG_MAGIC);
+        CHECK_DEFINE(LUSTRE_MSG_MAGIC_V1);
+        CHECK_DEFINE(LUSTRE_MSG_MAGIC_V2);
         CHECK_DEFINE(PTLRPC_MSG_VERSION);
 
         CHECK_VALUE(PTL_RPC_MSG_REQUEST);
@@ -1089,7 +1121,11 @@ main(int argc, char **argv)
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
         check_lustre_handle();
-        check_lustre_msg();
+        check_lustre_msg_v1();
+        check_lustre_msg_v2();
+        printf("        LASSERT(offsetof(struct lustre_msg_v1, lm_magic) == "
+               "offsetof(struct lustre_msg_v2, lm_magic));\n");
+        check_ptlrpc_body();
         check_obdo();
         check_lov_mds_md_v1();
         check_lov_mds_md_join();

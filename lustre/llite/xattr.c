@@ -210,8 +210,8 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 
 do_getxattr:
         ll_inode2fid(&fid, inode);
-        rc = mdc_getxattr(sbi->ll_mdc_exp, &fid, valid, name, NULL, 0,
-                          size, &req);
+        rc = mdc_getxattr(sbi->ll_mdc_exp, &fid, valid, name, NULL, 0, size,
+                          &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -221,9 +221,9 @@ do_getxattr:
                 RETURN(rc);
         }
 
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         LASSERT(body);
-        LASSERT_REPSWABBED(req, 0);
+        LASSERT_REPSWABBED(req, REPLY_REC_OFF);
 
         /* only detect the xattr size */
         if (size == 0)
@@ -235,17 +235,19 @@ do_getxattr:
                 GOTO(out, rc = -ERANGE);
         }
 
-        if (req->rq_repmsg->bufcount < 2) {
-                CERROR("reply bufcount %u\n", req->rq_repmsg->bufcount);
+        if (lustre_msg_bufcount(req->rq_repmsg) < 3) {
+                CERROR("reply bufcount %u\n",
+                       lustre_msg_bufcount(req->rq_repmsg));
                 GOTO(out, rc = -EFAULT);
         }
 
         /* do not need swab xattr data */
-        LASSERT_REPSWAB(req, 1);
-        xdata = lustre_msg_buf(req->rq_repmsg, 1, body->eadatasize);
+        LASSERT_REPSWAB(req, REPLY_REC_OFF + 1);
+        xdata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
+                               body->eadatasize);
         if (!xdata) {
                 CERROR("can't extract: %u : %u\n", body->eadatasize,
-                       lustre_msg_buflen(req->rq_repmsg, 1));
+                       lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF + 1));
                 GOTO(out, rc = -EFAULT);
         }
 

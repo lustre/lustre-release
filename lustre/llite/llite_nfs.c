@@ -84,7 +84,7 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
                 return ERR_PTR(rc);
         }
 
-        rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, 0, sb);
+        rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, REPLY_REC_OFF, sb);
         if (rc) {
                 ptlrpc_req_finished(req);
                 return ERR_PTR(rc);
@@ -238,7 +238,7 @@ struct dentry *ll_get_parent(struct dentry *dchild)
                 CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
                 return ERR_PTR(rc);
         }
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body)); 
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body)); 
        
         LASSERT((body->valid & OBD_MD_FLGENER) && (body->valid & OBD_MD_FLID));
         

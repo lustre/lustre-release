@@ -56,29 +56,31 @@ static int ll_readlink_internal(struct inode *inode,
                 GOTO (failed, rc);
         }
 
-        body = lustre_msg_buf ((*request)->rq_repmsg, 0, sizeof (*body));
-        LASSERT (body != NULL);
-        LASSERT_REPSWABBED (*request, 0);
+        body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
+                              sizeof(*body));
+        LASSERT(body != NULL);
+        LASSERT_REPSWABBED(*request, REPLY_REC_OFF);
 
         if ((body->valid & OBD_MD_LINKNAME) == 0) {
-                CERROR ("OBD_MD_LINKNAME not set on reply\n");
-                GOTO (failed, rc = -EPROTO);
+                CERROR("OBD_MD_LINKNAME not set on reply\n");
+                GOTO(failed, rc = -EPROTO);
         }
         
-        LASSERT (symlen != 0);
+        LASSERT(symlen != 0);
         if (body->eadatasize != symlen) {
-                CERROR ("inode %lu: symlink length %d not expected %d\n",
+                CERROR("inode %lu: symlink length %d not expected %d\n",
                         inode->i_ino, body->eadatasize - 1, symlen - 1);
-                GOTO (failed, rc = -EPROTO);
+                GOTO(failed, rc = -EPROTO);
         }
 
-        *symname = lustre_msg_buf ((*request)->rq_repmsg, 1, symlen);
+        *symname = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF + 1,
+                                  symlen);
         if (*symname == NULL ||
             strnlen (*symname, symlen) != symlen - 1) {
                 /* not full/NULL terminated */
-                CERROR ("inode %lu: symlink not NULL terminated string"
+                CERROR("inode %lu: symlink not NULL terminated string"
                         "of length %d\n", inode->i_ino, symlen - 1);
-                GOTO (failed, rc = -EPROTO);
+                GOTO(failed, rc = -EPROTO);
         }
 
         OBD_ALLOC(lli->lli_symlink_name, symlen);

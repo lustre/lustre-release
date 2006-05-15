@@ -136,6 +136,7 @@ static void __exit exit_lustre_lite(void)
         ll_unregister_cache(&ll_cache_definition);
 
         ll_destroy_inodecache();
+
         rc = kmem_cache_destroy(ll_file_data_slab);
         LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
         if (ll_async_page_slab) {

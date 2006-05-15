@@ -105,7 +105,7 @@ static inline void mds_inode_unset_orphan(struct inode *inode)
                         req->rq_export->exp_mds_data.med_mcd;                 \
                 if (mcd->mcd_last_xid == req->rq_xid) {                       \
                         reconstruct;                                          \
-                        RETURN(req->rq_repmsg->status);                       \
+                        RETURN(lustre_msg_get_status(req->rq_repmsg));        \
                 }                                                             \
                 DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")",\
                           mcd->mcd_last_xid);                                 \
@@ -156,7 +156,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
                                     int child_mode);
 
 void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
-                      struct mds_body *body);
+                      struct mds_body *body, int md_off);
 int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm);
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
@@ -205,7 +205,7 @@ int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *);
 int mds_pin(struct ptlrpc_request *req, int offset);
 void mds_mfd_unlink(struct mds_file_data *mfd, int decref);
-int mds_mfd_close(struct ptlrpc_request *req, int offset, struct obd_device *obd,
+int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
                   struct mds_file_data *mfd, int unlink_orphan);
 int mds_close(struct ptlrpc_request *req, int offset);
 int mds_done_writing(struct ptlrpc_request *req, int offset);

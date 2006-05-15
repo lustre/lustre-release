@@ -142,8 +142,8 @@ ptlrpc_save_lock (struct ptlrpc_request *req,
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         int                        idx;
 
-        LASSERT (rs != NULL);
-        LASSERT (rs->rs_nlocks < RS_MAX_LOCKS);
+        LASSERT(rs != NULL);
+        LASSERT(rs->rs_nlocks < RS_MAX_LOCKS);
 
         idx = rs->rs_nlocks++;
         rs->rs_locks[idx] = *lock;
@@ -550,7 +550,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         /* Clear request swab mask; this is a new request */
         request->rq_req_swab_mask = 0;
 #endif
-        rc = lustre_unpack_msg (request->rq_reqmsg, request->rq_reqlen);
+        rc = lustre_unpack_msg(request->rq_reqmsg, request->rq_reqlen);
         if (rc != 0) {
                 CERROR ("error unpacking request: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
@@ -558,10 +558,18 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 goto out;
         }
 
+        rc = lustre_unpack_ptlrpc_body(request->rq_reqmsg);
+        if (rc) {
+                CERROR ("error unpacking ptlrpc body: ptl %d from %s"
+                        " xid "LPU64"\n", svc->srv_req_portal,
+                        libcfs_id2str(request->rq_peer), request->rq_xid);
+                goto out;
+        }
+
         rc = -EINVAL;
-        if (request->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
+        if (lustre_msg_get_type(request->rq_reqmsg) != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type received (type=%u) from %s\n",
-                       request->rq_reqmsg->type,
+                       lustre_msg_get_type(request->rq_reqmsg),
                        libcfs_id2str(request->rq_peer));
                 goto out;
         }
@@ -569,14 +577,15 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
 
         request->rq_svc_thread = thread;
-        request->rq_export = class_conn2export(&request->rq_reqmsg->handle);
+        request->rq_export = class_conn2export(
+                                     lustre_msg_get_handle(request->rq_reqmsg));
 
         if (request->rq_export) {
-                if (request->rq_reqmsg->conn_cnt <
+                if (lustre_msg_get_conn_cnt(request->rq_reqmsg) <
                     request->rq_export->exp_conn_cnt) {
                         DEBUG_REQ(D_ERROR, request,
                                   "DROPPING req from old connection %d < %d",
-                                  request->rq_reqmsg->conn_cnt,
+                                  lustre_msg_get_conn_cnt(request->rq_reqmsg),
                                   request->rq_export->exp_conn_cnt);
                         goto put_conn;
                 }
@@ -599,7 +608,8 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
          * REQ anyway (bug 1502) */
         if (timediff / 1000000 > (long)obd_timeout) {
                 CERROR("Dropping timed-out opc %d request from %s"
-                       ": %ld seconds old\n", request->rq_reqmsg->opc,
+                       ": %ld seconds old\n",
+                       lustre_msg_get_opc(request->rq_reqmsg),
                        libcfs_id2str(request->rq_peer),
                        timediff / 1000000);
                 goto put_conn;
@@ -613,9 +623,9 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
                 atomic_read(&request->rq_export->exp_refcount) : -99),
-               request->rq_reqmsg->status, request->rq_xid,
+               lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
                libcfs_id2str(request->rq_peer),
-               request->rq_reqmsg->opc);
+               lustre_msg_get_opc(request->rq_reqmsg));
 
         rc = svc->srv_handler(request);
 
@@ -627,9 +637,9 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
                 atomic_read(&request->rq_export->exp_refcount) : -99),
-               request->rq_reqmsg->status, request->rq_xid,
+               lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
                libcfs_id2str(request->rq_peer),
-               request->rq_reqmsg->opc);
+               lustre_msg_get_opc(request->rq_reqmsg));
 
 put_conn:
         if (request->rq_export != NULL)
@@ -643,25 +653,30 @@ put_conn:
         if (timediff / 1000000 > (long)obd_timeout)
                 CERROR("request "LPU64" opc %u from %s processed in %lds "
                        "trans "LPU64" rc %d/%d\n",
-                       request->rq_xid, request->rq_reqmsg->opc,
+                       request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
                        libcfs_id2str(request->rq_peer),
                        cfs_timeval_sub(&work_end, &request->rq_arrival_time,
                                        NULL) / 1000000,
-                       request->rq_repmsg ? request->rq_repmsg->transno :
-                       request->rq_transno, request->rq_status,
-                       request->rq_repmsg ? request->rq_repmsg->status : -999);
+                       request->rq_repmsg ?
+                                lustre_msg_get_transno(request->rq_repmsg) :
+                                request->rq_transno, request->rq_status,
+                       request->rq_repmsg ?
+                                lustre_msg_get_status(request->rq_repmsg) :
+                                 -999);
         else
                 CDEBUG(D_HA, "request "LPU64" opc %u from %s processed in "
                        "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
-                       request->rq_xid, request->rq_reqmsg->opc,
+                       request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
                        libcfs_id2str(request->rq_peer), timediff,
                        cfs_timeval_sub(&work_end, &request->rq_arrival_time,
                                        NULL),
                        request->rq_transno, request->rq_status,
-                       request->rq_repmsg ? request->rq_repmsg->status : -999);
+                       request->rq_repmsg ?
+                                lustre_msg_get_status(request->rq_repmsg) :
+                                -999);
 
         if (svc->srv_stats != NULL) {
-                int opc = opcode_offset(request->rq_reqmsg->opc);
+                int opc = opcode_offset(lustre_msg_get_opc(request->rq_reqmsg));
                 if (opc > 0) {
                         LASSERT(opc < LUSTRE_MAX_OPCODES);
                         lprocfs_counter_add(svc->srv_stats,
@@ -731,12 +746,11 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                       " o%d NID %s\n",
                       rs,
                       rs->rs_xid, rs->rs_transno,
-                      rs->rs_msg.opc,
+                      lustre_msg_get_opc(rs->rs_msg),
                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
         }
 
-        if ((!been_handled && rs->rs_on_net) ||
-            nlocks > 0) {
+        if ((!been_handled && rs->rs_on_net) || nlocks > 0) {
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
 
                 if (!been_handled && rs->rs_on_net) {

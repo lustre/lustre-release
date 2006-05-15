@@ -351,11 +351,11 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lustre_handle lockh;
         struct mgs_target_info *mti, *rep_mti;
-        int rep_size = sizeof(*mti);
+        int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*mti) };
         int rc = 0, lockrc;
         ENTRY;
 
-        mti = lustre_swab_reqbuf(req, 0, sizeof(*mti),
+        mti = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*mti),
                                  lustre_swab_mgs_target_info);
         
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
@@ -434,9 +434,10 @@ out:
 out_nolock:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname, 
                mti->mti_stripe_index, rc);
-        lustre_pack_reply(req, 1, &rep_size, NULL); 
+        lustre_pack_reply(req, 2, rep_size, NULL); 
         /* send back the whole mti in the reply */
-        rep_mti = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep_mti));
+        rep_mti = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
+                                 sizeof(*rep_mti));
         memcpy(rep_mti, mti, sizeof(*rep_mti));
         RETURN(rc);
 }
@@ -444,26 +445,27 @@ out_nolock:
 int mgs_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_MGS_ALL_REPLY_NET;
-        int rc = 0;
+        int opc, rc = 0;
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_MGS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
         LASSERT(current->journal_info == NULL);
-        if (req->rq_reqmsg->opc != MGS_CONNECT) {
+        opc = lustre_msg_get_opc(req->rq_reqmsg);
+        if (opc != MGS_CONNECT) {
                 if (req->rq_export == NULL) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
-                               req->rq_reqmsg->opc);
+                               opc);
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }
         }
 
-        switch (req->rq_reqmsg->opc) {
+        switch (opc) {
         case MGS_CONNECT:
                 DEBUG_REQ(D_MGS, req, "connect");
                 rc = target_handle_connect(req, mgs_handle);
-                if (!rc && (req->rq_reqmsg->conn_cnt > 1))
+                if (!rc && (lustre_msg_get_conn_cnt(req->rq_reqmsg) > 1))
                         /* Make clients trying to reconnect after a MGS restart
                            happy; also requires obd_replayable */
                         lustre_msg_add_op_flags(req->rq_repmsg,
@@ -533,8 +535,7 @@ int mgs_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
         
-        CDEBUG(D_CONFIG | (rc?D_ERROR:0), "MGS handle cmd=%d rc=%d\n",
-               req->rq_reqmsg->opc, rc);
+        CDEBUG(D_CONFIG | (rc?D_ERROR:0), "MGS handle cmd=%d rc=%d\n", opc, rc);
 
  out:
         target_send_reply(req, rc, fail);

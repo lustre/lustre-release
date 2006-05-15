@@ -1128,22 +1128,25 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_reply *rep;
         struct list_head *tmp;
         ldlm_error_t err;
-        int tmpflags = 0, rc, repsize[2] = {sizeof(*rep), sizeof(*reply_lvb)};
-        int only_liblustre = 0;
+        int rc, tmpflags = 0, only_liblustre = 0;
+        int repsize[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+                           [DLM_LOCKREPLY_OFF]   = sizeof(*rep),
+                           [DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb) };
         ENTRY;
 
         policy = ldlm_get_processing_policy(res);
         LASSERT(policy != NULL);
         LASSERT(req != NULL);
 
-        rc = lustre_pack_reply(req, 2, repsize, NULL);
+        rc = lustre_pack_reply(req, 3, repsize, NULL);
         if (rc)
                 RETURN(req->rq_status = rc);
 
-        rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep));
+        rep = lustre_msg_buf(req->rq_repmsg, DLM_LOCKREPLY_OFF, sizeof(*rep));
         LASSERT(rep != NULL);
 
-        reply_lvb = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*reply_lvb));
+        reply_lvb = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF,
+                                   sizeof(*reply_lvb));
         LASSERT(reply_lvb != NULL);
 
         //fixup_handle_for_resent_req(req, lock, &lockh);

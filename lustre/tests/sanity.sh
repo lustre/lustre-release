@@ -2690,7 +2690,7 @@ test_75() {
 	$CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
 	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
 
-	rm -rf ${FHEAD} || "delete join file error"
+	rm -rf ${FHEAD} || error "delete join file error"
 	cp -p ${F128k} ${F}_join_10_compare
 	cp -p ${F128k} ${F}_join_10
 	for ((i = 0; i < 10; i++)); do

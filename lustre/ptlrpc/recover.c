@@ -277,7 +277,8 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
                imp->imp_connection->c_remote_uuid.uuid);
 
-        if (ptlrpc_set_import_discon(imp, failed_req->rq_reqmsg->conn_cnt)) {
+        if (ptlrpc_set_import_discon(imp,
+                              lustre_msg_get_conn_cnt(failed_req->rq_reqmsg))) {
                 if (!imp->imp_replayable) {
                         CDEBUG(D_HA, "import %s@%s for %s not replayable, "
                                "auto-deactivating\n",

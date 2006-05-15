@@ -432,7 +432,8 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
         struct qunit_data *qdata = NULL;
         ENTRY;
 
-        qdata = lustre_swab_repbuf(req, 0, sizeof(*qdata), lustre_swab_qdata);
+        qdata = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*qdata),
+                                   lustre_swab_qdata);
         if (rc == 0 && qdata == NULL)
                 RETURN(-EPROTO);
 
@@ -442,9 +443,11 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
                  qdata->qd_count == 0));
 
         QDATA_DEBUG(qdata, "%s interpret rc(%d).\n",
-                    req->rq_reqmsg->opc == QUOTA_DQACQ ? "DQACQ" : "DQREL", rc);
+                    lustre_msg_get_opc(req->rq_reqmsg) == QUOTA_DQACQ ?
+                    "DQACQ" : "DQREL", rc);
 
-        rc = dqacq_completion(obd, qctxt, qdata, rc, req->rq_reqmsg->opc);
+        rc = dqacq_completion(obd, qctxt, qdata, rc,
+                              lustre_msg_get_opc(req->rq_reqmsg));
 
         RETURN(rc);
 }
@@ -470,7 +473,7 @@ schedule_dqacq(struct obd_device *obd,
         struct ptlrpc_request *req;
         struct qunit_data *reqdata;
         struct dqacq_async_args *aa;
-        int size = sizeof(*reqdata);
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*reqdata) };
         int rc = 0;
         ENTRY;
 
@@ -512,17 +515,17 @@ schedule_dqacq(struct obd_device *obd,
 
         /* build dqacq/dqrel request */
         LASSERT(qctxt->lqc_import);
-        req = ptlrpc_prep_req(qctxt->lqc_import, LUSTRE_MDS_VERSION, opc, 1,
-                              &size, NULL);
+        req = ptlrpc_prep_req(qctxt->lqc_import, LUSTRE_MDS_VERSION, opc, 2,
+                              size, NULL);
         if (!req) {
                 dqacq_completion(obd, qctxt, qdata, -ENOMEM, opc);
                 RETURN(-ENOMEM);
         }
 
-        reqdata = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*reqdata));
+        reqdata = lustre_msg_buf(req->rq_reqmsg, REPLY_REC_OFF,
+                                 sizeof(*reqdata));
         *reqdata = *qdata;
-        size = sizeof(*reqdata);
-        req->rq_replen = lustre_msg_size(1, &size);
+        ptlrpc_req_set_repsize(req, 2, size);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = (struct dqacq_async_args *)&req->rq_async_args;

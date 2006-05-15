@@ -130,9 +130,9 @@ static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
         struct mds_body *body;
         ENTRY;
 
-        body = lustre_msg_buf (req->rq_repmsg, 1, sizeof (*body));
-        LASSERT (body != NULL);                 /* reply already checked out */
-        LASSERT_REPSWABBED (req, 1);            /* and swabbed down */
+        body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
+        LASSERT(body != NULL);                 /* reply already checked out */
+        LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF);       /* and swabbed down */
 
         /* already opened? */
         if (lli->lli_open_count++)
@@ -238,7 +238,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         ENTRY;
 
         /* req is swabbed so this is safe */
-        body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
 
         if (!(body->valid & OBD_MD_FLEASIZE))
                 RETURN(0);
@@ -252,7 +252,8 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
          * to this file. Use this EA to unlink the objects on the OST.
          * It's opaque so we don't swab here; we leave it to obd_unpackmd() to
          * check it is complete and sensible. */
-        eadata = lustre_swab_repbuf(request, 1, body->eadatasize, NULL);
+        eadata = lustre_swab_repbuf(request, REPLY_REC_OFF+1, body->eadatasize,
+                                    NULL);
         LASSERT(eadata != NULL);
         if (eadata == NULL) {
                 CERROR("Can't unpack MDS EA data\n");
@@ -277,7 +278,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies =
-                        lustre_msg_buf(request->rq_repmsg, 2,
+                        lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF + 2,
                                        sizeof(struct llog_cookie) *
                                        lsm->lsm_stripe_count);
                 if (oti.oti_logcookies == NULL) {

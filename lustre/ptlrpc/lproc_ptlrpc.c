@@ -419,7 +419,7 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
 {
         struct lprocfs_stats *svc_stats;
-        int opc =  opcode_offset(req->rq_reqmsg->opc);
+        int opc = opcode_offset(lustre_msg_get_opc(req->rq_reqmsg));
 
         svc_stats = req->rq_import->imp_obd->obd_svc_stats;
         if (svc_stats == NULL || opc <= 0)
@@ -477,11 +477,11 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         ENTRY;
 
         req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
-                              OBD_PING, 0, NULL, NULL);
+                              OBD_PING, 1, NULL, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req->rq_replen = lustre_msg_size(0, NULL);
+        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_no_resend = 1;
 

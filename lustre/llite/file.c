@@ -179,8 +179,8 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         }
 
         rc = ll_prep_inode(sbi->ll_osc_exp, &file->f_dentry->d_inode,
-                           (struct ptlrpc_request *)itp->d.lustre.it_data, 1,
-                            NULL);
+                           (struct ptlrpc_request *)itp->d.lustre.it_data,
+                           DLM_REPLY_REC_OFF, NULL);
 out:
         RETURN(rc);
 }
@@ -193,9 +193,9 @@ static void ll_och_fill(struct ll_inode_info *lli, struct lookup_intent *it,
 
         LASSERT(och);
 
-        body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body));
+        body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);                  /* reply already checked out */
-        LASSERT_REPSWABBED(req, 1);             /* and swabbed in mdc_enqueue */
+        LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF); /* and swabbed in mdc_enqueue */
 
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
@@ -673,7 +673,8 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         struct ll_inode_info *lli;
         struct lov_stripe_md *lsm;
         struct ost_lvb *lvb;
-        int rc, size = sizeof(*lvb), stripe;
+        int rc, stripe;
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
         ENTRY;
 
         if (inode == NULL)
@@ -690,13 +691,13 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         if (stripe < 0)
                 GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
 
-        rc = lustre_pack_reply(req, 1, &size, NULL);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc) {
                 CERROR("lustre_pack_reply: %d\n", rc);
                 GOTO(iput, rc);
         }
 
-        lvb = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*lvb));
+        lvb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*lvb));
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe].loi_kms;
         lvb->lvb_mtime = LTIME_S(inode->i_mtime);
         lvb->lvb_atime = LTIME_S(inode->i_atime);
@@ -706,7 +707,6 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
                    " atime "LPU64", mtime "LPU64", ctime "LPU64,
                    inode->i_size, stripe, lvb->lvb_size, lvb->lvb_mtime,
                    lvb->lvb_atime, lvb->lvb_ctime);
-        GOTO(iput, 0);
  iput:
         iput(inode);
 
@@ -714,7 +714,7 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         /* These errors are normal races, so we don't want to fill the console
          * with messages by calling ptlrpc_error() */
         if (rc == -ELDLM_NO_LOCK_DATA)
-                lustre_pack_reply(req, 0, NULL, NULL);
+                lustre_pack_reply(req, 1, NULL, NULL);
 
         req->rq_status = rc;
         return rc;
@@ -1241,7 +1241,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = mdc_req2lustre_md(req, 1, exp, &md);
+        rc = mdc_req2lustre_md(req, DLM_REPLY_REC_OFF, exp, &md);
         if (rc)
                 GOTO(out, rc);
         ll_update_inode(f->f_dentry->d_inode, &md);
@@ -1970,7 +1970,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                         GOTO (out, rc);
                 }
                 
-                rc = revalidate_it_finish(req, 1, &oit, dentry);
+                rc = revalidate_it_finish(req, DLM_REPLY_REC_OFF, &oit, dentry);
                 if (rc != 0) {
                         ll_intent_release(&oit);
                         GOTO(out, rc);
@@ -1995,8 +1995,9 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                         rc = ll_inode_revalidate_fini(inode, rc);
                         RETURN(rc);
                 }
-                
-                rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, 0, NULL);
+
+                rc = ll_prep_inode(sbi->ll_osc_exp, &inode, req, REPLY_REC_OFF,
+                                   NULL);
                 if (rc)
                         GOTO(out, rc);
         }

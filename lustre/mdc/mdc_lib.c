@@ -38,17 +38,17 @@
 #endif
 #endif
 
-void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
-                      __u32 size, struct ll_fid *mdc_fid)
+void mdc_readdir_pack(struct ptlrpc_request *req, int offset, __u64 pg_off,
+                      __u32 size, struct ll_fid *fid)
 {
         struct mds_body *b;
 
-        b = lustre_msg_buf(req->rq_reqmsg, pos, sizeof (*b));
+        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
-        b->fid1 = *mdc_fid;
-        b->size = offset;                       /* !! */
+        b->fid1 = *fid;
+        b->size = pg_off;                       /* !! */
         b->suppgid = -1;
         b->nlink = size;                        /* !! */
 }
@@ -170,11 +170,11 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
 }
 
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
-                      struct mdc_op_data *data, struct iattr *iattr,
-                      void *ea, int ealen, void *ea2, int ea2len)
+                      struct mdc_op_data *data, struct iattr *iattr, void *ea,
+                      int ealen, void *ea2, int ea2len)
 {
         struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset,
-                                                     sizeof (*rec));
+                                                     sizeof(*rec));
         rec->sa_opcode = REINT_SETATTR;
         rec->sa_fsuid = current->fsuid;
         rec->sa_fsgid = current->fsgid;
@@ -290,7 +290,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
                       int flags, struct mdc_op_data *data)
 {
         struct mds_body *b;
-        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*b));
+        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
 
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
@@ -314,7 +314,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
 {
         struct mds_body *body;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
 
         mdc_pack_fid(&body->fid1, oa->o_id, 0, oa->o_mode);
         memcpy(&body->handle, &och->och_fh, sizeof(body->handle));

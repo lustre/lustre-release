@@ -1307,7 +1307,8 @@ static void server_wait_finished(struct vfsmount *mnt)
                 l_wait_event(waitq, 0, &lwi);
         }
         if (atomic_read(&mnt->mnt_count)) {
-                CERROR("Mount is still busy, giving up.\n");
+                CERROR("Mount %p is still busy(%d refs), giving up.\n",
+                       mnt, atomic_read(&mnt->mnt_count));
         }
 }
 

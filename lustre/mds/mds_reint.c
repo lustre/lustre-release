@@ -141,7 +141,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         off = med->med_lr_off;
 
-        transno = req->rq_reqmsg->transno;
+        transno = lustre_msg_get_transno(req->rq_reqmsg);
         if (rc != 0) {
                 if (transno != 0) {
                         CERROR("%s: replay %s transno "LPU64" failed: rc %d\n",
@@ -160,7 +160,8 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                         mds->mds_last_transno = transno;
                 spin_unlock(&mds->mds_transno_lock);
         }
-        req->rq_repmsg->transno = req->rq_transno = transno;
+        req->rq_transno = transno;
+        lustre_msg_set_transno(req->rq_repmsg, transno);
         mcd->mcd_last_transno = cpu_to_le64(transno);
         mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
         mcd->mcd_last_result = cpu_to_le32(rc);
@@ -318,10 +319,12 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                 if (oldrep->rs_xid != req->rq_xid)
                         continue;
 
-                if (oldrep->rs_msg.opc != req->rq_reqmsg->opc)
+                if (lustre_msg_get_opc(oldrep->rs_msg) !=
+                    lustre_msg_get_opc(req->rq_reqmsg))
                         CERROR ("Resent req xid "LPX64" has mismatched opc: "
                                 "new %d old %d\n", req->rq_xid,
-                                req->rq_reqmsg->opc, oldrep->rs_msg.opc);
+                                lustre_msg_get_opc(req->rq_reqmsg),
+                                lustre_msg_get_opc(oldrep->rs_msg));
 
                 svc = oldrep->rs_service;
                 spin_lock (&svc->srv_lock);
@@ -331,7 +334,8 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                 CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",
                       oldrep->rs_nlocks, oldrep,
-                      oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_msg.opc,
+                      oldrep->rs_xid, oldrep->rs_transno,
+                      lustre_msg_get_opc(oldrep->rs_msg),
                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)
@@ -353,8 +357,10 @@ void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
 {
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
                   mcd->mcd_last_transno, mcd->mcd_last_result);
-        req->rq_repmsg->transno = req->rq_transno = mcd->mcd_last_transno;
-        req->rq_repmsg->status = req->rq_status = mcd->mcd_last_result;
+        req->rq_transno = mcd->mcd_last_transno;
+        lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+        req->rq_status = mcd->mcd_last_result;
+        lustre_msg_set_status(req->rq_repmsg, req->rq_status);
 
         mds_steal_ack_locks(req);
 }
@@ -375,7 +381,7 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
                 return;
         }
 
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
         mds_pack_inode2fid(&body->fid1, de->d_inode);
         mds_pack_inode2body(body, de->d_inode);
 
@@ -472,12 +478,13 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         struct llog_cookie *logcookies = NULL;
         int lmm_size = 0, need_lock = 1, cookie_size = 0;
         int rc = 0, cleanup_phase = 0, err, locked = 0;
-        unsigned int qcids[MAXQUOTAS] = {0, 0};
-        unsigned int qpids[MAXQUOTAS] = {rec->ur_iattr.ia_uid,
-                                         rec->ur_iattr.ia_gid};
+        unsigned int qcids[MAXQUOTAS] = { 0, 0 };
+        unsigned int qpids[MAXQUOTAS] = { rec->ur_iattr.ia_uid, 
+                                          rec->ur_iattr.ia_gid };
         ENTRY;
 
-        LASSERT(offset == MDS_REQ_REC_OFF);
+        LASSERT(offset == REQ_REC_OFF);
+        offset = REPLY_REC_OFF;
 
         DEBUG_REQ(D_INODE, req, "setattr "LPU64"/%u %x", rec->ur_fid1->id,
                   rec->ur_fid1->generation, rec->ur_iattr.ia_valid);
@@ -606,7 +613,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 }
         }
 
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
         mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 
@@ -699,9 +706,11 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         LASSERT(!IS_ERR(parent));
         child = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
         LASSERT(!IS_ERR(child));
-        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
+
+        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
         mds_pack_inode2fid(&body->fid1, child->d_inode);
         mds_pack_inode2body(body, child->d_inode);
+
         l_dput(parent);
         l_dput(child);
 }
@@ -719,12 +728,14 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct lustre_handle lockh;
         int rc = 0, err, type = rec->ur_mode & S_IFMT, cleanup_phase = 0;
         int created = 0;
-        unsigned int qcids[MAXQUOTAS] = {current->fsuid, current->fsgid};
-        unsigned int qpids[MAXQUOTAS] = {0, 0};
+        unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
+        unsigned int qpids[MAXQUOTAS] = { 0, 0 };
         struct dentry_params dp;
         ENTRY;
 
-        LASSERT(offset == MDS_REQ_REC_OFF);
+        LASSERT(offset == REQ_REC_OFF);
+        offset = REPLY_REC_OFF;
+
         LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name,
                         LUSTRE_MDS_NAME));
 
@@ -883,7 +894,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                         rc);
                 }
 
-                body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
+                body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
         }
@@ -1451,7 +1462,7 @@ int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm)
 }
 
 void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
-                      struct mds_body *body)
+                      struct mds_body *body, int md_off)
 {
         int cookie_size = 0, md_size = 0;
 
@@ -1461,15 +1472,15 @@ void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
         if (body && body->valid & OBD_MD_FLCOOKIE) {
                 LASSERT(body->valid & OBD_MD_FLEASIZE);
                 cookie_size = mds_get_cookie_size(obd, lustre_msg_buf(
-                                                  req->rq_repmsg, 1, 0));
+                                                  req->rq_repmsg, md_off, 0));
         }
 
         CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", md_size,
                cookie_size);
  
-        lustre_shrink_reply(req, 1, md_size, 1);
+        lustre_shrink_reply(req, md_off, md_size, 1);
         
-        lustre_shrink_reply(req, md_size? 2:1, cookie_size, 0); 
+        lustre_shrink_reply(req, md_off + (md_size > 0), cookie_size, 0); 
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
@@ -1484,11 +1495,12 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct lustre_handle parent_lockh, child_lockh, child_reuse_lockh;
         void *handle = NULL;
         int rc = 0, cleanup_phase = 0;
-        unsigned int qcids [MAXQUOTAS] = {0, 0};
-        unsigned int qpids [MAXQUOTAS] = {0, 0};
+        unsigned int qcids[MAXQUOTAS] = { 0, 0 };
+        unsigned int qpids[MAXQUOTAS] = { 0, 0 };
         ENTRY;
 
-        LASSERT(offset == MDS_REQ_REC_OFF || offset == 2);
+        LASSERT(offset == REQ_REC_OFF); /*  || offset == DLM_INTENT_REC_OFF); */
+        offset = REPLY_REC_OFF;
 
         DEBUG_REQ(D_INODE, req, "parent ino "LPU64"/%u, child %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name);
@@ -1551,10 +1563,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dparent->d_inode->i_sb);
 
         /* ldlm_reply in buf[0] if called via intent */
-        if (offset)
-                offset = 1;
+        if (offset == DLM_INTENT_REC_OFF)
+                offset = DLM_REPLY_REC_OFF;
 
-        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
+        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
         LASSERT(body != NULL);
 
         /* child orphan sem protects orphan_dec_test && is_orphan race */
@@ -1635,9 +1647,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                        OBD_MD_FLATIME | OBD_MD_FLMTIME);
                 } else if (mds_log_op_unlink(obd, child_inode,
                                 lustre_msg_buf(req->rq_repmsg, offset + 1, 0),
-                                        req->rq_repmsg->buflens[offset + 1],
+                                lustre_msg_buflen(req->rq_repmsg, offset + 1),
                                 lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
-                                        req->rq_repmsg->buflens[offset+2]) > 0){
+                                lustre_msg_buflen(req->rq_repmsg, offset+2)) >
+                           0) {
                         body->valid |= OBD_MD_FLCOOKIE;
                 }
         }
@@ -1694,7 +1707,7 @@ cleanup:
         }
         req->rq_status = rc;
 
-        mds_shrink_reply(obd, req, body);
+        mds_shrink_reply(obd, req, body, REPLY_REC_OFF + 1);
 
         /* trigger dqrel on the owner of child and parent */
         lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_UNLINK);
@@ -1719,7 +1732,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         int rc = 0, cleanup_phase = 0;
         ENTRY;
 
-        LASSERT(offset == MDS_REQ_REC_OFF);
+        LASSERT(offset == REQ_REC_OFF);
 
         DEBUG_REQ(D_INODE, req, "original "LPU64"/%u to "LPU64"/%u %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation,
@@ -2057,11 +2070,12 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct lov_mds_md *lmm = NULL;
         int rc = 0, lock_count = 3, cleanup_phase = 0;
         void *handle = NULL;
-        unsigned int qcids[MAXQUOTAS] = {0, 0};
-        unsigned int qpids[4] = {0, 0, 0, 0};
+        unsigned int qcids[MAXQUOTAS] = { 0, 0 };
+        unsigned int qpids[4] = { 0, 0, 0, 0 };
         ENTRY;
 
-        LASSERT(offset == MDS_REQ_REC_OFF);
+        LASSERT(offset == REQ_REC_OFF);
+        offset = REPLY_REC_OFF;
 
         DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u %s to "LPU64"/%u %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name,
@@ -2118,7 +2132,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         /* if we are about to remove the target at first, pass the EA of
          * that inode to client to perform and cleanup on OST */
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
         LASSERT(body != NULL);
 
         /* child orphan sem protects orphan_dec_test && is_orphan race */
@@ -2134,8 +2148,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 } else if (S_ISREG(new_inode->i_mode)) {
                         mds_pack_inode2fid(&body->fid1, new_inode);
                         mds_pack_inode2body(body, new_inode);
-                        mds_pack_md(obd, req->rq_repmsg, 1, body, new_inode,
-                                    MDS_PACK_MD_LOCK);
+                        mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
+                                    new_inode, MDS_PACK_MD_LOCK);
                 }
         }
 
@@ -2150,7 +2164,7 @@ no_unlink:
                 GOTO(cleanup, rc = -EINVAL);
 #endif
 
-        lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
+        lmm = lustre_msg_buf(req->rq_repmsg, offset + 1, 0);
         handle = fsfilt_start_log(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME,
                                   NULL, le32_to_cpu(lmm->lmm_stripe_count));
 
@@ -2178,10 +2192,15 @@ no_unlink:
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
                 } else if (mds_log_op_unlink(obd, new_inode,
-                                             lustre_msg_buf(req->rq_repmsg,1,0),
-                                             req->rq_repmsg->buflens[1],
-                                             lustre_msg_buf(req->rq_repmsg,2,0),
-                                             req->rq_repmsg->buflens[2]) > 0) {
+                                             lustre_msg_buf(req->rq_repmsg,
+                                                            offset + 1, 0),
+                                             lustre_msg_buflen(req->rq_repmsg,
+                                                               offset + 1),
+                                             lustre_msg_buf(req->rq_repmsg,
+                                                            offset + 2, 0),
+                                             lustre_msg_buflen(req->rq_repmsg,
+                                                               offset + 2))
+                           > 0) {
                         body->valid |= OBD_MD_FLCOOKIE;
                 }
         }

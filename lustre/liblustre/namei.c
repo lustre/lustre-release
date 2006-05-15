@@ -279,7 +279,7 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
         if (rc < 0)
                 GOTO(out, rc = 0);
 
-        rc = pnode_revalidate_finish(req, 1, it, pnode);
+        rc = pnode_revalidate_finish(req, DLM_REPLY_REC_OFF, it, pnode);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc = 0);
@@ -444,7 +444,7 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = lookup_it_finish(req, 1, it, &icbd);
+        rc = lookup_it_finish(req, DLM_REPLY_REC_OFF, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc);

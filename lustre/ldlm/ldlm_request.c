@@ -321,9 +321,11 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
-        int rc, size[] = {sizeof(*body), lvb_len}, req_passed_in = 1;
+        int size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+                        [DLM_LOCKREQ_OFF]     = sizeof(*body),
+                        [DLM_REPLY_REC_OFF]   = lvb_len };
         int is_replay = *flags & LDLM_FL_REPLAY;
-        int cleanup_phase = 0;
+        int req_passed_in = 1, cleanup_phase = 0, rc;
         ENTRY;
 
         if (exp == NULL) {
@@ -375,16 +377,16 @@ int ldlm_cli_enqueue(struct obd_export *exp,
 
         if (req == NULL) {
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 1, size, NULL);
+                                      LDLM_ENQUEUE, 2, size, NULL);
                 if (req == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
                 req_passed_in = 0;
         } else {
-                LASSERTF(req->rq_reqmsg->buflens[MDS_REQ_INTENT_LOCKREQ_OFF] ==
+                LASSERTF(lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF) ==
                          sizeof(*body), "buflen[%d] = %d, not %d\n",
-                         MDS_REQ_INTENT_LOCKREQ_OFF,
-                         req->rq_reqmsg->buflens[MDS_REQ_INTENT_LOCKREQ_OFF],
-                         (int)sizeof(*body));
+                         DLM_LOCKREQ_OFF,
+                         lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF),
+                         sizeof(*body));
         }
 
         lock->l_conn_export = exp;
@@ -392,17 +394,16 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         lock->l_blocking_ast = blocking;
 
         /* Dump lock data into the request buffer */
-        body = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_INTENT_LOCKREQ_OFF,
-                              sizeof(*body));
+        body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
         ldlm_lock2desc(lock, &body->lock_desc);
         body->lock_flags = *flags;
-
         body->lock_handle1 = *lockh;
 
         /* Continue as normal. */
         if (!req_passed_in) {
-                size[0] = sizeof(*reply);
-                req->rq_replen = lustre_msg_size(1 + (lvb_len > 0), size);
+                size[DLM_LOCKREPLY_OFF] = sizeof(*reply);
+                ptlrpc_req_set_repsize(req, 2 + (lvb_len > 0), size);
+                                                 
         }
         LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
@@ -413,7 +414,8 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                            rc == ELDLM_LOCK_ABORTED ? "ABORTED" : "FAILED");
                 if (rc == ELDLM_LOCK_ABORTED) {
                         /* Before we return, swab the reply */
-                        reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
+                        reply = lustre_swab_repbuf(req, DLM_LOCKREPLY_OFF,
+                                                   sizeof(*reply),
                                                    lustre_swab_ldlm_reply);
                         if (reply == NULL) {
                                 CERROR("Can't unpack ldlm_reply\n");
@@ -421,7 +423,9 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         }
                         if (lvb_len) {
                                 void *tmplvb;
-                                tmplvb = lustre_swab_repbuf(req, 1, lvb_len,
+                                tmplvb = lustre_swab_repbuf(req,
+                                                            DLM_REPLY_REC_OFF,
+                                                            lvb_len,
                                                             lvb_swabber);
                                 if (tmplvb == NULL)
                                         GOTO(cleanup, rc = -EPROTO);
@@ -440,7 +444,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         LASSERT(ergo(LIBLUSTRE_CLIENT, type != LDLM_EXTENT ||
                      policy->l_extent.end == OBD_OBJECT_EOF));
 
-        reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
+        reply = lustre_swab_repbuf(req, DLM_LOCKREPLY_OFF, sizeof(*reply),
                                    lustre_swab_ldlm_reply);
         if (reply == NULL) {
                 CERROR("Can't unpack ldlm_reply\n");
@@ -513,7 +517,8 @@ int ldlm_cli_enqueue(struct obd_export *exp,
          * clobber the LVB with an older one. */
         if (lvb_len && (lock->l_req_mode != lock->l_granted_mode)) {
                 void *tmplvb;
-                tmplvb = lustre_swab_repbuf(req, 1, lvb_len, lvb_swabber);
+                tmplvb = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF, lvb_len,
+                                            lvb_swabber);
                 if (tmplvb == NULL)
                         GOTO(cleanup, rc = -EPROTO);
                 memcpy(lock->l_lvb_data, tmplvb, lvb_len);
@@ -587,7 +592,9 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
         struct ldlm_lock *lock;
         struct ldlm_resource *res;
         struct ptlrpc_request *req;
-        int rc, size = sizeof(*body);
+        int size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+                        [DLM_LOCKREQ_OFF]     = sizeof(*body) };
+        int rc;
         ENTRY;
 
         lock = ldlm_handle2lock(lockh);
@@ -603,24 +610,24 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
         LDLM_DEBUG(lock, "client-side convert");
 
         req = ptlrpc_prep_req(class_exp2cliimp(lock->l_conn_export),
-                              LUSTRE_DLM_VERSION, LDLM_CONVERT, 1, &size, NULL);
+                              LUSTRE_DLM_VERSION, LDLM_CONVERT, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
         body->lock_handle1 = lock->l_remote_handle;
 
         body->lock_desc.l_req_mode = new_mode;
         body->lock_flags = *flags;
 
-        size = sizeof(*reply);
-        req->rq_replen = lustre_msg_size(1, &size);
+        size[DLM_LOCKREPLY_OFF] = sizeof(*reply);
+        ptlrpc_req_set_repsize(req, 2, size);
 
         rc = ptlrpc_queue_wait(req);
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
 
-        reply = lustre_swab_repbuf(req, 0, sizeof (*reply),
+        reply = lustre_swab_repbuf(req, DLM_LOCKREPLY_OFF, sizeof(*reply),
                                    lustre_swab_ldlm_reply);
         if (reply == NULL) {
                 CERROR ("Can't unpack ldlm_reply\n");
@@ -656,7 +663,9 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         struct ptlrpc_request *req;
         struct ldlm_lock *lock;
         struct ldlm_request *body;
-        int rc = 0, size = sizeof(*body);
+        int size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+                        [DLM_LOCKREQ_OFF]     = sizeof(*body) };
+        int rc = 0;
         ENTRY;
 
         /* concurrent cancels on the same handle can happen */
@@ -691,8 +700,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                         goto local_cancel;
                 }
 
-                req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_CANCEL,
-                                      1, &size, NULL);
+                req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_CANCEL, 2,
+                                      size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
                 req->rq_no_resend = 1;
@@ -701,11 +710,11 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
                 req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
-                body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+                body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF,
+                                      sizeof(*body));
                 body->lock_handle1 = lock->l_remote_handle;
 
-                req->rq_replen = lustre_msg_size(0, NULL);
-
+                ptlrpc_req_set_repsize(req, 1, NULL);
                 rc = ptlrpc_queue_wait(req);
 
                 if (rc == ESTALE) {
@@ -1124,7 +1133,7 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
         lock = req->rq_async_args.pointer_arg[0];
         LASSERT(lock != NULL);
 
-        reply = lustre_swab_repbuf(req, 0, sizeof (*reply),
+        reply = lustre_swab_repbuf(req, DLM_LOCKREPLY_OFF, sizeof(*reply),
                                    lustre_swab_ldlm_reply);
         if (reply == NULL) {
                 CERROR("Can't unpack ldlm_reply\n");
@@ -1147,8 +1156,8 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         struct ptlrpc_request *req;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
-        int buffers = 1;
-        int size[2];
+        int buffers = 2;
+        int size[3] = { sizeof(struct ptlrpc_body) };
         int flags;
         ENTRY;
 
@@ -1183,26 +1192,26 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         else
                 flags = LDLM_FL_REPLAY;
 
-        size[0] = sizeof(*body);
-        req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
-                              1, size, NULL);
+        size[DLM_LOCKREQ_OFF] = sizeof(*body);
+        req = ptlrpc_prep_req(imp, LUSTRE_DLM_VERSION, LDLM_ENQUEUE, 2, size,
+                              NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
         /* We're part of recovery, so don't wait for it. */
         req->rq_send_state = LUSTRE_IMP_REPLAY_LOCKS;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
         ldlm_lock2desc(lock, &body->lock_desc);
         body->lock_flags = flags;
 
         ldlm_lock2handle(lock, &body->lock_handle1);
-        size[0] = sizeof(*reply);
+        size[DLM_LOCKREPLY_OFF] = sizeof(*reply);
         if (lock->l_lvb_len != 0) {
-                buffers = 2;
-                size[1] = lock->l_lvb_len;
+                buffers = 3;
+                size[DLM_REPLY_REC_OFF] = lock->l_lvb_len;
         }
-        req->rq_replen = lustre_msg_size(buffers, size);
+        ptlrpc_req_set_repsize(req, buffers, size);
 
         LDLM_DEBUG(lock, "replaying lock:");
 

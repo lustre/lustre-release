@@ -106,9 +106,11 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,
                           offset, page, &request);
         if (!rc) {
-                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
-                LASSERT (body != NULL);         /* checked by mdc_readpage() */
-                LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_readpage() */
+                body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,
+                                      sizeof(*body));
+                LASSERT(body != NULL);         /* checked by mdc_readpage() */
+                /* swabbed by mdc_readpage() */
+                LASSERT_REPSWABBED(request, REPLY_REC_OFF);
 
                 st->st_size = body->size;
         } else {

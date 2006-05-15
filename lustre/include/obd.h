@@ -585,7 +585,7 @@ static inline void oti_init(struct obd_trans_info *oti,
                 return;
 
         if (req->rq_repmsg && req->rq_reqmsg != 0)
-                oti->oti_transno = req->rq_repmsg->transno;
+                oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
         oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
 }
 

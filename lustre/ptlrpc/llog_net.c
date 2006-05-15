@@ -55,7 +55,8 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         struct obd_import *imp;
         struct ptlrpc_request *request;
         struct llogd_conn_body *req_body;
-        int size = sizeof(struct llogd_conn_body);
+        int size[2] = { sizeof(struct ptlrpc_body),
+                        sizeof(struct llogd_conn_body) };
         int rc;
         ENTRY;
 
@@ -83,16 +84,17 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
         imp = ctxt->loc_imp;
 
         request = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
-                                  LLOG_ORIGIN_CONNECT, 1, &size, NULL);
+                                  LLOG_ORIGIN_CONNECT, 2, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
-        req_body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*req_body));
+        req_body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF,
+                                  sizeof(*req_body));
 
         req_body->lgdc_gen = ctxt->loc_gen;
         req_body->lgdc_logid = ctxt->loc_handle->lgh_id;
         req_body->lgdc_ctxt_idx = ctxt->loc_idx + 1;
-        request->rq_replen = lustre_msg_size(0, NULL);
+        ptlrpc_req_set_repsize(request, 1, NULL);
 
         rc = ptlrpc_queue_wait(request);
         ptlrpc_req_finished(request);
@@ -109,7 +111,8 @@ int llog_handle_connect(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        req_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_body));
+        req_body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                  sizeof(*req_body));
 
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,

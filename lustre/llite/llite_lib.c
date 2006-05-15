@@ -288,7 +288,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_osc, err);
         }
 
-        err = mdc_req2lustre_md(request, 0, sbi->ll_osc_exp, &md);
+        err = mdc_req2lustre_md(request, REPLY_REC_OFF, sbi->ll_osc_exp, &md);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n",err);
                 ptlrpc_req_finished (request);
@@ -1170,7 +1170,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
                 }
 
-                rc = mdc_req2lustre_md(request, 0, sbi->ll_osc_exp, &md);
+                rc = mdc_req2lustre_md(request, REPLY_REC_OFF, sbi->ll_osc_exp,
+                                       &md);
                 if (rc) {
                         ptlrpc_req_finished(request);
                         RETURN(rc);
@@ -1607,7 +1608,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         RETURN(-abs(rc));
                 }
 
-                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+                body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
+                                      sizeof(*body));
 
                 if (body->flags & S_APPEND)
                         flags |= EXT3_APPEND_FL;
@@ -1616,7 +1618,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 if (body->flags & S_NOATIME)
                         flags |= EXT3_NOATIME_FL;
 
-                ptlrpc_req_finished (req);
+                ptlrpc_req_finished(req);
 
                 RETURN(put_user(flags, (int *)arg));
         }

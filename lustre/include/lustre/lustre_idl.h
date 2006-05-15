@@ -33,6 +33,8 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
+#include <libcfs/kp30.h>
+
 #if defined(__linux__)
 #include <linux/lustre_types.h>
 #elif defined(__APPLE__)
@@ -105,8 +107,14 @@
 #define PTL_RPC_MSG_ERR     4712
 #define PTL_RPC_MSG_REPLY   4713
 
-#define PTLRPC_MSG_MAGIC    0x0BD00BD0
+/* DON'T use swabbed values of MAGIC as magic! */
+#define LUSTRE_MSG_MAGIC_V1 0x0BD00BD0
+#define LUSTRE_MSG_MAGIC_V2 0x0BD00BD2
 
+#define LUSTRE_MSG_MAGIC_V1_SWABBED 0xD00BD00B
+#define LUSTRE_MSG_MAGIC_V2_SWABBED 0xD20BD00B
+
+#define LUSTRE_MSG_MAGIC LUSTRE_MSG_MAGIC_V2
 
 #define PTLRPC_MSG_VERSION  0x00000003
 #define LUSTRE_VERSION_MASK 0xffff0000
@@ -142,21 +150,70 @@ static inline void lustre_handle_copy(struct lustre_handle *tgt,
 
 /* we depend on this structure to be 8-byte aligned */
 /* this type is only endian-adjusted in lustre_unpack_msg() */
-struct lustre_msg {
-        struct lustre_handle handle;
-        __u32 magic;
-        __u32 type;
-        __u32 version;
-        __u32 opc;
-        __u64 last_xid;
-        __u64 last_committed;
-        __u64 transno;
-        __u32 status;
-        __u32 flags;
-        __u32 conn_cnt;
-        __u32 bufcount;
-        __u32 buflens[0];
+struct lustre_msg_v1 {
+        struct lustre_handle lm_handle;
+        __u32 lm_magic;
+        __u32 lm_type;
+        __u32 lm_version;
+        __u32 lm_opc;
+        __u64 lm_last_xid;
+        __u64 lm_last_committed;
+        __u64 lm_transno;
+        __u32 lm_status;
+        __u32 lm_flags;
+        __u32 lm_conn_cnt;
+        __u32 lm_bufcount;
+        __u32 lm_buflens[0];
 };
+
+#define lustre_msg lustre_msg_v2
+/* we depend on this structure to be 8-byte aligned */
+/* this type is only endian-adjusted in lustre_unpack_msg() */
+struct lustre_msg_v2 {
+        __u32 lm_bufcount;
+        __u32 lm_secflvr;
+        __u32 lm_magic;
+        __u32 lm_repsize;
+        __u32 lm_buflens[0];
+};
+
+/* without security, ptlrpc_body is put in the first buffer. */
+struct ptlrpc_body {
+        struct lustre_handle pb_handle;
+        __u32 pb_type;
+        __u32 pb_version;
+        __u32 pb_opc;
+        __u32 pb_status;
+        __u64 pb_last_xid;
+        __u64 pb_last_committed;
+        __u64 pb_transno;
+        __u32 pb_flags;
+        __u32 pb_op_flags;
+        __u32 pb_conn_cnt;
+        __u32 pb_paddings[3];
+};
+
+extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
+
+/* message body offset for lustre_msg_v2 */
+/* ptlrpc body offset in all request/reply messages */
+#define MSG_PTLRPC_BODY_OFF             0
+
+/* normal request/reply message record offset */
+#define REQ_REC_OFF                     1
+#define REPLY_REC_OFF                   1
+
+/* ldlm request message body offset */
+#define DLM_LOCKREQ_OFF                 1 /* lockreq offset */
+#define DLM_REQ_REC_OFF                 2 /* normal dlm request record offset */
+
+/* ldlm intent lock message body offset */
+#define DLM_INTENT_IT_OFF               2 /* intent lock it offset */
+#define DLM_INTENT_REC_OFF              3 /* intent lock record offset */
+
+/* ldlm reply message body offset */
+#define DLM_LOCKREPLY_OFF               1 /* lockrep offset */
+#define DLM_REPLY_REC_OFF               2 /* reply record offset */
 
 /* Flags that are operation-specific go in the top 16 bits. */
 #define MSG_OP_FLAG_MASK   0xffff0000
@@ -167,43 +224,6 @@ struct lustre_msg {
 #define MSG_LAST_REPLAY        1
 #define MSG_RESENT             2
 #define MSG_REPLAY             4
-
-static inline int lustre_msg_get_flags(struct lustre_msg *msg)
-{
-        return (msg->flags & MSG_GEN_FLAG_MASK);
-}
-
-static inline void lustre_msg_add_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags |= MSG_GEN_FLAG_MASK & flags;
-}
-
-static inline void lustre_msg_set_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags &= ~MSG_GEN_FLAG_MASK;
-        lustre_msg_add_flags(msg, flags);
-}
-
-static inline void lustre_msg_clear_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags &= ~(MSG_GEN_FLAG_MASK & flags);
-}
-
-static inline int lustre_msg_get_op_flags(struct lustre_msg *msg)
-{
-        return (msg->flags >> MSG_OP_FLAG_SHIFT);
-}
-
-static inline void lustre_msg_add_op_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags |= ((flags & MSG_GEN_FLAG_MASK) << MSG_OP_FLAG_SHIFT);
-}
-
-static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags &= ~MSG_OP_FLAG_MASK;
-        lustre_msg_add_op_flags(msg, flags);
-}
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
@@ -216,6 +236,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_LIBCLIENT   0x10
 #define MSG_CONNECT_INITIAL     0x20
 #define MSG_CONNECT_ASYNC       0x40
+#define MSG_CONNECT_NEXT_VER    0x80 /* use next version of lustre_msg */
 
 /* Connect flags */
 #define OBD_CONNECT_RDONLY       0x1ULL /* client allowed read-only access */
