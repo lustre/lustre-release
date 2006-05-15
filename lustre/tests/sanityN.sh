@@ -36,23 +36,21 @@ fi
 
 SAVE_PWD=$PWD
 
-# for MCSETUP and MCCLEANUP
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
-. mountconf.sh
 
 cleanup() {
 	echo -n "cln.."
 	grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 ${FORCE}
-	$MCCLEANUP ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
+	cleanupall ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
 }
 CLEANUP=${CLEANUP:-:}
 
 setup() {
 	echo -n "mnt.."
-	$MCSETUP || exit 10
+	setupall || exit 10
 	echo "done"
 }
 SETUP=${SETUP:-:}
@@ -181,8 +179,8 @@ mounted_lustre_filesystems() {
 }
 MOUNTED="`mounted_lustre_filesystems`"
 if [ -z "$MOUNTED" ]; then
-    $MCFORMAT
-    $MCSETUP
+    formatall
+    setupall
     mount_client $MOUNT2
     MOUNTED="`mounted_lustre_filesystems`"
     [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"

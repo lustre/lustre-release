@@ -10,8 +10,12 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:      mc mc mc mc mc mc  mc mc mc
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT 9  10 11 12 13 13b 14 15 18"
+
+# These tests don't apply to mountconf
+MOUNTCONFSKIP="9 10 11 12 13 13b 14 15 18"
+
+# bug number for skipped test:
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -24,20 +28,11 @@ MKFSLUSTRE=${MKFSLUSTRE:-/usr/sbin/mkfs.lustre}
 HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 reformat() {
-        grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
-	stop ost -f
-	stop ost2 -f
-	stop mds -f
-	echo Formatting mds, ost, ost2
-	add mds $MDS_MKFS_OPTS --reformat $MDSDEV  > /dev/null
-	add ost $OST_MKFS_OPTS --reformat $OSTDEV  > /dev/null
-	add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2  > /dev/null
+        formatall
 }
 
 gen_config() {
@@ -63,19 +58,19 @@ stop_mds() {
 }
 
 start_ost() {
-	echo "start ost service on `facet_active_host ost`"
-	start ost $OSTDEV $OST_MOUNT_OPTS || return 95
+	echo "start ost1 service on `facet_active_host ost1`"
+	start ost1 `ostdevname 1` $OST_MOUNT_OPTS || return 95
 }
 
 stop_ost() {
-	echo "stop ost service on `facet_active_host ost`"
+	echo "stop ost1 service on `facet_active_host ost1`"
 	# These tests all use non-failover stop
-	stop ost -f  || return 98
+	stop ost1 -f  || return 98
 }
 
 start_ost2() {
 	echo "start ost2 service on `facet_active_host ost2`"
-	start ost2 $OSTDEV2 $OST2_MOUNT_OPTS || return 92
+	start ost2 `ostdevname 2` $OST_MOUNT_OPTS || return 92
 }
 
 stop_ost2() {
@@ -166,7 +161,7 @@ test_1() {
 	check_mount || return 42
 	cleanup || return $?
 }
-run_test 1 "start up ost twice"
+run_test 1 "start up ost twice (should return errors)"
 
 test_2() {
 	start_ost
@@ -589,7 +584,7 @@ test_14() {
         start_ost
         start_mds
         mount_client $MOUNT || return $?
-        if [ -z "`do_facet ost dumpe2fs -h $OSTDEV | grep label_conf_14`" ]; then
+        if [ -z "`do_facet ost1 dumpe2fs -h $OSTDEV | grep label_conf_14`" ]; then
                 echo "Error: the mkoptions not applied to mke2fs of ost."
                 return 1
         fi
@@ -706,7 +701,7 @@ test_17() {
 	start_mds && return 42
 	gen_config
 }
-run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
+run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should return errs)"
 
 test_18() {
         [ -f $MDSDEV ] && echo "remove $MDSDEV" && rm -f $MDSDEV
@@ -800,7 +795,28 @@ test_21() {
 
 	cleanup
 }
-run_test 21 "start a client before osts"
+run_test 21 "start a client before osts (should return errs)"
+
+test_22() {
+        setup
+        # failover mds
+	stop mds   
+	# force client
+	zconf_umount `hostname` $MOUNT -f
+	# enter recovery on mds
+	start_mds
+	mount_client $MOUNT &
+	sleep 5
+	local mount_lustre_pid = `ps -ef | grep mount.lustre | grep -v grep | awk '{print $2}'`
+	echo mount.lustre pid is ${mount_lustre_pid}
+	kill -SIGINT ${mount_lustre_pid}
+	exit 1
+
+	sleep 5
+	stop_mds
+	stop_ost
+}
+run_test 22 "interrupt client during recovery mount delay"
 
 
 umount_client $MOUNT	

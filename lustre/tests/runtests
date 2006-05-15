@@ -11,11 +11,10 @@ export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
-. mountconf.sh
 
-SETUP=${SETUP:-mcsetup}
-FORMAT=${FORMAT:-mcformat}
-CLEANUP=${CLEANUP:-mcstopall}
+SETUP=${SETUP:-setupall}
+FORMAT=${FORMAT:-formatall}
+CLEANUP=${CLEANUP:-stopall}
 
 fail() { 
 	echo "ERROR: $1" 1>&2

@@ -70,6 +70,39 @@ init_test_env() {
 #    echo "CONFIG=`canonical_path $CONFIG`"  > $LUSTRE/tests/CONFIG
 }
 
+load_module() {
+    EXT=".ko"
+    module=$1
+    shift
+    BASE=`basename $module $EXT`
+    lsmod | grep ${BASE} > /dev/null || insmod ${LUSTRE}/${module}${EXT} $@
+}
+
+load_modules() {
+    echo Loading modules from $LUSTRE
+    load_module ../lnet/libcfs/libcfs
+    # note that insmod will ignore anything in modprobe.conf
+    load_module ../lnet/lnet/lnet $LNETOPTS
+    LNETLND=${LNETLND:-"socklnd/ksocklnd"}
+    load_module ../lnet/klnds/$LNETLND
+    load_module lvfs/lvfs
+    load_module obdclass/obdclass
+    load_module ptlrpc/ptlrpc
+    load_module mdc/mdc
+    load_module osc/osc
+    load_module lov/lov
+    load_module mds/mds
+    load_module ldiskfs/ldiskfs
+    load_module lvfs/fsfilt_ldiskfs
+    load_module ost/ost
+    load_module obdfilter/obdfilter
+    load_module llite/llite
+    load_module mgc/mgc
+    load_module mgs/mgs
+    # 'mount' doesn't look in $PATH 
+    cp $LUSTRE/utils/mount.lustre /sbin/.
+}
+
 unload_modules() {
     lsmod | grep lnet > /dev/null && $LCTL dk $TMP/debug
     local MODULES=`$LCTL modules | awk '{ print $2 }'`
@@ -119,11 +152,15 @@ start() {
 }
 
 stop() {
+    local running
     facet=$1
     shift
+    HOST=`facet_active_host $facet`
+    [ -z $HOST ] && echo stop: no host for $facet && return 0
     # the following line fails with VERBOSE set 
-    local running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts" | awk '{print $(NF)}'`
-    if [ $running -ne 0 ]; then
+    #running=`do_facet ${facet} awk '/mnt\/${facet} / {print "FOUND"}' /proc/mounts`
+    running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts" | awk '{print $(NF)}'`
+    if [ ${running} -ne 0 ]; then
 	echo "Stopping /mnt/${facet} (opts:$@)"
 	do_facet ${facet} umount -d $@ /mnt/${facet}
     fi
@@ -248,7 +285,7 @@ replay_barrier() {
 }
 
 replay_barrier_nodf() {
-    local facet=$1
+    local facet=$1    echo running=${running}
     do_facet $facet sync
     local svc=${facet}_svc
     echo Replay barrier on ${!svc}
@@ -265,7 +302,7 @@ mds_evict_client() {
 
 ost_evict_client() {
     UUID=`cat /proc/fs/lustre/osc/*_MNT_*/uuid | head -n 1`
-    do_facet ost "echo $UUID > /proc/fs/lustre/obdfilter/ost_svc/evict_client"
+    do_facet ost1 "echo $UUID > /proc/fs/lustre/obdfilter/ost_svc/evict_client"
 }
 
 fail() {
@@ -402,6 +439,7 @@ do_facet() {
     facet=$1
     shift
     HOST=`facet_active_host $facet`
+    [ -z $HOST ] && echo No host defined for facet ${facet} && exit 1
     do_node $HOST $@
 }
 
@@ -412,6 +450,69 @@ add() {
     stop ${facet} -f
     rm -f ${facet}active
     $MKFS $*
+}
+
+ostdevname() {
+    num=$1
+    DEVNAME=OSTDEV$num
+    #if $OSTDEVn isn't defined, default is $OSTDEVBASE + num
+    eval DEVPTR=${!DEVNAME:=${OSTDEVBASE}${num}}
+    echo -n $DEVPTR
+}
+
+
+########
+## MountConf setup
+
+stopall() {
+    # make sure we are using the primary server, so test-framework will
+    # be able to clean up properly.
+    activemds=`facet_active mds`
+    if [ $activemds != "mds" ]; then
+        fail mds
+    fi
+    
+    # assume client mount is local 
+    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
+    grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 $*
+    stop mds -f
+    for num in `seq $OSTCOUNT`; do
+	stop ost$num -f
+    done
+    return 0
+}
+
+cleanupall() {
+    stopall $*
+    unload_modules
+}
+
+formatall() {
+    stopall
+    # We need ldiskfs here, may as well load them all
+    load_modules
+    echo Formatting mds, osts
+    add mds $MDS_MKFS_OPTS --reformat $MDSDEV    > /dev/null || exit 10
+    for num in `seq $OSTCOUNT`; do
+	DEVNAME=`ostdevname $num`
+	add ost$num $OST_MKFS_OPTS --reformat $DEVNAME > /dev/null || exit 10
+    done
+}
+
+mount_client() {
+    grep " $1 " /proc/mounts || zconf_mount `hostname` $*
+}
+
+setupall() {
+    echo Setup mdt, osts
+    start mds $MDSDEV $MDS_MOUNT_OPTS
+    for num in `seq $OSTCOUNT`; do
+	DEVNAME=`ostdevname $num`
+	start ost$num $DEVNAME $OST_MOUNT_OPTS
+    done
+    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    mount_client $MOUNT
+    sleep 5
 }
 
 
@@ -491,10 +592,10 @@ drop_reint_reply() {
 pause_bulk() {
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
     RC=0
-    do_facet ost sysctl -w lustre.fail_loc=0x214
+    do_facet ost1 sysctl -w lustre.fail_loc=0x214
     do_facet client "$1" || RC=$?
     do_facet client "sync"
-    do_facet ost sysctl -w lustre.fail_loc=0
+    do_facet ost1 sysctl -w lustre.fail_loc=0
     return $RC
 }
 
@@ -618,7 +719,7 @@ equals_msg() {
 
 log() {
 	echo "$*"
-	lsmod | grep lnet > /dev/null || modprobe lnet
+	lsmod | grep lnet > /dev/null || load_modules
 	$LCTL mark "$*" 2> /dev/null || true
 }
 

@@ -22,16 +22,13 @@ build_test_filter
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
 
-# for MCSETUP and MCCLEANUP
-. mountconf.sh
-
 setup() {
-    $MCFORMAT
-    $MCSETUP
+    formatall
+    setupall
 }
 
 cleanup() {
-	$MCCLEANUP > /dev/null || { echo "FAILed to clean up"; exit 20; }
+	cleanupall > /dev/null || { echo "FAILed to clean up"; exit 20; }
 }
 
 if [ ! -z "$EVAL" ]; then
@@ -201,7 +198,7 @@ test_16() {
     stop_read_ahead
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
-    do_facet ost sysctl -w lustre.fail_loc=0x80000504
+    do_facet ost1 sysctl -w lustre.fail_loc=0x80000504
     cancel_lru_locks osc
     # OST bulk will time out here, client resends
     do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 1
@@ -314,7 +311,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	sleep 1
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
-	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	do_facet ost1 sysctl -w lustre.fail_loc=0x80000308
 	kill -USR1 $MULTI_PID
 	wait $MULTI_PID
 	rc=$?
@@ -327,7 +324,7 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	touch $DIR/$tdir/${tfile}
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
-	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	do_facet ost1 sysctl -w lustre.fail_loc=0x80000308
 	dd if=/etc/hosts of=$DIR/$tdir/$tfile && \
 		error "didn't fail open enqueue" || true
 }
@@ -368,7 +365,7 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 	[ "`lsmod | grep mds`" ] && \
 	    echo "skipping test 26 (local MDS)" && return
 	OST_FILE=$LPROC/obdfilter/ost_svc/num_exports
-        OST_EXP="`do_facet ost cat $OST_FILE`"
+        OST_EXP="`do_facet ost1 cat $OST_FILE`"
 	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
 	echo starting with $OST_NEXP1 OST exports
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
@@ -378,7 +375,7 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 	# might have to wait for the next ping.
 	echo Waiting for $(($TIMEOUT * 4)) secs
 	sleep $(($TIMEOUT * 4))
-        OST_EXP="`do_facet ost cat $OST_FILE`"
+        OST_EXP="`do_facet ost1 cat $OST_FILE`"
 	OST_NEXP2=`echo $OST_EXP | cut -d' ' -f2`
 	echo ending with $OST_NEXP2 OST exports
 	do_facet client sysctl -w lustre.fail_loc=0x0
@@ -392,7 +389,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	MDS_FILE=$LPROC/mds/${mds_svc}/num_exports
         MDS_NEXP1="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
 	OST_FILE=$LPROC/obdfilter/${ost_svc}/num_exports
-        OST_NEXP1="`do_facet ost cat $OST_FILE | cut -d' ' -f2`"
+        OST_NEXP1="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
 	echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
 	zconf_umount `hostname` $MOUNT2 -f
 	# evictor takes up to 2.25x to evict.  But if there's a 
@@ -400,7 +397,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	# might have to wait for the next ping.
 	echo Waiting for $(($TIMEOUT * 4)) secs
 	sleep $(($TIMEOUT * 4))
-        OST_NEXP2="`do_facet ost cat $OST_FILE | cut -d' ' -f2`"
+        OST_NEXP2="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
         MDS_NEXP2="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
 	echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
         [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted from OST"

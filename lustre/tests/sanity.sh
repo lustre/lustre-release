@@ -74,22 +74,20 @@ export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD
 
-# for MCSETUP and MCCLEANUP
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
-. mountconf.sh
 
 cleanup() {
 	echo -n "cln.."
-	$MCCLEANUP ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
+	cleanupall ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
 }
 CLEANUP=${CLEANUP:-:}
 
 setup() {
 	echo -n "mnt.."
-	$MCSETUP || exit 10
+	setupall || exit 10
 	echo "done"
 }
 SETUP=${SETUP:-:}
@@ -217,8 +215,8 @@ mounted_lustre_filesystems() {
 
 MOUNTED="`mounted_lustre_filesystems`"
 if [ -z "$MOUNTED" ]; then
-        $MCFORMAT
-	$MCSETUP
+        formatall
+	setupall
 	MOUNTED="`mounted_lustre_filesystems`"
 	[ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
 	I_MOUNTED=yes
@@ -2980,7 +2978,7 @@ if [ "`mount | grep ^$NAME`" ]; then
     rm -rf $DIR/[Rdfs][1-9]*
 fi
 if [ "$I_MOUNTED" = "yes" ]; then
-    $MCCLEANUP -f || error "cleanup failed"
+    cleanupall -f || error "cleanup failed"
 fi
 
 

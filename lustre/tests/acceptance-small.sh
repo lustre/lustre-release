@@ -29,11 +29,10 @@ LIBLUSTRETESTS=${LIBLUSTRETESTS:-$LIBLUSTRE/tests}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. mountconf.sh
 
-SETUP=${SETUP:-mcsetup}
-FORMAT=${FORMAT:-mcformat}
-CLEANUP=${CLEANUP:-mcstopall}
+SETUP=${SETUP:-setupall}
+FORMAT=${FORMAT:-formatall}
+CLEANUP=${CLEANUP:-stopall}
 
 for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
