@@ -62,6 +62,21 @@ static struct md_object_operations mdd_obj_ops;
 static struct md_dir_operations    mdd_dir_ops;
 static struct lu_object_operations mdd_lu_obj_ops;
 
+static struct lu_context_key       mdd_thread_key;
+
+struct mdd_thread_info {
+        struct txn_param mti_param;
+};
+
+static struct mdd_thread_info *mdd_ctx_info(struct lu_context *ctx)
+{
+        struct mdd_thread_info *info;
+
+        info = lu_context_key_get(ctx, &mdd_thread_key);
+        LASSERT(info != NULL);
+        return info;
+}
+
 static int lu_device_is_mdd(struct lu_device *d)
 {
 	/*
@@ -274,7 +289,7 @@ static int mdd_object_print(struct lu_context *ctxt,
         return seq_printf(f, LUSTRE_MDD0_NAME"-object@%p", o);
 }
 
-static int mdd_fs_setup(struct mdd_device *mdd)
+static int mdd_fs_setup(struct lu_context *ctx, struct mdd_device *mdd)
 {
         return 0;
 }
@@ -284,7 +299,8 @@ static int mdd_fs_cleanup(struct mdd_device *mdd)
         return 0;
 }
 
-static int mdd_device_init(struct lu_device *d, struct lu_device *next)
+static int mdd_device_init(struct lu_context *ctx,
+                           struct lu_device *d, struct lu_device *next)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
         int rc = -EFAULT;
@@ -293,7 +309,7 @@ static int mdd_device_init(struct lu_device *d, struct lu_device *next)
 
         mdd->mdd_child = lu2dt_dev(next);
 
-        rc = mdd_fs_setup(mdd);
+        rc = mdd_fs_setup(ctx, mdd);
         if (rc)
                 GOTO(err, rc);
 
@@ -303,7 +319,8 @@ err:
         RETURN(rc);
 }
 
-static struct lu_device *mdd_device_fini(struct lu_device *d)
+static struct lu_device *mdd_device_fini(struct lu_context *ctx,
+                                         struct lu_device *d)
 {
 	struct mdd_device *m = lu2mdd_dev(d);
         struct lu_device *next = &m->mdd_child->dd_lu_dev;
@@ -311,7 +328,8 @@ static struct lu_device *mdd_device_fini(struct lu_device *d)
         return next;
 }
 
-static int mdd_process_config(struct lu_device *d, struct lustre_cfg *cfg)
+static int mdd_process_config(struct lu_context *ctx,
+                              struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct mdd_device *m = lu2mdd_dev(d);
         struct lu_device *next = &m->mdd_child->dd_lu_dev;
@@ -320,7 +338,7 @@ static int mdd_process_config(struct lu_device *d, struct lustre_cfg *cfg)
         switch(cfg->lcfg_command) {
 
         default:
-                err = next->ld_ops->ldo_process_config(next, cfg);
+                err = next->ld_ops->ldo_process_config(ctx, next, cfg);
         }
 
         RETURN(err);
@@ -497,7 +515,8 @@ __mdd_index_insert(struct lu_context *ctxt, struct mdd_object *pobj,
         int rc;
         struct dt_object *next = mdd_object_child(pobj);
 
-        rc = next->do_index_ops->dio_insert(ctxt, next, lf, name, handle);
+        rc = next->do_index_ops->dio_insert(ctxt, next, (struct dt_rec *)lf,
+                                            (struct dt_key *)name, handle);
         return rc;
 }
 
@@ -513,8 +532,9 @@ __mdd_index_delete(struct lu_context *ctxt, struct mdd_device *mdd,
 
         mdd_lock2(ctxt, pobj, obj);
 
-        rc = next->do_index_ops->dio_delete(ctxt, next, mdd_object_getfid(obj),
-                                            name, handle);
+        rc = next->do_index_ops->dio_delete(ctxt, next,
+                                            (const struct dt_rec *)mdd_object_getfid(obj),
+                                            (struct dt_key *)name, handle);
         mdd_unlock2(ctxt, pobj, obj);
 
         RETURN(rc);
@@ -765,7 +785,7 @@ struct lu_device *mdd_device_alloc(struct lu_device_type *t,
         return l;
 }
 
-void mdd_device_free(struct lu_device *lu)
+static void mdd_device_free(struct lu_device *lu)
 {
         struct mdd_device *m = lu2mdd_dev(lu);
 
@@ -775,13 +795,14 @@ void mdd_device_free(struct lu_device *lu)
         OBD_FREE_PTR(m);
 }
 
-int mdd_type_init(struct lu_device_type *t)
+static int mdd_type_init(struct lu_device_type *t)
 {
-        return 0;
+        return lu_context_key_register(&mdd_thread_key);
 }
 
-void mdd_type_fini(struct lu_device_type *t)
+static void mdd_type_fini(struct lu_device_type *t)
 {
+        lu_context_key_degister(&mdd_thread_key);
 }
 
 static struct lu_device_type_operations mdd_device_type_ops = {
@@ -799,6 +820,27 @@ static struct lu_device_type mdd_device_type = {
         .ldt_tags = LU_DEVICE_MD,
         .ldt_name = LUSTRE_MDD0_NAME,
         .ldt_ops  = &mdd_device_type_ops
+};
+
+static void *mdd_key_init(struct lu_context *ctx)
+{
+        struct mdd_thread_info *info;
+
+        OBD_ALLOC_PTR(info);
+        if (info == NULL)
+                info = ERR_PTR(-ENOMEM);
+        return info;
+}
+
+static void mdd_key_fini(struct lu_context *ctx, void *data)
+{
+        struct mdd_thread_info *info = data;
+        OBD_FREE_PTR(info);
+}
+
+static struct lu_context_key mdd_thread_key = {
+        .lct_init = mdd_key_init,
+        .lct_fini = mdd_key_fini
 };
 
 struct lprocfs_vars lprocfs_mdd_obd_vars[] = {

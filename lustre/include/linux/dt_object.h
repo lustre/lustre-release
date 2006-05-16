@@ -217,7 +217,7 @@ enum dt_index_flags {
  * Features, required from index to support file system directories (mapping
  * names to fids).
  */
-extern struct dt_index_features dt_directory_features;
+extern const struct dt_index_features dt_directory_features;
 
 /*
  * Per-dt-object operations on object as index.

@@ -20,6 +20,7 @@ struct mdd_device {
         int                              mdd_max_mddize;
         int                              mdd_max_cookiesize;
         struct file                     *mdd_rcvd_filp;
+        struct lu_fid                    mdd_root_fid;
         spinlock_t                       mdd_transno_lock;
         __u64                            mdd_last_transno;
         __u64                            mdd_mount_count;

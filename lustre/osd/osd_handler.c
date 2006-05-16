@@ -81,11 +81,12 @@ static int   osd_object_exists (struct lu_context *ctx, struct lu_object *o);
 static int   osd_object_print  (struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (struct lu_device *m);
-static int   osd_device_init   (struct lu_device *d, struct lu_device *);
 static void *osd_key_init      (struct lu_context *ctx);
 static void  osd_key_fini      (struct lu_context *ctx, void *data);
 static int   osd_has_index     (struct osd_object *obj);
 static void  osd_object_init0  (struct osd_object *obj);
+static int   osd_device_init   (struct lu_context *ctx,
+                                struct lu_device *d, struct lu_device *);
 static int   osd_fid_lookup    (struct lu_context *ctx, struct osd_object *obj,
                                 const struct lu_fid *fid);
 static int   osd_inode_getattr (struct lu_context *ctx,
@@ -108,8 +109,9 @@ static struct osd_device  *osd_dev          (const struct lu_device *d);
 static struct osd_device  *osd_dt_dev       (const struct dt_device *d);
 static struct osd_object  *osd_dt_obj       (const struct dt_object *d);
 static struct osd_device  *osd_obj2dev      (struct osd_object *o);
-static struct lu_device   *osd_device_fini  (struct lu_device *d);
 static struct lu_device   *osd2lu_dev       (struct osd_device * osd);
+static struct lu_device   *osd_device_fini  (struct lu_context *ctx,
+                                             struct lu_device *d);
 static struct lu_device   *osd_device_alloc (struct lu_device_type *t,
                                              struct lustre_cfg *cfg);
 static struct lu_object   *osd_object_alloc (struct lu_context *ctx,
@@ -621,7 +623,7 @@ static int osd_index_insert(struct lu_context *ctxt, struct dt_object *dt,
         return 0;
 }
 
-struct dt_index_features dt_directory_features;
+const struct dt_index_features dt_directory_features;
 
 static int osd_index_probe(struct lu_context *ctxt, struct dt_object *dt,
                            const struct dt_index_features *feat)
@@ -674,7 +676,8 @@ static void osd_key_fini(struct lu_context *ctx, void *data)
         OBD_FREE_PTR(info);
 }
 
-static int osd_device_init(struct lu_device *d, struct lu_device *next)
+static int osd_device_init(struct lu_context *ctx,
+                           struct lu_device *d, struct lu_device *next)
 {
         return 0;
 }
@@ -683,7 +686,8 @@ extern void osd_oi_init0(struct osd_oi *oi, __u64 root_ino, __u32 root_gen);
 extern int osd_oi_find_fid(struct osd_oi *oi,
                            __u64 ino, __u32 gen, struct lu_fid *fid);
 
-static int osd_mount(struct osd_device *o, struct lustre_cfg *cfg)
+static int osd_mount(struct lu_context *ctx,
+                     struct osd_device *o, struct lustre_cfg *cfg)
 {
         struct lustre_mount_info *lmi;
         const char *dev = lustre_cfg_string(cfg, 0);
@@ -726,11 +730,12 @@ static int osd_mount(struct osd_device *o, struct lustre_cfg *cfg)
                         result = PTR_ERR(d);
         }
         if (result != 0)
-                osd_device_fini(osd2lu_dev(o));
+                osd_device_fini(ctx, osd2lu_dev(o));
         RETURN(result);
 }
 
-static struct lu_device *osd_device_fini(struct lu_device *d)
+static struct lu_device *osd_device_fini(struct lu_context *ctx,
+                                         struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
 
@@ -782,14 +787,15 @@ static void osd_device_free(struct lu_device *d)
         OBD_FREE_PTR(o);
 }
 
-static int osd_process_config(struct lu_device *d, struct lustre_cfg *cfg)
+static int osd_process_config(struct lu_context *ctx,
+                              struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct osd_device *o = osd_dev(d);
         int err;
 
         switch(cfg->lcfg_command) {
         case LCFG_SETUP:
-                err = osd_mount(o, cfg);
+                err = osd_mount(ctx, o, cfg);
                 break;
         default:
                 err = -ENOTTY;

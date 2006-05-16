@@ -51,17 +51,27 @@ struct osd_object {
         struct rw_semaphore  oo_sem;
 };
 
+/*
+ * osd device.
+ */
 struct osd_device {
+        /* super-class */
         struct dt_device          od_dt_dev;
+        /* information about underlying file system */
         struct lustre_mount_info *od_mount;
+        /* object index */
         struct osd_oi             od_oi;
+        /* root directory */
         struct dentry            *od_root_dir;
+        /*
+         * XXX temporary stuff for object index: directory where every object
+         * is named by its fid.
+         */
         struct dentry            *od_obj_area;
 };
 
 struct dentry *osd_lookup(struct dentry *parent, const char *name);
 struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
-
 
 struct osd_thread_info {
         struct lu_fid       oti_fid;

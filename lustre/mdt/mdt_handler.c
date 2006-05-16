@@ -1017,7 +1017,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         int offset = MDS_REQ_INTENT_REC_OFF;
         int rc;
         struct mdt_thread_info *info;
-        
+
         ENTRY;
 
         LASSERT(req != NULL);
@@ -1197,7 +1197,8 @@ err_mdt_svc:
         RETURN(rc);
 }
 
-static void mdt_stack_fini(struct mdt_device *m, struct lu_device *d)
+static void mdt_stack_fini(struct lu_context *ctx,
+                           struct mdt_device *m, struct lu_device *d)
 {
         /* goes through all stack */
         while (d != NULL) {
@@ -1209,7 +1210,7 @@ static void mdt_stack_fini(struct mdt_device *m, struct lu_device *d)
 
                 /* each fini() returns next device in stack of layers
                  * * so we can avoid the recursion */
-                n = ldt->ldt_ops->ldto_device_fini(d);
+                n = ldt->ldt_ops->ldto_device_fini(ctx, d);
                 ldt->ldt_ops->ldto_device_free(d);
 
                 type = ldt->ldt_obd_type;
@@ -1221,7 +1222,8 @@ static void mdt_stack_fini(struct mdt_device *m, struct lu_device *d)
         m->mdt_child = NULL;
 }
 
-static struct lu_device *mdt_layer_setup(const char *typename,
+static struct lu_device *mdt_layer_setup(struct lu_context *ctx,
+                                         const char *typename,
                                          struct lu_device *child,
                                          struct lustre_cfg *cfg)
 {
@@ -1254,7 +1256,7 @@ static struct lu_device *mdt_layer_setup(const char *typename,
         d->ld_site = child->ld_site;
 
         type->typ_refcnt++;
-        rc = ldt->ldt_ops->ldto_device_init(d, child);
+        rc = ldt->ldt_ops->ldto_device_init(ctx, d, child);
         if (rc) {
                 CERROR("can't init device '%s', rc %d\n", typename, rc);
                 GOTO(out_alloc, rc);
@@ -1271,25 +1273,26 @@ out:
         RETURN(ERR_PTR(rc));
 }
 
-static int mdt_stack_init(struct mdt_device *m, struct lustre_cfg *cfg)
+static int mdt_stack_init(struct lu_context *ctx,
+                          struct mdt_device *m, struct lustre_cfg *cfg)
 {
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
         struct lu_device  *tmp;
         int rc;
 
         /* init the stack */
-        tmp = mdt_layer_setup(LUSTRE_OSD0_NAME, d, cfg);
+        tmp = mdt_layer_setup(ctx, LUSTRE_OSD0_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 RETURN (PTR_ERR(tmp));
         }
         m->mdt_bottom = lu2dt_dev(tmp);
         d = tmp;
-        tmp = mdt_layer_setup(LUSTRE_MDD0_NAME, d, cfg);
+        tmp = mdt_layer_setup(ctx, LUSTRE_MDD0_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 GOTO(out, rc = PTR_ERR(tmp));
         }
         d = tmp;
-        tmp = mdt_layer_setup(LUSTRE_CMM0_NAME, d, cfg);
+        tmp = mdt_layer_setup(ctx, LUSTRE_CMM0_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 GOTO(out, rc = PTR_ERR(tmp));
         }
@@ -1298,12 +1301,12 @@ static int mdt_stack_init(struct mdt_device *m, struct lustre_cfg *cfg)
 
         /* process setup config */
         tmp = &m->mdt_md_dev.md_lu_dev;
-        rc = tmp->ld_ops->ldo_process_config(tmp, cfg);
+        rc = tmp->ld_ops->ldo_process_config(ctx, tmp, cfg);
 
 out:
         /* fini from last known good lu_device */
         if (rc)
-                mdt_stack_fini(m, d);
+                mdt_stack_fini(ctx, m, d);
 
         return rc;
 }
@@ -1311,16 +1314,26 @@ out:
 static void mdt_fini(struct mdt_device *m)
 {
         struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
+        struct lu_context ctx;
+        int rc;
 
         ENTRY;
+
+        rc = lu_context_init(&ctx);
+        if (rc != 0) {
+                CERROR("Cannot initialize context: %d\n", rc);
+                EXIT;
+        }
+
+        lu_context_enter(&ctx);
 
         mdt_stop_ptlrpc_service(m);
 
         /* finish the stack */
-        mdt_stack_fini(m, md2lu_dev(m->mdt_child));
+        mdt_stack_fini(&ctx, m, md2lu_dev(m->mdt_child));
 
         mdt_fld_fini(m);
-        
+
         LASSERT(atomic_read(&d->ld_ref) == 0);
         md_device_fini(&m->mdt_md_dev);
 
@@ -1339,6 +1352,9 @@ static void mdt_fini(struct mdt_device *m)
                 OBD_FREE_PTR(d->ld_site);
                 d->ld_site = NULL;
         }
+
+        lu_context_exit(&ctx);
+        lu_context_fini(&ctx);
 
         EXIT;
 }
@@ -1371,17 +1387,23 @@ static int mdt_init0(struct mdt_device *m,
                 GOTO(err_fini_site, rc);
         }
 
+        rc = lu_context_init(&ctx);
+        if (rc != 0)
+                GOTO(err_fini_site, rc);
+
+        lu_context_enter(&ctx);
+
         /* init the stack */
-        rc = mdt_stack_init(m, cfg);
+        rc = mdt_stack_init(&ctx, m, cfg);
         if (rc) {
                 CERROR("can't init device stack, rc %d\n", rc);
-                GOTO(err_fini_site, rc);
+                GOTO(err_fini_ctx, rc);
         }
 
         /* set server index */
         LASSERT(num);
         s->ls_node_id = simple_strtol(num, NULL, 10);
-        
+
         m->mdt_seq_mgr = seq_mgr_init(&seq_mgr_ops, m);
         if (!m->mdt_seq_mgr) {
                 CERROR("can't initialize sequence manager\n");
@@ -1389,19 +1411,11 @@ static int mdt_init0(struct mdt_device *m,
         }
         /* set initial sequence by mds index */
         m->mdt_seq_mgr->m_seq = s->ls_node_id * LUSTRE_SEQ_RANGE;
-        
-        rc = lu_context_init(&ctx);
-        if (rc != 0)
-                GOTO(err_fini_mgr, rc);
 
-        lu_context_enter(&ctx);
         /* init sequence info after device stack is initialized. */
         rc = seq_mgr_setup(&ctx, m->mdt_seq_mgr);
-        lu_context_exit(&ctx);
         if (rc)
-                GOTO(err_fini_ctx, rc);
-
-        lu_context_fini(&ctx);
+                GOTO(err_fini_mgr, rc);
 
         snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
@@ -1418,6 +1432,9 @@ static int mdt_init0(struct mdt_device *m,
         if (rc)
                 GOTO(err_free_fld, rc);
 
+        lu_context_exit(&ctx);
+        lu_context_fini(&ctx);
+
         RETURN(0);
 
 err_free_fld:
@@ -1425,13 +1442,14 @@ err_free_fld:
 err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
         m->mdt_namespace = NULL;
-err_fini_ctx:
-        lu_context_fini(&ctx);
 err_fini_mgr:
         seq_mgr_fini(m->mdt_seq_mgr);
         m->mdt_seq_mgr = NULL;
 err_fini_stack:
-        mdt_stack_fini(m, md2lu_dev(m->mdt_child));
+        mdt_stack_fini(&ctx, m, md2lu_dev(m->mdt_child));
+err_fini_ctx:
+        lu_context_exit(&ctx);
+        lu_context_fini(&ctx);
 err_fini_site:
         lu_site_fini(s);
         OBD_FREE_PTR(s);
@@ -1439,7 +1457,8 @@ err_fini_site:
 }
 
 /* used by MGS to process specific configurations */
-static int mdt_process_config(struct lu_device *d, struct lustre_cfg *cfg)
+static int mdt_process_config(struct lu_context *ctx,
+                              struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct lu_device *next = md2lu_dev(mdt_dev(d)->mdt_child);
         int err;
@@ -1449,7 +1468,7 @@ static int mdt_process_config(struct lu_device *d, struct lustre_cfg *cfg)
                 /* all MDT specific commands should be here */
         default:
                 /* others are passed further */
-                err = next->ld_ops->ldo_process_config(next, cfg);
+                err = next->ld_ops->ldo_process_config(ctx, next, cfg);
         }
         RETURN(err);
 }

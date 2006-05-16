@@ -114,7 +114,7 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
 
                 CDEBUG(D_CONFIG, "connect to %s(%s)\n",
                        mdc->obd_name, mdc->obd_uuid.uuid);
-                
+
                 rc = obd_connect(&conn, mdc, &mdt->obd_uuid, NULL);
 
                 if (rc) {
@@ -125,11 +125,12 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
                         mc->mc_num = simple_strtol(index, NULL, 10);
                 }
         }
-        
+
         RETURN(rc);
 }
 
-static int mdc_process_config(struct lu_device *ld, struct lustre_cfg *cfg)
+static int mdc_process_config(struct lu_context *ctx,
+                              struct lu_device *ld, struct lustre_cfg *cfg)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
         int rc;
@@ -169,13 +170,13 @@ static int mdc_device_connect(struct mdc_device *mc)
         rc = ptlrpc_init_import(imp);
         if (rc != 0)
                 RETURN(rc);
-       
+
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
                 RETURN(rc);
         }
-        
+
         ptlrpc_pinger_add_import(imp);
         //TODO other initializations
         LASSERT(imp->imp_connection);
@@ -183,7 +184,8 @@ static int mdc_device_connect(struct mdc_device *mc)
         RETURN(0);
 }
 
-static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
+static int mdc_device_init(struct lu_context *ctx,
+                           struct lu_device *ld, struct lu_device *next)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
         struct mdc_cli_desc *desc = &mc->mc_desc;
@@ -203,7 +205,7 @@ static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
 
         sema_init(&cli->cl_sem, 1);
         cli->cl_conn_count = 0;
-        
+
         rc = ldlm_get_ref();
         if (rc != 0) {
                 CERROR("ldlm_get_ref failed: %d\n", rc);
@@ -212,11 +214,11 @@ static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
 
         ptlrpc_init_client(rq_portal, rp_portal, obd->obd_type->typ_name,
                            &desc->cl_ldlm_client);
-        
+
         imp = class_new_import(obd);
         if (imp == NULL)
                 GOTO(err_ldlm, rc = -ENOENT);
-        
+
         imp->imp_client = &desc->cl_ldlm_client;
         imp->imp_connect_op = connect_op;
         imp->imp_initial_recov = 1;
@@ -232,11 +234,11 @@ static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
 
         desc->cl_import = imp;
         cli->cl_import = imp;
-        
+
         rc = mdc_device_connect(mc);
-        
+
         RETURN(0);
-        
+
 err_import:
         class_destroy_import(imp);
 err_ldlm:
@@ -247,11 +249,12 @@ err:
         RETURN(rc);
 }
 
-static struct lu_device *mdc_device_fini(struct lu_device *ld)
+static struct lu_device *mdc_device_fini(struct lu_context *ctx,
+                                         struct lu_device *ld)
 {
 	struct mdc_device *mc = lu2mdc_dev(ld);
         struct mdc_cli_desc *desc = &mc->mc_desc;
-        
+
         ENTRY;
 
         class_destroy_import(desc->cl_import);
@@ -292,7 +295,8 @@ struct lu_device *mdc_device_alloc(struct lu_device_type *ldt,
         RETURN (ld);
 }
 #endif
-static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
+static int mdc_device_init(struct lu_context *ctx,
+                           struct lu_device *ld, struct lu_device *next)
 {
         /* struct mdc_device *mc = lu2mdc_dev(ld); */
         int rc = 0;
@@ -302,10 +306,11 @@ static int mdc_device_init(struct lu_device *ld, struct lu_device *next)
         RETURN(rc);
 }
 
-static struct lu_device *mdc_device_fini(struct lu_device *ld)
+static struct lu_device *mdc_device_fini(struct lu_context *ctx,
+                                         struct lu_device *ld)
 {
 	/* struct mdc_device *mc = lu2mdc_dev(ld); */
-       
+
         ENTRY;
 
         RETURN (NULL);

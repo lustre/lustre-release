@@ -421,8 +421,15 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
-                rc = d->ld_ops->ldo_process_config(d,
-                                                   (struct lustre_cfg *)data);
+                struct lu_context ctx;
+
+                rc = lu_context_init(&ctx);
+                if (rc == 0) {
+                        lu_context_enter(&ctx);
+                        rc = d->ld_ops->ldo_process_config(&ctx, d, data);
+                        lu_context_exit(&ctx);
+                        lu_context_fini(&ctx);
+                }
         } else {
                 OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
                 rc = OBP(obd, process_config)(obd, datalen, data);

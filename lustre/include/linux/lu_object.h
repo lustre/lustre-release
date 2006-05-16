@@ -143,7 +143,8 @@ struct lu_device_operations {
         /*
          * process config specific for device
          */
-        int  (*ldo_process_config)(struct lu_device *, struct lustre_cfg *);
+        int  (*ldo_process_config)(struct lu_context *ctx,
+                                   struct lu_device *, struct lustre_cfg *);
 };
 
 /*
@@ -269,12 +270,14 @@ struct lu_device_type_operations {
         /*
          * Initialize the devices after allocation
          */
-        int  (*ldto_device_init)(struct lu_device *, struct lu_device *);
+        int  (*ldto_device_init)(struct lu_context *ctx,
+                                 struct lu_device *, struct lu_device *);
         /*
          * Finalize device. Dual to ->ldto_device_init(). Returns pointer to
          * the next device in the stack.
          */
-        struct lu_device *(*ldto_device_fini)(struct lu_device *);
+        struct lu_device *(*ldto_device_fini)(struct lu_context *ctx,
+                                              struct lu_device *);
 
         /*
          * Initialize device type. This is called on module load.
