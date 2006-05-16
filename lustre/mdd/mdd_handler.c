@@ -497,8 +497,7 @@ __mdd_index_insert(struct lu_context *ctxt, struct mdd_object *pobj,
         int rc;
         struct dt_object *next = mdd_object_child(pobj);
 
-        rc = next->do_index_ops->dio_index_insert(ctxt, next, lf, name,
-                                                  handle);
+        rc = next->do_index_ops->dio_insert(ctxt, next, lf, name, handle);
         return rc;
 }
 
@@ -514,9 +513,8 @@ __mdd_index_delete(struct lu_context *ctxt, struct mdd_device *mdd,
 
         mdd_lock2(ctxt, pobj, obj);
 
-        rc = next->do_index_ops->dio_index_delete(ctxt, next,
-                                                  mdd_object_getfid(obj),
-                                                  name, handle);
+        rc = next->do_index_ops->dio_delete(ctxt, next, mdd_object_getfid(obj),
+                                            name, handle);
         mdd_unlock2(ctxt, pobj, obj);
 
         RETURN(rc);
