@@ -180,23 +180,73 @@ struct dt_body_operations {
 };
 
 /*
+ * Incomplete type of index record.
+ */
+struct dt_rec;
+
+/*
+ * Incomplete type of index key.
+ */
+struct dt_key;
+
+struct dt_index_features {
+        /* required feature flags from enum dt_index_flags */
+        __u32 dif_flags;
+        /* minimal required key size */
+        size_t dif_keysize_min;
+        /* maximal required key size, 0 if no limit */
+        size_t dif_keysize_max;
+        /* minimal required record size */
+        size_t dif_recsize_min;
+        /* maximal required record size, 0 if no limit */
+        size_t dif_recsize_max;
+};
+
+enum dt_index_flags {
+        /* index supports variable sized keys */
+        DT_IND_VARKEY = 1 << 0,
+        /* index supports variable sized records */
+        DT_IND_VARREC = 1 << 1,
+        /* index can be modified */
+        DT_IND_UPDATE = 1 << 2,
+        /* index supports records with non-unique (duplicate) keys */
+        DT_IND_NONUNQ = 1 << 3
+};
+
+/*
+ * Features, required from index to support file system directories (mapping
+ * names to fids).
+ */
+extern struct dt_index_features dt_directory_features;
+
+/*
  * Per-dt-object operations on object as index.
  */
 struct dt_index_operations {
         /*
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        int   (*dio_index_insert)(struct lu_context *ctxt,
-                                  struct dt_object *dt,
-                                  const struct lu_fid *fid, const char *name,
-                                  struct thandle *handle);
+        int (*dio_lookup)(struct lu_context *ctxt, struct dt_object *dt,
+                          struct dt_rec *rec, const struct dt_key *key);
         /*
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        int   (*dio_index_delete)(struct lu_context *ctxt,
-                                  struct dt_object *dt,
-                                  const struct lu_fid *fid, const char *name,
-                                  struct thandle *handle);
+        int (*dio_insert)(struct lu_context *ctxt, struct dt_object *dt,
+                          const struct dt_rec *rec, const struct dt_key *key,
+                          struct thandle *handle);
+        /*
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
+         */
+        int (*dio_delete)(struct lu_context *ctxt, struct dt_object *dt,
+                          const struct dt_rec *rec, const struct dt_key *key,
+                          struct thandle *handle);
+
+        /*
+         * Features probing. Returns 1 if this index supports all features in
+         * @feat, -ve on error, 0 otherwise.
+         */
+        int (*dio_probe)(struct lu_context *ctxt, struct dt_object *dt,
+                         const struct dt_index_features *feat);
 };
 
 struct dt_device {
