@@ -84,6 +84,8 @@ static void  osd_device_free   (struct lu_device *m);
 static int   osd_device_init   (struct lu_device *d, struct lu_device *);
 static void *osd_key_init      (struct lu_context *ctx);
 static void  osd_key_fini      (struct lu_context *ctx, void *data);
+static int   osd_has_index     (struct osd_object *obj);
+static void  osd_object_init0  (struct osd_object *obj);
 static int   osd_fid_lookup    (struct lu_context *ctx, struct osd_object *obj,
                                 const struct lu_fid *fid);
 static int   osd_inode_getattr (struct lu_context *ctx,
@@ -92,6 +94,14 @@ static int   osd_inode_get_fid (struct osd_device *d, const struct inode *inode,
                                 struct lu_fid *fid);
 static int   osd_param_is_sane (const struct osd_device *dev,
                                 const struct txn_param *param);
+static int   osd_index_lookup  (struct lu_context *ctxt, struct dt_object *dt,
+                                struct dt_rec *rec, const struct dt_key *key);
+static int   osd_index_insert  (struct lu_context *ctxt, struct dt_object *dt,
+                                const struct dt_rec *rec,
+                                const struct dt_key *key,
+                                struct thandle *handle);
+static int   osd_index_probe   (struct lu_context *ctxt, struct dt_object *dt,
+                                const struct dt_index_features *feat);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -162,6 +172,16 @@ static struct lu_object *osd_object_alloc(struct lu_context *ctx,
                 return NULL;
 }
 
+static void osd_object_init0(struct osd_object *obj)
+{
+        LASSERT(obj->oo_inode != NULL);
+
+        if (osd_has_index(obj))
+                obj->oo_dt.do_index_ops = &osd_index_ops;
+        else
+                obj->oo_dt.do_body_ops = &osd_body_ops;
+}
+
 static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
@@ -169,12 +189,8 @@ static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 
         result = osd_fid_lookup(ctxt, obj, lu_object_fid(l));
         if (result == 0) {
-                if (obj->oo_inode != NULL) {
-                        if (S_ISDIR(obj->oo_inode->i_mode))
-                                obj->oo_dt.do_index_ops = &osd_index_ops;
-                        else
-                                obj->oo_dt.do_body_ops = &osd_body_ops;
-                }
+                if (obj->oo_inode != NULL)
+                        osd_object_init0(obj);
         }
         return result;
 }
@@ -384,6 +400,9 @@ static int osd_create_pre(struct osd_thread_info *info, struct osd_object *obj,
 static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
                            struct lu_attr *attr, struct thandle *th)
 {
+        LASSERT(obj->oo_inode != NULL);
+
+        osd_object_init0(obj);
         return 0;
 }
 
@@ -527,15 +546,98 @@ static struct dt_object_operations osd_obj_ops = {
 static struct dt_body_operations osd_body_ops = {
 };
 
+/*
+ * Index operations.
+ */
+
+/*
+ * XXX This is temporary solution: inode operations are used until iam is
+ * ready.
+ */
+static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
+                            struct dt_rec *rec, const struct dt_key *key)
+{
+        struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_device *osd = osd_obj2dev(obj);
+        struct inode      *dir;
+
+        int result;
+
+        /*
+         * XXX temporary solution.
+         */
+        struct dentry     *dentry;
+        struct qstr        str = {
+                .name = (const char *)key,
+                .len  = strlen((const char *)key)
+        };
+
+        LASSERT(osd_has_index(obj));
+        LASSERT(osd->od_obj_area != NULL);
+
+        dir = obj->oo_inode;
+        LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
+
+        dentry = d_alloc(NULL, &str);
+        if (dentry != NULL) {
+                struct dentry *d;
+
+                /*
+                 * XXX passing NULL for nameidata should work for
+                 * ext3/ldiskfs.
+                 */
+                d = dir->i_op->lookup(dir, dentry, NULL);
+                if (d == NULL) {
+                        /*
+                         * normal case, result is in @dentry.
+                         */
+                        if (dentry->d_inode != NULL) {
+                                struct lu_fid *fid = (struct lu_fid *)rec;
+                                /*
+                                 * Build fid from inode.
+                                 */
+                                fid->f_seq = 0; /* XXX hard-coded */
+                                fid->f_oid = dentry->d_inode->i_ino;
+                                fid->f_ver = dentry->d_inode->i_generation;
+                                result = 0;
+                        } else
+                                result = -ENOENT;
+                } else {
+                        /* What? Disconnected alias? Ppheeeww... */
+                        CERROR("Aliasing where not expected\n");
+                        result = -EIO;
+                        dput(d);
+                }
+                dput(dentry);
+        } else
+                result = -ENOMEM;
+        return result;
+}
+
 static int osd_index_insert(struct lu_context *ctxt, struct dt_object *dt,
-                            const struct lu_fid *fid, const char *name,
+                            const struct dt_rec *rec, const struct dt_key *key,
                             struct thandle *handle)
 {
         return 0;
 }
 
+struct dt_index_features dt_directory_features;
+
+static int osd_index_probe(struct lu_context *ctxt, struct dt_object *dt,
+                           const struct dt_index_features *feat)
+{
+        struct osd_object *obj = osd_dt_obj(dt);
+
+        if (feat == &dt_directory_features)
+                return 1;
+        else
+                return 0; /* nothing yet is supported */
+}
+
 static struct dt_index_operations osd_index_ops = {
-        .dio_index_insert       = osd_index_insert,
+        .dio_lookup = osd_index_lookup,
+        .dio_insert = osd_index_insert,
+        .dio_probe  = osd_index_probe
 };
 
 /*
@@ -892,6 +994,11 @@ static struct super_block *osd_sb(const struct osd_device *dev)
 static journal_t *osd_journal(const struct osd_device *dev)
 {
 	return LDISKFS_SB(osd_sb(dev))->s_journal;
+}
+
+static int osd_has_index(struct osd_object *obj)
+{
+        return S_ISDIR(obj->oo_inode->i_mode);
 }
 
 static struct lu_object_operations osd_lu_obj_ops = {
