@@ -472,7 +472,7 @@ static int mmap_tst5(char *mnt)
         memset(ptr, 'a', region);
 
         /* cancel unused locks */
-        cancel_lru_locks("osc");
+        rc = cancel_lru_locks("osc");
         if (rc)
                 goto out_unmap;
 
@@ -538,7 +538,7 @@ static int mmap_tst6(char *mnt)
                 goto out;
         }
 
-        cancel_lru_locks("osc");
+        rc = cancel_lru_locks("osc");
         if (rc)
                 goto out;
 

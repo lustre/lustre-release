@@ -160,12 +160,20 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                         mds->mds_last_transno = transno;
                 spin_unlock(&mds->mds_transno_lock);
         }
+
         req->rq_transno = transno;
         lustre_msg_set_transno(req->rq_repmsg, transno);
-        mcd->mcd_last_transno = cpu_to_le64(transno);
-        mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
-        mcd->mcd_last_result = cpu_to_le32(rc);
-        mcd->mcd_last_data = cpu_to_le32(op_data);
+        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
+                mcd->mcd_last_close_transno = cpu_to_le64(transno);
+                mcd->mcd_last_close_xid = cpu_to_le64(req->rq_xid);
+                mcd->mcd_last_close_result = cpu_to_le32(rc);
+                mcd->mcd_last_close_data = cpu_to_le32(op_data);
+        } else {
+                mcd->mcd_last_transno = cpu_to_le64(transno);
+                mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
+                mcd->mcd_last_result = cpu_to_le32(rc);
+                mcd->mcd_last_data = cpu_to_le32(op_data);
+        }
 
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
@@ -355,12 +363,19 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
 
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
 {
+        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
+                req->rq_transno = le64_to_cpu(mcd->mcd_last_close_transno);
+                lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+                req->rq_status = le32_to_cpu(mcd->mcd_last_close_result);
+                lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+        } else {
+                req->rq_transno = le64_to_cpu(mcd->mcd_last_transno);
+                lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+                req->rq_status = le32_to_cpu(mcd->mcd_last_result);
+                lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+        }
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
-                  mcd->mcd_last_transno, mcd->mcd_last_result);
-        req->rq_transno = mcd->mcd_last_transno;
-        lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
-        req->rq_status = mcd->mcd_last_result;
-        lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+                  req->rq_transno, req->rq_status);
 
         mds_steal_ack_locks(req);
 }
@@ -1263,6 +1278,10 @@ cleanup:
         return rc;
 }
 
+#define INODE_CTIME_AGE (10)
+#define INODE_CTIME_OLD(inode) (LTIME_S(inode->i_ctime) +               \
+                                INODE_CTIME_AGE < CURRENT_SECONDS)
+
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 struct ll_fid *fid,
                                 struct lustre_handle *parent_lockh,
@@ -1320,6 +1339,16 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
 
         child_res_id.name[0] = inode->i_ino;
         child_res_id.name[1] = inode->i_generation;
+
+        /* If we want a LCK_CR for a directory, and this directory has not been
+           changed for some time, we return not only a LOOKUP lock, but also an 
+           UPDATE lock to have negative dentry starts working for this dir.
+           Also we apply same logic to non-directories. If the file is rarely
+           changed - we return both locks and this might save us RPC on
+           later STAT. */
+        if ((child_mode & (LCK_CR|LCK_PR|LCK_CW)) && INODE_CTIME_OLD(inode))
+                child_policy.l_inodebits.bits |= MDS_INODELOCK_UPDATE;
+
         iput(inode);
 
 retry_locks:

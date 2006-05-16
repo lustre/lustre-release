@@ -630,6 +630,12 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);
 
+        /* To avoid a livelock (bug 7034), we need to send CLOSE RPCs to a
+         * portal whose threads are not taking any DLM locks and are therefore
+         * always progressing */
+        /* XXX FIXME bug 249 */
+        req->rq_request_portal = MDS_READPAGE_PORTAL;
+
         /* Ensure that this close's handle is fixed up during replay. */
         LASSERT(och != NULL);
         LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
@@ -656,9 +662,9 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         LASSERT(req->rq_cb_data == NULL);
         req->rq_cb_data = mod;
 
-        mdc_get_rpc_lock(obd->u.cli.cl_rpc_lock, NULL);
+        mdc_get_rpc_lock(obd->u.cli.cl_close_lock, NULL);
         rc = ptlrpc_queue_wait(req);
-        mdc_put_rpc_lock(obd->u.cli.cl_rpc_lock, NULL);
+        mdc_put_rpc_lock(obd->u.cli.cl_close_lock, NULL);
 
         if (req->rq_repmsg == NULL) {
                 CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
@@ -1122,9 +1128,14 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_rpc_lock, rc = -ENOMEM);
         mdc_init_rpc_lock(cli->cl_setattr_lock);
 
+        OBD_ALLOC(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
+        if (!cli->cl_close_lock)
+                GOTO(err_setattr_lock, rc = -ENOMEM);
+        mdc_init_rpc_lock(cli->cl_close_lock);
+
         rc = client_obd_setup(obd, len, buf);
         if (rc)
-                GOTO(err_setattr_lock, rc);
+                GOTO(err_close_lock, rc);
         lprocfs_init_vars(mdc, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
@@ -1136,6 +1147,8 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 
         RETURN(rc);
 
+err_close_lock:
+        OBD_FREE(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
 err_setattr_lock:
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
 err_rpc_lock:
@@ -1212,6 +1225,7 @@ static int mdc_cleanup(struct obd_device *obd)
 
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
+        OBD_FREE(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
 
         lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();

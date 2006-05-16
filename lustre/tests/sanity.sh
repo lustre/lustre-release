@@ -21,7 +21,7 @@ EXCEPT="$EXCEPT 48a"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;
-2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 48b" ;;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT " ;;
 *) error "unsupported kernel" ;;
 esac
 
@@ -2628,7 +2628,35 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 }
 run_test 72 "Test that remove suid works properly (bug5695) ===="
 
-#b_cray run_test 73 "multiple MDC requests (should not deadlock)"
+# bug 3462 - multiple simultaneous MDC requests
+test_73() {
+	mkdir $DIR/d73-1 
+	mkdir $DIR/d73-2
+	multiop $DIR/d73-1/f73-1 O_c &
+	pid1=$!
+	#give multiop a chance to open
+	usleep 500
+
+	echo 0x80000129 > /proc/sys/lustre/fail_loc
+	multiop $DIR/d73-1/f73-2 Oc &
+	sleep 1
+	echo 0 > /proc/sys/lustre/fail_loc
+
+	multiop $DIR/d73-2/f73-3 Oc &
+	pid3=$!
+
+	kill -USR1 $pid1
+	wait $pid1 || return 1
+
+	sleep 25
+
+	$CHECKSTAT -t file $DIR/d73-1/f73-1 || return 4
+	$CHECKSTAT -t file $DIR/d73-1/f73-2 || return 5 
+	$CHECKSTAT -t file $DIR/d73-2/f73-3 || return 6 
+
+	rm -rf $DIR/d73-*
+}
+run_test 73 "multiple MDC requests (should not deadlock)"
 
 test_74() { # bug 6149, 6184
 	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e

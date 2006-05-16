@@ -44,6 +44,7 @@ static void lov_init_set(struct lov_request_set *set)
         set->set_count = 0;
         set->set_completes = 0;
         set->set_success = 0;
+        set->set_cookies = 0;
         CFS_INIT_LIST_HEAD(&set->set_list);
         atomic_set(&set->set_refcount, 1);
 }
@@ -129,11 +130,12 @@ int lov_update_enqueue_set(struct lov_request_set *set,
          * can be addressed then. */
         if (rc == ELDLM_OK) {
                 struct ldlm_lock *lock = ldlm_handle2lock(lov_lockhp);
-                __u64 tmp = req->rq_md->lsm_oinfo->loi_lvb.lvb_size;
+                __u64 tmp;
 
                 LASSERT(lock != NULL);
                 lov_stripe_lock(set->set_md);
                 loi->loi_lvb = req->rq_md->lsm_oinfo->loi_lvb;
+                tmp = loi->loi_lvb.lvb_size;
                 /* Extend KMS up to the end of this lock and no further
                  * A lock on [x,y] means a KMS of up to y + 1 bytes! */
                 if (tmp > lock->l_policy_data.l_extent.end)
@@ -641,7 +643,7 @@ int lov_update_create_set(struct lov_request_set *set,
                lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
         loi_init(loi);
 
-        if (set->set_cookies)
+        if (oti && set->set_cookies)
                 ++oti->oti_logcookies;
         if (req->rq_oa->o_valid & OBD_MD_FLCOOKIE)
                 set->set_cookie_sent++;
@@ -1010,7 +1012,7 @@ int lov_prep_destroy_set(struct obd_export *exp, struct obdo *src_oa,
                 req->rq_oa->o_id = loi->loi_id;
 
                 /* Setup the first request's cookie position */
-                if (!cookie_set && set->set_cookies) {
+                if (oti && !cookie_set && set->set_cookies) {
                         oti->oti_logcookies = set->set_cookies + i;
                         cookie_set = 1;
                 }

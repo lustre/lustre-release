@@ -180,16 +180,71 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                                    inode->i_ino, inode->i_generation, inode);
                 }
 
+                if (bits & MDS_INODELOCK_OPEN) {
+                        int flags = 0;
+                        switch (lock->l_req_mode) {
+                        case LCK_CW:
+                                flags = FMODE_WRITE;
+                                break;
+                        case LCK_PR:
+                                flags = FMODE_EXEC;
+                                break;
+                        case LCK_CR:
+                                flags = FMODE_READ;
+                                break;
+                        default:
+                                CERROR("Unexpected lock mode for OPEN lock "
+                                       "%d, inode %ld\n", lock->l_req_mode,
+                                       inode->i_ino);
+                        }
+                        ll_mdc_real_close(inode, flags);
+                }
+
                 if (bits & MDS_INODELOCK_UPDATE)
                         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
                                   &(ll_i2info(inode)->lli_flags));
 
-                
                 if (S_ISDIR(inode->i_mode) &&
-                     (bits & MDS_INODELOCK_UPDATE))  {
+                     (bits & MDS_INODELOCK_UPDATE)) {
+                        struct dentry *dentry, *tmp, *dir;
+                        struct list_head *list;
+                        
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
                         truncate_inode_pages(inode->i_mapping, 0);
+
+                        
+                        /* Drop possible cached negative dentries */
+                        list = &inode->i_dentry;
+                        dir = NULL;
+                        spin_lock(&dcache_lock);
+                        
+                        /* It is possible to have several dentries (with 
+                           racer?) */
+                        while ((list = list->next) != &inode->i_dentry) {
+                                dir = list_entry(list, struct dentry, d_alias);
+                                if (!(dir->d_flags & DCACHE_LUSTRE_INVALID))
+                                        break;
+
+                                dir = NULL;
+                        }
+                        
+                        if (dir) {
+restart:
+                                list_for_each_entry_safe(dentry, tmp, 
+                                                         &dir->d_subdirs, 
+                                                         d_child)
+                                {
+                                        /* XXX Print some debug here? */
+                                        if (!dentry->d_inode) 
+                                                /* Negative dentry. If we were 
+                                                   dropping dcache lock, go 
+                                                   throught the list again */
+                                                if (ll_drop_dentry(dentry))
+                                                        goto restart;
+                                }
+                        }
+                        spin_unlock(&dcache_lock);
                 }
 
                 if (inode->i_sb->s_root &&
@@ -407,9 +462,16 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 *de = ll_find_alias(inode, *de);
         } else {
                 ENTRY;
-                spin_lock(&dcache_lock);
-                ll_d_add(*de, inode);
-                spin_unlock(&dcache_lock);
+                /* Check that parent has UPDATE lock. If there is none, we
+                   cannot afford to hash this dentry (done by ll_d_add) as it
+                   might get picked up later when UPDATE lock will appear */
+                if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE)) {
+                        spin_lock(&dcache_lock);
+                        ll_d_add(*de, inode);
+                        spin_unlock(&dcache_lock);
+                } else {
+                        (*de)->d_inode = NULL; 
+                }
         }
 
         ll_set_dd(*de);

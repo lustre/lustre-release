@@ -51,8 +51,25 @@ static int ll_close_inode_openhandle(struct inode *inode,
                                      struct obd_client_handle *och)
 {
         struct ptlrpc_request *req = NULL;
+        struct obd_device *obd;
         struct obdo *oa;
         int rc;
+        ENTRY;
+
+        obd = class_exp2obd(ll_i2mdcexp(inode));
+        if (obd == NULL) {
+                CERROR("Invalid MDC connection handle "LPX64"\n",
+                       ll_i2mdcexp(inode)->exp_handle.h_cookie);
+                GOTO(out, rc = 0);
+        }
+
+        /*
+         * here we check if this is forced umount. If so this is called on
+         * canceling "open lock" and we do not call mdc_close() in this case, as
+         * it will not be successful, as import is already deactivated.
+         */
+        if (obd->obd_no_recov)
+                GOTO(out, rc = 0);
 
         oa = obdo_alloc();
         if (!oa)
@@ -89,8 +106,52 @@ static int ll_close_inode_openhandle(struct inode *inode,
                                inode->i_ino, rc);
         }
 
-        mdc_clear_open_replay_data(och);
         ptlrpc_req_finished(req); /* This is close request */
+        EXIT;
+out:
+        mdc_clear_open_replay_data(och);
+
+        return rc;
+}
+
+int ll_mdc_real_close(struct inode *inode, int flags)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        int rc = 0;
+        struct obd_client_handle **och_p;
+        struct obd_client_handle *och;
+        __u64 *och_usecount;
+
+        ENTRY;
+
+        if (flags & FMODE_WRITE) {
+                och_p = &lli->lli_mds_write_och;
+                och_usecount = &lli->lli_open_fd_write_count;
+        } else if (flags & FMODE_EXEC) {
+                och_p = &lli->lli_mds_exec_och;
+                och_usecount = &lli->lli_open_fd_exec_count;
+         } else {
+                LASSERT(flags & FMODE_READ);
+                och_p = &lli->lli_mds_read_och;
+                och_usecount = &lli->lli_open_fd_read_count;
+        }
+
+        down(&lli->lli_och_sem);
+        if (*och_usecount) { /* There are still users of this handle, so
+                                skip freeing it. */
+                up(&lli->lli_och_sem);
+                RETURN(0);
+        }
+        och=*och_p;
+        *och_p = NULL;
+        up(&lli->lli_och_sem);
+
+        if (och) { /* There might be a race and somebody have freed this och
+                      already */
+                rc = ll_close_inode_openhandle(inode, och);
+                och->och_fh.cookie = DEAD_HANDLE_MAGIC;
+                OBD_FREE(och, sizeof *och);
+        }
 
         RETURN(rc);
 }
@@ -99,8 +160,8 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                         struct file *file)
 {
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-        struct obd_client_handle *och = &fd->fd_mds_och;
-        int rc;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        int rc = 0;
         ENTRY;
 
         /* clear group lock, if present */
@@ -110,9 +171,45 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                 rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP,
                                       &fd->fd_cwlockh);
         }
+
+        /* Let's see if we have good enough OPEN lock on the file and if
+           we can skip talking to MDS */
+        if (file->f_dentry->d_inode) { /* Can this ever be false? */
+                int lockmode;
+                int flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_TEST_LOCK;
+                struct lustre_handle lockh;
+                struct inode *inode = file->f_dentry->d_inode;
+                struct ldlm_res_id file_res_id = {.name={inode->i_ino,
+                                                         inode->i_generation}};
+                ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_OPEN}};
+
+                down(&lli->lli_och_sem);
+                if (fd->fd_omode & FMODE_WRITE) {
+                        lockmode = LCK_CW;
+                        LASSERT(lli->lli_open_fd_write_count);
+                        lli->lli_open_fd_write_count--;
+                } else if (fd->fd_omode & FMODE_EXEC) {
+                        lockmode = LCK_PR;
+                        LASSERT(lli->lli_open_fd_exec_count);
+                        lli->lli_open_fd_exec_count--;
+                } else {
+                        lockmode = LCK_CR;
+                        LASSERT(lli->lli_open_fd_read_count);
+                        lli->lli_open_fd_read_count--;
+                }
+                up(&lli->lli_och_sem);
+
+                if (!ldlm_lock_match(mdc_exp->exp_obd->obd_namespace, flags,
+                                     &file_res_id, LDLM_IBITS, &policy,lockmode,
+                                     &lockh)) {
+                        rc = ll_mdc_real_close(file->f_dentry->d_inode,
+                                                fd->fd_omode);
+                }
+        } else {
+                CERROR("Releasing a file %p with negative dentry %p. Name %s",
+                       file, file->f_dentry, file->f_dentry->d_name.name);
+        }
         
-        rc = ll_close_inode_openhandle(inode, och);
-        och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         LUSTRE_FPRIVATE(file) = NULL;
         ll_file_data_put(fd);
 
@@ -170,6 +267,18 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         ll_prepare_mdc_op_data(&data, parent->d_inode, NULL, name, len, O_RDWR);
 
+        /* Usually we come here only for NFSD, and we want open lock.
+           But we can also get here with pre 2.6.15 patchless kernels, and in
+           that case that lock is also ok */
+        /* We can also get here if there was cached open handle in revalidate_it
+         * but it disappeared while we were getting from there to ll_file_open.
+         * But this means this file was closed and immediatelly opened which
+         * makes a good candidate for using OPEN lock */
+        /* If lmmsize & lmm are not 0, we are just setting stripe info
+         * parameters. No need for the open lock */
+        if (!lmm && !lmmsize)
+                itp->it_flags |= MDS_OPEN_LOCK;
+
         rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, itp, LCK_PW, &data,
                          &lockh, lmm, lmmsize, ldlm_completion_ast,
                          ll_mdc_blocking_ast, NULL, 0);
@@ -178,6 +287,11 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                 GOTO(out, rc);
         }
 
+        if (itp->d.lustre.it_lock_mode) { /* If we got lock - release it right
+                                           * away */
+                ldlm_lock_decref(&lockh, itp->d.lustre.it_lock_mode);
+                itp->d.lustre.it_lock_mode = 0;
+        }
         rc = ll_prep_inode(sbi->ll_osc_exp, &file->f_dentry->d_inode,
                            (struct ptlrpc_request *)itp->d.lustre.it_data,
                            DLM_REPLY_REC_OFF, NULL);
@@ -205,7 +319,7 @@ static void ll_och_fill(struct ll_inode_info *lli, struct lookup_intent *it,
 }
 
 int ll_local_open(struct file *file, struct lookup_intent *it,
-                  struct ll_file_data *fd)
+                  struct ll_file_data *fd, struct obd_client_handle *och)
 {
         ENTRY;
 
@@ -213,9 +327,11 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
 
         LASSERT(fd != NULL);
 
-        ll_och_fill(ll_i2info(file->f_dentry->d_inode), it, &fd->fd_mds_och);
+        if (och)
+                ll_och_fill(ll_i2info(file->f_dentry->d_inode), it, och);
         LUSTRE_FPRIVATE(file) = fd;
         ll_readahead_init(file->f_dentry->d_inode, &fd->fd_ras);
+        fd->fd_omode = it->it_flags;
 
         RETURN(0);
 }
@@ -241,7 +357,9 @@ int ll_file_open(struct inode *inode, struct file *file)
         struct lookup_intent *it, oit = { .it_op = IT_OPEN,
                                           .it_flags = file->f_flags };
         struct lov_stripe_md *lsm;
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *req = NULL;
+        struct obd_client_handle **och_p;
+        __u64 *och_usecount;
         struct ll_file_data *fd;
         int rc = 0;
         ENTRY;
@@ -276,25 +394,77 @@ int ll_file_open(struct inode *inode, struct file *file)
                 oit.it_flags &= ~O_EXCL;
 
                 it = &oit;
-                rc = ll_intent_file_open(file, NULL, 0, it);
+        }
+
+        /* Let's see if we have file open on MDS already. */
+        if (it->it_flags & FMODE_WRITE) {
+                och_p = &lli->lli_mds_write_och;
+                och_usecount = &lli->lli_open_fd_write_count;
+        } else if (it->it_flags & FMODE_EXEC) {
+                och_p = &lli->lli_mds_exec_och;
+                och_usecount = &lli->lli_open_fd_exec_count;
+         } else {
+                och_p = &lli->lli_mds_read_och;
+                och_usecount = &lli->lli_open_fd_read_count;
+        }
+        down(&lli->lli_och_sem);
+        if (*och_p) { /* Open handle is present */
+                if (it_disposition(it, DISP_LOOKUP_POS) && /* Positive lookup */
+                    it_disposition(it, DISP_OPEN_OPEN)) { /* & OPEN happened */
+                        /* Well, there's extra open request that we do not need,
+                           let's close it somehow. This will decref request. */
+                        ll_release_openhandle(file->f_dentry, it);
+                }
+                (*och_usecount)++;
+
+                rc = ll_local_open(file, it, fd, NULL);
+
+                LASSERTF(rc == 0, "rc = %d\n", rc);
+        } else {
+                LASSERT(*och_usecount == 0);
+                OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
+                if (!*och_p) {
+                        ll_file_data_put(fd);
+                        GOTO(out_och_free, rc = -ENOMEM);
+                }
+                (*och_usecount)++;
+                if (!it->d.lustre.it_disposition) {
+                        rc = ll_intent_file_open(file, NULL, 0, it);
+                        if (rc) {
+                                ll_file_data_put(fd);
+                                GOTO(out_och_free, rc);
+                        }
+
+                        /* Got some error? Release the request */
+                        if (it->d.lustre.it_status < 0) {
+                                req = it->d.lustre.it_data;
+                                ptlrpc_req_finished(req);
+                        }
+                        mdc_set_lock_data(&it->d.lustre.it_lock_handle,
+                                          file->f_dentry->d_inode);
+                }
+                req = it->d.lustre.it_data;
+
+                /* mdc_intent_lock() didn't get a request ref if there was an
+                 * open error, so don't do cleanup on the request here 
+                 * (bug 3430) */
+                /* XXX (green): Should not we bail out on any error here, not
+                 * just open error? */
+                rc = it_open_error(DISP_OPEN_OPEN, it);
                 if (rc) {
                         ll_file_data_put(fd);
-                        GOTO(out, rc);
+                        GOTO(out_och_free, rc);
                 }
+
+                lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
+                rc = ll_local_open(file, it, fd, *och_p);
+                LASSERTF(rc == 0, "rc = %d\n", rc);
         }
+        up(&lli->lli_och_sem);
 
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
-        rc = it_open_error(DISP_OPEN_OPEN, it);
-        /* mdc_intent_lock() didn't get a request ref if there was an open
-         * error, so don't do cleanup on the request here (bug 3430) */
-        if (rc) {
-                ll_file_data_put(fd);
-                RETURN(rc);
-        }
-
-        rc = ll_local_open(file, it, fd);
-        LASSERTF(rc == 0, "rc = %d\n", rc);
-
+        /* Must do this outside lli_och_sem lock to prevent deadlock where
+           different kind of OPEN lock for this same inode gets cancelled
+           by ldlm_cancel_lru */
         if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc);
 
@@ -309,12 +479,21 @@ int ll_file_open(struct inode *inode, struct file *file)
         file->f_flags &= ~O_LOV_DELAY_CREATE;
         GOTO(out, rc);
  out:
-        req = it->d.lustre.it_data;
         ptlrpc_req_finished(req);
         if (req)
                 it_clear_disposition(it, DISP_ENQ_OPEN_REF);
-        if (rc == 0)
+        if (rc == 0) {
                 ll_open_complete(inode);
+        } else {
+out_och_free:
+                if (*och_p) {
+                        OBD_FREE(*och_p, sizeof (struct obd_client_handle));
+                        *och_p = NULL; /* OBD_FREE writes some magic there */
+                        (*och_usecount)--;
+                }
+                up(&lli->lli_och_sem);
+        }
+
         return rc;
 }
 
@@ -1023,10 +1202,8 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                 *ppos = inode->i_size;
 
         if (*ppos >= maxbytes) {
-                if (count || *ppos > maxbytes) {
-                        send_sig(SIGXFSZ, current, 0);
-                        GOTO(out, retval = -EFBIG);
-                }
+                send_sig(SIGXFSZ, current, 0);
+                GOTO(out, retval = -EFBIG);
         }
         if (*ppos + count > maxbytes)
                 count = maxbytes - *ppos;
@@ -1200,14 +1377,9 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                                     int lum_size)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct file *f = NULL;
-        struct obd_export *exp = ll_i2obdexp(inode);
         struct lov_stripe_md *lsm;
         struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
-        struct ptlrpc_request *req = NULL;
-        struct ll_file_data *fd;
         int rc = 0;
-        struct lustre_md md;
         ENTRY;
 
         down(&lli->lli_open_sem);
@@ -1219,49 +1391,24 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                 RETURN(-EEXIST);
         }
 
-        fd = ll_file_data_get();
-        if (fd == NULL)
-                GOTO(out, -ENOMEM);
-
-        f = get_empty_filp();
-        if (!f)
-                GOTO(out, -ENOMEM);
-
-        f->f_dentry = dget(file->f_dentry);
-        f->f_vfsmnt = mntget(file->f_vfsmnt);
-
-        rc = ll_intent_file_open(f, lum, lum_size, &oit);
+        rc = ll_intent_file_open(file, lum, lum_size, &oit);
         if (rc)
                 GOTO(out, rc);
         if (it_disposition(&oit, DISP_LOOKUP_NEG))
-                GOTO(out, -ENOENT);
-        req = oit.d.lustre.it_data;
+                GOTO(out_req_free, rc = -ENOENT);
         rc = oit.d.lustre.it_status;
-
         if (rc < 0)
-                GOTO(out, rc);
+                GOTO(out_req_free, rc);
 
-        rc = mdc_req2lustre_md(req, DLM_REPLY_REC_OFF, exp, &md);
-        if (rc)
-                GOTO(out, rc);
-        ll_update_inode(f->f_dentry->d_inode, &md);
-
-        rc = ll_local_open(f, &oit, fd);
-        if (rc)
-                GOTO(out, rc);
-        fd = NULL;
-        ll_intent_release(&oit);
-
-        rc = ll_file_release(f->f_dentry->d_inode, f);
+        ll_release_openhandle(file->f_dentry, &oit);
 
  out:
-        if (f)
-                fput(f);
-        ll_file_data_put(fd);
         up(&lli->lli_open_sem);
-        if (req != NULL)
-                ptlrpc_req_finished(req);
+        ll_intent_release(&oit);
         RETURN(rc);
+out_req_free:
+        ptlrpc_req_finished((struct ptlrpc_request *) oit.d.lustre.it_data);
+        goto out;
 }
 
 static int ll_lov_setea(struct inode *inode, struct file *file,
@@ -1419,13 +1566,10 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         struct dentry *tail_dentry = tail_filp->f_dentry;
         struct lookup_intent oit = {.it_op = IT_OPEN,
                                    .it_flags = head_filp->f_flags|O_JOIN_FILE};
-        struct ptlrpc_request *req = NULL;
-        struct ll_file_data *fd;
         struct lustre_handle lockh;
         struct mdc_op_data *op_data;
         __u32  hsize = head_inode->i_size >> 32;
         __u32  tsize = head_inode->i_size;
-        struct file *f;
         int    rc;
         ENTRY;
 
@@ -1433,22 +1577,10 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         tail_inode = tail_dentry->d_inode;
         tail_parent = tail_dentry->d_parent->d_inode;
 
-        fd = ll_file_data_get();
-        if (fd == NULL)
-                RETURN(-ENOMEM);
-
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL) {
-                ll_file_data_put(fd);
                 RETURN(-ENOMEM);
         }
-
-        f = get_empty_filp();
-        if (f == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        f->f_dentry = dget(head_filp->f_dentry);
-        f->f_vfsmnt = mntget(head_filp->f_vfsmnt);
 
         ll_prepare_mdc_op_data(op_data, head_inode, tail_parent,
                                tail_dentry->d_name.name,
@@ -1460,26 +1592,24 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         if (rc < 0)
                 GOTO(out, rc);
 
-        req = oit.d.lustre.it_data;
         rc = oit.d.lustre.it_status;
 
-        if (rc < 0)
+        if (rc < 0) {
+                ptlrpc_req_finished((struct ptlrpc_request *)
+                                                          oit.d.lustre.it_data);
                 GOTO(out, rc);
+        }
 
-        rc = ll_local_open(f, &oit, fd);
-        LASSERTF(rc == 0, "rc = %d\n", rc);
-
-        fd = NULL;
-        ll_intent_release(&oit);
-
-        rc = ll_file_release(f->f_dentry->d_inode, f);
+        if (oit.d.lustre.it_lock_mode) { /* If we got lock - release it right
+                                           * away */
+                ldlm_lock_decref(&lockh, oit.d.lustre.it_lock_mode);
+                oit.d.lustre.it_lock_mode = 0;
+        }
+        ll_release_openhandle(head_filp->f_dentry, &oit);
 out:
         if (op_data)
                 OBD_FREE_PTR(op_data);
-        if (f)
-                fput(f);
-        ll_file_data_put(fd);
-        ptlrpc_req_finished(req);
+        ll_intent_release(&oit);
         RETURN(rc);
 }
 
@@ -1883,23 +2013,21 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         RETURN(rc);
 }
 
-static int ll_have_md_lock(struct dentry *de)
+int ll_have_md_lock(struct inode *inode, __u64 bits)
 {
-        struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
         struct lustre_handle lockh;
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obddev;
-        ldlm_policy_data_t policy = { .l_inodebits = {
-                MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP}};
+        ldlm_policy_data_t policy = { .l_inodebits = {bits}};
         int flags;
         ENTRY;
 
-        if (!de->d_inode)
+        if (!inode)
                RETURN(0);
 
-        obddev = sbi->ll_mdc_exp->exp_obd;
-        res_id.name[0] = de->d_inode->i_ino;
-        res_id.name[1] = de->d_inode->i_generation;
+        obddev = ll_i2mdcexp(inode)->exp_obd;
+        res_id.name[0] = inode->i_ino;
+        res_id.name[1] = inode->i_generation;
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
@@ -1976,8 +2104,19 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                         GOTO(out, rc);
                 }
 
+                /* Unlinked? Unhash dentry, so it is not picked up later by
+                   do_lookup() -> ll_revalidate_it(). We cannot use d_drop
+                   here to preserve get_cwd functionality on 2.6.
+                   Bug 10503 */
+                if (!dentry->d_inode->i_nlink) {
+                        spin_lock(&dcache_lock);
+                        ll_drop_dentry(dentry);
+                        spin_unlock(&dcache_lock);
+                }
+
                 ll_lookup_finish_locks(&oit, dentry);
-        } else if (!ll_have_md_lock(dentry)) {
+        } else if (!ll_have_md_lock(dentry->d_inode,
+                                  MDS_INODELOCK_UPDATE|MDS_INODELOCK_LOOKUP)) {
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 struct ll_fid fid;
                 obd_valid valid = OBD_MD_FLGETATTR;

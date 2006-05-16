@@ -284,7 +284,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         /* We are currently not supporting multi-obj BRW_READ RPCS at all.
-         * When we do this function's dentry cleanup will need to be fixed */
+         * When we do this function's dentry cleanup will need to be fixed.
+         * These values are verified in ost_brw_write() from the wire. */
         LASSERTF(objcount == 1, "%d\n", objcount);
         LASSERTF(obj->ioo_bufcnt > 0, "%d\n", obj->ioo_bufcnt);
 
@@ -310,9 +311,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         inode = dentry->d_inode;
 
-        if (oa)
-                obdo_to_inode(inode, oa, OBD_MD_FLATIME);
-
+        obdo_to_inode(inode, oa, OBD_MD_FLATIME);
         fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 
         for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt;

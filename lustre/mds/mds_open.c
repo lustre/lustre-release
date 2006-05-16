@@ -517,7 +517,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
 
         /* copy rc, transno and disp; steal locks */
         mds_req_from_mcd(req, mcd);
-        intent_set_disposition(rep, mcd->mcd_last_data);
+        intent_set_disposition(rep, le32_to_cpu(mcd->mcd_last_data));
 
         /* Only replay if create or open actually happened. */
         if (!intent_disposition(rep, DISP_OPEN_CREATE | DISP_OPEN_OPEN) ) {
@@ -720,12 +720,12 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         }
         UNLOCK_INODE_MUTEX(dchild->d_inode);
 
-        if (!(rec->ur_flags & MDS_OPEN_JOIN_FILE))
+        if (rec && !(rec->ur_flags & MDS_OPEN_JOIN_FILE))
                 lustre_shrink_reply(req, DLM_REPLY_REC_OFF + 1,
                                     body->eadatasize, 0);
 
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_ACL &&
-            !(rec->ur_flags & MDS_OPEN_JOIN_FILE)) {
+            rec && !(rec->ur_flags & MDS_OPEN_JOIN_FILE)) {
                 int acl_off = DLM_REPLY_REC_OFF + (body->eadatasize ? 2 : 1);
 
                 rc = mds_pack_acl(&req->rq_export->exp_mds_data,
@@ -869,7 +869,16 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct dentry_params dp;
         unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
+        int child_mode = LCK_CR;
+        /* Always returning LOOKUP lock if open succesful to guard
+           dentry on client. */
+        ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_LOOKUP}};
+        struct ldlm_res_id child_res_id = { .name = {0}};
+        int lock_flags = 0;
         ENTRY;
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
+                         (obd_timeout + 1) / 4);
 
         CLASSERT(MAXQUOTAS < 4);
         if (offset == DLM_INTENT_REC_OFF) { /* intent */
@@ -1107,6 +1116,36 @@ found_child:
                 GOTO(cleanup, rc = -EAGAIN);
         }
 
+        /* Obtain OPEN lock as well */
+        policy.l_inodebits.bits |= MDS_INODELOCK_OPEN;
+
+        /* We cannot use acc_mode here, because it is zeroed in case of
+           creating a file, so we get wrong lockmode */
+        if (accmode(dchild->d_inode, rec->ur_flags) & MAY_WRITE)
+                child_mode = LCK_CW;
+        else if (accmode(dchild->d_inode, rec->ur_flags) & MAY_EXEC)
+                child_mode = LCK_PR;
+        else
+                child_mode = LCK_CR;
+
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) && 
+             (rec->ur_flags & MDS_OPEN_LOCK)) {
+                /* In case of replay we do not get a lock assuming that the
+                   caller has it already */
+                child_res_id.name[0] = dchild->d_inode->i_ino;
+                child_res_id.name[1] = dchild->d_inode->i_generation;
+
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
+                                      child_res_id, LDLM_IBITS, &policy,
+                                      child_mode, &lock_flags,
+                                      ldlm_blocking_ast, ldlm_completion_ast,
+                                      NULL, NULL, NULL, 0, NULL, child_lockh);
+                if (rc != ELDLM_OK)
+                        GOTO(cleanup, rc);
+
+                cleanup_phase = 3;
+        }
+
         if (!S_ISREG(dchild->d_inode->i_mode) &&
             !S_ISDIR(dchild->d_inode->i_mode) &&
             (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH)) {
@@ -1126,6 +1165,9 @@ found_child:
 
  cleanup_no_trans:
         switch (cleanup_phase) {
+        case 3:
+                if (rc)
+                        ldlm_lock_decref(child_lockh, child_mode);
         case 2:
                 if (rc && created) {
                         int err = vfs_unlink(dparent->d_inode, dchild);
@@ -1151,6 +1193,14 @@ found_child:
                 else
                         ptlrpc_save_lock(req, &parent_lockh, parent_mode);
         }
+        /* If we have not taken the "open" lock, we may not return 0 here,
+           because caller expects 0 to mean "lock is taken", and it needs
+           nonzero return here for caller to return EDLM_LOCK_ABORTED to
+           client. Later caller should rewrite the return value back to zero
+           if it to be used any further
+         */
+        if ((cleanup_phase != 3) && !rc)
+                rc = ENOLCK;
 
         /* trigger dqacq on the owner of child and parent */
         lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_CREATE);

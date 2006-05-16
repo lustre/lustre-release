@@ -326,12 +326,10 @@ static inline int page_mapped(struct page *page)
 }
 #endif /* !HAVE_PAGE_MAPPED */
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
 static inline void touch_atime(struct vfsmount *mnt, struct dentry *dentry)
 {
         update_atime(dentry->d_inode);
 }
-#endif
 
 static inline void file_accessed(struct file *file)
 {

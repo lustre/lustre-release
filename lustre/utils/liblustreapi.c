@@ -69,7 +69,7 @@ static void err_msg(char *fmt, ...)
         fprintf(stderr, ": %s (%d)\n", strerror(tmp_errno), tmp_errno);
 }
 
-int llapi_file_create(char *name, long stripe_size, int stripe_offset,
+int llapi_file_create(const char *name, long stripe_size, int stripe_offset,
                       int stripe_count, int stripe_pattern)
 {
         struct lov_user_md lum = { 0 };
@@ -143,14 +143,6 @@ out:
                         rc = -errno;
         }
         return rc;
-}
-
-/* short term backwards compat only */
-int op_create_file(char *name, long stripe_size, int stripe_offset,
-                   int stripe_count)
-{
-        return llapi_file_create(name, stripe_size, stripe_offset,
-                                 stripe_count, 0);
 }
 
 struct find_param {
@@ -493,10 +485,30 @@ int llapi_file_get_stripe(char *path, struct lov_user_md *lum)
         return rc;
 }
 
-/* short term backwards compat only */
-int op_get_file_stripe(char *path, struct lov_user_md *lum)
+int llapi_file_lookup(int dirfd, const char *name)
 {
-        return llapi_file_get_stripe(path, lum);
+        struct obd_ioctl_data data = { 0 };
+        char rawbuf[8192];
+        char *buf = rawbuf;
+        int rc;
+
+        if (dirfd < 0 || name == NULL)
+                return -EINVAL;
+
+        data.ioc_version = OBD_IOCTL_VERSION;
+        data.ioc_len = sizeof(data);
+        data.ioc_inlbuf1 = (char *)name;
+        data.ioc_inllen1 = strlen(name) + 1;
+
+        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+        if (rc) {
+                fprintf(stderr,
+                        "error: IOC_MDC_LOOKUP pack failed for '%s': rc %d\n",
+                        name, rc);
+                return rc;
+        }
+
+        return ioctl(dirfd, IOC_MDC_LOOKUP, buf);
 }
 
 static int find_process_file(DIR *dir, char *dname, char *fname,

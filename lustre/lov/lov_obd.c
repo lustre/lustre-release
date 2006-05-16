@@ -1043,7 +1043,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 rc = obd_destroy(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
                                  NULL, oti, NULL);
                 err = lov_update_common_set(set, req, rc);
-                if (rc) {
+                if (err) {
                         CERROR("error: destroying objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
                                set->set_oa->o_id, req->rq_oa->o_id,
@@ -1052,7 +1052,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                                 rc = err;
                 }
         }
-        lov_fini_destroy_set(set);
+        rc = lov_fini_destroy_set(set);
         if (rc == 0) {
                 LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
                 rc = lsm_op_find(lsm->lsm_magic)->lsm_destroy(lsm, oa, md_exp);
@@ -1566,7 +1566,7 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         LASSERT(loi == NULL);
 
         lap = *res;
-        lap->lap_magic = LAP_MAGIC;
+        lap->lap_magic = LOV_AP_MAGIC;
         lap->lap_caller_ops = ops;
         lap->lap_caller_data = data;
 

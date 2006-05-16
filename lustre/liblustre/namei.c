@@ -340,8 +340,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return
          */
-        if (!it_disposition(it, DISP_LOOKUP_NEG) ||
-            (it->it_op & IT_CREAT)) {
+        if (!it_disposition(it, DISP_LOOKUP_NEG) || (it->it_op & IT_CREAT)) {
                 struct lustre_md md;
                 struct llu_inode_info *lli;
                 struct intnl_stat *st;

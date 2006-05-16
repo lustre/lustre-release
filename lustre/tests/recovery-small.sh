@@ -330,16 +330,233 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 }
 run_test 20b "ldlm_handle_enqueue error (should return error)"
 
-#b_cray run_test 21a "drop close request while close and open are both in flight"
-#b_cray run_test 21b "drop open request while close and open are both in flight"
-#b_cray run_test 21c "drop both request while close and open are both in flight"
-#b_cray run_test 21d "drop close reply while close and open are both in flight"
-#b_cray run_test 21e "drop open reply while close and open are both in flight"
-#b_cray run_test 21f "drop both reply while close and open are both in flight"
-#b_cray run_test 21g "drop open reply and close request while close and open are both in flight"
-#b_cray run_test 21h "drop open request and close reply while close and open are both in flight"
-#b_cray run_test 22 "drop close request and do mknod"
-#b_cray run_test 23 "client hang when close a file after mds crash"
+test_21a() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       close_pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000129"
+       multiop $DIR/$tdir-2/f Oc &
+       open_pid=$!
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       kill -USR1 $close_pid
+       cancel_lru_locks MDC  # force the close
+       wait $close_pid || return 1
+       wait $open_pid || return 2
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 3
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 4
+
+       rm -rf $DIR/$tdir-*
+}
+run_test 21a "drop close request while close and open are both in flight"
+
+test_21b() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       close_pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       mcreate $DIR/$tdir-2/f &
+       open_pid=$!
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       kill -USR1 $close_pid
+       cancel_lru_locks MDC  # force the close
+       wait $close_pid || return 1
+       wait $open_pid || return 3
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 4
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 5
+       rm -rf $DIR/$tdir-*
+}
+run_test 21b "drop open request while close and open are both in flight"
+
+test_21c() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       close_pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       mcreate $DIR/$tdir-2/f &
+       open_pid=$!
+       sleep 3
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       kill -USR1 $close_pid
+       cancel_lru_locks MDC  # force the close
+       wait $close_pid || return 1
+       wait $open_pid || return 2
+
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+       rm -rf $DIR/$tdir-*
+}
+run_test 21c "drop both request while close and open are both in flight"
+
+test_21d() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000129"
+       multiop $DIR/$tdir-2/f Oc &
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       kill -USR1 $pid
+       cancel_lru_locks MDC  # force the close
+       wait $pid || return 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+
+       rm -rf $DIR/$tdir-*
+}
+run_test 21d "drop close reply while close and open are both in flight"
+
+test_21e() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       touch $DIR/$tdir-2/f &
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       kill -USR1 $pid
+       cancel_lru_locks MDC  # force the close
+       wait $pid || return 1
+
+       sleep $TIMEOUT
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+       rm -rf $DIR/$tdir-*
+}
+run_test 21e "drop open reply while close and open are both in flight"
+
+test_21f() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       touch $DIR/$tdir-2/f &
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       kill -USR1 $pid
+       cancel_lru_locks MDC  # force the close
+       wait $pid || return 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+       rm -rf $DIR/$tdir-*
+}
+run_test 21f "drop both reply while close and open are both in flight"
+
+test_21g() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       touch $DIR/$tdir-2/f &
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       kill -USR1 $pid
+       cancel_lru_locks MDC  # force the close
+       wait $pid || return 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+       rm -rf $DIR/$tdir-*
+}
+run_test 21g "drop open reply and close request while close and open are both in flight"
+
+test_21h() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       touch $DIR/$tdir-2/f &
+       touch_pid=$!
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       cancel_lru_locks MDC  # force the close
+       kill -USR1 $pid
+       wait $pid || return 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       wait $touch_pid || return 2
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 3
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 4
+       rm -rf $DIR/$tdir-*
+}
+run_test 21h "drop open request and close reply while close and open are both in flight"
+
+# bug 3462 - multiple MDC requests
+test_22() {
+    f1=$DIR/${tfile}-1
+    f2=$DIR/${tfile}-2
+    
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    multiop $f2 Oc &
+    close_pid=$!
+
+    sleep 1
+    multiop $f1 msu || return 1
+
+     cancel_lru_locks MDC  # force the close
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+
+    wait $close_pid || return 2
+    rm -rf $f2 || return 4
+}
+run_test 22 "drop close request and do mknod"
+
+test_23() { #b=4561
+    multiop $DIR/$tfile O_c &
+    pid=$!
+    # give a chance for open
+    sleep 5
+
+    # try the close
+    drop_request "kill -USR1 $pid"
+
+    fail mds
+    wait $pid || return 1
+    return 0
+}
+run_test 23 "client hang when close a file after mds crash"
 
 test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	mkdir -p $DIR/$tdir

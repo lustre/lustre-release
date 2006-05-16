@@ -30,11 +30,13 @@
 #include <liblustre.h>
 #include <lustre/lustre_idl.h>
 
-int llog_pack_buffer(int fd, struct llog_log_hdr** llog_buf, struct llog_rec_hdr*** recs, int* recs_number);
+int llog_pack_buffer(int fd, struct llog_log_hdr **llog_buf,
+                     struct llog_rec_hdr ***recs, int *recs_number);
 
-void print_llog_header(struct llog_log_hdr* llog_buf);
-void print_records(struct llog_rec_hdr** recs_buf,int rec_number);
-void llog_unpack_buffer(int fd,struct llog_log_hdr* llog_buf,struct llog_rec_hdr** recs_buf);
+void print_llog_header(struct llog_log_hdr *llog_buf);
+void print_records(struct llog_rec_hdr **recs_buf,int rec_number);
+void llog_unpack_buffer(int fd, struct llog_log_hdr *llog_buf,
+                        struct llog_rec_hdr **recs_buf);
 
 #define PTL_CMD_BASE 100
 char* portals_command[17]=
@@ -57,37 +59,36 @@ char* portals_command[17]=
         "GET_INTERFACE",
         ""
 };
-                
+
 int main(int argc, char **argv)
 {
-        int rc=0;
-        int fd,rec_number;
-        
-        struct llog_log_hdr* llog_buf=NULL;
-        struct llog_rec_hdr** recs_buf=NULL;
-                
+        int rc = 0;
+        int fd, rec_number;
+        struct llog_log_hdr *llog_buf = NULL;
+        struct llog_rec_hdr **recs_buf = NULL;
 
         setlinebuf(stdout);
-        
+
         if(argc != 2 ){
                 printf("Usage: llog_reader filename \n");
                 return -1;
         }
-        
+
         fd = open(argv[1],O_RDONLY);
         if (fd < 0){
                 printf("Could not open the file %s \n",argv[1]);
                 goto out;
         }
         rc = llog_pack_buffer(fd, &llog_buf, &recs_buf, &rec_number);
-                
-        if(llog_buf == NULL )
-                printf("error");
-        print_llog_header(llog_buf);
-        
-        print_records(recs_buf,rec_number);
+        if (rc < 0) {
+                printf("Could not pack buffer; rc=%d\n", rc);
+                goto out_fd;
+        }
 
+        print_llog_header(llog_buf);
+        print_records(recs_buf,rec_number);
         llog_unpack_buffer(fd,llog_buf,recs_buf);
+out_fd:
         close(fd);
 out:
         return rc;
@@ -95,31 +96,31 @@ out:
 
 
 
-int llog_pack_buffer(int fd, struct llog_log_hdr** llog, 
-                     struct llog_rec_hdr*** recs, 
-                     int* recs_number)
+int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
+                     struct llog_rec_hdr ***recs,
+                     int *recs_number)
 {
-        int rc=0,recs_num,rd;
+        int rc = 0, recs_num,rd;
         off_t file_size;
         struct stat st;
-        char  *file_buf=NULL, *recs_buf=NULL;
-        struct llog_rec_hdr** recs_pr=NULL;
-        char* ptr=NULL;
+        char *file_buf=NULL, *recs_buf=NULL;
+        struct llog_rec_hdr **recs_pr=NULL;
+        char *ptr=NULL;
         int cur_idx,i;
-        
+
         rc = fstat(fd,&st);
         if (rc < 0){
                 printf("Get file stat error.\n");
                 goto out;
-        }       
+        }
         file_size = st.st_size;
-        
+
         file_buf = malloc(file_size);
         if (file_buf == NULL){
                 printf("Memory Alloc for file_buf error.\n");
                 rc = -ENOMEM;
                 goto out;
-        }       
+        }
         *llog = (struct llog_log_hdr*)file_buf;
 
         rd = read(fd,file_buf,file_size);
@@ -127,40 +128,37 @@ int llog_pack_buffer(int fd, struct llog_log_hdr** llog,
                 printf("Read file error.\n");
                 rc = -EIO; /*FIXME*/
                 goto clear_file_buf;
-        }       
+        }
 
         /* the llog header not countable here.*/
         recs_num = le32_to_cpu((*llog)->llh_count)-1;
-        
-        recs_buf = malloc(recs_num*sizeof(struct llog_rec_hdr*));
+
+        recs_buf = malloc(recs_num * sizeof(struct llog_rec_hdr *));
         if (recs_buf == NULL){
                 printf("Memory Alloc for recs_buf error.\n");
                 rc = -ENOMEM;
                 goto clear_file_buf;
-        }       
+        }
         recs_pr = (struct llog_rec_hdr **)recs_buf;
-        
+
         ptr = file_buf + le32_to_cpu((*llog)->llh_hdr.lrh_len);
         cur_idx = 1;
         i = 0;
-        while (i < recs_num){   
-                struct llog_rec_hdr* cur_rec=(struct llog_rec_hdr*)ptr;
 
-                while(!ext2_test_bit(cur_idx,(*llog)->llh_bitmap)){
-                        cur_idx++;
+        while (i < recs_num){
+                struct llog_rec_hdr *cur_rec = (struct llog_rec_hdr*)ptr;
+
+                if (ext2_test_bit(cur_idx++, (*llog)->llh_bitmap)) {
+                        recs_pr[i++] = cur_rec;
                         ptr += cur_rec->lrh_len;
-                        if ((ptr-file_buf) > file_size){
-                                printf("The log is corrupted. \n");
+                        if ((ptr - file_buf) > file_size) {
+                                printf("The log is corrupted.\n");
                                 rc = -EINVAL;
                                 goto clear_recs_buf;
-                        }       
+                        }
                 }
-                recs_pr[i] = cur_rec;
-                ptr+=cur_rec->lrh_len;
-                i++;
-                cur_idx++;
         }
-        
+
         *recs = recs_pr;
         *recs_number=recs_num;
 
@@ -175,24 +173,21 @@ clear_file_buf:
 
         *llog=NULL;
         goto out;
-
 }
 
-
-void llog_unpack_buffer(int fd,struct llog_log_hdr* llog_buf,struct llog_rec_hdr **recs_buf)
+void llog_unpack_buffer(int fd, struct llog_log_hdr *llog_buf,
+                        struct llog_rec_hdr **recs_buf)
 {
         free(llog_buf);
         free(recs_buf);
         return;
 }
 
-
-void print_llog_header(struct llog_log_hdr* llog_buf)
+void print_llog_header(struct llog_log_hdr *llog_buf)
 {
         time_t t;
 
         printf("Header size : %d \n",
-        //              le32_to_cpu(llog_buf->llh_hdr.lrh_len));
                 llog_buf->llh_hdr.lrh_len);
 
         t = le64_to_cpu(llog_buf->llh_timestamp);
@@ -204,7 +199,7 @@ void print_llog_header(struct llog_log_hdr* llog_buf)
         printf("Target uuid : %s \n",
                (char *)(&llog_buf->llh_tgtuuid));
 
-        /* Add the other infor you want to view here*/
+        /* Add the other info you want to view here */
 
         printf("-----------------------\n");
         return;
@@ -213,13 +208,14 @@ void print_llog_header(struct llog_log_hdr* llog_buf)
 static void print_1_cfg(struct lustre_cfg *lcfg)
 {
         int i;
+
         if (lcfg->lcfg_nid)
                 printf("nid=%s("LPX64")  ", libcfs_nid2str(lcfg->lcfg_nid),
                        lcfg->lcfg_nid);
         if (lcfg->lcfg_nal)
                 printf("nal=%d ", lcfg->lcfg_nal);
         for (i = 0; i <  lcfg->lcfg_bufcount; i++)
-                printf("%d:%.*s  ", i, lcfg->lcfg_buflens[i], 
+                printf("%d:%.*s  ", i, lcfg->lcfg_buflens[i],
                        (char*)lustre_cfg_buf(lcfg, i));
         return;
 }
@@ -229,7 +225,7 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
 {
         struct lov_desc *desc;
 
-        if ((lcfg->lcfg_bufcount == 2) && 
+        if ((lcfg->lcfg_bufcount == 2) &&
             (lcfg->lcfg_buflens[1] == sizeof(*desc))) {
                 printf("lov_setup ");
                 printf("0:%s  ", lustre_cfg_string(lcfg, 0));
@@ -250,7 +246,7 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
 void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
 {
         enum lcfg_command_type cmd = le32_to_cpu(lcfg->lcfg_command);
-        
+
         if (*skip > 0)
                 printf("SKIP ");
 
@@ -352,27 +348,25 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
         return;
 }
 
-void print_records(struct llog_rec_hdr** recs,int rec_number)
+void print_records(struct llog_rec_hdr **recs, int rec_number)
 {
         __u32 lopt;
         int i, skip = 0;
         
-        for(i = 0; i < rec_number; i++){
-        
+        for(i = 0; i < rec_number; i++) {
                 printf("#%.2d ", le32_to_cpu(recs[i]->lrh_index));
 
                 lopt = le32_to_cpu(recs[i]->lrh_type);
 
                 if (lopt == OBD_CFG_REC){
                         struct lustre_cfg *lcfg;
-                        printf("L "); 
-                        lcfg = (struct lustre_cfg *)
-                                ((char*)(recs[i]) + sizeof(struct llog_rec_hdr));
+                        printf("L ");
+                        lcfg = (struct lustre_cfg *)((char*)(recs[i]) +
+                                                     sizeof(struct llog_rec_hdr));
                         print_lustre_cfg(lcfg, &skip);
                 }
 
-                if (lopt == PTL_CFG_REC){
-                        printf("Portals - unknown type\n"); 
-                }
+                if (lopt == PTL_CFG_REC)
+                        printf("Portals - unknown type\n");
         }
 }

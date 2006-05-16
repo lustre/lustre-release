@@ -72,7 +72,7 @@ PORTALS_DIR = '../lnet'
 # Needed to call lconf --record
 CONFIG_FILE = ""
 
-# Please keep these in sync with the values in portals/kp30.h
+# Please keep these in sync with the values in lnet/include/libcfs/libcfs.h
 ptldebug_names = {
     "trace" :     (1 << 0),
     "inode" :     (1 << 1),
@@ -88,7 +88,8 @@ ptldebug_names = {
     "buffs" :     (1 << 11),
     "other" :     (1 << 12),
     "dentry" :    (1 << 13),
-    "portals" :   (1 << 14),
+    "portals" :   (1 << 14), # deprecated
+    "lnet" :      (1 << 14),
     "page" :      (1 << 15),
     "dlmtrace" :  (1 << 16),
     "error" :     (1 << 17),
@@ -114,22 +115,29 @@ subsystem_names = {
     "log" :          (1 << 6),
     "llite" :        (1 << 7),
     "rpc" :          (1 << 8),
-    "portals" :      (1 << 10),
-    "nal" :          (1 << 11),
+    "lnet" :         (1 << 10),
+    "portals" :      (1 << 10), # deprecated
+    "lnd" :          (1 << 11),
+    "nal" :          (1 << 11), # deprecated
     "pinger" :       (1 << 12),
     "filter" :       (1 << 13),
-    "ptlbd" :        (1 << 14),
+    "ptlbd" :        (1 << 14), # deprecated
     "echo" :         (1 << 15),
     "ldlm" :         (1 << 16),
     "lov" :          (1 << 17),
-    "ptlrouter" :    (1 << 18),
+    "ptlrouter" :    (1 << 18), # deprecated
     "cobd" :         (1 << 19),
     "sm" :           (1 << 20),
     "asobd" :        (1 << 21),
-    "confobd" :      (1 << 22),
+    "confobd" :      (1 << 22), # deprecated
     "lmv" :          (1 << 23),
     "cmobd" :        (1 << 24),
     "sec" :          (1 << 25),
+    "sec" :          (1 << 26),
+    "gss" :          (1 << 27),
+    "gks" :          (1 << 28),
+    "mgc" :          (1 << 29),
+    "mgs" :          (1 << 30),
     }
 
 
@@ -1419,7 +1427,7 @@ class MDSDEV(Module):
                         if not fs_uuid in self.filesystem_uuids:
                             continue;
 
-                        debug("recording", client_name)
+                        log("Recording log", client_name, "on", self.name)
                         old_noexec = config.noexec
                         config.noexec = 0
                         noexec_opt = ('', '-n')

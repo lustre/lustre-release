@@ -148,6 +148,51 @@ void ll_intent_release(struct lookup_intent *it)
         EXIT;
 }
 
+/* Drop dentry if it is not used already, unhash otherwise.
+   Should be called with dcache lock held!
+   Returns: 1 if dentry was dropped, 0 if unhashed. */
+int ll_drop_dentry(struct dentry *dentry)
+{
+        lock_dentry(dentry);
+        if (atomic_read(&dentry->d_count) == 0) {
+                CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
+                       "inode %p\n", dentry->d_name.len,
+                       dentry->d_name.name, dentry, dentry->d_parent,
+                       dentry->d_inode);
+                dget_locked(dentry);
+                __d_drop(dentry);
+                unlock_dentry(dentry);
+                spin_unlock(&dcache_lock);
+                dput(dentry);
+                spin_lock(&dcache_lock);
+                return 1;
+        } 
+        
+        if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                struct inode *inode = dentry->d_inode;
+#endif
+               CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
+                       "inode %p refc %d\n", dentry->d_name.len,
+                       dentry->d_name.name, dentry, dentry->d_parent,
+                       dentry->d_inode, atomic_read(&dentry->d_count));
+                /* actually we don't unhash the dentry, rather just
+                 * mark it inaccessible for to __d_lookup(). otherwise
+                 * sys_getcwd() could return -ENOENT -bzzz */
+                dentry->d_flags |= DCACHE_LUSTRE_INVALID;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                __d_drop(dentry);
+                if (inode) {
+                        /* Put positive dentries to orphan list */
+                        hlist_add_head(&dentry->d_hash,
+                                       &ll_i2sbi(inode)->ll_orphan_dentry_list);
+                }
+#endif
+        }
+        unlock_dentry(dentry);
+        return 0;
+}
+
 void ll_unhash_aliases(struct inode *inode)
 {
         struct list_head *tmp, *head;
@@ -162,8 +207,8 @@ void ll_unhash_aliases(struct inode *inode)
                inode->i_ino, inode->i_generation, inode);
 
         head = &inode->i_dentry;
-restart:
         spin_lock(&dcache_lock);
+restart:
         tmp = head;
         while ((tmp = tmp->next) != head) {
                 struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
@@ -185,35 +230,9 @@ restart:
 
                         continue;
                 }
-
-                lock_dentry(dentry);
-                if (atomic_read(&dentry->d_count) == 0) {
-                        CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
-                               "inode %p\n", dentry->d_name.len,
-                               dentry->d_name.name, dentry, dentry->d_parent,
-                               dentry->d_inode);
-                        dget_locked(dentry);
-                        __d_drop(dentry);
-                        unlock_dentry(dentry);
-                        spin_unlock(&dcache_lock);
-                        dput(dentry);
-                        goto restart;
-                } else if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
-                        CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
-                               "inode %p refc %d\n", dentry->d_name.len,
-                               dentry->d_name.name, dentry, dentry->d_parent,
-                               dentry->d_inode, atomic_read(&dentry->d_count));
-                        /* actually we don't unhash the dentry, rather just
-                         * mark it inaccessible for to __d_lookup(). otherwise
-                         * sys_getcwd() could return -ENOENT -bzzz */
-                        dentry->d_flags |= DCACHE_LUSTRE_INVALID;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        __d_drop(dentry);
-                        hlist_add_head(&dentry->d_hash,
-                                       &ll_i2sbi(inode)->ll_orphan_dentry_list);
-#endif
-                }
-                unlock_dentry(dentry);
+                
+                if (ll_drop_dentry(dentry))
+                          goto restart;
         }
         spin_unlock(&dcache_lock);
         EXIT;
@@ -282,7 +301,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                      struct lookup_intent *it)
 {
         int rc;
-        struct it_cb_data icbd;
         struct mdc_op_data op_data;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -292,13 +310,25 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%s\n", de->d_name.name,
                LL_IT2STR(it));
 
-        /* Cached negative dentries are unsafe for now - look them up again */
-        if (de->d_inode == NULL)
-                RETURN(0);
+        if (de->d_inode == NULL) {
+                /* We can only use negative dentries if this is stat or lookup,
+                   for opens and stuff we do need to query server. */
+                /* If there is IT_CREAT in intent op set, then we must throw
+                   away this negative dentry and actually do the request to
+                   kernel to create whatever needs to be created (if possible)*/
+                if (it && (it->it_op & IT_CREAT))
+                        RETURN(0);
+
+                if (de->d_flags & DCACHE_LUSTRE_INVALID)
+                        RETURN(0);
+
+                rc = ll_have_md_lock(de->d_parent->d_inode, 
+                                     MDS_INODELOCK_UPDATE);
+        
+                RETURN(rc);
+        }
 
         exp = ll_i2mdcexp(de->d_inode);
-        icbd.icbd_parent = de->d_parent->d_inode;
-        icbd.icbd_childp = &de;
 
         /* Never execute intents for mount points.
          * Attributes will be fixed up in ll_inode_revalidate_it */
@@ -312,6 +342,53 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, de->d_inode,
                                de->d_name.name, de->d_name.len, 0);
 
+        if ((it->it_op == IT_OPEN) && de->d_inode) {
+                struct inode *inode = de->d_inode;
+                struct ll_inode_info *lli = ll_i2info(inode);
+                struct obd_client_handle **och_p;
+                __u64 *och_usecount;
+                /* We used to check for MDS_INODELOCK_OPEN here, but in fact
+                 * just having LOOKUP lock is enough to justify inode is the
+                 * same. And if inode is the same and we have suitable
+                 * openhandle, then there is no point in doing another OPEN RPC
+                 * just to throw away newly received openhandle.
+                 * There are no security implications too, if file owner or
+                 * access mode is change, LOOKUP lock is revoked */
+
+                it->it_create_mode &= ~current->fs->umask;
+
+                if (it->it_flags & FMODE_WRITE) {
+                        och_p = &lli->lli_mds_write_och;
+                        och_usecount = &lli->lli_open_fd_write_count;
+                } else if (it->it_flags & FMODE_EXEC) {
+                        och_p = &lli->lli_mds_exec_och;
+                        och_usecount = &lli->lli_open_fd_exec_count;
+                 } else {
+                        och_p = &lli->lli_mds_read_och;
+                        och_usecount = &lli->lli_open_fd_read_count;
+                }
+                /* Check for the proper lock. */
+                if (!ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP))
+                        goto do_lock;
+                down(&lli->lli_och_sem);
+                if (*och_p) { /* Everything is open already, do nothing */
+                        /*(*och_usecount)++;  Do not let them steal our open
+                                              handle from under us */
+                        /* XXX The code above was my original idea, but in case
+                           we have the handle, but we cannot use it due to later
+                           checks (e.g. O_CREAT|O_EXCL flags set), nobody
+                           would decrement counter increased here. So we just
+                           hope the lock won't be invalidated in between. But
+                           if it would be, we'll reopen the open request to
+                           MDS later during file open path */
+                        up(&lli->lli_och_sem);
+                        RETURN(1);
+                } else {
+                        up(&lli->lli_och_sem);
+                }
+        }
+
+do_lock:
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
                              &req, ll_mdc_blocking_ast, 0);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;

@@ -484,7 +484,7 @@ static void prune_deathrow(struct ll_sb_info *sbi, int try)
         int empty;
 
         do {
-                if (need_resched())
+                if (need_resched() && try)
                         break;
 
                 if (try) {
@@ -641,6 +641,11 @@ void ll_lli_init(struct ll_inode_info *lli)
         spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
         lli->lli_inode_magic = LLI_INODE_MAGIC;
+        sema_init(&lli->lli_och_sem, 1);
+        lli->lli_mds_read_och = lli->lli_mds_write_och = NULL;
+        lli->lli_mds_exec_och = NULL;
+        lli->lli_open_fd_read_count = lli->lli_open_fd_write_count = 0;
+        lli->lli_open_fd_exec_count = 0;
         INIT_LIST_HEAD(&lli->lli_dead_list);
 }
 
@@ -1042,8 +1047,20 @@ void ll_clear_inode(struct inode *inode)
                inode->i_generation, inode);
 
         ll_inode2fid(&fid, inode);
-        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
+        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
         mdc_change_cbdata(sbi->ll_mdc_exp, &fid, null_if_equal, inode);
+
+        LASSERT(!lli->lli_open_fd_write_count);
+        LASSERT(!lli->lli_open_fd_read_count);
+        LASSERT(!lli->lli_open_fd_exec_count);
+        
+        if (lli->lli_mds_write_och)
+                ll_mdc_real_close(inode, FMODE_WRITE);
+        if (lli->lli_mds_exec_och)
+                ll_mdc_real_close(inode, FMODE_EXEC);
+        if (lli->lli_mds_read_och)
+                ll_mdc_real_close(inode, FMODE_READ);
+
 
         if (lli->lli_smd) {
                 obd_change_cbdata(sbi->ll_osc_exp, lli->lli_smd,

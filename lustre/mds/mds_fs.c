@@ -345,7 +345,10 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         continue;
                 }
 
-                last_transno = le64_to_cpu(mcd->mcd_last_transno);
+                last_transno = le64_to_cpu(mcd->mcd_last_transno) >
+                               le64_to_cpu(mcd->mcd_last_close_transno) ?
+                               le64_to_cpu(mcd->mcd_last_transno) :
+                               le64_to_cpu(mcd->mcd_last_close_transno);
 
                 /* These exports are cleaned up by mds_disconnect(), so they
                  * need to be set up like real exports as mds_connect() does.

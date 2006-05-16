@@ -1436,6 +1436,10 @@ int target_handle_qc_callback(struct ptlrpc_request *req)
 
         oqctl = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*oqctl),
                                    lustre_swab_obd_quotactl);
+        if (oqctl == NULL) {
+                CERROR("Can't unpack obd_quotactl\n");
+                RETURN(-EPROTO);
+        }
 
         cli->cl_qchk_stat = oqctl->qc_stat;
 
@@ -1465,7 +1469,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         qdata = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata),
                                    lustre_swab_qdata);
         if (qdata == NULL) {
-                CERROR("unpacking request buffer failed!");
+                CERROR("Can't unpack qunit_data\n");
                 RETURN(-EPROTO);
         }
 

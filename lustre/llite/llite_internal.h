@@ -83,6 +83,17 @@ struct ll_inode_info {
 
         struct list_head        lli_dead_list;
 
+        struct semaphore        lli_och_sem; /* Protects access to och pointers
+                                                and their usage counters */
+        /* We need all three because every inode may be opened in different
+           modes */
+        struct obd_client_handle *lli_mds_read_och;
+        __u64                   lli_open_fd_read_count;
+        struct obd_client_handle *lli_mds_write_och;
+        __u64                   lli_open_fd_write_count;
+        struct obd_client_handle *lli_mds_exec_och;
+        __u64                   lli_open_fd_exec_count;
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
@@ -256,11 +267,11 @@ struct ll_readahead_state {
 extern kmem_cache_t *ll_file_data_slab;
 struct lustre_handle;
 struct ll_file_data {
-        struct obd_client_handle fd_mds_och;
         struct ll_readahead_state fd_ras;
-        __u32 fd_flags;
+        int fd_omode;
         struct lustre_handle fd_cwlockh;
         unsigned long fd_gid;
+        __u32 fd_flags;
 };
 
 struct lov_stripe_md;
@@ -383,6 +394,7 @@ extern struct file_operations ll_file_operations;
 extern struct file_operations ll_file_operations_flock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
+extern int ll_have_md_lock(struct inode *inode, __u64 bits);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
                    struct lustre_handle *, int ast_flags);
@@ -393,10 +405,12 @@ int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
-                  struct lookup_intent *it, struct ll_file_data *fd);
+                  struct lookup_intent *it, struct ll_file_data *fd,
+                  struct obd_client_handle *och);
 int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                  struct file *file);
+int ll_mdc_real_close(struct inode *inode, int flags);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
@@ -413,6 +427,7 @@ int ll_inode_permission(struct inode *inode, int mask);
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
 extern void ll_set_dd(struct dentry *de);
+int ll_drop_dentry(struct dentry *dentry);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);

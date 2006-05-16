@@ -18,7 +18,12 @@ struct mds_client_data {
         __u64 mcd_last_xid;     /* xid for the last transaction */
         __u32 mcd_last_result;  /* result from last RPC */
         __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[LR_CLIENT_SIZE - 64];
+        /* for MDS_CLOSE requests */
+        __u64 mcd_last_close_transno; /* last completed transaction ID */
+        __u64 mcd_last_close_xid;     /* xid for the last transaction */
+        __u32 mcd_last_close_result;  /* result from last RPC */
+        __u32 mcd_last_close_data;  /* per-op data (disposition for open &c.) */
+        __u8 mcd_padding[LR_CLIENT_SIZE - 88];
 };
 
 #define MDS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
@@ -103,9 +108,13 @@ static inline void mds_inode_unset_orphan(struct inode *inode)
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {              \
                 struct mds_client_data *mcd =                                 \
                         req->rq_export->exp_mds_data.med_mcd;                 \
-                if (mcd->mcd_last_xid == req->rq_xid) {                       \
+                if (le64_to_cpu(mcd->mcd_last_xid) == req->rq_xid) {          \
                         reconstruct;                                          \
-                        RETURN(lustre_msg_get_status(req->rq_repmsg));        \
+                        RETURN(le32_to_cpu(mcd->mcd_last_result));            \
+                }                                                             \
+                if (le64_to_cpu(mcd->mcd_last_close_xid) == req->rq_xid) {    \
+                        reconstruct;                                          \
+                        RETURN(le32_to_cpu(mcd->mcd_last_close_result));      \
                 }                                                             \
                 DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")",\
                           mcd->mcd_last_xid);                                 \

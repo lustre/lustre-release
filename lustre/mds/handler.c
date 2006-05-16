@@ -1431,12 +1431,16 @@ int mds_handle(struct ptlrpc_request *req)
 
                 /* sanity check: if the xid matches, the request must
                  * be marked as a resent or replayed */
-                if (req->rq_xid == med->med_mcd->mcd_last_xid)
-                        LASSERTF(lustre_msg_get_flags(req->rq_reqmsg) &
-                                 (MSG_RESENT | MSG_REPLAY),
-                                 "rq_xid "LPU64" matches last_xid, "
-                                 "expected RESENT flag\n",
-                                 req->rq_xid);
+                if (req->rq_xid == le64_to_cpu(med->med_mcd->mcd_last_xid) ||
+                   req->rq_xid == le64_to_cpu(med->med_mcd->mcd_last_close_xid))
+                        if (!(lustre_msg_get_flags(req->rq_reqmsg) &
+                                 (MSG_RESENT | MSG_REPLAY))) {
+                                CERROR("rq_xid "LPU64" matches last_xid, "
+                                       "expected RESENT flag\n",
+                                        req->rq_xid);
+                                req->rq_status = -ENOTCONN;
+                                GOTO(out, rc = -EFAULT);
+                        }
                 /* else: note the opposite is not always true; a
                  * RESENT req after a failover will usually not match
                  * the last_xid, since it was likely never
@@ -1696,6 +1700,9 @@ int mds_handle(struct ptlrpc_request *req)
         /* If we're DISCONNECTing, the mds_export_data is already freed */
         if (!rc && lustre_msg_get_opc(req->rq_reqmsg) != MDS_DISCONNECT) {
                 struct mds_export_data *med = &req->rq_export->exp_mds_data;
+                
+                /* I don't think last_xid is used for anyway, so I'm not sure
+                   if we need to care about last_close_xid here.*/
                 lustre_msg_set_last_xid(req->rq_repmsg,
                                        le64_to_cpu(med->med_mcd->mcd_last_xid));
 
@@ -1985,7 +1992,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
-        ldlm_timeout = 2;
+        ldlm_timeout = 6;
 
         RETURN(0);
 
@@ -2272,6 +2279,10 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
             le64_to_cpu(exp->exp_mds_data.med_mcd->mcd_last_xid))
                 return;
 
+        if (req->rq_xid ==
+            le64_to_cpu(exp->exp_mds_data.med_mcd->mcd_last_close_xid))
+                return;
+
         /* This remote handle isn't enqueued, so we never received or
          * processed this request.  Clear MSG_RESENT, because it can
          * be handled like any normal request now. */
@@ -2366,7 +2377,13 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                 if (intent_disposition(rep, DISP_LOOKUP_NEG) &&
                     !intent_disposition(rep, DISP_OPEN_OPEN))
 #endif
+                if (rep->lock_policy_res2) {
+                        /* mds_open returns ENOLCK where it should return zero,
+                           but it has no lock to return */
+                        if (rep->lock_policy_res2 == ENOLCK)
+                                rep->lock_policy_res2 = 0;
                         RETURN(ELDLM_LOCK_ABORTED);
+                }
                 break;
         case IT_LOOKUP:
                         getattr_part = MDS_INODELOCK_LOOKUP;

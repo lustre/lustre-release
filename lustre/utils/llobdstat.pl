@@ -73,7 +73,7 @@ sub get_cpumhz()
 get_cpumhz();
 print "Processor counters run at $mhz MHz\n";
 
-sub readall()
+sub readstat()
 {
 	my $prevcount;
 	my @iodata;
@@ -101,6 +101,7 @@ sub readall()
 		}
     	}
 }
+
 sub process_stats()
 {
 	my $delta;
@@ -149,7 +150,7 @@ sub process_stats()
 
 open(STATS, $statspath) || die "Cannot open $statspath: $!\n";
 do {
-	readall();
+	readstat();
 	process_stats();
     	if ($interval) { 
 		sleep($interval);
@@ -157,4 +158,3 @@ do {
     	}
 } while ($interval);
 close STATS;
-

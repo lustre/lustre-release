@@ -617,11 +617,11 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 body->lock_flags |= LDLM_FL_AST_SENT;
 
                 /* We might get here prior to ldlm_handle_enqueue setting
-                   LDLM_FL_CANCEL_ON_BLOCK flag. Then we will put this lock into
-                   waiting list, but this is safe and similar code in
-                   ldlm_handle_enqueue will call ldlm_lock_cancel() still, that
-                   would not only cancel the loc, but will also remove it from
-                   waiting list */
+                 * LDLM_FL_CANCEL_ON_BLOCK flag. Then we will put this lock
+                 * into waiting list, but this is safe and similar code in
+                 * ldlm_handle_enqueue will call ldlm_lock_cancel() still,
+                 * that would not only cancel the lock, but will also remove
+                 * it from waiting list */
                 if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) {
                         ldlm_lock_cancel(lock);
                         instant_cancel = 1;

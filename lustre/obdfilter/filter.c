@@ -1050,12 +1050,13 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
 
         /* don't need dir->i_zombie for 2.4, it is for rename/unlink of dir
          * itself we already hold dir->i_mutex for child create/unlink ops */
+        LASSERT(dentry->d_inode != NULL);
         LASSERT(TRYLOCK_INODE_MUTEX(dir) == 0);
         LASSERT(TRYLOCK_INODE_MUTEX(dentry->d_inode) == 0);
 
 
         /* may_delete() */
-        if (!dentry->d_inode || dentry->d_parent->d_inode != dir)
+        if (/*!dentry->d_inode ||*/dentry->d_parent->d_inode != dir)
                 GOTO(out, rc = -ENOENT);
 
         rc = ll_permission(dir, MAY_WRITE | MAY_EXEC, NULL);
@@ -2216,12 +2217,14 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                                       EXT3_IOC_SETFLAGS, (long)&oa->o_flags);
         } else {
                 rc = fsfilt_setattr(exp->exp_obd, dentry, handle, &iattr, 1);
-                if (fcc != NULL)
+                if (fcc != NULL) {
                         /* set cancel cookie callback function */
                         fsfilt_add_journal_cb(exp->exp_obd, 0, oti ?
                                               oti->oti_handle : handle,
                                               filter_cancel_cookies_cb,
                                               fcc);
+                        fcc = NULL;
+                }
         }
 
         if (locked) {
@@ -2241,6 +2244,9 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
 out_unlock:
         if (locked)
                 UNLOCK_INODE_MUTEX(inode);
+
+        if (fcc)
+                OBD_FREE(fcc, sizeof(*fcc));
 
         /* trigger quota release */
         if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {

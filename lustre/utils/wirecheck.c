@@ -1120,6 +1120,7 @@ main(int argc, char **argv)
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
+        CHECK_STRUCT(obd_uuid);
         check_lustre_handle();
         check_lustre_msg_v1();
         check_lustre_msg_v2();

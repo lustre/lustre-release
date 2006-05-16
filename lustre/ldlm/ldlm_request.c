@@ -54,9 +54,10 @@ int ldlm_expired_completion_wait(void *data)
         if (lock->l_conn_export == NULL) {
                 static cfs_time_t next_dump = 0, last_dump = 0;
 
-                LDLM_ERROR(lock, "lock timed out (enq %lus ago); not entering "
-                           "recovery in server code, just going back to sleep",
-                           lock->l_enqueued_time.tv_sec);
+                LDLM_ERROR(lock, "lock timed out (enqueued at %lu, %lus ago); "
+                           "not entering recovery in server code, just going "
+                           "back to sleep", lock->l_enqueued_time.tv_sec,
+                           CURRENT_SECONDS - lock->l_enqueued_time.tv_sec);
                 if (cfs_time_after(cfs_time_current(), next_dump)) {
                         last_dump = next_dump;
                         next_dump = cfs_time_shift(300);
@@ -71,8 +72,9 @@ int ldlm_expired_completion_wait(void *data)
         obd = lock->l_conn_export->exp_obd;
         imp = obd->u.cli.cl_import;
         ptlrpc_fail_import(imp, lwd->lwd_conn_cnt);
-        LDLM_ERROR(lock, "lock timed out (enqueued %lus ago), entering "
+        LDLM_ERROR(lock, "lock timed out (enqueued at %lu, %lus ago), entering "
                    "recovery for %s@%s", lock->l_enqueued_time.tv_sec,
+                   CURRENT_SECONDS - lock->l_enqueued_time.tv_sec,
                    obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
 
         RETURN(0);

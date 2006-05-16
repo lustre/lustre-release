@@ -388,7 +388,8 @@ struct obdo {
         __u32                   o_mds;
         __u32                   o_stripe_idx;   /* holds stripe idx */
         __u32                   o_padding_1;
-        char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
+        char                    o_inline[OBD_INLINESZ];
+                                /* lustre_handle + llog_cookie */
 };
 
 #define o_dirty   o_blocks
@@ -760,6 +761,7 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
 #define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file*/
+#define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
 

@@ -50,7 +50,7 @@ struct lov_request_set {
         struct list_head         set_list;
 };
 
-#define LAP_MAGIC 8200
+#define LOV_AP_MAGIC 8200
 
 struct lov_async_page {
         int                             lap_magic;
@@ -62,8 +62,8 @@ struct lov_async_page {
         void                            *lap_caller_data;
 };
 
-#define LAP_FROM_COOKIE(c)                                                      \
-        (LASSERT(((struct lov_async_page *)(c))->lap_magic == LAP_MAGIC),       \
+#define LAP_FROM_COOKIE(c)                                                     \
+        (LASSERT(((struct lov_async_page *)(c))->lap_magic == LOV_AP_MAGIC),   \
          (struct lov_async_page *)(c))
 
 static inline void lov_llh_addref(void *llhp)

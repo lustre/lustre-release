@@ -16,7 +16,7 @@ if UTILS
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
 	mount_lustre mkfs_lustre mkfs.lustre \
-	tunefs_lustre tunefs.lustre l_getgroups
+	tunefs_lustre tunefs.lustre l_getgroups # llverfs llverdev
 bin_PROGRAMS = lfs llog_reader
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
@@ -34,6 +34,10 @@ lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 lload_SOURCES = lload.c 
 lload_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 lload_DEPENDENCIES := $(LIBPTLCTL)
+lload_SOURCES = lload.c 
+
+llverfs_LDADD := -lext2fs -le2p
+llverdev_LDADD := -lext2fs -lblkid
 
 liblustreapi_a_SOURCES = liblustreapi.c
 

@@ -208,10 +208,24 @@ Details    : Check that we actually have objects in a file before doing any
 
 Severity   : minor
 Frequency  : Rare
-Bugzilla   : 10484 
+Bugzilla   : 10484
 Description: Request leak when working with deleted CWD
 Details    : Introduce advanced request refcount tracking for requests
 	     referenced from lustre intent.
+
+Severity   : Enhancement
+Bugzilla   : 10482
+Description: Cache open file handles on client.
+Details    : MDS now will return special lock along with openhandle, if
+	     requested and client is allowed to hold openhandle, even if unused,
+	     until such a lock is revoked. Helps NFS a lot, since NFS is opening
+	     closing files for every read/write openration.
+
+Severity   : Enhancement
+Bugzilla   : 9291
+Description: Cache open negative dentries on client when possible.
+Details    : Guard negative dentries with UPDATE lock on parent dir, drop
+	     negative dentries on lock revocation.
 
 
 ------------------------------------------------------------------------------
