@@ -99,8 +99,9 @@ EXPORT_SYMBOL(lu_object_put);
  * This follows object creation protocol, described in the comment within
  * struct lu_device_operations definition.
  */
-struct lu_object *lu_object_alloc(struct lu_context *ctxt,
-                                  struct lu_site *s, const struct lu_fid *f)
+static struct lu_object *lu_object_alloc(struct lu_context *ctxt,
+                                         struct lu_site *s,
+                                         const struct lu_fid *f)
 {
         struct lu_object *scan;
         struct lu_object *top;
