@@ -39,7 +39,7 @@ static struct md_object_operations cmm_mo_ops;
 static struct md_dir_operations    cmm_dir_ops;
 static struct lu_object_operations cmm_obj_ops;
 
-static int cmm_fld_lookup(struct lu_fid *fid)
+static int cmm_fld_lookup(const struct lu_fid *fid)
 {
         int rc;
         /* temporary hack for proto mkdir */
@@ -92,7 +92,7 @@ int cmm_object_init(struct lu_context *ctx, struct lu_object *o)
 	struct cmm_device *d = lu2cmm_dev(o->lo_dev);
 	struct lu_device  *under;
 	struct lu_object  *below;
-        struct lu_fid     *fid = &o->lo_header->loh_fid;
+        const struct lu_fid *fid = lu_object_fid(o);
         int mdsnum;
         ENTRY;
 
@@ -167,7 +167,7 @@ int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
                 rc = local->mo_dir_ops->mdo_mkdir(ctx, attr, local, name,
                                                       cmm2child_obj(cmm_c));
         } else {
-                struct lu_fid *fid = &c->mo_lu.lo_header->loh_fid;
+                const struct lu_fid *fid = lu_object_fid(&c->mo_lu);
                 struct md_object *remote = cmm2child_obj(cmm_c);
 
                 /* remote object creation and local name insert */

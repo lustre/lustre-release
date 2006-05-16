@@ -66,7 +66,7 @@ int mdc_object_init(struct lu_context *ctx, struct lu_object *lo)
 {
 	//struct mdc_device *d = lu2mdc_dev(o->lo_dev);
 	//struct lu_device  *under;
-        //struct lu_fid     *fid = &o->lo_header->loh_fid;
+        //const struct lu_fid     *fid = lu_object_fid(o);
 
         ENTRY;
 
@@ -126,7 +126,7 @@ static int mdc_object_create(struct lu_context *ctx, struct md_object *mo,
         rec->cr_fsuid = attr->la_uid;
         rec->cr_fsgid = attr->la_gid;
         rec->cr_cap = 0;//cap_effective;
-        rec->cr_fid1 = mo->mo_lu.lo_header->loh_fid;
+        rec->cr_fid1 = *lu_object_fid(&mo->mo_lu);
         memset(&rec->cr_fid2, 0, sizeof(rec->cr_fid2));
         rec->cr_mode = attr->la_mode;
         rec->cr_rdev = 0;//rdev;
