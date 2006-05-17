@@ -651,7 +651,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                                 } else
                                         info->mti_object = obj;
                         } else
-                                result = PTR_ERR(info->mti_object);
+                                result = PTR_ERR(obj);
                 } else {
                         CERROR("Can't unpack body\n");
                         result = -EFAULT;
