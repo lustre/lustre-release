@@ -568,6 +568,28 @@ extern int osd_oi_find_fid(struct osd_oi *oi,
                            __u64 ino, __u32 gen, struct lu_fid *fid);
 #endif
 
+static int osd_build_fid(struct osd_device *osd,
+                         struct dentry *dentry, struct lu_fid *fid)
+{
+        struct inode *inode = dentry->d_inode;
+        int result;
+        /*
+         * Build fid from inode.
+         */
+        result = osd_oi_find_fid(&osd->od_oi,
+                                 inode->i_ino, inode->i_generation, fid);
+        if (result == -ENOENT) {
+                /* XXX hard-coded */
+                fid->f_seq = LUSTRE_ROOT_FID_SEQ + 1;
+                fid->f_oid = inode->i_ino;
+                fid->f_ver = inode->i_generation;
+                osd_oi_init0(&osd->od_oi, fid,
+                             inode->i_ino, inode->i_generation);
+                result = 0;
+        }
+        return result;
+}
+
 /*
  * XXX This is temporary solution: inode operations are used until iam is
  * ready.
@@ -614,20 +636,10 @@ static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
                         /*
                          * normal case, result is in @dentry.
                          */
-                        if (dentry->d_inode != NULL) {
-                                struct lu_fid *fid = (struct lu_fid *)rec;
-                                struct inode  *inode = dentry->d_inode;
-                                /*
-                                 * Build fid from inode.
-                                 */
-                                /* XXX hard-coded */
-                                fid->f_seq = LUSTRE_ROOT_FID_SEQ + 1;
-                                fid->f_oid = inode->i_ino;
-                                fid->f_ver = inode->i_generation;
-                                osd_oi_init0(&osd->od_oi, fid,
-                                             inode->i_ino, inode->i_generation);
-                                result = 0;
-                        } else
+                        if (dentry->d_inode != NULL)
+                                result = osd_build_fid(osd, dentry,
+                                                       (struct lu_fid *)rec);
+                        else
                                 result = -ENOENT;
                 } else {
                         /* What? Disconnected alias? Ppheeeww... */
@@ -642,11 +654,77 @@ static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
         return result;
 }
 
-static int osd_index_insert(struct lu_context *ctxt, struct dt_object *dt,
+static int osd_add_rec(struct osd_thread_info *info, struct osd_device *dev,
+                       struct inode *dir, struct inode *inode, const char *name)
+{
+        struct dentry *old;
+        struct dentry *new;
+        struct dentry *parent;
+
+        int result;
+
+        info->oti_str.name = name;
+        info->oti_str.len  = strlen(name);
+
+        result = -ENOMEM;
+        old = d_alloc(dev->od_obj_area, &info->oti_str);
+        d_instantiate(old, inode);
+        if (old != NULL) {
+                parent = d_alloc_root(dir);
+                if (parent != NULL) {
+                        new = d_alloc(parent, &info->oti_str);
+                        if (new != NULL) {
+                                result = inode->i_op->link(old, dir, new);
+                                dput(new);
+                        }
+                        dput(parent);
+                }
+                dput(old);
+        }
+        return result;
+}
+
+/*
+ * XXX Temporary stuff.
+ */
+static int osd_index_insert(struct lu_context *ctx, struct dt_object *dt,
                             const struct dt_rec *rec, const struct dt_key *key,
                             struct thandle *handle)
 {
-        return 0;
+        const struct lu_fid *fid  = (const struct lu_fid *)rec;
+        const char          *name = (const char *)key;
+
+        struct osd_object   *dir   = osd_dt_obj(dt);
+        struct lu_device    *ludev = dt->do_lu.lo_dev;
+        struct lu_object    *luch;
+
+        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+
+        int result;
+
+        luch = lu_object_find(ctx, ludev->ld_site, fid);
+        if (!IS_ERR(luch)) {
+                if (lu_object_exists(ctx, luch)) {
+                        struct osd_object *child;
+
+                        child = osd_obj(lu_object_locate(luch->lo_header,
+                                                         ludev->ld_type));
+                        if (child != NULL)
+                                result = osd_add_rec(info, osd_obj2dev(dir),
+                                                     dir->oo_inode,
+                                                     child->oo_inode, name);
+                        else {
+                                CERROR("No osd slice.\n");
+                                result = -ENOENT;
+                        }
+                } else {
+                        CERROR("Sorry.\n");
+                        result = -ENOENT;
+                }
+                lu_object_put(ctx, luch);
+        } else
+                result = PTR_ERR(luch);
+        return result;
 }
 
 const struct dt_index_features dt_directory_features;
