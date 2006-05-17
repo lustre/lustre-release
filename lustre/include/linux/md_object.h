@@ -191,8 +191,8 @@ static inline int mdo_mkdir(struct lu_context *cx, struct lu_attr *at,
 }
 
 static inline int mdo_name_insert(struct lu_context *cx, struct md_object *p,
-                           const char *name, struct lu_fid *f,
-                           struct lu_attr *at)
+                                  const char *name, const struct lu_fid *f,
+                                  struct lu_attr *at)
 {
         return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, at);
 }
