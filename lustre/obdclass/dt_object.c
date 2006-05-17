@@ -124,6 +124,6 @@ EXPORT_SYMBOL(dt_object_init);
 
 void dt_object_fini(struct dt_object *obj)
 {
-        lu_object_fini(obj);
+        lu_object_fini(&obj->do_lu);
 }
 EXPORT_SYMBOL(dt_object_fini);
