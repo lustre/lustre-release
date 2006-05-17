@@ -421,6 +421,7 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
+#ifdef __KERNEL__
                 struct lu_context ctx;
 
                 rc = lu_context_init(&ctx);
@@ -430,6 +431,7 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
                         lu_context_exit(&ctx);
                         lu_context_fini(&ctx);
                 }
+#endif
         } else {
                 OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
                 rc = OBP(obd, process_config)(obd, datalen, data);
