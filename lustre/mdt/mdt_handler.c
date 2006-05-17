@@ -193,8 +193,9 @@ static int mdt_getattr(struct mdt_thread_info *info,
 static int mdt_getattr_name(struct mdt_thread_info *info,
                             struct ptlrpc_request *req, int offset)
 {
-        struct md_object *next = mdt_object_child(info->mti_object);
+        struct md_object  *next = mdt_object_child(info->mti_object);
         struct mdt_object *child;
+        struct mdt_body   *body;
         struct lu_fid lf;
         char *name;
         int namesize;
@@ -203,6 +204,9 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
         LASSERT(info->mti_object != NULL);
 
         ENTRY;
+
+        body = lustre_msg_buf(req->rq_repmsg, 1, sizeof *body);
+        LASSERT(body != NULL);
 
         name = lustre_msg_string(req->rq_reqmsg, offset, 0);
         if (name == NULL) {
@@ -219,16 +223,14 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
                 } else {
                         result = mo_attr_get(info->mti_ctxt, next,
                                              &info->mti_attr);
+                        if (result == 0) {
+                                mdt_pack_attr2body(body, &info->mti_attr);
+                                body->fid1 = *mdt_object_fid(child);
+                        }
                         mdt_object_put(info->mti_ctxt, child);
                 }
         }
 
-        if (result == 0) {
-                info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
-                                                sizeof(struct mdt_body));
-                mdt_pack_attr2body(info->mti_body, &info->mti_attr);
-                info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
-        }
         RETURN(result);
 }
 
@@ -1137,7 +1139,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 gflags |= MDS_INODELOCK_LOOKUP;
                 //hmm.. something should be done with gflags..
                 rep->lock_policy_res2 = mdt_getattr_name(info, req, offset);
-                
+
                 break;
         default:
                 CERROR("Unhandled intent till now "LPD64"\n", it->opc);
@@ -1552,7 +1554,7 @@ static struct lu_object *mdt_object_alloc(struct lu_context *ctxt,
                                           struct lu_device *d)
 {
         struct mdt_object *mo;
-        
+
         ENTRY;
 
         OBD_ALLOC_PTR(mo);
