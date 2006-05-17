@@ -384,15 +384,19 @@ depend_kernel()
     local logfile=$(mktemp /tmp/XXXXXX)
     #timed_run 300 $TOPDIR/build/update_oldconfig $logfile
     #local RC=${PIPESTATUS[0]}
-    local RC=$(strace -f -o update_oldconfig.strace bash -c "$TOPDIR/build/update_oldconfig $logfile; echo \$?")
+    #local RC=$(strace -f -o update_oldconfig.strace bash -c "$TOPDIR/build/update_oldconfig $logfile; echo \$?")
+    $TOPDIR/build/update_oldconfig $logfile
+    local RC=${PIPESTATUS[0]}
     if [ $RC -eq 143 ]; then
         fatal 1 "update_oldconfig timed out"
     elif [ $RC -ne 0 ]; then
 	# dump the log
         cat $logfile
         rm -f $logfile
-	cat update_oldconfig.strace
-	rm -f update_oldconfig.strace
+	if [ -f update_oldconfig.strace ]; then
+	    cat update_oldconfig.strace
+	    rm -f update_oldconfig.strace
+        fi
         fatal 1 "update_oldconfig failed: $RC. See log above."
     fi
     rm -f $logfile
