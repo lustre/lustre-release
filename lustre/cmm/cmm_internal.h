@@ -95,21 +95,6 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 /* cmm_object.c */
 struct lu_object *cmm_object_alloc(struct lu_context *ctx, struct lu_device *);
 void cmm_object_free(struct lu_context *ctx, struct lu_object *o);
-//int cmm_getattr(struct lu_object *o, struct lu_attr *a);
-//int cmm_setattr(struct lu_object *o, struct lu_attr *a);
-
-/* cmm md operations */
-int cmm_config(struct lu_context *ctx, struct md_device *md, const char *name,
-               void *buf, int size, int mode);
-int cmm_root_get(struct lu_context *ctx, struct md_device *m, struct lu_fid *f);
-int cmm_statfs(struct lu_context *ctx,
-               struct md_device *m, struct kstatfs *sfs);
-int cmm_mkdir(struct lu_context *ctxt, struct lu_attr*,
-              struct md_object *o, const char *name,
-              struct md_object *child);
-int cmm_xattr_get(struct lu_context *ctxt,
-                  struct md_object *obj, void *buf, int size,
-                  const char *name);
 
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */

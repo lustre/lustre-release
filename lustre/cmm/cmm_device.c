@@ -120,6 +120,7 @@ static int cmm_add_mdc(struct lu_context *ctx,
                 struct mdc_device *mc = lu2mdc_dev(ld);
                 list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
                 lu_device_get(cmm2lu_dev(cm));
+                cm->cmm_tgt_count++;
         }
         RETURN(rc);
 }

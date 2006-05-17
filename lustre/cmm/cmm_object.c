@@ -68,142 +68,162 @@ static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
 }
 
 struct lu_object *cmm_object_alloc(struct lu_context *ctx,
-                                   struct lu_device *d)
+                                   struct lu_device *ld)
 {
-	struct cmm_object *mo;
+        struct cmm_object *co;
+        struct lu_object  *lo;
         ENTRY;
 
-	OBD_ALLOC_PTR(mo);
-	if (mo != NULL) {
-		struct lu_object *o;
+        OBD_ALLOC_PTR(co);
+	if (co != NULL) {
+		lo = &co->cmo_obj.mo_lu;
+                lu_object_init(lo, NULL, ld);
+                co->cmo_obj.mo_ops = &cmm_mo_ops;
+                co->cmo_obj.mo_dir_ops = &cmm_dir_ops;
+                lo->lo_ops = &cmm_obj_ops;
+        } else
+                lo = NULL;
 
-		o = &mo->cmo_obj.mo_lu;
-                lu_object_init(o, NULL, d);
-                mo->cmo_obj.mo_ops = &cmm_mo_ops;
-                mo->cmo_obj.mo_dir_ops = &cmm_dir_ops;
-                o->lo_ops = &cmm_obj_ops;
-		RETURN(o);
-	} else
-		RETURN(NULL);
+        RETURN(lo);
 }
 
-int cmm_object_init(struct lu_context *ctx, struct lu_object *o)
+void cmm_object_free(struct lu_context *ctx, struct lu_object *lo)
 {
-	struct cmm_device *d = lu2cmm_dev(o->lo_dev);
-	struct lu_device  *under;
-	struct lu_object  *below;
-        const struct lu_fid *fid = lu_object_fid(o);
-        int mdsnum;
+        struct cmm_object *co = lu2cmm_obj(lo);
+        lu_object_fini(lo);
+        OBD_FREE_PTR(co);        
+}
+
+int cmm_object_init(struct lu_context *ctx, struct lu_object *lo)
+{
+        struct cmm_device *cd = lu2cmm_dev(lo->lo_dev);
+        struct lu_device  *c_dev;
+        struct lu_object  *c_obj;
+        const struct lu_fid *fid = lu_object_fid(lo);
+        int mdsnum, rc;
+
         ENTRY;
 
         /* under device can be MDD or MDC */
         mdsnum = cmm_fld_lookup(fid);
-        under = cmm_get_child(d, mdsnum);
-        if (under == NULL)
-                RETURN(-ENOENT);
-
-        below = under->ld_ops->ldo_object_alloc(ctx, under);
-	if (below != NULL) {
-                struct cmm_object *co = lu2cmm_obj(o);
-
-		lu_object_add(o, below);
-                co->cmo_num = mdsnum;
-		RETURN(0);
-	} else
-		RETURN(-ENOMEM);
-}
-
-void cmm_object_free(struct lu_context *ctx, struct lu_object *o)
-{
-        struct cmm_object *mo = lu2cmm_obj(o);
-	lu_object_fini(o);
-        OBD_FREE_PTR(mo);
-}
-
-void cmm_object_release(struct lu_context *ctx, struct lu_object *o)
-{
-        return;
-}
-
-static int cmm_object_exists(struct lu_context *ctx, struct lu_object *o)
-{
-        return lu_object_exists(ctx, lu_object_next(o));
-}
-
-static int cmm_object_print(struct lu_context *ctx,
-                            struct seq_file *f, const struct lu_object *o)
-{
-	return seq_printf(f, LUSTRE_CMM0_NAME"-object@%p", o);
-}
-
-/* Metadata API */
-static int cmm_object_create(struct lu_context *ctx,
-                             struct md_object *mo, struct lu_attr *attr)
-{
-        struct cmm_object *cmo = md2cmm_obj(mo);
-        struct md_object  *nxo = cmm2child_obj(cmo);
-        int rc;
-
-        ENTRY;
-
-        LASSERT (cmm_is_local_obj(cmo));
-
-        rc = nxo->mo_ops->moo_object_create(ctx, nxo, attr);
-
-        RETURN(rc);
-}
-int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
-              struct md_object *p, const char *name, struct md_object *c)
-{
-	struct cmm_object *cmm_p = md2cmm_obj(p);
-        struct cmm_object *cmm_c = md2cmm_obj(c);
-        struct md_object  *local = cmm2child_obj(cmm_p);
-        int rc;
-
-        ENTRY;
-
-        if (cmm_is_local_obj(cmm_c)) {
-                /* fully local mkdir */
-                rc = local->mo_dir_ops->mdo_mkdir(ctx, attr, local, name,
-                                                      cmm2child_obj(cmm_c));
+        c_dev = cmm_get_child(cd, mdsnum);
+        if (c_dev == NULL) {
+                rc = -ENOENT;
         } else {
-                const struct lu_fid *fid = lu_object_fid(&c->mo_lu);
-                struct md_object *remote = cmm2child_obj(cmm_c);
+                c_obj = c_dev->ld_ops->ldo_object_alloc(ctx, c_dev);
+                if (c_obj != NULL) {
+                        struct cmm_object *co = lu2cmm_obj(lo);
 
-                /* remote object creation and local name insert */
-                rc = remote->mo_ops->moo_object_create(ctx, remote, attr);
-                if (rc == 0) {
-                        rc = local->mo_dir_ops->mdo_name_insert(ctx, local,
-                                                                name, fid,
-                                                                attr);
+                        lu_object_add(lo, c_obj);
+                        co->cmo_num = mdsnum;
+                        rc = 0;
+                } else {
+                        rc = -ENOMEM;
                 }
         }
 
         RETURN(rc);
 }
 
-int cmm_attr_get(struct lu_context *ctx, struct md_object *obj,
-                 struct lu_attr *attr)
+static int cmm_object_exists(struct lu_context *ctx, struct lu_object *lo)
 {
-        struct md_object *next = cmm2child_obj(md2cmm_obj(obj));
-
-        return next->mo_ops->moo_attr_get(ctx, next, attr);
+        return lu_object_exists(ctx, lu_object_next(lo));
 }
 
-static struct md_dir_operations cmm_dir_ops = {
-        .mdo_mkdir         = cmm_mkdir,
+static int cmm_object_print(struct lu_context *ctx,
+                            struct seq_file *f, const struct lu_object *lo)
+{
+	return seq_printf(f, LUSTRE_CMM0_NAME"-object@%p", lo);
+}
+
+static struct lu_object_operations cmm_obj_ops = {
+	.loo_object_init    = cmm_object_init,
+	.loo_object_print   = cmm_object_print,
+	.loo_object_exists  = cmm_object_exists
 };
+
+/* md_object operations */
+static int cmm_object_create(struct lu_context *ctx, struct md_object *mo,
+                             struct lu_attr *attr)
+{
+        struct md_object  *ch = cmm2child_obj(md2cmm_obj(mo));
+        int rc;
+
+        ENTRY;
+
+        LASSERT (cmm_is_local_obj(md2cmm_obj(mo)));
+
+        rc = mo_object_create(ctx, ch, attr);
+
+        RETURN(rc);
+}
+
+static int cmm_attr_get(struct lu_context *ctx, struct md_object *mo,
+                        struct lu_attr *attr)
+{
+        struct md_object *ch = cmm2child_obj(md2cmm_obj(mo));
+        int rc;
+
+        ENTRY;
+        
+        LASSERT (cmm_is_local_obj(md2cmm_obj(mo)));
+        
+        rc = mo_attr_get(ctx, ch, attr);
+        
+        RETURN(rc);
+}
 
 static struct md_object_operations cmm_mo_ops = {
         .moo_attr_get      = cmm_attr_get,
         .moo_object_create = cmm_object_create,
-
 };
 
-static struct lu_object_operations cmm_obj_ops = {
-	.loo_object_init    = cmm_object_init,
-	.loo_object_release = cmm_object_release,
-	.loo_object_print   = cmm_object_print,
-	.loo_object_exists  = cmm_object_exists
+static int cmm_lookup(struct lu_context *ctx, struct md_object *mo_p,
+                      const char *name, struct lu_fid *lf)
+{
+        struct md_object *ch_p = cmm2child_obj(md2cmm_obj(mo_p));
+        int rc;
+
+        ENTRY;
+       
+        LASSERT(cmm_is_local_obj(md2cmm_obj(mo_p)));
+
+        rc = mdo_lookup(ctx, ch_p, name, lf);
+
+        RETURN(rc);
+        
+}
+
+static int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
+                     struct md_object *mo_p, const char *name,
+                     struct md_object *mo_c)
+{
+	struct md_object *ch_c = cmm2child_obj(md2cmm_obj(mo_c));
+        struct md_object *ch_p = cmm2child_obj(md2cmm_obj(mo_p));
+        int rc;
+
+        ENTRY;
+
+        if (cmm_is_local_obj(md2cmm_obj(mo_c))) {
+                /* fully local mkdir */
+                rc = mdo_mkdir(ctx, attr, ch_p, name, ch_c);
+        } else {
+                const struct lu_fid *lf = lu_object_fid(&mo_c->mo_lu);
+
+                /* remote object creation and local name insert */
+                rc = mo_object_create(ctx, ch_c, attr);
+                if (rc == 0) {
+                        rc = mdo_name_insert(ctx, ch_p, name, lf, attr);
+                }
+        }
+
+        RETURN(rc);
+}
+
+static struct md_dir_operations cmm_dir_ops = {
+        .mdo_lookup        = cmm_lookup,
+        .mdo_mkdir         = cmm_mkdir,
 };
+
+
 
