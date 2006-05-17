@@ -80,7 +80,7 @@ static void  osd_object_release(struct lu_context *ctxt, struct lu_object *l);
 static int   osd_object_exists (struct lu_context *ctx, struct lu_object *o);
 static int   osd_object_print  (struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
-static void  osd_device_free   (struct lu_device *m);
+static void  osd_device_free   (struct lu_context *ctx, struct lu_device *m);
 static void *osd_key_init      (struct lu_context *ctx);
 static void  osd_key_fini      (struct lu_context *ctx, void *data);
 static int   osd_has_index     (struct osd_object *obj);
@@ -112,7 +112,8 @@ static struct osd_device  *osd_obj2dev      (struct osd_object *o);
 static struct lu_device   *osd2lu_dev       (struct osd_device * osd);
 static struct lu_device   *osd_device_fini  (struct lu_context *ctx,
                                              struct lu_device *d);
-static struct lu_device   *osd_device_alloc (struct lu_device_type *t,
+static struct lu_device   *osd_device_alloc (struct lu_context *ctx,
+                                             struct lu_device_type *t,
                                              struct lustre_cfg *cfg);
 static struct lu_object   *osd_object_alloc (struct lu_context *ctx,
                                              struct lu_device *d);
@@ -757,7 +758,8 @@ static struct lu_device *osd_device_fini(struct lu_context *ctx,
 	RETURN(NULL);
 }
 
-static struct lu_device *osd_device_alloc(struct lu_device_type *t,
+static struct lu_device *osd_device_alloc(struct lu_context *ctx,
+                                          struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
 {
         struct lu_device  *l;
@@ -779,7 +781,7 @@ static struct lu_device *osd_device_alloc(struct lu_device_type *t,
         return l;
 }
 
-static void osd_device_free(struct lu_device *d)
+static void osd_device_free(struct lu_context *ctx, struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
 

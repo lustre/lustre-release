@@ -106,13 +106,13 @@ static int cmm_add_mdc(struct lu_context *ctx,
 
         /*TODO check this MDC exists already */
 
-        ld = ldt->ldt_ops->ldto_device_alloc(ldt, cfg);
+        ld = ldt->ldt_ops->ldto_device_alloc(ctx, ldt, cfg);
 
         ld->ld_site = cmm2lu_dev(cm)->ld_site;
 
         rc = ldt->ldt_ops->ldto_device_init(ctx, ld, NULL);
         if (rc)
-                ldt->ldt_ops->ldto_device_free(ld);
+                ldt->ldt_ops->ldto_device_free(ctx, ld);
 
         /* pass config to the just created MDC */
         rc = ld->ld_ops->ldo_process_config(ctx, ld, cfg);
@@ -158,7 +158,8 @@ static struct lu_device_operations cmm_lu_ops = {
 
 /* --- lu_device_type operations --- */
 
-struct lu_device *cmm_device_alloc(struct lu_device_type *t,
+struct lu_device *cmm_device_alloc(struct lu_context *ctx,
+                                   struct lu_device_type *t,
                                    struct lustre_cfg *cfg)
 {
         struct lu_device  *l;
@@ -180,7 +181,7 @@ struct lu_device *cmm_device_alloc(struct lu_device_type *t,
         return l;
 }
 
-void cmm_device_free(struct lu_device *d)
+void cmm_device_free(struct lu_context *ctx, struct lu_device *d)
 {
         struct cmm_device *m = lu2cmm_dev(d);
 
@@ -228,7 +229,7 @@ static struct lu_device *cmm_device_fini(struct lu_context *ctx,
                 list_del(&mc->mc_linkage);
                 lu_device_put(cmm2lu_dev(cm));
                 ld->ld_type->ldt_ops->ldto_device_fini(ctx, ld_m);
-                ld->ld_type->ldt_ops->ldto_device_free(ld_m);
+                ld->ld_type->ldt_ops->ldto_device_free(ctx, ld_m);
         }
 
         EXIT;

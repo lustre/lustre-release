@@ -260,12 +260,13 @@ struct lu_device_type_operations {
         /*
          * Allocate new device.
          */
-        struct lu_device *(*ldto_device_alloc)(struct lu_device_type *t,
+        struct lu_device *(*ldto_device_alloc)(struct lu_context *ctx,
+                                               struct lu_device_type *t,
                                                struct lustre_cfg *lcfg);
         /*
          * Free device. Dual to ->ldto_device_alloc().
          */
-        void (*ldto_device_free)(struct lu_device *d);
+        void (*ldto_device_free)(struct lu_context *ctx, struct lu_device *d);
 
         /*
          * Initialize the devices after allocation

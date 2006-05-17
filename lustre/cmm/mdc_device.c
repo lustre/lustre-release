@@ -265,7 +265,8 @@ static struct lu_device *mdc_device_fini(struct lu_context *ctx,
         RETURN (NULL);
 }
 
-struct lu_device *mdc_device_alloc(struct lu_device_type *ldt,
+struct lu_device *mdc_device_alloc(struct lu_context *ctx,
+                                   struct lu_device_type *ldt,
                                    struct lustre_cfg *cfg)
 {
         struct lu_device  *ld;
@@ -316,7 +317,8 @@ static struct lu_device *mdc_device_fini(struct lu_context *ctx,
         RETURN (NULL);
 }
 
-struct lu_device *mdc_device_alloc(struct lu_device_type *ldt,
+struct lu_device *mdc_device_alloc(struct lu_context *ctx,
+                                   struct lu_device_type *ldt,
                                    struct lustre_cfg *cfg)
 {
         struct lu_device  *ld;
@@ -336,7 +338,7 @@ struct lu_device *mdc_device_alloc(struct lu_device_type *ldt,
 
         RETURN (ld);
 }
-void mdc_device_free(struct lu_device *ld)
+void mdc_device_free(struct lu_context *ctx, struct lu_device *ld)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
 

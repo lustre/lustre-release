@@ -766,7 +766,8 @@ static struct obd_ops mdd_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
 
-struct lu_device *mdd_device_alloc(struct lu_device_type *t,
+struct lu_device *mdd_device_alloc(struct lu_context *ctx,
+                                   struct lu_device_type *t,
                                    struct lustre_cfg *lcfg)
 {
         struct lu_device  *l;
@@ -785,7 +786,7 @@ struct lu_device *mdd_device_alloc(struct lu_device_type *t,
         return l;
 }
 
-static void mdd_device_free(struct lu_device *lu)
+static void mdd_device_free(struct lu_context *ctx, struct lu_device *lu)
 {
         struct mdd_device *m = lu2mdd_dev(lu);
 

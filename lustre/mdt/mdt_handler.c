@@ -1211,7 +1211,7 @@ static void mdt_stack_fini(struct lu_context *ctx,
                 /* each fini() returns next device in stack of layers
                  * * so we can avoid the recursion */
                 n = ldt->ldt_ops->ldto_device_fini(ctx, d);
-                ldt->ldt_ops->ldto_device_free(d);
+                ldt->ldt_ops->ldto_device_free(ctx, d);
 
                 type = ldt->ldt_obd_type;
                 type->typ_refcnt--;
@@ -1246,7 +1246,7 @@ static struct lu_device *mdt_layer_setup(struct lu_context *ctx,
                 GOTO(out_type, rc = -EINVAL);
         }
 
-        d = ldt->ldt_ops->ldto_device_alloc(ldt, cfg);
+        d = ldt->ldt_ops->ldto_device_alloc(ctx, ldt, cfg);
         if (IS_ERR(d)) {
                 CERROR("Cannot allocate device: '%s'\n", typename);
                 GOTO(out_type, rc = -ENODEV);
@@ -1265,7 +1265,7 @@ static struct lu_device *mdt_layer_setup(struct lu_context *ctx,
 
         RETURN(d);
 out_alloc:
-        ldt->ldt_ops->ldto_device_free(d);
+        ldt->ldt_ops->ldto_device_free(ctx, d);
         type->typ_refcnt--;
 out_type:
         class_put_type(type);
@@ -1666,7 +1666,7 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_disconnect = mdt_obd_disconnect,
 };
 
-static void mdt_device_free(struct lu_device *d)
+static void mdt_device_free(struct lu_context *ctx, struct lu_device *d)
 {
         struct mdt_device *m = mdt_dev(d);
 
@@ -1674,7 +1674,8 @@ static void mdt_device_free(struct lu_device *d)
         OBD_FREE_PTR(m);
 }
 
-static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
+static struct lu_device *mdt_device_alloc(struct lu_context *ctx,
+                                          struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
 {
         struct lu_device  *l;
@@ -1687,7 +1688,7 @@ static struct lu_device *mdt_device_alloc(struct lu_device_type *t,
                 l = &m->mdt_md_dev.md_lu_dev;
                 result = mdt_init0(m, t, cfg);
                 if (result != 0) {
-                        mdt_device_free(l);
+                        mdt_device_free(ctx, l);
                         return ERR_PTR(result);
                 }
 

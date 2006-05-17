@@ -492,7 +492,7 @@ static int mds_getstatus(struct ptlrpc_request *req)
 
 /* get the LOV EA from @inode and store it into @md.  It can be at most
  * @size bytes, and @size is updated with the actual EA size.
- * The EA size is also returned on success, and -ve errno on failure. 
+ * The EA size is also returned on success, and -ve errno on failure.
  * If there is no EA then 0 is returned. */
 int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                int *size, int lock)
@@ -2629,7 +2629,7 @@ static struct obd_ops mdt_obd_ops = {
 quota_interface_t *quota_interface;
 quota_interface_t mds_quota_interface;
 
-static int __init mds_init(void)
+static __attribute__((unused)) int __init mds_init(void)
 {
         int rc;
         struct lprocfs_static_vars lvars;
@@ -2653,7 +2653,7 @@ static int __init mds_init(void)
         return 0;
 }
 
-static void /*__exit*/ mds_exit(void)
+static __attribute__((unused)) void /*__exit*/ mds_exit(void)
 {
         lquota_exit(quota_interface);
         if (quota_interface)

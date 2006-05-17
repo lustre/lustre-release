@@ -355,15 +355,23 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
         ldt = obd->obd_type->typ_lu;
         if (ldt != NULL) {
+#ifdef __KERNEL__
+                struct lu_context ctx;
                 struct lu_device *d;
 
-                d = ldt->ldt_ops->ldto_device_alloc(ldt, cfg);
-                if (!IS_ERR(d)) {
-                        obd->obd_lu_dev = d;
-                        d->ld_obd = obd;
-                        rc = 0;
-                } else
-                        rc = PTR_ERR(d);
+                rc = lu_context_init(&ctx);
+                if (rc == 0) {
+                        lu_context_enter(&ctx);
+
+                        d = ldt->ldt_ops->ldto_device_alloc(&ctx, ldt, cfg);
+                        if (!IS_ERR(d)) {
+                                obd->obd_lu_dev = d;
+                                d->ld_obd = obd;
+                                rc = 0;
+                        } else
+                                rc = PTR_ERR(d);
+                }
+#endif
         } else {
                 OBD_CHECK_DT_OP(obd, setup, -EOPNOTSUPP);
                 OBD_COUNTER_INCREMENT(obd, setup);
@@ -397,9 +405,19 @@ static inline int obd_cleanup(struct obd_device *obd)
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
-                ldt->ldt_ops->ldto_device_free(d);
-                obd->obd_lu_dev = NULL;
-                rc = 0;
+#ifdef __KERNEL__
+                struct lu_context ctx;
+
+                rc = lu_context_init(&ctx);
+                if (rc == 0) {
+                        lu_context_enter(&ctx);
+                        ldt->ldt_ops->ldto_device_free(&ctx, d);
+                        lu_context_exit(&ctx);
+                        lu_context_fini(&ctx);
+                        obd->obd_lu_dev = NULL;
+                        rc = 0;
+                }
+#endif
         } else {
                 OBD_CHECK_DT_OP(obd, cleanup, 0);
                 rc = OBP(obd, cleanup)(obd);
