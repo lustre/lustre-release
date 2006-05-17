@@ -148,7 +148,7 @@ static int osd_root_get(struct lu_context *ctx,
 {
         struct osd_device *d = osd_dt_dev(dev);
 
-        return osd_inode_get_fid(d, d->od_root_dir->d_inode, f);
+        return osd_inode_get_fid(d, osd_sb(d)->s_root->d_inode, f);
 }
 
 
@@ -166,7 +166,7 @@ static struct lu_object *osd_object_alloc(struct lu_context *ctx,
                 struct lu_object *l;
 
                 l = &mo->oo_dt.do_lu;
-                lu_object_init(l, NULL, d);
+                dt_object_init(&mo->oo_dt, NULL, d);
                 mo->oo_dt.do_ops = &osd_obj_ops;
                 l->lo_ops = &osd_lu_obj_ops;
                 init_rwsem(&mo->oo_sem);
@@ -201,6 +201,7 @@ static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
 static void osd_object_free(struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
+        dt_object_fini(&obj->oo_dt);
         OBD_FREE_PTR(obj);
 }
 
@@ -550,6 +551,23 @@ static struct dt_body_operations osd_body_ops = {
  * Index operations.
  */
 
+#if OI_IN_MEMORY
+
+/*
+ * XXX fid for "real" root.
+ */
+static const struct lu_fid uber_fid = {
+        .f_seq = LUSTRE_ROOT_FID_SEQ,
+        .f_oid = LUSTRE_ROOT_FID_OID,
+        .f_ver = 0
+};
+
+extern void osd_oi_init0(struct osd_oi *oi, const struct lu_fid *fid,
+                         __u64 root_ino, __u32 root_gen);
+extern int osd_oi_find_fid(struct osd_oi *oi,
+                           __u64 ino, __u32 gen, struct lu_fid *fid);
+#endif
+
 /*
  * XXX This is temporary solution: inode operations are used until iam is
  * ready.
@@ -567,7 +585,8 @@ static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
         /*
          * XXX temporary solution.
          */
-        struct dentry     *dentry;
+        struct dentry *dentry;
+        struct dentry *parent;
 
         LASSERT(osd_has_index(obj));
         LASSERT(osd->od_obj_area != NULL);
@@ -578,7 +597,11 @@ static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
         dir = obj->oo_inode;
         LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
 
-        dentry = d_alloc(NULL, &info->oti_str);
+        parent = d_alloc_root(dir);
+        if (parent == NULL)
+                return -ENOMEM;
+
+        dentry = d_alloc(parent, &info->oti_str);
         if (dentry != NULL) {
                 struct dentry *d;
 
@@ -593,12 +616,16 @@ static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
                          */
                         if (dentry->d_inode != NULL) {
                                 struct lu_fid *fid = (struct lu_fid *)rec;
+                                struct inode  *inode = dentry->d_inode;
                                 /*
                                  * Build fid from inode.
                                  */
-                                fid->f_seq = 0; /* XXX hard-coded */
-                                fid->f_oid = dentry->d_inode->i_ino;
-                                fid->f_ver = dentry->d_inode->i_generation;
+                                /* XXX hard-coded */
+                                fid->f_seq = LUSTRE_ROOT_FID_SEQ + 1;
+                                fid->f_oid = inode->i_ino;
+                                fid->f_ver = inode->i_generation;
+                                osd_oi_init0(&osd->od_oi, fid,
+                                             inode->i_ino, inode->i_generation);
                                 result = 0;
                         } else
                                 result = -ENOENT;
@@ -611,6 +638,7 @@ static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
                 dput(dentry);
         } else
                 result = -ENOMEM;
+        dput(parent);
         return result;
 }
 
@@ -680,15 +708,12 @@ static int osd_device_init(struct lu_context *ctx,
         return 0;
 }
 
-extern void osd_oi_init0(struct osd_oi *oi, __u64 root_ino, __u32 root_gen);
-extern int osd_oi_find_fid(struct osd_oi *oi,
-                           __u64 ino, __u32 gen, struct lu_fid *fid);
-
 static int osd_mount(struct lu_context *ctx,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
         struct lustre_mount_info *lmi;
-        const char *dev = lustre_cfg_string(cfg, 0);
+        const char               *dev = lustre_cfg_string(cfg, 0);
+        struct inode             *inode;
         int result;
 
         ENTRY;
@@ -713,16 +738,25 @@ static int osd_mount(struct lu_context *ctx,
         if (result == 0) {
                 struct dentry *d;
 
+                inode = osd_sb(o)->s_root->d_inode;
+                /*
+                 * XXX temporary kludge: this should be done by mkfs.
+                 */
+                osd_oi_init0(&o->od_oi, &uber_fid,
+                             inode->i_ino, inode->i_generation);
+
                 d = simple_mkdir(osd_sb(o)->s_root, "*OBJ-TEMP*", 0777, 1);
                 if (!IS_ERR(d)) {
                         o->od_obj_area = d;
 
+                        /*
+                         * XXX temporary fix for mdd/fld: create root
+                         * directory if not yet there, and insert it into fld.
+                         */
                         d = simple_mkdir(osd_sb(o)->s_root, "ROOT", 0777, 1);
-                        if (!IS_ERR(d)) {
-                                osd_oi_init0(&o->od_oi, d->d_inode->i_ino,
-                                             d->d_inode->i_generation);
-                                o->od_root_dir = d;
-                        } else
+                        if (!IS_ERR(d))
+                                dput(d);
+                        else
                                 result = PTR_ERR(d);
                 } else
                         result = PTR_ERR(d);
@@ -741,10 +775,6 @@ static struct lu_device *osd_device_fini(struct lu_context *ctx,
         if (o->od_obj_area != NULL) {
                 dput(o->od_obj_area);
                 o->od_obj_area = NULL;
-        }
-        if (o->od_root_dir != NULL) {
-                dput(o->od_root_dir);
-                o->od_root_dir = NULL;
         }
         osd_oi_fini(&o->od_oi);
 

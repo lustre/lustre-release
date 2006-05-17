@@ -65,7 +65,10 @@ static struct lu_context_key       mdd_thread_key;
 
 struct mdd_thread_info {
         struct txn_param mti_param;
+        struct lu_fid    mti_fid;
 };
+
+const char *mdd_root_dir_name = "ROOT";
 
 static struct mdd_thread_info *mdd_ctx_info(struct lu_context *ctx)
 {
@@ -321,6 +324,57 @@ static int mdd_object_print(struct lu_context *ctxt,
         return seq_printf(f, LUSTRE_MDD0_NAME"-object@%p", o);
 }
 
+static int mdd_dt_lookup(struct lu_context *ctx, struct mdd_device *mdd,
+                         struct mdd_object *obj, const char *name,
+                         struct lu_fid *fid)
+{
+        struct dt_object *dir    = mdd_object_child(obj);
+        struct dt_rec    *rec    = (struct dt_rec *)fid;
+        const struct dt_key *key = (const struct dt_key *)name;
+        int result;
+
+        if (dir->do_index_ops != NULL)
+                result = dir->do_index_ops->dio_lookup(ctx, dir, rec, key);
+        else
+                result = -ENOTDIR;
+        return result;
+}
+
+static int mdd_mount(struct lu_context *ctx, struct mdd_device *mdd)
+{
+        int result;
+        struct mdd_thread_info *info = lu_context_key_get(ctx,
+                                                          &mdd_thread_key);
+        struct lu_device *dev = &mdd->mdd_md_dev.md_lu_dev;
+
+        result = mdd_child_ops(mdd)->dt_root_get(ctx, mdd->mdd_child,
+                                                 &info->mti_fid);
+        if (result == 0) {
+                struct lu_object *root;
+
+                root = lu_object_find(ctx, dev->ld_site, &info->mti_fid);
+                if (!IS_ERR(root)) {
+                        struct mdd_object *obj;
+
+                        obj = mdd_obj(lu_object_locate(root->lo_header,
+                                                       dev->ld_type));
+                        if (obj != NULL)
+                                result = mdd_dt_lookup(ctx, mdd, obj,
+                                                       mdd_root_dir_name ,
+                                                       &mdd->mdd_root_fid);
+                        else {
+                                CERROR("No slice\n");
+                                result = -EINVAL;
+                        }
+                        lu_object_put(ctx, root);
+                } else {
+                        CERROR("No root\n");
+                        result = PTR_ERR(root);
+                }
+        }
+        return result;
+}
+
 static int mdd_fs_setup(struct lu_context *ctx, struct mdd_device *mdd)
 {
         return 0;
@@ -371,6 +425,8 @@ static int mdd_process_config(struct lu_context *ctx,
 
         default:
                 err = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                if (err == 0 && cfg->lcfg_command == LCFG_SETUP)
+                        err = mdd_mount(ctx, m);
         }
 
         RETURN(err);
@@ -633,8 +689,10 @@ exit:
         RETURN(rc);
 }
 
-static void mdd_rename_lock(struct mdd_device *mdd, struct mdd_object *src_pobj,
-                            struct mdd_object *tgt_pobj, struct mdd_object *sobj,
+static void mdd_rename_lock(struct mdd_device *mdd,
+                            struct mdd_object *src_pobj,
+                            struct mdd_object *tgt_pobj,
+                            struct mdd_object *sobj,
                             struct mdd_object *tobj)
 {
         return;
@@ -752,7 +810,8 @@ static int mdd_root_get(struct lu_context *ctx,
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
 
         ENTRY;
-        RETURN(mdd_child_ops(mdd)->dt_root_get(ctx, mdd->mdd_child, f));
+        *f = mdd->mdd_root_fid;
+        RETURN(0);
 }
 
 static int mdd_config(struct lu_context *ctx, struct md_device *m,

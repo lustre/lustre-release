@@ -61,8 +61,6 @@ struct osd_device {
         struct lustre_mount_info *od_mount;
         /* object index */
         struct osd_oi             od_oi;
-        /* root directory */
-        struct dentry            *od_root_dir;
         /*
          * XXX temporary stuff for object index: directory where every object
          * is named by its fid.

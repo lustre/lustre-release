@@ -193,13 +193,8 @@ int osd_oi_delete(struct osd_thread_info *info,
         return result;
 }
 
-const struct lu_fid root_fid = {
-        .f_seq = LUSTRE_ROOT_FID_SEQ,
-        .f_oid = LUSTRE_ROOT_FID_OID,
-        .f_ver = 0
-};
-
-void osd_oi_init0(struct osd_oi *oi, __u64 root_ino, __u32 root_gen)
+void osd_oi_init0(struct osd_oi *oi, const struct lu_fid *fid,
+                  __u64 root_ino, __u32 root_gen)
 {
         int result;
         const struct osd_inode_id root_id = {
@@ -207,7 +202,7 @@ void osd_oi_init0(struct osd_oi *oi, __u64 root_ino, __u32 root_gen)
                 .oii_gen = root_gen
         };
 
-        result = osd_oi_insert(NULL, oi, &root_fid, &root_id, NULL);
+        result = osd_oi_insert(NULL, oi, fid, &root_id, NULL);
         LASSERT(result == 0);
 }
 
