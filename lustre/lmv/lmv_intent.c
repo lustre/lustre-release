@@ -100,7 +100,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         }
 
         LASSERT(fid_num(&body->fid1) != 0);
-                
+
         nid = body->fid1;
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
         op_data.fid1 = nid;
@@ -153,9 +153,9 @@ repeat:
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
-                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
+                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    (char *)name, len);
-                
+
                 CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n",
                        mds, PFID3(&rpid));
                 rpid = obj->lo_inodes[mds].li_fid;
@@ -166,7 +166,7 @@ repeat:
         op_data.fid2 = *cid;
         op_data.name = name;
         op_data.namelen = len;
-        
+
         mds = lmv_fld_lookup(obd, &rpid);
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data,
                             lmm, lmmsize, it, flags, reqp,
@@ -191,7 +191,7 @@ repeat:
         if (rc != 0) {
                 LASSERT(rc < 0);
 
-                /* 
+                /*
                  * this is possible, that some userspace application will try to
                  * open file as directory and we will have -ENOTDIR here. As
                  * this is "usual" situation, we should not print error here,
@@ -220,7 +220,7 @@ repeat:
         /* could not find object, FID is not present in response. */
 /*        if (!(body->valid & OBD_MD_FID))
                 RETURN(0);*/
-        
+
         cid = &body->fid1;
         obj = lmv_obj_grab(obd, cid);
         if (!obj && (mea = lmv_get_mea(*reqp, 1))) {
@@ -234,17 +234,17 @@ repeat:
                 /* this is splitted dir and we'd want to get attrs */
                 CDEBUG(D_OTHER, "attrs from slaves for "DFID3"\n",
                        PFID3(cid));
-                
+
                 rc = lmv_revalidate_slaves(exp, reqp, cid, it, 1,
                                            cb_blocking, extra_lock_flags);
         } else if (S_ISDIR(body->mode)) {
                 CDEBUG(D_OTHER, "object "DFID3" has not lmv obj?\n",
                        PFID3(cid));
         }
-        
+
         if (obj)
                 lmv_obj_put(obj);
-        
+
         RETURN(rc);
 }
 
@@ -290,7 +290,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                 obj = lmv_obj_grab(obd, pid);
                 if (obj && len) {
                         /* directory is already splitted. calculate mds */
-                        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
+                        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)name, len);
                         rpid = obj->lo_inodes[mds].li_fid;
                         mds = lmv_fld_lookup(obd, &rpid);
@@ -304,14 +304,14 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         op_data.fid1 = rpid;
         op_data.name = name;
         op_data.namelen = len;
-        
+
         /* the same about fid returning. */
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data, lmm,
                             lmmsize, it, flags, reqp, cb_blocking,
                             extra_lock_flags);
         if (rc < 0)
                 RETURN(rc);
-       
+
         if (obj && rc > 0) {
                 /* this is splitted dir. In order to optimize things a
                  * bit, we consider obj valid updating missing parts.
@@ -322,7 +322,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                 CDEBUG(D_OTHER,
                        "revalidate slaves for "DFID3", rc %d\n",
                        PFID3(cid), rc);
-                
+
                 LASSERT(cid != 0);
                 rc = lmv_revalidate_slaves(exp, reqp, cid, it, rc,
                                            cb_blocking, extra_lock_flags);
@@ -331,7 +331,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
 
         if (*reqp == NULL)
                 RETURN(rc);
- 
+
         /* okay, MDS has returned success. probably name has been
          * resolved in remote inode */
         rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags,
@@ -345,7 +345,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
          */
         if (it->d.lustre.it_disposition & DISP_LOOKUP_NEG)
                 RETURN(0);
-                
+
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
 
@@ -370,7 +370,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                 /* this is splitted dir and we'd want to get attrs */
                 CDEBUG(D_OTHER, "attrs from slaves for "DFID3", rc %d\n",
                        PFID3(cid), rc);
-                
+
                 rc = lmv_revalidate_slaves(exp, reqp, cid, it, 1,
                                            cb_blocking, extra_lock_flags);
                 lmv_obj_put(obj2);
@@ -403,10 +403,10 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         /* master is locked. we'd like to take locks on slaves and update
          * attributes to be returned from the slaves it's important that lookup
          * is called in two cases:
-         
+
          *  - for first time (dcache has no such a resolving yet).
          *  - ->d_revalidate() returned false.
-         
+
          * last case possible only if all the objs (master and all slaves aren't
          * valid */
 
@@ -417,11 +417,11 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         obj = lmv_obj_grab(obd, &body->fid1);
         LASSERT(obj != NULL);
 
-        CDEBUG(D_OTHER, "lookup slaves for "DFID3"\n", 
+        CDEBUG(D_OTHER, "lookup slaves for "DFID3"\n",
                PFID3(&body->fid1));
 
         lmv_obj_lock(obj);
-        
+
         for (i = 0; i < obj->lo_objcount; i++) {
                 struct lu_fid fid = obj->lo_inodes[i].li_fid;
                 struct md_op_data op_data = { { 0 } };
@@ -441,12 +441,12 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
                 op_data.fid1 = fid;
                 op_data.fid2 = fid;
-                
+
                 mds = lmv_fld_lookup(obd, &fid);
                 rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data,
                                     NULL, 0, &it, 0, &req,
                                     lmv_blocking_ast, 0);
-                
+
                 lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
                 if (rc > 0 && req == NULL) {
                         /* nice, this slave is valid */
@@ -458,7 +458,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 if (rc < 0) {
                         /* error during lookup */
                         GOTO(cleanup, rc);
-                } 
+                }
                 lock = ldlm_handle2lock(lockh);
                 LASSERT(lock);
 
@@ -468,7 +468,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 LASSERT(body2);
 
                 obj->lo_inodes[i].li_size = body2->size;
-                
+
                 CDEBUG(D_OTHER, "fresh: %lu\n",
                        (unsigned long)obj->lo_inodes[i].li_size);
 
@@ -531,11 +531,12 @@ int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
                 CDEBUG(D_OTHER, "revalidate lookup for "DFID3" to %d MDS\n",
                        PFID3(cid), mds);
 
+                op_data.fid2 = *cid;
         } else {
                 mds = lmv_fld_lookup(obd, pid);
 repeat:
                 LASSERT(++loop <= 2);
-                
+
                 /* this is lookup. during lookup we have to update all the
                  * attributes, because returned values will be put in struct
                  * inode */
@@ -544,20 +545,20 @@ repeat:
                 if (obj) {
                         if (len) {
                                 /* directory is already splitted. calculate mds */
-                                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount, 
+                                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                                    (char *)name, len);
                                 rpid = obj->lo_inodes[mds].li_fid;
                                 mds = lmv_fld_lookup(obd, &rpid);
                         }
                         lmv_obj_put(obj);
                 }
+                memset(&op_data.fid2, 0, sizeof op_data.fid2);
         }
 
         op_data.fid1 = rpid;
-        op_data.fid2 = *cid;
         op_data.name = name;
         op_data.namelen = len;
-        
+
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data, lmm, lmmsize,
                             it, flags, reqp, cb_blocking, extra_lock_flags);
         if (rc > 0) {
@@ -579,7 +580,7 @@ repeat:
                       PFID3(&rpid));
                 RETURN(rc);
         }
-       
+
         if (rc == -ERESTART) {
                 /* directory got splitted since last update. this shouldn't be
                  * becasue splitting causes lock revocation, so revalidate had
@@ -607,7 +608,7 @@ repeat:
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body != NULL);
 //                LASSERT((body->valid & OBD_MD_FID) != 0);
-                
+
                 obj = lmv_obj_grab(obd, &body->fid1);
                 if (!obj) {
                         obj = lmv_obj_create(exp, &body->fid1, mea);
@@ -691,7 +692,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         master_lock_mode = 0;
 
         lmv_obj_lock(obj);
-        
+
         for (i = 0; i < obj->lo_objcount; i++) {
                 struct lu_fid fid = obj->lo_inodes[i].li_fid;
                 struct md_op_data op_data = { { 0 } };
@@ -719,7 +720,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                                         body = lustre_msg_buf(mreq->rq_repmsg,
                                                               1, sizeof(*body));
                                         LASSERT(body != NULL);
-                                        goto update; 
+                                        goto update;
                                 }
                                 /* take already cached attrs into account */
                                 CDEBUG(D_OTHER,
@@ -732,7 +733,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 op_data.fid1 = fid;
                 op_data.fid2 = fid;
-               
+
                 /* is obj valid? */
                 mds = lmv_fld_lookup(obd, &fid);
                 rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data,
@@ -775,13 +776,13 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body);
-                
+
 update:
                 obj->lo_inodes[i].li_size = body->size;
-                
+
                 CDEBUG(D_OTHER, "fresh: %lu\n",
                        (unsigned long)obj->lo_inodes[i].li_size);
-                
+
                 if (req)
                         ptlrpc_req_finished(req);
 release_lock:
@@ -796,13 +797,13 @@ release_lock:
                  * fresh attrs to it */
                 CDEBUG(D_OTHER, "return refreshed attrs: size = %lu\n",
                        (unsigned long)size);
-                
+
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body);
 
                 /* FIXME: what about other attributes? */
                 body->size = size;
-                
+
                 if (mreq == NULL) {
                         /* very important to maintain mds num the
                          * same because of revalidation. mreq == NULL means that
