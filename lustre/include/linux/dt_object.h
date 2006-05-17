@@ -285,12 +285,6 @@ struct txn_param {
         unsigned int tp_credits;
 };
 
-#define TXN_PARAM_INIT(credits) {               \
-        .tp_credits = (credits)                 \
-}
-
-#define TXN_PARAM(...) ((struct txn_param)TXN_PARAM_INIT(__VA_ARGS__))
-
 struct thandle {
         struct dt_device *th_dev;
 };

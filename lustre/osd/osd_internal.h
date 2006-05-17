@@ -76,6 +76,15 @@ struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
 struct osd_thread_info {
         struct lu_fid       oti_fid;
         struct osd_inode_id oti_id;
+        /*
+         * XXX temporary: Buffer for fid->name conversion.
+         */
+        char                oti_name[32];
+        /*
+         * XXX temporary: for ->i_op calls.
+         */
+        struct qstr         oti_str;
+
 };
 
 #endif /* __KERNEL__ */

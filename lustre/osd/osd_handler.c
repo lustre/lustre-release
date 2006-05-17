@@ -427,10 +427,6 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
          * XXX temporary solution.
          */
         struct dentry     *dentry;
-        char               name[32];
-        struct qstr        str = {
-                .name = name
-        };
 
         LASSERT(obj->oo_inode == NULL);
         LASSERT(S_ISDIR(attr->la_mode));
@@ -439,10 +435,11 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
         dir = osd->od_obj_area->d_inode;
         LASSERT(dir->i_op != NULL && dir->i_op->mkdir != NULL);
 
-        osd_fid_build_name(lu_object_fid(&obj->oo_dt.do_lu), name);
-        str.len = strlen(name);
+        osd_fid_build_name(lu_object_fid(&obj->oo_dt.do_lu), info->oti_name);
+        info->oti_str.name = info->oti_name;
+        info->oti_str.len  = strlen(info->oti_name);
 
-        dentry = d_alloc(osd->od_obj_area, &str);
+        dentry = d_alloc(osd->od_obj_area, &info->oti_str);
         if (dentry != NULL) {
                 result = dir->i_op->mkdir(dir, dentry,
                                           attr->la_mode & (S_IRWXUGO|S_ISVTX));
@@ -560,9 +557,10 @@ static struct dt_body_operations osd_body_ops = {
 static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
-        struct osd_device *osd = osd_obj2dev(obj);
-        struct inode      *dir;
+        struct osd_object      *obj  = osd_dt_obj(dt);
+        struct osd_device      *osd  = osd_obj2dev(obj);
+        struct osd_thread_info *info = lu_context_key_get(ctxt, &osd_key);
+        struct inode           *dir;
 
         int result;
 
@@ -570,18 +568,17 @@ static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
          * XXX temporary solution.
          */
         struct dentry     *dentry;
-        struct qstr        str = {
-                .name = (const char *)key,
-                .len  = strlen((const char *)key)
-        };
 
         LASSERT(osd_has_index(obj));
         LASSERT(osd->od_obj_area != NULL);
 
+        info->oti_str.name = (const char *)key;
+        info->oti_str.len  = strlen((const char *)key);
+
         dir = obj->oo_inode;
         LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
 
-        dentry = d_alloc(NULL, &str);
+        dentry = d_alloc(NULL, &info->oti_str);
         if (dentry != NULL) {
                 struct dentry *d;
 

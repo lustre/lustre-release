@@ -47,8 +47,7 @@
 
 
 static struct thandle* mdd_trans_start(struct lu_context *ctxt,
-                                       struct mdd_device *,
-                                       struct txn_param *);
+                                       struct mdd_device *);
 static void mdd_trans_stop(struct lu_context *ctxt,
                            struct mdd_device *mdd, struct thandle *handle);
 static struct dt_object* mdd_object_child(struct mdd_object *o);
@@ -224,21 +223,60 @@ mdd_add_unlink_log(struct mdd_device *mdd, struct mdd_object *obj,
         return 0;
 }
 
+enum mdd_txn_op {
+        MDD_TXN_OBJECT_DESTROY_OP,
+        MDD_TXN_OBJECT_CREATE_OP,
+        MDD_TXN_ATTR_SET_OP,
+        MDD_TXN_XATTR_SET_OP,
+        MDD_TXN_INDEX_INSERT_OP,
+        MDD_TXN_INDEX_DELETE_OP,
+        MDD_TXN_LINK_OP,
+        MDD_TXN_RENAME_OP,
+        MDD_TXN_MKDIR_OP
+};
+
+struct mdd_txn_op_descr {
+        enum mdd_txn_op mod_op;
+        unsigned int    mod_credits;
+};
+
+enum {
+        MDD_TXN_OBJECT_DESTROY_CREDITS = 10,
+        MDD_TXN_OBJECT_CREATE_CREDITS  = 10,
+        MDD_TXN_ATTR_SET_CREDITS       = 10,
+        MDD_TXN_XATTR_SET_CREDITS      = 10,
+        MDD_TXN_INDEX_INSERT_CREDITS   = 10,
+        MDD_TXN_INDEX_DELETE_CREDITS   = 10,
+        MDD_TXN_LINK_CREDITS           = 10,
+        MDD_TXN_RENAME_CREDITS         = 10,
+        MDD_TXN_MKDIR_CREDITS          = 10
+};
+
+#define DEFINE_MDD_TXN_OP_DESC(opname)          \
+static const struct mdd_txn_op_descr opname = { \
+        .mod_op      = opname ## _OP,           \
+        .mod_credits = opname ## _CREDITS,      \
+}
+
 /*
  * number of blocks to reserve for particular operations. Should be function
  * of ... something. Stub for now.
  */
-enum {
-        MDD_OBJECT_DESTROY_CREDITS = 10,
-        MDD_OBJECT_CREATE_CREDITS  = 10,
-        MDD_ATTR_SET_CREDITS       = 10,
-        MDD_XATTR_SET_CREDITS      = 10,
-        MDD_INDEX_INSERT_CREDITS   = 10,
-        MDD_INDEX_DELETE_CREDITS   = 10,
-        MDD_LINK_CREDITS           = 10,
-        MDD_RENAME_CREDITS         = 10,
-        MDD_MKDIR_CREDITS          = 10
-};
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_OBJECT_DESTROY);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_OBJECT_CREATE);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_ATTR_SET);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_XATTR_SET);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_INSERT);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_DELETE);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_LINK);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_RENAME);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_MKDIR);
+
+static void mdd_txn_param_build(struct lu_context *ctx,
+                                const struct mdd_txn_op_descr *opd)
+{
+        mdd_ctx_info(ctx)->mti_param.tp_credits = opd->mod_credits;
+}
 
 static int
 mdd_object_destroy(struct lu_context *ctxt, struct md_object *obj)
@@ -249,14 +287,8 @@ mdd_object_destroy(struct lu_context *ctxt, struct md_object *obj)
         int rc ;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd,
-                                 /*
-                                  * TXN_PARAM should probably go into
-                                  * lu_context_key to reduce stack
-                                  * consumption. Currently this is just one
-                                  * int, though.
-                                  */
-                                 &TXN_PARAM(MDD_OBJECT_DESTROY_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_OBJECT_DESTROY);
+        handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
@@ -394,9 +426,10 @@ static void mdd_unlock2(struct lu_context *ctxt,
 }
 
 static struct thandle* mdd_trans_start(struct lu_context *ctxt,
-                                       struct mdd_device *mdd,
-                                       struct txn_param *p)
+                                       struct mdd_device *mdd)
 {
+        struct txn_param *p = &mdd_ctx_info(ctxt)->mti_param;
+
         return mdd_child_ops(mdd)->dt_trans_start(ctxt, mdd->mdd_child, p);
 }
 
@@ -428,8 +461,8 @@ static int mdd_object_create(struct lu_context *ctxt, struct md_object *obj,
         int rc;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd,
-                                 &TXN_PARAM(MDD_OBJECT_CREATE_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_OBJECT_CREATE);
+        handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
@@ -458,7 +491,8 @@ mdd_attr_set(struct lu_context *ctxt,
         int  rc;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd, &TXN_PARAM(MDD_ATTR_SET_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_ATTR_SET);
+        handle = mdd_trans_start(ctxt, mdd);
         if (!handle)
                 RETURN(-ENOMEM);
 
@@ -490,7 +524,8 @@ mdd_xattr_set(struct lu_context *ctxt, struct md_object *obj, void *buf,
         int  rc;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd, &TXN_PARAM(MDD_XATTR_SET_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
+        handle = mdd_trans_start(ctxt, mdd);
         if (!handle)
                 RETURN(-ENOMEM);
 
@@ -551,8 +586,8 @@ mdd_index_delete(struct lu_context *ctxt, struct md_object *pobj,
         int rc;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd,
-                                 &TXN_PARAM(MDD_INDEX_DELETE_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_INDEX_DELETE);
+        handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
@@ -574,7 +609,8 @@ mdd_link(struct lu_context *ctxt, struct md_object *tgt_obj,
         int rc, nlink;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd, &TXN_PARAM(MDD_LINK_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_LINK);
+        handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
@@ -624,7 +660,8 @@ mdd_rename(struct lu_context *ctxt, struct md_object *src_pobj,
         int rc;
         struct thandle *handle;
 
-        handle = mdd_trans_start(ctxt, mdd, &TXN_PARAM(MDD_RENAME_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_RENAME);
+        handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
@@ -665,7 +702,8 @@ static int mdd_mkdir(struct lu_context *ctxt, struct lu_attr* attr,
         int rc = 0;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd, &TXN_PARAM(MDD_MKDIR_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
+        handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
@@ -694,8 +732,8 @@ static int mdd_mkname(struct lu_context *ctxt, struct md_object *pobj,
         int rc = 0;
         ENTRY;
 
-        handle = mdd_trans_start(ctxt, mdd,
-                                 &TXN_PARAM(MDD_INDEX_INSERT_CREDITS));
+        mdd_txn_param_build(ctxt, &MDD_TXN_INDEX_INSERT);
+        handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
