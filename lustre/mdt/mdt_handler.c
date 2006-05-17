@@ -179,14 +179,55 @@ static int mdt_getattr(struct mdt_thread_info *info,
         } else {
                 struct md_object *next = mdt_object_child(info->mti_object);
 
-                result = next->mo_ops->moo_attr_get(info->mti_ctxt, next,
-                                                    &info->mti_attr);
+                result = mo_attr_get(info->mti_ctxt, next, &info->mti_attr);
                 if (result == 0) {
                         info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
                                                        sizeof(struct mdt_body));
                         mdt_pack_attr2body(info->mti_body, &info->mti_attr);
                         info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
                 }
+        }
+        RETURN(result);
+}
+
+static int mdt_getattr_name(struct mdt_thread_info *info,
+                            struct ptlrpc_request *req, int offset)
+{
+        struct md_object *next = mdt_object_child(info->mti_object);
+        struct mdt_object *child;
+        struct lu_fid lf;
+        char *name;
+        int namesize;
+        int result;
+
+        LASSERT(info->mti_object != NULL);
+
+        ENTRY;
+
+        name = lustre_msg_string(req->rq_reqmsg, offset, 0);
+        if (name == NULL) {
+                CERROR("Can't unpack name\n");
+                RETURN(-EFAULT);
+        }
+        namesize = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
+
+        result = mdo_lookup(info->mti_ctxt, next, name, &lf);
+        if (result == 0) {
+                child = mdt_object_find(info->mti_ctxt, info->mti_mdt, &lf);
+                if (IS_ERR(child)) {
+                        result = PTR_ERR(child);
+                } else {
+                        result = mo_attr_get(info->mti_ctxt, next,
+                                             &info->mti_attr);
+                        mdt_object_put(info->mti_ctxt, child);
+                }
+        }
+
+        if (result == 0) {
+                info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
+                                                sizeof(struct mdt_body));
+                mdt_pack_attr2body(info->mti_body, &info->mti_attr);
+                info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
         }
         RETURN(result);
 }
@@ -232,12 +273,6 @@ static int mdt_disconnect(struct mdt_thread_info *info,
                           struct ptlrpc_request *req, int offset)
 {
         return target_handle_disconnect(req);
-}
-
-static int mdt_getattr_name(struct mdt_thread_info *info,
-                            struct ptlrpc_request *req, int offset)
-{
-        return -EOPNOTSUPP;
 }
 
 static int mdt_setxattr(struct mdt_thread_info *info,
@@ -1014,10 +1049,11 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_lock *lock = *lockp;
         struct ldlm_intent *it;
         struct ldlm_reply *rep;
-        int offset = MDS_REQ_INTENT_REC_OFF;
+        int offset = MDS_REQ_INTENT_REC_OFF + 1;
         int rc;
+        int gflags = 0;
         struct mdt_thread_info *info;
-
+        struct mdt_body   *body;
         ENTRY;
 
         LASSERT(req != NULL);
@@ -1041,6 +1077,36 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 RETURN(req->rq_status = -EFAULT);
         }
 
+        body = info->mti_body = lustre_swab_reqbuf(req, MDS_REQ_INTENT_REC_OFF,
+                                                   sizeof *body,
+                                                   lustre_swab_mdt_body);
+        if (body != NULL) {
+                struct mdt_object *obj;
+                struct lu_context *ctx = info->mti_ctxt;
+
+                obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
+                if (!IS_ERR(obj)) {
+                        if (!lu_object_exists(ctx, &obj->mot_obj.mo_lu)) {
+                                CERROR("Object doesn't exist\n");
+                                mdt_object_put(ctx, obj);
+                                rc = -ENOENT;
+                        } else {
+                                info->mti_object = obj;
+                                rc = 0;
+                        }
+                } else
+                        rc = PTR_ERR(obj);
+        } else {
+                CERROR("Can't unpack body\n");
+                rc = -EFAULT;
+        }
+
+        //TODO: if rc then pack reply according to it
+        if (rc) {
+                CERROR("Cannot prepare intent info, rc=%u\n", rc);
+                RETURN(req->rq_status = rc);
+        }
+
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
         info->mti_rep_buf_nr = 3;
         info->mti_rep_buf_size[0] = sizeof(*rep);
@@ -1060,9 +1126,18 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 
         /* execute policy */
         switch ((long)it->opc) {
-        case IT_CREAT:
-                rep->lock_policy_res2 = mdt_reint_internal(info, req, offset);
+        case IT_OPEN:
+        case IT_OPEN|IT_CREAT:
+                //rep->lock_policy_res2 = mdt_reint_internal(info, req, offset);
                 RETURN(ELDLM_LOCK_ABORTED);
+                break;
+        case IT_GETATTR:
+                gflags = MDS_INODELOCK_UPDATE;
+        case IT_LOOKUP:
+                gflags |= MDS_INODELOCK_LOOKUP;
+                //hmm.. something should be done with gflags..
+                rep->lock_policy_res2 = mdt_getattr_name(info, req, offset);
+                
                 break;
         default:
                 CERROR("Unhandled intent till now "LPD64"\n", it->opc);
@@ -1477,6 +1552,8 @@ static struct lu_object *mdt_object_alloc(struct lu_context *ctxt,
                                           struct lu_device *d)
 {
         struct mdt_object *mo;
+        
+        ENTRY;
 
         OBD_ALLOC_PTR(mo);
         if (mo != NULL) {
@@ -1489,9 +1566,9 @@ static struct lu_object *mdt_object_alloc(struct lu_context *ctxt,
                 lu_object_init(o, h, d);
                 lu_object_add_top(h, o);
                 o->lo_ops = &mdt_obj_ops;
-                return o;
+                RETURN(o);
         } else
-                return NULL;
+                RETURN(NULL);
 }
 
 static int mdt_object_init(struct lu_context *ctxt, struct lu_object *o)
@@ -1513,11 +1590,12 @@ static void mdt_object_free(struct lu_context *ctxt, struct lu_object *o)
 {
         struct mdt_object *mo = mdt_obj(o);
         struct lu_object_header *h;
-
+        ENTRY;
         h = o->lo_header;
         lu_object_fini(o);
         lu_object_header_fini(h);
         OBD_FREE_PTR(mo);
+        EXIT;
 }
 
 static void mdt_object_release(struct lu_context *ctxt, struct lu_object *o)

@@ -61,10 +61,9 @@ static int mdt_md_mkdir(struct mdt_thread_info *info)
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
-                result = next->mo_dir_ops->mdo_mkdir(info->mti_ctxt,
-                                                     &info->mti_attr,
-                                                     next, info->mti_rr.rr_name,
-                                                     mdt_object_child(child));
+                result = mdo_mkdir(info->mti_ctxt, &info->mti_attr, next,
+                                   info->mti_rr.rr_name,
+                                   mdt_object_child(child));
                 mdt_object_put(info->mti_ctxt, child);
         } else
                 result = PTR_ERR(child);
@@ -86,8 +85,8 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
-                result = next->mo_ops->moo_object_create(info->mti_ctxt, next,
-                                                         &info->mti_attr);
+                result = mo_object_create(info->mti_ctxt, next,
+                                          &info->mti_attr);
                 mdt_object_put(info->mti_ctxt, o);
         } else
                 result = PTR_ERR(o);
