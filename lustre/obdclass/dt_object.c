@@ -113,3 +113,17 @@ void dt_device_fini(struct dt_device *dev)
         lu_device_fini(&dev->dd_lu_dev);
 }
 EXPORT_SYMBOL(dt_device_fini);
+
+int dt_object_init(struct dt_object *obj,
+                   struct lu_object_header *h, struct lu_device *d)
+
+{
+        return lu_object_init(&obj->do_lu, h, d);
+}
+EXPORT_SYMBOL(dt_object_init);
+
+void dt_object_fini(struct dt_object *obj)
+{
+        lu_object_fini(obj);
+}
+EXPORT_SYMBOL(dt_object_fini);

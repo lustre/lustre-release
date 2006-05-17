@@ -281,6 +281,10 @@ struct dt_object {
         struct dt_index_operations  *do_index_ops;
 };
 
+int  dt_object_init(struct dt_object *obj,
+                    struct lu_object_header *h, struct lu_device *d);
+void dt_object_fini(struct dt_object *obj);
+
 struct txn_param {
         unsigned int tp_credits;
 };
