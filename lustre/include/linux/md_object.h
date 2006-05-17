@@ -62,17 +62,22 @@ struct md_object_operations {
         /* part of cross-ref operation */
         int (*moo_object_create)(struct lu_context *,
                                  struct md_object *, struct lu_attr *);
-        int (*moo_object_destroy)(struct lu_context *, struct md_object *);
-
+        int (*moo_ref_add)(struct lu_context *, struct md_object *);
+        int (*moo_ref_del)(struct lu_context *, struct md_object *);
+        int (*moo_open)(struct lu_context *, struct md_object *);
+        int (*moo_close)(struct lu_context *, struct md_object *);
 };
 
 /*
  * Operations implemented for each directory object.
  */
 struct md_dir_operations {
-        int (*mdo_mkdir)(struct lu_context *ctxt, struct lu_attr *attr,
-                         struct md_object *obj,
-                         const char *name, struct md_object *child);
+        int (*mdo_lookup)(struct lu_context *, struct md_object *,
+                          const char *, struct lu_fid *);
+
+        int (*mdo_mkdir)(struct lu_context *, struct lu_attr *,
+                         struct md_object *, const char *,
+                         struct md_object *);
 
         int (*mdo_rename)(struct lu_context *ctxt, struct md_object *spobj,
                           struct md_object *tpobj, struct md_object *sobj,
@@ -84,10 +89,10 @@ struct md_dir_operations {
 
         /* partial ops for cross-ref case */
         int (*mdo_name_insert)(struct lu_context *, struct md_object *,
-                               const char *name, const struct lu_fid *,
+                               const char *, const struct lu_fid *,
                                struct lu_attr *);
         int (*mdo_name_remove)(struct lu_context *, struct md_object *,
-                               const char *name, struct lu_attr *);
+                               const char *, struct lu_attr *);
 };
 
 struct md_device_operations {
@@ -157,6 +162,39 @@ static inline int md_device_init(struct md_device *md, struct lu_device_type *t)
 static inline void md_device_fini(struct md_device *md)
 {
 	lu_device_fini(&md->md_lu_dev);
+}
+
+/* md operations */
+static inline int mo_attr_get(struct lu_context *cx, struct md_object *m,
+                              struct lu_attr *at)
+{
+        return m->mo_ops->moo_attr_get(cx, m, at);
+}
+
+static inline int mo_object_create(struct lu_context *cx, struct md_object *m,
+                                   struct lu_attr *at)
+{
+        return m->mo_ops->moo_object_create(cx, m, at);
+}
+
+static inline int mdo_lookup(struct lu_context *cx, struct md_object *p,
+                            const char *name, struct lu_fid *f)
+{
+        return p->mo_dir_ops->mdo_lookup(cx, p, name, f);
+}
+
+static inline int mdo_mkdir(struct lu_context *cx, struct lu_attr *at,
+                            struct md_object *p, const char *name,
+                            struct md_object *c)
+{
+        return p->mo_dir_ops->mdo_mkdir(cx, at, p, name, c);
+}
+
+static inline int mdo_name_insert(struct lu_context *cx, struct md_object *p,
+                           const char *name, struct lu_fid *f,
+                           struct lu_attr *at)
+{
+        return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, at);
 }
 
 #endif /* _LINUX_MD_OBJECT_H */
