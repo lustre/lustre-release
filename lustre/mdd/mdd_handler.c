@@ -750,6 +750,14 @@ cleanup:
         RETURN(rc);
 }
 
+static int mdd_lookup(struct lu_context *ctxt, struct md_object *pobj,
+                      const char *name, struct lu_fid* fid)
+{
+        struct dt_object *next = mdd_object_child(mdo2mddo(pobj));
+      
+        return next->do_index_ops->dio_lookup(ctxt, next, fid, name);
+}
+
 static int mdd_mkdir(struct lu_context *ctxt, struct lu_attr* attr,
                      struct md_object *pobj, const char *name,
                      struct md_object *child)
@@ -845,6 +853,7 @@ struct md_device_operations mdd_ops = {
 };
 
 static struct md_dir_operations mdd_dir_ops = {
+        .mdo_lookup        = mdd_lookup,
         .mdo_mkdir         = mdd_mkdir,
         .mdo_rename        = mdd_rename,
         .mdo_link          = mdd_link,
