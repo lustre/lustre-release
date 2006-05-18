@@ -213,7 +213,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
                 CERROR("Can't unpack name\n");
                 RETURN(-EFAULT);
         }
-        namesize = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
+        namesize = lustre_msg_buflen(req->rq_reqmsg, offset);
 
         result = mdo_lookup(info->mti_ctxt, next, name, &lf);
         if (result == 0) {
@@ -1051,7 +1051,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_lock *lock = *lockp;
         struct ldlm_intent *it;
         struct ldlm_reply *rep;
-        int offset = MDS_REQ_INTENT_REC_OFF + 1;
+        int offset = MDS_REQ_INTENT_REC_OFF;
         int rc;
         int gflags = 0;
         struct mdt_thread_info *info;
@@ -1079,6 +1079,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 RETURN(req->rq_status = -EFAULT);
         }
 
+        if (it->opc == IT_GETATTR || it->opc == IT_LOOKUP) {
         body = info->mti_body = lustre_swab_reqbuf(req, MDS_REQ_INTENT_REC_OFF,
                                                    sizeof *body,
                                                    lustre_swab_mdt_body);
@@ -1108,7 +1109,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 CERROR("Cannot prepare intent info, rc=%u\n", rc);
                 RETURN(req->rq_status = rc);
         }
-
+        }
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
         info->mti_rep_buf_nr = 3;
         info->mti_rep_buf_size[0] = sizeof(*rep);
@@ -1130,7 +1131,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         switch ((long)it->opc) {
         case IT_OPEN:
         case IT_OPEN|IT_CREAT:
-                //rep->lock_policy_res2 = mdt_reint_internal(info, req, offset);
+                rep->lock_policy_res2 = mdt_reint_internal(info, req, offset);
                 RETURN(ELDLM_LOCK_ABORTED);
                 break;
         case IT_GETATTR:
@@ -1138,7 +1139,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         case IT_LOOKUP:
                 gflags |= MDS_INODELOCK_LOOKUP;
                 //hmm.. something should be done with gflags..
-                rep->lock_policy_res2 = mdt_getattr_name(info, req, offset);
+                rep->lock_policy_res2 = mdt_getattr_name(info, req, offset + 1);
 
                 break;
         default:
