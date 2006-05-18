@@ -417,7 +417,7 @@ done
 for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
     for ((nobj=$nobjlo;nobj<=$nobjhi;nobj*=2)); do 
 	for ((thr=$thrlo;thr<=$thrhi;thr*=2)); do
-	    if ((thr < nobj)); then
+	    if ((thr % nobj)); then
 		continue
 	    fi
 	    # restart?
@@ -481,10 +481,11 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		    devno=${devnos[$idx]}
 		    tmpfi="${tmpf}_$idx"
 		    first_obj=${first_objs[$idx]}
+		    thr_per_obj=$((${thr}/${nobj}))
 		    echo >> ${cmdsf}_${host} \
 		        "$lctl > $tmpfi 2>&1 \\
                          --threads $thr -$snap $devno \\
-			 test_brw $count `testname2type $test` q $pages ${thr}t${first_obj} &"
+			 test_brw $count `testname2type $test` q $pages ${thr_per_obj}t${first_obj} &"
                 done
                 pidcount=0
                 for host in ${unique_hosts[@]}; do
