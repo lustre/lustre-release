@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mds/handler.c
+ *  lustre/mdt/mdt_handler.c
  *  Lustre Metadata Target (mdt) request handler
  *
  *  Copyright (c) 2006 Cluster File Systems, Inc.
@@ -56,7 +56,6 @@
 /*LUSTRE_POSIX_ACL_MAX_SIZE*/
 #include <linux/lustre_acl.h>
 
-
 /* struct mds_client_data */
 #include "../mds/mds_internal.h"
 #include "mdt_internal.h"
@@ -81,16 +80,15 @@ static int mdt_getstatus(struct mdt_thread_info *info,
 
         ENTRY;
 
-        info->mti_rep_buf_size[0] = sizeof (struct mdt_body);
-        result = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
+        result = req_capsule_start(&info->mti_pill, &RQF_MDS_GETSTATUS,
+                                   info->mti_rep_buf_size);
         if (result)
-                CERROR(LUSTRE_MDT0_NAME" out of memory for message: size=%d\n",
-                       sizeof (struct mdt_body));
+                ;
         else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
                 result = -ENOMEM;
         else {
-                info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
-                                                sizeof (struct mdt_body));
+                info->mti_body = req_capsule_server_get(&info->mti_pill,
+                                                        &RMF_MDT_BODY);
                 result = next->md_ops->mdo_root_get(info->mti_ctxt,
                                                     next,
                                                     &info->mti_body->fid1);
@@ -668,6 +666,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         result = 0;
         flags = h->mh_flags;
+        req_capsule_init(&info->mti_pill, req, RCL_SERVER);
         if (flags & HABEO_CORPUS) {
                 struct mdt_body   *body;
                 struct lu_context *ctx;
@@ -740,6 +739,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 req->rq_reqmsg->last_xid = le64_to_cpu(req_exp_last_xid(req));
                 target_committed_to_req(req);
         }
+        req_capsule_fini(&info->mti_pill);
         RETURN(result);
 }
 

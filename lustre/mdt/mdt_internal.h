@@ -45,6 +45,9 @@
  * struct lustre_handle
  */
 #include <linux/lustre_idl.h>
+/* req_layout things */
+#include <linux/lustre_req_layout.h>
+
 #include <linux/md_object.h>
 #include <linux/lustre_fid.h>
 
@@ -174,7 +177,10 @@ struct mdt_thread_info {
          * A couple of lock handles.
          */
         struct mdt_lock_handle mti_lh[MDT_LH_NR];
-
+        /*
+         * for req-layout interface.
+         */
+        struct req_capsule     mti_pill;
 };
 
 int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
@@ -197,8 +203,8 @@ void mdt_object_unlock(struct ldlm_namespace *, struct mdt_object *,
 struct mdt_object *mdt_object_find_lock(struct lu_context *, struct mdt_device *,
                                         struct lu_fid *,
                                         struct mdt_lock_handle *, __u64);
-int mdt_reint_unpack(struct mdt_thread_info *, 
-                     struct ptlrpc_request *, 
+int mdt_reint_unpack(struct mdt_thread_info *,
+                     struct ptlrpc_request *,
                      int);
 
 int mdt_reint_rec(struct mdt_thread_info *);
