@@ -47,7 +47,10 @@
 /* dummy function for a while */
 int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid)
 {
+        int rc;
         ENTRY;
-        /* MDS0 will be used until lookup will works */
-        RETURN(0);
+        /* temporary hack until fld will works */
+        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_RANGE;
+        CWARN("LMV: got MDS %d for sequence: "LPU64"\n", rc, fid_seq(fid));
+        RETURN(rc);
 }

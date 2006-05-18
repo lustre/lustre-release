@@ -163,11 +163,12 @@ repeat:
         }
 
         op_data.fid1 = rpid;
+        LASSERT(cid);
         op_data.fid2 = *cid;
         op_data.name = name;
         op_data.namelen = len;
 
-        mds = lmv_fld_lookup(obd, &rpid);
+        //mds = lmv_fld_lookup(obd, &rpid);
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data,
                             lmm, lmmsize, it, flags, reqp,
                             cb_blocking, extra_lock_flags);
