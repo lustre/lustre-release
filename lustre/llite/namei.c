@@ -384,7 +384,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_parent = parent;
 
         /* allocate new fid for child */
-        if (it->it_op == IT_OPEN || it->it_op == IT_CREAT) {
+        if (it->it_op & IT_CREAT) {
                 struct placement_hint hint = { .ph_pname = NULL,
                                                .ph_cname = &dentry->d_name,
                                                .ph_opc = LUSTRE_OPC_CREATE };
