@@ -20,14 +20,21 @@
 #define MGS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 10)
 
 /* mgs_llog.c */
-#define FSDB_EMPTY 0x0001
+#define FSDB_EMPTY      0x0001
+#define FSDB_OLDLOG14   0x0002  /* log starts in old (1.4) style */
+
 
 struct fs_db {
         char              fsdb_name[8];
-        struct list_head  fsdb_list;
+        struct list_head  fsdb_list;           /* list of databases */
         struct semaphore  fsdb_sem;
-        void*             fsdb_ost_index_map;
-        void*             fsdb_mdt_index_map;
+        void             *fsdb_ost_index_map;  /* bitmap of used indicies */
+        void             *fsdb_mdt_index_map;  /* bitmap of used indicies */
+        /* COMPAT_146 these items must be recorded out of the old client log */
+        char             *fsdb_clilov;         /* COMPAT_146 client lov name */
+        char             *fsdb_mdtlov;         /* COMPAT_146 mds lov name */
+        char             *fsdb_mdc;            /* COMPAT_146 mdc name */
+        /* end COMPAT_146 */
         __u32             fsdb_flags;
         __u32             fsdb_gen;
 };

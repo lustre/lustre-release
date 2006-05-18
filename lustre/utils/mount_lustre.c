@@ -374,30 +374,32 @@ int main(int argc, char *const argv[])
                 rc = mount(source, target, "lustre", flags, (void *)optcopy);
 
         if (rc) {
-                fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname, 
+                fprintf(stderr, "%s: mount %s at %s failed: %s\n", progname, 
                         source, target, strerror(errno));
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");
                 if (errno == ENOTBLK)
-                        fprintf(stderr,"Do you need -o loop?\n");
+                        fprintf(stderr, "Do you need -o loop?\n");
                 if (errno == ENOMEDIUM)
                         fprintf(stderr,"This filesystem needs at least 1 OST\n");
                 if (errno == ENOENT)
-                        fprintf(stderr,"Is the MGS specification correct? "
+                        fprintf(stderr, "Is the MGS specification correct? "
                                 "(%s)\n", source);
                 if (errno == EALREADY)
-                        fprintf(stderr,"The target service is already running. "
-                                "(%s)\n", source);
+                        fprintf(stderr, "The target service is already running."
+                                " (%s)\n", source);
                 if (errno == ENXIO)
-                        fprintf(stderr,"The target service failed to start "
+                        fprintf(stderr, "The target service failed to start "
                                 "(bad config log?) (%s).  "
                                 "See /var/log/messages.\n", source);
                 if (errno == EIO)
-                        fprintf(stderr,"Is the MGS running? (%s)\n", source);
+                        fprintf(stderr, "Is the MGS running?\n");
                 if (errno == EADDRINUSE)
-                        fprintf(stderr,"The target service's index is already "
+                        fprintf(stderr, "The target service's index is already "
                                 "in use. (%s)\n", source);
+                if (errno == EINVAL)
+                        fprintf(stderr, "Check the syslog for more info\n");
                 rc = errno;
         } else if (!nomtab) {
                 rc = update_mtab_entry(source, target, "lustre", options,0,0,0);

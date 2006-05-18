@@ -168,6 +168,7 @@ struct lustre_mount_data {
 /* COMPAT_146 */
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
 #define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
+#define OBD_COMPAT_COMMON_LR    0x00000008 /* Dual last_rcvd format (temp) */
 /* end COMPAT_146 */
 
 #define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
@@ -183,8 +184,8 @@ struct lustre_mount_data {
    This should be common to filter_internal.h, lustre_mds.h */
 struct lr_server_data {
         __u8  lsd_uuid[40];        /* server UUID */
-        __u64 lsd_unused;          /* was fsd_last_objid - don't use for now */
         __u64 lsd_last_transno;    /* last completed transaction ID */
+        __u64 lsd_compat146;       /* reserved - compat with old last_rcvd */
         __u64 lsd_mount_count;     /* incarnation number */
         __u32 lsd_feature_compat;  /* compatible feature flags */
         __u32 lsd_feature_rocompat;/* read-only compatible feature flags */

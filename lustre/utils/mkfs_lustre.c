@@ -229,7 +229,7 @@ int loop_setup(struct mkfs_opts *mop)
                 strcpy(loop_base, "/dev/loop/\0");
         else {
                 fprintf(stderr, "%s: can't access loop devices\n", progname);
-                return 1;
+                return EACCES;
         }
 
         /* Find unused loop device */
@@ -240,6 +240,7 @@ int loop_setup(struct mkfs_opts *mop)
                         break;
                 sprintf(cmd, "losetup %s > /dev/null 2>&1", l_device);
                 ret = system(cmd);
+                
                 /* losetup gets 1 (ret=256) for non-set-up device */
                 if (ret) {
                         /* Set up a loopback device to our file */
@@ -636,21 +637,20 @@ int write_local_files(struct mkfs_opts *mop)
                 char *term;
                 vprint("Copying old logs\n");
 #if 0
- /* Generate new client log as servers upgrade.  Starting a new client 
-    may end up with short lov's, so will be degraded until all servers
-    upgrade */
+                /* Generate new client log as servers upgrade.  Starting a new
+                   client may end up with short lov's, so will be degraded 
+                   until all servers upgrade */
+#else
                 /* Copy the old client log to fsname-client */
                 sprintf(filepnm, "%s/%s/%s-client", 
                         mntpt, MOUNT_CONFIGS_DIR, mop->mo_ldd.ldd_fsname);
                 sprintf(cmd, "cp %s/%s/client %s", mntpt, MDT_LOGS_DIR,
                         filepnm);
-                if (verbose > 1) 
-                        printf("cmd: %s\n", cmd);
                 ret = run_command(cmd);
                 if (ret) {
                         fprintf(stderr, "%s: Can't copy 1.4 config %s/client "
                                 "(%d)\n", progname, MDT_LOGS_DIR, ret);
-                        fprintf(stderr, "mount -t ext3 %s somewhere, "
+                        fprintf(stderr, "mount -t ldiskfs %s somewhere, "
                                 "find the client log for fs %s and "
                                 "copy it manually into %s/%s-client, "
                                 "then umount.\n",
@@ -659,7 +659,7 @@ int write_local_files(struct mkfs_opts *mop)
                                 mop->mo_ldd.ldd_fsname);
                         goto out_umnt;
                 }
- #endif
+#endif
                 /* We need to use the old mdt log because otherwise mdt won't
                    have complete lov if old clients connect before all 
                    servers upgrade. */
@@ -674,8 +674,6 @@ int write_local_files(struct mkfs_opts *mop)
                                 mntpt, MDT_LOGS_DIR, filepnm, 
                                 mntpt, MOUNT_CONFIGS_DIR,
                                 mop->mo_ldd.ldd_svname);
-                        if (verbose > 1) 
-                                printf("cmd: %s\n", cmd);
                         ret = run_command(cmd);
                 }
                 if (ret) {
@@ -1118,9 +1116,11 @@ int main(int argc, char *const argv[])
                 ret = access(mop.mo_device, F_OK);
                 if (ret == 0)  
                         ret = loop_setup(&mop);
+                else 
+                        ret = errno;
                 if (ret) {
                         fatal();
-                        fprintf(stderr, "Loop device setup for %s failed: %s\n", 
+                        fprintf(stderr, "Loop device setup for %s failed: %s\n",
                                 mop.mo_device, strerror(ret));
                         goto out;
                 }

@@ -1736,7 +1736,6 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lr_server_data *lsd = mds->mds_server_data;
-        struct lr_server_data *lsd_copy = NULL;
         struct file *filp = mds->mds_rcvd_filp;
         struct lvfs_run_ctxt saved;
         loff_t off = 0;
@@ -1748,32 +1747,12 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
 
         lsd->lsd_last_transno = cpu_to_le64(mds->mds_last_transno);
 
-        if (!(lsd->lsd_feature_incompat & cpu_to_le32(OBD_INCOMPAT_COMMON_LR))){
-                /* Swap to the old mds_server_data format, in case
-                   someone wants to revert to a pre-1.6 lustre */
-                CDEBUG(D_CONFIG, "writing old last_rcvd format\n");
-                /* malloc new struct instead of swap in-place because 
-                   we don't have a lock on the last_trasno or mount count -
-                   someone may modify it while we're here, and we don't want
-                   them to inc the wrong thing. */
-                OBD_ALLOC(lsd_copy, sizeof(*lsd_copy));
-                if (!lsd_copy) 
-                        RETURN(-ENOMEM);
-                *lsd_copy = *lsd;
-                lsd_copy->lsd_unused = lsd->lsd_last_transno;
-                lsd_copy->lsd_last_transno = lsd->lsd_mount_count;
-                lsd = lsd_copy;
-        }
-
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = fsfilt_write_record(obd, filp, lsd, sizeof(*lsd), &off,force_sync);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 CERROR("error writing MDS server data: rc = %d\n", rc);
-
-        if (lsd_copy) 
-                OBD_FREE(lsd_copy, sizeof(*lsd_copy));
-
+        
         RETURN(rc);
 }
 

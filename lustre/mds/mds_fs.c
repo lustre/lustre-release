@@ -247,6 +247,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
                 lsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT |
                                                         OBD_INCOMPAT_COMMON_LR);
+                /* See note in filter_init_server_data */
+                lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_COMMON_LR);
         } else {
                 rc = fsfilt_read_record(obd, file, lsd, sizeof(*lsd), &off);
                 if (rc) {
@@ -261,6 +263,14 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         GOTO(err_msd, rc = -EINVAL);
                 }
                 mount_count = le64_to_cpu(lsd->lsd_mount_count);
+                /* COMPAT_146 */
+                if (!(lsd->lsd_feature_compat & 
+                      cpu_to_le32(OBD_COMPAT_COMMON_LR))){
+                        /* mount count was not stored in the correct spot */
+                        CDEBUG(D_WARNING, "using old last_rcvd format\n");
+                        mount_count = le64_to_cpu(lsd->lsd_compat146);
+                }
+                /* end COMPAT_146 */
         }
 
         if (lsd->lsd_feature_incompat & ~cpu_to_le32(MDT_INCOMPAT_SUPP)) {
@@ -276,15 +286,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 /* Do something like remount filesystem read-only */
                 GOTO(err_msd, rc = -EINVAL);
         }
-        if (!(lsd->lsd_feature_incompat & cpu_to_le32(OBD_INCOMPAT_COMMON_LR))){
-                CDEBUG(D_WARNING, "using old last_rcvd format\n");
-                lsd->lsd_mount_count = lsd->lsd_last_transno;
-                lsd->lsd_last_transno = lsd->lsd_unused;
-                /* If we update the last_rcvd, we can never go back to 
-                   an old install, so leave this in the old format for now.
-                lsd->lsd_feature_incompat |= cpu_to_le32(LR_INCOMPAT_COMMON_LR);
-                */
-        }
+
         lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
         
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
@@ -400,7 +402,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         }
 
         mds->mds_mount_count = mount_count + 1;
-        lsd->lsd_mount_count = cpu_to_le64(mds->mds_mount_count);
+        lsd->lsd_mount_count = lsd->lsd_compat146 = 
+                cpu_to_le64(mds->mds_mount_count);
 
         /* save it, so mount count and last_transno is current */
         rc = mds_update_server_data(obd, 1);
