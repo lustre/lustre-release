@@ -38,6 +38,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_req_layout.h>
 
 #include "ptlrpc_internal.h"
 
@@ -51,23 +52,28 @@ __init int ptlrpc_init(void)
 
         lustre_assert_wire_constants();
 
-        rc = ptlrpc_init_portals();
+        rc = req_layout_init();
         if (rc)
                 RETURN(rc);
         cleanup_phase = 1;
+
+        rc = ptlrpc_init_portals();
+        if (rc)
+                RETURN(rc);
+        cleanup_phase = 2;
 
         ptlrpc_init_connection();
         rc = llog_init_commit_master();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 2;
+        cleanup_phase = 3;
 
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
 
         rc = ptlrpc_start_pinger();
         if (rc)
                 GOTO(cleanup, rc);
-        cleanup_phase = 3;
+        cleanup_phase = 4;
 
         rc = ldlm_init();
         if (rc)
@@ -76,13 +82,15 @@ __init int ptlrpc_init(void)
 
 cleanup:
         switch(cleanup_phase) {
-        case 3:
+        case 4:
                 ptlrpc_stop_pinger();
-        case 2:
+        case 3:
                 llog_cleanup_commit_master(1);
                 ptlrpc_cleanup_connection();
-        case 1:
+        case 2:
                 ptlrpc_exit_portals();
+        case 1:
+                req_layout_fini();
         default: ;
         }
 
