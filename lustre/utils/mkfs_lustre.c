@@ -636,11 +636,7 @@ int write_local_files(struct mkfs_opts *mop)
                 char cmd[128];
                 char *term;
                 vprint("Copying old logs\n");
-#if 0
-                /* Generate new client log as servers upgrade.  Starting a new
-                   client may end up with short lov's, so will be degraded 
-                   until all servers upgrade */
-#else
+                
                 /* Copy the old client log to fsname-client */
                 sprintf(filepnm, "%s/%s/%s-client", 
                         mntpt, MOUNT_CONFIGS_DIR, mop->mo_ldd.ldd_fsname);
@@ -659,7 +655,7 @@ int write_local_files(struct mkfs_opts *mop)
                                 mop->mo_ldd.ldd_fsname);
                         goto out_umnt;
                 }
-#endif
+
                 /* We need to use the old mdt log because otherwise mdt won't
                    have complete lov if old clients connect before all 
                    servers upgrade. */
