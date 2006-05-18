@@ -373,7 +373,7 @@ struct ptlrpc_request {
 };
 
 static inline const char *
-ptlrpc_rqphase2str(struct ptlrpc_request *req)
+ptlrpc_rqphase2str(const struct ptlrpc_request *req)
 {
         switch (req->rq_phase) {
         case RQ_PHASE_NEW:
