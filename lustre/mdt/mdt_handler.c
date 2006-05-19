@@ -1615,13 +1615,13 @@ static int mdt_object_print(const struct lu_context *ctxt,
 
 static struct lu_device_operations mdt_lu_ops = {
         .ldo_object_alloc   = mdt_object_alloc,
-        .ldo_object_free    = mdt_object_free,
         .ldo_process_config = mdt_process_config
 };
 
 static struct lu_object_operations mdt_obj_ops = {
         .loo_object_init    = mdt_object_init,
         .loo_object_release = mdt_object_release,
+        .loo_object_free    = mdt_object_free,
         .loo_object_print   = mdt_object_print,
         .loo_object_exists  = mdt_object_exists
 };

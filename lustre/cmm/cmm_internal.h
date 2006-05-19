@@ -95,7 +95,5 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 /* cmm_object.c */
 struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                                    struct lu_device *);
-void cmm_object_free(const struct lu_context *ctx, struct lu_object *o);
-
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */

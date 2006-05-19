@@ -87,14 +87,14 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
         RETURN(lo);
 }
 
-void cmm_object_free(const struct lu_context *ctx, struct lu_object *lo)
+static void cmm_object_free(const struct lu_context *ctx, struct lu_object *lo)
 {
         struct cmm_object *co = lu2cmm_obj(lo);
         lu_object_fini(lo);
         OBD_FREE_PTR(co);
 }
 
-int cmm_object_init(const struct lu_context *ctx, struct lu_object *lo)
+static int cmm_object_init(const struct lu_context *ctx, struct lu_object *lo)
 {
         struct cmm_device *cd = lu2cmm_dev(lo->lo_dev);
         struct lu_device  *c_dev;
@@ -138,6 +138,7 @@ static int cmm_object_print(const struct lu_context *ctx,
 
 static struct lu_object_operations cmm_obj_ops = {
 	.loo_object_init    = cmm_object_init,
+	.loo_object_free    = cmm_object_free,
 	.loo_object_print   = cmm_object_print,
 	.loo_object_exists  = cmm_object_exists
 };

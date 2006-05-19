@@ -150,7 +150,6 @@ static int cmm_process_config(const struct lu_context *ctx,
 
 static struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_alloc   = cmm_object_alloc,
-	.ldo_object_free    = cmm_object_free,
 
         .ldo_process_config = cmm_process_config
 };

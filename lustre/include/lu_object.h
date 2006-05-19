@@ -135,12 +135,6 @@ struct lu_device_operations {
         struct lu_object *(*ldo_object_alloc)(const struct lu_context *ctx,
                                               struct lu_device *d);
         /*
-         * Dual to ->ldo_object_alloc(). Called when object is removed from
-         * memory.
-         */
-        void (*ldo_object_free)(const struct lu_context *ctx, struct lu_object *o);
-
-        /*
          * process config specific for device
          */
         int  (*ldo_process_config)(const struct lu_context *ctx,
@@ -163,11 +157,18 @@ struct lu_object_operations {
         int (*loo_object_init)(const struct lu_context *ctx,
                                struct lu_object *o);
         /*
-         * Called before ->ldo_object_free() to signal that object is being
+         * Called before ->loo_object_free() to signal that object is being
          * destroyed. Dual to ->loo_object_init().
          */
         void (*loo_object_delete)(const struct lu_context *ctx,
                                   struct lu_object *o);
+
+        /*
+         * Dual to ->ldo_object_alloc(). Called when object is removed from
+         * memory.
+         */
+        void (*loo_object_free)(const struct lu_context *ctx,
+                                struct lu_object *o);
 
         /*
          * Called when last active reference to the object is released (and

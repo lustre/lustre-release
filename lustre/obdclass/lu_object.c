@@ -162,7 +162,7 @@ static void lu_object_free(const struct lu_context *ctx, struct lu_object *o)
         -- o->lo_dev->ld_site->ls_total;
         /*
          * Then, splice object layers into stand-alone list, and call
-         * ->ldo_object_free() on all layers to free memory. Splice is
+         * ->loo_object_free() on all layers to free memory. Splice is
          * necessary, because lu_object_header is freed together with the
          * top-level slice.
          */
@@ -171,8 +171,8 @@ static void lu_object_free(const struct lu_context *ctx, struct lu_object *o)
         while (!list_empty(&splice)) {
                 o = container_of0(splice.next, struct lu_object, lo_linkage);
                 list_del_init(&o->lo_linkage);
-                LASSERT(lu_object_ops(o)->ldo_object_free != NULL);
-                lu_object_ops(o)->ldo_object_free(ctx, o);
+                LASSERT(o->lo_ops->loo_object_free != NULL);
+                o->lo_ops->loo_object_free(ctx, o);
         }
 }
 

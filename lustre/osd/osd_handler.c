@@ -1127,13 +1127,13 @@ static struct lu_object_operations osd_lu_obj_ops = {
         .loo_object_init    = osd_object_init,
         .loo_object_delete  = osd_object_delete,
         .loo_object_release = osd_object_release,
+        .loo_object_free    = osd_object_free,
         .loo_object_print   = osd_object_print,
         .loo_object_exists  = osd_object_exists
 };
 
 static struct lu_device_operations osd_lu_ops = {
         .ldo_object_alloc   = osd_object_alloc,
-        .ldo_object_free    = osd_object_free,
         .ldo_process_config = osd_process_config
 };
 

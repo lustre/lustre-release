@@ -146,7 +146,6 @@ static int mdc_process_config(const struct lu_context *ctx,
 
 static struct lu_device_operations mdc_lu_ops = {
 	.ldo_object_alloc   = mdc_object_alloc,
-	.ldo_object_free    = mdc_object_free,
 
         .ldo_process_config = mdc_process_config
 };
