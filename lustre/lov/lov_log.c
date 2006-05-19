@@ -30,27 +30,21 @@
 #endif
 #define DEBUG_SUBSYSTEM S_LOV
 #ifdef __KERNEL__
-#include <linux/slab.h>
-#include <linux/module.h>
-#include <linux/init.h>
-#include <linux/slab.h>
-#include <linux/pagemap.h>
-#include <asm/div64.h>
-#include <linux/seq_file.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_mds.h>
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/obd_ost.h>
-#include <linux/lprocfs_status.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
+#include <lustre_net.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_dlm.h>
+#include <lustre_mds.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <obd_ost.h>
+#include <lprocfs_status.h>
 
 #include "lov_internal.h"
 

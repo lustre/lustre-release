@@ -22,12 +22,12 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/version.h>
+#include <linux/seq_file.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
 #endif
-#include <linux/lprocfs_status.h>
-#include <linux/obd_class.h>
-#include <linux/seq_file.h>
+#include <lprocfs_status.h>
+#include <obd_class.h>
 
 #ifndef LPROCFS
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };

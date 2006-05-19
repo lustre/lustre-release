@@ -31,16 +31,14 @@
 #include <linux/kmod.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#include <linux/lustre_quota.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
 #endif
-#include <linux/obd_class.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_disk.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_commit_confd.h>
+#include <obd_class.h>
+#include <obd_support.h>
+#include <lustre_disk.h>
+#include <lustre_lib.h>
+#include <lustre_fsfilt.h>
 #include <libcfs/list.h>
 #include "mgs_internal.h"
 

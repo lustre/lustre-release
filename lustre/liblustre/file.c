@@ -71,12 +71,12 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         }
 }
 
-void llu_prepare_mdc_op_data(struct md_op_data *op_data,
-                             struct inode *i1,
-                             struct inode *i2,
-                             const char *name,
-                             int namelen,
-                             int mode)
+void llu_prepare_md_op_data(struct md_op_data *op_data,
+                            struct inode *i1,
+                            struct inode *i2,
+                            const char *name,
+                            int namelen,
+                            int mode)
 {
         LASSERT(i1);
 

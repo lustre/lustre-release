@@ -23,7 +23,7 @@
 #include <asm/byteorder.h>
 #include <asm/uaccess.h>
 
-#include <linux/lustre_quota.h>
+#include <lustre_quota.h>
 #include "lustre_quota_fmt.h"
 
 typedef char *dqbuf_t;

@@ -25,20 +25,16 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifdef __KERNEL__
-# include <linux/module.h>
-# include <linux/init.h>
-# include <linux/list.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
-#include <linux/obd.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_net.h>
-#include <linux/lprocfs_status.h>
+#include <obd.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_lib.h>
+#include <lustre_ha.h>
+#include <lustre_net.h>
+#include <lprocfs_status.h>
 
 struct uuid_nid_data {
         struct list_head un_list;
@@ -52,7 +48,7 @@ static spinlock_t       g_uuid_lock;
 
 void class_init_uuidlist(void)
 {
-        INIT_LIST_HEAD(&g_uuid_list);
+        CFS_INIT_LIST_HEAD(&g_uuid_list);
         spin_lock_init(&g_uuid_lock);
 }
 
@@ -128,7 +124,7 @@ int class_del_uuid(const char *uuid)
         struct list_head *n;
         struct uuid_nid_data *data;
 
-        INIT_LIST_HEAD (&deathrow);
+        CFS_INIT_LIST_HEAD (&deathrow);
 
         spin_lock (&g_uuid_lock);
 

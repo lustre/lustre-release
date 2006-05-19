@@ -10,6 +10,13 @@
 #init_test_env $@
 
 mcstopall() {
+    # make sure we are using the primary server, so test-framework will
+    # be able to clean up properly.
+    activemds=`facet_active mds`
+    if [ $activemds != "mds" ]; then
+        fail mds
+    fi
+
     grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
     stop ost -f
     stop ost2 -f

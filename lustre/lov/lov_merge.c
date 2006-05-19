@@ -28,13 +28,13 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #ifdef __KERNEL__
-#include <asm/div64.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
+#include <obd_class.h>
+#include <obd_lov.h>
 
 #include "lov_internal.h"
 
@@ -60,7 +60,7 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
 #ifdef __KERNEL__
-        LASSERT(lsm->lsm_lock_owner == current);
+        LASSERT(lsm->lsm_lock_owner == cfs_current());
 #endif
 
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
@@ -103,7 +103,7 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
 #ifdef __KERNEL__
-        LASSERT(lsm->lsm_lock_owner == current);
+        LASSERT(lsm->lsm_lock_owner == cfs_current());
 #endif
 
         if (shrink) {

@@ -27,21 +27,21 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #ifdef __KERNEL__
-#include <linux/lustre_dlm.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_lib.h>
+#include <lustre_dlm.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_lib.h>
 #include <libcfs/list.h>
 #else
 #include <liblustre.h>
-#include <linux/obd_class.h>
+#include <obd_class.h>
 #endif
 
 #include "ldlm_internal.h"
 
 #define l_flock_waitq   l_lru
 
-static struct list_head ldlm_flock_waitq = LIST_HEAD_INIT(ldlm_flock_waitq);
+static struct list_head ldlm_flock_waitq = CFS_LIST_HEAD_INIT(ldlm_flock_waitq);
 
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, int flag);
@@ -390,7 +390,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                          * ldlm_reprocess_queue. */
                         if ((mode == LCK_NL) && overlaps) {
                                 struct list_head rpc_list
-                                                    = LIST_HEAD_INIT(rpc_list);
+                                                    = CFS_LIST_HEAD_INIT(rpc_list);
                                 int rc;
 restart:
                                 res->lr_tmp = &rpc_list;
@@ -451,7 +451,7 @@ int
 ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
         struct ldlm_namespace *ns;
-        struct file_lock *getlk = lock->l_ast_data;
+        cfs_flock_t *getlk = lock->l_ast_data;
         struct ldlm_flock_wait_data fwd;
         unsigned long irqflags;
         struct obd_device *obd;
@@ -512,20 +512,20 @@ granted:
                 /* fcntl(F_GETLK) request */
                 /* The old mode was saved in getlk->fl_type so that if the mode
                  * in the lock changes we can decref the approprate refcount. */
-                ldlm_flock_destroy(lock, getlk->fl_type, LDLM_FL_WAIT_NOREPROC);
+                ldlm_flock_destroy(lock, cfs_flock_type(getlk), LDLM_FL_WAIT_NOREPROC);
                 switch (lock->l_granted_mode) {
                 case LCK_PR:
-                        getlk->fl_type = F_RDLCK;
+                        cfs_flock_set_type(getlk, F_RDLCK);
                         break;
                 case LCK_PW:
-                        getlk->fl_type = F_WRLCK;
+                        cfs_flock_set_type(getlk, F_WRLCK);
                         break;
                 default:
-                        getlk->fl_type = F_UNLCK;
+                        cfs_flock_set_type(getlk, F_UNLCK);
                 }
-                getlk->fl_pid = lock->l_policy_data.l_flock.pid;
-                getlk->fl_start = lock->l_policy_data.l_flock.start;
-                getlk->fl_end = lock->l_policy_data.l_flock.end;
+                cfs_flock_set_pid(getlk, (pid_t)lock->l_policy_data.l_flock.pid);
+                cfs_flock_set_start(getlk, (off_t)lock->l_policy_data.l_flock.start);
+                cfs_flock_set_end(getlk, (off_t)lock->l_policy_data.l_flock.end);
         } else {
                 int noreproc = LDLM_FL_WAIT_NOREPROC;
 
@@ -533,7 +533,7 @@ granted:
                  * with existing locks owned by this process. */
                 ldlm_process_flock_lock(lock, &noreproc, 1, &err);
                 if (flags == 0)
-                        wake_up(&lock->l_waitq);
+                        cfs_waitq_signal(&lock->l_waitq);
         }
         l_unlock(&ns->ns_lock);
         RETURN(0);

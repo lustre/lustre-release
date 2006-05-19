@@ -35,21 +35,20 @@
 #include <linux/kmod.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#include <linux/lustre_quota.h>
+#include <lustre_quota.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
 #endif
-#include <linux/lustre_mds.h>
-#include <linux/obd_class.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_disk.h>
+#include <lustre_mds.h>
+#include <obd_class.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
+#include <lustre_fsfilt.h>
+#include <lustre_disk.h>
 #include <libcfs/list.h>
 
 #include "mds_internal.h"
 
-#define HEALTH_CHECK "health_check"
 
 /* Add client data to the MDS.  We use a bitmap to locate a free space
  * in the last_rcvd file if cl_off is -1 (i.e. a new client).
@@ -237,7 +236,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         mds->mds_server_data = lsd;
 
         if (last_rcvd_size == 0) {
-                CWARN("%s: initializing new %s\n", obd->obd_name, LAST_RCVD);
+                LCONSOLE_WARN("%s: new disk, initializing\n", obd->obd_name);
 
                 memcpy(lsd->lsd_uuid, obd->obd_uuid.uuid,sizeof(lsd->lsd_uuid));
                 lsd->lsd_last_transno = 0;
@@ -255,8 +254,10 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         GOTO(err_msd, rc);
                 }
                 if (strcmp(lsd->lsd_uuid, obd->obd_uuid.uuid) != 0) {
-                        CERROR("OBD UUID %s does not match last_rcvd UUID %s\n",
-                               obd->obd_uuid.uuid, lsd->lsd_uuid);
+                        LCONSOLE_ERROR("Trying to start OBD %s using the wrong"
+                                       " disk %s. Were the /dev/ assignments "
+                                       "rearranged?\n",
+                                       obd->obd_uuid.uuid, lsd->lsd_uuid);
                         GOTO(err_msd, rc = -EINVAL);
                 }
                 mount_count = le64_to_cpu(lsd->lsd_mount_count);
@@ -392,7 +393,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 obd->obd_recovery_start = CURRENT_SECONDS;
                 /* Only used for lprocfs_status */
                 obd->obd_recovery_end = obd->obd_recovery_start +
-                        OBD_RECOVERY_TIMEOUT / HZ;
+                        OBD_RECOVERY_TIMEOUT;
         }
 
         mds->mds_mount_count = mount_count + 1;
@@ -426,6 +427,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 RETURN(rc);
 
         mds->mds_vfsmnt = mnt;
+        /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
 
         fsfilt_setup(obd, obd->u.obt.obt_sb);

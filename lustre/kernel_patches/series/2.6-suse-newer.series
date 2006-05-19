@@ -7,3 +7,5 @@ uml-exprt-clearuser.patch
 qsnet-suse-2.6.patch 
 fsprivate-2.6.patch
 dcache-qstr-api-fix-2.6-suse.patch 
+iallocsem_consistency.patch
+tcp-zero-copy-2.6.5-7.244.patch

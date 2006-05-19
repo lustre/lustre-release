@@ -25,9 +25,9 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 #ifdef __KERNEL__
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_net.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_net.h>
 #else
 #include <liblustre.h>
 #endif
@@ -167,9 +167,9 @@ struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
 
 void ptlrpc_init_connection(void)
 {
-        INIT_LIST_HEAD(&conn_list);
-        INIT_LIST_HEAD(&conn_unused_list);
-        conn_lock = SPIN_LOCK_UNLOCKED;
+        CFS_INIT_LIST_HEAD(&conn_list);
+        CFS_INIT_LIST_HEAD(&conn_unused_list);
+        spin_lock_init(&conn_lock);
 }
 
 void ptlrpc_cleanup_connection(void)

@@ -29,17 +29,17 @@
 #define PRINT_CMD LCONSOLE
 #define PRINT_MASK D_SUPER
 
-#include <linux/obd.h>
-#include <linux/lvfs.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd_class.h>
+#include <obd.h>
+#include <lvfs.h>
+#include <lustre_fsfilt.h>
+#include <obd_class.h>
 #include <lustre/lustre_user.h>
-#include <linux/version.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_disk.h>
-#include <linux/lustre_param.h>
-#include <linux/lustre_ver.h>
-
+#include <linux/version.h> 
+#include <lustre_log.h>
+#include <lustre_disk.h>
+#include <lustre_param.h>
+#include <lustre_ver.h>
+                      
 static int (*client_fill_super)(struct super_block *sb) = NULL;
 
 /*********** string parsing utils *********/
@@ -463,7 +463,9 @@ int lustre_process_log(struct super_block *sb, char *logname,
 
         if (rc)
                 LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
-                               "(%d), mount will fail.\n",
+                               "from the MGS (%d).  This may be the result of "
+                               "communication errors between this node and "
+                               "the MGS, or the MGS may not be running.\n",
                                mgc->obd_name, logname, rc);
 
         class_obd_list();
@@ -641,10 +643,10 @@ static int lustre_start_mgc(struct super_block *sb)
                    if at all possible. */
                 recov_bk++;
                 CDEBUG(D_MOUNT, "Set MGS reconnect %d\n", recov_bk);
-                rc = obd_set_info(obd->obd_self_export,
-                                  strlen(KEY_INIT_RECOV_BACKUP),
-                                  KEY_INIT_RECOV_BACKUP,
-                                  sizeof(recov_bk), &recov_bk);
+                rc = obd_set_info_async(obd->obd_self_export,
+                                        strlen(KEY_INIT_RECOV_BACKUP),
+                                        KEY_INIT_RECOV_BACKUP,
+                                        sizeof(recov_bk), &recov_bk, NULL);
                 GOTO(out, rc = 0);
         }
 
@@ -735,10 +737,11 @@ static int lustre_start_mgc(struct super_block *sb)
 
         /* Try all connections, but only once. */
         recov_bk = 1;
-        rc = obd_set_info(obd->obd_self_export,
-                          strlen(KEY_INIT_RECOV_BACKUP), KEY_INIT_RECOV_BACKUP,
-                          sizeof(recov_bk), &recov_bk);
-        if (rc)
+        rc = obd_set_info_async(obd->obd_self_export,
+                                strlen(KEY_INIT_RECOV_BACKUP), 
+                                KEY_INIT_RECOV_BACKUP,
+                                sizeof(recov_bk), &recov_bk, NULL);
+        if (rc) 
                 /* nonfatal */
                 CERROR("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
 
@@ -827,9 +830,9 @@ static int server_mgc_set_fs(struct obd_device *mgc, struct super_block *sb)
         CDEBUG(D_MOUNT, "Set mgc disk for %s\n", lsi->lsi_lmd->lmd_dev);
 
         /* cl_mgc_sem in mgc insures we sleep if the mgc_fs is busy */
-        rc = obd_set_info(mgc->obd_self_export,
-                          strlen("set_fs"), "set_fs",
-                          sizeof(*sb), sb);
+        rc = obd_set_info_async(mgc->obd_self_export,
+                                strlen("set_fs"), "set_fs",
+                                sizeof(*sb), sb, NULL);
         if (rc) {
                 CERROR("can't set_fs %d\n", rc);
         }
@@ -843,9 +846,10 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
         ENTRY;
 
         CDEBUG(D_MOUNT, "Unassign mgc disk\n");
-
-        rc = obd_set_info(mgc->obd_self_export,
-                          strlen("clear_fs"), "clear_fs", 0, NULL);
+        
+        rc = obd_set_info_async(mgc->obd_self_export,
+                                strlen("clear_fs"), "clear_fs",
+                                0, NULL, NULL);
         RETURN(rc);
 }
 
@@ -964,9 +968,9 @@ int server_register_target(struct super_block *sb)
 
         /* Register the target */
         /* FIXME use mdc_process_config instead */
-        rc = obd_set_info(mgc->u.cli.cl_mgc_mgsexp,
-                          strlen("register_target"), "register_target",
-                          sizeof(*mti), mti);
+        rc = obd_set_info_async(mgc->u.cli.cl_mgc_mgsexp,
+                                strlen("register_target"), "register_target",
+                                sizeof(*mti), mti, NULL);
         if (rc) {
                 CERROR("registration with the MGS failed (%d)\n", rc);
                 GOTO(out, rc);
@@ -1358,7 +1362,7 @@ static void server_put_super(struct super_block *sb)
            is right. */
         server_stop_servers(lddflags, lsiflags);
 
-        CDEBUG(D_MOUNT|D_WARNING, "server umount %s done\n", tmpname);
+        LCONSOLE_WARN("server umount %s complete\n", tmpname);
         OBD_FREE(tmpname, tmpname_sz);
         EXIT;
 }
@@ -1831,8 +1835,7 @@ out:
                 CERROR("Unable to mount %s\n",
                        s2lsi(sb) ? lmd->lmd_dev : "");
         } else {
-                CDEBUG(D_MOUNT|D_WARNING, "Successfully mounted %s\n", 
-                       lmd->lmd_dev);
+                LCONSOLE_WARN("mount %s complete\n", lmd->lmd_dev);
         }
         RETURN(rc);
 }

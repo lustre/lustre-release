@@ -30,18 +30,18 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/module.h>
-
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_ver.h>
-#include <linux/obd_support.h>
-#include <linux/lprocfs_status.h>
 #include <linux/jbd.h>
 
-#include <linux/dt_object.h>
-#include <linux/md_object.h>
-#include <linux/lustre_mdc.h>
-#include <linux/lustre_fid.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_ver.h>
+#include <obd_support.h>
+#include <lprocfs_status.h>
+
+#include <dt_object.h>
+#include <md_object.h>
+#include <lustre_mdc.h>
+#include <lustre_fid.h>
 #include <linux/lustre_iam.h>
 #include "fld_internal.h"
 
@@ -96,9 +96,9 @@ int fld_handle_delete(struct lu_context *ctx, struct fld *fld,
 int fld_handle_lookup(struct lu_context *ctx,
                       struct fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
 {
+#if 0
         int size;
 
-#if 0
         size = fld_param.id_rec_size;
         return fld->fld_dt->dd_ops->dt_iam_lookup(&lctx, fld->fld_dt,
                                                   fld->fld_info->fi_container,

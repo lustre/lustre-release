@@ -212,11 +212,22 @@ test_5() {
 	# if all the modules have unloaded.
  	umount -d $MOUNT &
 	UMOUNT_PID=$!
-	sleep 2
+	sleep 6
 	echo "killing umount"
 	kill -TERM $UMOUNT_PID
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
+	if grep " $MOUNT " /etc/mtab; then
+		echo "test 5: mtab after failed umount"
+		umount $MOUNT &
+		UMOUNT_PID=$!
+		sleep 2
+		echo "killing umount"
+		kill -TERM $UMOUNT_PID
+		echo "waiting for umount to finish"
+		wait $UMOUNT_PID
+		grep " $MOUNT " /etc/mtab && echo "test 5: mtab after second umount" && return 11
+	fi
 
 	manual_umount_client
 	# stop_mds is a no-op here, and should not fail
@@ -232,8 +243,9 @@ run_test 5 "force cleanup mds, then cleanup"
 test_5b() {
 	start_ost
 	[ -d $MOUNT ] || mkdir -p $MOUNT
+	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab before mount" && return 10
 	mount_client $MOUNT && return 1
-
+	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab after failed mount" && return 11
 	umount_client $MOUNT	
 	# stop_mds is a no-op here, and should not fail
 	cleanup_nocli || return $?
@@ -245,8 +257,9 @@ test_5c() {
 	start_ost
 	start_mds
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	# Bad nid might still work if mgs is on 0@lo
-	mount -t lustre 1.2.3.4@tcp:/wrong.$FSNAME $MOUNT || :
+	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab before mount" && return 10
+	mount -t lustre `facet_nid mgs`:/wrong.$FSNAME $MOUNT || :
+	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab after failed mount" && return 11
 	umount_client $MOUNT
 	cleanup_nocli  || return $?
 }
@@ -256,18 +269,27 @@ test_5d() {
 	start_ost
 	start_mds
 	stop_ost -f
+	grep " $MOUNT " /etc/mtab && echo "test 5d: mtab before mount" && return 10
 	mount_client $MOUNT || return 1
 	cleanup  || return $?
+	grep " $MOUNT " /etc/mtab && echo "test 5d: mtab after unmount" && return 11
+	return 0
 }
 run_test 5d "mount with ost down"
 
 test_5e() {
 	start_ost
 	start_mds
+        # give MDS a chance to connect to OSTs (bz 10476)
+	sleep 5	
+
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
+	grep " $MOUNT " /etc/mtab && echo "test 5e: mtab before mount" && return 10
 	mount_client $MOUNT || echo "mount failed (not fatal)"
 	cleanup  || return $?
+	grep " $MOUNT " /etc/mtab && echo "test 5e: mtab after unmount" && return 11
+	return 0
 }
 run_test 5e "delayed connect, don't crash (bug 10268)"
 
@@ -772,6 +794,7 @@ test_21() {
 	echo Client mount with a running ost
 	start_ost
 	mount_client $MOUNT
+	sleep 5	#bz10476
 	check_mount || return 41
 	pass
 

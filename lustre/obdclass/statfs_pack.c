@@ -33,17 +33,12 @@
 #endif
 #ifndef __KERNEL__
 #include <liblustre.h>
-#else
-#include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <linux/statfs.h>
-#endif
 #endif
 
-#include <linux/lustre_export.h>
-#include <linux/lustre_net.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
+#include <lustre_export.h>
+#include <lustre_net.h>
+#include <obd_support.h>
+#include <obd_class.h>
 
 void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs)
 {

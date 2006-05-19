@@ -7,8 +7,7 @@ ALWAYS_EXCEPT="20b  24   27 $RECOVERY_SMALL_EXCEPT"
 
 # Tests that always fail with mountconf -- FIXME
 # 16 fails with 1, not evicted
-# 18a,b there is still data in page cache
-EXCEPT="$EXCEPT 16 18a 18b"
+EXCEPT="$EXCEPT 16"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -244,13 +243,13 @@ test_18a() {
 
     do_facet client cp /etc/termcap $f
     sync
-    local osc2_dev=`awk '(/OST0001-osc-/){print $4}' $LPROC/devices`
-    $LCTL --device %$osc2_dev deactivate
+    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    $LCTL --device $osc2dev deactivate || return 3
     # my understanding is that there should be nothing in the page
     # cache after the client reconnects?     
     rc=0
     pgcache_empty || rc=2
-    $LCTL --device %$osc2_dev activate
+    $LCTL --device $osc2dev activate
     rm -f $f
     return $rc
 }
@@ -368,7 +367,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 }
 run_test 24 "fsync error (should return error)"
 
-test_26() {      # bug 5921 - evict dead exports 
+test_26() {      # bug 5921 - evict dead exports by pinger
 # this test can only run from a client on a separate node.
 	[ "`lsmod | grep obdfilter`" ] && \
 	    echo "skipping test 26 (local OST)" && return

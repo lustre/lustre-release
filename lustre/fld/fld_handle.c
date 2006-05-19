@@ -30,18 +30,18 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/module.h>
-
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_ver.h>
-#include <linux/obd_support.h>
-#include <linux/lprocfs_status.h>
 #include <linux/jbd.h>
 
-#include <linux/dt_object.h>
-#include <linux/md_object.h>
-#include <linux/lustre_mdc.h>
-#include <linux/lustre_fid.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_ver.h>
+#include <obd_support.h>
+#include <lprocfs_status.h>
+
+#include <dt_object.h>
+#include <md_object.h>
+#include <lustre_mdc.h>
+#include <lustre_fid.h>
 #include "fld_internal.h"
 
 static int fld_handle(struct lu_context *ctx,

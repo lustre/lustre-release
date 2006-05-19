@@ -27,12 +27,12 @@
 #include <linux/types.h>
 #include <linux/random.h>
 #include <linux/version.h>
-#include <linux/lustre_lite.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_dlm.h>
+#include <lustre_lite.h>
+#include <lustre_ha.h>
+#include <lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
-#include <linux/lprocfs_status.h>
+#include <lprocfs_status.h>
 #include "llite_internal.h"
 
 static kmem_cache_t *ll_inode_cachep;
@@ -79,8 +79,10 @@ int ll_init_inodecache(void)
 
 void ll_destroy_inodecache(void)
 {
-        LASSERTF(kmem_cache_destroy(ll_inode_cachep) == 0,
-                 "ll_inode_cache: not all structures were freed\n");
+        int rc;
+
+        rc = kmem_cache_destroy(ll_inode_cachep);
+        LASSERTF(rc == 0, "ll_inode_cache: not all structures were freed\n");
 }
 
 /* exported operations */
@@ -100,7 +102,7 @@ struct super_operations lustre_super_operations =
 static int __init init_lustre_lite(void)
 {
         int rc, seed[2];
-        printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
+        printk(KERN_INFO "Lustre: Lustre Client File System; "
                "info@clusterfs.com\n");
         rc = ll_init_inodecache();
         if (rc)
@@ -128,16 +130,19 @@ static int __init init_lustre_lite(void)
 
 static void __exit exit_lustre_lite(void)
 {
+        int rc;
+
         lustre_register_client_fill_super(NULL);
 
         ll_unregister_cache(&ll_cache_definition);
 
         ll_destroy_inodecache();
-        LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
-                 "couldn't destroy ll_file_data slab\n");
-        if (ll_async_page_slab)
-                LASSERTF(kmem_cache_destroy(ll_async_page_slab) == 0,
-                         "couldn't destroy ll_async_page slab\n");
+        rc = kmem_cache_destroy(ll_file_data_slab);
+        LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
+        if (ll_async_page_slab) {
+                rc = kmem_cache_destroy(ll_async_page_slab);
+                LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
+        }
 
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);

@@ -49,6 +49,7 @@
 void *buf_alloc;
 int buf_size;
 int opt_verbose;
+struct timeval start;
 
 extern char *lustre_path;
 
@@ -64,17 +65,23 @@ extern char *lustre_path;
                         buf[80] = 0;                                    \
                 }                                                       \
                 printf("%s", buf);                                      \
+                gettimeofday(&start, NULL);                             \
         } while (0)
 
 #define LEAVE()                                                         \
         do {                                                            \
-                char buf[100];                                          \
-                int len;                                                \
-                sprintf(buf, "===== END TEST %s: successfully ",        \
-                        __FUNCTION__);                                  \
-                len = strlen(buf);                                      \
+                struct timeval stop;                                    \
+                char buf[100] = { '\0' };                               \
+                int len = sizeof(buf) - 1;                              \
+                long usec;                                              \
+                gettimeofday(&stop, NULL);                              \
+                usec = (stop.tv_sec - start.tv_sec) * 1000000 +         \
+                       (stop.tv_usec - start.tv_usec);                  \
+                len = snprintf(buf, len,                                \
+                               "===== END TEST %s: successfully (%gs)", \
+                               __FUNCTION__, (double)usec / 1000000);   \
                 if (len < 79) {                                         \
-                        memset(buf+len, '=', 100-len);                  \
+                        memset(buf+len, '=', sizeof(buf) - len);        \
                         buf[79] = '\n';                                 \
                         buf[80] = 0;                                    \
                 }                                                       \
@@ -1035,7 +1042,6 @@ int t51(char *name)
         printf("\n");
         LEAVE();
 }
-
 /*
  * check atime update during read
  */

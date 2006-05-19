@@ -45,21 +45,19 @@
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 # include <linux/mount.h>
 # include <linux/buffer_head.h>
-# include <linux/security.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_ver.h>
-#include <linux/lustre_commit_confd.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <lustre_dlm.h>
+#include <lustre_fsfilt.h>
+#include <lprocfs_status.h>
+#include <lustre_log.h>
+#include <lustre_commit_confd.h>
 #include <libcfs/list.h>
-#include <linux/lustre_disk.h>
-#include <linux/lustre_quota.h>
-#include <linux/quotaops.h>
+#include <lustre_disk.h>
+#include <lustre_quota.h>
+#include <lustre_ver.h>
 
 #include "filter_internal.h"
 
@@ -397,7 +395,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         }
 
         if (last_rcvd_size == 0) {
-                CWARN("%s: initializing new %s\n", obd->obd_name, LAST_RCVD);
+                LCONSOLE_WARN("%s: new disk, initializing\n", obd->obd_name);
 
                 memcpy(fsd->lsd_uuid, obd->obd_uuid.uuid,sizeof(fsd->lsd_uuid));
                 fsd->lsd_last_transno = 0;
@@ -416,8 +414,10 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         GOTO(err_fsd, rc);
                 }
                 if (strcmp(fsd->lsd_uuid, obd->obd_uuid.uuid) != 0) {
-                        CERROR("OBD UUID %s does not match last_rcvd UUID %s\n",
-                               obd->obd_uuid.uuid, fsd->lsd_uuid);
+                        LCONSOLE_ERROR("Trying to start OBD %s using the wrong"
+                                       " disk %s. Were the /dev/ assignments "
+                                       "rearranged?\n",
+                                       obd->obd_uuid.uuid, fsd->lsd_uuid);
                         GOTO(err_fsd, rc = -EINVAL);
                 }
                 mount_count = le64_to_cpu(fsd->lsd_mount_count);
@@ -538,7 +538,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 obd->obd_recovery_start = CURRENT_SECONDS;
                 /* Only used for lprocfs_status */
                 obd->obd_recovery_end = obd->obd_recovery_start +
-                        OBD_RECOVERY_TIMEOUT / HZ;
+                        OBD_RECOVERY_TIMEOUT;
         }
 
 out:
@@ -1528,8 +1528,8 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1)
                               ? "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) / 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) % 60,
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "
@@ -2705,7 +2705,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         struct obd_device *obd;
         struct filter_obd *filter;
-        struct dentry *dchild = NULL, *dparent;
+        struct dentry *dchild = NULL, *dparent = NULL;
         struct lvfs_run_ctxt saved;
         void *handle = NULL;
         struct llog_cookie *fcc = NULL;
@@ -2947,8 +2947,9 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
         RETURN(-EINVAL);
 }
 
-static int filter_set_info(struct obd_export *exp, __u32 keylen,
-                           void *key, __u32 vallen, void *val)
+static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
+                                 void *key, __u32 vallen, void *val,
+                                 struct ptlrpc_request_set *set)
 {
         struct obd_device *obd;
         struct llog_ctxt *ctxt;
@@ -2965,8 +2966,8 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
             memcmp(key, KEY_MDS_CONN, keylen) != 0)
                 RETURN(-EINVAL);
 
-        CWARN("%s: received MDS connection from %s\n", obd->obd_name,
-              obd_export_nid2str(exp));
+        LCONSOLE_WARN("%s: received MDS connection from %s\n", obd->obd_name,
+                      obd_export_nid2str(exp));
         obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */
@@ -3077,7 +3078,7 @@ static struct lvfs_callback_ops filter_lvfs_ops = {
 static struct obd_ops filter_obd_ops = {
         .o_owner          = THIS_MODULE,
         .o_get_info       = filter_get_info,
-        .o_set_info       = filter_set_info,
+        .o_set_info_async = filter_set_info_async,
         .o_setup          = filter_setup,
         .o_precleanup     = filter_precleanup,
         .o_cleanup        = filter_cleanup,
@@ -3106,7 +3107,7 @@ static struct obd_ops filter_obd_ops = {
 static struct obd_ops filter_sanobd_ops = {
         .o_owner          = THIS_MODULE,
         .o_get_info       = filter_get_info,
-        .o_set_info       = filter_set_info,
+        .o_set_info_async = filter_set_info_async,
         .o_setup          = filter_san_setup,
         .o_precleanup     = filter_precleanup,
         .o_cleanup        = filter_cleanup,

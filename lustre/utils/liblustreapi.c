@@ -40,8 +40,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#ifdef HAVE_LINUX_TYPES_H
-#include <linux/types.h>
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
 #endif
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
@@ -52,10 +52,10 @@
 #include <lnet/lnetctl.h>
 
 #include <liblustre.h>
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
+#include <obd.h>
+#include <lustre_lib.h>
 #include <lustre/liblustreapi.h>
-#include <linux/obd_lov.h>
+#include <obd_lov.h>
 #include <lustre/liblustreapi.h>
 
 static void err_msg(char *fmt, ...)
@@ -889,9 +889,12 @@ int llapi_catinfo(char *dir, char *keyword, char *node_name)
         return rc;
 }
 
-int llapi_is_lustre_mnttype(char *type)
+/* Is this a lustre client fs? */
+int llapi_is_lustre_mnttype(struct mntent *mnt)
 {
-        return (strcmp(type,"lustre") == 0 || strcmp(type,"lustre_lite") == 0);
+        char *type = mnt->mnt_type;
+        return ((strcmp(type, "lustre") == 0 || strcmp(type,"lustre_lite") == 0)
+                && (strstr(mnt->mnt_fsname, ":/") != NULL));
 }
 
 int llapi_quotacheck(char *mnt, int check_type)

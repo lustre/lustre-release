@@ -32,11 +32,11 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/obd_support.h>
-#include <linux/lustre_lite.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_version.h>
-#include <linux/lustre_mdc.h>
+#include <obd_support.h>
+#include <lustre_lite.h>
+#include <lustre_dlm.h>
+#include <lustre_ver.h>
+#include <lustre_mdc.h>
 
 #include "llite_internal.h"
 
@@ -47,15 +47,18 @@
 #define XATTR_USER_T            (1)
 #define XATTR_TRUSTED_T         (2)
 #define XATTR_SECURITY_T        (3)
-#define XATTR_ACL_T             (4)
-#define XATTR_OTHER_T           (5)
+#define XATTR_ACL_ACCESS_T      (4)
+#define XATTR_ACL_DEFAULT_T     (5)
+#define XATTR_OTHER_T           (6)
 
 static
 int get_xattr_type(const char *name)
 {
-        if (!strcmp(name, XATTR_NAME_ACL_ACCESS) ||
-            !strcmp(name, XATTR_NAME_ACL_DEFAULT))
-                return XATTR_ACL_T;
+        if (!strcmp(name, XATTR_NAME_ACL_ACCESS))
+                return XATTR_ACL_ACCESS_T;
+
+        if (!strcmp(name, XATTR_NAME_ACL_DEFAULT))
+                return XATTR_ACL_DEFAULT_T;
 
         if (!strncmp(name, XATTR_USER_PREFIX,
                      sizeof(XATTR_USER_PREFIX) - 1))
@@ -75,8 +78,11 @@ int get_xattr_type(const char *name)
 static
 int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
 {
-        if (xattr_type == XATTR_ACL_T && !(sbi->ll_flags & LL_SBI_ACL))
+        if ((xattr_type == XATTR_ACL_ACCESS_T ||
+             xattr_type == XATTR_ACL_DEFAULT_T) &&
+            !(sbi->ll_flags & LL_SBI_ACL))
                 return -EOPNOTSUPP;
+
         if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
                 return -EOPNOTSUPP;
         if (xattr_type == XATTR_TRUSTED_T && !capable(CAP_SYS_ADMIN))
@@ -177,6 +183,26 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         rc = xattr_type_filter(sbi, xattr_type);
         if (rc)
                 RETURN(rc);
+
+        /* posix acl is under protection of LOOKUP lock. when calling to this,
+         * we just have path resolution to the target inode, so we have great
+         * chance that cached ACL is uptodate.
+         */
+        if (xattr_type == XATTR_ACL_ACCESS_T) {
+                struct ll_inode_info *lli = ll_i2info(inode);
+                struct posix_acl *acl;
+
+                spin_lock(&lli->lli_lock);
+                acl = posix_acl_dup(lli->lli_posix_acl);
+                spin_unlock(&lli->lli_lock);
+
+                if (!acl)
+                        RETURN(-ENODATA);
+
+                rc = posix_acl_to_xattr(acl, buffer, size);
+                posix_acl_release(acl);
+                RETURN(rc);
+        }
 
 do_getxattr:
         rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid,

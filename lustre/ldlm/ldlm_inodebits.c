@@ -26,9 +26,9 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/lustre_dlm.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
+#include <lustre_dlm.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
 
 #include "ldlm_internal.h"
 
@@ -85,7 +85,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                                 int first_enq, ldlm_error_t *err)
 {
         struct ldlm_resource *res = lock->l_resource;
-        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
         int rc;
         ENTRY;
 

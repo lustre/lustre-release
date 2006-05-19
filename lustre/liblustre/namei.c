@@ -270,7 +270,7 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
                 it->it_op_release = ll_intent_release;
         }
 
-        llu_prepare_mdc_op_data(&op_data, pnode->p_parent->p_base->pb_ino,
+        llu_prepare_md_op_data(&op_data, pnode->p_parent->p_base->pb_ino,
                                 pb->pb_ino, pb->pb_name.name,pb->pb_name.len,0);
 
         rc = md_intent_lock(exp, &op_data, NULL, 0, it, flags,
@@ -448,9 +448,9 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                         LBUG();
                 }
         }
-        llu_prepare_mdc_op_data(&op_data, parent, NULL,
-                                pnode->p_base->pb_name.name,
-                                pnode->p_base->pb_name.len, flags);
+        llu_prepare_md_op_data(&op_data, parent, NULL,
+                               pnode->p_base->pb_name.name,
+                               pnode->p_base->pb_name.len, flags);
 
         rc = md_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
                             flags, &req, llu_mdc_blocking_ast,

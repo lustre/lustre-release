@@ -33,14 +33,12 @@
 
 #include <linux/module.h>
 
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-
+#include <obd.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
+#include <lustre_ver.h>
 #include "cmm_internal.h"
 #include "mdc_internal.h"
-
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_ver.h>
 
 static struct obd_ops cmm_obd_device_ops = {
         .o_owner           = THIS_MODULE

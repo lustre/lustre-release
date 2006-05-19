@@ -53,8 +53,8 @@ int main(int argc, char **argv)
                 return 1;
         }
 
-        if (argc == 6)
-                st.st_blksize = strtoul(argv[4], 0, 0);
+        if (argc >= 6)
+                st.st_blksize = strtoul(argv[5], 0, 0);
         else if (fstat64(fd, &st) < 0) {
                 printf("Cannot stat %s:  %s\n", argv[1], strerror(errno));
                 return 1;

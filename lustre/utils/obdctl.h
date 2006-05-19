@@ -10,10 +10,10 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_cfg.h>
+#include <lustre_lib.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_dlm.h>
+#include <lustre_cfg.h>
 
 /* obd.c */
 int do_disconnect(char *func, int verbose);

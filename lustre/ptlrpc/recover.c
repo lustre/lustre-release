@@ -27,23 +27,20 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 #ifdef __KERNEL__
-# include <linux/config.h>
-# include <linux/module.h>
-# include <linux/kmod.h>
-# include <linux/list.h>
+# include <libcfs/libcfs.h>
 #else
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_import.h>
-#include <linux/lustre_export.h>
-#include <linux/obd.h>
-#include <linux/obd_ost.h>
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
+#include <obd_support.h>
+#include <lustre_ha.h>
+#include <lustre_net.h>
+#include <lustre_import.h>
+#include <lustre_export.h>
+#include <obd.h>
+#include <obd_ost.h>
+#include <obd_class.h>
+#include <obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
 #include <libcfs/list.h>
 
 #include "ptlrpc_internal.h"
@@ -164,6 +161,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          * get rid of them now.
          */
         spin_lock_irqsave(&imp->imp_lock, flags);
+        imp->imp_last_transno_checked = 0;
         ptlrpc_free_committed(imp);
         last_transno = imp->imp_last_replay_transno;
         spin_unlock_irqrestore(&imp->imp_lock, flags);
@@ -314,6 +312,7 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         struct obd_device *obd = imp->imp_obd;
         int rc = 0;
 
+        ENTRY;
         LASSERT(obd);
 
         /* When deactivating, mark import invalid, and abort in-flight
@@ -390,7 +389,8 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
         CDEBUG(D_HA, "%s: recovery started, waiting\n",
                obd2cli_tgt(imp->imp_obd));
 
-        lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
+        lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
+                          NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           !ptlrpc_import_in_recovery(imp), &lwi);
         CDEBUG(D_HA, "%s: recovery finished\n",

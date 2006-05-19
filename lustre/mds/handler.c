@@ -34,12 +34,9 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <lustre_mds.h>
 #include <linux/module.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_acl.h>
-#include <linux/lustre_dlm.h>
 #include <linux/init.h>
-#include <linux/obd_class.h>
 #include <linux/random.h>
 #include <linux/fs.h>
 #include <linux/jbd.h>
@@ -52,14 +49,16 @@
 #else
 # include <linux/locks.h>
 #endif
-#include <linux/obd_lov.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_commit_confd.h>
-#include <linux/lustre_quota.h>
-#include <linux/lustre_disk.h>
-#include <linux/lustre_ver.h>
+
+#include <obd_class.h>
+#include <lustre_dlm.h>
+#include <obd_lov.h>
+#include <lustre_fsfilt.h>
+#include <lprocfs_status.h>
+#include <lustre_commit_confd.h>
+#include <lustre_quota.h>
+#include <lustre_disk.h>
+#include <lustre_ver.h>
 
 #include "mds_internal.h"
 
@@ -228,9 +227,9 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 
         if (inode->i_generation == 0 || inode->i_nlink == 0) {
                 LCONSOLE_WARN("Found inode with zero generation or link -- this"
-                              " may indicate disk corruption (inode: %lu, link:"
-                              " %lu, count: %d)\n", inode->i_ino,
-                              (unsigned long)inode->i_nlink,
+                              " may indicate disk corruption (inode: %lu/%u, "
+                              "link %lu, count %d)\n", inode->i_ino,
+                              inode->i_generation,(unsigned long)inode->i_nlink,
                               atomic_read(&inode->i_count));
                 dput(result);
                 RETURN(ERR_PTR(-ENOENT));
@@ -707,7 +706,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_body *body;
-        int rc, size[2] = {sizeof(*body)}, bufcount = 1;
+        int rc, size[3] = {sizeof(*body)}, bufcount = 1;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*body));
@@ -1939,7 +1938,6 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         }
 
         label = fsfilt_get_label(obd, obd->u.obt.obt_sb);
-
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("MDT %s now serving %s (%s%s%s), but will be in "
                               "recovery until %d %s reconnect, or if no clients"
@@ -1952,8 +1950,8 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1) ?
                               "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT / HZ) % 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) / 60,
+                              (int)(OBD_RECOVERY_TIMEOUT) % 60,
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("MDT %s now serving %s (%s%s%s) with recovery "
@@ -2381,7 +2379,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                 break;
         default:
                 CERROR("Unhandled intent "LPD64"\n", it->opc);
-                LBUG();
+                RETURN(-EFAULT);
         }
 
         /* By this point, whatever function we called above must have either

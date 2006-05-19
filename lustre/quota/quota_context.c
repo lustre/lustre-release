@@ -26,9 +26,9 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
-#include <linux/obd_class.h>
-#include <linux/lustre_quota.h>
-#include <linux/lustre_fsfilt.h>
+#include <obd_class.h>
+#include <lustre_quota.h>
+#include <lustre_fsfilt.h>
 #include "quota_internal.h"
 
 unsigned long default_bunit_sz = 100 * 1024 * 1024;       /* 100M bytes */
@@ -62,7 +62,7 @@ void qunit_cache_cleanup(void)
         if (qunit_cachep) {
                 int rc;
                 rc = kmem_cache_destroy(qunit_cachep);
-                LASSERT(rc == 0);
+                LASSERTF(rc == 0, "couldn't destory qunit_cache slab\n");
                 qunit_cachep = NULL;
         }
         EXIT;
@@ -269,7 +269,7 @@ static void remove_qunit_nolock(struct lustre_qunit *qunit)
 
 struct qunit_waiter {
         struct list_head qw_entry;
-        wait_queue_head_t qw_waitq;
+        cfs_waitq_t      qw_waitq;
         int qw_rc;
 };
 

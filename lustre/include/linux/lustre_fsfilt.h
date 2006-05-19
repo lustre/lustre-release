@@ -22,13 +22,17 @@
  *
  */
 
+#ifndef _LINUX_LUSTRE_FSFILT_H
+#define _LINUX_LUSTRE_FSFILT_H
+
 #ifndef _LUSTRE_FSFILT_H
-#define _LUSTRE_FSFILT_H
+#error Do not #include this file directly. #include <lustre_fsfilt.h> instead
+#endif
 
 #ifdef __KERNEL__
 
-#include <linux/obd.h>
-#include <linux/obd_class.h>
+#include <obd.h>
+#include <obd_class.h>
 
 typedef void (*fsfilt_cb_t)(struct obd_device *obd, __u64 last_rcvd,
                             void *data, int error);

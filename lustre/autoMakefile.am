@@ -51,8 +51,10 @@ endif
 
 lvfs-sources:
 	$(MAKE) sources -C lvfs
+obdclass-sources:
+	$(MAKE) sources -C obdclass
 
-sources: $(LDISKFS) lvfs-sources lustre_build_version
+sources: $(LDISKFS) lvfs-sources obdclass-sources lustre_build_version
 
 all-recursive: lustre_build_version
 

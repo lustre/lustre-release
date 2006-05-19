@@ -43,7 +43,7 @@ MOUNTOPT=""
     MOUNTOPT=$MOUNTOPT" --param default_stripe_size=$STRIPE_BYTES"
 [ "x$STRIPES_PER_OBJ" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --param default_stripe_count=$STRIPES_PER_OBJ"
-MDS_MKFS_OPTS="--mgs --mdt --device-size=$MDSSIZE $MKFSOPT $MOUNTOPT $MDSOPT"
+MDS_MKFS_OPTS="--mgs --mdt --device-size=$MDSSIZE --param obd_timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $MDSOPT"
 
 MKFSOPT=""
 MOUNTOPT=""
@@ -53,8 +53,8 @@ MOUNTOPT=""
     MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
 [ "x$ostfailover_HOST" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --failnode=`h2$NETTYPE $ostfailover_HOST`"
-OST_MKFS_OPTS="--ost --device-size=$OSTSIZE --mgsnode=$MGSNID $MKFSOPT $MOUNTOPT $OSTOPT"
-OST2_MKFS_OPTS="--ost --device-size=$OSTSIZE --mgsnode=$MGSNID $MKFSOPT $MOUNTOPT $OSTOPT"
+OST_MKFS_OPTS="--ost --device-size=$OSTSIZE --mgsnode=$MGSNID --param obd_timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $OSTOPT"
+OST2_MKFS_OPTS=${OST2_MKFS_OPTS:-${OST_MKFS_OPTS}}
 
 MDS_MOUNT_OPTS="-o loop"
 OST_MOUNT_OPTS="-o loop"

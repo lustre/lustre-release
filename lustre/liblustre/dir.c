@@ -46,8 +46,8 @@
 
 #undef LIST_HEAD
 
-#ifdef HAVE_LINUX_TYPES_H
-#include <linux/types.h>
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
 #elif defined(HAVE_SYS_TYPES_H)
 #include <sys/types.h>
 #endif
@@ -83,7 +83,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
-                llu_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+                llu_prepare_md_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, &it, LCK_CR,
                                 &op_data, &lockh, NULL, 0,

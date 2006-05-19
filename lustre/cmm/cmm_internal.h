@@ -25,8 +25,8 @@
 
 #if defined(__KERNEL__)
 
-#include <linux/obd.h>
-#include <linux/md_object.h>
+#include <obd.h>
+#include <md_object.h>
 
 struct cmm_device {
         struct md_device cmm_md_dev;

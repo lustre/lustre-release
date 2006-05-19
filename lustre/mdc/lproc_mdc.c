@@ -26,8 +26,8 @@
 
 #include <linux/version.h>
 #include <linux/vfs.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
 
 #ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = {

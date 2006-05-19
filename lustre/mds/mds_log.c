@@ -34,10 +34,11 @@
 #include <linux/version.h>
 
 #include <libcfs/list.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_commit_confd.h>
-#include <linux/lustre_log.h>
+#include <obd_class.h>
+#include <lustre_fsfilt.h>
+#include <lustre_mds.h>
+#include <lustre_commit_confd.h>
+#include <lustre_log.h>
 
 #include "mds_internal.h"
 

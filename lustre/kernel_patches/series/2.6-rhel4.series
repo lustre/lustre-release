@@ -21,3 +21,4 @@ compile-fixes-2.6.9-rhel4-22.patch
 vm-tunables-rhel4.patch 
 2.6-rhel4-kgdb-ga.patch
 tcp-zero-copy-2.6.9-rhel4.patch
+iallocsem_consistency.patch

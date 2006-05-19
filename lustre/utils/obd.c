@@ -38,7 +38,7 @@
 
 #include "obdctl.h"
 
-#include <linux/obd.h>          /* for struct lov_stripe_md */
+#include <obd.h>          /* for struct lov_stripe_md */
 #include <linux/lustre_build_version.h>
 
 #include <unistd.h>
@@ -52,9 +52,10 @@
 #include <asm/page.h>           /* needed for PAGE_SIZE - rread */
 #endif
 
-#include <linux/obd_class.h>
+#include <obd_class.h>
 #include <lnet/lnetctl.h>
 #include "parser.h"
+#include "platform.h"
 #include <stdio.h>
 
 #define MAX_STRING_SIZE 128
@@ -72,8 +73,8 @@ struct shared_data {
         __u64 offsets[MAX_THREADS];
         int   running;
         int   barrier;
-        pthread_mutex_t mutex;
-        pthread_cond_t  cond;
+        l_mutex_t mutex;
+        l_cond_t  cond;
 };
 
 static struct shared_data *shared_data;
@@ -486,12 +487,12 @@ static void shmem_setup(void)
 
 static inline void shmem_lock(void)
 { 
-        pthread_mutex_lock(&shared_data->mutex);
+        l_mutex_lock(&shared_data->mutex);
 }
 
 static inline void shmem_unlock(void)
 { 
-        pthread_mutex_unlock(&shared_data->mutex);
+        l_mutex_unlock(&shared_data->mutex);
 }
 
 static inline void shmem_reset(int total_threads)
@@ -500,8 +501,8 @@ static inline void shmem_reset(int total_threads)
                 return;
 
         memset(shared_data, 0, sizeof(*shared_data));
-        pthread_mutex_init(&shared_data->mutex, NULL);
-        pthread_cond_init(&shared_data->cond, NULL);
+        l_mutex_init(&shared_data->mutex);
+        l_cond_init(&shared_data->cond);
         memset(counter_snapshot, 0, sizeof(counter_snapshot));
         prev_valid = 0;
         shared_data->barrier = total_threads;
@@ -875,6 +876,7 @@ int jt_get_version(int argc, char **argv)
         memset(buf, 0, sizeof(buf));
         data->ioc_version = OBD_IOCTL_VERSION;
         data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
+        data->ioc_inlbuf1 = buf + size_round(sizeof(*data));
         data->ioc_len = obd_ioctl_packlen(data);
 
         rc = l2_ioctl(OBD_DEV_ID, OBD_GET_VERSION, buf);
@@ -892,6 +894,7 @@ int jt_get_version(int argc, char **argv)
 int jt_obd_list(int argc, char **argv)
 {
         int rc;
+#if HAVE_PROC_FS
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
 
@@ -908,8 +911,40 @@ int jt_obd_list(int argc, char **argv)
                 printf("%s", buf);
 
         fclose(fp);
-
         return 0;
+#else
+        /* No /proc filesystem, get device list by ioctl */
+        int index;
+        char buf[8192];
+        struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
+
+        if (argc != 1)
+                return CMD_HELP;
+
+        for (index = 0;; index++) {
+                memset(buf, 0, sizeof(buf));
+                data->ioc_version = OBD_IOCTL_VERSION;
+                data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
+                data->ioc_inlbuf1 = buf + size_round(sizeof(*data));
+                data->ioc_len = obd_ioctl_packlen(data);
+                data->ioc_count = index;
+
+                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETDEVICE, buf);
+                if (rc != 0)
+                        break;
+                printf("%s\n", (char *)data->ioc_bulk);
+        }
+        if (rc != 0) {
+                if (errno == ENOENT) 
+                        /* no device or the last device */
+                        rc = 0;
+                else 
+                        fprintf(stderr, "Error getting device list: %s: "
+                                        "check dmesg.\n",
+                                        strerror(errno));
+        }
+        return rc;
+#endif
 }
 
 /* Get echo client's stripe meta-data for the given object
@@ -1585,9 +1620,9 @@ int jt_obd_test_brw(int argc, char **argv)
 
                 shared_data->barrier--;
                 if (shared_data->barrier == 0)
-                        pthread_cond_broadcast(&shared_data->cond);
+                        l_cond_broadcast(&shared_data->cond);
                 else
-                        pthread_cond_wait(&shared_data->cond,
+                        l_cond_wait(&shared_data->cond,
                                           &shared_data->mutex);
 
                 shmem_unlock ();

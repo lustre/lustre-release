@@ -25,31 +25,13 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifdef __KERNEL__
-#include <linux/config.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/unistd.h>
-#include <linux/version.h>
-
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <asm/segment.h>
-#include <linux/mm.h>
-#include <linux/pagemap.h>
-#include <linux/smp_lock.h>
+#include <libcfs/libcfs.h>
 #else 
 #include <liblustre.h>
 #endif
 
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_lib.h>
+#include <lustre_dlm.h>
+#include <lustre_lib.h>
 
 /* invariants:
  - only the owner of the lock changes l_owner/l_depth
@@ -67,7 +49,7 @@ void l_lock(struct lustre_lock *lock)
         int owner = 0;
 
         spin_lock(&lock->l_spin);
-        if (lock->l_owner == current)
+        if (lock->l_owner == cfs_current())
                 owner = 1;
         spin_unlock(&lock->l_spin);
 
@@ -78,9 +60,9 @@ void l_lock(struct lustre_lock *lock)
         if (owner) {
                 ++lock->l_depth;
         } else {
-                down(&lock->l_sem);
+                mutex_down(&lock->l_sem);
                 spin_lock(&lock->l_spin);
-                lock->l_owner = current;
+                lock->l_owner = cfs_current();
                 lock->l_depth = 0;
                 spin_unlock(&lock->l_spin);
         }
@@ -88,15 +70,15 @@ void l_lock(struct lustre_lock *lock)
 
 void l_unlock(struct lustre_lock *lock)
 {
-        LASSERTF(lock->l_owner == current, "lock %p, current %p\n",
-                 lock->l_owner, current);
+        LASSERTF(lock->l_owner == cfs_current(), "lock %p, current %p\n",
+                 lock->l_owner, cfs_current());
         LASSERTF(lock->l_depth >= 0, "depth %d\n", lock->l_depth);
 
         spin_lock(&lock->l_spin);
         if (--lock->l_depth < 0) {
                 lock->l_owner = NULL;
                 spin_unlock(&lock->l_spin);
-                up(&lock->l_sem);
+                mutex_up(&lock->l_sem);
                 return;
         }
         spin_unlock(&lock->l_spin);
@@ -107,7 +89,7 @@ int l_has_lock(struct lustre_lock *lock)
         int depth = -1, owner = 0;
 
         spin_lock(&lock->l_spin);
-        if (lock->l_owner == current) {
+        if (lock->l_owner == cfs_current()) {
                 depth = lock->l_depth;
                 owner = 1;
         }
@@ -119,28 +101,27 @@ int l_has_lock(struct lustre_lock *lock)
 }
 
 #ifdef __KERNEL__
-#include <linux/lustre_version.h>
 void l_check_ns_lock(struct ldlm_namespace *ns)
 {
-        static unsigned long next_msg;
+        static cfs_time_t next_msg;
 
-        if (!l_has_lock(&ns->ns_lock) && time_after(jiffies, next_msg)) {
+        if (!l_has_lock(&ns->ns_lock) && cfs_time_after(cfs_time_current(), next_msg)) {
                 CERROR("namespace %s lock not held when it should be; tell "
                        "phil\n", ns->ns_name);
                 libcfs_debug_dumpstack(NULL);
-                next_msg = jiffies + 60 * HZ;
+                next_msg = cfs_time_shift(60);
         }
 }
 
 void l_check_no_ns_lock(struct ldlm_namespace *ns)
 {
-        static unsigned long next_msg;
+        static cfs_time_t next_msg;
 
-        if (l_has_lock(&ns->ns_lock) && time_after(jiffies, next_msg)) {
+        if (l_has_lock(&ns->ns_lock) && cfs_time_after(cfs_time_current(), next_msg)) {
                 CERROR("namespace %s lock held illegally; tell phil\n",
                        ns->ns_name);
                 libcfs_debug_dumpstack(NULL);
-                next_msg = jiffies + 60 * HZ;
+                next_msg = cfs_time_shift(60);
         }
 }
 

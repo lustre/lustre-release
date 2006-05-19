@@ -12,19 +12,12 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#ifdef __KERNEL__
-# include <linux/ctype.h>
-# include <linux/kernel.h>
-# include <linux/sched.h>
-# include <linux/smp_lock.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/obd_ost.h> /* for LUSTRE_OST_NAME */
-#include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
+#include <obd_support.h>
+#include <obd_class.h>
 
 struct uuid {
         __u32   time_low;

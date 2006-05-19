@@ -36,11 +36,10 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_mdc.h>
-#include <linux/lustre_acl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <lustre_dlm.h>
+#include <lustre_mds.h>
+#include <lprocfs_status.h>
 #include "mdc_internal.h"
 
 int it_disposition(struct lookup_intent *it, int flag)
@@ -374,7 +373,8 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[repbufcnt++] = obddev->u.cli.cl_max_mds_cookiesize;
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
-                                  OBD_MD_FLACL | OBD_MD_FLMODEASIZE;
+                                  OBD_MD_FLACL | OBD_MD_FLMODEASIZE |
+                                  OBD_MD_FLDIREA;
                 size[req_buffers++] = sizeof(struct mdt_body);
                 size[req_buffers++] = op_data->namelen + 1;
 

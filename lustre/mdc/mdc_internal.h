@@ -25,7 +25,7 @@
 #ifndef _MDC_INTERNAL_H
 #define _MDC_INTERNAL_H
 
-#include <linux/lustre_mdc.h>
+#include <lustre_mdc.h>
 
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
                        __u64 valid, struct lu_fid *fid, int ea_size);

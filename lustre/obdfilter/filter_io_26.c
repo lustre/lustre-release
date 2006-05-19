@@ -35,9 +35,9 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
-#include <linux/obd_class.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_quota.h>
+#include <obd_class.h>
+#include <lustre_fsfilt.h>
+#include <lustre_quota.h>
 #include "filter_internal.h"
 
 /* 512byte block min */
@@ -390,11 +390,15 @@ static int filter_clear_page_cache(struct inode *inode,
         rc = generic_osync_inode(inode, inode->i_mapping,
                                  OSYNC_DATA|OSYNC_METADATA);
          */
+        down(&inode->i_sem);
+        current->flags |= PF_SYNCWRITE;
         rc = filemap_fdatawrite(inode->i_mapping);
         rc2 = sync_mapping_buffers(inode->i_mapping);
         if (rc == 0)
                 rc = rc2;
         rc2 = filemap_fdatawait(inode->i_mapping);
+        current->flags &= ~PF_SYNCWRITE;
+        up(&inode->i_sem);
         if (rc == 0)
                 rc = rc2;
         if (rc != 0)

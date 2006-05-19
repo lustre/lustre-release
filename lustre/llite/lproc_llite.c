@@ -22,10 +22,10 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/version.h>
-#include <linux/lustre_lite.h>
-#include <linux/lprocfs_status.h>
+#include <lustre_lite.h>
+#include <lprocfs_status.h>
 #include <linux/seq_file.h>
-#include <linux/obd_support.h>
+#include <obd_support.h>
 
 #include "llite_internal.h"
 
@@ -201,13 +201,57 @@ static int ll_wr_max_readahead_mb(struct file *file, const char *buffer,
                 return rc;
 
         if (val < 0 || val > (num_physpages >> (20 - PAGE_CACHE_SHIFT - 1))) {
-                CERROR("can't set readahead more than %lu MB\n",
+                CERROR("can't set file readahead more than %lu MB\n",
                         num_physpages >> (20 - PAGE_CACHE_SHIFT - 1));
                 return -ERANGE;
         }
 
         spin_lock(&sbi->ll_lock);
         sbi->ll_ra_info.ra_max_pages = val << (20 - PAGE_CACHE_SHIFT);
+        spin_unlock(&sbi->ll_lock);
+
+        return count;
+}
+
+static int ll_rd_max_read_ahead_whole_mb(char *page, char **start, off_t off,
+                                       int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        unsigned val;
+
+        spin_lock(&sbi->ll_lock);
+        val = sbi->ll_ra_info.ra_max_read_ahead_whole_pages >>
+              (20 - PAGE_CACHE_SHIFT);
+        spin_unlock(&sbi->ll_lock);
+
+        return snprintf(page, count, "%u\n", val);
+}
+
+static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        /* Cap this at the current max readahead window size, the readahead
+         * algorithm does this anyway so it's pointless to set it larger. */
+        if (val < 0 ||
+            val > (sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT))) {
+                CERROR("can't set max_read_ahead_whole_mb more than "
+                       "max_read_ahead_mb: %lu\n",
+                       sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT));
+                return -ERANGE;
+        }
+
+        spin_lock(&sbi->ll_lock);
+        sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
+                val << (20 - PAGE_CACHE_SHIFT);
         spin_unlock(&sbi->ll_lock);
 
         return count;
@@ -280,8 +324,8 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         else
                 sbi->ll_flags &= ~LL_SBI_CHECKSUM;
 
-        rc = obd_set_info(sbi->ll_dt_exp, strlen("checksum"), "checksum",
-                          sizeof(val), &val);
+        rc = obd_set_info_async(sbi->ll_dt_exp, strlen("checksum"), "checksum",
+                                sizeof(val), &val, NULL);
         if (rc)
                 CWARN("Failed to set OSC checksum flags: %d\n", rc);
 
@@ -301,6 +345,8 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "max_read_ahead_mb", ll_rd_max_readahead_mb,
                                ll_wr_max_readahead_mb, 0 },
+        { "max_read_ahead_whole_mb", ll_rd_max_read_ahead_whole_mb,
+                                     ll_wr_max_read_ahead_whole_mb, 0 },
         { "max_cached_mb", ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
         { "checksum_pages", ll_rd_checksum, ll_wr_checksum, 0 },
         { 0 }

@@ -24,11 +24,11 @@
  */
 
 #include <liblustre.h>
-#include <linux/lvfs.h>
+#include <lvfs.h>
 #include "lvfs_internal.h"
 
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
+#include <obd.h>
+#include <lustre_lib.h>
 
 /* XXX currently ctxt functions should not be used ?? */
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,

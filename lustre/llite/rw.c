@@ -43,8 +43,8 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_mdc.h>
-#include <linux/lustre_lite.h>
+#include <lustre_mdc.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
@@ -971,10 +971,12 @@ void ll_ra_accounting(struct ll_async_page *llap, struct address_space *mapping)
 }
 
 #define RAS_CDEBUG(ras) \
-        CDEBUG(D_READA, "lrp %lu c %lu ws %lu wl %lu nra %lu\n",        \
-               ras->ras_last_readpage, ras->ras_consecutive,            \
-               ras->ras_window_start, ras->ras_window_len,              \
-               ras->ras_next_readahead);
+        CDEBUG(D_READA,                                                      \
+               "lrp %lu cr %lu cp %lu ws %lu wl %lu nra %lu r %lu ri %lu\n", \
+               ras->ras_last_readpage, ras->ras_consecutive_requests,        \
+               ras->ras_consecutive_pages, ras->ras_window_start,            \
+               ras->ras_window_len, ras->ras_next_readahead,                 \
+               ras->ras_requests, ras->ras_request_index);
 
 static int index_in_window(unsigned long index, unsigned long point,
                            unsigned long before, unsigned long after)
@@ -1002,9 +1004,13 @@ void ll_ra_read_in(struct file *f, struct ll_ra_read *rar)
         struct ll_readahead_state *ras;
 
         ras = ll_ras_get(f);
-        rar->lrr_reader = current;
 
         spin_lock(&ras->ras_lock);
+        ras->ras_requests++;
+        ras->ras_request_index = 0;
+        ras->ras_consecutive_requests++;
+        rar->lrr_reader = current;
+
         list_add(&rar->lrr_linkage, &ras->ras_read_beads);
         spin_unlock(&ras->ras_lock);
 }
@@ -1075,34 +1081,19 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
         spin_lock(&ras->ras_lock);
         bead = ll_ra_read_get_locked(ras);
-        /* reserve a part of the read-ahead window that we'll be issuing */
+        /* Enlarge the RA window to encompass the full read */
+        if (bead != NULL && ras->ras_window_start + ras->ras_window_len <
+            bead->lrr_start + bead->lrr_count) {
+                ras->ras_window_len = bead->lrr_start + bead->lrr_count -
+                                      ras->ras_window_start;
+        }
+        /* Reserve a part of the read-ahead window that we'll be issuing */
         if (ras->ras_window_len) {
                 start = ras->ras_next_readahead;
                 end = ras->ras_window_start + ras->ras_window_len - 1;
         }
-        if (bead != NULL) {
-                pgoff_t read_end;
-
-                start = max(start, bead->lrr_start);
-                read_end = bead->lrr_start + bead->lrr_count - 1;
-                if (ras->ras_consecutive > start - bead->lrr_start + 1)
-                        /*
-                         * if current read(2) is a part of larger sequential
-                         * read, make sure read-ahead is at least to the end
-                         * of the read region.
-                         *
-                         * XXX nikita: This doesn't work when some pages in
-                         * [lrr_start, start] were cached (and, as a result,
-                         * weren't counted in ->ras_consecutive).
-                         */
-                        end = max(end, read_end);
-                else
-                        /*
-                         * otherwise, clip read-ahead at the read boundary.
-                         */
-                        end = read_end;
-        }
         if (end != 0) {
+                /* Truncate RA window to end of file */
                 end = min(end, (unsigned long)((kms - 1) >> PAGE_CACHE_SHIFT));
                 ras->ras_next_readahead = max(end, end + 1);
                 RAS_CDEBUG(ras);
@@ -1209,10 +1200,11 @@ static void ras_set_start(struct ll_readahead_state *ras, unsigned long index)
 static void ras_reset(struct ll_readahead_state *ras, unsigned long index)
 {
         ras->ras_last_readpage = index;
-        ras->ras_consecutive = 1;
+        ras->ras_consecutive_requests = 0;
+        ras->ras_consecutive_pages = 0;
         ras->ras_window_len = 0;
         ras_set_start(ras, index);
-        ras->ras_next_readahead = ras->ras_window_start;
+        ras->ras_next_readahead = max(ras->ras_window_start, index);
 
         RAS_CDEBUG(ras);
 }
@@ -1221,11 +1213,13 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
 {
         spin_lock_init(&ras->ras_lock);
         ras_reset(ras, 0);
+        ras->ras_requests = 0;
         INIT_LIST_HEAD(&ras->ras_read_beads);
 }
 
-static void ras_update(struct ll_sb_info *sbi, struct ll_readahead_state *ras,
-                       unsigned long index, unsigned hit)
+static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
+                       struct ll_readahead_state *ras, unsigned long index,
+                       unsigned hit)
 {
         struct ll_ra_info *ra = &sbi->ll_ra_info;
         int zero = 0;
@@ -1252,36 +1246,62 @@ static void ras_update(struct ll_sb_info *sbi, struct ll_readahead_state *ras,
                 ll_ra_stats_inc_unlocked(ra, RA_STAT_MISS_IN_WINDOW);
         }
 
+        /* On the second access to a file smaller than the tunable
+         * ra_max_read_ahead_whole_pages trigger RA on all pages in the
+         * file up to ra_max_pages.  This is simply a best effort and
+         * only occurs once per open file.  Normal RA behavior is reverted
+         * to for subsequent IO.  The mmap case does not increment
+         * ras_requests and thus can never trigger this behavior. */
+        if (ras->ras_requests == 2 && !ras->ras_request_index) {
+                __u64 kms_pages;
+
+                kms_pages = (inode->i_size + PAGE_SIZE - 1) >> PAGE_CACHE_SHIFT;
+
+                CDEBUG(D_READA, "kmsp %llu mwp %lu mp %lu\n", kms_pages,
+                       ra->ra_max_read_ahead_whole_pages, ra->ra_max_pages);
+
+                if (kms_pages &&
+                    kms_pages <= ra->ra_max_read_ahead_whole_pages) {
+                        ras->ras_window_start = 0;
+                        ras->ras_last_readpage = 0;
+                        ras->ras_next_readahead = 0;
+                        ras->ras_window_len = min(ra->ra_max_pages,
+                                ra->ra_max_read_ahead_whole_pages);
+                        GOTO(out_unlock, 0);
+                }
+        }
+
         if (zero) {
                 ras_reset(ras, index);
                 GOTO(out_unlock, 0);
         }
 
         ras->ras_last_readpage = index;
-        ras->ras_consecutive++;
+        ras->ras_consecutive_pages++;
         ras_set_start(ras, index);
         ras->ras_next_readahead = max(ras->ras_window_start,
                                       ras->ras_next_readahead);
 
-        /* wait for a few pages to arrive before issuing readahead to avoid
-         * the worst overutilization */
-        if (ras->ras_consecutive == 3) {
+        /* Trigger RA in the mmap case where ras_consecutive_requests
+         * is not incremented and thus can't be used to trigger RA */
+        if (!ras->ras_window_len && ras->ras_consecutive_pages == 3) {
                 ras->ras_window_len = PTLRPC_MAX_BRW_PAGES;
                 GOTO(out_unlock, 0);
         }
 
-        /* we need to increase the window sometimes.  we'll arbitrarily
-         * do it half-way through the pages in an rpc */
-        if ((index & (PTLRPC_MAX_BRW_PAGES - 1)) ==
-            (PTLRPC_MAX_BRW_PAGES >> 1)) {
-                ras->ras_window_len += PTLRPC_MAX_BRW_PAGES;
-                ras->ras_window_len = min(ras->ras_window_len,
+        /* The initial ras_window_len is set to the request size.  To avoid
+         * uselessly reading and discarding pages for random IO the window is
+         * only increased once per consecutive request received. */
+        if (ras->ras_consecutive_requests > 1 && !ras->ras_request_index) {
+                ras->ras_window_len = min(ras->ras_window_len +
+                                          PTLRPC_MAX_BRW_PAGES,
                                           ra->ra_max_pages);
         }
 
         EXIT;
 out_unlock:
         RAS_CDEBUG(ras);
+        ras->ras_request_index++;
         spin_unlock(&ras->ras_lock);
         spin_unlock(&sbi->ll_lock);
         return;
@@ -1357,6 +1377,17 @@ int ll_readpage(struct file *filp, struct page *page)
                (((loff_t)page->index) << PAGE_SHIFT));
         LASSERT(atomic_read(&filp->f_dentry->d_inode->i_count) > 0);
 
+        if (!ll_i2info(inode)->lli_smd) {
+                /* File with no objects - one big hole */
+                /* We use this just for remove_from_page_cache that is not
+                 * exported, we'd make page back up to date. */
+                ll_truncate_complete_page(page);
+                clear_page(page);
+                SetPageUptodate(page);
+                unlock_page(page);
+                RETURN(0);
+        }
+
         rc = oig_init(&oig);
         if (rc < 0)
                 GOTO(out, rc);
@@ -1370,7 +1401,7 @@ int ll_readpage(struct file *filp, struct page *page)
                 GOTO(out, rc = PTR_ERR(llap));
 
         if (ll_i2sbi(inode)->ll_ra_info.ra_max_pages)
-                ras_update(ll_i2sbi(inode), &fd->fd_ras, page->index,
+                ras_update(ll_i2sbi(inode), inode, &fd->fd_ras, page->index,
                            llap->llap_defer_uptodate);
 
         if (llap->llap_defer_uptodate) {

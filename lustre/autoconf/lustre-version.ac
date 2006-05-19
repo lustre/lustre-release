@@ -1,7 +1,7 @@
 m4_define([LUSTRE_MAJOR],[1])
-m4_define([LUSTRE_MINOR],[4])
-m4_define([LUSTRE_PATCH],[6])
-m4_define([LUSTRE_FIX],[90])
+m4_define([LUSTRE_MINOR],[5])
+m4_define([LUSTRE_PATCH],[1])
+m4_define([LUSTRE_FIX],[0])
 
 dnl # 288 stands for 0.0.1.32 , next version with fixes is ok, but next after
 dnl # next release candidate/beta would spill this warning already.

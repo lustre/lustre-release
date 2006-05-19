@@ -22,7 +22,7 @@
 #ifndef _LMV_INTERNAL_H_
 #define _LMV_INTERNAL_H_
 
-#include <linux/lustre_idl.h>
+#include <lustre/lustre_idl.h>
 
 #define LMV_MAX_TGT_COUNT 128
 

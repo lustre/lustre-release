@@ -38,16 +38,16 @@
 #endif
 
 /* LUSTRE_VERSION_CODE */
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 
-#include <linux/obd_support.h>
+#include <obd_support.h>
 /* lustre_swab_mdt_body */
-#include <linux/lustre_idl.h>
+#include <lustre/lustre_idl.h>
 /* obd2cli_tgt() (required by DEBUG_REQ()) */
-#include <linux/obd.h>
+#include <obd.h>
 
 /* struct ptlrpc_request, lustre_msg* */
-#include <linux/lustre_req_layout.h>
+#include <lustre_req_layout.h>
 
 static const struct req_msg_field *empty[] = {}; /* none */
 

@@ -28,14 +28,14 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #ifdef __KERNEL__
-#include <asm/div64.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/lustre_idl.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <lustre/lustre_idl.h>
 
 #include "lov_internal.h"
 
@@ -44,7 +44,7 @@ static void lov_init_set(struct lov_request_set *set)
         set->set_count = 0;
         set->set_completes = 0;
         set->set_success = 0;
-        INIT_LIST_HEAD(&set->set_list);
+        CFS_INIT_LIST_HEAD(&set->set_list);
         atomic_set(&set->set_refcount, 1);
 }
 
@@ -591,10 +591,8 @@ int lov_fini_create_set(struct lov_request_set *set,struct lov_stripe_md **lsmp)
         if (set == NULL)
                 RETURN(0);
         LASSERT(set->set_exp);
-        if (set->set_completes) {
+        if (set->set_completes)
                 rc = create_done(set->set_exp, set, lsmp);
-                /* FIXME update qos data here */
-        }
 
         if (atomic_dec_and_test(&set->set_refcount))
                 lov_finish_set(set);
@@ -649,9 +647,8 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **lsmp,
                         struct obdo *src_oa, struct obd_trans_info *oti,
                         struct lov_request_set **reqset)
 {
-        struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_request_set *set;
-        int rc = 0, newea = 0;
+        int rc = 0;
         ENTRY;
 
         OBD_ALLOC(set, sizeof(*set));
@@ -664,51 +661,11 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **lsmp,
         set->set_oa = src_oa;
         set->set_oti = oti;
 
-        if (set->set_md == NULL) {
-                int stripes, stripe_cnt;
-                stripe_cnt = lov_get_stripecnt(lov, 0);
-
-                /* If the MDS file was truncated up to some size, stripe over
-                 * enough OSTs to allow the file to be created at that size. */
-                if (src_oa->o_valid & OBD_MD_FLSIZE) {
-                        stripes=((src_oa->o_size+LUSTRE_STRIPE_MAXBYTES)>>12)-1;
-                        do_div(stripes, (__u32)(LUSTRE_STRIPE_MAXBYTES >> 12));
-
-                        if (stripes > lov->desc.ld_active_tgt_count)
-                                GOTO(out_set, rc = -EFBIG);
-                        if (stripes < stripe_cnt)
-                                stripes = stripe_cnt;
-                } else {
-                        stripes = stripe_cnt;
-                }
-
-                rc = lov_alloc_memmd(&set->set_md, stripes,
-                                     lov->desc.ld_pattern ?
-                                     lov->desc.ld_pattern : LOV_PATTERN_RAID0, 
-                                     LOV_MAGIC);
-                if (rc < 0)
-                        goto out_set;
-                newea = 1;
-        }
-
-        rc = qos_prep_create(lov, set, newea);
+        rc = qos_prep_create(exp, set);
         if (rc)
-                goto out_lsm;
-
-        if (oti && (src_oa->o_valid & OBD_MD_FLCOOKIE)) {
-                oti_alloc_cookies(oti, set->set_count);
-                if (!oti->oti_logcookies)
-                        goto out_lsm;
-                set->set_cookies = oti->oti_logcookies;
-        }
-        *reqset = set;
-        RETURN(rc);
-
-out_lsm:
-        if (*lsmp == NULL)
-                obd_free_memmd(exp, &set->set_md);
-out_set:
-        lov_fini_create_set(set, lsmp);
+                lov_fini_create_set(set, lsmp);
+        else
+                *reqset = set;
         RETURN(rc);
 }
 

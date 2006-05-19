@@ -28,9 +28,8 @@
 #define EXPORT_SYMTAB
 #endif
 
-#include <linux/fs.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
+#include <obd_class.h>
+#include <lustre_log.h>
 #include <libcfs/list.h>
 #include "llog_internal.h"
 
@@ -38,6 +37,7 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 {
         char *start, *end, *endp;
 
+        ENTRY;
         start = str;
         if (*start != '#')
                 RETURN(-EINVAL);
@@ -85,6 +85,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         char *endp;
         int cur_index, rc = 0;
 
+        ENTRY;
         cur_index = rec->lrh_index;
 
         if (ioc_data && (ioc_data->ioc_inllen1)) {
@@ -128,7 +129,6 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 case MDS_UNLINK_REC:
                 case MDS_SETATTR_REC:
                 case OBD_CFG_REC:
-                case PTL_CFG_REC:               /* obsolete */
                 case LLOG_HDR_MAGIC: {
                          l = snprintf(out, remains, "[index]: %05d  [type]: "
                                       "%02x  [len]: %04d ok\n",
@@ -169,6 +169,7 @@ static int llog_print_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         char *endp;
         int cur_index;
 
+        ENTRY;
         if (ioc_data->ioc_inllen1) {
                 l = 0;
                 remains = ioc_data->ioc_inllen4 +
@@ -222,6 +223,7 @@ static int llog_remove_log(struct llog_handle *cat, struct llog_logid *logid)
         struct llog_handle *log;
         int rc, index = 0;
 
+        ENTRY;
         down_write(&cat->lgh_lock);
         rc = llog_cat_id2handle(cat, &log, logid);
         if (rc) {
@@ -252,8 +254,9 @@ static int llog_delete_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         struct  llog_logid_rec *lir = (struct llog_logid_rec*)rec;
         int     rc;
 
+        ENTRY;
         if (rec->lrh_type != LLOG_LOGID_MAGIC)
-              return (-EINVAL);
+              RETURN (-EINVAL);
         rc = llog_remove_log(handle, &lir->lid_id);
 
         RETURN(rc);
@@ -266,6 +269,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         int err = 0;
         struct llog_handle *handle = NULL;
 
+        ENTRY;
         if (*data->ioc_inlbuf1 == '#') {
                 err = str2logid(&logid, data->ioc_inlbuf1, data->ioc_inllen1);
                 if (err)
@@ -406,6 +410,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         char *out;
         int l, remains, rc = 0;
 
+        ENTRY;
         size = sizeof(*idarray) * count;
 
         OBD_ALLOC(idarray, size);

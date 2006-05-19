@@ -28,19 +28,7 @@
 #include <sys/param.h>
 #include <assert.h>
 
-#ifdef HAVE_LIBREADLINE
-#define READLINE_LIBRARY
-#include <readline/readline.h>
-
-/* completion_matches() is #if 0-ed out in modern glibc */
-#ifndef completion_matches
-#  define completion_matches rl_completion_matches
-#endif
-extern void using_history(void);
-extern void stifle_history(int);
-extern void add_history(char *);
-#endif
-
+#include "platform.h"
 #include "parser.h"
 
 static command_t * top_level;           /* Top level of commands, initialized by
@@ -345,6 +333,7 @@ char * readline(char * prompt)
         char *line = malloc(size);
         char *ptr = line;
         int c;
+        int eof = 0;
 
         if (line == NULL)
                 return NULL;
@@ -370,6 +359,7 @@ char * readline(char * prompt)
                                 line = tmp;
                         }
                 } else {
+                        eof = 1;
                         if (ferror(stdin))
                                 goto outfree;
                         goto out;
@@ -377,6 +367,10 @@ char * readline(char * prompt)
         }
 out:
         *ptr = 0;
+        if (eof && (strlen(line) == 0)) {
+                free(line);
+                line = NULL;
+        }
         return line;
 outfree:
         free(line);

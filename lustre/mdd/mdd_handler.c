@@ -32,16 +32,15 @@
 
 #include <linux/module.h>
 
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_ver.h>
-#include <linux/obd_support.h>
-#include <linux/lprocfs_status.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_ver.h>
+#include <obd_support.h>
+#include <lprocfs_status.h>
 
-
-#include <linux/lu_object.h>
-#include <linux/md_object.h>
-#include <linux/dt_object.h>
+#include <lu_object.h>
+#include <md_object.h>
+#include <dt_object.h>
 
 #include "mdd_internal.h"
 

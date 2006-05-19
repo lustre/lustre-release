@@ -25,8 +25,8 @@
 
 #if defined(__KERNEL__)
 
-#include <linux/obd.h>
-#include <linux/md_object.h>
+#include <obd.h>
+#include <md_object.h>
 
 struct mdc_cli_desc {
         struct obd_connect_data  cl_conn_data;

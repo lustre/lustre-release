@@ -24,17 +24,14 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifdef __KERNEL__
-# include <linux/types.h>
-# include <linux/random.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_handles.h>
+#include <obd_support.h>
+#include <lustre_handles.h>
 
-static spinlock_t handle_lock = SPIN_LOCK_UNLOCKED;
+spinlock_t handle_lock;
 static __u64 handle_base;
 #define HANDLE_INCR 7
 static struct list_head *handle_hash = NULL;
@@ -146,7 +143,7 @@ int class_handle_init(void)
 
         for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
              bucket--)
-                INIT_LIST_HEAD(bucket);
+                CFS_INIT_LIST_HEAD(bucket);
 
         get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);

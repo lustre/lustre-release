@@ -7,15 +7,13 @@
 
 #ifdef __KERNEL__
 # include <linux/fs.h>
-# include <linux/dcache.h>
 #endif
-#include <linux/lustre_handles.h>
 #include <libcfs/kp30.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_export.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_lib.h>
+#include <lustre_dlm.h>
+#include <lustre_log.h>
+#include <lustre_export.h>
 
 
 /* MDS has o_t * 1000 */

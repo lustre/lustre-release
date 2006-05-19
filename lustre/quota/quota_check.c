@@ -34,13 +34,13 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_cfg.h>
-#include <linux/obd_ost.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_quota.h>
+#include <obd_class.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lustre_cfg.h>
+#include <obd_ost.h>
+#include <lustre_fsfilt.h>
+#include <lustre_quota.h>
 #include "quota_internal.h"
 
 #ifdef __KERNEL__
@@ -201,10 +201,11 @@ int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk)
                 rc = -EINTR;
 
         qchk->obd_uuid = cli->cl_target_uuid;
+        /* FIXME change strncmp to strcmp and save the strlen op */
         if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME,
             strlen(LUSTRE_OSC_NAME)))
-                memcpy(qchk->obd_type, LUSTRE_FILTER_NAME,
-                       strlen(LUSTRE_FILTER_NAME));
+                memcpy(qchk->obd_type, LUSTRE_OST_NAME,
+                       strlen(LUSTRE_OST_NAME));
         else if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME,
                  strlen(LUSTRE_MDC_NAME)))
                 memcpy(qchk->obd_type, LUSTRE_MDS_NAME,

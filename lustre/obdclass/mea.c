@@ -23,16 +23,16 @@
 #ifdef __KERNEL__
 #include <linux/kmod.h>   /* for request_module() */
 #include <linux/module.h>
-#include <linux/obd_class.h>
+#include <obd_class.h>
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #else 
 #include <liblustre.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
+#include <obd_class.h>
+#include <obd.h>
 #endif
-#include <linux/lprocfs_status.h>
+#include <lprocfs_status.h>
 
 static int mea_last_char_hash(int count, char *name, int namelen)
 {

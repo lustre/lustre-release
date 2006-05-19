@@ -23,7 +23,7 @@ extern int llapi_ping(char *obd_type, char *obd_name);
 extern int llapi_target_check(int num_types, char **obd_types, char *dir);
 extern int llapi_catinfo(char *dir, char *keyword, char *node_name);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
-extern int llapi_is_lustre_mnttype(char *type);
+extern int llapi_is_lustre_mnttype(struct mntent *mnt);
 extern int llapi_quotachown(char *path, int flag);
 extern int llapi_quotacheck(char *mnt, int check_type);
 extern int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk);

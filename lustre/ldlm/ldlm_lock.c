@@ -27,15 +27,13 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #ifdef __KERNEL__
-# include <linux/slab.h>
-# include <linux/module.h>
-# include <linux/lustre_dlm.h>
+# include <libcfs/libcfs.h>
 #else
 # include <liblustre.h>
 # include <libcfs/kp30.h>
 #endif
 
-#include <linux/obd_class.h>
+#include <obd_class.h>
 #include "ldlm_internal.h"
 
 //struct lustre_lock ldlm_everything_lock;
@@ -83,7 +81,7 @@ char *ldlm_it2str(int it)
         }
 }
 
-extern kmem_cache_t *ldlm_lock_slab;
+extern cfs_mem_cache_t *ldlm_lock_slab;
 struct lustre_lock ldlm_handle_lock;
 
 static ldlm_processing_policy ldlm_processing_policy_table[] = {
@@ -249,20 +247,20 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         if (resource == NULL)
                 LBUG();
 
-        OBD_SLAB_ALLOC(lock, ldlm_lock_slab, SLAB_NOFS, sizeof(*lock));
+        OBD_SLAB_ALLOC(lock, ldlm_lock_slab, CFS_ALLOC_IO, sizeof(*lock));
         if (lock == NULL)
                 RETURN(NULL);
 
         lock->l_resource = ldlm_resource_getref(resource);
 
         atomic_set(&lock->l_refc, 2);
-        INIT_LIST_HEAD(&lock->l_children);
-        INIT_LIST_HEAD(&lock->l_childof);
-        INIT_LIST_HEAD(&lock->l_res_link);
-        INIT_LIST_HEAD(&lock->l_lru);
-        INIT_LIST_HEAD(&lock->l_export_chain);
-        INIT_LIST_HEAD(&lock->l_pending_chain);
-        init_waitqueue_head(&lock->l_waitq);
+        CFS_INIT_LIST_HEAD(&lock->l_children);
+        CFS_INIT_LIST_HEAD(&lock->l_childof);
+        CFS_INIT_LIST_HEAD(&lock->l_res_link);
+        CFS_INIT_LIST_HEAD(&lock->l_lru);
+        CFS_INIT_LIST_HEAD(&lock->l_export_chain);
+        CFS_INIT_LIST_HEAD(&lock->l_pending_chain);
+        cfs_waitq_init(&lock->l_waitq);
 
         spin_lock(&resource->lr_namespace->ns_counter_lock);
         resource->lr_namespace->ns_locks++;
@@ -275,7 +273,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                 l_unlock(&parent->l_resource->lr_namespace->ns_lock);
         }
 
-        INIT_LIST_HEAD(&lock->l_handle.h_link);
+        CFS_INIT_LIST_HEAD(&lock->l_handle.h_link);
         class_handle_hash(&lock->l_handle, lock_handle_addref);
 
         RETURN(lock);
@@ -482,7 +480,7 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
                 lock->l_readers++;
         if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP))
                 lock->l_writers++;
-        lock->l_last_used = jiffies;
+        lock->l_last_used = cfs_time_current();
         LDLM_LOCK_GET(lock);
         LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -669,7 +667,7 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
 {
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         lock->l_flags |= LDLM_FL_CAN_MATCH;
-        wake_up(&lock->l_waitq);
+        cfs_waitq_signal(&lock->l_waitq);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
 
@@ -756,7 +754,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                 }
                         }
 
-                        lwi = LWI_TIMEOUT_INTR(obd_timeout*HZ, NULL,NULL,NULL);
+                        lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout), NULL,NULL,NULL);
 
                         /* XXX FIXME see comment on CAN_MATCH in lustre_dlm.h */
                         l_wait_event(lock->l_waitq,
@@ -826,7 +824,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         lock->l_blocking_ast = blocking;
         lock->l_completion_ast = completion;
         lock->l_glimpse_ast = glimpse;
-        lock->l_pid = current->pid;
+        lock->l_pid = cfs_curproc_pid();
 
         if (lvb_len) {
                 lock->l_lvb_len = lvb_len;
@@ -1016,6 +1014,7 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 {
         int i, rc;
 
+        ENTRY;
         l_lock(&ns->ns_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
                 struct list_head *tmp, *next;

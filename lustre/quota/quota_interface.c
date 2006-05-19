@@ -35,13 +35,13 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_cfg.h>
-#include <linux/obd_ost.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_quota.h>
+#include <obd_class.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lustre_cfg.h>
+#include <obd_ost.h>
+#include <lustre_fsfilt.h>
+#include <lustre_quota.h>
 #include "quota_internal.h"
 
 
@@ -410,7 +410,7 @@ spinlock_t qinfo_list_lock = SPIN_LOCK_UNLOCKED;
 
 static struct list_head qinfo_hash[NR_DQHASH];
 /* SLAB cache for client quota context */
-kmem_cache_t *qinfo_cachep = NULL;
+cfs_mem_cache_t *qinfo_cachep = NULL;
 
 static inline int const hashfn(struct client_obd *cli,
                                unsigned long id,
@@ -460,7 +460,7 @@ static struct osc_quota_info *alloc_qinfo(struct client_obd *cli,
         struct osc_quota_info *oqi;
         ENTRY;
 
-        OBD_SLAB_ALLOC(oqi, qinfo_cachep, SLAB_KERNEL, sizeof(*oqi));
+        OBD_SLAB_ALLOC(oqi, qinfo_cachep, CFS_ALLOC_STD, sizeof(*oqi));
         if(!oqi)
                 RETURN(NULL);
 
@@ -574,9 +574,9 @@ int osc_quota_init(void)
         ENTRY;
 
         LASSERT(qinfo_cachep == NULL);
-        qinfo_cachep = kmem_cache_create("osc_quota_info",
+        qinfo_cachep = cfs_mem_cache_create("osc_quota_info",
                                          sizeof(struct osc_quota_info),
-                                         0, 0, NULL, NULL);
+                                         0, 0);
         if (!qinfo_cachep)
                 RETURN(-ENOMEM);
 
@@ -601,8 +601,10 @@ int osc_quota_exit(void)
         }
         spin_unlock(&qinfo_list_lock);
 
-        rc = kmem_cache_destroy(qinfo_cachep);
-        LASSERT(rc == 0);
+        rc = cfs_mem_cache_destroy(qinfo_cachep);
+        LASSERTF(rc == 0, "couldn't destory qinfo_cachep slab\n");
+        qinfo_cachep = NULL;
+
         RETURN(0);
 }
 

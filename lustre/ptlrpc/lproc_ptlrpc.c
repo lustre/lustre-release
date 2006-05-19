@@ -24,13 +24,12 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <linux/obd_support.h>
-#include <linux/obd.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_net.h>
-#include <linux/obd_class.h>
-#include <linux/seq_file.h>
+#include <obd_support.h>
+#include <obd.h>
+#include <lprocfs_status.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_net.h>
+#include <obd_class.h>
 #include "ptlrpc_internal.h"
 
 

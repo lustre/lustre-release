@@ -42,10 +42,10 @@
 # include <linux/locks.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <lustre_fsfilt.h>
+#include <lprocfs_status.h>
 
 #include "mds_internal.h"
 
@@ -1095,6 +1095,14 @@ found_child:
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
                 obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;
                 GOTO(cleanup, rc = -EAGAIN);
+        }
+
+        if (!S_ISREG(dchild->d_inode->i_mode) &&
+            !S_ISDIR(dchild->d_inode->i_mode) &&
+            (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH)) {
+                /* If client supports this, do not return open handle for
+                 * special device nodes */
+                GOTO(cleanup_no_trans, rc = 0);
         }
 
         /* Step 5: mds_open it */

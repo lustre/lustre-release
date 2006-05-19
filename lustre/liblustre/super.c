@@ -51,7 +51,6 @@
 #undef LIST_HEAD
 
 #include "llite_lib.h"
-#include <linux/lustre_ver.h>
 
 #ifndef MAY_EXEC
 #define MAY_EXEC        1
@@ -667,7 +666,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
-                llu_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+                llu_prepare_md_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = md_setattr(sbi->ll_md_exp, &op_data,
                                 attr, NULL, 0, NULL, 0, &request);
@@ -863,7 +862,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
                 CERROR("can't allocate new fid, rc %d\n", err);
                 RETURN(err);
         }
-        llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
         err = md_create(sbi->ll_md_exp, &op_data,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                         current->fsuid, current->fsgid, current->cap_effective,
@@ -993,10 +992,10 @@ static int llu_iop_mknod_raw(struct pnode *pno,
                         RETURN(err);
                 }
 
-                llu_prepare_mdc_op_data(&op_data, dir, NULL,
-                                        pno->p_base->pb_name.name,
-                                        pno->p_base->pb_name.len,
-                                        0);
+                llu_prepare_md_op_data(&op_data, dir, NULL,
+                                       pno->p_base->pb_name.name,
+                                       pno->p_base->pb_name.len,
+                                       0);
                 err = md_create(sbi->ll_md_exp, &op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid,
                                 current->cap_effective, dev, &request);
@@ -1027,7 +1026,7 @@ static int llu_iop_link_raw(struct pnode *old, struct pnode *new)
         LASSERT(dir);
 
         liblustre_wait_event(0);
-        llu_prepare_mdc_op_data(&op_data, src, dir, name, namelen, 0);
+        llu_prepare_md_op_data(&op_data, src, dir, name, namelen, 0);
         rc = md_link(llu_i2sbi(src)->ll_md_exp, &op_data, &request);
         ptlrpc_req_finished(request);
         liblustre_wait_event(0);
@@ -1053,7 +1052,7 @@ static int llu_iop_unlink_raw(struct pnode *pno)
         LASSERT(target);
 
         liblustre_wait_event(0);
-        llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
         rc = md_unlink(llu_i2sbi(dir)->ll_md_exp, &op_data, &request);
         if (!rc)
                 rc = llu_objects_destroy(request, dir);
@@ -1080,7 +1079,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         LASSERT(tgt);
 
         liblustre_wait_event(0);
-        llu_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
+        llu_prepare_md_op_data(&op_data, src, tgt, NULL, 0, 0);
         rc = md_rename(llu_i2sbi(src)->ll_md_exp, &op_data,
                        oldname, oldnamelen, newname, newnamelen,
                        &request);
@@ -1232,7 +1231,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
                 CERROR("can't allocate new fid, rc %d\n", err);
                 RETURN(err);
         }
-        llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
         err = md_create(llu_i2sbi(dir)->ll_md_exp, &op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid, current->cap_effective,
                         0, &request);
@@ -1257,7 +1256,7 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
                (long long)llu_i2stat(dir)->st_ino,
                llu_i2info(dir)->lli_st_generation, dir);
 
-        llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, S_IFDIR);
+        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, S_IFDIR);
         rc = md_unlink(llu_i2sbi(dir)->ll_md_exp, &op_data, &request);
         ptlrpc_req_finished(request);
 
@@ -1798,8 +1797,8 @@ llu_fsswop_mount(const char *source,
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, err = -EINVAL);
         }
-        obd_set_info(obd->obd_self_export, strlen("async"), "async",
-                     sizeof(async), &async);
+        obd_set_info_async(obd->obd_self_export, strlen("async"), "async",
+                           sizeof(async), &async, NULL);
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS|OBD_CONNECT_VERSION;
         ocd.ocd_ibits_known = MDS_INODELOCK_FULL;
@@ -1833,8 +1832,8 @@ llu_fsswop_mount(const char *source,
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, err = -EINVAL);
         }
-        obd_set_info(obd->obd_self_export, strlen("async"), "async",
-                     sizeof(async), &async);
+        obd_set_info_async(obd->obd_self_export, strlen("async"), "async",
+                           sizeof(async), &async, NULL);
 
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = ll_ocd_update;

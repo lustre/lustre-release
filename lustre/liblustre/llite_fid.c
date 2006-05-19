@@ -48,7 +48,7 @@
 
 #include "lutil.h"
 #include "llite_lib.h"
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
 int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid)

@@ -39,11 +39,11 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_disk.h>
+#include <obd_class.h>
+#include <lustre_dlm.h>
+#include <lustre_log.h>
+#include <lustre_fsfilt.h>
+#include <lustre_disk.h>
 
 
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
@@ -256,6 +256,8 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         /* The mgc fs exclusion sem. Only one fs can be setup at a time. */
         down(&cli->cl_mgc_sem);
 
+        cleanup_group_info();
+
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops)) {
                 up(&cli->cl_mgc_sem);
@@ -265,9 +267,6 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         }
 
         cli->cl_mgc_vfsmnt = mnt;
-        // FIXME which is the right SB? - filter_common_setup also 
-        CDEBUG(D_MGC, "SB's: fill=%p mnt=%p == root=%p\n", sb, mnt->mnt_sb,
-               mnt->mnt_root->d_inode->i_sb);
         fsfilt_setup(obd, mnt->mnt_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
@@ -497,8 +496,8 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
                 /* Re-enqueue the lock in a separate thread, because we must
                    return from this fn before that lock can be taken. */
-                rc = kernel_thread(mgc_async_requeue, data,
-                                   CLONE_VM | CLONE_FS);
+                rc = cfs_kernel_thread(mgc_async_requeue, data,
+                                       CLONE_VM | CLONE_FILES);
                 if (rc < 0) {
                         CERROR("Cannot re-enqueue thread: %d\n", rc);
                 } else {
@@ -667,8 +666,9 @@ static int mgc_target_register(struct obd_export *exp,
         RETURN(rc);
 }
 
-int mgc_set_info(struct obd_export *exp, obd_count keylen,
-                 void *key, obd_count vallen, void *val)
+int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
+                       void *key, obd_count vallen, void *val, 
+                       struct ptlrpc_request_set *set)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
@@ -1091,7 +1091,7 @@ struct obd_ops mgc_obd_ops = {
         //.o_enqueue      = mgc_enqueue,
         .o_cancel       = mgc_cancel,
         //.o_iocontrol    = mgc_iocontrol,
-        .o_set_info     = mgc_set_info,
+        .o_set_info_async = mgc_set_info_async,
         .o_import_event = mgc_import_event,
         .o_llog_init    = mgc_llog_init,
         .o_llog_finish  = mgc_llog_finish,

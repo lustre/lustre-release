@@ -34,7 +34,7 @@
 #include <linux/module.h>
 
 /* LUSTRE_VERSION_CODE */
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 /*
  * XXX temporary stuff: direct access to ldiskfs/jdb. Interface between osd
  * and file system is not yet specified.
@@ -44,23 +44,23 @@
 /* LDISKFS_SB() */
 #include <linux/ldiskfs_fs.h>
 /* simple_mkdir() */
-#include <linux/lvfs.h>
+#include <lvfs.h>
 
 /*
  * struct OBD_{ALLOC,FREE}*()
  * OBD_FAIL_CHECK
  */
-#include <linux/obd_support.h>
+#include <obd_support.h>
 /* struct ptlrpc_thread */
-#include <linux/lustre_net.h>
+#include <lustre_net.h>
 /* LUSTRE_OSD0_NAME */
-#include <linux/obd.h>
+#include <obd.h>
 /* class_register_type(), class_unregister_type(), class_get_type() */
-#include <linux/obd_class.h>
-#include <linux/lustre_disk.h>
+#include <obd_class.h>
+#include <lustre_disk.h>
 
 /* fid_is_local() */
-#include <linux/lustre_fid.h>
+#include <lustre_fid.h>
 #include <linux/lustre_iam.h>
 
 #include "osd_internal.h"

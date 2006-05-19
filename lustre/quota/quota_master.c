@@ -27,10 +27,10 @@
 #include <linux/init.h>
 #include <linux/quota.h>
 
-#include <linux/obd_class.h>
-#include <linux/lustre_quota.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_mds.h>
+#include <obd_class.h>
+#include <lustre_quota.h>
+#include <lustre_fsfilt.h>
+#include <lustre_mds.h>
 
 #include "quota_internal.h"
 
@@ -71,7 +71,7 @@ void lustre_dquot_exit(void)
         if (lustre_dquot_cachep) {
                 int rc;
                 rc = kmem_cache_destroy(lustre_dquot_cachep);
-                LASSERT(rc == 0);
+                LASSERTF(rc == 0,"couldn't destroy lustre_dquot_cachep slab\n");
                 lustre_dquot_cachep = NULL;
         }
         EXIT;
@@ -528,9 +528,16 @@ static int mds_admin_quota_off(struct obd_device *obd,
 int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
+        struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
+
+        if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
+                CDEBUG(D_INFO, "other people are doing quotacheck\n");
+                atomic_inc(&obt->obt_quotachecking);
+                RETURN(-EBUSY);
+        }
 
         down(&mds->mds_qonoff_sem);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -546,15 +553,23 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
 out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         up(&mds->mds_qonoff_sem);
+        atomic_inc(&obt->obt_quotachecking);
         RETURN(rc);
 }
 
 int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
+        struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
         int rc, rc2;
         ENTRY;
+
+        if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
+                CDEBUG(D_INFO, "other people are doing quotacheck\n");
+                atomic_inc(&obt->obt_quotachecking);
+                RETURN(-EBUSY);
+        }
 
         down(&mds->mds_qonoff_sem);
         /* close admin quota files */
@@ -566,6 +581,8 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         up(&mds->mds_qonoff_sem);
+        atomic_inc(&obt->obt_quotachecking);
+
         RETURN(rc ?: rc2);
 }
 
@@ -1068,13 +1085,13 @@ int mds_quota_recovery(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        down(&lov->lov_lock);
+        mutex_down(&lov->lov_lock);
         if (lov->desc.ld_tgt_count != lov->desc.ld_active_tgt_count) {
                 CWARN("Not all osts are active, abort quota recovery\n");
-                up(&lov->lov_lock);
+                mutex_up(&lov->lov_lock);
                 RETURN(rc);
         }
-        up(&lov->lov_lock);
+        mutex_up(&lov->lov_lock);
 
         data.obd = obd;
         init_completion(&data.comp);

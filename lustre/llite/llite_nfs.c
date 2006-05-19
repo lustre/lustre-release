@@ -22,7 +22,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
-#include <linux/lustre_lite.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 
 __u32 get_uuid2int(const char *name, int len)
@@ -103,7 +103,9 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
 {
         struct inode *inode;
         struct dentry *result;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct list_head *lp;
+#endif
 
         if (fid_num(fid) == 0)
                 return ERR_PTR(-ESTALE);
@@ -120,6 +122,13 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
                 return ERR_PTR(-ESTALE);
         }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        result = d_alloc_anon(inode);
+        if (!result) {
+                iput(inode);
+                return ERR_PTR(-ENOMEM);
+        }
+#else
         /* now to find a dentry.
          * If possible, get a well-connected one
          */
@@ -145,6 +154,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
         }
         result->d_flags |= DCACHE_DISCONNECTED;
 
+#endif
         ll_set_dd(result);
         result->d_op = &ll_d_ops;
         return result;
@@ -234,3 +244,59 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
         *lenp = 5;
         return 1;
 }
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+struct dentry *ll_get_dentry(struct super_block *sb, void *data)
+{
+        __u32 *inump = (__u32*)data;
+        struct lu_fid fid;
+        
+        /* FIXME: seems this is not enough */
+        fid.f_seq = inump[0];
+        fid.f_oid = inump[1];
+        
+        return ll_iget_for_nfs(sb, &fid, S_IFREG);
+}
+
+struct dentry *ll_get_parent(struct dentry *dchild)
+{
+        struct ptlrpc_request *req = NULL;
+        struct inode *dir = dchild->d_inode;
+        struct ll_sb_info *sbi;
+        struct dentry *result = NULL;
+        struct mds_body *body;
+        char dotdot[] = "..";
+        int  rc = 0;
+        ENTRY;
+        
+        LASSERT(dir && S_ISDIR(dir->i_mode));
+        
+        sbi = ll_s2sbi(dir->i_sb);
+ 
+        rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(dir),
+                             dotdot, strlen(dotdot) + 1,
+                             0, 0, &req);
+        if (rc) {
+                CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
+                return ERR_PTR(rc);
+        }
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body)); 
+       
+        LASSERT((body->valid & OBD_MD_FLGENER) && (body->valid & OBD_MD_FLID));
+        
+        result = ll_iget_for_nfs(dir->i_sb, ll_inode2fid(dir), S_IFDIR);
+
+        if (IS_ERR(result))
+                rc = PTR_ERR(result);
+
+        ptlrpc_req_finished(req);
+        if (rc)
+                return ERR_PTR(rc);
+        RETURN(result);
+} 
+
+struct export_operations lustre_export_operations = {
+       .get_parent = ll_get_parent,
+       .get_dentry = ll_get_dentry, 
+};
+#endif

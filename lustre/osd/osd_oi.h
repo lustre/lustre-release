@@ -33,8 +33,7 @@
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
-
-#include <linux/lu_object.h>
+#include <lu_object.h>
 
 struct dentry;
 struct lu_fid;

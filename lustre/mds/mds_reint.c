@@ -34,15 +34,15 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/fs.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_ucache.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <obd.h>
+#include <lustre_lib.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lustre_fsfilt.h>
+#include <lustre_ucache.h>
 
 #include "mds_internal.h"
 
@@ -531,6 +531,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock);
                 if (rc < 0)
                         GOTO(cleanup, rc);
+                rc = 0;
 
                 handle = fsfilt_start_log(obd, inode, FSFILT_OP_SETATTR, NULL,
                                           le32_to_cpu(lmm->lmm_stripe_count));
@@ -1040,6 +1041,22 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
         RETURN(0);
 }
 
+static inline int res_eq(struct ldlm_res_id *res1, struct ldlm_res_id *res2)
+{
+        return !memcmp(res1, res2, sizeof(*res1));
+}
+
+static inline void
+try_to_aggregate_locks(struct ldlm_res_id *res1, ldlm_policy_data_t *p1,
+                        struct ldlm_res_id *res2, ldlm_policy_data_t *p2)
+{
+        if (!res_eq(res1, res2))
+                return;
+        /* XXX: any additional inodebits (to current LOOKUP and UPDATE)
+         * should be taken with great care here */
+        p1->l_inodebits.bits |= p2->l_inodebits.bits;
+}
+
 int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                            struct lustre_handle *p1_lockh, int p1_lock_mode,
                            ldlm_policy_data_t *p1_policy,
@@ -1105,14 +1122,19 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                 flags = 0;
                 if (res_id[i]->name[0] == 0)
                         break;
-                if (i != 0 &&
-                    memcmp(res_id[i], res_id[i-1], sizeof(*res_id[i])) == 0 &&
-                    (policies[i]->l_inodebits.bits &
-                     policies[i-1]->l_inodebits.bits)) {
+                if (i && res_eq(res_id[i], res_id[i-1])) {
                         memcpy(dlm_handles[i], dlm_handles[i-1],
                                sizeof(*(dlm_handles[i])));
                         ldlm_lock_addref(dlm_handles[i], lock_modes[i]);
                 } else {
+                        /* we need to enqueue locks with different inodebits
+                         * at once, because otherwise concurrent thread can
+                         * hit the windown between these two locks and we'll
+                         * get to deadlock. see bug 10360. note also, that it
+                         * is impossible to have >2 equal res. */
+                        if (i < 3)
+                                try_to_aggregate_locks(res_id[i], policies[i],
+                                                       res_id[i+1], policies[i+1]);
                         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
                                               *res_id[i], LDLM_IBITS,
                                               policies[i],
@@ -1193,8 +1215,11 @@ static int mds_verify_child(struct obd_device *obd,
                 child_res_id->name[0] = dchild->d_inode->i_ino;
                 child_res_id->name[1] = dchild->d_inode->i_generation;
 
-                if (res_gt(parent_res_id, child_res_id, NULL, NULL) ||
-                    res_gt(maxres, child_res_id, NULL, NULL)) {
+                /* Make sure that we don't try to re-enqueue a lock on the
+                 * same resource if it happens that the source is renamed to
+                 * the target by another thread (bug 9974, thanks racer :-) */
+                if (!res_gt(child_res_id, parent_res_id, NULL, NULL) ||
+                    !res_gt(child_res_id, maxres, NULL, NULL)) {
                         CDEBUG(D_DLMTRACE, "relock "LPU64"<("LPU64"|"LPU64")\n",
                                child_res_id->name[0], parent_res_id->name[0],
                                maxres->name[0]);
@@ -1634,8 +1659,8 @@ cleanup:
         rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
                                 handle, req, rc, 0);
         if (!rc)
-                (void)obd_set_info(mds->mds_osc_exp, strlen("unlinked"),
-                                   "unlinked", 0, NULL);
+                (void)obd_set_info_async(mds->mds_osc_exp, strlen("unlinked"),
+                                         "unlinked", 0, NULL, NULL);
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
                 UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);

@@ -28,9 +28,9 @@
 
 #include <linux/module.h>
 
-#include <linux/obd.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_fid.h>
+#include <lustre/lustre_idl.h>
+#include <obd.h>
+#include <lustre_fid.h>
 
 /* sequence manager initialization/finalization stuff */
 struct lu_seq_mgr *seq_mgr_init(struct lu_seq_mgr_ops *ops,

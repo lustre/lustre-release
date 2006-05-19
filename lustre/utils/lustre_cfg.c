@@ -33,11 +33,12 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #endif
-#include <linux/lustre_lib.h>
-#include <linux/lustre_cfg.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/obd.h>          /* for struct lov_stripe_md */
+#include <lustre_lib.h>
+#include <lustre_cfg.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_dlm.h>
+#include <obd.h>          /* for struct lov_stripe_md */
+#include <obd_lov.h>
 #include <linux/lustre_build_version.h>
 
 #include <unistd.h>
@@ -388,6 +389,8 @@ int jt_lcfg_lov_setup(int argc, char **argv)
                         jt_cmdname(argv[0]), argv[5]);
                 return CMD_HELP;
         }
+        desc.ld_qos_threshold = QOS_DEFAULT_THRESHOLD;
+        desc.ld_qos_maxage = QOS_DEFAULT_MAXAGE;
 
         if (argc == 7) {
                 desc.ld_tgt_count = strtoul(argv[6], &end, 0);

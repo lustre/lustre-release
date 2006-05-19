@@ -27,19 +27,14 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 #ifdef __KERNEL__
-#include <linux/kmod.h>   /* for request_module() */
-#include <linux/module.h>
-#include <linux/obd_class.h>
-#include <linux/random.h>
-#include <linux/slab.h>
-#include <linux/pagemap.h>
+#include <obd_class.h>
 #else
 #include <liblustre.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
+#include <obd_class.h>
+#include <obd.h>
 #endif
-#include <linux/lustre_log.h>
-#include <linux/lprocfs_status.h>
+#include <lustre_log.h>
+#include <lprocfs_status.h>
 #include <libcfs/list.h>
 
 
@@ -54,6 +49,7 @@ int class_attach(struct lustre_cfg *lcfg)
         struct obd_device *obd = NULL;
         char *typename, *name, *namecopy, *uuid;
         int rc, len, cleanup_phase = 0;
+        ENTRY;
 
         if (!LUSTRE_CFG_BUFLEN(lcfg, 1)) {
                 CERROR("No type passed!\n");
@@ -119,22 +115,22 @@ int class_attach(struct lustre_cfg *lcfg)
         }
         cleanup_phase = 3;  /* class_release_dev */
 
-        INIT_LIST_HEAD(&obd->obd_exports);
-        INIT_LIST_HEAD(&obd->obd_exports_timed);
+        CFS_INIT_LIST_HEAD(&obd->obd_exports);
+        CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         spin_lock_init(&obd->obd_dev_lock);
         spin_lock_init(&obd->obd_osfs_lock);
-        obd->obd_osfs_age = jiffies - 1000 * HZ;
+        obd->obd_osfs_age = cfs_time_shift(-1000);
 
         /* XXX belongs in setup not attach  */
         /* recovery data */
-        init_timer(&obd->obd_recovery_timer);
+        cfs_init_timer(&obd->obd_recovery_timer);
         spin_lock_init(&obd->obd_processing_task_lock);
-        init_waitqueue_head(&obd->obd_next_transno_waitq);
-        INIT_LIST_HEAD(&obd->obd_recovery_queue);
-        INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
+        cfs_waitq_init(&obd->obd_next_transno_waitq);
+        CFS_INIT_LIST_HEAD(&obd->obd_recovery_queue);
+        CFS_INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
 
         spin_lock_init(&obd->obd_uncommitted_replies_lock);
-        INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
+        CFS_INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
@@ -513,12 +509,13 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(rc);
 }
 
-static LIST_HEAD(lustre_profile_list);
+CFS_LIST_HEAD(lustre_profile_list);
 
 struct lustre_profile *class_get_profile(const char * prof)
 {
         struct lustre_profile *lprof;
 
+        ENTRY;
         list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
                 if (!strcmp(lprof->lp_profile, prof)) {
                         RETURN(lprof);
@@ -533,10 +530,11 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
         struct lustre_profile *lprof;
         int err = 0;
 
+        ENTRY;
         OBD_ALLOC(lprof, sizeof(*lprof));
         if (lprof == NULL)
                 RETURN(-ENOMEM);
-        INIT_LIST_HEAD(&lprof->lp_list);
+        CFS_INIT_LIST_HEAD(&lprof->lp_list);
 
         LASSERT(proflen == (strlen(prof) + 1));
         OBD_ALLOC(lprof->lp_profile, proflen);
@@ -568,7 +566,7 @@ out:
                 OBD_FREE(lprof->lp_osc, osclen);
         if (lprof->lp_profile)
                 OBD_FREE(lprof->lp_profile, proflen);
-        OBD_FREE(lprof, sizeof(*lprof));
+        OBD_FREE(lprof, sizeof(*lprof));        
         RETURN(err);
 }
 
@@ -846,10 +844,6 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         OBD_FREE(inst_name, inst_len);
                 break;
         }
-        case PTL_CFG_REC: {
-                CWARN("Ignoring obsolete portals config\n");
-                break;
-        }
         default:
                 CERROR("Unknown llog record type %#x encountered\n",
                        rec->lrh_type);
@@ -887,8 +881,8 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
-        // FIXME remove warning
-        CDEBUG(D_CONFIG|D_WARNING, "Processed log %s gen %d-%d (%d)\n", name,
+        /* FIXME remove warning */
+        CDEBUG(D_CONFIG|D_WARNING, "Processed log %s gen %d-%d (rc=%d)\n", name, 
                cd.first_idx + 1, cd.last_idx, rc);
         if (cfg)
                 cfg->cfg_last_idx = cd.last_idx;
@@ -952,8 +946,6 @@ int class_config_dump_handler(struct llog_handle * handle,
                         }
                 }
                 LCONSOLE(D_WARNING, "   %s\n", outstr);
-        } else if (rec->lrh_type == PTL_CFG_REC) {
-                LCONSOLE(D_WARNING, "Obsolete pcfg command\n");
         } else {
                 LCONSOLE(D_WARNING, "unhandled lrh_type: %#x\n", rec->lrh_type);
                 rc = -EINVAL;

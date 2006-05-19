@@ -31,14 +31,15 @@
 #include <linux/module.h>
 #include <linux/pagemap.h> // XXX kill me soon
 #include <linux/version.h>
+#include <linux/lustre_version.h>
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/iobuf.h>
 #include <linux/locks.h>
 
-#include <linux/obd_class.h>
-#include <linux/lustre_fsfilt.h>
+#include <obd_class.h>
+#include <lustre_fsfilt.h>
 #include "filter_internal.h"
 
 /* Bug 2254 -- this is better done in ext3_map_inode_page, but this

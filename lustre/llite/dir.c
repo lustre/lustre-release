@@ -41,13 +41,12 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_mdc.h>
-#include <linux/lustre_lite.h>
-#include <linux/lustre_dlm.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_lib.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_lite.h>
+#include <lustre_dlm.h>
 #include "llite_internal.h"
 
 typedef struct ext2_dir_entry_2 ext2_dirent;
@@ -111,9 +110,8 @@ static inline unsigned long dir_pages(struct inode *inode)
 }
 
 
-static void ext2_check_page(struct page *page)
+static void ext2_check_page(struct inode *dir, struct page *page)
 {
-        struct inode *dir = page->mapping->host;
         unsigned chunk_size = ext2_chunk_size(dir);
         char *kaddr = page_address(page);
         //      u32 max_inumber = le32_to_cpu(sb->u.ext2_sb.s_es->s_inodes_count);
@@ -219,7 +217,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
                 rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
                                 LCK_CR, &op_data, &lockh, NULL, 0,
-                                ldlm_completion_ast, ll_mdc_blocking_ast, dir,
+                                ldlm_completion_ast, ll_md_blocking_ast, dir,
                                 0);
 
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
@@ -242,7 +240,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         if (!PageUptodate(page))
                 goto fail;
         if (!PageChecked(page))
-                ext2_check_page(page);
+                ext2_check_page(dir, page);
         if (PageError(page))
                 goto fail;
 
@@ -316,7 +314,7 @@ int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
                        n, npages, inode->i_size);
                 page = ll_get_dir_page(inode, n);
 
-                /* size might have been updated by mdc_readpage */
+                /* size might have been updated by md_readpage */
                 npages = dir_pages(inode);
 
                 if (IS_ERR(page)) {
@@ -424,7 +422,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                                      filename, namelen, OBD_MD_FLID, 0,
                                      &request);
                 if (rc < 0) {
-                        CDEBUG(D_INFO, "mdc_getattr_name: %d\n", rc);
+                        CDEBUG(D_INFO, "md_getattr_name: %d\n", rc);
                         GOTO(out, rc);
                 }
 
@@ -469,7 +467,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc) {
                         ptlrpc_req_finished(request);
                         if (rc != -EPERM && rc != -EACCES)
-                                CERROR("mdc_setattr fails: rc = %d\n", rc);
+                                CERROR("md_setattr fails: rc = %d\n", rc);
                         return rc;
                 }
                 ptlrpc_req_finished(request);
@@ -490,13 +488,13 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
                                 OBD_MD_FLDIREA, lmmsize, &request);
                 if (rc < 0) {
-                        CDEBUG(D_INFO, "mdc_getattr failed: rc = %d\n", rc);
+                        CDEBUG(D_INFO, "md_getattr failed: rc = %d\n", rc);
                         RETURN(rc);
                 }
 
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
-                LASSERT(body != NULL);         /* checked by mdc_getattr_name */
-                LASSERT_REPSWABBED(request, 0);/* swabbed by mdc_getattr_name */
+                LASSERT(body != NULL);         /* checked by md_getattr_name */
+                LASSERT_REPSWABBED(request, 0);/* swabbed by md_getattr_name */
 
                 lmmsize = body->eadatasize;
                 if (lmmsize == 0)
@@ -548,14 +546,14 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                                      filename, strlen(filename) + 1,
                                      OBD_MD_FLEASIZE, lmmsize, &request);
                 if (rc < 0) {
-                        CDEBUG(D_INFO, "mdc_getattr_name failed on %s: rc %d\n",
+                        CDEBUG(D_INFO, "md_getattr_name failed on %s: rc %d\n",
                                filename, rc);
                         GOTO(out_name, rc);
                 }
 
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
-                LASSERT(body != NULL);         /* checked by mdc_getattr_name */
-                LASSERT_REPSWABBED(request, 0);/* swabbed by mdc_getattr_name */
+                LASSERT(body != NULL);         /* checked by md_getattr_name */
+                LASSERT_REPSWABBED(request, 0);/* swabbed by md_getattr_name */
 
                 lmmsize = body->eadatasize;
 
@@ -733,13 +731,13 @@ out_free_memmd:
                 oqctl->qc_type = arg;
                 rc = obd_quotacheck(sbi->ll_md_exp, oqctl);
                 if (rc < 0) {
-                        CDEBUG(D_INFO, "mdc_quotacheck failed: rc %d\n", rc);
+                        CDEBUG(D_INFO, "md_quotacheck failed: rc %d\n", rc);
                         error = rc;
                 }
 
                 rc = obd_quotacheck(sbi->ll_dt_exp, oqctl);
                 if (rc < 0)
-                        CDEBUG(D_INFO, "osc_quotacheck failed: rc %d\n", rc);
+                        CDEBUG(D_INFO, "obd_quotacheck failed: rc %d\n", rc);
 
                 OBD_FREE_PTR(oqctl);
                 return error ?: rc;

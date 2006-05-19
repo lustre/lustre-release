@@ -38,6 +38,15 @@ else:
     from fcntl import F_GETFL, F_SETFL
 
 PYMOD_DIR = ["/usr/lib64/lustre/python", "/usr/lib/lustre/python"]
+PLATFORM = ''
+KEXTPATH = ''
+if string.find(sys.platform, 'linux') != -1:
+    PLATFORM='LINUX'
+elif string.find(sys.platform, 'darwin') != -1:
+    PLATFORM='DARWIN'
+    KEXTPATH='/System/Library/Extensions/'
+else:
+    PLATFORM='Unsupported'
 
 def development_mode():
     base = os.path.dirname(sys.argv[0])
@@ -456,15 +465,25 @@ class LCTLInterface:
 
     # get list of devices
     def device_list(self):
-        devices = '/proc/fs/lustre/devices'
         ret = []
-        if os.access(devices, os.R_OK):
-            try:
-                fp = open(devices, 'r')
-                ret =  fp.readlines()
-                fp.close()
-            except IOError, e:
-                log(e)
+        if PLATFORM == 'LINUX':
+            devices = '/proc/fs/lustre/devices'
+            if os.access(devices, os.R_OK):
+                try:
+                    fp = open(devices, 'r')
+                    ret =  fp.readlines()
+                    fp.close()
+                except IOError, e:
+                    log(e)
+        elif PLATFORM == 'DARWIN':
+            rc, out = self.run("device_list")
+            ret = out.split("\n")
+            if len(ret) == 0:
+                return ret
+            tail = ret[-1]
+            if not tail:
+                # remove the last empty line
+                ret = ret[:-1]
         return ret
 
     # get lustre version
@@ -862,15 +881,24 @@ def sys_get_branch():
 
 def mod_loaded(modname):
     """Check if a module is already loaded. Look in /proc/modules for it."""
-    try:
-        fp = open('/proc/modules')
-        lines = fp.readlines()
-        fp.close()
-        # please forgive my tired fingers for this one
-        ret = filter(lambda word, mod=modname: word == mod,
-                     map(lambda line: string.split(line)[0], lines))
-        return ret
-    except Exception, e:
+    if PLATFORM == 'LINUX':
+        try:
+            fp = open('/proc/modules')
+            lines = fp.readlines()
+            fp.close()
+            # please forgive my tired fingers for this one
+            ret = filter(lambda word, mod=modname: word == mod,
+                         map(lambda line: string.split(line)[0], lines))
+            return ret
+        except Exception, e:
+            return 0
+    elif PLATFORM == 'DARWIN':
+        ret, out = run('/usr/sbin/kextstat | /usr/bin/grep', modname)
+        if ret == 0:
+                return 1
+        else:
+                return 0
+    else:
         return 0
 
 # XXX: instead of device_list, ask for $name and see what we get
@@ -934,28 +962,31 @@ class kmod:
             if mod_loaded(mod) and not config.noexec:
                 continue
             log ('loading module:', mod, 'srcdir', src_dir, 'devdir', dev_dir)
-            options = ''
-            if mod == 'lnet':
-                #For LNET we really need modprobe to load defined LNDs
-                run('/sbin/modprobe lnet')
-                #But if that fails, try insmod anyhow with dev option
-                #accept=all for dev liblustre testing
-                options = 'accept=all'
-            if src_dir:
-                module = find_module(src_dir, dev_dir, mod)
-                if not module:
-                    panic('module not found:', mod)
-                (rc, out) = run('/sbin/insmod', module, options)
-                if rc and not mod_loaded(mod):
-                    if rc == 1:
-                        print("Bad module options? Check dmesg.") 
-                    raise CommandError('insmod', out, rc)
-            else:
-                (rc, out) = run('/sbin/modprobe', mod)
-                if rc and not mod_loaded(mod):
-                    if rc == 1:
-                        print("Bad module options? Check dmesg.") 
-                    raise CommandError('modprobe', out, rc)
+            if PLATFORM == 'LINUX':
+                options = ''
+                if mod == 'lnet':
+                    #For LNET we really need modprobe to load defined LNDs
+                    run('/sbin/modprobe lnet')
+                    #But if that fails, try insmod anyhow with dev option
+                    #accept=all for dev liblustre testing
+                    options = 'accept=all'
+                if src_dir:
+                    module = find_module(src_dir, dev_dir, mod)
+                    if not module:
+                        panic('module not found:', mod)
+                    (rc, out) = run('/sbin/insmod', module, options)
+                    if rc and not mod_loaded(mod):
+                        if rc == 1:
+                            print("Bad module options? Check dmesg.") 
+                        raise CommandError('insmod', out, rc)
+                else:
+                    (rc, out) = run('/sbin/modprobe', mod)
+                    if rc and not mod_loaded(mod):
+                        if rc == 1:
+                            print("Bad module options? Check dmesg.") 
+                        raise CommandError('modprobe', out, rc)
+            elif PLATFORM == 'DARWIN':
+                run('/sbin/kextload', KEXTPATH + mod + '.kext');
 
     def cleanup_module(self):
         """Unload the modules in the list in reverse order."""
@@ -979,7 +1010,10 @@ class kmod:
                 log('unloading the network')
                 lctl.unconfigure_network()
                 if mod_loaded("ksocklnd"):
-                    run('/sbin/rmmod ksocklnd')
+                    if PLATFORM == 'LINUX':
+                        run('/sbin/rmmod ksocklnd')
+                    elif PLATFORM == 'DARWIN':
+                        run('/sbin/kextunload', KEXTPATH+'ksocklnd.kext')
                 if mod_loaded("kqswlnd"):
                     run('/sbin/rmmod kqswlnd')
                 if mod_loaded("kgmlnd"):
@@ -994,7 +1028,10 @@ class kmod:
                     run('/sbin/rmmod kralnd')
                 if mod_loaded("kptllnd"):
                     run('/sbin/rmmod kptllnd')
-            (rc, out) = run('/sbin/rmmod', mod)
+            if PLATFORM == 'LINUX':
+                (rc, out) = run('/sbin/rmmod', mod)
+            elif PLATFORM == 'DARWIN':
+                (rc, out) = run('/sbin/kextunload', KEXTPATH+mod+'.kext');
             if rc:
                 log('! unable to unload module:', mod)
                 logall(out)
@@ -1076,7 +1113,12 @@ class Network(Module):
             sys_optimize_elan()
 
     def safe_to_clean(self):
-        return not is_network_prepared()
+        if PLATFORM == 'LINUX':
+            return not is_network_prepared()
+        elif PLATFORM == 'DARWIN':
+            # XXX always assume it's safe to clean 
+            return 1    
+        return 1
 
     def cleanup(self):
         self.info(self.net_type, self.nid)
@@ -1471,7 +1513,9 @@ class OSD(Module):
         self.journal_size = self.db.get_val_int('journalsize', 0)
 
         # now as we store fids in EA on OST we need to make inode bigger
-        self.inode_size = self.db.get_val_int('inodesize', 256)
+        self.inode_size = self.db.get_val_int('inodesize', 0)
+        if self.inode_size == 0:
+                self.inode_size = 256
         self.mkfsoptions = self.db.get_val('mkfsoptions', '')
         # Allocate fewer inodes on large OST devices.  Most filesystems
         # can be much more aggressive than this, but by default we can't.
@@ -1631,7 +1675,7 @@ class Client(Module):
             self.name = self_name
         self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
-	self.lookup_backup_targets()
+        self.lookup_backup_targets()
         self.fs_name = fs_name
         if not module_dir:
             module_dir = module
@@ -1697,7 +1741,6 @@ class Client(Module):
             else:
                 for srv in this_nets:
                     lctl.connect(srv)
-                    break
             if srv:
                  lctl.add_conn(self.name, srv.nid_uuid);
 
@@ -2252,14 +2295,17 @@ def doHost(lustreDB, hosts):
             for_each_profile(node_db, prof_list, doSetup)
             return
 
-        sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
-        sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
+        if PLATFORM == 'LINUX':
+            sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
+            sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
 
         for_each_profile(node_db, prof_list, doModules)
 
-        sys_set_debug_path()
-        sys_set_ptldebug(ptldebug)
-        sys_set_subsystem(subsystem)
+        if PLATFORM == 'LINUX':
+            # XXX need to be fixed for Darwin
+            sys_set_debug_path()
+            sys_set_ptldebug(ptldebug)
+            sys_set_subsystem(subsystem)
         script = config.gdb_script
         run(lctl.lctl, ' modules >', script)
         if config.gdb:

@@ -25,13 +25,11 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
-#include <linux/lvfs.h>
+#include <lvfs.h>
 
 struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *ctxt, __u64 id,
                                __u32 gen, __u64 gr, void *data)
 {
         return ctxt->cb_ops.l_fid2dentry(id, gen, gr, data);
 }
-
-
 EXPORT_SYMBOL(lvfs_fid2dentry);

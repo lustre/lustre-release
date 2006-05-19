@@ -39,16 +39,16 @@
 #define DEBUG_SUBSYSTEM S_OST
 
 #include <linux/module.h>
-#include <linux/obd_ost.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_export.h>
-#include <linux/lustre_debug.h>
+#include <obd_ost.h>
+#include <lustre_net.h>
+#include <lustre_dlm.h>
+#include <lustre_export.h>
+#include <lustre_debug.h>
 #include <linux/init.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_commit_confd.h>
+#include <lprocfs_status.h>
+#include <lustre_commit_confd.h>
 #include <libcfs/list.h>
-#include <linux/lustre_quota.h>
+#include <lustre_quota.h>
 #include "ost_internal.h"
 
 static int ost_num_threads;
@@ -1149,7 +1149,7 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
                 GOTO(out, rc = 0);
         }
 
-        rc = obd_set_info(exp, keylen, key, vallen, val);
+        rc = obd_set_info_async(exp, keylen, key, vallen, val, NULL);
 out:
         req->rq_repmsg->status = 0;
         RETURN(rc);

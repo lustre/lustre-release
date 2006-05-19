@@ -35,15 +35,15 @@
 #include <linux/fs.h>
 #endif
 
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
-#include <linux/obd_ost.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_log.h>
+#include <obd_ost.h>
 #include <libcfs/list.h>
 #include <linux/lvfs.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_disk.h>
-#include <linux/lustre_param.h>
+#include <lustre_fsfilt.h>
+#include <lustre_disk.h>
+#include <lustre_param.h>
 #include "mgs_internal.h"
 
 /********************** Class fns ********************/

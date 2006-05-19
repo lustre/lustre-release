@@ -35,13 +35,13 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
+#include <lustre/lustre_idl.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
+#include <lustre_net.h>
+#include <lustre_dlm.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
 #include "lmv_internal.h"
 
 /* dummy function for a while */

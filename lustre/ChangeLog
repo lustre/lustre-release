@@ -121,6 +121,57 @@ Description: write_conf for zeroconf mount queried LDAP incorrectly for client
 Details    : LDAP apparently contains 'lustreName' attributes instead of
 	     'name'.  A simple remapping of the name is sufficient.
 
+Severity   : major
+Frequency  : rare (only with non-default dump_on_timeout debug enabled)
+Bugzilla   : 10397
+Description: waiting_locks_callback trips kernel BUG if client is evicted
+Details    : Running with the dump_on_timeout debug flag turned on makes
+	     it possible that the waiting_locks_callback() can try to dump
+	     the Lustre kernel debug logs from an interrupt handler.  Defer
+	     this log dumping to the expired_lock_main() thread.
+
+Severity   : enhancement
+Bugzilla   : 10420
+Description: Support NFS exporting on 2.6 kernels.
+Details    : Implement non-rawops metadata methods for NFS server to use without
+	     changing NFS server code.
+
+Severity   : medium
+Frequency  : very rare (synthetic metadata workload only)
+Bugzilla   : 9974
+Description: two racing renames might cause an MDS thread to deadlock
+Details    : Running the "racer" program may cause one MDS thread to rename
+	     a file from being the source of a rename to being the target of
+	     a rename at exactly the same time that another thread is doing
+	     so, and the second thread has already enqueued these locks after
+	     doing a lookup of the target and is trying to relock them in
+	     order.  Ensure that we don't try to re-lock the same resource.
+
+Severity   : major
+Frequency  : only very large systems with liblustre clients
+Bugzilla   : 7304 
+Description: slow eviction of liblustre clients with the "evict_by_nid" RPC
+Details    : Use asynchronous set_info RPCs to send the "evict_by_nid" to 
+	     all OSTs in parallel.  This allows the eviction of stale liblustre
+	     clients to proceed much faster than if they were done in series, 
+	     and also offers similar improvements for other set_info RPCs.
+
+Severity   : minor
+Bugzilla   : 10265
+Description: excessive CPU usage during initial read phase on client
+Details    : During the initial read phase on a client, it would agressively
+	     retry readahead on the file, consuming too much CPU and impacting
+	     performance (since 1.4.5.8).  Improve the readahead algorithm
+	     to avoid this, and also improve some other common cases (read
+	     of small files in particular, where "small" is files smaller than
+	     /proc/fs/lustre/llite/*/max_read_ahead_whole_mb, 2MB by default).
+
+Severity   : minor
+Bugzilla   : 10450
+Description: MDS crash when receiving packet with unknown intent.
+Details    : Do not LBUG in unknown intent case, just return -EFAULT
+
+
 ------------------------------------------------------------------------------
 
 02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>

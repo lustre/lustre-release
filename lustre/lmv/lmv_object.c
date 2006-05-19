@@ -35,17 +35,17 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
+#include <lustre/lustre_idl.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
+#include <lustre_net.h>
+#include <lustre_dlm.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
 #include "lmv_internal.h"
 
 /* objects cache. */
-extern kmem_cache_t *obj_cache;
+extern cfs_mem_cache_t *obj_cache;
 extern atomic_t obj_cache_count;
 
 /* object list and its guard. */
@@ -66,7 +66,7 @@ lmv_obj_alloc(struct obd_device *obd,
         LASSERT(mea->mea_magic == MEA_MAGIC_LAST_CHAR
                 || mea->mea_magic == MEA_MAGIC_ALL_CHARS);
 
-        OBD_SLAB_ALLOC(obj, obj_cache, GFP_NOFS,
+        OBD_SLAB_ALLOC(obj, obj_cache, CFS_ALLOC_STD,
                        sizeof(*obj));
         if (!obj)
                 return NULL;

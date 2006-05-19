@@ -6,10 +6,12 @@
 #define __LLU_H_
 
 #include <liblustre.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_mdc.h>
-#include <linux/lustre_lite.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_mds.h>
+#include <lustre_mdc.h>
+#include <lustre_lite.h>
+#include <lustre_ver.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -195,12 +197,12 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr);
 extern struct fssw_ops llu_fssw_ops;
 
 /* file.c */
-void llu_prepare_mdc_op_data(struct md_op_data *op_data,
-                             struct inode *i1,
-                             struct inode *i2,
-                             const char *name,
-                             int namelen,
-                             int mode);
+void llu_prepare_md_op_data(struct md_op_data *op_data,
+                            struct inode *i1,
+                            struct inode *i2,
+                            const char *name,
+                            int namelen,
+                            int mode);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
 int llu_mdc_close(struct obd_export *md_exp, struct inode *inode);

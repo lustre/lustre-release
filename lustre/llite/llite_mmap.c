@@ -44,8 +44,8 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_mdc.h>
-#include <linux/lustre_lite.h>
+#include <lustre_mdc.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
@@ -407,7 +407,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         if (pgoff >= size) {
                 lov_stripe_unlock(lsm);
-                ll_glimpse_size(inode, 0);
+                ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
         } else {
                 /* XXX change inode size without ll_inode_size_lock() held!
                  *     there is a race condition with truncate path. (see

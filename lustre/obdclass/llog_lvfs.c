@@ -35,23 +35,21 @@
 #define EXPORT_SYMTAB
 #endif
 
-#ifdef __KERNEL__
-#include <linux/fs.h>
-#else
+#ifndef __KERNEL__
 #include <liblustre.h>
 #endif
 
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
-#include <linux/obd_ost.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_log.h>
+#include <obd_ost.h>
 #include <libcfs/list.h>
-#include <linux/lvfs.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_disk.h>
+#include <lvfs.h>
+#include <lustre_fsfilt.h>
+#include <lustre_disk.h>
 #include "llog_internal.h"
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) && defined(LLOG_LVFS)
 
 static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
                                 int len, int index)

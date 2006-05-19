@@ -30,14 +30,15 @@
 
 #ifdef __KERNEL__
 #include <asm/div64.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_log.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_log.h>
 
 #include "lov_internal.h"
 

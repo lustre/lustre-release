@@ -38,13 +38,13 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_commit_confd.h>
-#include <linux/lustre_disk.h>
-#include <linux/lustre_ver.h>
+#include <obd_class.h>
+#include <lustre_dlm.h>
+#include <lprocfs_status.h>
+#include <lustre_fsfilt.h>
+#include <lustre_commit_confd.h>
+#include <lustre_disk.h>
+#include <lustre_ver.h>
 #include "mgs_internal.h"
 
 
@@ -275,7 +275,8 @@ static int mgs_cleanup(struct obd_device *obd)
         /* Free the namespace in it's own thread, so that if the
            ldlm_cancel_handler put the last mgs obd ref, we won't
            deadlock here. */
-        kernel_thread(mgs_ldlm_nsfree, obd->obd_namespace, CLONE_VM | CLONE_FS);
+        cfs_kernel_thread(mgs_ldlm_nsfree, obd->obd_namespace, 
+                          CLONE_VM | CLONE_FILES);
 
         lvfs_clear_rdonly(save_dev);
 
@@ -460,7 +461,6 @@ int mgs_handle(struct ptlrpc_request *req)
         switch (req->rq_reqmsg->opc) {
         case MGS_CONNECT:
                 DEBUG_REQ(D_MGS, req, "connect");
-                OBD_FAIL_RETURN(OBD_FAIL_MGS_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mgs_handle);
                 if (!rc && (req->rq_reqmsg->conn_cnt > 1))
                         /* Make clients trying to reconnect after a MGS restart
@@ -470,7 +470,6 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
         case MGS_DISCONNECT:
                 DEBUG_REQ(D_MGS, req, "disconnect");
-                OBD_FAIL_RETURN(OBD_FAIL_MGS_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
                 break;
@@ -485,7 +484,6 @@ int mgs_handle(struct ptlrpc_request *req)
 
         case LDLM_ENQUEUE:
                 DEBUG_REQ(D_MGS, req, "enqueue");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
                                          ldlm_server_blocking_ast, NULL);
                 fail = OBD_FAIL_LDLM_REPLY;
@@ -495,7 +493,6 @@ int mgs_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_MGS, req, "callback");
                 CERROR("callbacks should not happen on MGS\n");
                 LBUG();
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
                 break;
 
         case OBD_PING:
@@ -504,33 +501,27 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
         case OBD_LOG_CANCEL:
                 DEBUG_REQ(D_MGS, req, "log cancel\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = -ENOTSUPP; /* la la la */
                 break;
 
         case LLOG_ORIGIN_HANDLE_CREATE:
                 DEBUG_REQ(D_MGS, req, "llog_init");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_create(req);
                 break;
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
                 DEBUG_REQ(D_MGS, req, "llog next block");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_next_block(req);
                 break;
         case LLOG_ORIGIN_HANDLE_READ_HEADER:
                 DEBUG_REQ(D_MGS, req, "llog read header");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_read_header(req);
                 break;
         case LLOG_ORIGIN_HANDLE_CLOSE:
                 DEBUG_REQ(D_MGS, req, "llog close");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_close(req);
                 break;
         case LLOG_CATINFO:
                 DEBUG_REQ(D_MGS, req, "llog catinfo");
-                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_catinfo(req);
                 break;
         default:

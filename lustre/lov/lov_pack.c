@@ -28,11 +28,11 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/lustre_net.h>
-#include <linux/obd.h>
-#include <linux/obd_lov.h>
-#include <linux/obd_class.h>
-#include <linux/obd_support.h>
+#include <lustre_net.h>
+#include <obd.h>
+#include <obd_lov.h>
+#include <obd_class.h>
+#include <obd_support.h>
 #include <lustre/lustre_user.h>
 
 #include "lov_internal.h"
@@ -148,6 +148,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         RETURN(lmm_size);
 }
 
+/* Find the max stripecount we should use */
 int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
 {
         if (!stripe_count)
@@ -363,6 +364,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         obd_id last_id = 0;
 
+        ENTRY;
         for (i = 0; i < lump->lmm_stripe_count; i++) {
                 __u32 len = sizeof(last_id);
                 oexp = lov->tgts[lump->lmm_objects[i].l_ost_idx].ltd_exp;

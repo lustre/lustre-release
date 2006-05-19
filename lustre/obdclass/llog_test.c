@@ -33,9 +33,8 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
+#include <obd_class.h>
+#include <lustre_log.h>
 
 static int llog_test_rand;
 static struct obd_uuid uuid = { .uuid = "test_uuid" };

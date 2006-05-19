@@ -28,10 +28,10 @@
 #include <linux/version.h>
 #include <linux/bitops.h>
 
-#include <linux/obd_class.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_mds.h>
-#include <linux/obd_ost.h>
+#include <obd_class.h>
+#include <lustre_fsfilt.h>
+#include <lustre_mds.h>
+#include <obd_ost.h>
 
 char *test_quotafile[] = {"aquotacheck.user", "aquotacheck.group"};
 

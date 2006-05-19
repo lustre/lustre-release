@@ -25,8 +25,8 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_mdc.h>
-#include <linux/lustre_lite.h>
+#include <lustre_mdc.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 
 /* record that a write is in flight */
@@ -196,18 +196,12 @@ static int ll_close_thread(void *arg)
         struct ll_close_queue *lcq = arg;
         ENTRY;
 
-        /* XXX boiler-plate */
         {
-                char name[sizeof(current->comm)];
-                unsigned long flags;
+                char name[CFS_CURPROC_COMM_MAX];
                 snprintf(name, sizeof(name) - 1, "ll_close");
-                libcfs_daemonize(name);
-                SIGNAL_MASK_LOCK(current, flags);
-                sigfillset(&current->blocked);
-                RECALC_SIGPENDING;
-                SIGNAL_MASK_UNLOCK(current, flags);
+                cfs_daemonize(name);
         }
-
+        
         complete(&lcq->lcq_comp);
 
         while (1) {

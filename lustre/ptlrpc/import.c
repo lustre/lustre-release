@@ -24,22 +24,18 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifdef __KERNEL__
-# include <linux/config.h>
-# include <linux/module.h>
-# include <linux/kmod.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_import.h>
-#include <linux/lustre_export.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_ver.h>
+#include <obd_support.h>
+#include <lustre_ha.h>
+#include <lustre_net.h>
+#include <lustre_import.h>
+#include <lustre_export.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_ver.h>
 
 #include "ptlrpc_internal.h"
 
@@ -143,11 +139,12 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                                imp->imp_replayable ?
                                       "wait for recovery to complete" : "fail");
 
+                IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
+                spin_unlock_irqrestore(&imp->imp_lock, flags);
+    
                 if (obd_dump_on_timeout)
                         libcfs_debug_dumplog();
 
-                IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
                 rc = 1;
         } else {
@@ -199,8 +196,8 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         LASSERT(imp->imp_invalid);
 
         /* wait for all requests to error out and call completion callbacks */
-        lwi = LWI_TIMEOUT_INTR(MAX(obd_timeout * HZ, 1), NULL,
-                               NULL, NULL);
+        lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
+                               NULL, NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           (atomic_read(&imp->imp_inflight) == 0),
                           &lwi);
@@ -322,6 +319,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         struct ptlrpc_connect_async_args *aa;
         unsigned long flags;
 
+        ENTRY;
         spin_lock_irqsave(&imp->imp_lock, flags);
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
@@ -369,9 +367,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                        imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
                 /* Don't retry if connect fails */
                 rc = 0;
-                obd_set_info(obd->obd_self_export,
-                             strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
-                             sizeof(rc), &rc);
+                obd_set_info_async(obd->obd_self_export,
+                                   strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
+                                   sizeof(rc), &rc, NULL);
         }
 
         rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
@@ -683,13 +681,14 @@ finish:
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
         }
 
-        wake_up(&imp->imp_recovery_waitq);
+        cfs_waitq_signal(&imp->imp_recovery_waitq);
         RETURN(rc);
 }
 
 static int completed_replay_interpret(struct ptlrpc_request *req,
                                     void * data, int rc)
 {
+        ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
         if (req->rq_status == 0) {
                 ptlrpc_import_recovery_state_machine(req->rq_import);
@@ -736,7 +735,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
         ENTRY;
 
         ptlrpc_daemonize("ll_imp_inval");
-
+        
         CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
                imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
                imp->imp_connection->c_remote_uuid.uuid);
@@ -757,6 +756,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         char *target_start;
         int target_len;
 
+        ENTRY;
         if (imp->imp_state == LUSTRE_IMP_EVICTED) {
                 deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
                           &target_start, &target_len);
@@ -768,7 +768,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_connection->c_remote_uuid.uuid);
 
 #ifdef __KERNEL__
-                rc = kernel_thread(ptlrpc_invalidate_import_thread, imp,
+                rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,
                                    CLONE_VM | CLONE_FILES);
                 if (rc < 0)
                         CERROR("error starting invalidate thread: %d\n", rc);
@@ -832,7 +832,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
-                wake_up(&imp->imp_recovery_waitq);
+                cfs_waitq_signal(&imp->imp_recovery_waitq);
                 ptlrpc_wake_delayed(imp);
         }
 
@@ -865,8 +865,8 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
 
         if (ptlrpc_import_in_recovery(imp)) {
                 struct l_wait_info lwi;
-                lwi = LWI_TIMEOUT_INTR(MAX(obd_timeout * HZ, 1), back_to_sleep,
-                                       NULL, NULL);
+                lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
+                                       back_to_sleep, NULL, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                   !ptlrpc_import_in_recovery(imp), &lwi);
 

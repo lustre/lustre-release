@@ -38,7 +38,7 @@ AC_SUBST(pymoddir)
 #
 AC_DEFUN([LC_TARGET_SUPPORTED],
 [case $target_os in
-	linux*)
+	linux* | darwin*)
 $1
 		;;
 	*)
@@ -602,7 +602,7 @@ AC_DEFUN([LC_CONFIGURE],
 [LC_CONFIG_OBD_BUFFER_SIZE
 
 # include/liblustre.h
-AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
+AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h])
 
 # include/lustre/lustre_user.h
 # See note there re: __ASM_X86_64_PROCESSOR_H
@@ -620,6 +620,10 @@ AC_CHECK_FUNCS([inet_ntoa])
 
 # llite/xattr.c
 AC_CHECK_HEADERS([linux/xattr_acl.h])
+
+# use universal lustre headers 
+# i.e: include/obd.h instead of include/linux/obd.h
+AC_CHECK_FILE($PWD/lustre/include/obd.h, [AC_DEFINE(UNIV_LUSTRE_HEADERS, 1, [Use universal lustre headers])])
 
 # Super safe df
 AC_ARG_ENABLE([mindf],
@@ -661,8 +665,8 @@ lustre/autoconf/Makefile
 lustre/conf/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile
+lustre/include/lustre_ver.h
 lustre/include/linux/Makefile
-lustre/include/linux/lustre_ver.h
 lustre/include/lustre/Makefile
 lustre/kernel_patches/targets/2.6-suse.target
 lustre/kernel_patches/targets/2.6-vanilla.target
@@ -701,6 +705,7 @@ lustre/fld/Makefile
 lustre/fld/autoMakefile
 lustre/obdclass/Makefile
 lustre/obdclass/autoMakefile
+lustre/obdclass/linux/Makefile
 lustre/obdecho/Makefile
 lustre/obdecho/autoMakefile
 lustre/obdfilter/Makefile
@@ -725,4 +730,10 @@ lustre/tests/Makefile
 lustre/utils/Lustre/Makefile
 lustre/utils/Makefile
 ])
+case $lb_target_os in
+        darwin)
+                AC_CONFIG_FILES([ lustre/obdclass/darwin/Makefile ])
+                ;;
+esac
+
 ])

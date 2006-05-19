@@ -8,7 +8,7 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_scripts = llanalyze llstat.pl llobdstat.pl lactive	lrun 
+sbin_scripts = llanalyze llstat.pl llobdstat.pl lactive lrun 
 bin_scripts = lfind lstripe
 
 if UTILS
@@ -16,51 +16,52 @@ if UTILS
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
 	mount_lustre mkfs_lustre mkfs.lustre \
-	tunefs_lustre tunefs.lustre l_getgroups llog_reader
-bin_PROGRAMS = lfs
+	tunefs_lustre tunefs.lustre l_getgroups
+bin_PROGRAMS = lfs llog_reader
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
 bin_SCRIPTS = $(bin_scripts)
 endif # UTILS
 
+lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
+lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL) 
+lctl_DEPENDENCIES := $(LIBPTLCTL) 
+
+lfs_SOURCES = lfs.c parser.c obd.c
+lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
+lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
+
+lload_SOURCES = lload.c 
+lload_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
+lload_DEPENDENCIES := $(LIBPTLCTL)
+
 liblustreapi_a_SOURCES = liblustreapi.c
 
 wirecheck_SOURCES = wirecheck.c
 wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
+
 wiretest_SOURCES = wiretest.c
-
-lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
-lctl_DEPENDENCIES := $(LIBPTLCTL)
-lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h
-
-lload_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
-lload_DEPENDENCIES := $(LIBPTLCTL)
-lload_SOURCES = lload.c 
 
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 
-lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
-lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
-lfs_SOURCES = lfs.c parser.c obd.c
-
-llog_reader_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
-llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 llog_reader_SOURCES = llog_reader.c
+llog_reader_LDADD := $(LIBPTLCTL)
+llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 
-mount_lustre_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
-mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 mount_lustre_SOURCES = mount_lustre.c 
+mount_lustre_LDADD := $(LIBPTLCTL)
+mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
-mkfs_lustre_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
-mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
-mkfs_lustre_SOURCES = parser.c obd.c lustre_cfg.c mkfs_lustre.c parser.h obdctl.h
+mkfs_lustre_SOURCES = mkfs_lustre.c
 mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS)
+mkfs_lustre_LDADD := $(LIBPTLCTL)
+mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
-tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
-tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 tunefs_lustre_SOURCES = $(mkfs_lustre_SOURCES)
 tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
+tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
+tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 
 EXTRA_DIST = $(bin_scripts) $(sbin_scripts)
 

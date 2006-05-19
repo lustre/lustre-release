@@ -34,8 +34,8 @@
 #include <mntent.h>
 #include <getopt.h>
 #include <sys/utsname.h>
-#include <linux/lustre_ver.h>
 #include "obdctl.h"
+#include <lustre_ver.h>
 
 int          verbose = 0;
 int          nomtab = 0;
@@ -83,10 +83,11 @@ static int check_mtab_entry(char *spec, char *mtpt, char *type)
                 if (strcmp(mnt->mnt_fsname, spec) == 0 &&
                         strcmp(mnt->mnt_dir, mtpt) == 0 &&
                         strcmp(mnt->mnt_type, type) == 0) {
+                        endmntent(fp);
                         fprintf(stderr, "%s: according to %s %s is "
                                 "already mounted on %s\n",
                                 progname, MOUNTED, spec, mtpt);
-                        return(1); /* or should we return an error? */
+                        return(EEXIST); 
                 }
         }
         endmntent(fp);

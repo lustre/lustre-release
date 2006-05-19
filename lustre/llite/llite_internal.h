@@ -9,10 +9,11 @@
 # include <linux/fs.h>
 # include <linux/xattr_acl.h>
 #endif
-
-#include <linux/lustre_debug.h>
 #include <linux/lustre_version.h>
-#include <linux/lustre_disk.h>  /* for s2sbi */
+
+#include <lustre_debug.h>
+#include <lustre_ver.h>
+#include <lustre_disk.h>  /* for s2sbi */
  
 /*
 struct lustre_intent_data {
@@ -77,11 +78,6 @@ struct ll_inode_info {
         /* for writepage() only to communicate to fsync */
         int                     lli_async_rc;
 
-        struct file_operations *ll_save_ifop;
-        struct file_operations *ll_save_ffop;
-        struct file_operations *ll_save_wfop;
-        struct file_operations *ll_save_wrfop;
-
         struct posix_acl       *lli_posix_acl;
 
         struct list_head        lli_dead_list;
@@ -120,6 +116,10 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - PAGE_CACHE_SHIFT))
+
+/* default to read-ahead full files smaller than 2MB on the second read */
+#define SBI_DEFAULT_READAHEAD_WHOLE_MAX (2UL << (20 - PAGE_CACHE_SHIFT))
+
 enum ra_stat {
         RA_STAT_HIT = 0,
         RA_STAT_MISS,
@@ -139,6 +139,7 @@ enum ra_stat {
 struct ll_ra_info {
         unsigned long             ra_cur_pages;
         unsigned long             ra_max_pages;
+        unsigned long             ra_max_read_ahead_whole_pages;
         unsigned long             ra_stats[_NR_RA_STAT];
 };
 
@@ -213,7 +214,13 @@ struct ll_readahead_state {
          * case, it probably doesn't make sense to expand window to
          * PTLRPC_MAX_BRW_PAGES on the third access.
          */
-        unsigned long   ras_consecutive;
+        unsigned long   ras_consecutive_pages;
+        /*
+         * number of read requests after the last read-ahead window reset
+         * As window is reset on each seek, this is effectively the number 
+         * on consecutive read request and is used to trigger read-ahead.
+         */
+        unsigned long   ras_consecutive_requests;
         /*
          * Parameters of current read-ahead window. Handled by
          * ras_update(). On the initial access to the file or after a seek,
@@ -230,6 +237,17 @@ struct ll_readahead_state {
          * not covered by DLM lock.
          */
         unsigned long   ras_next_readahead;
+        /*
+         * Total number of ll_file_read requests issued, reads originating
+         * due to mmap are not counted in this total.  This value is used to
+         * trigger full file read-ahead after multiple reads to a small file.
+         */
+        unsigned long   ras_requests;
+        /*
+         * Page index with respect to the current request, these value 
+         * will not be accurate when dealing with reads issued via mmap.
+         */
+        unsigned long   ras_request_index;
         /*
          * list of struct ll_ra_read's one per read(2) call current in
          * progress against this file descriptor. Used by read-ahead code,
@@ -339,8 +357,8 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
 struct dentry *ll_find_alias(struct inode *, struct dentry *);
-int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
-                        void *data, int flag);
+int ll_md_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
+                       void *data, int flag);
 void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
                            struct inode *i2, const char *name, int namelen,
                            int mode);
@@ -377,11 +395,13 @@ int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
                   struct lookup_intent *it, struct ll_file_data *fd);
-int ll_mdc_close(struct obd_export *md_exp, struct inode *inode,
-                 struct file *file);
+int ll_release_openhandle(struct dentry *, struct lookup_intent *);
+int ll_md_close(struct obd_export *md_exp, struct inode *inode,
+                struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-int ll_getattr(struct vfsmount *mnt, struct dentry *de,
+int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
+int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
 struct ll_file_data *ll_file_data_get(void);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
@@ -434,6 +454,7 @@ int ll_obd_statfs(struct inode *inode, void *arg);
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 
 /* llite/llite_nfs.c */
+extern struct export_operations lustre_export_operations;
 __u32 get_uuid2int(const char *name, int len);
 struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
                                int fhtype, int parent);

@@ -13,6 +13,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. mountconf.sh 
 
 # Skip these tests
 # bug number: 2766
@@ -20,22 +21,8 @@ ALWAYS_EXCEPT="0b   $REPLAY_SINGLE_EXCEPT"
 
 build_test_filter
 
-cleanup() {
-    # make sure we are using the primary server, so test-framework will
-    # be able to clean up properly.
-    activemds=`facet_active mds`
-    if [ $activemds != "mds" ]; then
-        fail mds
-    fi
-
-    zconf_umount `hostname` $MOUNT
-    stop ost -f
-    stop ost2 -f
-    stop mds -f
-}
-
 SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
+CLEANUP=${CLEANUP:-"mcstopall"}
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0 || true
@@ -44,15 +31,8 @@ if [ "$ONLY" == "cleanup" ]; then
 fi
 
 setup() {
-    cleanup
-    add mds $MDS_MKFS_OPTS --reformat $MDSDEV
-    add ost $OST_MKFS_OPTS --reformat $OSTDEV
-    add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2
-    start mds $MDSDEV $MDS_MOUNT_OPTS
-    start ost $OSTDEV $OST_MOUNT_OPTS
-    start ost2 $OSTDEV2 $OST2_MOUNT_OPTS
-    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+    mcformat
+    mcsetup
 }
 
 $SETUP
@@ -91,20 +71,20 @@ test_1a() {
     do_facet ost "sysctl -w lustre.fail_loc=0"
 
     rm -fr $DIR/$tfile
-    local old_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    local old_last_id=`cat $LPROC/obdfilter/*/last_id`
     touch -o $DIR/$tfile 1
     sync
-    local new_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    local new_last_id=`cat $LPROC/obdfilter/*/last_id`
     
     test "$old_last_id" = "$new_last_id" || {
 	echo "OST object create is caused by MDS"
 	return 1
     }
     
-    old_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    old_last_id=`cat $LPROC/obdfilter/*/last_id`
     echo "data" > $DIR/$tfile
     sync
-    new_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    new_last_id=`cat $LPROC/obdfilter/*/last_id`
     test "$old_last_id" = "$new_last_id "&& {
 	echo "CROW does not work on write"
 	return 1
@@ -116,10 +96,10 @@ test_1a() {
     do_facet ost "sysctl -w lustre.fail_loc=0x80000801"
 
     rm -fr $DIR/1a1
-    old_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    old_last_id=`cat $LPROC/obdfilter/*/last_id`
     echo "data" > $DIR/1a1
     sync
-    new_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
+    new_last_id=`cat $LPROC/obdfilter/*/last_id`
     test "$old_last_id" = "$new_last_id" || {
 	echo "CROW does work with fail_loc=0x80000801"
 	return 1
@@ -802,8 +782,7 @@ test_39() { # bug 4176
 run_test 39 "test recovery from unlink llog (test llog_gen_rec) "
 
 count_ost_writes() {
-        cat /proc/fs/lustre/osc/*/stats |
-            awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }'
+    awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }' $LPROC/osc/*/stats
 }
 
 #b=2477,2532
@@ -856,11 +835,11 @@ test_41() {
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
-    local osc2_dev=`$LCTL device_list | \
-		awk '(/ost2.*client_facet/){print $4}' `
-    $LCTL --device %$osc2_dev deactivate
+    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    [ "$osc2dev" ] || return 4
+    $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
-    $LCTL --device %$osc2_dev activate
+    $LCTL --device $osc2dev activate || return 2
     return 0
 }
 run_test 41 "read from a valid osc while other oscs are invalid"
@@ -901,8 +880,10 @@ test_43() { # bug 2530
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
 test_44() {
-    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
+    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
+	echo iteration $i
         #define OBD_FAIL_TGT_CONN_RACE     0x701
         do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
         $LCTL --device $mdcdev recover
@@ -914,8 +895,10 @@ test_44() {
 run_test 44 "race in target handle connect"
 
 test_44b() {
-    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
+    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
+	echo iteration $i
         #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
         do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
         $LCTL --device $mdcdev recover
@@ -928,7 +911,8 @@ run_test 44b "race in target handle connect"
 
 # Handle failed close
 test_45() {
-    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
+    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    [ "$mdcdev" ] || exit 2
     $LCTL --device $mdcdev recover
 
     multiop $DIR/$tfile O_c &
@@ -937,13 +921,13 @@ test_45() {
 
     # This will cause the CLOSE to fail before even 
     # allocating a reply buffer
-    $LCTL --device $mdcdev deactivate
+    $LCTL --device $mdcdev deactivate || return 4
 
     # try the close
     kill -USR1 $pid
     wait $pid || return 1
 
-    $LCTL --device $mdcdev activate
+    $LCTL --device $mdcdev activate || return 5
     sleep 1
 
     $CHECKSTAT -t file $DIR/$tfile || return 2
@@ -1002,9 +986,9 @@ test_48() {
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local osc_dev=`$LCTL device_list | \
-		awk '(/ost_svc_mds_svc/){print $4}' `
-    $LCTL --device %$osc_dev recover &&  $LCTL --device %$osc_dev recover
+    local oscdev=`grep ${ost_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    [ "$oscdev" ] || return 1
+    $LCTL --device $oscdev recover &&  $LCTL --device $oscdev recover
     # give the mds_lov_sync threads a chance to run
     sleep 5
 }

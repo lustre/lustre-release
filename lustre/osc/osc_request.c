@@ -35,38 +35,30 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #ifdef __KERNEL__
-# include <linux/version.h>
-# include <linux/module.h>
-# include <linux/mm.h>
-# include <linux/highmem.h>
-# include <linux/ctype.h>
-# include <linux/init.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#  include <linux/workqueue.h>
-#  include <linux/smp_lock.h>
-# else
-#  include <linux/locks.h>
-# endif
+# include <libcfs/libcfs.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
 
-# include <linux/lustre_dlm.h>
+# include <lustre_dlm.h>
 #include <libcfs/kp30.h>
-#include <linux/lustre_net.h>
+#include <lustre_net.h>
 #include <lustre/lustre_user.h>
-#include <linux/obd_ost.h>
-#include <linux/obd_lov.h>
+#include <obd_ost.h>
+#include <obd_lov.h>
 
 #ifdef  __CYGWIN__
 # include <ctype.h>
 #endif
 
-#include <linux/lustre_ha.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_debug.h>
+#include <lustre_ha.h>
+#include <lprocfs_status.h>
+#include <lustre_log.h>
+#include <lustre_debug.h>
 #include "osc_internal.h"
+
+static quota_interface_t *quota_interface = NULL;
+extern quota_interface_t osc_quota_interface;
 
 /* Pack OSC object metadata for disk storage (LE byte order). */
 static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
@@ -548,7 +540,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
         LASSERT(!(oa->o_valid & bits));
 
         oa->o_valid |= bits;
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         oa->o_dirty = cli->cl_dirty;
         if (cli->cl_dirty > cli->cl_dirty_max) {
                 CERROR("dirty %lu > dirty_max %lu\n",
@@ -559,14 +551,14 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
                        cli->cl_dirty, cli->cl_dirty_max);
                 oa->o_undirty = 0;
         } else {
-                long max_in_flight = (cli->cl_max_pages_per_rpc << PAGE_SHIFT)*
+                long max_in_flight = (cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT)*
                                 (cli->cl_max_rpcs_in_flight + 1);
                 oa->o_undirty = max(cli->cl_dirty_max, max_in_flight);
         }
         oa->o_grant = cli->cl_avail_grant;
         oa->o_dropped = cli->cl_lost_grant;
         cli->cl_lost_grant = 0;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         CDEBUG(D_CACHE,"dirty: "LPU64" undirty: %u dropped %u grant: "LPU64"\n",
                oa->o_dirty, oa->o_undirty, oa->o_dropped, oa->o_grant);
 }
@@ -575,10 +567,10 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 static void osc_consume_write_grant(struct client_obd *cli,
                                     struct osc_async_page *oap)
 {
-        cli->cl_dirty += PAGE_SIZE;
-        cli->cl_avail_grant -= PAGE_SIZE;
+        cli->cl_dirty += CFS_PAGE_SIZE;
+        cli->cl_avail_grant -= CFS_PAGE_SIZE;
         oap->oap_brw_flags |= OBD_BRW_FROM_GRANT;
-        CDEBUG(D_CACHE, "using %lu grant credits for oap %p\n", PAGE_SIZE, oap);
+        CDEBUG(D_CACHE, "using %lu grant credits for oap %p\n", CFS_PAGE_SIZE, oap);
         LASSERT(cli->cl_avail_grant >= 0);
 }
 
@@ -593,9 +585,10 @@ void osc_wake_cache_waiters(struct client_obd *cli)
         struct list_head *l, *tmp;
         struct osc_cache_waiter *ocw;
 
+        ENTRY;
         list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
                 /* if we can't dirty more, we must wait until some is written */
-                if (cli->cl_dirty + PAGE_SIZE > cli->cl_dirty_max) {
+                if (cli->cl_dirty + CFS_PAGE_SIZE > cli->cl_dirty_max) {
                         CDEBUG(D_CACHE, "no dirty room: dirty: %ld max %ld\n",
                                cli->cl_dirty, cli->cl_dirty_max);
                         return;
@@ -603,7 +596,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
                 /* if still dirty cache but no grant wait for pending RPCs that
                  * may yet return us some grant before doing sync writes */
-                if (cli->cl_w_in_flight && cli->cl_avail_grant < PAGE_SIZE) {
+                if (cli->cl_w_in_flight && cli->cl_avail_grant < CFS_PAGE_SIZE) {
                         CDEBUG(D_CACHE, "%u BRW writes in flight, no grant\n",
                                cli->cl_w_in_flight);
                         return;
@@ -611,7 +604,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
                 ocw = list_entry(l, struct osc_cache_waiter, ocw_entry);
                 list_del_init(&ocw->ocw_entry);
-                if (cli->cl_avail_grant < PAGE_SIZE) {
+                if (cli->cl_avail_grant < CFS_PAGE_SIZE) {
                         /* no more RPCs in flight to return grant, do sync IO */
                         ocw->ocw_rc = -EDQUOT;
                         CDEBUG(D_INODE, "wake oap %p for sync\n", ocw->ocw_oap);
@@ -619,7 +612,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
                         osc_consume_write_grant(cli, ocw->ocw_oap);
                 }
 
-                wake_up(&ocw->ocw_waitq);
+                cfs_waitq_signal(&ocw->ocw_waitq);
         }
 
         EXIT;
@@ -627,9 +620,9 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
 static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 {
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_avail_grant = ocd->ocd_grant;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         CDEBUG(D_CACHE, "setting cl_avail_grant: %ld cl_lost_grant: %ld\n",
                cli->cl_avail_grant, cli->cl_lost_grant);
@@ -638,11 +631,11 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 
 static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 {
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         CDEBUG(D_CACHE, "got "LPU64" extra grant\n", body->oa.o_grant);
         cli->cl_avail_grant += body->oa.o_grant;
         /* waiters are woken in brw_interpret_oap */
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 }
 
 /* We assume that the reason this OSC got a short read is because it read
@@ -660,9 +653,9 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
                 if (pga->count > nob_read) {
                         /* EOF inside this page */
-                        ptr = kmap(pga->pg) + (pga->off & ~PAGE_MASK);
+                        ptr = cfs_kmap(pga->pg) + (pga->off & ~CFS_PAGE_MASK);
                         memset(ptr + nob_read, 0, pga->count - nob_read);
-                        kunmap(pga->pg);
+                        cfs_kunmap(pga->pg);
                         page_count--;
                         pga++;
                         break;
@@ -675,9 +668,9 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
         /* zero remaining pages */
         while (page_count-- > 0) {
-                ptr = kmap(pga->pg) + (pga->off & ~PAGE_MASK);
+                ptr = cfs_kmap(pga->pg) + (pga->off & ~CFS_PAGE_MASK);
                 memset(ptr, 0, pga->count);
-                kunmap(pga->pg);
+                cfs_kunmap(pga->pg);
                 pga++;
         }
 }
@@ -742,12 +735,12 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 
         LASSERT (pg_count > 0);
         while (nob > 0 && pg_count > 0) {
-                char *ptr = kmap(pga->pg);
-                int off = pga->off & ~PAGE_MASK;
+                char *ptr = cfs_kmap(pga->pg);
+                int off = pga->off & ~CFS_PAGE_MASK;
                 int count = pga->count > nob ? nob : pga->count;
 
                 cksum = crc32_le(cksum, ptr + off, count);
-                kunmap(pga->pg);
+                cfs_kunmap(pga->pg);
                 LL_CDEBUG_PAGE(D_PAGE, pga->pg, "off %d checksum %x\n",
                                off, cksum);
 
@@ -778,6 +771,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         int                      rc;
         struct ptlrpc_request_pool *pool;
 
+        ENTRY;
         opc = ((cmd & OBD_BRW_WRITE) != 0) ? OST_WRITE : OST_READ;
         pool = ((cmd & OBD_BRW_WRITE) != 0) ? imp->imp_rq_pool : NULL;
 
@@ -793,7 +787,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         req = ptlrpc_prep_req_pool(imp, LUSTRE_OST_VERSION, opc, 3,
                                    size, NULL, pool);
         if (req == NULL)
-                return (-ENOMEM);
+                RETURN (-ENOMEM);
 
         /* FIXME bug 249. Also see bug 7198 */
         if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_REQPORTAL)
@@ -824,9 +818,10 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                 struct brw_page *pg_prev = pg - 1;
 
                 LASSERT(pg->count > 0);
-                LASSERTF((pg->off & ~PAGE_MASK) + pg->count <= PAGE_SIZE,
+                LASSERTF((pg->off & ~CFS_PAGE_MASK) + pg->count <= CFS_PAGE_SIZE,
                          "i: %d pg: %p off: "LPU64", count: %u\n", i, pg,
                          pg->off, pg->count);
+#ifdef __LINUX__
                 LASSERTF(i == 0 || pg->off > pg_prev->off,
                          "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
                          " prev_pg %p [pri %lu ind %lu] off "LPU64"\n",
@@ -834,10 +829,14 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                          pg->pg, page_private(pg->pg), pg->pg->index, pg->off,
                          pg_prev->pg, page_private(pg_prev->pg),
                          pg_prev->pg->index, pg_prev->off);
+#else
+                LASSERTF(i == 0 || pg->off > pg_prev->off,
+                         "i %d p_c %u\n", i, page_count);
+#endif
                 LASSERT((pga[0].flag & OBD_BRW_SRVLOCK) ==
                         (pg->flag & OBD_BRW_SRVLOCK));
 
-                ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~PAGE_MASK,
+                ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~CFS_PAGE_MASK,
                                       pg->count);
                 requested_nob += pg->count;
 
@@ -880,11 +879,11 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         *niocountp = niocount;
         *requested_nobp = requested_nob;
         *reqp = req;
-        return (0);
+        RETURN (0);
 
  out:
         ptlrpc_req_finished (req);
-        return (rc);
+        RETURN (rc);
 }
 
 static void check_write_csum(__u32 cli, __u32 srv, int requested_nob,
@@ -1145,21 +1144,21 @@ static obd_count max_unfragmented_pages(struct brw_page *pg, obd_count pages)
         int count = 1;
         int offset;
 
-        LASSERT (pages > 0);
-        offset = pg->off & (PAGE_SIZE - 1);
+	LASSERT (pages > 0);
+        offset = pg->off & (CFS_PAGE_SIZE - 1);
 
         for (;;) {
                 pages--;
                 if (pages == 0)         /* that's all */
                         return count;
 
-                if (offset + pg->count < PAGE_SIZE)
-                        return count;   /* doesn't end on page boundary */
+                if (offset + pg->count < CFS_PAGE_SIZE)
+			return count;   /* doesn't end on page boundary */
 
-                pg++;
-                offset = pg->off & (PAGE_SIZE - 1);
-                if (offset != 0)        /* doesn't start on page boundary */
-                        return count;
+		pg++;
+                offset = pg->off & (CFS_PAGE_SIZE - 1);
+		if (offset != 0)        /* doesn't start on page boundary */
+			return count;
 
                 count++;
         }
@@ -1201,11 +1200,9 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                         *oa = *saved_oa;
                 } else if (page_count > pages_per_brw) {
                         /* save a copy of oa (brw will clobber it) */
-                        OBD_ALLOC(saved_oa, sizeof(*saved_oa));
-                        if (saved_oa == NULL) {
-                                CERROR("Can't save oa (ENOMEM)\n");
+                        saved_oa = obdo_alloc();
+                        if (saved_oa == NULL)
                                 RETURN(-ENOMEM);
-                        }
                         *saved_oa = *oa;
                 }
 
@@ -1219,7 +1216,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         }
 
         if (saved_oa != NULL)
-                OBD_FREE(saved_oa, sizeof(*saved_oa));
+                obdo_free(saved_oa);
 
         RETURN(rc);
 }
@@ -1364,7 +1361,7 @@ static void osc_occ_interrupted(struct oig_callback_context *occ)
         /* XXX member_of() */
         oap = list_entry(occ, struct osc_async_page, oap_occ);
 
-        spin_lock(&oap->oap_cli->cl_loi_list_lock);
+        client_obd_list_lock(&oap->oap_cli->cl_loi_list_lock);
 
         oap->oap_interrupted = 1;
 
@@ -1392,7 +1389,7 @@ static void osc_occ_interrupted(struct oig_callback_context *occ)
         }
 
 unlock:
-        spin_unlock(&oap->oap_cli->cl_loi_list_lock);
+        client_obd_list_unlock(&oap->oap_cli->cl_loi_list_lock);
 }
 
 /* this is trying to propogate async writeback errors back up to the
@@ -1422,6 +1419,7 @@ static void osc_process_ar(struct osc_async_rc *ar, struct ptlrpc_request *req,
 static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
                               struct osc_async_page *oap, int sent, int rc)
 {
+        ENTRY;
         osc_exit_cache(cli, oap, sent);
         oap->oap_async_flags = 0;
         oap->oap_interrupted = 0;
@@ -1456,6 +1454,7 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
 
         oap->oap_caller_ops->ap_completion(oap->oap_caller_data, oap->oap_cmd,
                                            oa, rc);
+        EXIT;
 }
 
 static int brw_interpret_oap(struct ptlrpc_request *request,
@@ -1474,7 +1473,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
 
         cli = aa->aa_cli;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         /* We need to decrement before osc_ap_completion->osc_wake_cache_waiters
          * is called so we know whether to go to sync BRWs or wait for more
@@ -1499,7 +1498,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(cli);
 
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         obdo_free(aa->aa_oa);
         OBD_FREE(aa->aa_pga, aa->aa_page_count * sizeof(struct brw_page));
@@ -1521,6 +1520,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         struct list_head *pos;
         int i, rc;
 
+        ENTRY;
         LASSERT(!list_empty(rpc_list));
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
@@ -1545,7 +1545,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                 pga[i].count = oap->oap_count;
                 pga[i].flag = oap->oap_brw_flags;
                 CDEBUG(0, "put page %p index %lu oap %p flg %x to pga\n",
-                       pga[i].pg, oap->oap_page->index, oap, pga[i].flag);
+                       pga[i].pg, cfs_page_index(oap->oap_page), oap, pga[i].flag);
                 i++;
         }
 
@@ -1591,7 +1591,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         struct osc_async_page *oap = NULL;
         struct osc_brw_async_args *aa;
         struct obd_async_page_ops *ops;
-        LIST_HEAD(rpc_list);
+        CFS_LIST_HEAD(rpc_list);
         unsigned int ending_offset;
         unsigned  starting_offset = 0;
         ENTRY;
@@ -1653,7 +1653,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                  * XXX nikita: this assertion should be adjusted when lustre
                  * starts using PG_writeback for pages being written out.
                  */
-#if defined(__KERNEL__)
+#if defined(__KERNEL__) && defined(__LINUX__)
                 LASSERT(PageLocked(oap->oap_page));
 #endif
                 /* If there is a gap at the start of this page, it can't merge
@@ -1699,7 +1699,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 /* If there is a gap at the end of this page, it can't merge
                  * with any subsequent pages, so we'll hand the network a
                  * "fragmented" page array that it can't transfer in 1 RDMA */
-                if (oap->oap_page_off + oap->oap_count < PAGE_SIZE)
+                if (oap->oap_page_off + oap->oap_count < CFS_PAGE_SIZE)
                         break;
         }
 
@@ -1710,13 +1710,13 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
         loi_list_maint(cli, loi);
 
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         request = osc_build_req(cli, &rpc_list, page_count, cmd);
         if (IS_ERR(request)) {
                 /* this should happen rarely and is pretty bad, it makes the
                  * pending list not follow the dirty order */
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 list_for_each_safe(pos, tmp, &rpc_list) {
                         oap = list_entry(pos, struct osc_async_page,
                                          oap_rpc_item);
@@ -1746,24 +1746,24 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
         LASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
         aa = (struct osc_brw_async_args *)&request->rq_async_args;
-        INIT_LIST_HEAD(&aa->aa_oaps);
+        CFS_INIT_LIST_HEAD(&aa->aa_oaps);
         list_splice(&rpc_list, &aa->aa_oaps);
-        INIT_LIST_HEAD(&rpc_list);
+        CFS_INIT_LIST_HEAD(&rpc_list);
 
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
                 lprocfs_oh_tally_log2(&cli->cl_read_offset_hist,
-                                      starting_offset/PAGE_SIZE + 1);
+                                      starting_offset/CFS_PAGE_SIZE + 1);
         } else {
                 lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_write_rpc_hist,
                                  cli->cl_w_in_flight);
                 lprocfs_oh_tally_log2(&cli->cl_write_offset_hist,
-                                      starting_offset/PAGE_SIZE + 1);
+                                      starting_offset/CFS_PAGE_SIZE + 1);
         }
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         if (cmd == OBD_BRW_READ)
                 cli->cl_r_in_flight++;
@@ -1908,9 +1908,9 @@ static int ocw_granted(struct client_obd *cli, struct osc_cache_waiter *ocw)
 {
         int rc;
         ENTRY;
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         rc = list_empty(&ocw->ocw_entry) || rpcs_in_flight(cli) == 0;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         RETURN(rc);
 };
 
@@ -1922,22 +1922,23 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
         struct osc_cache_waiter ocw;
         struct l_wait_info lwi = { 0 };
 
+        ENTRY;
         CDEBUG(D_CACHE, "dirty: %ld dirty_max: %ld dropped: %lu grant: %lu\n",
                cli->cl_dirty, cli->cl_dirty_max, cli->cl_lost_grant,
                cli->cl_avail_grant);
 
         /* force the caller to try sync io.  this can jump the list
          * of queued writes and create a discontiguous rpc stream */
-        if (cli->cl_dirty_max < PAGE_SIZE || cli->cl_ar.ar_force_sync ||
+        if (cli->cl_dirty_max < CFS_PAGE_SIZE || cli->cl_ar.ar_force_sync ||
             loi->loi_ar.ar_force_sync)
-                return(-EDQUOT);
+                RETURN(-EDQUOT);
 
         /* Hopefully normal case - cache space and write credits available */
-        if (cli->cl_dirty + PAGE_SIZE <= cli->cl_dirty_max &&
-            cli->cl_avail_grant >= PAGE_SIZE) {
+        if (cli->cl_dirty + CFS_PAGE_SIZE <= cli->cl_dirty_max &&
+            cli->cl_avail_grant >= CFS_PAGE_SIZE) {
                 /* account for ourselves */
                 osc_consume_write_grant(cli, oap);
-                return(0);
+                RETURN(0);
         }
 
         /* Make sure that there are write rpcs in flight to wait for.  This
@@ -1945,18 +1946,18 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
          * other objects sure might. */
         if (cli->cl_w_in_flight) {
                 list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
-                init_waitqueue_head(&ocw.ocw_waitq);
+                cfs_waitq_init(&ocw.ocw_waitq);
                 ocw.ocw_oap = oap;
                 ocw.ocw_rc = 0;
 
                 loi_list_maint(cli, loi);
                 osc_check_rpcs(cli);
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 CDEBUG(D_CACHE, "sleeping for cache space\n");
                 l_wait_event(ocw.ocw_waitq, ocw_granted(cli, &ocw), &lwi);
 
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 if (!list_empty(&ocw.ocw_entry)) {
                         list_del(&ocw.ocw_entry);
                         RETURN(-EINTR);
@@ -1982,24 +1983,24 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
         }
 
         oap->oap_brw_flags &= ~OBD_BRW_FROM_GRANT;
-        cli->cl_dirty -= PAGE_SIZE;
+        cli->cl_dirty -= CFS_PAGE_SIZE;
         if (!sent) {
-                cli->cl_lost_grant += PAGE_SIZE;
+                cli->cl_lost_grant += CFS_PAGE_SIZE;
                 CDEBUG(D_CACHE, "lost grant: %lu avail grant: %lu dirty: %lu\n",
                        cli->cl_lost_grant, cli->cl_avail_grant, cli->cl_dirty);
-        } else if (PAGE_SIZE != blocksize && oap->oap_count != PAGE_SIZE) {
+        } else if (CFS_PAGE_SIZE != blocksize && oap->oap_count != CFS_PAGE_SIZE) {
                 /* For short writes we shouldn't count parts of pages that
                  * span a whole block on the OST side, or our accounting goes
                  * wrong.  Should match the code in filter_grant_check. */
-                int offset = (oap->oap_obj_off +oap->oap_page_off) & ~PAGE_MASK;
+                int offset = (oap->oap_obj_off +oap->oap_page_off) & ~CFS_PAGE_MASK;
                 int count = oap->oap_count + (offset & (blocksize - 1));
                 int end = (offset + oap->oap_count) & (blocksize - 1);
                 if (end)
                         count += blocksize - end;
 
-                cli->cl_lost_grant += PAGE_SIZE - count;
+                cli->cl_lost_grant += CFS_PAGE_SIZE - count;
                 CDEBUG(D_CACHE, "lost %lu grant: %lu avail: %lu dirty: %lu\n",
-                       PAGE_SIZE - count, cli->cl_lost_grant,
+                       CFS_PAGE_SIZE - count, cli->cl_lost_grant,
                        cli->cl_avail_grant, cli->cl_dirty);
         }
 
@@ -2007,7 +2008,7 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
 }
 
 int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
-                        struct lov_oinfo *loi, struct page *page,
+                        struct lov_oinfo *loi, cfs_page_t *page,
                         obd_off offset, struct obd_async_page_ops *ops,
                         void *data, void **res)
 {
@@ -2028,9 +2029,9 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         oap->oap_page = page;
         oap->oap_obj_off = offset;
 
-        INIT_LIST_HEAD(&oap->oap_pending_item);
-        INIT_LIST_HEAD(&oap->oap_urgent_item);
-        INIT_LIST_HEAD(&oap->oap_rpc_item);
+        CFS_INIT_LIST_HEAD(&oap->oap_pending_item);
+        CFS_INIT_LIST_HEAD(&oap->oap_urgent_item);
+        CFS_INIT_LIST_HEAD(&oap->oap_rpc_item);
 
         oap->oap_occ.occ_interrupted = osc_occ_interrupted;
 
@@ -2094,7 +2095,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         oap->oap_cmd = cmd;
         oap->oap_page_off = off;
@@ -2105,7 +2106,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (cmd & OBD_BRW_WRITE) {
                 rc = osc_enter_cache(cli, loi, oap);
                 if (rc) {
-                        spin_unlock(&cli->cl_loi_list_lock);
+                        client_obd_list_unlock(&cli->cl_loi_list_lock);
                         RETURN(rc);
                 }
                 lop = &loi->loi_write_lop;
@@ -2124,7 +2125,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                   cmd);
 
         osc_check_rpcs(cli);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         RETURN(0);
 }
@@ -2169,7 +2170,7 @@ static int osc_set_async_flags(struct obd_export *exp,
                 lop = &loi->loi_read_lop;
         }
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         if (list_empty(&oap->oap_pending_item))
                 GOTO(out, rc = -EINVAL);
@@ -2191,7 +2192,7 @@ static int osc_set_async_flags(struct obd_export *exp,
                         oap->oap_async_flags);
 out:
         osc_check_rpcs(cli);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         RETURN(rc);
 }
 
@@ -2222,7 +2223,7 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         oap->oap_cmd = cmd;
         oap->oap_page_off = off;
@@ -2243,7 +2244,7 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         LOI_DEBUG(loi, "oap %p page %p on group pending\n", oap, oap->oap_page);
 
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         RETURN(0);
 }
@@ -2276,13 +2277,13 @@ static int osc_trigger_group_io(struct obd_export *exp,
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         osc_group_to_pending(cli, loi, &loi->loi_write_lop, OBD_BRW_WRITE);
         osc_group_to_pending(cli, loi, &loi->loi_read_lop, OBD_BRW_READ);
 
         osc_check_rpcs(cli);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         RETURN(0);
 }
@@ -2310,7 +2311,7 @@ static int osc_teardown_async_page(struct obd_export *exp,
                 lop = &loi->loi_read_lop;
         }
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         if (!list_empty(&oap->oap_rpc_item))
                 GOTO(out, rc = -EBUSY);
@@ -2330,7 +2331,7 @@ static int osc_teardown_async_page(struct obd_export *exp,
 
         LOI_DEBUG(loi, "oap %p page %p torn down\n", oap, oap->oap_page);
 out:
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         RETURN(rc);
 }
 
@@ -2425,12 +2426,12 @@ static int sanosc_brw_read(struct obd_export *exp, struct obdo *oa,
                         CDEBUG(D_PAGE, "hole at ino %lu; index %ld\n",
                                         page->mapping->host->i_ino,
                                         page->index);
-                        memset(page_address(page), 0, PAGE_SIZE);
+                        memset(page_address(page), 0, CFS_PAGE_SIZE);
                         continue;
                 }
 
                 if (!page->buffers) {
-                        create_empty_buffers(page, dev, PAGE_SIZE);
+                        create_empty_buffers(page, dev, CFS_PAGE_SIZE);
                         bh = page->buffers;
 
                         clear_bit(BH_New, &bh->b_state);
@@ -2548,7 +2549,7 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
                 dev = exp->exp_obd->u.cli.cl_sandev;
 
                 if (!page->buffers) {
-                        create_empty_buffers(page, dev, PAGE_SIZE);
+                        create_empty_buffers(page, dev, CFS_PAGE_SIZE);
                 } else {
                         /* checking */
                         LASSERT(!test_bit(BH_New, &page->buffers->b_state));
@@ -2633,6 +2634,8 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
         }
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
 #ifdef __KERNEL__
+#ifdef __LINUX__
+        /* Liang XXX: Darwin and Winnt checking should be added */
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
@@ -2645,6 +2648,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
                          old_inode->i_state,
                          new_inode, new_inode->i_ino, new_inode->i_generation);
         }
+#endif
 #endif
         lock->l_ast_data = data;
         lock->l_flags |= (flags & LDLM_FL_NO_LRU);
@@ -2678,15 +2682,15 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother.  */
-        policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
-        policy->l_extent.end |= ~PAGE_MASK;
+        policy->l_extent.start -= policy->l_extent.start & ~CFS_PAGE_MASK;
+        policy->l_extent.end |= ~CFS_PAGE_MASK;
 
         if (lsm->lsm_oinfo->loi_kms_valid == 0)
                 goto no_match;
 
         /* Next, search for already existing extent locks that will cover us */
-        rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type, policy, mode,
-                             lockh);
+        rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type, policy,
+                             mode, lockh);
         if (rc == 1) {
                 osc_set_data_with_check(lockh, data, *flags);
                 if (*flags & LDLM_FL_HAS_INTENT) {
@@ -2711,7 +2715,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
          * locks out from other users right now, too. */
 
         if (mode == LCK_PR) {
-                rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type,
+                rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
                                      policy, LCK_PW, lockh);
                 if (rc == 1) {
                         /* FIXME: This is not incredibly elegant, but it might
@@ -2737,6 +2741,9 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 size[0] = sizeof(*rep);
                 req->rq_replen = lustre_msg_size(2, size);
         }
+
+        /* users of osc_enqueue() can pass this flag for ldlm_lock_match() */
+        *flags &= ~LDLM_FL_BLOCK_GRANTED;
 
         rc = ldlm_cli_enqueue(exp, req, obd->obd_namespace, res_id, type,
                               policy, mode, flags, bl_cb, cp_cb, gl_cb, data,
@@ -2776,8 +2783,8 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother */
-        policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
-        policy->l_extent.end |= ~PAGE_MASK;
+        policy->l_extent.start -= policy->l_extent.start & ~CFS_PAGE_MASK;
+        policy->l_extent.end |= ~CFS_PAGE_MASK;
 
         /* Next, search for already existing extent locks that will cover us */
         rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
@@ -2839,7 +2846,7 @@ static int osc_join_lru(struct obd_export *exp,
 }
 
 static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      unsigned long max_age)
+                      cfs_time_t max_age)
 {
         struct obd_statfs *msfs;
         struct ptlrpc_request *request;
@@ -3005,7 +3012,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, err);
         default:
                 CDEBUG(D_INODE, "unrecognised ioctl %#x by %s\n",
-                       cmd, current->comm);
+                       cmd, cfs_curproc_comm());
                 GOTO(out, err = -ENOTTY);
         }
 out:
@@ -3059,14 +3066,40 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         RETURN(-EINVAL);
 }
 
-static int osc_set_info(struct obd_export *exp, obd_count keylen,
-                        void *key, obd_count vallen, void *val)
+static int osc_setinfo_mds_conn_interpret(struct ptlrpc_request *req,
+                                          void *aa, int rc)
+{
+        struct llog_ctxt *ctxt;
+        struct obd_import *imp = req->rq_import;
+        ENTRY;
+
+        if (rc != 0)
+                RETURN(rc);
+
+        ctxt = llog_get_context(imp->imp_obd, LLOG_MDS_OST_ORIG_CTXT);
+        if (ctxt) {
+                if (rc == 0)
+                        rc = llog_initiator_connect(ctxt);
+                else
+                        CERROR("cannot establish connection for "
+                               "ctxt %p: %d\n", ctxt, rc);
+        }
+
+        imp->imp_server_timeout = 1;
+        CDEBUG(D_HA, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
+        imp->imp_pingable = 1;
+
+        RETURN(rc);
+}
+
+static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
+                              void *key, obd_count vallen, void *val,
+                              struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request *req;
         struct obd_device  *obd = exp->exp_obd;
         struct obd_import *imp = class_exp2cliimp(exp);
-        struct llog_ctxt *ctxt;
-        int rc, size[2] = {keylen, vallen};
+        int size[2] = {keylen, vallen};
         char *bufs[2] = {key, val};
         ENTRY;
 
@@ -3108,9 +3141,15 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (!KEY_IS(KEY_MDS_CONN) && !KEY_IS("evict_by_nid"))
+        if (!set)
                 RETURN(-EINVAL);
 
+        /* We pass all other commands directly to OST. Since nobody calls osc
+           methods directly and everybody is supposed to go through LOV, we
+           assume lov checked invalid values for us.
+           The only recognised values so far are evict_by_nid and mds_conn.
+           Even if something bad goes through, we'd get a -EINVAL from OST
+           anyway. */
 
         req = ptlrpc_prep_req(imp, LUSTRE_OST_VERSION, OST_SET_INFO,
                               2, size, bufs);
@@ -3118,23 +3157,13 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-ENOMEM);
 
         req->rq_replen = lustre_msg_size(0, NULL);
-        rc = ptlrpc_queue_wait(req);
-        ptlrpc_req_finished(req);
 
-        ctxt = llog_get_context(exp->exp_obd, LLOG_MDS_OST_ORIG_CTXT);
-        if (ctxt) {
-                if (rc == 0)
-                        rc = llog_initiator_connect(ctxt);
-                else
-                        CERROR("cannot establish connection for ctxt %p: %d\n",
-                               ctxt, rc);
-        }
+        if (KEY_IS("mds_conn"))
+                req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
+        ptlrpc_set_add_req(set, req);
+        ptlrpc_check_set(set);
 
-        imp->imp_server_timeout = 1;
-        CDEBUG(D_HA, "pinging OST %s\n", obd2cli_tgt(exp->exp_obd));
-        imp->imp_pingable = 1;
-
-        RETURN(rc);
+        RETURN(0);
 }
 
 
@@ -3193,12 +3222,12 @@ static int osc_reconnect(struct obd_export *exp, struct obd_device *obd,
         if (data != NULL && (data->ocd_connect_flags & OBD_CONNECT_GRANT)) {
                 long lost_grant;
 
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 data->ocd_grant = cli->cl_avail_grant ?:
                                 2 * cli->cl_max_pages_per_rpc << PAGE_SHIFT;
                 lost_grant = cli->cl_lost_grant;
                 cli->cl_lost_grant = 0;
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 CDEBUG(D_CACHE, "request ocd_grant: %d cl_avail_grant: %ld "
                        "cl_lost_grant: %ld\n", data->ocd_grant,
@@ -3232,6 +3261,7 @@ static int osc_import_event(struct obd_device *obd,
         struct client_obd *cli;
         int rc = 0;
 
+        ENTRY;
         LASSERT(imp->imp_obd == obd);
 
         switch (event) {
@@ -3256,12 +3286,12 @@ static int osc_import_event(struct obd_device *obd,
 
                 /* Reset grants */
                 cli = &obd->u.cli;
-                spin_lock(&cli->cl_loi_list_lock);
+                client_obd_list_lock(&cli->cl_loi_list_lock);
                 cli->cl_avail_grant = 0;
                 cli->cl_lost_grant = 0;
                 /* all pages go to failing rpcs due to the invalid import */
                 osc_check_rpcs(cli);
-                spin_unlock(&cli->cl_loi_list_lock);
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
@@ -3304,9 +3334,10 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         int rc;
         ENTRY;
 
+        ENTRY;
         rc = ptlrpcd_addref();
         if (rc)
-                return rc;
+                RETURN(rc);
 
         rc = client_obd_setup(obd, lcfg);
         if (rc) {
@@ -3368,6 +3399,7 @@ int osc_cleanup(struct obd_device *obd)
         struct osc_creator *oscc = &obd->u.cli.cl_oscc;
         int rc;
 
+        ENTRY;
         ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_obd_cleanup(obd);
 
@@ -3423,7 +3455,7 @@ struct obd_ops osc_obd_ops = {
         .o_join_lru             = osc_join_lru,
         .o_iocontrol            = osc_iocontrol,
         .o_get_info             = osc_get_info,
-        .o_set_info             = osc_set_info,
+        .o_set_info_async       = osc_set_info_async,
         .o_import_event         = osc_import_event,
         .o_llog_init            = osc_llog_init,
         .o_llog_finish          = osc_llog_finish,
@@ -3464,7 +3496,6 @@ struct obd_ops sanosc_obd_ops = {
 };
 #endif
 
-static quota_interface_t *quota_interface;
 extern quota_interface_t osc_quota_interface;
 
 int __init osc_init(void)
@@ -3524,6 +3555,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Object Storage Client (OSC)");
 MODULE_LICENSE("GPL");
 
-module_init(osc_init);
-module_exit(osc_exit);
+cfs_module(osc, "1.0.0", osc_init, osc_exit);
 #endif

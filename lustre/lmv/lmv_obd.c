@@ -34,17 +34,17 @@
 #include <linux/namei.h>
 #else
 #include <liblustre.h>
-#include <linux/lustre_log.h>
+#include <lustre_log.h>
 #endif
 #include <linux/ext2_fs.h>
 
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_idl.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_lite.h>
+#include <lustre/lustre_idl.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
+#include <lustre_net.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
+#include <lustre_lite.h>
 #include "lmv_internal.h"
 
 /* not defined for liblustre building */
@@ -240,8 +240,8 @@ static void lmv_set_timeouts(struct obd_device *obd)
                 if (tgts->ltd_exp == NULL)
                         continue;
                 
-                obd_set_info(tgts->ltd_exp, strlen("inter_mds"),
-                             "inter_mds", 0, NULL);
+                obd_set_info_async(tgts->ltd_exp, strlen("inter_mds"),
+                                   "inter_mds", 0, NULL, NULL);
         }
 }
 
@@ -1903,8 +1903,9 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
         RETURN(-EINVAL);
 }
 
-int lmv_set_info(struct obd_export *exp, obd_count keylen,
-                 void *key, obd_count vallen, void *val)
+int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
+                       void *key, obd_count vallen, void *val,
+                       struct ptlrpc_request_set *set)
 {
         struct lmv_tgt_desc    *tgt;
         struct obd_device      *obd;
@@ -1956,7 +1957,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                                 exp = tgt_obd->obd_self_export;
                         }
 
-                        err = obd_set_info(exp, keylen, key, vallen, val);
+                        err = obd_set_info_async(exp, keylen, key, vallen, val, set);
                         if (!rc)
                                 rc = err;
                 }
@@ -1974,8 +1975,9 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                      i++, tgt++) {
                         if (!tgt->ltd_exp)
                                 continue;
-                        rc = obd_set_info(tgt->ltd_exp,
-                                          keylen, key, vallen, val);
+                        rc = obd_set_info_async(tgt->ltd_exp,
+                                                keylen, key, vallen, 
+                                                val, set);
                         if (rc)
                                 RETURN(rc);
                 }
@@ -1992,8 +1994,9 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                         RETURN(rc);
 
                 i = lmv_fld_lookup(obd, fid);
-                rc = obd_set_info(lmv->tgts[i].ltd_exp, 
-                                  keylen, key, vallen, val); 
+                rc = obd_set_info_async(lmv->tgts[i].ltd_exp, 
+                                        keylen, key, vallen, val,
+                                        set); 
                 RETURN(rc);
         }
 
@@ -2378,7 +2381,7 @@ struct obd_ops lmv_obd_ops = {
         .o_llog_init            = lmv_llog_init,
         .o_llog_finish          = lmv_llog_finish,
         .o_get_info             = lmv_get_info,
-        .o_set_info             = lmv_set_info,
+        .o_set_info_async       = lmv_set_info_async,
         .o_packmd               = lmv_packmd,
         .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,

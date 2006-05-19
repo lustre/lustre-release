@@ -48,7 +48,6 @@
 
 #include "lutil.h"
 #include "llite_lib.h"
-#include <linux/lustre_ver.h>
 
 static int lllib_init(void)
 {
@@ -131,9 +130,9 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
         /* Disable initial recovery on this import */
-        rc = obd_set_info(obd->obd_self_export,
-                          strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
-                          sizeof(allow_recov), &allow_recov);
+        rc = obd_set_info_async(obd->obd_self_export,
+                                strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
+                                sizeof(allow_recov), &allow_recov, NULL);
 
         rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
         if (rc) {
@@ -243,15 +242,8 @@ int _sysio_lustre_init(void)
 {
         int err;
         char *timeout = NULL;
-        char *debug_mask = NULL;
-        char *debug_subsys = NULL;
 #ifndef INIT_SYSIO
         extern void __liblustre_cleanup_(void);
-#endif
-
-#if 0
-        libcfs_debug = -1;
-        libcfs_subsystem_debug = -1;
 #endif
 
         liblustre_init_random();
@@ -267,16 +259,6 @@ int _sysio_lustre_init(void)
                 printf("LibLustre: set obd timeout as %u seconds\n",
                         obd_timeout);
         }
-
-        /* debug masks */
-        debug_mask = getenv("LIBLUSTRE_DEBUG_MASK");
-        if (debug_mask)
-                libcfs_debug = (unsigned int) strtol(debug_mask, NULL, 0);
-
-        debug_subsys = getenv("LIBLUSTRE_DEBUG_SUBSYS");
-        if (debug_subsys)
-                libcfs_subsystem_debug =
-                                (unsigned int) strtol(debug_subsys, NULL, 0);
 
 #ifndef INIT_SYSIO
         (void)atexit(__liblustre_cleanup_);

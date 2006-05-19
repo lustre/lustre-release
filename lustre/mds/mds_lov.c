@@ -32,13 +32,13 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_idl.h>
-#include <linux/obd_class.h>
-#include <linux/obd_lov.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_ver.h>
+#include <lustre_mds.h>
+#include <lustre/lustre_idl.h>
+#include <obd_class.h>
+#include <obd_lov.h>
+#include <lustre_lib.h>
+#include <lustre_fsfilt.h>
+#include <lustre_ver.h>
 
 #include "mds_internal.h"
 
@@ -163,17 +163,19 @@ int mds_lov_set_nextid(struct obd_device *obd)
 
         LASSERT(mds->mds_lov_objids != NULL);
 
-        rc = obd_set_info(mds->mds_osc_exp, strlen(KEY_NEXT_ID), KEY_NEXT_ID,
-                          mds->mds_lov_desc.ld_tgt_count, mds->mds_lov_objids);
+        rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_NEXT_ID),
+                                KEY_NEXT_ID,
+                                mds->mds_lov_desc.ld_tgt_count,
+                                mds->mds_lov_objids, NULL);
         
         if (rc) 
                 CERROR ("%s: mds_lov_set_nextid failed (%d)\n", 
                         obd->obd_name, rc);
+
         RETURN(rc);
 }
 
-/* Update the lov desc for a new size lov.
-   From HEAD mds_dt_lov_update_desc (but fixed) */
+/* Update the lov desc for a new size lov. */
 static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -388,7 +390,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
          * set_nextid().  The class driver can help us here, because
          * it can use the obd_recovering flag to determine when the
          * the OBD is full available. */
-        if (!obd->obd_recovering) 
+        if (!obd->obd_recovering)
                 rc = mds_postrecov(obd);
         RETURN(rc);
 
@@ -443,7 +445,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mds->mds_cfg_llh, NULL,  name);
+                                 &mds->mds_cfg_llh, NULL, name);
                 if (rc == 0)
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
                                          &cfg_uuid);
@@ -586,8 +588,9 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
-                rc2 = obd_set_info(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
-                                   KEY_MDS_CONN, 0, NULL);
+                rc2 = obd_set_info_async(mds->mds_osc_exp,
+                                         strlen(KEY_MDS_CONN), KEY_MDS_CONN,
+                                         0, NULL, NULL);
                 if (!rc)
                         rc = rc2;
                 RETURN(rc);
@@ -623,37 +626,35 @@ struct mds_lov_sync_info {
         __u32              mlsi_index;   /* index of target */
 };
 
+/* We only sync one osc at a time, so that we don't have to hold
+   any kind of lock on the whole mds_lov_desc, which may change 
+   (grow) as a result of mds_lov_add_ost.  This also avoids any
+   kind of mismatch between the lov_desc and the mds_lov_desc, 
+   which are not in lock-step during lov_add_obd */
 static int __mds_lov_synchronize(void *data)
 {
         struct mds_lov_sync_info *mlsi = data;
         struct obd_device *obd = mlsi->mlsi_obd;
         struct obd_device *watched = mlsi->mlsi_watched;
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_uuid *uuid = NULL;
+        struct obd_uuid *uuid;
         __u32  idx = mlsi->mlsi_index;
         int rc = 0;
         ENTRY;
 
-        if (watched) 
-                uuid = &watched->u.cli.cl_target_uuid;
-
         OBD_FREE(mlsi, sizeof(*mlsi));
 
         LASSERT(obd);
-
-        /* We only sync one osc at a time, so that we don't have to hold
-           any kind of lock on the whole mds_lov_desc, which may change 
-           (grow) as a result of mds_lov_add_ost.  This also avoids any
-           kind of mismatch between the lov_desc and the mds_lov_desc, 
-           which are not in lock-step during lov_add_obd */
+        LASSERT(watched);
+        uuid = &watched->u.cli.cl_target_uuid;
         LASSERT(uuid);
 
         rc = mds_lov_update_mds(obd, watched, idx);
         if (rc != 0)
                 GOTO(out, rc);
         
-        rc = obd_set_info(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
-                          KEY_MDS_CONN, 0, uuid);
+        rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
+                                KEY_MDS_CONN, 0, uuid, NULL);
         if (rc != 0)
                 GOTO(out, rc);
 
@@ -668,7 +669,7 @@ static int __mds_lov_synchronize(void *data)
         }
 
         LCONSOLE_INFO("MDS %s: %s now active, resetting orphans\n",
-              obd->obd_name, (char *)uuid->uuid);
+              obd->obd_name, obd_uuid2str(uuid));
 
         if (obd->obd_stopping)
                 GOTO(out, rc = -ENODEV);
@@ -730,15 +731,16 @@ int mds_lov_start_synchronize(struct obd_device *obd,
 
         if (nonblock) {
                 /* Synchronize in the background */
-                rc = kernel_thread(mds_lov_synchronize, mlsi,
-                                   CLONE_VM | CLONE_FILES);
+                rc = cfs_kernel_thread(mds_lov_synchronize, mlsi,
+                                       CLONE_VM | CLONE_FILES);
                 if (rc < 0) {
                         CERROR("%s: error starting mds_lov_synchronize: %d\n",
                                obd->obd_name, rc);
                         class_decref(obd);
                 } else {
-                        CDEBUG(D_HA, "%s: mds_lov_synchronize thread: %d\n",
-                               obd->obd_name, rc);
+                        CDEBUG(D_HA, "%s: mds_lov_synchronize idx=%d "
+                               "thread=%d\n", obd->obd_name,
+                               mlsi->mlsi_index, rc);
                         rc = 0;
                 }
         } else {

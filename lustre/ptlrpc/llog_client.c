@@ -33,14 +33,14 @@
 #endif
 
 #ifdef __KERNEL__
-#include <linux/fs.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_net.h>
+#include <obd_class.h>
+#include <lustre_log.h>
+#include <lustre_net.h>
 #include <libcfs/list.h>
 
 /* This is a callback from the llog_* functions.
@@ -309,11 +309,10 @@ out:
 
 static int llog_client_close(struct llog_handle *handle)
 {
-        int rc = 0;
         /* this doesn't call LLOG_ORIGIN_HANDLE_CLOSE because
            the servers all close the file at the end of every
            other LLOG_ RPC. */
-        RETURN(rc);
+        return(0);
 }
 
 

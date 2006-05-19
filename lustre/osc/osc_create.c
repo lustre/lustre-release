@@ -35,18 +35,7 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #ifdef __KERNEL__
-# include <linux/version.h>
-# include <linux/module.h>
-# include <linux/mm.h>
-# include <linux/highmem.h>
-# include <linux/ctype.h>
-# include <linux/init.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#  include <linux/workqueue.h>
-#  include <linux/smp_lock.h>
-# else
-#  include <linux/locks.h>
-# endif
+# include <libcfs/libcfs.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
@@ -55,8 +44,8 @@
 # include <ctype.h>
 #endif
 
-# include <linux/lustre_dlm.h>
-#include <linux/obd_class.h>
+# include <lustre_dlm.h>
+#include <obd_class.h>
 #include "osc_internal.h"
 
 static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
@@ -109,7 +98,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         CDEBUG(D_HA, "preallocated through id "LPU64" (last used "LPU64")\n",
                oscc->oscc_last_id, oscc->oscc_next_id);
 
-        wake_up(&oscc->oscc_waitq);
+        cfs_waitq_signal(&oscc->oscc_waitq);
         RETURN(rc);
 }
 
@@ -288,7 +277,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         CDEBUG(D_HA, "%s: oscc recovery finished, last_id: "
                                LPU64", rc: %d\n", oscc->oscc_obd->obd_name,
                                oscc->oscc_last_id, rc);
-                        wake_up(&oscc->oscc_waitq);
+                        cfs_waitq_signal(&oscc->oscc_waitq);
                 } else {
                         CDEBUG(D_ERROR, "%s: oscc recovery failed: %d\n",
                                oscc->oscc_obd->obd_name, rc);
@@ -315,7 +304,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n",
                                oscc);
 
-                        lwi = LWI_TIMEOUT(MAX(obd_timeout*HZ/4, 1), NULL, NULL);
+                        lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout/4)),
+                                          NULL, NULL);
                         rc = l_wait_event(oscc->oscc_waitq,
                                           !oscc_recovering(oscc), &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
@@ -373,8 +363,8 @@ void oscc_init(struct obd_device *obd)
         oscc = &obd->u.cli.cl_oscc;
 
         memset(oscc, 0, sizeof(*oscc));
-        INIT_LIST_HEAD(&oscc->oscc_list);
-        init_waitqueue_head(&oscc->oscc_waitq);
+        CFS_INIT_LIST_HEAD(&oscc->oscc_list);
+        cfs_waitq_init(&oscc->oscc_waitq);
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_obd = obd;
         oscc->oscc_grow_count = OST_MIN_PRECREATE;

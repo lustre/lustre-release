@@ -5,8 +5,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <liblustre.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
+#include <lustre_lib.h>
+#include <lustre/lustre_idl.h>
 
 #define BLANK_LINE()                                            \
 do {                                                            \
@@ -494,11 +494,10 @@ check_lov_desc(void)
         CHECK_MEMBER(lov_desc, ld_pattern);
         CHECK_MEMBER(lov_desc, ld_default_stripe_size);
         CHECK_MEMBER(lov_desc, ld_default_stripe_offset);
-        CHECK_MEMBER(lov_desc, ld_default_stripe_offset);
+        CHECK_MEMBER(lov_desc, ld_qos_threshold);
+        CHECK_MEMBER(lov_desc, ld_qos_maxage);
         CHECK_MEMBER(lov_desc, ld_padding_1);
         CHECK_MEMBER(lov_desc, ld_padding_2);
-        CHECK_MEMBER(lov_desc, ld_padding_3);
-        CHECK_MEMBER(lov_desc, ld_padding_4);
         CHECK_MEMBER(lov_desc, ld_uuid);
 }
 

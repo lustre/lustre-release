@@ -28,9 +28,9 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/lustre_dlm.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
+#include <lustre_dlm.h>
+#include <obd_class.h>
+#include <obd.h>
 
 #include "ldlm_internal.h"
 
@@ -50,15 +50,16 @@ int ldlm_expired_completion_wait(void *data)
         struct obd_import *imp;
         struct obd_device *obd;
 
+        ENTRY;
         if (lock->l_conn_export == NULL) {
-                static unsigned long next_dump = 0, last_dump = 0;
+                static cfs_time_t next_dump = 0, last_dump = 0;
 
                 LDLM_ERROR(lock, "lock timed out (enq %lus ago); not entering "
                            "recovery in server code, just going back to sleep",
                            lock->l_enqueued_time.tv_sec);
-                if (time_after(jiffies, next_dump)) {
+                if (cfs_time_after(cfs_time_current(), next_dump)) {
                         last_dump = next_dump;
-                        next_dump = jiffies + 300 * HZ;
+                        next_dump = cfs_time_shift(300);
                         ldlm_namespace_dump(D_DLMTRACE,
                                             lock->l_resource->lr_namespace);
                         if (last_dump == 0)
@@ -95,7 +96,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                        LDLM_FL_BLOCK_CONV))) {
-                wake_up(&lock->l_waitq);
+                cfs_waitq_signal(&lock->l_waitq);
                 RETURN(0);
         }
 
@@ -115,11 +116,10 @@ noreproc:
         lwd.lwd_lock = lock;
 
         if (unlikely(flags & LDLM_FL_NO_TIMEOUT)) {
-                LDLM_DEBUG(lock, "waiting indefinitely because CW lock was"
-                           " met\n");
+                LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
                 lwi = LWI_INTR(interrupted_completion_wait, &lwd);
         } else {
-                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ,
+                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout),
                                        ldlm_expired_completion_wait,
                                        interrupted_completion_wait, &lwd);
         }
@@ -450,9 +450,11 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         /* lock enqueued on the server */
         cleanup_phase = 1;
 
+        l_lock(&ns->ns_lock);
         lock->l_remote_handle = reply->lock_handle;
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
+        l_unlock(&ns->ns_lock);
 
         CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%x\n",
                lock, reply->lock_handle.cookie, *flags);
@@ -752,7 +754,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 {
         struct ldlm_lock *lock, *next;
         int count, rc = 0;
-        LIST_HEAD(cblist);
+        CFS_LIST_HEAD(cblist);
         ENTRY;
 
 #ifndef __KERNEL__
@@ -818,7 +820,7 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                            void *opaque)
 {
         struct ldlm_resource *res;
-        struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
+        struct list_head *tmp, *next, list = CFS_LIST_HEAD_INIT(list);
         struct ldlm_ast_work *w;
         ENTRY;
 
@@ -1045,6 +1047,7 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
 {
         int i, rc = LDLM_ITER_CONTINUE;
 
+        ENTRY;
         l_lock(&ns->ns_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
                 struct list_head *tmp, *next;
@@ -1098,7 +1101,9 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
         /* we use l_pending_chain here, because it's unused on clients. */
         LASSERTF(list_empty(&lock->l_pending_chain),"lock %p next %p prev %p\n",
                  lock, &lock->l_pending_chain.next,&lock->l_pending_chain.prev);
-        list_add(&lock->l_pending_chain, list);
+        /* bug 9573: don't replay locks left after eviction */
+        if (!(lock->l_flags & LDLM_FL_FAILED))
+                list_add(&lock->l_pending_chain, list);
         return LDLM_ITER_CONTINUE;
 }
 
@@ -1108,6 +1113,7 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
 
+        ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
@@ -1141,6 +1147,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         int buffers = 1;
         int size[2];
         int flags;
+        ENTRY;
 
         /* If this is reply-less callback lock, we cannot replay it, since
          * server might have long dropped it, but notification of that event was
@@ -1212,7 +1219,7 @@ int ldlm_replay_locks(struct obd_import *imp)
         int rc = 0;
 
         ENTRY;
-        INIT_LIST_HEAD(&list);
+        CFS_INIT_LIST_HEAD(&list);
 
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
 

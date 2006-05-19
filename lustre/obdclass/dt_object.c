@@ -32,7 +32,7 @@
 # define EXPORT_SYMTAB
 #endif
 
-#include <linux/dt_object.h>
+#include <dt_object.h>
 #include <libcfs/list.h>
 
 void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb)

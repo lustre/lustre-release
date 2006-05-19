@@ -20,8 +20,8 @@
  *
  */
 
-#ifndef _COMPAT25_H
-#define _COMPAT25_H
+#ifndef _LINUX_COMPAT25_H
+#define _LINUX_COMPAT25_H
 
 #ifdef __KERNEL__
 
@@ -30,6 +30,15 @@
 #endif
 
 #include <libcfs/linux/portals_compat25.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+struct ll_iattr_struct {
+        struct iattr    iattr;
+        unsigned int    ia_attr_flags;
+};
+#else
+#define ll_iattr_struct iattr
+#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16)
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
@@ -181,6 +190,7 @@ static inline int cleanup_group_info(void)
 #define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
 #define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
 #define ll_dev_t                            int
+#define old_encode_dev(dev)                 (dev)
 
 /* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
  * as 2.5 and let macros drop back.. */

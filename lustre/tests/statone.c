@@ -5,8 +5,8 @@
 #include <fcntl.h>
 
 #include <liblustre.h>
-#include <linux/lustre_lib.h>
-#include <linux/obd.h>
+#include <lustre_lib.h>
+#include <obd.h>
 
 int main(int argc, char **argv)
 {

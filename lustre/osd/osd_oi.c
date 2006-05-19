@@ -34,15 +34,15 @@
 #include <linux/module.h>
 
 /* LUSTRE_VERSION_CODE */
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 /*
  * struct OBD_{ALLOC,FREE}*()
  * OBD_FAIL_CHECK
  */
-#include <linux/obd_support.h>
+#include <obd_support.h>
 
 /* fid_is_local() */
-#include <linux/lustre_fid.h>
+#include <lustre_fid.h>
 
 #include "osd_oi.h"
 /* osd_lookup(), struct osd_thread_info */

@@ -46,25 +46,28 @@ LOCK=/var/lock/subsys/$SERVICE
 
 # Source function library.
 if [ -f /etc/init.d/functions ] ; then
-   . /etc/init.d/functions
+	. /etc/init.d/functions
 fi
 
 # Source networking configuration.
 if [ -f /etc/sysconfig/network ] ; then
-   . /etc/sysconfig/network
+	. /etc/sysconfig/network
 fi
 
 check_start_stop() {
-	# Check that networking is up.
-	[ "${NETWORKING}" = "no" ] && exit 0
+	# Exit codes now LSB compliant
+	# Check that networking is up. - exit 'not running'
+	[ "${NETWORKING}" = "no" ] && exit 7 
 
-	[ -x ${LCONF} -a -x ${LCTL} ] || exit 0
+	# exit 'not installed' 
+	[ -x ${LCONF} -a -x ${LCTL} ] || exit 5
 
 	if [ ${LUSTRE_CONFIG_XML:0:1} = "/" ] ; then
-	         if [ ! -f ${LUSTRE_CONFIG_XML} ] ; then
-		     echo "${0##*/}: Configuration file ${LUSTRE_CONFIG_XML} not found; skipping."
-		     exit 0
-		 fi
+			if [ ! -f ${LUSTRE_CONFIG_XML} ] ; then
+			echo "${0##*/}: Configuration file ${LUSTRE_CONFIG_XML} not found; skipping."
+			# exit 'not configured'
+			exit 6
+		fi
 	fi
 
 	# Create /var/lustre directory 
@@ -77,7 +80,7 @@ check_start_stop() {
 
 start() {
 	if [ -x "/usr/sbin/clustat" -a "${SERVICE}" = "lustre" ] ; then
-	    if [ ! -f "/etc/lustre/start-despite-clumanager" ] ; then
+		if [ ! -f "/etc/lustre/start-despite-clumanager" ] ; then
 		cat >&2 <<EOF
 This script was run directly, which can be dangerous if you are using
 clumanager to manage Lustre services.
@@ -87,7 +90,7 @@ command to have this script start Lustre instead:
 
 touch /etc/lustre/start-despite-clumanager
 EOF
-		RETVAL=1
+		RETVAL=6  # program not configured
 		return
 	    fi
 	fi
@@ -95,7 +98,7 @@ EOF
 	echo -n "Starting $SERVICE: "
 	if [ $UID -ne 0 ]; then
 		echo "Lustre should be started as root"
-		RETVAL=1
+		RETVAL=4 # insufficent privileges
 		return
 	fi
 	${LCONF} ${LCONF_START_ARGS}
@@ -114,7 +117,7 @@ stop() {
 	echo -n "Shutting down $SERVICE: "
 	if [ $UID -ne 0 ]; then
 		echo "Lustre should be stopped as root"
-		RETVAL=1
+		RETVAL=4 # insufficent privileges
 		return
 	fi
 	${LCONF} ${LCONF_STOP_ARGS}
@@ -135,14 +138,19 @@ restart() {
 
 status() {
 	STATE="stopped"
-	RETVAL=1
+	# LSB compliance - return 3 if service is not running
+	# Lustre-specific returns
+	# 150 - partial startup
+	# 151 - health_check unhealthy
+	# 152 - LBUG
+	RETVAL=3
 	egrep -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
 
 	# check for any routes - on a portals router this is the only thing
 	[ "`cat /proc/sys/lnet/routes 2> /dev/null`" ] && STATE="running" && RETVAL=0
 	
 	# check for any configured devices (may indicate partial startup)
-	[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial" && RETVAL=1
+	[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial" && RETVAL=150
 
 	# check for either a server or a client filesystem
 	MDS="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
@@ -159,14 +167,17 @@ status() {
 
 	# check for error in health_check
 	HEALTH="/proc/fs/lustre/health_check"
-	[ -f "$HEALTH" ] && grep -q "NOT HEALTHY" $HEALTH && STATE="unhealthy" && RETVAL=2
+	[ -f "$HEALTH" ] && grep -q "NOT HEALTHY" $HEALTH && STATE="unhealthy" && RETVAL=151
 
 	# check for LBUG
-	[ -f  "$HEALTH" ] && grep -q "LBUG" $HEALTH && STATE="LBUG" && RETVAL=3
+	[ -f  "$HEALTH" ] && grep -q "LBUG" $HEALTH && STATE="LBUG" && RETVAL=152
 
-	# Check if the service really exists
-	DUMMY=`lctl dl | grep $SERVICE`
-	[ $? -ne 0 ] && STATE="not_found" && RETVAL=5
+	# If Lustre is up , check if the service really exists
+        # Skip this is we are not checking a specific service
+	if [ $RETVAL -eq 0 ] && [ $SERVICE != 'lustre' ]; then
+		DUMMY=`lctl dl | grep $SERVICE`
+		[ $? -ne 0 ] && STATE="not_found" && RETVAL=3
+	fi
 
 	echo $STATE
 }

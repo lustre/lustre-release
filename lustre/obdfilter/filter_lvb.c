@@ -34,8 +34,8 @@
 #include <linux/version.h>
 
 #include <libcfs/list.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_dlm.h>
+#include <obd_class.h>
+#include <lustre_dlm.h>
 
 #include "filter_internal.h"
 

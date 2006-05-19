@@ -26,7 +26,7 @@
 #include <linux/version.h>
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_lite.h>
+#include <lustre_lite.h>
 #include "llite_internal.h"
 
 static int ll_readlink_internal(struct inode *inode,
@@ -157,7 +157,7 @@ struct inode_operations ll_fast_symlink_inode_operations = {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         .revalidate_it  = ll_inode_revalidate_it,
 #else 
-        .getattr_it     = ll_getattr,
+        .getattr_it     = ll_getattr_it,
 #endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,

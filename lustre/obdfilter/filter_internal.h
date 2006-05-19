@@ -8,12 +8,13 @@
 #ifdef __KERNEL__
 # include <linux/spinlock.h>
 #endif
-#include <linux/lustre_handles.h>
-#include <linux/lustre_debug.h>
-#include <linux/obd.h>
-#include <linux/lustre_disk.h>
+#include <lustre_disk.h>
+#include <lustre_handles.h>
+#include <lustre_debug.h>
+#include <obd.h>
 
-#define HEALTH_CHECK "health_check"
+#define FILTER_LAYOUT_VERSION "2"
+
 #define FILTER_INIT_OBJID 0
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */

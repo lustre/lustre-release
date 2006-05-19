@@ -38,18 +38,16 @@
 /*
  * struct ptlrpc_client
  */
-#include <linux/lustre_net.h>
-#include <linux/obd.h>
+#include <lustre_net.h>
+#include <obd.h>
 /*
  * struct obd_connect_data
  * struct lustre_handle
  */
-#include <linux/lustre_idl.h>
-/* req_layout things */
-#include <linux/lustre_req_layout.h>
-
-#include <linux/md_object.h>
-#include <linux/lustre_fid.h>
+#include <lustre/lustre_idl.h>
+#include <md_object.h>
+#include <lustre_fid.h>
+#include <lustre_req_layout.h>
 
 struct mdt_device {
         /* super-class */

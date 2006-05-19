@@ -26,24 +26,19 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifdef __KERNEL__
-#include <linux/kmod.h>   /* for request_module() */
-#include <linux/module.h>
-#else
+#ifndef __KERNEL__
 #include <liblustre.h>
 #endif
-#include <linux/lustre_mds.h>
-#include <linux/obd_ost.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lu_object.h>
+#include <obd_ost.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
 
 extern struct list_head obd_types;
-static spinlock_t obd_types_lock = SPIN_LOCK_UNLOCKED;
+spinlock_t obd_types_lock;
 
-kmem_cache_t *obdo_cachep = NULL;
+cfs_mem_cache_t *obdo_cachep = NULL;
 EXPORT_SYMBOL(obdo_cachep);
-kmem_cache_t *import_cachep = NULL;
+cfs_mem_cache_t *import_cachep = NULL;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
@@ -411,15 +406,17 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 
 void obd_cleanup_caches(void)
 {
+        int rc;
+
         ENTRY;
         if (obdo_cachep) {
-                LASSERTF(kmem_cache_destroy(obdo_cachep) == 0,
-                         "Cannot destory ll_obdo_cache\n");
+                rc = cfs_mem_cache_destroy(obdo_cachep);
+                LASSERTF(rc == 0, "Cannot destory ll_obdo_cache\n");
                 obdo_cachep = NULL;
         }
         if (import_cachep) {
-                LASSERTF(kmem_cache_destroy(import_cachep) == 0,
-                         "Cannot destory ll_import_cache\n");
+                rc = cfs_mem_cache_destroy(import_cachep);
+                LASSERTF(rc == 0, "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
         EXIT;
@@ -430,15 +427,15 @@ int obd_init_caches(void)
         ENTRY;
 
         LASSERT(obdo_cachep == NULL);
-        obdo_cachep = kmem_cache_create("ll_obdo_cache", sizeof(struct obdo),
-                                        0, 0, NULL, NULL);
+        obdo_cachep = cfs_mem_cache_create("ll_obdo_cache", sizeof(struct obdo),
+                                        0, 0);
         if (!obdo_cachep)
                 GOTO(out, -ENOMEM);
 
         LASSERT(import_cachep == NULL);
-        import_cachep = kmem_cache_create("ll_import_cache",
+        import_cachep = cfs_mem_cache_create("ll_import_cache",
                                           sizeof(struct obd_import),
-                                          0, 0, NULL, NULL);
+                                          0, 0);
         if (!import_cachep)
                 GOTO(out, -ENOMEM);
 
@@ -549,11 +546,11 @@ struct obd_export *class_new_export(struct obd_device *obd,
         export->exp_conn_cnt = 0;
         atomic_set(&export->exp_refcount, 2);
         export->exp_obd = obd;
-        INIT_LIST_HEAD(&export->exp_outstanding_replies);
+        CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         /* XXX this should be in LDLM init */
-        INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
+        CFS_INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
 
-        INIT_LIST_HEAD(&export->exp_handle.h_link);
+        CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);
         export->exp_last_request_time = CURRENT_SECONDS;
         spin_lock_init(&export->exp_lock);
@@ -660,19 +657,19 @@ struct obd_import *class_new_import(struct obd_device *obd)
         if (imp == NULL)
                 return NULL;
 
-        INIT_LIST_HEAD(&imp->imp_replay_list);
-        INIT_LIST_HEAD(&imp->imp_sending_list);
-        INIT_LIST_HEAD(&imp->imp_delayed_list);
+        CFS_INIT_LIST_HEAD(&imp->imp_replay_list);
+        CFS_INIT_LIST_HEAD(&imp->imp_sending_list);
+        CFS_INIT_LIST_HEAD(&imp->imp_delayed_list);
         spin_lock_init(&imp->imp_lock);
         imp->imp_state = LUSTRE_IMP_NEW;
         imp->imp_obd = class_incref(obd);
-        init_waitqueue_head(&imp->imp_recovery_waitq);
+        cfs_waitq_init(&imp->imp_recovery_waitq);
 
         atomic_set(&imp->imp_refcount, 2);
         atomic_set(&imp->imp_inflight, 0);
         atomic_set(&imp->imp_replay_inflight, 0);
-        INIT_LIST_HEAD(&imp->imp_conn_list);
-        INIT_LIST_HEAD(&imp->imp_handle.h_link);
+        CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
+        CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
 
         return imp;
@@ -830,7 +827,7 @@ void class_disconnect_stale_exports(struct obd_device *obd)
         int cnt = 0;
         ENTRY;
 
-        INIT_LIST_HEAD(&work_list);
+        CFS_INIT_LIST_HEAD(&work_list);
         spin_lock(&obd->obd_dev_lock);
         list_for_each_safe(pos, n, &obd->obd_exports) {
                 exp = list_entry(pos, struct obd_export, exp_obd_chain);
@@ -862,8 +859,8 @@ int oig_init(struct obd_io_group **oig_out)
         oig->oig_rc = 0;
         oig->oig_pending = 0;
         atomic_set(&oig->oig_refcount, 1);
-        init_waitqueue_head(&oig->oig_waitq);
-        INIT_LIST_HEAD(&oig->oig_occ_list);
+        cfs_waitq_init(&oig->oig_waitq);
+        CFS_INIT_LIST_HEAD(&oig->oig_occ_list);
 
         *oig_out = oig;
         RETURN(0);
@@ -899,7 +896,7 @@ void oig_complete_one(struct obd_io_group *oig,
                       struct oig_callback_context *occ, int rc)
 {
         unsigned long flags;
-        wait_queue_head_t *wake = NULL;
+        cfs_waitq_t *wake = NULL;
         int old_rc;
 
         spin_lock_irqsave(&oig->oig_lock, flags);
@@ -920,7 +917,7 @@ void oig_complete_one(struct obd_io_group *oig,
                         "pending (racey)\n", oig, old_rc, oig->oig_rc, rc,
                         oig->oig_pending);
         if (wake)
-                wake_up(wake);
+                cfs_waitq_signal(wake);
         oig_release(oig);
 }
 EXPORT_SYMBOL(oig_complete_one);

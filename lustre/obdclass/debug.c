@@ -33,10 +33,10 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_ost.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_debug.h>
-#include <linux/lustre_net.h>
+#include <obd_ost.h>
+#include <obd_support.h>
+#include <lustre_debug.h>
+#include <lustre_net.h>
 
 int dump_ioo(struct obd_ioobj *ioo)
 {
@@ -50,7 +50,7 @@ int dump_lniobuf(struct niobuf_local *nb)
 {
         CERROR("niobuf_local: offset="LPD64", len=%d, page=%p, rc=%d\n",
                nb->offset, nb->len, nb->page, nb->rc);
-        CERROR("nb->page: index = %ld\n", nb->page ? nb->page->index : -1);
+        CERROR("nb->page: index = %ld\n", nb->page ? cfs_page_index(nb->page) : -1);
 
         return -EINVAL;
 }

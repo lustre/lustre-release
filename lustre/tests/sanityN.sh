@@ -7,6 +7,9 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+# Tests that fail on uml
+[ "$UML" = "true" ] && EXCEPT="$EXCEPT 7"
+
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
@@ -558,6 +561,45 @@ test_23() { # Bug 5972
 	true
 }
 run_test 23 " others should see updated atime while another read===="
+
+test_24() {
+	touch $DIR1/$tfile
+	lfs df || error "lfs df failed"
+	lfs df -ih || error "lfs df -ih failed"
+	lfs df -h $DIR1 || error "lfs df -h $DIR1 failed"
+	lfs df -i $DIR2 || error "lfs df -i $DIR2 failed"
+	lfs df $DIR1/$tfile || error "lfs df $DIR1/$tfile failed"
+	lfs df -ih $DIR2/$tfile || error "lfs df -ih $DIR2/$tfile failed"
+	
+	OSC=`lctl dl | awk '/OSC.*MNT/ {print $4}' | head -n 1`
+	lctl --device %$OSC deactivate
+	lfs df -i || error "lfs df -i with deactivated OSC failed"
+	lctl --device %$OSC recover
+	lfs df || error "lfs df with reactivated OSC failed"
+}
+run_test 24 "lfs df [-ih] [path] test ========================="
+
+test_25() {
+	[ -z "`mount | grep " $DIR1 .*\<acl\>"`" ] && echo "skipping $TESTNAME ($DIR1 must have acl)" && return
+	[ -z "`mount | grep " $DIR2 .*\<acl\>"`" ] && echo "skipping $TESTNAME ($DIR2 must have acl)" && return
+
+	mkdir $DIR1/d25 || error
+	touch $DIR1/d25/f1 || error
+	chmod 0755 $DIR1/d25/f1 || error
+
+	$RUNAS checkstat $DIR2/d25/f1 || error
+	setfacl -m u:$RUNAS_ID:--- $DIR1/d25 || error
+	$RUNAS checkstat $DIR2/d25/f1 && error
+	setfacl -m u:$RUNAS_ID:r-x $DIR1/d25 || error
+	$RUNAS checkstat $DIR2/d25/f1 || error
+	setfacl -m u:$RUNAS_ID:--- $DIR1/d25 || error
+	$RUNAS checkstat $DIR2/d25/f1 && error
+	setfacl -x u:$RUNAS_ID: $DIR1/d25 || error
+	$RUNAS checkstat $DIR2/d25/f1 || error
+
+	rm -rf $DIR1/d25
+}
+run_test 25 "change ACL on one mountpoint be seen on another ==="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

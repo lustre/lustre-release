@@ -27,14 +27,14 @@
 #include <linux/types.h>
 #include <linux/random.h>
 #include <linux/version.h>
-#include <linux/lustre_lite.h>
-#include <linux/lustre_ha.h>
-#include <linux/lustre_dlm.h>
+#include <lustre_lite.h>
+#include <lustre_ha.h>
+#include <lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/random.h>
 #include <linux/cache_def.h>
-#include <linux/lprocfs_status.h>
+#include <lprocfs_status.h>
 #include "llite_internal.h"
 #include <lustre/lustre_user.h>
 
@@ -60,7 +60,7 @@ static int __init init_lustre_lite(void)
 {
         int rc, seed[2];
 
-        printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
+        printk(KERN_INFO "Lustre: Lustre Client File System; "
                "info@clusterfs.com\n");
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
@@ -83,15 +83,18 @@ static int __init init_lustre_lite(void)
 
 static void __exit exit_lustre_lite(void)
 {
+        int rc;
+
         lustre_register_client_fill_super(NULL);
         
         ll_unregister_cache(&ll_cache_definition);
 
-        LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
-                 "couldn't destroy ll_file_data slab\n");
-        if (ll_async_page_slab)
-                LASSERTF(kmem_cache_destroy(ll_async_page_slab) == 0,
-                         "couldn't destroy ll_async_page slab\n");
+        rc = kmem_cache_destroy(ll_file_data_slab);
+        LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
+        if (ll_async_page_slab) {
+                rc = kmem_cache_destroy(ll_async_page_slab);
+                LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
+        }
 
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);

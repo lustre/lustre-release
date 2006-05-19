@@ -27,10 +27,10 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #endif
-#include <linux/obd_support.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_lib.h>
-#include <linux/obd.h>
+#include <obd_support.h>
+#include <lustre_net.h>
+#include <lustre_lib.h>
+#include <obd.h>
 #include "ptlrpc_internal.h"
 
 static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
@@ -177,7 +177,7 @@ void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
         for (;;) {
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT (300 * HZ, NULL, NULL);
+                lwi = LWI_TIMEOUT (cfs_time_seconds(300), NULL, NULL);
                 rc = l_wait_event(desc->bd_waitq, 
                                   !ptlrpc_bulk_active(desc), &lwi);
                 if (rc == 0)
@@ -266,7 +266,7 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
         /* Disconnect a bulk desc from the network. Idempotent. Not
          * thread-safe (i.e. only interlocks with completion callback). */
         struct ptlrpc_bulk_desc *desc = req->rq_bulk;
-        wait_queue_head_t       *wq;
+        cfs_waitq_t             *wq;
         struct l_wait_info       lwi;
         int                      rc;
 
@@ -292,7 +292,7 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
         for (;;) {
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT (300 * HZ, NULL, NULL);
+                lwi = LWI_TIMEOUT (cfs_time_seconds(300), NULL, NULL);
                 rc = l_wait_event(*wq, !ptlrpc_bulk_active(desc), &lwi);
                 if (rc == 0)
                         return;

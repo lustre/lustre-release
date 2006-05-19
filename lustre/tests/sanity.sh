@@ -11,14 +11,13 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 101"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 77 101"
 # Tests that fail on uml
-[ "$UML" = "no" ] && EXCEPT="$EXCEPT 31d"
+[ "$UML" = "true" ] && EXCEPT="$EXCEPT 31d"
 
 # Tests that always fail with mountconf -- FIXME
 # 48a moving the working dir succeeds
-# 104 something is out of sync with b1_4? 'lfs df' needs an arg
-EXCEPT="$EXCEPT 48a 104"
+EXCEPT="$EXCEPT 48a"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;
@@ -2724,6 +2723,11 @@ test_76() { # bug 1443
 }
 run_test 76 "destroy duplicate inodes in client inode cache"
 
+test_77() {
+       sh qos.sh
+}
+run_test 77 "qos test ============================================"
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.
@@ -2817,39 +2821,49 @@ function get_named_value()
     done
 }
 
+export CACHE_MAX=`cat /proc/fs/lustre/llite/*/max_cached_mb | head -n 1`
+cleanup_101() {
+	for s in $LPROC/llite/*/max_cached_mb; do
+		echo $CACHE_MAX > $s
+	done
+	trap 0
+}
+
 test_101() {
 	local s
 	local discard
-	local nreads
+	local nreads=10000
+	local cache_limit=32
 
-	for s in $LPROC/osc/*-osc*/rpc_stats ;do
+	for s in $LPROC/osc/*-osc*/rpc_stats; do
 		echo 0 > $s
 	done
-	for s in $LPROC/llite/*/read_ahead_stats ;do
-		echo 0 > $s
+	trap cleanup_101 EXIT
+	for s in $LPROC/llite/fs*; do
+		echo 0 > $s/read_ahead_stats
+		echo $cache_limit > $s/max_cached_mb
 	done
 
 	#
-	# randomly read 10000 of 64K chunks from file 3x RAM size
+	# randomly read 10000 of 64K chunks from file 3x 32MB in size
 	#
-	nreads=10000
-	s=$(($(awk '/MemTotal/ { print $2 }' /proc/meminfo) * 3))
-	echo "nreads: $nreads file size: ${s}kB"
-	$RANDOM_READS -f $DIR/f101 -s${s}000 -b65536 -C -n$nreads -t 180
+	echo "nreads: $nreads file size: $((cache_limit * 3))MB"
+	$RANDOM_READS -f $DIR/$tfile -s$((cache_limit * 3192 * 1024)) -b65536 -C -n$nreads -t 180
 
 	discard=0
-	for s in $LPROC/llite/*/read_ahead_stats ;do
-		discard=$(($discard + $(cat $s | get_named_value 'read but discarded')))
+	for s in $LPROC/llite/fs*; do
+		discard=$(($discard + $(cat $s/read_ahead_stats | get_named_value 'read but discarded')))
 	done
+	cleanup_101
 
 	if [ $(($discard * 10)) -gt $nreads ] ;then
 		cat $LPROC/osc/*-osc*/rpc_stats
 		cat $LPROC/llite/*/read_ahead_stats
 		error "too many ($discard) discarded pages" 
 	fi
-	rm -f $DIR/f101 || true
+	rm -f $DIR/$tfile || true
 }
-run_test 101 "check read-ahead for random reads ==========="
+run_test 101 "check read-ahead for random reads ================"
 
 test_102() {
 	local testfile=$DIR/xattr_testfile
@@ -2858,7 +2872,7 @@ test_102() {
         touch $testfile
 
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
-	[ -z "`grep \<xattr\> $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	[ -z "`grep xattr $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
@@ -2894,7 +2908,7 @@ test_102() {
 
 	rm -f $testfile
 }
-run_test 102 "user xattr test ====================="
+run_test 102 "user xattr test =================================="
 
 run_acl_subtest()
 {
@@ -2934,14 +2948,14 @@ test_103 () {
     cd $SAVED_PWD
     umask $SAVE_UMASK
 }
-run_test 103 "==============acl test ============="
+run_test 103 "acl test ========================================="
 
 test_104() {
 	touch $DIR/$tfile
 	lfs df || error "lfs df failed"
 	lfs df -ih || error "lfs df -ih failed"
-	lfs df $DIR || error "lfs df $DIR failed"
-	lfs df -ih $DIR || error "lfs df -ih $DIR failed"
+	lfs df -h $DIR || error "lfs df -h $DIR failed"
+	lfs df -i $DIR || error "lfs df -i $DIR failed"
 	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
 	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
 	
@@ -2951,7 +2965,7 @@ test_104() {
 	lctl --device %$OSC recover
 	lfs df || error "lfs df with reactivated OSC failed"
 }
-run_test 104 "lfs>df [-ih] [path] test ============"
+run_test 104 "lfs df [-ih] [path] test ========================="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

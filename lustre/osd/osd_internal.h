@@ -34,8 +34,7 @@
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
 
-#include <linux/dt_object.h>
-
+#include <dt_object.h>
 #include "osd_oi.h"
 
 struct inode;

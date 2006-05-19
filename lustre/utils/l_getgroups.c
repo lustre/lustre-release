@@ -128,14 +128,15 @@ int main(int argc, char **argv)
         else
                 progname++;
 
-        if (strcmp(argv[1], "-d") == 0)
-                debug = 1;
-
         if (argc != 3) {
                 fprintf(stderr, "%s: bad parameter count\n", progname);
                 usage(stderr);
                 return EINVAL;
         }
+
+        if (strcmp(argv[1], "-d") == 0)
+                debug = 1;
+
         param->mgd_uid = strtoul(argv[2], &end, 0);
         if (*end) {
                 fprintf(stderr, "%s: invalid uid '%s'\n", progname, argv[2]);

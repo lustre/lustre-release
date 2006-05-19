@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <mntent.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -37,19 +38,13 @@
 #include <getopt.h>
 
 #include <linux/types.h>
-#define NO_SYS_VFS 1
+//#define HAVE_SYS_VFS_H 1
 #include <linux/fs.h> // for BLKGETSIZE64
-#include <linux/lustre_disk.h>
-#include <linux/lustre_param.h>
+#include <lustre_disk.h>
+#include <lustre_param.h>
 #include <lnet/lnetctl.h>
-#include <linux/lustre_ver.h>
-#include "obdctl.h"
+#include <lustre_ver.h>
 
-/* So obd.o will link */
-#include "parser.h"
-command_t cmdlist[] = {
-        { 0, 0, 0, NULL }
-};
 
 #define MAX_LOOP_DEVICES 16
 #define L_BLOCK_SIZE 4096
@@ -180,6 +175,29 @@ int run_command(char *cmd)
         return rc;
 }                                                       
 
+static int check_mtab_entry(char *spec, char *type)
+{
+        FILE *fp;
+        struct mntent *mnt;
+
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL)
+                return(0);
+
+        while ((mnt = getmntent(fp)) != NULL) {
+                if (strcmp(mnt->mnt_fsname, spec) == 0 &&
+                        strcmp(mnt->mnt_type, type) == 0) {
+                        endmntent(fp);
+                        fprintf(stderr, "%s: according to %s %s is "
+                                "already mounted on %s\n",
+                                progname, MOUNTED, spec, mnt->mnt_dir);
+                        return(EEXIST);
+                }
+        }
+        endmntent(fp);
+
+        return(0);
+}
 
 /*============ disk dev functions ===================*/
 
@@ -341,17 +359,14 @@ static int file_in_dev(char *file_name, char *dev_name)
         return 0;
 }
 
-/* Check whether the device has already been fomatted by mkfs.lustre */
+/* Check whether the device has already been used with lustre */
 static int is_lustre_target(struct mkfs_opts *mop)
 {
         int rc;
-        /* Check whether there exist MOUNT_DATA_FILE,
-           LAST_RCVD or CATLIST in the device. */
         vprint("checking for existing Lustre data\n");
         
         if ((rc = file_in_dev(MOUNT_DATA_FILE, mop->mo_device))
-            || (rc = file_in_dev(LAST_RCVD, mop->mo_device))
-            || (rc = file_in_dev(CATLIST, mop->mo_device))) { 
+            || (rc = file_in_dev(LAST_RCVD, mop->mo_device))) { 
                 vprint("found Lustre data\n");
                 /* in the -1 case, 'extents' means this really IS a lustre
                    target */
@@ -461,6 +476,10 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         strcat(mop->mo_mkfsopts, " -O dir_index");
                 }
 
+                /* Allow reformat of full devices (as opposed to 
+                   partitions.)  We already checked for mounted dev. */
+                strcat(mop->mo_mkfsopts, " -F");
+
                 sprintf(mkfs_cmd, "mkfs.ext2 -j -b %d -L %s ", L_BLOCK_SIZE,
                         mop->mo_ldd.ldd_svname);
 
@@ -479,7 +498,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 return EINVAL;
         }
 
-        /* Loop device? */
+        /* For loop device format the dev, not the filename */
         dev = mop->mo_device;
         if (mop->mo_flags & MO_IS_LOOP) 
                 dev = mop->mo_loopdev;
@@ -1079,6 +1098,10 @@ int main(int argc, char *const argv[])
 
         /* device is last arg */
         strcpy(mop.mo_device, argv[argc - 1]);
+
+        if (check_mtab_entry(mop.mo_device, "lustre"))
+                return(EEXIST);
+
         /* Are we using a loop device? */
         ret = is_block(mop.mo_device);
         if (ret < 0) 

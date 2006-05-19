@@ -1,11 +1,32 @@
 MODULES := obdclass llog_test
 
-obdclass-objs := llog.o llog_cat.o llog_lvfs.o llog_obd.o llog_swab.o
-obdclass-objs += class_obd.o lu_object.o dt_object.o
-obdclass-objs += debug.o genops.o sysctl.o uuid.o llog_ioctl.o
-obdclass-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
-obdclass-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o mea.o prng.o
+obdclass-linux-objs := linux-module.o linux-obdo.o linux-sysctl.o
+ifeq ($(PATCHLEVEL),6)
+obdclass-linux-objs := $(addprefix linux/,$(obdclass-linux-objs))
+endif
 
+default: all
+
+ifeq (@linux25@,no)
+sources:
+	@for i in $(obdclass-linux-objs:%.o=%.c) ; do \
+		echo "ln -s @srcdir@/linux/$$i ." ; \
+		ln -sf @srcdir@/linux/$$i . || exit 1 ; \
+	done
+
+else
+sources:
+
+endif
+
+obdclass-all-objs := llog.o llog_cat.o llog_lvfs.o llog_obd.o llog_swab.o
+obdclass-all-objs += class_obd.o
+obdclass-all-objs += debug.o genops.o uuid.o llog_ioctl.o
+obdclass-all-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
+obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o prng.o mea.o
+obdclass-all-objs += lu_object.o dt_object.o
+
+obdclass-objs := $(obdclass-linux-objs) $(obdclass-all-objs)
 
 ifeq ($(PATCHLEVEL),6)
 llog_test-objs := llog-test.o

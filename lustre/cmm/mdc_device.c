@@ -31,13 +31,11 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
-#include <linux/obd.h>
-#include<linux/obd_class.h>
-
+#include <obd.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
+#include <lustre_ver.h>
 #include "mdc_internal.h"
-
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_ver.h>
 
 static struct lu_device_operations mdc_lu_ops;
 

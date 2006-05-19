@@ -35,8 +35,7 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_mdc.h>
+#include <obd_class.h>
 #include "mdc_internal.h"
 
 /* mdc_setattr does its own semaphore handling */

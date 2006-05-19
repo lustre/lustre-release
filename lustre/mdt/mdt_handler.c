@@ -38,24 +38,20 @@
 #include <linux/module.h>
 
 /* LUSTRE_VERSION_CODE */
-#include <linux/lustre_ver.h>
+#include <lustre_ver.h>
 /*
  * struct OBD_{ALLOC,FREE}*()
  * OBD_FAIL_CHECK
  */
-#include <linux/obd_support.h>
+#include <obd_support.h>
 /* struct ptlrpc_request */
-#include <linux/lustre_net.h>
+#include <lustre_net.h>
 /* struct obd_export */
-#include <linux/lustre_export.h>
+#include <lustre_export.h>
 /* struct obd_device */
-#include <linux/obd.h>
+#include <obd.h>
 /* lu2dt_dev() */
-#include <linux/dt_object.h>
-
-/*LUSTRE_POSIX_ACL_MAX_SIZE*/
-#include <linux/lustre_acl.h>
-
+#include <dt_object.h>
 /* struct mds_client_data */
 #include "../mds/mds_internal.h"
 #include "mdt_internal.h"

@@ -1,8 +1,8 @@
-Index: uml/fs/cifs/dir.c
+Index: linux-2.6.10/fs/cifs/dir.c
 ===================================================================
---- uml.orig/fs/cifs/dir.c	2004-12-24 16:35:01.000000000 -0500
-+++ uml/fs/cifs/dir.c	2005-04-13 23:43:03.681625568 -0400
-@@ -199,23 +199,23 @@
+--- linux-2.6.10.orig/fs/cifs/dir.c
++++ linux-2.6.10/fs/cifs/dir.c
+@@ -199,23 +199,23 @@ cifs_create(struct inode *inode, struct 
  	}
  
  	if(nd) {
@@ -32,11 +32,11 @@ Index: uml/fs/cifs/dir.c
  			disposition = FILE_OPEN_IF;
  		else {
  			cFYI(1,("Create flag not set in create function"));
-Index: uml/fs/nfs/nfs4proc.c
+Index: linux-2.6.10/fs/nfs/nfs4proc.c
 ===================================================================
---- uml.orig/fs/nfs/nfs4proc.c	2004-12-24 16:35:23.000000000 -0500
-+++ uml/fs/nfs/nfs4proc.c	2005-04-13 23:43:26.409770503 -0400
-@@ -775,17 +775,17 @@
+--- linux-2.6.10.orig/fs/nfs/nfs4proc.c
++++ linux-2.6.10/fs/nfs/nfs4proc.c
+@@ -775,17 +775,17 @@ nfs4_atomic_open(struct inode *dir, stru
  	struct nfs4_state *state;
  
  	if (nd->flags & LOOKUP_CREATE) {
@@ -57,11 +57,20 @@ Index: uml/fs/nfs/nfs4proc.c
  	put_rpccred(cred);
  	if (IS_ERR(state))
  		return (struct inode *)state;
-Index: uml/fs/nfs/dir.c
+Index: linux-2.6.10/fs/nfs/dir.c
 ===================================================================
---- uml.orig/fs/nfs/dir.c	2005-04-13 23:42:21.792883770 -0400
-+++ uml/fs/nfs/dir.c	2005-04-13 23:43:03.685625066 -0400
-@@ -791,7 +791,7 @@
+--- linux-2.6.10.orig/fs/nfs/dir.c
++++ linux-2.6.10/fs/nfs/dir.c
+@@ -718,7 +718,7 @@ int nfs_is_exclusive_create(struct inode
+ 		return 0;
+ 	if (!nd || (nd->flags & LOOKUP_CONTINUE) || !(nd->flags & LOOKUP_CREATE))
+ 		return 0;
+-	return (nd->intent.open.flags & O_EXCL) != 0;
++	return (nd->intent.it_flags & O_EXCL) != 0;
+ }
+ 
+ static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *nd)
+@@ -791,7 +791,7 @@ static int is_atomic_open(struct inode *
  	if (nd->flags & LOOKUP_DIRECTORY)
  		return 0;
  	/* Are we trying to write to a read only partition? */
@@ -70,7 +79,7 @@ Index: uml/fs/nfs/dir.c
  		return 0;
  	return 1;
  }
-@@ -812,7 +812,7 @@
+@@ -812,7 +812,7 @@ static struct dentry *nfs_atomic_lookup(
  	dentry->d_op = NFS_PROTO(dir)->dentry_ops;
  
  	/* Let vfs_create() deal with O_EXCL */
@@ -79,7 +88,7 @@ Index: uml/fs/nfs/dir.c
  		goto no_entry;
  
  	/* Open the file on the server */
-@@ -820,7 +820,7 @@
+@@ -820,7 +820,7 @@ static struct dentry *nfs_atomic_lookup(
  	/* Revalidate parent directory attribute cache */
  	nfs_revalidate_inode(NFS_SERVER(dir), dir);
  
@@ -88,7 +97,7 @@ Index: uml/fs/nfs/dir.c
  		nfs_begin_data_update(dir);
  		inode = nfs4_atomic_open(dir, dentry, nd);
  		nfs_end_data_update(dir);
-@@ -836,7 +836,7 @@
+@@ -836,7 +836,7 @@ static struct dentry *nfs_atomic_lookup(
  				break;
  			/* This turned out not to be a regular file */
  			case -ELOOP:
@@ -97,7 +106,7 @@ Index: uml/fs/nfs/dir.c
  					goto no_open;
  			/* case -EISDIR: */
  			/* case -EINVAL: */
-@@ -875,7 +875,7 @@
+@@ -875,7 +875,7 @@ static int nfs_open_revalidate(struct de
  	/* NFS only supports OPEN on regular files */
  	if (!S_ISREG(inode->i_mode))
  		goto no_open;
@@ -106,3 +115,13 @@ Index: uml/fs/nfs/dir.c
  	/* We cannot do exclusive creation on a positive dentry */
  	if ((openflags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL))
  		goto no_open;
+@@ -1043,7 +1043,8 @@ static int nfs_create(struct inode *dir,
+ 	attr.ia_valid = ATTR_MODE;
+ 
+ 	if (nd && (nd->flags & LOOKUP_CREATE))
+-		open_flags = nd->intent.open.flags;
++		open_flags = nd->intent.it_flags;
++
+ 
+ 	/*
+ 	 * The 0 argument passed into the create function should one day

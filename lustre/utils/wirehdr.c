@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <liblustre.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
+#include <lustre_lib.h>
+#include <lustre/lustre_idl.h>
 
 #undef LASSERT
 #undef LASSERTF

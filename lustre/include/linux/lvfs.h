@@ -21,13 +21,12 @@
  * lustre VFS/process permission interface
  */
 
+#ifndef __LINUX_LVFS_H__
+#define __LINUX_LVFS_H__
+
 #ifndef __LVFS_H__
-#define __LVFS_H__
-
-#include <libcfs/kp30.h>
-#include <linux/lustre_ucache.h>
-
-#define LL_FID_NAMELEN (16 + 1 + 8 + 1)
+#error Do not #include this file directly. #include <lvfs.h> instead
+#endif
 
 #if defined __KERNEL__
 #include <linux/lustre_compat25.h>
@@ -36,9 +35,7 @@
 struct group_info { /* unused */ };
 #endif
 
-#ifdef LIBLUSTRE
-#include <lvfs_user_fs.h>
-#endif
+#define LLOG_LVFS
 
 /* simple.c */
 
@@ -80,14 +77,6 @@ struct lvfs_run_ctxt {
 #else
 #define OBD_SET_CTXT_MAGIC(ctxt) do {} while(0)
 #endif
-
-/* lvfs_common.c */
-struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *, __u64, __u32, __u64 ,void *data);
-
-void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
-               struct lvfs_ucred *cred);
-void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
-              struct lvfs_ucred *cred);
 
 #ifdef __KERNEL__
 

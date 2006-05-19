@@ -4,9 +4,8 @@
 #ifndef _MDD_INTERNAL_H
 #define _MDD_INTERNAL_H
 
-#include <linux/md_object.h>
-
 #include <asm/semaphore.h>
+#include <md_object.h>
 
 struct dt_device;
 struct file;

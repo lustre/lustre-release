@@ -25,13 +25,11 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifdef __KERNEL__
-#include <linux/module.h>
-#else
+#ifndef __KERNEL__
 #include <liblustre.h>
 #endif
-#include <linux/obd_class.h>
-#include <linux/lustre_net.h>
+#include <obd_class.h>
+#include <lustre_net.h>
 #include "ptlrpc_internal.h"
 
 lnet_handle_eq_t   ptlrpc_eq_h;
@@ -185,7 +183,7 @@ void request_in_callback(lnet_event_t *ev)
                         /* We moaned above already... */
                         return;
                 }
-                OBD_ALLOC_GFP(req, sizeof(*req), GFP_ATOMIC);
+                OBD_ALLOC_GFP(req, sizeof(*req), CFS_ALLOC_ATOMIC_TRY);
                 if (req == NULL) {
                         CERROR("Can't allocate incoming request descriptor: "
                                "Dropping %s RPC from %s\n",
@@ -239,7 +237,7 @@ void request_in_callback(lnet_event_t *ev)
 
         /* NB everything can disappear under us once the request
          * has been queued and we unlock, so do the wake now... */
-        wake_up(&service->srv_waitq);
+        cfs_waitq_signal(&service->srv_waitq);
 
         spin_unlock_irqrestore(&service->srv_lock, flags);
         EXIT;
@@ -320,7 +318,7 @@ void server_bulk_callback (lnet_event_t *ev)
         if (ev->unlinked) {
                 /* This is the last callback no matter what... */
                 desc->bd_network_rw = 0;
-                wake_up(&desc->bd_waitq);
+                cfs_waitq_signal(&desc->bd_waitq);
         }
 
         spin_unlock_irqrestore (&desc->bd_lock, flags);
@@ -402,7 +400,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
 
 void ptlrpc_ni_fini(void)
 {
-        wait_queue_head_t   waitq;
+        cfs_waitq_t         waitq;
         struct l_wait_info  lwi;
         int                 rc;
         int                 retries;
@@ -427,8 +425,8 @@ void ptlrpc_ni_fini(void)
                                 CWARN("Event queue still busy\n");
 
                         /* Wait for a bit */
-                        init_waitqueue_head(&waitq);
-                        lwi = LWI_TIMEOUT(2*HZ, NULL, NULL);
+                        cfs_waitq_init(&waitq);
+                        lwi = LWI_TIMEOUT(cfs_time_seconds(2), NULL, NULL);
                         l_wait_event(waitq, 0, &lwi);
                         break;
                 }
@@ -486,7 +484,7 @@ int ptlrpc_ni_init(void)
 }
 
 #ifndef __KERNEL__
-LIST_HEAD(liblustre_wait_callbacks);
+CFS_LIST_HEAD(liblustre_wait_callbacks);
 void *liblustre_services_callback;
 
 void *

@@ -31,46 +31,19 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#ifdef __KERNEL__
-#include <linux/config.h> /* for CONFIG_PROC_FS */
-#include <linux/module.h>
-#include <linux/errno.h>
-#include <linux/kernel.h>
-#include <linux/major.h>
-#include <linux/sched.h>
-#include <linux/lp.h>
-#include <linux/slab.h>
-#include <linux/ioport.h>
-#include <linux/fcntl.h>
-#include <linux/delay.h>
-#include <linux/skbuff.h>
-#include <linux/proc_fs.h>
-#include <linux/fs.h>
-#include <linux/poll.h>
-#include <linux/init.h>
-#include <linux/list.h>
-#include <linux/highmem.h>
-#include <asm/io.h>
-#include <asm/ioctls.h>
-#include <asm/system.h>
-#include <asm/poll.h>
-#include <asm/uaccess.h>
-#include <linux/miscdevice.h>
-#include <linux/smp_lock.h>
-#include <linux/seq_file.h>
-#else
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_debug.h>
-#include <linux/lprocfs_status.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_debug.h>
+#include <lprocfs_status.h>
 #ifdef __KERNEL__
 #include <linux/lustre_build_version.h>
-#include <linux/lustre_version.h>
 #endif
 #include <libcfs/list.h>
+#include <lustre_ver.h>
 #include "llog_internal.h"
 
 #ifndef __KERNEL__
@@ -86,9 +59,7 @@ atomic_t obd_memory;
 int obd_memmax;
 #endif
 
-int proc_version;
-
-/* The following are visible and mutable through /proc/fs/lustre/. */
+/* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_timeout = 100; /* seconds */
@@ -96,7 +67,7 @@ unsigned int ldlm_timeout = 20; /* seconds */
 unsigned int obd_health_check_timeout = 120; /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 
-DECLARE_WAIT_QUEUE_HEAD(obd_race_waitq);
+cfs_waitq_t obd_race_waitq;
 
 #ifdef __KERNEL__
 unsigned int obd_print_fail_loc(void)
@@ -111,7 +82,7 @@ void obd_set_fail_loc(unsigned int fl)
 }
 
 /*  opening /dev/obd */
-static int obd_class_open(struct inode * inode, struct file * file)
+static int obd_class_open(unsigned long flags, void *args)
 {
         ENTRY;
 
@@ -120,7 +91,7 @@ static int obd_class_open(struct inode * inode, struct file * file)
 }
 
 /*  closing /dev/obd */
-static int obd_class_release(struct inode * inode, struct file * file)
+static int obd_class_release(unsigned long flags, void *args)
 {
         ENTRY;
 
@@ -147,6 +118,7 @@ int class_resolve_dev_name(uint32_t len, char *name)
         int rc;
         int dev;
 
+        ENTRY;
         if (!len || !name) {
                 CERROR("No name passed,!\n");
                 GOTO(out, rc = -EINVAL);
@@ -179,14 +151,6 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         int err = 0, len = 0;
         ENTRY;
 
-#ifdef __KERNEL__
-        if (current->fsuid != 0)
-                RETURN(err = -EACCES);
-#endif
-
-        if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
-                RETURN(err = -ENOTTY);
-
         /* only for debugging */
         if (cmd == LIBCFS_IOC_DEBUG_MASK) {
                 debug_data = (struct libcfs_debug_ioctl_data*)arg;
@@ -210,16 +174,19 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                         CERROR("No config buffer passed!\n");
                         GOTO(out, err = -EINVAL);
                 }
-
-                err = lustre_cfg_sanity_check(data->ioc_pbuf1,
-                                              data->ioc_plen1);
-                if (err)
-                        GOTO(out, err);
-
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 err = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-                if (!err)
-                        err = class_process_config(lcfg);
+                if (err) {
+                        OBD_FREE(lcfg, data->ioc_plen1);
+                        GOTO(out, err);
+                }
+                err = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
+                if (err) {
+                        OBD_FREE(lcfg, data->ioc_plen1);
+                        GOTO(out, err);
+                }
+                err = class_process_config(lcfg);
+
                 OBD_FREE(lcfg, data->ioc_plen1);
                 GOTO(out, err);
         }
@@ -238,7 +205,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 memcpy(data->ioc_bulk, BUILD_VERSION,
                        strlen(BUILD_VERSION) + 1);
 
-                err = copy_to_user((void *)arg, data, len);
+                err = obd_ioctl_popdata((void *)arg, data, len);
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -255,7 +222,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (dev < 0)
                         GOTO(out, err = -EINVAL);
 
-                err = copy_to_user((void *)arg, data, sizeof(*data));
+                err = obd_ioctl_popdata((void *)arg, data, sizeof(*data));
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -289,16 +256,52 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
-                err = copy_to_user((void *)arg, data, sizeof(*data));
+                err = obd_ioctl_popdata((void *)arg, data, sizeof(*data));
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
         }
 
-
         case OBD_IOC_CLOSE_UUID: {
                 CDEBUG(D_IOCTL, "closing all connections to uuid %s (NOOP)\n",
                        data->ioc_inlbuf1);
+                GOTO(out, err = 0);
+        }
+
+        case OBD_IOC_GETDEVICE: {
+                int     index = data->ioc_count;
+                char    *status, *str;
+
+                if (!data->ioc_inlbuf1) {
+                        CERROR("No buffer passed in ioctl\n");
+                        GOTO(out, err = -EINVAL);
+                } 
+                if (data->ioc_inllen1 < 128) {
+                        CERROR("ioctl buffer too small to hold version\n");
+                        GOTO(out, err = -EINVAL);
+                }
+                                
+                if (index >= MAX_OBD_DEVICES)
+                        GOTO(out, err = -ENOENT);
+                obd = &obd_dev[index];
+                if (!obd->obd_type)
+                        GOTO(out, err = -ENOENT);
+                
+                if (obd->obd_stopping)
+                        status = "ST";
+                else if (obd->obd_set_up)
+                        status = "UP";
+                else if (obd->obd_attached)
+                        status = "AT";
+                else
+                        status = "--"; 
+                str = (char *)data->ioc_bulk;
+                snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
+                         (int)index, status, obd->obd_type->typ_name,
+                         obd->obd_name, obd->obd_uuid.uuid,
+                         atomic_read(&obd->obd_refcount));
+                err = obd_ioctl_popdata((void *)arg, data, len);
+
                 GOTO(out, err = 0);
         }
 
@@ -331,7 +334,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (err)
                         GOTO(out, err);
 
-                err = copy_to_user((void *)arg, data, len);
+                err = obd_ioctl_popdata((void *)arg, data, len);
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -349,26 +352,21 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 #define OBD_MINOR 241
 #ifdef __KERNEL__
 /* to control /dev/obd */
-static int obd_class_ioctl(struct inode *inode, struct file *filp,
-                           unsigned int cmd, unsigned long arg)
+static int obd_class_ioctl (struct cfs_psdev_file *pfile, unsigned long cmd, void *arg)
 {
-        return class_handle_ioctl(cmd, arg);
+        return class_handle_ioctl(cmd, (unsigned long)arg);
 }
 
 /* declare character device */
-static struct file_operations obd_psdev_fops = {
-        .owner   = THIS_MODULE,
-        .ioctl   = obd_class_ioctl,     /* ioctl */
-        .open    = obd_class_open,      /* open */
-        .release = obd_class_release,   /* release */
+struct cfs_psdev_ops obd_psdev_ops = {
+        /* .p_open    = */ obd_class_open,      /* open */
+        /* .p_close   = */ obd_class_release,   /* release */
+        /* .p_read    = */ NULL,
+        /* .p_write   = */ NULL,
+        /* .p_ioctl   = */ obd_class_ioctl     /* ioctl */
 };
 
-/* modules setup */
-static struct miscdevice obd_psdev = {
-        .minor = OBD_MINOR,
-        .name  = "obd",
-        .fops  = &obd_psdev_fops,
-};
+extern cfs_psdev_t obd_psdev;
 #else
 void *obd_psdev = NULL;
 #endif
@@ -384,7 +382,6 @@ EXPORT_SYMBOL(obd_health_check_timeout);
 EXPORT_SYMBOL(obd_lustre_upcall);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
-struct proc_dir_entry *proc_lustre_root;
 EXPORT_SYMBOL(proc_lustre_root);
 
 EXPORT_SYMBOL(class_register_type);
@@ -433,183 +430,6 @@ EXPORT_SYMBOL(class_manual_cleanup);
 /* mea.c */
 EXPORT_SYMBOL(mea_name2idx);
 EXPORT_SYMBOL(raw_name2idx);
-
-#ifdef LPROCFS
-int obd_proc_read_version(char *page, char **start, off_t off, int count,
-                          int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "%s\n", BUILD_VERSION);
-}
-
-int obd_proc_read_kernel_version(char *page, char **start, off_t off, int count,
-                                 int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "%u\n", LUSTRE_KERNEL_VERSION);
-}
-
-int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
-                         int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "%s\n",
-#ifdef ENABLE_PINGER
-                        "on"
-#else
-                        "off"
-#endif
-                       );
-}
-
-static int obd_proc_read_health(char *page, char **start, off_t off,
-                                int count, int *eof, void *data)
-{
-        int rc = 0, i;
-        *eof = 1;
-
-        if (libcfs_catastrophe)
-                rc += snprintf(page + rc, count - rc, "LBUG\n");
-
-        spin_lock(&obd_dev_lock);
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd;
-
-                obd = &obd_dev[i];
-                if (obd->obd_type == NULL)
-                        continue;
-
-                if (obd->obd_stopping)
-                        continue;
-
-                class_incref(obd);
-                spin_unlock(&obd_dev_lock);
-
-                if (obd_health_check(obd)) {
-                        rc += snprintf(page + rc, count - rc,
-                                       "device %s reported unhealthy\n",
-                                       obd->obd_name);
-                }
-                class_decref(obd);
-                spin_lock(&obd_dev_lock);
-        }
-        spin_unlock(&obd_dev_lock);
-
-        if (rc == 0)
-                return snprintf(page, count, "healthy\n");
-
-        rc += snprintf(page + rc, count - rc, "NOT HEALTHY\n");
-        return rc;
-}
-
-static int obd_proc_rd_health_timeout(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "%d\n", obd_health_check_timeout);
-}
-
-static int obd_proc_wr_health_timeout(struct file *file, const char *buffer,
-                                      unsigned long count, void *data)
-{
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        obd_health_check_timeout = val;
-
-        return count;
-}
-
-/* Root for /proc/fs/lustre */
-struct lprocfs_vars lprocfs_base[] = {
-        { "version", obd_proc_read_version, NULL, NULL },
-        { "kernel_version", obd_proc_read_kernel_version, NULL, NULL },
-        { "pinger", obd_proc_read_pinger, NULL, NULL },
-        { "health_check", obd_proc_read_health, NULL, NULL },
-        { "health_check_timeout", obd_proc_rd_health_timeout,
-          obd_proc_wr_health_timeout, NULL },        
-        { 0 }
-};
-#else
-#define lprocfs_base NULL
-#endif /* LPROCFS */
-
-#ifdef __KERNEL__
-static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
-{
-        if (*pos >= MAX_OBD_DEVICES)
-                return NULL;
-        return &obd_dev[*pos];
-}
-
-static void obd_device_list_seq_stop(struct seq_file *p, void *v)
-{
-}
-
-static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
-{
-        ++*pos;
-        if (*pos >= MAX_OBD_DEVICES)
-                return NULL;
-        return &obd_dev[*pos];
-}
-
-static int obd_device_list_seq_show(struct seq_file *p, void *v)
-{
-        struct obd_device *obd = (struct obd_device *)v;
-        int index = obd - &obd_dev[0];
-        char *status;
-
-        if (!obd->obd_type)
-                return 0;
-        if (obd->obd_stopping)
-                status = "ST";
-        else if (obd->obd_set_up)
-                status = "UP";
-        else if (obd->obd_attached)
-                status = "AT";
-        else
-                status = "--";
-
-        return seq_printf(p, "%3d %s %s %s %s %d\n",
-                          (int)index, status, obd->obd_type->typ_name,
-                          obd->obd_name, obd->obd_uuid.uuid,
-                          atomic_read(&obd->obd_refcount));
-}
-
-struct seq_operations obd_device_list_sops = {
-        .start = obd_device_list_seq_start,
-        .stop = obd_device_list_seq_stop,
-        .next = obd_device_list_seq_next,
-        .show = obd_device_list_seq_show,
-};
-
-static int obd_device_list_open(struct inode *inode, struct file *file)
-{
-        struct proc_dir_entry *dp = PDE(inode);
-        struct seq_file *seq;
-        int rc = seq_open(file, &obd_device_list_sops);
-
-        if (rc)
-                return rc;
-
-        seq = file->private_data;
-        seq->private = dp->data;
-
-        return 0;
-}
-
-struct file_operations obd_device_list_fops = {
-        .owner   = THIS_MODULE,
-        .open    = obd_device_list_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
-};
-#endif
 
 #define OBD_INIT_CHECK
 #ifdef OBD_INIT_CHECK
@@ -673,8 +493,8 @@ int obd_init_checks(void)
                 CWARN("LPD64 wrong length! strlen(%s)=%d != 2\n", buf, len);
                 ret = -EINVAL;
         }
-        if ((u64val & ~PAGE_MASK) >= PAGE_SIZE) {
-                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,PAGE_SIZE);
+        if ((u64val & ~CFS_PAGE_MASK) >= CFS_PAGE_SIZE) {
+                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,CFS_PAGE_SIZE);
                 ret = -EINVAL;
         }
 
@@ -684,27 +504,32 @@ int obd_init_checks(void)
 #define obd_init_checks() do {} while(0)
 #endif
 
+extern spinlock_t obd_types_lock;
+extern spinlock_t handle_lock;
+extern int class_procfs_init(void);
+extern int class_procfs_clean(void);
+
 #ifdef __KERNEL__
 static int __init init_obdclass(void)
 #else
 int init_obdclass(void)
 #endif
 {
+        int i, err;
         struct obd_device *obd;
 #ifdef __KERNEL__
-        struct proc_dir_entry *entry;
         int lustre_register_fs(void);
-#endif
-        int err;
-        int i;
 
-#ifdef __KERNEL__
         printk(KERN_INFO "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
 #else
         CDEBUG(D_INFO, "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
 #endif
+
+        spin_lock_init(&obd_types_lock);
+        spin_lock_init(&handle_lock);
+        cfs_waitq_init(&obd_race_waitq);
 
         err = obd_init_checks();
         if (err == -EOVERFLOW)
@@ -718,7 +543,7 @@ int init_obdclass(void)
         spin_lock_init(&obd_dev_lock);
         INIT_LIST_HEAD(&obd_types);
 
-        err = misc_register(&obd_psdev);
+        err = cfs_psdev_register(&obd_psdev);
         if (err) {
                 CERROR("cannot register %d err %d\n", OBD_MINOR, err);
                 return err;
@@ -731,28 +556,12 @@ int init_obdclass(void)
         err = obd_init_caches();
         if (err)
                 return err;
-
 #ifdef __KERNEL__
-        obd_sysctl_init();
-
-        proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
-        if (!proc_lustre_root) {
-                printk(KERN_ERR
-                       "LustreError: error registering /proc/fs/lustre\n");
-                RETURN(-ENOMEM);
-        }
-        proc_version = lprocfs_add_vars(proc_lustre_root, lprocfs_base, NULL);
-        entry = create_proc_entry("devices", 0444, proc_lustre_root);
-        if (entry == NULL) {
-                CERROR("error registering /proc/fs/lustre/devices\n");
-                lprocfs_remove(proc_lustre_root);
-                RETURN(-ENOMEM);
-        }
-        entry->proc_fops = &obd_device_list_fops;
-
+        err = class_procfs_init();
         lustre_register_fs();
 #endif
-        return 0;
+
+        return err;
 }
 
 /* liblustre doesn't call cleanup_obdclass, apparently.  we carry on in this
@@ -766,7 +575,7 @@ static void cleanup_obdclass(void)
 
         lustre_unregister_fs();
 
-        misc_deregister(&obd_psdev);
+        cfs_psdev_deregister(&obd_psdev);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_type && obd->obd_set_up &&
@@ -779,32 +588,16 @@ static void cleanup_obdclass(void)
         obd_cleanup_caches();
         obd_sysctl_clean();
 
-        if (proc_lustre_root) {
-                lprocfs_remove(proc_lustre_root);
-                proc_lustre_root = NULL;
-        }
+        class_procfs_clean();
 
         class_handle_cleanup();
         class_exit_uuidlist();
         EXIT;
 }
 
-
-/* Check that we're building against the appropriate version of the Lustre
- * kernel patch */
-#include <linux/lustre_version.h>
-#define LUSTRE_MIN_VERSION 37
-#define LUSTRE_MAX_VERSION 47
-#if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
-# error Cannot continue: Your Lustre kernel patch is older than the sources
-#elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)
-# error Cannot continue: Your Lustre sources are older than the kernel patch
-#endif
-
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");
 
-module_init(init_obdclass);
-module_exit(cleanup_obdclass);
+cfs_module(obdclass, "1.0.0", init_obdclass, cleanup_obdclass);
 #endif

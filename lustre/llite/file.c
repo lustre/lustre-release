@@ -23,8 +23,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_lite.h>
+#include <lustre_dlm.h>
+#include <lustre_lite.h>
+#include <lustre_mdc.h>
 #include <linux/pagemap.h>
 #include <linux/file.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -47,25 +48,14 @@ static void ll_file_data_put(struct ll_file_data *fd)
                 OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof *fd);
 }
 
-int ll_mdc_close(struct obd_export *md_exp, struct inode *inode,
-                 struct file *file)
+static int ll_close_inode_openhandle(struct obd_export *md_exp,
+                                     struct inode *inode,
+                                     struct obd_client_handle *och)
 {
-        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+        struct md_op_data op_data = { { 0 } };
         struct ptlrpc_request *req = NULL;
-        struct obd_client_handle *och = &fd->fd_mds_och;
-        struct md_op_data op_data;
         int rc;
-        ENTRY;
 
-        /* clear group lock, if present */
-        if (unlikely(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-                fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
-                rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP,
-                                      &fd->fd_cwlockh);
-        }
-
-        memset(&op_data, 0, sizeof(op_data));
         op_data.fid1 = ll_i2info(inode)->lli_fid;
         op_data.valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
                         OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
@@ -94,15 +84,37 @@ int ll_mdc_close(struct obd_export *md_exp, struct inode *inode,
                 CERROR("inode %lu mdc close failed: rc = %d\n",
                        inode->i_ino, rc);
         }
+
         if (rc == 0) {
-                rc = ll_objects_destroy(req, file->f_dentry->d_inode);
+                rc = ll_objects_destroy(req, inode);
                 if (rc)
                         CERROR("inode %lu ll_objects destroy: rc = %d\n",
                                inode->i_ino, rc);
         }
 
         md_clear_open_replay_data(md_exp, och);
-        ptlrpc_req_finished(req);
+        ptlrpc_req_finished(req); /* This is close request */
+
+        RETURN(rc);
+}
+
+int ll_md_close(struct obd_export *md_exp, struct inode *inode,
+                struct file *file)
+{
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+        struct obd_client_handle *och = &fd->fd_mds_och;
+        int rc;
+        ENTRY;
+
+        /* clear group lock, if present */
+        if (unlikely(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+                rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP,
+                                      &fd->fd_cwlockh);
+        }
+        
+        rc = ll_close_inode_openhandle(md_exp, inode, och);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         LUSTRE_FPRIVATE(file) = NULL;
         ll_file_data_put(fd);
@@ -141,7 +153,7 @@ int ll_file_release(struct inode *inode, struct file *file)
                 lov_test_and_clear_async_rc(lsm);
         lli->lli_async_rc = 0;
 
-        rc = ll_mdc_close(sbi->ll_md_exp, inode, file);
+        rc = ll_md_close(sbi->ll_md_exp, inode, file);
         RETURN(rc);
 }
 
@@ -164,39 +176,53 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, &op_data,
                         &lockh, lmm, lmmsize, ldlm_completion_ast,
-                        ll_mdc_blocking_ast, NULL, 0);
-        if (rc < 0)
+                        ll_md_blocking_ast, NULL, 0);
+        if (rc < 0) {
                 CERROR("lock enqueue: err: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        rc = ll_prep_inode(&file->f_dentry->d_inode,
+                           (struct ptlrpc_request *)itp->d.lustre.it_data, 1,
+                            NULL);
+out:
         RETURN(rc);
+}
+
+static void ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli, 
+                        struct lookup_intent *it, struct obd_client_handle *och)
+{
+        struct ptlrpc_request *req = it->d.lustre.it_data;
+        struct mds_body *body;
+
+        LASSERT(och);
+
+        body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body));
+        LASSERT(body != NULL);                  /* reply already checked out */
+        LASSERT_REPSWABBED(req, 1);             /* and swabbed in md_enqueue */
+
+        memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
+        och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
+        lli->lli_io_epoch = body->io_epoch;
+
+        md_set_open_replay_data(md_exp, och, it->d.lustre.it_data);
 }
 
 int ll_local_open(struct file *file, struct lookup_intent *it,
                   struct ll_file_data *fd)
 {
-        struct ptlrpc_request *req = it->d.lustre.it_data;
         struct inode *inode = file->f_dentry->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct mdt_body *body;
         ENTRY;
-
-        body = lustre_msg_buf (req->rq_repmsg, 1, sizeof (*body));
-        LASSERT (body != NULL);                 /* reply already checked out */
-        LASSERT_REPSWABBED (req, 1);            /* and swabbed down */
 
         LASSERT(!LUSTRE_FPRIVATE(file));
 
         LASSERT(fd != NULL);
 
-        memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
-        fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
+        ll_och_fill(ll_i2sbi(inode)->ll_md_exp,
+                    ll_i2info(inode), it, &fd->fd_mds_och);
+                    
         LUSTRE_FPRIVATE(file) = fd;
         ll_readahead_init(inode, &fd->fd_ras);
-
-        lli->lli_io_epoch = body->io_epoch;
-
-        md_set_open_replay_data(sbi->ll_md_exp, &fd->fd_mds_och,
-                                it->d.lustre.it_data);
 
         RETURN(0);
 }
@@ -241,6 +267,21 @@ int ll_file_open(struct inode *inode, struct file *file)
                 RETURN(-ENOMEM);
 
         if (!it || !it->d.lustre.it_disposition) {
+                /* Convert f_flags into access mode. We cannot use file->f_mode,
+                 * because everything but O_ACCMODE mask was stripped from
+                 * there */
+                if ((oit.it_flags + 1) & O_ACCMODE)
+                        oit.it_flags++;
+                if (oit.it_flags & O_TRUNC)
+                        oit.it_flags |= FMODE_WRITE;
+
+                if (oit.it_flags & O_CREAT)
+                        oit.it_flags |= MDS_OPEN_OWNEROVERRIDE;
+
+                /* We do not want O_EXCL here, presumably we opened the file
+                 * already? XXX - NFS implications? */
+                oit.it_flags &= ~O_EXCL;
+
                 it = &oit;
                 rc = ll_intent_file_open(file, NULL, 0, it);
                 if (rc) {
@@ -900,7 +941,7 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                 /* A glimpse is necessary to determine whether we return a
                  * short read (B) or some zeroes at the end of the buffer (C) */
                 ll_inode_size_unlock(inode, 1);
-                retval = ll_glimpse_size(inode, 0);
+                retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval)
                         goto out;
         } else {
@@ -1032,6 +1073,10 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
         lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_READ_BYTES,
                             count);
 
+        /* File with no objects, nothing to lock */
+        if (!lsm)
+                RETURN(generic_file_sendfile(in_file, ppos, count, actor, target));
+
         node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
         tree.lt_fd = LUSTRE_FPRIVATE(in_file);
         rc = ll_tree_lock(&tree, node, NULL, count,
@@ -1066,7 +1111,7 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
                 /* A glimpse is necessary to determine whether we return a
                  * short read (B) or some zeroes at the end of the buffer (C) */
                 ll_inode_size_unlock(inode, 1);
-                retval = ll_glimpse_size(inode, 0);
+                retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval)
                         goto out;
         } else {
@@ -1412,7 +1457,7 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         
         rc = md_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_PW,
                         op_data, &lockh, &tsize, 0, ldlm_completion_ast,
-                        ll_mdc_blocking_ast, &hsize, 0);
+                        ll_md_blocking_ast, &hsize, 0);
 
         if (rc < 0)
                 GOTO(out, rc);
@@ -1443,7 +1488,7 @@ out:
 static int ll_file_join(struct inode *head, struct file *filp,
                         char *filename_tail)
 {
-        struct inode *tail = NULL, *first, *second;
+        struct inode *tail = NULL, *first = NULL, *second = NULL;
         struct dentry *tail_dentry;
         struct file *tail_filp, *first_filp, *second_filp;
         struct ll_lock_tree first_tree, second_tree;
@@ -1530,6 +1575,40 @@ cleanup:
                 CERROR("invalid cleanup_phase %d\n", cleanup_phase);
                 LBUG();
         }
+        RETURN(rc);
+}
+
+int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
+{
+        struct inode *inode = dentry->d_inode;
+        struct obd_client_handle *och;
+        int rc;
+        ENTRY;
+
+        LASSERT(inode);
+
+        /* Root ? Do nothing. */
+        if (dentry->d_inode->i_sb->s_root == dentry)
+                RETURN(0);
+
+        /* No open handle to close? Move away */
+        if (!it_disposition(it, DISP_OPEN_OPEN))
+                RETURN(0);
+
+        OBD_ALLOC(och, sizeof(*och));
+        if (!och)
+                GOTO(out, rc = -ENOMEM);
+
+        ll_och_fill(ll_i2sbi(inode)->ll_md_exp,
+                    ll_i2info(inode), it, och);
+
+        rc = ll_close_inode_openhandle(ll_i2sbi(inode)->ll_md_exp, 
+                                       inode, och);
+
+        OBD_FREE(och, sizeof(*och));
+ out:
+        /* this one is in place of ll_file_open */
+        ptlrpc_req_finished(it->d.lustre.it_data);
         RETURN(rc);
 }
 
@@ -1835,7 +1914,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         ll_prepare_md_op_data(&op_data, inode, inode, NULL, 0, 0);
         
         rc = md_intent_lock(sbi->ll_md_exp, &op_data, NULL, 0, &oit, 0,
-                            &req, ll_mdc_blocking_ast, 0);
+                            &req, ll_md_blocking_ast, 0);
 
         if (rc < 0)
                 GOTO(out, rc);
@@ -1860,8 +1939,8 @@ out:
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-int ll_getattr(struct vfsmount *mnt, struct dentry *de,
-               struct lookup_intent *it, struct kstat *stat)
+int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
+                  struct lookup_intent *it, struct kstat *stat)
 {
         struct inode *inode = de->d_inode;
         int res = 0;
@@ -1890,6 +1969,12 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
         ll_inode_size_unlock(inode, 0);
 
         return 0;
+}
+int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
+{
+        struct lookup_intent it = { .it_op = IT_GETATTR };
+
+        return ll_getattr_it(mnt, de, &it, stat);
 }
 #endif
 
@@ -2011,7 +2096,7 @@ struct inode_operations ll_file_inode_operations = {
         .setattr        = ll_setattr,
         .truncate       = ll_truncate,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        .getattr_it     = ll_getattr,
+        .getattr_it     = ll_getattr_it,
 #else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif

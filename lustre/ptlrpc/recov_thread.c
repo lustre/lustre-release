@@ -36,21 +36,21 @@
 #endif
 
 #ifdef __KERNEL__
-#include <linux/fs.h>
+# include <libcfs/libcfs.h>
 #else
 # include <libcfs/list.h>
 # include <liblustre.h>
 #endif
 
 #include <libcfs/kp30.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_commit_confd.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_net.h>
+#include <obd_class.h>
+#include <lustre_commit_confd.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <lustre_net.h>
 #include <lnet/types.h>
 #include <libcfs/list.h>
-#include <linux/lustre_log.h>
+#include <lustre_log.h>
 #include "ptlrpc_internal.h"
 
 #ifdef __KERNEL__
@@ -132,7 +132,7 @@ void llcd_send(struct llog_canceld_ctxt *llcd)
         list_add_tail(&llcd->llcd_list, &llcd->llcd_lcm->lcm_llcd_pending);
         spin_unlock(&llcd->llcd_lcm->lcm_llcd_lock);
 
-        wake_up_nr(&llcd->llcd_lcm->lcm_waitq, 1);
+        cfs_waitq_signal_nr(&llcd->llcd_lcm->lcm_waitq, 1);
 }
 EXPORT_SYMBOL(llcd_send);
 
@@ -150,7 +150,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         LASSERT(ctxt);
 
-        down(&ctxt->loc_sem);
+        mutex_down(&ctxt->loc_sem);
         if (ctxt->loc_imp == NULL) {
                 CWARN("no import for ctxt %p\n", ctxt);
                 GOTO(out, rc = 0);
@@ -188,7 +188,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                 llcd_send(llcd);
         }
 out:
-        up(&ctxt->loc_sem);
+        mutex_up(&ctxt->loc_sem);
         return rc;
 }
 EXPORT_SYMBOL(llog_obd_repl_cancel);
@@ -201,13 +201,13 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
                 CDEBUG(D_HA, "reverse import disconnected, put llcd %p:%p\n",
                        ctxt->loc_llcd, ctxt);
-                down(&ctxt->loc_sem);
+                mutex_down(&ctxt->loc_sem);
                 if (ctxt->loc_llcd != NULL) {
                         llcd_put(ctxt->loc_llcd);
                         ctxt->loc_llcd = NULL;
                 }
                 ctxt->loc_imp = NULL;
-                up(&ctxt->loc_sem);
+                mutex_up(&ctxt->loc_sem);
         } else {
                 rc = llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);
         }
@@ -221,7 +221,6 @@ static int log_commit_thread(void *arg)
         struct llog_commit_master *lcm = arg;
         struct llog_commit_daemon *lcd;
         struct llog_canceld_ctxt *llcd, *n;
-        char name[24];
         ENTRY;
 
         OBD_ALLOC(lcd, sizeof(*lcd));
@@ -229,18 +228,18 @@ static int log_commit_thread(void *arg)
                 RETURN(-ENOMEM);
 
         spin_lock(&lcm->lcm_thread_lock);
-        THREAD_NAME(name, sizeof(name) - 1,
+        THREAD_NAME(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX - 1,
                     "ll_log_comt_%02d", atomic_read(&lcm->lcm_thread_total));
         atomic_inc(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
 
-        ptlrpc_daemonize(name); /* thread never needs to do IO */
+        ptlrpc_daemonize(cfs_curproc_comm()); /* thread never needs to do IO */
 
-        INIT_LIST_HEAD(&lcd->lcd_lcm_list);
-        INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+        CFS_INIT_LIST_HEAD(&lcd->lcd_lcm_list);
+        CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
         lcd->lcd_lcm = lcm;
 
-        CDEBUG(D_HA, "%s started\n", current->comm);
+        CDEBUG(D_HA, "%s started\n", cfs_curproc_comm());
         do {
                 struct ptlrpc_request *request;
                 struct obd_import *import = NULL;
@@ -331,15 +330,15 @@ static int log_commit_thread(void *arg)
                                 continue;
                         }
 
-                        down(&llcd->llcd_ctxt->loc_sem);
+                        mutex_down(&llcd->llcd_ctxt->loc_sem);
                         if (llcd->llcd_ctxt->loc_imp == NULL) {
-                                up(&llcd->llcd_ctxt->loc_sem);
+                                mutex_up(&llcd->llcd_ctxt->loc_sem);
                                 CWARN("import will be destroyed, put "
                                       "llcd %p:%p\n", llcd, llcd->llcd_ctxt);
                                 llcd_put(llcd);
                                 continue;
                         }
-                        up(&llcd->llcd_ctxt->loc_sem);
+                        mutex_up(&llcd->llcd_ctxt->loc_sem);
 
                         if (!import || (import == LP_POISON) ||
                             (import->imp_client == LP_POISON)) {
@@ -360,7 +359,7 @@ static int log_commit_thread(void *arg)
                                 spin_lock(&lcm->lcm_llcd_lock);
                                 list_splice(&lcd->lcd_llcd_list,
                                             &lcm->lcm_llcd_resend);
-                                INIT_LIST_HEAD(&lcd->lcd_llcd_list);
+                                CFS_INIT_LIST_HEAD(&lcd->lcd_llcd_list);
                                 spin_unlock(&lcm->lcm_llcd_lock);
                                 break;
                         }
@@ -370,16 +369,16 @@ static int log_commit_thread(void *arg)
                         request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
                         request->rq_replen = lustre_msg_size(0, NULL);
-                        down(&llcd->llcd_ctxt->loc_sem);
+                        mutex_down(&llcd->llcd_ctxt->loc_sem);
                         if (llcd->llcd_ctxt->loc_imp == NULL) {
-                                up(&llcd->llcd_ctxt->loc_sem);
+                                mutex_up(&llcd->llcd_ctxt->loc_sem);
                                 CWARN("import will be destroyed, put "
                                       "llcd %p:%p\n", llcd, llcd->llcd_ctxt);
                                 llcd_put(llcd);
                                 ptlrpc_req_finished(request);
                                 continue;
                         }
-                        up(&llcd->llcd_ctxt->loc_sem);
+                        mutex_up(&llcd->llcd_ctxt->loc_sem);
                         rc = ptlrpc_queue_wait(request);
                         ptlrpc_req_finished(request);
 
@@ -421,12 +420,12 @@ static int log_commit_thread(void *arg)
         spin_unlock(&lcm->lcm_thread_lock);
         OBD_FREE(lcd, sizeof(*lcd));
 
-        CDEBUG(D_HA, "%s exiting\n", current->comm);
+        CDEBUG(D_HA, "%s exiting\n", cfs_curproc_comm());
 
         spin_lock(&lcm->lcm_thread_lock);
         atomic_dec(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
-        wake_up(&lcm->lcm_waitq);
+        cfs_waitq_signal(&lcm->lcm_waitq);
 
         return 0;
 }
@@ -439,7 +438,7 @@ int llog_start_commit_thread(void)
         if (atomic_read(&lcm->lcm_thread_total) >= lcm->lcm_thread_max)
                 RETURN(0);
 
-        rc = kernel_thread(log_commit_thread, lcm, CLONE_VM | CLONE_FILES);
+        rc = cfs_kernel_thread(log_commit_thread, lcm, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("error starting thread #%d: %d\n",
                        atomic_read(&lcm->lcm_thread_total), rc);
@@ -459,14 +458,14 @@ static struct llog_process_args {
 
 int llog_init_commit_master(void)
 {
-        INIT_LIST_HEAD(&lcm->lcm_thread_busy);
-        INIT_LIST_HEAD(&lcm->lcm_thread_idle);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_thread_busy);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_thread_idle);
         spin_lock_init(&lcm->lcm_thread_lock);
         atomic_set(&lcm->lcm_thread_numidle, 0);
-        init_waitqueue_head(&lcm->lcm_waitq);
-        INIT_LIST_HEAD(&lcm->lcm_llcd_pending);
-        INIT_LIST_HEAD(&lcm->lcm_llcd_resend);
-        INIT_LIST_HEAD(&lcm->lcm_llcd_free);
+        cfs_waitq_init(&lcm->lcm_waitq);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_llcd_pending);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_llcd_resend);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_llcd_free);
         spin_lock_init(&lcm->lcm_llcd_lock);
         atomic_set(&lcm->lcm_llcd_numfree, 0);
         lcm->lcm_llcd_minfree = 0;
@@ -481,7 +480,7 @@ int llog_cleanup_commit_master(int force)
         lcm->lcm_flags |= LLOG_LCM_FL_EXIT;
         if (force)
                 lcm->lcm_flags |= LLOG_LCM_FL_EXIT_FORCE;
-        wake_up(&lcm->lcm_waitq);
+        cfs_waitq_signal(&lcm->lcm_waitq);
 
         wait_event_interruptible(lcm->lcm_waitq,
                                  atomic_read(&lcm->lcm_thread_total) == 0);
@@ -498,7 +497,7 @@ static int log_process_thread(void *args)
         int rc;
         ENTRY;
 
-        up(&data->llpa_sem);
+        mutex_up(&data->llpa_sem);
         ptlrpc_daemonize("llog_process");     /* thread does IO to log files */
 
         rc = llog_create(ctxt, &llh, &logid, NULL);
@@ -536,12 +535,12 @@ static int llog_recovery_generic(struct llog_ctxt *ctxt, void *handle,void *arg)
         int rc;
         ENTRY;
 
-        down(&llpa.llpa_sem);
+        mutex_down(&llpa.llpa_sem);
         llpa.llpa_ctxt = ctxt;
         llpa.llpa_cb = handle;
         llpa.llpa_arg = arg;
 
-        rc = kernel_thread(log_process_thread, &llpa, CLONE_VM | CLONE_FILES);
+        rc = cfs_kernel_thread(log_process_thread, &llpa, CLONE_VM | CLONE_FILES);
         if (rc < 0)
                 CERROR("error starting log_process_thread: %d\n", rc);
         else {
@@ -566,17 +565,17 @@ int llog_repl_connect(struct llog_ctxt *ctxt, int count,
                 llog_sync(ctxt, NULL);
         }
 
-        down(&ctxt->loc_sem);
+        mutex_down(&ctxt->loc_sem);
         ctxt->loc_gen = *gen;
         llcd = llcd_grab();
         if (llcd == NULL) {
                 CERROR("couldn't get an llcd\n");
-                up(&ctxt->loc_sem);
+                mutex_up(&ctxt->loc_sem);
                 RETURN(-ENOMEM);
         }
         llcd->llcd_ctxt = ctxt;
         ctxt->loc_llcd = llcd;
-        up(&ctxt->loc_sem);
+        mutex_up(&ctxt->loc_sem);
 
         rc = llog_recovery_generic(ctxt, ctxt->llog_proc_cb, logid);
         if (rc != 0)

@@ -41,7 +41,9 @@ int          verbose;
 int          nomtab;
 int          fake;
 int          force;
+int          retry;
 static char *progname = NULL;
+#define MAX_RETRIES 99
 
 void usage(FILE *out)
 {
@@ -59,6 +61,7 @@ void usage(FILE *out)
                 "\t-v|--verbose: print verbose config settings\n"
                 "\t-o: filesystem mount options:\n"
                 "\t\tflock/noflock: enable/disable flock support\n"
+                "\t\troute=<gw>[-<gw>]:<low>[-<high>]: portal route to MDS\n"
                 "\t\tuser_xattr/nouser_xattr: enable/disable user extended "
                 "attributes\n"
                 );
@@ -115,6 +118,9 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
                         fprintf(stderr, "%s: addmntent: %s:",
                                 progname, strerror (errno));
                         rc = 16;
+                } else if (verbose > 1) {
+                        fprintf(stderr, "%s: added %s on %s to %s\n",
+                                progname, spec, mtpt, MOUNTED);
                 }
                 endmntent(fp);
         }
@@ -141,6 +147,7 @@ print_options(FILE *out, struct lustre_mount_data *lmd, const char *options)
         fprintf(out, "mds name:        %s\n", lmd->lmd_mds);
         fprintf(out, "profile:         %s\n", lmd->lmd_profile);
         fprintf(out, "options:         %s\n", options);
+        fprintf(out, "retry:           %d\n", retry);
 
         return 0;
 }
@@ -243,8 +250,11 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
                 if ((opteq = strchr(opt, '='))) {
                         val = atoi(opteq + 1);
                         *opteq = '\0';
-                        if (0) {
-                                /* All the network options have gone :)) */
+                        if (!strcmp(opt, "retry")) {
+                                if (val >= 0 || val < MAX_RETRIES)
+                                        retry = val;
+                                else
+                                        retry = 0;
                         } else {
                                 fprintf(stderr, "%s: unknown option '%s'. "
                                         "Ignoring.\n", progname, opt);
@@ -353,12 +363,14 @@ int main(int argc, char *const argv[])
                 switch (opt) {
                 case 1:
                         ++force;
-                        printf("force: %d\n", force);
+                        if (verbose)
+                                printf("force: %d\n", force);
                         nargs++;
                         break;
                 case 'f':
                         ++fake;
-                        printf("fake: %d\n", fake);
+                        if (verbose)
+                                printf("fake: %d\n", fake);
                         nargs++;
                         break;
                 case 'h':
@@ -366,7 +378,8 @@ int main(int argc, char *const argv[])
                         break;
                 case 'n':
                         ++nomtab;
-                        printf("nomtab: %d\n", nomtab);
+                        if (verbose)
+                                printf("nomtab: %d\n", nomtab);
                         nargs++;
                         break;
                 case 'o':
@@ -428,15 +441,29 @@ int main(int argc, char *const argv[])
                 return 1;
         }
 
-        if (!fake)
-                rc = mount(source, target, "lustre", flags, (void *)&lmd);
+        if (!fake) {
+                FILE *modpipe = popen("/sbin/modprobe -q llite", "r");
+                if (modpipe != NULL)
+                        pclose(modpipe);
+                /* use <= to include the initial mount before we retry */
+                for (i = 0, rc = -EAGAIN; i <= retry && rc != 0; i++)
+                        rc = mount(source, target, "lustre", flags, &lmd);
+        }
         if (rc) {
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname,
                         source, target, strerror(errno));
                 print_options(stderr, &lmd, options);
-                if (errno == ENODEV)
+                if (errno == ENODEV) {
+                        struct utsname unamebuf;
+                        char *modfile = "/etc/modutils.conf";
+
+                        if (uname(&unamebuf) == 0 &&
+                            strncmp(unamebuf.release, "2.4", 3) == 0)
+                                modfile = "/etc/modules.conf";
+
                         fprintf(stderr, "Are the lustre modules loaded?\n"
-                             "Check /etc/modules.conf and /proc/filesystems\n");
+                                "Check %s and /proc/filesystems\n");
+                }
                 rc = 32;
         } else if (!nomtab) {
                 rc = update_mtab_entry(source, target, "lustre", options,0,0,0);

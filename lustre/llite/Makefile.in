@@ -1,5 +1,5 @@
 MODULES := llite
-llite-objs := dcache.o dir.o file.o llite_close.o llite_lib.o llite_nfs.o llite_fid.o rw.o lproc_llite.o namei.o special.o symlink.o llite_mmap.o xattr.o
+llite-objs := dcache.o dir.o file.o llite_close.o llite_lib.o llite_nfs.o llite_fid.o rw.o lproc_llite.o namei.o symlink.o llite_mmap.o xattr.o
 
 ifeq ($(PATCHLEVEL),4)
 llite-objs += rw24.o super.o

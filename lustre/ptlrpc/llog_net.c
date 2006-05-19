@@ -36,15 +36,15 @@
 #endif
 
 #ifdef __KERNEL__
-#include <linux/fs.h>
+#include <libcfs/libcfs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
+#include <obd_class.h>
+#include <lustre_log.h>
 #include <libcfs/list.h>
-#include <linux/lvfs.h>
+#include <lvfs.h>
 
 #ifdef __KERNEL__
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,

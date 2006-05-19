@@ -22,7 +22,7 @@ struct osc_async_page {
 
         unsigned long           oap_interrupted:1;
         struct oig_callback_context oap_occ;
-        struct page             *oap_page;
+        cfs_page_t              *oap_page;
         struct obd_io_group     *oap_oig;
         struct ptlrpc_request   *oap_request;
         struct client_obd       *oap_cli;
@@ -38,7 +38,7 @@ struct osc_async_page {
 
 struct osc_cache_waiter {
         struct list_head        ocw_entry;
-        wait_queue_head_t       ocw_waitq;
+        cfs_waitq_t             ocw_waitq;
         struct osc_async_page   *ocw_oap;
         int                     ocw_rc;
 };
@@ -56,10 +56,6 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 void oscc_init(struct obd_device *obd);
 void osc_wake_cache_waiters(struct client_obd *cli);
-
-
-/* Quota stuff */
-extern quota_interface_t *quota_interface;
 
 #ifdef LPROCFS
 int lproc_osc_attach_seqstat(struct obd_device *dev);

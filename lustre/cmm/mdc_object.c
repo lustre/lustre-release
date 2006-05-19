@@ -31,11 +31,11 @@
 #endif
 
 #define DEBUG_SUBSYSTEM S_MDS
-#include <linux/obd_support.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_idl.h>
-#include <linux/obd_class.h>
+#include <lustre/lustre_idl.h>
+#include <obd_support.h>
+#include <lustre_lib.h>
+#include <lustre_net.h>
+#include <obd_class.h>
 #include "mdc_internal.h"
 
 static struct md_object_operations mdc_mo_ops;

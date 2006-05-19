@@ -9,7 +9,7 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 
-#include <linux/lvfs.h>
+#include <lvfs.h>
 
 #define l_file file
 #define l_dentry dentry

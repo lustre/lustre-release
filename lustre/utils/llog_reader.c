@@ -28,7 +28,7 @@
 
 #include <time.h>
 #include <liblustre.h>
-#include <linux/lustre_idl.h>
+#include <lustre/lustre_idl.h>
 
 int llog_pack_buffer(int fd, struct llog_log_hdr** llog_buf, struct llog_rec_hdr*** recs, int* recs_number);
 

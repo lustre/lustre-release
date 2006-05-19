@@ -37,18 +37,18 @@
 #include <linux/quotaops.h>
 #include <linux/version.h>
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
+#include <lustre_fsfilt.h>
+#include <obd.h>
+#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/lustre_compat25.h>
-#include <linux/lvfs.h>
+#include <lvfs.h>
 #include "lvfs_internal.h"
 
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_quota.h>
+#include <obd.h>
+#include <lustre_lib.h>
+#include <lustre_quota.h>
 
 atomic_t obd_memory;
 int obd_memmax;
@@ -294,8 +294,9 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
 
                 /* Fixup directory permissions if necessary */
                 if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
-                        CWARN("fixing permissions on %s from %o to %o\n",
-                              name, old_mode, mode);
+                        CDEBUG(D_CONFIG, 
+                               "fixing permissions on %s from %o to %o\n",
+                               name, old_mode, mode);
                         dchild->d_inode->i_mode = (mode & S_IALLUGO) |
                                                   (old_mode & ~S_IALLUGO);
                         mark_inode_dirty(dchild->d_inode);
@@ -505,6 +506,7 @@ static void __exit lvfs_linux_exit(void)
         CDEBUG_EX(leaked ? D_ERROR : D_INFO,
                "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
 
+        EXIT;
         return;
 }
 

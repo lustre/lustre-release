@@ -28,8 +28,8 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
 #endif
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
 #include <linux/seq_file.h>
 #include "osc_internal.h"
 
@@ -41,9 +41,9 @@ static int osc_rd_max_pages_per_rpc(char *page, char **start, off_t off,
         struct client_obd *cli = &dev->u.cli;
         int rc;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         rc = snprintf(page, count, "%d\n", cli->cl_max_pages_per_rpc);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         return rc;
 }
 
@@ -61,9 +61,9 @@ static int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
         if (val < 1 || val > PTLRPC_MAX_BRW_PAGES)
                 return -ERANGE;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_pages_per_rpc = val;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         return count;
 }
@@ -75,9 +75,9 @@ static int osc_rd_max_rpcs_in_flight(char *page, char **start, off_t off,
         struct client_obd *cli = &dev->u.cli;
         int rc;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         rc = snprintf(page, count, "%u\n", cli->cl_max_rpcs_in_flight);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         return rc;
 }
 
@@ -99,9 +99,9 @@ static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         if (pool && val > cli->cl_max_rpcs_in_flight)
                 pool->prp_populate(pool, val-cli->cl_max_rpcs_in_flight);
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         return count;
 }
@@ -113,9 +113,9 @@ static int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
         struct client_obd *cli = &dev->u.cli;
         unsigned val;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         val = cli->cl_dirty_max >> 20;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         return snprintf(page, count, "%u\n", val);
 }
@@ -135,10 +135,10 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
             val > num_physpages >> (20 - PAGE_SHIFT - 2)) /* 1/4 of RAM */
                 return -ERANGE;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_dirty_max = (obd_count)val * 1024 * 1024;
         osc_wake_cache_waiters(cli);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         return count;
 }
@@ -150,9 +150,9 @@ static int osc_rd_cur_dirty_bytes(char *page, char **start, off_t off,
         struct client_obd *cli = &dev->u.cli;
         int rc;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         rc = snprintf(page, count, "%lu\n", cli->cl_dirty);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         return rc;
 }
 
@@ -163,9 +163,9 @@ static int osc_rd_cur_grant_bytes(char *page, char **start, off_t off,
         struct client_obd *cli = &dev->u.cli;
         int rc;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         rc = snprintf(page, count, "%lu\n", cli->cl_avail_grant);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         return rc;
 }
 
@@ -297,13 +297,12 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         struct timeval now;
         struct obd_device *dev = seq->private;
         struct client_obd *cli = &dev->u.cli;
-        unsigned long flags;
         unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
         int i;
 
         do_gettimeofday(&now);
 
-        spin_lock_irqsave(&cli->cl_loi_list_lock, flags);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
 
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
@@ -384,7 +383,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                         break;
         }
 
-        spin_unlock_irqrestore(&cli->cl_loi_list_lock, flags);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         return 0;
 }

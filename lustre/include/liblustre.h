@@ -57,8 +57,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
-/* Hack for mkfs_lustre.c */
-#ifndef  NO_SYS_VFS
+#ifdef HAVE_SYS_VFS_H
 # include <sys/vfs.h>
 #endif
 #include <unistd.h>
@@ -403,9 +402,9 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)
 
-static inline struct page *alloc_pages(int mask, unsigned long order)
+static inline cfs_page_t *alloc_pages(int mask, unsigned long order)
 {
-        struct page *pg = malloc(sizeof(*pg));
+        cfs_page_t *pg = malloc(sizeof(*pg));
 
         if (!pg)
                 return NULL;
@@ -424,7 +423,7 @@ static inline struct page *alloc_pages(int mask, unsigned long order)
 
 #define alloc_page(mask) alloc_pages((mask), 0)
 
-static inline void __free_pages(struct page *pg, int what)
+static inline void __free_pages(cfs_page_t *pg, int what)
 {
 #if 0 //#ifdef MAP_ANONYMOUS
         munmap(pg->addr, PAGE_SIZE);
@@ -437,9 +436,9 @@ static inline void __free_pages(struct page *pg, int what)
 #define __free_page(page) __free_pages((page), 0)
 #define free_page(page) __free_page(page)
 
-static inline struct page* __grab_cache_page(unsigned long index)
+static inline cfs_page_t* __grab_cache_page(unsigned long index)
 {
-        struct page *pg = alloc_pages(0, 0);
+        cfs_page_t *pg = alloc_pages(0, 0);
 
         if (pg)
                 pg->index = index;
@@ -485,6 +484,7 @@ struct iattr {
         time_t          ia_ctime;
         unsigned int    ia_attr_flags;
 };
+#define ll_iattr_struct iattr
 
 #define IT_OPEN     0x0001
 #define IT_CREAT    0x0002
@@ -549,7 +549,9 @@ struct semaphore {
 
 /* use the macro's argument to avoid unused warnings */
 #define down(a) do { (void)a; } while (0)
+#define mutex_down(a)   down(a)
 #define up(a) do { (void)a; } while (0)
+#define mutex_up(a)     up(a)
 #define down_read(a) do { (void)a; } while (0)
 #define up_read(a) do { (void)a; } while (0)
 #define down_write(a) do { (void)a; } while (0)
@@ -563,6 +565,7 @@ static inline void init_MUTEX (struct semaphore *sem)
         sema_init(sem, 1);
 }
 
+#define init_mutex(s)   init_MUTEX(s)
 
 typedef struct  {
         struct list_head sleepers;
@@ -589,6 +592,11 @@ struct task_struct {
         gid_t *groups;
         __u32 cap_effective;
 };
+
+typedef struct task_struct cfs_task_t;
+#define cfs_current()           current
+#define cfs_curproc_pid()       (current->pid)
+#define cfs_curproc_comm()      (current->comm)
 
 extern struct task_struct *current;
 int in_group_p(gid_t gid);
@@ -748,7 +756,7 @@ static inline void libcfs_run_lbug_upcall(char *file, const char *fn,
 /* completion */
 struct completion {
         unsigned int done;
-        wait_queue_head_t wait;
+        cfs_waitq_t wait;
 };
 
 #define COMPLETION_INITIALIZER(work) \
@@ -782,13 +790,13 @@ struct nfs_lock_info {
         void            *host;
 };
 
-struct file_lock {
+typedef struct file_lock {
         struct file_lock *fl_next;      /* singly linked list for this inode  */
         struct list_head fl_link;       /* doubly linked list of all locks */
         struct list_head fl_block;      /* circular list of blocked processes */
         void *fl_owner;
         unsigned int fl_pid;
-        wait_queue_head_t fl_wait;
+        cfs_waitq_t fl_wait;
         struct file *fl_file;
         unsigned char fl_flags;
         unsigned char fl_type;
@@ -805,7 +813,16 @@ struct file_lock {
         union {
                 struct nfs_lock_info    nfs_fl;
         } fl_u;
-};
+} cfs_flock_t;
+
+#define cfs_flock_type(fl)                  ((fl)->fl_type)
+#define cfs_flock_set_type(fl, type)        do { (fl)->fl_type = (type); } while(0)
+#define cfs_flock_pid(fl)                   ((fl)->fl_pid)
+#define cfs_flock_set_pid(fl, pid)          do { (fl)->fl_pid = (pid); } while(0)
+#define cfs_flock_start(fl)                 ((fl)->fl_start)
+#define cfs_flock_set_start(fl, start)      do { (fl)->fl_start = (start); } while(0)
+#define cfs_flock_end(fl)                   ((fl)->fl_end)
+#define cfs_flock_set_end(fl, end)          do { (fl)->fl_end = (end); } while(0)
 
 #ifndef OFFSET_MAX
 #define INT_LIMIT(x)    (~((x)1 << (sizeof(x)*8 - 1)))
@@ -819,13 +836,6 @@ struct file_lock {
 /* quota */
 #define QUOTA_OK 0
 #define NO_QUOTA 1
-
-/* proc */
-#define proc_symlink(...)                       \
-({                                              \
-        void *result = NULL;                    \
-        result;                                 \
-})
 
 /* ACL */
 struct posix_acl_entry {
@@ -877,11 +887,11 @@ void posix_acl_release(struct posix_acl *acl)
 #define ENOTSUPP ENOTSUP
 #endif
 
-#include <linux/obd_support.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_import.h>
-#include <linux/lustre_export.h>
-#include <linux/lustre_net.h>
+#include <obd_support.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_lib.h>
+#include <lustre_import.h>
+#include <lustre_export.h>
+#include <lustre_net.h>
 
 #endif

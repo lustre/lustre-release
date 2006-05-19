@@ -46,10 +46,10 @@
 #endif
 
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_quota.h>
+#include <lustre_fsfilt.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lustre_quota.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
 #endif
@@ -524,10 +524,6 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 
         LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
 
-        if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
-                CWARN("setting EA on %lu/%u again... interesting\n",
-                       inode->i_ino, inode->i_generation);
-
         lock_24kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
                                    name, lmm, lmm_size, 0);
@@ -864,7 +860,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 return EXT_CONTINUE;
         }
 
-        tgen = EXT_GENERATION(tree);
+        tgen = EXT_GENERATION(EXT_ROOT_HDR(tree));
         count = ext3_ext_calc_credits_for_insert(tree, path);
         ext3_up_truncate_sem(inode);
 
@@ -877,7 +873,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         ext3_down_truncate_sem(inode);
-        if (tgen != EXT_GENERATION(tree)) {
+        if (tgen != EXT_GENERATION(EXT_ROOT_HDR(tree))) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
                 journal_stop(handle);
@@ -2015,8 +2011,11 @@ out:
 
 static void __exit fsfilt_ext3_exit(void)
 {
+        int rc;
+
         fsfilt_unregister_ops(&fsfilt_ext3_ops);
-        LASSERT(kmem_cache_destroy(fcb_cache) == 0);
+        rc = kmem_cache_destroy(fcb_cache);
+        LASSERTF(rc == 0, "couldn't destroy fcb_cache slab\n");
 }
 
 module_init(fsfilt_ext3_init);

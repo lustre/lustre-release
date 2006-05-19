@@ -11,8 +11,8 @@
 #include <limits.h>
 #include <sys/ioctl.h>
 #include <liblustre.h>
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
+#include <obd.h>
+#include <lustre_lib.h>
 
 static int usage(char *prog, FILE *out)
 {

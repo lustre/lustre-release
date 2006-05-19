@@ -34,17 +34,15 @@
 
 #ifndef __KERNEL__
 #include <liblustre.h>
-#else
-#include <linux/fs.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_net.h>
+#include <obd_class.h>
+#include <lustre_log.h>
+#include <lustre_net.h>
 #include <libcfs/list.h>
-#include <linux/lustre_fsfilt.h>
+#include <lustre_fsfilt.h>
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) && defined(LUSTRE_LOG_SERVER)
 
 int llog_origin_handle_create(struct ptlrpc_request *req)
 {

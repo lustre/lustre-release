@@ -41,7 +41,7 @@
 #include <lnet/lnetctl.h>
 
 #include <liblustre.h>
-#include <linux/lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre/liblustreapi.h>
 #include <lustre/lustre_user.h>
 
@@ -322,7 +322,7 @@ static int lfs_osts(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) ==0) {
-                        if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                        if (llapi_is_lustre_mnttype(mnt)) {
                                 rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0);
                                 if (rc)
                                         fprintf(stderr,
@@ -370,7 +370,7 @@ static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
         len = 0;
         mnt = getmntent(fp);
         while (feof(fp) == 0 && ferror(fp) == 0) {
-                if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                if (llapi_is_lustre_mnttype(mnt)) {
                         len = strlen(mnt->mnt_dir);
                         if (len > out_len &&
                             !strncmp(rpath, mnt->mnt_dir, len)) {
@@ -384,42 +384,36 @@ static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
 
         if (out_len > 0)
                 return 0;
-        
+
         fprintf(stderr, "error: lfs df: %s isn't mounted on lustre\n", path);
         return -EINVAL;
 }
 
 static int showdf(char *mntdir, struct obd_statfs *stat,
-                  struct obd_uuid *uuid, int ishow, int cooked,
+                  char *uuid, int ishow, int cooked,
                   char *type, int index, int rc)
 {
         __u64 avail, used, total;
         double ratio = 0;
-        int obd_type;
         char *suffix = "KMGTPEZY";
         char tbuf[10], ubuf[10], abuf[10], rbuf[10];
 
-        if (!uuid || !stat || !type)
+        if (!uuid || !stat)
                 return -EINVAL;
-        if (!strncmp(type, "MDT", 3)) {
-                obd_type = 0;
-        } else if(!strncmp(type, "OST", 3)){
-                obd_type = 1;
-        } else {
-                fprintf(stderr, "error: lfs df: invalid type '%s'\n", type);
-                return -EINVAL;
-        }
 
-        if (rc == 0) {
+        switch (rc) {
+        case 0:
                 if (ishow) {
                         avail = stat->os_ffree;
                         used = stat->os_files - stat->os_ffree;
                         total = stat->os_files;
                 } else {
-                        avail = stat->os_bavail * stat->os_bsize / 1024;
+                        int shift = cooked ? 0 : 10;
+
+                        avail = (stat->os_bavail * stat->os_bsize) >> shift;
                         used = stat->os_blocks - stat->os_bavail;
-                        used = used * stat->os_bsize / 1024;
-                        total = stat->os_blocks * stat->os_bsize / 1024;
+                        used = (used * stat->os_bsize) >> shift;
+                        total = (stat->os_blocks * stat->os_bsize) >> shift;
                 }
 
                 if (total > 0)
@@ -427,26 +421,26 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 
                 if (cooked) {
                         int i;
-                        double total_d, used_d, avail_d;
-                        
-                        total_d = (double)total;
-                        i = COOK(total_d);
+                        double cook_val;
+
+                        cook_val = (double)total;
+                        i = COOK(cook_val);
                         if (i > 0)
-                                sprintf(tbuf, HDF"%c", total_d, suffix[i - 1]);
+                                sprintf(tbuf, HDF"%c", cook_val, suffix[i - 1]);
                         else
                                 sprintf(tbuf, CDF, total);
 
-                        used_d = (double)used;
-                        i = COOK(used_d);
+                        cook_val = (double)used;
+                        i = COOK(cook_val);
                         if (i > 0)
-                                sprintf(ubuf, HDF"%c", used_d, suffix[i - 1]);
+                                sprintf(ubuf, HDF"%c", cook_val, suffix[i - 1]);
                         else
                                 sprintf(ubuf, CDF, used);
 
-                        avail_d = (double)avail;
-                        i = COOK(avail_d);
+                        cook_val = (double)avail;
+                        i = COOK(cook_val);
                         if (i > 0)
-                                sprintf(abuf, HDF"%c", avail_d, suffix[i - 1]);
+                                sprintf(abuf, HDF"%c", cook_val, suffix[i - 1]);
                         else
                                 sprintf(abuf, CDF, avail);
                 } else {
@@ -456,23 +450,19 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                 }
 
                 sprintf(rbuf, RDF, (int)(ratio * 100));
-                if (obd_type == 0)
-                        printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s[MDT:%d]\n",
-                               (char *)uuid, tbuf, ubuf, abuf, rbuf,
-                               mntdir, index);
+                printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s",
+                       uuid, tbuf, ubuf, abuf, rbuf, mntdir);
+                if (type)
+                        printf("[%s:%d]\n", type, index);
                 else
-                        printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s[OST:%d]\n",
-                               (char *)uuid, tbuf, ubuf, abuf, rbuf,
-                               mntdir, index);
+                        printf("\n");
 
-                return 0;
-        }
-        switch (rc) {
+                break;
         case -ENODATA:
-                printf(UUF": inactive OST\n", (char *)uuid);
+                printf(UUF": inactive device\n", uuid);
                 break;
         default:
-                printf(UUF": %s\n", (char *)uuid, strerror(-rc));
+                printf(UUF": %s\n", uuid, strerror(-rc));
                 break;
         }
 
@@ -481,12 +471,9 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 
 static int mntdf(char *mntdir, int ishow, int cooked)
 {
-        struct obd_statfs stat_buf;
+        struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
         struct obd_uuid uuid_buf;
         __u32 index;
-        __u64 avail_sum, used_sum, total_sum;
-        char tbuf[10], ubuf[10], abuf[10], rbuf[10];        
-        double ratio_sum = 0;
         int rc;
 
         if (ishow)
@@ -495,10 +482,9 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                        "IUse%", "Mounted on");
         else
                 printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
-                       "UUID", "1K-blocks", "Used", "Available",
-                       "Use%", "Mounted on");
+                       "UUID", cooked ? "bytes" : "1K-blocks",
+                       "Used", "Available", "Use%", "Mounted on");
 
-        avail_sum = total_sum = 0; 
         for (index = 0; ; index++) {
                 memset(&stat_buf, 0, sizeof(struct obd_statfs));
                 memset(&uuid_buf, 0, sizeof(struct obd_uuid));
@@ -509,7 +495,7 @@ static int mntdf(char *mntdir, int ishow, int cooked)
 
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
-                        showdf(mntdir, &stat_buf, &uuid_buf, ishow, cooked,
+                        showdf(mntdir, &stat_buf, uuid_buf.uuid, ishow, cooked,
                                "MDT", index, rc);
                 } else {
                         fprintf(stderr,
@@ -517,13 +503,13 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                                 uuid_buf.uuid, strerror(-rc), rc);
                         return rc;
                 }
-                if (!rc && ishow) {
-                        avail_sum += stat_buf.os_ffree;
-                        total_sum += stat_buf.os_files;
+                if (rc == 0) {
+                        sum.os_ffree += stat_buf.os_ffree;
+                        sum.os_files += stat_buf.os_files;
                 }
         }
 
-        for (index = 0;;index++) {
+        for (index = 0; ; index++) {
                 memset(&stat_buf, 0, sizeof(struct obd_statfs));
                 memset(&uuid_buf, 0, sizeof(struct obd_uuid));
                 rc = llapi_obd_statfs(mntdir, LL_STATFS_LOV, index,
@@ -533,7 +519,7 @@ static int mntdf(char *mntdir, int ishow, int cooked)
 
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
-                        showdf(mntdir, &stat_buf, &uuid_buf, ishow, cooked,
+                        showdf(mntdir, &stat_buf, uuid_buf.uuid, ishow, cooked,
                                "OST", index, rc);
                 } else {
                         fprintf(stderr,
@@ -541,55 +527,15 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                                 strerror(-rc), rc);
                         return rc;
                 }
-                if (!rc && !ishow) {
-                        __u64 avail, total;
-                        avail = stat_buf.os_bavail * stat_buf.os_bsize;
-                        avail /= 1024;
-                        total = stat_buf.os_blocks * stat_buf.os_bsize;
-                        total /= 1024;
-                        
-                        avail_sum += avail;
-                        total_sum += total;
+                if (rc == 0) {
+                        sum.os_blocks += stat_buf.os_blocks * stat_buf.os_bsize;
+                        sum.os_bfree  += stat_buf.os_bfree * stat_buf.os_bsize;
+                        sum.os_bavail += stat_buf.os_bavail * stat_buf.os_bsize;
                 }
         }
 
-        used_sum = total_sum - avail_sum;
-        if (total_sum > 0)
-                ratio_sum = (double)(total_sum - avail_sum) / (double)total_sum;
-        sprintf(rbuf, RDF, (int)(ratio_sum * 100));
-        if (cooked) {
-                int i;
-                char *suffix = "KMGTPEZY";
-                double total_sum_d, used_sum_d, avail_sum_d;
-
-                total_sum_d = (double)total_sum;
-                i = COOK(total_sum_d);
-                if (i > 0)
-                        sprintf(tbuf, HDF"%c", total_sum_d, suffix[i - 1]);
-                else
-                        sprintf(tbuf, CDF, total_sum);
-                
-                used_sum_d = (double)used_sum;
-                i = COOK(used_sum_d);
-                if (i > 0)
-                        sprintf(ubuf, HDF"%c", used_sum_d, suffix[i - 1]);
-                else
-                        sprintf(ubuf, CDF, used_sum);
-                        
-                avail_sum_d = (double)avail_sum;
-                i = COOK(avail_sum_d);
-                if (i > 0)
-                        sprintf(abuf, HDF"%c", avail_sum_d, suffix[i - 1]);
-                else
-                        sprintf(abuf, CDF, avail_sum);
-        } else {
-                sprintf(tbuf, CDF, total_sum);
-                sprintf(ubuf, CDF, used_sum);
-                sprintf(abuf, CDF, avail_sum);
-        }
-       
-        printf("\n"UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
-               "filesystem summary:", tbuf, ubuf, abuf, rbuf, mntdir);
+        printf("\n");
+        showdf(mntdir, &sum, "filesystem summary:", ishow, cooked, NULL, 0,0);
 
         return 0;
 }
@@ -639,7 +585,7 @@ static int lfs_df(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) == 0) {
-                        if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                        if (llapi_is_lustre_mnttype(mnt)) {
                                 rc = mntdf(mnt->mnt_dir, ishow, cooked);
                                 if (rc)
                                         break;
@@ -690,7 +636,7 @@ static int lfs_check(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) ==0) {
-                        if (llapi_is_lustre_mnttype(mnt->mnt_type))
+                        if (llapi_is_lustre_mnttype(mnt))
                                 break;
                         mnt = getmntent(fp);
                 }
@@ -731,7 +677,7 @@ static int lfs_catinfo(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) == 0) {
-                        if (llapi_is_lustre_mnttype(mnt->mnt_type))
+                        if (llapi_is_lustre_mnttype(mnt))
                                 break;
                         mnt = getmntent(fp);
                 }

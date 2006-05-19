@@ -28,23 +28,13 @@
 #endif
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#ifdef __KERNEL__
-# include <linux/config.h>
-# include <linux/module.h>
-# include <linux/version.h>
-# include <linux/slab.h>
-# include <linux/types.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#  include <asm/statfs.h>
-# endif
-# include <linux/seq_file.h>
-#else /* __KERNEL__ */
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
-#include <linux/lustre_fsfilt.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
+#include <lustre_fsfilt.h>
 
 #if defined(LPROCFS)
 
@@ -371,6 +361,8 @@ static const char *obd_connect_names[] = {
         "initial_transno",
         "inode_bit_locks",
         "join_file",
+        "",
+        "no_oh_for_devices",
         NULL
 };
 
@@ -662,7 +654,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
 
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, iocontrol);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, get_info);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_info);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_info_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, attach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, detach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setup);
@@ -727,7 +719,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         for (i = num_private_stats; i < num_stats; i++) {
                 /* If this LBUGs, it is likely that an obd
                  * operation was added to struct obd_ops in
-                 * <linux/obd.h>, and that the corresponding line item
+                 * <obd.h>, and that the corresponding line item
                  * LPROCFS_OBD_OP_INIT(.., .., opname)
                  * is missing from the list above. */
                 if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {

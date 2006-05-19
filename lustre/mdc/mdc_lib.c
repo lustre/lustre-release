@@ -27,9 +27,8 @@
 # include <fcntl.h>
 # include <liblustre.h>
 #endif
-#include <linux/lustre_idl.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_mdc.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_net.h>
 #include "mdc_internal.h"
 
 #ifndef __KERNEL__
@@ -193,7 +192,9 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                 rec->sa_atime = LTIME_S(iattr->ia_atime);
                 rec->sa_mtime = LTIME_S(iattr->ia_mtime);
                 rec->sa_ctime = LTIME_S(iattr->ia_ctime);
-                rec->sa_attr_flags = iattr->ia_attr_flags;
+                rec->sa_attr_flags =
+                               ((struct ll_iattr_struct *)iattr)->ia_attr_flags;
+
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
                 else

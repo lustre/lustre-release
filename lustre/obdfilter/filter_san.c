@@ -33,8 +33,8 @@
 #include <linux/pagemap.h> // XXX kill me soon
 #include <linux/version.h>
 
-#include <linux/obd_class.h>
-#include <linux/lustre_fsfilt.h>
+#include <obd_class.h>
+#include <lustre_fsfilt.h>
 #include "filter_internal.h"
 
 /* sanobd setup methods - use a specific mount option */

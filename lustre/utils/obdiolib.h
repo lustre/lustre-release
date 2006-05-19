@@ -11,9 +11,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/obd_class.h>
+#include <lustre_lib.h>
+#include <lustre/lustre_idl.h>
+#include <obd_class.h>
 
 struct obdio_conn {
         int                    oc_fd;

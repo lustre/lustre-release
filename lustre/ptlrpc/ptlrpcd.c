@@ -27,30 +27,19 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #ifdef __KERNEL__
-# include <linux/version.h>
-# include <linux/module.h>
-# include <linux/mm.h>
-# include <linux/highmem.h>
-# include <linux/lustre_dlm.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#  include <linux/workqueue.h>
-#  include <linux/smp_lock.h>
-# else
-#  include <linux/locks.h>
-# endif
-# include <linux/ctype.h>
-# include <linux/init.h>
+# include <libcfs/libcfs.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 # include <ctype.h>
 #endif
 
 #include <libcfs/kp30.h>
-#include <linux/lustre_net.h>
+#include <lustre_net.h>
+# include <lustre_lib.h>
 
-#include <linux/lustre_ha.h>
-#include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
-#include <linux/lprocfs_status.h>
+#include <lustre_ha.h>
+#include <obd_support.h> /* for OBD_FAIL_CHECK */
+#include <lprocfs_status.h>
 
 #define LIOD_STOP 0
 struct ptlrpcd_ctl {
@@ -59,7 +48,7 @@ struct ptlrpcd_ctl {
         struct completion         pc_starting;
         struct completion         pc_finishing;
         struct list_head          pc_req_list;
-        wait_queue_head_t         pc_waitq;
+        cfs_waitq_t               pc_waitq;
         struct ptlrpc_request_set *pc_set;
         char                      pc_name[16];
 #ifndef __KERNEL__
@@ -71,7 +60,7 @@ struct ptlrpcd_ctl {
 static struct ptlrpcd_ctl ptlrpcd_pc;
 static struct ptlrpcd_ctl ptlrpcd_recovery_pc;
 
-static DECLARE_MUTEX(ptlrpcd_sem);
+struct semaphore ptlrpcd_sem;
 static int ptlrpcd_users = 0;
 
 void ptlrpcd_wake(struct ptlrpc_request *req)
@@ -80,7 +69,7 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
 
         LASSERT(pc != NULL);
 
-        wake_up(&pc->pc_waitq);
+        cfs_waitq_signal(&pc->pc_waitq);
 }
 
 /* requests that are added to the ptlrpcd queue are sent via
@@ -153,15 +142,9 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
 static int ptlrpcd(void *arg)
 {
         struct ptlrpcd_ctl *pc = arg;
-        unsigned long flags;
         ENTRY;
 
-        libcfs_daemonize(pc->pc_name);
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
+        cfs_daemonize(pc->pc_name);
 
         complete(&pc->pc_starting);
 
@@ -171,18 +154,19 @@ static int ptlrpcd(void *arg)
          * on the set's new_req_list and ptlrpcd_check moves them into
          * the set. */
         while (1) {
-                wait_queue_t set_wait;
+                cfs_waitlink_t set_wait;
                 struct l_wait_info lwi;
-                int timeout;
+                cfs_duration_t timeout;
 
-                timeout = ptlrpc_set_next_timeout(pc->pc_set) * HZ;
+                timeout = cfs_time_seconds(ptlrpc_set_next_timeout(pc->pc_set));
                 lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, pc->pc_set);
 
                 /* ala the pinger, wait on pc's waitqueue and the set's */
-                init_waitqueue_entry(&set_wait, current);
-                add_wait_queue(&pc->pc_set->set_waitq, &set_wait);
+                cfs_waitlink_init(&set_wait);
+                cfs_waitq_add(&pc->pc_set->set_waitq, &set_wait);
+                cfs_waitq_forward(&set_wait, &pc->pc_waitq);
                 l_wait_event(pc->pc_waitq, ptlrpcd_check(pc), &lwi);
-                remove_wait_queue(&pc->pc_set->set_waitq, &set_wait);
+                cfs_waitq_del(&pc->pc_set->set_waitq, &set_wait);
 
                 if (test_bit(LIOD_STOP, &pc->pc_flags))
                         break;
@@ -218,13 +202,14 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
         int rc;
 
+        ENTRY;
         memset(pc, 0, sizeof(*pc));
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
-        init_waitqueue_head(&pc->pc_waitq);
+        cfs_waitq_init(&pc->pc_waitq);
         pc->pc_flags = 0;
         spin_lock_init(&pc->pc_lock);
-        INIT_LIST_HEAD(&pc->pc_req_list);
+        CFS_INIT_LIST_HEAD(&pc->pc_req_list);
         snprintf (pc->pc_name, sizeof (pc->pc_name), name);
 
         pc->pc_set = ptlrpc_prep_set();
@@ -232,7 +217,7 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
                 RETURN(-ENOMEM);
 
 #ifdef __KERNEL__
-        rc = kernel_thread(ptlrpcd, pc, 0);
+        rc = cfs_kernel_thread(ptlrpcd, pc, 0);
         if (rc < 0)  {
                 ptlrpc_set_destroy(pc->pc_set);
                 RETURN(rc);
@@ -250,7 +235,7 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 static void ptlrpcd_stop(struct ptlrpcd_ctl *pc)
 {
         set_bit(LIOD_STOP, &pc->pc_flags);
-        wake_up(&pc->pc_waitq);
+        cfs_waitq_signal(&pc->pc_waitq);
 #ifdef __KERNEL__
         wait_for_completion(&pc->pc_finishing);
 #else
@@ -264,7 +249,7 @@ int ptlrpcd_addref(void)
         int rc = 0;
         ENTRY;
 
-        down(&ptlrpcd_sem);
+        mutex_down(&ptlrpcd_sem);
         if (++ptlrpcd_users != 1)
                 GOTO(out, rc);
 
@@ -281,16 +266,16 @@ int ptlrpcd_addref(void)
                 GOTO(out, rc);
         }
 out:
-        up(&ptlrpcd_sem);
+        mutex_up(&ptlrpcd_sem);
         RETURN(rc);
 }
 
 void ptlrpcd_decref(void)
 {
-        down(&ptlrpcd_sem);
+        mutex_down(&ptlrpcd_sem);
         if (--ptlrpcd_users == 0) {
                 ptlrpcd_stop(&ptlrpcd_pc);
                 ptlrpcd_stop(&ptlrpcd_recovery_pc);
         }
-        up(&ptlrpcd_sem);
+        mutex_up(&ptlrpcd_sem);
 }

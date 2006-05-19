@@ -28,15 +28,15 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #ifdef __KERNEL__
-# include <linux/module.h>
+# include <libcfs/libcfs.h>
 #else
 # include <liblustre.h>
 #endif
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_ver.h>
-#include <linux/lustre_net.h>
+#include <obd.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lustre_net.h>
+#include <lustre_ver.h>
 
 /* @priority: if non-zero, move the selected to the list head
  * @create: if zero, only search in existed connections
@@ -186,7 +186,7 @@ out:
  * 2 - server UUID
  * 3 - inactive-on-startup
  */
-int client_obd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg)
+int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 {
         struct client_obd *cli = &obddev->u.cli;
         struct obd_import *imp;
@@ -249,11 +249,11 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg)
         cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
         if (cli->cl_dirty_max >> PAGE_SHIFT > num_physpages / 8)
                 cli->cl_dirty_max = num_physpages << (PAGE_SHIFT - 3);
-        INIT_LIST_HEAD(&cli->cl_cache_waiters);
-        INIT_LIST_HEAD(&cli->cl_loi_ready_list);
-        INIT_LIST_HEAD(&cli->cl_loi_write_list);
-        INIT_LIST_HEAD(&cli->cl_loi_read_list);
-        spin_lock_init(&cli->cl_loi_list_lock);
+        CFS_INIT_LIST_HEAD(&cli->cl_cache_waiters);
+        CFS_INIT_LIST_HEAD(&cli->cl_loi_ready_list);
+        CFS_INIT_LIST_HEAD(&cli->cl_loi_write_list);
+        CFS_INIT_LIST_HEAD(&cli->cl_loi_read_list);
+        client_obd_list_lock_init(&cli->cl_loi_list_lock);
         cli->cl_r_in_flight = 0;
         cli->cl_w_in_flight = 0;
 
@@ -293,7 +293,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg)
         imp->imp_connect_op = connect_op;
         imp->imp_initial_recov = 1;
         imp->imp_initial_recov_bk = 0;
-        INIT_LIST_HEAD(&imp->imp_pinger_chain);
+        CFS_INIT_LIST_HEAD(&imp->imp_pinger_chain);
         memcpy(cli->cl_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
                LUSTRE_CFG_BUFLEN(lcfg, 1));
         class_import_put(imp);
@@ -334,6 +334,7 @@ err:
 
 int client_obd_cleanup(struct obd_device *obddev)
 {
+        ENTRY;
         ldlm_put_ref(obddev->obd_force);
 
         RETURN(0);
@@ -351,7 +352,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         int rc;
         ENTRY;
 
-        down(&cli->cl_sem);
+        mutex_down(&cli->cl_sem);
         rc = class_connect(dlm_handle, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
@@ -410,7 +411,7 @@ out_disco:
                 class_export_put(exp);
         }
 out_sem:
-        up(&cli->cl_sem);
+        mutex_up(&cli->cl_sem);
         return rc;
 }
 
@@ -431,7 +432,7 @@ int client_disconnect_export(struct obd_export *exp)
         cli = &obd->u.cli;
         imp = cli->cl_import;
 
-        down(&cli->cl_sem);
+        mutex_down(&cli->cl_sem);
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
                        obd->obd_name);
@@ -471,7 +472,7 @@ int client_disconnect_export(struct obd_export *exp)
         if (!rc && err)
                 rc = err;
  out_sem:
-        up(&cli->cl_sem);
+        mutex_up(&cli->cl_sem);
         RETURN(rc);
 }
 
@@ -482,6 +483,7 @@ int client_disconnect_export(struct obd_export *exp)
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                             struct obd_uuid *cluuid)
 {
+        ENTRY;
         if (exp->exp_connection && exp->exp_imp_reverse) {
                 struct lustre_handle *hdl;
                 hdl = &exp->exp_imp_reverse->imp_remote_handle;
@@ -691,7 +693,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                                target->obd_name,
                                libcfs_nid2str(req->rq_peer.nid), cluuid.uuid,
                                target->obd_recoverable_clients,
-                               (target->obd_recovery_timer.expires-jiffies)/HZ);
+                               cfs_duration_sec(cfs_time_sub(cfs_timer_deadline(&target->obd_recovery_timer),
+                                                             cfs_time_current())));
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
@@ -923,6 +926,7 @@ void target_abort_recovery(void *data)
 {
         struct obd_device *obd = data;
 
+        ENTRY;
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -942,6 +946,7 @@ void target_abort_recovery(void *data)
         target_finish_recovery(obd);
 
         ptlrpc_run_recovery_over_upcall(obd);
+        EXIT;
 }
 
 static void target_recovery_expired(unsigned long castmeharder)
@@ -951,7 +956,7 @@ static void target_recovery_expired(unsigned long castmeharder)
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering)
                 obd->obd_abort_recovery = 1;
-        wake_up(&obd->obd_next_transno_waitq);
+        cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 }
 
@@ -960,7 +965,7 @@ static void target_recovery_expired(unsigned long castmeharder)
 void target_cancel_recovery_timer(struct obd_device *obd)
 {
         CDEBUG(D_HA, "%s: cancel recovery timer\n", obd->obd_name);
-        del_timer(&obd->obd_recovery_timer);
+        cfs_timer_disarm(&obd->obd_recovery_timer);
 }
 
 static void reset_recovery_timer(struct obd_device *obd)
@@ -970,12 +975,13 @@ static void reset_recovery_timer(struct obd_device *obd)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
+        cfs_timer_arm(&obd->obd_recovery_timer, 
+                      cfs_time_shift(OBD_RECOVERY_TIMEOUT));
         spin_unlock_bh(&obd->obd_processing_task_lock);
         CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,
-               (int)(OBD_RECOVERY_TIMEOUT / HZ));
+               OBD_RECOVERY_TIMEOUT);
         /* Only used for lprocfs_status */
-        obd->obd_recovery_end = CURRENT_SECONDS + OBD_RECOVERY_TIMEOUT/HZ;
+        obd->obd_recovery_end = CURRENT_SECONDS + OBD_RECOVERY_TIMEOUT;
 }
 
 
@@ -988,10 +994,9 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler)
                 return;
         }
         CWARN("%s: starting recovery timer (%us)\n", obd->obd_name,
-              (int)(OBD_RECOVERY_TIMEOUT / HZ));
+              OBD_RECOVERY_TIMEOUT);
         obd->obd_recovery_handler = handler;
-        obd->obd_recovery_timer.function = target_recovery_expired;
-        obd->obd_recovery_timer.data = (unsigned long)obd;
+        cfs_timer_init(&obd->obd_recovery_timer, target_recovery_expired, obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         reset_recovery_timer(obd);
@@ -1047,7 +1052,7 @@ static void process_recovery_queue(struct obd_device *obd)
 
         for (;;) {
                 spin_lock_bh(&obd->obd_processing_task_lock);
-                LASSERT(obd->obd_processing_task == current->pid);
+                LASSERT(obd->obd_processing_task == cfs_curproc_pid());
                 req = list_entry(obd->obd_recovery_queue.next,
                                  struct ptlrpc_request, rq_list);
 
@@ -1111,7 +1116,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
          * buffers (eg mds_body, ost_body etc) have NOT been swabbed. */
 
         if (!transno) {
-                INIT_LIST_HEAD(&req->rq_list);
+                CFS_INIT_LIST_HEAD(&req->rq_list);
                 DEBUG_REQ(D_HA, req, "not queueing");
                 return 1;
         }
@@ -1137,7 +1142,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
          * Also, a resent, replayed request that has already been
          * handled will pass through here and be processed immediately.
          */
-        if (obd->obd_processing_task == current->pid ||
+        if (obd->obd_processing_task == cfs_curproc_pid() ||
             transno < obd->obd_next_recovery_transno) {
                 /* Processing the queue right now, don't re-add. */
                 LASSERT(list_empty(&req->rq_list));
@@ -1163,7 +1168,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         req = saved_req;
         req->rq_reqmsg = reqmsg;
         class_export_get(req->rq_export);
-        INIT_LIST_HEAD(&req->rq_list);
+        CFS_INIT_LIST_HEAD(&req->rq_list);
 
         /* XXX O(n^2) */
         list_for_each(tmp, &obd->obd_recovery_queue) {
@@ -1187,7 +1192,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 /* Someone else is processing this queue, we'll leave it to
                  * them.
                  */
-                wake_up(&obd->obd_next_transno_waitq);
+                cfs_waitq_signal(&obd->obd_next_transno_waitq);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return 0;
         }
@@ -1195,7 +1200,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         /* Nobody is processing, and we know there's (at least) one to process
          * now, so we'll do the honours.
          */
-        obd->obd_processing_task = current->pid;
+        obd->obd_processing_task = cfs_curproc_pid();
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         process_recovery_queue(obd);
@@ -1272,7 +1277,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         } else {
                 CWARN("%s: %d recoverable clients remain\n",
                        obd->obd_name, obd->obd_recoverable_clients);
-                wake_up(&obd->obd_next_transno_waitq);
+                cfs_waitq_signal(&obd->obd_next_transno_waitq);
         }
 
         return 1;
@@ -1376,7 +1381,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
             list_empty(&rs->rs_exp_list) ||     /* completed already */
             list_empty(&rs->rs_obd_list)) {
                 list_add_tail (&rs->rs_list, &svc->srv_reply_queue);
-                wake_up (&svc->srv_waitq);
+                cfs_waitq_signal (&svc->srv_waitq);
         } else {
                 list_add (&rs->rs_list, &svc->srv_active_replies);
                 rs->rs_scheduled = 0;           /* allow notifier to schedule */

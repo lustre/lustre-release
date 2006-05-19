@@ -31,15 +31,15 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/fs.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/lustre_ucache.h>
+#include <obd_support.h>
+#include <obd_class.h>
+#include <obd.h>
+#include <lustre_lib.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_mds.h>
+#include <lustre_dlm.h>
+#include <lustre_fsfilt.h>
+#include <lustre_ucache.h>
 
 #include "mds_internal.h"
 
@@ -199,6 +199,10 @@ out_ucred:
         return rc;
 }
 
+/*
+ * alwasy return 0, and set req->rq_status as error number in case
+ * of failures.
+ */
 static
 int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 {
@@ -225,6 +229,30 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         lockpart = MDS_INODELOCK_UPDATE;
 
+        /* various sanity check for xattr name */
+        xattr_name = lustre_msg_string(req->rq_reqmsg, 1, 0);
+        if (!xattr_name) {
+                CERROR("can't extract xattr name\n");
+                GOTO(out, rc = -EPROTO);
+        }
+
+        DEBUG_REQ(D_INODE, req, "%sxattr %s\n",
+                  body->valid & OBD_MD_FLXATTR ? "set" : "remove",
+                  xattr_name);
+
+        if (strncmp(xattr_name, "trusted.", 8) == 0) {
+                if (strcmp(xattr_name + 8, XATTR_LUSTRE_MDS_LOV_EA) == 0)
+                        GOTO(out, rc = -EACCES);
+        }
+
+        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
+            (strncmp(xattr_name, "user.", 5) == 0)) {
+                GOTO(out, rc = -EOPNOTSUPP);
+        }
+
+        if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
+                lockpart |= MDS_INODELOCK_LOOKUP;
+
         de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX,
                                    &lockh, lockpart);
         if (IS_ERR(de))
@@ -234,26 +262,6 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         LASSERT(inode);
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
-
-        xattr_name = lustre_msg_string(req->rq_reqmsg, 1, 0);
-        if (!xattr_name) {
-                CERROR("can't extract xattr name\n");
-                GOTO(out_dput, rc = -EPROTO);
-        }
-
-        DEBUG_REQ(D_INODE, req, "%sxattr %s\n",
-                  body->valid & OBD_MD_FLXATTR ? "set" : "remove",
-                  xattr_name);
-
-        if (strncmp(xattr_name, "trusted.", 8) == 0) {
-                if (strcmp(xattr_name + 8, XATTR_LUSTRE_MDS_LOV_EA) == 0)
-                        GOTO(out_dput, rc = -EACCES);
-        }
-
-        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
-            (strncmp(xattr_name, "user.", 5) == 0)) {
-                GOTO(out_dput, rc = -EOPNOTSUPP);
-        }
 
         /* filter_op simply use setattr one */
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);

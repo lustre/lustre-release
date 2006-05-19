@@ -34,10 +34,9 @@
 
 #include <linux/seq_file.h>
 #include <linux/module.h>
-#include <linux/obd_support.h>
-#include <linux/lustre_disk.h>
-
-#include <linux/lu_object.h>
+#include <obd_support.h>
+#include <lustre_disk.h>
+#include <lu_object.h>
 #include <libcfs/list.h>
 
 static void lu_object_free(struct lu_context *ctx, struct lu_object *o);

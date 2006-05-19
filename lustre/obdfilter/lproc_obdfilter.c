@@ -25,8 +25,8 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/version.h>
-#include <linux/lprocfs_status.h>
-#include <linux/obd.h>
+#include <lprocfs_status.h>
+#include <obd.h>
 #include <linux/seq_file.h>
 #include <linux/version.h>
 

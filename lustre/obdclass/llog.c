@@ -35,14 +35,12 @@
 #define EXPORT_SYMTAB
 #endif
 
-#ifdef __KERNEL__
-#include <linux/fs.h>
-#else
+#ifndef __KERNEL__
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_log.h>
+#include <obd_class.h>
+#include <lustre_log.h>
 #include <libcfs/list.h>
 
 /* Allocate a new log or catalog handle */
@@ -170,10 +168,10 @@ int llog_init_handle(struct llog_handle *handle, int flags,
 
 out:
         if (flags & LLOG_F_IS_CAT) {
-                INIT_LIST_HEAD(&handle->u.chd.chd_head);
+                CFS_INIT_LIST_HEAD(&handle->u.chd.chd_head);
                 llh->llh_size = sizeof(struct llog_logid_rec);
         } else if (flags & LLOG_F_IS_PLAIN) {
-                INIT_LIST_HEAD(&handle->u.phd.phd_entry);
+                CFS_INIT_LIST_HEAD(&handle->u.phd.phd_entry);
         } else {
                 CERROR("Unknown flags: %#x (Expected %#x or %#x\n",
                        flags, LLOG_F_IS_CAT, LLOG_F_IS_PLAIN);

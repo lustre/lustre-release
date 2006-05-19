@@ -28,9 +28,9 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
 #endif
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs_status.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <lprocfs_status.h>
 #include "mds_internal.h"
 
 #ifdef LPROCFS
@@ -52,6 +52,7 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         struct obd_device *obd = data;
         struct mds_obd *mds = &obd->u.mds;
         char tmpbuf[sizeof(struct obd_uuid)];
+        struct ptlrpc_request_set *set;
         int rc;
 
         sscanf(buffer, "%40s", tmpbuf);
@@ -59,14 +60,25 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         if (strncmp(tmpbuf, "nid:", 4) != 0)
                 return lprocfs_wr_evict_client(file, buffer, count, data);
 
-        obd_export_evict_by_nid(obd, tmpbuf+4);
+        set = ptlrpc_prep_set();
+        if (!set)
+                return -ENOMEM;
 
-        rc = obd_set_info(mds->mds_osc_exp, strlen("evict_by_nid"),
-                          "evict_by_nid", strlen(tmpbuf + 4) + 1, tmpbuf + 4);
+        rc = obd_set_info_async(mds->mds_osc_exp, strlen("evict_by_nid"),
+                                "evict_by_nid", strlen(tmpbuf + 4) + 1,
+                                 tmpbuf + 4, set);
         if (rc)
                 CERROR("Failed to evict nid %s from OSTs: rc %d\n", tmpbuf + 4,
                        rc);
 
+        ptlrpc_check_set(set);
+
+        obd_export_evict_by_nid(obd, tmpbuf+4);
+        rc = ptlrpc_set_wait(set);
+        if (rc)
+                CERROR("Failed to evict nid %s from OSTs: rc %d\n", tmpbuf + 4,
+                       rc);
+        ptlrpc_set_destroy(set);
         return count;
 }
 

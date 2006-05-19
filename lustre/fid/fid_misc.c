@@ -27,10 +27,10 @@
  */
 
 #include <linux/module.h>
+#include <lustre/lustre_idl.h>
 
-#include <linux/obd.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_fid.h>
+#include <obd.h>
+#include <lustre_fid.h>
 
 void fid_to_le(struct lu_fid *dst, const struct lu_fid *src)
 {

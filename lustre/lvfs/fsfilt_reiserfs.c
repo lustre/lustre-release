@@ -42,9 +42,9 @@
 #include <asm/statfs.h>
 #endif
 #include <libcfs/kp30.h>
-#include <linux/lustre_fsfilt.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
+#include <lustre_fsfilt.h>
+#include <obd.h>
+#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 

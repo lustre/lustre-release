@@ -36,13 +36,14 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
-#include <linux/lustre_mdc.h>
-#include <linux/md_object.h>
-#include <linux/lustre_acl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lprocfs_status.h>
+#include <obd_class.h>
+#include <lustre_dlm.h>
+#include <lustre_mds.h> /* for LUSTRE_POSIX_ACL_MAX_SIZE */
+#include <md_object.h>
+#include <lprocfs_status.h>
 #include "mdc_internal.h"
+
+static quota_interface_t *quota_interface;
 
 #define REQUEST_MINOR 244
 
@@ -662,6 +663,9 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         EXIT;
         *request = req;
  out:
+        if (rc != 0 && req && req->rq_commit_cb)
+                req->rq_commit_cb(req);
+
         return rc;
 }
 
@@ -806,8 +810,9 @@ out:
         return rc;
 }
 
-int mdc_set_info(struct obd_export *exp, obd_count keylen,
-                 void *key, obd_count vallen, void *val)
+int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
+                       void *key, obd_count vallen, void *val,
+                       struct ptlrpc_request_set *set)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
         int rc = -EINVAL;
@@ -853,8 +858,14 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                         RETURN(-ENOMEM);
 
                 req->rq_replen = lustre_msg_size(0, NULL);
-                rc = ptlrpc_queue_wait(req);
-                ptlrpc_req_finished(req);
+                if (set) {
+                        rc = 0;
+                        ptlrpc_set_add_req(set, req);
+                        ptlrpc_check_set(set);
+                } else {
+                        rc = ptlrpc_queue_wait(req);
+                        ptlrpc_req_finished(req);
+                }
                 RETURN(rc);
         }
         RETURN(rc);
@@ -892,7 +903,7 @@ out_req:
 }
 
 static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      unsigned long max_age)
+                      cfs_time_t max_age)
 {
         struct ptlrpc_request *req;
         struct obd_statfs *msfs;
@@ -1243,7 +1254,7 @@ struct obd_ops mdc_obd_ops = {
         .o_connect          = client_connect_import,
         .o_disconnect       = client_disconnect_export,
         .o_iocontrol        = mdc_iocontrol,
-        .o_set_info         = mdc_set_info,
+        .o_set_info_async   = mdc_set_info_async,
         .o_statfs           = mdc_statfs,
         .o_pin              = mdc_pin,
         .o_unpin            = mdc_unpin,
@@ -1279,7 +1290,6 @@ struct md_ops mdc_md_ops = {
         .m_clear_open_replay_data = mdc_clear_open_replay_data
 };
 
-static quota_interface_t *quota_interface;
 extern quota_interface_t mdc_quota_interface;
 
 int __init mdc_init(void)
