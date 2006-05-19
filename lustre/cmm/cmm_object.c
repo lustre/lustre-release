@@ -67,7 +67,7 @@ static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
         RETURN(next);
 }
 
-struct lu_object *cmm_object_alloc(struct lu_context *ctx,
+struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                                    struct lu_device *ld)
 {
         struct cmm_object *co;
@@ -87,14 +87,14 @@ struct lu_object *cmm_object_alloc(struct lu_context *ctx,
         RETURN(lo);
 }
 
-void cmm_object_free(struct lu_context *ctx, struct lu_object *lo)
+void cmm_object_free(const struct lu_context *ctx, struct lu_object *lo)
 {
         struct cmm_object *co = lu2cmm_obj(lo);
         lu_object_fini(lo);
-        OBD_FREE_PTR(co);        
+        OBD_FREE_PTR(co);
 }
 
-int cmm_object_init(struct lu_context *ctx, struct lu_object *lo)
+int cmm_object_init(const struct lu_context *ctx, struct lu_object *lo)
 {
         struct cmm_device *cd = lu2cmm_dev(lo->lo_dev);
         struct lu_device  *c_dev;
@@ -125,12 +125,12 @@ int cmm_object_init(struct lu_context *ctx, struct lu_object *lo)
         RETURN(rc);
 }
 
-static int cmm_object_exists(struct lu_context *ctx, struct lu_object *lo)
+static int cmm_object_exists(const struct lu_context *ctx, struct lu_object *lo)
 {
         return lu_object_exists(ctx, lu_object_next(lo));
 }
 
-static int cmm_object_print(struct lu_context *ctx,
+static int cmm_object_print(const struct lu_context *ctx,
                             struct seq_file *f, const struct lu_object *lo)
 {
 	return seq_printf(f, LUSTRE_CMM0_NAME"-object@%p", lo);
@@ -143,7 +143,7 @@ static struct lu_object_operations cmm_obj_ops = {
 };
 
 /* md_object operations */
-static int cmm_object_create(struct lu_context *ctx, struct md_object *mo,
+static int cmm_object_create(const struct lu_context *ctx, struct md_object *mo,
                              struct lu_attr *attr)
 {
         struct md_object  *ch = cmm2child_obj(md2cmm_obj(mo));
@@ -158,18 +158,18 @@ static int cmm_object_create(struct lu_context *ctx, struct md_object *mo,
         RETURN(rc);
 }
 
-static int cmm_attr_get(struct lu_context *ctx, struct md_object *mo,
+static int cmm_attr_get(const struct lu_context *ctx, struct md_object *mo,
                         struct lu_attr *attr)
 {
         struct md_object *ch = cmm2child_obj(md2cmm_obj(mo));
         int rc;
 
         ENTRY;
-        
+
         LASSERT (cmm_is_local_obj(md2cmm_obj(mo)));
-        
+
         rc = mo_attr_get(ctx, ch, attr);
-        
+
         RETURN(rc);
 }
 
@@ -178,23 +178,23 @@ static struct md_object_operations cmm_mo_ops = {
         .moo_object_create = cmm_object_create,
 };
 
-static int cmm_lookup(struct lu_context *ctx, struct md_object *mo_p,
+static int cmm_lookup(const struct lu_context *ctx, struct md_object *mo_p,
                       const char *name, struct lu_fid *lf)
 {
         struct md_object *ch_p = cmm2child_obj(md2cmm_obj(mo_p));
         int rc;
 
         ENTRY;
-       
+
         LASSERT(cmm_is_local_obj(md2cmm_obj(mo_p)));
 
         rc = mdo_lookup(ctx, ch_p, name, lf);
 
         RETURN(rc);
-        
+
 }
 
-static int cmm_mkdir(struct lu_context *ctx, struct lu_attr *attr,
+static int cmm_mkdir(const struct lu_context *ctx, struct lu_attr *attr,
                      struct md_object *mo_p, const char *name,
                      struct md_object *mo_c)
 {

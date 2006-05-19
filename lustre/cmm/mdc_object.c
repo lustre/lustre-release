@@ -42,7 +42,7 @@ static struct md_object_operations mdc_mo_ops;
 static struct md_dir_operations mdc_dir_ops;
 static struct lu_object_operations mdc_obj_ops;
 
-struct lu_object *mdc_object_alloc(struct lu_context *ctx,
+struct lu_object *mdc_object_alloc(const struct lu_context *ctx,
                                    struct lu_device *ld)
 {
 	struct mdc_object *mco;
@@ -62,7 +62,7 @@ struct lu_object *mdc_object_alloc(struct lu_context *ctx,
 		RETURN(NULL);
 }
 
-int mdc_object_init(struct lu_context *ctx, struct lu_object *lo)
+int mdc_object_init(const struct lu_context *ctx, struct lu_object *lo)
 {
 	//struct mdc_device *d = lu2mdc_dev(o->lo_dev);
 	//struct lu_device  *under;
@@ -73,31 +73,31 @@ int mdc_object_init(struct lu_context *ctx, struct lu_object *lo)
         RETURN(0);
 }
 
-void mdc_object_free(struct lu_context *ctx, struct lu_object *lo)
+void mdc_object_free(const struct lu_context *ctx, struct lu_object *lo)
 {
         struct mdc_object *mco = lu2mdc_obj(lo);
 	lu_object_fini(lo);
         OBD_FREE_PTR(mco);
 }
 
-void mdc_object_release(struct lu_context *ctx, struct lu_object *lo)
+void mdc_object_release(const struct lu_context *ctx, struct lu_object *lo)
 {
         return;
 }
 
-static int mdc_object_exists(struct lu_context *ctx, struct lu_object *lo)
+static int mdc_object_exists(const struct lu_context *ctx, struct lu_object *lo)
 {
         return 0;
 }
 
-static int mdc_object_print(struct lu_context *ctx,
+static int mdc_object_print(const struct lu_context *ctx,
                             struct seq_file *f, const struct lu_object *lo)
 {
 	return seq_printf(f, LUSTRE_MDC0_NAME"-object@%p", lo);
 }
 
-static int mdc_object_create(struct lu_context *ctx, struct md_object *mo,
-                             struct lu_attr *attr)
+static int mdc_object_create(const struct lu_context *ctx,
+                             struct md_object *mo, struct lu_attr *attr)
 {
         struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
         struct obd_export *exp = mc->mc_desc.cl_exp;
@@ -111,7 +111,7 @@ static int mdc_object_create(struct lu_context *ctx, struct md_object *mo,
         };
         int rc;
 
-        
+
 #if 0
         req = ptlrpc_prep_req(mc->mc_desc.cl_import, LUSTRE_MDS_VERSION,
                               MDS_REINT, 1, &size, NULL);

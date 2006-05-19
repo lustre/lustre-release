@@ -47,7 +47,7 @@ void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb)
 }
 EXPORT_SYMBOL(dt_txn_callback_del);
 
-int dt_txn_hook_start(struct lu_context *ctx,
+int dt_txn_hook_start(const struct lu_context *ctx,
                       struct dt_device *dev, struct txn_param *param)
 {
         int result;
@@ -65,7 +65,7 @@ int dt_txn_hook_start(struct lu_context *ctx,
 }
 EXPORT_SYMBOL(dt_txn_hook_start);
 
-int dt_txn_hook_stop(struct lu_context *ctx,
+int dt_txn_hook_stop(const struct lu_context *ctx,
                      struct dt_device *dev, struct thandle *txn)
 {
         int result;
@@ -83,7 +83,7 @@ int dt_txn_hook_stop(struct lu_context *ctx,
 }
 EXPORT_SYMBOL(dt_txn_hook_stop);
 
-int dt_txn_hook_commit(struct lu_context *ctx,
+int dt_txn_hook_commit(const struct lu_context *ctx,
                        struct dt_device *dev, struct thandle *txn)
 {
         int result;

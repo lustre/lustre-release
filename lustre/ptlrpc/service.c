@@ -988,8 +988,11 @@ static int ptlrpc_main(void *arg)
                  * requests */
                 if (!list_empty (&svc->srv_request_queue) &&
                     (svc->srv_n_difficult_replies == 0 ||
-                     svc->srv_n_active_reqs < (svc->srv_nthreads - 1)))
+                     svc->srv_n_active_reqs < (svc->srv_nthreads - 1))) {
+                        lu_context_enter(&ctx);
                         ptlrpc_server_handle_request(svc, thread);
+                        lu_context_exit(&ctx);
+                }
 
                 if (!list_empty(&svc->srv_idle_rqbds) &&
                     ptlrpc_server_post_idle_rqbds(svc) < 0) {

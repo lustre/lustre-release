@@ -63,7 +63,7 @@ struct iam_descr fld_param = {
 #endif
 };
 
-int fld_handle_insert(struct lu_context *ctx, struct fld *fld,
+int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
                       fidseq_t seq_num, mdsno_t mdsno)
 {
         /*
@@ -80,7 +80,7 @@ int fld_handle_insert(struct lu_context *ctx, struct fld *fld,
 #endif
 }
 
-int fld_handle_delete(struct lu_context *ctx, struct fld *fld,
+int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
                       fidseq_t seq_num, mdsno_t mds_num)
 {
 #if 0
@@ -93,7 +93,7 @@ int fld_handle_delete(struct lu_context *ctx, struct fld *fld,
 #endif
 }
 
-int fld_handle_lookup(struct lu_context *ctx,
+int fld_handle_lookup(const struct lu_context *ctx,
                       struct fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
 {
 #if 0

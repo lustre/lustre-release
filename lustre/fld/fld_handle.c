@@ -44,7 +44,7 @@
 #include <lustre_fid.h>
 #include "fld_internal.h"
 
-static int fld_handle(struct lu_context *ctx,
+static int fld_handle(const struct lu_context *ctx,
                       struct fld *fld, __u32 opts, struct md_fld *mf);
 
 /*XXX maybe these 2 items should go to sbi*/
@@ -284,7 +284,7 @@ static void __exit fld_mod_exit(void)
 
 struct fld_list fld_list_head;
 
-static int fld_req_handle0(struct lu_context *ctx,
+static int fld_req_handle0(const struct lu_context *ctx,
                            struct fld *fld, struct ptlrpc_request *req)
 {
         struct md_fld *in;
@@ -320,7 +320,7 @@ static int fld_req_handle0(struct lu_context *ctx,
 static int fld_req_handle(struct ptlrpc_request *req)
 {
         int result;
-        struct lu_context *ctx;
+        const struct lu_context *ctx;
         struct lu_site    *site;
 
         ENTRY;
@@ -408,7 +408,7 @@ void fld_server_fini(struct fld *fld)
 }
 EXPORT_SYMBOL(fld_server_fini);
 
-static int fld_handle(struct lu_context *ctx,
+static int fld_handle(const struct lu_context *ctx,
                       struct fld *fld, __u32 opts, struct md_fld *mf)
 {
         int rc;

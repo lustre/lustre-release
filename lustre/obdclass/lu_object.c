@@ -39,14 +39,14 @@
 #include <lu_object.h>
 #include <libcfs/list.h>
 
-static void lu_object_free(struct lu_context *ctx, struct lu_object *o);
+static void lu_object_free(const struct lu_context *ctx, struct lu_object *o);
 
 /*
  * Decrease reference counter on object. If last reference is freed, return
  * object to the cache, unless lu_object_is_dying(o) holds. In the latter
  * case, free object immediately.
  */
-void lu_object_put(struct lu_context *ctxt, struct lu_object *o)
+void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
 {
         struct lu_object_header *top;
         struct lu_site          *site;
@@ -98,7 +98,7 @@ EXPORT_SYMBOL(lu_object_put);
  * This follows object creation protocol, described in the comment within
  * struct lu_device_operations definition.
  */
-static struct lu_object *lu_object_alloc(struct lu_context *ctxt,
+static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
                                          struct lu_site *s,
                                          const struct lu_fid *f)
 {
@@ -146,7 +146,7 @@ static struct lu_object *lu_object_alloc(struct lu_context *ctxt,
 /*
  * Free object.
  */
-static void lu_object_free(struct lu_context *ctx, struct lu_object *o)
+static void lu_object_free(const struct lu_context *ctx, struct lu_object *o)
 {
         struct list_head splice;
         struct lu_object *scan;
@@ -179,7 +179,7 @@ static void lu_object_free(struct lu_context *ctx, struct lu_object *o)
 /*
  * Free @nr objects from the cold end of the site LRU list.
  */
-void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr)
+void lu_site_purge(const struct lu_context *ctx, struct lu_site *s, int nr)
 {
         struct list_head         dispose;
         struct lu_object_header *h;
@@ -217,7 +217,7 @@ EXPORT_SYMBOL(lu_site_purge);
 /*
  * Print human readable representation of the @o to the @f.
  */
-int lu_object_print(struct lu_context *ctx,
+int lu_object_print(const struct lu_context *ctx,
                     struct seq_file *f, const struct lu_object *o)
 {
         static char ruler[] = "........................................";
@@ -279,8 +279,8 @@ static __u32 fid_hash(const struct lu_fid *f)
  * it. Otherwise, create new object, insert it into cache and return it. In
  * any case, additional reference is acquired on the returned object.
  */
-struct lu_object *lu_object_find(struct lu_context *ctxt, struct lu_site *s,
-                                 const struct lu_fid *f)
+struct lu_object *lu_object_find(const struct lu_context *ctxt,
+                                 struct lu_site *s, const struct lu_fid *f)
 {
         struct lu_object  *o;
         struct lu_object  *shadow;
@@ -584,7 +584,8 @@ EXPORT_SYMBOL(lu_context_key_degister);
 /*
  * Return value associated with key @key in context @ctx.
  */
-void *lu_context_key_get(struct lu_context *ctx, struct lu_context_key *key)
+void *lu_context_key_get(const struct lu_context *ctx,
+                         struct lu_context_key *key)
 {
         LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
         return ctx->lc_value[key->lct_index];

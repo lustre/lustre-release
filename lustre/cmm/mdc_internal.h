@@ -77,10 +77,11 @@ static inline struct mdc_device *lu2mdc_dev(struct lu_device *ld)
 	return container_of0(ld, struct mdc_device, mc_md_dev.md_lu_dev);
 }
 
-int mdc_object_init(struct lu_context *, struct lu_object*);
-struct lu_object *mdc_object_alloc(struct lu_context *, struct lu_device *);
-void mdc_object_free(struct lu_context *, struct lu_object *);
-void mdc_object_release(struct lu_context *, struct lu_object *);
+int mdc_object_init(const struct lu_context *, struct lu_object*);
+struct lu_object *mdc_object_alloc(const struct lu_context *,
+                                   struct lu_device *);
+void mdc_object_free(const struct lu_context *, struct lu_object *);
+void mdc_object_release(const struct lu_context *, struct lu_object *);
 
 #endif /* __KERNEL__ */
 #endif /* _CMM_MDC_INTERNAL_H */

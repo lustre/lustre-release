@@ -65,9 +65,9 @@
 
 #include "osd_internal.h"
 
-static int   osd_root_get      (struct lu_context *ctxt,
+static int   osd_root_get      (const struct lu_context *ctxt,
                                 struct dt_device *dev, struct lu_fid *f);
-static int   osd_statfs        (struct lu_context *ctxt,
+static int   osd_statfs        (const struct lu_context *ctxt,
                                 struct dt_device *dev, struct kstatfs *sfs);
 
 static int   lu_device_is_osd  (const struct lu_device *d);
@@ -75,33 +75,41 @@ static void  osd_mod_exit      (void) __exit;
 static int   osd_mod_init      (void) __init;
 static int   osd_type_init     (struct lu_device_type *t);
 static void  osd_type_fini     (struct lu_device_type *t);
-static int   osd_object_init   (struct lu_context *ctxt, struct lu_object *l);
-static void  osd_object_release(struct lu_context *ctxt, struct lu_object *l);
-static int   osd_object_exists (struct lu_context *ctx, struct lu_object *o);
-static int   osd_object_print  (struct lu_context *ctx,
+static int   osd_object_init   (const struct lu_context *ctxt,
+                                struct lu_object *l);
+static void  osd_object_release(const struct lu_context *ctxt,
+                                struct lu_object *l);
+static int   osd_object_exists (const struct lu_context *ctx,
+                                struct lu_object *o);
+static int   osd_object_print  (const struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
-static void  osd_device_free   (struct lu_context *ctx, struct lu_device *m);
-static void *osd_key_init      (struct lu_context *ctx);
-static void  osd_key_fini      (struct lu_context *ctx, void *data);
+static void  osd_device_free   (const struct lu_context *ctx,
+                                struct lu_device *m);
+static void *osd_key_init      (const struct lu_context *ctx);
+static void  osd_key_fini      (const struct lu_context *ctx, void *data);
 static int   osd_has_index     (struct osd_object *obj);
 static void  osd_object_init0  (struct osd_object *obj);
-static int   osd_device_init   (struct lu_context *ctx,
+static int   osd_device_init   (const struct lu_context *ctx,
                                 struct lu_device *d, struct lu_device *);
-static int   osd_fid_lookup    (struct lu_context *ctx, struct osd_object *obj,
+static int   osd_fid_lookup    (const struct lu_context *ctx,
+                                struct osd_object *obj,
                                 const struct lu_fid *fid);
-static int   osd_inode_getattr (struct lu_context *ctx,
+static int   osd_inode_getattr (const struct lu_context *ctx,
                                 struct inode *inode, struct lu_attr *attr);
 static int   osd_inode_get_fid (struct osd_device *d, const struct inode *inode,
                                 struct lu_fid *fid);
 static int   osd_param_is_sane (const struct osd_device *dev,
                                 const struct txn_param *param);
-static int   osd_index_lookup  (struct lu_context *ctxt, struct dt_object *dt,
+static int   osd_index_lookup  (const struct lu_context *ctxt,
+                                struct dt_object *dt,
                                 struct dt_rec *rec, const struct dt_key *key);
-static int   osd_index_insert  (struct lu_context *ctxt, struct dt_object *dt,
+static int   osd_index_insert  (const struct lu_context *ctxt,
+                                struct dt_object *dt,
                                 const struct dt_rec *rec,
                                 const struct dt_key *key,
                                 struct thandle *handle);
-static int   osd_index_probe   (struct lu_context *ctxt, struct dt_object *dt,
+static int   osd_index_probe   (const struct lu_context *ctxt,
+                                struct dt_object *dt,
                                 const struct dt_index_features *feat);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
@@ -110,12 +118,12 @@ static struct osd_device  *osd_dt_dev       (const struct dt_device *d);
 static struct osd_object  *osd_dt_obj       (const struct dt_object *d);
 static struct osd_device  *osd_obj2dev      (struct osd_object *o);
 static struct lu_device   *osd2lu_dev       (struct osd_device * osd);
-static struct lu_device   *osd_device_fini  (struct lu_context *ctx,
+static struct lu_device   *osd_device_fini  (const struct lu_context *ctx,
                                              struct lu_device *d);
-static struct lu_device   *osd_device_alloc (struct lu_context *ctx,
+static struct lu_device   *osd_device_alloc (const struct lu_context *ctx,
                                              struct lu_device_type *t,
                                              struct lustre_cfg *cfg);
-static struct lu_object   *osd_object_alloc (struct lu_context *ctx,
+static struct lu_object   *osd_object_alloc (const struct lu_context *ctx,
                                              struct lu_device *d);
 static struct inode       *osd_iget         (struct osd_thread_info *info,
                                              struct osd_device *dev,
@@ -143,7 +151,7 @@ struct osd_thandle {
 /*
  * DT methods.
  */
-static int osd_root_get(struct lu_context *ctx,
+static int osd_root_get(const struct lu_context *ctx,
                         struct dt_device *dev, struct lu_fid *f)
 {
         struct osd_device *d = osd_dt_dev(dev);
@@ -156,7 +164,7 @@ static int osd_root_get(struct lu_context *ctx,
  * OSD object methods.
  */
 
-static struct lu_object *osd_object_alloc(struct lu_context *ctx,
+static struct lu_object *osd_object_alloc(const struct lu_context *ctx,
                                           struct lu_device *d)
 {
         struct osd_object *mo;
@@ -185,7 +193,7 @@ static void osd_object_init0(struct osd_object *obj)
                 obj->oo_dt.do_body_ops = &osd_body_ops;
 }
 
-static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
+static int osd_object_init(const struct lu_context *ctxt, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
         int result;
@@ -198,14 +206,14 @@ static int osd_object_init(struct lu_context *ctxt, struct lu_object *l)
         return result;
 }
 
-static void osd_object_free(struct lu_context *ctx, struct lu_object *l)
+static void osd_object_free(const struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
         dt_object_fini(&obj->oo_dt);
         OBD_FREE_PTR(obj);
 }
 
-static void osd_object_delete(struct lu_context *ctx, struct lu_object *l)
+static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
 
@@ -218,7 +226,8 @@ static int osd_inode_unlinked(const struct inode *inode)
         return inode->i_nlink == !!S_ISDIR(inode->i_mode);
 }
 
-static void osd_object_release(struct lu_context *ctxt, struct lu_object *l)
+static void osd_object_release(const struct lu_context *ctxt,
+                               struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
 
@@ -226,12 +235,12 @@ static void osd_object_release(struct lu_context *ctxt, struct lu_object *l)
                 set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
-static int osd_object_exists(struct lu_context *ctx, struct lu_object *o)
+static int osd_object_exists(const struct lu_context *ctx, struct lu_object *o)
 {
         return osd_obj(o)->oo_inode != NULL;
 }
 
-static int osd_object_print(struct lu_context *ctx,
+static int osd_object_print(const struct lu_context *ctx,
                             struct seq_file *f, const struct lu_object *l)
 {
         struct osd_object  *o = osd_obj(l);
@@ -242,7 +251,7 @@ static int osd_object_print(struct lu_context *ctx,
                           o->oo_inode ? o->oo_inode->i_generation : 0);
 }
 
-static int osd_config(struct lu_context *ctx,
+static int osd_config(const struct lu_context *ctx,
                       struct dt_device *d, const char *name,
                       void *buf, int size, int mode)
 {
@@ -255,7 +264,7 @@ static int osd_config(struct lu_context *ctx,
         }
 }
 
-static int osd_statfs(struct lu_context *ctx,
+static int osd_statfs(const struct lu_context *ctx,
                       struct dt_device *d, struct kstatfs *sfs)
 {
 	struct osd_device *osd = osd_dt_dev(d);
@@ -280,7 +289,7 @@ static int osd_param_is_sane(const struct osd_device *dev,
         return param->tp_credits <= osd_journal(dev)->j_max_transaction_buffers;
 }
 
-static struct thandle *osd_trans_start(struct lu_context *ctx,
+static struct thandle *osd_trans_start(const struct lu_context *ctx,
                                        struct dt_device *d,
                                        struct txn_param *p)
 {
@@ -323,7 +332,7 @@ static struct thandle *osd_trans_start(struct lu_context *ctx,
         RETURN(th);
 }
 
-static void osd_trans_stop(struct lu_context *ctx, struct thandle *th)
+static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
 {
         int result;
         struct osd_thandle *oh;
@@ -358,7 +367,7 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_trans_stop  = osd_trans_stop,
 };
 
-static void osd_object_lock(struct lu_context *ctx, struct dt_object *dt,
+static void osd_object_lock(const struct lu_context *ctx, struct dt_object *dt,
                             enum dt_lock_mode mode)
 {
         struct osd_object *obj = osd_dt_obj(dt);
@@ -370,8 +379,8 @@ static void osd_object_lock(struct lu_context *ctx, struct dt_object *dt,
                 down_read(&obj->oo_sem);
 }
 
-static void osd_object_unlock(struct lu_context *ctx, struct dt_object *dt,
-                              enum dt_lock_mode mode)
+static void osd_object_unlock(const struct lu_context *ctx,
+                              struct dt_object *dt, enum dt_lock_mode mode)
 {
         struct osd_object *obj = osd_dt_obj(dt);
 
@@ -382,7 +391,7 @@ static void osd_object_unlock(struct lu_context *ctx, struct dt_object *dt,
                 up_read(&obj->oo_sem);
 }
 
-static int osd_attr_get(struct lu_context *ctxt, struct dt_object *dt,
+static int osd_attr_get(const struct lu_context *ctxt, struct dt_object *dt,
                         struct lu_attr *attr)
 {
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
@@ -489,7 +498,7 @@ static osd_obj_type_f osd_create_type_f(__u32 mode)
         return result;
  }
 
-static int osd_object_create(struct lu_context *ctx, struct dt_object *dt,
+static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
                              struct lu_attr *attr, struct thandle *th)
 {
         const struct lu_fid    *fid  = lu_object_fid(&dt->do_lu);
@@ -594,7 +603,7 @@ static int osd_build_fid(struct osd_device *osd,
  * XXX This is temporary solution: inode operations are used until iam is
  * ready.
  */
-static int osd_index_lookup(struct lu_context *ctxt, struct dt_object *dt,
+static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
         struct osd_object      *obj  = osd_dt_obj(dt);
@@ -687,7 +696,7 @@ static int osd_add_rec(struct osd_thread_info *info, struct osd_device *dev,
 /*
  * XXX Temporary stuff.
  */
-static int osd_index_insert(struct lu_context *ctx, struct dt_object *dt,
+static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
                             const struct dt_rec *rec, const struct dt_key *key,
                             struct thandle *handle)
 {
@@ -729,7 +738,7 @@ static int osd_index_insert(struct lu_context *ctx, struct dt_object *dt,
 
 const struct dt_index_features dt_directory_features;
 
-static int osd_index_probe(struct lu_context *ctxt, struct dt_object *dt,
+static int osd_index_probe(const struct lu_context *ctxt, struct dt_object *dt,
                            const struct dt_index_features *feat)
 {
         struct osd_object *obj = osd_dt_obj(dt);
@@ -764,7 +773,7 @@ static struct lu_context_key osd_key = {
         .lct_fini = osd_key_fini
 };
 
-static void *osd_key_init(struct lu_context *ctx)
+static void *osd_key_init(const struct lu_context *ctx)
 {
         struct osd_thread_info *info;
 
@@ -774,19 +783,19 @@ static void *osd_key_init(struct lu_context *ctx)
         return info;
 }
 
-static void osd_key_fini(struct lu_context *ctx, void *data)
+static void osd_key_fini(const struct lu_context *ctx, void *data)
 {
         struct osd_thread_info *info = data;
         OBD_FREE_PTR(info);
 }
 
-static int osd_device_init(struct lu_context *ctx,
+static int osd_device_init(const struct lu_context *ctx,
                            struct lu_device *d, struct lu_device *next)
 {
         return 0;
 }
 
-static int osd_mount(struct lu_context *ctx,
+static int osd_mount(const struct lu_context *ctx,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
         struct lustre_mount_info *lmi;
@@ -844,7 +853,7 @@ static int osd_mount(struct lu_context *ctx,
         RETURN(result);
 }
 
-static struct lu_device *osd_device_fini(struct lu_context *ctx,
+static struct lu_device *osd_device_fini(const struct lu_context *ctx,
                                          struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
@@ -863,7 +872,7 @@ static struct lu_device *osd_device_fini(struct lu_context *ctx,
 	RETURN(NULL);
 }
 
-static struct lu_device *osd_device_alloc(struct lu_context *ctx,
+static struct lu_device *osd_device_alloc(const struct lu_context *ctx,
                                           struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
 {
@@ -886,7 +895,7 @@ static struct lu_device *osd_device_alloc(struct lu_context *ctx,
         return l;
 }
 
-static void osd_device_free(struct lu_context *ctx, struct lu_device *d)
+static void osd_device_free(const struct lu_context *ctx, struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
 
@@ -894,7 +903,7 @@ static void osd_device_free(struct lu_context *ctx, struct lu_device *d)
         OBD_FREE_PTR(o);
 }
 
-static int osd_process_config(struct lu_context *ctx,
+static int osd_process_config(const struct lu_context *ctx,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct osd_device *o = osd_dev(d);
@@ -1001,7 +1010,7 @@ static struct inode *osd_iget(struct osd_thread_info *info,
 
 }
 
-static int osd_fid_lookup(struct lu_context *ctx,
+static int osd_fid_lookup(const struct lu_context *ctx,
                           struct osd_object *obj, const struct lu_fid *fid)
 {
         struct osd_thread_info *info;
@@ -1038,7 +1047,7 @@ static int osd_fid_lookup(struct lu_context *ctx,
         RETURN(result);
 }
 
-static int osd_inode_getattr(struct lu_context *ctx,
+static int osd_inode_getattr(const struct lu_context *ctx,
                              struct inode *inode, struct lu_attr *attr)
 {
         //attr->la_atime      = inode->i_atime;

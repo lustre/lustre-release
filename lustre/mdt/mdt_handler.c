@@ -495,7 +495,7 @@ static struct mdt_object *mdt_obj(struct lu_object *o)
         return container_of0(o, struct mdt_object, mot_obj.mo_lu);
 }
 
-struct mdt_object *mdt_object_find(struct lu_context *ctxt,
+struct mdt_object *mdt_object_find(const struct lu_context *ctxt,
                                    struct mdt_device *d,
                                    struct lu_fid *f)
 {
@@ -508,7 +508,7 @@ struct mdt_object *mdt_object_find(struct lu_context *ctxt,
                 return mdt_obj(o);
 }
 
-void mdt_object_put(struct lu_context *ctxt, struct mdt_object *o)
+void mdt_object_put(const struct lu_context *ctxt, struct mdt_object *o)
 {
         lu_object_put(ctxt, &o->mot_obj.mo_lu);
 }
@@ -541,7 +541,7 @@ void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o,
         }
 }
 
-struct mdt_object *mdt_object_find_lock(struct lu_context *ctxt,
+struct mdt_object *mdt_object_find_lock(const struct lu_context *ctxt,
                                         struct mdt_device *d,
                                         struct lu_fid *f,
                                         struct mdt_lock_handle *lh,
@@ -665,7 +665,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         req_capsule_init(&info->mti_pill, req, RCL_SERVER);
         if (flags & HABEO_CORPUS) {
                 struct mdt_body   *body;
-                struct lu_context *ctx;
+                const struct lu_context *ctx;
                 struct mdt_object *obj;
 
                 ctx = info->mti_ctxt;
@@ -763,14 +763,12 @@ static void mdt_thread_info_init(struct mdt_thread_info *info)
         info->mti_rep_buf_nr = i;
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
-        lu_context_enter(info->mti_ctxt);
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
 {
         int i;
 
-        lu_context_exit(info->mti_ctxt);
         if (info->mti_object != NULL) {
                 mdt_object_put(info->mti_ctxt, info->mti_object);
                 info->mti_object = NULL;
@@ -1081,7 +1079,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                                                    lustre_swab_mdt_body);
         if (body != NULL) {
                 struct mdt_object *obj;
-                struct lu_context *ctx = info->mti_ctxt;
+                const struct lu_context *ctx = info->mti_ctxt;
 
                 obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
                 if (!IS_ERR(obj)) {
@@ -1146,7 +1144,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         RETURN(ELDLM_OK);
 }
 
-static int mdt_config(struct lu_context *ctx, struct mdt_device *m,
+static int mdt_config(const struct lu_context *ctx, struct mdt_device *m,
                       const char *name, void *buf, int size, int mode)
 {
         struct md_device *child = m->mdt_child;
@@ -1154,8 +1152,8 @@ static int mdt_config(struct lu_context *ctx, struct mdt_device *m,
         RETURN(child->md_ops->mdo_config(ctx, child, name, buf, size, mode));
 }
 
-static int mdt_seq_mgr_hpr(struct lu_context *ctx, void *opaque, __u64 *seq,
-                           int mode)
+static int mdt_seq_mgr_hpr(const struct lu_context *ctx,
+                           void *opaque, __u64 *seq, int mode)
 {
         struct mdt_device *m = opaque;
         int rc;
@@ -1166,13 +1164,15 @@ static int mdt_seq_mgr_hpr(struct lu_context *ctx, void *opaque, __u64 *seq,
         RETURN(rc);
 }
 
-static int mdt_seq_mgr_read(struct lu_context *ctx, void *opaque, __u64 *seq)
+static int mdt_seq_mgr_read(const struct lu_context *ctx,
+                            void *opaque, __u64 *seq)
 {
         ENTRY;
         RETURN(mdt_seq_mgr_hpr(ctx, opaque, seq, LUSTRE_CONFIG_GET));
 }
 
-static int mdt_seq_mgr_write(struct lu_context *ctx, void *opaque, __u64 *seq)
+static int mdt_seq_mgr_write(const struct lu_context *ctx,
+                             void *opaque, __u64 *seq)
 {
         ENTRY;
         RETURN(mdt_seq_mgr_hpr(ctx, opaque, seq, LUSTRE_CONFIG_SET));
@@ -1271,7 +1271,7 @@ err_mdt_svc:
         RETURN(rc);
 }
 
-static void mdt_stack_fini(struct lu_context *ctx,
+static void mdt_stack_fini(const struct lu_context *ctx,
                            struct mdt_device *m, struct lu_device *d)
 {
         /* goes through all stack */
@@ -1296,7 +1296,7 @@ static void mdt_stack_fini(struct lu_context *ctx,
         m->mdt_child = NULL;
 }
 
-static struct lu_device *mdt_layer_setup(struct lu_context *ctx,
+static struct lu_device *mdt_layer_setup(const struct lu_context *ctx,
                                          const char *typename,
                                          struct lu_device *child,
                                          struct lustre_cfg *cfg)
@@ -1347,7 +1347,7 @@ out:
         RETURN(ERR_PTR(rc));
 }
 
-static int mdt_stack_init(struct lu_context *ctx,
+static int mdt_stack_init(const struct lu_context *ctx,
                           struct mdt_device *m, struct lustre_cfg *cfg)
 {
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
@@ -1531,7 +1531,7 @@ err_fini_site:
 }
 
 /* used by MGS to process specific configurations */
-static int mdt_process_config(struct lu_context *ctx,
+static int mdt_process_config(const struct lu_context *ctx,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct lu_device *next = md2lu_dev(mdt_dev(d)->mdt_child);
@@ -1547,7 +1547,7 @@ static int mdt_process_config(struct lu_context *ctx,
         RETURN(err);
 }
 
-static struct lu_object *mdt_object_alloc(struct lu_context *ctxt,
+static struct lu_object *mdt_object_alloc(const struct lu_context *ctxt,
                                           struct lu_device *d)
 {
         struct mdt_object *mo;
@@ -1570,7 +1570,7 @@ static struct lu_object *mdt_object_alloc(struct lu_context *ctxt,
                 RETURN(NULL);
 }
 
-static int mdt_object_init(struct lu_context *ctxt, struct lu_object *o)
+static int mdt_object_init(const struct lu_context *ctxt, struct lu_object *o)
 {
         struct mdt_device *d = mdt_dev(o->lo_dev);
         struct lu_device  *under;
@@ -1585,7 +1585,7 @@ static int mdt_object_init(struct lu_context *ctxt, struct lu_object *o)
                 return -ENOMEM;
 }
 
-static void mdt_object_free(struct lu_context *ctxt, struct lu_object *o)
+static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
 {
         struct mdt_object *mo = mdt_obj(o);
         struct lu_object_header *h;
@@ -1597,16 +1597,17 @@ static void mdt_object_free(struct lu_context *ctxt, struct lu_object *o)
         EXIT;
 }
 
-static void mdt_object_release(struct lu_context *ctxt, struct lu_object *o)
+static void mdt_object_release(const struct lu_context *ctxt,
+                               struct lu_object *o)
 {
 }
 
-static int mdt_object_exists(struct lu_context *ctx, struct lu_object *o)
+static int mdt_object_exists(const struct lu_context *ctx, struct lu_object *o)
 {
         return lu_object_exists(ctx, lu_object_next(o));
 }
 
-static int mdt_object_print(struct lu_context *ctxt,
+static int mdt_object_print(const struct lu_context *ctxt,
                             struct seq_file *f, const struct lu_object *o)
 {
         return seq_printf(f, LUSTRE_MDT0_NAME"-object@%p", o);
@@ -1743,7 +1744,7 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_disconnect = mdt_obd_disconnect,
 };
 
-static void mdt_device_free(struct lu_context *ctx, struct lu_device *d)
+static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
 {
         struct mdt_device *m = mdt_dev(d);
 
@@ -1751,7 +1752,7 @@ static void mdt_device_free(struct lu_context *ctx, struct lu_device *d)
         OBD_FREE_PTR(m);
 }
 
-static struct lu_device *mdt_device_alloc(struct lu_context *ctx,
+static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
                                           struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
 {
@@ -1775,7 +1776,7 @@ static struct lu_device *mdt_device_alloc(struct lu_context *ctx,
 }
 
 
-static void *mdt_thread_init(struct lu_context *ctx)
+static void *mdt_thread_init(const struct lu_context *ctx)
 {
         struct mdt_thread_info *info;
 
@@ -1787,7 +1788,7 @@ static void *mdt_thread_init(struct lu_context *ctx)
         return info;
 }
 
-static void mdt_thread_fini(struct lu_context *ctx, void *data)
+static void mdt_thread_fini(const struct lu_context *ctx, void *data)
 {
         struct mdt_thread_info *info = data;
         OBD_FREE_PTR(info);

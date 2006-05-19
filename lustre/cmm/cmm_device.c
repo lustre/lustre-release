@@ -54,7 +54,7 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
-int cmm_root_get(struct lu_context *ctx, struct md_device *md,
+int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
                  struct lu_fid *fid)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
@@ -63,7 +63,7 @@ int cmm_root_get(struct lu_context *ctx, struct md_device *md,
                                                     cmm_dev->cmm_child, fid);
 }
 
-int cmm_config(struct lu_context *ctxt, struct md_device *md,
+int cmm_config(const struct lu_context *ctxt, struct md_device *md,
                const char *name, void *buf, int size, int mode)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
@@ -74,7 +74,7 @@ int cmm_config(struct lu_context *ctxt, struct md_device *md,
         RETURN(rc);
 }
 
-int cmm_statfs(struct lu_context *ctxt, struct md_device *md,
+int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
                struct kstatfs *sfs) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 	int rc;
@@ -94,7 +94,7 @@ static struct md_device_operations cmm_md_ops = {
 extern struct lu_device_type mdc_device_type;
 
 /* add new MDC to the CMM, create MDC lu_device and connect it to mdc_obd */
-static int cmm_add_mdc(struct lu_context *ctx,
+static int cmm_add_mdc(const struct lu_context *ctx,
                        struct cmm_device * cm, struct lustre_cfg *cfg)
 {
         struct lu_device_type *ldt = &mdc_device_type;
@@ -124,7 +124,7 @@ static int cmm_add_mdc(struct lu_context *ctx,
 }
 
 
-static int cmm_process_config(struct lu_context *ctx,
+static int cmm_process_config(const struct lu_context *ctx,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct cmm_device *m = lu2cmm_dev(d);
@@ -157,7 +157,7 @@ static struct lu_device_operations cmm_lu_ops = {
 
 /* --- lu_device_type operations --- */
 
-struct lu_device *cmm_device_alloc(struct lu_context *ctx,
+struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
                                    struct lu_device_type *t,
                                    struct lustre_cfg *cfg)
 {
@@ -180,7 +180,7 @@ struct lu_device *cmm_device_alloc(struct lu_context *ctx,
         return l;
 }
 
-void cmm_device_free(struct lu_context *ctx, struct lu_device *d)
+void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
 {
         struct cmm_device *m = lu2cmm_dev(d);
 
@@ -199,7 +199,7 @@ void cmm_type_fini(struct lu_device_type *t)
         return;
 }
 
-static int cmm_device_init(struct lu_context *ctx,
+static int cmm_device_init(const struct lu_context *ctx,
                            struct lu_device *d, struct lu_device *next)
 {
         struct cmm_device *m = lu2cmm_dev(d);
@@ -214,7 +214,7 @@ static int cmm_device_init(struct lu_context *ctx,
         RETURN(err);
 }
 
-static struct lu_device *cmm_device_fini(struct lu_context *ctx,
+static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
                                          struct lu_device *ld)
 {
 	struct cmm_device *cm = lu2cmm_dev(ld);

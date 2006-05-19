@@ -49,63 +49,66 @@ struct md_object;
  * Operations implemented for each md object (both directory and leaf).
  */
 struct md_object_operations {
-        int (*moo_attr_get)(struct lu_context *ctxt, struct md_object *dt,
+        int (*moo_attr_get)(const struct lu_context *ctxt, struct md_object *dt,
                             struct lu_attr *attr);
-        int (*moo_attr_set)(struct lu_context *ctxt, struct md_object *dt,
+        int (*moo_attr_set)(const struct lu_context *ctxt, struct md_object *dt,
                             struct lu_attr *attr);
 
-        int (*moo_xattr_get)(struct lu_context *ctxt, struct md_object *obj,
+        int (*moo_xattr_get)(const struct lu_context *ctxt,
+                             struct md_object *obj,
                              void *buf, int buf_len, const char *name);
 
-        int (*moo_xattr_set)(struct lu_context *ctxt, struct md_object *obj,
+        int (*moo_xattr_set)(const struct lu_context *ctxt,
+                             struct md_object *obj,
                              void *buf, int buf_len, const char *name);
         /* part of cross-ref operation */
-        int (*moo_object_create)(struct lu_context *,
+        int (*moo_object_create)(const struct lu_context *,
                                  struct md_object *, struct lu_attr *);
-        int (*moo_ref_add)(struct lu_context *, struct md_object *);
-        int (*moo_ref_del)(struct lu_context *, struct md_object *);
-        int (*moo_open)(struct lu_context *, struct md_object *);
-        int (*moo_close)(struct lu_context *, struct md_object *);
+        int (*moo_ref_add)(const struct lu_context *, struct md_object *);
+        int (*moo_ref_del)(const struct lu_context *, struct md_object *);
+        int (*moo_open)(const struct lu_context *, struct md_object *);
+        int (*moo_close)(const struct lu_context *, struct md_object *);
 };
 
 /*
  * Operations implemented for each directory object.
  */
 struct md_dir_operations {
-        int (*mdo_lookup)(struct lu_context *, struct md_object *,
+        int (*mdo_lookup)(const struct lu_context *, struct md_object *,
                           const char *, struct lu_fid *);
 
-        int (*mdo_mkdir)(struct lu_context *, struct lu_attr *,
+        int (*mdo_mkdir)(const struct lu_context *, struct lu_attr *,
                          struct md_object *, const char *,
                          struct md_object *);
 
-        int (*mdo_rename)(struct lu_context *ctxt, struct md_object *spobj,
+        int (*mdo_rename)(const struct lu_context *ctxt,
+                          struct md_object *spobj,
                           struct md_object *tpobj, struct md_object *sobj,
                           const char *sname, struct md_object *tobj,
                           const char *tname);
 
-        int (*mdo_link)(struct lu_context *ctxt, struct md_object *tobj,
+        int (*mdo_link)(const struct lu_context *ctxt, struct md_object *tobj,
                         struct md_object *sobj, const char *name);
 
         /* partial ops for cross-ref case */
-        int (*mdo_name_insert)(struct lu_context *, struct md_object *,
+        int (*mdo_name_insert)(const struct lu_context *, struct md_object *,
                                const char *, const struct lu_fid *,
                                struct lu_attr *);
-        int (*mdo_name_remove)(struct lu_context *, struct md_object *,
+        int (*mdo_name_remove)(const struct lu_context *, struct md_object *,
                                const char *, struct lu_attr *);
 };
 
 struct md_device_operations {
         /* method for getting/setting device wide back stored config data, like
          * last used meta-sequence, etc. */
-        int (*mdo_config) (struct lu_context *ctx,
+        int (*mdo_config) (const struct lu_context *ctx,
                            struct md_device *m, const char *name,
                            void *buf, int size, int mode);
 
         /* meta-data device related handlers. */
-        int (*mdo_root_get)(struct lu_context *ctx,
+        int (*mdo_root_get)(const struct lu_context *ctx,
                             struct md_device *m, struct lu_fid *f);
-        int (*mdo_statfs)(struct lu_context *ctx,
+        int (*mdo_statfs)(const struct lu_context *ctx,
                           struct md_device *m, struct kstatfs *sfs);
 
 };
@@ -165,32 +168,33 @@ static inline void md_device_fini(struct md_device *md)
 }
 
 /* md operations */
-static inline int mo_attr_get(struct lu_context *cx, struct md_object *m,
+static inline int mo_attr_get(const struct lu_context *cx, struct md_object *m,
                               struct lu_attr *at)
 {
         return m->mo_ops->moo_attr_get(cx, m, at);
 }
 
-static inline int mo_object_create(struct lu_context *cx, struct md_object *m,
-                                   struct lu_attr *at)
+static inline int mo_object_create(const struct lu_context *cx,
+                                   struct md_object *m, struct lu_attr *at)
 {
         return m->mo_ops->moo_object_create(cx, m, at);
 }
 
-static inline int mdo_lookup(struct lu_context *cx, struct md_object *p,
+static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
                             const char *name, struct lu_fid *f)
 {
         return p->mo_dir_ops->mdo_lookup(cx, p, name, f);
 }
 
-static inline int mdo_mkdir(struct lu_context *cx, struct lu_attr *at,
+static inline int mdo_mkdir(const struct lu_context *cx, struct lu_attr *at,
                             struct md_object *p, const char *name,
                             struct md_object *c)
 {
         return p->mo_dir_ops->mdo_mkdir(cx, at, p, name, c);
 }
 
-static inline int mdo_name_insert(struct lu_context *cx, struct md_object *p,
+static inline int mdo_name_insert(const struct lu_context *cx,
+                                  struct md_object *p,
                                   const char *name, const struct lu_fid *f,
                                   struct lu_attr *at)
 {

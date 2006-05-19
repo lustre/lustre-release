@@ -132,18 +132,18 @@ struct lu_device_operations {
          * postcondition: ergo(!IS_ERR(result), result->lo_dev ==  d &&
          *                                      result->lo_ops != NULL);
          */
-        struct lu_object *(*ldo_object_alloc)(struct lu_context *ctx,
+        struct lu_object *(*ldo_object_alloc)(const struct lu_context *ctx,
                                               struct lu_device *d);
         /*
          * Dual to ->ldo_object_alloc(). Called when object is removed from
          * memory.
          */
-        void (*ldo_object_free)(struct lu_context *ctx, struct lu_object *o);
+        void (*ldo_object_free)(const struct lu_context *ctx, struct lu_object *o);
 
         /*
          * process config specific for device
          */
-        int  (*ldo_process_config)(struct lu_context *ctx,
+        int  (*ldo_process_config)(const struct lu_context *ctx,
                                    struct lu_device *, struct lustre_cfg *);
 };
 
@@ -160,27 +160,31 @@ struct lu_object_operations {
          * stack. It's responsibility of this method to insert lower-layer
          * object(s) it create into appropriate places of object stack.
          */
-        int (*loo_object_init)(struct lu_context *ctx, struct lu_object *o);
+        int (*loo_object_init)(const struct lu_context *ctx,
+                               struct lu_object *o);
         /*
          * Called before ->ldo_object_free() to signal that object is being
          * destroyed. Dual to ->loo_object_init().
          */
-        void (*loo_object_delete)(struct lu_context *ctx, struct lu_object *o);
+        void (*loo_object_delete)(const struct lu_context *ctx,
+                                  struct lu_object *o);
 
         /*
          * Called when last active reference to the object is released (and
          * object returns to the cache).
          */
-        void (*loo_object_release)(struct lu_context *ctx, struct lu_object *o);
+        void (*loo_object_release)(const struct lu_context *ctx,
+                                   struct lu_object *o);
 
         /*
          * Return true off object @o exists on a storage.
          */
-        int (*loo_object_exists)(struct lu_context *ctx, struct lu_object *o);
+        int (*loo_object_exists)(const struct lu_context *ctx,
+                                 struct lu_object *o);
         /*
          * Debugging helper. Print given object.
          */
-        int (*loo_object_print)(struct lu_context *ctx,
+        int (*loo_object_print)(const struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
 };
 
@@ -260,24 +264,25 @@ struct lu_device_type_operations {
         /*
          * Allocate new device.
          */
-        struct lu_device *(*ldto_device_alloc)(struct lu_context *ctx,
+        struct lu_device *(*ldto_device_alloc)(const struct lu_context *ctx,
                                                struct lu_device_type *t,
                                                struct lustre_cfg *lcfg);
         /*
          * Free device. Dual to ->ldto_device_alloc().
          */
-        void (*ldto_device_free)(struct lu_context *ctx, struct lu_device *d);
+        void (*ldto_device_free)(const struct lu_context *ctx,
+                                 struct lu_device *d);
 
         /*
          * Initialize the devices after allocation
          */
-        int  (*ldto_device_init)(struct lu_context *ctx,
+        int  (*ldto_device_init)(const struct lu_context *ctx,
                                  struct lu_device *, struct lu_device *);
         /*
          * Finalize device. Dual to ->ldto_device_init(). Returns pointer to
          * the next device in the stack.
          */
-        struct lu_device *(*ldto_device_fini)(struct lu_context *ctx,
+        struct lu_device *(*ldto_device_fini)(const struct lu_context *ctx,
                                               struct lu_device *);
 
         /*
@@ -579,19 +584,21 @@ static inline int lu_object_is_dying(struct lu_object_header *h)
  * object to the cache, unless lu_object_is_dying(o) holds. In the latter
  * case, free object immediately.
  */
-void lu_object_put(struct lu_context *ctxt, struct lu_object *o);
+void lu_object_put(const struct lu_context *ctxt,
+                   struct lu_object *o);
 
 /*
  * Free @nr objects from the cold end of the site LRU list.
  */
-void lu_site_purge(struct lu_context *ctx, struct lu_site *s, int nr);
+void lu_site_purge(const struct lu_context *ctx,
+                   struct lu_site *s, int nr);
 
 /*
  * Search cache for an object with the fid @f. If such object is found, return
  * it. Otherwise, create new object, insert it into cache and return it. In
  * any case, additional reference is acquired on the returned object.
  */
-struct lu_object *lu_object_find(struct lu_context *ctxt,
+struct lu_object *lu_object_find(const struct lu_context *ctxt,
                                  struct lu_site *s, const struct lu_fid *f);
 
 /*
@@ -642,13 +649,14 @@ struct lu_object *lu_object_locate(struct lu_object_header *h,
 /*
  * Print human readable representation of the @o to the @f.
  */
-int lu_object_print(struct lu_context *ctxt,
+int lu_object_print(const struct lu_context *ctxt,
                     struct seq_file *f, const struct lu_object *o);
 
 /*
  * Returns true iff object @o exists on the stable storage.
  */
-static inline int lu_object_exists(struct lu_context *ctx, struct lu_object *o)
+static inline int lu_object_exists(const struct lu_context *ctx,
+                                   struct lu_object *o)
 {
         return o->lo_ops->loo_object_exists(ctx, o);
 }
@@ -708,13 +716,13 @@ struct lu_context_key {
          * Value constructor. This is called when new value is created for a
          * context. Returns pointer to new value of error pointer.
          */
-        void  *(*lct_init)(struct lu_context *ctx);
+        void  *(*lct_init)(const struct lu_context *ctx);
         /*
          * Value destructor. Called when context with previously allocated
          * value of this slot is destroyed. @data is a value that was returned
          * by a matching call to ->lct_init().
          */
-        void   (*lct_fini)(struct lu_context *ctx, void *data);
+        void   (*lct_fini)(const struct lu_context *ctx, void *data);
         /*
          * Internal implementation detail: index within ->lc_value[] reserved
          * for this key.
@@ -738,7 +746,8 @@ void  lu_context_key_degister(struct lu_context_key *key);
 /*
  * Return value associated with key @key in context @ctx.
  */
-void *lu_context_key_get(struct lu_context *ctx, struct lu_context_key *key);
+void *lu_context_key_get(const struct lu_context *ctx,
+                         struct lu_context_key *key);
 
 /*
  * Initialize context data-structure. Create values for all keys.

@@ -33,8 +33,8 @@
 
 struct lu_context;
 struct lu_seq_mgr_ops {
-        int (*smo_read) (struct lu_context *, void *opaque, __u64 *);
-        int (*smo_write) (struct lu_context *, void *opaque, __u64 *);
+        int (*smo_read) (const struct lu_context *, void *opaque, __u64 *);
+        int (*smo_write) (const struct lu_context *, void *opaque, __u64 *);
 };
 
 struct lu_seq_mgr {
@@ -55,11 +55,12 @@ struct lu_seq_mgr *seq_mgr_init(struct lu_seq_mgr_ops *, void *);
 void seq_mgr_fini(struct lu_seq_mgr *);
 
 /* seq management methods */
-int seq_mgr_setup(struct lu_context *, struct lu_seq_mgr *);
-int seq_mgr_read(struct lu_context *, struct lu_seq_mgr *);
-int seq_mgr_write(struct lu_context *, struct lu_seq_mgr *);
-int seq_mgr_alloc(struct lu_context *, struct lu_seq_mgr *, __u64 *);
-int seq_mgr_range_alloc(struct lu_context *, struct lu_seq_mgr *, __u64 *);
+int seq_mgr_setup(const struct lu_context *, struct lu_seq_mgr *);
+int seq_mgr_read(const struct lu_context *, struct lu_seq_mgr *);
+int seq_mgr_write(const struct lu_context *, struct lu_seq_mgr *);
+int seq_mgr_alloc(const struct lu_context *, struct lu_seq_mgr *, __u64 *);
+int seq_mgr_range_alloc(const struct lu_context *,
+                        struct lu_seq_mgr *, __u64 *);
 struct lu_site;
 #if 0
 int fid_is_local(struct lu_site *site, const struct lu_fid *fid);

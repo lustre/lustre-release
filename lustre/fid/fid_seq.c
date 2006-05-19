@@ -57,14 +57,14 @@ void seq_mgr_fini(struct lu_seq_mgr *mgr)
 }
 EXPORT_SYMBOL(seq_mgr_fini);
 
-int seq_mgr_write(struct lu_context *ctx, struct lu_seq_mgr *mgr)
+int seq_mgr_write(const struct lu_context *ctx, struct lu_seq_mgr *mgr)
 {
         ENTRY;
         RETURN(mgr->m_ops->smo_write(ctx, mgr->m_opaque, &mgr->m_seq));
 }
 EXPORT_SYMBOL(seq_mgr_write);
 
-int seq_mgr_read(struct lu_context *ctx, struct lu_seq_mgr *mgr)
+int seq_mgr_read(const struct lu_context *ctx, struct lu_seq_mgr *mgr)
 {
         ENTRY;
         RETURN(mgr->m_ops->smo_read(ctx, mgr->m_opaque, &mgr->m_seq));
@@ -72,7 +72,7 @@ int seq_mgr_read(struct lu_context *ctx, struct lu_seq_mgr *mgr)
 EXPORT_SYMBOL(seq_mgr_read);
 
 /* manager functionality stuff */
-int seq_mgr_alloc(struct lu_context *ctx, struct lu_seq_mgr *mgr,
+int seq_mgr_alloc(const struct lu_context *ctx, struct lu_seq_mgr *mgr,
                   __u64 *seq)
 {
         int rc = 0;
@@ -99,7 +99,7 @@ EXPORT_SYMBOL(seq_mgr_alloc);
 /* initialize meta-sequence. First of all try to get it from lower layer,
  * falling down to back store one. In the case this is first run and there is
  * not meta-sequence initialized yet - store it to backstore. */
-int seq_mgr_setup(struct lu_context *ctx, struct lu_seq_mgr *mgr)
+int seq_mgr_setup(const struct lu_context *ctx, struct lu_seq_mgr *mgr)
 {
         int rc = 0;
         ENTRY;
