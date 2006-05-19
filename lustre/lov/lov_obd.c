@@ -354,6 +354,8 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
                 lov->desc.ld_active_tgt_count++;
         else
                 lov->desc.ld_active_tgt_count--;
+        /* remove any old qos penalty */
+        tgt->ltd_qos.ltq_penalty = 0;
 
         EXIT;
  out:
