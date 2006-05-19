@@ -1,4 +1,59 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.0
+       * CONFIGURATION CHANGE.  This version of Lustre WILL NOT
+	 INTEROPERATE with older versions automatically.  In many cases a
+	 special upgrade step is needed. Please read the
+	 user documentation before upgrading any part of a live system.
+       * WARNING: Lustre configuration and startup changes are required with
+	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
+	 for details.
+       * bug fixes
+
+Severity   : enhancement
+Bugzilla   : 8007
+Description: MountConf
+Details    : Lustre configuration is now managed via mkfs and mount
+	     commands instead of lmc and lconf.  New obd types (MGS, MGC)
+	     are added for dynamic configuration management.  See
+	     https://mail.clusterfs.com/wikis/lustre/MountConf for
+	     details.
+
+Severity   : enhancement
+Bugzilla   : 4482
+Description: dynamic OST addition
+Details    : OSTs can now be added to a live filesystem
+
+Severity   : enhancement
+Bugzilla   : 9851
+Description: startup order invariance
+Details    : MDTs and OSTs can be started in any order.  Clients only
+	     require the MDT to complete startup.
+	
+Severity   : enhancement
+Bugzilla   : 4899
+Description: parallel, asynchronous orphan cleanup
+Details    : orphan cleanup is now performed in separate threads for each
+	     OST, allowing parallel non-blocking operation.
+
+Severity   : enhancement
+Bugzilla   : 9862
+Description: optimized stripe assignment
+Details    : stripe assignments are now made based on ost space available,
+	     ost previous usage, and OSS previous usage, in order to try
+	     to optimize storage space and networking resources. 
+	
+Severity   : enhancement
+Bugzilla   : 9866
+Description: client OST exclusion list
+Details    : Clients can be started with a list of OSTs that should be
+	     declared "inactive" for known non-responsive OSTs.
+
+	
+	
+	
+------------------------------------------------------------------------------
+
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.7
        * bug fixes
 
