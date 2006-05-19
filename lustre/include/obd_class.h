@@ -333,22 +333,29 @@ static inline int obd_set_info_async(struct obd_export *exp, obd_count keylen,
         EXP_CHECK_DT_OP(exp, set_info_async);
         OBD_COUNTER_INCREMENT(exp->exp_obd, set_info_async);
 
-        rc = OBP(exp->exp_obd, set_info_async)(exp, keylen, key, vallen, val, 
+        rc = OBP(exp->exp_obd, set_info_async)(exp, keylen, key, vallen, val,
                                                set);
         RETURN(rc);
 }
 
+#ifdef __KERNEL__
+#define DECLARE_LU_VARS(ldt, d)                 \
+        struct lu_device_type *ldt;             \
+        struct lu_device *d
+#else
+#define DECLARE_LU_VARS(ldt, d)                                 \
+        extern void __placeholder_to_put_a_semicolon(void)
+#endif
 static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
         int rc;
-        struct lu_device_type *ldt;
+        DECLARE_LU_VARS(ldt, d);
         ENTRY;
 
+#ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         if (ldt != NULL) {
-#ifdef __KERNEL__
                 struct lu_context ctx;
-                struct lu_device *d;
 
                 rc = lu_context_init(&ctx);
                 if (rc == 0) {
@@ -362,8 +369,9 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                         } else
                                 rc = PTR_ERR(d);
                 }
+        } else
 #endif
-        } else {
+        {
                 OBD_CHECK_DT_OP(obd, setup, -EOPNOTSUPP);
                 OBD_COUNTER_INCREMENT(obd, setup);
                 rc = OBP(obd, setup)(obd, cfg);
@@ -387,16 +395,15 @@ static inline int obd_precleanup(struct obd_device *obd,
 static inline int obd_cleanup(struct obd_device *obd)
 {
         int rc;
-        struct lu_device *d;
-        struct lu_device_type *ldt;
+        DECLARE_LU_VARS(ldt, d);
         ENTRY;
 
         OBD_CHECK_DEV(obd);
 
+#ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
-#ifdef __KERNEL__
                 struct lu_context ctx;
 
                 rc = lu_context_init(&ctx);
@@ -408,9 +415,9 @@ static inline int obd_cleanup(struct obd_device *obd)
                         obd->obd_lu_dev = NULL;
                         rc = 0;
                 }
+        } else
 #endif
-                
-        } else {
+        {
                 OBD_CHECK_DT_OP(obd, cleanup, 0);
                 rc = OBP(obd, cleanup)(obd);
         }
@@ -422,16 +429,15 @@ static inline int
 obd_process_config(struct obd_device *obd, int datalen, void *data)
 {
         int rc;
-        struct lu_device *d;
-        struct lu_device_type *ldt;
+        DECLARE_LU_VARS(ldt, d);
         ENTRY;
 
         OBD_CHECK_DEV(obd);
 
+#ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
-#ifdef __KERNEL__
                 struct lu_context ctx;
 
                 rc = lu_context_init(&ctx);
@@ -441,8 +447,9 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
                         lu_context_exit(&ctx);
                         lu_context_fini(&ctx);
                 }
+        } else
 #endif
-        } else {
+        {
                 OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
                 rc = OBP(obd, process_config)(obd, datalen, data);
         }
