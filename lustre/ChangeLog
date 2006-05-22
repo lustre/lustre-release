@@ -10,6 +10,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : enhancement
+Bugzilla   : 10547
+Description: Lustre message v2
+Details    : Add lustre message format v2.
+
+Severity   : enhancement
 Bugzilla   : 8007
 Description: MountConf
 Details    : Lustre configuration is now managed via mkfs and mount
