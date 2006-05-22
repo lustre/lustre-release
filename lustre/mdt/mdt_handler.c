@@ -1074,35 +1074,37 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         }
 
         if (it->opc == IT_GETATTR || it->opc == IT_LOOKUP) {
-        body = info->mti_body = lustre_swab_reqbuf(req, MDS_REQ_INTENT_REC_OFF,
-                                                   sizeof *body,
-                                                   lustre_swab_mdt_body);
-        if (body != NULL) {
-                struct mdt_object *obj;
-                const struct lu_context *ctx = info->mti_ctxt;
+                body = lustre_swab_reqbuf(req, MDS_REQ_INTENT_REC_OFF,
+                                          sizeof *body,
+                                          lustre_swab_mdt_body);
+                info->mti_body = body;
+                if (body != NULL) {
+                        struct mdt_object *obj;
+                        const struct lu_context *ctx = info->mti_ctxt;
 
-                obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
-                if (!IS_ERR(obj)) {
-                        if (!lu_object_exists(ctx, &obj->mot_obj.mo_lu)) {
-                                CERROR("Object doesn't exist\n");
-                                mdt_object_put(ctx, obj);
-                                rc = -ENOENT;
-                        } else {
-                                info->mti_object = obj;
-                                rc = 0;
-                        }
-                } else
-                        rc = PTR_ERR(obj);
-        } else {
-                CERROR("Can't unpack body\n");
-                rc = -EFAULT;
-        }
+                        obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
+                        if (!IS_ERR(obj)) {
+                                if (!lu_object_exists(ctx, 
+                                                      &obj->mot_obj.mo_lu)) {
+                                        CERROR("Object doesn't exist\n");
+                                        mdt_object_put(ctx, obj);
+                                        rc = -ENOENT;
+                                } else {
+                                        info->mti_object = obj;
+                                        rc = 0;
+                                }
+                        } else
+                                rc = PTR_ERR(obj);
+                } else {
+                        CERROR("Can't unpack body\n");
+                        rc = -EFAULT;
+                }
 
-        //TODO: if rc then pack reply according to it
-        if (rc) {
-                CERROR("Cannot prepare intent info, rc=%u\n", rc);
-                RETURN(req->rq_status = rc);
-        }
+                //TODO: if rc then pack reply according to it
+                if (rc) {
+                        CERROR("Cannot prepare intent info, rc=%u\n", rc);
+                        RETURN(req->rq_status = rc);
+                }
         }
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
         info->mti_rep_buf_nr = 3;
