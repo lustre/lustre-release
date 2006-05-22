@@ -114,6 +114,7 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
         top = s->ls_top_dev->ld_ops->ldo_object_alloc(ctxt, s->ls_top_dev);
         if (IS_ERR(top))
                 RETURN(top);
+        s->ls_total ++;
         /*
          * This is the only place where object fid is assigned. It's constant
          * after this point.
@@ -314,7 +315,6 @@ struct lu_object *lu_object_find(const struct lu_context *ctxt,
         if (IS_ERR(o))
                 return o;
 
-        ++ s->ls_total;
         LASSERT(lu_fid_eq(lu_object_fid(o), f));
 
         spin_lock(&s->ls_guard);
