@@ -640,7 +640,7 @@ static int lustre_start_mgc(struct super_block *sb)
                 /* If we are restarting the MGS, don't try to keep the MGC's
                    old connection, or registration will fail. */
                 if ((lsi->lsi_flags & LSI_SERVER) && IS_MGS(lsi->lsi_ldd)) {
-                        CDEBUG(D_MOUNT|D_ERROR, "New MGS with live MGC\n");
+                        CDEBUG(D_MOUNT, "New MGS with live MGC\n");
                         recov_bk = 1;
                 }
 
@@ -1482,6 +1482,7 @@ static int server_fill_super(struct super_block *sb)
                 rc = PTR_ERR(mnt);
                 CERROR("Unable to mount device %s: %d\n", 
                       lsi->lsi_lmd->lmd_dev, rc);
+                lustre_put_lsi(sb);
                 GOTO(out, rc);
         }
         lsi->lsi_srv_mnt = mnt;
