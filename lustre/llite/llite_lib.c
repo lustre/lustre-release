@@ -339,8 +339,6 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err = -EBADF);
         }
 
-        ll_i2info(root)->lli_fid = sbi->ll_root_fid;
-
         err = ll_close_thread_start(&sbi->ll_lcq);
         if (err) {
                 CERROR("cannot start close thread: rc %d\n", err);
@@ -1586,7 +1584,6 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
                         CERROR("new_inode -fatal: rc %d\n", rc);
                         GOTO(out, rc);
                 }
-                ll_i2info(*inode)->lli_fid = md.body->fid1;
         }
 
         rc = obd_checkmd(sbi->ll_dt_exp, sbi->ll_md_exp,
