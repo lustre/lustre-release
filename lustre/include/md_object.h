@@ -81,6 +81,10 @@ struct md_dir_operations {
                          struct md_object *, const char *,
                          struct md_object *);
 
+        int (*mdo_create)(const struct lu_context *, struct md_object *,
+                          const char *, struct md_object *,
+                          struct lu_attr *);
+
         int (*mdo_rename)(const struct lu_context *ctxt,
                           struct md_object *spobj,
                           struct md_object *tpobj, struct md_object *sobj,
@@ -174,6 +178,11 @@ static inline int mo_attr_get(const struct lu_context *cx, struct md_object *m,
         return m->mo_ops->moo_attr_get(cx, m, at);
 }
 
+static inline int mo_open(const struct lu_context *cx, struct md_object *m)
+{
+        return m->mo_ops->moo_open(cx, m);
+}
+
 static inline int mo_object_create(const struct lu_context *cx,
                                    struct md_object *m, struct lu_attr *at)
 {
@@ -191,6 +200,13 @@ static inline int mdo_mkdir(const struct lu_context *cx, struct lu_attr *at,
                             struct md_object *c)
 {
         return p->mo_dir_ops->mdo_mkdir(cx, at, p, name, c);
+}
+
+static inline int mdo_create(const struct lu_context *cx,
+                             struct md_object *p, const char *name,
+                             struct md_object *c, struct lu_attr *at)
+{
+        return c->mo_dir_ops->mdo_create(cx, p, name, c, at);
 }
 
 static inline int mdo_name_insert(const struct lu_context *cx,
