@@ -133,7 +133,7 @@ static int mdt_statfs(struct mdt_thread_info *info,
 
 static void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
 {
-        b->valid |= OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID |
+        b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID |
                     OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
                     OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER;
 
@@ -180,7 +180,6 @@ static int mdt_getattr(struct mdt_thread_info *info,
                         info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
                                                         sizeof(struct mdt_body));
                         mdt_pack_attr2body(info->mti_body, &info->mti_attr);
-                        info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
                         info->mti_body->valid |= OBD_MD_FLID;
                 }
         }
@@ -193,7 +192,6 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
         struct md_object  *next = mdt_object_child(info->mti_object);
         struct mdt_object *child;
         struct mdt_body   *body;
-        struct lu_fid lf;
         char *name;
         int namesize;
         int result;
@@ -212,9 +210,10 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
         }
         namesize = lustre_msg_buflen(req->rq_reqmsg, offset);
 
-        result = mdo_lookup(info->mti_ctxt, next, name, &lf);
+        result = mdo_lookup(info->mti_ctxt, next, name, &body->fid1);
         if (result == 0) {
-                child = mdt_object_find(info->mti_ctxt, info->mti_mdt, &lf);
+                child = mdt_object_find(info->mti_ctxt, info->mti_mdt,
+                                        &body->fid1);
                 if (IS_ERR(child)) {
                         result = PTR_ERR(child);
                 } else {
@@ -222,7 +221,6 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
                                              &info->mti_attr);
                         if (result == 0) {
                                 mdt_pack_attr2body(body, &info->mti_attr);
-                                body->fid1 = *mdt_object_fid(child);
                                 body->valid |= OBD_MD_FLID;
                         }
                         mdt_object_put(info->mti_ctxt, child);
