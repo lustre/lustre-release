@@ -105,9 +105,12 @@ static inline void name_destroy(char *name)
 /* from the (client) config log, figure out:
         1. which ost's/mdt's are configured (by index)
         2. what the last config step is
+        3. COMPAT_146 lov name
+        4. COMPAT_146 mdt lov name
+        5. COMPAT_146 mdc name 
 */
-/* FIXME is it better to have a separate db file, instead of parsing the info
-   out of the client log? */
+/* It might be better to have a separate db file, instead of parsing the info
+   out of the client log.  This is slow and potentially error-prone. */
 static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
                             void *data)
 {
@@ -706,8 +709,6 @@ static int mgs_log_is_empty(struct obd_device *obd, char *name)
         struct llog_handle *llh;
         int rc = 0;
 
-        /* FIXME cache the empty state in the db */
-
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                          &llh, NULL, name);
@@ -745,7 +746,7 @@ static int mgs_write_log_direct(struct obd_device *obd, struct fs_db *fsdb,
 
 /* write the lcfg in all logs for the given fs */
 int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
-                          char *fsname, struct lustre_cfg *lcfg)
+                           char *fsname, struct lustre_cfg *lcfg)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct list_head dentry_list;
@@ -755,7 +756,9 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
         ENTRY;
         
         /* We need to set params for any future logs 
-           as well. FIXME Append this file to every new log. */
+           as well. FIXME Append this file to every new log. 
+           Actually, we should store as params (text), not llogs.  Or
+           in a database. */
         name_create(&logname, fsname, "-params");
         if (mgs_log_is_empty(obd, logname)) {
                 struct llog_handle *llh = NULL;
@@ -966,6 +969,9 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         if (mti->mti_flags & LDD_F_UPGRADE14) { 
                 /* Old client log already has MDC entry, but needs mount opt 
                    for new client name (lustre-client) */
+                /* FIXME Old MDT log already has an old mount opt 
+                   which we should remove (currently handled by
+                   class_del_profiles()) */
                 rc = record_mount_opt(obd, llh, cliname, fsdb->fsdb_clilov,
                                       fsdb->fsdb_mdc);
                 /* end COMPAT_146 */
@@ -1064,19 +1070,14 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         /* The ost startup log */
 
         /* If the ost log already exists, that means that someone reformatted
-           the ost and it called target_add again.
-           FIXME check and warn here, maybe inc config ver #?  Or abort, 
-           and claim there's already a server with that name?  Maybe need 
-           another flag to say it's okay to rewrite. 
-           Heck, what do we do about the client and mds logs? We better
-           abort. */
+           the ost and it called target_add again. */
         if (!mgs_log_is_empty(obd, mti->mti_svname)) {
                 LCONSOLE_ERROR("The config log for %s already exists, yet the "
                                "server claims it never registered.  It may have"
                                " been reformatted, or the index changed. Use "
                                " tunefs.lustre --writeconf to regenerate "
                                " all logs.\n", mti->mti_svname);
-                return -EALREADY;
+                RETURN(-EALREADY);
         }
         /*
         attach obdfilter ost1 ost1_UUID
@@ -1103,8 +1104,8 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                 /* If we're upgrading, the old mdt log already has our
                    entry. Let's do a fake one for fun. */
                 flags = CM_SKIP | CM_UPGRADE146;
-        /* FIXME add to all mdt logs for CMD */
-        // FIXME need real mdt name -- but MDT may not have registered yet!
+        /* FIXME add to all MDT logs for CMD */
+        /* FIXME need real MDT name, but MDT may not have registered yet! */
         name_create(&logname, mti->mti_fsname, "-MDT0000");
         mgs_write_log_osc(obd, fsdb, mti, logname, fsdb->fsdb_mdtlov, flags);
         name_destroy(logname);
@@ -1200,6 +1201,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         len = strlen(ptr);
                 CDEBUG(D_MGS, "next param '%.*s'\n", len, ptr);
 
+                /* Stored in MOUNT_DATA_FILE, modified via tunefs.lustre */
                 if (class_match_param(ptr, PARAM_MGSNODE, &endptr) == 0) 
                         GOTO(end_while, rc);
 
@@ -1298,17 +1300,10 @@ int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti)
                 RETURN(-ENOENT);
 
         CDEBUG(D_MGS, "Checking for new failnids for %s\n", mti->mti_svname);
-        // FIXME check logs
-        /* FIXME we need a real database lookup.  Create on-disk db of known 
-           size, lookup by index */
-        /* Check each nid, or check only nid0 and add all if nid0 is missing?
-           What if someone adds a net to a node? Better check everything. */
-        /* if nid 0 is missing, mgs_write_log_add_failnid.
-           if just one nid is missing, add uuid for nodeuuid[nid0]).
-        */
 
-        /* Hey, we can just check mti->params to see if we're already in
-           the failover list */
+        /* FIXME We can just check mti->params to see if we're already in
+           the failover list.  Modify mti->params for rewriting back at 
+           server_register_target(). */
         
         down(&fsdb->fsdb_sem);
         rc = mgs_write_log_add_failnid(obd, fsdb, mti);
@@ -1346,8 +1341,11 @@ int mgs_write_log_target(struct obd_device *obd,
         } else {
                 if (rc == EALREADY) {
                         /* Update a target entry in the logs */
-                        // FIXME mark old log sections as invalid, add new.
                         CERROR("updates not yet implemented\n");
+                        /* FIXME mark old log sections as invalid, 
+                           inc config ver #, add new log sections.
+                           Make sure to update client and mds logs too
+                           if needed */
                         RETURN(-ENXIO);
                 }
         }
@@ -1429,8 +1427,6 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
                 RETURN(-ENOENT);
         }
 
-        /* FIXME Old MDT log already has an old mount opt 
-           which we should drop */
         rc = mgs_write_log_target(obd, mti);
         RETURN(rc);
 }

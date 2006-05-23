@@ -144,9 +144,10 @@ struct lustre_mount_data {
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
 };
 
-#define LMD_FLG_CLIENT       0x0002  /* Mounting a client only */
-#define LMD_FLG_RECOVER      0x0004  /* Allow recovery */
-#define LMD_FLG_NOSVC        0x0008  /* Only start MGS/MGC for servers, 
+#define LMD_FLG_SERVER       0x0001  /* Mounting a server */
+#define LMD_FLG_CLIENT       0x0002  /* Mounting a client */
+#define LMD_FLG_ABORT_RECOV  0x0008  /* Abort recovery */
+#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers, 
                                         no other services */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT) 

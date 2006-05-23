@@ -201,37 +201,6 @@ static int server_deregister_mount(char *name)
         RETURN(0);
 }
 
-/* Deregister anyone referencing the mnt. Everyone should have
-   put_mount in *_cleanup, but this is a catch-all in case of err... */
-/* FIXME this should be removed from lustre_free_lsi, which may be called
-   from server_put_mount _before_ it gets to server_deregister_mount. 
-   Leave it here for now for the error message it shows... */
-static void server_deregister_mount_all(struct vfsmount *mnt)
-{
-        struct list_head *tmp, *n;
-        struct lustre_mount_info *lmi;
-        ENTRY;
-
-        if (!mnt) {
-                EXIT;
-                return;
-        }
-
-        //down(&lustre_mount_info_lock);
-        list_for_each_safe(tmp, n, &server_mount_info_list) {
-                lmi = list_entry(tmp, struct lustre_mount_info, lmi_list_chain);
-                if (lmi->lmi_mnt == mnt) {
-                        CERROR("Mount %p still referenced by %s\n", mnt,
-                               lmi->lmi_name);
-                        //OBD_FREE(lmi->lmi_name, strlen(lmi->lmi_name) + 1);
-                        //list_del(&lmi->lmi_list_chain);
-                        //OBD_FREE(lmi, sizeof(*lmi));
-                }
-        }
-        //up(&lustre_mount_info_lock);
-        EXIT;
-}
-
 /* obd's look up a registered mount using their name. This is just
    for initial obd setup to find the mount struct.  It should not be
    called every time you want to mntget. */
@@ -753,9 +722,6 @@ static int lustre_start_mgc(struct super_block *sb)
                 /* nonfatal */
                 CERROR("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
        
-        /* FIXME add ACL support? */
-        //ocd.ocd_connect_flags = OBD_CONNECT_ACL;
-
         /* We connect to the MGS at setup, and don't disconnect until cleanup */
         rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), &ocd);
         if (rc) {
@@ -1095,11 +1061,17 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                 GOTO(out, rc);
         }
 
-        if (!class_name2obd(lsi->lsi_ldd->ldd_svname)) {
+        obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
+        if (!obd) {
                 CERROR("no server named %s was started\n",
                        lsi->lsi_ldd->ldd_svname);
-                rc = -ENXIO;
+                GOTO(out, rc = -ENXIO);
         }
+
+        if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV) &&
+            (OBP(obd, iocontrol)))
+                obd_iocontrol(OBD_IOC_ABORT_RECOVERY, obd->obd_self_export,
+                              0, NULL, NULL);
         
 out:
         /* Release the mgc fs for others to use */
@@ -1170,8 +1142,6 @@ static int lustre_free_lsi(struct super_block *sb)
         
         LASSERT(lsi->lsi_llsbi == NULL);
         
-        server_deregister_mount_all(lsi->lsi_srv_mnt);
-        
         OBD_FREE(lsi, sizeof(*lsi));
         s2lsi_nocast(sb) = NULL;
         
@@ -1217,17 +1187,17 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
            Note ext3/ldiskfs can't be mounted ro. */
         s_flags = sb->s_flags;
 
-        /* Pre-mount ext3 to read the MOUNT_DATA_FILE */
-        CDEBUG(D_MOUNT, "Pre-mount ext3 %s\n", lmd->lmd_dev);
-        mnt = do_kern_mount("ext3", s_flags, lmd->lmd_dev, 0);
+        /* Pre-mount ldiskfs to read the MOUNT_DATA_FILE */
+        CDEBUG(D_MOUNT, "Pre-mount ldiskfs %s\n", lmd->lmd_dev);
+        mnt = do_kern_mount("ldiskfs", s_flags, lmd->lmd_dev, 0);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
-                CERROR("premount ext3 failed (%d), trying ldiskfs\n", rc);
-                /* If ext3 fails (bec. of mballoc, extents), try ldiskfs */
-                mnt = do_kern_mount("ldiskfs", s_flags, lmd->lmd_dev, 0);
+                CERROR("premount ldiskfs failed (%d), trying ext3\n", rc);
+                /* If ldisk fails, try ext3 */
+                mnt = do_kern_mount("ext3", s_flags, lmd->lmd_dev, 0);
                 if (IS_ERR(mnt)) {
                         rc = PTR_ERR(mnt);
-                        CERROR("premount ldiskfs failed: rc = %d\n", rc);
+                        CERROR("premount ext3 failed: rc = %d\n", rc);
                         GOTO(out_free, rc);
                 }
         }
@@ -1712,8 +1682,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         }
         lmd->lmd_magic = LMD_MAGIC;
 
-        /* Default flags */
-        lmd->lmd_flags |= LMD_FLG_RECOVER;
+        /* Set default flags here */
 
         s1 = options;
         while (*s1) {
@@ -1724,14 +1693,11 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 /* Client options are parsed in ll_options: eg. flock, 
                    user_xattr, acl */
                 
-                if (strncmp(s1, "recov", 5) == 0) 
-                        /* FIXME do something with the RECOVER flag - see lconf */
-                        lmd->lmd_flags |= LMD_FLG_RECOVER;
-                else if (strncmp(s1, "norecov", 7) == 0)
-                        lmd->lmd_flags &= ~LMD_FLG_RECOVER;
+                /* Parse non-ldiskfs options here */
+                if (strncmp(s1, "abort_recov", 11) == 0) 
+                        lmd->lmd_flags |= LMD_FLG_ABORT_RECOV;
                 else if (strncmp(s1, "nosvc", 5) == 0)
                         lmd->lmd_flags |= LMD_FLG_NOSVC;
-
                 /* ost exclusion list */
                 else if (strncmp(s1, "exclude=", 8) == 0) {
                         rc = lmd_make_exclusion(lmd, s1 + 7);

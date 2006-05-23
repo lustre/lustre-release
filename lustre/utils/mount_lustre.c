@@ -209,6 +209,7 @@ static const struct opt_map opt_map[] = {
   { "noacl",    1, 1, 0         },      /* Disable ACL support */
   { "nosvc",    0, 0, 0         },      /* Only start MGS/MGC, nothing else */
   { "exclude",  0, 0, 0         },      /* OST exclusion list */
+  { "abort_recov",  0, 0, 0     },      /* Abort recovery */
   { NULL,       0, 0, 0         }
 };
 /****************************************************************************/
