@@ -88,6 +88,8 @@ static int mdt_getstatus(struct mdt_thread_info *info,
                 result = next->md_ops->mdo_root_get(info->mti_ctxt,
                                                     next,
                                                     &info->mti_body->fid1);
+                if (result == 0)
+                        info->mti_body->valid |= OBD_MD_FLID;
         }
 
         /* the last_committed and last_xid fields are filled in for all
@@ -295,13 +297,21 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                               struct ptlrpc_request *req,
                               int offset)
 {
-        int rc;
+        int rep_off, rc;
 
         rc = mdt_reint_unpack(info, req, offset);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
                 CERROR("invalid record\n");
                 RETURN(rc = -EINVAL);
         }
+    
+        /* XXX: this should be cleanup up */
+        rep_off = offset == MDS_REQ_INTENT_REC_OFF ? 1 : 0;
+        
+        /* init body for handlers by rep's body, they may want to 
+         * store there something. */
+        info->mti_body = lustre_msg_buf(req->rq_repmsg, rep_off,
+                                        sizeof(struct mdt_body));
         rc = mdt_reint_rec(info);
         RETURN(rc);
 }
@@ -342,6 +352,10 @@ static int mdt_reint(struct mdt_thread_info *info,
                                info->mti_rep_buf_size, NULL);
         if (rc)
                 RETURN(rc);
+    
+        /* init body by rep body, needed by handlers to return data to client */
+        info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
+                                        sizeof(struct mdt_body));
         rc = mdt_reint_internal(info, req, offset);
         RETURN(rc);
 }

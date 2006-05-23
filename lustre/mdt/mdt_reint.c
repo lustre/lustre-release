@@ -117,6 +117,11 @@ static int mdt_reint_create(struct mdt_thread_info *info)
                         rc = mdt_md_mkdir(info);
                 else
                         rc = mdt_md_mkobj(info);
+                
+                /* return fid to client. mti_body should point to 
+                 * rep's body. */
+                info->mti_body->fid1 = *info->mti_rr.rr_fid2;
+                info->mti_body->valid |= OBD_MD_FLID;
                 break;
         }
         case S_IFLNK:{
