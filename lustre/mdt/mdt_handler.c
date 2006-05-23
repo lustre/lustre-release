@@ -176,9 +176,10 @@ static int mdt_getattr(struct mdt_thread_info *info,
                 result = mo_attr_get(info->mti_ctxt, next, &info->mti_attr);
                 if (result == 0) {
                         info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
-                                                       sizeof(struct mdt_body));
+                                                        sizeof(struct mdt_body));
                         mdt_pack_attr2body(info->mti_body, &info->mti_attr);
                         info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
+                        info->mti_body->valid |= OBD_MD_FLID;
                 }
         }
         RETURN(result);
@@ -220,6 +221,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
                         if (result == 0) {
                                 mdt_pack_attr2body(body, &info->mti_attr);
                                 body->fid1 = *mdt_object_fid(child);
+                                body->valid |= OBD_MD_FLID;
                         }
                         mdt_object_put(info->mti_ctxt, child);
                 }

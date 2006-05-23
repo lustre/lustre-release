@@ -216,8 +216,8 @@ repeat:
         LASSERT(body != NULL);
 
         /* could not find object, FID is not present in response. */
-/*        if (!(body->valid & OBD_MD_FID))
-                RETURN(0);*/
+        if (!(body->valid & OBD_MD_FLID))
+                RETURN(0);
 
         cid = &body->fid1;
         obj = lmv_obj_grab(obd, cid);
@@ -348,8 +348,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         LASSERT(body != NULL);
 
         /* could not find object, FID is not present in response. */
-/*        if (!(body->valid & OBD_MD_FID))
-                RETURN(0);*/
+        if (!(body->valid & OBD_MD_FLID))
+                RETURN(0);
 
         cid = &body->fid1;
         obj2 = lmv_obj_grab(obd, cid);
@@ -410,7 +410,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
-//        LASSERT((body->valid & OBD_MD_FID) != 0);
+        LASSERT((body->valid & OBD_MD_FLID) != 0);
 
         obj = lmv_obj_grab(obd, &body->fid1);
         LASSERT(obj != NULL);
@@ -605,7 +605,7 @@ repeat:
                 /* wow! this is splitted dir, we'd like to handle it */
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body != NULL);
-//                LASSERT((body->valid & OBD_MD_FID) != 0);
+                LASSERT((body->valid & OBD_MD_FLID) != 0);
 
                 obj = lmv_obj_grab(obd, &body->fid1);
                 if (!obj) {

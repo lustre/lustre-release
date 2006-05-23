@@ -71,11 +71,8 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
                 if (inode->i_state & I_NEW) {
                         lli = ll_i2info(inode);
                         ll_read_inode2(inode, md);
-                        lli->lli_fid = md->body->fid1;
                         unlock_new_inode(inode);
                 } else {
-                        /* inode is not new, no chamges to fid 
-                         * should take place. */
                         ll_update_inode(inode, md);
                 }
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n",
@@ -93,12 +90,8 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 
         inode = iget4(sb, hash, NULL, md);
         if (inode) {
-                if (!(inode->i_state & (I_FREEING | I_CLEAR))) {
+                if (!(inode->i_state & (I_FREEING | I_CLEAR)))
                         ll_update_inode(inode, md);
-                        down(&inode->i_sem);
-                        lli->lli_fid = md->body->fid1;
-                        up(&inode->i_sem);
-                }
 
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n",
                        inode->i_ino, inode->i_generation, inode);
