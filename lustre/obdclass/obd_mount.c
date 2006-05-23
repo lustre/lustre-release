@@ -1686,6 +1686,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 
         s1 = options;
         while (*s1) {
+                int clear = 0;
                 /* Skip whitespace and extra commas */
                 while (*s1 == ' ' || *s1 == ',')
                         s1++;
@@ -1693,16 +1694,20 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 /* Client options are parsed in ll_options: eg. flock, 
                    user_xattr, acl */
                 
-                /* Parse non-ldiskfs options here */
-                if (strncmp(s1, "abort_recov", 11) == 0) 
+                /* Parse non-ldiskfs options here. Rather than modifying
+                   ldiskfs, we just zero these out here */
+                if (strncmp(s1, "abort_recov", 11) == 0) {
                         lmd->lmd_flags |= LMD_FLG_ABORT_RECOV;
-                else if (strncmp(s1, "nosvc", 5) == 0)
+                        clear++;
+                } else if (strncmp(s1, "nosvc", 5) == 0) {
                         lmd->lmd_flags |= LMD_FLG_NOSVC;
+                        clear++;
                 /* ost exclusion list */
-                else if (strncmp(s1, "exclude=", 8) == 0) {
+                } else if (strncmp(s1, "exclude=", 8) == 0) {
                         rc = lmd_make_exclusion(lmd, s1 + 7);
                         if (rc) 
                                 goto invalid;
+                        clear++;
                 }
 
                 /* Linux 2.4 doesn't pass the device, so we stuck it at the 
@@ -1711,15 +1716,22 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         devname = s1 + 7;
                         /* terminate options right before device.  device
                            must be the last one. */
-                        *s1 = 0;
+                        *s1 = '\0';
                         break;
                 }
 
                 /* Find next opt */
                 s2 = strchr(s1, ',');
-                if (s2 == NULL) 
+                if (s2 == NULL) {
+                        if (clear) 
+                                *s1 = '\0';
                         break;
-                s1 = s2 + 1;
+                }
+                s2++;
+                if (clear) 
+                        memmove(s1, s2, strlen(s2) + 1);
+                else
+                        s1 = s2;
         }
 
         if (!devname) {
