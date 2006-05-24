@@ -66,9 +66,10 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
-                result = mdo_create(info->mti_ctxt, &info->mti_attr, next,
+                result = mdo_create(info->mti_ctxt, next,
                                     info->mti_rr.rr_name,
-                                    mdt_object_child(child));
+                                    mdt_object_child(child),
+                                    &info->mti_attr);
                 mdt_object_put(info->mti_ctxt, child);
         } else
                 result = PTR_ERR(child);
@@ -233,10 +234,11 @@ static int mdt_reint_open(struct mdt_thread_info *info)
        if (info->mti_rr.rr_flags & MDS_OPEN_CREAT) {
                 if (result == -ENOENT) {
                         /* let's create something */
-                        result = mdo_create(info->mti_ctxt, &info->mti_attr,
+                        result = mdo_create(info->mti_ctxt,
                                             mdt_object_child(parent),
                                             info->mti_rr.rr_name,
-                                            mdt_object_child(child));
+                                            mdt_object_child(child),
+                                            &info->mti_attr);
                 } else if (info->mti_rr.rr_flags & MDS_OPEN_EXCL) {
                         result = -EEXIST;
                 }

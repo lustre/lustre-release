@@ -195,6 +195,31 @@ static int cmm_lookup(const struct lu_context *ctx, struct md_object *mo_p,
 
 }
 
+static int cmm_create(const struct lu_context *ctx,
+                      struct md_object *mo_p, const char *name,
+                      struct md_object *mo_c, struct lu_attr *attr)
+{
+	struct md_object *ch_c = cmm2child_obj(md2cmm_obj(mo_c));
+        struct md_object *ch_p = cmm2child_obj(md2cmm_obj(mo_p));
+        int rc;
+
+        ENTRY;
+
+        if (cmm_is_local_obj(md2cmm_obj(mo_c))) {
+                rc = mdo_create(ctx, ch_p, name, ch_c, attr);
+        } else {
+                const struct lu_fid *lf = lu_object_fid(&mo_c->mo_lu);
+
+                /* remote object creation and local name insert */
+                rc = mo_object_create(ctx, ch_c, attr);
+                if (rc == 0) {
+                        rc = mdo_name_insert(ctx, ch_p, name, lf, attr);
+                }
+        }
+
+        RETURN(rc);
+}
+
 static int cmm_mkdir(const struct lu_context *ctx, struct lu_attr *attr,
                      struct md_object *mo_p, const char *name,
                      struct md_object *mo_c)
@@ -224,6 +249,7 @@ static int cmm_mkdir(const struct lu_context *ctx, struct lu_attr *attr,
 static struct md_dir_operations cmm_dir_ops = {
         .mdo_lookup        = cmm_lookup,
         .mdo_mkdir         = cmm_mkdir,
+        .mdo_create        = cmm_create
 };
 
 

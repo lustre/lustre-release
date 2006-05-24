@@ -756,6 +756,37 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         return mdd_dt_lookup(ctxt, mdo2mdd(pobj), mdo2mddo(pobj), name, fid);
 }
 
+static int mdd_create(const struct lu_context *ctxt,
+                      struct md_object *pobj, const char *name,
+                      struct md_object *child, struct lu_attr* attr)
+{
+        struct mdd_device *mdd = mdo2mdd(pobj);
+        struct mdd_object *mdo = mdo2mddo(pobj);
+        struct thandle *handle;
+        int rc = 0;
+        ENTRY;
+
+        mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
+        handle = mdd_trans_start(ctxt, mdd);
+        if (IS_ERR(handle))
+                RETURN(PTR_ERR(handle));
+
+        mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
+
+        rc = __mdd_object_create(ctxt, mdo2mddo(child), attr, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        rc = __mdd_index_insert(ctxt, mdo, lu_object_fid(&child->mo_lu),
+                                name, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+cleanup:
+        mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
+        mdd_trans_stop(ctxt, mdd, handle);
+        RETURN(rc);
+}
+
 static int mdd_mkdir(const struct lu_context *ctxt, struct lu_attr* attr,
                      struct md_object *pobj, const char *name,
                      struct md_object *child)
@@ -852,6 +883,7 @@ struct md_device_operations mdd_ops = {
 
 static struct md_dir_operations mdd_dir_ops = {
         .mdo_lookup        = mdd_lookup,
+        .mdo_create        = mdd_create,
         .mdo_mkdir         = mdd_mkdir,
         .mdo_rename        = mdd_rename,
         .mdo_link          = mdd_link,
