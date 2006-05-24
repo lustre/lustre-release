@@ -1210,7 +1210,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
 {
         char *log = mti->mti_svname;
         struct llog_handle *llh = NULL;
-        char *uuid;
+        char *uuid, *lovname;
         char mdt_index[5];
         int rc = 0;
         ENTRY;
@@ -1221,15 +1221,22 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
         if (uuid == NULL)
                 RETURN(-ENOMEM);
 
+        name_create(log, "-mdtlov", &lovname);
+        if (mgs_log_is_empty(obd, log)) {
+                rc = mgs_write_log_lov(obd, fsdb, mti, log, lovname);
+        } 
+
         sprintf(uuid, "%s_UUID", log);
         sprintf(mdt_index,"%d",mti->mti_stripe_index);
         /* add MDT itself */
         rc = record_start_log(obd, &llh, log);
         rc = record_marker(obd, llh, fsdb, CM_START, log, "add mdt");
         rc = record_attach(obd, llh, log, LUSTRE_MDT0_NAME, uuid);
-        rc = record_setup(obd, llh, log, uuid, mdt_index, 0, 0);
+        rc = record_setup(obd, llh, log, uuid, mdt_index, lovname, 0);
         rc = record_marker(obd, llh, fsdb, CM_END, log, "add mdt");
         rc = record_end_log(obd, &llh);
+        
+        name_destroy(lovname);
 
         OBD_FREE(uuid, sizeof(*uuid));
         RETURN(rc);
@@ -1250,11 +1257,9 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
 
         /* Make up our own uuid */
         snprintf(mti->mti_uuid, sizeof(mti->mti_uuid), "%s_UUID", mti->mti_svname);        
-        name_create(mti->mti_fsname, "-mdtlov", &lovname);
 
         /* add mdt */
-        rc = mgs_write_log_mdt0(obd, fsdb, mti);//->mti_svname, mti->mti_svname, NULL);
-        name_destroy(lovname);
+        rc = mgs_write_log_mdt0(obd, fsdb, mti);
         
         /* Append the mdt info to the client log */
         name_create(mti->mti_fsname, "-client", &cliname);
@@ -1415,21 +1420,20 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                 /* If we're upgrading, the old mdt log already has our
                    entry. Let's do a fake one for fun. */
                 flags = CM_SKIP | CM_UPGRADE146;
-#if 0
-        //XXX disabled until MDS-LOV will be setup properly
+
         //for_all_existing_mdt{
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                  if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
                         sprintf(mdt_index,"-MDT%04x",i);
                         name_create(mti->mti_fsname, mdt_index, &logname);
-                        name_create(mti->mti_fsname, "-mdtlov", &lovname);
+                        name_create(logname, "-mdtlov", &lovname);
                         mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, lovname, flags);
                         name_destroy(logname);
                         name_destroy(lovname);
                 }
         }
         //END PROTO
-#endif      
+    
         /* Append ost info to the client log */
         name_create(mti->mti_fsname, "-client", &logname);
         name_create(mti->mti_fsname, "-clilov", &lovname);
