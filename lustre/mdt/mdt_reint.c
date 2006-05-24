@@ -219,7 +219,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                                       lh,
                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
-                return PTR_ERR(parent);
+                RETURN(PTR_ERR(parent));
 
         result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
                             info->mti_rr.rr_name, info->mti_rr.rr_fid2);
@@ -244,10 +244,8 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 }
         }
         
-        if (result)
-                GOTO(out_parent, result);
-
-        result = mdt_md_open(info, child);
+        if (result == 0)
+                result = mdt_md_open(info, child);
         
         mdt_object_put(info->mti_ctxt, child);
 
