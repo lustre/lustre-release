@@ -180,6 +180,7 @@ static int mdt_getattr(struct mdt_thread_info *info,
                         info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
                                                         sizeof(struct mdt_body));
                         mdt_pack_attr2body(info->mti_body, &info->mti_attr);
+                        info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
                         info->mti_body->valid |= OBD_MD_FLID;
                 }
         }

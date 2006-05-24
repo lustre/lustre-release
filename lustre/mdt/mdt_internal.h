@@ -129,6 +129,7 @@ struct mdt_reint_record {
         struct lu_fid *rr_fid2;
         char          *rr_name;
         char          *rr_tgt;
+        __u32         rr_flags;
 };
 
 /*

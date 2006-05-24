@@ -38,6 +38,45 @@
 
 
 /* object operations */
+static int mdt_md_open(struct mdt_thread_info *info, struct mdt_object *obj)
+{
+        return 0;
+}
+
+static int mdt_md_create(struct mdt_thread_info *info)
+{
+        struct mdt_device      *mdt = info->mti_mdt;
+        struct mdt_object      *parent;
+        struct mdt_object      *child;
+        struct mdt_lock_handle *lh;
+
+        int result;
+
+        lh = &info->mti_lh[MDT_LH_PARENT];
+        lh->mlh_mode = LCK_PW;
+
+        parent = mdt_object_find_lock(info->mti_ctxt,
+                                      mdt, info->mti_rr.rr_fid1,
+                                      lh,
+                                      MDS_INODELOCK_UPDATE);
+        if (IS_ERR(parent))
+                return PTR_ERR(parent);
+
+        child = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid2);
+        if (!IS_ERR(child)) {
+                struct md_object *next = mdt_object_child(parent);
+
+                result = mdo_create(info->mti_ctxt, &info->mti_attr, next,
+                                    info->mti_rr.rr_name,
+                                    mdt_object_child(child));
+                mdt_object_put(info->mti_ctxt, child);
+        } else
+                result = PTR_ERR(child);
+        mdt_object_unlock(mdt->mdt_namespace, parent, lh);
+        mdt_object_put(info->mti_ctxt, parent);
+        return result;
+}
+
 static int mdt_md_mkdir(struct mdt_thread_info *info)
 {
         struct mdt_device      *mdt = info->mti_mdt;
@@ -163,8 +202,57 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
 
 static int mdt_reint_open(struct mdt_thread_info *info)
 {
+        struct mdt_device      *mdt = info->mti_mdt;
+        struct mdt_object      *parent;
+        struct mdt_object      *child;
+        struct mdt_lock_handle *lh;
+        int result;
+
         ENTRY;
-        RETURN(-EOPNOTSUPP);
+
+        lh = &info->mti_lh[MDT_LH_PARENT];
+        lh->mlh_mode = LCK_PW;
+
+        parent = mdt_object_find_lock(info->mti_ctxt,
+                                      mdt, info->mti_rr.rr_fid1,
+                                      lh,
+                                      MDS_INODELOCK_UPDATE);
+        if (IS_ERR(parent))
+                return PTR_ERR(parent);
+
+        result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
+                            info->mti_rr.rr_name, info->mti_rr.rr_fid2);
+        if (result && result != -ENOENT) {
+                GOTO(out_parent, result);
+        }
+        
+        child = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid2);
+        if (IS_ERR(child)) 
+                GOTO(out_parent, PTR_ERR(child));
+
+       if (info->mti_rr.rr_flags & MDS_OPEN_CREAT) {
+                if (result == -ENOENT) {
+                        /* let's create something */
+                        result = mdo_create(info->mti_ctxt, &info->mti_attr,
+                                            mdt_object_child(parent),
+                                            info->mti_rr.rr_name,
+                                            mdt_object_child(child));
+                } else if (info->mti_rr.rr_flags & MDS_OPEN_EXCL) {
+                        result = -EEXIST;
+                }
+        }
+        
+        if (result)
+                GOTO(out_parent, result);
+
+        result = mdt_md_open(info, child);
+        
+        mdt_object_put(info->mti_ctxt, child);
+
+out_parent:
+        mdt_object_unlock(mdt->mdt_namespace, parent, lh);
+        mdt_object_put(info->mti_ctxt, parent);
+        RETURN(result);
 }
 
 

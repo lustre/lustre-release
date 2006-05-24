@@ -101,8 +101,26 @@ static int mdt_open_unpack(struct mdt_thread_info *info,
                            struct ptlrpc_request *req, 
                            int offset)
 {
+        struct mdt_rec_create *rec;
+        struct lu_attr *attr = &info->mti_attr;
+        struct mdt_reint_record *rr = &info->mti_rr;
         ENTRY;
-        RETURN(-EOPNOTSUPP);
+
+        rec = lustre_swab_reqbuf(req, offset, sizeof (*rec),
+                                 lustre_swab_mdt_rec_create);
+        if (rec == NULL)
+                RETURN(-EFAULT);
+
+        rr->rr_fid1   = &rec->cr_fid1;
+        rr->rr_fid2   = &rec->cr_fid2;
+        attr->la_mode = rec->cr_mode;
+        rr->rr_flags  = rec->cr_flags;
+
+        rr->rr_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
+        if (rr->rr_name == NULL)
+                RETURN (-EFAULT);
+
+        RETURN(0);
 }
 
 typedef int (*reint_unpacker)(struct mdt_thread_info *info,
