@@ -73,23 +73,18 @@ static int mdt_getstatus(struct mdt_thread_info *info,
 {
         struct md_device *next  = info->mti_mdt->mdt_child;
         int               result;
+        struct mdt_body  *body;
 
         ENTRY;
 
-        result = req_capsule_start(&info->mti_pill, &RQF_MDS_GETSTATUS,
-                                   info->mti_rep_buf_size);
-        if (result)
-                ;
-        else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
                 result = -ENOMEM;
         else {
-                info->mti_body = req_capsule_server_get(&info->mti_pill,
-                                                        &RMF_MDT_BODY);
+                body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
                 result = next->md_ops->mdo_root_get(info->mti_ctxt,
-                                                    next,
-                                                    &info->mti_body->fid1);
+                                                    next, &body->fid1);
                 if (result == 0)
-                        info->mti_body->valid |= OBD_MD_FLID;
+                        body->valid |= OBD_MD_FLID;
         }
 
         /* the last_committed and last_xid fields are filled in for all
@@ -103,29 +98,19 @@ static int mdt_statfs(struct mdt_thread_info *info,
 {
         struct md_device  *next  = info->mti_mdt->mdt_child;
         struct obd_statfs *osfs;
-        struct kstatfs    *sfs;
-        int               result;
+        int                result;
 
         ENTRY;
 
-        info->mti_rep_buf_size[0] = sizeof(struct obd_statfs);
-        result = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
-        if (result)
-                CERROR(LUSTRE_MDT0_NAME" out of memory for statfs: size=%d\n",
-                       sizeof(struct obd_statfs));
-        else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
                 CERROR(LUSTRE_MDT0_NAME": statfs lustre_pack_reply failed\n");
                 result = -ENOMEM;
         } else {
-                osfs = lustre_msg_buf(req->rq_repmsg, 0,
-                                      sizeof(struct obd_statfs));
-                OBD_ALLOC_PTR(sfs);
-                if(sfs == NULL)
-                        RETURN(-ENOMEM);
+                osfs = req_capsule_server_get(&info->mti_pill, &RMF_OBD_STATFS);
                 /* XXX max_age optimisation is needed here. See mds_statfs */
-                result = next->md_ops->mdo_statfs(info->mti_ctxt, next, sfs);
-                statfs_pack(osfs, sfs);
-                OBD_FREE_PTR(sfs);
+                result = next->md_ops->mdo_statfs(info->mti_ctxt,
+                                                  next, &info->mti_sfs);
+                statfs_pack(osfs, &info->mti_sfs);
         }
 
         RETURN(result);
@@ -157,19 +142,14 @@ static int mdt_getattr(struct mdt_thread_info *info,
                        struct ptlrpc_request *req, int offset)
 {
         int              result;
+        struct mdt_body *body;
 
         LASSERT(info->mti_object != NULL);
         LASSERT(lu_object_exists(info->mti_ctxt,
                                  &info->mti_object->mot_obj.mo_lu));
-
         ENTRY;
 
-        info->mti_rep_buf_size[0] = sizeof(struct mdt_body);
-        result = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
-        if (result)
-                CERROR(LUSTRE_MDT0_NAME" cannot pack size=%d, rc=%d\n",
-                       sizeof(struct mdt_body), result);
-        else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR(LUSTRE_MDT0_NAME": statfs lustre_pack_reply failed\n");
                 result = -ENOMEM;
         } else {
@@ -177,11 +157,11 @@ static int mdt_getattr(struct mdt_thread_info *info,
 
                 result = mo_attr_get(info->mti_ctxt, next, &info->mti_attr);
                 if (result == 0) {
-                        info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
-                                                        sizeof(struct mdt_body));
-                        mdt_pack_attr2body(info->mti_body, &info->mti_attr);
-                        info->mti_body->fid1 = *mdt_object_fid(info->mti_object);
-                        info->mti_body->valid |= OBD_MD_FLID;
+                        body = req_capsule_server_get(&info->mti_pill,
+                                                      &RMF_MDT_BODY);
+                        mdt_pack_attr2body(body, &info->mti_attr);
+                        body->fid1 = *mdt_object_fid(info->mti_object);
+                        body->valid |= OBD_MD_FLID;
                 }
         }
         RETURN(result);
@@ -193,23 +173,17 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
         struct md_object  *next = mdt_object_child(info->mti_object);
         struct mdt_object *child;
         struct mdt_body   *body;
-        char *name;
-        int namesize;
+        const char *name;
         int result;
 
         LASSERT(info->mti_object != NULL);
 
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_repmsg, 1, sizeof *body);
-        LASSERT(body != NULL);
-
-        name = lustre_msg_string(req->rq_reqmsg, offset, 0);
-        if (name == NULL) {
-                CERROR("Can't unpack name\n");
+        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
+        if (name == NULL)
                 RETURN(-EFAULT);
-        }
-        namesize = lustre_msg_buflen(req->rq_reqmsg, offset);
 
         result = mdo_lookup(info->mti_ctxt, next, name, &body->fid1);
         if (result == 0) {
@@ -303,11 +277,11 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 CERROR("invalid record\n");
                 RETURN(rc = -EINVAL);
         }
-    
+
         /* XXX: this should be cleanup up */
         rep_off = offset == MDS_REQ_INTENT_REC_OFF ? 1 : 0;
-        
-        /* init body for handlers by rep's body, they may want to 
+
+        /* init body for handlers by rep's body, they may want to
          * store there something. */
         info->mti_body = lustre_msg_buf(req->rq_repmsg, rep_off,
                                         sizeof(struct mdt_body));
@@ -351,7 +325,7 @@ static int mdt_reint(struct mdt_thread_info *info,
                                info->mti_rep_buf_size, NULL);
         if (rc)
                 RETURN(rc);
-    
+
         /* init body by rep body, needed by handlers to return data to client */
         info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
                                         sizeof(struct mdt_body));
@@ -512,7 +486,7 @@ static struct mdt_object *mdt_obj(struct lu_object *o)
 
 struct mdt_object *mdt_object_find(const struct lu_context *ctxt,
                                    struct mdt_device *d,
-                                   struct lu_fid *f)
+                                   const struct lu_fid *f)
 {
         struct lu_object *o;
 
@@ -584,23 +558,29 @@ struct mdt_handler {
         __u32       mh_flags;
         int (*mh_act)(struct mdt_thread_info *info,
                       struct ptlrpc_request *req, int offset);
+
+        const struct req_format *mh_fmt;
 };
 
 enum mdt_handler_flags {
         /*
-         * struct mdt_body is passed in the 0-th incoming buffer.
+         * struct mdt_body is passed in the incoming message.
          */
         HABEO_CORPUS = (1 << 0),
         /*
-         * struct ldlm_request is passed in MDS_REQ_INTENT_LOCKREQ_OFF-th
-         * incoming buffer.
+         * struct ldlm_request is passed in the incoming message.
          */
         HABEO_CLAVIS = (1 << 1),
         /*
-         * object, identified by fid passed in mdt_body already exists (on
-         * disk)..
+         * object, identified by fid passed in mdt_body, already exists (on
+         * disk).
          */
-        HABEO_DISCUS = HABEO_CORPUS | (1 << 2)
+        HABEO_DISCUS = HABEO_CORPUS | (1 << 2),
+        /*
+         * this request has fixed reply format, so that reply message can be
+         * packed by generic code.
+         */
+        HABEO_REFERO = (1 << 3)
 };
 
 struct mdt_opc_slice {
@@ -649,6 +629,58 @@ static int mdt_lock_reply_compat(struct mdt_device *m, struct ldlm_reply *rep)
 }
 
 /*
+ * Generic code handling requests that have struct mdt_body passed in:
+ *
+ *  - extract mdt_body from request and save it in @info;
+ *
+ *  - create lu_object, corresponding to the fid in mdt_body, and save it in
+ *  @info;
+ *
+ *  - if HABEO_DISCUS flag is set for this request type in addition to
+ *  HABEO_CORPUS, check whether object actually exists on storage
+ *  (lu_object_exists()).
+ *
+ */
+static int mdt_habeo_corpus(struct mdt_thread_info *info, __u32 flags)
+{
+        const struct mdt_body   *body;
+        struct mdt_object       *obj;
+        const struct lu_context *ctx;
+
+        int result;
+
+        ctx = info->mti_ctxt;
+
+        body = info->mti_body = req_capsule_client_get(&info->mti_pill,
+                                                       &RMF_MDT_BODY);
+        if (body != NULL) {
+                if (fid_is_sane(&body->fid1)) {
+                        obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
+
+                        if (!IS_ERR(obj)) {
+                                if ((flags & HABEO_DISCUS) == HABEO_DISCUS &&
+                                    !lu_object_exists(ctx,
+                                                      &obj->mot_obj.mo_lu)) {
+                                        mdt_object_put(ctx, obj);
+                                        result = -ENOENT;
+                                } else {
+                                        info->mti_object = obj;
+                                        result = 0;
+                                }
+                        } else
+                                result = PTR_ERR(obj);
+                } else {
+                        CERROR("Invalid fid: "DFID3"\n", PFID3(&body->fid1));
+                        result = -EINVAL;
+                }
+        } else {
+                CERROR("Can't unpack body\n");
+                result = -EFAULT;
+        }
+        return result;
+}
+
+/*
  * Invoke handler for this request opc. Also do necessary preprocessing
  * (according to handler ->mh_flags), and post-processing (setting of
  * ->last_{xid,committed}).
@@ -677,49 +709,38 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         result = 0;
         flags = h->mh_flags;
-        req_capsule_init(&info->mti_pill, req, RCL_SERVER);
-        if (flags & HABEO_CORPUS) {
-                struct mdt_body   *body;
-                const struct lu_context *ctx;
-                struct mdt_object *obj;
+        LASSERT(ergo(flags & (HABEO_CORPUS | HABEO_REFERO), h->mh_fmt != NULL));
 
-                ctx = info->mti_ctxt;
-                body = info->mti_body =
-                        lustre_swab_reqbuf(req, off, sizeof *info->mti_body,
-                                           lustre_swab_mdt_body);
-                if (body != NULL) {
-                        obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
-                        if (!IS_ERR(obj)) {
-                                if ((flags & HABEO_DISCUS) == HABEO_DISCUS &&
-                                    !lu_object_exists(ctx,
-                                                      &obj->mot_obj.mo_lu)) {
-                                        mdt_object_put(ctx, obj);
-                                        result = -ENOENT;
-                                } else
-                                        info->mti_object = obj;
-                        } else
-                                result = PTR_ERR(obj);
-                } else {
-                        CERROR("Can't unpack body\n");
-                        result = -EFAULT;
-                }
-        } else if (flags & HABEO_CLAVIS) {
+        req_capsule_init(&info->mti_pill,
+                         req, RCL_SERVER, info->mti_rep_buf_size);
+
+        if (h->mh_fmt != NULL) {
+                req_capsule_set(&info->mti_pill, h->mh_fmt);
+                if (flags & HABEO_REFERO)
+                        result = req_capsule_pack(&info->mti_pill);
+        }
+
+        if (result == 0 && flags & HABEO_CORPUS)
+                result = mdt_habeo_corpus(info, flags);
+
+        if (result == 0 && flags & HABEO_CLAVIS) {
                 struct ldlm_request *dlm;
 
                 LASSERT(shift == 0);
-                dlm = info->mti_dlm_req =
-                        lustre_swab_reqbuf(req, MDS_REQ_INTENT_LOCKREQ_OFF,
-                                           sizeof *dlm,
-                                           lustre_swab_ldlm_request);
+                LASSERT(h->mh_fmt != NULL);
+
+                dlm = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
                 if (dlm != NULL) {
                         if (info->mti_mdt->mdt_flags & MDT_CL_COMPAT_RESNAME)
                                 result = mdt_lock_resname_compat(info->mti_mdt,
                                                                  dlm);
+                        info->mti_dlm_req = dlm;
                 } else {
                         CERROR("Can't unpack dlm request\n");
                         result = -EFAULT;
                 }
         }
+
         if (result == 0)
                 /*
                  * Process request.
@@ -736,7 +757,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         LASSERT(current->journal_info == NULL);
 
-        if (flags & HABEO_CLAVIS &&
+        if (result == 0 && flags & HABEO_CLAVIS &&
             info->mti_mdt->mdt_flags & MDT_CL_COMPAT_RESNAME) {
                 struct ldlm_reply *rep;
 
@@ -770,11 +791,8 @@ static void mdt_thread_info_init(struct mdt_thread_info *info)
         int i;
 
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
-        /*
-         * Poison size array.
-         */
         for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
-                info->mti_rep_buf_size[i] = ~0;
+                info->mti_rep_buf_size[i] = 0;
         info->mti_rep_buf_nr = i;
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
@@ -1051,6 +1069,77 @@ void intent_set_disposition(struct ldlm_reply *rep, int flag)
         rep->lock_policy_res1 |= flag;
 }
 
+enum mdt_it_code {
+        MDT_IT_OPEN,
+        MDT_IT_OCREAT,
+        MDT_IT_CREATE,
+        MDT_IT_GETATTR,
+        MDT_IT_READDIR,
+        MDT_IT_LOOKUP,
+        MDT_IT_UNLINK,
+        MDT_IT_TRUNC,
+        MDT_IT_GETXATTR,
+        MDT_IT_NR
+};
+
+static struct {
+        const struct req_format *it_fmt;
+        __u32                    it_flags;
+        int                    (*it_act)(struct mdt_thread_info *,
+                                         struct ptlrpc_request *, int);
+} mdt_it_flavor[] = {
+        [MDT_IT_OPEN]     = { NULL,                     0, mdt_reint_internal },
+        [MDT_IT_OCREAT]   = { NULL,                     0, mdt_reint_internal },
+        [MDT_IT_CREATE]   = { NULL,                     0, NULL },
+        [MDT_IT_GETATTR]  = { &RQF_LDLM_INTENT_GETATTR,
+                              HABEO_DISCUS, mdt_getattr_name },
+        [MDT_IT_READDIR]  = { NULL,                     0, NULL },
+        [MDT_IT_LOOKUP]   = { &RQF_LDLM_INTENT_GETATTR,
+                              HABEO_DISCUS, mdt_getattr_name },
+        [MDT_IT_UNLINK]   = { NULL,                     0, NULL },
+        [MDT_IT_TRUNC]    = { NULL,                     0, NULL },
+        [MDT_IT_GETXATTR] = { NULL,                     0, NULL }
+};
+
+static int mdt_intent_code(long itcode)
+{
+        int result;
+
+        switch(itcode) {
+        case IT_OPEN:
+                result = MDT_IT_OPEN;
+                break;
+        case IT_OPEN|IT_CREAT:
+                result = MDT_IT_OCREAT;
+                break;
+        case IT_CREAT:
+                result = MDT_IT_CREATE;
+                break;
+        case IT_READDIR:
+                result = MDT_IT_READDIR;
+                break;
+        case IT_GETATTR:
+                result = MDT_IT_GETATTR;
+                break;
+        case IT_LOOKUP:
+                result = MDT_IT_LOOKUP;
+                break;
+        case IT_UNLINK:
+                result = MDT_IT_UNLINK;
+                break;
+        case IT_TRUNC:
+                result = MDT_IT_TRUNC;
+                break;
+        case IT_GETXATTR:
+                result = MDT_IT_GETXATTR;
+                break;
+        default:
+                CERROR("Unknown intent opcode: %ld\n", itcode);
+                result = -EINVAL;
+                break;
+        }
+        return result;
+}
 
 static int mdt_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
@@ -1064,99 +1153,53 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         int rc;
         int gflags = 0;
         struct mdt_thread_info *info;
-        struct mdt_body   *body;
+        struct req_capsule *pill;
+        int opcode;
         ENTRY;
 
         LASSERT(req != NULL);
 
         info = lu_context_key_get(req->rq_svc_thread->t_ctx, &mdt_thread_key);
         LASSERT(info != NULL);
-
+        pill = &info->mti_pill;
+        LASSERT(pill->rc_req == req);
 
         if (req->rq_reqmsg->bufcount <= MDS_REQ_INTENT_IT_OFF) {
                 /* No intent was provided */
-                info->mti_rep_buf_size[0] = sizeof(struct ldlm_reply);
-                rc = lustre_pack_reply(req, 1, info->mti_rep_buf_size, NULL);
-                LASSERT(rc == 0);
-                RETURN(0);
+                LASSERT(pill->rc_fmt == &RQF_LDLM_ENQUEUE);
+                RETURN(req_capsule_pack(pill));
         }
 
-        it = lustre_swab_reqbuf(req, MDS_REQ_INTENT_IT_OFF, sizeof(*it),
-                                lustre_swab_ldlm_intent);
+        req_capsule_extend(pill, &RQF_LDLM_INTENT);
+        it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
         if (it == NULL) {
-                CERROR("Intent missing\n");
-                RETURN(req->rq_status = -EFAULT);
+                rc = -EFAULT;
+                RETURN(rc);
         }
 
-        if (it->opc == IT_GETATTR || it->opc == IT_LOOKUP) {
-                body = lustre_swab_reqbuf(req, MDS_REQ_INTENT_REC_OFF,
-                                          sizeof *body,
-                                          lustre_swab_mdt_body);
-                info->mti_body = body;
-                if (body != NULL) {
-                        struct mdt_object *obj;
-                        const struct lu_context *ctx = info->mti_ctxt;
-
-                        obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
-                        if (!IS_ERR(obj)) {
-                                if (!lu_object_exists(ctx, 
-                                                      &obj->mot_obj.mo_lu)) {
-                                        CERROR("Object doesn't exist\n");
-                                        mdt_object_put(ctx, obj);
-                                        rc = -ENOENT;
-                                } else {
-                                        info->mti_object = obj;
-                                        rc = 0;
-                                }
-                        } else
-                                rc = PTR_ERR(obj);
-                } else {
-                        CERROR("Can't unpack body\n");
-                        rc = -EFAULT;
-                }
-
-                //TODO: if rc then pack reply according to it
-                if (rc) {
-                        CERROR("Cannot prepare intent info, rc=%u\n", rc);
-                        RETURN(req->rq_status = rc);
-                }
-        }
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
-        info->mti_rep_buf_nr = 3;
-        info->mti_rep_buf_size[0] = sizeof(*rep);
-        info->mti_rep_buf_size[1] = sizeof(struct mdt_body);
-        info->mti_rep_buf_size[2] = sizeof(struct lov_mds_md);/*FIXME:See mds*/
 
+        opcode = mdt_intent_code(it->opc);
+        if (opcode < 0)
+                RETURN(-EINVAL);
 
-        rc = lustre_pack_reply(req, info->mti_rep_buf_nr,
-                               info->mti_rep_buf_size, NULL);
-        if (rc) {
-                RETURN(req->rq_status = rc);
+        req_capsule_extend(pill, mdt_it_flavor[opcode].it_fmt);
+
+        if (mdt_it_flavor[opcode].it_flags & HABEO_CORPUS) {
+                rc = mdt_habeo_corpus(info, mdt_it_flavor[opcode].it_flags);
+                if (rc != 0)
+                        RETURN(rc);
         }
 
-        rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
+        rc = req_capsule_pack(pill);
+        if (rc != 0)
+                RETURN(rc);
+
+        rep = req_capsule_server_get(pill, &RMF_DLM_REP);
         intent_set_disposition(rep, DISP_IT_EXECD);
 
-
         /* execute policy */
-        switch ((long)it->opc) {
-        case IT_OPEN:
-        case IT_OPEN|IT_CREAT:
-                rep->lock_policy_res2 = mdt_reint_internal(info, req, offset);
-                RETURN(ELDLM_LOCK_ABORTED);
-                break;
-        case IT_GETATTR:
-                gflags = MDS_INODELOCK_UPDATE;
-        case IT_LOOKUP:
-                gflags |= MDS_INODELOCK_LOOKUP;
-                //hmm.. something should be done with gflags..
-                rep->lock_policy_res2 = mdt_getattr_name(info, req, offset + 1);
-
-                break;
-        default:
-                CERROR("Unhandled intent till now "LPD64"\n", it->opc);
-                LBUG();
-        }
+        rep->lock_policy_res2 = mdt_it_flavor[opcode].it_act(info, req, offset);
 
         RETURN(ELDLM_OK);
 }
@@ -1792,11 +1835,18 @@ static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
         return l;
 }
 
+/*
+ * context key constructor/destructor
+ */
 
 static void *mdt_thread_init(const struct lu_context *ctx)
 {
         struct mdt_thread_info *info;
 
+        /*
+         * check that no high order allocations are incurred.
+         */
+        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
         OBD_ALLOC_PTR(info);
         if (info != NULL)
                 info->mti_ctxt = ctx;
@@ -1867,48 +1917,61 @@ static void __exit mdt_mod_exit(void)
 }
 
 
-#define DEF_HNDL(prefix, base, suffix, flags, opc, fn)                  \
+#define DEF_HNDL(prefix, base, suffix, flags, opc, fn, fmt)             \
 [prefix ## _ ## opc - prefix ## _ ## base] = {                          \
         .mh_name    = #opc,                                             \
         .mh_fail_id = OBD_FAIL_ ## prefix ## _  ## opc ## suffix,       \
         .mh_opc     = prefix ## _  ## opc,                              \
         .mh_flags   = flags,                                            \
-        .mh_act     = fn                                                \
+        .mh_act     = fn,                                               \
+        .mh_fmt     = fmt                                               \
 }
 
-#define DEF_MDT_HNDL(flags, name, fn)                   \
-        DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn)
+#define DEF_MDT_HNDL(flags, name, fn, fmt)                                  \
+        DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn, fmt)
+/*
+ * Request with a format known in advance
+ */
+#define DEF_MDT_HNDL_F(flags, name, fn)                                 \
+        DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn, &RQF_MDS_ ## name)
+/*
+ * Request with a format we do not yet know
+ */
+#define DEF_MDT_HNDL_0(flags, name, fn)                                 \
+        DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn, NULL)
 
 static struct mdt_handler mdt_mds_ops[] = {
-        DEF_MDT_HNDL(0,            CONNECT,        mdt_connect),
-        DEF_MDT_HNDL(0,            DISCONNECT,     mdt_disconnect),
-        DEF_MDT_HNDL(0,            GETSTATUS,      mdt_getstatus),
-        DEF_MDT_HNDL(HABEO_DISCUS, GETATTR,        mdt_getattr),
-        DEF_MDT_HNDL(HABEO_DISCUS, GETATTR_NAME,   mdt_getattr_name),
-        DEF_MDT_HNDL(HABEO_DISCUS, SETXATTR,       mdt_setxattr),
-        DEF_MDT_HNDL(HABEO_DISCUS, GETXATTR,       mdt_getxattr),
-        DEF_MDT_HNDL(0,            STATFS,         mdt_statfs),
-        DEF_MDT_HNDL(HABEO_DISCUS, READPAGE,       mdt_readpage),
-        DEF_MDT_HNDL(0,            REINT,          mdt_reint),
-        DEF_MDT_HNDL(HABEO_DISCUS, CLOSE,          mdt_close),
-        DEF_MDT_HNDL(HABEO_CORPUS, DONE_WRITING,   mdt_done_writing),
-        DEF_MDT_HNDL(0,            PIN,            mdt_pin),
-        DEF_MDT_HNDL(HABEO_DISCUS, SYNC,           mdt_sync),
-        DEF_MDT_HNDL(0,            QUOTACHECK,     mdt_handle_quotacheck),
-        DEF_MDT_HNDL(0,            QUOTACTL,       mdt_handle_quotactl)
+DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
+DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
+DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
+DEF_MDT_HNDL_F(HABEO_DISCUS|HABEO_REFERO, GETATTR,      mdt_getattr),
+DEF_MDT_HNDL_F(HABEO_DISCUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
+DEF_MDT_HNDL_0(HABEO_DISCUS,              SETXATTR,     mdt_setxattr),
+DEF_MDT_HNDL_0(HABEO_DISCUS,              GETXATTR,     mdt_getxattr),
+DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
+DEF_MDT_HNDL_0(HABEO_DISCUS,              READPAGE,     mdt_readpage),
+DEF_MDT_HNDL_0(0,                         REINT,        mdt_reint),
+DEF_MDT_HNDL_0(HABEO_DISCUS,              CLOSE,        mdt_close),
+DEF_MDT_HNDL_0(HABEO_CORPUS,              DONE_WRITING, mdt_done_writing),
+DEF_MDT_HNDL_0(0,                         PIN,          mdt_pin),
+DEF_MDT_HNDL_0(HABEO_DISCUS,              SYNC,         mdt_sync),
+DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_handle_quotacheck),
+DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_handle_quotactl)
 };
 
 static struct mdt_handler mdt_obd_ops[] = {
 };
 
-#define DEF_DLM_HNDL(flags, name, fn)                   \
-        DEF_HNDL(LDLM, ENQUEUE, , flags, name, fn)
+#define DEF_DLM_HNDL_0(flags, name, fn)                   \
+        DEF_HNDL(LDLM, ENQUEUE, , flags, name, fn, NULL)
+#define DEF_DLM_HNDL_F(flags, name, fn)                   \
+        DEF_HNDL(LDLM, ENQUEUE, , flags, name, fn, &RQF_LDLM_ ## name)
 
 static struct mdt_handler mdt_dlm_ops[] = {
-        DEF_DLM_HNDL(HABEO_CLAVIS, ENQUEUE,        mdt_enqueue),
-        DEF_DLM_HNDL(HABEO_CLAVIS, CONVERT,        mdt_convert),
-        DEF_DLM_HNDL(0,            BL_CALLBACK,    mdt_bl_callback),
-        DEF_DLM_HNDL(0,            CP_CALLBACK,    mdt_cp_callback)
+        DEF_DLM_HNDL_F(HABEO_CLAVIS, ENQUEUE,        mdt_enqueue),
+        DEF_DLM_HNDL_0(HABEO_CLAVIS, CONVERT,        mdt_convert),
+        DEF_DLM_HNDL_0(0,            BL_CALLBACK,    mdt_bl_callback),
+        DEF_DLM_HNDL_0(0,            CP_CALLBACK,    mdt_cp_callback)
 };
 
 static struct mdt_handler mdt_llog_ops[] = {

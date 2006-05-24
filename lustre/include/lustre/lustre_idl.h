@@ -177,9 +177,16 @@ static inline __u64 fid_num(const struct lu_fid *fid)
         return f_ver | fid_oid(fid);
 }
 
+static inline int fid_seq_is_sane(__u64 seq)
+{
+        return seq != 0;
+}
+
 static inline int fid_is_sane(const struct lu_fid *fid)
 {
-        return fid != NULL && fid_seq(fid) != 0 && fid_oid(fid) != 0;
+        return
+                fid != NULL &&
+                fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0;
 }
 
 #define DFID3 "["LPU64"/%u:%u]"

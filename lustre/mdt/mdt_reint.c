@@ -130,7 +130,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                 mdt_object_put(info->mti_ctxt, o);
         } else
                 result = PTR_ERR(o);
-        
+
         RETURN(result);
 }
 
@@ -157,11 +157,12 @@ static int mdt_reint_create(struct mdt_thread_info *info)
                         rc = mdt_md_mkdir(info);
                 else
                         rc = mdt_md_mkobj(info);
-                
-                /* return fid to client. mti_body should point to 
+
+                /* return fid to client. mti_body should point to
                  * rep's body. */
-                info->mti_body->fid1 = *info->mti_rr.rr_fid2;
-                info->mti_body->valid |= OBD_MD_FLID;
+                /* XXX these fields are not used by the callers. */
+                /* info->mti_body->fid1 = *info->mti_rr.rr_fid2; */
+                /* info->mti_body->valid |= OBD_MD_FLID; */
                 break;
         }
         case S_IFLNK:{
@@ -226,9 +227,9 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         if (result && result != -ENOENT) {
                 GOTO(out_parent, result);
         }
-        
+
         child = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid2);
-        if (IS_ERR(child)) 
+        if (IS_ERR(child))
                 GOTO(out_parent, PTR_ERR(child));
 
        if (info->mti_rr.rr_flags & MDS_OPEN_CREAT) {
@@ -243,10 +244,10 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                         result = -EEXIST;
                 }
         }
-        
+
         if (result == 0)
                 result = mdt_md_open(info, child);
-        
+
         mdt_object_put(info->mti_ctxt, child);
 
 out_parent:

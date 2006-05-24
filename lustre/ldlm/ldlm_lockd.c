@@ -659,8 +659,8 @@ find_existing_lock(struct obd_export *exp, struct lustre_handle *remote_hdl)
  */
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                          struct ptlrpc_request *req,
-                         struct ldlm_request *dlm_req,
-                         struct ldlm_callback_suite *cbs)
+                         const struct ldlm_request *dlm_req,
+                         const struct ldlm_callback_suite *cbs)
 {
         struct ldlm_reply *dlm_rep;
         int rc = 0, size[2] = {sizeof(*dlm_rep)};
@@ -704,7 +704,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
         }
 
 #if 0
-        /* FIXME this makes it impossible to use LDLM_PLAIN locks -- check 
+        /* FIXME this makes it impossible to use LDLM_PLAIN locks -- check
            against server's _CONNECT_SUPPORTED flags? (I don't want to use
            ibits for mgc/mgs) */
 
@@ -921,7 +921,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 }
 
 int ldlm_handle_convert0(struct ptlrpc_request *req,
-                         struct ldlm_request *dlm_req)
+                         const struct ldlm_request *dlm_req)
 {
         struct ldlm_reply *dlm_rep;
         struct ldlm_lock *lock;
@@ -1182,7 +1182,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         l_unlock(&ns->ns_lock);
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
-            cfs_time_after(cfs_time_current(), 
+            cfs_time_after(cfs_time_current(),
                            cfs_time_add(lock->l_last_used, cfs_time_seconds(10)))) {
                 if (ldlm_bl_to_thread(ns, NULL, lock))
                         ldlm_handle_bl_callback(ns, NULL, lock);
@@ -1610,7 +1610,7 @@ static int ldlm_setup(void)
         spin_lock_init(&waiting_locks_spinlock);
         cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, 0);
 
-        /* Using CLONE_FILES instead of CLONE_FS here causes failures in 
+        /* Using CLONE_FILES instead of CLONE_FS here causes failures in
            conf-sanity test 21.  But using CLONE_FS can cause problems
            if the daemonize happens between push/pop_ctxt... */
         rc = cfs_kernel_thread(expired_lock_main, NULL, CLONE_VM | CLONE_FS);

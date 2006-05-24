@@ -570,13 +570,13 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                      void *lvb_swabber,
                      struct lustre_handle *lockh);
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
-                         struct ldlm_request *dlm_req,
-                         struct ldlm_callback_suite *cbs);
+                         const struct ldlm_request *dlm_req,
+                         const struct ldlm_callback_suite *cbs);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
 int ldlm_handle_convert0(struct ptlrpc_request *req,
-                         struct ldlm_request *dlm_req);
+                         const struct ldlm_request *dlm_req);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
                            int flags, void *opaque);

@@ -137,49 +137,57 @@ struct mdt_reint_record {
  * reduce stack consumption.
  */
 struct mdt_thread_info {
-        const struct lu_context *mti_ctxt;
-        struct mdt_device       *mti_mdt;
+        const struct lu_context   *mti_ctxt;
+        struct mdt_device         *mti_mdt;
         /*
          * number of buffers in reply message.
          */
-        int                      mti_rep_buf_nr;
+        int                        mti_rep_buf_nr;
         /*
          * sizes of reply buffers.
          */
-        int                      mti_rep_buf_size[MDT_REP_BUF_NR_MAX];
+        int                        mti_rep_buf_size[MDT_REP_BUF_NR_MAX];
         /*
          * Body for "habeo corpus" operations.
          */
-        struct mdt_body         *mti_body;
+        const struct mdt_body     *mti_body;
         /*
          * Lock request for "habeo clavis" operations.
          */
-        struct ldlm_request     *mti_dlm_req;
+        const struct ldlm_request *mti_dlm_req;
         /*
          * Host object. This is released at the end of mdt_handler().
          */
-        struct mdt_object       *mti_object;
+        struct mdt_object         *mti_object;
         /*
          * Object attributes.
          */
-        struct lu_attr           mti_attr;
+        struct lu_attr             mti_attr;
         /*
          * reint record. Containing information for reint operations.
          */
-        struct mdt_reint_record  mti_rr;
+        struct mdt_reint_record    mti_rr;
         /*
          * Additional fail id that can be set by handler. Passed to
          * target_send_reply().
          */
-        int                      mti_fail_id;
+        int                        mti_fail_id;
         /*
          * A couple of lock handles.
          */
-        struct mdt_lock_handle   mti_lh[MDT_LH_NR];
+        struct mdt_lock_handle     mti_lh[MDT_LH_NR];
         /*
          * for req-layout interface.
          */
-        struct req_capsule       mti_pill;
+        struct req_capsule         mti_pill;
+        /*
+         * buffer for mdt_statfs().
+         *
+         * XXX this is probably huge overkill, because statfs is not that
+         * frequent.
+         */
+        struct kstatfs             mti_sfs;
+
 };
 
 int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
@@ -190,7 +198,7 @@ void fid_unlock(struct ldlm_namespace *, const struct lu_fid *,
                 struct lustre_handle *, ldlm_mode_t);
 
 struct mdt_object *mdt_object_find(const struct lu_context *,
-                                   struct mdt_device *, struct lu_fid *);
+                                   struct mdt_device *, const struct lu_fid *);
 void mdt_object_put(const struct lu_context *ctxt, struct mdt_object *);
 
 int mdt_object_lock(struct ldlm_namespace *, struct mdt_object *,
