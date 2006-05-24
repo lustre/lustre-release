@@ -600,9 +600,9 @@ static int lustre_start_mgc(struct super_block *sb)
         obd = class_name2obd(LUSTRE_MGC_OBDNAME);
         if (obd) {
                 atomic_inc(&obd->u.cli.cl_mgc_refcount);
-                /* FIXME There's only one MGC, but users could give different
+                /* There's only one MGC, but users could give different
                    MGS nids on the mount line.  So now do we add new MGS uuids
-                   or not?  If there's truly one MGS per site, the MGS uuids
+                   or not?  Since there's only one MGS per site, the MGS uuids
                    _should_ all be the same. Maybe check here?
                 */
                 
@@ -838,12 +838,14 @@ static int server_stop_servers(int lddflags, int lsiflags)
         /* Either an MDT or an OST or neither  */
 
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */
-        if ((lddflags & LDD_F_SV_TYPE_MDT) && (obd = class_name2obd("MDS"))) {
-                //FIXME pre-rename, should eventually be LUSTRE_MDT_NAME
+        if ((lddflags & LDD_F_SV_TYPE_MDT) && 
+            (obd = class_name2obd(LUSTRE_MDS_OBDNAME))) {
+                /*FIXME pre-rename, should eventually be LUSTRE_MDT_NAME*/
                 type = class_search_type(LUSTRE_MDS_NAME);
         } 
         /* if this was an OST, and there are no more OST's, clean up the OSS */
-        if ((lddflags & LDD_F_SV_TYPE_OST) && (obd = class_name2obd("OSS"))) {
+        if ((lddflags & LDD_F_SV_TYPE_OST) &&
+            (obd = class_name2obd(LUSTRE_OSS_OBDNAME))) {
                 type = class_search_type(LUSTRE_OST_NAME);
         }
 
@@ -942,7 +944,7 @@ int server_register_target(struct super_block *sb)
                mti->mti_flags);
 
         /* Register the target */
-        /* FIXME use mdc_process_config instead */
+        /* FIXME use mgc_process_config instead */
         rc = obd_set_info_async(mgc->u.cli.cl_mgc_mgsexp,
                                 strlen("register_target"), "register_target",
                                 sizeof(*mti), mti, NULL);
@@ -996,12 +998,14 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         
         /* If we're an MDT, make sure the global MDS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) {
-                /* make sure (what will be called) the MDS is started */
-                obd = class_name2obd("MDS");
+                /* make sure the MDS is started */
+                obd = class_name2obd(LUSTRE_MDS_OBDNAME);
                 if (!obd) {
-                        //FIXME pre-rename, should eventually be LUSTRE_MDS_NAME
-                        rc = lustre_start_simple("MDS", LUSTRE_MDT_NAME, 
-                                                 "MDS_uuid", 0, 0);
+                        rc = lustre_start_simple(LUSTRE_MDS_OBDNAME, 
+                    /* FIXME pre-rename, should eventually be LUSTRE_MDS_NAME */
+                                                 LUSTRE_MDT_NAME, 
+                                                 LUSTRE_MDS_OBDNAME"_uuid",
+                                                 0, 0);
                         if (rc) {
                                 CERROR("failed to start MDS: %d\n", rc);
                                 GOTO(out_servers, rc);
@@ -1012,10 +1016,12 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         /* If we're an OST, make sure the global OSS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
                 /* make sure OSS is started */
-                obd = class_name2obd("OSS");
+                obd = class_name2obd(LUSTRE_OSS_OBDNAME);
                 if (!obd) {
-                        rc = lustre_start_simple("OSS", LUSTRE_OSS_NAME,
-                                                 "OSS_uuid", 0, 0);
+                        rc = lustre_start_simple(LUSTRE_OSS_OBDNAME, 
+                                                 LUSTRE_OSS_NAME,
+                                                 LUSTRE_OSS_OBDNAME"_uuid", 
+                                                 0, 0);
                         if (rc) {
                                 CERROR("failed to start OSS: %d\n", rc);
                                 GOTO(out_servers, rc);
@@ -1315,8 +1321,7 @@ static void server_put_super(struct super_block *sb)
                         if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
                                 obd->obd_fail = 1;
                         /* We can't seem to give an error return code
-                           to .put_super, so we better make sure we clean up!
-                           FIXME is there a way to get around this? */
+                           to .put_super, so we better make sure we clean up! */
                         obd->obd_force = 1;
                         class_manual_cleanup(obd);
                 } else {
@@ -1499,8 +1504,8 @@ static int server_fill_super(struct super_block *sb)
            call s_p_s if so. 
            Probably should start client from new thread so we can return.
            Client will not finish until all servers are connected.
-           Note - MGMT-only server does NOT get a client, since there is no
-           lustre fs associated - the MGMT is for all lustre fs's */
+           Note - MGS-only server does NOT get a client, since there is no
+           lustre fs associated - the MGS is for all lustre fs's */
         }
 
         rc = server_fill_super_common(sb);

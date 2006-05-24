@@ -70,7 +70,7 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
         memcpy(&resname, logname, len);
 
         memset(res_id, 0, sizeof(*res_id));
-        /* FIXME are resid names swabbed across the wire? */
+        /* Always use the same endianness for the resid */
         res_id->name[0] = cpu_to_le64(resname);
         CDEBUG(D_MGC, "log %s to resid "LPX64"/"LPX64" (%.8s)\n", logname,
                res_id->name[0], res_id->name[1], (char *)&res_id->name[0]);
@@ -712,7 +712,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 }
                 RETURN(0);
         }
-        /* Hack alert */
+        /* FIXME move this to mgc_process_config */
         if (KEY_IS("register_target")) {
                 struct mgs_target_info *mti;
                 if (vallen != sizeof(struct mgs_target_info))
@@ -843,7 +843,6 @@ static int mgc_copy_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
 
         lcfg = (struct lustre_cfg *)cfg_buf;
 
-        /* FIXME we should always write to an empty log, so remove this check.*/
         /* append new records */
         if (rec->lrh_index >= llog_get_size(local_llh)) { 
                 rc = llog_write_rec(local_llh, &local_rec, NULL, 0, 
@@ -1017,6 +1016,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
 
         switch(cmd = lcfg->lcfg_command) {
         case LCFG_LOV_ADD_OBD: {
+                /* Add any new target, not just osts */
                 struct mgs_target_info *mti;
 
                 if (LUSTRE_CFG_BUFLEN(lcfg, 1) != 
@@ -1029,7 +1029,8 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 rc = mgc_target_register(obd->u.cli.cl_mgc_mgsexp, mti);
                 break;
         }
-        case LCFG_LOV_DEL_OBD: 
+        case LCFG_LOV_DEL_OBD:
+                /* Remove target from the fs? */  
                 /* FIXME */
                 CERROR("lov_del_obd unimplemented\n");
                 rc = -ENOSYS;
@@ -1056,7 +1057,8 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 }
                 
                 /* COMPAT_146 */
-                /* FIXME only set this for old logs! */
+                /* FIXME only set this for old logs!  Right now this forces
+                   us to always skip the "inside markers" check */
                 cld->cld_cfg.cfg_flags |= CFG_F_COMPAT146;
                 
                 rc = mgc_process_log(obd, cld);
