@@ -61,15 +61,15 @@
  */
 unsigned long mdt_num_threads;
 
-static int                  mdt_handle    (struct ptlrpc_request *req);
-static struct mdt_device   *mdt_dev       (struct lu_device *d);
-static const struct lu_fid *mdt_object_fid(struct mdt_object *o);
+static int                    mdt_handle    (struct ptlrpc_request *req);
+static struct mdt_device     *mdt_dev       (struct lu_device *d);
+static const struct lu_fid   *mdt_object_fid(struct mdt_object *o);
+static struct ptlrpc_request *mdt_info_req  (struct mdt_thread_info *info);
 
 static struct lu_context_key       mdt_thread_key;
 static struct lu_object_operations mdt_obj_ops;
 
-static int mdt_getstatus(struct mdt_thread_info *info,
-                         struct ptlrpc_request *req, int offset)
+static int mdt_getstatus(struct mdt_thread_info *info)
 {
         struct md_device *next  = info->mti_mdt->mdt_child;
         int               result;
@@ -93,8 +93,7 @@ static int mdt_getstatus(struct mdt_thread_info *info,
         RETURN(result);
 }
 
-static int mdt_statfs(struct mdt_thread_info *info,
-                      struct ptlrpc_request *req, int offset)
+static int mdt_statfs(struct mdt_thread_info *info)
 {
         struct md_device  *next  = info->mti_mdt->mdt_child;
         struct obd_statfs *osfs;
@@ -138,8 +137,7 @@ static void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
         b->nlink      = attr->la_nlink;
 }
 
-static int mdt_getattr(struct mdt_thread_info *info,
-                       struct ptlrpc_request *req, int offset)
+static int mdt_getattr(struct mdt_thread_info *info)
 {
         int              result;
         struct mdt_body *body;
@@ -167,8 +165,7 @@ static int mdt_getattr(struct mdt_thread_info *info,
         RETURN(result);
 }
 
-static int mdt_getattr_name(struct mdt_thread_info *info,
-                            struct ptlrpc_request *req, int offset)
+static int mdt_getattr_name(struct mdt_thread_info *info)
 {
         struct md_object  *next = mdt_object_child(info->mti_object);
         struct mdt_object *child;
@@ -189,9 +186,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
         if (result == 0) {
                 child = mdt_object_find(info->mti_ctxt, info->mti_mdt,
                                         &body->fid1);
-                if (IS_ERR(child)) {
-                        result = PTR_ERR(child);
-                } else {
+                if (!IS_ERR(child)) {
                         result = mo_attr_get(info->mti_ctxt, next,
                                              &info->mti_attr);
                         if (result == 0) {
@@ -199,7 +194,8 @@ static int mdt_getattr_name(struct mdt_thread_info *info,
                                 body->valid |= OBD_MD_FLID;
                         }
                         mdt_object_put(info->mti_ctxt, child);
-                }
+                } else
+                        result = PTR_ERR(child);
         }
 
         RETURN(result);
@@ -221,11 +217,19 @@ static struct mdt_device *mdt_dev(struct lu_device *d)
         return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
 }
 
-static int mdt_connect(struct mdt_thread_info *info,
-                       struct ptlrpc_request *req, int offset)
+static struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
+{
+        return info->mti_pill.rc_req;
+}
+
+static int mdt_connect(struct mdt_thread_info *info)
 {
         int result;
+        struct req_capsule *pill;
+        struct ptlrpc_request *req;
 
+        pill = &info->mti_pill;
+        req = mdt_info_req(info);
         result = target_handle_connect(req, mdt_handle);
         if (result == 0) {
                 struct obd_connect_data *data;
@@ -233,7 +237,13 @@ static int mdt_connect(struct mdt_thread_info *info,
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
 
-                data = lustre_msg_buf(req->rq_repmsg, 0, sizeof *data);
+                /*
+                 * XXX: this is incorrect, because target_handle_connect()
+                 * accessed and *swabbed* connect data bypassing
+                 * capsule. Correct fix is to switch everything to the new
+                 * req-layout interface.
+                 */
+                data = req_capsule_server_get(pill, &RMF_CONNECT_DATA);
 
                 result = seq_mgr_alloc(info->mti_ctxt,
                                        info->mti_mdt->mdt_seq_mgr,
@@ -242,73 +252,82 @@ static int mdt_connect(struct mdt_thread_info *info,
         return result;
 }
 
-static int mdt_disconnect(struct mdt_thread_info *info,
-                          struct ptlrpc_request *req, int offset)
+static int mdt_disconnect(struct mdt_thread_info *info)
 {
-        return target_handle_disconnect(req);
+        return target_handle_disconnect(mdt_info_req(info));
 }
 
-static int mdt_setxattr(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
+static int mdt_setxattr(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_getxattr(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
+static int mdt_getxattr(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_readpage(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
+static int mdt_readpage(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_reint_internal(struct mdt_thread_info *info,
-                              struct ptlrpc_request *req,
-                              int offset)
+static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
 {
-        int rep_off, rc;
-
-        rc = mdt_reint_unpack(info, req, offset);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
-                CERROR("invalid record\n");
-                RETURN(rc = -EINVAL);
-        }
-
-        /* XXX: this should be cleanup up */
-        rep_off = offset == MDS_REQ_INTENT_REC_OFF ? 1 : 0;
-
-        /* init body for handlers by rep's body, they may want to
-         * store there something. */
-        info->mti_body = lustre_msg_buf(req->rq_repmsg, rep_off,
-                                        sizeof(struct mdt_body));
-        rc = mdt_reint_rec(info);
-        RETURN(rc);
-}
-
-static int mdt_reint(struct mdt_thread_info *info,
-                     struct ptlrpc_request *req, int offset)
-{
-        __u32 *opcp = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF,
-                                     sizeof (*opcp));
-        __u32  opc;
         int rc;
 
         ENTRY;
 
-        /* NB only peek inside req now; mdt_XXX_unpack() will swab it */
-        if (opcp == NULL) {
-                CERROR("Can't inspect opcode\n");
-                RETURN(-EINVAL);
-        }
-        opc = *opcp;
-        if (lustre_msg_swabbed(req->rq_reqmsg))
-                __swab32s(&opc);
+        OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_UNPACK, -EFAULT);
 
-        DEBUG_REQ(D_INODE, req, "reint opt = %d", opc);
+        rc = mdt_reint_unpack(info, op);
+        if (rc == 0)
+                rc = mdt_reint_rec(info);
+
+        RETURN(rc);
+}
+
+static long mdt_reint_opcode(struct mdt_thread_info *info,
+                             const struct req_format **fmt)
+{
+        __u32 *ptr;
+        long opc;
+
+        opc = -EINVAL;
+        ptr = req_capsule_client_get(&info->mti_pill, &RMF_REINT_OPC);
+        if (ptr != NULL) {
+                opc = *ptr;
+                DEBUG_REQ(D_INODE, mdt_info_req(info), "reint opt = %ld", opc);
+                if (opc < REINT_MAX && fmt[opc] != NULL)
+                        req_capsule_extend(&info->mti_pill, fmt[opc]);
+                else
+                        CERROR("Unsupported opc: %ld\n", opc);
+        }
+        return opc;
+}
+
+static int mdt_reint(struct mdt_thread_info *info)
+{
+        long opc;
+        int  rc;
+
+        struct ptlrpc_request *req;
+
+        static const struct req_format *reint_fmts[REINT_MAX] = {
+                [REINT_SETATTR] = &RQF_MDS_REINT_SETATTR,
+                [REINT_CREATE]  = &RQF_MDS_REINT_CREATE,
+                [REINT_LINK]    = NULL, /* XXX not yet */
+                [REINT_UNLINK]  = &RQF_MDS_REINT_UNLINK,
+                [REINT_RENAME]  = NULL, /* XXX not yet */
+                [REINT_OPEN]    = NULL /* XXX not yet */
+        };
+
+        ENTRY;
+
+        req = mdt_info_req(info);
+        opc = mdt_reint_opcode(info, reint_fmts);
+        if (opc < 0)
+                RETURN(opc);
 
         OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
@@ -326,45 +345,36 @@ static int mdt_reint(struct mdt_thread_info *info,
         if (rc)
                 RETURN(rc);
 
-        /* init body by rep body, needed by handlers to return data to client */
-        info->mti_body = lustre_msg_buf(req->rq_repmsg, 0,
-                                        sizeof(struct mdt_body));
-        rc = mdt_reint_internal(info, req, offset);
+        rc = mdt_reint_internal(info, opc);
         RETURN(rc);
 }
 
-static int mdt_close(struct mdt_thread_info *info,
-                     struct ptlrpc_request *req, int offset)
+static int mdt_close(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_done_writing(struct mdt_thread_info *info,
-                            struct ptlrpc_request *req, int offset)
+static int mdt_done_writing(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_pin(struct mdt_thread_info *info,
-                   struct ptlrpc_request *req, int offset)
+static int mdt_pin(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_sync(struct mdt_thread_info *info,
-                    struct ptlrpc_request *req, int offset)
+static int mdt_sync(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_handle_quotacheck(struct mdt_thread_info *info,
-                                 struct ptlrpc_request *req, int offset)
+static int mdt_handle_quotacheck(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_handle_quotactl(struct mdt_thread_info *info,
-                               struct ptlrpc_request *req, int offset)
+static int mdt_handle_quotactl(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
@@ -373,23 +383,20 @@ static int mdt_handle_quotactl(struct mdt_thread_info *info,
  * OBD PING and other handlers.
  */
 
-static int mdt_obd_ping(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
+static int mdt_obd_ping(struct mdt_thread_info *info)
 {
         int result;
         ENTRY;
-        result = target_handle_ping(req);
+        result = target_handle_ping(mdt_info_req(info));
         RETURN(result);
 }
 
-static int mdt_obd_log_cancel(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
+static int mdt_obd_log_cancel(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_obd_qc_callback(struct mdt_thread_info *info,
-                        struct ptlrpc_request *req, int offset)
+static int mdt_obd_qc_callback(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
@@ -405,8 +412,7 @@ static struct ldlm_callback_suite cbs = {
         .lcs_glimpse    = NULL
 };
 
-static int mdt_enqueue(struct mdt_thread_info *info,
-                       struct ptlrpc_request *req, int offset)
+static int mdt_enqueue(struct mdt_thread_info *info)
 {
         /*
          * info->mti_dlm_req already contains swapped and (if necessary)
@@ -416,26 +422,24 @@ static int mdt_enqueue(struct mdt_thread_info *info,
 
         info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
         return ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
-                                    req, info->mti_dlm_req, &cbs);
+                                    mdt_info_req(info),
+                                    info->mti_dlm_req, &cbs);
 }
 
-static int mdt_convert(struct mdt_thread_info *info,
-                       struct ptlrpc_request *req, int offset)
+static int mdt_convert(struct mdt_thread_info *info)
 {
         LASSERT(info->mti_dlm_req);
-        return ldlm_handle_convert0(req, info->mti_dlm_req);
+        return ldlm_handle_convert0(mdt_info_req(info), info->mti_dlm_req);
 }
 
-static int mdt_bl_callback(struct mdt_thread_info *info,
-                           struct ptlrpc_request *req, int offset)
+static int mdt_bl_callback(struct mdt_thread_info *info)
 {
         CERROR("bl callbacks should not happen on MDS\n");
         LBUG();
         return -EOPNOTSUPP;
 }
 
-static int mdt_cp_callback(struct mdt_thread_info *info,
-                           struct ptlrpc_request *req, int offset)
+static int mdt_cp_callback(struct mdt_thread_info *info)
 {
         CERROR("cp callbacks should not happen on MDS\n");
         LBUG();
@@ -582,15 +586,15 @@ struct mdt_handler {
         int         mh_fail_id;
         __u32       mh_opc;
         __u32       mh_flags;
-        int (*mh_act)(struct mdt_thread_info *info,
-                      struct ptlrpc_request *req, int offset);
+        int (*mh_act)(struct mdt_thread_info *info);
 
         const struct req_format *mh_fmt;
 };
 
 enum mdt_handler_flags {
         /*
-         * struct mdt_body is passed in the incoming message.
+         * struct mdt_body is passed in the incoming message, and object
+         * identified by this fid exists on disk.
          */
         HABEO_CORPUS = (1 << 0),
         /*
@@ -598,15 +602,10 @@ enum mdt_handler_flags {
          */
         HABEO_CLAVIS = (1 << 1),
         /*
-         * object, identified by fid passed in mdt_body, already exists (on
-         * disk).
-         */
-        HABEO_DISCUS = HABEO_CORPUS | (1 << 2),
-        /*
          * this request has fixed reply format, so that reply message can be
          * packed by generic code.
          */
-        HABEO_REFERO = (1 << 3)
+        HABEO_REFERO = (1 << 2)
 };
 
 struct mdt_opc_slice {
@@ -654,37 +653,23 @@ static int mdt_lock_reply_compat(struct mdt_device *m, struct ldlm_reply *rep)
         return 0;
 }
 
-/*
- * Generic code handling requests that have struct mdt_body passed in:
- *
- *  - extract mdt_body from request and save it in @info;
- *
- *  - create lu_object, corresponding to the fid in mdt_body, and save it in
- *  @info;
- *
- *  - if HABEO_DISCUS flag is set for this request type in addition to
- *  HABEO_CORPUS, check whether object actually exists on storage
- *  (lu_object_exists()).
- *
- */
-static int mdt_habeo_corpus(struct mdt_thread_info *info, __u32 flags)
+static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
 {
-        const struct mdt_body   *body;
-        struct mdt_object       *obj;
-        const struct lu_context *ctx;
-
         int result;
+        const struct mdt_body    *body;
+        struct mdt_object        *obj;
+        const struct lu_context  *ctx;
+        const struct req_capsule *pill;
 
         ctx = info->mti_ctxt;
+        pill = &info->mti_pill;
 
-        body = info->mti_body = req_capsule_client_get(&info->mti_pill,
-                                                       &RMF_MDT_BODY);
+        body = info->mti_body = req_capsule_client_get(pill, &RMF_MDT_BODY);
         if (body != NULL) {
                 if (fid_is_sane(&body->fid1)) {
                         obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
-
                         if (!IS_ERR(obj)) {
-                                if ((flags & HABEO_DISCUS) == HABEO_DISCUS &&
+                                if ((flags & HABEO_CORPUS) &&
                                     !lu_object_exists(ctx,
                                                       &obj->mot_obj.mo_lu)) {
                                         mdt_object_put(ctx, obj);
@@ -707,17 +692,45 @@ static int mdt_habeo_corpus(struct mdt_thread_info *info, __u32 flags)
 }
 
 /*
+ * Generic code handling requests that have struct mdt_body passed in:
+ *
+ *  - extract mdt_body from request and save it in @info, if present;
+ *
+ *  - create lu_object, corresponding to the fid in mdt_body, and save it in
+ *  @info;
+ *
+ *  - if HABEO_CORPUS flag is set for this request type check whether object
+ *  actually exists on storage (lu_object_exists()).
+ *
+ */
+static int mdt_req_unpack(struct mdt_thread_info *info, __u32 flags)
+{
+        struct req_capsule *pill;
+
+        int result;
+
+        pill = &info->mti_pill;
+
+        if (req_capsule_has_field(pill, &RMF_MDT_BODY))
+                result = mdt_body_unpack(info, flags);
+        else
+                result = 0;
+
+        if (result == 0 && (flags & HABEO_REFERO))
+                result = req_capsule_pack(pill);
+
+        return result;
+}
+
+/*
  * Invoke handler for this request opc. Also do necessary preprocessing
  * (according to handler ->mh_flags), and post-processing (setting of
  * ->last_{xid,committed}).
  */
 static int mdt_req_handle(struct mdt_thread_info *info,
-                          struct mdt_handler *h, struct ptlrpc_request *req,
-                          int shift)
+                          struct mdt_handler *h, struct ptlrpc_request *req)
 {
-        int result;
-        int off;
-
+        int   result;
         __u32 flags;
 
         ENTRY;
@@ -731,8 +744,6 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         if (h->mh_fail_id != 0)
                 OBD_FAIL_RETURN(h->mh_fail_id, 0);
 
-        off = MDS_REQ_REC_OFF + shift;
-
         result = 0;
         flags = h->mh_flags;
         LASSERT(ergo(flags & (HABEO_CORPUS | HABEO_REFERO), h->mh_fmt != NULL));
@@ -742,17 +753,13 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         if (h->mh_fmt != NULL) {
                 req_capsule_set(&info->mti_pill, h->mh_fmt);
-                if (flags & HABEO_REFERO)
-                        result = req_capsule_pack(&info->mti_pill);
+                if (result == 0)
+                        result = mdt_req_unpack(info, flags);
         }
-
-        if (result == 0 && flags & HABEO_CORPUS)
-                result = mdt_habeo_corpus(info, flags);
 
         if (result == 0 && flags & HABEO_CLAVIS) {
                 struct ldlm_request *dlm;
 
-                LASSERT(shift == 0);
                 LASSERT(h->mh_fmt != NULL);
 
                 dlm = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
@@ -771,7 +778,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 /*
                  * Process request.
                  */
-                result = h->mh_act(info, req, off);
+                result = h->mh_act(info);
         /*
          * XXX result value is unconditionally shoved into ->rq_status
          * (original code sometimes placed error code into ->rq_status, and
@@ -1035,7 +1042,7 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
                 case +1:
                         h = mdt_handler_find(msg->opc);
                         if (h != NULL)
-                                result = mdt_req_handle(info, h, req, 0);
+                                result = mdt_req_handle(info, h, req);
                         else {
                                 req->rq_status = -ENOTSUPP;
                                 result = ptlrpc_error(req);
@@ -1108,24 +1115,101 @@ enum mdt_it_code {
         MDT_IT_NR
 };
 
-static struct {
+static int mdt_intent_getattr(enum mdt_it_code opcode,
+                              struct mdt_thread_info *info);
+static int mdt_intent_reint(enum mdt_it_code opcode,
+                            struct mdt_thread_info *info);
+
+static struct mdt_it_flavor {
         const struct req_format *it_fmt;
         __u32                    it_flags;
-        int                    (*it_act)(struct mdt_thread_info *,
-                                         struct ptlrpc_request *, int);
+        int                    (*it_act)(enum mdt_it_code ,
+                                         struct mdt_thread_info *);
+        long                     it_reint;
 } mdt_it_flavor[] = {
-        [MDT_IT_OPEN]     = { NULL,                     0, mdt_reint_internal },
-        [MDT_IT_OCREAT]   = { NULL,                     0, mdt_reint_internal },
-        [MDT_IT_CREATE]   = { NULL,                     0, NULL },
-        [MDT_IT_GETATTR]  = { &RQF_LDLM_INTENT_GETATTR,
-                              HABEO_DISCUS, mdt_getattr_name },
-        [MDT_IT_READDIR]  = { NULL,                     0, NULL },
-        [MDT_IT_LOOKUP]   = { &RQF_LDLM_INTENT_GETATTR,
-                              HABEO_DISCUS, mdt_getattr_name },
-        [MDT_IT_UNLINK]   = { NULL,                     0, NULL },
-        [MDT_IT_TRUNC]    = { NULL,                     0, NULL },
-        [MDT_IT_GETXATTR] = { NULL,                     0, NULL }
+        [MDT_IT_OPEN]     = {
+                .it_fmt   = NULL,
+                .it_flags = HABEO_REFERO,
+                .it_act   = mdt_intent_reint,
+                .it_reint = REINT_OPEN
+        },
+        [MDT_IT_OCREAT]   = {
+                .it_fmt   = NULL,
+                .it_flags = HABEO_REFERO,
+                .it_act   = mdt_intent_reint,
+                .it_reint = REINT_OPEN
+        },
+        [MDT_IT_CREATE]   = {
+                .it_fmt   = NULL,
+                .it_flags = HABEO_REFERO,
+                .it_act   = mdt_intent_reint,
+                .it_reint = REINT_CREATE
+        },
+        [MDT_IT_GETATTR]  = {
+                .it_fmt   = &RQF_LDLM_INTENT_GETATTR,
+                .it_flags = HABEO_CORPUS|HABEO_REFERO,
+                .it_act   = mdt_intent_getattr
+        },
+        [MDT_IT_READDIR]  = {
+                .it_fmt   = NULL,
+                .it_flags = HABEO_REFERO,
+                .it_act   = NULL
+        },
+        [MDT_IT_LOOKUP]   = {
+                .it_fmt   = &RQF_LDLM_INTENT_GETATTR,
+                .it_flags = HABEO_CORPUS|HABEO_REFERO,
+                .it_act   = mdt_intent_getattr
+        },
+        [MDT_IT_UNLINK]   = {
+                .it_fmt   = &RQF_LDLM_INTENT_UNLINK,
+                .it_flags = HABEO_REFERO,
+                .it_act   = NULL, /* XXX can be mdt_intent_reint, ? */
+                .it_reint = REINT_UNLINK
+        },
+        [MDT_IT_TRUNC]    = {
+                .it_fmt   = NULL,
+                .it_flags = HABEO_REFERO,
+                .it_act   = NULL
+        },
+        [MDT_IT_GETXATTR] = {
+                .it_fmt   = NULL,
+                .it_flags = HABEO_REFERO,
+                .it_act   = NULL
+        }
 };
+
+static int mdt_intent_getattr(enum mdt_it_code opcode,
+                              struct mdt_thread_info *info)
+{
+        return mdt_getattr_name(info);
+}
+
+static int mdt_intent_reint(enum mdt_it_code opcode,
+                            struct mdt_thread_info *info)
+{
+        long opc;
+        int  rc;
+
+        static const struct req_format *intent_fmts[REINT_MAX] = {
+                [REINT_CREATE]  = &RQF_LDLM_INTENT_CREATE,
+                [REINT_OPEN]    = &RQF_LDLM_INTENT_OPEN
+        };
+
+        ENTRY;
+
+        opc = mdt_reint_opcode(info, intent_fmts);
+        if (opc >= 0) {
+                if (mdt_it_flavor[opcode].it_reint == opc)
+                        rc = mdt_reint_internal(info, opc);
+                else {
+                        CERROR("Reint code %ld doesn't match intent: %d\n",
+                               opc, opcode);
+                        rc = -EPROTO;
+                }
+        } else
+                rc = opc;
+        RETURN(rc);
+}
 
 static int mdt_intent_code(long itcode)
 {
@@ -1167,20 +1251,55 @@ static int mdt_intent_code(long itcode)
         return result;
 }
 
+static int mdt_intent_opc(long itopc, struct mdt_thread_info *info)
+{
+        int opc;
+        int rc;
+
+        struct req_capsule   *pill;
+        struct mdt_it_flavor *flv;
+
+        ENTRY;
+
+        opc = mdt_intent_code(itopc);
+        if (opc >= 0) {
+                pill = &info->mti_pill;
+                flv  = &mdt_it_flavor[opc];
+
+                if (flv->it_fmt != NULL)
+                        req_capsule_extend(pill, flv->it_fmt);
+
+                rc = mdt_req_unpack(info, flv->it_flags);
+                if (rc == 0) {
+                        struct ldlm_reply *rep;
+
+                        rep = req_capsule_server_get(pill, &RMF_DLM_REP);
+                        if (rep != NULL) {
+                                /* execute policy */
+                                rep->lock_policy_res2 = flv->it_act(opc, info);
+                                intent_set_disposition(rep, DISP_IT_EXECD);
+                                rc = 0;
+                        } else
+                                rc = -EFAULT;
+                }
+        } else
+                rc = -EINVAL;
+
+        RETURN(rc);
+}
+
 static int mdt_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
                              ldlm_mode_t mode, int flags, void *data)
 {
-        struct ptlrpc_request *req = req_cookie;
-        struct ldlm_lock *lock = *lockp;
-        struct ldlm_intent *it;
-        struct ldlm_reply *rep;
-        int offset = MDS_REQ_INTENT_REC_OFF;
+        struct mdt_thread_info *info;
+        struct ptlrpc_request  *req  =  req_cookie;
+        struct ldlm_intent     *it;
+        struct req_capsule     *pill;
+        struct ldlm_lock       *lock = *lockp;
+
         int rc;
         int gflags = 0;
-        struct mdt_thread_info *info;
-        struct req_capsule *pill;
-        int opcode;
         ENTRY;
 
         LASSERT(req != NULL);
@@ -1190,44 +1309,24 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         pill = &info->mti_pill;
         LASSERT(pill->rc_req == req);
 
-        if (req->rq_reqmsg->bufcount <= MDS_REQ_INTENT_IT_OFF) {
+        if (req->rq_reqmsg->bufcount > MDS_REQ_INTENT_IT_OFF) {
+                req_capsule_extend(pill, &RQF_LDLM_INTENT);
+                it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
+                if (it != NULL) {
+                        LDLM_DEBUG(lock, "intent policy opc: %s",
+                                   ldlm_it2str(it->opc));
+
+                        rc = mdt_intent_opc(it->opc, info);
+                        if (rc == 0)
+                                rc = ELDLM_OK;
+                } else
+                        rc = -EFAULT;
+        } else {
                 /* No intent was provided */
                 LASSERT(pill->rc_fmt == &RQF_LDLM_ENQUEUE);
-                RETURN(req_capsule_pack(pill));
+                rc = req_capsule_pack(pill);
         }
-
-        req_capsule_extend(pill, &RQF_LDLM_INTENT);
-        it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
-        if (it == NULL) {
-                rc = -EFAULT;
-                RETURN(rc);
-        }
-
-        LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
-
-        opcode = mdt_intent_code(it->opc);
-        if (opcode < 0)
-                RETURN(-EINVAL);
-
-        req_capsule_extend(pill, mdt_it_flavor[opcode].it_fmt);
-
-        if (mdt_it_flavor[opcode].it_flags & HABEO_CORPUS) {
-                rc = mdt_habeo_corpus(info, mdt_it_flavor[opcode].it_flags);
-                if (rc != 0)
-                        RETURN(rc);
-        }
-
-        rc = req_capsule_pack(pill);
-        if (rc != 0)
-                RETURN(rc);
-
-        rep = req_capsule_server_get(pill, &RMF_DLM_REP);
-        intent_set_disposition(rep, DISP_IT_EXECD);
-
-        /* execute policy */
-        rep->lock_policy_res2 = mdt_it_flavor[opcode].it_act(info, req, offset);
-
-        RETURN(ELDLM_OK);
+        RETURN(rc);
 }
 
 static int mdt_config(const struct lu_context *ctx, struct mdt_device *m,
@@ -1970,17 +2069,17 @@ static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
-DEF_MDT_HNDL_F(HABEO_DISCUS|HABEO_REFERO, GETATTR,      mdt_getattr),
-DEF_MDT_HNDL_F(HABEO_DISCUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
-DEF_MDT_HNDL_0(HABEO_DISCUS,              SETXATTR,     mdt_setxattr),
-DEF_MDT_HNDL_0(HABEO_DISCUS,              GETXATTR,     mdt_getxattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR,      mdt_getattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
+DEF_MDT_HNDL_0(HABEO_CORPUS,              SETXATTR,     mdt_setxattr),
+DEF_MDT_HNDL_0(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
-DEF_MDT_HNDL_0(HABEO_DISCUS,              READPAGE,     mdt_readpage),
-DEF_MDT_HNDL_0(0,                         REINT,        mdt_reint),
-DEF_MDT_HNDL_0(HABEO_DISCUS,              CLOSE,        mdt_close),
-DEF_MDT_HNDL_0(HABEO_CORPUS,              DONE_WRITING, mdt_done_writing),
+DEF_MDT_HNDL_0(HABEO_CORPUS,              READPAGE,     mdt_readpage),
+DEF_MDT_HNDL_F(0,                         REINT,        mdt_reint),
+DEF_MDT_HNDL_0(HABEO_CORPUS,              CLOSE,        mdt_close),
+DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_0(0,                         PIN,          mdt_pin),
-DEF_MDT_HNDL_0(HABEO_DISCUS,              SYNC,         mdt_sync),
+DEF_MDT_HNDL_0(HABEO_CORPUS,              SYNC,         mdt_sync),
 DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_handle_quotacheck),
 DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_handle_quotactl)
 };

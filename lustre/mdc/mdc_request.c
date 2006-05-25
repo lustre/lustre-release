@@ -1095,7 +1095,7 @@ static int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 
         LASSERT(fid != NULL);
         LASSERT(hint != NULL);
-        LASSERT(fid_seq(&cli->cl_fid));
+        LASSERT(fid_seq_is_sane(fid_seq(&cli->cl_fid)));
 
         spin_lock(&cli->cl_fid_lock);
         if (fid_oid(&cli->cl_fid) < LUSTRE_FID_SEQ_WIDTH) {

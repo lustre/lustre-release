@@ -42,126 +42,102 @@
 
 
 /* unpacking */
-static int mdt_setattr_unpack(struct mdt_thread_info *info,
-                              struct ptlrpc_request *req, 
-                              int offset)
+static int mdt_setattr_unpack(struct mdt_thread_info *info)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
 
-static int mdt_create_unpack(struct mdt_thread_info *info,
-                             struct ptlrpc_request *req, 
-                             int offset)
+static int mdt_create_unpack(struct mdt_thread_info *info)
 {
         struct mdt_rec_create *rec;
         struct lu_attr *attr = &info->mti_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
+        struct req_capsule *pill = &info->mti_pill;
+        int result;
         ENTRY;
 
-        rec = lustre_swab_reqbuf(req, offset, sizeof (*rec),
-                                 lustre_swab_mdt_rec_create);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+        rec = req_capsule_client_get(pill, &RMF_REC_CREATE);
+        if (rec != NULL) {
+                rr->rr_fid1 = &rec->cr_fid1;
+                rr->rr_fid2 = &rec->cr_fid2;
+                attr->la_mode = rec->cr_mode;
 
-        rr->rr_fid1 = &rec->cr_fid1;
-        rr->rr_fid2 = &rec->cr_fid2;
-        attr->la_mode = rec->cr_mode;
-
-        rr->rr_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
-
-        RETURN(0);
+                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+                result = 0;
+        } else
+                result = -EFAULT;
+        RETURN(result);
 }
 
-static int mdt_link_unpack(struct mdt_thread_info *info,
-                           struct ptlrpc_request *req, 
-                           int offset)
+static int mdt_link_unpack(struct mdt_thread_info *info)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
 
-static int mdt_unlink_unpack(struct mdt_thread_info *info,
-                             struct ptlrpc_request *req, 
-                             int offset)
+static int mdt_unlink_unpack(struct mdt_thread_info *info)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
 
-static int mdt_rename_unpack(struct mdt_thread_info *info,
-                             struct ptlrpc_request *req, 
-                             int offset)
+static int mdt_rename_unpack(struct mdt_thread_info *info)
 {
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
 
-static int mdt_open_unpack(struct mdt_thread_info *info,
-                           struct ptlrpc_request *req, 
-                           int offset)
+static int mdt_open_unpack(struct mdt_thread_info *info)
 {
-        struct mdt_rec_create *rec;
-        struct lu_attr *attr = &info->mti_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
+        struct mdt_rec_create   *rec;
+        struct lu_attr          *attr = &info->mti_attr;
+        struct req_capsule      *pill = &info->mti_pill;
+        struct mdt_reint_record *rr   = &info->mti_rr;
+        int result;
         ENTRY;
 
-        rec = lustre_swab_reqbuf(req, offset, sizeof (*rec),
-                                 lustre_swab_mdt_rec_create);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+        rec = req_capsule_client_get(pill, &RMF_REC_CREATE);
+        if (rec != NULL) {
+                rr->rr_fid1   = &rec->cr_fid1;
+                rr->rr_fid2   = &rec->cr_fid2;
+                attr->la_mode = rec->cr_mode;
+                rr->rr_flags  = rec->cr_flags;
 
-        rr->rr_fid1   = &rec->cr_fid1;
-        rr->rr_fid2   = &rec->cr_fid2;
-        attr->la_mode = rec->cr_mode;
-        rr->rr_flags  = rec->cr_flags;
+                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+                if (rr->rr_name == NULL)
+                        result = -EFAULT;
+                else
+                        result = 0;
+        } else
+                result = -EFAULT;
 
-        rr->rr_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
-        if (rr->rr_name == NULL)
-                RETURN (-EFAULT);
-
-        RETURN(0);
+        RETURN(result);
 }
 
-typedef int (*reint_unpacker)(struct mdt_thread_info *info,
-                              struct ptlrpc_request *req, 
-                              int offset);
+typedef int (*reint_unpacker)(struct mdt_thread_info *info);
 
 static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
         [REINT_SETATTR]  = mdt_setattr_unpack,
-        [REINT_CREATE] = mdt_create_unpack,
-        [REINT_LINK] = mdt_link_unpack,
-        [REINT_UNLINK] = mdt_unlink_unpack,
-        [REINT_RENAME] = mdt_rename_unpack,
-        [REINT_OPEN] = mdt_open_unpack
+        [REINT_CREATE]   = mdt_create_unpack,
+        [REINT_LINK]     = mdt_link_unpack,
+        [REINT_UNLINK]   = mdt_unlink_unpack,
+        [REINT_RENAME]   = mdt_rename_unpack,
+        [REINT_OPEN]     = mdt_open_unpack
 };
 
-int mdt_reint_unpack(struct mdt_thread_info *info,
-                     struct ptlrpc_request *req, 
-                     int offset)
+int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)
 {
-        mdt_reint_t opcode;
-        mdt_reint_t *opcodep;
         int rc;
+
         ENTRY;
 
-        /* NB don't lustre_swab_reqbuf() here.  We're just taking a peek
-         * and we want to leave it to the specific unpacker once we've
-         * identified the message type */
-        opcodep = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*opcodep));
-        if (opcodep == NULL)
-                RETURN(-EFAULT);
-
-        opcode = *opcodep;
-        if (lustre_msg_swabbed(req->rq_reqmsg))
-                __swab32s (&opcode);
-
-        if (opcode >= REINT_MAX || mdt_reint_unpackers[opcode] == NULL) {
-                CERROR("Unexpected opcode %d\n", opcode);
-                RETURN(-EFAULT);
+        if (op < REINT_MAX && mdt_reint_unpackers[op] != NULL) {
+                info->mti_rr.rr_opcode = op;
+                rc = mdt_reint_unpackers[op](info);
+        } else {
+                CERROR("Unexpected opcode %d\n", op);
+                rc = -EFAULT;
         }
-        info->mti_rr.rr_opcode = opcode;
-        rc = mdt_reint_unpackers[opcode](info, req, offset);
-
         RETURN(rc);
 }

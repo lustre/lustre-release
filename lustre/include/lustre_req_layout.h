@@ -71,6 +71,9 @@ void req_capsule_set_size(const struct req_capsule *pill,
                           enum req_location loc, int size);
 void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt);
 
+int req_capsule_has_field(const struct req_capsule *pill,
+                          const struct req_msg_field *field);
+
 int  req_layout_init(void);
 void req_layout_fini(void);
 
@@ -84,15 +87,20 @@ extern const struct req_format RQF_MDS_DISCONNECT;
  * This is format of direct (non-intent) MDS_GETATTR_NAME request.
  */
 extern const struct req_format RQF_MDS_GETATTR_NAME;
+extern const struct req_format RQF_MDS_REINT;
 extern const struct req_format RQF_MDS_REINT_CREATE;
+extern const struct req_format RQF_MDS_REINT_UNLINK;
+extern const struct req_format RQF_MDS_REINT_SETATTR;
 extern const struct req_format RQF_LDLM_ENQUEUE;
 extern const struct req_format RQF_LDLM_INTENT;
 extern const struct req_format RQF_LDLM_INTENT_GETATTR;
+extern const struct req_format RQF_LDLM_INTENT_OPEN;
+extern const struct req_format RQF_LDLM_INTENT_CREATE;
+extern const struct req_format RQF_LDLM_INTENT_UNLINK;
 
 extern const struct req_msg_field RMF_MDT_BODY;
 extern const struct req_msg_field RMF_OBD_STATFS;
 extern const struct req_msg_field RMF_NAME;
-extern const struct req_msg_field RMF_REC_CREATE;
 extern const struct req_msg_field RMF_TGTUUID;
 extern const struct req_msg_field RMF_CLUUID;
 /*
@@ -104,5 +112,13 @@ extern const struct req_msg_field RMF_DLM_REQ;
 extern const struct req_msg_field RMF_DLM_REP;
 extern const struct req_msg_field RMF_LDLM_INTENT;
 extern const struct req_msg_field RMF_MDT_MD;
+extern const struct req_msg_field RMF_REC_CREATE;
+extern const struct req_msg_field RMF_REC_LINK;
+extern const struct req_msg_field RMF_REC_UNLINK;
+extern const struct req_msg_field RMF_REC_RENAME;
+extern const struct req_msg_field RMF_REC_SETATTR;
+extern const struct req_msg_field RMF_EADATA;
+extern const struct req_msg_field RMF_LOGCOOKIES;
+extern const struct req_msg_field RMF_REINT_OPC;
 
 #endif /* _LUSTRE_REQ_LAYOUT_H__ */

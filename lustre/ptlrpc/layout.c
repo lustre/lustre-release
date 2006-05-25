@@ -64,9 +64,24 @@ static const struct req_msg_field *mds_getattr_name_client[] = {
         &RMF_NAME
 };
 
+static const struct req_msg_field *mds_reint_client[] = {
+        &RMF_REINT_OPC
+};
+
 static const struct req_msg_field *mds_reint_create_client[] = {
         &RMF_REC_CREATE,
         &RMF_NAME
+};
+
+static const struct req_msg_field *mds_reint_unlink_client[] = {
+        &RMF_REC_UNLINK,
+        &RMF_NAME
+};
+
+static const struct req_msg_field *mds_reint_setattr_client[] = {
+        &RMF_REC_SETATTR,
+        &RMF_EADATA,
+        &RMF_LOGCOOKIES
 };
 
 static const struct req_msg_field *mds_connect_client[] = {
@@ -90,7 +105,8 @@ static const struct req_msg_field *ldlm_enqueue_server[] = {
 
 static const struct req_msg_field *ldlm_intent_client[] = {
         &RMF_DLM_REQ,
-        &RMF_LDLM_INTENT
+        &RMF_LDLM_INTENT,
+        &RMF_REINT_OPC
 };
 
 static const struct req_msg_field *ldlm_intent_server[] = {
@@ -106,6 +122,23 @@ static const struct req_msg_field *ldlm_intent_getattr_client[] = {
         &RMF_NAME
 };
 
+/*
+ * Used for open and create.
+ */
+static const struct req_msg_field *ldlm_intent_create_client[] = {
+        &RMF_DLM_REQ,
+        &RMF_LDLM_INTENT,
+        &RMF_REC_CREATE,    /* coincides with mds_reint_create_client[] */
+        &RMF_NAME
+};
+
+static const struct req_msg_field *ldlm_intent_unlink_client[] = {
+        &RMF_DLM_REQ,
+        &RMF_LDLM_INTENT,
+        &RMF_REC_UNLINK,    /* coincides with mds_reint_unlink_client[] */
+        &RMF_NAME
+};
+
 static const struct req_format *req_formats[] = {
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
@@ -113,10 +146,16 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_STATFS,
         &RQF_MDS_GETATTR,
         &RQF_MDS_GETATTR_NAME,
+        &RQF_MDS_REINT,
         &RQF_MDS_REINT_CREATE,
+        &RQF_MDS_REINT_UNLINK,
+        &RQF_MDS_REINT_SETATTR,
         &RQF_LDLM_ENQUEUE,
         &RQF_LDLM_INTENT,
-        &RQF_LDLM_INTENT_GETATTR
+        &RQF_LDLM_INTENT_GETATTR,
+        &RQF_LDLM_INTENT_OPEN,
+        &RQF_LDLM_INTENT_CREATE,
+        &RQF_LDLM_INTENT_UNLINK,
 };
 
 struct req_msg_field {
@@ -156,11 +195,6 @@ EXPORT_SYMBOL(RMF_OBD_STATFS);
 const struct req_msg_field RMF_NAME =
         DEFINE_MSGF("name", RMF_F_STRING, 0, NULL);
 EXPORT_SYMBOL(RMF_NAME);
-
-const struct req_msg_field RMF_REC_CREATE =
-        DEFINE_MSGF("rec_create", 0,
-                    sizeof(struct mdt_rec_create), lustre_swab_mdt_rec_create);
-EXPORT_SYMBOL(RMF_REC_CREATE);
 
 const struct req_msg_field RMF_TGTUUID =
         DEFINE_MSGF("tgtuuid", RMF_F_STRING, sizeof(struct obd_uuid) - 1, NULL);
@@ -203,6 +237,42 @@ const struct req_msg_field RMF_MDT_MD =
         DEFINE_MSGF("mdt_md",
                     0, sizeof(struct lov_mds_md) /* FIXME: See mds */, NULL);
 EXPORT_SYMBOL(RMF_MDT_MD);
+
+const struct req_msg_field RMF_REC_UNLINK =
+        DEFINE_MSGF("rec_unlink", 0, sizeof(struct mdt_rec_unlink),
+                    lustre_swab_mds_rec_unlink);
+EXPORT_SYMBOL(RMF_REC_UNLINK);
+
+const struct req_msg_field RMF_REC_LINK =
+        DEFINE_MSGF("rec_link", 0, sizeof(struct mdt_rec_link),
+                    lustre_swab_mdt_rec_link);
+EXPORT_SYMBOL(RMF_REC_LINK);
+
+const struct req_msg_field RMF_REC_RENAME =
+        DEFINE_MSGF("rec_rename", 0, sizeof(struct mdt_rec_rename),
+                    lustre_swab_mdt_rec_rename);
+EXPORT_SYMBOL(RMF_REC_RENAME);
+
+const struct req_msg_field RMF_REC_CREATE =
+        DEFINE_MSGF("rec_create", 0,
+                    sizeof(struct mdt_rec_create), lustre_swab_mdt_rec_create);
+EXPORT_SYMBOL(RMF_REC_CREATE);
+
+const struct req_msg_field RMF_REC_SETATTR =
+        DEFINE_MSGF("rec_setattr", 0, sizeof(struct mdt_rec_setattr),
+                    lustre_swab_mdt_rec_setattr);
+EXPORT_SYMBOL(RMF_REC_SETATTR);
+
+const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 0, NULL);
+EXPORT_SYMBOL(RMF_EADATA);
+
+const struct req_msg_field RMF_LOGCOOKIES =
+        DEFINE_MSGF("logcookies", 0, 0, NULL);
+EXPORT_SYMBOL(RMF_LOGCOOKIES);
+
+const struct req_msg_field RMF_REINT_OPC =
+        DEFINE_MSGF("reint_opc", 0, sizeof(__u32), lustre_swab_generic_32s);
+EXPORT_SYMBOL(RMF_REINT_OPC);
 
 /*
  * Request formats.
@@ -251,10 +321,24 @@ const struct req_format RQF_MDS_GETATTR_NAME =
                         mds_getattr_name_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_GETATTR_NAME);
 
+const struct req_format RQF_MDS_REINT =
+        DEFINE_REQ_FMT0("MDS_REINT", mds_reint_client, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_REINT);
+
 const struct req_format RQF_MDS_REINT_CREATE =
         DEFINE_REQ_FMT0("MDS_REINT_CREATE",
                         mds_reint_create_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE);
+
+const struct req_format RQF_MDS_REINT_UNLINK =
+        DEFINE_REQ_FMT0("MDS_REINT_UNLINK",
+                        mds_reint_unlink_client, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_REINT_UNLINK);
+
+const struct req_format RQF_MDS_REINT_SETATTR =
+        DEFINE_REQ_FMT0("MDS_REINT_SETATTR",
+                        mds_reint_setattr_client, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_REINT_SETATTR);
 
 const struct req_format RQF_MDS_CONNECT =
         DEFINE_REQ_FMT0("MDS_CONNECT",
@@ -276,9 +360,24 @@ const struct req_format RQF_LDLM_INTENT =
 EXPORT_SYMBOL(RQF_LDLM_INTENT);
 
 const struct req_format RQF_LDLM_INTENT_GETATTR =
-        DEFINE_REQ_FMT0("LDLM_INTENT",
+        DEFINE_REQ_FMT0("LDLM_INTENT_GETATTR",
                         ldlm_intent_getattr_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_GETATTR);
+
+const struct req_format RQF_LDLM_INTENT_OPEN =
+        DEFINE_REQ_FMT0("LDLM_INTENT_OPEN",
+                        ldlm_intent_create_client, ldlm_intent_server);
+EXPORT_SYMBOL(RQF_LDLM_INTENT_OPEN);
+
+const struct req_format RQF_LDLM_INTENT_CREATE =
+        DEFINE_REQ_FMT0("LDLM_INTENT_CREATE",
+                        ldlm_intent_create_client, ldlm_intent_server);
+EXPORT_SYMBOL(RQF_LDLM_INTENT_CREATE);
+
+const struct req_format RQF_LDLM_INTENT_UNLINK =
+        DEFINE_REQ_FMT0("LDLM_INTENT_UNLINK",
+                        ldlm_intent_unlink_client, ldlm_intent_server);
+EXPORT_SYMBOL(RQF_LDLM_INTENT_UNLINK);
 
 int req_layout_init(void)
 {
@@ -337,6 +436,15 @@ static int __req_format_is_sane(const struct req_format *fmt)
         return
                 0 <= fmt->rf_idx && fmt->rf_idx < ARRAY_SIZE(req_formats) &&
                 req_formats[fmt->rf_idx] == fmt;
+}
+
+static struct lustre_msg *__req_msg(const struct req_capsule *pill,
+                                    enum req_location loc)
+{
+        struct ptlrpc_request *req;
+
+        req = pill->rc_req;
+        return loc == RCL_CLIENT ? req->rq_reqmsg : req->rq_repmsg;
 }
 
 void req_capsule_set(struct req_capsule *pill, const struct req_format *fmt)
@@ -399,11 +507,10 @@ static void *__req_capsule_get(const struct req_capsule *pill,
                                const struct req_msg_field *field,
                                enum req_location loc)
 {
-        const struct req_format     *fmt;
-        const struct ptlrpc_request *req;
-        struct lustre_msg           *msg;
-        void                        *value;
-        int                          offset;
+        const struct req_format *fmt;
+        struct lustre_msg       *msg;
+        void                    *value;
+        int                      offset;
 
         void *(*getter)(struct lustre_msg *m, int n, int minlen);
 
@@ -418,8 +525,7 @@ static void *__req_capsule_get(const struct req_capsule *pill,
 
         offset = __req_capsule_offset(pill, field, loc);
 
-        req = pill->rc_req;
-        msg = loc == RCL_CLIENT ? req->rq_reqmsg : req->rq_repmsg;
+        msg = __req_msg(pill, loc);
 
         getter = (field->rmf_flags & RMF_F_STRING) ?
                 (typeof(getter))lustre_msg_string : lustre_msg_buf;
@@ -432,9 +538,9 @@ static void *__req_capsule_get(const struct req_capsule *pill,
                 field->rmf_swabber(value);
         if (value == NULL)
                 DEBUG_REQ(D_ERROR, pill->rc_req,
-                          "Wrong buffer for field `%s' (%d) in format `%s': "
-                          "%d < %d (%s)\n",
-                          field->rmf_name, offset, fmt->rf_name,
+                          "Wrong buffer for field `%s' (%d of %d) "
+                          "in format `%s': %d vs. %d (%s)\n",
+                          field->rmf_name, offset, msg->bufcount, fmt->rf_name,
                           lustre_msg_buflen(msg, offset), field->rmf_size,
                           rcl_names[loc]);
         return value;
@@ -469,6 +575,8 @@ void req_capsule_set_size(const struct req_capsule *pill,
 }
 EXPORT_SYMBOL(req_capsule_set_size);
 
+#define FMT_FIELD(fmt, i, j) (fmt)->rf_fields[(i)].d[(j)]
+
 void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
 {
         int i;
@@ -486,15 +594,35 @@ void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
         for (i = 0; i < RCL_NR; ++i) {
                 LASSERT(fmt->rf_fields[i].nr >= old->rf_fields[i].nr);
                 for (j = 0; j < old->rf_fields[i].nr - 1; ++j) {
-                        LASSERT(fmt->rf_fields[i].d[j]->rmf_size ==
-                                old->rf_fields[i].d[j]->rmf_size);
+                        LASSERT(FMT_FIELD(fmt, i, j) == FMT_FIELD(old, i, j));
                 }
                 /*
                  * Last field in old format can be shorter than in new.
                  */
-                LASSERT(fmt->rf_fields[i].d[j]->rmf_size >=
-                        old->rf_fields[i].d[j]->rmf_size);
+                LASSERT(FMT_FIELD(fmt, i, j)->rmf_size >=
+                        FMT_FIELD(old, i, j)->rmf_size);
         }
         pill->rc_fmt = fmt;
 }
 EXPORT_SYMBOL(req_capsule_extend);
+
+int req_capsule_has_field(const struct req_capsule *pill,
+                          const struct req_msg_field *field)
+{
+        int result;
+        int loc;
+
+        loc = pill->rc_loc ^ 1;
+        if (field->rmf_offset[pill->rc_fmt->rf_idx][loc]) {
+                int offset;
+
+                offset = __req_capsule_offset(pill, field, loc);
+                result = __req_msg(pill, loc)->bufcount > offset;
+        } else
+                /*
+                 * Field doesn't exist in this format.
+                 */
+                result = 0;
+        return result;
+}
+EXPORT_SYMBOL(req_capsule_has_field);
