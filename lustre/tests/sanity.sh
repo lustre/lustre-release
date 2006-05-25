@@ -12,8 +12,11 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 77 101"
-# Tests that fail on uml
-[ "$UML" = "true" ] && EXCEPT="$EXCEPT 31d"
+
+# Tests that fail on uml, maybe elsewhere, FIXME
+# 31d works on my real system
+CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
+[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 31d 54a 65a 65b 65c 65d 65e 99a 99b 99c 99d 99e 99f"
 
 # Tests that always fail with mountconf -- FIXME
 # 48a moving the working dir succeeds

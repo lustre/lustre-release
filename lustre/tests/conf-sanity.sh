@@ -825,7 +825,6 @@ test_22() {
 }
 run_test 22 "interrupt client during recovery mount delay"
 
-
 umount_client $MOUNT	
 cleanup_nocli
 
