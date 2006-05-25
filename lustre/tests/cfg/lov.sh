@@ -1,17 +1,11 @@
-# oldstyle
-MDSNODE=${MDSNODE:-`hostname`}
-OSTNODE=${OSTNODE:-`hostname`}
-CLIENT=${CLIENT:-client}
-
 FSNAME=lustre
 
 # facet hosts
-mds_HOST=${mds_HOST:-$MDSNODE}
+mds_HOST=${mds_HOST:-`hostname`}
 mdsfailover_HOST=${mdsfailover_HOST}
 mgs_HOST=${mgs_HOST:-$mds_HOST}
-ost1_HOST=${ost1_HOST:-$OSTNODE}
+ost_HOST=${ost_HOST:-`hostname`}
 ostfailover_HOST=${ostfailover_HOST}
-ost2_HOST=${ost2_HOST:-$OSTNODE}
 
 TMP=${TMP:-/tmp}
 MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt}
@@ -28,7 +22,6 @@ FSTYPE=${FSTYPE:-ldiskfs}
 STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-$((OSTCOUNT -1))}
 TIMEOUT=${TIMEOUT:-20}
-UPCALL=${UPCALL:-DEFAULT}
 PTLDEBUG=${PTLDEBUG:-0x33f0404}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 

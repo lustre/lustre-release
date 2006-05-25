@@ -67,7 +67,6 @@ init_test_env() {
 
     # save the name of the config file for the upcall
     echo "XMLCONFIG=$LUSTRE/tests/$XMLCONFIG"  > $LUSTRE/tests/XMLCONFIG
-#    echo "CONFIG=`canonical_path $CONFIG`"  > $LUSTRE/tests/CONFIG
 }
 
 load_module() {
@@ -132,9 +131,6 @@ start() {
     echo "Starting ${facet}: $@ ${device} /mnt/${facet}"
     do_facet ${facet} mkdir -p /mnt/${facet}
     do_facet ${facet} mount -t lustre $@ ${device} /mnt/${facet} 
-    #do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
-    #    --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
-    #    $@ $XMLCONFIG
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
 	echo mount -t lustre $@ ${device} /mnt/${facet} 
@@ -362,6 +358,11 @@ declare -fx h2openib
 facet_host() {
    local facet=$1
    varname=${facet}_HOST
+   if [ -z "${!varname}" ]; then
+       if [ "${facet:0:3}" == "ost" ]; then
+	   eval ${facet}_HOST=${ost_HOST}
+       fi
+   fi
    echo -n ${!varname}
 }
 
@@ -446,10 +447,10 @@ do_facet() {
 add() {
     local facet=$1
     shift
-    # failsafe
+    # make sure its not already running
     stop ${facet} -f
     rm -f ${facet}active
-    $MKFS $*
+    do_facet ${facet} $MKFS $*
 }
 
 ostdevname() {
@@ -459,7 +460,6 @@ ostdevname() {
     eval DEVPTR=${!DEVNAME:=${OSTDEVBASE}${num}}
     echo -n $DEVPTR
 }
-
 
 ########
 ## MountConf setup
@@ -492,10 +492,9 @@ formatall() {
     # We need ldiskfs here, may as well load them all
     load_modules
     echo Formatting mds, osts
-    add mds $MDS_MKFS_OPTS --reformat $MDSDEV    > /dev/null || exit 10
+    add mds $MDS_MKFS_OPTS --reformat $MDSDEV > /dev/null || exit 10
     for num in `seq $OSTCOUNT`; do
-	DEVNAME=`ostdevname $num`
-	add ost$num $OST_MKFS_OPTS --reformat $DEVNAME > /dev/null || exit 10
+	add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
     done
 }
 

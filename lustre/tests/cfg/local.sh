@@ -1,19 +1,14 @@
-# oldstyle
-MDSNODE=${MDSNODE:-`hostname`}
-OSTNODE=${OSTNODE:-`hostname`}
-CLIENT=${CLIENT:-client}
-
 FSNAME=lustre
 
 # facet hosts
-mds_HOST=${mds_HOST:-$MDSNODE}
+mds_HOST=${mds_HOST:-`hostname`}
 mdsfailover_HOST=${mdsfailover_HOST}
 mgs_HOST=${mgs_HOST:-$mds_HOST}
-ost1_HOST=${ost1_HOST:-$OSTNODE}
+ost_HOST=${ost_HOST:-`hostname`}
 ostfailover_HOST=${ostfailover_HOST}
-ost2_HOST=${ost2_HOST:-$OSTNODE}
 
 TMP=${TMP:-/tmp}
+
 MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-100000}
 MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
@@ -21,6 +16,11 @@ MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
 OSTCOUNT=${OSTCOUNT:-2}
 OSTDEVBASE=${OSTDEVBASE:-$TMP/${FSNAME}-ost}
 OSTSIZE=${OSTSIZE:-200000}
+OSTOPT=""
+# Can specify individual ost devs with
+# OSTDEV1="/dev/sda"
+# on specific hosts with
+# ost1_HOST="uml2"
 
 NETTYPE=${NETTYPE:-tcp}
 MGSNID=`h2$NETTYPE $mgs_HOST`
@@ -28,7 +28,6 @@ FSTYPE=${FSTYPE:-ldiskfs}
 STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
 TIMEOUT=${TIMEOUT:-20}
-UPCALL=${UPCALL:-DEFAULT}
 PTLDEBUG=${PTLDEBUG:-0x33f0404}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 

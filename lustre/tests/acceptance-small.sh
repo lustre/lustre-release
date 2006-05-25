@@ -39,7 +39,7 @@ for NAME in $CONFIGS; do
 	. $LUSTRE/tests/cfg/$NAME.sh
 	
 	assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
-	assert_env ost_HOST ost2_HOST OST_MKFS_OPTS OSTDEV
+	assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 	assert_env FSNAME
 
 	if [ "$RUNTESTS" != "no" ]; then
