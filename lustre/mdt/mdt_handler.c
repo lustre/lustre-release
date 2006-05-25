@@ -370,6 +370,32 @@ static int mdt_handle_quotactl(struct mdt_thread_info *info,
 }
 
 /*
+ * OBD PING and other handlers.
+ */
+
+static int mdt_obd_ping(struct mdt_thread_info *info,
+                        struct ptlrpc_request *req, int offset)
+{
+        int result;
+        ENTRY;
+        result = target_handle_ping(req);
+        RETURN(result);
+}
+
+static int mdt_obd_log_cancel(struct mdt_thread_info *info,
+                        struct ptlrpc_request *req, int offset)
+{
+        return -EOPNOTSUPP;
+}
+
+static int mdt_obd_qc_callback(struct mdt_thread_info *info,
+                        struct ptlrpc_request *req, int offset)
+{
+        return -EOPNOTSUPP;
+}
+
+
+/*
  * DLM handlers.
  */
 
@@ -1959,7 +1985,14 @@ DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_handle_quotacheck),
 DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_handle_quotactl)
 };
 
+#define DEF_OBD_HNDL(flags, name, fn)                   \
+        DEF_HNDL(OBD, PING, _NET, flags, name, fn, NULL)
+
+
 static struct mdt_handler mdt_obd_ops[] = {
+        DEF_OBD_HNDL(0, PING,           mdt_obd_ping),
+        DEF_OBD_HNDL(0, LOG_CANCEL,     mdt_obd_log_cancel),
+        DEF_OBD_HNDL(0, QC_CALLBACK,    mdt_obd_qc_callback)
 };
 
 #define DEF_DLM_HNDL_0(flags, name, fn)                   \
