@@ -1,7 +1,7 @@
 Index: linux-2.6.9/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.9.orig/fs/ext3/namei.c	2006-05-23 17:01:09.000000000 +0800
-+++ linux-2.6.9/fs/ext3/namei.c	2006-05-23 17:01:09.000000000 +0800
+--- linux-2.6.9.orig/fs/ext3/namei.c	2006-05-26 16:47:50.000000000 +0800
++++ linux-2.6.9/fs/ext3/namei.c	2006-05-26 16:47:50.000000000 +0800
 @@ -24,81 +24,6 @@
   * 	Theodore Ts'o, 2002
   */
@@ -1375,9 +1375,9 @@ Index: linux-2.6.9/fs/ext3/namei.c
  
 Index: linux-2.6.9/fs/ext3/iam.c
 ===================================================================
---- linux-2.6.9.orig/fs/ext3/iam.c	2006-05-24 19:52:06.500448688 +0800
-+++ linux-2.6.9/fs/ext3/iam.c	2006-05-24 17:47:34.000000000 +0800
-@@ -0,0 +1,1183 @@
+--- linux-2.6.9.orig/fs/ext3/iam.c	2006-05-26 18:25:26.573741592 +0800
++++ linux-2.6.9/fs/ext3/iam.c	2006-05-26 17:08:48.000000000 +0800
+@@ -0,0 +1,1205 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1635,36 +1635,42 @@ Index: linux-2.6.9/fs/ext3/iam.c
 +        p = iam_lentry_shift(c, l->il_entries, 1);
 +        q = iam_lentry_shift(c, l->il_entries, count - 1);
 +
-+        while (p < q) {
++        while (p <= q) {
 +                m = iam_lentry_shift(c, p, iam_lfix_diff(path, q, p) / 2);
-+                if (iam_keycmp(c, iam_leaf_key_at(c, m), k) >= 0)
++                if (iam_keycmp(c, iam_leaf_key_at(c, m), k) > 0)
 +                        q = iam_lentry_shift(c, m, -1);
 +                else
 +                        p = iam_lentry_shift(c, m, +1);
 +        }
-+        l->il_at = q;
++        l->il_at = iam_lentry_shift(c, p, -1);
 +        iam_keycpy(c, iam_path_key(path, 0), iam_leaf_key_at(c, q));
-+
-+        if (iam_keycmp(c, iam_leaf_key_at(c, q), k) != 0)
++        
++        if (l->il_at == l->il_entries ||
++                iam_keycmp(c, iam_leaf_key_at(c, q), k) != 0)
 +                return -ENOENT;
++        
 +        return 0;
 +}
 +
 +static void iam_lfix_rec_add (struct iam_path *path, 
 +                              struct iam_key *k, struct iam_rec *r)
 +{
-+       	struct iam_lentry *end, *next, *nnext;
-+	int count;
++        struct iam_lentry *end, *next, *cur, *nnext;
 +        ptrdiff_t diff;
++        int count;
 +
 +        count = lentry_count_get(&path->ip_leaf);
 +        end = iam_lfix_get_end(path->ip_container, &path->ip_leaf);
-+        next = iam_lentry_shift(path->ip_container, path->ip_leaf.il_at, 1);
-+        nnext = iam_lentry_shift(path->ip_container, next, 1);
-+
-+        diff = (void *)end - (void *)next;
-+        memmove(next, nnext, diff);
-+
++        cur = path->ip_leaf.il_at;
++        if (cur != end) {
++                next = iam_lentry_shift(path->ip_container, cur, 1);
++                if (next != end) {
++                        nnext = iam_lentry_shift(path->ip_container, next, 1);
++                        diff = (void *)end - (void *)next;
++                        memmove(nnext, next, diff);
++                }
++                iam_lfix_next(path->ip_container, &path->ip_leaf);
++        }
 +        lentry_count_set(&path->ip_leaf, count + 1);
 +}
 +
@@ -2173,6 +2179,13 @@ Index: linux-2.6.9/fs/ext3/iam.c
 +               iam_it_container(it)->ic_descr->id_rec_size);
 +}
 +
++static void iam_it_keycpy(struct iam_iterator *it, struct iam_key *k)
++{
++        memcpy(iam_leaf_key(iam_it_container(it), &it->ii_path.ip_leaf, NULL), k,
++                iam_it_container(it)->ic_descr->id_key_size);
++}
++
++
 +/*
 + * Replace contents of record under iterator.
 + *
@@ -2208,10 +2221,14 @@ Index: linux-2.6.9/fs/ext3/iam.c
 +{
 +        int err;
 +
++        err = ext3_journal_get_write_access(handle, path->ip_leaf.il_bh);
++        if (err)
++                goto journal_error;
 +        iam_rec_add(path, NULL, NULL);
 +	err = ext3_journal_dirty_metadata(handle, path->ip_leaf.il_bh);
++journal_error:
 +	if (err)
-+		ext3_std_error(iam_path_obj(path)->i_sb, err);
++                ext3_std_error(iam_path_obj(path)->i_sb, err);
 +	return err;
 +}
 +
@@ -2285,7 +2302,7 @@ Index: linux-2.6.9/fs/ext3/iam.c
 +{
 +	int err;
 +
-+	if (!iam_leaf_can_add(path->ip_container, &path->ip_leaf, k, r)) {
++	if (iam_leaf_can_add(path->ip_container, &path->ip_leaf, k, r)) {
 +		err = iam_leaf_rec_add(handle, path);
 +	} else {
 +		err = split_index_node(handle, path);
@@ -2316,14 +2333,19 @@ Index: linux-2.6.9/fs/ext3/iam.c
 +        int result;
 +
 +        assert(it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE);
++#if 0
++        /*XXX remove this assert temporarily, since if the il_at point to the hearder,
++         * this assert might has some problems*/
 +        assert(it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)), k) < 0);
-+
++#endif
 +	result = iam_add_rec(h, &it->ii_path, k, r);
 +	if (result == 0) {
 +		/* place record and key info freed space. Leaf node is already
 +		 * in transaction. */
 +		iam_it_reccpy(it, r);
-+		/*
++                iam_it_keycpy(it, k);
++                iam_keycpy(it->ii_path.ip_container, it_scratch_key(it, 0), k);
++                /*
 +		 * XXX TBD.
 +		 */
 +        }
@@ -2563,8 +2585,8 @@ Index: linux-2.6.9/fs/ext3/iam.c
 +
 Index: linux-2.6.9/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.9.orig/fs/ext3/Makefile	2006-05-23 17:01:07.000000000 +0800
-+++ linux-2.6.9/fs/ext3/Makefile	2006-05-23 17:01:09.000000000 +0800
+--- linux-2.6.9.orig/fs/ext3/Makefile	2006-05-26 16:47:48.000000000 +0800
++++ linux-2.6.9/fs/ext3/Makefile	2006-05-26 16:47:50.000000000 +0800
 @@ -6,7 +6,7 @@
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -2576,8 +2598,8 @@ Index: linux-2.6.9/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: linux-2.6.9/include/linux/lustre_iam.h
 ===================================================================
---- linux-2.6.9.orig/include/linux/lustre_iam.h	2006-05-23 17:01:09.000000000 +0800
-+++ linux-2.6.9/include/linux/lustre_iam.h	2006-05-24 17:41:04.000000000 +0800
+--- linux-2.6.9.orig/include/linux/lustre_iam.h	2006-05-26 16:47:50.000000000 +0800
++++ linux-2.6.9/include/linux/lustre_iam.h	2006-05-26 16:47:50.000000000 +0800
 @@ -1,3 +1,39 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -3200,7 +3222,7 @@ Index: linux-2.6.9/include/linux/lustre_iam.h
 +				u32 *block, int *err);
 +int split_index_node(handle_t *handle, struct iam_path *path);
 +
-+extern struct iam_leaf_operations generic_leaf_ops;
++extern struct iam_leaf_operations lfix_leaf_ops;
 +extern struct iam_operations generic_iam_ops;
 +
 +
