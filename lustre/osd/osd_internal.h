@@ -48,6 +48,7 @@ struct osd_object {
          */
         struct inode        *oo_inode;
         struct rw_semaphore  oo_sem;
+        void                *oo_container;
 };
 
 /*
@@ -81,7 +82,7 @@ struct osd_thread_info {
          * XXX temporary: for ->i_op calls.
          */
         struct qstr         oti_str;
-
+        void                *scratch_key;        
 };
 
 #endif /* __KERNEL__ */

@@ -45,90 +45,125 @@
 #include <linux/lustre_iam.h>
 #include "fld_internal.h"
 
+
 struct iam_descr fld_param = {
         .id_key_size = sizeof ((struct lu_fid *)0)->f_seq,
         .id_ptr_size = 4, /* 32 bit block numbers for now */
         .id_rec_size = sizeof(mdsno_t),
         .id_node_gap = 0, /* no gaps in index nodes */
-        .id_root_gap = 0,
+        .id_root_gap = sizeof(struct iam_root),
+        .id_ops      = &generic_iam_ops,
+        .id_leaf_ops = &lfix_leaf_ops
+};
+/*
+ * number of blocks to reserve for particular operations. Should be function
+ * of ... something. Stub for now.
+ */
 
-#if 0
-        .id_root_ptr   = iam_root_ptr, /* returns 0: root is always at the
-                                        * beginning of the file (as it
-                                        * htree) */
-        .id_node_read  = iam_node_read,
-        .id_node_check = iam_node_check,
-        .id_node_init  = iam_node_init,
-        .id_keycmp     = iam_keycmp,
-#endif
+enum {
+        FLD_TXN_INDEX_INSERT_CREDITS  = 10,
+        FLD_TXN_INDEX_DELETE_CREDITS  = 10
 };
 
-int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
-                      fidseq_t seq_num, mdsno_t mdsno)
+static int fld_keycmp(struct iam_container *c, struct iam_key *k1, 
+                      struct iam_key *k2)
 {
-        /*
-         * XXX Use ->dio_index_insert() from struct dt_index_operations. The
-         * same below.
-         */
-#if 0
-        return fld->fld_dt->dd_ops->dt_iam_insert(&lctx, fld->fld_dt,
-                                                  fld->fld_info->fi_container,
-                                                  &seq_num, fld_param.id_key_size,
-                                                  &mdsno, fld_param.id_rec_size);
-#else
-        return 0;
-#endif
+        __u64 p1 = le64_to_cpu(*(__u32 *)k1);
+        __u64 p2 = le64_to_cpu(*(__u32 *)k2);
+
+        return p1 > p2 ? +1 : (p1 < p2 ? -1 : 0);
+ 
+}
+
+int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
+                      fidseq_t seq_num, mdsno_t mds_num)
+{
+        struct dt_device *dt = fld->fld_dt;
+        struct dt_object *dt_obj = fld->fld_obj;
+        struct txn_param txn;
+        struct thandle *th;
+        int    rc;
+
+      
+        /*stub here, will fix it later*/ 
+        txn.tp_credits = FLD_TXN_INDEX_INSERT_CREDITS;
+ 
+        th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
+        
+        rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj, 
+                                              (struct dt_rec*)(&mds_num),
+                                              (struct dt_key*)(&seq_num), th);
+        dt->dd_ops->dt_trans_stop(ctx, th);
+
+        RETURN(rc);
 }
 
 int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
                       fidseq_t seq_num, mdsno_t mds_num)
 {
-#if 0
-        return fld->fld_dt->dd_ops->dt_iam_delete(&lctx, fld->fld_dt,
-                                                  fld->fld_info->fi_container,
-                                                  &seq_num, fld_param.id_key_size,
-                                                  &mds_num, fld_param.id_rec_size);
-#else
-        return 0;
-#endif
+        struct dt_device *dt = fld->fld_dt;
+        struct dt_object *dt_obj = fld->fld_obj;
+        struct txn_param txn;
+        struct thandle *th;
+        int    rc;
+
+        
+        txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
+        th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
+        rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj, 
+                                              (struct dt_rec*)(&mds_num),
+                                              (struct dt_key*)(&seq_num), th);
+        dt->dd_ops->dt_trans_stop(ctx, th);
+
+        RETURN(rc);
 }
 
 int fld_handle_lookup(const struct lu_context *ctx,
                       struct fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
 {
-#if 0
-        int size;
-
-        size = fld_param.id_rec_size;
-        return fld->fld_dt->dd_ops->dt_iam_lookup(&lctx, fld->fld_dt,
-                                                  fld->fld_info->fi_container,
-                                                  &seq_num, fld_param.id_key_size,
-                                                  mds_num, &size);
-#else
-        return 0;
-#endif
+        
+        struct dt_device *dt = fld->fld_dt;
+        struct dt_object *dt_obj = fld->fld_obj;
+        
+        return dt_obj->do_index_ops->dio_lookup(ctx, dt_obj,
+                                             (struct dt_rec*)(&mds_num),
+                                             (struct dt_key*)(&seq_num));
 }
 
-int fld_info_init(struct fld_info *fld_info)
+#define FLD_OBJ_FID {1000, 1000, 1000}
+#define FLD_OBJ_MODE S_IFDIR
+int fld_iam_init(struct lu_context *ctx, struct fld *fld)
 {
-        struct file *fld_file;
-        int rc;
+        struct lu_fid obj_fid = FLD_OBJ_FID; /* reserved fid */
+        struct dt_device *dt = fld->fld_dt;
+        struct dt_object *dt_obj;
+        struct iam_container *ic;
+        int rc = 0;
+
         ENTRY;
 
-        fld_file = filp_open("/dev/null", O_RDWR, S_IRWXU);
-        /* sanity and security checks... */
-        OBD_ALLOC(fld_info->fi_container, sizeof(struct iam_container));
-        if (!fld_info->fi_container)
-                RETURN(-ENOMEM);
+        dt_obj = dt_object_find(ctx, dt, &obj_fid);
+        if (IS_ERR(dt_obj)) {
+                CERROR("can not find fld obj %lu \n", PTR_ERR(dt_obj));
+                RETURN(PTR_ERR(dt_obj));
+        }
+        
+        lu_object_get(&dt_obj->do_lu);
+        fld->fld_obj = dt_obj;
+        OBD_ALLOC_PTR(ic);
 
-        rc = iam_container_init(fld_info->fi_container, &fld_param,
-                                fld_file->f_dentry->d_inode);
+        rc = dt_obj->do_index_ops->dio_init(ctx, dt, dt_obj, ic, &fld_param);
+        fld_param.id_ops->id_keycmp = fld_keycmp; 
         RETURN(rc);
 }
 
-void fld_info_fini(struct fld_info *fld_info)
+void fld_iam_fini(struct fld *fld)
 {
-        iam_container_fini(fld_info->fi_container);
-        OBD_FREE(fld_info->fi_container, sizeof(struct iam_container));
-        OBD_FREE_PTR(fld_info);
+        struct dt_object *dt_obj = fld->fld_obj;
+
+        dt_obj->do_index_ops->dio_fini(dt_obj);
+        /*XXX Should put object here, 
+          lu_object_put(fld->fld_obj->do_lu);
+         *but no ctxt in this func, FIX later*/
+        fld->fld_obj = NULL;
 }

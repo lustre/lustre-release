@@ -1372,7 +1372,7 @@ struct lu_seq_mgr_ops seq_mgr_ops = {
  * FLD wrappers
  */
 
-static int mdt_fld_init(struct mdt_device *m)
+static int mdt_fld_init(struct lu_context *ctx, struct mdt_device *m)
 {
         struct lu_site *ls;
         int rc;
@@ -1383,7 +1383,7 @@ static int mdt_fld_init(struct mdt_device *m)
         OBD_ALLOC_PTR(ls->ls_fld);
 
         if (ls->ls_fld != NULL)
-                rc = fld_server_init(ls->ls_fld, m->mdt_bottom);
+                rc = fld_server_init(ctx, ls->ls_fld, m->mdt_bottom);
         else
                 rc = -ENOMEM;
 
@@ -1673,8 +1673,18 @@ static int mdt_init0(struct mdt_device *m,
 
         /* init sequence info after device stack is initialized. */
         rc = seq_mgr_setup(&ctx, m->mdt_seq_mgr);
+        
+        lu_context_exit(&ctx);
         if (rc)
                 GOTO(err_fini_mgr, rc);
+
+        lu_context_enter(&ctx);
+        rc = mdt_fld_init(&ctx, m);
+        lu_context_exit(&ctx);
+        if (rc)
+                GOTO(err_free_fld, rc);
+
+        lu_context_fini(&ctx);
 
         snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
@@ -1683,32 +1693,29 @@ static int mdt_init0(struct mdt_device *m,
 
         ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
 
-        rc = mdt_fld_init(m);
-        if (rc)
-                GOTO(err_free_ns, rc);
 
         rc = mdt_start_ptlrpc_service(m);
         if (rc)
-                GOTO(err_free_fld, rc);
+                GOTO(err_free_ns, rc);
 
         lu_context_exit(&ctx);
         lu_context_fini(&ctx);
 
         RETURN(0);
 
-err_free_fld:
-        mdt_fld_fini(m);
 err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
         m->mdt_namespace = NULL;
+err_free_fld:
+        mdt_fld_fini(m);
 err_fini_mgr:
         seq_mgr_fini(m->mdt_seq_mgr);
         m->mdt_seq_mgr = NULL;
-err_fini_stack:
-        mdt_stack_fini(&ctx, m, md2lu_dev(m->mdt_child));
 err_fini_ctx:
         lu_context_exit(&ctx);
         lu_context_fini(&ctx);
+err_fini_stack:
+        mdt_stack_fini(&ctx, m, md2lu_dev(m->mdt_child));
 err_fini_site:
         lu_site_fini(s);
         OBD_FREE_PTR(s);

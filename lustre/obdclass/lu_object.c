@@ -304,6 +304,7 @@ struct lu_object *lu_object_find(const struct lu_context *ctxt,
         bucket = s->ls_hash + (fid_hash(f) & s->ls_hash_mask);
         spin_lock(&s->ls_guard);
         o = htable_lookup(s, bucket, f);
+
         spin_unlock(&s->ls_guard);
         if (o != NULL)
                 return o;
@@ -495,6 +496,7 @@ EXPORT_SYMBOL(lu_object_add);
 int lu_object_header_init(struct lu_object_header *h)
 {
         memset(h, 0, sizeof *h);
+        h->loh_ref = 1; 
         INIT_HLIST_NODE(&h->loh_hash);
         CFS_INIT_LIST_HEAD(&h->loh_lru);
         CFS_INIT_LIST_HEAD(&h->loh_layers);

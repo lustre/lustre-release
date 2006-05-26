@@ -71,6 +71,6 @@ int fld_handle_delete(const struct lu_context *ctx,
 int fld_handle_lookup(const struct lu_context *ctx,
                       struct fld *fld, fidseq_t seq_num, mdsno_t *mds);
 
-int fld_info_init(struct fld_info *fld_info);
-void fld_info_fini(struct fld_info *fld_info);
+int fld_iam_init(struct lu_context *ctx, struct fld *fld);
+void fld_iam_fini(struct fld *fld);
 #endif

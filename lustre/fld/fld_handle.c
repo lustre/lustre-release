@@ -342,7 +342,8 @@ static int fld_req_handle(struct ptlrpc_request *req)
         RETURN(result);
 }
 
-int fld_server_init(struct fld *fld, struct dt_device *dt)
+int fld_server_init(struct lu_context *ctx, struct fld *fld, 
+                    struct dt_device *dt)
 {
         int result;
         struct ptlrpc_service_conf fld_conf = {
@@ -355,18 +356,13 @@ int fld_server_init(struct fld *fld, struct dt_device *dt)
                 .psc_watchdog_timeout = FLD_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads      = FLD_NUM_THREADS
         };
-        struct fld_info *fld_info;
 
         fld->fld_dt = dt;
         lu_device_get(&dt->dd_lu_dev);
         INIT_LIST_HEAD(&fld_list_head.fld_list);
         spin_lock_init(&fld_list_head.fld_lock);
 
-        OBD_ALLOC_PTR(fld_info);
-        if(!fld_info)
-                return -ENOMEM;
-        fld_info_init(fld_info);
-        fld->fld_info = fld_info;
+        fld_iam_init(ctx, fld);
 
         fld->fld_service =
                 ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
@@ -378,8 +374,8 @@ int fld_server_init(struct fld *fld, struct dt_device *dt)
         else
                 result = -ENOMEM;
         if (result != 0) {
+                fld_iam_fini(fld);
                 fld_server_fini(fld);
-                fld_info_fini(fld_info);
         }
         return result;
 }
@@ -403,7 +399,7 @@ void fld_server_fini(struct fld *fld)
         }
         spin_unlock(&fld_list_head.fld_lock);
         lu_device_put(&fld->fld_dt->dd_lu_dev);
-        fld_info_fini(fld->fld_info);
+        fld_iam_fini(fld);
         fld->fld_dt = NULL;
 }
 EXPORT_SYMBOL(fld_server_fini);
