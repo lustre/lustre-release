@@ -165,8 +165,8 @@ static int osd_root_get(const struct lu_context *ctx,
 }
 
 struct dt_object *dt_object_find(struct lu_context *ctxt,
-                                   struct dt_device *d,
-                                   struct lu_fid *f)
+                                 struct dt_device *d,
+                                 const struct lu_fid *f)
 {
         struct lu_object *o;
 
@@ -581,7 +581,7 @@ static struct dt_body_operations osd_body_ops = {
 };
 #if 0
 static int osd_index_delete(struct lu_context *ctxt, struct dt_object *dt,
-                            const struct lu_fid *fid, const char *name, 
+                            const struct lu_fid *fid, const char *name,
                             struct thandle *th)
 {
         struct osd_object *osj = osd_dt_obj(dt);
@@ -591,10 +591,10 @@ static int osd_index_delete(struct lu_context *ctxt, struct dt_object *dt,
 
         ENTRY;
         oh = container_of0(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle != NULL); 
-        if (osj->oo_container) 
+        LASSERT(oh->ot_handle != NULL);
+        if (osj->oo_container)
                 rc = iam_delete(oh->ot_handle, osj->oo_container, name, &ipd);
-        
+
         RETURN(rc);
 }
 #endif
@@ -647,9 +647,9 @@ static int osd_build_fid(struct osd_device *osd,
 static void ipd_init(struct iam_path_descr *ipd, __u64 *key)
 {
         int i;
-        for (i = 0; i < DX_SCRATCH_KEYS; i++, key++) 
+        for (i = 0; i < DX_SCRATCH_KEYS; i++, key++)
                 ipd->ipd_key_scratch[i] = key;
-} 
+}
 
 /*
  * XXX This is temporary solution: inode operations are used until iam is
@@ -658,7 +658,7 @@ static void ipd_init(struct iam_path_descr *ipd, __u64 *key)
 static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
-#if 1 
+#if 0
         struct osd_object *osj = osd_dt_obj(dt);
         struct osd_thandle *oh;
         struct iam_path_descr ipd;
@@ -668,9 +668,9 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
         ENTRY;
 
         ipd_init(&ipd, scratch_key);
-        if (osj->oo_container) 
+        if (osj->oo_container)
                 rc = iam_lookup(osj->oo_container, key, rec, &ipd);
-        
+
         RETURN(rc);
 #else
         struct osd_object      *obj  = osd_dt_obj(dt);
@@ -769,7 +769,7 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
                             const struct dt_rec *rec, const struct dt_key *key,
                             struct thandle *th)
 {
-#if 1 
+#if 0
         struct osd_object *osj = osd_dt_obj(dt);
         struct osd_thandle *oh;
         struct iam_path_descr ipd;
@@ -780,7 +780,7 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
 
         ipd_init(&ipd, scratch_key);
         oh = container_of0(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle != NULL); 
+        LASSERT(oh->ot_handle != NULL);
         if (osj->oo_container)
                 rc = iam_insert(oh->ot_handle, osj->oo_container, key, rec, &ipd);
 
@@ -820,7 +820,7 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
         } else
                 result = PTR_ERR(luch);
         return result;
-#endif        
+#endif
 }
 
 const struct dt_index_features dt_directory_features;
@@ -836,21 +836,26 @@ static int osd_index_probe(const struct lu_context *ctxt, struct dt_object *dt,
                 return 0; /* nothing yet is supported */
 }
 #define osd_fld_name "fld_iam"
-static int osd_index_init(struct lu_context *ctx, struct dt_device *dt, 
-                          struct dt_object *dt_obj, void *container, 
+static int osd_index_init(const struct lu_context *ctx,
+                          struct dt_object *dt_obj, void *container,
                           void *param)
 {
         struct osd_object *obj = osd_dt_obj(dt_obj);
         struct osd_device *osd = osd_obj2dev(obj);
- 
+
+        /*
+         * XXX nikita: not yet.
+         */
+        return 0;
+
         if (!obj->oo_container) {
                 /*stub for fld_iam*/
                 struct dentry *dentry;
-                
+
                 dentry = osd_open(osd_sb(osd)->s_root, osd_fld_name,
                                   S_IFREG);
                 if (IS_ERR(dentry)) {
-                        CERROR("can not open %s, rc = %d \n", osd_fld_name, 
+                        CERROR("can not open %s, rc = %d \n", osd_fld_name,
                                 PTR_ERR(dentry));
                         return (PTR_ERR(dentry));
                 }
@@ -860,14 +865,14 @@ static int osd_index_init(struct lu_context *ctx, struct dt_device *dt,
                 obj->oo_container = container;
                 dput(dentry);
         }
-        
+
         return 0;
 }
 
 static int osd_index_fini(struct dt_object *dt_obj)
 {
         struct osd_object *obj = osd_dt_obj(dt_obj);
-        
+
         if (obj->oo_container) {
                 iam_container_fini(obj->oo_container);
                 OBD_FREE(obj->oo_container, sizeof(struct iam_container));
