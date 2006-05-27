@@ -158,11 +158,14 @@ static int mdt_reint_create(struct mdt_thread_info *info)
                 else
                         rc = mdt_md_mkobj(info);
 
-                /* return fid to client. mti_body should point to
-                 * rep's body. */
-                /* XXX these fields are not used by the callers. */
-                /* info->mti_body->fid1 = *info->mti_rr.rr_fid2; */
-                /* info->mti_body->valid |= OBD_MD_FLID; */
+                /* return fid to client. */
+                if (rc == 0) {
+                        struct mdt_body *body;
+
+                        body = info->mti_reint_rep.mrr_body;
+                        body->fid1   = *info->mti_rr.rr_fid2;
+                        body->valid |= OBD_MD_FLID;
+                }
                 break;
         }
         case S_IFLNK:{

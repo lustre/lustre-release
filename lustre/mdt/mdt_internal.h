@@ -124,12 +124,18 @@ enum {
 };
 
 struct mdt_reint_record {
-        mdt_reint_t    rr_opcode;
-        struct lu_fid *rr_fid1;
-        struct lu_fid *rr_fid2;
-        char          *rr_name;
-        char          *rr_tgt;
-        __u32         rr_flags;
+        mdt_reint_t          rr_opcode;
+        const struct lu_fid *rr_fid1;
+        struct lu_fid       *rr_fid2;
+        const char          *rr_name;
+        const char          *rr_tgt;
+        __u32                rr_flags;
+};
+
+struct mdt_reint_reply {
+        struct mdt_body    *mrr_body;
+        struct lov_mds_md  *mrr_md;
+        struct llog_cookie *mrr_cookie;
 };
 
 /*
@@ -187,7 +193,7 @@ struct mdt_thread_info {
          * frequent.
          */
         struct kstatfs             mti_sfs;
-
+        struct mdt_reint_reply     mti_reint_rep;
 };
 
 int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
@@ -208,7 +214,8 @@ void mdt_object_unlock(struct ldlm_namespace *, struct mdt_object *,
                        struct mdt_lock_handle *);
 
 struct mdt_object *mdt_object_find_lock(const struct lu_context *,
-                                        struct mdt_device *, struct lu_fid *,
+                                        struct mdt_device *,
+                                        const struct lu_fid *,
                                         struct mdt_lock_handle *, __u64);
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);

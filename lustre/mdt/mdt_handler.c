@@ -275,14 +275,26 @@ static int mdt_readpage(struct mdt_thread_info *info)
 static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
 {
         int rc;
-
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_UNPACK, -EFAULT);
 
         rc = mdt_reint_unpack(info, op);
-        if (rc == 0)
-                rc = mdt_reint_rec(info);
+        if (rc == 0) {
+                struct mdt_reint_reply *rep;
+
+                rep = &info->mti_reint_rep;
+                rep->mrr_body = req_capsule_server_get(&info->mti_pill,
+                                                       &RMF_MDT_BODY);
+                if (rep->mrr_body != NULL)
+                        /*
+                         * XXX fill other fields in @rec with pointers to
+                         * reply buffers.
+                         */
+                        rc = mdt_reint_rec(info);
+                else
+                        rc = -EFAULT;
+        }
 
         RETURN(rc);
 }
@@ -326,26 +338,14 @@ static int mdt_reint(struct mdt_thread_info *info)
 
         req = mdt_info_req(info);
         opc = mdt_reint_opcode(info, reint_fmts);
-        if (opc < 0)
-                RETURN(opc);
+        if (opc >= 0) {
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
-
-        if (opc == REINT_UNLINK || opc == REINT_RENAME)
-                info->mti_rep_buf_nr = 3;
-        else if (opc == REINT_OPEN)
-                info->mti_rep_buf_nr = 2;
-        else
-                info->mti_rep_buf_nr = 1;
-        info->mti_rep_buf_size[0] = sizeof(struct mdt_body);
-        info->mti_rep_buf_size[1] = sizeof(struct lov_mds_md); /*FIXME:See mds*/
-        info->mti_rep_buf_size[2] = sizeof(struct llog_cookie);/*FIXME:See mds*/
-        rc = lustre_pack_reply(req, info->mti_rep_buf_nr,
-                               info->mti_rep_buf_size, NULL);
-        if (rc)
-                RETURN(rc);
-
-        rc = mdt_reint_internal(info, opc);
+                rc = req_capsule_pack(&info->mti_pill);
+                if (rc == 0)
+                        rc = mdt_reint_internal(info, opc);
+        } else
+                rc = opc;
         RETURN(rc);
 }
 
@@ -562,7 +562,7 @@ void mdt_object_unlock(struct ldlm_namespace *ns, struct mdt_object *o,
 
 struct mdt_object *mdt_object_find_lock(const struct lu_context *ctxt,
                                         struct mdt_device *d,
-                                        struct lu_fid *f,
+                                        const struct lu_fid *f,
                                         struct mdt_lock_handle *lh,
                                         __u64 ibits)
 {
@@ -1372,7 +1372,7 @@ struct lu_seq_mgr_ops seq_mgr_ops = {
  * FLD wrappers
  */
 
-static int mdt_fld_init(struct lu_context *ctx, struct mdt_device *m)
+static int mdt_fld_init(const struct lu_context *ctx, struct mdt_device *m)
 {
         struct lu_site *ls;
         int rc;
@@ -1390,16 +1390,15 @@ static int mdt_fld_init(struct lu_context *ctx, struct mdt_device *m)
         RETURN(rc);
 }
 
-static int mdt_fld_fini(struct mdt_device *m)
+static int mdt_fld_fini(const struct lu_context *ctx, struct mdt_device *m)
 {
         struct lu_site *ls = m->mdt_md_dev.md_lu_dev.ld_site;
-        int rc = 0;
 
         if (ls && ls->ls_fld) {
-                fld_server_fini(ls->ls_fld);
+                fld_server_fini(ctx, ls->ls_fld);
                 OBD_FREE_PTR(ls->ls_fld);
         }
-        RETURN(rc);
+        return 0;
 }
 
 /* device init/fini methods */
@@ -1591,7 +1590,7 @@ static void mdt_fini(struct mdt_device *m)
         /* finish the stack */
         mdt_stack_fini(&ctx, m, md2lu_dev(m->mdt_child));
 
-        mdt_fld_fini(m);
+        mdt_fld_fini(&ctx, m);
 
         LASSERT(atomic_read(&d->ld_ref) == 0);
         md_device_fini(&m->mdt_md_dev);
@@ -1673,7 +1672,7 @@ static int mdt_init0(struct mdt_device *m,
 
         /* init sequence info after device stack is initialized. */
         rc = seq_mgr_setup(&ctx, m->mdt_seq_mgr);
-        
+
         lu_context_exit(&ctx);
         if (rc)
                 GOTO(err_fini_mgr, rc);
@@ -1707,7 +1706,7 @@ err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
         m->mdt_namespace = NULL;
 err_free_fld:
-        mdt_fld_fini(m);
+        mdt_fld_fini(&ctx, m);
 err_fini_mgr:
         seq_mgr_fini(m->mdt_seq_mgr);
         m->mdt_seq_mgr = NULL;
