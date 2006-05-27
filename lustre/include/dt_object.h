@@ -255,10 +255,10 @@ struct dt_index_operations {
         int (*dio_probe)(const struct lu_context *ctxt, struct dt_object *dt,
                          const struct dt_index_features *feat);
 
-        int (*dio_init)(struct lu_context *ctxt, struct dt_device *dt,
-                        struct dt_object *dt_obj, void *container, void *param);
-        
-        int (*dio_fini)(struct dt_object *dt_obj);
+        int (*dio_init)(const struct lu_context *ctxt, struct dt_object *obj,
+                        void *container, void *param);
+
+        int (*dio_fini)(const struct lu_context *ctxt, struct dt_object *obj);
 };
 
 struct dt_device {
@@ -293,9 +293,6 @@ struct dt_object {
         struct dt_index_operations  *do_index_ops;
 };
 
-struct dt_object *dt_object_find(struct lu_context *ctxt,
-                                   struct dt_device *d,
-                                   struct lu_fid *f);
 int  dt_object_init(struct dt_object *obj,
                     struct lu_object_header *h, struct lu_device *d);
 
@@ -343,5 +340,9 @@ int dt_txn_hook_stop(const struct lu_context *ctx,
                      struct dt_device *dev, struct thandle *txn);
 int dt_txn_hook_commit(const struct lu_context *ctx,
                        struct dt_device *dev, struct thandle *txn);
+
+struct dt_object *dt_store_open(const struct lu_context *ctx,
+                                struct dt_device *dt, const char *name,
+                                struct lu_fid *fid);
 
 #endif /* __LUSTRE_DT_OBJECT_H */

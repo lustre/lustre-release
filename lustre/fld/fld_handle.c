@@ -342,7 +342,7 @@ static int fld_req_handle(struct ptlrpc_request *req)
         RETURN(result);
 }
 
-int fld_server_init(struct lu_context *ctx, struct fld *fld, 
+int fld_server_init(const struct lu_context *ctx, struct fld *fld,
                     struct dt_device *dt)
 {
         int result;
@@ -373,15 +373,13 @@ int fld_server_init(struct lu_context *ctx, struct fld *fld,
                                               LUSTRE_FLD0_NAME);
         else
                 result = -ENOMEM;
-        if (result != 0) {
-                fld_iam_fini(fld);
-                fld_server_fini(fld);
-        }
+        if (result != 0)
+                fld_server_fini(ctx, fld);
         return result;
 }
 EXPORT_SYMBOL(fld_server_init);
 
-void fld_server_fini(struct fld *fld)
+void fld_server_fini(const struct lu_context *ctx, struct fld *fld)
 {
         struct list_head *pos, *n;
 
@@ -399,7 +397,7 @@ void fld_server_fini(struct fld *fld)
         }
         spin_unlock(&fld_list_head.fld_lock);
         lu_device_put(&fld->fld_dt->dd_lu_dev);
-        fld_iam_fini(fld);
+        fld_iam_fini(ctx, fld);
         fld->fld_dt = NULL;
 }
 EXPORT_SYMBOL(fld_server_fini);

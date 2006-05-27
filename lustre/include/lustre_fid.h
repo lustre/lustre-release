@@ -81,11 +81,11 @@ struct fld {
         struct ptlrpc_service   *fld_service;
         struct dt_device        *fld_dt;
         struct dt_object        *fld_obj;
-        void                    *fld_container;
+        struct lu_fid            fld_fid; /* used during initialization */
 };
 
-int  fld_server_init(struct lu_context *ctx, struct fld *fld, 
+int  fld_server_init(const struct lu_context *ctx, struct fld *fld,
                      struct dt_device *dt);
-void fld_server_fini(struct fld *fld);
+void fld_server_fini(const struct lu_context *ctx, struct fld *fld);
 
 #endif /* __LINUX_OBD_CLASS_H */
