@@ -316,7 +316,7 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
  *  HANDLES
  */
 
-void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
+void ldlm_lock2handle(const struct ldlm_lock *lock, struct lustre_handle *lockh)
 {
         lockh->cookie = lock->l_handle.h_cookie;
 }
@@ -325,7 +325,8 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
  *           Return NULL if flag already set
  */
 
-struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle, int flags)
+struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
+                                     int flags)
 {
         struct ldlm_namespace *ns;
         struct ldlm_lock *lock = NULL, *retval = NULL;
@@ -367,7 +368,7 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle, int flags)
 }
 
 struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *ns,
-                                      struct lustre_handle *handle)
+                                      const struct lustre_handle *handle)
 {
         struct ldlm_lock *retval = NULL;
 
@@ -789,8 +790,9 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 
 /* Returns a referenced lock */
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
-                                   struct lustre_handle *parent_lock_handle,
-                                   struct ldlm_res_id res_id, ldlm_type_t type,
+                                   const struct lustre_handle *parent_lock_handle,
+                                   const struct ldlm_res_id res_id,
+                                   ldlm_type_t type,
                                    ldlm_mode_t mode,
                                    ldlm_blocking_callback blocking,
                                    ldlm_completion_callback completion,

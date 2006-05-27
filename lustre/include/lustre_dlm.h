@@ -467,13 +467,14 @@ void ldlm_put_ref(int force);
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
 void ldlm_register_intent(struct ldlm_namespace *ns, ldlm_res_policy arg);
-void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
-struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int flags);
+void ldlm_lock2handle(const struct ldlm_lock *lock,
+                      struct lustre_handle *lockh);
+struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_set_data(struct lustre_handle *, void *data);
 void ldlm_lock_remove_from_lru(struct ldlm_lock *);
 struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *,
-                                      struct lustre_handle *);
+                                      const struct lustre_handle *);
 
 static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 {

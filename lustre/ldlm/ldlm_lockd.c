@@ -633,7 +633,8 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 }
 
 static struct ldlm_lock *
-find_existing_lock(struct obd_export *exp, struct lustre_handle *remote_hdl)
+find_existing_lock(struct obd_export *exp,
+                   const struct lustre_handle *remote_hdl)
 {
         struct obd_device *obd = exp->exp_obd;
         struct list_head *iter;
