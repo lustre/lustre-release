@@ -190,7 +190,7 @@ static inline int mo_object_create(const struct lu_context *cx,
 }
 
 static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
-                            const char *name, struct lu_fid *f)
+                             const char *name, struct lu_fid *f)
 {
         return p->mo_dir_ops->mdo_lookup(cx, p, name, f);
 }

@@ -53,7 +53,7 @@ struct iam_descr fld_param = {
         .id_node_gap = 0, /* no gaps in index nodes */
         .id_root_gap = sizeof(struct iam_root),
         .id_ops      = &generic_iam_ops,
-        .id_leaf_ops = &lfix_leaf_ops
+        .id_leaf_ops = &iam_lfix_leaf_ops
 };
 /*
  * number of blocks to reserve for particular operations. Should be function
@@ -65,8 +65,8 @@ enum {
         FLD_TXN_INDEX_DELETE_CREDITS  = 10
 };
 
-static int fld_keycmp(struct iam_container *c, struct iam_key *k1,
-                      struct iam_key *k2)
+static int fld_keycmp(const struct iam_container *c, const struct iam_key *k1,
+                      const struct iam_key *k2)
 {
         __u64 p1 = le64_to_cpu(*(__u32 *)k1);
         __u64 p2 = le64_to_cpu(*(__u32 *)k2);
