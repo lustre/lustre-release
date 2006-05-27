@@ -65,14 +65,14 @@ enum {
         FLD_TXN_INDEX_DELETE_CREDITS  = 10
 };
 
-static int fld_keycmp(struct iam_container *c, struct iam_key *k1, 
+static int fld_keycmp(struct iam_container *c, struct iam_key *k1,
                       struct iam_key *k2)
 {
         __u64 p1 = le64_to_cpu(*(__u32 *)k1);
         __u64 p2 = le64_to_cpu(*(__u32 *)k2);
 
         return p1 > p2 ? +1 : (p1 < p2 ? -1 : 0);
- 
+
 }
 
 int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
@@ -84,13 +84,13 @@ int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
         struct thandle *th;
         int    rc;
 
-      
-        /*stub here, will fix it later*/ 
+
+        /*stub here, will fix it later*/
         txn.tp_credits = FLD_TXN_INDEX_INSERT_CREDITS;
- 
+
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
-        
-        rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj, 
+
+        rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
                                               (struct dt_rec*)(&mds_num),
                                               (struct dt_key*)(&seq_num), th);
         dt->dd_ops->dt_trans_stop(ctx, th);
@@ -107,10 +107,10 @@ int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
         struct thandle *th;
         int    rc;
 
-        
+
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
-        rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj, 
+        rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
                                               (struct dt_rec*)(&mds_num),
                                               (struct dt_key*)(&seq_num), th);
         dt->dd_ops->dt_trans_stop(ctx, th);
@@ -121,48 +121,49 @@ int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
 int fld_handle_lookup(const struct lu_context *ctx,
                       struct fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
 {
-        
-        struct dt_device *dt = fld->fld_dt;
+
         struct dt_object *dt_obj = fld->fld_obj;
-        
+
         return dt_obj->do_index_ops->dio_lookup(ctx, dt_obj,
                                              (struct dt_rec*)(&mds_num),
                                              (struct dt_key*)(&seq_num));
 }
 
-#define FLD_OBJ_FID {1000, 1000, 1000}
-#define FLD_OBJ_MODE S_IFDIR
-int fld_iam_init(struct lu_context *ctx, struct fld *fld)
+int fld_iam_init(const struct lu_context *ctx, struct fld *fld)
 {
-        struct lu_fid obj_fid = FLD_OBJ_FID; /* reserved fid */
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj;
-        struct iam_container *ic;
-        int rc = 0;
+        struct iam_container *ic = NULL;
+        int rc;
 
         ENTRY;
 
-        dt_obj = dt_object_find(ctx, dt, &obj_fid);
-        if (IS_ERR(dt_obj)) {
-                CERROR("can not find fld obj %lu \n", PTR_ERR(dt_obj));
-                RETURN(PTR_ERR(dt_obj));
+        dt_obj = dt_store_open(ctx, dt, "fld", &fld->fld_fid);
+        if (!IS_ERR(dt_obj)) {
+                fld->fld_obj = dt_obj;
+                if (dt_obj->do_index_ops != NULL) {
+                        rc = dt_obj->do_index_ops->dio_init(ctx, dt_obj,
+                                                            ic, &fld_param);
+                        fld_param.id_ops->id_keycmp = fld_keycmp;
+                } else {
+                        CERROR("fld is not an index!\n");
+                        rc = -EINVAL;
+                }
+        } else {
+                CERROR("Cannot find fld obj %lu \n", PTR_ERR(dt_obj));
+                rc = PTR_ERR(dt_obj);
         }
-        
-        lu_object_get(&dt_obj->do_lu);
-        fld->fld_obj = dt_obj;
-        OBD_ALLOC_PTR(ic);
 
-        rc = dt_obj->do_index_ops->dio_init(ctx, dt, dt_obj, ic, &fld_param);
-        fld_param.id_ops->id_keycmp = fld_keycmp; 
+
         RETURN(rc);
 }
 
-void fld_iam_fini(struct fld *fld)
+void fld_iam_fini(const struct lu_context *ctx, struct fld *fld)
 {
         struct dt_object *dt_obj = fld->fld_obj;
 
-        dt_obj->do_index_ops->dio_fini(dt_obj);
-        /*XXX Should put object here, 
+        dt_obj->do_index_ops->dio_fini(ctx, dt_obj);
+        /*XXX Should put object here,
           lu_object_put(fld->fld_obj->do_lu);
          *but no ctxt in this func, FIX later*/
         fld->fld_obj = NULL;

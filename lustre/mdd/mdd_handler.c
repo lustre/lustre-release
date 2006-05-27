@@ -324,9 +324,8 @@ static int mdd_object_print(const struct lu_context *ctxt,
         return seq_printf(f, LUSTRE_MDD0_NAME"-object@%p", o);
 }
 
-static int mdd_dt_lookup(const struct lu_context *ctx, struct mdd_device *mdd,
-                         struct mdd_object *obj, const char *name,
-                         struct lu_fid *fid)
+static int mdd_dt_lookup(const struct lu_context *ctx, struct mdd_object *obj,
+                         const char *name, struct lu_fid *fid)
 {
         struct dt_object *dir    = mdd_object_child(obj);
         struct dt_rec    *rec    = (struct dt_rec *)fid;
@@ -343,35 +342,16 @@ static int mdd_dt_lookup(const struct lu_context *ctx, struct mdd_device *mdd,
 static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
 {
         int result;
-        struct mdd_thread_info *info = lu_context_key_get(ctx,
-                                                          &mdd_thread_key);
-        struct lu_device *dev = &mdd->mdd_md_dev.md_lu_dev;
+        struct dt_object *root;
 
-        result = mdd_child_ops(mdd)->dt_root_get(ctx, mdd->mdd_child,
-                                                 &info->mti_fid);
-        if (result == 0) {
-                struct lu_object *root;
-
-                root = lu_object_find(ctx, dev->ld_site, &info->mti_fid);
-                if (!IS_ERR(root)) {
-                        struct mdd_object *obj;
-
-                        obj = mdd_obj(lu_object_locate(root->lo_header,
-                                                       dev->ld_type));
-                        if (obj != NULL)
-                                result = mdd_dt_lookup(ctx, mdd, obj,
-                                                       mdd_root_dir_name ,
-                                                       &mdd->mdd_root_fid);
-                        else {
-                                CERROR("No slice\n");
-                                result = -EINVAL;
-                        }
-                        lu_object_put(ctx, root);
-                } else {
-                        CERROR("No root\n");
-                        result = PTR_ERR(root);
-                }
-        }
+        root = dt_store_open(ctx, mdd->mdd_child, mdd_root_dir_name,
+                             &mdd->mdd_root_fid);
+        if (!IS_ERR(root)) {
+                LASSERT(root != NULL);
+                lu_object_put(ctx, &root->do_lu);
+                result = 0;
+        } else
+                result = PTR_ERR(root);
         return result;
 }
 
@@ -753,7 +733,7 @@ cleanup:
 static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct lu_fid* fid)
 {
-        return mdd_dt_lookup(ctxt, mdo2mdd(pobj), mdo2mddo(pobj), name, fid);
+        return mdd_dt_lookup(ctxt, mdo2mddo(pobj), name, fid);
 }
 
 static int mdd_create(const struct lu_context *ctxt,

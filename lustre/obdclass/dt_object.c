@@ -127,3 +127,63 @@ void dt_object_fini(struct dt_object *obj)
         lu_object_fini(&obj->do_lu);
 }
 EXPORT_SYMBOL(dt_object_fini);
+
+static int dt_lookup(const struct lu_context *ctx, struct dt_object *dir,
+                     const char *name, struct lu_fid *fid)
+{
+        struct dt_rec       *rec = (struct dt_rec *)fid;
+        const struct dt_key *key = (const struct dt_key *)name;
+        int result;
+
+        if (dir->do_index_ops != NULL)
+                result = dir->do_index_ops->dio_lookup(ctx, dir, rec, key);
+        else
+                result = -ENOTDIR;
+        return result;
+}
+
+static struct dt_object *dt_locate(const struct lu_context *ctx,
+                                   struct dt_device *dev,
+                                   const struct lu_fid *fid)
+{
+        struct lu_object *obj;
+        struct dt_object *dt;
+
+        obj = lu_object_find(ctx, dev->dd_lu_dev.ld_site, fid);
+        if (!IS_ERR(obj)) {
+                obj = lu_object_locate(obj->lo_header, dev->dd_lu_dev.ld_type);
+                LASSERT(obj != NULL);
+                dt = container_of(obj, struct dt_object, do_lu);
+        } else
+                dt = (void *)obj;
+        return dt;
+}
+
+struct dt_object *dt_store_open(const struct lu_context *ctx,
+                                struct dt_device *dt, const char *name,
+                                struct lu_fid *fid)
+{
+        int result;
+
+        struct dt_object *root;
+        struct dt_object *child;
+
+        result = dt->dd_ops->dt_root_get(ctx, dt, fid);
+        if (result == 0) {
+                root = dt_locate(ctx, dt, fid);
+                if (!IS_ERR(root)) {
+                        result = dt_lookup(ctx, root, name, fid);
+                        if (result == 0)
+                                child = dt_locate(ctx, dt, fid);
+                        else
+                                child = ERR_PTR(result);
+                        lu_object_put(ctx, &root->do_lu);
+                } else {
+                        CERROR("No root\n");
+                        child = (void *)root;
+                }
+        } else
+                child = ERR_PTR(result);
+        return child;
+}
+EXPORT_SYMBOL(dt_store_open);
