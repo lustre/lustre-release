@@ -476,7 +476,7 @@ void ldlm_lock_remove_from_lru(struct ldlm_lock *);
 struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *,
                                       const struct lustre_handle *);
 
-static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
+static inline struct ldlm_lock *ldlm_handle2lock(const struct lustre_handle *h)
 {
         return __ldlm_handle2lock(h, 0);
 }

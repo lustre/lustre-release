@@ -68,6 +68,7 @@ static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
 }
 
 struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
+                                   const struct lu_object_header *hdr,
                                    struct lu_device *ld)
 {
         struct cmm_object *co;
@@ -110,7 +111,8 @@ static int cmm_object_init(const struct lu_context *ctx, struct lu_object *lo)
         if (c_dev == NULL) {
                 rc = -ENOENT;
         } else {
-                c_obj = c_dev->ld_ops->ldo_object_alloc(ctx, c_dev);
+                c_obj = c_dev->ld_ops->ldo_object_alloc(ctx,
+                                                        lo->lo_header, c_dev);
                 if (c_obj != NULL) {
                         struct cmm_object *co = lu2cmm_obj(lo);
 

@@ -124,6 +124,7 @@ static struct lu_device   *osd_device_alloc (const struct lu_context *ctx,
                                              struct lu_device_type *t,
                                              struct lustre_cfg *cfg);
 static struct lu_object   *osd_object_alloc (const struct lu_context *ctx,
+                                             const struct lu_object_header *hdr,
                                              struct lu_device *d);
 static struct inode       *osd_iget         (struct osd_thread_info *info,
                                              struct osd_device *dev,
@@ -186,6 +187,7 @@ EXPORT_SYMBOL(dt_object_find);
  */
 
 static struct lu_object *osd_object_alloc(const struct lu_context *ctx,
+                                          const struct lu_object_header *hdr,
                                           struct lu_device *d)
 {
         struct osd_object *mo;
@@ -221,8 +223,6 @@ static int osd_object_init(const struct lu_context *ctxt, struct lu_object *l)
 
         result = osd_fid_lookup(ctxt, obj, lu_object_fid(l));
         if (result == 0) {
-                /*FIXME: put osd_index_ops here for tmp fix WANGDI*/
-                obj->oo_dt.do_index_ops = &osd_index_ops;
                 if (obj->oo_inode != NULL)
                         osd_object_init0(obj);
         }
@@ -855,7 +855,7 @@ static int osd_index_init(const struct lu_context *ctx,
                 dentry = osd_open(osd_sb(osd)->s_root, osd_fld_name,
                                   S_IFREG);
                 if (IS_ERR(dentry)) {
-                        CERROR("can not open %s, rc = %d \n", osd_fld_name,
+                        CERROR("can not open %s, rc = %ld\n", osd_fld_name,
                                 PTR_ERR(dentry));
                         return (PTR_ERR(dentry));
                 }
@@ -885,8 +885,6 @@ static struct dt_index_operations osd_index_ops = {
         .dio_lookup = osd_index_lookup,
         .dio_insert = osd_index_insert,
         .dio_probe  = osd_index_probe,
-        .dio_init   = osd_index_init,
-        .dio_fini   = osd_index_fini,
 };
 
 /*

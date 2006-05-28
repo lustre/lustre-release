@@ -1739,6 +1739,7 @@ static int mdt_process_config(const struct lu_context *ctx,
 }
 
 static struct lu_object *mdt_object_alloc(const struct lu_context *ctxt,
+                                          const struct lu_object_header *hdr,
                                           struct lu_device *d)
 {
         struct mdt_object *mo;
@@ -1768,7 +1769,7 @@ static int mdt_object_init(const struct lu_context *ctxt, struct lu_object *o)
         struct lu_object  *below;
 
         under = &d->mdt_child->md_lu_dev;
-        below = under->ld_ops->ldo_object_alloc(ctxt, under);
+        below = under->ld_ops->ldo_object_alloc(ctxt, o->lo_header, under);
         if (below != NULL) {
                 lu_object_add(o, below);
                 return 0;

@@ -43,6 +43,7 @@ static struct md_dir_operations mdc_dir_ops;
 static struct lu_object_operations mdc_obj_ops;
 
 struct lu_object *mdc_object_alloc(const struct lu_context *ctx,
+                                   const struct lu_object_header *hdr,
                                    struct lu_device *ld)
 {
 	struct mdc_object *mco;

@@ -78,6 +78,7 @@ static inline struct mdc_device *lu2mdc_dev(struct lu_device *ld)
 }
 
 struct lu_object *mdc_object_alloc(const struct lu_context *,
+                                   const struct lu_object_header *,
                                    struct lu_device *);
 #endif /* __KERNEL__ */
 #endif /* _CMM_MDC_INTERNAL_H */

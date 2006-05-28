@@ -119,6 +119,7 @@ static inline struct dt_device_operations *mdd_child_ops(struct mdd_device *d)
 }
 
 static struct lu_object *mdd_object_alloc(const struct lu_context *ctxt,
+                                          const struct lu_object_header *hdr,
                                           struct lu_device *d)
 {
         struct mdd_object *mdo;
@@ -146,7 +147,7 @@ static int mdd_object_init(const struct lu_context *ctxt, struct lu_object *o)
         ENTRY;
 
 	under = &d->mdd_child->dd_lu_dev;
-	below = under->ld_ops->ldo_object_alloc(ctxt, under);
+	below = under->ld_ops->ldo_object_alloc(ctxt, o->lo_header, under);
 
         if (below == NULL)
 		RETURN(-ENOMEM);

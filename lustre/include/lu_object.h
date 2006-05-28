@@ -133,6 +133,7 @@ struct lu_device_operations {
          *                                      result->lo_ops != NULL);
          */
         struct lu_object *(*ldo_object_alloc)(const struct lu_context *ctx,
+                                              const struct lu_object_header *h,
                                               struct lu_device *d);
         /*
          * process config specific for device

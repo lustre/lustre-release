@@ -111,7 +111,8 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
          * Create top-level object slice. This will also create
          * lu_object_header.
          */
-        top = s->ls_top_dev->ld_ops->ldo_object_alloc(ctxt, s->ls_top_dev);
+        top = s->ls_top_dev->ld_ops->ldo_object_alloc(ctxt,
+                                                      NULL, s->ls_top_dev);
         if (IS_ERR(top))
                 RETURN(top);
         s->ls_total ++;
@@ -496,7 +497,7 @@ EXPORT_SYMBOL(lu_object_add);
 int lu_object_header_init(struct lu_object_header *h)
 {
         memset(h, 0, sizeof *h);
-        h->loh_ref = 1; 
+        h->loh_ref = 1;
         INIT_HLIST_NODE(&h->loh_hash);
         CFS_INIT_LIST_HEAD(&h->loh_lru);
         CFS_INIT_LIST_HEAD(&h->loh_layers);
