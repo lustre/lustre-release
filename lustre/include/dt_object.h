@@ -247,18 +247,12 @@ struct dt_index_operations {
         int (*dio_delete)(const struct lu_context *ctxt, struct dt_object *dt,
                           const struct dt_rec *rec, const struct dt_key *key,
                           struct thandle *handle);
-
         /*
          * Features probing. Returns 1 if this index supports all features in
          * @feat, -ve on error, 0 otherwise.
          */
         int (*dio_probe)(const struct lu_context *ctxt, struct dt_object *dt,
                          const struct dt_index_features *feat);
-
-        int (*dio_init)(const struct lu_context *ctxt, struct dt_object *obj,
-                        void *container, void *param);
-
-        int (*dio_fini)(const struct lu_context *ctxt, struct dt_object *obj);
 };
 
 struct dt_device {

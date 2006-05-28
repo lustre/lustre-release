@@ -142,8 +142,9 @@ int fld_iam_init(const struct lu_context *ctx, struct fld *fld)
         if (!IS_ERR(dt_obj)) {
                 fld->fld_obj = dt_obj;
                 if (dt_obj->do_index_ops != NULL) {
-                        rc = dt_obj->do_index_ops->dio_init(ctx, dt_obj,
-                                                            ic, &fld_param);
+                        /* XXX nikita: disable for now */
+                        /* rc = dt_obj->do_index_ops->dio_init(ctx, dt_obj,
+                                                            ic, &fld_param); */
                         fld_param.id_ops->id_keycmp = fld_keycmp;
                 } else {
                         CERROR("fld is not an index!\n");
@@ -162,7 +163,8 @@ void fld_iam_fini(const struct lu_context *ctx, struct fld *fld)
 {
         struct dt_object *dt_obj = fld->fld_obj;
 
-        dt_obj->do_index_ops->dio_fini(ctx, dt_obj);
+        /* XXX nikita: disable for now */
+        /* dt_obj->do_index_ops->dio_fini(ctx, dt_obj); */
         /*XXX Should put object here,
           lu_object_put(fld->fld_obj->do_lu);
          *but no ctxt in this func, FIX later*/

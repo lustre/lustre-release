@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-05-27 21:32:20.000000000 +0400
-@@ -0,0 +1,957 @@
++++ iam/fs/ext3/iam.c	2006-05-29 00:31:12.000000000 +0400
+@@ -0,0 +1,990 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -362,9 +362,9 @@ Index: iam/fs/ext3/iam.c
 +        return iam_leaf_ops(leaf)->at_end(leaf);
 +}
 +
-+int iam_leaf_split(handle_t *handle, struct iam_leaf *l)
++void iam_leaf_split(struct iam_leaf *l, struct buffer_head *bh)
 +{
-+        return iam_leaf_ops(l)->split(handle, l);
++        iam_leaf_ops(l)->split(l, bh);
 +}
 +
 +static int iam_leaf_can_add(struct iam_leaf *l,
@@ -411,7 +411,7 @@ Index: iam/fs/ext3/iam.c
 +
 +        result = iam_it_get(it, k);
 +        if (result == 0 &&
-+            (it_keycmp(it, k, iam_it_key_get(it, it_scratch_key(it, 0))) != 0))
++            (it_keycmp(it, k, iam_it_key_get(it, it_scratch_key(it, 1))) != 0))
 +                /*
 +                 * Return -ENOENT if cursor is located above record with a key
 +                 * different from one specified.
@@ -591,26 +591,30 @@ Index: iam/fs/ext3/iam.c
 +{
 +        int result;
 +        struct iam_container *c;
++        struct iam_path      *path;
++        struct iam_leaf      *leaf;
 +
 +        assert(it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_MOVE);
 +
-+        c = iam_it_container(it);
-+        if (iam_leaf_at_end(&it->ii_path.ip_leaf)) {
++        c    = iam_it_container(it);
++        path = &it->ii_path;
++        leaf = &path->ip_leaf;
++
++        if (iam_leaf_at_end(leaf)) {
 +                /* advance index portion of the path */
-+                result = 0; /* XXX not yet iam_index_next(&it->ii_path); */
-+                if (result == 0) {
-+                        result = 0; /* XXX not yet
-+                                     * iam_read_leaf(&it->ii_path); */
++                result = iam_index_next(c, path);
++                if (result == 1) {
++                        result = iam_leaf_load(path);
 +                        if (result == 0)
-+                                iam_leaf_start(&it->ii_path.ip_leaf);
-+                } else if (result > 0)
++                                iam_leaf_start(leaf);
++                } else if (result == 0)
 +                        /* end of container reached */
 +                        result = +1;
 +                if (result < 0)
 +                        iam_it_put(it);
 +        } else {
 +                /* advance within leaf node */
-+                iam_leaf_next(&it->ii_path.ip_leaf);
++                iam_leaf_next(leaf);
 +                result = 0;
 +        }
 +        assert(ergo(result >= 0, it_state(it) == IAM_IT_ATTACHED));
@@ -688,6 +692,35 @@ Index: iam/fs/ext3/iam.c
 +	return err;
 +}
 +
++static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
++{
++        int err;
++        int err2;
++        u32 blknr; /* XXX 32bit block size */
++        struct buffer_head   *new_leaf;
++        struct iam_container *c;
++
++        c = iam_leaf_container(leaf);
++        err = ext3_journal_get_write_access(handle, leaf->il_bh);
++        if (err == 0) {
++                struct inode *obj;
++
++                obj = c->ic_object;
++                new_leaf = ext3_append(handle, c->ic_object, &blknr, &err);
++                if (new_leaf != NULL) {
++                        iam_leaf_ops(leaf)->init_new(c, new_leaf);
++                        iam_leaf_ops(leaf)->split(leaf, new_leaf);
++                        err = ext3_journal_dirty_metadata(handle, new_leaf);
++                        err2 = ext3_journal_dirty_metadata(handle, leaf->il_bh);
++                        err = err ? : err2;
++                        if (err)
++                                ext3_std_error(obj->i_sb, err);
++                        brelse(new_leaf);
++                }
++        }
++        return err;
++}
++
 +int iam_add_rec(handle_t *handle, struct iam_path *path,
 +                struct iam_key *k, struct iam_rec *r)
 +{
@@ -698,7 +731,7 @@ Index: iam/fs/ext3/iam.c
 +	} else {
 +		err = split_index_node(handle, path);
 +		if (err == 0) {
-+			err = iam_leaf_split(handle, &path->ip_leaf);
++                        err = iam_new_leaf(handle, &path->ip_leaf);
 +			if (err == 0)
 +				err = iam_leaf_rec_add(handle, path);
 +		}
@@ -976,8 +1009,8 @@ Index: iam/fs/ext3/iam.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-05-27 21:26:51.000000000 +0400
-@@ -0,0 +1,313 @@
++++ iam/fs/ext3/iam_lfix.c	2006-05-29 00:42:57.000000000 +0400
+@@ -0,0 +1,309 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1009,6 +1042,8 @@ Index: iam/fs/ext3/iam_lfix.c
 +
 +#include <linux/types.h>
 +#include <linux/jbd.h>
++/* ext3_error() */
++#include <linux/ext3_fs.h>
 +
 +#include <linux/lustre_iam.h>
 +
@@ -1030,13 +1065,17 @@ Index: iam/fs/ext3/iam_lfix.c
 +static inline const struct iam_key *
 +iam_leaf_key_at(const struct iam_container *c, const struct iam_lentry *entry)
 +{
-+        const void *e = entry;
-+        return e;
++        return (const struct iam_key *)entry;
++}
++
++static struct iam_lentry *iam_entries(const struct buffer_head *bh)
++{
++        return (void *)bh->b_data + sizeof(struct iam_leaf_head);
 +}
 +
 +static struct iam_lentry *iam_get_lentries(const struct iam_leaf *l)
 +{
-+        return (void *)l->il_bh->b_data + iam_leaf_descr(l)->id_node_gap;
++        return iam_entries(l->il_bh);
 +}
 +
 +static int lentry_count_get(const struct iam_leaf *leaf)
@@ -1055,15 +1094,13 @@ Index: iam/fs/ext3/iam_lfix.c
 + *which are not stored explicitly
 + *it would be decrypt in the key buffer
 + */
-+struct iam_key*
-+iam_lfix_key(struct iam_leaf *l, struct iam_key *key)
++struct iam_key *iam_lfix_key(struct iam_leaf *l, struct iam_key *key)
 +{
 +        void *ie = l->il_at;
 +        return (struct iam_key*)ie;
 +}
 +
-+static void
-+iam_lfix_start(struct iam_leaf *l)
++static void iam_lfix_start(struct iam_leaf *l)
 +{
 +        l->il_at = iam_get_lentries(l);
 +}
@@ -1082,15 +1119,26 @@ Index: iam/fs/ext3/iam_lfix.c
 +
 +static int iam_lfix_init(struct iam_leaf *l)
 +{
++        int result;
 +        struct iam_leaf_head *ill;
 +
 +        assert(l->il_bh != NULL);
 +
 +        ill = (struct iam_leaf_head*)l->il_bh->b_data;
-+        assert(ill->ill_magic == IAM_LEAF_HEADER_MAGIC);
++        if (ill->ill_magic == le16_to_cpu(IAM_LEAF_HEADER_MAGIC)) {
++                l->il_at = l->il_entries = iam_get_lentries(l);
++                result = 0;
++        } else {
++                struct inode *obj;
 +
-+        l->il_at = l->il_entries = iam_get_lentries(l);
-+        return 0;
++                obj = iam_leaf_container(l)->ic_object;
++                ext3_error(obj->i_sb, __FUNCTION__,
++                           "Wrong magic in node %llu (#%lu): %#x != %#x\n",
++                           l->il_bh->b_blocknr, obj->i_ino,
++                           ill->ill_magic, le16_to_cpu(IAM_LEAF_HEADER_MAGIC));
++                result = -EIO;
++        }
++        return result;
 +}
 +
 +static void iam_lfix_fini(struct iam_leaf *l)
@@ -1099,8 +1147,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +        return;
 +}
 +
-+static struct iam_lentry *
-+iam_lfix_get_end(const struct iam_leaf *l)
++static struct iam_lentry *iam_lfix_get_end(const struct iam_leaf *l)
 +{
 +        int count = lentry_count_get(l);
 +        struct iam_lentry *ile = iam_lfix_shift(l, l->il_entries, count);
@@ -1108,22 +1155,19 @@ Index: iam/fs/ext3/iam_lfix.c
 +        return ile;
 +}
 +
-+struct iam_rec*
-+iam_lfix_rec(struct iam_leaf *l)
++struct iam_rec *iam_lfix_rec(struct iam_leaf *l)
 +{
 +        void *e = l->il_at;
 +        return e + iam_leaf_descr(l)->id_key_size;
 +}
 +
-+static void
-+iam_lfix_next(struct iam_leaf *l)
++static void iam_lfix_next(struct iam_leaf *l)
 +{
 +        assert(!iam_leaf_at_end(l));
 +        l->il_at = iam_lfix_shift(l, l->il_at, 1);
 +}
 +
-+static int
-+iam_lfix_lookup(struct iam_leaf *l, struct iam_key *k)
++static int iam_lfix_lookup(struct iam_leaf *l, struct iam_key *k)
 +{
 +        struct iam_lentry *p, *q, *m;
 +        struct iam_container *c;
@@ -1217,8 +1261,52 @@ Index: iam/fs/ext3/iam_lfix.c
 +        return (folio->il_at == ile);
 +}
 +
++static void iam_lfix_init_new(struct iam_container *c, struct buffer_head *bh)
++{
++        struct iam_leaf_head *hdr;
++
++        hdr = (struct iam_leaf_head*)bh->b_data;
++        hdr->ill_magic = cpu_to_le16(IAM_LEAF_HEADER_MAGIC);
++        hdr->ill_count = cpu_to_le16(0);
++}
++
++static void iam_lfix_split(struct iam_leaf *l, struct buffer_head *bh)
++{
++        struct iam_path      *path;
++	struct iam_leaf_head *hdr;
++        const struct iam_key *pivot;
++
++	unsigned count;
++	unsigned split;
++
++	void *start;
++	void *finis;
++
++        path = iam_leaf_path(l);
++
++	hdr = (void *)bh->b_data;
++
++        count = lentry_count_get(l);
++        split = count / 2;
++
++        start = iam_lfix_shift(l, iam_get_lentries(l), split);
++        finis = iam_lfix_shift(l, iam_get_lentries(l), count);
++
++        pivot = iam_leaf_key_at(iam_leaf_container(l), start);
++
++        memmove(iam_entries(bh), start, finis - start);
++        hdr->ill_count = count - split;
++        lentry_count_set(l, split);
++        /*
++         * Insert pointer to the new node (together with the smallest key in
++         * the node) into index node.
++         */
++        iam_insert_key(path, path->ip_frame, pivot, bh->b_blocknr);
++}
++
 +struct iam_leaf_operations iam_lfix_leaf_ops = {
 +        .init           = iam_lfix_init,
++        .init_new       = iam_lfix_init_new,
 +        .fini           = iam_lfix_fini,
 +        .start          = iam_lfix_start,
 +        .next           = iam_lfix_next,
@@ -1228,73 +1316,14 @@ Index: iam/fs/ext3/iam_lfix.c
 +        .at_end         = iam_lfix_at_end,
 +        .rec_add        = iam_lfix_rec_add,
 +        .rec_del        = iam_lfix_rec_del,
-+        .can_add        = iam_lfix_can_add
++        .can_add        = iam_lfix_can_add,
++        .split          = iam_lfix_split
 +};
 +EXPORT_SYMBOL(iam_lfix_leaf_ops);
-+
-+static int split_leaf_node(handle_t *handle, struct iam_path *path)
-+{
-+#if 0
-+	struct inode *dir = iam_path_obj(path);
-+	unsigned continued = 0;
-+	struct buffer_head *bh2;
-+	u32 newblock, hash_split;
-+	char *data2;
-+	unsigned split;
-+	int	err;
-+
-+	bh2 = ext3_append (handle, dir, &newblock, &err);
-+	if (!(bh2))
-+		return -ENOSPC;
-+	
-+	err = iam_leaf_load(path);
-+	if (err)
-+		goto errout;
-+
-+	BUFFER_TRACE(path->ip_leaf.il_bh, "get_write_access");
-+	err = ext3_journal_get_write_access(handle, path->ip_leaf.il_bh);
-+	if (err) {
-+	journal_error:
-+		iam_leaf_fini(path);
-+		brelse(bh2);
-+		ext3_std_error(dir->i_sb, err);
-+		err = -EIO;
-+		goto errout;
-+	}
-+	data2 = bh2->b_data;
-+	split = dx_get_count((struct iam_entry*)iam_leaf_entries(path))/2;
-+	hash_split = *(__u32*)iam_leaf_key_at(path,
-+		       iam_lfix_shift(path, iam_leaf_entries(path),
-+		       split));
-+	if (iam_keycmp(path->ip_container, iam_leaf_key_at(path,
-+		   iam_lfix_shift(path, iam_leaf_entries(path), split)),
-+		   iam_leaf_key_at(path,
-+		   iam_lfix_shift(path, iam_leaf_entries(path), split -1))) == 0)
-+		continued = 1;
-+
-+	memcpy(iam_lfix_shift(path, (struct iam_lentry *)data2, 1),
-+	       iam_lfix_shift(path, iam_leaf_entries(path), split),
-+	       split * iam_lfix_entry_size(path));
-+
-+	/* Which block gets the new entry? */
-+	dx_insert_block(path, path->ip_frame, hash_split + continued, newblock);
-+	err = ext3_journal_dirty_metadata (handle, bh2);
-+	if (err)
-+		goto journal_error;
-+	err = ext3_journal_dirty_metadata (handle, path->ip_leaf.il_bh);
-+	if (err)
-+		goto journal_error;
-+errout:
-+	brelse (bh2);
-+	return err;
-+#endif
-+        return 0;
-+}
-+
 Index: iam/fs/ext3/namei.c
 ===================================================================
 --- iam.orig/fs/ext3/namei.c	2006-05-27 19:58:44.000000000 +0400
-+++ iam/fs/ext3/namei.c	2006-05-27 21:30:42.000000000 +0400
++++ iam/fs/ext3/namei.c	2006-05-29 00:40:31.000000000 +0400
 @@ -24,81 +24,6 @@
   * 	Theodore Ts'o, 2002
   */
@@ -1402,7 +1431,17 @@ Index: iam/fs/ext3/namei.c
  {
  	struct buffer_head *bh;
  
-@@ -141,9 +66,6 @@ static struct buffer_head *ext3_append(h
+@@ -136,14 +61,15 @@ static struct buffer_head *ext3_append(h
+ 	if ((bh = ext3_bread(handle, inode, *block, 1, err))) {
+ 		inode->i_size += inode->i_sb->s_blocksize;
+ 		EXT3_I(inode)->i_disksize = inode->i_size;
+-		ext3_journal_get_write_access(handle,bh);
++		*err = ext3_journal_get_write_access(handle, bh);
++		if (err != 0) {
++			brelse(bh);
++			bh = NULL;
++		}
+ 	}
  	return bh;
  }
  
@@ -1412,7 +1451,7 @@ Index: iam/fs/ext3/namei.c
  
  #ifndef swap
  #define swap(x, y) do { typeof(x) z = x; x = y; y = z; } while (0)
-@@ -162,10 +84,6 @@ struct fake_dirent {
+@@ -162,10 +88,6 @@ struct fake_dirent {
  	u8 file_type;
  };
  
@@ -1423,7 +1462,7 @@ Index: iam/fs/ext3/namei.c
  
  /*
   * dx_root_info is laid out so that if it should somehow get overlaid by a
-@@ -203,242 +121,10 @@ struct dx_map_entry
+@@ -203,245 +125,10 @@ struct dx_map_entry
  };
  
  
@@ -1663,10 +1702,13 @@ Index: iam/fs/ext3/namei.c
 -static inline struct iam_key *dx_get_key(struct iam_path *p,
 -					struct iam_entry *entry,
 -					struct iam_key *key);
- static void dx_set_key(struct iam_path *p, struct iam_entry *entry,
- 		       struct iam_key *key);
- static unsigned dx_get_count(struct iam_entry *entries);
-@@ -457,80 +143,29 @@ static void dx_sort_map(struct dx_map_en
+-static void dx_set_key(struct iam_path *p, struct iam_entry *entry,
+-		       struct iam_key *key);
+-static unsigned dx_get_count(struct iam_entry *entries);
+ static unsigned dx_get_limit(struct iam_entry *entries);
+ static void dx_set_count(struct iam_entry *entries, unsigned value);
+ static void dx_set_limit(struct iam_entry *entries, unsigned value);
+@@ -457,80 +144,29 @@ static void dx_sort_map(struct dx_map_en
  static struct ext3_dir_entry_2 *dx_move_dirents (char *from, char *to,
  		struct dx_map_entry *offsets, int count);
  static struct ext3_dir_entry_2* dx_pack_dirents (char *base, int size);
@@ -1730,17 +1772,17 @@ Index: iam/fs/ext3/namei.c
 -}
 -
 -static inline unsigned dx_get_block(struct iam_path *p, struct iam_entry *entry)
-+static inline struct iam_key *iam_get_key(struct iam_path *p,
-+					  struct iam_entry *entry,
-+					  struct iam_key *key)
- {
+-{
 -	return le32_to_cpu(*(u32 *)entry_off(entry, path_descr(p)->id_key_size))
 -		& 0x00ffffff;
 -}
 -
 -static inline void dx_set_block(struct iam_path *p,
 -				struct iam_entry *entry, unsigned value)
--{
++static inline struct iam_key *iam_get_key(struct iam_path *p,
++					  struct iam_entry *entry,
++					  struct iam_key *key)
+ {
 -	*(u32*)entry_off(entry,
 -			 path_descr(p)->id_key_size) = cpu_to_le32(value);
 -}
@@ -1754,7 +1796,7 @@ Index: iam/fs/ext3/namei.c
  	return key;
  }
  
-@@ -540,68 +175,70 @@ static inline struct iam_key *iam_key_at
+@@ -540,68 +176,70 @@ static inline struct iam_key *iam_key_at
  	return (struct iam_key *)entry;
  }
  
@@ -1867,7 +1909,7 @@ Index: iam/fs/ext3/namei.c
  static int dx_node_check(struct iam_path *p, struct iam_frame *f)
  {
  	struct iam_entry     *e;
-@@ -614,10 +251,10 @@ static int dx_node_check(struct iam_path
+@@ -614,10 +252,10 @@ static int dx_node_check(struct iam_path
  	count = dx_get_count(e);
  	e = iam_entry_shift(p, e, 1);
  	for (i = 0; i < count - 1; ++i, e = iam_entry_shift(p, e, 1)) {
@@ -1881,7 +1923,7 @@ Index: iam/fs/ext3/namei.c
  			return 0;
  	}
  	return 1;
-@@ -636,13 +273,17 @@ static int htree_node_check(struct iam_p
+@@ -636,13 +274,17 @@ static int htree_node_check(struct iam_p
  
  	data = frame->bh->b_data;
  	entries = dx_node_get_entries(path, frame);
@@ -1901,7 +1943,7 @@ Index: iam/fs/ext3/namei.c
  		if (root->info.hash_version > DX_HASH_MAX) {
  			ext3_warning(sb, __FUNCTION__,
  				     "Unrecognised inode hash code %d",
-@@ -669,15 +310,16 @@ static int htree_node_check(struct iam_p
+@@ -669,15 +311,16 @@ static int htree_node_check(struct iam_p
  					   root->info.info_length));
  		assert(dx_get_limit(entries) == dx_root_limit(path));
  
@@ -1925,7 +1967,7 @@ Index: iam/fs/ext3/namei.c
  		assert(dx_get_limit(entries) == dx_node_limit(path));
  	}
  	frame->entries = frame->at = entries;
-@@ -697,8 +339,8 @@ static int htree_node_init(struct iam_co
+@@ -697,8 +340,8 @@ static int htree_node_init(struct iam_co
  	return 0;
  }
  
@@ -1936,7 +1978,7 @@ Index: iam/fs/ext3/namei.c
  {
  	int result = 0;
  
-@@ -708,8 +350,8 @@ static int htree_node_read(struct iam_co
+@@ -708,8 +351,8 @@ static int htree_node_read(struct iam_co
  	return result;
  }
  
@@ -1947,7 +1989,7 @@ Index: iam/fs/ext3/namei.c
  {
  	__u32 p1 = le32_to_cpu(*(__u32 *)k1);
  	__u32 p2 = le32_to_cpu(*(__u32 *)k2);
-@@ -800,7 +442,7 @@ struct stats dx_show_entries(struct dx_h
+@@ -800,7 +443,7 @@ struct stats dx_show_entries(struct dx_h
  }
  #endif /* DX_DEBUG */
  
@@ -1956,7 +1998,7 @@ Index: iam/fs/ext3/namei.c
  {
  	u32 ptr;
  	int err = 0;
-@@ -810,11 +452,11 @@ static int dx_lookup(struct iam_path *pa
+@@ -810,11 +453,11 @@ static int dx_lookup(struct iam_path *pa
  	struct iam_frame *frame;
  	struct iam_container *c;
  
@@ -1970,7 +2012,7 @@ Index: iam/fs/ext3/namei.c
  	     i <= path->ip_indirect;
  	     ptr = dx_get_block(path, frame->at), ++frame, ++i) {
  		struct iam_entry *entries;
-@@ -823,10 +465,11 @@ static int dx_lookup(struct iam_path *pa
+@@ -823,10 +466,11 @@ static int dx_lookup(struct iam_path *pa
  		struct iam_entry *m;
  		unsigned count;
  
@@ -1984,7 +2026,7 @@ Index: iam/fs/ext3/namei.c
  		if (err != 0)
  			break;
  
-@@ -841,8 +484,8 @@ static int dx_lookup(struct iam_path *pa
+@@ -841,8 +485,8 @@ static int dx_lookup(struct iam_path *pa
  			m = iam_entry_shift(path,
  					   p, iam_entry_diff(path, q, p) / 2);
  			dxtrace(printk("."));
@@ -1995,7 +2037,7 @@ Index: iam/fs/ext3/namei.c
  				q = iam_entry_shift(path, m, -1);
  			else
  				p = iam_entry_shift(path, m, +1);
-@@ -857,12 +500,12 @@ static int dx_lookup(struct iam_path *pa
+@@ -857,12 +501,12 @@ static int dx_lookup(struct iam_path *pa
  			while (n--) {
  				dxtrace(printk(","));
  				at = iam_entry_shift(path, at, +1);
@@ -2011,7 +2053,7 @@ Index: iam/fs/ext3/namei.c
  							      path->ip_key_target));
  					}
  					at = iam_entry_shift(path, at, -1);
-@@ -891,508 +534,20 @@ static int dx_probe(struct dentry *dentr
+@@ -891,508 +535,20 @@ static int dx_probe(struct dentry *dentr
  		    struct dx_hash_info *hinfo, struct iam_path *path)
  {
  	int err;
@@ -2526,27 +2568,64 @@ Index: iam/fs/ext3/namei.c
   * This function increments the frame pointer to search the next leaf
   * block, and reads in the necessary intervening nodes if the search
   * should be necessary.  Whether or not the search is necessary is
-@@ -1409,8 +564,8 @@ EXPORT_SYMBOL(iam_update);
+@@ -1409,16 +565,15 @@ EXPORT_SYMBOL(iam_update);
   * If start_hash is non-null, it will be filled in with the starting
   * hash of the next page.
   */
 -static int ext3_htree_next_block(struct inode *dir, __u32 hash,
 -				 struct iam_path *path, __u32 *start_hash)
-+int ext3_htree_next_block(struct inode *dir, __u32 hash,
-+			  struct iam_path *path, __u32 *start_hash)
++static int ext3_htree_advance(struct inode *dir, __u32 hash,
++			      struct iam_path *path, __u32 *start_hash,
++			      int compat)
  {
  	struct iam_frame *p;
  	struct buffer_head *bh;
-@@ -1445,7 +600,7 @@ static int ext3_htree_next_block(struct 
- 	 * desired contiuation hash.  If it doesn't, return since
- 	 * there's no point to read in the successive index pages.
- 	 */
+ 	int err, num_frames = 0;
+ 	__u32 bhash;
+ 
+-	assert(dx_index_is_compat(path));
+-
+ 	p = path->ip_frame;
+ 	/*
+ 	 * Find the next leaf page by incrementing the frame pointer.
+@@ -1438,28 +593,34 @@ static int ext3_htree_next_block(struct 
+ 		--p;
+ 	}
+ 
+-	/*
+-	 * If the hash is 1, then continue only if the next page has a
+-	 * continuation hash of any value.  This is used for readdir
+-	 * handling.  Otherwise, check to see if the hash matches the
+-	 * desired contiuation hash.  If it doesn't, return since
+-	 * there's no point to read in the successive index pages.
+-	 */
 -	dx_get_key(path, p->at, (struct iam_key *)&bhash);
-+	iam_get_key(path, p->at, (struct iam_key *)&bhash);
- 	if (start_hash)
- 		*start_hash = bhash;
- 	if ((hash & 1) == 0) {
-@@ -1457,9 +612,10 @@ static int ext3_htree_next_block(struct 
+-	if (start_hash)
+-		*start_hash = bhash;
+-	if ((hash & 1) == 0) {
+-		if ((bhash & ~1) != hash)
+-			return 0;
++	if (compat) {
++		/*
++		 * Htree hash magic.
++		 */
++		/*
++		 * If the hash is 1, then continue only if the next page has a
++		 * continuation hash of any value.  This is used for readdir
++		 * handling.  Otherwise, check to see if the hash matches the
++		 * desired contiuation hash.  If it doesn't, return since
++		 * there's no point to read in the successive index pages.
++		 */
++		iam_get_key(path, p->at, (struct iam_key *)&bhash);
++		if (start_hash)
++			*start_hash = bhash;
++		if ((hash & 1) == 0) {
++			if ((bhash & ~1) != hash)
++				return 0;
++		}
+ 	}
+ 	/*
+ 	 * If the hash is HASH_NB_ALWAYS, we always go to the next
  	 * block so no check is necessary
  	 */
  	while (num_frames--) {
@@ -2560,18 +2639,61 @@ Index: iam/fs/ext3/namei.c
  		if (err != 0)
  			return err; /* Failure */
  		++p;
-@@ -1662,8 +818,8 @@ static void dx_sort_map (struct dx_map_e
+@@ -1471,6 +632,16 @@ static int ext3_htree_next_block(struct 
+ 	return 1;
+ }
+ 
++int iam_index_next(struct iam_container *c, struct iam_path *path)
++{
++	return ext3_htree_advance(c->ic_object, 0, path, NULL, 0);
++}
++
++int ext3_htree_next_block(struct inode *dir, __u32 hash,
++			  struct iam_path *path, __u32 *start_hash)
++{
++	return ext3_htree_advance(dir, hash, path, start_hash, 1);
++}
+ 
+ /*
+  * p is at least 6 bytes before the end of page
+@@ -1662,21 +833,30 @@ static void dx_sort_map (struct dx_map_e
  	} while(more);
  }
  
 -static void dx_insert_block(struct iam_path *path,
 -			    struct iam_frame *frame, u32 hash, u32 block)
-+void dx_insert_block(struct iam_path *path, struct iam_frame *frame,
-+		     u32 hash, u32 block)
++void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
++		    const struct iam_key *key, iam_ptr_t ptr)
  {
  	struct iam_entry *entries = frame->entries;
- 	struct iam_entry *old = frame->at, *new = iam_entry_shift(path, old, +1);
-@@ -1897,14 +1053,15 @@ static struct buffer_head * ext3_dx_find
+-	struct iam_entry *old = frame->at, *new = iam_entry_shift(path, old, +1);
++	struct iam_entry *new = iam_entry_shift(path, frame->at, +1);
+ 	int count = dx_get_count(entries);
+ 
+ 	assert(count < dx_get_limit(entries));
+-	assert(old < iam_entry_shift(path, entries, count));
++	assert(frame->at < iam_entry_shift(path, entries, count));
++
+ 	memmove(iam_entry_shift(path, new, 1), new,
+ 		(char *)iam_entry_shift(path, entries, count) - (char *)new);
+-	dx_set_key(path, new, (struct iam_key *)&hash);
+-	dx_set_block(path, new, block);
++	dx_set_key(path, new, key);
++	dx_set_block(path, new, ptr);
+ 	dx_set_count(entries, count + 1);
+ }
++
++void dx_insert_block(struct iam_path *path, struct iam_frame *frame,
++		     u32 hash, u32 block)
++{
++	assert(dx_index_is_compat(path));
++	iam_insert_key(path, frame, (struct iam_key *)&hash, block);
++}
++
+ #endif
+ 
+ 
+@@ -1897,14 +1077,15 @@ static struct buffer_head * ext3_dx_find
  		if (*err != 0)
  			return NULL;
  	} else {
@@ -2590,7 +2712,7 @@ Index: iam/fs/ext3/namei.c
  		if (*err != 0)
  			goto errout;
  		de = (struct ext3_dir_entry_2 *) bh->b_data;
-@@ -2067,7 +1224,7 @@ static struct ext3_dir_entry_2 *do_split
+@@ -2067,7 +1248,7 @@ static struct ext3_dir_entry_2 *do_split
  			struct buffer_head **bh,struct iam_frame *frame,
  			struct dx_hash_info *hinfo, int *error)
  {
@@ -2599,7 +2721,7 @@ Index: iam/fs/ext3/namei.c
  	unsigned blocksize = dir->i_sb->s_blocksize;
  	unsigned count, continued;
  	struct buffer_head *bh2;
-@@ -2392,15 +1549,15 @@ static int ext3_add_entry (handle_t *han
+@@ -2392,15 +1573,15 @@ static int ext3_add_entry (handle_t *han
  }
  
  #ifdef CONFIG_EXT3_INDEX
@@ -2618,7 +2740,7 @@ Index: iam/fs/ext3/namei.c
  	int nr_splet;
  	int i, err;
  
-@@ -2442,7 +1599,8 @@ static int split_index_node(handle_t *ha
+@@ -2442,7 +1623,8 @@ static int split_index_node(handle_t *ha
  	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
  		bh_new[i] = ext3_append (handle, dir, &newblock[i], &err);
  		if (!bh_new[i] ||
@@ -2628,7 +2750,7 @@ Index: iam/fs/ext3/namei.c
  			goto cleanup;
  		BUFFER_TRACE(frame->bh, "get_write_access");
  		err = ext3_journal_get_write_access(handle, frame->bh);
-@@ -2516,9 +1674,9 @@ static int split_index_node(handle_t *ha
+@@ -2516,9 +1698,9 @@ static int split_index_node(handle_t *ha
  			unsigned count1 = count/2, count2 = count - count1;
  			unsigned hash2;
  
@@ -2641,7 +2763,7 @@ Index: iam/fs/ext3/namei.c
  
  			dxtrace(printk("Split index %i/%i\n", count1, count2));
  
-@@ -2578,7 +1736,7 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -2578,7 +1760,7 @@ static int ext3_dx_add_entry(handle_t *h
  	size_t isize;
  
  	iam_path_compat_init(&cpath, dir);
@@ -2650,7 +2772,7 @@ Index: iam/fs/ext3/namei.c
  
  	err = dx_probe(dentry, NULL, &hinfo, path);
  	if (err != 0)
-@@ -2588,8 +1746,9 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -2588,8 +1770,9 @@ static int ext3_dx_add_entry(handle_t *h
  	/* XXX nikita: global serialization! */
  	isize = dir->i_size;
  
@@ -2662,7 +2784,7 @@ Index: iam/fs/ext3/namei.c
  	if (err != 0)
  		goto cleanup;
  
-@@ -2724,12 +1883,12 @@ static struct inode * ext3_new_inode_wan
+@@ -2724,12 +1907,12 @@ static struct inode * ext3_new_inode_wan
   * is so far negative - it has no inode.
   *
   * If the create succeeds, we fill in the inode information
@@ -2680,8 +2802,8 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-27 19:58:44.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-05-27 21:33:22.000000000 +0400
-@@ -1,3 +1,39 @@
++++ iam/include/linux/lustre_iam.h	2006-05-29 00:40:51.000000000 +0400
+@@ -1,9 +1,61 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2714,14 +2836,38 @@ Index: iam/include/linux/lustre_iam.h
 +#ifndef __LINUX_LUSTRE_IAM_H__
 +#define __LINUX_LUSTRE_IAM_H__
 +
-+/*
-+ *  linux/include/linux/lustre_iam.h
-+ */
-+
  /*
-  * Maximal number of non-leaf levels in htree. In the stock ext3 this is 2.
+- * Maximal number of non-leaf levels in htree. In the stock ext3 this is 2.
++ *  linux/include/linux/lustre_iam.h
   */
-@@ -30,6 +66,11 @@ struct iam_key;
++
+ enum {
++        /*
++         * Maximal number of non-leaf levels in htree. In the stock ext3 this
++         * is 2.
++         */
+ 	DX_MAX_TREE_HEIGHT = 5,
+-	DX_SCRATCH_KEYS    = 2
++        /*
++         * Scratch keys used by generic code for temporaries.
++         *
++         * Allocation:
++         *
++         *         [0] reserved for assertions and as a staging area for
++         *         record keys immediately used for key comparisons.
++         *
++         *         [1] reserved for record key, stored during iteration over
++         *         node records (see dx_node_check()).
++         *
++         *         [2] reserved for leaf node operations.
++         *
++         *         [3] reserved for index operations.
++         */
++	DX_SCRATCH_KEYS    = 4
+ };
+ 
+ /*
+@@ -30,6 +82,11 @@ struct iam_key;
  /* Incomplete type use to refer to the records stored in iam containers. */
  struct iam_rec;
  
@@ -2733,7 +2879,7 @@ Index: iam/include/linux/lustre_iam.h
  typedef __u64 iam_ptr_t;
  
  /*
-@@ -41,45 +82,25 @@ struct iam_frame {
+@@ -41,45 +98,25 @@ struct iam_frame {
  	struct iam_entry *at;      /* target entry, found by binary search */
  };
  
@@ -2793,7 +2939,7 @@ Index: iam/include/linux/lustre_iam.h
  	/*
  	 * Returns pointer (in the same sense as pointer in index entry) to
  	 * the root node.
-@@ -102,8 +123,8 @@ struct iam_descr {
+@@ -102,8 +139,8 @@ struct iam_descr {
  	/*
  	 * Key comparison function. Returns -1, 0, +1.
  	 */
@@ -2804,7 +2950,7 @@ Index: iam/include/linux/lustre_iam.h
  	/*
  	 * Create new container.
  	 *
-@@ -111,25 +132,115 @@ struct iam_descr {
+@@ -111,25 +148,120 @@ struct iam_descr {
  	 * contains single record with the smallest possible key.
  	 */
  	int (*id_create)(struct iam_container *c);
@@ -2838,6 +2984,10 @@ Index: iam/include/linux/lustre_iam.h
 +         * initialize just loaded leaf node.
 +         */
 +        int (*init)(struct iam_leaf *p);
++        /*
++         * Format new node.
++         */
++        void (*init_new)(struct iam_container *c, struct buffer_head *bh);
 +        /*
 +         * Release resources.
 +         */
@@ -2884,9 +3034,10 @@ Index: iam/include/linux/lustre_iam.h
 +         */
 +        void (*rec_del)(struct iam_leaf *l);
 +        /*
-+         * split leaf node
++         * split leaf node, moving some entries into @bh (the latter currently
++         * is assumed to be empty).
 +         */
-+        int (*split)(handle_t *h, struct iam_leaf *l);
++        void (*split)(struct iam_leaf *l, struct buffer_head *bh);
 +};
 +
 +struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
@@ -2939,7 +3090,7 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  struct iam_container {
-@@ -149,6 +260,17 @@ struct iam_container {
+@@ -149,6 +281,17 @@ struct iam_container {
  };
  
  /*
@@ -2957,7 +3108,7 @@ Index: iam/include/linux/lustre_iam.h
   * Structure to keep track of a path drilled through htree.
   */
  struct iam_path {
-@@ -172,34 +294,232 @@ struct iam_path {
+@@ -172,34 +315,232 @@ struct iam_path {
  	/*
  	 * Leaf node: a child of ->ip_frame.
  	 */
@@ -3204,7 +3355,7 @@ Index: iam/include/linux/lustre_iam.h
  /*
   * Initialize container @c, acquires additional reference on @inode.
   */
-@@ -210,3 +530,152 @@ int iam_container_init(struct iam_contai
+@@ -210,3 +551,155 @@ int iam_container_init(struct iam_contai
   */
  void iam_container_fini(struct iam_container *c);
  
@@ -3260,10 +3411,10 @@ Index: iam/include/linux/lustre_iam.h
 +		cpu_to_le32(value);
 +}
 +
-+static inline void dx_set_key(struct iam_path *p,
-+			      struct iam_entry *entry, struct iam_key *key)
++static inline void dx_set_key(struct iam_path *p, struct iam_entry *entry,
++                              const struct iam_key *key)
 +{
-+	memcpy(entry, key, iam_path_descr(p)->id_key_size);
++        iam_keycpy(p->ip_container, iam_entry_off(entry, 0), key);
 +}
 +
 +struct dx_countlimit {
@@ -3339,11 +3490,14 @@ Index: iam/include/linux/lustre_iam.h
 +void iam_container_read_lock(struct iam_container *c);
 +void iam_container_read_unlock(struct iam_container *c);
 +
-+int iam_index_next(struct iam_path *p);
++int iam_index_next(struct iam_container *c, struct iam_path *p);
 +int iam_read_leaf(struct iam_path *p);
 +
 +int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
 +		  handle_t *handle, struct buffer_head **bh);
++
++void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
++		    const struct iam_key *key, iam_ptr_t ptr);
 +
 +int  iam_leaf_at_end(const struct iam_leaf *l);
 +void iam_leaf_next(struct iam_leaf *folio);
