@@ -69,6 +69,11 @@ struct iam_leaf_head {
         u_int16_t ill_count;
 };
 
+struct dx_countlimit {
+        u_int16_t limit;
+        u_int16_t count;
+};
+
 #define LEAF_HEAD_MAGIC 0x1976
 int main(int argc, char **argv)
 {
@@ -80,8 +85,10 @@ int main(int argc, char **argv)
         int ptrsize   = 4;
         int verbose   = 0;
         void *buf;
+
         struct iam_lfix_root *root;
         struct iam_leaf_head *head;
+        struct dx_countlimit *limit;
         void *entry;
 
         do {
@@ -140,13 +147,29 @@ int main(int argc, char **argv)
 
         root = memset(buf, 0, blocksize);
 
-        *root = (struct iam_lfix_root) {
+        *root = (typeof(*root)) {
                 .ilr_magic           = cpu_to_le64(IAM_LFIX_ROOT_MAGIC),
                 .ilr_keysize         = cpu_to_le16(keysize),
                 .ilr_recsize         = cpu_to_le16(recsize),
                 .ilr_indirect_levels = cpu_to_le16(1)
         };
+
+        limit = (void *)(root + 1);
+        *limit = (typeof(*limit)){
+                /*
+                 * limit itself + one pointer to the leaf.
+                 */
+                .count = cpu_to_le16(2),
+                .limit = (blocksize -
+                          sizeof(struct iam_lfix_root)) / (keysize + ptrsize)
+        };
+
         entry = root + 1;
+        /*
+         * Skip over @limit.
+         */
+        entry += keysize + ptrsize;
+
         /*
          * Entry format is <key> followed by <ptr>. In the minimal tree
          * consisting of a root and single node, <key> is a minimal possible
