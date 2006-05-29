@@ -36,7 +36,7 @@ shift  `expr $OPTIND - 1`
 
 # Here we expect the csv file
 if [ $# -eq 0 ]; then
-	echo >&2 $"`basename $0`: Lack csv file!"
+	echo >&2 $"`basename $0`: Missing csv file!"
 	usage
 fi
 
@@ -44,6 +44,9 @@ fi
 CSV_FILE=$1
 declare -a HOST_NAMES
 declare -a HOST_IPADDRS
+
+# Remote command
+REMOTE=${REMOTE:-"ssh -x -q"}
 
 # Output verbose informations
 verbose_output() {
@@ -68,17 +71,16 @@ check_file() {
 get_hostnames() {
 	local NAME CHECK_STR
 	declare -i i
+	declare -i j
 
 	# Initialize the HOST_NAMES array
-	for ((i = 0; i < ${#HOST_NAMES[@]}; i++)); do
-        	HOST_NAMES[i]=$""
-    	done
+	unset HOST_NAMES
 
 	CHECK_STR=`egrep -v "([[:space:]]|^)#" ${CSV_FILE} | awk -F, \
 		  '/[[:alnum:]]/{if ($1 !~/[[:alnum:]]/) print $0}'`
 	if [ -n "${CHECK_STR}" ]; then
-                echo >&2 $"`basename $0`: get_hostnames() error: Lack hostname"\
-			  "field in the line - ${CHECK_STR}"
+                echo >&2 $"`basename $0`: get_hostnames() error: Missing"\
+			  "hostname field in the line - ${CHECK_STR}"
 		return 1
 	fi
 
@@ -86,6 +88,10 @@ get_hostnames() {
 	for NAME in `egrep -v "([[:space:]]|^)#" ${CSV_FILE}\
 		    | awk -F, '/[[:alnum:]]/{print $1}'`
 	do
+		for ((j = 0; j < ${#HOST_NAMES[@]}; j++)); do
+			[ "${NAME}" = "${HOST_NAMES[j]}" ] && continue 2
+        	done
+
 		HOST_NAMES[i]=${NAME}
 		i=$i+1
 	done
@@ -94,18 +100,18 @@ get_hostnames() {
 }
 
 # Check whether the host name matches the name in the local /etc/hosts table
-# and whether the IP address according to the host name is correct
+# and whether the IP address corresponding to the host name is correct
 local_check() {
 	# Check argument
         if [ $# -ne 2 ]; then
-                echo >&2 $"`basename $0`: local_check() error: Lack argument" \
-			  "for function local_check()!"
+                echo >&2 $"`basename $0`: local_check() error: Missing"\
+			  "argument for function local_check()!"
                 return 1
         fi
 
 	local RET_STR REAL_NAME
 
-	# Get the IP address according to the host name from /etc/hosts table
+	# Get the corresponding IP address of the host name from /etc/hosts table
 	# of the current host 
 	HOST_IPADDRS[$2]=`egrep "[[:space:]]$1([[:space:]]|$)" /etc/hosts \
 		     | awk '{print $1}'`
@@ -117,32 +123,31 @@ local_check() {
 
 	if [ ${#HOST_IPADDRS[$2]} -gt 15 ]; then
 		echo >&2 "`basename $0`: local_check() error: More than one" \
-			 "IP address line according to $1 in the local" \
+			 "IP address line corresponding to $1 in the local" \
 			 "/etc/hosts table!"
 		return 1
 	fi
 
-	# Execute pdsh command to get the real host name
-	RET_STR=`${PDSH} -w ${HOST_IPADDRS[$2]} hostname 2>&1`
-	if [ $? -ne 0 ] || [ "${RET_STR}" != "${RET_STR#*connect:*}" ]; then
-		echo >&2 "`basename $0`: local_check() error: pdsh error:" \
+	# Execute remote command to get the real host name
+	RET_STR=`${REMOTE} ${HOST_IPADDRS[$2]} hostname 2>&1`
+	if [ $? -ne 0 -a -n "${RET_STR}" ]; then
+		echo >&2 "`basename $0`: local_check() error: remote error:" \
 			 "${RET_STR}"
 		return 1
 	fi
 
 	if [ -z "${RET_STR}" ]; then
-		echo >&2 "`basename $0`: local_check() error: pdsh error:" \
-			 "No results from pdsh! Check the network connectivity"\
-			 "between the local host and ${HOST_IPADDRS[$2]}" \
-			 "or check the two hosts' rcmd module!"
+		echo >&2 "`basename $0`: local_check() error: remote error: No"\
+			 "results from remote! Check the network connectivity"\
+			 "between the local host and ${HOST_IPADDRS[$2]}!"
 		return 1
 	fi
 
-	REAL_NAME=`echo ${RET_STR} | awk '{print $2}'`
+	REAL_NAME=`echo ${RET_STR} | awk '{print $1}'`
 	if [ "$1" != "${REAL_NAME}" ]; then
 		echo >&2 "`basename $0`: local_check() error: The real hostname"\
-			 "according to ${HOST_IPADDRS[$2]} is ${REAL_NAME}," \
-			 "not $1! Check the local /etc/hosts table!"
+			 "of ${HOST_IPADDRS[$2]} is \"${REAL_NAME}\","\
+			 "not \"$1\"! Check the local /etc/hosts table!"
 		return 1
 	fi
 
@@ -154,8 +159,8 @@ local_check() {
 remote_check() {
 	# Check argument
         if [ $# -ne 2 ]; then
-                echo >&2 $"`basename $0`: remote_check() error: Lack argument"\
-			  "for function remote_check()!"
+                echo >&2 $"`basename $0`: remote_check() error: Missing"\
+			  "argument for function remote_check()!"
                 return 1
         fi
 
@@ -164,31 +169,29 @@ remote_check() {
 
 	COMMAND=$"egrep \"[[:space:]]$1([[:space:]]|$)\" /etc/hosts"
 
-	# Execute pdsh command to check remote /etc/hosts tables
+	# Execute remote command to check remote /etc/hosts tables
 	for ((i = 0; i < ${#HOST_NAMES[@]}; i++)); do
-		RET_STR=`${PDSH} -w ${HOST_NAMES[i]} ${COMMAND} 2>&1`
-		if [ $? -ne 0 ] || [ "${RET_STR}" != "${RET_STR#*connect:*}" ]
-		then
-			echo >&2 "`basename $0`: remote_check() error:" \
-				 "pdsh error: ${RET_STR}"
+		RET_STR=`${REMOTE} ${HOST_NAMES[i]} ${COMMAND} 2>&1`
+		if [ $? -ne 0 -a -n "${RET_STR}" ]; then
+			echo >&2 "`basename $0`: remote_check() error:"\
+			 	 "remote error: ${RET_STR}"
 			return 1
 		fi
 
-		IP_ADDR=`echo ${RET_STR} | awk '{print $2}'`
+		IP_ADDR=`echo ${RET_STR} | awk '{print $1}'`
 		if [ -z "${IP_ADDR}" ]; then
 			echo >&2 "`basename $0`: remote_check() error:" \
 				 "$1 does not exist in the ${HOST_NAMES[i]}'s"\
 				 "/etc/hosts table!"
 			return 1
 		fi
-
+	
 		if [ "${IP_ADDR}" != "${HOST_IPADDRS[$2]}" ]; then
 			echo >&2 "`basename $0`: remote_check() error:" \
 				 "IP address ${IP_ADDR} of $1 in the" \
 				 "${HOST_NAMES[i]}'s /etc/hosts is incorrect!"
 			return 1
 		fi
-		
     	done
 
 	return 0
@@ -198,34 +201,33 @@ remote_check() {
 network_check () {
 	# Check argument
         if [ $# -eq 0 ]; then
-                echo >&2 $"`basename $0`: network_check() error: Lack argument" \
-			  "for function network_check()!"
+                echo >&2 $"`basename $0`: network_check() error: Missing"\
+			  "argument for function network_check()!"
                 return 1
         fi
 
 	declare -i i
 	local RET_STR COMMAND REAL_NAME
 
-	# Execute pdsh command to check network connectivity
+	# Execute remote command to check network connectivity
 	for ((i = 0; i < ${#HOST_NAMES[@]}; i++)); do
-		COMMAND=$"${PDSH} -w ${HOST_NAMES[i]} hostname"
-		RET_STR=`${PDSH} -w $1 ${COMMAND} 2>&1`
-		if [ $? -ne 0 ] || [ "${RET_STR}" != "${RET_STR#*connect:*}" ]
-		then
+		COMMAND=$"${REMOTE} ${HOST_NAMES[i]} hostname"
+		RET_STR=`${REMOTE} $1 ${COMMAND} 2>&1`
+		if [ $? -ne 0 -a -n "${RET_STR}" ]; then
 			echo >&2 "`basename $0`: network_check() error:" \
-				 "pdsh error: ${RET_STR}"
+				 "remote error: ${RET_STR}"
 			return 1
 		fi
 
 		if [ -z "${RET_STR}" ]; then
 			echo >&2 "`basename $0`: network_check() error:" \
-				 "pdsh error: Nothing get from pdsh! Check" \
-				 "the network connectivity between $1 and" \
-				 "${HOST_NAMES[i]} or the two hosts' rcmd module!"
+				 "No results from remote! Check the network" \
+				 "connectivity between \"$1\" and" \
+				 "\"${HOST_NAMES[i]}\"!"
 			return 1
 		fi
 
-		REAL_NAME=`echo ${RET_STR} | awk '{print $3}'`
+		REAL_NAME=`echo ${RET_STR} | awk '{print $1}'`
 		if [ "${HOST_NAMES[i]}" != "${REAL_NAME}" ]; then
 			echo >&2 "`basename $0`: network_check() error:" \
 				 "${RET_STR}"
@@ -242,9 +244,7 @@ network_verify() {
 	declare -i i
 
 	# Initialize the HOST_IPADDRS array
-	for ((i = 0; i < ${#HOST_IPADDRS[@]}; i++)); do
-        	HOST_IPADDRS[i]=$""
-    	done
+	unset HOST_IPADDRS
 
 	# Get all the host names from the csv file
 	if ! get_hostnames; then
@@ -255,7 +255,7 @@ network_verify() {
 	# all the /etc/hosts tables of the Lustre cluster
 	for ((i = 0; i < ${#HOST_NAMES[@]}; i++)); do
 		verbose_output "Verifying IP address of host" \
-			       "${HOST_NAMES[i]} in the local /etc/hosts..."
+			       "\"${HOST_NAMES[i]}\" in the local /etc/hosts..."
 		if ! local_check ${HOST_NAMES[i]} $i; then
 			return 1
 		fi
@@ -263,8 +263,9 @@ network_verify() {
 	done
 
 	for ((i = 0; i < ${#HOST_NAMES[@]}; i++)); do
+		[ "${HOST_NAMES[i]}" = "`hostname`" ] && continue
 		verbose_output "Verifying IP address of host" \
-			       "${HOST_NAMES[i]} in the remote /etc/hosts..."
+			       "\"${HOST_NAMES[i]}\" in the remote /etc/hosts..."
 		if ! remote_check ${HOST_NAMES[i]} $i; then
 			return 1
 		fi
@@ -273,8 +274,9 @@ network_verify() {
 
 	# Verify network connectivity of the Lustre cluster
 	for ((i = 0; i < ${#HOST_NAMES[@]}; i++)); do
+		[ "${HOST_NAMES[i]}" = "`hostname`" ] && continue
 		verbose_output "Verifying network connectivity of host" \
-			       "${HOST_NAMES[i]} to other hosts..."
+			       "\"${HOST_NAMES[i]}\" to other hosts..."
 		if ! network_check ${HOST_NAMES[i]}; then
 			return 1
 		fi
