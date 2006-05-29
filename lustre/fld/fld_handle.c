@@ -362,17 +362,20 @@ int fld_server_init(const struct lu_context *ctx, struct fld *fld,
         INIT_LIST_HEAD(&fld_list_head.fld_list);
         spin_lock_init(&fld_list_head.fld_lock);
 
-        fld_iam_init(ctx, fld);
+        result = fld_iam_init(ctx, fld);
 
-        fld->fld_service =
-                ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
-                                     LUSTRE_FLD0_NAME,
-                                     fld->fld_proc_entry, NULL);
-        if (fld->fld_service != NULL)
-                result = ptlrpc_start_threads(NULL, fld->fld_service,
-                                              LUSTRE_FLD0_NAME);
-        else
-                result = -ENOMEM;
+        if (result == 0) {
+                fld->fld_service =
+                        ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
+                                             LUSTRE_FLD0_NAME,
+                                             fld->fld_proc_entry, NULL);
+                if (fld->fld_service != NULL)
+                        result = ptlrpc_start_threads(NULL, fld->fld_service,
+                                                      LUSTRE_FLD0_NAME);
+                else
+                        result = -ENOMEM;
+        }
+
         if (result != 0)
                 fld_server_fini(ctx, fld);
         return result;
@@ -396,9 +399,11 @@ void fld_server_fini(const struct lu_context *ctx, struct fld *fld)
                 OBD_FREE_PTR(fld);
         }
         spin_unlock(&fld_list_head.fld_lock);
-        lu_device_put(&fld->fld_dt->dd_lu_dev);
-        fld_iam_fini(ctx, fld);
-        fld->fld_dt = NULL;
+        if (fld->fld_dt != NULL) {
+                lu_device_put(&fld->fld_dt->dd_lu_dev);
+                fld_iam_fini(ctx, fld);
+                fld->fld_dt = NULL;
+        }
 }
 EXPORT_SYMBOL(fld_server_fini);
 
@@ -413,7 +418,7 @@ static int fld_handle(const struct lu_context *ctx,
                 rc = fld_handle_insert(ctx, fld, mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_DELETE:
-                rc = fld_handle_delete(ctx, fld, mf->mf_seq, mf->mf_mds);
+                rc = fld_handle_delete(ctx, fld, mf->mf_seq);
                 break;
         case FLD_GET:
                 rc = fld_handle_lookup(ctx, fld, mf->mf_seq, &mf->mf_mds);

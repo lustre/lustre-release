@@ -67,10 +67,11 @@ enum fld_op {
 int fld_handle_insert(const struct lu_context *ctx,
                       struct fld *fld, fidseq_t seq_num, mdsno_t mdsno);
 int fld_handle_delete(const struct lu_context *ctx,
-                      struct fld *fld, fidseq_t seq_num, mdsno_t mdsno);
+                      struct fld *fld, fidseq_t seq_num);
 int fld_handle_lookup(const struct lu_context *ctx,
                       struct fld *fld, fidseq_t seq_num, mdsno_t *mds);
 
 int fld_iam_init(const struct lu_context *ctx, struct fld *fld);
 void fld_iam_fini(const struct lu_context *ctx, struct fld *fld);
+
 #endif

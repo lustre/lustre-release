@@ -718,13 +718,15 @@ struct lu_context_key {
          * Value constructor. This is called when new value is created for a
          * context. Returns pointer to new value of error pointer.
          */
-        void  *(*lct_init)(const struct lu_context *ctx);
+        void  *(*lct_init)(const struct lu_context *ctx,
+                           struct lu_context_key *key);
         /*
          * Value destructor. Called when context with previously allocated
          * value of this slot is destroyed. @data is a value that was returned
          * by a matching call to ->lct_init().
          */
-        void   (*lct_fini)(const struct lu_context *ctx, void *data);
+        void   (*lct_fini)(const struct lu_context *ctx,
+                           struct lu_context_key *key, void *data);
         /*
          * Internal implementation detail: index within ->lc_value[] reserved
          * for this key.

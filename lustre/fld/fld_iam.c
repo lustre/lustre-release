@@ -42,19 +42,17 @@
 #include <md_object.h>
 #include <lustre_mdc.h>
 #include <lustre_fid.h>
-#include <linux/lustre_iam.h>
 #include "fld_internal.h"
 
 
-struct iam_descr fld_param = {
-        .id_key_size = sizeof ((struct lu_fid *)0)->f_seq,
-        .id_ptr_size = 4, /* 32 bit block numbers for now */
-        .id_rec_size = sizeof(mdsno_t),
-        .id_node_gap = 0, /* no gaps in index nodes */
-        .id_root_gap = sizeof(struct iam_root),
-        .id_ops      = &generic_iam_ops,
-        .id_leaf_ops = &iam_lfix_leaf_ops
+static const struct dt_index_features fld_index_features = {
+        .dif_flags       = DT_IND_UPDATE,
+        .dif_keysize_min = sizeof(fidseq_t),
+        .dif_keysize_max = sizeof(fidseq_t),
+        .dif_recsize_min = sizeof(mdsno_t),
+        .dif_recsize_max = sizeof(mdsno_t)
 };
+
 /*
  * number of blocks to reserve for particular operations. Should be function
  * of ... something. Stub for now.
@@ -65,14 +63,54 @@ enum {
         FLD_TXN_INDEX_DELETE_CREDITS  = 10
 };
 
-static int fld_keycmp(const struct iam_container *c, const struct iam_key *k1,
-                      const struct iam_key *k2)
+struct fld_thread_info {
+        __u64 fti_key;
+        __u64 fti_rec;
+};
+
+static void *fld_key_init(const struct lu_context *ctx,
+                          struct lu_context_key *key)
 {
-        __u64 p1 = le64_to_cpu(*(__u32 *)k1);
-        __u64 p2 = le64_to_cpu(*(__u32 *)k2);
+        struct fld_thread_info *info;
 
-        return p1 > p2 ? +1 : (p1 < p2 ? -1 : 0);
+        OBD_ALLOC_PTR(info);
+        if (info == NULL)
+                info = ERR_PTR(-ENOMEM);
+        return info;
+}
 
+static void fld_key_fini(const struct lu_context *ctx,
+                         struct lu_context_key *key, void *data)
+{
+        struct fld_thread_info *info = data;
+        OBD_FREE_PTR(info);
+}
+
+static int fld_key_registered = 0;
+
+static struct lu_context_key fld_thread_key = {
+        .lct_init = fld_key_init,
+        .lct_fini = fld_key_fini
+};
+
+static struct dt_key *fld_key(const struct lu_context *ctx,
+                              const fidseq_t seq_num)
+{
+        struct fld_thread_info *info = lu_context_key_get(ctx, &fld_thread_key);
+        LASSERT(info != NULL);
+
+        info->fti_key = cpu_to_be64(seq_num);
+        return (void *)&info->fti_key;
+}
+
+static struct dt_rec *fld_rec(const struct lu_context *ctx,
+                              const mdsno_t mds_num)
+{
+        struct fld_thread_info *info = lu_context_key_get(ctx, &fld_thread_key);
+        LASSERT(info != NULL);
+
+        info->fti_rec = cpu_to_be64(mds_num);
+        return (void *)&info->fti_rec;
 }
 
 int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
@@ -91,15 +129,15 @@ int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
 
         rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
-                                              (struct dt_rec*)(&mds_num),
-                                              (struct dt_key*)(&seq_num), th);
+                                              fld_rec(ctx, mds_num),
+                                              fld_key(ctx, seq_num), th);
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
 }
 
 int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
-                      fidseq_t seq_num, mdsno_t mds_num)
+                      fidseq_t seq_num)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -111,8 +149,7 @@ int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
         rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
-                                              (struct dt_rec*)(&mds_num),
-                                              (struct dt_key*)(&seq_num), th);
+                                              fld_key(ctx, seq_num), th);
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
@@ -121,52 +158,73 @@ int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
 int fld_handle_lookup(const struct lu_context *ctx,
                       struct fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
 {
+        int result;
 
         struct dt_object *dt_obj = fld->fld_obj;
+        struct dt_rec    *rec = fld_rec(ctx, 0);
 
-        return dt_obj->do_index_ops->dio_lookup(ctx, dt_obj,
-                                             (struct dt_rec*)(&mds_num),
-                                             (struct dt_key*)(&seq_num));
+        result = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
+                                                  fld_key(ctx, seq_num));
+        if (result == 0)
+                *mds_num = be64_to_cpu(*(__u64 *)rec);
+        return result;
 }
 
 int fld_iam_init(const struct lu_context *ctx, struct fld *fld)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj;
-        struct iam_container *ic = NULL;
         int rc;
 
         ENTRY;
 
+        if (fld_key_registered == 0) {
+                rc = lu_context_key_register(&fld_thread_key);
+                if (rc != 0)
+                        return rc;
+        }
+        fld_key_registered++;
+
+        /*
+         * lu_context_key has to be registered before threads are started,
+         * check this.
+         */
+        LASSERT(fld->fld_service == NULL);
+
+        fld->fld_cookie = dt->dd_ops->dt_index_init(ctx, &fld_index_features);
+        if (IS_ERR(fld->fld_cookie) != 0)
+                return PTR_ERR(fld->fld_cookie);
+
         dt_obj = dt_store_open(ctx, dt, "fld", &fld->fld_fid);
         if (!IS_ERR(dt_obj)) {
                 fld->fld_obj = dt_obj;
-                if (dt_obj->do_index_ops != NULL) {
-                        /* XXX nikita: disable for now */
-                        /* rc = dt_obj->do_index_ops->dio_init(ctx, dt_obj,
-                                                            ic, &fld_param); */
-                        fld_param.id_ops->id_keycmp = fld_keycmp;
-                } else {
+                rc = dt_obj->do_ops->do_object_index_try(ctx, dt_obj,
+                                                         &fld_index_features,
+                                                         fld->fld_cookie);
+                if (rc == 0)
+                        LASSERT(dt_obj->do_index_ops != NULL);
+                else
                         CERROR("fld is not an index!\n");
-                        rc = -EINVAL;
-                }
         } else {
                 CERROR("Cannot find fld obj %lu \n", PTR_ERR(dt_obj));
                 rc = PTR_ERR(dt_obj);
         }
-
 
         RETURN(rc);
 }
 
 void fld_iam_fini(const struct lu_context *ctx, struct fld *fld)
 {
-        struct dt_object *dt_obj = fld->fld_obj;
-
-        /* XXX nikita: disable for now */
-        /* dt_obj->do_index_ops->dio_fini(ctx, dt_obj); */
-        /*XXX Should put object here,
-          lu_object_put(fld->fld_obj->do_lu);
-         *but no ctxt in this func, FIX later*/
-        fld->fld_obj = NULL;
+        if (!IS_ERR(fld->fld_cookie) && fld->fld_cookie != NULL) {
+                fld->fld_dt->dd_ops->dt_index_fini(ctx, fld->fld_cookie);
+                fld->fld_cookie = NULL;
+        }
+        if (fld->fld_obj != NULL) {
+                lu_object_put(ctx, &fld->fld_obj->do_lu);
+                fld->fld_obj = NULL;
+        }
+        if (fld_key_registered > 0) {
+                if (-- fld_key_registered == 0)
+                        lu_context_key_degister(&fld_thread_key);
+        }
 }

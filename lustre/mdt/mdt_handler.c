@@ -1971,7 +1971,8 @@ static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
  * context key constructor/destructor
  */
 
-static void *mdt_thread_init(const struct lu_context *ctx)
+static void *mdt_thread_init(const struct lu_context *ctx,
+                             struct lu_context_key *key)
 {
         struct mdt_thread_info *info;
 
@@ -1987,7 +1988,8 @@ static void *mdt_thread_init(const struct lu_context *ctx)
         return info;
 }
 
-static void mdt_thread_fini(const struct lu_context *ctx, void *data)
+static void mdt_thread_fini(const struct lu_context *ctx,
+                            struct lu_context_key *key, void *data)
 {
         struct mdt_thread_info *info = data;
         OBD_FREE_PTR(info);

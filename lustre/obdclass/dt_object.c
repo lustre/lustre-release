@@ -187,3 +187,7 @@ struct dt_object *dt_store_open(const struct lu_context *ctx,
         return child;
 }
 EXPORT_SYMBOL(dt_store_open);
+
+const struct dt_index_features dt_directory_features;
+EXPORT_SYMBOL(dt_directory_features);
+

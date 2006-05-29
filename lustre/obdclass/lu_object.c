@@ -609,7 +609,7 @@ static void keys_fini(struct lu_context *ctx)
                                 LASSERT(key->lct_fini != NULL);
                                 LASSERT(key->lct_used > 1);
 
-                                key->lct_fini(ctx, ctx->lc_value[i]);
+                                key->lct_fini(ctx, key, ctx->lc_value[i]);
                                 key->lct_used--;
                                 ctx->lc_value[i] = NULL;
                         }
@@ -637,7 +637,7 @@ static int keys_init(struct lu_context *ctx)
                                 LASSERT(key->lct_init != NULL);
                                 LASSERT(key->lct_index == i);
 
-                                value = key->lct_init(ctx);
+                                value = key->lct_init(ctx, key);
                                 if (IS_ERR(value)) {
                                         keys_fini(ctx);
                                         return PTR_ERR(value);

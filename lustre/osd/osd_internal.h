@@ -33,6 +33,7 @@
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
+#include <linux/lustre_iam.h>
 
 #include <dt_object.h>
 #include "osd_oi.h"
@@ -41,14 +42,16 @@ struct inode;
 struct dentry;
 
 struct osd_object {
-        struct dt_object     oo_dt;
+        struct dt_object       oo_dt;
         /*
          * Inode for file system object represented by this osd_object. This
          * inode is pinned for the whole duration of lu_object life.
          */
-        struct inode        *oo_inode;
-        struct rw_semaphore  oo_sem;
-        void                *oo_container;
+        struct inode          *oo_inode;
+        struct rw_semaphore    oo_sem;
+        struct iam_container   oo_container;
+        struct iam_descr       oo_descr;
+        struct lu_context_key *oo_cookie_key;
 };
 
 /*
@@ -82,7 +85,7 @@ struct osd_thread_info {
          * XXX temporary: for ->i_op calls.
          */
         struct qstr         oti_str;
-        void                *scratch_key;        
+        void                *scratch_key;
 };
 
 #endif /* __KERNEL__ */

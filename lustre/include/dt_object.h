@@ -51,6 +51,8 @@ struct thandle;
 struct txn_param;
 struct dt_device;
 struct dt_object;
+struct dt_index_features;
+struct dt_index_cookie;
 
 /*
  * Lock mode for DT objects.
@@ -94,7 +96,48 @@ struct dt_device_operations {
          */
         int   (*dt_root_get)(const struct lu_context *ctx,
                              struct dt_device *dev, struct lu_fid *f);
+        /*
+         * This method has to be called by any module that is going to use
+         * indexing capabilities of dt interface.
+         */
+        struct dt_index_cookie *(*dt_index_init)
+                (const struct lu_context *, const struct dt_index_features *);
+        /*
+         * Dual to ->dt_index_init().
+         */
+        void (*dt_index_fini)(const struct lu_context *ctx,
+                              struct dt_index_cookie *cookie);
 };
+
+struct dt_index_features {
+        /* required feature flags from enum dt_index_flags */
+        __u32 dif_flags;
+        /* minimal required key size */
+        size_t dif_keysize_min;
+        /* maximal required key size, 0 if no limit */
+        size_t dif_keysize_max;
+        /* minimal required record size */
+        size_t dif_recsize_min;
+        /* maximal required record size, 0 if no limit */
+        size_t dif_recsize_max;
+};
+
+enum dt_index_flags {
+        /* index supports variable sized keys */
+        DT_IND_VARKEY = 1 << 0,
+        /* index supports variable sized records */
+        DT_IND_VARREC = 1 << 1,
+        /* index can be modified */
+        DT_IND_UPDATE = 1 << 2,
+        /* index supports records with non-unique (duplicate) keys */
+        DT_IND_NONUNQ = 1 << 3
+};
+
+/*
+ * Features, required from index to support file system directories (mapping
+ * names to fids).
+ */
+extern const struct dt_index_features dt_directory_features;
 
 /*
  * Per-dt-object operations.
@@ -163,6 +206,21 @@ struct dt_object_operations {
          */
         int   (*do_object_destroy)(const struct lu_context *ctxt,
                                    struct dt_object *dt, struct thandle *th);
+        /*
+         * Announce that this object is going to be used as an index. This
+         * operation check that object supports indexing operations and
+         * installs appropriate dt_index_operations vector on success.
+         *
+         * Also probes for features. Operation is successful if all required
+         * features are supported. In this case, value of @cookie key is used
+         * as an opaque datum with format required by the underlying indexing
+         * implementation. Value of this key has to be allocated through
+         * ->dt_index_cookie().
+         */
+        int   (*do_object_index_try)(const struct lu_context *ctxt,
+                                     struct dt_object *dt,
+                                     const struct dt_index_features *feat,
+                                     struct dt_index_cookie *cookie);
 };
 
 /*
@@ -196,36 +254,6 @@ struct dt_rec;
  */
 struct dt_key;
 
-struct dt_index_features {
-        /* required feature flags from enum dt_index_flags */
-        __u32 dif_flags;
-        /* minimal required key size */
-        size_t dif_keysize_min;
-        /* maximal required key size, 0 if no limit */
-        size_t dif_keysize_max;
-        /* minimal required record size */
-        size_t dif_recsize_min;
-        /* maximal required record size, 0 if no limit */
-        size_t dif_recsize_max;
-};
-
-enum dt_index_flags {
-        /* index supports variable sized keys */
-        DT_IND_VARKEY = 1 << 0,
-        /* index supports variable sized records */
-        DT_IND_VARREC = 1 << 1,
-        /* index can be modified */
-        DT_IND_UPDATE = 1 << 2,
-        /* index supports records with non-unique (duplicate) keys */
-        DT_IND_NONUNQ = 1 << 3
-};
-
-/*
- * Features, required from index to support file system directories (mapping
- * names to fids).
- */
-extern const struct dt_index_features dt_directory_features;
-
 /*
  * Per-dt-object operations on object as index.
  */
@@ -245,14 +273,7 @@ struct dt_index_operations {
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int (*dio_delete)(const struct lu_context *ctxt, struct dt_object *dt,
-                          const struct dt_rec *rec, const struct dt_key *key,
-                          struct thandle *handle);
-        /*
-         * Features probing. Returns 1 if this index supports all features in
-         * @feat, -ve on error, 0 otherwise.
-         */
-        int (*dio_probe)(const struct lu_context *ctxt, struct dt_object *dt,
-                         const struct dt_index_features *feat);
+                          const struct dt_key *key, struct thandle *handle);
 };
 
 struct dt_device {

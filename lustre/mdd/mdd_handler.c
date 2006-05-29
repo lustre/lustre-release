@@ -605,7 +605,6 @@ __mdd_index_delete(const struct lu_context *ctxt, struct mdd_device *mdd,
         mdd_lock2(ctxt, pobj, obj);
 
         rc = next->do_index_ops->dio_delete(ctxt, next,
-                                            (const struct dt_rec *)mdd_object_getfid(obj),
                                             (struct dt_key *)name, handle);
         mdd_unlock2(ctxt, pobj, obj);
 
@@ -940,7 +939,8 @@ static struct lu_device_type mdd_device_type = {
         .ldt_ops  = &mdd_device_type_ops
 };
 
-static void *mdd_key_init(const struct lu_context *ctx)
+static void *mdd_key_init(const struct lu_context *ctx,
+                          struct lu_context_key *key)
 {
         struct mdd_thread_info *info;
 
@@ -950,7 +950,8 @@ static void *mdd_key_init(const struct lu_context *ctx)
         return info;
 }
 
-static void mdd_key_fini(const struct lu_context *ctx, void *data)
+static void mdd_key_fini(const struct lu_context *ctx,
+                         struct lu_context_key *key, void *data)
 {
         struct mdd_thread_info *info = data;
         OBD_FREE_PTR(info);

@@ -82,6 +82,7 @@ struct fld {
         struct dt_device        *fld_dt;
         struct dt_object        *fld_obj;
         struct lu_fid            fld_fid; /* used during initialization */
+        struct dt_index_cookie  *fld_cookie;
 };
 
 int  fld_server_init(const struct lu_context *ctx, struct fld *fld,
