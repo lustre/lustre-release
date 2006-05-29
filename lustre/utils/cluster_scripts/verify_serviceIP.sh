@@ -23,6 +23,9 @@ if [ $# -lt 2 ]; then
         usage
 fi
 
+# Remote command
+REMOTE=${REMOTE:-"ssh -x -q"}
+
 #
 # inSameIPsubnet serviceIPaddr interfaceIPaddr mask
 #
@@ -95,7 +98,6 @@ inSameIPsubnet() {
 # interface name is returned to stdout.
 #
 findInterface() {
-	declare host 
 	declare line
 	declare intf
 	declare addr
@@ -105,9 +107,9 @@ findInterface() {
 	declare hostname=$2
 
 	{
-	while read host intf line
+	while read intf line
 	do
-		while read host line
+		while read line
 	  	do
 	    		if [ "$line" = "" ]; then	# go to next interface
 	      			continue 2
@@ -130,7 +132,7 @@ findInterface() {
 	    		done
 	  	done
 	done
-	} < <(${PDSH} -w $hostname /sbin/ifconfig)
+	} < <(${REMOTE} $hostname /sbin/ifconfig)
 
 	echo >&2 "`basename $0`: Cannot find the interface in which" \
 		  "$target is configured in the host $hostname!"
@@ -162,7 +164,7 @@ findNetmask() {
  	    		esac
 	    		shift
 	  	done
-	done < <(${PDSH} -w $hostname /sbin/ifconfig $target)
+	done < <(${REMOTE} $hostname /sbin/ifconfig $target)
 
 	echo >&2 "`basename $0`: Cannot find the netmask associated with" \
 		  "the interface $target in the host $hostname!"
@@ -183,18 +185,19 @@ check_srvIPaddr() {
 	declare srv_IPaddr=$1
 	declare hostname=$2
 
-	# Get the IP address from /etc/hosts table according to the hostname
+	# Get the corresponding IP address of the hostname from /etc/hosts table
 	real_IPaddr=`egrep "[[:space:]]$hostname([[:space:]]|$)" /etc/hosts \
                      | awk '{print $1}'`
         if [ -z "$real_IPaddr" ]; then
-                echo >&2 "`basename $0`: $hostname does not exist in" \
+                echo >&2 "`basename $0`: Hostname $hostname does not exist in" \
                          "the local /etc/hosts table!"
                 return 1
         fi
 
         if [ ${#real_IPaddr} -gt 15 ]; then
                 echo >&2 "`basename $0`: More than one IP address line" \
-                         "according to $hostname in the local /etc/hosts table!"
+                         "corresponding to $hostname in the local"  \
+			 "/etc/hosts table!"
                 return 1
         fi
 
