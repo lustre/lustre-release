@@ -9,9 +9,9 @@
 usage() {
 	cat >&2 <<EOF
 
-Usage:  `basename $0` <-r HBver> <-n hostnames> <-d target device>
-		      <-c heartbeat channels> <-s service address>
-		      [-o heartbeat options] [-v]
+Usage:  `basename $0` <-r HBver> <-n hostnames> <-c heartbeat channels> 
+		      [-s service address] [-o heartbeat options] [-v] 
+		      <-d target device> [-d target device...]
 
 	-r HBver		the version of Heartbeat software
                         	The Heartbeat software versions which are curr-
@@ -22,46 +22,68 @@ Usage:  `basename $0` <-r HBver> <-n hostnames> <-d target device>
                         	Multiple nodenames are separated by colon (:)
                         	delimeter. The first one is the nodename of the 
 				primary node, the others are failover nodenames.
-	-d target device        the target device name and type
-                        	The name and type are separated by colon (:)
-                        	delimeter. The type values are: mgs, mdt, ost or
-				mgs_mdt.
 	-c heartbeat channels   the methods and devices to send/rcv heartbeats on
-	-s service address      the IP address to failover
+				Multiple channels are separated by colon (:)
+				delimeter.
+	-s service address      the IP address to failover, required by hbv1
 	-o heartbeat options    a "catchall" for other heartbeat configuration 
 				options
+				Multiple options are separated by colon (:)
+				delimeter.
 	-v			verbose mode
+	-d target device        the target device name and mount point
+                        	The device name and mount point are separated by
+				colon (:) delimeter. 
 
 EOF
 	exit 1
 }
 
-# Global variables
-SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"./"}
-SCRIPT_VERIFY_SRVIP=${SCRIPTS_PATH}$"verify_serviceIP.sh"
+#****************************** Global variables ******************************#
+# Scripts to be called
+SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"."}
+SCRIPT_VERIFY_SRVIP=${SCRIPTS_PATH}/verify_serviceIP.sh
+SCRIPT_GEN_MONCF=${SCRIPTS_PATH}/mon_cf.generator.sh	# create mon.cf file
 
-LUSTRE_SRV_SCRIPT=$"lustre" 		# service script for lustre
-MON_SRV_SCRIPT=$"mon"			# service script for mon
-LUSTRE_MON_SCRIPT=$"simple.health_check.monitor"
-LUSTRE_ALERT_SCRIPT=$"fail_lustre.alert"
-CIB_GEN_SCRIPT=$"/usr/lib/heartbeat/cts/haresources2cib.py"
+# Remote command
+REMOTE=${REMOTE:-"ssh -x -q"}
 
-TMP_DIR=$"/tmp/heartbeat/"		# temporary directory
-HACF_TEMP=${TMP_DIR}$"ha.cf.temp"
-AUTHKEYS_TEMP=${TMP_DIR}$"authkeys.temp"
-MONCF_TEMP=${TMP_DIR}$"mon.cf.temp"
+# Lustre utilities path
+CMD_PATH=${CMD_PATH:-"/usr/sbin"}
+TUNEFS=${TUNEFS:-"$CMD_PATH/tunefs.lustre"}
 
-HA_DIR=$"/etc/ha.d/"			# Heartbeat configuration directory
-MON_DIR=$"/etc/mon/"			# mon configuration directory
-CIB_DIR=$"/var/lib/heartbeat/crm/"	# cib.xml directory
+# Heartbeat tools
+HB_TOOLS_PATH=${HB_TOOLS_PATH:-"/usr/lib/heartbeat"}	# Heartbeat tools path
+CIB_GEN_SCRIPT=${HB_TOOLS_PATH}/haresources2cib.py
 
-HBVER_HBV1=$"hbv1"			# Heartbeat version 1
-HBVER_HBV2=$"hbv2"			# Heartbeat version 2
+# Configuration directories
+HA_DIR=${HA_DIR:-"/etc/ha.d"}		# Heartbeat configuration directory
+MON_DIR=${MON_DIR:-"/etc/mon"}		# mon configuration directory
+CIB_DIR=${CIB_DIR:-"/var/lib/heartbeat/crm"}	# cib.xml directory
+
+# Service directories and names
+INIT_DIR=${INIT_DIR:-"/etc/init.d"}
+HARES_DIR=${HARES_DIR:-"${HA_DIR}/resource.d"}		# Heartbeat resources
+LUSTRE_SRV=${LUSTRE_SRV:-"${INIT_DIR}/lustre"}		# service script for lustre
+LUSTRE_RESMON_SCRIPT=${LUSTRE_RESMON_SCRIPT:-"${HARES_DIR}/lustre-resource-monitor"}
+
+TMP_DIR="/tmp/heartbeat"		# temporary directory
+HACF_TEMP=${TMP_DIR}/ha.cf.temp
+AUTHKEYS_TEMP=${TMP_DIR}/authkeys.temp
+
+HBVER_HBV1="hbv1"			# Heartbeat version 1
+HBVER_HBV2="hbv2"			# Heartbeat version 2
 
 declare -a NODE_NAMES			# node names in the failover group
 
+# Lustre target device names, service names and mount points
+declare -a TARGET_DEVNAMES TARGET_SRVNAMES TARGET_MNTPNTS
+declare -i TARGET_NUM=0			# number of targets
+
+
 # Get and check the positional parameters
-while getopts "r:n:d:c:s:o:v" OPTION; do
+VERBOSE_OUTPUT=false
+while getopts "r:n:c:s:o:vd:" OPTION; do
 	case $OPTION in
 	r) 
 		HBVER_OPT=$OPTARG
@@ -74,25 +96,20 @@ while getopts "r:n:d:c:s:o:v" OPTION; do
 		;;
         n)
 		HOSTNAME_OPT=$OPTARG 
+		PRIM_NODENAME=`echo ${HOSTNAME_OPT} | awk -F":" '{print $1}'`
+		if [ -z "${PRIM_NODENAME}" ]; then
+			echo >&2 $"`basename $0`: Missing primary nodename!"
+			usage
+		fi
 		HOSTNAME_NUM=`echo ${HOSTNAME_OPT} | awk -F":" '{print NF}'`
 		if [ ${HOSTNAME_NUM} -lt 2 ]; then
-			echo >&2 $"`basename $0`: Lack failover nodenames!"
+			echo >&2 $"`basename $0`: Missing failover nodenames!"
 			usage
 		fi
-		;;
-        d)
-		DEVICE_OPT=$OPTARG 
-		TARGET_DEV=`echo ${DEVICE_OPT} | awk -F":" '{print $1}'`
-		TARGET_TYPE=`echo ${DEVICE_OPT} | awk -F":" '{print $2}'`
-		if [ -z "${TARGET_TYPE}" ]; then
-			echo >&2 $"`basename $0`: Lack target device type!"
-			usage
-		fi
-		if [ "${TARGET_TYPE}" != "mgs" ]&&[ "${TARGET_TYPE}" != "mdt" ]\
-		&&[ "${TARGET_TYPE}" != "ost" ]&&[ "${TARGET_TYPE}" != "mgs_mdt" ]
+		if [ "${HBVER_OPT}" = "${HBVER_HBV1}" -a ${HOSTNAME_NUM} -gt 2 ]
 		then
-			echo >&2 $"`basename $0`: Invalid target device type" \
-				  "- ${TARGET_TYPE}!"
+			echo >&2 $"`basename $0`: Heartbeat version 1 can" \
+				  "only support 2 nodes!"
 			usage
 		fi
 		;;
@@ -105,7 +122,7 @@ while getopts "r:n:d:c:s:o:v" OPTION; do
    		&& [ "${HBCHANNEL_OPT}" = "${HBCHANNEL_OPT#*ucast*}" ] \
    		&& [ "${HBCHANNEL_OPT}" = "${HBCHANNEL_OPT#*mcast*}" ]; then
 			echo >&2 $"`basename $0`: Invalid Heartbeat channel" \
-				  "- ${HBCHANNEL_OPT}!"
+				  "- \"${HBCHANNEL_OPT}\"!"
 			usage
 		fi
 		;;
@@ -117,7 +134,22 @@ while getopts "r:n:d:c:s:o:v" OPTION; do
 		HBOPT_OPT=`echo "${HBOPT_OPT}" | sed 's/^"//' | sed 's/"$//'`
 		;;
 	v) 
-		VERBOSE_OPT=$"yes"
+		VERBOSE_OUTPUT=true
+		;;
+        d)
+		DEVICE_OPT=$OPTARG 
+		TARGET_DEVNAMES[TARGET_NUM]=`echo ${DEVICE_OPT}|awk -F: '{print $1}'`
+		TARGET_MNTPNTS[TARGET_NUM]=`echo ${DEVICE_OPT}|awk -F: '{print $2}'`
+		if [ -z "${TARGET_DEVNAMES[TARGET_NUM]}" ]; then
+			echo >&2 $"`basename $0`: Missing target device name!"
+			usage
+		fi
+		if [ -z "${TARGET_MNTPNTS[TARGET_NUM]}" ]; then
+			echo >&2 $"`basename $0`: Missing mount point for target"\
+				  "${TARGET_DEVNAMES[TARGET_NUM]}!"
+			usage
+		fi
+		TARGET_NUM=$(( TARGET_NUM + 1 ))
 		;;
         ?) 
 		usage 
@@ -126,38 +158,33 @@ done
 
 # Check the required parameters
 if [ -z "${HBVER_OPT}" ]; then
-	echo >&2 $"`basename $0`: Lack -r option!"
+	echo >&2 $"`basename $0`: Missing -r option!"
 	usage
 fi
 
 if [ -z "${HOSTNAME_OPT}" ]; then
-	echo >&2 $"`basename $0`: Lack -n option!"
-	usage
-fi
-
-if [ -z "${DEVICE_OPT}" ]; then
-	echo >&2 $"`basename $0`: Lack -d option!"
+	echo >&2 $"`basename $0`: Missing -n option!"
 	usage
 fi
 
 if [ -z "${HBCHANNEL_OPT}" ]; then
-	echo >&2 $"`basename $0`: Lack -c option!"
+	echo >&2 $"`basename $0`: Missing -c option!"
 	usage
 fi
 
-if [ -z "${SRVADDR_OPT}" ]; then
-	echo >&2 $"`basename $0`: Lack -s option!"
+if [ "${HBVER_OPT}" = "${HBVER_HBV1}" -a -z "${SRVADDR_OPT}" ]; then
+	echo >&2 $"`basename $0`: Missing -s option!"
 	usage
 fi
 
-if [ "${HBVER_OPT}" = "${HBVER_HBV1}" -a ${HOSTNAME_NUM} -gt 2 ]; then
-	echo >&2 $"`basename $0`: Heartbeat version 1 can only support 2 nodes!"
+if [ -z "${DEVICE_OPT}" ]; then
+	echo >&2 $"`basename $0`: Missing -d option!"
 	usage
 fi
 
 # Output verbose informations
 verbose_output() {
-	if [ "${VERBOSE_OPT}" = "yes" ]; then
+	if ${VERBOSE_OUTPUT}; then
 		echo "`basename $0`: $*"
 	fi
 	return 0
@@ -167,8 +194,6 @@ verbose_output() {
 #
 # Get all the node names in this failover group
 get_nodenames() {
-	PRIM_NODENAME=`echo ${HOSTNAME_OPT} | awk -F":" '{print $1}'`
-
 	declare -i idx
 	local nodename_str nodename
 
@@ -207,28 +232,105 @@ check_srvIPaddr() {
 
 # stop_heartbeat
 #
-# Run pdsh command to stop each node's heartbeat service
+# Run remote command to stop each node's heartbeat service
 stop_heartbeat() {
 	declare -i idx
-	local nodename_str=${PRIM_NODENAME}
+	local ret_str
 
-	for ((idx = 1; idx < ${#NODE_NAMES[@]}; idx++)); do
-		nodename_str=${nodename_str}$","${NODE_NAMES[idx]}
+	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
+		ret_str=`${REMOTE} ${NODE_NAMES[idx]} \
+			"/sbin/service heartbeat stop" 2>&1`
+		if [ $? -ne 0 ]; then
+			echo >&2 "`basename $0`: stop_heartbeat() error:"\
+				 "from host ${NODE_NAMES[idx]} - $ret_str!"
+		fi
 	done
 
-	${PDSH} -w ${nodename_str} /sbin/service heartbeat stop
+	return 0
+}
+
+# get_srvname hostname target_devname
+#
+# Get the lustre target server name from the node @hostname
+get_srvname() {
+	local host_name=$1
+	local target_devname=$2
+	local target_srvname=
+	local ret_str
+
+	# Execute remote command to get the target server name
+	ret_str=`${REMOTE} ${host_name} \
+		"${TUNEFS} --print ${target_devname} | grep Target:" 2>&1`
 	if [ $? -ne 0 ]; then
-		echo >&2 "`basename $0`: stop_heartbeat() error:"\
-			 "Fail to execute pdsh command!"
+		echo "`basename $0`: get_srvname() error:" \
+		     "from host ${host_name} - ${ret_str}"
 		return 1
 	fi
+
+	if [ "${ret_str}" != "${ret_str#*Target: }" ]; then
+		ret_str=${ret_str#*Target: }
+		target_srvname=`echo ${ret_str} | awk '{print $1}'`
+	fi
+	
+	if [ -z "${target_srvname}" ]; then
+		echo "`basename $0`: get_srvname() error: Cannot get the"\
+		     "server name of target ${target_devname} in ${host_name}!"
+		return 1
+	fi
+
+	echo ${target_srvname}
+	return 0
+} 
+
+# create_service
+#
+# Create service symlinks from /etc/init.d/lustre for Lustre targets
+create_service() {
+	declare -i i
+	local srv_dir
+	local command ret_str
+
+	# Initialize the TARGET_SRVNAMES array
+	unset TARGET_SRVNAMES
+
+	# Get Lustre target service names
+	for ((i = 0; i < ${#TARGET_DEVNAMES[@]}; i++)); do
+		TARGET_SRVNAMES[i]=$(get_srvname ${PRIM_NODENAME} \
+				     ${TARGET_DEVNAMES[i]})
+		if [ $? -ne 0 ]; then
+			echo >&2 "${TARGET_SRVNAMES[i]}"
+			return 1
+		fi
+	done
+
+	[ "${HBVER_OPT}" = "${HBVER_HBV1}" ] && srv_dir=${HARES_DIR} \
+	|| srv_dir=${INIT_DIR}
+
+	# Construct remote command
+	command=":"
+	for ((i = 0; i < ${#TARGET_SRVNAMES[@]}; i++)); do
+		command=${command}";ln -s -f ${LUSTRE_SRV} ${srv_dir}/${TARGET_SRVNAMES[i]}"
+		if [ "${HBVER_OPT}" = "${HBVER_HBV1}" ]; then
+			command=${command}";/bin/cp -f ${LUSTRE_RESMON_SCRIPT} ${HARES_DIR}/${TARGET_SRVNAMES[i]}-mon"
+		fi
+	done
+
+	# Execute remote command to create symlinks
+	for ((i = 0; i < ${#NODE_NAMES[@]}; i++)); do
+		ret_str=`${REMOTE} ${NODE_NAMES[i]} "${command}" 2>&1`
+		if [ $? -ne 0 ]; then
+			echo >&2 "`basename $0`: create_service() error:" \
+		     		 "from host ${NODE_NAMES[i]} - ${ret_str}"
+			return 1
+		fi
+	done
 
 	return 0
 }
 
 # create_template
 #
-# Create the templates for ha.cf, authkeys and mon.cf files
+# Create the templates for ha.cf and authkeys files
 create_template() {
 	/bin/mkdir -p ${TMP_DIR}
 
@@ -239,19 +341,16 @@ debugfile /var/log/ha-debug
 logfile /var/log/ha-log
 logfacility     local0
 keepalive 2
-deadtime 15
-warntime 10
+deadtime 30
 initdead 120
 
 EOF
 	elif [ "${HBVER_OPT}" = "${HBVER_HBV2}" ]; then
 		cat >${HACF_TEMP} <<EOF
-logfacility     daemon
 use_logd        yes
-keepalive 2
-deadtime 15
-warntime 10
-initdead 120
+keepalive 1
+deadtime 10
+initdead 60
 
 EOF
 	fi
@@ -261,24 +360,6 @@ EOF
 		cat >${AUTHKEYS_TEMP} <<EOF
 auth 1
 1 sha1 HelloLustre!
-EOF
-	fi
-
-	# Create the template for mon.cf 
-	if [ ! -s ${MONCF_TEMP} ]; then
-		cat >${MONCF_TEMP} <<EOF
-cfbasedir   = /etc/mon
-alertdir   = /usr/lib/mon/alert.d
-mondir     = /usr/lib/mon/mon.d
-statedir    = /usr/lib/mon/state.d
-logdir    = /usr/lib/mon/log.d
-dtlogfile    = /usr/lib/mon/log.d/downtime.log
-maxprocs    = 20
-histlength  = 100
-randstart   = 60s
-
-authtype = getpwnam
-
 EOF
 	fi
 
@@ -299,7 +380,7 @@ gen_udpport() {
 	declare -i tmp_port
 	declare -i idx
 
-	UDPPORT_PRIMNODE=${TMP_DIR}$"udpport."${PRIM_NODENAME}
+	UDPPORT_PRIMNODE=${TMP_DIR}$"/udpport."${PRIM_NODENAME}
 
 	if [ -s ${UDPPORT_PRIMNODE} ]; then
 		cat ${UDPPORT_PRIMNODE}
@@ -307,7 +388,7 @@ gen_udpport() {
 	fi
 
 	# Get the current maximum UDP port number in the cluster
-	for port_file in `ls ${TMP_DIR}udpport.*`
+	for port_file in `ls ${TMP_DIR}/udpport.* 2>/dev/null`
 	do
 		if [ $? -ne 0 ]; then
 			break
@@ -338,7 +419,7 @@ gen_udpport() {
 
         # Add the UDP port number into each failover node's udpport file
         for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-                UDPPORT_NODE=${TMP_DIR}$"udpport."${NODE_NAMES[idx]}
+                UDPPORT_NODE=${TMP_DIR}$"/udpport."${NODE_NAMES[idx]}
 		echo ${port} > ${UDPPORT_NODE}
         done
 
@@ -350,11 +431,11 @@ gen_udpport() {
 #
 # Create the ha.cf file and scp it to each node's /etc/ha.d/
 create_hacf() {
-	HACF_PRIMNODE=${TMP_DIR}$"ha.cf."${PRIM_NODENAME}
+	HACF_PRIMNODE=${TMP_DIR}$"/ha.cf."${PRIM_NODENAME}
 
 	declare -i idx
 
-	if [ -s ${HACF_PRIMNODE} ]; then
+	if [ -e ${HACF_PRIMNODE} ]; then
 		# The ha.cf file for the primary node has already existed.
 		verbose_output "${HACF_PRIMNODE} already exists."
 		return 0
@@ -378,6 +459,11 @@ create_hacf() {
 	echo ${HBCHANNEL_OPT} | awk '{split($HBCHANNEL_OPT, a, ":")} \
 	END {for (i in a) print a[i]}' >> ${HACF_PRIMNODE}
 
+	# Disable automatic failbacks
+	echo "auto_failback off" >> ${HACF_PRIMNODE}
+
+	[ "${HBVER_OPT}" = "${HBVER_HBV2}" ] && echo "crm yes" >> ${HACF_PRIMNODE}
+
         for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
 		echo "node    ${NODE_NAMES[idx]}" >> ${HACF_PRIMNODE}
         done
@@ -387,10 +473,10 @@ create_hacf() {
 
 	# scp ha.cf file to all the nodes
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		touch ${TMP_DIR}$"ha.cf."${NODE_NAMES[idx]}
-		scp ${HACF_PRIMNODE} ${NODE_NAMES[idx]}:${HA_DIR}ha.cf
+		touch ${TMP_DIR}$"/ha.cf."${NODE_NAMES[idx]}
+		scp ${HACF_PRIMNODE} ${NODE_NAMES[idx]}:${HA_DIR}/ha.cf
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Fail to scp ha.cf file"\
+			echo >&2 "`basename $0`: Failed to scp ha.cf file"\
 				 "to node ${NODE_NAMES[idx]}!"
 			return 1
 		fi
@@ -403,26 +489,40 @@ create_hacf() {
 #
 # Create the haresources file and scp it to the each node's /etc/ha.d/
 create_haresources() {
-	HARES_PRIMNODE=${TMP_DIR}$"haresources."${PRIM_NODENAME}
+	HARES_PRIMNODE=${TMP_DIR}$"/haresources."${PRIM_NODENAME}
 	declare -i idx
+	local res_line
 
 	if [ -s ${HARES_PRIMNODE} ]; then
 		# The haresources file for the primary node has already existed
-		verbose_output "${HARES_PRIMNODE} already exists."
-		return 0
+		if [ -n "`/bin/grep ${TARGET_SRVNAMES[0]} ${HARES_PRIMNODE}`" ]; then
+			verbose_output "${HARES_PRIMNODE} already exists."
+			return 0
+		fi
 	fi
 		
 	# Add the resource group line into the haresources file
-	echo "${PRIM_NODENAME} ${SRVADDR_OPT} "\
-	     "${LUSTRE_SRV_SCRIPT}::${TARGET_TYPE}::${TARGET_DEV} "\
-	     "${MON_SRV_SCRIPT}" > ${HARES_PRIMNODE}
+	res_line=${PRIM_NODENAME}" "${SRVADDR_OPT}
+	for ((idx = 0; idx < ${#TARGET_SRVNAMES[@]}; idx++)); do
+		res_line=${res_line}" "${TARGET_SRVNAMES[idx]}::${TARGET_DEVNAMES[idx]}::${TARGET_MNTPNTS[idx]}
+			
+		if [ "${HBVER_OPT}" = "${HBVER_HBV1}" ]; then
+			res_line=${res_line}" "${TARGET_SRVNAMES[idx]}"-mon"
+		fi
+	done
+	echo "${res_line}" >> ${HARES_PRIMNODE}
 
 	# Generate the cib.xml file
 	if [ "${HBVER_OPT}" = "${HBVER_HBV2}" ]; then
-		CIB_PRIMNODE=${TMP_DIR}$"cib.xml."${PRIM_NODENAME}
-		python ${CIB_GEN_SCRIPT} ${HARES_PRIMNODE} > ${CIB_PRIMNODE}
+		# Add group haclient and user hacluster
+		[ -z "`grep haclient /etc/group`" ] && groupadd haclient
+		[ -z "`grep hacluster /etc/passwd`" ] && useradd -g haclient hacluster
+
+		CIB_PRIMNODE=${TMP_DIR}$"/cib.xml."${PRIM_NODENAME}
+		python ${CIB_GEN_SCRIPT} --stdout -c ${HACF_PRIMNODE} \
+		${HARES_PRIMNODE} > ${CIB_PRIMNODE}
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Fail to generate cib.xml file"\
+			echo >&2 "`basename $0`: Failed to generate cib.xml file"\
 				 "for node ${PRIM_NODENAME}!"
 			return 1
 		fi
@@ -430,17 +530,25 @@ create_haresources() {
 
 	# scp the haresources file or cib.xml file
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		touch ${TMP_DIR}$"haresources."${NODE_NAMES[idx]}
-		if [ "${HBVER_OPT}" = "${HBVER_HBV2}" ]; then
-			scp ${CIB_PRIMNODE} ${NODE_NAMES[idx]}:${CIB_DIR}cib.xml
-		else
-			scp ${HARES_PRIMNODE} ${NODE_NAMES[idx]}:${HA_DIR}haresources
+		if [ "${PRIM_NODENAME}" != "${NODE_NAMES[idx]}" ]; then
+			/bin/cp -f ${HARES_PRIMNODE} \
+			${TMP_DIR}$"/haresources."${NODE_NAMES[idx]}
 		fi
 
+		scp ${HARES_PRIMNODE} ${NODE_NAMES[idx]}:${HA_DIR}/haresources
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Fail to scp haresources file"\
+			echo >&2 "`basename $0`: Failed to scp haresources file"\
 				 "to node ${NODE_NAMES[idx]}!"
 			return 1
+		fi
+
+		if [ "${HBVER_OPT}" = "${HBVER_HBV2}" ]; then
+			scp ${CIB_PRIMNODE} ${NODE_NAMES[idx]}:${CIB_DIR}/cib.xml
+			if [ $? -ne 0 ]; then
+				echo >&2 "`basename $0`: Failed to scp cib.xml"\
+				 	 "file to node ${NODE_NAMES[idx]}!"
+				return 1
+			fi
 		fi
 	done
 
@@ -451,7 +559,7 @@ create_haresources() {
 #
 # Create the authkeys file and scp it to the each node's /etc/ha.d/
 create_authkeys() {
-	AUTHKEYS_PRIMNODE=${TMP_DIR}$"authkeys."${PRIM_NODENAME}
+	AUTHKEYS_PRIMNODE=${TMP_DIR}$"/authkeys."${PRIM_NODENAME}
 	declare -i idx
 
 	if [ -e ${AUTHKEYS_PRIMNODE} ]; then
@@ -460,11 +568,12 @@ create_authkeys() {
 	fi
 
 	# scp the authkeys file to all the nodes
+	chmod 600 ${AUTHKEYS_TEMP}
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		touch ${TMP_DIR}$"authkeys."${NODE_NAMES[idx]}
-		scp ${AUTHKEYS_TEMP} ${NODE_NAMES[idx]}:${HA_DIR}authkeys
+		touch ${TMP_DIR}$"/authkeys."${NODE_NAMES[idx]}
+		scp -p ${AUTHKEYS_TEMP} ${NODE_NAMES[idx]}:${HA_DIR}/authkeys
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Fail to scp authkeys file"\
+			echo >&2 "`basename $0`: Failed to scp authkeys file"\
 				 "to node ${NODE_NAMES[idx]}!"
 			return 1
 		fi
@@ -477,40 +586,65 @@ create_authkeys() {
 #
 # Create the mon.cf file and scp it to the each node's /etc/mon/
 create_moncf() {
-	MONCF_PRIMNODE=${TMP_DIR}$"mon.cf."${PRIM_NODENAME}
+	MONCF_PRIMNODE=${TMP_DIR}$"/mon.cf."${PRIM_NODENAME}
+	local srv_name params=
 	declare -i idx
-	local hostgroup_str=$"hostgroup ${TARGET_TYPE}-group"
+	declare -a OLD_TARGET_SRVNAMES		# targets in other nodes 
+						# in this failover group
+	# Initialize the OLD_TARGET_SRVNAMES array
+	unset OLD_TARGET_SRVNAMES
 
-	if [ -e ${MONCF_PRIMNODE} ]; then
-		verbose_output "${MONCF_PRIMNODE} already exists."
-		return 0
+	if [ -s ${MONCF_PRIMNODE} ]; then
+		if [ -n "`/bin/grep ${TARGET_SRVNAMES[0]} ${MONCF_PRIMNODE}`" ]
+		then
+			verbose_output "${MONCF_PRIMNODE} already exists."
+			return 0
+		else
+			# Get the Lustre target service names 
+			# from the previous mon.cf file
+			idx=0
+			for srv_name in `grep hostgroup ${MONCF_PRIMNODE}\
+					|awk '$2 ~ /-mon/ {print $2}'|xargs`
+			do
+				OLD_TARGET_SRVNAMES[idx]=`echo ${srv_name}\
+							  |sed 's/-mon//g'`
+				idx=$(( idx + 1 ))
+			done
+		fi
 	fi
 
-	/bin/cp -f ${MONCF_TEMP} ${MONCF_PRIMNODE}
-
+	# Construct the parameters to mon.cf generation script
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		hostgroup_str=${hostgroup_str}$" "${NODE_NAMES[idx]}
+		params=${params}" -n "${NODE_NAMES[idx]}
 	done
 
-	echo ${hostgroup_str} >> ${MONCF_PRIMNODE}
+	for ((idx = 0; idx < ${#OLD_TARGET_SRVNAMES[@]}; idx++)); do
+		params=${params}" -o "${OLD_TARGET_SRVNAMES[idx]}
+	done
 
-	cat >>${MONCF_PRIMNODE} <<EOF
+	for ((idx = 0; idx < ${#TARGET_SRVNAMES[@]}; idx++)); do
+		params=${params}" -o "${TARGET_SRVNAMES[idx]}
+	done
 
-watch ${TARGET_TYPE}-group
-    service ${LUSTRE_SRV_SCRIPT}
-        description Lustre health check
-        interval 1m
-        monitor ${LUSTRE_MON_SCRIPT} -o ${TARGET_TYPE}
-        period wd {Sat-Sun}
-            alert ${LUSTRE_ALERT_SCRIPT}
+	${SCRIPT_GEN_MONCF} ${params}
+	if [ $? -ne 0 ]; then
+		echo >&2 "`basename $0`: Failed to generate mon.cf file"\
+			 "by using ${SCRIPT_GEN_MONCF}!"
+		return 1
+	fi
 
-EOF
+	/bin/mv *-mon.cfg ${MONCF_PRIMNODE}
+
 	# scp the mon.cf file to all the nodes
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		touch ${TMP_DIR}$"mon.cf."${NODE_NAMES[idx]}
-		scp ${MONCF_PRIMNODE} ${NODE_NAMES[idx]}:${MON_DIR}mon.cf
+		if [ "${PRIM_NODENAME}" != "${NODE_NAMES[idx]}" ]; then
+			/bin/cp -f ${MONCF_PRIMNODE} \
+			${TMP_DIR}$"/mon.cf."${NODE_NAMES[idx]}
+		fi
+
+		scp ${MONCF_PRIMNODE} ${NODE_NAMES[idx]}:${MON_DIR}/mon.cf
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Fail to scp mon.cf file"\
+			echo >&2 "`basename $0`: Failed to scp mon.cf file"\
 				 "to node ${NODE_NAMES[idx]}!"
 			return 1
 		fi
@@ -523,6 +657,14 @@ EOF
 #
 # Generate the configuration files for Heartbeat and scp them to all the nodes
 generate_config() {
+	# Create symlinks for Lustre services
+	verbose_output "Creating symlinks for lustre target services in"\
+		       "${PRIM_NODENAME} failover group hosts..." 
+	if ! create_service; then
+		return 1
+	fi
+	verbose_output "OK"
+	
 	if ! create_template; then
 		return 1
 	fi
@@ -534,14 +676,8 @@ generate_config() {
 	fi
 	verbose_output "OK"
 
-	if [ "${HBVER_OPT}" = "${HBVER_HBV1}" ]; then
-		verbose_output "Creating and remote copying haresources file"\
-			       "to ${PRIM_NODENAME} failover group hosts..."
-	else
-		verbose_output "Creating and remote copying cib.xml file"\
-			       "to ${PRIM_NODENAME} failover group hosts..."
-	fi
-
+	verbose_output "Creating and remote copying haresources file"\
+		       "to ${PRIM_NODENAME} failover group hosts..."
 	if ! create_haresources; then
 		return 1
 	fi
@@ -554,12 +690,14 @@ generate_config() {
 	fi
 	verbose_output "OK"
 
-	verbose_output "Creating and remote copying mon.cf file to" \
-		       "${PRIM_NODENAME} failover group hosts..."
-	if ! create_moncf; then
-		return 1
+	if [ "${HBVER_OPT}" = "${HBVER_HBV1}" ]; then
+		verbose_output "Creating and remote copying mon.cf file to" \
+				"${PRIM_NODENAME} failover group hosts..."
+		if ! create_moncf; then
+			return 1
+		fi
+		verbose_output "OK"
 	fi
-	verbose_output "OK"
 
 	return 0
 }
@@ -571,7 +709,7 @@ if ! get_nodenames; then
 fi
 
 # Check service IP address
-if ! check_srvIPaddr; then
+if [ "${HBVER_OPT}" = "${HBVER_HBV1}" ] && ! check_srvIPaddr; then
 	exit 1
 fi
 
