@@ -254,8 +254,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
 #define OBD_CONNECT_ATTRFID   0x4000ULL /* Server supports GetAttr By Fid */
 #define OBD_CONNECT_NODEVOH   0x8000ULL /* No open handle for special nodes */
-#define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
 #define OBD_CONNECT_RMT_CLIENT 0x10000ULL /* Remote client */
+
+#define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
 
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags() */
 
