@@ -227,7 +227,7 @@ test_2() {
     start_ost 1
 
     wait_for mds
-    start mds $MDSDEV $MDS_MOUNT_OPTS
+    start mds $MDSDEV $MDS_MOUNT_OPTS || return $?
 
     #Check FS
     wait $DFPID

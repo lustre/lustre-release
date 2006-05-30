@@ -168,8 +168,8 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_fs, rc);
 
-        /* Allow reconnect attempts */
-        obd->obd_replayable = 1;
+        /* No recovery for MGC's */
+        obd->obd_replayable = 0;
 
         /* Internal mgs setup */
         mgs_init_fsdb_list(obd);

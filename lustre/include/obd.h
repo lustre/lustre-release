@@ -673,10 +673,18 @@ struct obd_device {
         struct obd_uuid         obd_uuid;
 
         int                     obd_minor;
-        unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
-                obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
-                obd_no_recov:1, obd_stopping:1, obd_starting:1,
-                obd_force:1, obd_fail:1, obd_async_recov:1;
+        unsigned int obd_attached:1,      /* finished attach */
+                     obd_set_up:1,        /* finished setup */
+                     obd_recovering:1,    /* there are recoverable clients */
+                     obd_abort_recovery:1,/* somebody ioctl'ed us to abort */ 
+                     obd_replayable:1,    /* recovery is enabled; inform clients */
+                     obd_no_transno:1,    /* no committed-transno notification */
+                     obd_no_recov:1,      /* fail instead of retry messages */
+                     obd_stopping:1,      /* started cleanup */
+                     obd_starting:1,      /* started setup */
+                     obd_force:1,         /* cleanup with > 0 obd refcount */
+                     obd_fail:1,          /* cleanup with failover */
+                     obd_async_recov:1;   /* allow asyncronous orphan cleanup */
         atomic_t obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         cfs_proc_dir_entry_t  *obd_proc_entry;

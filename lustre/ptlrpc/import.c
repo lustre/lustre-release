@@ -363,16 +363,23 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         if (rc)
                 GOTO(out, rc);
 
-        if (imp->imp_initial_recov_bk && initial_connect &&
-            /* last in list */
-            (imp->imp_conn_current->oic_item.next == &imp->imp_conn_list)) {
-                CDEBUG(D_HA, "Last connection attempt (%d) for %s\n",
-                       imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
-                /* Don't retry if connect fails */
-                rc = 0;
-                obd_set_info_async(obd->obd_self_export,
-                                   strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
-                                   sizeof(rc), &rc, NULL);
+        /* last in connection list */
+        if (imp->imp_conn_current->oic_item.next == &imp->imp_conn_list) {
+                if (imp->imp_initial_recov_bk && initial_connect) {
+                        CDEBUG(D_HA, "Last connection attempt (%d) for %s\n",
+                               imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
+                        /* Don't retry if connect fails */
+                        rc = 0;
+                        obd_set_info_async(obd->obd_self_export,
+                                           strlen(KEY_INIT_RECOV),
+                                           KEY_INIT_RECOV,
+                                           sizeof(rc), &rc, NULL);
+                }
+                if (imp->imp_recon_bk) {
+                        CDEBUG(D_HA, "Last reconnection attempt (%d) for %s\n",
+                               imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
+                        imp->imp_last_recon = 1;
+                }
         }
 
         rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
@@ -520,7 +527,14 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 if (memcmp(&imp->imp_remote_handle,
                            lustre_msg_get_handle(request->rq_repmsg),
                            sizeof(imp->imp_remote_handle))) {
-                        CERROR("%s@%s changed handle from "LPX64" to "LPX64
+                        int level = D_ERROR;
+                        /* The MGC does this all the time */
+                        if (strcmp(imp->imp_obd->obd_type->typ_name,
+                                   LUSTRE_MGC_NAME) == 0) {
+                                level = D_CONFIG;
+                        }
+                        CDEBUG(level, 
+                               "%s@%s changed handle from "LPX64" to "LPX64
                                "; copying, but this may foreshadow disaster\n",
                                obd2cli_tgt(imp->imp_obd),
                                imp->imp_connection->c_remote_uuid.uuid,
@@ -661,6 +675,12 @@ finish:
                 if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
                         ptlrpc_deactivate_import(imp);
 
+                if (imp->imp_recon_bk && imp->imp_last_recon) {
+                        /* Give up trying to reconnect */
+                        imp->imp_obd->obd_no_recov = 1;
+                        ptlrpc_deactivate_import(imp);
+                }
+
                 if (rc == -EPROTO) {
                         struct obd_connect_data *ocd;
                         ocd = lustre_swab_repbuf(request, 0,
@@ -694,6 +714,8 @@ finish:
                        obd2cli_tgt(imp->imp_obd),
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
         }
+        
+        imp->imp_last_recon = 0;
 
         cfs_waitq_signal(&imp->imp_recovery_waitq);
         RETURN(rc);

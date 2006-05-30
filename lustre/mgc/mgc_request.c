@@ -45,6 +45,8 @@
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 
+/* There's only 1 MGC on a node.  Anybody using this must have a ref lock */
+static struct obd_device *the_mgc;
 
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
 {
@@ -103,6 +105,8 @@ static void config_log_put(struct config_llog_data *cld)
                atomic_read(&cld->cld_refcount));
         if (atomic_dec_and_test(&cld->cld_refcount)) {
                 CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
+                LASSERT(the_mgc);
+                class_export_put(the_mgc->obd_self_export);
                 OBD_FREE(cld->cld_logname, strlen(cld->cld_logname) + 1);
                 if (cld->cld_cfg.cfg_instance != NULL)
                         OBD_FREE(cld->cld_cfg.cfg_instance, 
@@ -177,6 +181,7 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         cld->cld_cfg.cfg_flags = 0;
         cld->cld_cfg.cfg_sb = sb;
         atomic_set(&cld->cld_refcount, 1);
+        class_export_get(the_mgc->obd_self_export);
         if (cfg->cfg_instance != NULL) {
                 OBD_ALLOC(cld->cld_cfg.cfg_instance, 
                           strlen(cfg->cfg_instance) + 1);
@@ -327,6 +332,7 @@ static int mgc_fs_cleanup(struct obd_device *obd)
                 fsfilt_put_ops(obd->obd_fsops);
         
         up(&cli->cl_mgc_sem);
+
         RETURN(rc);
 }
 
@@ -337,7 +343,9 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 
         switch (stage) {
         case OBD_CLEANUP_EARLY: 
+                break;
         case OBD_CLEANUP_EXPORTS:
+                config_log_end_all();
                 break;
         case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
@@ -358,8 +366,8 @@ static int mgc_cleanup(struct obd_device *obd)
 
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
         
-        /* Failsafes called at EOW */
-        config_log_end_all();
+        the_mgc = NULL;
+
         /* COMPAT_146 - old config logs may have added profiles we don't 
            know about */
         class_del_profiles();
@@ -369,8 +377,6 @@ static int mgc_cleanup(struct obd_device *obd)
         rc = client_obd_cleanup(obd);
         RETURN(rc);
 }
-
-static struct obd_device *the_mgc;
 
 static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
@@ -431,21 +437,20 @@ static int mgc_async_requeue(void *data)
            the lock revocation to finish its setup, plus some random
            so everyone doesn't try to reconnect at once. */
         init_waitqueue_head(&waitq);
-        lwi = LWI_TIMEOUT(3 * HZ + (ll_rand() & 0x7f), NULL, NULL);
+        lwi = LWI_TIMEOUT(3 * HZ + (ll_rand() & 0xff), NULL, NULL);
         l_wait_event(waitq, 0, &lwi);
 
+        /* We're holding a lock on the mgc, but not necessarily the lsi */
         LASSERT(the_mgc);
-
-        class_export_get(the_mgc->obd_self_export);
 #if 0
         /* Re-send server info every time, in case MGS needs to regen its
            logs (for write_conf).  Do we need this?  It's extra RPCs for
            every server at every update.  Turning it off until I'm sure
            it's needed. */
+        /* Unsafe - we don't know that the lsi hasn't been destroyed */
         server_register_target(cld->cld_cfg.cfg_sb);
 #endif 
         rc = mgc_process_log(the_mgc, cld);
-        class_export_put(the_mgc->obd_self_export);
 out:
         /* Whether we enqueued again or not in mgc_process_log, 
            we're done with the ref from the old mgc_blocking_ast */        
@@ -695,15 +700,20 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                         RETURN(-EINVAL);
                 value = *(int *)val;
                 imp->imp_initial_recov_bk = value > 0;
+                /* Even after the initial connection, give up all comms if 
+                   nobody answers the first time. */
+                imp->imp_recon_bk = 1;
+                CDEBUG(D_MGC, "InitRecov %s %d/%d:d%d:i%d:r%d:or%d:%s\n", 
+                       imp->imp_obd->obd_name, value, imp->imp_initial_recov,
+                       imp->imp_deactive, imp->imp_invalid, 
+                       imp->imp_replayable, imp->imp_obd->obd_replayable,
+                       ptlrpc_import_state_name(imp->imp_state));
+                /* Resurrect if we previously died */
                 if (imp->imp_invalid || value > 1) {
-                        /* Resurrect if we previously died */
-                        CDEBUG(D_MGC, "Reactivate %s %d:%d:%d:%s\n", 
-                               imp->imp_obd->obd_name, value,
-                               imp->imp_deactive, imp->imp_invalid, 
-                               ptlrpc_import_state_name(imp->imp_state));
-                        /* can't put this in obdclass, module loop with ptlrpc*/
-                        /* This seems to be necessary when restarting a 
-                           combo mgs/mdt while the mgc is alive */
+                        /* Allow reconnect attempts */
+                        imp->imp_obd->obd_no_recov = 0;
+                        /* Force a new connect attempt */
+                        /* (can't put these in obdclass, module loop) */
                         ptlrpc_invalidate_import(imp);
                         /* Remove 'invalid' flag */
                         ptlrpc_activate_import(imp);
@@ -758,16 +768,17 @@ static int mgc_import_event(struct obd_device *obd,
         CDEBUG(D_MGC, "import event %#x\n", event);
 
         switch (event) {
-        case IMP_EVENT_INVALIDATE: {
-                struct ldlm_namespace *ns = obd->obd_namespace;
-                ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
-                break;
-        }
         case IMP_EVENT_DISCON: 
                 /* MGC imports should not wait for recovery */
                 ptlrpc_invalidate_import(imp);
                 break;
         case IMP_EVENT_INACTIVE: 
+                break;
+        case IMP_EVENT_INVALIDATE: {
+                struct ldlm_namespace *ns = obd->obd_namespace;
+                ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
+                break;
+        }
         case IMP_EVENT_ACTIVE: 
         case IMP_EVENT_OCD:
                 break;
@@ -926,6 +937,8 @@ static int mgc_process_log(struct obd_device *mgc,
         }
         if (cld->cld_stopping) 
                 RETURN(0);
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PROCESS_LOG, 20);
 
         lsi = s2lsi(cld->cld_cfg.cfg_sb);
 

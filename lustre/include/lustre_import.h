@@ -87,6 +87,7 @@ struct obd_import {
 
         /* flags */
         unsigned int              imp_invalid:1,          /* evicted */
+                                  imp_deactive:1,         /* administratively disabled */
                                   imp_replayable:1,       /* try to recover the import */
                                   imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
                                   imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
@@ -95,7 +96,8 @@ struct obd_import {
                                   imp_force_verify:1,     /* force an immidiate ping */
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
-                                  imp_deactive:1;         /* administratively disabled */
+                                  imp_recon_bk:1,         /* turn off reconnect if all failovers fail */
+                                  imp_last_recon:1;       /* internally used by above */
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;

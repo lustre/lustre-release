@@ -332,8 +332,10 @@ out_root:
                 iput(root);
 out_osc:
         obd_disconnect(sbi->ll_osc_exp);
+        sbi->ll_osc_exp = NULL;
 out_mdc:
         obd_disconnect(sbi->ll_mdc_exp);
+        sbi->ll_mdc_exp = NULL;
 out:
         if (data != NULL)
                 OBD_FREE(data, sizeof(*data));
@@ -524,6 +526,7 @@ void client_common_put_super(struct super_block *sb)
 
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp);
+        sbi->ll_osc_exp = NULL;
 
         lprocfs_unregister_mountpoint(sbi);
         if (sbi->ll_proc_root) {
@@ -532,6 +535,7 @@ void client_common_put_super(struct super_block *sb)
         }
 
         obd_disconnect(sbi->ll_mdc_exp);
+        sbi->ll_mdc_exp = NULL;
 
         lustre_throw_orphan_dentries(sb);
         EXIT;

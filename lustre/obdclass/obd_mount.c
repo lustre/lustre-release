@@ -1031,7 +1031,9 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         /* Set the mgc fs to our server disk.  This allows the MGC
            to read and write configs locally. */
-        server_mgc_set_fs(lsi->lsi_mgc, sb);
+        rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
+        if (rc)
+                GOTO(out_servers, rc);
 
         /* Register with MGS */
         rc = server_register_target(sb);
@@ -1154,6 +1156,8 @@ static int lustre_free_lsi(struct super_block *sb)
         RETURN(0);
 }
            
+/* The lsi has one reference for every server that is using the disk - 
+   e.g. MDT, MGS, and potentially MGC */
 static int lustre_put_lsi(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
@@ -1556,6 +1560,7 @@ int lustre_common_put_super(struct super_block *sb)
 
         CDEBUG(D_MOUNT, "dropping sb %p\n", sb);
         
+        /* Drop a ref to the MGC */
         rc = lustre_stop_mgc(sb);
         if (rc && (rc != -ENOENT)) {
                 if (rc != -EBUSY) {
@@ -1566,6 +1571,7 @@ int lustre_common_put_super(struct super_block *sb)
                    needs the mgc.  Let him clean it up. */
                 CDEBUG(D_MOUNT, "MGC still in use\n");
         }
+        /* Drop a ref to the mounted disk */
         lustre_put_lsi(sb);
         RETURN(rc);
 }      
