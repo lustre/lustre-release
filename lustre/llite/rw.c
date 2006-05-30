@@ -1257,7 +1257,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 
                 kms_pages = (inode->i_size + PAGE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 
-                CDEBUG(D_READA, "kmsp %llu mwp %lu mp %lu\n", kms_pages,
+                CDEBUG(D_READA, "kmsp "LPU64" mwp %lu mp %lu\n", kms_pages,
                        ra->ra_max_read_ahead_whole_pages, ra->ra_max_pages);
 
                 if (kms_pages &&

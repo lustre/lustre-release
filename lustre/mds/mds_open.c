@@ -748,8 +748,9 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 mds_lov_update_objids(obd, ids);
                 OBD_FREE(ids, sizeof(*ids) * mds->mds_lov_desc.ld_tgt_count);
         }
-        if (rc)
+        if (rc) /* coverity[deadcode] */
                 mds_mfd_unlink(mfd, 1);
+
         mds_mfd_put(mfd);
         RETURN(rc);
 }

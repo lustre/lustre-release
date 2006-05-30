@@ -1032,6 +1032,10 @@ class kmod:
                     run('/sbin/rmmod kiiblnd')
                 if mod_loaded("kviblnd"):
                     run('/sbin/rmmod kviblnd')
+                if mod_loaded("kciblnd"):
+                    run('/sbin/rmmod kciblnd')
+                if mod_loaded("ko2iblnd"):
+                    run('/sbin/rmmod ko2iblnd')
                 if mod_loaded("kralnd"):
                     run('/sbin/rmmod kralnd')
                 if mod_loaded("kptllnd"):

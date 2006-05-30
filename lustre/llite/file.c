@@ -1552,8 +1552,7 @@ static int join_sanity_check(struct inode *head, struct inode *tail)
                 RETURN(-EINVAL);
         }
         if (head->i_size % JOIN_FILE_ALIGN) {
-                CERROR("hsize" LPU64 " must be times of 64K\n",
-                        head->i_size);
+                CERROR("hsize %llu must be times of 64K\n", head->i_size);
                 RETURN(-EINVAL);
         }
         RETURN(0);

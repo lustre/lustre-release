@@ -8,7 +8,7 @@
 
 #include <lustre_mds.h>
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, struct ll_fid *fid, int ea_size);
+                       __u64 valid, struct ll_fid *fid, int ea_size, int flags);
 void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_readdir_pack(struct ptlrpc_request *req, int offset, __u64 pg_off,
 		      __u32 size, struct ll_fid *mdc_fid);

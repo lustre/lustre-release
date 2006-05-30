@@ -2192,8 +2192,12 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_JOIN == 0x2000ULL);
         CLASSERT(OBD_CONNECT_ATTRFID == 0x4000ULL);
         CLASSERT(OBD_CONNECT_NODEVOH == 0x8000ULL);
+        CLASSERT(OBD_CONNECT_RMT_CLIENT == 0x10000ULL);
         /* Sizes and Offsets */
 
+        /* Checks for struct obd_uuid */
+        LASSERTF((int)sizeof(struct obd_uuid) == 40, " found %lld\n",
+                 (long long)(int)sizeof(struct obd_uuid));
 
         /* Checks for struct lustre_handle */
         LASSERTF((int)sizeof(struct lustre_handle) == 8, " found %lld\n",

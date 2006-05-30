@@ -66,7 +66,7 @@ static int send_getstatus(struct obd_import *imp, struct ll_fid *rootfid,
         req->rq_send_state = level;
         ptlrpc_req_set_repsize(req, 2, size);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, 0, NULL, 0);
+        mdc_pack_req_body(req, REQ_REC_OFF, 0, NULL, 0, 0);
         lustre_msg_add_flags(req->rq_reqmsg, msg_flags);
         rc = ptlrpc_queue_wait(req);
 
@@ -178,7 +178,8 @@ int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, ea_size);
+        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, ea_size,
+                          MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
 
         /* currently only root inode will call us with FLACL */
         if (valid & OBD_MD_FLACL)
@@ -208,7 +209,8 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, ea_size);
+        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, ea_size,
+                          MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
  
         LASSERT(strnlen(filename, namelen) == namelen - 1);
         memcpy(lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, namelen),
@@ -231,8 +233,8 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                      int flags, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        struct mds_body *body;
-        int size[4] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[4] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
+        // int size[3] = {sizeof(struct mds_body)}, bufcnt = 1;
         int rc, xattr_namelen = 0, bufcnt = 2, offset;
         void *tmp;
         ENTRY;
@@ -252,9 +254,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                 GOTO(out, rc = -ENOMEM);
 
         /* request data */
-        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, output_size);
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        body->flags = flags;
+        mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, output_size, flags);
 
         offset = REQ_REC_OFF + 1;
 
@@ -269,6 +269,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
 
         /* reply buffers */
         if (opcode == MDS_GETXATTR) {
+                size[0] = sizeof(struct mds_body);
                 bufcnt = 2;
         } else {
                 bufcnt = 1;
@@ -291,7 +292,8 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                 GOTO(err_out, rc);
 
         if (opcode == MDS_GETXATTR) {
-                body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
+                struct mds_body * body = lustre_swab_repbuf(req, REPLY_REC_OFF,
+                                          sizeof(*body),
                                           lustre_swab_mds_body);
                 if (body == NULL) {
                         CERROR ("Can't unpack mds_body\n");
@@ -1060,7 +1062,7 @@ int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
         if (!req)
                 RETURN(rc = -ENOMEM);
 
-        mdc_pack_req_body(req, REQ_REC_OFF, 0, fid, 0);
+        mdc_pack_req_body(req, REQ_REC_OFF, 0, fid, 0, 0);
 
         ptlrpc_req_set_repsize(req, 2, size);
 

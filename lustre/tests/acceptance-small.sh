@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # script which _must_ complete successfully (at minimum) before checkins to
 # the CVS HEAD are allowed.
 set -vxe
@@ -6,13 +6,13 @@ set -vxe
 PATH=`dirname $0`/../utils:$PATH
 
 [ "$CONFIGS" ] || CONFIGS="local"  #"local lov"
-[ "$MAX_THREADS" ] || MAX_THREADS=10
+[ "$MAX_THREADS" ] || MAX_THREADS=20
+RAMKB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
 if [ -z "$THREADS" ]; then
-	KB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
-	THREADS=`expr $KB / 16384`
+	THREADS=$((RAMKB / 16384))
 	[ $THREADS -gt $MAX_THREADS ] && THREADS=$MAX_THREADS
 fi
-[ "$SIZE" ] || SIZE=40960
+[ "$SIZE" ] || SIZE=$((RAMKB * 2))
 [ "$RSIZE" ] || RSIZE=512
 [ "$UID" ] || UID=1000
 [ "$MOUNT" ] || MOUNT=/mnt/lustre
@@ -53,7 +53,7 @@ for NAME in $CONFIGS; do
 	if [ "$DBENCH" != "no" ]; then
  	        mount_client $MOUNT
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
-		DB_THREADS=`expr $SPACE / 50000`
+		DB_THREADS=$((SPACE / 50000))
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
 
 		$DEBUG_OFF
@@ -74,18 +74,22 @@ for NAME in $CONFIGS; do
 	chown $UID $MOUNT && chmod 700 $MOUNT
 	if [ "$BONNIE" != "no" ]; then
  	        mount_client $MOUNT
+		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
-		bonnie++ -f -r 0 -s $(($SIZE / 1024)) -n 10 -u $UID -d $MOUNT
+		bonnie++ -f -r 0 -s $((SIZE / 1024)) -n 10 -u $UID -d $MOUNT
 		$DEBUG_ON
 		$CLEANUP
 		$SETUP
 	fi
 
-	IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
-	IOZFILE="-f $MOUNT/iozone"
 	export O_DIRECT
 	if [ "$IOZONE" != "no" ]; then
  	        mount_client $MOUNT
+		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
+		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
+		IOZFILE="-f $MOUNT/iozone"
 		$DEBUG_OFF
 		iozone $IOZONE_OPTS $IOZFILE
 		$DEBUG_ON
@@ -109,16 +113,16 @@ for NAME in $CONFIGS; do
 		fi
 
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
-		IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 512 \)`
+		IOZ_THREADS=$((SPACE / SIZE * 2 / 3 ))
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
-		IOZVER=`iozone -v|awk '/Revision:/ {print $3}'|tr -d .`
+		IOZVER=`iozone -v | awk '/Revision:/ {print $3}' | tr -d .`
 		if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
 			$DEBUG_OFF
 			THREAD=1
 			IOZFILE="-F "
 			while [ $THREAD -le $IOZ_THREADS ]; do
 				IOZFILE="$IOZFILE $MOUNT/iozone.$THREAD"
-				THREAD=`expr $THREAD + 1`
+				THREAD=$((THREAD + 1))
 			done
 			iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE
 			$DEBUG_ON
@@ -132,6 +136,8 @@ for NAME in $CONFIGS; do
 
 	if [ "$FSX" != "no" ]; then
 		mount | grep $MOUNT || $SETUP
+		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
 		./fsx -c 50 -p 1000 -P $TMP -l $SIZE \
 			-N $(($COUNT * 100)) $MOUNT/fsxfile

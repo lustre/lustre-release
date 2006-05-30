@@ -602,7 +602,7 @@ AC_DEFUN([LC_CONFIGURE],
 [LC_CONFIG_OBD_BUFFER_SIZE
 
 # include/liblustre.h
-AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h])
+AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
 
 # include/lustre/lustre_user.h
 # See note there re: __ASM_X86_64_PROCESSOR_H
@@ -650,6 +650,7 @@ AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
+AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 ])
 
 #
@@ -662,6 +663,7 @@ AC_DEFUN([LC_CONFIG_FILES],
 lustre/Makefile
 lustre/autoMakefile
 lustre/autoconf/Makefile
+lustre/contrib/Makefile
 lustre/conf/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile

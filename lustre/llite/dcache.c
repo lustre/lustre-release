@@ -166,13 +166,13 @@ int ll_drop_dentry(struct dentry *dentry)
                 dput(dentry);
                 spin_lock(&dcache_lock);
                 return 1;
-        } 
-        
+        }
+
         if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 struct inode *inode = dentry->d_inode;
 #endif
-               CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
+                CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
                        "inode %p refc %d\n", dentry->d_name.len,
                        dentry->d_name.name, dentry, dentry->d_parent,
                        dentry->d_inode, atomic_read(&dentry->d_count));

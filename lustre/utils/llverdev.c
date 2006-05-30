@@ -16,6 +16,19 @@
  * pattern in bulk.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef LUSTRE_UTILS
+#define LUSTRE_UTILS
+#endif
+#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE
+#endif
+#ifndef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
+
 #include <features.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,7 +48,6 @@
 #include <sys/time.h>
 #include <gnu/stubs.h>
 #include <ext2fs/ext2fs.h>
-#include <blkid/blkid.h>
 
 #define ONE_MB (1024 * 1024)
 #define ONE_GB (1024 * 1024 * 1024)
@@ -128,20 +140,53 @@ static int open_dev(const char *devname, int mode)
 	return (fd);
 }
 
+#ifdef HAVE_BLKID_BLKID_H
+#include <blkid/blkid.h>
+#endif
 /*
  * sizeof_dev: Returns size of device in bytes
  */
-static unsigned long long sizeof_dev(int fd)
+static loff_t sizeof_dev(int fd)
 {
-	blkid_loff_t numbytes = 0;
+	loff_t numbytes;
 
+#ifdef HAVE_BLKID_BLKID_H
 	numbytes = blkid_get_dev_size(fd);
 	if (numbytes <= 0) {
 		fprintf(stderr, "%s: blkid_get_dev_size(%s) failed",
 			progname, devname);
 		return 1;
 	}
+	goto out;
+#else
+# if defined BLKGETSIZE64	/* in sys/mount.h */
+	if (ioctl(fd, BLKGETSIZE64, &numbytes) >= 0)
+		goto out;
+# endif
+# if defined BLKGETSIZE		/* in sys/mount.h */
+	{
+		unsigned long sectors;
 
+		if (ioctl(fd, BLKGETSIZE, &sectors) >= 0) {
+			numbytes = (loff_t)sectors << 9;
+			goto out;
+		}
+	}
+# endif
+	{
+		struct stat statbuf;
+
+		if (fstat(fd, &statbuf) == 0 && S_ISREG(statbuf.st_mode)) {
+			numbytes = statbuf.st_size;
+			goto out;
+		}
+	}
+	fprintf(stderr, "%s: unable to determine size of %s\n",
+			progname, devname);
+	return 0;
+#endif
+
+out:
 	if (verbose)
 		printf("%s: %s is %llu bytes (%g GB) in size\n",
 		       progname, devname,
@@ -155,7 +200,7 @@ static unsigned long long sizeof_dev(int fd)
  * Returns 0 if test offset and timestamp is correct otherwise 1.
  */
 int verify_chunk(char *chunk_buf, size_t chunksize,
-		 loff_t chunk_off, time_t time_st)
+		 unsigned long long chunk_off, time_t time_st)
 {
 	struct block_data *bd;
 	char *chunk_end;
@@ -225,8 +270,8 @@ void show_rate(char *op, unsigned long long offset, unsigned long long *count)
  * write_chunk: write the chunk_buf on the device. The number of write
  * operations are based on the parameters write_end, offset, and chunksize.
  */
-int write_chunks(loff_t offset, loff_t write_end, char *chunk_buf,
-		 size_t chunksize, time_t time_st)
+int write_chunks(unsigned long long offset, unsigned long long write_end,
+		 char *chunk_buf, size_t chunksize, time_t time_st)
 {
 	unsigned long long stride, count = 0;
 
@@ -281,8 +326,8 @@ int write_chunks(loff_t offset, loff_t write_end, char *chunk_buf,
  * read_chunk: reads the chunk_buf from the device. The number of read
  * operations are based on the parameters read_end, offset, and chunksize.
  */
-int read_chunks(loff_t offset, loff_t read_end, char *chunk_buf,
-		size_t chunksize, time_t time_st)
+int read_chunks(unsigned long long offset, unsigned long long read_end,
+		char *chunk_buf, size_t chunksize, time_t time_st)
 {
 	unsigned long long stride, count = 0;
 

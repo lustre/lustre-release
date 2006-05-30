@@ -509,6 +509,12 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
                 RETURN(-EPERM);
         }
 
+        /* FIXME: Can't do this because of nested transaction deadlock */
+        if (cmd == EXT3_IOC_SETFLAGS && (*(int *)arg) & EXT3_JOURNAL_DATA_FL) {
+                CERROR("can't set data journal flag on file\n");
+                RETURN(-EPERM);
+        }
+
         if (inode->i_fop->ioctl)
                 rc = inode->i_fop->ioctl(inode, file, cmd, arg);
         else

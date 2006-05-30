@@ -390,7 +390,7 @@ static int filter_clear_page_cache(struct inode *inode,
         rc = generic_osync_inode(inode, inode->i_mapping,
                                  OSYNC_DATA|OSYNC_METADATA);
          */
-        down(&inode->i_sem);
+        LOCK_INODE_MUTEX(inode);
         current->flags |= PF_SYNCWRITE;
         rc = filemap_fdatawrite(inode->i_mapping);
         rc2 = sync_mapping_buffers(inode->i_mapping);
@@ -398,7 +398,7 @@ static int filter_clear_page_cache(struct inode *inode,
                 rc = rc2;
         rc2 = filemap_fdatawait(inode->i_mapping);
         current->flags &= ~PF_SYNCWRITE;
-        up(&inode->i_sem);
+        UNLOCK_INODE_MUTEX(inode);
         if (rc == 0)
                 rc = rc2;
         if (rc != 0)
@@ -655,10 +655,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
-        if (err)
+        if (err) {
+                CERROR("Failure to commit OST transaction (%d)?\n", err);
                 rc = err;
+        }
 
-        if (obd->obd_replayable && !err)
+        if (obd->obd_replayable && !rc)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);

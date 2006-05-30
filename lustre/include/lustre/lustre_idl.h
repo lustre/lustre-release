@@ -255,6 +255,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_ATTRFID   0x4000ULL /* Server supports GetAttr By Fid */
 #define OBD_CONNECT_NODEVOH   0x8000ULL /* No open handle for special nodes */
 #define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
+#define OBD_CONNECT_RMT_CLIENT 0x10000ULL /* Remote client */
 
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags() */
 
@@ -665,6 +666,48 @@ struct mds_status_req {
 extern void lustre_swab_mds_status_req (struct mds_status_req *r);
 
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
+#define MDS_BFLAG_EXT_FLAGS     0x80000000 /* == EXT3_RESERVED_FL */
+
+/* these should be identical to their EXT3_*_FL counterparts, and are
+ * redefined here only to avoid dragging in ext3_fs.h */
+#define MDS_SYNC_FL             0x00000008 /* Synchronous updates */
+#define MDS_IMMUTABLE_FL        0x00000010 /* Immutable file */
+#define MDS_APPEND_FL           0x00000020 /* writes to file may only append */
+#define MDS_NOATIME_FL          0x00000080 /* do not update atime */
+#define MDS_DIRSYNC_FL          0x00010000 /* dirsync behaviour (dir only) */
+
+#ifdef __KERNEL__
+/* If MDS_BFLAG_IOC_FLAGS is set it means we requested EXT3_*_FL inode flags
+ * and we need to decode these into local S_* flags in the inode.  Otherwise
+ * we pass flags straight through (see bug 9486). */
+static inline int ll_ext_to_inode_flags(int flags)
+{
+        return (flags & MDS_BFLAG_EXT_FLAGS) ?
+               (((flags & MDS_SYNC_FL)      ? S_SYNC      : 0) |
+                ((flags & MDS_NOATIME_FL)   ? S_NOATIME   : 0) |
+                ((flags & MDS_APPEND_FL)    ? S_APPEND    : 0) |
+#if defined(S_DIRSYNC)
+                ((flags & MDS_DIRSYNC_FL)   ? S_DIRSYNC   : 0) |
+#endif
+                ((flags & MDS_IMMUTABLE_FL) ? S_IMMUTABLE : 0)) :
+               (flags & ~MDS_BFLAG_EXT_FLAGS);
+}
+
+/* If MDS_BFLAG_EXT_FLAGS is set it means we requested EXT3_*_FL inode flags
+ * and we pass these straight through.  Otherwise we need to convert from
+ * S_* flags to their EXT3_*_FL equivalents (see bug 9486). */
+static inline int ll_inode_to_ext_flags(int oflags, int iflags)
+{
+        return (oflags & MDS_BFLAG_EXT_FLAGS) ? (oflags & ~MDS_BFLAG_EXT_FLAGS):
+               (((iflags & S_SYNC)      ? MDS_SYNC_FL      : 0) |
+                ((iflags & S_NOATIME)   ? MDS_NOATIME_FL   : 0) |
+                ((iflags & S_APPEND)    ? MDS_APPEND_FL    : 0) |
+#if defined(S_DIRSYNC)
+                ((iflags & S_DIRSYNC)   ? MDS_DIRSYNC_FL   : 0) |
+#endif
+                ((iflags & S_IMMUTABLE) ? MDS_IMMUTABLE_FL : 0));
+}
+#endif
 
 struct mds_body {
         struct ll_fid  fid1;

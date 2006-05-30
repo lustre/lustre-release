@@ -18,7 +18,18 @@
  * that the data in each file is correct.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+#ifndef LUSTRE_UTILS
+#define LUSTRE_UTILS
+#endif
+#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE
+#endif
+#ifndef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
 
 #include <features.h>
 #include <stdlib.h>
@@ -48,9 +59,9 @@
 
 /* Structure for writing test pattern */
 struct block_data {
-	loff_t  bd_offset;
-	time_t  bd_time;
-	ino_t   bd_inode;
+	unsigned long long bd_offset;
+	unsigned long long bd_time;
+	unsigned long long bd_inode;
 };
 static char *progname;		    /* name by which this program was run. */
 static unsigned verbose = 1;	    /* prints offset in kB, operation rate */
@@ -60,7 +71,7 @@ char *testdir;			    /* name of device to be tested. */
 static unsigned full = 1;	    /* flag to full check */
 static int errno_local;		    /* local copy of errno */
 static unsigned long num_files;     /* Total number of files for read/write */
-static loff_t file_size;	    /* Size of each file */
+static loff_t file_size = 4*ONE_GB; /* Size of each file */
 static unsigned files_in_dir = 32;  /* number of files in each directioy */
 static unsigned num_dirs = 30000;   /* total number of directories */
 const int dirmode = S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
@@ -128,8 +139,9 @@ static int open_file(const char *file, int flag)
  * Verify_chunk: Verifies test pattern in each 4kB (BLOCKSIZE) is correct.
  * Returns 0 if test offset and timestamp is correct otherwise 1.
  */
-int verify_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
-		 time_t time_st, ino_t inode_st, char *file)
+int verify_chunk(char *chunk_buf, size_t chunksize,unsigned long long chunk_off,
+		 unsigned long long time_st, unsigned long long inode_st,
+		 char *file)
 {
 	struct block_data *bd;
 	char *chunk_end;
@@ -142,9 +154,9 @@ int verify_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
 		    (bd->bd_inode == inode_st))
 			continue;
 		fprintf(stderr,"\n%s: verify %s failed offset/timestamp/inode "
-			"%llu/%lu/%lu: found %llu/%lu/%lu instead\n", progname,
-			file, chunk_off, time_st, inode_st, bd->bd_offset,
-			bd->bd_time, bd->bd_inode);
+			"%llu/%llu/%llu: found %llu/%llu/%llu instead\n",
+			progname, file, chunk_off, time_st, inode_st,
+			bd->bd_offset, bd->bd_time, bd->bd_inode);
 		return 1;
 	}
 	return 0;
@@ -175,8 +187,8 @@ void fill_chunk(char *chunk_buf, size_t chunksize, loff_t chunk_off,
  * write_chunk: write the chunk_buf on the device. The number of write
  * operations are based on the parameters write_end, offset, and chunksize.
  */
-int write_chunks(int fd, loff_t offset, loff_t write_end, char *chunk_buf,
-		 size_t chunksize, time_t time_st,
+int write_chunks(int fd, unsigned long long offset,unsigned long long write_end,
+		 char *chunk_buf, size_t chunksize, time_t time_st,
 		 ino_t inode_st, const char *file)
 {
 	unsigned long long stride;
@@ -226,8 +238,9 @@ int write_chunks(int fd, loff_t offset, loff_t write_end, char *chunk_buf,
  * read_chunk: reads the chunk_buf from the device. The number of read
  * operations are based on the parameters read_end, offset, and chunksize.
  */
-int read_chunks(int fd, loff_t offset, loff_t read_end, char *chunk_buf,
-		size_t chunksize, time_t time_st, ino_t inode_st, char *file)
+int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
+		char *chunk_buf, size_t chunksize, time_t time_st,
+		ino_t inode_st, char *file)
 {
 	unsigned long long stride;
 
@@ -497,7 +510,6 @@ int main(int argc, char **argv)
 		usage(1);
 		return -1;
 	}
-	file_size = 4 * ONE_GB;
 	if (!readoption && !writeoption) {
 		readoption = 1;
 		writeoption = 1;

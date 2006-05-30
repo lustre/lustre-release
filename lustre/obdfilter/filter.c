@@ -1775,7 +1775,7 @@ static int filter_connect_internal(struct obd_export *exp,
                 spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
                 CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "
-                       "%lld left: %lld\n", exp->exp_obd->obd_name,
+                       LPU64" left: "LPU64"\n", exp->exp_obd->obd_name,
                        exp->exp_client_uuid.uuid, exp,
                        data->ocd_grant, want, left);
         }

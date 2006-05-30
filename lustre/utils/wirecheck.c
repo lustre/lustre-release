@@ -1117,6 +1117,7 @@ main(int argc, char **argv)
         CHECK_CDEFINE(OBD_CONNECT_JOIN);
         CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
         CHECK_CDEFINE(OBD_CONNECT_NODEVOH);
+        CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();

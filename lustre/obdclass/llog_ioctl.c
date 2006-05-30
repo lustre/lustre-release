@@ -121,7 +121,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                         RETURN(-EOPNOTSUPP);
                 rc = llog_cat_id2handle(handle, &log_handle, &lir->lid_id);
                 if (rc) {
-                        CDEBUG(D_IOCTL, 
+                        CDEBUG(D_IOCTL,
                                "cannot find log #"LPX64"#"LPX64"#%08x\n",
                                lir->lid_id.lgl_oid, lir->lid_id.lgl_ogr,
                                lir->lid_id.lgl_ogen);

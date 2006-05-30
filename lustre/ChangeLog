@@ -287,6 +287,27 @@ Description: Cache open negative dentries on client when possible.
 Details    : Guard negative dentries with UPDATE lock on parent dir, drop
 	     negative dentries on lock revocation.
 
+Severity   : minor
+Frequency  : Always
+Bugzilla   : 10510
+Description: Remounting a client read-only wasn't possible with a zconf mount
+Details    : It wasn't possible to remount a client read-only with llmount.
+
+Severity   : enhancement
+Description: Include MPICH 1.2.6 Lustre ADIO interface patch
+Details    : In lustre/contrib/ or /usr/share/lustre in RPM a patch for
+	     MPICH is included to add Lustre-specific ADIO interfaces.
+	     This is based closely on the UFS ADIO layer and only differs
+	     in file creation, in order to allow the OST striping to be set.
+	     This is user-contributed code and not supported by CFS.
+
+Severity   : minor
+Frequency  : Always
+Bugzilla   : 9486
+Description: extended inode attributes work improperly for the case of 2.4/2.6
+             kernels used on client/server or the other way around.
+Details    : Introduce kernel-independent values for these flags.
+
 
 ------------------------------------------------------------------------------
 
@@ -815,6 +836,14 @@ Details    : If a client is repeatedly creating and unlinking files it
 	     If there is no other client load running this can cause the
 	     client node to run out of memory.  Instead flush old inodes
 	     from client cache that have the same inode number as a new inode.
+
+Severity   : minor
+Frequency  : SLES9 2.6.5 kernel and long filenames only
+Bugzilla   : 9969, 10379
+Description: utime reports stale NFS file handle
+Details    : SLES9 uses out-of-dentry names in some cases, which confused
+	     the lustre dentry revalidation.  Change it to always use the
+	     in-dentry qstr.
 
 Severity   : major
 Frequency  : rare, unless heavy write-truncate concurrency is continuous

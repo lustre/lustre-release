@@ -1521,7 +1521,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLGID)
                 inode->i_gid = body->gid;
         if (body->valid & OBD_MD_FLFLAGS)
-                inode->i_flags = body->flags;
+                inode->i_flags = ll_ext_to_inode_flags(body->flags);
         if (body->valid & OBD_MD_FLNLINK)
                 inode->i_nlink = body->nlink;
         if (body->valid & OBD_MD_FLGENER)
@@ -1630,14 +1630,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
 
-                if (body->flags & S_APPEND)
-                        flags |= EXT3_APPEND_FL;
-                if (body->flags & S_IMMUTABLE)
-                        flags |= EXT3_IMMUTABLE_FL;
-                if (body->flags & S_NOATIME)
-                        flags |= EXT3_NOATIME_FL;
-
-                ptlrpc_req_finished(req);
+                /* We want to return EXT3_*_FL flags to the caller via this
+                 * ioctl.  An older MDS may be sending S_* flags, fix it up. */
+                flags = ll_inode_to_ext_flags(body->flags, body->flags);
+                ptlrpc_req_finished (req);
 
                 RETURN(put_user(flags, (int *)arg));
         }
@@ -1682,19 +1678,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         RETURN(rc);
                 }
 
-                if (flags & EXT3_APPEND_FL)
-                        inode->i_flags |= S_APPEND;
-                else
-                        inode->i_flags &= ~S_APPEND;
-                if (flags & EXT3_IMMUTABLE_FL)
-                        inode->i_flags |= S_IMMUTABLE;
-                else
-                        inode->i_flags &= ~S_IMMUTABLE;
-                if (flags & EXT3_NOATIME_FL)
-                        inode->i_flags |= S_NOATIME;
-                else
-                        inode->i_flags &= ~S_NOATIME;
-
+                inode->i_flags = ll_ext_to_inode_flags(flags |
+                                                       MDS_BFLAG_EXT_FLAGS);
                 RETURN(0);
         }
         default:

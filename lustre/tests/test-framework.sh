@@ -218,6 +218,35 @@ reboot_facet() {
     fi
 }
 
+# verify that lustre actually cleaned up properly
+cleanup_check() {
+    BUSY=`dmesg | grep -i destruct || true`
+    if [ "$BUSY" ]; then
+        echo "$BUSY" 1>&2
+        [ -e $TMP/debug ] && mv $TMP/debug $TMP/debug-busy.`date +%s`
+        exit 205
+    fi
+    LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked" || true`
+    LEAK_PORTALS=`dmesg | tail -n 20 | grep "Portals memory leaked" || true`
+    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
+        echo "$0: $LEAK_LUSTRE" 1>&2
+        echo "$0: $LEAK_PORTALS" 1>&2
+        echo "$0: Memory leak(s) detected..." 1>&2
+        mv $TMP/debug $TMP/debug-leak.`date +%s`
+        exit 204
+    fi
+
+    [ "`lctl dl 2> /dev/null | wc -l`" -gt 0 ] && lctl dl && \
+        echo "$0: lustre didn't clean up..." 1>&2 && return 202 || true
+
+    if [ "`/sbin/lsmod 2>&1 | egrep 'lnet|libcfs'`" ]; then
+        echo "$0: modules still loaded..." 1>&2
+        /sbin/lsmod 1>&2
+        return 203
+    fi
+    return 0
+}
+
 wait_for_host() {
    HOST=$1
    check_network "$HOST" 900

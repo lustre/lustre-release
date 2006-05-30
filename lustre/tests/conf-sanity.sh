@@ -85,6 +85,15 @@ mount_client() {
 	zconf_mount `hostname` $MOUNTPATH  || return 96
 }
 
+remount_client() {
+	local SAVEMOUNTOPT=$MOUNTOPT
+	MOUNTOPT="remount,$1"
+	local MOUNTPATH=$2
+	echo "remount '$1' lustre on ${MOUNTPATH}....."
+	zconf_mount `hostname`  $MOUNTPATH  || return 96
+	MOUNTOPT=$SAVEMOUNTOPT
+}
+
 umount_client() {
 	local MOUNTPATH=$1
 	echo "umount lustre on ${MOUNTPATH}....."
@@ -648,10 +657,10 @@ test_16() {
         fi
 
         echo "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
-        do_facet mds "[ -d $TMPMTPT ] || mkdir -p $TMPMTPT;
-                      mount -o loop -t ext3 $MDSDEV $TMPMTPT || return \$?;
-                      chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} || return \$?;
-                      umount -d $TMPMTPT || return \$?" || return $?
+        do_facet mds "mkdir -p $TMPMTPT &&
+                      mount -o loop -t ext3 $MDSDEV $TMPMTPT &&
+                      chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} &&
+                      umount $TMPMTPT" || return $?
 
         echo "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
 	setup
@@ -827,5 +836,26 @@ run_test 22 "interrupt client during recovery mount delay"
 
 umount_client $MOUNT	
 cleanup_nocli
+
+test_20() {
+	# first format the ost/mdt
+	start_ost
+	start_mds
+	mount_client $MOUNT
+	check_mount || return 43
+	rm -f $DIR/$tfile
+	remount_client ro $MOUNT || return 44
+	touch $DIR/$tfile && echo "$DIR/$tfile created incorrectly" && return 45
+	[ -e $DIR/$tfile ] && echo "$DIR/$tfile exists incorrectly" && return 46
+	remount_client rw $MOUNT || return 47
+	touch $DIR/$tfile
+	[ ! -f $DIR/$tfile ] && echo "$DIR/$tfile missing" && return 48
+	MCNT=`grep -c $MOUNT /etc/mtab`
+	[ "$MCNT" -ne 1 ] && echo "$MOUNT in /etc/mtab $MCNT times" && return 49
+	umount_client $MOUNT
+	stop_mds
+	stop_ost
+}
+run_test 20 "remount ro,rw mounts work and doesn't break /etc/mtab"
 
 equals_msg "Done"

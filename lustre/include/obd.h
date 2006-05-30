@@ -23,7 +23,7 @@
 #define IOC_MDC_TYPE         'i'
 #define IOC_MDC_MIN_NR       20
 /* Moved to lustre_user.h
-#define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
+#define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_ioctl_data *)
 #define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *) */
 #define IOC_MDC_MAX_NR       50
 
@@ -35,9 +35,9 @@
 /* this is really local to the OSC */
 struct loi_oap_pages {
         struct list_head        lop_pending;
-        int                     lop_num_pending;
         struct list_head        lop_urgent;
         struct list_head        lop_pending_group;
+        int                     lop_num_pending;
 };
 
 struct osc_async_rc {

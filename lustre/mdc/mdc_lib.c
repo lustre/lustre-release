@@ -63,7 +63,7 @@ static void mdc_pack_body(struct mds_body *b)
 }
 
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, struct ll_fid *fid, int ea_size)
+                       __u64 valid, struct ll_fid *fid, int ea_size, int flags)
 {
         struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
 
@@ -71,6 +71,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
                 b->fid1 = *fid;
         b->valid = valid;
         b->eadatasize = ea_size;
+        b->flags = flags;
         mdc_pack_body(b);
 }
 
@@ -297,7 +298,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
         b->valid = valid;
-        b->flags = flags;
+        b->flags = flags | MDS_BFLAG_EXT_FLAGS;
         b->suppgid = data->suppgids[0];
 
         b->fid1 = data->fid1;

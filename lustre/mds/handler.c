@@ -633,6 +633,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         LASSERT(body != NULL);                 /* caller prepped reply */
 
         mds_pack_inode2fid(&body->fid1, inode);
+        body->flags = reqbody->flags; /* copy MDS_BFLAG_EXT_FLAGS if present */
         mds_pack_inode2body(body, inode);
         reply_off++;
 
@@ -673,6 +674,16 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                         rc = 0;
                 }
                 reply_off++;
+        } else if (reqbody->valid == OBD_MD_FLFLAGS &&
+                   reqbody->flags & MDS_BFLAG_EXT_FLAGS) {
+                int flags;
+
+                /* We only return the full set of flags on ioctl, otherwise we
+                 * get enough flags from the inode in mds_pack_inode2body(). */
+                rc = fsfilt_iocontrol(obd, inode, NULL, EXT3_IOC_GETFLAGS,
+                                      (long)&flags);
+                if (rc == 0)
+                        body->flags = flags | MDS_BFLAG_EXT_FLAGS;
         }
 
         if (reqbody->valid & OBD_MD_FLMODEASIZE) {

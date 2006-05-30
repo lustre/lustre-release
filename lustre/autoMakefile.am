@@ -5,8 +5,9 @@
 
 AUTOMAKE_OPTIONS = foreign
 
+# also update lustre/autoconf/lustre-core.m4 AC_CONFIG_FILES
 ALWAYS_SUBDIRS := include lvfs obdclass ldlm ptlrpc osc lov obdecho \
-	mgc doc utils tests conf scripts autoconf
+	mgc doc utils tests conf scripts autoconf contrib
 
 SERVER_SUBDIRS := ldiskfs obdfilter ost mds mgs
 

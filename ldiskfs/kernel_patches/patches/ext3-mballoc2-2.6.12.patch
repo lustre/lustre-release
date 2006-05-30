@@ -1,7 +1,7 @@
-Index: linux-2.6.12.6/include/linux/ext3_fs.h
+Index: linux-2.6.12.6-bull/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.12.6.orig/include/linux/ext3_fs.h	2005-12-17 02:17:16.000000000 +0300
-+++ linux-2.6.12.6/include/linux/ext3_fs.h	2005-12-17 02:21:21.000000000 +0300
+--- linux-2.6.12.6-bull.orig/include/linux/ext3_fs.h	2006-04-29 20:39:09.000000000 +0400
++++ linux-2.6.12.6-bull/include/linux/ext3_fs.h	2006-04-29 20:39:10.000000000 +0400
 @@ -57,6 +57,14 @@ struct statfs;
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
@@ -52,10 +52,10 @@ Index: linux-2.6.12.6/include/linux/ext3_fs.h
  #endif	/* __KERNEL__ */
  
  /* EXT3_IOC_CREATE_INUM at bottom of file (visible to kernel and user). */
-Index: linux-2.6.12.6/include/linux/ext3_fs_sb.h
+Index: linux-2.6.12.6-bull/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.12.6.orig/include/linux/ext3_fs_sb.h	2005-08-29 20:55:27.000000000 +0400
-+++ linux-2.6.12.6/include/linux/ext3_fs_sb.h	2005-12-17 02:21:21.000000000 +0300
+--- linux-2.6.12.6-bull.orig/include/linux/ext3_fs_sb.h	2005-08-29 20:55:27.000000000 +0400
++++ linux-2.6.12.6-bull/include/linux/ext3_fs_sb.h	2006-04-29 20:39:10.000000000 +0400
 @@ -21,8 +21,14 @@
  #include <linux/wait.h>
  #include <linux/blockgroup_lock.h>
@@ -110,10 +110,10 @@ Index: linux-2.6.12.6/include/linux/ext3_fs_sb.h
  };
  
  #endif	/* _LINUX_EXT3_FS_SB */
-Index: linux-2.6.12.6/fs/ext3/super.c
+Index: linux-2.6.12.6-bull/fs/ext3/super.c
 ===================================================================
---- linux-2.6.12.6.orig/fs/ext3/super.c	2005-12-17 02:17:16.000000000 +0300
-+++ linux-2.6.12.6/fs/ext3/super.c	2005-12-17 02:21:21.000000000 +0300
+--- linux-2.6.12.6-bull.orig/fs/ext3/super.c	2006-04-29 20:39:09.000000000 +0400
++++ linux-2.6.12.6-bull/fs/ext3/super.c	2006-04-29 20:39:10.000000000 +0400
 @@ -387,6 +387,7 @@ static void ext3_put_super (struct super
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
@@ -131,7 +131,7 @@ Index: linux-2.6.12.6/fs/ext3/super.c
  };
  
  static match_table_t tokens = {
-@@ -649,6 +651,7 @@ static match_table_t tokens = {
+@@ -650,6 +651,7 @@ static match_table_t tokens = {
  	{Opt_iopen_nopriv, "iopen_nopriv"},
  	{Opt_extents, "extents"},
  	{Opt_extdebug, "extdebug"},
@@ -139,7 +139,7 @@ Index: linux-2.6.12.6/fs/ext3/super.c
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
-@@ -964,6 +967,9 @@ clear_qf_name:
+@@ -965,6 +967,9 @@ clear_qf_name:
  		case Opt_extdebug:
  			set_opt (sbi->s_mount_opt, EXTDEBUG);
  			break;
@@ -149,7 +149,7 @@ Index: linux-2.6.12.6/fs/ext3/super.c
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -1669,6 +1675,7 @@ static int ext3_fill_super (struct super
+@@ -1670,6 +1675,7 @@ static int ext3_fill_super (struct super
  		ext3_count_dirs(sb));
  
  	ext3_ext_init(sb);
@@ -157,7 +157,7 @@ Index: linux-2.6.12.6/fs/ext3/super.c
  	lock_kernel();
  	return 0;
  
-@@ -2548,7 +2555,13 @@ static struct file_system_type ext3_fs_t
+@@ -2549,7 +2555,13 @@ static struct file_system_type ext3_fs_t
  
  static int __init init_ext3_fs(void)
  {
@@ -172,7 +172,7 @@ Index: linux-2.6.12.6/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2570,6 +2583,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2571,6 +2583,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
@@ -180,11 +180,11 @@ Index: linux-2.6.12.6/fs/ext3/super.c
  }
  
  int ext3_prep_san_write(struct inode *inode, long *blocks,
-Index: linux-2.6.12.6/fs/ext3/extents.c
+Index: linux-2.6.12.6-bull/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.12.6.orig/fs/ext3/extents.c	2005-12-17 02:17:16.000000000 +0300
-+++ linux-2.6.12.6/fs/ext3/extents.c	2005-12-17 02:21:21.000000000 +0300
-@@ -771,7 +771,7 @@ cleanup:
+--- linux-2.6.12.6-bull.orig/fs/ext3/extents.c	2006-04-29 20:39:09.000000000 +0400
++++ linux-2.6.12.6-bull/fs/ext3/extents.c	2006-04-29 20:39:10.000000000 +0400
+@@ -777,7 +777,7 @@ cleanup:
  		for (i = 0; i < depth; i++) {
  			if (!ablocks[i])
  				continue;
@@ -193,7 +193,7 @@ Index: linux-2.6.12.6/fs/ext3/extents.c
  		}
  	}
  	kfree(ablocks);
-@@ -1428,7 +1428,7 @@ int ext3_ext_rm_idx(handle_t *handle, st
+@@ -1434,7 +1434,7 @@ int ext3_ext_rm_idx(handle_t *handle, st
  		  path->p_idx->ei_leaf);
  	bh = sb_find_get_block(tree->inode->i_sb, path->p_idx->ei_leaf);
  	ext3_forget(handle, 1, tree->inode, bh, path->p_idx->ei_leaf);
@@ -202,7 +202,7 @@ Index: linux-2.6.12.6/fs/ext3/extents.c
  	return err;
  }
  
-@@ -1913,10 +1913,12 @@ ext3_remove_blocks(struct ext3_extents_t
+@@ -1919,10 +1919,12 @@ ext3_remove_blocks(struct ext3_extents_t
  	int needed = ext3_remove_blocks_credits(tree, ex, from, to);
  	handle_t *handle = ext3_journal_start(tree->inode, needed);
  	struct buffer_head *bh;
@@ -216,7 +216,7 @@ Index: linux-2.6.12.6/fs/ext3/extents.c
  	if (from >= ex->ee_block && to == ex->ee_block + ex->ee_len - 1) {
  		/* tail removal */
  		unsigned long num, start;
-@@ -1928,7 +1930,7 @@ ext3_remove_blocks(struct ext3_extents_t
+@@ -1934,7 +1936,7 @@ ext3_remove_blocks(struct ext3_extents_t
  			bh = sb_find_get_block(tree->inode->i_sb, start + i);
  			ext3_forget(handle, 0, tree->inode, bh, start + i);
  		}
@@ -225,10 +225,10 @@ Index: linux-2.6.12.6/fs/ext3/extents.c
  	} else if (from == ex->ee_block && to <= ex->ee_block + ex->ee_len - 1) {
  		printk("strange request: removal %lu-%lu from %u:%u\n",
  		       from, to, ex->ee_block, ex->ee_len);
-Index: linux-2.6.12.6/fs/ext3/inode.c
+Index: linux-2.6.12.6-bull/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.12.6.orig/fs/ext3/inode.c	2005-12-17 02:17:16.000000000 +0300
-+++ linux-2.6.12.6/fs/ext3/inode.c	2005-12-17 02:21:21.000000000 +0300
+--- linux-2.6.12.6-bull.orig/fs/ext3/inode.c	2006-04-29 20:39:09.000000000 +0400
++++ linux-2.6.12.6-bull/fs/ext3/inode.c	2006-04-29 20:39:10.000000000 +0400
 @@ -564,7 +564,7 @@ static int ext3_alloc_branch(handle_t *h
  		ext3_journal_forget(handle, branch[i].bh);
  	}
@@ -256,10 +256,10 @@ Index: linux-2.6.12.6/fs/ext3/inode.c
  
  			if (parent_bh) {
  				/*
-Index: linux-2.6.12.6/fs/ext3/balloc.c
+Index: linux-2.6.12.6-bull/fs/ext3/balloc.c
 ===================================================================
---- linux-2.6.12.6.orig/fs/ext3/balloc.c	2005-08-29 20:55:27.000000000 +0400
-+++ linux-2.6.12.6/fs/ext3/balloc.c	2005-12-17 02:21:21.000000000 +0300
+--- linux-2.6.12.6-bull.orig/fs/ext3/balloc.c	2005-08-29 20:55:27.000000000 +0400
++++ linux-2.6.12.6-bull/fs/ext3/balloc.c	2006-04-29 20:39:10.000000000 +0400
 @@ -79,7 +79,7 @@ struct ext3_group_desc * ext3_get_group_
   *
   * Return buffer_head on success or NULL in case of failure.
@@ -303,10 +303,10 @@ Index: linux-2.6.12.6/fs/ext3/balloc.c
  			unsigned long goal, int *errp)
  {
  	struct buffer_head *bitmap_bh = NULL;
-Index: linux-2.6.12.6/fs/ext3/xattr.c
+Index: linux-2.6.12.6-bull/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.12.6.orig/fs/ext3/xattr.c	2005-08-29 20:55:27.000000000 +0400
-+++ linux-2.6.12.6/fs/ext3/xattr.c	2005-12-17 02:21:33.000000000 +0300
+--- linux-2.6.12.6-bull.orig/fs/ext3/xattr.c	2005-08-29 20:55:27.000000000 +0400
++++ linux-2.6.12.6-bull/fs/ext3/xattr.c	2006-04-29 20:39:10.000000000 +0400
 @@ -484,7 +484,7 @@ ext3_xattr_release_block(handle_t *handl
  		ea_bdebug(bh, "refcount now=0; freeing");
  		if (ce)
@@ -325,11 +325,11 @@ Index: linux-2.6.12.6/fs/ext3/xattr.c
  				error = -EIO;
  				goto cleanup;
  			}
-Index: linux-2.6.12.6/fs/ext3/mballoc.c
+Index: linux-2.6.12.6-bull/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.12.6.orig/fs/ext3/mballoc.c	2005-12-09 13:08:53.191437750 +0300
-+++ linux-2.6.12.6/fs/ext3/mballoc.c	2005-12-17 02:21:21.000000000 +0300
-@@ -0,0 +1,2429 @@
+--- linux-2.6.12.6-bull.orig/fs/ext3/mballoc.c	2006-04-22 17:31:47.543334750 +0400
++++ linux-2.6.12.6-bull/fs/ext3/mballoc.c	2006-04-30 01:24:11.000000000 +0400
+@@ -0,0 +1,2615 @@
 +/*
 + * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -418,6 +418,12 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +
 +long ext3_mb_stats = 1;
 +
++/*
++ * for which requests use 2^N search using buddies
++ */
++long ext3_mb_order2_reqs = 8;
++
++
 +#ifdef EXT3_BB_MAX_BLOCKS
 +#undef EXT3_BB_MAX_BLOCKS
 +#endif
@@ -483,6 +489,8 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +struct ext3_mb_history {
 +	struct ext3_free_extent goal;	/* goal allocation */
 +	struct ext3_free_extent result;	/* result allocation */
++	unsigned pid;
++	unsigned ino;
 +	__u16 found;	/* how many extents have been found */
 +	__u16 groups;	/* how many groups have been scanned */
 +	__u16 tail;	/* what tail broke some buddy */
@@ -505,9 +513,9 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +#define EXT3_MB_BUDDY(e3b)	((e3b)->bd_buddy)
 +
 +#ifndef EXT3_MB_HISTORY
-+#define ext3_mb_store_history(sb,ac)
++#define ext3_mb_store_history(sb,ino,ac)
 +#else
-+static void ext3_mb_store_history(struct super_block *,
++static void ext3_mb_store_history(struct super_block *, unsigned ino,
 +				struct ext3_allocation_context *ac);
 +#endif
 +
@@ -1129,7 +1137,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +static int mb_find_extent(struct ext3_buddy *e3b, int order, int block,
 +				int needed, struct ext3_free_extent *ex)
 +{
-+	int next, max, ord;
++	int next = block, max, ord;
 +	void *buddy;
 +
 +	J_ASSERT(ex != NULL);
@@ -1153,6 +1161,11 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	ex->fe_len = 1 << order;
 +	ex->fe_start = block << order;
 +	ex->fe_group = e3b->bd_group;
++
++	/* calc difference from given start */
++	next = next - ex->fe_start;
++	ex->fe_len -= next;
++	ex->fe_start += next;
 +
 +	while (needed > ex->fe_len && (buddy = mb_find_buddy(e3b, order, &max))) {
 +
@@ -1376,7 +1389,16 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	max = mb_find_extent(e3b, 0, ac->ac_g_ex.fe_start,
 +				ac->ac_g_ex.fe_len, &ex);
 +	
-+	if (max > 0) {
++	if (max >= ac->ac_g_ex.fe_len) {
++		J_ASSERT(ex.fe_len > 0);
++		J_ASSERT(ex.fe_group == ac->ac_g_ex.fe_group);
++		J_ASSERT(ex.fe_start == ac->ac_g_ex.fe_start);
++		ac->ac_found++;
++		ac->ac_b_ex = ex;
++		ext3_mb_use_best_found(ac, e3b);
++	} else if (max > 0 && (ac->ac_flags & EXT3_MB_HINT_MERGE)) {
++		/* Sometimes, caller may want to merge even small
++		 * number of blocks to an existing extent */
 +		J_ASSERT(ex.fe_len > 0);
 +		J_ASSERT(ex.fe_group == ac->ac_g_ex.fe_group);
 +		J_ASSERT(ex.fe_start == ac->ac_g_ex.fe_start);
@@ -1404,7 +1426,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	int i, k, max;
 +
 +	J_ASSERT(ac->ac_2order > 0);
-+	for (i = ac->ac_2order; i < sb->s_blocksize_bits + 1; i++) {
++	for (i = ac->ac_2order; i <= sb->s_blocksize_bits + 1; i++) {
 +		if (grp->bb_counters[i] == 0)
 +			continue;
 +
@@ -1490,15 +1512,18 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +		case 0:
 +			J_ASSERT(ac->ac_2order != 0);
 +			bits = ac->ac_sb->s_blocksize_bits + 1;
-+			for (i = ac->ac_2order; i < bits; i++)
++			for (i = ac->ac_2order; i <= bits; i++)
 +				if (grp->bb_counters[i] > 0)
 +					return 1;
++			break;
 +		case 1:
 +			if ((free / fragments) >= ac->ac_g_ex.fe_len)
 +				return 1;
++			break;
 +		case 2:
 +			if (free >= ac->ac_g_ex.fe_len)
 +				return 1;
++			break;
 +		case 3:
 +			return 1;
 +		default:
@@ -1601,21 +1626,18 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +
 +	/* probably, the request is for 2^8+ blocks (1/2/3/... MB) */
 +	i = ffs(*len);
-+	if (i >= 8) {
++	if (i >= ext3_mb_order2_reqs) {
 +		i--;
 +		if ((*len & (~(1 << i))) == 0)
 +			ac.ac_2order = i;
 +	}
 +
-+	/* Sometimes, caller may want to merge even small
-+	 * number of blocks to an existing extent */
-+	if (ac.ac_flags & EXT3_MB_HINT_MERGE) {
-+		err = ext3_mb_find_by_goal(&ac, &e3b);
-+		if (err)
-+			goto out_err;
-+		if (ac.ac_status == AC_STATUS_FOUND)
-+			goto found;
-+	}
++	/* first, try the goal */
++	err = ext3_mb_find_by_goal(&ac, &e3b);
++	if (err)
++		goto out_err;
++	if (ac.ac_status == AC_STATUS_FOUND)
++		goto found;
 +
 +	/* Let's just scan groups to find more-less suitable blocks */
 +	cr = ac.ac_2order ? 0 : 1;
@@ -1834,7 +1856,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +			atomic_inc(&sbi->s_bal_breaks);
 +	}
 +
-+	ext3_mb_store_history(sb, &ac);
++	ext3_mb_store_history(sb, inode->i_ino, &ac);
 +
 +	return block;
 +}
@@ -1899,9 +1921,9 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	char buf[20], buf2[20];
 +
 +	if (v == SEQ_START_TOKEN) {
-+		seq_printf(seq, "%-17s %-17s %-5s %-5s %-2s %-5s %-5s %-6s\n",
-+			 "goal", "result", "found", "grps", "cr", "merge",
-+			 "tail", "broken");
++		seq_printf(seq, "%-5s %-8s %-17s %-17s %-5s %-5s %-2s %-5s %-5s %-6s\n",
++			 "pid", "inode", "goal", "result", "found", "grps", "cr",
++			 "merge", "tail", "broken");
 +		return 0;
 +	}
 +
@@ -1909,9 +1931,9 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +		hs->goal.fe_start, hs->goal.fe_len);
 +	sprintf(buf2, "%u/%u/%u", hs->result.fe_group,
 +		hs->result.fe_start, hs->result.fe_len);
-+	seq_printf(seq, "%-17s %-17s %-5u %-5u %-2u %-5s %-5u %-6u\n", buf,
-+			buf2, hs->found, hs->groups, hs->cr, 
-+			hs->merged ? "M" : "", hs->tail,
++	seq_printf(seq, "%-5u %-8u %-17s %-17s %-5u %-5u %-2u %-5s %-5u %-6u\n",
++			hs->pid, hs->ino, buf, buf2, hs->found, hs->groups,
++			hs->cr, hs->merged ? "M" : "", hs->tail,
 +			hs->buddy ? 1 << hs->buddy : 0);
 +	return 0;
 +}
@@ -1975,12 +1997,108 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	.release        = ext3_mb_seq_history_release,
 +};
 +
++static void *ext3_mb_seq_groups_start(struct seq_file *seq, loff_t *pos)
++{
++	struct super_block *sb = seq->private;
++	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	int group;
++
++	if (*pos < 0 || *pos >= sbi->s_groups_count)
++		return NULL;
++
++	group = *pos + 1;
++	return (void *) group;
++}
++
++static void *ext3_mb_seq_groups_next(struct seq_file *seq, void *v, loff_t *pos)
++{
++	struct super_block *sb = seq->private;
++	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	int group;
++
++	++*pos;
++	if (*pos < 0 || *pos >= sbi->s_groups_count)
++		return NULL;
++	group = *pos + 1;
++	return (void *) group;;
++}
++
++static int ext3_mb_seq_groups_show(struct seq_file *seq, void *v)
++{
++	struct super_block *sb = seq->private;
++	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	int group = (int) v, i;
++	struct sg {
++		struct ext3_group_info info;
++		unsigned short counters[16];
++	} sg;
++
++	group--;
++	if (group == 0)
++		seq_printf(seq, "#%-5s: %-5s %-5s %-5s [ %-5s %-5s %-5s %-5s %-5s %-5s %-5s %-5s %-5s %-5s %-5s %-5s %-5s %-5s ]\n",
++			 "group", "free", "frags", "first", "2^0", "2^1", "2^2", 
++			 "2^3", "2^4", "2^5", "2^6", "2^7", "2^8", "2^9", "2^10",
++			 "2^11", "2^12", "2^13");
++
++	i = (sb->s_blocksize_bits + 2) * sizeof(sg.info.bb_counters[0]) +
++		sizeof(struct ext3_group_info);
++	ext3_lock_group(sb, group);
++	memcpy(&sg, sbi->s_group_info[group], i);
++	ext3_unlock_group(sb, group);
++
++	if (EXT3_MB_GRP_NEED_INIT(&sg.info))
++		return 0;
++
++	seq_printf(seq, "#%-5u: %-5u %-5u %-5u [", group, sg.info.bb_free,
++			sg.info.bb_fragments, sg.info.bb_first_free);
++	for (i = 0; i <= 13; i++)
++		seq_printf(seq, " %-5u", i <= sb->s_blocksize_bits + 1 ?
++				sg.info.bb_counters[i] : 0);
++	seq_printf(seq, " ]\n");
++
++	return 0;
++}
++
++static void ext3_mb_seq_groups_stop(struct seq_file *seq, void *v)
++{
++}
++
++static struct seq_operations ext3_mb_seq_groups_ops = {
++	.start  = ext3_mb_seq_groups_start,
++	.next   = ext3_mb_seq_groups_next,
++	.stop   = ext3_mb_seq_groups_stop,
++	.show   = ext3_mb_seq_groups_show,
++};
++
++static int ext3_mb_seq_groups_open(struct inode *inode, struct file *file)
++{
++	struct super_block *sb = PDE(inode)->data;
++	int rc;
++
++	rc = seq_open(file, &ext3_mb_seq_groups_ops);
++	if (rc == 0) {
++		struct seq_file *m = (struct seq_file *)file->private_data;
++		m->private = sb;
++	}
++	return rc;
++
++}
++
++static struct file_operations ext3_mb_seq_groups_fops = {
++	.owner		= THIS_MODULE,
++	.open           = ext3_mb_seq_groups_open,
++	.read           = seq_read,
++	.llseek         = seq_lseek,
++	.release        = seq_release,
++};
++
 +static void ext3_mb_history_release(struct super_block *sb)
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	char name[64];
 +
 +	snprintf(name, sizeof(name) - 1, "%s", bdevname(sb->s_bdev, name));
++	remove_proc_entry("mb_groups", sbi->s_mb_proc);
 +	remove_proc_entry("mb_history", sbi->s_mb_proc);
 +	remove_proc_entry(name, proc_root_ext3);
 +
@@ -2003,6 +2121,11 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +			p->proc_fops = &ext3_mb_seq_history_fops;
 +			p->data = sb;
 +		}
++		p = create_proc_entry("mb_groups", S_IRUGO, sbi->s_mb_proc);
++		if (p) {
++			p->proc_fops = &ext3_mb_seq_groups_fops;
++			p->data = sb;
++		}
 +	}
 +
 +	sbi->s_mb_history_max = 1000;
@@ -2015,7 +2138,8 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +}
 +
 +static void
-+ext3_mb_store_history(struct super_block *sb, struct ext3_allocation_context *ac)
++ext3_mb_store_history(struct super_block *sb, unsigned ino,
++			struct ext3_allocation_context *ac)
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	struct ext3_mb_history h;
@@ -2023,6 +2147,8 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	if (likely(sbi->s_mb_history == NULL))
 +		return;
 +
++	h.pid = current->pid;
++	h.ino = ino;
 +	h.goal = ac->ac_g_ex;
 +	h.result = ac->ac_b_ex;
 +	h.found = ac->ac_found;
@@ -2578,6 +2704,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +#define EXT3_MB_STATS_NAME        "mb_stats"
 +#define EXT3_MB_MAX_TO_SCAN_NAME  "mb_max_to_scan"
 +#define EXT3_MB_MIN_TO_SCAN_NAME  "mb_min_to_scan"
++#define EXT3_MB_ORDER2_REQ	  "mb_order2_req"
 +
 +static int ext3_mb_stats_read(char *page, char **start, off_t off,
 +		int count, int *eof, void *data)
@@ -2665,6 +2792,45 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	return len;
 +}
 +
++static int ext3_mb_order2_req_write(struct file *file, const char *buffer,
++		unsigned long count, void *data)
++{
++	char str[32];
++	long value;
++
++	if (count >= sizeof(str)) {
++		printk(KERN_ERR "EXT3-fs: %s string too long, max %u bytes\n",
++		       EXT3_MB_MIN_TO_SCAN_NAME, (int)sizeof(str));
++		return -EOVERFLOW;
++	}
++
++	if (copy_from_user(str, buffer, count))
++		return -EFAULT;
++
++	/* Only set to 0 or 1 respectively; zero->0; non-zero->1 */
++	value = simple_strtol(str, NULL, 0);
++	if (value <= 0)
++		return -ERANGE;
++
++	ext3_mb_order2_reqs = value;	
++
++	return count;
++}
++
++static int ext3_mb_order2_req_read(char *page, char **start, off_t off,
++		int count, int *eof, void *data)
++{
++	int len;
++
++	*eof = 1;
++	if (off != 0)
++		return 0;
++
++	len = sprintf(page, "%ld\n", ext3_mb_order2_reqs);
++	*start = page;
++	return len;
++}
++
 +static int ext3_mb_min_to_scan_write(struct file *file, const char *buffer,
 +		unsigned long count, void *data)
 +{
@@ -2695,6 +2861,7 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	struct proc_dir_entry *proc_ext3_mb_stats;
 +	struct proc_dir_entry *proc_ext3_mb_max_to_scan;
 +	struct proc_dir_entry *proc_ext3_mb_min_to_scan;
++	struct proc_dir_entry *proc_ext3_mb_order2_req;
 +
 +	proc_root_ext3 = proc_mkdir(EXT3_ROOT, proc_root_fs);
 +	if (proc_root_ext3 == NULL) {
@@ -2749,6 +2916,24 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	proc_ext3_mb_min_to_scan->read_proc  = ext3_mb_min_to_scan_read;
 +	proc_ext3_mb_min_to_scan->write_proc = ext3_mb_min_to_scan_write;
 +
++	/* Initialize EXT3_ORDER2_REQ */
++	proc_ext3_mb_order2_req = create_proc_entry(
++			EXT3_MB_ORDER2_REQ,
++			S_IFREG | S_IRUGO | S_IWUSR, proc_root_ext3);
++	if (proc_ext3_mb_order2_req == NULL) {
++		printk(KERN_ERR "EXT3-fs: Unable to create %s\n",
++				EXT3_MB_ORDER2_REQ);
++		remove_proc_entry(EXT3_MB_MIN_TO_SCAN_NAME, proc_root_ext3);
++		remove_proc_entry(EXT3_MB_MAX_TO_SCAN_NAME, proc_root_ext3);
++		remove_proc_entry(EXT3_MB_STATS_NAME, proc_root_ext3);
++		remove_proc_entry(EXT3_ROOT, proc_root_fs);
++		return -EIO;
++	}
++
++	proc_ext3_mb_order2_req->data = NULL;
++	proc_ext3_mb_order2_req->read_proc  = ext3_mb_order2_req_read;
++	proc_ext3_mb_order2_req->write_proc = ext3_mb_order2_req_write;
++
 +	return 0;
 +}
 +
@@ -2757,13 +2942,14 @@ Index: linux-2.6.12.6/fs/ext3/mballoc.c
 +	remove_proc_entry(EXT3_MB_STATS_NAME, proc_root_ext3);
 +	remove_proc_entry(EXT3_MB_MAX_TO_SCAN_NAME, proc_root_ext3);
 +	remove_proc_entry(EXT3_MB_MIN_TO_SCAN_NAME, proc_root_ext3);
++	remove_proc_entry(EXT3_MB_ORDER2_REQ, proc_root_ext3);
 +	remove_proc_entry(EXT3_ROOT, proc_root_fs);
 +}
-Index: linux-2.6.12.6/fs/ext3/Makefile
+Index: linux-2.6.12.6-bull/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.12.6.orig/fs/ext3/Makefile	2005-12-17 02:17:16.000000000 +0300
-+++ linux-2.6.12.6/fs/ext3/Makefile	2005-12-17 02:21:21.000000000 +0300
-@@ -6,7 +6,7 @@
+--- linux-2.6.12.6-bull.orig/fs/ext3/Makefile	2006-04-29 20:39:09.000000000 +0400
++++ linux-2.6.12.6-bull/fs/ext3/Makefile	2006-04-29 20:39:10.000000000 +0400
+@@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
  	   ioctl.o namei.o super.o symlink.o hash.o resize.o \

@@ -467,7 +467,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 CERROR("Failure to commit OST transaction (%d)?\n", err);
                 rc = err;
         }
-        if (obd->obd_replayable && !err)
+        if (obd->obd_replayable && !rc)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);

@@ -605,10 +605,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                  * values specified) then delete default striping from dir. */
                 if (S_ISDIR(inode->i_mode) &&
                     ((lum->lmm_stripe_size == 0 &&
-                      lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1) &&
+                      lum->lmm_stripe_offset ==
+                      (typeof(lum->lmm_stripe_offset))(-1) &&
                       lum->lmm_stripe_count == 0) ||
                     /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
-                    lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1))){
+                    lum->lmm_stripe_size ==
+                    (typeof(lum->lmm_stripe_size))(-1))){
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);

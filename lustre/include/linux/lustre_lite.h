@@ -19,8 +19,6 @@
 
 #include <linux/fs.h>
 #include <linux/dcache.h>
-#include <linux/jbd.h>
-#include <linux/ext3_fs.h>
 #include <linux/proc_fs.h>
 
 #include <obd_class.h>

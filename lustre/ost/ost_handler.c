@@ -648,7 +648,7 @@ static void ost_prolong_locks(struct obd_export *exp, struct obd_ioobj *obj,
         opd.opd_policy.l_extent.end = (nb[nrbufs - 1].offset +
                                        nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
 
-        CDEBUG(D_DLMTRACE, "refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
+        CDEBUG(D_DLMTRACE,"refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
                res_id.name[0], res_id.name[1], opd.opd_policy.l_extent.start,
                opd.opd_policy.l_extent.end);
         ldlm_resource_iterate(exp->exp_obd->obd_namespace, &res_id,
@@ -853,7 +853,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         ptlrpc_rs_decref(req->rq_reply_state);
                         req->rq_reply_state = NULL;
                 }
-                CWARN("%s: ignoring bulk IO comm error with %s@%s id %s\n",
+                CWARN("%s: ignoring bulk IO comm error with %s@%s id %s - "
+                      "client will retry\n",
                       req->rq_export->exp_obd->obd_name,
                       req->rq_export->exp_client_uuid.uuid,
                       req->rq_export->exp_connection->c_remote_uuid.uuid,
@@ -1094,7 +1095,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         ptlrpc_rs_decref(req->rq_reply_state);
                         req->rq_reply_state = NULL;
                 }
-                CWARN("%s: ignoring bulk IO comm error with %s@%s id %s\n",
+                CWARN("%s: ignoring bulk IO comm error with %s@%s id %s - "
+                      "client will retry\n",
                       req->rq_export->exp_obd->obd_name,
                       req->rq_export->exp_client_uuid.uuid,
                       req->rq_export->exp_connection->c_remote_uuid.uuid,

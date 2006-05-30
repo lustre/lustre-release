@@ -242,7 +242,7 @@ typedef long sector_t;
 static inline void clear_page_dirty(struct page *page)
 {
         if (PageDirty(page))
-                ClearPageDirty(page); 
+                ClearPageDirty(page);
 }
 
 static inline int clear_page_dirty_for_io(struct page *page)

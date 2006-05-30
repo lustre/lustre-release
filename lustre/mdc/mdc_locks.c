@@ -57,7 +57,6 @@ void it_clear_disposition(struct lookup_intent *it, int flag)
 {
         it->d.lustre.it_disposition &= ~flag;
 }
-
 EXPORT_SYMBOL(it_clear_disposition);
 
 static int it_to_lock_mode(struct lookup_intent *it)
@@ -568,9 +567,9 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                    owner/group/acls are under lookup lock, we need both 
                    ibits for GETATTR. */
                 policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
-                        MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP : 
+                        MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP :
                         MDS_INODELOCK_LOOKUP;
-                
+
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                      LDLM_FL_BLOCK_GRANTED, &res_id,
                                      LDLM_IBITS, &policy, LCK_CR, &lockh);
@@ -578,13 +577,13 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                         mode = LCK_CW;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                              LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy, LCK_CW, &lockh);
+                                             LDLM_IBITS, &policy,LCK_CW,&lockh);
                 }
                 if (!rc) {
                         mode = LCK_PR;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                              LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy, LCK_PR, &lockh);
+                                             LDLM_IBITS, &policy,LCK_PR,&lockh);
                 }
                 if (rc) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh,
@@ -658,7 +657,8 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
         if (op_data->fid2.id && (it->it_op != IT_GETATTR)) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                if (memcmp(&op_data->fid2, &mds_body->fid1, sizeof(op_data->fid2)))
+                if (memcmp(&op_data->fid2, &mds_body->fid1,
+                           sizeof(op_data->fid2)))
                         RETURN(-ESTALE);
         }
 
