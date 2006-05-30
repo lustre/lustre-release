@@ -103,8 +103,8 @@ void usage(FILE *out)
                 "\t\t--nomgs: turn off MGS service on this MDT\n"
                 "\t\t--writeconf: erase all config logs for this fs.\n"
 #endif
-                "\t\t--print: just report what we would do; don't write to "
-                "disk\n"
+                "\t\t--print (or --noformat): just report what we would do; "
+                "don't write to disk\n"
                 "\t\t--verbose\n"
                 "\t\t--quiet\n");
         return;
@@ -905,6 +905,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"mgsnid", 1, 0, 'm'},
                 {"mdt", 0, 0, 'M'},
                 {"fsname",1, 0, 'n'},
+                {"noformat", 0, 0, 'P'},
                 {"nomgs", 0, 0, 'N'},
                 {"mountfsoptions", 1, 0, 'o'},
                 {"ost", 0, 0, 'O'},
