@@ -70,7 +70,14 @@ static const struct req_msg_field *mds_reint_client[] = {
 
 static const struct req_msg_field *mds_reint_create_client[] = {
         &RMF_REC_CREATE,
-        &RMF_NAME
+        &RMF_NAME,
+        &RMF_SYMTGT
+};
+
+static const struct req_msg_field *mds_reint_open_client[] = {
+        &RMF_REC_CREATE,
+        &RMF_NAME,
+        &RMF_EADATA
 };
 
 static const struct req_msg_field *mds_reint_unlink_client[] = {
@@ -122,14 +129,20 @@ static const struct req_msg_field *ldlm_intent_getattr_client[] = {
         &RMF_NAME
 };
 
-/*
- * Used for open and create.
- */
 static const struct req_msg_field *ldlm_intent_create_client[] = {
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
         &RMF_REC_CREATE,    /* coincides with mds_reint_create_client[] */
-        &RMF_NAME
+        &RMF_NAME,
+        &RMF_EADATA
+};
+
+static const struct req_msg_field *ldlm_intent_open_client[] = {
+        &RMF_DLM_REQ,
+        &RMF_LDLM_INTENT,
+        &RMF_REC_CREATE,    /* coincides with mds_reint_open_client[] */
+        &RMF_NAME,
+        &RMF_SYMTGT
 };
 
 static const struct req_msg_field *ldlm_intent_unlink_client[] = {
@@ -148,6 +161,7 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_GETATTR_NAME,
         &RQF_MDS_REINT,
         &RQF_MDS_REINT_CREATE,
+        &RQF_MDS_REINT_OPEN,
         &RQF_MDS_REINT_UNLINK,
         &RQF_MDS_REINT_SETATTR,
         &RQF_LDLM_ENQUEUE,
@@ -195,6 +209,10 @@ EXPORT_SYMBOL(RMF_OBD_STATFS);
 const struct req_msg_field RMF_NAME =
         DEFINE_MSGF("name", RMF_F_STRING, 0, NULL);
 EXPORT_SYMBOL(RMF_NAME);
+
+const struct req_msg_field RMF_SYMTGT =
+        DEFINE_MSGF("symtgt", RMF_F_STRING, 0, NULL);
+EXPORT_SYMBOL(RMF_SYMTGT);
 
 const struct req_msg_field RMF_TGTUUID =
         DEFINE_MSGF("tgtuuid", RMF_F_STRING, sizeof(struct obd_uuid) - 1, NULL);
@@ -330,6 +348,11 @@ const struct req_format RQF_MDS_REINT_CREATE =
                         mds_reint_create_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE);
 
+const struct req_format RQF_MDS_REINT_OPEN =
+        DEFINE_REQ_FMT0("MDS_REINT_OPEN",
+                        mds_reint_open_client, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_REINT_OPEN);
+
 const struct req_format RQF_MDS_REINT_UNLINK =
         DEFINE_REQ_FMT0("MDS_REINT_UNLINK",
                         mds_reint_unlink_client, mdt_body_only);
@@ -366,7 +389,7 @@ EXPORT_SYMBOL(RQF_LDLM_INTENT_GETATTR);
 
 const struct req_format RQF_LDLM_INTENT_OPEN =
         DEFINE_REQ_FMT0("LDLM_INTENT_OPEN",
-                        ldlm_intent_create_client, ldlm_intent_server);
+                        ldlm_intent_open_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_OPEN);
 
 const struct req_format RQF_LDLM_INTENT_CREATE =
