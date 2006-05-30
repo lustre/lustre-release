@@ -7,7 +7,11 @@
 
 #ifdef CONFIG_FS_POSIX_ACL
 # include <linux/fs.h>
-# include <linux/xattr_acl.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16))
+#include <linux/posix_acl_xattr.h>
+#else
+#include <linux/xattr_acl.h>        
+#endif
 #endif
 
 #include <lustre_debug.h>
@@ -24,13 +28,15 @@ struct lustre_intent_data {
         }; */
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16))
+#define LUSTRE_FPRIVATE(file) ((file)->private_data)
+#else
 #if (LUSTRE_KERNEL_VERSION < 46)
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 #else
 #define LUSTRE_FPRIVATE(file) ((file)->fs_private)
 #endif
-
+#endif
 
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {

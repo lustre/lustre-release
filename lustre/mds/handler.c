@@ -590,7 +590,7 @@ int mds_pack_posix_acl(struct inode *inode, struct lustre_msg *repmsg,
                 GOTO(out, 0);
 
         lock_24kernel();
-        rc = inode->i_op->getxattr(&de, XATTR_NAME_ACL_ACCESS,
+        rc = inode->i_op->getxattr(&de, MDS_XATTR_NAME_ACL_ACCESS,
                                    lustre_msg_buf(repmsg, repoff, buflen),
                                    buflen);
         unlock_24kernel();
@@ -768,7 +768,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                 size[bufcount] = 0;
                 if (inode->i_op && inode->i_op->getxattr) {
                         lock_24kernel();
-                        rc = inode->i_op->getxattr(&de, XATTR_NAME_ACL_ACCESS,
+                        rc = inode->i_op->getxattr(&de, MDS_XATTR_NAME_ACL_ACCESS,
                                                    NULL, 0);
                         unlock_24kernel();
 

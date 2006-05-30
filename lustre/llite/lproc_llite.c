@@ -601,7 +601,9 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                 seq_page_flag(seq, page, referenced, has_flags);
                 seq_page_flag(seq, page, uptodate, has_flags);
                 seq_page_flag(seq, page, dirty, has_flags);
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,12))
                 seq_page_flag(seq, page, highmem, has_flags);
+#endif
                 if (!has_flags)
                         seq_puts(seq, "-]\n");
                 else 

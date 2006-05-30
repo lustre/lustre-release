@@ -615,7 +615,7 @@ Index: linux-2.6.16.i686/fs/exec.c
 Index: linux-2.6.16.i686/include/linux/dcache.h
 ===================================================================
 --- linux-2.6.16.i686.orig/include/linux/dcache.h	2006-05-30 15:47:11.000000000 +0800
-+++ linux-2.6.16.i686/include/linux/dcache.h	2006-05-30 23:42:41.000000000 +0800
++++ linux-2.6.16.i686/include/linux/dcache.h	2006-05-31 00:52:42.000000000 +0800
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -624,6 +624,15 @@ Index: linux-2.6.16.i686/include/linux/dcache.h
  #include <linux/list.h>
  #include <linux/spinlock.h>
  #include <linux/cache.h>
+@@ -36,6 +37,8 @@
+ 	const unsigned char *name;
+ };
+ 
++#include <linux/namei.h>
++
+ struct dentry_stat_t {
+ 	int nr_dentry;
+ 	int nr_unused;
 Index: linux-2.6.16.i686/include/linux/fs.h
 ===================================================================
 --- linux-2.6.16.i686.orig/include/linux/fs.h	2006-05-30 15:47:11.000000000 +0800

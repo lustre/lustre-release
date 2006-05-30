@@ -59,6 +59,14 @@
 #include <linux/ext3_extents.h>
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
+#define FSFILT_DATA_TRANS_BLOCKS(sb)      EXT3_DATA_TRANS_BLOCKS
+#define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS
+#else
+#define FSFILT_DATA_TRANS_BLOCKS(sb)      EXT3_DATA_TRANS_BLOCKS(sb)
+#define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS(sb)
+#endif
+
 static kmem_cache_t *fcb_cache;
 
 struct fsfilt_cb_data {
@@ -140,7 +148,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         case FSFILT_OP_RMDIR:
         case FSFILT_OP_UNLINK:
                 /* delete one file + create/update logs for each stripe */
-                nblocks += EXT3_DELETE_TRANS_BLOCKS;
+                nblocks += FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                             EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 break;
@@ -177,7 +185,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         case FSFILT_OP_LINK:
                 /* modify parent directory */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                        EXT3_DATA_TRANS_BLOCKS;
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 /* create/update logs for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                             EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
@@ -186,7 +194,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* Setattr on inode */
                 nblocks += 1;
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                        EXT3_DATA_TRANS_BLOCKS;
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 /* quota chown log for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                             EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
@@ -195,12 +203,12 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* blocks for log header bitmap update OR
                  * blocks for catalog header bitmap update + unlink of logs */
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
-                        EXT3_DELETE_TRANS_BLOCKS * logs;
+                        FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb) * logs;
                 break;
         case FSFILT_OP_JOIN:
                 /* delete 2 file(file + array id) + create 1 file (array id) 
                  * create/update logs for each stripe */
-                nblocks += 2 * EXT3_DELETE_TRANS_BLOCKS;
+                nblocks += 2 * FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
                
                 /*create array log for head file*/ 
                 nblocks += 3;
@@ -208,7 +216,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                             EXT3_SINGLEDATA_TRANS_BLOCKS);
                 /*update head file array */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                        EXT3_DATA_TRANS_BLOCKS;
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
                 LBUG();
@@ -306,7 +314,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
         needed += nbitmaps + ngdblocks;
 
         /* last_rcvd update */
-        needed += EXT3_DATA_TRANS_BLOCKS;
+        needed += FSFILT_DATA_TRANS_BLOCKS(sb);
 
 #if defined(CONFIG_QUOTA)
         /* We assume that there will be 1 bit set in s_dquot.flags for each
@@ -1165,11 +1173,11 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         journal = EXT3_SB(inode->i_sb)->s_journal;
         lock_24kernel();
         handle = journal_start(journal,
-                               block_count * EXT3_DATA_TRANS_BLOCKS + 2);
+                               block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2);
         unlock_24kernel();
         if (IS_ERR(handle)) {
                 CERROR("can't start transaction for %d blocks (%d bytes)\n",
-                       block_count * EXT3_DATA_TRANS_BLOCKS + 2, bufsize);
+                       block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2, bufsize);
                 return PTR_ERR(handle);
         }
 

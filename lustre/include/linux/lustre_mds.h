@@ -17,7 +17,12 @@
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/dcache.h>
-# include <linux/xattr_acl.h>
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16))
+#include <linux/posix_acl_xattr.h>
+#else
+#include <linux/xattr_acl.h>        
+#endif
 #endif
 
 struct ldlm_lock_desc;

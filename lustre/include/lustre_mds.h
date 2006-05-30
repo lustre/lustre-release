@@ -88,9 +88,19 @@ struct mds_file_data {
 
 /* ACL */
 #ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_FS_POSIX_ACL
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16))
+#define MDS_XATTR_NAME_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
+#define mds_xattr_acl_size(entry) posix_acl_xattr_size(entry)
+#else
+#define MDS_XATTR_NAME_ACL_ACCESS XATTR_NAME_ACL_ACCESS
+#define mds_xattr_acl_size(entry) acl_xattr_size(entry)
+#endif
+#endif
+
 #define LUSTRE_POSIX_ACL_MAX_ENTRIES    (32)
 #define LUSTRE_POSIX_ACL_MAX_SIZE       \
-                (xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
+                (mds_xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
 #else
 #define LUSTRE_POSIX_ACL_MAX_SIZE       0
 #endif
