@@ -212,6 +212,11 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_object      *child;
         struct mdt_lock_handle *lh;
         int result;
+        struct ldlm_reply *ldlm_rep;
+        struct ptlrpc_request *req = info->mti_pill.rc_req;
+        __u32  mode = info->mti_attr.la_mode; /*save a backup*/
+        struct mdt_reint_reply *rep = &info->mti_reint_rep;
+
 
         ENTRY;
 
@@ -231,6 +236,20 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 GOTO(out_parent, result);
         }
 
+        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+        intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
+        if (result == -ENOENT)
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+        else
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+
+        if (result == -ENOENT) {
+                if(!(info->mti_rr.rr_flags & MDS_OPEN_CREAT))
+                        GOTO(out_parent, result);
+                if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                        GOTO(out_parent, result = -EROFS);
+        }
+
         child = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid2);
         if (IS_ERR(child))
                 GOTO(out_parent, PTR_ERR(child));
@@ -243,14 +262,32 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                                             info->mti_rr.rr_name,
                                             mdt_object_child(child),
                                             &info->mti_attr);
+                        intent_set_disposition(ldlm_rep, DISP_OPEN_CREATE);
                 } else if (info->mti_rr.rr_flags & MDS_OPEN_EXCL) {
-                        result = -EEXIST;
+                        GOTO(out_child, result = -EEXIST);
                 }
         }
 
-        if (result == 0)
-                result = mdt_md_open(info, child);
+        if (result != 0) 
+                GOTO(out_child, result);
 
+        result = mo_attr_get(info->mti_ctxt, 
+                             mdt_object_child(child), 
+                             &info->mti_attr);
+        if (result != 0) 
+                GOTO(out_child, result);
+                
+        mdt_pack_attr2body(rep->mrr_body, &info->mti_attr);
+        rep->mrr_body->fid1 = *mdt_object_fid(child);
+        rep->mrr_body->valid |= OBD_MD_FLID;
+
+        /*FIXME add permission checking here */
+        if (S_ISREG(mode))
+                ;
+
+        result = mdt_md_open(info, child);
+
+out_child:
         mdt_object_put(info->mti_ctxt, child);
 
 out_parent:

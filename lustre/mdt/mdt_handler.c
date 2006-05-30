@@ -63,7 +63,6 @@ unsigned long mdt_num_threads;
 
 static int                    mdt_handle    (struct ptlrpc_request *req);
 static struct mdt_device     *mdt_dev       (struct lu_device *d);
-static const struct lu_fid   *mdt_object_fid(struct mdt_object *o);
 static struct ptlrpc_request *mdt_info_req  (struct mdt_thread_info *info);
 
 static struct lu_context_key       mdt_thread_key;
@@ -115,7 +114,7 @@ static int mdt_statfs(struct mdt_thread_info *info)
         RETURN(result);
 }
 
-static void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
+void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
 {
         b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID |
                     OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
@@ -288,7 +287,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
                                                        &RMF_MDT_BODY);
                 if (rep->mrr_body != NULL)
                         /*
-                         * XXX fill other fields in @rec with pointers to
+                         * XXX fill other fields in @rep with pointers to
                          * reply buffers.
                          */
                         rc = mdt_reint_rec(info);
@@ -331,7 +330,7 @@ static int mdt_reint(struct mdt_thread_info *info)
                 [REINT_LINK]    = NULL, /* XXX not yet */
                 [REINT_UNLINK]  = &RQF_MDS_REINT_UNLINK,
                 [REINT_RENAME]  = NULL, /* XXX not yet */
-                [REINT_OPEN]    = NULL /* XXX not yet */
+                [REINT_OPEN]    = &RQF_MDS_REINT_OPEN /* XXX Huang hua */
         };
 
         ENTRY;
@@ -532,7 +531,7 @@ void mdt_object_put(const struct lu_context *ctxt, struct mdt_object *o)
         lu_object_put(ctxt, &o->mot_obj.mo_lu);
 }
 
-static const struct lu_fid *mdt_object_fid(struct mdt_object *o)
+const struct lu_fid *mdt_object_fid(struct mdt_object *o)
 {
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
@@ -703,7 +702,7 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
  *  actually exists on storage (lu_object_exists()).
  *
  */
-static int mdt_req_unpack(struct mdt_thread_info *info, __u32 flags)
+static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
 {
         struct req_capsule *pill;
 
@@ -754,7 +753,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         if (h->mh_fmt != NULL) {
                 req_capsule_set(&info->mti_pill, h->mh_fmt);
                 if (result == 0)
-                        result = mdt_req_unpack(info, flags);
+                        result = mdt_unpack_req_pack_rep(info, flags);
         }
 
         if (result == 0 && flags & HABEO_CLAVIS) {
@@ -1181,6 +1180,20 @@ static struct mdt_it_flavor {
 static int mdt_intent_getattr(enum mdt_it_code opcode,
                               struct mdt_thread_info *info)
 {
+        int getattr_part = MDS_INODELOCK_UPDATE;
+        
+        switch (opcode) {
+        case MDT_IT_LOOKUP:
+                getattr_part = MDS_INODELOCK_LOOKUP;
+                break;
+        case MDT_IT_GETATTR:
+                getattr_part |= MDS_INODELOCK_LOOKUP;
+                break;
+        default:
+                break;
+        }
+        /*FIXME do something on the above flag */
+
         return mdt_getattr_name(info);
 }
 
@@ -1269,16 +1282,22 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info)
                 if (flv->it_fmt != NULL)
                         req_capsule_extend(pill, flv->it_fmt);
 
-                rc = mdt_req_unpack(info, flv->it_flags);
+                rc = mdt_unpack_req_pack_rep(info, flv->it_flags);
                 if (rc == 0) {
                         struct ldlm_reply *rep;
 
                         rep = req_capsule_server_get(pill, &RMF_DLM_REP);
                         if (rep != NULL) {
                                 /* execute policy */
-                                rep->lock_policy_res2 = flv->it_act(opc, info);
-                                intent_set_disposition(rep, DISP_IT_EXECD);
-                                rc = 0;
+                                /*XXX LASSERT( flv->it_act) */
+                                if (flv->it_act) {
+                                        rc = flv->it_act(opc, info);
+                                        rep->lock_policy_res2 = rc;
+                                        intent_set_disposition(rep, 
+                                                               DISP_IT_EXECD);
+                                        rc = 0;
+                                } else
+                                        rc = -EOPNOTSUPP;
                         } else
                                 rc = -EFAULT;
                 }
@@ -1297,9 +1316,8 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_intent     *it;
         struct req_capsule     *pill;
         struct ldlm_lock       *lock = *lockp;
-
         int rc;
-        int gflags = 0;
+
         ENTRY;
 
         LASSERT(req != NULL);
