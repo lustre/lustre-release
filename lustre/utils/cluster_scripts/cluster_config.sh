@@ -18,19 +18,20 @@ usage() {
 
 Usage:	`basename $0` [-t HAtype] [-n] [-f] [-m] [-h] [-v] <csv file>
 
-	This script is used to configure multiple lustre servers from a csv file.
+	This script is used to format and set up multiple lustre servers from a
+	csv file.
 
+	-h		help and examples
 	-t HAtype	produce High-Availability software configurations
 
 			The argument following -t is used to indicate the High-
 			Availability software type. The HA software types which 
 			are currently supported are: hbv1 (Heartbeat v1), hbv2 
 			(Heartbeat v2) and cluman (CluManager).
-	-n		don't verify network connectivity and hostnames in the 
-			cluster
+	-n		no net - don't verify network connectivity and 
+	                hostnames in the cluster
 	-f		force-format the Lustre targets using --reformat option
 	-m		modify /etc/fstab to add the new Lustre targets
-	-h		help and examples
 	-v		verbose mode
 	csv file	a spreadsheet that contains configuration parameters
                         (separated by commas) for each target in a Lustre cl-
@@ -47,96 +48,78 @@ sample() {
 This script is used to parse each line of a spreadsheet (csv file) and 
 execute remote commands to format (mkfs.lustre) every Lustre target 
 that will be part of the Lustre cluster.
- 
-In addition, it can also verify the network connectivity and hostnames in 
-the cluster and produce High-Availability software configurations for
-Heartbeat or CluManager.
 
+It can also optionally: 
+ * verify the network connectivity and hostnames in the cluster
+ * modify /etc/modprobe.conf to add Lustre networking info
+ * add the Lustre server info to /etc/fstab
+ * produce configurations for Heartbeat or CluManager.
 
-Each line in the csv file represents one Lustre target.
-The format is:
+Each line in the csv file represents one Lustre target. The format is:
 hostname,module_opts,device name,mount point,device type,fsname,mgs nids,index,
 format options,mkfs options,mount options,failover nids,heartbeat channels,
 service address,heartbeat options
 
 Items left blank will be set to defaults.
 
-Sample 1 for csv file (Simple one without HA software configuration options):
+Example 1 - Simple, without HA software configuration options:
 -------------------------------------------------------------------------------
 # combo mdt/mgs
-lustre-mgs,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,
---device-size=10240
+lustre-mgs,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,--device-size=10240
 
 # ost0
-lustre-ost,options lnet networks=tcp,/tmp/ost0,/mnt/ost0,ost,,lustre-mgs@tcp0,,
---device-size=10240
+lustre-ost,options lnet networks=tcp,/tmp/ost0,/mnt/ost0,ost,,lustre-mgs@tcp0,,--device-size=10240
 
 # ost1
-lustre-ost,options lnet networks=tcp,/tmp/ost1,/mnt/ost1,ost,,lustre-mgs@tcp0,,
---device-size=10240
+lustre-ost,options lnet networks=tcp,/tmp/ost1,/mnt/ost1,ost,,lustre-mgs@tcp0,,--device-size=10240
 -------------------------------------------------------------------------------
 
-Sample 2 for csv file (Complex one without HA software configuration options):
--------------------------------------------------------------------------------
-# mgs
-lustre-mgs1,options lnet 'networks="tcp,elan"',/tmp/mgs,/mnt/mgs,mgs,,,,
---device-size=10240,-J size=4,,"lustre-mgs2,2@elan"
-
-# mdt
-lustre-mdt1,options lnet 'networks="tcp,elan"',/tmp/mdt,/mnt/mdt,mdt,lustre2,
-"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,
--J size=4,,lustre-mdt2
-
-# ost
-lustre-ost1,options lnet 'networks="tcp,elan"',/tmp/ost,/mnt/ost,ost,lustre2,
-"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,
--J size=4,"extents,mballoc",lustre-ost2
--------------------------------------------------------------------------------
-
-Sample 3 for csv file (with Heartbeat version 1 configuration options):
+Example 2 - Separate MGS/MDT, two networks interfaces:
 -------------------------------------------------------------------------------
 # mgs
-lustre-mgs1,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs,,,,
---device-size=10240,,,lustre-mgs2,serial /dev/ttyS0:bcast eth1,192.168.1.170,
-ping 192.168.1.169:respawn hacluster /usr/lib/heartbeat/ipfail
+lustre-mgs1,options lnet 'networks="tcp,elan"',/tmp/mgs,/mnt/mgs,mgs,,,,--device-size=10240,-J size=4,,"lustre-mgs2,2@elan"
 
 # mdt
-lustre-mdt1,options lnet networks=tcp,/tmp/mdt,/mnt/mdt,mdt,,"lustre-mgs1:
-lustre-mgs2",,--device-size=10240,,,lustre-mdt2,bcast eth1,192.168.1.173
+lustre-mdt1,options lnet 'networks="tcp,elan"',/tmp/mdt,/mnt/mdt,mdt,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,-J size=4,,lustre-mdt2
 
 # ost
-lustre-ost1,options lnet networks=tcp,/tmp/ost,/mnt/ost,ost,,"lustre-mgs1:
-lustre-mgs2",,--device-size=10240,,,lustre-ost2,bcast eth1,192.168.1.171
+lustre-ost1,options lnet 'networks="tcp,elan"',/tmp/ost,/mnt/ost,ost,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,-J size=4,"extents,mballoc",lustre-ost2
 -------------------------------------------------------------------------------
 
-Sample 4 for csv file (with Heartbeat version 2 configuration options):
+Example 3 - with Heartbeat version 1 configuration options:
+-------------------------------------------------------------------------------
+# mgs
+lustre-mgs1,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs,,,,--device-size=10240,,,lustre-mgs2,serial /dev/ttyS0:bcast eth1,192.168.1.170,ping 192.168.1.169:respawn hacluster /usr/lib/heartbeat/ipfail
+
+# mdt
+lustre-mdt1,options lnet networks=tcp,/tmp/mdt,/mnt/mdt,mdt,,"lustre-mgs1:lustre-mgs2",,--device-size=10240,,,lustre-mdt2,bcast eth1,192.168.1.173
+
+# ost
+lustre-ost1,options lnet networks=tcp,/tmp/ost,/mnt/ost,ost,,"lustre-mgs1:lustre-mgs2",,--device-size=10240,,,lustre-ost2,bcast eth1,192.168.1.171
+-------------------------------------------------------------------------------
+
+Example 4 - with Heartbeat version 2 configuration options:
 -------------------------------------------------------------------------------
 # combo mdt/mgs
-lustre-mgs1,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,
---device-size=10240,,,"lustre-mgs2:lustre-mgs3",bcast eth1
+lustre-mgs1,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,--device-size=10240,,,"lustre-mgs2:lustre-mgs3",bcast eth1
 
 # ost1
-lustre-ost1,options lnet networks=tcp,/tmp/ost1,/mnt/ost1,ost,,"lustre-mgs1:
-lustre-mgs2:lustre-mgs3",,--device-size=10240,,,lustre-ost2,bcast eth2
+lustre-ost1,options lnet networks=tcp,/tmp/ost1,/mnt/ost1,ost,,"lustre-mgs1:lustre-mgs2:lustre-mgs3",,--device-size=10240,,,lustre-ost2,bcast eth2
 
 # ost2
-lustre-ost2,options lnet networks=tcp,/tmp/ost2,/mnt/ost2,ost,,"lustre-mgs1:
-lustre-mgs2:lustre-mgs3",,--device-size=10240,,,lustre-ost1,bcast eth2
+lustre-ost2,options lnet networks=tcp,/tmp/ost2,/mnt/ost2,ost,,"lustre-mgs1:lustre-mgs2:lustre-mgs3",,--device-size=10240,,,lustre-ost1,bcast eth2
 -------------------------------------------------------------------------------
 
-Sample 5 for csv file (with Red Hat Cluster Manager configuration options):
+Example 5 - with Red Hat Cluster Manager configuration options:
 -------------------------------------------------------------------------------
 # mgs
-lustre-mgs1,options lnet networks=tcp,/dev/sda,/mnt/mgs,mgs,,,,,,,
-lustre-mgs2,broadcast,192.168.1.170,--clumembd --interval=1000000 --tko_count=20
+lustre-mgs1,options lnet networks=tcp,/dev/sda,/mnt/mgs,mgs,,,,,,,lustre-mgs2,broadcast,192.168.1.170,--clumembd --interval=1000000 --tko_count=20
 
 # mdt
-lustre-mdt1,options lnet networks=tcp,/dev/sdb,/mnt/mdt,mdt,,"lustre-mgs1:
-lustre-mgs2",,,,,lustre-mdt2,multicast 225.0.0.12,192.168.1.173
+lustre-mdt1,options lnet networks=tcp,/dev/sdb,/mnt/mdt,mdt,,"lustre-mgs1:lustre-mgs2",,,,,lustre-mdt2,multicast 225.0.0.12,192.168.1.173
 
 # ost
-lustre-ost1,options lnet networks=tcp,/dev/sdb,/mnt/ost,ost,,"lustre-mgs1:
-lustre-mgs2",,,,,lustre-ost2,,192.168.1.171:192.168.1.172
+lustre-ost1,options lnet networks=tcp,/dev/sdb,/mnt/ost,ost,,"lustre-mgs1:lustre-mgs2",,,,,lustre-ost2,,192.168.1.171:192.168.1.172
 -------------------------------------------------------------------------------
 
 EOF
