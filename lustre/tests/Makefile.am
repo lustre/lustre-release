@@ -31,6 +31,7 @@ noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany random-reads
 if MPITESTS
 noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
+noinst_PROGRAMS += iam_ut
 endif
 # noinst_PROGRAMS += ldaptest copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink

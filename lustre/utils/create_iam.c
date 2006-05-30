@@ -56,6 +56,7 @@ struct iam_lfix_root {
         u_int64_t  ilr_magic;
         u_int16_t  ilr_keysize;
         u_int16_t  ilr_recsize;
+        u_int16_t  ilr_ptrsize;
         u_int16_t  ilr_indirect_levels;
         u_int16_t  ilr_padding;
 };
@@ -151,6 +152,7 @@ int main(int argc, char **argv)
                 .ilr_magic           = cpu_to_le64(IAM_LFIX_ROOT_MAGIC),
                 .ilr_keysize         = cpu_to_le16(keysize),
                 .ilr_recsize         = cpu_to_le16(recsize),
+                .ilr_ptrsize         = cpu_to_le16(ptrsize),
                 .ilr_indirect_levels = cpu_to_le16(1)
         };
 
