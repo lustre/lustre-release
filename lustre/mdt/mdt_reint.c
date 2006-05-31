@@ -55,10 +55,8 @@ static int mdt_md_create(struct mdt_thread_info *info)
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
 
-        parent = mdt_object_find_lock(info->mti_ctxt,
-                                      mdt, info->mti_rr.rr_fid1,
-                                      lh,
-                                      MDS_INODELOCK_UPDATE);
+        parent = mdt_object_find_lock(info->mti_ctxt, mdt, info->mti_rr.rr_fid1,
+                                      lh, MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 return PTR_ERR(parent);
 
@@ -66,10 +64,8 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
-                result = mdo_create(info->mti_ctxt, next,
-                                    info->mti_rr.rr_name,
-                                    mdt_object_child(child),
-                                    &info->mti_attr);
+                result = mdo_create(info->mti_ctxt, next, info->mti_rr.rr_name,
+                                    mdt_object_child(child), &info->mti_attr);
                 mdt_object_put(info->mti_ctxt, child);
         } else
                 result = PTR_ERR(child);
@@ -90,10 +86,8 @@ static int mdt_md_mkdir(struct mdt_thread_info *info)
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
 
-        parent = mdt_object_find_lock(info->mti_ctxt,
-                                      mdt, info->mti_rr.rr_fid1,
-                                      lh,
-                                      MDS_INODELOCK_UPDATE);
+        parent = mdt_object_find_lock(info->mti_ctxt, mdt, info->mti_rr.rr_fid1,
+                                      lh, MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 return PTR_ERR(parent);
 
@@ -268,15 +262,15 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 }
         }
 
-        if (result != 0) 
+        if (result != 0)
                 GOTO(out_child, result);
 
-        result = mo_attr_get(info->mti_ctxt, 
-                             mdt_object_child(child), 
+        result = mo_attr_get(info->mti_ctxt,
+                             mdt_object_child(child),
                              &info->mti_attr);
-        if (result != 0) 
+        if (result != 0)
                 GOTO(out_child, result);
-                
+
         mdt_pack_attr2body(rep->mrr_body, &info->mti_attr);
         rep->mrr_body->fid1 = *mdt_object_fid(child);
         rep->mrr_body->valid |= OBD_MD_FLID;
