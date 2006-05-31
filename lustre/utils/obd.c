@@ -153,6 +153,8 @@ int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg)
         return rc;
 }
 
+static int do_device(char *func, char *devname);
+
 int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 {
         struct obd_ioctl_data data;
@@ -161,7 +163,6 @@ int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 
         /* Always operates on MGS dev */
         if (mgs_device == -1) {
-                static int do_device(char *func, char *devname);
                 do_disconnect(NULL, 1);
                 rc = do_device("mgsioc", "MGS");
                 if (rc) {
