@@ -576,14 +576,6 @@ extern void lustre_swab_ost_lvb(struct ost_lvb *);
  *   MDS REQ RECORDS
  */
 
-/* FIXME: this is different from HEAD, adjust it
- * while merge GSS */
-#define MDS_REQ_REC_OFF                 0
-
-#define MDS_REQ_INTENT_LOCKREQ_OFF      0
-#define MDS_REQ_INTENT_IT_OFF           1
-#define MDS_REQ_INTENT_REC_OFF          2
-
 /* opcodes */
 typedef enum {
         MDS_GETATTR      = 33,
