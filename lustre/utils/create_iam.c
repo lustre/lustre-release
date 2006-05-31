@@ -153,7 +153,7 @@ int main(int argc, char **argv)
                 .ilr_keysize         = cpu_to_le16(keysize),
                 .ilr_recsize         = cpu_to_le16(recsize),
                 .ilr_ptrsize         = cpu_to_le16(ptrsize),
-                .ilr_indirect_levels = cpu_to_le16(1)
+                .ilr_indirect_levels = 0
         };
 
         limit = (void *)(root + 1);
@@ -207,5 +207,8 @@ int main(int argc, char **argv)
                 fprintf(stderr, "Unable to write leaf node: %m (%i)\n", rc);
                 return 1;
         }
+        if (verbose > 0)
+                fprintf(stderr, "Don't forget to umount/mount "
+                        "before accessing iam from the kernel!\n");
         return 0;
 }
