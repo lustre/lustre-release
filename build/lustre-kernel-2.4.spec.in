@@ -666,7 +666,7 @@ EOF
 	    $VERSION \
 	    $PATCHLEVEL \
 	    > $o/Makefile
-	zcat "$RPM_BUILD_ROOT/boot/symvers-%{KVERREL}-%{_target_cpu}${flavor}.gz" \
+	zcat "$RPM_BUILD_ROOT/boot/symvers-%{KVERREL}-%{_target_cpu}${flavtgt}.gz" \
 	    > $o/Module.symvers
 }
 
