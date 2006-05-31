@@ -1,7 +1,7 @@
-Index: linux-2.6.15.i686/fs/inode.c
+Index: linux-2.6.15-fc5/fs/inode.c
 ===================================================================
---- linux-2.6.15.i686.orig/fs/inode.c	2006-05-31 04:08:19.000000000 +0800
-+++ linux-2.6.15.i686/fs/inode.c	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/fs/inode.c	2006-05-31 04:08:19.000000000 +0800
++++ linux-2.6.15-fc5/fs/inode.c	2006-05-31 17:24:35.000000000 +0800
 @@ -236,6 +236,7 @@
  	inodes_stat.nr_unused--;
  }
@@ -10,10 +10,10 @@ Index: linux-2.6.15.i686/fs/inode.c
  /**
   * clear_inode - clear an inode
   * @inode: inode to clear
-Index: linux-2.6.15.i686/fs/open.c
+Index: linux-2.6.15-fc5/fs/open.c
 ===================================================================
---- linux-2.6.15.i686.orig/fs/open.c	2006-05-31 04:08:39.000000000 +0800
-+++ linux-2.6.15.i686/fs/open.c	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/fs/open.c	2006-05-31 04:08:39.000000000 +0800
++++ linux-2.6.15-fc5/fs/open.c	2006-05-31 17:24:35.000000000 +0800
 @@ -224,12 +224,12 @@
  	struct nameidata nd;
  	struct inode * inode;
@@ -128,10 +128,10 @@ Index: linux-2.6.15.i686/fs/open.c
  	/* Has the filesystem initialised the file for us? */
  	if (filp->f_dentry == NULL)
  		filp = __dentry_open(nd->dentry, nd->mnt, flags, filp, NULL);
-Index: linux-2.6.15.i686/fs/nfsctl.c
+Index: linux-2.6.15-fc5/fs/nfsctl.c
 ===================================================================
---- linux-2.6.15.i686.orig/fs/nfsctl.c	2006-05-31 04:08:20.000000000 +0800
-+++ linux-2.6.15.i686/fs/nfsctl.c	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/fs/nfsctl.c	2006-05-31 04:08:20.000000000 +0800
++++ linux-2.6.15-fc5/fs/nfsctl.c	2006-05-31 17:24:35.000000000 +0800
 @@ -26,6 +26,7 @@
  	struct nameidata nd;
  	int error;
@@ -140,10 +140,10 @@ Index: linux-2.6.15.i686/fs/nfsctl.c
  	nd.mnt = do_kern_mount("nfsd", 0, "nfsd", NULL);
  
  	if (IS_ERR(nd.mnt))
-Index: linux-2.6.15.i686/fs/namei.c
+Index: linux-2.6.15-fc5/fs/namei.c
 ===================================================================
---- linux-2.6.15.i686.orig/fs/namei.c	2006-05-31 04:08:33.000000000 +0800
-+++ linux-2.6.15.i686/fs/namei.c	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/fs/namei.c	2006-05-31 04:08:33.000000000 +0800
++++ linux-2.6.15-fc5/fs/namei.c	2006-05-31 17:24:35.000000000 +0800
 @@ -337,8 +337,19 @@
  	return 0;
  }
@@ -459,10 +459,10 @@ Index: linux-2.6.15.i686/fs/namei.c
  	if (error)
  		goto exit;
  	error = do_path_lookup(newdfd, to, LOOKUP_PARENT, &nd);
-Index: linux-2.6.15.i686/fs/stat.c
+Index: linux-2.6.15-fc5/fs/stat.c
 ===================================================================
---- linux-2.6.15.i686.orig/fs/stat.c	2006-05-31 04:08:20.000000000 +0800
-+++ linux-2.6.15.i686/fs/stat.c	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/fs/stat.c	2006-05-31 04:08:20.000000000 +0800
++++ linux-2.6.15-fc5/fs/stat.c	2006-05-31 17:24:35.000000000 +0800
 @@ -38,7 +38,7 @@
  
  EXPORT_SYMBOL(generic_fillattr);
@@ -533,10 +533,10 @@ Index: linux-2.6.15.i686/fs/stat.c
  		fput(f);
  	}
  	return error;
-Index: linux-2.6.15.i686/fs/namespace.c
+Index: linux-2.6.15-fc5/fs/namespace.c
 ===================================================================
---- linux-2.6.15.i686.orig/fs/namespace.c	2006-05-31 04:08:33.000000000 +0800
-+++ linux-2.6.15.i686/fs/namespace.c	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/fs/namespace.c	2006-05-31 04:08:33.000000000 +0800
++++ linux-2.6.15-fc5/fs/namespace.c	2006-05-31 17:24:35.000000000 +0800
 @@ -74,6 +74,7 @@
  		INIT_LIST_HEAD(&mnt->mnt_share);
  		INIT_LIST_HEAD(&mnt->mnt_slave_list);
@@ -596,10 +596,10 @@ Index: linux-2.6.15.i686/fs/namespace.c
  	/* Discard magic */
  	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
  		flags &= ~MS_MGC_MSK;
-Index: linux-2.6.15.i686/fs/exec.c
+Index: linux-2.6.15-fc5/fs/exec.c
 ===================================================================
---- linux-2.6.15.i686.orig/fs/exec.c	2006-05-31 04:08:33.000000000 +0800
-+++ linux-2.6.15.i686/fs/exec.c	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/fs/exec.c	2006-05-31 04:08:33.000000000 +0800
++++ linux-2.6.15-fc5/fs/exec.c	2006-05-31 17:24:35.000000000 +0800
 @@ -127,7 +127,9 @@
  	struct nameidata nd;
  	int error;
@@ -622,10 +622,10 @@ Index: linux-2.6.15.i686/fs/exec.c
  	file = ERR_PTR(err);
  
  	if (!err) {
-Index: linux-2.6.15.i686/include/linux/dcache.h
+Index: linux-2.6.15-fc5/include/linux/dcache.h
 ===================================================================
---- linux-2.6.15.i686.orig/include/linux/dcache.h	2006-05-31 04:08:33.000000000 +0800
-+++ linux-2.6.15.i686/include/linux/dcache.h	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/include/linux/dcache.h	2006-05-31 04:08:33.000000000 +0800
++++ linux-2.6.15-fc5/include/linux/dcache.h	2006-05-31 17:24:41.000000000 +0800
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -638,15 +638,15 @@ Index: linux-2.6.15.i686/include/linux/dcache.h
  	const unsigned char *name;
  };
  
-+//#include <linux/namei.h>
++#include <linux/namei.h>
 +
  struct dentry_stat_t {
  	int nr_dentry;
  	int nr_unused;
-Index: linux-2.6.15.i686/include/linux/fs.h
+Index: linux-2.6.15-fc5/include/linux/fs.h
 ===================================================================
---- linux-2.6.15.i686.orig/include/linux/fs.h	2006-05-31 04:08:33.000000000 +0800
-+++ linux-2.6.15.i686/include/linux/fs.h	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/include/linux/fs.h	2006-05-31 04:08:33.000000000 +0800
++++ linux-2.6.15-fc5/include/linux/fs.h	2006-05-31 17:24:35.000000000 +0800
 @@ -59,6 +59,7 @@
  
  #define FMODE_READ 1
@@ -714,10 +714,10 @@ Index: linux-2.6.15.i686/include/linux/fs.h
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char __user *);
  
-Index: linux-2.6.15.i686/include/linux/namei.h
+Index: linux-2.6.15-fc5/include/linux/namei.h
 ===================================================================
---- linux-2.6.15.i686.orig/include/linux/namei.h	2006-05-31 04:08:39.000000000 +0800
-+++ linux-2.6.15.i686/include/linux/namei.h	2006-05-31 11:13:47.000000000 +0800
+--- linux-2.6.15-fc5.orig/include/linux/namei.h	2006-05-31 04:08:39.000000000 +0800
++++ linux-2.6.15-fc5/include/linux/namei.h	2006-05-31 17:24:35.000000000 +0800
 @@ -5,10 +5,39 @@
  
  struct vfsmount;
@@ -812,10 +812,10 @@ Index: linux-2.6.15.i686/include/linux/namei.h
  extern int FASTCALL(path_lookup(const char *, unsigned, struct nameidata *));
  extern int FASTCALL(path_walk(const char *, struct nameidata *));
  extern int FASTCALL(link_path_walk(const char *, struct nameidata *));
-Index: linux-2.6.15.i686/include/linux/mount.h
+Index: linux-2.6.15-fc5/include/linux/mount.h
 ===================================================================
---- linux-2.6.15.i686.orig/include/linux/mount.h	2006-05-31 04:08:22.000000000 +0800
-+++ linux-2.6.15.i686/include/linux/mount.h	2006-05-31 11:12:07.000000000 +0800
+--- linux-2.6.15-fc5.orig/include/linux/mount.h	2006-05-31 04:08:22.000000000 +0800
++++ linux-2.6.15-fc5/include/linux/mount.h	2006-05-31 17:24:35.000000000 +0800
 @@ -46,6 +46,8 @@
  	struct list_head mnt_slave;	/* slave list entry */
  	struct vfsmount *mnt_master;	/* slave is on master->mnt_slave_list */
