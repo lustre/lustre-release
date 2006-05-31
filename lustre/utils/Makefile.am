@@ -1,6 +1,6 @@
 # Administration utilities Makefile
 
-SUBDIRS = Lustre
+SUBDIRS = Lustre cluster_scripts
 
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1

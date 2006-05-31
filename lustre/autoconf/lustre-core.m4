@@ -717,6 +717,7 @@ lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
 lustre/tests/Makefile
 lustre/utils/Lustre/Makefile
+lustre/utils/cluster_scripts/Makefile
 lustre/utils/Makefile
 ])
 case $lb_target_os in
