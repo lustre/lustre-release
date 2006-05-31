@@ -39,6 +39,7 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 
 #define PARAM_MGSNODE          "mgsnode="
 #define PARAM_FAILNODE         "failnode="
+#define PARAM_FAILMODE         "failmode="
 #define PARAM_OBD_TIMEOUT      "obd_timeout="
 #define PARAM_DEFAULT_STRIPE   "default_stripe_"
 #define PARAM_D_STRIPE_SIZE    PARAM_DEFAULT_STRIPE"size"

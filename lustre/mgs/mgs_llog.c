@@ -1062,7 +1062,8 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
 {
         struct llog_handle *llh = NULL;
         char *logname;
-        int rc, flags = 0;
+        char *ptr = mti->mti_params;
+        int rc, flags = 0, failout = 0;
         ENTRY;
         
         CDEBUG(D_MGS, "writing new ost %s\n", mti->mti_svname);
@@ -1083,6 +1084,8 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         attach obdfilter ost1 ost1_UUID
         setup /dev/loop2 ldiskfs f|n errors=remount-ro,user_xattr
         */
+        if (class_find_param(ptr, PARAM_FAILMODE, &ptr) == 0) 
+                failout = (strncmp(ptr, "failout", 7) == 0);
         rc = record_start_log(obd, &llh, mti->mti_svname);
         rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,"add ost"); 
         if (*mti->mti_uuid == '\0') 
@@ -1090,9 +1093,9 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                          "%s_UUID", mti->mti_svname);
         rc = record_attach(obd, llh, mti->mti_svname,
                            "obdfilter"/*LUSTRE_OST_NAME*/, mti->mti_uuid);
-        rc = record_setup(obd,llh,mti->mti_svname,
-                          "dev"/*ignored*/,"type"/*ignored*/,
-                          "f", 0/*options*/);
+        rc = record_setup(obd, llh, mti->mti_svname,
+                          "dev"/*ignored*/, "type"/*ignored*/,
+                          failout ? "n" : "f", 0/*options*/);
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add ost"); 
         rc = record_end_log(obd, &llh);
 
@@ -1201,8 +1204,15 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         len = strlen(ptr);
                 CDEBUG(D_MGS, "next param '%.*s'\n", len, ptr);
 
-                /* Stored in MOUNT_DATA_FILE, modified via tunefs.lustre */
+                /* The params are stored in MOUNT_DATA_FILE and modified 
+                   via tunefs.lustre */
+
+                /* Processed in lustre_start_mgc */
                 if (class_match_param(ptr, PARAM_MGSNODE, &endptr) == 0) 
+                        GOTO(end_while, rc);
+
+                /* Processed in mgs_write_log_ost */
+                if (class_match_param(ptr, PARAM_FAILMODE, &endptr) == 0) 
                         GOTO(end_while, rc);
 
                 if (class_match_param(ptr, PARAM_FAILNODE, &endptr) == 0) {
