@@ -79,7 +79,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
          * oh, MDS reports that this is remote inode case i.e. we have to ask
          * for real attrs on another MDS.
          */
-        if (it->it_op == IT_LOOKUP/* || it->it_op == IT_CHDIR*/) {
+        if (it->it_op & IT_LOOKUP/* || it->it_op & IT_CHDIR*/) {
                 /*
                  * unfortunately, we have to lie to MDC/MDS to retrieve
                  * attributes llite needs.
@@ -645,7 +645,7 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         if (rc)
                 RETURN(rc);
 
-        if (it->it_op == IT_LOOKUP)
+        if (it->it_op & IT_LOOKUP)
                 rc = lmv_intent_lookup(exp, pid, name, len, lmm,
                                        lmmsize, cid, it, flags, reqp,
                                        cb_blocking, extra_lock_flags);
@@ -653,7 +653,7 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 rc = lmv_intent_open(exp, pid, name, len, lmm,
                                      lmmsize, cid, it, flags, reqp,
                                      cb_blocking, extra_lock_flags);
-        else if (it->it_op == IT_GETATTR/* || it->it_op == IT_CHDIR*/)
+        else if (it->it_op & IT_GETATTR/* || it->it_op & IT_CHDIR*/)
                 rc = lmv_intent_getattr(exp, pid, name, len, lmm,
                                         lmmsize, cid, it, flags, reqp,
                                         cb_blocking, extra_lock_flags);

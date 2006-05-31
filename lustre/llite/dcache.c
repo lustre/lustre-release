@@ -251,7 +251,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
         }
 
         /* drop lookup or getattr locks immediately */
-        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR) {
+        if (it->it_op & (IT_LOOKUP | IT_GETATTR)) {
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 /* on 2.6 there are situation when several lookups and
                  * revalidations may be requested during single operation.

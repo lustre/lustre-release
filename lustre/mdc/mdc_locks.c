@@ -584,7 +584,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                ldlm_it2str(it->it_op), it->it_flags);
 
         if (fid_is_sane(&op_data->fid2) &&
-            (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
+            (it->it_op & (IT_LOOKUP | IT_GETATTR))) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */

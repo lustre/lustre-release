@@ -120,7 +120,7 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
         }
 
         /* drop lookup/getattr locks */
-        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)
+        if (it->it_op & (IT_LOOKUP | IT_GETATTR))
                 ll_intent_release(it);
 
 }
@@ -547,7 +547,7 @@ translate_lookup_intent(struct intent *intent, const char *path)
 
         /* conform to kernel code, if only IT_LOOKUP was set, don't
          * pass down it */
-        if (!it->it_op || it->it_op == IT_LOOKUP) {
+        if (!it->it_op || it->it_op & IT_LOOKUP) {
                 OBD_FREE(it, sizeof(*it));
                 it = NULL;
         }
