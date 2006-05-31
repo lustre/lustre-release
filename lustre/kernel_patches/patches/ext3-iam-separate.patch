@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-05-31 20:28:15.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-05-31 23:32:29.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-05-31 20:28:37.000000000 +0400
-@@ -0,0 +1,1023 @@
++++ iam/fs/ext3/iam.c	2006-05-31 22:34:57.000000000 +0400
+@@ -0,0 +1,1016 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -170,18 +170,15 @@ Index: iam/fs/ext3/iam.c
 +}
 +
 +/*
-+ * Initialize container @c, acquires additional reference on @inode.
++ * Initialize container @c.
 + */
 +int iam_container_init(struct iam_container *c,
 +		       struct iam_descr *descr, struct inode *inode)
 +{
 +	memset(c, 0, sizeof *c);
 +	c->ic_descr  = descr;
-+	c->ic_object = igrab(inode);
-+	if (c->ic_object != NULL)
-+		return 0;
-+	else
-+		return -ENOENT;
++	c->ic_object = inode;
++        return 0;
 +}
 +EXPORT_SYMBOL(iam_container_init);
 +
@@ -199,10 +196,6 @@ Index: iam/fs/ext3/iam.c
 + */
 +void iam_container_fini(struct iam_container *c)
 +{
-+	if (c->ic_object != NULL) {
-+		iput(c->ic_object);
-+		c->ic_object = NULL;
-+	}
 +}
 +EXPORT_SYMBOL(iam_container_fini);
 +
@@ -1042,8 +1035,8 @@ Index: iam/fs/ext3/iam.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-05-31 20:26:49.000000000 +0400
-@@ -0,0 +1,448 @@
++++ iam/fs/ext3/iam_lfix.c	2006-05-31 23:32:16.000000000 +0400
+@@ -0,0 +1,451 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1114,6 +1107,11 @@ Index: iam/fs/ext3/iam_lfix.c
 +        return (struct iam_key *)entry;
 +}
 +
++static struct iam_leaf_head *iam_get_head(const struct iam_leaf *l)
++{
++        return (struct iam_leaf_head *)l->il_bh->b_data;
++}
++
 +static struct iam_lentry *iam_entries(const struct buffer_head *bh)
 +{
 +        return (void *)bh->b_data + sizeof(struct iam_leaf_head);
@@ -1126,14 +1124,12 @@ Index: iam/fs/ext3/iam_lfix.c
 +
 +static int lentry_count_get(const struct iam_leaf *leaf)
 +{
-+        struct iam_lentry *lentry = leaf->il_entries;
-+        return le16_to_cpu(((struct iam_leaf_head *)lentry)->ill_count);
++        return le16_to_cpu(iam_get_head(leaf)->ill_count);
 +}
 +
 +static void lentry_count_set(struct iam_leaf *leaf, unsigned count)
 +{
-+        struct iam_lentry *lentry = leaf->il_entries;
-+        ((struct iam_leaf_head *)lentry)->ill_count = cpu_to_le16(count);
++        iam_get_head(leaf)->ill_count = cpu_to_le16(count);
 +}
 +
 +/*This func is for flat key, for those keys,
@@ -1223,8 +1219,8 @@ Index: iam/fs/ext3/iam_lfix.c
 +        count = lentry_count_get(l);
 +        c = iam_leaf_container(l);
 +
-+        p = iam_lfix_shift(l, l->il_entries, 1);
-+        q = iam_lfix_shift(l, l->il_entries, count - 1);
++        p = l->il_entries;
++        q = iam_lfix_shift(l, p, count - 1);
 +
 +        while (p <= q) {
 +                m = iam_lfix_shift(l, p, iam_lfix_diff(l, q, p) / 2);
@@ -3005,7 +3001,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-05-31 20:28:15.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-05-31 23:32:29.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -3313,7 +3309,7 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  /*
-@@ -172,34 +311,238 @@ struct iam_path {
+@@ -172,36 +311,240 @@ struct iam_path {
  	/*
  	 * Leaf node: a child of ->ip_frame.
  	 */
@@ -3371,7 +3367,8 @@ Index: iam/include/linux/lustre_iam.h
 -int iam_delete(handle_t *h, struct iam_container *c, struct iam_key *k);
 -int iam_update(handle_t *h, struct iam_container *c, struct iam_key *k, struct iam_rec *r);
 -int iam_insert(handle_t *handle, struct iam_container *c, struct iam_key *k, struct iam_rec *r);
-+/*
+ /*
+- * Initialize container @c, acquires additional reference on @inode.
 + * Flags controlling iterator functionality.
 + */
 +enum iam_it_flags {
@@ -3564,9 +3561,11 @@ Index: iam/include/linux/lustre_iam.h
 +int iam_insert(handle_t *handle, struct iam_container *c,
 +               const struct iam_key *k,
 +	       struct iam_rec *r, struct iam_path_descr *pd);
- /*
-  * Initialize container @c, acquires additional reference on @inode.
++/*
++ * Initialize container @c.
   */
+ int iam_container_init(struct iam_container *c,
+ 		       struct iam_descr *descr, struct inode *inode);
 @@ -210,3 +553,170 @@ int iam_container_init(struct iam_contai
   */
  void iam_container_fini(struct iam_container *c);

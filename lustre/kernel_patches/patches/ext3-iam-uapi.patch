@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-05-30 23:07:25.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-05-30 23:08:12.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-05-31 23:32:29.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-05-31 23:32:36.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-05-30 23:07:25.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-05-30 23:11:11.000000000 +0400
+--- iam.orig/fs/ext3/file.c	2006-05-31 23:32:29.000000000 +0400
++++ iam/fs/ext3/file.c	2006-05-31 23:32:36.000000000 +0400
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -50,8 +50,8 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-05-31 19:02:37.000000000 +0400
-@@ -0,0 +1,233 @@
++++ iam/fs/ext3/iam-uapi.c	2006-05-31 23:32:36.000000000 +0400
+@@ -0,0 +1,246 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -197,20 +197,30 @@ Index: iam/fs/ext3/iam-uapi.c
 +                return 0;
 +}
 +
-+static int putop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
-+                 struct iam_descr *des)
++enum outop_t {
++        KEY = 1 << 0,
++        REC = 1 << 1
++};
++
++static int outop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
++                 struct iam_descr *des, enum outop_t opt)
 +{
 +        int result;
 +
-+        if (uop != NULL && copy_to_user((void __user *)uop->iul_rec,
-+                                        op->iul_rec, des->id_rec_size))
++        if (((opt & REC) && copy_to_user((void __user *)uop->iul_rec,
++                                         op->iul_rec, des->id_rec_size)) ||
++            ((opt & KEY) && copy_to_user((void __user *)uop->iul_key,
++                                         op->iul_key, des->id_key_size)))
 +                result = -EFAULT;
 +        else
 +                result = 0;
++        return result;
++}
 +
++static void putop(struct iam_uapi_op *op)
++{
 +        kfree(op->iul_key);
 +        kfree(op->iul_rec);
-+        return result;
 +}
 +
 +static int getop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
@@ -232,7 +242,7 @@ Index: iam/fs/ext3/iam-uapi.c
 +                result = 0;
 +        else {
 +                result = -EFAULT;
-+                putop(op, NULL, NULL);
++                putop(op);
 +        }
 +        return result;
 +}
@@ -273,11 +283,14 @@ Index: iam/fs/ext3/iam-uapi.c
 +                } else if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_LOOKUP) {
 +                        result = getop(&u.op, &uop, des, arg);
 +                        if (result == 0) {
-+                                int res2;
-+
 +                                result = iam_uapi_op(cmd, inode, filp, &u.op);
-+                                res2 = putop(&u.op, &uop, des);
-+                                result = result ? : res2;
++                                if (cmd == IAM_IOC_LOOKUP) {
++                                        int res2;
++
++                                        res2 = outop(&u.op, &uop, des, KEY);
++                                        result = result ? : res2;
++                                }
++                                putop(&u.op);
 +                        }
 +                } else
 +                        result = -EINVAL;
@@ -287,8 +300,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-05-30 23:07:25.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-05-31 18:26:14.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-05-31 23:32:29.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-05-31 23:32:36.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
