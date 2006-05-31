@@ -1087,7 +1087,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 }
 
 static int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
-                         struct placement_hint *hint)
+                         struct lu_placement_hint *hint)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         int rc = 0;

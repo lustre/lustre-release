@@ -165,10 +165,12 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
                 if (lock->l_resource->lr_name.name[0] != fid_seq(&lli->lli_fid) ||
-                    lock->l_resource->lr_name.name[1] != fid_num(&lli->lli_fid)) {
-                        LDLM_ERROR(lock, "data mismatch with ino %llu/%llu",
+                    lock->l_resource->lr_name.name[1] != fid_oid(&lli->lli_fid) ||
+                    lock->l_resource->lr_name.name[2] != fid_ver(&lli->lli_fid)) {
+                        LDLM_ERROR(lock, "data mismatch with ino %llu/%llu/%llu",
                                   (long long)fid_seq(&lli->lli_fid), 
-                                  (long long)fid_num(&lli->lli_fid));
+                                  (long long)fid_oid(&lli->lli_fid),
+                                  (long long)fid_ver(&lli->lli_fid));
                 }
                 if (S_ISDIR(st->st_mode) &&
                     (bits & MDS_INODELOCK_UPDATE)) {

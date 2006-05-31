@@ -96,7 +96,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
                 it->d.lustre.it_data = 0;
         }
 
-        LASSERT(fid_num(&body->fid1) != 0);
+        LASSERT(fid_is_sane(&body->fid1));
 
         nid = body->fid1;
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
@@ -634,8 +634,8 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         LASSERT(it);
 
-        pid = fid_num(&op_data->fid1) != 0 ? &op_data->fid1 : NULL;
-        cid = fid_num(&op_data->fid2) != 0 ? &op_data->fid2 : NULL;
+        pid = fid_is_sane(&op_data->fid1) ? &op_data->fid1 : NULL;
+        cid = fid_is_sane(&op_data->fid2) ? &op_data->fid2 : NULL;
 
         i = lmv_fld_lookup(obd, pid);
         CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID3" -> %d\n",

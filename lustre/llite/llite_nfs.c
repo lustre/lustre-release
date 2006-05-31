@@ -107,7 +107,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
         struct list_head *lp;
 #endif
 
-        if (fid_num(fid) == 0)
+        if (!fid_is_sane(fid))
                 return ERR_PTR(-ESTALE);
 
         inode = search_inode_for_lustre(sb, fid, mode);

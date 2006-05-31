@@ -543,7 +543,7 @@ struct niobuf_local {
 #define LUSTRE_OPC_MKNODE    (1 << 2)
 #define LUSTRE_OPC_CREATE    (1 << 3)
         
-struct placement_hint {
+struct lu_placement_hint {
         struct qstr *ph_pname;
         struct qstr *ph_cname;
         int          ph_opc;
@@ -831,7 +831,7 @@ struct obd_ops {
 
         /* may be later these should be moved into separate fid_ops */
         int (*o_fid_alloc)(struct obd_export *exp, struct lu_fid *fid,
-                           struct placement_hint *hint);
+                           struct lu_placement_hint *hint);
         
         int (*o_fid_delete)(struct obd_export *exp, struct lu_fid *fid);
         

@@ -1809,7 +1809,8 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         struct obd_device *obddev;
         struct ldlm_res_id res_id =
                 { .name = { fid_seq(ll_inode2fid(inode)),
-                            fid_num(ll_inode2fid(inode)),
+                            fid_oid(ll_inode2fid(inode)),
+                            fid_ver(ll_inode2fid(inode)),
                             LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;

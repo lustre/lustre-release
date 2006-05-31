@@ -124,10 +124,9 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (inode == NULL)
                         break;
 
-                /* DLM locks are taken using version component as well,
-                 * so we use fid_num() instead of fid_oid(). */
                 if (lock->l_resource->lr_name.name[0] != fid_seq(ll_inode2fid(inode)) ||
-                    lock->l_resource->lr_name.name[1] != fid_num(ll_inode2fid(inode))) {
+                    lock->l_resource->lr_name.name[1] != fid_oid(ll_inode2fid(inode)) ||
+                    lock->l_resource->lr_name.name[2] != fid_ver(ll_inode2fid(inode))) {
                         LDLM_ERROR(lock, "data mismatch with object "DFID3" (%p)",
                                    PFID3(ll_inode2fid(inode)), inode);
                 }
@@ -387,10 +386,11 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_parent = parent;
 
         /* allocate new fid for child */
-        if (it->it_op & IT_CREAT) {
-                struct placement_hint hint = { .ph_pname = NULL,
-                                               .ph_cname = &dentry->d_name,
-                                               .ph_opc = LUSTRE_OPC_CREATE };
+        if (it->it_op & IT_CREAT || 
+            (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
+                struct lu_placement_hint hint = { .ph_pname = NULL,
+                                                  .ph_cname = &dentry->d_name,
+                                                  .ph_opc = LUSTRE_OPC_CREATE };
                 
                 rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data.fid2, &hint);
                 if (rc) {
@@ -607,9 +607,9 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, stru
 static int ll_symlink_generic(struct inode *dir, struct qstr *name,
                               const char *tgt)
 {
-        struct placement_hint hint = { .ph_pname = NULL,
-                                       .ph_cname = name,
-                                       .ph_opc = LUSTRE_OPC_SYMLINK };
+        struct lu_placement_hint hint = { .ph_pname = NULL,
+                                          .ph_cname = name,
+                                          .ph_opc = LUSTRE_OPC_SYMLINK };
                 
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
@@ -671,9 +671,9 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name, int mode,
                             struct dentry *dchild)
 
 {
-        struct placement_hint hint = { .ph_pname = NULL,
-                                       .ph_cname = name,
-                                       .ph_opc = LUSTRE_OPC_MKDIR };
+        struct lu_placement_hint hint = { .ph_pname = NULL,
+                                          .ph_cname = name,
+                                          .ph_opc = LUSTRE_OPC_MKDIR };
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct md_op_data op_data = { { 0 } };

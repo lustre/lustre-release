@@ -76,7 +76,9 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct md_op_data op_data = { { 0 } };
         struct obd_device *obddev = class_exp2obd(sbi->ll_md_exp);
         struct ldlm_res_id res_id =
-                { .name = {fid_seq(&lli->lli_fid), fid_num(&lli->lli_fid)} };
+                { .name = {fid_seq(&lli->lli_fid), 
+                           fid_oid(&lli->lli_fid), 
+                           fid_ver(&lli->lli_fid)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 

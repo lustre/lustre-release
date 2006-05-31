@@ -145,10 +145,7 @@ enum {
         LUSTRE_SEQ_RANGE = 1000,
 
         /* initial fid id value */
-        LUSTRE_FID_INIT_OID  = 1UL,
-
-        /* shift of version component */
-        LUSTRE_FID_VER_SHIFT = (sizeof(((struct lu_fid *)0)->f_ver) * 8)
+        LUSTRE_FID_INIT_OID  = 1UL
 };
 
 /* get object sequence */
@@ -167,14 +164,6 @@ static inline __u32 fid_oid(const struct lu_fid *fid)
 static inline __u32 fid_ver(const struct lu_fid *fid)
 {
         return fid->f_ver;
-}
-
-/* get complex object number (oid + version) */
-static inline __u64 fid_num(const struct lu_fid *fid)
-{
-        __u64 f_ver = fid_ver(fid);
-        f_ver = f_ver << LUSTRE_FID_VER_SHIFT;
-        return f_ver | fid_oid(fid);
 }
 
 static inline int fid_seq_is_sane(__u64 seq)

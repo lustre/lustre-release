@@ -96,7 +96,7 @@ lmv_obj_alloc(struct obd_device *obd,
                 CDEBUG(D_OTHER, "subobj "DFID3"\n",
                        PFID3(&mea->mea_ids[i]));
                 obj->lo_inodes[i].li_fid = mea->mea_ids[i];
-                LASSERT(fid_num(&obj->lo_inodes[i].li_fid));
+                LASSERT(fid_is_sane(&obj->lo_inodes[i].li_fid));
         }
 
         return obj;

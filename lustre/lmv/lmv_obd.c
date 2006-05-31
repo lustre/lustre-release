@@ -649,7 +649,7 @@ static int lmv_fids_balanced(struct obd_device *obd)
 /* returns number of target where new fid should be allocated using passed @hint
  * as input data for making decision. */
 static int lmv_placment_policy(struct obd_device *obd,
-                               struct placement_hint *hint)
+                               struct lu_placement_hint *hint)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         ENTRY;
@@ -671,7 +671,7 @@ static int lmv_placment_policy(struct obd_device *obd,
 }
 
 static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
-                         struct placement_hint *hint)
+                         struct lu_placement_hint *hint)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lmv_obd *lmv = &obd->u.lmv;

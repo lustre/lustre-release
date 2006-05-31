@@ -722,7 +722,7 @@ static inline int obd_disconnect(struct obd_export *exp)
 
 static inline int obd_fid_alloc(struct obd_export *exp,
                                 struct lu_fid *fid,
-                                struct placement_hint *hint)
+                                struct lu_placement_hint *hint)
 {
         int rc;
         ENTRY;

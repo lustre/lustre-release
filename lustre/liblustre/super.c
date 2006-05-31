@@ -392,7 +392,8 @@ static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
 
         obddev = sbi->ll_md_exp->exp_obd;
         res_id.name[0] = fid_seq(&lli->lli_fid);
-        res_id.name[1] = fid_num(&lli->lli_fid);
+        res_id.name[1] = fid_oid(&lli->lli_fid);
+        res_id.name[2] = fid_ver(&lli->lli_fid);
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
@@ -1281,7 +1282,9 @@ static int llu_file_flock(struct inode *ino,
         struct intnl_stat *st = llu_i2stat(ino);
         struct ldlm_res_id res_id =
                 { .name = {fid_seq(&lli->lli_fid),
-                           fid_num(&lli->lli_fid), LDLM_FLOCK} };
+                           fid_oid(&lli->lli_fid),
+                           fid_ver(&lli->lli_fid), 
+                           LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
         ldlm_mode_t mode = 0;
@@ -1874,7 +1877,7 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_request, err);
         }
 
-        LASSERT(fid_num(&sbi->ll_root_fid) != 0);
+        LASSERT(fid_is_sane(&sbi->ll_root_fid));
 
         root = llu_iget(fs, &md);
         if (!root || IS_ERR(root)) {

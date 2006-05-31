@@ -1580,7 +1580,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
                 /* at this point server answers to client's RPC with same fid as
                  * client generated for creating some inode. So using ->fid1 is
                  * okay here. */
-                LASSERT(fid_num(&md.body->fid1) != 0);
+                LASSERT(fid_is_sane(&md.body->fid1));
                 
                 *inode = ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1), &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {

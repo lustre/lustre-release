@@ -111,8 +111,8 @@ static inline int llu_is_root_inode(struct inode *inode)
 {
         return (fid_seq(&llu_i2info(inode)->lli_fid) ==
                 fid_seq(&llu_i2info(inode)->lli_sbi->ll_root_fid) &&
-                fid_num(&llu_i2info(inode)->lli_fid) ==
-                fid_num(&llu_i2info(inode)->lli_sbi->ll_root_fid));
+                fid_oid(&llu_i2info(inode)->lli_fid) ==
+                fid_oid(&llu_i2info(inode)->lli_sbi->ll_root_fid));
 }
 
 #define LL_SAVE_INTENT(inode, it)                                              \

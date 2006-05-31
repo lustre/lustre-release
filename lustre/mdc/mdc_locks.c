@@ -147,7 +147,9 @@ int mdc_lock_match(struct obd_export *exp, int flags,
                    struct lustre_handle *lockh)
 {
         struct ldlm_res_id res_id =
-                { .name = {fid_seq(fid), fid_num(fid)} };
+                { .name = {fid_seq(fid), 
+                           fid_oid(fid),
+                           fid_ver(fid)} };
         struct obd_device *obd = class_exp2obd(exp);
         int rc;
         ENTRY;
@@ -163,7 +165,9 @@ int mdc_cancel_unused(struct obd_export *exp,
                       int flags, void *opaque)
 {
         struct ldlm_res_id res_id =
-                { .name = {fid_seq(fid), fid_num(fid)} };
+                { .name = {fid_seq(fid), 
+                           fid_oid(fid), 
+                           fid_ver(fid)} };
         struct obd_device *obd = class_exp2obd(exp);
         int rc;
         
@@ -181,7 +185,8 @@ int mdc_change_cbdata(struct obd_export *exp, struct lu_fid *fid,
         ENTRY;
 
         res_id.name[0] = fid_seq(fid);
-        res_id.name[1] = fid_num(fid);
+        res_id.name[1] = fid_oid(fid);
+        res_id.name[2] = fid_ver(fid);
 
         ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, 
                            &res_id, it, data);
@@ -276,7 +281,9 @@ int mdc_enqueue(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_exp2obd(exp);
         struct ldlm_res_id res_id =
-                { .name = {fid_seq(&op_data->fid1), fid_num(&op_data->fid1)} };
+                { .name = {fid_seq(&op_data->fid1), 
+                           fid_oid(&op_data->fid1),
+                           fid_ver(&op_data->fid1)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
         struct ldlm_request *lockreq;
         struct ldlm_intent *lit;
@@ -576,13 +583,14 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                op_data->namelen, op_data->name, PFID3(&op_data->fid1),
                ldlm_it2str(it->it_op), it->it_flags);
 
-        if (fid_num(&op_data->fid2) &&
+        if (fid_is_sane(&op_data->fid2) &&
             (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
                 struct ldlm_res_id res_id = { .name = { fid_seq(&op_data->fid2),
-                                                        fid_num(&op_data->fid2) } };
+                                                        fid_oid(&op_data->fid2),
+                                                        fid_ver(&op_data->fid2) } };
                 struct lustre_handle lockh;
                 ldlm_policy_data_t policy;
                 int mode = LCK_CR;
@@ -628,7 +636,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
-        } else if (!fid_num(&op_data->fid2)) {
+        } else if (!fid_is_sane(&op_data->fid2)) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
                  * request referenced from this intent, saved for subsequent
                  * lookup.  This path is executed when we proceed to this
@@ -667,7 +675,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
-        if (fid_num(&op_data->fid2)) {
+        if (fid_is_sane(&op_data->fid2)) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
                 if (memcmp(&op_data->fid2, &mdt_body->fid1, sizeof(op_data->fid2)))

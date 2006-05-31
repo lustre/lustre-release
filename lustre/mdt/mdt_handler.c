@@ -452,10 +452,9 @@ struct ldlm_res_id *fid_build_res_name(const struct lu_fid *f,
                                        struct ldlm_res_id *name)
 {
         memset(name, 0, sizeof *name);
-        /* we use fid_num() whoch includes also object version instread of raw
-         * fid_oid(). */
         name->name[0] = fid_seq(f);
-        name->name[1] = fid_num(f);
+        name->name[1] = fid_oid(f);
+        name->name[2] = fid_ver(f);
         return name;
 }
 
@@ -464,7 +463,9 @@ struct ldlm_res_id *fid_build_res_name(const struct lu_fid *f,
  */
 int fid_res_name_eq(const struct lu_fid *f, const struct ldlm_res_id *name)
 {
-        return name->name[0] == fid_seq(f) && name->name[1] == fid_num(f);
+        return name->name[0] == fid_seq(f) && 
+                name->name[1] == fid_oid(f) && 
+                name->name[2] == fid_ver(f);
 }
 
 /* issues dlm lock on passed @ns, @f stores it lock handle into @lh. */

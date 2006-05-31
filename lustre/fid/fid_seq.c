@@ -72,10 +72,11 @@ int seq_mgr_read(const struct lu_context *ctx, struct lu_seq_mgr *mgr)
 EXPORT_SYMBOL(seq_mgr_read);
 
 /* manager functionality stuff */
-int seq_mgr_alloc(const struct lu_context *ctx, struct lu_seq_mgr *mgr,
+int seq_mgr_alloc(const struct lu_context *ctx,
+                  struct lu_seq_mgr *mgr,
                   __u64 *seq)
 {
-        int rc = 0;
+        int rc;
         ENTRY;
 
         LASSERT(mgr != NULL);
@@ -106,6 +107,7 @@ int seq_mgr_setup(const struct lu_context *ctx, struct lu_seq_mgr *mgr)
 
         /* set seq range */
         mgr->m_seq_last = mgr->m_seq + LUSTRE_SEQ_RANGE;
+        
         /* allocate next seq after root one */
         mgr->m_seq += LUSTRE_ROOT_FID_SEQ + 1;
 

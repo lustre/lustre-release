@@ -36,7 +36,7 @@
 #include "llite_internal.h"
 
 static int ll_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
-                        struct placement_hint *hint)
+                        struct lu_placement_hint *hint)
 {
         int rc;
         ENTRY;
@@ -47,13 +47,13 @@ static int ll_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                 RETURN(rc);
         }
 
-        LASSERT(fid_seq(fid) != 0 && fid_num(fid) != 0);
+        LASSERT(fid_is_sane(fid));
         RETURN(rc);
 }
 
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
 int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
-                    struct placement_hint *hint)
+                    struct lu_placement_hint *hint)
 {
         ENTRY;
         RETURN(ll_fid_alloc(sbi->ll_md_exp, fid, hint));
@@ -61,7 +61,7 @@ int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
 
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
 int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
-                    struct placement_hint *hint)
+                    struct lu_placement_hint *hint)
 {
         ENTRY;
         RETURN(ll_fid_alloc(sbi->ll_dt_exp, fid, hint));
