@@ -50,8 +50,8 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-05-31 16:48:12.000000000 +0400
-@@ -0,0 +1,163 @@
++++ iam/fs/ext3/iam-uapi.c	2006-05-31 19:02:37.000000000 +0400
+@@ -0,0 +1,233 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -84,17 +84,12 @@ Index: iam/fs/ext3/iam-uapi.c
 +#include <linux/jbd.h>
 +/* ext3_error() */
 +#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
 +
 +#include <linux/lustre_iam.h>
 +
 +#include <libcfs/libcfs.h>
 +#include <libcfs/kp30.h>
-+
-+struct iam_uapi_insert {
-+};
-+
-+struct iam_uapi_lookup {
-+};
 +
 +struct iam_private_info {
 +        struct iam_container   ipi_bag;
@@ -102,9 +97,38 @@ Index: iam/fs/ext3/iam-uapi.c
 +        struct iam_path_descr *ipi_ipd;
 +};
 +
-+struct iam_private_info *get_ipi(struct file *filp)
++enum {
++        IAM_INSERT_CREDITS = 10
++};
++
++static struct iam_private_info *get_ipi(struct file *filp)
 +{
 +        return filp->private_data;
++}
++
++static int iam_uapi_op(int cmd, struct inode *inode,
++                       struct file *filp, struct iam_uapi_op *op)
++{
++        int result;
++        struct iam_private_info *ipi;
++
++        ipi = get_ipi(filp);
++        if (cmd == IAM_IOC_INSERT) {
++                handle_t *h;
++
++                h = ext3_journal_start(inode, IAM_INSERT_CREDITS);
++                if (!IS_ERR(h)) {
++                        result = iam_insert(h, &ipi->ipi_bag, op->iul_key,
++                                            op->iul_rec, ipi->ipi_ipd);
++                        ext3_journal_stop(h);
++                } else {
++                        result = PTR_ERR(h);
++                        ext3_std_error(inode->i_sb, result);
++                }
++        } else
++                result = iam_lookup(&ipi->ipi_bag, op->iul_key,
++                                    op->iul_rec, ipi->ipi_ipd);
++        return result;
 +}
 +
 +static struct iam_private_info *ext3_iam_alloc_info(int flags)
@@ -157,7 +181,7 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 +
 +
-+int getua(struct iam_uapi_info *ua, unsigned long arg)
++static int getua(struct iam_uapi_info *ua, unsigned long arg)
 +{
 +        if (copy_from_user(ua, (struct iam_uapi_info __user *)arg, sizeof *ua))
 +                return -EFAULT;
@@ -165,7 +189,7 @@ Index: iam/fs/ext3/iam-uapi.c
 +                return 0;
 +}
 +
-+int putua(struct iam_uapi_info *ua, unsigned long arg)
++static int putua(struct iam_uapi_info *ua, unsigned long arg)
 +{
 +        if (copy_to_user((struct iam_uapi_info __user *)arg, ua, sizeof *ua))
 +                return -EFAULT;
@@ -173,52 +197,98 @@ Index: iam/fs/ext3/iam-uapi.c
 +                return 0;
 +}
 +
++static int putop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
++                 struct iam_descr *des)
++{
++        int result;
++
++        if (uop != NULL && copy_to_user((void __user *)uop->iul_rec,
++                                        op->iul_rec, des->id_rec_size))
++                result = -EFAULT;
++        else
++                result = 0;
++
++        kfree(op->iul_key);
++        kfree(op->iul_rec);
++        return result;
++}
++
++static int getop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
++                 struct iam_descr *des, unsigned long arg)
++{
++        int result;
++        int ks;
++        int rs;
++
++        ks = des->id_key_size;
++        rs = des->id_rec_size;
++        op->iul_key = kmalloc(ks, GFP_KERNEL);
++        op->iul_rec = kmalloc(rs, GFP_KERNEL);
++        if (!copy_from_user(uop,
++                            (struct iam_uapi_op __user *)arg, sizeof *uop) &&
++            op->iul_key != NULL && op->iul_rec != NULL &&
++            !copy_from_user(op->iul_key, (void __user *)uop->iul_key, ks) &&
++            !copy_from_user(op->iul_rec, (void __user *)uop->iul_rec, rs))
++                result = 0;
++        else {
++                result = -EFAULT;
++                putop(op, NULL, NULL);
++        }
++        return result;
++}
++
 +int iam_uapi_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 +                   unsigned long arg)
 +{
 +        int result;
-+        struct iam_uapi_info ua;
++        union {
++                struct iam_uapi_info ua;
++                struct iam_uapi_op   op;
++        } u;
++        struct iam_uapi_op uop;
 +
 +        if ((current->fsuid != inode->i_uid) && !capable(CAP_FOWNER))
 +                result = -EACCES;
-+        else if (S_ISREG(inode->i_mode)) {
-+                switch (cmd) {
-+                case IAM_IOC_INIT:
-+                        if (!is_dx(inode)) {
-+                                result = getua(&ua, arg);
-+                                if (result == 0)
-+                                        result = iam_uapi_init(inode, filp, &ua);
-+                        } else
-+                                result = -EBUSY;
-+                        break;
-+                case IAM_IOC_GETINFO:
-+                        if (is_dx(inode)) {
-+                                struct iam_descr *des;
++        else if (!S_ISREG(inode->i_mode))
++                result = -EBADF;
++        else if (cmd == IAM_IOC_INIT) {
++                if (!is_dx(inode)) {
++                        result = getua(&u.ua, arg);
++                        if (result == 0)
++                                result = iam_uapi_init(inode, filp, &u.ua);
++                } else
++                        result = -EBUSY;
++        } else if (is_dx(inode)) {
++                struct iam_descr *des;
 +
-+                                des = &get_ipi(filp)->ipi_descr;
-+                                ua.iui_keysize = des->id_key_size;
-+                                ua.iui_recsize = des->id_rec_size;
-+                                ua.iui_ptrsize = des->id_ptr_size;
-+                                ua.iui_height  = 0; /* not yet */
-+                                memcpy(ua.iui_fmt_name, des->id_ops->id_name,
-+                                       ARRAY_SIZE(ua.iui_fmt_name));
-+                                result = putua(&ua, arg);
-+                        } else
-+                                result = -EINVAL;
-+                        break;
-+                case IAM_IOC_INSERT:
-+                case IAM_IOC_LOOKUP:
-+                default:
-+                        result = -ENOTTY;
-+                }
++                des = &get_ipi(filp)->ipi_descr;
++                if (cmd == IAM_IOC_GETINFO) {
++                        u.ua.iui_keysize = des->id_key_size;
++                        u.ua.iui_recsize = des->id_rec_size;
++                        u.ua.iui_ptrsize = des->id_ptr_size;
++                        u.ua.iui_height  = 0; /* not yet */
++                        memcpy(u.ua.iui_fmt_name, des->id_ops->id_name,
++                               ARRAY_SIZE(u.ua.iui_fmt_name));
++                        result = putua(&u.ua, arg);
++                } else if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_LOOKUP) {
++                        result = getop(&u.op, &uop, des, arg);
++                        if (result == 0) {
++                                int res2;
++
++                                result = iam_uapi_op(cmd, inode, filp, &u.op);
++                                res2 = putop(&u.op, &uop, des);
++                                result = result ? : res2;
++                        }
++                } else
++                        result = -EINVAL;
 +        } else
-+                result = -EINVAL;
++                result = -ENOENT;
 +        return result;
 +}
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-30 23:07:25.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-05-30 23:08:12.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-05-31 18:26:14.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
@@ -240,7 +310,7 @@ Index: iam/include/linux/lustre_iam.h
  /*
   * Entry within index tree node. Consists of a key immediately followed
   * (without padding) by a pointer to the child node.
-@@ -718,5 +719,40 @@ void iam_format_register(struct iam_form
+@@ -718,5 +719,39 @@ void iam_format_register(struct iam_form
  
  void iam_lfix_format_init(void);
  
@@ -266,17 +336,16 @@ Index: iam/include/linux/lustre_iam.h
 +        char  iui_fmt_name[DX_FMT_NAME_LEN];
 +};
 +
-+struct iam_uapi_insert {
-+};
-+
-+struct iam_uapi_lookup {
++struct iam_uapi_op {
++        void *iul_key;
++        void *iul_rec;
 +};
 +
 +enum iam_ioctl_cmd {
 +        IAM_IOC_INIT     = _IOW('i', 1, struct iam_uapi_info),
 +        IAM_IOC_GETINFO  = _IOR('i', 2, struct iam_uapi_info),
-+        IAM_IOC_INSERT   = _IOW('i', 3, struct iam_uapi_insert),
-+        IAM_IOC_LOOKUP   = _IOR('i', 4, struct iam_uapi_lookup)
++        IAM_IOC_INSERT   = _IOWR('i', 3, struct iam_uapi_op),
++        IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op)
 +};
 +
  /* __LINUX_LUSTRE_IAM_H__ */
