@@ -103,7 +103,7 @@ void usage(FILE *out)
                 "\t\t--nomgs: turn off MGS service on this MDT\n"
                 "\t\t--writeconf: erase all config logs for this fs.\n"
 #endif
-                "\t\t--print (or --noformat): just report what we would do; "
+                "\t\t--noformat: just report what we would do; "
                 "don't write to disk\n"
                 "\t\t--verbose\n"
                 "\t\t--quiet\n");
@@ -904,20 +904,20 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"mgsnode", 1, 0, 'm'},
                 {"mgsnid", 1, 0, 'm'},
                 {"mdt", 0, 0, 'M'},
-                {"fsname",1, 0, 'n'},
-                {"noformat", 0, 0, 'P'},
+                {"fsname",1, 0, 'L'},
+                {"noformat", 0, 0, 'n'},
                 {"nomgs", 0, 0, 'N'},
                 {"mountfsoptions", 1, 0, 'o'},
                 {"ost", 0, 0, 'O'},
                 {"param", 1, 0, 'p'},
-                {"print", 0, 0, 'P'},
+                {"print", 0, 0, 'n'},
                 {"quiet", 0, 0, 'q'},
                 {"reformat", 0, 0, 'r'},
                 {"verbose", 0, 0, 'v'},
                 {"writeconf", 0, 0, 'w'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "b:c:C:d:ef:Ghi:k:m:Mn:No:Op:Pqrvw";
+        char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqrvw";
         char opt;
         int rc, longidx;
 
@@ -989,6 +989,20 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         strncpy(mop->mo_mkfsopts, optarg, 
                                 sizeof(mop->mo_mkfsopts) - 1);
                         break;
+                case 'L':
+                        if (!(IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd))) {
+                                badopt(long_opt[longidx].name, "MDT,OST");
+                                return 1;
+                        }
+                        if (strlen(optarg) > 8) {
+                                fprintf(stderr, "%s: filesystem name must be "
+                                        "<= 8 chars\n", progname);
+                                return 1;
+                        }
+                        if (optarg[0] != 0) 
+                                strncpy(mop->mo_ldd.ldd_fsname, optarg, 
+                                        sizeof(mop->mo_ldd.ldd_fsname) - 1);
+                        break;
                 case 'm': {
                         char *nids = convert_hostnames(optarg);
                         if (!nids) 
@@ -1005,18 +1019,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         mop->mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MDT;
                         break;
                 case 'n':
-                        if (!(IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd))) {
-                                badopt(long_opt[longidx].name, "MDT,OST");
-                                return 1;
-                        }
-                        if (strlen(optarg) > 8) {
-                                fprintf(stderr, "%s: filesystem name must be "
-                                        "<= 8 chars\n", progname);
-                                return 1;
-                        }
-                        if (optarg[0] != 0) 
-                                strncpy(mop->mo_ldd.ldd_fsname, optarg, 
-                                        sizeof(mop->mo_ldd.ldd_fsname) - 1);
+                        print_only++;
                         break;
                 case 'N':
                         mop->mo_ldd.ldd_flags &= ~LDD_F_SV_TYPE_MGS;
@@ -1031,9 +1034,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg);
                         if (rc) 
                                 return rc;
-                        break;
-                case 'P':
-                        print_only++;
                         break;
                 case 'q':
                         verbose--;
