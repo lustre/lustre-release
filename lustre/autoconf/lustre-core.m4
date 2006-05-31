@@ -365,6 +365,7 @@ case $BACKINGFS in
 		2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
 		2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
 		2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
+		2.6.15*) LDISKFS_SERIES="2.6-fc5.series";;
 		2.6.16*) LDISKFS_SERIES="2.6-fc5.series";;
 		*) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix lustre/autoconf/lustre-core.m4])
 		esac

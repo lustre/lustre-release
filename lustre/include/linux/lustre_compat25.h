@@ -40,7 +40,7 @@ struct ll_iattr_struct {
 #define ll_iattr_struct iattr
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
 #define LOCK_INODE_MUTEX(inode) do {mutex_lock(&(inode)->i_mutex); } while(0)
 #define TRYLOCK_INODE_MUTEX(inode) mutex_trylock(&(inode)->i_mutex)
