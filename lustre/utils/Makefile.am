@@ -16,7 +16,10 @@ if UTILS
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
 	mount_lustre mkfs_lustre mkfs.lustre \
-	tunefs_lustre tunefs.lustre l_getgroups llverfs llverdev
+if EXT2FS
+	llverfs llverdev \
+endif
+	tunefs_lustre tunefs.lustre l_getgroups
 bin_PROGRAMS = lfs llog_reader
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)

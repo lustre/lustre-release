@@ -653,6 +653,7 @@ AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
+AM_CONDITIONAL(EXT2FS, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 ])
 
 #
