@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-05-27 19:58:43.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-05-30 23:07:25.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-05-31 20:28:15.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-05-30 18:26:37.000000000 +0400
-@@ -0,0 +1,1021 @@
++++ iam/fs/ext3/iam.c	2006-05-31 20:28:37.000000000 +0400
+@@ -0,0 +1,1023 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -356,11 +356,13 @@ Index: iam/fs/ext3/iam.c
 +
 +static void iam_leaf_fini(struct iam_leaf *leaf)
 +{
-+	iam_leaf_ops(leaf)->fini(leaf);
-+	if (leaf->il_bh) {
-+		brelse(leaf->il_bh);
-+		leaf->il_bh = NULL;
-+	}
++        if (leaf->il_path != NULL) {
++                iam_leaf_ops(leaf)->fini(leaf);
++                if (leaf->il_bh) {
++                        brelse(leaf->il_bh);
++                        leaf->il_bh = NULL;
++                }
++        }
 +}
 +
 +static void iam_leaf_start(struct iam_leaf *folio)
@@ -1040,7 +1042,7 @@ Index: iam/fs/ext3/iam.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-05-30 23:08:00.000000000 +0400
++++ iam/fs/ext3/iam_lfix.c	2006-05-31 20:26:49.000000000 +0400
 @@ -0,0 +1,448 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -1179,7 +1181,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +                obj = iam_leaf_container(l)->ic_object;
 +                ext3_error(obj->i_sb, __FUNCTION__,
 +                           "Wrong magic in node %llu (#%lu): %#x != %#x\n",
-+                           l->il_bh->b_blocknr, obj->i_ino,
++                           (unsigned long long)l->il_bh->b_blocknr, obj->i_ino,
 +                           ill->ill_magic, le16_to_cpu(IAM_LEAF_HEADER_MAGIC));
 +                result = -EIO;
 +        }
@@ -1492,8 +1494,8 @@ Index: iam/fs/ext3/iam_lfix.c
 +}
 Index: iam/fs/ext3/namei.c
 ===================================================================
---- iam.orig/fs/ext3/namei.c	2006-05-27 19:58:44.000000000 +0400
-+++ iam/fs/ext3/namei.c	2006-05-30 19:01:04.000000000 +0400
+--- iam.orig/fs/ext3/namei.c	2006-05-31 20:24:32.000000000 +0400
++++ iam/fs/ext3/namei.c	2006-05-31 20:26:49.000000000 +0400
 @@ -24,81 +24,6 @@
   * 	Theodore Ts'o, 2002
   */
@@ -2207,7 +2209,7 @@ Index: iam/fs/ext3/namei.c
 +		 * key in the node.
 +		 */
 +		if (iam_keycmp(c,
-+			       iam_key_at(path, p), path->ip_key_target) < 0) {
++			       iam_key_at(path, p), path->ip_key_target) > 0) {
 +			struct inode *obj;
 +
 +			obj = c->ic_object;
@@ -3002,8 +3004,8 @@ Index: iam/fs/ext3/namei.c
  
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-05-27 19:58:44.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-05-30 23:07:25.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-05-31 20:28:15.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
