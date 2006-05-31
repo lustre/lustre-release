@@ -683,10 +683,8 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                         CERROR("Invalid fid: "DFID3"\n", PFID3(&body->fid1));
                         result = -EINVAL;
                 }
-        } else {
-                CERROR("Can't unpack body\n");
+        } else
                 result = -EFAULT;
-        }
         return result;
 }
 

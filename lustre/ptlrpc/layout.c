@@ -632,20 +632,20 @@ EXPORT_SYMBOL(req_capsule_extend);
 int req_capsule_has_field(const struct req_capsule *pill,
                           const struct req_msg_field *field)
 {
-        int result;
-        int loc;
-
-        loc = pill->rc_loc ^ 1;
-        if (field->rmf_offset[pill->rc_fmt->rf_idx][loc]) {
-                int offset;
-
-                offset = __req_capsule_offset(pill, field, loc);
-                result = __req_msg(pill, loc)->bufcount > offset;
-        } else
-                /*
-                 * Field doesn't exist in this format.
-                 */
-                result = 0;
-        return result;
+        return field->rmf_offset[pill->rc_fmt->rf_idx][pill->rc_loc ^ 1];
 }
 EXPORT_SYMBOL(req_capsule_has_field);
+
+int req_capsule_field_present(const struct req_capsule *pill,
+                              const struct req_msg_field *field)
+{
+        int loc;
+        int offset;
+
+        LASSERT(req_capsule_has_field(pill, field));
+
+        loc = pill->rc_loc ^ 1;
+        offset = __req_capsule_offset(pill, field, loc);
+        return __req_msg(pill, loc)->bufcount > offset;
+}
+EXPORT_SYMBOL(req_capsule_field_present);
