@@ -205,17 +205,18 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_object      *parent;
         struct mdt_object      *child;
         struct mdt_lock_handle *lh;
-        int result;
-        struct ldlm_reply *ldlm_rep;
-        struct ptlrpc_request *req = info->mti_pill.rc_req;
-        __u32  mode = info->mti_attr.la_mode; /*save a backup*/
+        int                     result;
+        struct ldlm_reply      *ldlm_rep;
+        struct ptlrpc_request  *req = mdt_info_req(info);
+        __u32                   mode = info->mti_attr.la_mode; /*save a backup*/
         struct mdt_reint_reply *rep = &info->mti_reint_rep;
-
 
         ENTRY;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
+
+        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
 
         parent = mdt_object_find_lock(info->mti_ctxt,
                                       mdt, info->mti_rr.rr_fid1,
@@ -230,12 +231,12 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 GOTO(out_parent, result);
         }
 
-        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
+
         if (result == -ENOENT)
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
-        else
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+        else
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
 
         if (result == -ENOENT) {
                 if(!(info->mti_rr.rr_flags & MDS_OPEN_CREAT))
@@ -275,6 +276,8 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         rep->mrr_body->fid1 = *mdt_object_fid(child);
         rep->mrr_body->valid |= OBD_MD_FLID;
 
+        /* To be continued: we should return "struct lov_mds_md" back*/
+
         /*FIXME add permission checking here */
         if (S_ISREG(mode))
                 ;
@@ -283,7 +286,6 @@ static int mdt_reint_open(struct mdt_thread_info *info)
 
 out_child:
         mdt_object_put(info->mti_ctxt, child);
-
 out_parent:
         mdt_object_unlock(mdt->mdt_namespace, parent, lh);
         mdt_object_put(info->mti_ctxt, parent);

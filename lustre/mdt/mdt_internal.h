@@ -222,6 +222,7 @@ int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *);
 void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr);
 const struct lu_fid *mdt_object_fid(struct mdt_object *o);
+struct ptlrpc_request *mdt_info_req  (struct mdt_thread_info *info);
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

@@ -63,7 +63,6 @@ unsigned long mdt_num_threads;
 
 static int                    mdt_handle    (struct ptlrpc_request *req);
 static struct mdt_device     *mdt_dev       (struct lu_device *d);
-static struct ptlrpc_request *mdt_info_req  (struct mdt_thread_info *info);
 
 static struct lu_context_key       mdt_thread_key;
 static struct lu_object_operations mdt_obj_ops;
@@ -279,7 +278,7 @@ static struct mdt_device *mdt_dev(struct lu_device *d)
         return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
 }
 
-static struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
+struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
 {
         return info->mti_pill.rc_req;
 }
