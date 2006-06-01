@@ -106,7 +106,6 @@ findInterface() {
 	declare target=$1
 	declare hostname=$2
 
-	{
 	while read intf line
 	do
 		while read line
@@ -131,8 +130,7 @@ findInterface() {
 	      			shift
 	    		done
 	  	done
-	done
-	} < <(${REMOTE} $hostname /sbin/ifconfig)
+	done < <(${REMOTE} $hostname /sbin/ifconfig)
 
 	echo >&2 "`basename $0`: Cannot find the interface in which" \
 		  "$target is configured in the host $hostname!"
