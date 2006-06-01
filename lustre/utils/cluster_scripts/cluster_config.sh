@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# cluster_config.sh - configure multiple lustre servers from a csv file
+# cluster_config.sh - format and set up multiple lustre servers from a csv file
 #
 # This script is used to parse each line of a spreadsheet (csv file) and 
 # execute remote commands to format (mkfs.lustre) every Lustre target 
@@ -122,6 +122,21 @@ lustre-mdt1,options lnet networks=tcp,/dev/sdb,/mnt/mdt,mdt,,"lustre-mgs1:lustre
 lustre-ost1,options lnet networks=tcp,/dev/sdb,/mnt/ost,ost,,"lustre-mgs1:lustre-mgs2",,,,,lustre-ost2,,192.168.1.171:192.168.1.172
 -------------------------------------------------------------------------------
 
+Example 6 - with combo mgs/mdt failover pair and ost failover pair:
+-------------------------------------------------------------------------------
+# combo mgs/mdt
+lustre-mgs1,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,--quiet --device-size=10240,,,lustre-mgs2@tcp0
+
+# combo mgs/mdt backup (--noformat)
+lustre-mgs2,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,--quiet --device-size=10240 --noformat,,,lustre-mgs1@tcp0
+
+# ost
+lustre-ost1,options lnet networks=tcp,/tmp/ost1,/mnt/ost1,ost,,"lustre-mgs1@tcp0:lustre-mgs2@tcp0",,--quiet --device-size=10240,,,lustre-ost2@tcp0
+
+# ost backup (--noformat) (note different device name)
+lustre-ost2,options lnet networks=tcp,/tmp/ost2,/mnt/ost2,ost,,"lustre-mgs1@tcp0:lustre-mgs2@tcp0",,--quiet --device-size=10240 --noformat,,,lustre-ost1@tcp0
+-------------------------------------------------------------------------------
+
 EOF
 	exit 0
 }
@@ -139,7 +154,7 @@ LCTL=${LCTL:-"$CMD_PATH/lctl"}
 EXPORT_PATH=${EXPORT_PATH:-"PATH=\$PATH:/sbin:/usr/sbin;"}
 
 # Some scripts to be called
-SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"."}
+SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"/usr/local/sbin"}
 MODULE_CONFIG=${SCRIPTS_PATH}/module_config.sh
 VERIFY_CLUSTER_NET=${SCRIPTS_PATH}/verify_cluster_net.sh
 GEN_HB_CONFIG=${SCRIPTS_PATH}/gen_hb_config.sh
@@ -156,8 +171,10 @@ TMP_DIRS="${HB_TMP_DIR} ${CLUMGR_TMP_DIR}"
 
 FS_TYPE=${FS_TYPE:-"lustre"}		# filesystem type
 
-MGS_NODENAME=${MGS_NODENAME:-""}	# node name of the MGS server
-declare -i MGS_IDX			# index of MGS in the global arrays
+declare -a MGS_NODENAME			# node names of the MGS servers
+declare -a MGS_IDX			# indexes of MGSs in the global arrays
+declare -i MGS_NUM			# number of MGS servers in the cluster
+declare -i INIT_IDX
 
 declare -a CONFIG_ITEM			# items in each line of the csv file
 declare -a NODE_NAMES			# node names in the failover group
@@ -407,84 +424,155 @@ check_ha_item() {
 	return 0
 }
 
-# Check the number of MGS.
+# Get the number of MGS nodes in the cluster
+get_mgs_num() {
+	INIT_IDX=0
+	MGS_NUM=${#MGS_NODENAME[@]}
+	[ -z "${MGS_NODENAME[0]}" ] && let "INIT_IDX += 1" \
+	&& let "MGS_NUM += 1"
+}
+
+# is_mgs_node hostname
+# Verify whether @hostname is a MGS node
+is_mgs_node() {
+	local host_name=$1
+	declare -i i
+
+	get_mgs_num
+	for ((i = ${INIT_IDX}; i < ${MGS_NUM}; i++)); do
+		[ "${MGS_NODENAME[i]}" = "${host_name}" ] && return 0
+	done
+
+	return 1
+}
+
+# Check whether the MGS nodes are in the same failover group
+check_mgs_group() {
+	declare -i i
+	declare -i j
+	declare -i idx
+	local mgs_node
+
+	get_mgs_num
+	for ((i = ${INIT_IDX}; i < ${MGS_NUM}; i++)); do
+		mgs_node=${MGS_NODENAME[i]}
+		for ((j = ${INIT_IDX}; j < ${MGS_NUM}; j++)); do
+		  [ "${MGS_NODENAME[j]}" = "${mgs_node}" ] && continue 1
+
+		  idx=${MGS_IDX[j]}
+		  if [ "${FAILOVERS[idx]#*$mgs_node*}" = "${FAILOVERS[idx]}" ]
+		  then
+			echo >&2 $"`basename $0`: check_mgs_group() error:"\
+			"MGS node ${mgs_node} is not in the ${HOST_NAME[idx]}"\
+			"failover group!"
+			return 1
+		  fi
+		done
+	done
+
+	return 0
+}
+
+# Get and check MGS servers.
 # There should be no more than one MGS specified in the entire csv file.
 check_mgs() {
-        # Check argument
-        if [ $# -eq 0 ]; then
-                echo >&2 $"`basename $0`: check_mgs() error: Missing argument"\
-			  "for function check_mgs()!"
-                return 1
-        fi
+	declare -i i
+	declare -i j
+	declare -i exp_idx	# Index of explicit MGS servers
+	declare -i imp_idx	# Index of implicit MGS servers
+	local is_exp_mgs is_imp_mgs
+	local mgs_node
 
-	declare -i i=$1
+	# Initialize the MGS_NODENAME and MGS_IDX arrays
+	unset MGS_NODENAME
+	unset MGS_IDX
 
-	# Check the number of explicit MGS
-	if [ "${DEVICE_TYPE[i]#*mgs*}" != "${DEVICE_TYPE[i]}" ]; then	
-		if [ "${EXP_MGS}" = "${HOST_NAME[i]}" ]; then
-			echo >&2 $"`basename $0`: check_mgs() error: More than"\
-				  "one explicit MGS in the csv file!"
-			return 1
+	exp_idx=1
+	imp_idx=1
+	for ((i = 0; i < ${#HOST_NAME[@]}; i++)); do
+		is_exp_mgs=false
+		is_imp_mgs=false
+
+		# Check whether this node is an explicit MGS node 
+		# or an implicit one
+		if [ "${DEVICE_TYPE[i]#*mgs*}" != "${DEVICE_TYPE[i]}" ]; then
+			verbose_output "Explicit MGS target" \
+			"${DEVICE_NAME[i]} in host ${HOST_NAME[i]}."
+			is_exp_mgs=true
 		fi
 
-		if [ -z "${EXP_MGS}" ]; then
-			EXP_MGS=${HOST_NAME[i]}
-			MGS_NODENAME=${EXP_MGS}
-			MGS_IDX=$i
+		if [ "${DEVICE_TYPE[i]}" = "mdt" -a -z "${MGS_NIDS[i]}" ]; then
+			verbose_output "Implicit MGS target" \
+			"${DEVICE_NAME[i]} in host ${HOST_NAME[i]}."
+			is_imp_mgs=true
 		fi
 
-		if [ "${EXP_MGS}" != "${HOST_NAME[i]}" ]; then
-			if [ "${FAILOVERS[i]#*$EXP_MGS*}" = "${FAILOVERS[i]}" ]
-			then
+		# Get and check MGS servers
+		if ${is_exp_mgs} || ${is_imp_mgs}; then
+			# Check whether more than one MGS target in one MGS node
+			if is_mgs_node ${HOST_NAME[i]}; then
 				echo >&2 $"`basename $0`: check_mgs() error:"\
-				          "More than one explicit MGS in the"\
-					  "csv file!"
-			else
-				echo >&2 $"`basename $0`: check_mgs() error:"\
-					  "There should not be two entries for"\
-					  "a server and its failover partner"\
-					  "in the csv file!"
+			  	"More than one MGS target in the same node -"\
+				"\"${HOST_NAME[i]}\"!"
+				return 1
 			fi
-			return 1
-		fi
-	fi
 
-	# Check the number of implicit MGS
-        if [ "${DEVICE_TYPE[i]}" = "mdt" ]&&[ -z "${MGS_NIDS[i]}" ]; then
-		if [ "${IMP_MGS}" = "${HOST_NAME[i]}" ]; then
-			echo >&2 $"`basename $0`: check_mgs() error: More than"\
-				  "one implicit MGS in the csv file!"
-			return 1
-		fi
-
-		if [ -z "${IMP_MGS}" ]; then
-			IMP_MGS=${HOST_NAME[i]}
-			MGS_NODENAME=${IMP_MGS}
-			MGS_IDX=$i
-		fi
-
-		if [ "${IMP_MGS}" != "${HOST_NAME[i]}" ]; then
-			if [ "${FAILOVERS[i]#*$IMP_MGS*}" = "${FAILOVERS[i]}" ]
+			# Get and check primary MGS server and backup MGS server		
+			if [ "${FORMAT_OPTIONS[i]}" = "${FORMAT_OPTIONS[i]#*noformat*}" ]
 			then
-				echo >&2 $"`basename $0`: check_mgs() error:"\
-					  "More than one implicit MGS in the"\
-					  "csv file!"
-			else
-				echo >&2 $"`basename $0`: check_mgs() error:"\
-					  "There should not be two entries for"\
-					  "a server and its failover partner"\
-					  "in the csv file!"
-			fi
-			return 1
-		fi
-	fi
+				# Primary MGS server
+				if [ -z "${MGS_NODENAME[0]}" ]; then
+					if [ "${is_exp_mgs}" = "true" -a ${imp_idx} -gt 1 ] \
+					|| [ "${is_imp_mgs}" = "true" -a ${exp_idx} -gt 1 ]; then
+						echo >&2 $"`basename $0`: check_mgs() error:"\
+				  		"There exist both explicit and implicit MGS"\
+						"targets in the csv file!"
+						return 1
+					fi
+					MGS_NODENAME[0]=${HOST_NAME[i]}
+					MGS_IDX[0]=$i
+				else
+					mgs_node=${MGS_NODENAME[0]}
+					if [ "${FAILOVERS[i]#*$mgs_node*}" = "${FAILOVERS[i]}" ]
+					then
+						echo >&2 $"`basename $0`: check_mgs() error:"\
+				  		"More than one primary MGS nodes in the csv" \
+						"file - ${MGS_NODENAME[0]} and ${HOST_NAME[i]}!"
+					else
+						echo >&2 $"`basename $0`: check_mgs() error:"\
+				  		"MGS nodes ${MGS_NODENAME[0]} and ${HOST_NAME[i]}"\
+						"are failover pair, one of them should use"\
+						"\"--noformat\" in the format options item!"
+					fi
+					return 1
+				fi
+			else	# Backup MGS server
+				if [ "${is_exp_mgs}" = "true" -a ${imp_idx} -gt 1 ] \
+				|| [ "${is_imp_mgs}" = "true" -a ${exp_idx} -gt 1 ]; then
+					echo >&2 $"`basename $0`: check_mgs() error:"\
+					"There exist both explicit and implicit MGS"\
+					"targets in the csv file!"
+					return 1
+				fi
 
-	if [ -n "${EXP_MGS}" -a -n "${IMP_MGS}" ]; then
-		echo >&2 $"`basename $0`: check_mgs() error: More than one"\
-			  "MGS in the csv file!"
+				if ${is_exp_mgs}; then # Explicit MGS
+					MGS_NODENAME[exp_idx]=${HOST_NAME[i]}
+					MGS_IDX[exp_idx]=$i
+					exp_idx=$(( exp_idx + 1 ))
+				else	# Implicit MGS
+					MGS_NODENAME[imp_idx]=${HOST_NAME[i]}
+					MGS_IDX[imp_idx]=$i
+					imp_idx=$(( imp_idx + 1 ))
+				fi
+			fi
+		fi #End of "if ${is_exp_mgs} || ${is_imp_mgs}"
+	done
+
+	# Check whether the MGS nodes are in the same failover group
+	if ! check_mgs_group; then
 		return 1
 	fi
-	
+
 	return 0
 }
 
@@ -810,15 +898,78 @@ get_items() {
 			return 1	
 		fi
 		
-		# Check the number of MGS
-		if ! check_mgs $idx; then
-			echo >&2 $"`basename $0`: check_mgs() error:"\
-				  "Occurred on line ${line_num} in ${CSV_FILE}."
-			return 1
-		fi
-		
 		idx=${idx}+1
 	done < ${CSV_FILE}
+
+	return 0
+}
+
+# check_lnet_connect hostname_index mgs_hostname
+# Check whether the target node can contact the MGS node @mgs_hostname
+# If @mgs_hostname is null, then it means the primary MGS node
+check_lnet_connect() {
+	declare -i i=$1
+	declare -i idx=0
+	local mgs_node=$2
+
+	local COMMAND RET_STR
+	local mgs_prim_nids all_nids all_nids_str 	
+	local nids
+	local nids_str=
+	local mgs_nids mgs_nid 
+	local ping_mgs
+
+	# Execute remote command to check that 
+	# this node can contact the MGS node
+	verbose_output "Checking lnet connectivity between" \
+		       "${HOST_NAME[i]} and the MGS node ${mgs_node}"
+	all_nids=${MGS_NIDS[i]}
+	mgs_prim_nids=`echo ${all_nids} | awk -F: '{print $1}'`
+	all_nids_str=`echo ${all_nids} | awk '{split($all_nids, a, ":")}\
+		       END {for (idx in a) print a[idx]}'`
+
+	if [ -z "${mgs_node}" ]; then
+		nids_str=${mgs_prim_nids}	# nids of primary MGS node
+	else
+		for nids in ${all_nids_str}; do
+			# FIXME: Suppose the MGS nids contain the node name
+			[ "${nids}" != "${nids#*$mgs_node*}" ] && nids_str=${nids}
+		done
+	fi
+
+	if [ -z "${nids_str}" ]; then
+                echo >&2 $"`basename $0`: check_lnet_connect() error:"\
+			  "Check the mgs nids item of host ${HOST_NAME[i]}!"\
+			  "Missing nids of the MGS node ${mgs_node}!"
+                return 1
+	fi
+
+	idx=0
+	mgs_nids=`echo ${nids_str} | awk '{split($nids_str, a, ",")}\
+		       END {for (idx in a) print a[idx]}'`
+
+	ping_mgs=false
+	for mgs_nid in ${mgs_nids}
+	do
+		COMMAND=$"${LCTL} ping ${mgs_nid} 5 || echo failed 2>&1"
+		RET_STR=`${REMOTE} ${HOST_NAME[i]} "${COMMAND}" 2>&1`
+		if [ $? -eq 0 -a "${RET_STR}" = "${RET_STR#*failed*}" ]
+		then
+			# This node can contact the MGS node
+			verbose_output "${HOST_NAME[i]} can contact the MGS" \
+                         	       "node ${mgs_node} by using nid" \
+				       "\"${mgs_nid}\"!"
+			ping_mgs=true
+			break
+        	fi
+	done
+
+	if ! ${ping_mgs}; then
+                echo >&2 "`basename $0`: check_lnet_connect() error:" \
+                         "${HOST_NAME[i]} cannot contact the MGS node"\
+			 "${mgs_node} through lnet networks!"
+                return 1
+	fi
 
 	return 0
 }
@@ -838,10 +989,8 @@ check_lnet() {
         fi
 
 	declare -i i=$1
-	declare -i idx=0
+	declare -i j
 	local COMMAND RET_STR
-	local nids_str mgs_prim_nids mgs_prim_nid  # primary nids of MGS node
-	local ping_mgs
 
 	# Execute remote command to start lnet network
 	verbose_output "Starting lnet network in ${HOST_NAME[i]}"
@@ -854,66 +1003,52 @@ check_lnet() {
                 return 1
         fi
 
-	if [ "${HOST_NAME[i]}" = "${MGS_NODENAME}" ]; then
+	if is_mgs_node ${HOST_NAME[i]}; then
 		return 0
 	fi
 
 	# Execute remote command to check that 
 	# this node can contact the MGS node
-	verbose_output "Checking lnet connectivity between" \
-		       "${HOST_NAME[i]} and the MGS node ${MGS_NODENAME}"
-	nids_str=`echo ${MGS_NIDS[i]} | awk -F: '{print $1}'`
-	mgs_prim_nids=`echo ${nids_str} | awk '{split($nids_str, a, ",")}\
-		       END {for (idx in a) print a[idx]}'`
-
-	ping_mgs=false
-	for mgs_prim_nid in ${mgs_prim_nids}
-	do
-		COMMAND=$"${LCTL} ping ${mgs_prim_nid} 5 || echo failed 2>&1"
-		RET_STR=`${REMOTE} ${HOST_NAME[i]} "${COMMAND}" 2>&1`
-		if [ $? -eq 0 -a "${RET_STR}" = "${RET_STR#*failed*}" ]
-		then
-			# This node can contact the MGS node
-			verbose_output "${HOST_NAME[i]} can contact the MGS" \
-                         	       "node ${MGS_NODENAME} by using nid" \
-				       "${mgs_prim_nid}"
-			ping_mgs=true
-			break
-        	fi
+	for ((j = 0; j < ${MGS_NUM}; j++)); do
+		if ! check_lnet_connect $i ${MGS_NODENAME[j]}; then
+			return 1
+		fi
 	done
-
-	if ! ${ping_mgs}; then
-                echo >&2 "`basename $0`: check_lnet() error: ${HOST_NAME[i]}" \
-                         "cannot contact the MGS node ${MGS_NODENAME} through"\
-			 "lnet networks!"
-                return 1
-	fi
 
 	return 0
 }
 
 # Start lnet network in the MGS node
 start_mgs_lnet() {
-	if [ -z "${MGS_NODENAME}" ]; then
+	declare -i i
+	declare -i idx
+	local COMMAND
+
+	if [ -z "${MGS_NODENAME[0]}" -a  -z "${MGS_NODENAME[1]}" ]; then
 		verbose_output "There is no MGS target in the ${CSV_FILE} file."
-	else
+		return 0
+	fi
+
+	for ((i = ${INIT_IDX}; i < ${MGS_NUM}; i++)); do
 		# Execute remote command to add lnet options lines to 
 		# the MGS node's modprobe.conf/modules.conf
-		COMMAND=$"echo \"${MODULE_OPTS[${MGS_IDX}]}\"|${MODULE_CONFIG}"
-		verbose_output "Adding lnet module options to ${MGS_NODENAME}"
-		${REMOTE} ${MGS_NODENAME} "${COMMAND}" >&2 
+		idx=${MGS_IDX[i]}
+		COMMAND=$"echo \"${MODULE_OPTS[${idx}]}\"|${MODULE_CONFIG}"
+		verbose_output "Adding lnet module options to ${MGS_NODENAME[i]}"
+		${REMOTE} ${MGS_NODENAME[i]} "${COMMAND}" >&2 
 		if [ $? -ne 0 ]; then
                		echo >&2 "`basename $0`: start_mgs_lnet() error:"\
 				 "Failed to execute remote command to" \
-				 "add module options to ${MGS_NODENAME}!"
+				 "add module options to ${MGS_NODENAME[i]}!"\
+				 "Check ${MODULE_CONFIG}!"
                		return 1
         	fi
 
 		# Start lnet network in the MGS node
-		if ! check_lnet ${MGS_IDX}; then
+		if ! check_lnet ${idx}; then
 			return 1	
 		fi
-	fi
+	done
 
 	return 0
 }
@@ -938,7 +1073,7 @@ mass_config() {
 			return 1	
 		fi
 
-		if [ "${HOST_NAME[i]}" != "${MGS_NODENAME}" ]; then
+		if ! is_mgs_node ${HOST_NAME[i]}; then
 			# Execute remote command to add lnet options lines to 
 			# modprobe.conf/modules.conf
 			COMMAND=$"echo \"${MODULE_OPTS[i]}\"|${MODULE_CONFIG}"
@@ -1085,6 +1220,10 @@ fi
 # Configure the Lustre cluster
 echo "`basename $0`: ******** Lustre cluster configuration START ********"
 if ! get_items ${CSV_FILE}; then
+	exit 1
+fi
+
+if ! check_mgs; then
 	exit 1
 fi
 
