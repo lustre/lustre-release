@@ -115,11 +115,8 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         LTIME_S(attr->ia_atime) = rec->sa_atime;
         LTIME_S(attr->ia_mtime) = rec->sa_mtime;
         LTIME_S(attr->ia_ctime) = rec->sa_ctime;
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,14))
-        attr->ia_attr_flags = rec->sa_attr_flags;
-#else
-        #warning "fix it later for fc5"
-#endif
+        r->ur_flags = rec->sa_attr_flags;
+
         LASSERT_REQSWAB (req, offset + 1);
         if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 1) {
                 r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 1, 0);

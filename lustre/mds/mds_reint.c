@@ -572,13 +572,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc);
 
         if (rec->ur_iattr.ia_valid & ATTR_ATTR_FLAG) {  /* ioctl */
-
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,14))
                 rc = fsfilt_iocontrol(obd, inode, NULL, EXT3_IOC_SETFLAGS,
-                                      (long)&rec->ur_iattr.ia_attr_flags);
-#else
-        #warning "fix it later for fc5"
-#endif
+                                      (long)&rec->ur_flags);
         } else if (rec->ur_iattr.ia_valid) {            /* setattr */
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
                 /* journal chown/chgrp in llog, just like unlink */

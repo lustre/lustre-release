@@ -18,10 +18,10 @@
 # include <linux/fs.h>
 # include <linux/dcache.h>
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
-#include <linux/posix_acl_xattr.h>
-#else
+#ifdef HAVE_XATTR_ACL
 #include <linux/xattr_acl.h>        
+#else
+#include <linux/posix_acl_xattr.h>
 #endif
 #endif
 

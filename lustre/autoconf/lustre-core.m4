@@ -490,6 +490,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_POSIX_ACL_XATTR
+#
+# If we have xattr_acl.h 
+#
+AC_DEFUN([LC_XATTR_ACL],
+[LB_CHECK_FILE([$LINUX/include/linux/xattr_acl.h],[
+	AC_MSG_CHECKING([if xattr_acl.h can be compiled])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/xattr_acl.h>
+	],[],[
+		AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_XATTR_ACL, 1, [Kernel has xattr_acl])
+	],[
+		AC_MSG_RESULT([no])
+	])
+],
+[])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -517,6 +537,7 @@ LC_FUNC_PAGE_MAPPED
 LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL
 LC_FILEMAP_POPULATE
 LC_D_ADD_UNIQUE
+LC_XATTR_ACL
 ])
 
 #
