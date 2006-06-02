@@ -540,8 +540,6 @@ mdd_attr_set(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-
-
 static int
 __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_device *mdd,
                 struct mdd_object *obj, void *buf,
@@ -718,12 +716,11 @@ mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        /*
-         * XXX nikita: huh? What is this?
-         */
-        rc = __mdd_object_destroy(ctxt, mdd_sobj, handle);
-        if (rc)
-                GOTO(cleanup, rc);
+        if (mdd_object_exists(ctxt, &tobj->mo_lu)) { 
+                rc = __mdd_object_destroy(ctxt, mdd_tobj, handle);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
 cleanup:
         mdd_rename_unlock(mdd, mdd_spobj, mdd_tpobj, mdd_sobj, mdd_tobj);
         mdd_trans_stop(ctxt, mdd, handle);
