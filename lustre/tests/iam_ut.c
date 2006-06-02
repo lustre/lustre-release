@@ -64,8 +64,9 @@ struct iam_uapi_op {
 enum iam_ioctl_cmd {
         IAM_IOC_INIT     = _IOW('i', 1, struct iam_uapi_info),
         IAM_IOC_GETINFO  = _IOR('i', 2, struct iam_uapi_info),
-        IAM_IOC_INSERT   = _IOWR('i', 3, struct iam_uapi_op),
-        IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op)
+        IAM_IOC_INSERT   = _IOR('i', 3, struct iam_uapi_op),
+        IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op),
+        IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op)
 };
 
 static void usage(void)
@@ -73,7 +74,8 @@ static void usage(void)
         printf("usage: iam_ut [-v] [-h] file\n");
 }
 
-static int insert(int fd, const void *key, const void *rec)
+static int doop(int fd, const void *key, const void *rec,
+                int cmd, const char *name)
 {
         int result;
 
@@ -81,24 +83,25 @@ static int insert(int fd, const void *key, const void *rec)
                 .iul_key = key,
                 .iul_rec = rec
         };
-        result = ioctl(fd, IAM_IOC_INSERT, &op);
+        result = ioctl(fd, cmd, &op);
         if (result != 0)
-                fprintf(stderr, "ioctl(IAM_IOC_INSERT): %i (%m)\n", result);
+                fprintf(stderr, "ioctl(%s): %i/%i (%m)\n", name, result, errno);
         return result;
+}
+
+static int insert(int fd, const void *key, const void *rec)
+{
+        return doop(fd, key, rec, IAM_IOC_INSERT, "IAM_IOC_INSERT");
 }
 
 static int lookup(int fd, const void *key, void *rec)
 {
-        int result;
+        return doop(fd, key, rec, IAM_IOC_LOOKUP, "IAM_IOC_LOOKUP");
+}
 
-        struct iam_uapi_op op = {
-                .iul_key = key,
-                .iul_rec = rec
-        };
-        result = ioctl(fd, IAM_IOC_LOOKUP, &op);
-        if (result != 0)
-                fprintf(stderr, "ioctl(IAM_IOC_LOOKUP): %i (%m)\n", result);
-        return result;
+static int delete(int fd, const void *key, void *rec)
+{
+        return doop(fd, key, rec, IAM_IOC_DELETE, "IAM_IOC_DELETE");
 }
 
 static void print_rec(const unsigned char *rec, int nr)
@@ -113,31 +116,61 @@ static void print_rec(const unsigned char *rec, int nr)
         printf("\n");
 }
 
+enum op {
+        OP_TEST,
+        OP_INSERT,
+        OP_LOOKUP,
+        OP_DELETE
+};
+
 int main(int argc, char **argv)
 {
+        int i;
         int rc;
-        int fd;
         int opt;
-        int blocksize = 4096;
-        int keysize   = 8;
-        int recsize   = 8;
-        int ptrsize   = 4;
-        int verbose   = 0;
+        int keysize;
+        int recsize;
+        int verbose = 0;
 
-        char *name;
-        char rec[8];
+        enum op op;
+
+        char *key;
+        char *rec;
+
+        char *key_opt;
+        char *rec_opt;
 
         struct iam_uapi_info ua;
 
+        setbuf(stdout, NULL);
+        setbuf(stderr, NULL);
+
+        key_opt = NULL;
+        rec_opt = NULL;
+
+        op = OP_TEST;
+
         do {
-                opt = getopt(argc, argv, "v");
+                opt = getopt(argc, argv, "vilk:r:d");
                 switch (opt) {
                 case 'v':
                         verbose++;
                 case -1:
                         break;
-                case 'b':
-                        /* blocksize = atoi(optarg); */
+                case 'k':
+                        key_opt = optarg;
+                        break;
+                case 'r':
+                        rec_opt = optarg;
+                        break;
+                case 'i':
+                        op = OP_INSERT;
+                        break;
+                case 'l':
+                        op = OP_LOOKUP;
+                        break;
+                case 'd':
+                        op = OP_DELETE;
                         break;
                 case '?':
                 default:
@@ -148,52 +181,79 @@ int main(int argc, char **argv)
                 }
         } while (opt != -1);
 
-        if (optind >= argc) {
-                fprintf(stderr, "filename missed\n");
-                usage();
-                return 1;
-        }
-        name = argv[optind];
-        fd = open(name, O_RDWR);
-        if (fd == -1) {
-                fprintf(stderr, "open(%s): (%m)", name);
-                return 1;
-        }
-        rc = ioctl(fd, IAM_IOC_INIT, &ua);
+        rc = ioctl(0, IAM_IOC_INIT, &ua);
         if (rc != 0) {
-                fprintf(stderr, "ioctl(IAM_IOC_INIT): %i (%m)", rc);
+                fprintf(stderr, "ioctl(IAM_IOC_INIT): %i (%m)\n", rc);
                 return 1;
         }
-        rc = ioctl(fd, IAM_IOC_GETINFO, &ua);
+        rc = ioctl(0, IAM_IOC_GETINFO, &ua);
         if (rc != 0) {
-                fprintf(stderr, "ioctl(IAM_IOC_GETATTR): %i (%m)", rc);
+                fprintf(stderr, "ioctl(IAM_IOC_GETATTR): %i (%m)\n", rc);
                 return 1;
         }
 
-        printf("keysize: %i, recsize: %i, ptrsize: %i, height: %i, name: %s\n",
-               ua.iui_keysize, ua.iui_recsize, ua.iui_ptrsize,
-               ua.iui_height, ua.iui_fmt_name);
+        keysize = ua.iui_keysize;
+        recsize = ua.iui_recsize;
+        if (verbose > 0)
+                printf("keysize: %i, recsize: %i, ptrsize: %i, "
+                       "height: %i, name: %s\n",
+                       keysize, recsize, ua.iui_ptrsize,
+                       ua.iui_height, ua.iui_fmt_name);
 
-        rc = insert(fd, "RIVERRUN", "PALEFIRE");
+        key = calloc(keysize + 1, sizeof key[0]);
+        rec = calloc(recsize + 1, sizeof rec[0]);
+
+        if (key == NULL || rec == NULL) {
+                fprintf(stderr, "cannot allocte memory\n");
+                return 1;
+        }
+
+        strncpy(key, key_opt ? : "RIVERRUN", keysize + 1);
+        strncpy(rec, rec_opt ? : "PALEFIRE", recsize + 1);
+
+        if (op == OP_INSERT)
+                return insert(0, key, rec);
+        else if (op == OP_DELETE)
+                return delete(0, key, rec);
+        else if (op == OP_LOOKUP) {
+                rc = lookup(0, key, rec);
+                if (rc == 0)
+                        print_rec(rec, recsize);
+                return rc;
+        }
+
+        rc = insert(0, key, rec);
         if (rc != 0)
                 return 1;
 
-        rc = insert(fd, "DAEDALUS", "FINNEGAN");
+        rc = insert(0, "DAEDALUS", "FINNEGAN");
         if (rc != 0)
                 return 1;
 
-        rc = insert(fd, "DAEDALUS", "FINNEGAN");
+        rc = insert(0, "DAEDALUS", "FINNEGAN");
         if (errno != EEXIST) {
                 if (rc == 0)
                         fprintf(stderr, "Duplicate key not detected!\n");
                 return 1;
         }
 
-        rc = lookup(fd, "RIVERRUN", rec);
+        rc = lookup(0, "RIVERRUN", rec);
         if (rc != 0)
                 return 1;
 
-        print_rec(rec, 8);
+        print_rec(rec, recsize);
+
+        for (i = 0; i < 1000; ++i) {
+                memset(key, 0, keysize + 1);
+                memset(rec, 0, recsize + 1);
+                snprintf(key, keysize, "y-%x-x", i);
+                snprintf(rec, recsize, "p-%x-q", 1000 - i);
+                rc = insert(0, key, rec);
+                if (rc != 0)
+                        return 1;
+                if (verbose > 1)
+                        printf("key %i inserted\n", i);
+        }
 
         return 0;
 }

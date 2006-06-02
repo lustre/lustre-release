@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-05-31 23:32:29.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-05-31 23:32:36.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-06-02 15:15:24.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-06-02 15:15:25.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-05-31 23:32:29.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-05-31 23:32:36.000000000 +0400
+--- iam.orig/fs/ext3/file.c	2006-06-02 15:15:24.000000000 +0400
++++ iam/fs/ext3/file.c	2006-06-02 15:15:25.000000000 +0400
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -33,7 +33,7 @@ Index: iam/fs/ext3/file.c
 +		if (S_ISDIR(inode->i_mode))
 +			ext3_htree_free_dir_info(filp->private_data);
 +		else
-+			ext3_iam_free_info(filp->private_data);
++			ext3_iam_release(filp, inode);
 +	}
  
  	return 0;
@@ -50,8 +50,8 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-05-31 23:32:36.000000000 +0400
-@@ -0,0 +1,246 @@
++++ iam/fs/ext3/iam-uapi.c	2006-06-02 15:15:25.000000000 +0400
+@@ -0,0 +1,256 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -113,13 +113,18 @@ Index: iam/fs/ext3/iam-uapi.c
 +        struct iam_private_info *ipi;
 +
 +        ipi = get_ipi(filp);
-+        if (cmd == IAM_IOC_INSERT) {
++        if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_DELETE) {
 +                handle_t *h;
 +
 +                h = ext3_journal_start(inode, IAM_INSERT_CREDITS);
 +                if (!IS_ERR(h)) {
-+                        result = iam_insert(h, &ipi->ipi_bag, op->iul_key,
-+                                            op->iul_rec, ipi->ipi_ipd);
++                        if (cmd == IAM_IOC_INSERT)
++                                result = iam_insert(h, &ipi->ipi_bag,
++                                                    op->iul_key,
++                                                    op->iul_rec, ipi->ipi_ipd);
++                        else
++                                result = iam_delete(h, &ipi->ipi_bag,
++                                                    op->iul_key, ipi->ipi_ipd);
 +                        ext3_journal_stop(h);
 +                } else {
 +                        result = PTR_ERR(h);
@@ -141,13 +146,17 @@ Index: iam/fs/ext3/iam-uapi.c
 +        return info;
 +}
 +
-+void ext3_iam_free_info(struct iam_private_info *info)
++void ext3_iam_release(struct file *filp, struct inode *inode)
 +{
++        struct iam_private_info *info;
++
++        info = filp->private_data;
 +        iam_container_fini(&info->ipi_bag);
 +        if (info->ipi_ipd != NULL)
 +                iam_ipd_free(info->ipi_ipd);
 +
 +        kfree(info);
++        EXT3_I(inode)->i_flags &= ~EXT3_INDEX_FL;
 +}
 +
 +static int iam_uapi_init(struct inode *inode,
@@ -262,13 +271,13 @@ Index: iam/fs/ext3/iam-uapi.c
 +        else if (!S_ISREG(inode->i_mode))
 +                result = -EBADF;
 +        else if (cmd == IAM_IOC_INIT) {
-+                if (!is_dx(inode)) {
++                if (filp->private_data == NULL) {
 +                        result = getua(&u.ua, arg);
 +                        if (result == 0)
 +                                result = iam_uapi_init(inode, filp, &u.ua);
 +                } else
 +                        result = -EBUSY;
-+        } else if (is_dx(inode)) {
++        } else if (is_dx(inode) && filp->private_data != NULL) {
 +                struct iam_descr *des;
 +
 +                des = &get_ipi(filp)->ipi_descr;
@@ -280,14 +289,15 @@ Index: iam/fs/ext3/iam-uapi.c
 +                        memcpy(u.ua.iui_fmt_name, des->id_ops->id_name,
 +                               ARRAY_SIZE(u.ua.iui_fmt_name));
 +                        result = putua(&u.ua, arg);
-+                } else if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_LOOKUP) {
++                } else if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_LOOKUP ||
++                           cmd == IAM_IOC_DELETE) {
 +                        result = getop(&u.op, &uop, des, arg);
 +                        if (result == 0) {
 +                                result = iam_uapi_op(cmd, inode, filp, &u.op);
 +                                if (cmd == IAM_IOC_LOOKUP) {
 +                                        int res2;
 +
-+                                        res2 = outop(&u.op, &uop, des, KEY);
++                                        res2 = outop(&u.op, &uop, des, REC);
 +                                        result = result ? : res2;
 +                                }
 +                                putop(&u.op);
@@ -300,8 +310,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-05-31 23:32:29.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-05-31 23:32:36.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-06-02 15:15:24.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-06-02 15:15:25.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
@@ -323,13 +333,32 @@ Index: iam/include/linux/lustre_iam.h
  /*
   * Entry within index tree node. Consists of a key immediately followed
   * (without padding) by a pointer to the child node.
-@@ -718,5 +719,39 @@ void iam_format_register(struct iam_form
+@@ -226,7 +227,8 @@ struct iam_leaf_operations {
+          * split leaf node, moving some entries into @bh (the latter currently
+          * is assumed to be empty).
+          */
+-        void (*split)(struct iam_leaf *l, struct buffer_head *bh);
++        void (*split)(struct iam_leaf *l, struct buffer_head **bh,
++                      iam_ptr_t newblknr);
+ };
+ 
+ struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
+@@ -702,6 +704,8 @@ void iam_insert_key(struct iam_path *pat
+ 
+ int  iam_leaf_at_end(const struct iam_leaf *l);
+ void iam_leaf_next(struct iam_leaf *folio);
++int iam_leaf_can_add(const struct iam_leaf *l,
++                     const struct iam_key *k, const struct iam_rec *r);
+ 
+ struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
+ struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
+@@ -718,5 +722,40 @@ void iam_format_register(struct iam_form
  
  void iam_lfix_format_init(void);
  
 +struct iam_private_info;
 +
-+void ext3_iam_free_info(struct iam_private_info *info);
++void ext3_iam_release(struct file *filp, struct inode *inode);
 +
 +int iam_uapi_ioctl(struct inode * inode, struct file * filp, unsigned int cmd,
 +                   unsigned long arg);
@@ -357,8 +386,9 @@ Index: iam/include/linux/lustre_iam.h
 +enum iam_ioctl_cmd {
 +        IAM_IOC_INIT     = _IOW('i', 1, struct iam_uapi_info),
 +        IAM_IOC_GETINFO  = _IOR('i', 2, struct iam_uapi_info),
-+        IAM_IOC_INSERT   = _IOWR('i', 3, struct iam_uapi_op),
-+        IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op)
++        IAM_IOC_INSERT   = _IOR('i', 3, struct iam_uapi_op),
++        IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op),
++        IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op)
 +};
 +
  /* __LINUX_LUSTRE_IAM_H__ */
