@@ -243,7 +243,7 @@ int main(int argc, char **argv)
 
         print_rec(rec, recsize);
 
-        for (i = 0; i < 1000; ++i) {
+        for (i = 0; i < 0x10000; ++i) {
                 memset(key, 0, keysize + 1);
                 memset(rec, 0, recsize + 1);
                 snprintf(key, keysize, "y-%x-x", i);
@@ -252,7 +252,7 @@ int main(int argc, char **argv)
                 if (rc != 0)
                         return 1;
                 if (verbose > 1)
-                        printf("key %i inserted\n", i);
+                        printf("key %#x inserted\n", i);
         }
 
         return 0;

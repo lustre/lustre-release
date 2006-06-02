@@ -58,7 +58,6 @@ struct iam_lfix_root {
         u_int16_t  ilr_recsize;
         u_int16_t  ilr_ptrsize;
         u_int16_t  ilr_indirect_levels;
-        u_int16_t  ilr_padding;
 };
 
 enum {
