@@ -15,7 +15,7 @@ ONLY=${ONLY:-"$*"}
 MOUNTCONFSKIP="9 10 11 12 13 13b 14 15 18"
 
 # bug number for skipped test:
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP"
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 23"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -753,23 +753,44 @@ test_19b() {
 }
 run_test 19b "start/stop OSTs without MDS"
 
-test_20a() {
+test_20() {
+	# first format the ost/mdt
+	start_ost
+	start_mds
+	mount_client $MOUNT
+	check_mount || return 43
+	rm -f $DIR/$tfile
+	remount_client ro $MOUNT || return 44
+	touch $DIR/$tfile && echo "$DIR/$tfile created incorrectly" && return 45
+	[ -e $DIR/$tfile ] && echo "$DIR/$tfile exists incorrectly" && return 46
+	remount_client rw $MOUNT || return 47
+	touch $DIR/$tfile
+	[ ! -f $DIR/$tfile ] && echo "$DIR/$tfile missing" && return 48
+	MCNT=`grep -c $MOUNT /etc/mtab`
+	[ "$MCNT" -ne 1 ] && echo "$MOUNT in /etc/mtab $MCNT times" && return 49
+	umount_client $MOUNT
+	stop_mds
+	stop_ost
+}
+run_test 20 "remount ro,rw mounts work and doesn't break /etc/mtab"
+
+test_21a() {
         start_mds
 	start_ost
 	stop_ost
 	stop_mds
 }
-run_test 20a "start mds before ost, stop ost first"
+run_test 21a "start mds before ost, stop ost first"
 
-test_20b() {
+test_21b() {
         start_ost
 	start_mds
 	stop_mds
 	stop_ost
 }
-run_test 20b "start ost before mds, stop mds first"
+run_test 21b "start ost before mds, stop mds first"
 
-test_20c() {
+test_21c() {
         start_ost
 	start_mds
 	start_ost2
@@ -777,9 +798,9 @@ test_20c() {
 	stop_ost2
 	stop_mds
 }
-run_test 20c "start mds between two osts, stop mds last"
+run_test 21c "start mds between two osts, stop mds last"
 
-test_21() {
+test_22() {
         reformat
 	start_mds
 	echo Client mount before any osts are in the logs
@@ -804,58 +825,36 @@ test_21() {
 
 	cleanup
 }
-run_test 21 "start a client before osts (should return errs)"
+run_test 22 "start a client before osts (should return errs)"
 
-test_22() {
-        echo this test is not working yet
-	return 0
+test_23() {
         setup
-        # failover mds
+        # fail mds
 	stop mds   
-	# force client so that recovering mds waits
+	# force down client so that recovering mds waits for reconnect
 	zconf_umount `hostname` $MOUNT -f
 	# enter recovery on mds
 	start_mds
+	# try to start a new client
 	mount_client $MOUNT &
-	local mount_pid=$?
+	MOUNT_PID=$!
 	sleep 5
-	local mount_lustre_pid=`ps -ef | grep mount.lustre | grep -v grep | awk '{print $2}'`
-	ps -ef | grep mount
-	echo mount pid is ${mount_pid}, mount.lustre pid is ${mount_lustre_pid}
+	MOUNT_LUSTRE_PID=`ps -ef | grep mount.lustre | grep -v grep | awk '{print $2}'`
+	echo mount pid is ${MOUNT_PID}, mount.lustre pid is ${MOUNT_LUSTRE_PID}
+	ps --ppid $MOUNT_PID
+	ps --ppid $MOUNT_LUSTRE_PID
 	# why o why can't I kill these? Manual "ctrl-c" works...
-	kill -2 ${mount_pid}
+	kill -TERM $MOUNT_PID
+	echo "waiting for mount to finish"
 	ps -ef | grep mount
-	kill -2 ${mount_lustre_pid}
-	ps -ef | grep mount
-	sleep 5
-	exit 1 # the mount process is still running??
+	wait $MOUNT_PID
+
 	stop_mds
 	stop_ost
 }
-run_test 22 "interrupt client during recovery mount delay"
+run_test 23 "interrupt client during recovery mount delay"
 
 umount_client $MOUNT	
 cleanup_nocli
-
-test_20() {
-	# first format the ost/mdt
-	start_ost
-	start_mds
-	mount_client $MOUNT
-	check_mount || return 43
-	rm -f $DIR/$tfile
-	remount_client ro $MOUNT || return 44
-	touch $DIR/$tfile && echo "$DIR/$tfile created incorrectly" && return 45
-	[ -e $DIR/$tfile ] && echo "$DIR/$tfile exists incorrectly" && return 46
-	remount_client rw $MOUNT || return 47
-	touch $DIR/$tfile
-	[ ! -f $DIR/$tfile ] && echo "$DIR/$tfile missing" && return 48
-	MCNT=`grep -c $MOUNT /etc/mtab`
-	[ "$MCNT" -ne 1 ] && echo "$MOUNT in /etc/mtab $MCNT times" && return 49
-	umount_client $MOUNT
-	stop_mds
-	stop_ost
-}
-run_test 20 "remount ro,rw mounts work and doesn't break /etc/mtab"
 
 equals_msg "Done"
