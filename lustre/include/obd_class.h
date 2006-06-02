@@ -99,7 +99,6 @@ void class_decref(struct obd_device *obd);
 #define CFG_F_COMPAT146 0x08   /* Using old-style log */
 #define CFG_F_EXCLUDE   0x10   /* OST exclusion list */
 
-
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
         char *              cfg_instance;
@@ -120,6 +119,7 @@ struct config_llog_data {
         struct config_llog_instance cld_cfg;
         struct list_head    cld_list_chain;
         atomic_t            cld_refcount;
+        struct obd_export  *cld_mgcexp;
         unsigned int        cld_stopping:1;
 };
 

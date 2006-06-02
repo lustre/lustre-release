@@ -45,8 +45,6 @@
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 
-/* There's only 1 MGC on a node.  Anybody using this must have a ref lock */
-static struct obd_device *the_mgc;
 
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
 {
@@ -105,8 +103,7 @@ static void config_log_put(struct config_llog_data *cld)
                atomic_read(&cld->cld_refcount));
         if (atomic_dec_and_test(&cld->cld_refcount)) {
                 CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
-                LASSERT(the_mgc);
-                class_export_put(the_mgc->obd_self_export);
+                class_export_put(cld->cld_mgcexp);
                 OBD_FREE(cld->cld_logname, strlen(cld->cld_logname) + 1);
                 if (cld->cld_cfg.cfg_instance != NULL)
                         OBD_FREE(cld->cld_cfg.cfg_instance, 
@@ -162,6 +159,7 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
                           struct super_block *sb)
 {
         struct config_llog_data *cld;
+        struct lustre_sb_info *lsi = s2lsi(sb);
         int rc;
         ENTRY;
 
@@ -181,7 +179,10 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         cld->cld_cfg.cfg_flags = 0;
         cld->cld_cfg.cfg_sb = sb;
         atomic_set(&cld->cld_refcount, 1);
-        class_export_get(the_mgc->obd_self_export);
+        
+        /* Keep the mgc around until we are done */
+        cld->cld_mgcexp = class_export_get(lsi->lsi_mgc->obd_self_export);
+        
         if (cfg->cfg_instance != NULL) {
                 OBD_ALLOC(cld->cld_cfg.cfg_instance, 
                           strlen(cfg->cfg_instance) + 1);
@@ -223,7 +224,7 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         RETURN(rc);
 }
 
-/* Failsafe */
+/* Failsafe FIXME remove this */
 static void config_log_end_all(void)
 {
         struct list_head *tmp, *n;
@@ -233,7 +234,7 @@ static void config_log_end_all(void)
         spin_lock(&config_list_lock);
         list_for_each_safe(tmp, n, &config_llog_list) {
                 cld = list_entry(tmp, struct config_llog_data, cld_list_chain);
-                CERROR("conflog failsafe %s\n", cld->cld_logname);
+                CERROR("\n\nconflog failsafe %s\n\n\n", cld->cld_logname);
                 list_del(&cld->cld_list_chain);
                 config_log_put(cld);
         }
@@ -345,7 +346,9 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EARLY: 
                 break;
         case OBD_CLEANUP_EXPORTS:
-                config_log_end_all();
+                if (obd->obd_type->typ_refcnt <= 2) 
+                        /* Only for the last mgc */
+                        config_log_end_all();
                 break;
         case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
@@ -366,11 +369,11 @@ static int mgc_cleanup(struct obd_device *obd)
 
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
         
-        the_mgc = NULL;
-
         /* COMPAT_146 - old config logs may have added profiles we don't 
            know about */
-        class_del_profiles();
+        if (obd->obd_type->typ_refcnt <= 2) 
+                /* Only for the last mgc */
+                class_del_profiles();
 
         ptlrpcd_decref();
 
@@ -395,7 +398,6 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_cleanup, rc);
         }
 
-        the_mgc = obd;
         RETURN(rc);
 
 err_cleanup:
@@ -440,8 +442,6 @@ static int mgc_async_requeue(void *data)
         lwi = LWI_TIMEOUT(3 * HZ + (ll_rand() & 0xff), NULL, NULL);
         l_wait_event(waitq, 0, &lwi);
 
-        /* We're holding a lock on the mgc, but not necessarily the lsi */
-        LASSERT(the_mgc);
 #if 0
         /* Re-send server info every time, in case MGS needs to regen its
            logs (for write_conf).  Do we need this?  It's extra RPCs for
@@ -450,7 +450,8 @@ static int mgc_async_requeue(void *data)
         /* Unsafe - we don't know that the lsi hasn't been destroyed */
         server_register_target(cld->cld_cfg.cfg_sb);
 #endif 
-        rc = mgc_process_log(the_mgc, cld);
+
+        rc = mgc_process_log(cld->cld_mgcexp->exp_obd, cld);
 out:
         /* Whether we enqueued again or not in mgc_process_log, 
            we're done with the ref from the old mgc_blocking_ast */        

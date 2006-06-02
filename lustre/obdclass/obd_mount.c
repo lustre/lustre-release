@@ -25,7 +25,7 @@
 
 
 #define DEBUG_SUBSYSTEM S_MGMT
-#define D_MOUNT D_SUPER|D_CONFIG /*|D_WARNING */
+#define D_MOUNT D_SUPER|D_CONFIG /*|D_WARNING */ 
 #define PRINT_CMD LCONSOLE
 #define PRINT_MASK D_SUPER
 
@@ -201,7 +201,7 @@ static int server_deregister_mount(char *name)
         RETURN(0);
 }
 
-/* obd's look up a registered mount using their name. This is just
+/* obd's look up a registered mount using their obdname. This is just
    for initial obd setup to find the mount struct.  It should not be
    called every time you want to mntget. */
 struct lustre_mount_info *server_get_mount(char *name)
@@ -589,22 +589,53 @@ static int lustre_start_mgc(struct super_block *sb)
         struct obd_uuid *uuid;
         class_uuid_t uuidc;
         lnet_nid_t nid;
-        char niduuid[10];
+        char *mgcname, *niduuid;
         char *ptr;
         int recov_bk = 0;
-        int rc = 0, i = 0, j;
+        int rc = 0, i = 0, j, len;
         ENTRY;
 
         LASSERT(lsi->lsi_lmd);
         
-        obd = class_name2obd(LUSTRE_MGC_OBDNAME);
+        /* Find the first non-lo MGS nid for our MGC name */
+        if (lsi->lsi_flags & LSI_SERVER) {
+                ptr = lsi->lsi_ldd->ldd_params;
+                /* Use mgsnode= nids */
+                if ((class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0) &&
+                    (class_parse_nid(ptr, &nid, &ptr) == 0)) {
+                        i++;
+                } else if (IS_MGS(lsi->lsi_ldd)) {
+                        lnet_process_id_t id;
+                        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+                                if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND) 
+                                        continue;
+                                nid = id.nid;
+                                i++;
+                                break;
+                        }
+                }
+        } else { /* client */
+                /* Use nids from mount line: uml1,1@elan:uml2,2@elan:/lustre */
+                ptr = lsi->lsi_lmd->lmd_dev;
+                if (class_parse_nid(ptr, &nid, &ptr) == 0) 
+                        i++;
+        }
+        if (i == 0) {
+                CERROR("No valid MGS nids found.\n");
+                RETURN(-EINVAL);
+        }
+
+        len = strlen(LUSTRE_MGC_OBDNAME) + strlen(libcfs_nid2str(nid)) + 1;
+        OBD_ALLOC(mgcname, len);
+        OBD_ALLOC(niduuid, len + 2);
+        if (!mgcname || !niduuid) 
+                GOTO(out_free, rc = -ENOMEM);
+        sprintf(mgcname, "%s%s", LUSTRE_MGC_OBDNAME, libcfs_nid2str(nid));
+
+        obd = class_name2obd(mgcname);
         if (obd) {
+                /* Re-using an existing MGC */
                 atomic_inc(&obd->u.cli.cl_mgc_refcount);
-                /* There's only one MGC, but users could give different
-                   MGS nids on the mount line.  So now do we add new MGS uuids
-                   or not?  Since there's only one MGS per site, the MGS uuids
-                   _should_ all be the same. Maybe check here?
-                */
                 
                 /* If we are restarting the MGS, don't try to keep the MGC's
                    old connection, or registration will fail. */
@@ -618,7 +649,7 @@ static int lustre_start_mgc(struct super_block *sb)
                    (using its local copy of the log), but we do want to connect
                    if at all possible. */
                 recov_bk++;
-                CDEBUG(D_MOUNT, "Set MGS reconnect %d\n", recov_bk);
+                CDEBUG(D_MOUNT, "%s: Set MGC reconnect %d\n", mgcname,recov_bk);
                 rc = obd_set_info_async(obd->obd_self_export,
                                         strlen(KEY_INIT_RECOV_BACKUP),
                                         KEY_INIT_RECOV_BACKUP,
@@ -626,27 +657,29 @@ static int lustre_start_mgc(struct super_block *sb)
                 GOTO(out, rc = 0);
         }
 
-        CDEBUG(D_MOUNT, "Start MGC '%s'\n", LUSTRE_MGC_OBDNAME);
+        CDEBUG(D_MOUNT, "Start MGC '%s'\n", mgcname);
 
         /* Add the primary nids for the MGS */
+        i = 0;
+        sprintf(niduuid, "%s%x", mgcname, i);
         if (lsi->lsi_flags & LSI_SERVER) {
                 ptr = lsi->lsi_ldd->ldd_params;
                 if (IS_MGS(lsi->lsi_ldd)) {
                         /* Use local nids (including LO) */
                         lnet_process_id_t id;
                         while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
-                                rc = do_lcfg(LUSTRE_MGC_OBDNAME, id.nid,
-                                             LCFG_ADD_UUID, "mgsnid0", 0,0,0);
+                                rc = do_lcfg(mgcname, id.nid,
+                                             LCFG_ADD_UUID, niduuid, 0,0,0);
                         }
                 } else {
                         /* Use mgsnode= nids */
                         if (class_find_param(ptr, PARAM_MGSNODE, &ptr) != 0) {
                                 CERROR("No MGS nids given.\n");
-                                RETURN(-EINVAL);
+                                GOTO(out_free, rc = -EINVAL);
                         }
                         while (class_parse_nid(ptr, &nid, &ptr) == 0) {
-                                rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid,
-                                             LCFG_ADD_UUID, "mgsnid0", 0,0,0);
+                                rc = do_lcfg(mgcname, nid,
+                                             LCFG_ADD_UUID, niduuid, 0,0,0);
                                 i++;
                         }
                 }
@@ -654,8 +687,8 @@ static int lustre_start_mgc(struct super_block *sb)
                 /* Use nids from mount line: uml1,1@elan:uml2,2@elan:/lustre */
                 ptr = lsi->lsi_lmd->lmd_dev;
                 while (class_parse_nid(ptr, &nid, &ptr) == 0) {
-                        rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid,
-                                     LCFG_ADD_UUID, "mgsnid0", 0,0,0);
+                        rc = do_lcfg(mgcname, nid,
+                                     LCFG_ADD_UUID, niduuid, 0,0,0);
                         i++;
                         /* Stop at the first failover nid */
                         if (*ptr == ':') 
@@ -664,7 +697,7 @@ static int lustre_start_mgc(struct super_block *sb)
         }
         if (i == 0) {
                 CERROR("No valid MGS nids found.\n");
-                RETURN(-EINVAL);
+                GOTO(out_free, rc = -EINVAL);
         }
         lsi->lsi_lmd->lmd_mgs_failnodes = 1;
 
@@ -674,29 +707,29 @@ static int lustre_start_mgc(struct super_block *sb)
         class_uuid_unparse(uuidc, uuid);
 
         /* Start the MGC */
-        rc = lustre_start_simple(LUSTRE_MGC_OBDNAME, LUSTRE_MGC_NAME, 
+        rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME, 
                                  (char *)uuid->uuid, LUSTRE_MGS_OBDNAME,
-                                 "mgsnid0");
+                                 niduuid);
         OBD_FREE_PTR(uuid);
         if (rc) 
-                RETURN(rc);
+                GOTO(out_free, rc);
         
         /* Add any failover MGS nids */
         i = 1;
         while ((*ptr == ':' || 
                 class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0)) {
                 /* New failover node */
-                sprintf(niduuid, "mgsnid%d", i);
+                sprintf(niduuid, "%s%x", mgcname, i);
                 j = 0;
                 while (class_parse_nid(ptr, &nid, &ptr) == 0) {
                         j++;
-                        rc = do_lcfg(LUSTRE_MGC_OBDNAME, nid,
+                        rc = do_lcfg(mgcname, nid,
                                      LCFG_ADD_UUID, niduuid, 0,0,0);
                         if (*ptr == ':') 
                                 break;
                 }
                 if (j > 0) {
-                        rc = do_lcfg(LUSTRE_MGC_OBDNAME, 0, LCFG_ADD_CONN,
+                        rc = do_lcfg(mgcname, 0, LCFG_ADD_CONN,
                                      niduuid, 0, 0, 0);
                         i++;
                 } else {
@@ -706,10 +739,10 @@ static int lustre_start_mgc(struct super_block *sb)
         }
         lsi->lsi_lmd->lmd_mgs_failnodes = i;
         
-        obd = class_name2obd(LUSTRE_MGC_OBDNAME);
+        obd = class_name2obd(mgcname);
         if (!obd) {
-                CERROR("Can't find mgcobd %s\n", LUSTRE_MGC_OBDNAME);
-                RETURN(-ENOTCONN);
+                CERROR("Can't find mgcobd %s\n", mgcname);
+                GOTO(out_free, rc = -ENOTCONN);
         }
 
         /* Try all connections, but only once. */
@@ -740,6 +773,11 @@ out:
         /* Keep the mgc info in the sb. Note that many lsi's can point
            to the same mgc.*/
         lsi->lsi_mgc = obd;
+out_free:
+        if (mgcname) 
+                OBD_FREE(mgcname, len);
+        if (niduuid) 
+                OBD_FREE(niduuid, len + 2);
         RETURN(rc);
 }
 
@@ -747,8 +785,8 @@ static int lustre_stop_mgc(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
-        char niduuid[10];
-        int i, rc;
+        char *niduuid, *ptr = 0;
+        int i, rc, len;
         ENTRY;
 
         if (!lsi)
@@ -776,20 +814,32 @@ static int lustre_stop_mgc(struct super_block *sb)
         if (obd->u.cli.cl_mgc_mgsexp)
                 obd_disconnect(obd->u.cli.cl_mgc_mgsexp);
 
+        /* Save the obdname for cleaning the nid uuids */
+        len = strlen(obd->obd_name) + 3;
+        OBD_ALLOC(niduuid, len);
+        if (niduuid) {
+                strcpy(niduuid, obd->obd_name);
+                ptr = niduuid + strlen(niduuid);
+        }
+
         rc = class_manual_cleanup(obd);
-        if (rc)
+        if (rc) 
                 RETURN(rc);
-        
+
+        /* Clean the nid uuids */
+        if (!niduuid) 
+                RETURN(-ENOMEM);
         for (i = 0; i < lsi->lsi_lmd->lmd_mgs_failnodes; i++) {
-                sprintf(niduuid, "mgsnid%d", i);
+                sprintf(ptr, "%x", i);
                 rc = do_lcfg(obd->obd_name, 0, LCFG_DEL_UUID, 
                              niduuid, 0, 0, 0);
                 if (rc)
                         CERROR("del MDC UUID %s failed: rc = %d\n", 
                                niduuid, rc);
         }
+        OBD_FREE(niduuid, len);
         /* class_import_put will get rid of the additional connections */
-
+        
         RETURN(0);
 }
           
@@ -1273,17 +1323,18 @@ static void server_wait_finished(struct vfsmount *mnt)
 {
         wait_queue_head_t   waitq;
         struct l_wait_info  lwi;
-        int                 retries = 10;
+        int                 retries = 120;
         
         init_waitqueue_head(&waitq);
 
-        while ((atomic_read(&mnt->mnt_count) > 1) && retries--) {
+        while ((atomic_read(&mnt->mnt_count) > 1) && (retries > 0)) {
                 LCONSOLE_WARN("Mount still busy with %d refs, waiting for "
                               "%d secs...\n",
-                              atomic_read(&mnt->mnt_count), 2 * retries);
+                              atomic_read(&mnt->mnt_count), retries);
 
                 /* Wait for a bit */
-                lwi = LWI_TIMEOUT(2 * HZ, NULL, NULL);
+                retries -= 5;
+                lwi = LWI_TIMEOUT(5 * HZ, NULL, NULL);
                 l_wait_event(waitq, 0, &lwi);
         }
         if (atomic_read(&mnt->mnt_count) > 1) {

@@ -184,11 +184,11 @@ test_0() {
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 1; }
 
-    facet_failover ost1
+    facet_failover ost1 || return 4
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 2; }
 
-    facet_failover ost2
+    facet_failover ost2 || return 5
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 3; }
     return 0
@@ -224,7 +224,7 @@ test_2() {
     echo "Reintegrating OST"
     reboot_facet ost1
     wait_for ost1
-    start_ost 1
+    start_ost 1 || return 2
 
     wait_for mds
     start mds $MDSDEV $MDS_MOUNT_OPTS || return $?

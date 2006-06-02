@@ -626,7 +626,14 @@ finish:
                                " bits?\n");
 
                 exp = class_conn2export(&imp->imp_dlm_handle);
-                LASSERT(exp);
+                if (!exp) {
+                        /* This could happen if export is cleaned during the 
+                           connect attempt */
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        CERROR("Missing export for %s\n", 
+                               imp->imp_obd->obd_name);
+                        GOTO(out, rc = -ENODEV);
+                }
                 exp->exp_connect_flags = ocd->ocd_connect_flags;
                 class_export_put(exp);
 

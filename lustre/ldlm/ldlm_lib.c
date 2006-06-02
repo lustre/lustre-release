@@ -444,7 +444,8 @@ int client_disconnect_export(struct obd_export *exp)
         if (obd->obd_namespace != NULL) {
                 /* obd_no_recov == local only */
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
-                                       obd->obd_no_recov, NULL);
+                                       obd->obd_no_recov ? LDLM_FL_LOCAL_ONLY:0,
+                                       NULL);
                 ldlm_namespace_free(obd->obd_namespace, obd->obd_no_recov);
                 obd->obd_namespace = NULL;
         }
