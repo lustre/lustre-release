@@ -209,7 +209,8 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         struct ldlm_reply      *ldlm_rep;
         struct ptlrpc_request  *req = mdt_info_req(info);
         __u32                   mode = info->mti_attr.la_mode; /*save a backup*/
-        struct mdt_reint_reply *rep = &info->mti_reint_rep;
+        struct mdt_body        *body = info->mti_reint_rep.mrr_body;
+         struct lov_mds_md     *lmm  = info->mti_reint_rep.mrr_md;
 
         ENTRY;
 
@@ -272,11 +273,41 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         if (result != 0)
                 GOTO(out_child, result);
 
-        mdt_pack_attr2body(rep->mrr_body, &info->mti_attr);
-        rep->mrr_body->fid1 = *mdt_object_fid(child);
-        rep->mrr_body->valid |= OBD_MD_FLID;
+        mdt_pack_attr2body(body, &info->mti_attr);
+        body->fid1 = *mdt_object_fid(child);
+        body->valid |= OBD_MD_FLID;
 
         /* To be continued: we should return "struct lov_mds_md" back*/
+        lmm = req_capsule_server_get(&info->mti_pill,
+                                     &RMF_MDT_MD);
+
+        result = mo_xattr_get(info->mti_ctxt, mdt_object_child(child), 
+                              lmm, MAX_MD_SIZE, "lov");
+        if (result <= 0)
+                GOTO(out_child, result = -EINVAL);
+
+        if (S_ISDIR(info->mti_attr.la_mode))
+                body->valid |= OBD_MD_FLDIREA;
+        else
+                body->valid |= OBD_MD_FLEASIZE;
+        body->eadatasize = result;
+        result = 0;
+
+        /* FIXME Let me fake it until the underlying works */
+        lmm->lmm_magic   = LOV_MAGIC;           /* magic number = LOV_MAGIC_V1 */
+        lmm->lmm_pattern = LOV_PATTERN_RAID0;   /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
+        lmm->lmm_object_id = 1;                 /* LOV object ID */
+        lmm->lmm_object_gr = 1;                 /* LOV object group */
+        lmm->lmm_stripe_size = 4096 * 1024;     /* size of stripe in bytes */
+        lmm->lmm_stripe_count = 1;              /* num stripes in use for this object */
+                                                /* per-stripe data */
+        lmm->lmm_objects[0].l_object_id = 1;    /* OST object ID */
+        lmm->lmm_objects[0].l_object_gr = 1;    /* OST object group (creating MDS number) */
+        lmm->lmm_objects[0].l_ost_gen   = 1;    /* generation of this l_ost_idx */
+        lmm->lmm_objects[0].l_ost_idx   = 0;    /* OST index in LOV (lov_tgt_desc->tgts) */
+        body->eadatasize = sizeof(struct lov_mds_md) + sizeof(struct lov_ost_data);
+
+
 
         /*FIXME add permission checking here */
         if (S_ISREG(mode))

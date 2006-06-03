@@ -536,6 +536,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
 
+#define MAX_MD_SIZE (sizeof(struct lov_mds_md) + 16 * sizeof(struct lov_ost_data))
 
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
@@ -1582,6 +1583,7 @@ struct lov_user_md_join {         /* LOV EA user data (host-endian) */
         struct lov_user_ost_data_join lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
 
+extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
 extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);

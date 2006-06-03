@@ -251,9 +251,13 @@ const struct req_msg_field RMF_LDLM_INTENT =
                     sizeof(struct ldlm_intent), lustre_swab_ldlm_intent);
 EXPORT_SYMBOL(RMF_LDLM_INTENT);
 
+
+/* FIXME XXX by Huang Hua 
+ * to make sure about the size. Refer to MDS.
+ */
+
 const struct req_msg_field RMF_MDT_MD =
-        DEFINE_MSGF("mdt_md",
-                    0, sizeof(struct lov_mds_md) /* FIXME: See mds */, NULL);
+        DEFINE_MSGF("mdt_md", 0, MAX_MD_SIZE, lustre_swab_lov_mds_md);
 EXPORT_SYMBOL(RMF_MDT_MD);
 
 const struct req_msg_field RMF_REC_UNLINK =

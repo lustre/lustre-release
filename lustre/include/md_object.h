@@ -178,6 +178,14 @@ static inline int mo_attr_get(const struct lu_context *cx, struct md_object *m,
         return m->mo_ops->moo_attr_get(cx, m, at);
 }
 
+static inline int mo_xattr_get(const struct lu_context *cx,
+                               struct md_object *m,
+                               void *buf, int buf_len, const char *name)
+{
+        return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, name);
+}
+
+
 static inline int mo_open(const struct lu_context *cx, struct md_object *m)
 {
         return m->mo_ops->moo_open(cx, m);

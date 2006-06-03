@@ -1022,6 +1022,30 @@ void lustre_swab_lov_user_md_objects(struct lov_user_md *lum)
         EXIT;
 }
 
+
+void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
+{
+        struct lov_ost_data *lod;
+        int i;
+        ENTRY;
+        for (i = 0; i < lmm->lmm_stripe_count; i++) {
+                lod = &lmm->lmm_objects[i];
+                __swab64s(&lod->l_object_id);
+                __swab64s(&lod->l_object_gr);
+                __swab32s(&lod->l_ost_gen);
+                __swab32s(&lod->l_ost_idx);
+        }
+        __swab32s(&lmm->lmm_magic);
+        __swab32s(&lmm->lmm_pattern);
+        __swab64s(&lmm->lmm_object_id);
+        __swab64s(&lmm->lmm_object_gr);
+        __swab32s(&lmm->lmm_stripe_size);
+        __swab32s(&lmm->lmm_stripe_count);
+
+        EXIT;
+}
+
+
 void lustre_swab_ldlm_res_id (struct ldlm_res_id *id)
 {
         int  i;
