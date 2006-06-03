@@ -40,6 +40,8 @@ cp -u ../../lustre/lvfs/lvfs.ko $MDIR
 cp -u ../../lustre/obdclass/llog_test.ko $MDIR
 cp -u ../../lustre/obdclass/obdclass.ko $MDIR
 cp -u ../../lustre/mdd/mdd.ko $MDIR
+cp -u ../../lustre/fld/fld.ko $MDIR
+cp -u ../../lustre/fid/fid.ko $MDIR
 cp -u ../../lnet/libcfs/libcfs.ko $MDIR
 cp -u ../../lnet/tests/pingcli.ko $MDIR
 cp -u ../../lnet/tests/spingsrv.ko $MDIR

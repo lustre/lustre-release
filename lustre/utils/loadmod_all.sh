@@ -4,6 +4,8 @@ dmesg -c >/dev/null
 dmesg -n 8
 
 modprobe mgs
+modprobe fid
+modprobe fld
 modprobe mgc
 modprobe osd
 modprobe ost
