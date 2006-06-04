@@ -339,6 +339,13 @@ add_services() {
 		done
 
 		${CONFIG_CMD} --service=${TARGET_SRVNAMES[i]} \
+			      --add_device \
+			      --name=${TARGET_DEVNAMES[i]}
+		if ! check_retval $?; then
+			return 1
+		fi
+
+		${CONFIG_CMD} --service=${TARGET_SRVNAMES[i]} \
 			      --device=${TARGET_DEVNAMES[i]} \
 			      --mount \
 			      --mountpoint=${TARGET_MNTPNTS[i]} \
@@ -359,7 +366,7 @@ gen_cluster_xml() {
 	declare -i i
 	local mcast_IPaddr
 	local node_names
-	local hbopt_str hbopt
+	local hbopt
 
 	[ -e "${CLUMAN_DIR}/cluster.xml" ] && \
 	/bin/mv ${CLUMAN_DIR}/cluster.xml ${CLUMAN_DIR}/cluster.xml.old
@@ -408,18 +415,15 @@ gen_cluster_xml() {
 	fi
 
 	# Add other tags
-	if [ -n "${HBOPT_OPT}"]; then
-		hbopt_str=`echo ${HBOPT_OPT}|awk '{split($HBOPT_OPT, a, ":")}\
-		      	  END {for (i in a) print a[i]}'`
-		idx=0
-		for hbopt in ${hbopt_str}
+	if [ -n "${HBOPT_OPT}" ]; then
+		while read -r hbopt
         	do
 			${CONFIG_CMD} ${hbopt}
 			if ! check_retval $?; then
 				return 1
 			fi
-			idx=$idx+1
-        	done
+        	done < <(echo ${HBOPT_OPT}|awk '{split($HBOPT_OPT, a, ":")}\
+			 END {for (i in a) print a[i]}')
 	fi
 
 	return 0
@@ -429,8 +433,10 @@ gen_cluster_xml() {
 #
 # Create the cluster.xml file and scp it to the each node's /etc/
 create_config() {
-	CONFIG_PRIMNODE=${TMP_DIR}$"/cluster.xml."${PRIM_NODENAME}
 	declare -i idx
+
+	/bin/mkdir -p ${TMP_DIR}
+	CONFIG_PRIMNODE=${TMP_DIR}$"/cluster.xml."${PRIM_NODENAME}
 
 	# Create symlinks for Lustre services
 	verbose_output "Creating symlinks for lustre target services in"\
