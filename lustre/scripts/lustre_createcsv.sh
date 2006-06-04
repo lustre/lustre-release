@@ -56,8 +56,6 @@ LNET_PROC_PEERS=${LNET_PROC}/peers
 
 # Default network module options
 DEFAULT_MOD_OPTS=${DEFAULT_MOD_OPTS:-"options lnet networks=tcp"}
-START_MARKER=${START_MARKER:-"# start lustre config"}
-END_MARKER=${END_MARKER:-"# end lustre config"}
 
 # Variables of HA software
 HATYPE_HBV1="hbv1"			# Heartbeat version 1
@@ -313,6 +311,25 @@ get_hostnames() {
 }
 
 #*************************** Network module options ***************************#
+# last_is_backslash line
+# Check whether the last effective letter of @line is a backslash
+last_is_backslash() {
+	local line="$*"
+	declare -i i
+	declare -i length
+	local letter last_letter
+
+	length=${#line}
+	for ((i = ${length}-1; i >= 0; i--)); do
+		letter=${line:${i}:1}
+        	[ "x${letter}" != "x " -a "x${letter}" != "x	" -a -n "${letter}" ]\
+		&& last_letter=${letter} && break
+	done
+
+	[ "x${last_letter}" = "x\\" ] && return 0
+
+	return 1
+}
 
 # get_module_opts hostname
 # Get the network module options from the node @hostname 
@@ -321,6 +338,7 @@ get_module_opts() {
 	local ret_str
 	local MODULE_CONF KERNEL_VER
 	local ret_line line find_options
+	local continue_flag
 
 	MODULE_OPTS=${DEFAULT_MOD_OPTS}
 
@@ -347,6 +365,7 @@ get_module_opts() {
 	fi
 
 	# Execute remote command to get the lustre network module options
+	continue_flag=false
 	find_options=false
 	while read -r ret_line; do
 		if is_pdsh; then
@@ -357,22 +376,26 @@ get_module_opts() {
 			line="${ret_line}"
 		fi
 
-		if [ "${line}" = "${START_MARKER}" ]; then
-			find_options=true
-			MODULE_OPTS=
-			continue
-		fi	
+		# Get rid of the comment line
+		[ -z "`echo \"${line}\"|egrep -v \"^#\"`" ] && continue
 
-		if ${find_options}; then
-			if [ "${line}" = "${END_MARKER}" ]; then
-				break
-			fi 
-
-			if [ -z "${MODULE_OPTS}" ]; then
+		if [ "${line}" != "${line#*options lnet*}" ]; then
+			if ! ${find_options}; then
+				find_options=true
 				MODULE_OPTS=${line}
 			else
 				MODULE_OPTS=${MODULE_OPTS}$" \n "${line}
 			fi
+
+			last_is_backslash "${line}" && continue_flag=true \
+			|| continue_flag=false
+			continue
+		fi	
+
+		if ${continue_flag}; then
+			MODULE_OPTS=${MODULE_OPTS}$" \n "${line}
+			! last_is_backslash "${line}" && continue_flag=false
+
 		fi
         done < <(${REMOTE} ${host_name} "cat ${MODULE_CONF}")
 
