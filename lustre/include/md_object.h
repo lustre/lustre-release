@@ -185,7 +185,7 @@ static inline int mo_xattr_get(const struct lu_context *cx,
                                struct md_object *m,
                                void *buf, int buf_len, const char *name)
 {
-        if (m->mo_ops->moo_xattr_get);
+        if (m->mo_ops->moo_xattr_get)
                 return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, name);
         else
                 return -ENODEV;
@@ -243,7 +243,7 @@ static inline int mdo_name_insert(const struct lu_context *cx,
                                   const char *name, const struct lu_fid *f,
                                   struct lu_attr *at)
 {
-        if (p->mo_dir_ops->mdo_name_insert);
+        if (p->mo_dir_ops->mdo_name_insert)
                 return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, at);
         else
                 return -ENODEV;

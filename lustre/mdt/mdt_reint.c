@@ -38,9 +38,10 @@
 
 
 /* object operations */
-static int mdt_md_open(struct mdt_thread_info *info, struct mdt_object *obj)
+static int mdt_md_open(struct mdt_thread_info *info, struct mdt_object *child)
 {
-        return 0;
+        return mo_open(info->mti_ctxt, mdt_object_child(child));
+                             
 }
 
 static int mdt_md_create(struct mdt_thread_info *info)
@@ -312,7 +313,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         /*FIXME add permission checking here */
         if (S_ISREG(mode))
                 ;
-
+        /* Open it now. */
         result = mdt_md_open(info, child);
 
 out_child:
