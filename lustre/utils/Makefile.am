@@ -34,7 +34,6 @@ lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 lload_SOURCES = lload.c 
 lload_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 lload_DEPENDENCIES := $(LIBPTLCTL)
-lload_SOURCES = lload.c 
 
 llverfs_LDADD := -lext2fs -le2p
 if BLKID
