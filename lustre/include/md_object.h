@@ -175,67 +175,53 @@ static inline void md_device_fini(struct md_device *md)
 static inline int mo_attr_get(const struct lu_context *cx, struct md_object *m,
                               struct lu_attr *at)
 {
-        if (m->mo_ops->moo_attr_get)
-                return m->mo_ops->moo_attr_get(cx, m, at);
-        else 
-                return -ENODEV;
+        LASSERT(m->mo_ops->moo_attr_get);
+        return m->mo_ops->moo_attr_get(cx, m, at);
 }
 
 static inline int mo_xattr_get(const struct lu_context *cx,
                                struct md_object *m,
                                void *buf, int buf_len, const char *name)
 {
-        if (m->mo_ops->moo_xattr_get)
-                return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, name);
-        else
-                return -ENODEV;
+        LASSERT(m->mo_ops->moo_xattr_get);
+        return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, name);
 }
 
 
 static inline int mo_open(const struct lu_context *cx, struct md_object *m)
 {
-        if (m->mo_ops->moo_open)
-                return m->mo_ops->moo_open(cx, m);
-        else
-                return -ENODEV;
+        LASSERT(m->mo_ops->moo_open);
+        return m->mo_ops->moo_open(cx, m);
 }
 
 static inline int mo_object_create(const struct lu_context *cx,
                                    struct md_object *m, struct lu_attr *at)
 {
-        if (m->mo_ops->moo_object_create)
-                return m->mo_ops->moo_object_create(cx, m, at);
-        else
-                return -ENODEV;
+        LASSERT(m->mo_ops->moo_object_create);
+        return m->mo_ops->moo_object_create(cx, m, at);
 }
 
 static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
                              const char *name, struct lu_fid *f)
 {
-        if (p->mo_dir_ops->mdo_lookup)
-                return p->mo_dir_ops->mdo_lookup(cx, p, name, f);
-        else
-                return -ENODEV;
+        LASSERT(p->mo_dir_ops->mdo_lookup);
+        return p->mo_dir_ops->mdo_lookup(cx, p, name, f);
 }
 
 static inline int mdo_mkdir(const struct lu_context *cx, struct lu_attr *at,
                             struct md_object *p, const char *name,
                             struct md_object *c)
 {
-        if (p->mo_dir_ops->mdo_mkdir)
-                return p->mo_dir_ops->mdo_mkdir(cx, at, p, name, c);
-        else
-                return -ENODEV;
+        LASSERT(p->mo_dir_ops->mdo_mkdir);
+        return p->mo_dir_ops->mdo_mkdir(cx, at, p, name, c);
 }
 
 static inline int mdo_create(const struct lu_context *cx,
                              struct md_object *p, const char *name,
                              struct md_object *c, struct lu_attr *at)
 {
-        if (c->mo_dir_ops->mdo_create)
-                return c->mo_dir_ops->mdo_create(cx, p, name, c, at);
-        else
-                return -ENODEV;
+        LASSERT(c->mo_dir_ops->mdo_create);
+        return c->mo_dir_ops->mdo_create(cx, p, name, c, at);
 }
 
 static inline int mdo_name_insert(const struct lu_context *cx,
@@ -243,10 +229,8 @@ static inline int mdo_name_insert(const struct lu_context *cx,
                                   const char *name, const struct lu_fid *f,
                                   struct lu_attr *at)
 {
-        if (p->mo_dir_ops->mdo_name_insert)
-                return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, at);
-        else
-                return -ENODEV;
+        LASSERT(p->mo_dir_ops->mdo_name_insert);
+        return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, at);
 }
 
 #endif /* _LINUX_MD_OBJECT_H */
