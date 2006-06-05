@@ -91,7 +91,7 @@ mkdir $DST || fail "can't mkdir $DST" 10
 # haven't changed in the last day (hopefully they don't change during test)
 FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -n $COUNT`
 log "copying files from $SRC to $DST$SRC at `date`"
-tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
+tar cf - $FILES | tar xvf - -C $DST > /dev/null || fail "copying $SRC" 11
 
 log "comparing newly copied files at `date`"
 for f in $FILES; do

@@ -724,11 +724,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
          * drop any previous reference the request had, but we don't want
          * that to go to zero before we get our new export reference. */
         export = class_conn2export(&conn);
-
-        /* It's possible that the connection fails if this target is shutting
-           down. */
-        if (!export)
+        if (!export) {
+                DEBUG_REQ(D_ERROR, req, "Missing export!\n");
                 GOTO(out, rc = -ENODEV);
+        }
 
         /* If the client and the server are the same node, we will already
          * have an export that really points to the client's DLM export,
