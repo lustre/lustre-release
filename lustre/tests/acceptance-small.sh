@@ -34,6 +34,10 @@ SETUP=${SETUP:-setupall}
 FORMAT=${FORMAT:-formatall}
 CLEANUP=${CLEANUP:-stopall}
 
+setup_if_needed() {
+    mount | grep $MOUNT || $FORMAT && $SETUP
+}
+
 for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
 	. $LUSTRE/tests/cfg/$NAME.sh
@@ -51,7 +55,7 @@ for NAME in $CONFIGS; do
 	fi
 
 	if [ "$DBENCH" != "no" ]; then
- 	        mount_client $MOUNT
+	        setup_if_needed
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		DB_THREADS=$((SPACE / 50000))
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
@@ -73,7 +77,7 @@ for NAME in $CONFIGS; do
 
 	chown $UID $MOUNT && chmod 700 $MOUNT
 	if [ "$BONNIE" != "no" ]; then
- 	        mount_client $MOUNT
+	        setup_if_needed
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
@@ -85,7 +89,7 @@ for NAME in $CONFIGS; do
 
 	export O_DIRECT
 	if [ "$IOZONE" != "no" ]; then
- 	        mount_client $MOUNT
+	        setup_if_needed
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
@@ -135,7 +139,7 @@ for NAME in $CONFIGS; do
 	fi
 
 	if [ "$FSX" != "no" ]; then
-		mount | grep $MOUNT || $SETUP
+	        setup_if_needed
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
@@ -158,7 +162,7 @@ for NAME in $CONFIGS; do
 	esac
 
 	if [ "$SANITYN" != "no" ]; then
- 	        mount_client $MOUNT
+	        setup_if_needed
 		$DEBUG_OFF
 
 		if [ "$MDSNODE" -a "$MDSNAME" -a "$CLIENT" ]; then
@@ -176,7 +180,7 @@ for NAME in $CONFIGS; do
 	fi
 
 	if [ "$LIBLUSTRE" != "no" ]; then
- 	        mount_client $MOUNT
+	        setup_if_needed
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_TARGET=$MDSNODE:/$MDSNAME/$CLIENT
 		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
