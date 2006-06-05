@@ -29,7 +29,7 @@ Usage:	`basename $0` [-t HAtype] [-h] [-v] [-f csv_filename]
 	-h		help
 	-v		verbose mode
 	-f csv_filename	designate a name for the csv file
-			Default is cluster_config.csv.
+			Default is lustre_config.csv.
 
 EOF
 	exit 1
@@ -37,7 +37,7 @@ EOF
 
 #**************************** Global variables ****************************#
 # csv file
-CSV_FILE=${CSV_FILE:-"cluster_config.csv"}
+CSV_FILE=${CSV_FILE:-"lustre_config.csv"}
 
 # Remote command
 REMOTE=${REMOTE:-"ssh -x -q"}
@@ -67,6 +67,9 @@ CIB_DIR=${CIB_DIR:-"/var/lib/heartbeat/crm"}   # cib.xml directory
 HA_CF=${HA_DIR}/ha.cf			# ha.cf file
 HA_RES=${HA_DIR}/haresources		# haresources file
 HA_CIB=${CIB_DIR}/cib.xml
+
+CLUMAN_TOOLS_PATH=${CLUMAN_TOOLS_PATH:-"/usr/sbin"}	# CluManager tools
+CONFIG_CMD=${CONFIG_CMD:-"${CLUMAN_TOOLS_PATH}/redhat-config-cluster-cmd"}
 
 CLUMAN_DIR=${CLUMAN_DIR:-"/etc"}	# CluManager configuration directory
 CLUMAN_CONFIG=${CLUMAN_DIR}/cluster.xml
@@ -533,13 +536,118 @@ get_hb_configs() {
 	return 0
 }
 
+# get_cluman_channel hostname
+# Get the Heartbeat channel of CluManager from the node @hostname
+get_cluman_channel() {
+	local host_name=$1
+	local ret_line line
+	local cluman_channel=
+	local mcast_ipaddr
+
+	while read -r ret_line; do
+		if is_pdsh; then
+                	set -- ${ret_line}
+			shift
+			line="$*"
+		else
+			line="${ret_line}"
+		fi
+
+		if [ "${line}" != "${line#*broadcast*}" ] \
+		&& [ "`echo ${line}|awk '{print $3}'`" = "yes" ]; then
+			cluman_channel="broadcast"
+			break
+		fi
+
+		if [ "${line}" != "${line#*multicast_ipaddress*}" ]; then
+			mcast_ipaddr=`echo ${line}|awk '{print $3}'`
+			if [ "${mcast_ipaddr}" != "225.0.0.11" ]; then
+				cluman_channel="multicast ${mcast_ipaddr}"
+				break
+			fi
+		fi
+        done < <(${REMOTE} ${host_name} "${CONFIG_CMD} --clumembd")
+
+	echo ${cluman_channel}
+	return 0
+}
+
+# get_cluman_srvaddr hostname target_svname
+# Get the service IP addresses of @target_svname from the node @hostname 
+get_cluman_srvaddr() {
+	local host_name=$1
+	local target_svname=$2
+	local ret_line line
+	local srvaddr cluman_srvaddr=
+
+	while read -r ret_line; do
+		if is_pdsh; then
+                	set -- ${ret_line}
+			shift
+			line="$*"
+		else
+			line="${ret_line}"
+		fi
+
+		if [ "${line}" != "${line#*ipaddress = *}" ]; then
+			srvaddr=`echo ${line}|awk '{print $3}'`
+			if [ -z "${cluman_srvaddr}" ]; then
+				cluman_srvaddr=${srvaddr}			
+			else
+				cluman_srvaddr=${cluman_srvaddr}:${srvaddr}
+			fi
+		fi
+        done < <(${REMOTE} ${host_name} "${CONFIG_CMD} \
+		--service=${target_svname} --service_ipaddresses")
+
+	if [ -z "${cluman_srvaddr}" ]; then
+		echo "`basename $0`: get_cluman_srvaddr() error: Cannot" \
+		"get the service IP addresses of ${target_svname} in" \
+		"${host_name}! Check ${CONFIG_CMD} command!"
+		return 1
+	fi
+
+	echo ${cluman_srvaddr}
+	return 0
+}
+
 # get_cluman_configs hostname
 # Get the CluManager configurations from the node @hostname
 get_cluman_configs() {
 	local host_name=$1
+	local ret_str
+	declare -i i
+
 	unset HA_CONFIGS
 
-	# FIXME: Get CluManager configurations
+	# Execute remote command to get the configs of CluManager
+	for ((i = 0; i < ${#TARGET_DEVNAMES[@]}; i++)); do
+		HB_CHANNELS=
+		SRV_IPADDRS=
+		HB_OPTIONS=
+		[ -z "${TARGET_DEVNAMES[i]}" ] && continue
+
+		# Execute remote command to check whether this target service 
+		# was made to be high-available
+		! is_ha_target ${host_name} ${TARGET_SVNAMES[i]} && continue
+
+		# Execute remote command to get Heartbeat channel
+		HB_CHANNELS=$(get_cluman_channel ${host_name})
+		if [ $? -ne 0 ]; then
+			echo >&2 "${HB_CHANNELS}"
+		fi
+
+		# Execute remote command to get service IP address 
+		SRV_IPADDRS=$(get_cluman_srvaddr ${host_name} \
+			      ${TARGET_SVNAMES[i]})
+		if [ $? -ne 0 ]; then
+			echo >&2 "${SRV_IPADDRS}"
+			return 0
+		fi
+
+		HA_CONFIGS[i]=${HB_CHANNELS},${SRV_IPADDRS},${HB_OPTIONS}
+	done
+
 	return 0
 }
 
@@ -569,7 +677,6 @@ get_ha_configs() {
 		;;
 	esac
 
-	verbose_output "OK"
 	return 0
 }
 
@@ -936,28 +1043,6 @@ get_mntopts() {
 	return 0
 }
 
-# get_mgsnids ldd_params
-# Get the mgs nids of lustre target from @ldd_params
-get_mgsnids() {
-	local mgs_nids=
-	local param=
-	local ldd_params="$*"
-
-	for param in ${ldd_params}; do
-		if [ -n "`echo ${param}|awk '/mgsnode=/ {print $0}'`" ]; then
-			if [ -n "${mgs_nids}" ]; then
-				mgs_nids=${mgs_nids}:`echo ${param#${PARAM_MGSNODE}}`
-			else
-				mgs_nids=`echo ${param#${PARAM_MGSNODE}}`
-			fi
-		fi
-	done
-
-	[ "${mgs_nids}" != "${mgs_nids#*,*}" ] && echo "\""${mgs_nids}"\"" || echo ${mgs_nids}
-
-	return 0
-}
-
 # ip2hostname nids
 # Convert IP addresses in @nids into hostnames
 ip2hostname() {
@@ -992,6 +1077,37 @@ ip2hostname() {
         done
 
 	echo ${nids}
+	return 0
+}
+
+# get_mgsnids ldd_params
+# Get the mgs nids of lustre target from @ldd_params
+get_mgsnids() {
+	local mgs_nids=		# mgs nids in one mgs node
+	local all_mgs_nids=	# mgs nids in all mgs failover nodes
+	local param=
+	local ldd_params="$*"
+
+	for param in ${ldd_params}; do
+		if [ -n "`echo ${param}|awk '/mgsnode=/ {print $0}'`" ]; then
+			mgs_nids=`echo ${param#${PARAM_MGSNODE}}`
+			mgs_nids=$(ip2hostname ${mgs_nids})
+			if [ $? -ne 0 ]; then
+				echo >&2 "${mgs_nids}"
+				return 1
+			fi
+
+			if [ -n "${all_mgs_nids}" ]; then
+				all_mgs_nids=${all_mgs_nids}:${mgs_nids}
+			else
+				all_mgs_nids=${mgs_nids}
+			fi
+		fi
+	done
+
+	[ "${all_mgs_nids}" != "${all_mgs_nids#*,*}" ] \
+	&& echo "\""${all_mgs_nids}"\"" || echo ${all_mgs_nids}
+
 	return 0
 }
 
@@ -1044,9 +1160,9 @@ get_fmtopts() {
 
 		if [ -n "${param}" ]; then
 			if [ -n "${fmt_opts}" ]; then
-				fmt_opts=${fmt_opts}" "${param}
+				fmt_opts=${fmt_opts}" --param=\""${param}"\""
 			else
-				fmt_opts=${param}
+				fmt_opts="--param=\""${param}"\""
 			fi
 		fi
 	done
