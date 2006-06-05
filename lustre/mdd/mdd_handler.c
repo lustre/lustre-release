@@ -156,6 +156,12 @@ static int mdd_object_init(const struct lu_context *ctxt, struct lu_object *o)
         RETURN(0);
 }
 
+static int mdd_object_exists(const struct lu_context *ctx, struct lu_object *o)
+{
+        return lu_object_exists(ctx, lu_object_next(o));
+}
+
+
 static void mdd_object_free(const struct lu_context *ctxt, struct lu_object *o)
 {
 	struct lu_object_header *h;
@@ -171,12 +177,17 @@ mdd_attr_get(const struct lu_context *ctxt,
              struct md_object *obj, struct lu_attr *attr)
 {
         struct mdd_object *mdd_obj = mdo2mddo(obj);
-        struct dt_object  *next = mdd_object_child(mdd_obj);
+        struct dt_object  *next;
         int rc;
 
         ENTRY;
 
-        rc = next->do_ops->do_attr_get(ctxt, next, attr);
+        if (mdd_object_exists(ctxt, &obj->mo_lu)) {
+                next = mdd_object_child(mdd_obj);
+                rc = next->do_ops->do_attr_get(ctxt, next, attr);
+        } else
+                rc = -ENOENT;
+        
         RETURN(rc);
 }
 
@@ -185,12 +196,15 @@ mdd_xattr_get(const struct lu_context *ctxt, struct md_object *obj, void *buf,
               int buf_len, const char *name)
 {
         struct mdd_object *mdd_obj = mdo2mddo(obj);
-        struct dt_object  *next = mdd_object_child(mdd_obj);
+        struct dt_object  *next;
         int rc;
 
         ENTRY;
-
-        rc = next->do_ops->do_xattr_get(ctxt, next, buf, buf_len, name);
+        if (mdd_object_exists(ctxt, &obj->mo_lu)) {
+                next = mdd_object_child(mdd_obj);
+                rc = next->do_ops->do_xattr_get(ctxt, next, buf, buf_len, name);
+        }
+                rc = -ENOENT;
         RETURN(rc);
 }
 
@@ -199,8 +213,14 @@ __mdd_object_destroy(const struct lu_context *ctxt, struct mdd_object *obj,
                      struct thandle *handle)
 {
         struct dt_object  *next = mdd_object_child(obj);
-        int rc;
-        rc = next->do_ops->do_object_destroy(ctxt, next, handle);
+        int rc = 0;
+       
+        ENTRY; 
+        if (mdd_object_exists(ctxt, &obj->mod_obj.mo_lu)) 
+                rc = next->do_ops->do_object_destroy(ctxt, next, handle);
+        
+        LASSERT(ergo(rc == 0, !mdd_object_exists(ctxt, &obj->mod_obj.mo_lu)));
+        
         RETURN(rc);
 }
 
@@ -312,11 +332,6 @@ mdd_object_destroy(const struct lu_context *ctxt, struct md_object *obj)
 static void mdd_object_release(const struct lu_context *ctxt,
                                struct lu_object *o)
 {
-}
-
-static int mdd_object_exists(const struct lu_context *ctx, struct lu_object *o)
-{
-        return lu_object_exists(ctx, lu_object_next(o));
 }
 
 static int mdd_object_print(const struct lu_context *ctxt,
@@ -480,11 +495,16 @@ static int
 __mdd_object_create(const struct lu_context *ctxt, struct mdd_object *obj,
                     struct lu_attr *attr, struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        int rc;
+        struct dt_object *next;
+        int rc = 0;
         ENTRY;
 
-        rc = next->do_ops->do_object_create(ctxt, next, attr, handle);
+        if (!mdd_object_exists(ctxt, &obj->mod_obj.mo_lu)) {
+                next = mdd_object_child(obj);
+                rc = next->do_ops->do_object_create(ctxt, next, attr, handle);
+        } else
+                rc = -EEXIST;        
+        LASSERT(ergo(rc == 0, lu_object_exists(ctxt, &obj->mod_obj.mo_lu)));
         /*XXX increase the refcount of the object or not?*/
         RETURN(rc);
 }
@@ -510,13 +530,16 @@ static int mdd_object_create(const struct lu_context *ctxt, struct md_object *ob
         RETURN(rc);
 }
 
-
 static int
 __mdd_attr_set(const struct lu_context *ctxt, struct md_object *obj,
                struct lu_attr *attr, struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(mdo2mddo(obj));
-        return next->do_ops->do_attr_set(ctxt, next, attr, handle);
+        struct dt_object *next;
+        if (!mdd_object_exists(ctxt, &obj->mo_lu)) {
+                next = mdd_object_child(mdo2mddo(obj));
+                return next->do_ops->do_attr_set(ctxt, next, attr, handle);
+        }
+                return -ENOENT;
 }
 
 static int
@@ -545,9 +568,13 @@ __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_device *mdd,
                 struct mdd_object *obj, void *buf,
                 int buf_len, const char *name, struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        return next->do_ops->do_xattr_set(ctxt, next, buf, buf_len,
-                                          name, handle);
+        struct dt_object *next;
+        if (!mdd_object_exists(ctxt, &obj->mod_obj.mo_lu)) {
+                next = mdd_object_child(obj);
+                return next->do_ops->do_xattr_set(ctxt, next, buf, 
+                                                  buf_len, name, handle);
+        } else
+                return -ENOENT;
 }
 
 static int
