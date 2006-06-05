@@ -4,6 +4,7 @@
  * Lustre Object.
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Nikita Danilov <nikita@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -50,9 +51,11 @@ void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
 {
         struct lu_object_header *top;
         struct lu_site          *site;
+        int                      kill_it;
 
         top = o->lo_header;
         site = o->lo_dev->ld_site;
+        kill_it = 0;
         spin_lock(&site->ls_guard);
         if (-- top->loh_ref == 0) {
                 /*
@@ -80,10 +83,11 @@ void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
                          */
                         hlist_del_init(&top->loh_hash);
                         list_del_init(&top->loh_lru);
+                        kill_it = 1;
                 }
         }
         spin_unlock(&site->ls_guard);
-        if (lu_object_is_dying(top))
+        if (kill_it)
                 /*
                  * Object was already removed from hash and lru above, can
                  * kill it.
@@ -223,22 +227,20 @@ int lu_object_print(const struct lu_context *ctx,
                     struct seq_file *f, const struct lu_object *o)
 {
         static char ruler[] = "........................................";
-        const struct lu_object *scan;
+        struct lu_object_header *top;
         int nob;
         int depth;
 
         nob = 0;
-        scan = o;
-        list_for_each_entry_continue(scan, &o->lo_linkage, lo_linkage) {
-                depth = scan->lo_depth;
-                if (depth <= o->lo_depth && scan != o)
-                        break;
-                LASSERT(scan->lo_ops->loo_object_print != NULL);
+        top = o->lo_header;
+        list_for_each_entry(o, &top->loh_layers, lo_linkage) {
+                depth = o->lo_depth;
+                LASSERT(o->lo_ops->loo_object_print != NULL);
                 /*
                  * print `.' @depth times.
                  */
                 nob += seq_printf(f, "%*.*s", depth, depth, ruler);
-                nob += scan->lo_ops->loo_object_print(ctx, f, scan);
+                nob += o->lo_ops->loo_object_print(ctx, f, o);
                 nob += seq_printf(f, "\n");
         }
         return nob;
