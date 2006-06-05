@@ -877,7 +877,7 @@ int mdc_fld(struct obd_export *exp, struct md_fld *mf, __u32 fld_op)
         struct md_fld *pmf;
         int mf_size = sizeof(*mf);
         __u32 *op;
-        int size[2] = {sizeof(op), mf_size}, rc;
+        int size[2] = {sizeof(*op), mf_size}, rc;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -897,6 +897,7 @@ int mdc_fld(struct obd_export *exp, struct md_fld *mf, __u32 fld_op)
                 GOTO(out_req, rc);
 
         pmf = lustre_swab_repbuf(req, 0, sizeof(*pmf), lustre_swab_md_fld);
+        *mf = *pmf; 
 out_req:
         ptlrpc_req_finished(req);
         RETURN(rc);
