@@ -137,8 +137,8 @@ start() {
         echo Start of ${device} on ${facet} failed ${RC}
     else 
 	do_facet ${facet} sync
-	# need the awk in case running with -v 
-	label=`do_facet ${facet} "e2label ${device}" | awk '{print $(NF)}'`
+	label=`do_facet ${facet} "e2label ${device}" | grep -v "CMD: "`
+	[ -z "$label" ] && echo no label for ${device} && exit 1
 	eval export ${facet}_svc=${label}
 	eval export ${facet}_dev=${device}
 	eval export ${facet}_opt=\"$@\"
@@ -153,16 +153,16 @@ stop() {
     shift
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo stop: no host for $facet && return 0
-    # the following line fails with VERBOSE set 
-    #running=`do_facet ${facet} awk '/mnt\/${facet} / {print "FOUND"}' /proc/mounts`
-    running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts" | awk '{print $(NF)}'`
+
+    running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts" | grep -v "CMD: "`
     if [ ${running} -ne 0 ]; then
 	echo "Stopping /mnt/${facet} (opts:$@)"
 	do_facet ${facet} umount -d $@ /mnt/${facet}
     fi
-    #do_facet ${facet} umount -d $@ /mnt/${facet} >> /dev/null 2>&1 || :
+
     [ -e /proc/fs/lustre ] && grep "ST " /proc/fs/lustre/devices && echo "service didn't stop" && exit 1
     return 0
+
 }
 
 zconf_mount() {
@@ -192,7 +192,7 @@ zconf_umount() {
     client=$1
     mnt=$2
     [ "$3" ] && force=-f
-    local running=`do_node $client "grep -c $mnt' ' /proc/mounts" | awk '{print $(NF)}'`
+    local running=`do_node $client "grep -c $mnt' ' /proc/mounts" | grep -v "CMD: "`
     if [ $running -ne 0 ]; then
 	echo "Stopping client $mnt (opts:$force)"
 	do_node $client umount $force $mnt
@@ -521,9 +521,18 @@ formatall() {
     # We need ldiskfs here, may as well load them all
     load_modules
     echo Formatting mds, osts
-    add mds $MDS_MKFS_OPTS --reformat $MDSDEV > /dev/null || exit 10
+    if $VERBOSE; then
+	add mds $MDS_MKFS_OPTS --reformat $MDSDEV || exit 10
+    else
+	add mds $MDS_MKFS_OPTS --reformat $MDSDEV > /dev/null || exit 10
+    fi
+
     for num in `seq $OSTCOUNT`; do
-	add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
+	if $VERBOSE; then
+	    add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
+	else
+	    add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
+	fi
     done
 }
 
