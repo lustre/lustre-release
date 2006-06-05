@@ -626,7 +626,9 @@ construct_mkfs_cmdline() {
 	fi
 
 	if [ -n "${FORMAT_OPTIONS[i]}" ]; then
-		FORMAT_OPTIONS[i]=`echo "${FORMAT_OPTIONS[i]}" | sed 's/^"//' | sed 's/"$//'`
+		if [ "${FORMAT_OPTIONS[i]:0:1}" = "\"" ]; then
+			FORMAT_OPTIONS[i]=`echo "${FORMAT_OPTIONS[i]}" | sed 's/^"//' | sed 's/"$//'`
+		fi
 		MKFS_CMD=${MKFS_CMD}${FORMAT_OPTIONS[i]}$" "
 	fi
 
