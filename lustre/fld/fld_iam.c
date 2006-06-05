@@ -113,7 +113,7 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
         return (void *)&info->fti_rec;
 }
 
-int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
+int fld_handle_insert(const struct lu_context *ctx, struct lu_fld *fld,
                       fidseq_t seq_num, mdsno_t mds_num)
 {
         struct dt_device *dt = fld->fld_dt;
@@ -136,7 +136,7 @@ int fld_handle_insert(const struct lu_context *ctx, struct fld *fld,
         RETURN(rc);
 }
 
-int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
+int fld_handle_delete(const struct lu_context *ctx, struct lu_fld *fld,
                       fidseq_t seq_num)
 {
         struct dt_device *dt = fld->fld_dt;
@@ -156,7 +156,7 @@ int fld_handle_delete(const struct lu_context *ctx, struct fld *fld,
 }
 
 int fld_handle_lookup(const struct lu_context *ctx,
-                      struct fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
+                      struct lu_fld *fld, fidseq_t seq_num, mdsno_t *mds_num)
 {
         int result;
 
@@ -170,7 +170,7 @@ int fld_handle_lookup(const struct lu_context *ctx,
         return result;
 }
 
-int fld_iam_init(const struct lu_context *ctx, struct fld *fld)
+int fld_iam_init(const struct lu_context *ctx, struct lu_fld *fld)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj;
@@ -213,7 +213,7 @@ int fld_iam_init(const struct lu_context *ctx, struct fld *fld)
         RETURN(rc);
 }
 
-void fld_iam_fini(const struct lu_context *ctx, struct fld *fld)
+void fld_iam_fini(const struct lu_context *ctx, struct lu_fld *fld)
 {
         if (!IS_ERR(fld->fld_cookie) && fld->fld_cookie != NULL) {
                 fld->fld_dt->dd_ops->dt_index_fini(ctx, fld->fld_cookie);

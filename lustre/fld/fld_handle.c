@@ -45,7 +45,7 @@
 #include "fld_internal.h"
 
 static int fld_handle(const struct lu_context *ctx,
-                      struct fld *fld, __u32 opts, struct md_fld *mf);
+                      struct lu_fld *fld, __u32 opts, struct md_fld *mf);
 
 /*XXX maybe these 2 items should go to sbi*/
 struct fld_cache_info *fld_cache = NULL;
@@ -285,7 +285,7 @@ static void __exit fld_mod_exit(void)
 struct fld_list fld_list_head;
 
 static int fld_req_handle0(const struct lu_context *ctx,
-                           struct fld *fld, struct ptlrpc_request *req)
+                           struct lu_fld *fld, struct ptlrpc_request *req)
 {
         struct md_fld *in;
         struct md_fld *out;
@@ -342,7 +342,7 @@ static int fld_req_handle(struct ptlrpc_request *req)
         RETURN(result);
 }
 
-int fld_server_init(const struct lu_context *ctx, struct fld *fld,
+int fld_server_init(const struct lu_context *ctx, struct lu_fld *fld,
                     struct dt_device *dt)
 {
         int result;
@@ -382,7 +382,7 @@ int fld_server_init(const struct lu_context *ctx, struct fld *fld,
 }
 EXPORT_SYMBOL(fld_server_init);
 
-void fld_server_fini(const struct lu_context *ctx, struct fld *fld)
+void fld_server_fini(const struct lu_context *ctx, struct lu_fld *fld)
 {
         struct list_head *pos, *n;
 
@@ -408,7 +408,7 @@ void fld_server_fini(const struct lu_context *ctx, struct fld *fld)
 EXPORT_SYMBOL(fld_server_fini);
 
 static int fld_handle(const struct lu_context *ctx,
-                      struct fld *fld, __u32 opts, struct md_fld *mf)
+                      struct lu_fld *fld, __u32 opts, struct md_fld *mf)
 {
         int rc;
         ENTRY;

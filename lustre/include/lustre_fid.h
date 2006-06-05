@@ -76,7 +76,7 @@ void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
 /*
  * fld (fid location database) interface.
  */
-struct fld {
+struct lu_fld {
         struct proc_dir_entry   *fld_proc_entry;
         struct ptlrpc_service   *fld_service;
         struct dt_device        *fld_dt;
@@ -85,8 +85,8 @@ struct fld {
         struct dt_index_cookie  *fld_cookie;
 };
 
-int  fld_server_init(const struct lu_context *ctx, struct fld *fld,
+int  fld_server_init(const struct lu_context *ctx, struct lu_fld *fld,
                      struct dt_device *dt);
-void fld_server_fini(const struct lu_context *ctx, struct fld *fld);
+void fld_server_fini(const struct lu_context *ctx, struct lu_fld *fld);
 
 #endif /* __LINUX_OBD_CLASS_H */

@@ -468,7 +468,7 @@ struct lu_site {
         /*
          * Fid location database
          */
-        struct fld        *ls_fld;
+        struct lu_fld        *ls_fld;
 
         /* statistical counters. Protected by nothing, races are accepted. */
         struct {
