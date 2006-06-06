@@ -94,12 +94,18 @@ struct md_dir_operations {
         int (*mdo_link)(const struct lu_context *ctxt, struct md_object *tobj,
                         struct md_object *sobj, const char *name);
 
+        int (*mdo_unlink)(const struct lu_context *, struct md_object *,
+                          struct md_object *, const char *);
+
         /* partial ops for cross-ref case */
         int (*mdo_name_insert)(const struct lu_context *, struct md_object *,
                                const char *, const struct lu_fid *,
                                struct lu_attr *);
         int (*mdo_name_remove)(const struct lu_context *, struct md_object *,
                                const char *, struct lu_attr *);
+        int (*mdo_rename_tgt)(const struct lu_context *, struct md_object *,
+                              struct md_object *, struct md_object *,
+                              const char *);
 };
 
 struct md_device_operations {
@@ -224,6 +230,29 @@ static inline int mdo_create(const struct lu_context *cx,
         return c->mo_dir_ops->mdo_create(cx, p, name, c, at);
 }
 
+static inline int mdo_rename(const struct lu_context *cx,
+                             struct md_object *sp, struct md_object *tp,
+                             struct md_object *s, const char *sname,
+                             struct md_object *t, const char *tname)
+{
+        LASSERT(tp->mo_dir_ops->mdo_rename);
+        return tp->mo_dir_ops->mdo_rename(cx, sp, tp, s, sname, t, tname);
+}
+
+static inline int mdo_link(const struct lu_context *cx, struct md_object *p,
+                           struct md_object *s, const char *name)
+{
+        LASSERT(s->mo_dir_ops->mdo_link);
+        return s->mo_dir_ops->mdo_link(cx, p, s, name);
+}
+
+static inline int mdo_unlink(const struct lu_context *cx, struct md_object *p,
+                             struct md_object *c, const char *name)
+{
+        LASSERT(c->mo_dir_ops->mdo_unlink);
+        return c->mo_dir_ops->mdo_unlink(cx, p, c, name);
+}
+
 static inline int mdo_name_insert(const struct lu_context *cx,
                                   struct md_object *p,
                                   const char *name, const struct lu_fid *f,
@@ -233,4 +262,20 @@ static inline int mdo_name_insert(const struct lu_context *cx,
         return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, at);
 }
 
+static inline int mdo_name_remove(const struct lu_context *cx,
+                                  struct md_object *p,
+                                  const char *name, struct lu_attr *at)
+{
+        LASSERT(p->mo_dir_ops->mdo_name_remove);
+        return p->mo_dir_ops->mdo_name_remove(cx, p, name, at);
+}
+
+static inline int mdo_rename_tgt(const struct lu_context *cx,
+                                 struct md_object *p,
+                                 struct md_object *s, struct md_object *t,
+                                 const char *name)
+{
+        LASSERT(p->mo_dir_ops->mdo_rename_tgt);
+        return p->mo_dir_ops->mdo_rename_tgt(cx, p, s, t, name);
+}
 #endif /* _LINUX_MD_OBJECT_H */
