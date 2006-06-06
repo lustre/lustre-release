@@ -28,7 +28,6 @@ generate_lnet_lines() {
 
 	echo ${START_MARKER} > ${MODLINES_FILE}
 	echo "# Lustre module options added automatically by `basename $0`" >> ${MODLINES_FILE}
-	echo "alias lustre llite" >> ${MODLINES_FILE}
 	while true; do
 		LNET_LINE=${TMP_LINE%%\\n*}
         	echo ${LNET_LINE} >> ${MODLINES_FILE}

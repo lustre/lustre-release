@@ -95,7 +95,7 @@ load_modules() {
     load_module lvfs/fsfilt_ldiskfs
     load_module ost/ost
     load_module obdfilter/obdfilter
-    load_module llite/llite
+    load_module llite/lustre
     load_module mgc/mgc
     load_module mgs/mgs
     # 'mount' doesn't look in $PATH 

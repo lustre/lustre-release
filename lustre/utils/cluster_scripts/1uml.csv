@@ -1,5 +1,0 @@
-# combo mdt/mgs
-uml1,options lnet networks=tcp,/r/tmp/mdt,/mnt/mdt,mdt|mgs,,,,--device-size=10240
-
-# ost0
-uml1,options lnet networks=tcp,/r/tmp/ost0,/mnt/ost0,ost,,uml1@tcp0,,--device-size=10240

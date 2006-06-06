@@ -1868,7 +1868,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
                 if (!client_fill_super) {
                         LCONSOLE_ERROR("Nothing registered for client mount!"
-                               " Is llite module loaded?\n");
+                               " Is the 'lustre' module loaded?\n");
                         rc = -ENODEV;
                 } else {
                         rc = lustre_start_mgc(sb);

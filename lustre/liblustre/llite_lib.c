@@ -275,7 +275,7 @@ void __liblustre_setup_(void)
 {
         char *target = NULL;
         char *root_driver = "native";
-        char *lustre_driver = "llite";
+        char *lustre_driver = "lustre";
         char *root_path = "/";
         unsigned mntflgs = 0;
         int err;

@@ -26,9 +26,6 @@ AC_SUBST(demodir)
 
 pkgexampledir='${pkgdatadir}/examples'
 AC_SUBST(pkgexampledir)
-
-pymoddir='${pkglibdir}/python/Lustre'
-AC_SUBST(pymoddir)
 ])
 
 #
@@ -688,7 +685,6 @@ lustre/Makefile
 lustre/autoMakefile
 lustre/autoconf/Makefile
 lustre/contrib/Makefile
-lustre/conf/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre_ver.h
@@ -740,8 +736,6 @@ lustre/quota/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
 lustre/tests/Makefile
-lustre/utils/Lustre/Makefile
-lustre/utils/cluster_scripts/Makefile
 lustre/utils/Makefile
 ])
 case $lb_target_os in
