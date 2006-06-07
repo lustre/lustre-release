@@ -823,7 +823,7 @@ cleanup:
 }
 
 static int mdd_mkname(const struct lu_context *ctxt, struct md_object *pobj,
-          const char *name, const struct lu_fid *fid, struct lu_attr *attr)
+          const char *name, const struct lu_fid *fid)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = mdo2mddo(pobj);
