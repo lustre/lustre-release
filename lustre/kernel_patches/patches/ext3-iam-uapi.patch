@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-06-02 22:59:11.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-06-02 22:59:12.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-06-08 01:08:10.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-06-08 01:08:11.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-06-02 22:59:11.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-06-02 22:59:12.000000000 +0400
+--- iam.orig/fs/ext3/file.c	2006-06-08 01:08:10.000000000 +0400
++++ iam/fs/ext3/file.c	2006-06-08 01:08:11.000000000 +0400
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -50,7 +50,7 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-06-02 22:59:12.000000000 +0400
++++ iam/fs/ext3/iam-uapi.c	2006-06-08 01:08:11.000000000 +0400
 @@ -0,0 +1,256 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -310,8 +310,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-06-02 22:59:11.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-06-02 22:59:12.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-06-08 01:08:10.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-06-08 01:08:11.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
@@ -333,6 +333,23 @@ Index: iam/include/linux/lustre_iam.h
  /*
   * Entry within index tree node. Consists of a key immediately followed
   * (without padding) by a pointer to the child node.
+@@ -89,11 +90,11 @@ struct iam_key;
+ /* Incomplete type use to refer to the records stored in iam containers. */
+ struct iam_rec;
+ 
+-struct iam_cookie {
+-	struct iam_key *ic_key;
+-	struct iam_rec *ic_rec;
+-};
+-
++/*
++ * Scalar type into which certain iam_key's can be uniquely mapped. Used to
++ * support interfaces like readdir(), where iteration over index has to be
++ * re-startable.
++ */
+ typedef __u64 iam_ptr_t;
+ 
+ /*
 @@ -131,11 +132,15 @@ struct iam_operations {
  	__u32 (*id_root_ptr)(struct iam_container *c);
  
@@ -372,7 +389,67 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
-@@ -650,6 +660,15 @@ static inline unsigned dx_node_limit(str
+@@ -468,7 +478,7 @@ int iam_it_next(struct iam_iterator *it)
+ /*
+  * Return pointer to the record under iterator.
+  *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED
++ * precondition:  it_state(it) == IAM_IT_ATTACHED && it_at_rec(it)
+  * postcondition: it_state(it) == IAM_IT_ATTACHED
+  */
+ struct iam_rec *iam_it_rec_get(const struct iam_iterator *it);
+@@ -476,7 +486,9 @@ struct iam_rec *iam_it_rec_get(const str
+ /*
+  * Replace contents of record under iterator.
+  *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE
++ * precondition:  it_state(it) == IAM_IT_ATTACHED &&
++ *                it->ii_flags&IAM_IT_WRITE &&
++ *                it_at_rec(it)
+  * postcondition: it_state(it) == IAM_IT_ATTACHED &&
+  *                ergo(result == 0, !memcmp(iam_it_rec_get(it), r, ...))
+  */
+@@ -485,7 +497,7 @@ int iam_it_rec_set(handle_t *h, struct i
+ /*
+  * Place key under iterator in @k, return @k
+  *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED
++ * precondition:  it_state(it) == IAM_IT_ATTACHED && it_at_rec(it)
+  * postcondition: it_state(it) == IAM_IT_ATTACHED
+  */
+ struct iam_key *iam_it_key_get(const struct iam_iterator *it,
+@@ -497,7 +509,8 @@ struct iam_key *iam_it_key_get(const str
+  *
+  * precondition:  it_state(it) == IAM_IT_ATTACHED &&
+  *                it->ii_flags&IAM_IT_WRITE &&
+- *                it_keycmp(it, iam_it_key_get(it, *), k) < 0
++ *                ergo(it_at_rec(it),
++ *                     it_keycmp(it, iam_it_key_get(it, *), k) < 0)
+  * postcondition: it_state(it) == IAM_IT_ATTACHED &&
+  *                ergo(result == 0,
+  *                     it_keycmp(it, iam_it_key_get(it, *), k) == 0 &&
+@@ -508,7 +521,9 @@ int iam_it_rec_insert(handle_t *h, struc
+ /*
+  * Delete record under iterator.
+  *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE
++ * precondition:  it_state(it) == IAM_IT_ATTACHED &&
++ *                it->ii_flags&IAM_IT_WRITE &&
++ *                it_at_rec(it)
+  * postcondition: it_state(it) == IAM_IT_ATTACHED
+  */
+ int iam_it_rec_delete(handle_t *h, struct iam_iterator *it);
+@@ -519,7 +534,8 @@ typedef __u64 iam_pos_t;
+  * Convert iterator to cookie.
+  *
+  * precondition:  it_state(it) == IAM_IT_ATTACHED &&
+- *                path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
++ *                path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t) &&
++ *                it_at_rec(it)
+  * postcondition: it_state(it) == IAM_IT_ATTACHED
+  */
+ iam_pos_t iam_it_store(const struct iam_iterator *it);
+@@ -650,6 +666,15 @@ static inline unsigned dx_node_limit(str
  	return entry_space / (param->id_key_size + param->id_ptr_size);
  }
  
@@ -388,7 +465,7 @@ Index: iam/include/linux/lustre_iam.h
  static inline struct iam_entry *dx_get_entries(struct iam_path *path,
  					       void *data, int root)
  {
-@@ -702,6 +721,8 @@ void iam_insert_key(struct iam_path *pat
+@@ -702,6 +727,8 @@ void iam_insert_key(struct iam_path *pat
  
  int  iam_leaf_at_end(const struct iam_leaf *l);
  void iam_leaf_next(struct iam_leaf *folio);
@@ -397,7 +474,7 @@ Index: iam/include/linux/lustre_iam.h
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
  struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
-@@ -718,5 +739,40 @@ void iam_format_register(struct iam_form
+@@ -718,5 +745,40 @@ void iam_format_register(struct iam_form
  
  void iam_lfix_format_init(void);
  
