@@ -353,7 +353,7 @@ The Lustre Lite file system utilities.  This includes the tools needed
 to configure, mount, and administer a Lustre filesystem.  This package
 is necessary if you want to access a Lustre filesystem.
 
-# the lustre-doc files are just included as %doc wiht
+# the lustre-doc files are just included as %doc with
 # lustre-lite-utils
 
 #%package -n lustre-doc
@@ -363,14 +363,6 @@ is necessary if you want to access a Lustre filesystem.
 #%description -n lustre-doc
 #The Lustre book, sample configurations, and other documentation for
 #Lustre.
-
-%package -n lustre-ldap
-Summary: LDAP schema files for Lustre
-Group: System Environment/Daemons
-
-%description -n lustre-ldap
-LDAP schema files for Lustre.  These are needed if you plan to store
-your Lustre configuration in LDAP, rather than on disk.
 
 %prep
 %setup -n lustre-kernel-%{version} -q -c
