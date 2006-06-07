@@ -28,6 +28,83 @@
 #include <obd.h>
 #include <md_object.h>
 
+#ifdef CMM_CODE
+struct cmm_device {
+        struct md_device cmm_md_dev;
+        /* underlaying device in MDS stack, usually MDD */
+        struct md_device *cmm_child;
+        /* other MD servers in cluster */
+        __u32            cmm_local_num;
+        __u32            cmm_tgt_count;
+        struct list_head cmm_targets;
+        spinlock_t       cmm_tgt_guard;
+};
+
+static inline struct md_device_operations *cmm_child_ops(struct cmm_device *d)
+{
+        return (d->cmm_child->md_ops);
+}
+
+static inline struct cmm_device *md2cmm_dev(struct md_device *m)
+{
+        return container_of0(m, struct cmm_device, cmm_md_dev);
+}
+
+static inline struct cmm_device *lu2cmm_dev(struct lu_device *d)
+{
+	return container_of0(d, struct cmm_device, cmm_md_dev.md_lu_dev);
+}
+
+static inline struct lu_device *cmm2lu_dev(struct cmm_device *d)
+{
+	return (&d->cmm_md_dev.md_lu_dev);
+}
+
+struct cmm_object {
+	struct md_object cmo_obj;
+};
+
+/* local CMM objec */
+struct cml_object {
+        struct cmm_object cmm_obj;
+};
+
+/* remote CMM object */
+struct cmr_object {
+        struct cmm_object cmm_obj;
+        /* mds number where object is placed */
+        __u32            cmo_num;
+}
+
+static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)
+{
+	return (md2cmm_dev(md_device_get(&c->cmo_obj)));
+}
+
+static inline struct cmm_object *lu2cmm_obj(struct lu_object *o)
+{
+	//LASSERT(lu_device_is_cmm(o->lo_dev));
+	return container_of0(o, struct cmm_object, cmo_obj.mo_lu);
+}
+
+/* get cmm object from md_object */
+static inline struct cmm_object *md2cmm_obj(struct md_object *o)
+{
+	return container_of0(o, struct cmm_object, cmo_obj);
+}
+/* get lower-layer object */
+static inline struct md_object *cmm2child_obj(struct cmm_object *o)
+{
+        return lu2md(lu_object_next(&o->cmo_obj.mo_lu));
+}
+
+/* cmm_object.c */
+struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
+                                   const struct lu_object_header *hdr,
+                                   struct lu_device *);
+
+#else
+
 struct cmm_device {
         struct md_device cmm_md_dev;
         /* underlaying device in MDS stack, usually MDD */
@@ -96,5 +173,6 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *);
+#endif
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */

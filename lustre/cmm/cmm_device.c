@@ -54,7 +54,7 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
-int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
+static int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
                  struct lu_fid *fid)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
@@ -63,7 +63,7 @@ int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
                                                     cmm_dev->cmm_child, fid);
 }
 
-int cmm_config(const struct lu_context *ctxt, struct md_device *md,
+static int cmm_config(const struct lu_context *ctxt, struct md_device *md,
                const char *name, void *buf, int size, int mode)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
@@ -74,7 +74,7 @@ int cmm_config(const struct lu_context *ctxt, struct md_device *md,
         RETURN(rc);
 }
 
-int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
+static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
                struct kstatfs *sfs) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 	int rc;
@@ -93,19 +93,34 @@ static struct md_device_operations cmm_md_ops = {
 
 extern struct lu_device_type mdc_device_type;
 
+/* --- cmm_lu_operations --- */
 /* add new MDC to the CMM, create MDC lu_device and connect it to mdc_obd */
 static int cmm_add_mdc(const struct lu_context *ctx,
                        struct cmm_device * cm, struct lustre_cfg *cfg)
 {
         struct lu_device_type *ldt = &mdc_device_type;
         struct lu_device *ld;
+        struct mdc_device *mc;
+#ifdef CMM_CODE
+        struct mdc_device *tmp;
+        __u32 mdc_num;
+#endif
         int rc;
         ENTRY;
 
-        /*TODO check this MDC exists already */
-
+#ifdef CMM_CODE
+        /* find out that there is no such mdc */
+        LASSERT(lustre_cfg_string(cfg, 2));
+        mdc_num = simple_strtol(lustre_cfg_string(cfg, 2), NULL, 10);
+        spin_lock(&cm->cmm_tgt_guard);
+        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
+                                 mc_linkage) {
+                if (mc->mc_num == mdc_num)
+                        RETURN(-EEXIST);
+        }
+        spin_unlock(&cm->cmm_tgt_guard);
+#endif        
         ld = ldt->ldt_ops->ldto_device_alloc(ctx, ldt, cfg);
-
         ld->ld_site = cmm2lu_dev(cm)->ld_site;
 
         rc = ldt->ldt_ops->ldto_device_init(ctx, ld, NULL);
@@ -115,10 +130,16 @@ static int cmm_add_mdc(const struct lu_context *ctx,
         /* pass config to the just created MDC */
         rc = ld->ld_ops->ldo_process_config(ctx, ld, cfg);
         if (rc == 0) {
-                struct mdc_device *mc = lu2mdc_dev(ld);
+                mc = lu2mdc_dev(ld);
+#ifdef CMM_CODE
+                spin_lock(&cm->cmm_tgt_guard);
+#endif
                 list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
-                lu_device_get(cmm2lu_dev(cm));
                 cm->cmm_tgt_count++;
+#ifdef CMM_CODE
+                spin_unlock(&cm->cmm_tgt_guard);
+#endif                
+                lu_device_get(cmm2lu_dev(cm));
         }
         RETURN(rc);
 }
@@ -150,13 +171,12 @@ static int cmm_process_config(const struct lu_context *ctx,
 
 static struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_alloc   = cmm_object_alloc,
-
         .ldo_process_config = cmm_process_config
 };
 
 /* --- lu_device_type operations --- */
 
-struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
+static struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
                                    struct lu_device_type *t,
                                    struct lustre_cfg *cfg)
 {
@@ -179,7 +199,7 @@ struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
         return l;
 }
 
-void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
+static void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
 {
         struct cmm_device *m = lu2cmm_dev(d);
 
@@ -188,12 +208,12 @@ void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
         OBD_FREE_PTR(m);
 }
 
-int cmm_type_init(struct lu_device_type *t)
+static int cmm_type_init(struct lu_device_type *t)
 {
         return 0;
 }
 
-void cmm_type_fini(struct lu_device_type *t)
+static void cmm_type_fini(struct lu_device_type *t)
 {
         return;
 }
@@ -205,7 +225,10 @@ static int cmm_device_init(const struct lu_context *ctx,
         int err = 0;
 
         ENTRY;
-
+        
+#ifdef CMM_CODE
+        spin_lock_init(&m->cmm_tgt_guard);
+#endif
         INIT_LIST_HEAD(&m->cmm_targets);
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
