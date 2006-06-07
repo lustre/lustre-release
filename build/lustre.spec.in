@@ -12,7 +12,7 @@ Source: lustre-%{version}.tar.gz
 URL: http://clusterfs.com/
 BuildRoot: /var/tmp/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap
-Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}, lustre-ldap = %{version}
+Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
 
 %description
 Userspace tools and files for the Lustre file system.
@@ -50,7 +50,7 @@ Lustre sources for further development
 Summary: Lustre dependencies meta-package for SLES
 Group: Utilities/System
 Provides: lustre-deps = %{version}
-Requires: lustre = %{version}, sles-release, python-xml
+Requires: lustre = %{version}, sles-release
 Conflicts: lustre-deps-rhel
 
 %description deps-sles
@@ -60,7 +60,7 @@ This package has RPM dependencies appropriate for SLES systems.
 Summary: Lustre dependencies meta-package for RHEL
 Group: Utilities/System
 Provides: lustre-deps = %{version}
-Requires: lustre = %{version}, redhat-release, PyXML
+Requires: lustre = %{version}, redhat-release
 Conflicts: lustre-deps-sles
 
 %description deps-rhel
@@ -108,21 +108,16 @@ cat >lustre.files <<EOF
 %attr(-, root, root) /sbin/mount.lustre
 %attr(-, root, root) /usr/sbin/*
 %attr(-, root, root) /usr/bin/*
-%attr(-, root, root) %{_libdir}/lustre/python
-%attr(-, root, root) /usr/share/lustre/*
 
-%attr(-, root, root) /etc/init.d/lustre
-%attr(-, root, root) /etc/init.d/lustrefs
+%attr(-, root, root) /usr/share/lustre/*
 
 %attr(-, root, root) %{_libdir}/libptlctl.a
 %attr(-, root, root) %{_libdir}/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre
 
 %attr(-, root, root) %{_mandir}/man?/*
-
-%attr(-, root, root) /etc/openldap/slapd-lustre.conf
-%attr(-, root, root) /etc/openldap/schema/lustre.schema
 EOF
+
 if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
   echo '%attr(-, root, root) %{_libdir}/liblustre.a' >>lustre.files
   echo '%attr(-, root, root) %{_libdir}/liblustre.so' >>lustre.files
@@ -156,19 +151,6 @@ fi
 # %files deps-sles
 # %files deps-rhel
 
-%post
-if [ -f /etc/init.d/lustre ] ; then
-	/sbin/chkconfig --add lustre
-	/sbin/chkconfig --add lustrefs
-fi
-
-%preun
-if [ $1 = 0 -a -f /etc/init.d/lustre ] ; then
-	/sbin/chkconfig --del lustre
-	/sbin/chkconfig --del lustrefs
-fi
-rm -f %{_libdir}/lustre/python/Lustre/*.pyc
-
 %post modules
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
@@ -181,10 +163,11 @@ fi
 for f in /etc/modules.conf /etc/modprobe.conf /etc/modprobe.conf.local ; 
 do
 	if [ -f $f ]; then
-		if ! grep 'lustre llite' $f >/dev/null 2>/dev/null ; then
-			cat >> $f <<-EOF
-alias lustre llite
-EOF
+		if grep 'lustre llite' $f >/dev/null 2>/dev/null ; then
+			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
+			TMPFILE=`mktemp $f.XXXXXX` && \
+			grep -v 'lustre llite' $f > $TMPFILE && \
+			mv $TMPFILE $f
 		fi
 		if egrep "^[^#]*(add below|install) ptlrpc" $f ; then
 			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave

@@ -7,6 +7,7 @@ checkstack:
 	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv -f ${CSTK} ${CSTKO} || true
 	{ for i in lustre/* lnet/* ; do					     \
 		MOD=$$i/`basename $$i`;					     \
+		if [ $$i = "lustre/llite" ]; then MOD=$$i/lustre; fi;        \
 		[ -f $$MOD.ko ] && MOD=$$MOD.ko || MOD=$$MOD.o;		     \
 		[ -f $$MOD ] && objdump -d $$MOD | perl build/checkstack.pl; \
 	  done;								     \
