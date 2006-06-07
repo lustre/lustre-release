@@ -78,6 +78,11 @@ load_module() {
 }
 
 load_modules() {
+    if [ "$HAVE_MODULES" = true ]; then
+	return 0
+    fi
+    HAVE_MODULES=true
+
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
     # note that insmod will ignore anything in modprobe.conf
@@ -98,7 +103,8 @@ load_modules() {
     load_module llite/lustre
     load_module mgc/mgc
     load_module mgs/mgs
-    # 'mount' doesn't look in $PATH 
+    $LCTL modules >> /tmp/ogdb-`hostname`
+    # 'mount' doesn't look in $PATH, just sbin
     cp $LUSTRE/utils/mount.lustre /sbin/.
 }
 
@@ -119,6 +125,7 @@ unload_modules() {
 	echo "Memory leaks detected"
 	return 254
     fi
+    HAVE_MODULES=false
 }
 
 # Facet functions
@@ -541,6 +548,7 @@ mount_client() {
 }
 
 setupall() {
+    load_modules
     echo Setup mdt, osts
     start mds $MDSDEV $MDS_MOUNT_OPTS
     for num in `seq $OSTCOUNT`; do
