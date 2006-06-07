@@ -40,8 +40,8 @@
 /* object operations */
 static int mdt_md_open(struct mdt_thread_info *info, struct mdt_object *child)
 {
-        return mo_open(info->mti_ctxt, mdt_object_child(child));
-                             
+        ENTRY;
+        RETURN(mo_open(info->mti_ctxt, mdt_object_child(child)));
 }
 
 static int mdt_md_create(struct mdt_thread_info *info)
@@ -211,8 +211,8 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         struct ptlrpc_request  *req = mdt_info_req(info);
         __u32                   mode = info->mti_attr.la_mode; /*save a backup*/
         struct mdt_body        *body = info->mti_reint_rep.mrr_body;
-         struct lov_mds_md     *lmm  = info->mti_reint_rep.mrr_md;
-
+        struct lov_mds_md      *lmm  = info->mti_reint_rep.mrr_md;
+        int                     created = 0;
         ENTRY;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
@@ -249,43 +249,42 @@ static int mdt_reint_open(struct mdt_thread_info *info)
 
         child = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid2);
         if (IS_ERR(child))
-                GOTO(out_parent, PTR_ERR(child));
+                GOTO(out_parent, result = PTR_ERR(child));
 
-       if (info->mti_rr.rr_flags & MDS_OPEN_CREAT) {
-                if (result == -ENOENT) {
-                        /* let's create something */
-                        result = mdo_create(info->mti_ctxt,
-                                            mdt_object_child(parent),
-                                            info->mti_rr.rr_name,
-                                            mdt_object_child(child),
-                                            &info->mti_attr);
-                        intent_set_disposition(ldlm_rep, DISP_OPEN_CREATE);
-                } else if (info->mti_rr.rr_flags & MDS_OPEN_EXCL) {
+        if (result == -ENOENT) {
+                /* not found and with MDS_OPEN_CREAT: let's create something */
+                result = mdo_create(info->mti_ctxt,
+                                    mdt_object_child(parent),
+                                    info->mti_rr.rr_name,
+                                    mdt_object_child(child),
+                                    &info->mti_attr);
+                intent_set_disposition(ldlm_rep, DISP_OPEN_CREATE);
+                if (result != 0)
+                        GOTO(out_child, result);
+                created = 1; 
+        } else if (info->mti_rr.rr_flags & MDS_OPEN_EXCL &&
+                   info->mti_rr.rr_flags & MDS_OPEN_CREAT) {
                         GOTO(out_child, result = -EEXIST);
-                }
         }
-
-        if (result != 0)
-                GOTO(out_child, result);
 
         result = mo_attr_get(info->mti_ctxt,
                              mdt_object_child(child),
                              &info->mti_attr);
         if (result != 0)
-                GOTO(out_child, result);
+                GOTO(destroy_child, result);
 
         mdt_pack_attr2body(body, &info->mti_attr);
         body->fid1 = *mdt_object_fid(child);
         body->valid |= OBD_MD_FLID;
 
-        /* To be continued: we should return "struct lov_mds_md" back*/
+        /* we should return "struct lov_mds_md" back*/
         lmm = req_capsule_server_get(&info->mti_pill,
                                      &RMF_MDT_MD);
 
         result = mo_xattr_get(info->mti_ctxt, mdt_object_child(child), 
                               lmm, MAX_MD_SIZE, "lov");
         if (result <= 0)
-                GOTO(out_child, result = -EINVAL);
+                GOTO(destroy_child, result = -EINVAL);
 
         if (S_ISDIR(info->mti_attr.la_mode))
                 body->valid |= OBD_MD_FLDIREA;
@@ -308,14 +307,16 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         lmm->lmm_objects[0].l_ost_idx   = 0;    /* OST index in LOV (lov_tgt_desc->tgts) */
         body->eadatasize = sizeof(struct lov_mds_md) + sizeof(struct lov_ost_data);
 
-
-
-        /*FIXME add permission checking here */
+        /*TODO add permission checking here */
         if (S_ISREG(mode))
                 ;
         /* Open it now. */
         result = mdt_md_open(info, child);
 
+destroy_child:
+        if (result != 0 && created)
+                mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
+                           mdt_object_child(child), info->mti_rr.rr_name);
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
