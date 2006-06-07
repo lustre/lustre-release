@@ -146,7 +146,7 @@ Second, per-architecture exclusions (ifarch)
 %define kernel_glob vmlinu?-%{KVERREL}
 %endif
 
-Name: kernel
+Name: kernel-lustre
 Version: %{kversion}
 Release: %{release}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 %define KVERREL %{PACKAGE_VERSION}-%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
