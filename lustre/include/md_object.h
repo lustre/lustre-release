@@ -99,10 +99,9 @@ struct md_dir_operations {
 
         /* partial ops for cross-ref case */
         int (*mdo_name_insert)(const struct lu_context *, struct md_object *,
-                               const char *, const struct lu_fid *,
-                               struct lu_attr *);
+                               const char *, const struct lu_fid *);
         int (*mdo_name_remove)(const struct lu_context *, struct md_object *,
-                               const char *, struct lu_attr *);
+                               const char *);
         int (*mdo_rename_tgt)(const struct lu_context *, struct md_object *,
                               struct md_object *, struct md_object *,
                               const char *);
@@ -255,19 +254,18 @@ static inline int mdo_unlink(const struct lu_context *cx, struct md_object *p,
 
 static inline int mdo_name_insert(const struct lu_context *cx,
                                   struct md_object *p,
-                                  const char *name, const struct lu_fid *f,
-                                  struct lu_attr *at)
+                                  const char *name, const struct lu_fid *f)
 {
         LASSERT(p->mo_dir_ops->mdo_name_insert);
-        return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, at);
+        return p->mo_dir_ops->mdo_name_insert(cx, p, name, f);
 }
 
 static inline int mdo_name_remove(const struct lu_context *cx,
                                   struct md_object *p,
-                                  const char *name, struct lu_attr *at)
+                                  const char *name)
 {
         LASSERT(p->mo_dir_ops->mdo_name_remove);
-        return p->mo_dir_ops->mdo_name_remove(cx, p, name, at);
+        return p->mo_dir_ops->mdo_name_remove(cx, p, name);
 }
 
 static inline int mdo_rename_tgt(const struct lu_context *cx,
