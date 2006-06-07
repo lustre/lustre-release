@@ -166,13 +166,15 @@ do
 		if grep 'lustre llite' $f >/dev/null 2>/dev/null ; then
 			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
 			TMPFILE=`mktemp $f.XXXXXX` && \
-			grep -v 'lustre llite' $f > $TMPFILE && \
+			rm -f $TMPFILE && touch $TMPFILE && \
+			grep -v 'lustre llite' $f >> $TMPFILE && \
 			mv $TMPFILE $f
 		fi
 		if egrep "^[^#]*(add below|install) ptlrpc" $f ; then
 			[ ! -f $f.rpmsave ] && cp $f $f.rpmsave
 			TMPFILE=`mktemp $f.XXXXXX` && \
-			sed -e "s/^[^#]*\(add below\|install\) ptlrpc.*/#&/" $f > $TMPFILE && \
+			rm -f $TMPFILE && touch $TMPFILE && \
+			sed -e "s/^[^#]*\(add below\|install\) ptlrpc.*/#&/" $f >> $TMPFILE && \
 			mv $TMPFILE $f
 		fi
 	fi
