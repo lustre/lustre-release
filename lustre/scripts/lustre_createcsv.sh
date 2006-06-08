@@ -92,6 +92,8 @@ declare -a TARGET_SVNAMES TARGET_DEVNAMES TARGET_DEVSIZES TARGET_MNTPNTS
 declare -a TARGET_DEVTYPES TARGET_FSNAMES TARGET_MGSNIDS TARGET_INDEXES
 declare -a TARGET_FMTOPTS TARGET_MKFSOPTS TARGET_MNTOPTS TARGET_FAILNIDS
 declare -a HA_CONFIGS
+declare -a ALL_TARGET_SVNAMES		# All the target services in the cluster
+declare -a FAILOVER_FMTOPTS		# "--noformat"	
 
 # Lustre target service types
 let "LDD_F_SV_TYPE_MDT = 0x0001"
@@ -682,19 +684,35 @@ get_ha_configs() {
 
 #*********************** Lustre targets configurations ***********************#
 
+# is_failover_service target_svname
+# Check whether a target service @target_svname is a failover service.
+is_failover_service() {
+	local target_svname=$1
+	declare -i i
+
+	for ((i = 0; i < ${#ALL_TARGET_SVNAMES[@]}; i++)); do
+		[ "${target_svname}" = "${ALL_TARGET_SVNAMES[i]}" ] && return 0
+	done
+
+	return 1
+}
+
 # get_svnames hostname
 # Get the lustre target server obd names from the node @hostname
 get_svnames(){
 	declare -i i
+	declare -i j
 	local host_name=$1
 	local ret_line line
 
         # Initialize the TARGET_SVNAMES array
 	unset TARGET_SVNAMES
+	unset FAILOVER_FMTOPTS
 	
 	# Execute remote command to the node @hostname and figure out what
 	# lustre services are running.
 	i=0
+	j=${#ALL_TARGET_SVNAMES[@]}
 	while read -r ret_line; do
 		if is_pdsh; then
                 	set -- ${ret_line}
@@ -713,7 +731,12 @@ get_svnames(){
 		# Get target server name
 		TARGET_SVNAMES[i]=`echo ${line} | awk '{print $4}'`
 		if [ -n "${TARGET_SVNAMES[i]}" ]; then
+			if is_failover_service ${TARGET_SVNAMES[i]}; then
+				FAILOVER_FMTOPTS[i]="--noformat"
+			fi
+			ALL_TARGET_SVNAMES[j]=${TARGET_SVNAMES[i]}
 			let "i += 1"
+			let "j += 1"
 		else
 			echo >&2 "`basename $0`: get_svnames() error: Invalid"\
 			      "line in ${host_name}'s ${LUSTRE_PROC_DEVICES}"\
@@ -1278,6 +1301,14 @@ get_ldds(){
 				TARGET_FMTOPTS[i]="--device-size=${TARGET_DEVSIZES[i]} ""${TARGET_FMTOPTS[i]}"
 			else
 				TARGET_FMTOPTS[i]="--device-size=${TARGET_DEVSIZES[i]}"
+			fi
+		fi
+
+		if [ -n "${FAILOVER_FMTOPTS[i]}" ]; then
+			if [ -n "${TARGET_FMTOPTS[i]}" ]; then
+				TARGET_FMTOPTS[i]=${TARGET_FMTOPTS[i]}" "${FAILOVER_FMTOPTS[i]}
+			else
+				TARGET_FMTOPTS[i]=${FAILOVER_FMTOPTS[i]}
 			fi
 		fi
 
