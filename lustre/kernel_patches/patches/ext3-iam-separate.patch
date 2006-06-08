@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-06-08 01:08:10.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-06-08 21:50:42.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-06-08 01:08:07.000000000 +0400
-@@ -0,0 +1,1125 @@
++++ iam/fs/ext3/iam.c	2006-06-08 19:42:19.000000000 +0400
+@@ -0,0 +1,1163 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -599,7 +599,7 @@ Index: iam/fs/ext3/iam.c
 +	iam_path_fini(&it->ii_path);
 +}
 +
-+int iam_path_lookup(struct iam_path *path)
++static int iam_path_lookup(struct iam_path *path)
 +{
 +	struct iam_container *c;
 +	struct iam_descr *descr;
@@ -615,8 +615,8 @@ Index: iam/fs/ext3/iam.c
 +		result = iam_leaf_load(path);
 +                assert(ergo(result == 0, iam_leaf_check(leaf)));
 +		if (result == 0)
-+			result = iam_leaf_ops(leaf)->lookup(leaf,
-+                                                            path->ip_key_target);
++			result = iam_leaf_ops(leaf)->
++                                lookup(leaf, path->ip_key_target);
 +	}
 +	return result;
 +}
@@ -629,9 +629,8 @@ Index: iam/fs/ext3/iam.c
 + *             -ve: error.
 + *
 + * precondition:  it_state(it) == IAM_IT_DETACHED
-+ * postcondition: ergo(result == 0,
-+ *                     (it_state(it) == IAM_IT_ATTACHED &&
-+ *                      it_keycmp(it, iam_it_key_get(it, *), k) < 0))
++ * postcondition: ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
++ *                     it_keycmp(it, iam_it_key_get(it, *), k) <= 0)
 + */
 +int iam_it_get(struct iam_iterator *it, const struct iam_key *k)
 +{
@@ -641,14 +640,30 @@ Index: iam/fs/ext3/iam.c
 +        it->ii_path.ip_key_target = k;
 +        iam_it_lock(it);
 +        result = iam_path_lookup(&it->ii_path);
-+        if (result == 0 || result == -ENOENT)
-+                it->ii_state = IAM_IT_ATTACHED;
-+        else
++        if (result >= 0) {
++                switch (result) {
++                case IAM_LOOKUP_OK:
++                        it->ii_state = IAM_IT_ATTACHED;
++                        break;
++                case IAM_LOOKUP_EMPTY:
++                        it->ii_state = IAM_IT_EMPTY;
++                        break;
++                case IAM_LOOKUP_BEFORE:
++                        it->ii_state = IAM_IT_BEFORE;
++                        break;
++                default:
++                        assert(0);
++                }
++                result = 0;
++        } else
 +                iam_it_unlock(it);
-+	assert(ergo(result == 0,
-+                    it_keycmp(it,
-+                              iam_it_key_get(it, it_scratch_key(it, 0)),
++	assert(ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
++                    it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)),
 +			      k) <= 0));
++        /*
++         * See iam_it_get_exact() for explanation.
++         */
++        assert(result != -ENOENT);
 +        return result;
 +}
 +
@@ -686,7 +701,7 @@ Index: iam/fs/ext3/iam.c
 + */
 +void iam_it_put(struct iam_iterator *it)
 +{
-+        if (it->ii_state == IAM_IT_ATTACHED) {
++        if (it->ii_state > IAM_IT_DETACHED) {
 +                it->ii_state = IAM_IT_DETACHED;
 +		iam_leaf_fini(&it->ii_path.ip_leaf);
 +                iam_it_unlock(it);
@@ -706,39 +721,44 @@ Index: iam/fs/ext3/iam.c
 +int iam_it_next(struct iam_iterator *it)
 +{
 +        int result;
-+        struct iam_container *c;
 +        struct iam_path      *path;
 +        struct iam_leaf      *leaf;
 +
-+        assert(it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_MOVE);
++        assert(it->ii_flags&IAM_IT_MOVE);
++        assert(it_state(it) == IAM_IT_ATTACHED ||
++               it_state(it) == IAM_IT_BEFORE || it_state(it) == IAM_IT_EMPTY);
 +
-+        c    = iam_it_container(it);
 +        path = &it->ii_path;
 +        leaf = &path->ip_leaf;
 +
-+        if (!iam_leaf_at_end(leaf)) {
-+                /* advance within leaf node */
-+                iam_leaf_next(leaf);
-+                result = 0;
++        result = 0;
++        if (it_state(it) == IAM_IT_BEFORE) {
++                assert(!iam_leaf_at_end(leaf));
++                it->ii_state = IAM_IT_ATTACHED;
 +        } else {
++                if (!iam_leaf_at_end(leaf))
++                        /* advance within leaf node */
++                        iam_leaf_next(leaf);
 +                /*
 +                 * multiple iterations may be necessary due to empty leaves.
 +                 */
-+                do {
++                while (result == 0 && iam_leaf_at_end(leaf)) {
 +                        /* advance index portion of the path */
-+                        result = iam_index_next(c, path);
++                        result = iam_index_next(iam_it_container(it), path);
 +                        if (result == 1) {
 +                                result = iam_leaf_load(path);
 +                                if (result == 0)
 +                                        iam_leaf_start(leaf);
-+                        } else if (result == 0)
++                        } else if (result == 0) {
 +                                /* end of container reached */
++                                it->ii_state = IAM_IT_EOC;
 +                                result = +1;
++                        }
 +                        if (result < 0)
 +                                iam_it_put(it);
-+                } while (result == 0 && iam_leaf_at_end(leaf));
++                }
 +        }
-+        assert(ergo(result >= 0, it_state(it) == IAM_IT_ATTACHED));
++        assert(ergo(result == 0, it_state(it) == IAM_IT_ATTACHED));
 +        return result;
 +}
 +
@@ -797,12 +817,14 @@ Index: iam/fs/ext3/iam.c
 +/*
 + * Return pointer to the key under iterator.
 + *
-+ * precondition:  it_state(it) == IAM_IT_ATTACHED && it_at_rec(it)
++ * precondition:  it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_BEFORE
 + * postcondition: it_state(it) == IAM_IT_ATTACHED
 + */
 +struct iam_key *iam_it_key_get(const struct iam_iterator *it, struct iam_key *k)
 +{
-+        assert(it_state(it) == IAM_IT_ATTACHED);
++        assert(it_state(it) == IAM_IT_ATTACHED ||
++               it_state(it) == IAM_IT_BEFORE);
 +        assert(it_at_rec(it));
 +        return iam_leaf_key(&it->ii_path.ip_leaf, k);
 +}
@@ -873,11 +895,18 @@ Index: iam/fs/ext3/iam.c
 + * Insert new record with key @k and contents from @r, shifting records to the
 + * right.
 + *
-+ * precondition:  it_state(it) == IAM_IT_ATTACHED &&
-+ *                it->ii_flags&IAM_IT_WRITE &&
-+ *                it_keycmp(it, iam_it_key_get(it, *), k) < 0
-+ * postcondition: it_state(it) == IAM_IT_ATTACHED &&
-+ *                ergo(result == 0,
++ * precondition: it->ii_flags&IAM_IT_WRITE &&
++ *               (it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_BEFORE ||
++ *                it_state(it) == IAM_IT_EMPTY) &&
++ *               ergo(it_state(it) == IAM_IT_ATTACHED,
++ *                    it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)),
++ *                              k) < 0) &&
++ *               ergo(it_state(it) == IAM_IT_BEFORE,
++ *                    it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)),
++ *                              k) > 0));
++ * postcondition: ergo(result == 0,
++ *                     it_state(it) == IAM_IT_ATTACHED &&
 + *                     it_keycmp(it, iam_it_key_get(it, *), k) == 0 &&
 + *                     !memcmp(iam_it_rec_get(it), r, ...))
 + */
@@ -889,40 +918,25 @@ Index: iam/fs/ext3/iam.c
 +
 +        path = &it->ii_path;
 +
-+        assert(it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE);
-+        /*
-+         * if insertion point is at the existing record...
-+         */
-+        assert(ergo(it_at_rec(it),
-+                    /*
-+                     * this record either has the key smaller then target
-+                     * key...
-+                     */
++        assert(it->ii_flags&IAM_IT_WRITE);
++        assert(it_state(it) == IAM_IT_ATTACHED ||
++               it_state(it) == IAM_IT_BEFORE || it_state(it) == IAM_IT_EMPTY);
++        assert(ergo(it_state(it) == IAM_IT_ATTACHED,
 +                    it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)),
-+                              k) < 0 ||
-+                    /*
-+                     * or we landed into leaf where the smallest key is larger
-+                     * than the target key.
-+                     */
-+                    path->ip_leaf.il_at == path->ip_leaf.il_entries));
++                              k) < 0));
++        assert(ergo(it_state(it) == IAM_IT_BEFORE,
++                    it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)),
++                              k) > 0));
 +	result = iam_add_rec(h, path, k, r);
-+        assert(it_state(it) == IAM_IT_ATTACHED);
++        if (result == 0)
++                it->ii_state = IAM_IT_ATTACHED;
 +        assert(ergo(result == 0,
++                    it_state(it) == IAM_IT_ATTACHED &&
 +                    it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)),
 +                              k) == 0 &&
 +                    !memcmp(iam_it_rec_get(it), r,
 +                            iam_it_container(it)->ic_descr->id_rec_size)));
 +        return result;
-+}
-+
-+static int iam_leaf_rec_remove(handle_t *handle, struct iam_leaf *leaf)
-+{
-+        assert(iam_leaf_check(leaf));
-+        assert(iam_path_check(iam_leaf_path(leaf)));
-+        iam_rec_del(leaf);
-+        assert(iam_leaf_check(leaf));
-+        assert(iam_path_check(iam_leaf_path(leaf)));
-+	return iam_txn_dirty(handle, iam_leaf_path(leaf), leaf->il_bh);
 +}
 +
 +/*
@@ -931,22 +945,40 @@ Index: iam/fs/ext3/iam.c
 + * precondition:  it_state(it) == IAM_IT_ATTACHED &&
 + *                it->ii_flags&IAM_IT_WRITE &&
 + *                it_at_rec(it)
-+ * postcondition: it_state(it) == IAM_IT_ATTACHED
++ * postcondition: it_state(it) == IAM_IT_ATTACHED || it_state(it) == IAM_IT_EOC
 + */
 +int iam_it_rec_delete(handle_t *h, struct iam_iterator *it)
 +{
 +        int result;
++        struct iam_leaf *leaf;
++        struct iam_path *path;
 +
 +        assert(it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE);
 +        assert(it_at_rec(it));
 +
-+        result = iam_txn_add(h, &it->ii_path, it->ii_path.ip_leaf.il_bh);
++        path = &it->ii_path;
++        leaf = &path->ip_leaf;
++
++        assert(iam_leaf_check(leaf));
++        assert(iam_path_check(path));
++
++        result = iam_txn_add(h, path, leaf->il_bh);
 +        /*
 +         * no compaction for now.
 +         */
-+        if (result == 0)
-+                iam_leaf_rec_remove(h, &it->ii_path.ip_leaf);
-+
++        if (result == 0) {
++                iam_rec_del(leaf);
++                result = iam_txn_dirty(h, path, leaf->il_bh);
++                if (result == 0 && iam_leaf_at_end(leaf) &&
++                    it->ii_flags&IAM_IT_MOVE) {
++                        result = iam_it_next(it);
++                        if (result > 0)
++                                result = 0;
++                }
++        }
++        assert(iam_leaf_check(leaf));
++        assert(iam_path_check(path));
++        assert(it_state(it) == IAM_IT_ATTACHED || it_state(it) == IAM_IT_EOC);
 +	return result;
 +}
 +
@@ -1035,10 +1067,16 @@ Index: iam/fs/ext3/iam.c
 +{
 +        return
 +                (it->ii_state == IAM_IT_DETACHED ||
-+                 it->ii_state == IAM_IT_ATTACHED) &&
++                 it->ii_state == IAM_IT_ATTACHED ||
++                 it->ii_state == IAM_IT_EMPTY    ||
++                 it->ii_state == IAM_IT_BEFORE   ||
++                 it->ii_state == IAM_IT_EOC) &&
 +                !(it->ii_flags & ~(IAM_IT_MOVE | IAM_IT_WRITE)) &&
-+                ergo(it->ii_state == IAM_IT_ATTACHED,
-+                     iam_path_invariant(&it->ii_path));
++                ergo(it->ii_state == IAM_IT_ATTACHED ||
++                     it->ii_state == IAM_IT_EMPTY    ||
++                     it->ii_state == IAM_IT_BEFORE,
++                     iam_path_invariant(&it->ii_path) &&
++                     equi(it->ii_state == IAM_IT_EMPTY, !it_at_rec(it)));
 +}
 +
 +/*
@@ -1144,8 +1182,8 @@ Index: iam/fs/ext3/iam.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-06-08 00:36:08.000000000 +0400
-@@ -0,0 +1,610 @@
++++ iam/fs/ext3/iam_lfix.c	2006-06-08 17:34:38.000000000 +0400
+@@ -0,0 +1,613 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1351,11 +1389,13 @@ Index: iam/fs/ext3/iam_lfix.c
 +        struct iam_lentry *p, *q, *m, *t;
 +        struct iam_container *c;
 +        int count;
++        int result;
 +
 +        count = lentry_count_get(l);
 +        if (count == 0)
-+                return -ENOENT;
++                return IAM_LOOKUP_EMPTY;
 +
++        result = IAM_LOOKUP_OK;
 +        c = iam_leaf_container(l);
 +
 +        p = l->il_entries;
@@ -1365,6 +1405,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +                 * @k is less than the smallest key in the leaf
 +                 */
 +                l->il_at = p;
++                result = IAM_LOOKUP_BEFORE;
 +        } else if (iam_keycmp(c, iam_leaf_key_at(q), k) <= 0) {
 +                l->il_at = q;
 +        } else {
@@ -1392,7 +1433,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +        }
 +        assert(iam_leaf_at_rec(l));
 +
-+        return iam_keycmp(c, iam_leaf_key_at(l->il_at), k) != 0 ? -ENOENT : 0;
++        return result;
 +}
 +
 +static void iam_lfix_key_set(struct iam_leaf *l, const struct iam_key *k)
@@ -3392,7 +3433,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-06-08 01:08:10.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-06-08 21:50:42.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:

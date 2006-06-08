@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-06-08 01:08:10.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-06-08 01:08:11.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-06-08 21:50:42.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-06-08 21:50:42.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-06-08 01:08:10.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-06-08 01:08:11.000000000 +0400
+--- iam.orig/fs/ext3/file.c	2006-06-08 21:50:42.000000000 +0400
++++ iam/fs/ext3/file.c	2006-06-08 21:50:42.000000000 +0400
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -50,8 +50,8 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-06-08 01:08:11.000000000 +0400
-@@ -0,0 +1,256 @@
++++ iam/fs/ext3/iam-uapi.c	2006-06-08 21:50:42.000000000 +0400
+@@ -0,0 +1,349 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -94,6 +94,7 @@ Index: iam/fs/ext3/iam-uapi.c
 +struct iam_private_info {
 +        struct iam_container   ipi_bag;
 +        struct iam_descr       ipi_descr;
++        struct iam_iterator    ipi_it;
 +        struct iam_path_descr *ipi_ipd;
 +};
 +
@@ -104,6 +105,48 @@ Index: iam/fs/ext3/iam-uapi.c
 +static struct iam_private_info *get_ipi(struct file *filp)
 +{
 +        return filp->private_data;
++}
++
++static int iam_uapi_it(int cmd, struct inode *inode,
++                       struct file *filp, struct iam_uapi_it *itop)
++{
++        struct iam_private_info *ipi;
++        struct iam_iterator     *it;
++        enum iam_it_state        st;
++        int result = 0;
++
++        ipi = get_ipi(filp);
++        it = &ipi->ipi_it;
++        st = it->ii_state;
++        switch (cmd) {
++        case IAM_IOC_IT_START:
++                result = iam_it_init(it, &ipi->ipi_bag,
++                                     IAM_IT_MOVE, ipi->ipi_ipd);
++                if (result == 0)
++                        result = iam_it_get(it, itop->iui_op.iul_key);
++                break;
++        case IAM_IOC_IT_NEXT:
++                if (st == IAM_IT_ATTACHED ||
++                    st == IAM_IT_BEFORE || st == IAM_IT_EMPTY)
++                        result = iam_it_next(it);
++                else
++                        result = -EBUSY;
++                break;
++        case IAM_IOC_IT_STOP:
++                iam_it_put(it);
++                iam_it_fini(it);
++                result = 0;
++                break;
++        }
++        st = it->ii_state;
++        if (st == IAM_IT_ATTACHED || st == IAM_IT_BEFORE)
++                iam_keycpy0(&ipi->ipi_bag, itop->iui_op.iul_key,
++                            iam_it_key_get(it, itop->iui_op.iul_key));
++        if (st == IAM_IT_ATTACHED)
++                iam_reccpy(&it->ii_path,
++                           itop->iui_op.iul_rec, iam_it_rec_get(it));
++        itop->iui_state = st;
++        return result;
 +}
 +
 +static int iam_uapi_op(int cmd, struct inode *inode,
@@ -151,6 +194,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +        struct iam_private_info *info;
 +
 +        info = filp->private_data;
++        iam_it_put(&info->ipi_it);
++        iam_it_fini(&info->ipi_it);
 +        iam_container_fini(&info->ipi_bag);
 +        if (info->ipi_ipd != NULL)
 +                iam_ipd_free(info->ipi_ipd);
@@ -207,8 +252,9 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 +
 +enum outop_t {
-+        KEY = 1 << 0,
-+        REC = 1 << 1
++        KEY   = 1 << 0,
++        REC   = 1 << 1,
++        STATE = 1 << 2
 +};
 +
 +static int outop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
@@ -256,15 +302,39 @@ Index: iam/fs/ext3/iam-uapi.c
 +        return result;
 +}
 +
++static int outit(struct iam_uapi_it *it, struct iam_uapi_it *uit,
++                 struct iam_descr *des, enum outop_t opt, unsigned long arg)
++{
++        int result;
++
++        result = outop(&it->iui_op, &uit->iui_op, des, opt);
++        if (result == 0 && (opt&STATE))
++                result = put_user(it->iui_state, (int __user *) arg);
++        return result;
++}
++
++static void putit(struct iam_uapi_it *it)
++{
++        putop(&it->iui_op);
++}
++
++static int getit(struct iam_uapi_it *it, struct iam_uapi_it *uit,
++                 struct iam_descr *des, unsigned long arg)
++{
++        return getop(&it->iui_op, &uit->iui_op, des,
++                     (unsigned long)&((struct iam_uapi_it *)arg)->iui_op);
++}
++
 +int iam_uapi_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 +                   unsigned long arg)
 +{
 +        int result;
-+        union {
-+                struct iam_uapi_info ua;
-+                struct iam_uapi_op   op;
-+        } u;
-+        struct iam_uapi_op uop;
++        struct iam_uapi_info ua;
++        struct iam_uapi_op   uop;
++        struct iam_uapi_op   op;
++        struct iam_uapi_it   uit;
++        struct iam_uapi_it   it;
++        enum outop_t opt;
 +
 +        if ((current->fsuid != inode->i_uid) && !capable(CAP_FOWNER))
 +                result = -EACCES;
@@ -272,35 +342,58 @@ Index: iam/fs/ext3/iam-uapi.c
 +                result = -EBADF;
 +        else if (cmd == IAM_IOC_INIT) {
 +                if (filp->private_data == NULL) {
-+                        result = getua(&u.ua, arg);
++                        result = getua(&ua, arg);
 +                        if (result == 0)
-+                                result = iam_uapi_init(inode, filp, &u.ua);
++                                result = iam_uapi_init(inode, filp, &ua);
 +                } else
 +                        result = -EBUSY;
 +        } else if (is_dx(inode) && filp->private_data != NULL) {
 +                struct iam_descr *des;
 +
++                switch (cmd) {
++                case IAM_IOC_IT_START:
++                case IAM_IOC_IT_NEXT:
++                        opt = KEY|REC|STATE;
++                        break;
++                case IAM_IOC_LOOKUP:
++                        opt = REC;
++                        break;
++                default:
++                        opt = 0;
++                        break;
++                }
++
 +                des = &get_ipi(filp)->ipi_descr;
 +                if (cmd == IAM_IOC_GETINFO) {
-+                        u.ua.iui_keysize = des->id_key_size;
-+                        u.ua.iui_recsize = des->id_rec_size;
-+                        u.ua.iui_ptrsize = des->id_ptr_size;
-+                        u.ua.iui_height  = 0; /* not yet */
-+                        memcpy(u.ua.iui_fmt_name, des->id_ops->id_name,
-+                               ARRAY_SIZE(u.ua.iui_fmt_name));
-+                        result = putua(&u.ua, arg);
++                        ua.iui_keysize = des->id_key_size;
++                        ua.iui_recsize = des->id_rec_size;
++                        ua.iui_ptrsize = des->id_ptr_size;
++                        ua.iui_height  = 0; /* not yet */
++                        memcpy(ua.iui_fmt_name, des->id_ops->id_name,
++                               ARRAY_SIZE(ua.iui_fmt_name));
++                        result = putua(&ua, arg);
 +                } else if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_LOOKUP ||
 +                           cmd == IAM_IOC_DELETE) {
-+                        result = getop(&u.op, &uop, des, arg);
++                        result = getop(&op, &uop, des, arg);
 +                        if (result == 0) {
-+                                result = iam_uapi_op(cmd, inode, filp, &u.op);
-+                                if (cmd == IAM_IOC_LOOKUP) {
-+                                        int res2;
++                                int res2;
++                                result = iam_uapi_op(cmd, inode, filp, &op);
 +
-+                                        res2 = outop(&u.op, &uop, des, REC);
-+                                        result = result ? : res2;
-+                                }
-+                                putop(&u.op);
++                                res2 = outop(&op, &uop, des, opt);
++                                result = result ? : res2;
++                                putop(&op);
++                        }
++                } else if (cmd == IAM_IOC_IT_START || cmd == IAM_IOC_IT_NEXT ||
++                           cmd == IAM_IOC_IT_STOP) {
++                        result = getit(&it, &uit, des, arg);
++                        if (result == 0) {
++                                int res2;
++
++                                result = iam_uapi_it(cmd, inode, filp, &it);
++
++                                res2 = outit(&it, &uit, des, opt, arg);
++                                result = result ? : res2;
++                                putit(&it);
 +                        }
 +                } else
 +                        result = -EINVAL;
@@ -310,8 +403,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-06-08 01:08:10.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-06-08 01:08:11.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-06-08 21:50:42.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-06-08 21:50:42.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
@@ -350,7 +443,29 @@ Index: iam/include/linux/lustre_iam.h
  typedef __u64 iam_ptr_t;
  
  /*
-@@ -131,11 +132,15 @@ struct iam_operations {
+@@ -123,6 +124,21 @@ struct iam_leaf {
+ 	void               *il_descr_data;
+ };
+ 
++enum iam_lookup_t {
++        /*
++         * lookup positioned leaf on some record
++         */
++        IAM_LOOKUP_OK,
++        /*
++         * leaf was empty
++         */
++        IAM_LOOKUP_EMPTY,
++        /*
++         * lookup positioned leaf before first record
++         */
++        IAM_LOOKUP_BEFORE
++};
++
+ struct iam_operations {
+ 	/*
+ 	 * Returns pointer (in the same sense as pointer in index entry) to
+@@ -131,11 +147,15 @@ struct iam_operations {
  	__u32 (*id_root_ptr)(struct iam_container *c);
  
  	/*
@@ -368,7 +483,7 @@ Index: iam/include/linux/lustre_iam.h
  	 * Initialize new node (stored in @bh) that is going to be added into
  	 * tree.
  	 */
-@@ -155,6 +160,10 @@ struct iam_operations {
+@@ -155,6 +175,10 @@ struct iam_operations {
  	 * contains single record with the smallest possible key.
  	 */
  	int (*id_create)(struct iam_container *c);
@@ -379,7 +494,7 @@ Index: iam/include/linux/lustre_iam.h
          /*
           * Format name.
           */
-@@ -226,7 +235,8 @@ struct iam_leaf_operations {
+@@ -226,7 +250,8 @@ struct iam_leaf_operations {
           * split leaf node, moving some entries into @bh (the latter currently
           * is assumed to be empty).
           */
@@ -389,7 +504,22 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
-@@ -468,7 +478,7 @@ int iam_it_next(struct iam_iterator *it)
+@@ -347,7 +372,13 @@ enum iam_it_state {
+ 	/* initial state */
+ 	IAM_IT_DETACHED,
+ 	/* iterator is above particular record in the container */
+-	IAM_IT_ATTACHED
++	IAM_IT_ATTACHED,
++        /* iterator landed into empty leaf */
++        IAM_IT_EMPTY,
++        /* iterator is positioned before first record in the leaf */
++        IAM_IT_BEFORE,
++        /* end of container reached */
++        IAM_IT_EOC
+ };
+ 
+ /*
+@@ -468,7 +499,7 @@ int iam_it_next(struct iam_iterator *it)
  /*
   * Return pointer to the record under iterator.
   *
@@ -398,7 +528,7 @@ Index: iam/include/linux/lustre_iam.h
   * postcondition: it_state(it) == IAM_IT_ATTACHED
   */
  struct iam_rec *iam_it_rec_get(const struct iam_iterator *it);
-@@ -476,7 +486,9 @@ struct iam_rec *iam_it_rec_get(const str
+@@ -476,7 +507,9 @@ struct iam_rec *iam_it_rec_get(const str
  /*
   * Replace contents of record under iterator.
   *
@@ -409,7 +539,7 @@ Index: iam/include/linux/lustre_iam.h
   * postcondition: it_state(it) == IAM_IT_ATTACHED &&
   *                ergo(result == 0, !memcmp(iam_it_rec_get(it), r, ...))
   */
-@@ -485,7 +497,7 @@ int iam_it_rec_set(handle_t *h, struct i
+@@ -485,7 +518,7 @@ int iam_it_rec_set(handle_t *h, struct i
  /*
   * Place key under iterator in @k, return @k
   *
@@ -418,7 +548,7 @@ Index: iam/include/linux/lustre_iam.h
   * postcondition: it_state(it) == IAM_IT_ATTACHED
   */
  struct iam_key *iam_it_key_get(const struct iam_iterator *it,
-@@ -497,7 +509,8 @@ struct iam_key *iam_it_key_get(const str
+@@ -497,7 +530,8 @@ struct iam_key *iam_it_key_get(const str
   *
   * precondition:  it_state(it) == IAM_IT_ATTACHED &&
   *                it->ii_flags&IAM_IT_WRITE &&
@@ -428,7 +558,7 @@ Index: iam/include/linux/lustre_iam.h
   * postcondition: it_state(it) == IAM_IT_ATTACHED &&
   *                ergo(result == 0,
   *                     it_keycmp(it, iam_it_key_get(it, *), k) == 0 &&
-@@ -508,7 +521,9 @@ int iam_it_rec_insert(handle_t *h, struc
+@@ -508,7 +542,9 @@ int iam_it_rec_insert(handle_t *h, struc
  /*
   * Delete record under iterator.
   *
@@ -439,7 +569,7 @@ Index: iam/include/linux/lustre_iam.h
   * postcondition: it_state(it) == IAM_IT_ATTACHED
   */
  int iam_it_rec_delete(handle_t *h, struct iam_iterator *it);
-@@ -519,7 +534,8 @@ typedef __u64 iam_pos_t;
+@@ -519,7 +555,8 @@ typedef __u64 iam_pos_t;
   * Convert iterator to cookie.
   *
   * precondition:  it_state(it) == IAM_IT_ATTACHED &&
@@ -449,7 +579,25 @@ Index: iam/include/linux/lustre_iam.h
   * postcondition: it_state(it) == IAM_IT_ATTACHED
   */
  iam_pos_t iam_it_store(const struct iam_iterator *it);
-@@ -650,6 +666,15 @@ static inline unsigned dx_node_limit(str
+@@ -583,6 +620,17 @@ static inline void iam_keycpy(const stru
+ 	memcpy(k1, k2, c->ic_descr->id_key_size);
+ }
+ 
++/*
++ * Helper for the frequent case, where key was already placed into @k1 by
++ * callback.
++ */
++static inline void iam_keycpy0(const struct iam_container *c,
++                               struct iam_key *k1, const struct iam_key *k2)
++{
++        if (k1 != k2)
++                iam_keycpy(c, k1, k2);
++}
++
+ static inline int iam_keycmp(const struct iam_container *c,
+ 			     const struct iam_key *k1, const struct iam_key *k2)
+ {
+@@ -650,6 +698,15 @@ static inline unsigned dx_node_limit(str
  	return entry_space / (param->id_key_size + param->id_ptr_size);
  }
  
@@ -465,7 +613,7 @@ Index: iam/include/linux/lustre_iam.h
  static inline struct iam_entry *dx_get_entries(struct iam_path *path,
  					       void *data, int root)
  {
-@@ -702,6 +727,8 @@ void iam_insert_key(struct iam_path *pat
+@@ -702,6 +759,8 @@ void iam_insert_key(struct iam_path *pat
  
  int  iam_leaf_at_end(const struct iam_leaf *l);
  void iam_leaf_next(struct iam_leaf *folio);
@@ -474,7 +622,7 @@ Index: iam/include/linux/lustre_iam.h
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
  struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
-@@ -718,5 +745,40 @@ void iam_format_register(struct iam_form
+@@ -718,5 +777,48 @@ void iam_format_register(struct iam_form
  
  void iam_lfix_format_init(void);
  
@@ -505,12 +653,20 @@ Index: iam/include/linux/lustre_iam.h
 +        void *iul_rec;
 +};
 +
++struct iam_uapi_it {
++        struct iam_uapi_op iui_op;
++        __u16              iui_state;
++};
++
 +enum iam_ioctl_cmd {
 +        IAM_IOC_INIT     = _IOW('i', 1, struct iam_uapi_info),
 +        IAM_IOC_GETINFO  = _IOR('i', 2, struct iam_uapi_info),
 +        IAM_IOC_INSERT   = _IOR('i', 3, struct iam_uapi_op),
 +        IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op),
-+        IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op)
++        IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op),
++        IAM_IOC_IT_START = _IOR('i', 6, struct iam_uapi_it),
++        IAM_IOC_IT_NEXT  = _IOW('i', 7, struct iam_uapi_it),
++        IAM_IOC_IT_STOP  = _IOR('i', 8, struct iam_uapi_it)
 +};
 +
  /* __LINUX_LUSTRE_IAM_H__ */

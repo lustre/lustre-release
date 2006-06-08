@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <sys/types.h>
 
@@ -61,12 +62,20 @@ struct iam_uapi_op {
         void *iul_rec;
 };
 
+struct iam_uapi_it {
+        struct iam_uapi_op iui_op;
+        __u16              iui_state;
+};
+
 enum iam_ioctl_cmd {
         IAM_IOC_INIT     = _IOW('i', 1, struct iam_uapi_info),
         IAM_IOC_GETINFO  = _IOR('i', 2, struct iam_uapi_info),
         IAM_IOC_INSERT   = _IOR('i', 3, struct iam_uapi_op),
         IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op),
-        IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op)
+        IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op),
+        IAM_IOC_IT_START = _IOR('i', 6, struct iam_uapi_it),
+        IAM_IOC_IT_NEXT  = _IOW('i', 7, struct iam_uapi_it),
+        IAM_IOC_IT_STOP  = _IOR('i', 8, struct iam_uapi_it)
 };
 
 static void usage(void)
@@ -86,6 +95,29 @@ static int doop(int fd, const void *key, const void *rec,
         result = ioctl(fd, cmd, &op);
         if (result != 0)
                 fprintf(stderr, "ioctl(%s): %i/%i (%m)\n", name, result, errno);
+        return result;
+}
+
+static int doit(int fd, const void *key, const void *rec,
+                int cmd, const char *name)
+{
+        int result;
+
+        struct iam_uapi_it it = {
+                .iui_op = {
+                        .iul_key = key,
+                        .iul_rec = rec
+                },
+                .iui_state = 0
+        };
+
+        assert((void *)&it == (void *)&it.iui_op);
+
+        result = ioctl(fd, cmd, &it);
+        if (result != 0)
+                fprintf(stderr, "ioctl(%s): %i/%i (%m)\n", name, result, errno);
+        else
+                result = it.iui_state;
         return result;
 }
 
@@ -120,7 +152,10 @@ enum op {
         OP_TEST,
         OP_INSERT,
         OP_LOOKUP,
-        OP_DELETE
+        OP_DELETE,
+        OP_IT_START,
+        OP_IT_NEXT,
+        OP_IT_STOP
 };
 
 int main(int argc, char **argv)
@@ -130,7 +165,9 @@ int main(int argc, char **argv)
         int opt;
         int keysize;
         int recsize;
+        int N = 0x10000;
         int verbose = 0;
+        int doinit = 1;
 
         enum op op;
 
@@ -151,7 +188,7 @@ int main(int argc, char **argv)
         op = OP_TEST;
 
         do {
-                opt = getopt(argc, argv, "vilk:r:d");
+                opt = getopt(argc, argv, "vilk:N:r:dsSn");
                 switch (opt) {
                 case 'v':
                         verbose++;
@@ -159,6 +196,9 @@ int main(int argc, char **argv)
                         break;
                 case 'k':
                         key_opt = optarg;
+                        break;
+                case 'N':
+                        N = atoi(optarg);
                         break;
                 case 'r':
                         rec_opt = optarg;
@@ -172,6 +212,17 @@ int main(int argc, char **argv)
                 case 'd':
                         op = OP_DELETE;
                         break;
+                case 's':
+                        op = OP_IT_START;
+                        break;
+                case 'S':
+                        op = OP_IT_STOP;
+                        doinit = 0;
+                        break;
+                case 'n':
+                        op = OP_IT_NEXT;
+                        doinit = 0;
+                        break;
                 case '?':
                 default:
                         fprintf(stderr, "Unable to parse options.");
@@ -181,10 +232,12 @@ int main(int argc, char **argv)
                 }
         } while (opt != -1);
 
-        rc = ioctl(0, IAM_IOC_INIT, &ua);
-        if (rc != 0) {
-                fprintf(stderr, "ioctl(IAM_IOC_INIT): %i (%m)\n", rc);
-                return 1;
+        if (doinit) {
+                rc = ioctl(0, IAM_IOC_INIT, &ua);
+                if (rc != 0) {
+                        fprintf(stderr, "ioctl(IAM_IOC_INIT): %i (%m)\n", rc);
+                        return 1;
+                }
         }
         rc = ioctl(0, IAM_IOC_GETINFO, &ua);
         if (rc != 0) {
@@ -212,13 +265,29 @@ int main(int argc, char **argv)
         strncpy(rec, rec_opt ? : "PALEFIRE", recsize + 1);
 
         if (op == OP_INSERT)
-                return insert(0, key, rec);
+                return doop(0, key, rec, IAM_IOC_INSERT, "IAM_IOC_INSERT");
         else if (op == OP_DELETE)
-                return delete(0, key, rec);
+                return doop(0, key, rec, IAM_IOC_DELETE, "IAM_IOC_DELETE");
         else if (op == OP_LOOKUP) {
-                rc = lookup(0, key, rec);
+                rc = doop(0, key, rec, IAM_IOC_LOOKUP, "IAM_IOC_LOOKUP");
                 if (rc == 0)
                         print_rec(rec, recsize);
+                return rc;
+        } else if (op == OP_IT_START) {
+                rc = doop(0, key, rec, IAM_IOC_IT_START, "IAM_IOC_IT_START");
+                if (rc == 0) {
+                        print_rec(key, keysize);
+                        print_rec(rec, recsize);
+                }
+                return rc;
+        } else if (op == OP_IT_STOP) {
+                return doop(0, key, rec, IAM_IOC_IT_STOP, "IAM_IOC_IT_STOP");
+        } else if (op == OP_IT_NEXT) {
+                rc = doop(0, key, rec, IAM_IOC_IT_NEXT, "IAM_IOC_IT_NEXT");
+                if (rc == 0) {
+                        print_rec(key, keysize);
+                        print_rec(rec, recsize);
+                }
                 return rc;
         }
 
@@ -243,11 +312,11 @@ int main(int argc, char **argv)
 
         print_rec(rec, recsize);
 
-        for (i = 0; i < 0x10000; ++i) {
+        for (i = 0; i < N; ++i) {
                 memset(key, 0, keysize + 1);
                 memset(rec, 0, recsize + 1);
-                snprintf(key, keysize, "y-%x-x", i);
-                snprintf(rec, recsize, "p-%x-q", 1000 - i);
+                snprintf(key, keysize + 1, "y-%x-x", i);
+                snprintf(rec, recsize + 1, "p-%x-q", 1000 - i);
                 rc = insert(0, key, rec);
                 if (rc != 0)
                         return 1;
