@@ -315,6 +315,15 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
 {
         int rc;
         ENTRY;
+
+        if (mo_t && !cmm_is_local_obj(md2cmm_obj(mo_t))) {
+                /* remote object */
+                rc = moo_ref_del(ctx, cmm2child_obj(md2cmm_obj(mo_t)));
+                if (rc)
+                        RETURN(rc);
+                mo_t = NULL;
+        }
+
         rc = mdo_rename(ctx, cmm2child_obj(md2cmm_obj(mo_po)),
                         cmm2child_obj(md2cmm_obj(mo_pn)),
                         cmm2child_obj(md2cmm_obj(mo_s)), s_name,
@@ -329,9 +338,22 @@ static int cml_rename_tgt(const struct lu_context *ctx,
 {
         int rc;
         ENTRY;
+
         rc = mdo_rename_tgt(ctx, cmm2child_obj(md2cmm_obj(mo_po)),
                             cmm2child_obj(md2cmm_obj(mo_s)),
                             cmm2child_obj(md2cmm_obj(mo_t)), name);
+        RETURN(rc);
+}
+
+static int cml_name_insert(const struct lu_context * ctx,
+                           struct md_object *mo_p,
+                           const char *name, const struct lu_fid *lf)
+{
+        int rc;
+        ENTRY;
+        
+        rc = mdo_name_insert(ctx, cmm2child_obj(md2cmm_obj(mo_po)), name, lf);
+
         RETURN(rc);
 }
 
@@ -342,6 +364,7 @@ static struct md_dir_operations cmm_dir_ops = {
         .mdo_unlink      = cml_unlink,
         .mdo_rename      = cml_rename,
         .mdo_rename_tgt  = cml_rename_tgt,
+        .mdo_name_insert = cml_name_insert
 };
 
 /* -------------------------------------------------------------------
@@ -512,13 +535,13 @@ static int cmr_create(const struct lu_context *ctx,
 
         ENTRY;
 
+        //TODO: check the name isn't exist
+
         /* remote object creation and local name insert */
         rc = mo_object_create(ctx, cmm2child_obj(md2cmm_obj(mo_c)), attr);
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, cmm2child_obj(md2cmm_obj(mo_p)),
                                      name, lu_object_fid(&mo_c->mo_lu));
-                if (rc) 
-                        mo_ref_del(ctx, cmm2child_obj(md2cmm_obj(mo_c)));
         }
 
         RETURN(rc);
@@ -530,12 +553,12 @@ static int cmr_link(const struct lu_context *ctx, struct md_object *mo_p,
         int rc;
         ENTRY;
 
+        //TODO: check the name isn't exist
+
         rc = mo_ref_add(ctx, cmm2child_obj(md2cmm_obj(mo_s)));
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, cmm2child_obj(md2cmm_obj(mo_p)),
                                      name, lu_object_fid(&mo_s->mo_lu));
-                if (rc)
-                        mo_ref_del(ctx, cmm2child_obj(md2cmm_obj(mo_s)));
         }
 
         RETURN(rc);
@@ -551,8 +574,6 @@ static int cmr_unlink(const struct lu_context *ctx, struct md_object *mo_p,
         if (rc == 0) {
                 rc = mdo_name_remove(ctx, cmm2child_obj(md2cmm_obj(mo_p)),
                                      name, lu_object_fid(&mo_c->mo_lu));
-                if (rc)
-                        mo_ref_add(ctx, cmm2child_obj(md2cmm_obj(mo_c)));
         }
 
         RETURN(rc);
@@ -569,6 +590,32 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
                         cmm2child_obj(md2cmm_obj(mo_pn)),
                         cmm2child_obj(md2cmm_obj(mo_s)), s_name,
                         cmm2child_obj(md2cmm_obj(mo_t)), t_name);
+        
+        if (mo_t == NULL) { 
+                rc = mdo_name_insert(ctx, c_pn, t_name, lu_object_fid(c_s->mo_lu));
+                rc = mdo_name_remove(ctx, c_po, s_name); 
+        } else {
+                c_t =  cmm2child_obj(md2cmm_obj(mo_t));
+                if (cmm_is_local_obj(md2cmm_obj(mo_t))) {
+                        /*
+                         * target object is local so only name should
+                         * deleted/inserted on remote server 
+                         */
+                        rc = mdo_rename_tgt(ctx, c_pn, c_s,
+                                            NULL, t_name);
+                        /* localy the old name will be removed and target object
+                         * will be destroeyd*/
+                        rc = mdo_rename(ctx, c_po, NULL, c_s, 
+                                        s_name, c_t, NULL); 
+               } else {
+                        /* target object is remote one so just ask remote server
+                         * to continue with rename */
+                        rc = mdo_rename_tgt(ctx, c_pn, c_s,
+                                            c_t, t_name);
+                        /* only old name is removed localy */
+                        rc = mdo_name_destroy(ctx, c_po, s_name); 
+               }
+       }
 
         RETURN(rc);
 }
@@ -580,10 +627,20 @@ static int cmr_rename_tgt(const struct lu_context *ctx,
 {
         int rc;
         ENTRY;
+        /* target object is remote one */
+        rc = mo_ref_del(ctx, cmm2child_obj(md2cmm_obj(mo_t)));
+        /* continue locally with name handling only */
         rc = mdo_rename_tgt(ctx, cmm2child_obj(md2cmm_obj(mo_po)),
                             cmm2child_obj(md2cmm_obj(mo_s)),
-                            cmm2child_obj(md2cmm_obj(mo_t)), name);
+                            NULL, name);
         RETURN(rc);
+}
+
+static int cmr_name_insert(const struct lu_context * ctx,
+                           struct md_object *mo_p,
+                           const char *name, const struct lu_fid *lf)
+{
+        RETURN(-EFAULT);
 }
 
 static struct md_dir_operations cmm_dir_ops = {
@@ -593,6 +650,7 @@ static struct md_dir_operations cmm_dir_ops = {
         .mdo_unlink      = cmr_unlink,
         .mdo_rename      = cmr_rename,
         .mdo_rename_tgt  = cmr_rename_tgt,
+        .mdo_name_insert = cmr_name_insert,
 };
 
 #else /* CMM_CODE */

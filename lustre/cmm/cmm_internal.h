@@ -95,8 +95,14 @@ static inline struct cmm_object *md2cmm_obj(struct md_object *o)
 /* get lower-layer object */
 static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 {
-        return lu2md(lu_object_next(&o->cmo_obj.mo_lu));
+        return (o ? lu2md(lu_object_next(&o->cmo_obj.mo_lu)) : NULL);
 }
+
+static inline int cmm_is_local_obj(struct cmm_object *c)
+{
+        return (c->cmo_num == cmm_obj2dev(c)->cmm_local_num);
+}
+
 
 /* cmm_object.c */
 struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
