@@ -273,7 +273,12 @@ static inline int mdo_rename_tgt(const struct lu_context *cx,
                                  struct md_object *s, struct md_object *t,
                                  const char *name)
 {
-        LASSERT(p->mo_dir_ops->mdo_rename_tgt);
-        return p->mo_dir_ops->mdo_rename_tgt(cx, p, s, t, name);
+        if (t) {
+                LASSERT(t->mo_dir_ops->mdo_rename_tgt);
+                return t->mo_dir_ops->mdo_rename_tgt(cx, p, s, t, name);
+        } else {
+                LASSERT(p->mo_dir_ops->mdo_rename_tgt);
+                return p->mo_dir_ops->mdo_rename_tgt(cx, p, s, t, name);
+        }
 }
 #endif /* _LINUX_MD_OBJECT_H */
