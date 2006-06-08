@@ -141,16 +141,7 @@ static char *convert_hostnames(char *s1)
                 nid = libcfs_str2nid(s1);
                 if (nid == LNET_NID_ANY)
                         goto out_free;
-                if (LNET_NETTYP(LNET_NIDNET(nid)) == SOCKLND) {
-                        __u32 addr = LNET_NIDADDR(nid);
-                        c += snprintf(c, left, "%u.%u.%u.%u@%s%u%c",
-                                      (addr >> 24) & 0xff, (addr >> 16) & 0xff,
-                                      (addr >> 8) & 0xff, addr & 0xff,
-                                      libcfs_lnd2str(SOCKLND), 
-                                      LNET_NETNUM(LNET_NIDNET(nid)), sep);
-                } else {
-                        c += snprintf(c, left, "%s%c", s1, sep);
-                }
+                c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
                 left = converted + MAXNIDSTR - c;
                 s1 = s2 + 1;
         }

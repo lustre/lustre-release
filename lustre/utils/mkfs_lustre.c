@@ -870,16 +870,7 @@ static char *convert_hostnames(char *s1)
                         free(converted);
                         return NULL;
                 }
-                if (LNET_NETTYP(LNET_NIDNET(nid)) == SOCKLND) {
-                        __u32 addr = LNET_NIDADDR(nid);
-                        c += snprintf(c, left, "%u.%u.%u.%u@%s%u,",
-                                      (addr >> 24) & 0xff, (addr >> 16) & 0xff,
-                                      (addr >> 8) & 0xff, addr & 0xff,
-                                      libcfs_lnd2str(SOCKLND), 
-                                      LNET_NETNUM(LNET_NIDNET(nid)));
-                } else {
-                        c += snprintf(c, left, "%s,", s2);
-                }
+                c += snprintf(c, left, "%s,", libcfs_nid2str(nid));
                 left = converted + MAXNIDSTR - c;
         }
         *(c - 1) = '\0';

@@ -30,7 +30,7 @@ cp -u ../lvfs/$FSFLT.$EXT $MDIR
 [ $KVER == "26" ] && cp -u ../ldiskfs/ldiskfs.$EXT $MDIR
 cp -u ../ost/ost.$EXT $MDIR
 cp -u ../obdfilter/obdfilter.$EXT $MDIR
-cp -u ../llite/llite.$EXT $MDIR
+cp -u ../llite/lustre.$EXT $MDIR
 cp -u ../mgc/mgc.$EXT $MDIR
 cp -u ../mgs/mgs.$EXT $MDIR
 
