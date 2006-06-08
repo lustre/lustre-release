@@ -73,20 +73,5 @@ static inline int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
 
 void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
 
-/*
- * fld (fid location database) interface.
- */
-struct lu_fld {
-        struct proc_dir_entry   *fld_proc_entry;
-        struct ptlrpc_service   *fld_service;
-        struct dt_device        *fld_dt;
-        struct dt_object        *fld_obj;
-        struct lu_fid            fld_fid; /* used during initialization */
-        struct dt_index_cookie  *fld_cookie;
-};
-
-int  fld_server_init(const struct lu_context *ctx, struct lu_fld *fld,
-                     struct dt_device *dt);
-void fld_server_fini(const struct lu_context *ctx, struct lu_fld *fld);
 
 #endif /* __LINUX_OBD_CLASS_H */

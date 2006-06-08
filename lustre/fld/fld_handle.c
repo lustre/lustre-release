@@ -41,7 +41,7 @@
 #include <dt_object.h>
 #include <md_object.h>
 #include <lustre_mdc.h>
-#include <lustre_fid.h>
+#include <lustre_fld.h>
 #include "fld_internal.h"
 
 static int fld_handle(const struct lu_context *ctx,

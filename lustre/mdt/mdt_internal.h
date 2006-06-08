@@ -47,6 +47,7 @@
 #include <lustre/lustre_idl.h>
 #include <md_object.h>
 #include <lustre_fid.h>
+#include <lustre_fld.h>
 #include <lustre_req_layout.h>
 
 struct mdt_device {
