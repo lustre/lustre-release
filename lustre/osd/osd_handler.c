@@ -593,12 +593,43 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         return result;
 }
 
+static void osd_inode_inc_link(const struct lu_context *ctxt, 
+                               struct inode *inode)
+{
+        inode->i_nlink ++;
+}
+
+
+static void osd_inode_dec_link(const struct lu_context *ctxt, 
+                               struct inode *inode)
+{
+        inode->i_nlink --;
+}
+
+static int osd_object_ref_add(const struct lu_context *ctxt, 
+                              struct dt_object *dt)
+{
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        osd_inode_inc_link(ctxt, osd_dt_obj(dt)->oo_inode);
+        return 0;
+}
+
+static int osd_object_ref_del(const struct lu_context *ctxt, 
+                              struct dt_object *dt)
+{
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        osd_inode_dec_link(ctxt, osd_dt_obj(dt)->oo_inode);
+        return 0;
+}
+
 static struct dt_object_operations osd_obj_ops = {
         .do_object_lock      = osd_object_lock,
         .do_object_unlock    = osd_object_unlock,
         .do_attr_get         = osd_attr_get,
         .do_object_create    = osd_object_create,
-        .do_object_index_try = osd_index_try
+        .do_object_index_try = osd_index_try,
+        .do_object_ref_add   = osd_object_ref_add,
+        .do_object_ref_del   = osd_object_ref_del
 };
 
 static struct dt_body_operations osd_body_ops = {

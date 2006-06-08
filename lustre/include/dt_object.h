@@ -221,6 +221,22 @@ struct dt_object_operations {
                                      struct dt_object *dt,
                                      const struct dt_index_features *feat,
                                      struct dt_index_cookie *cookie);
+        /*
+         * Add nlink of the object
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
+         */
+        
+        int   (*do_object_ref_add)(const struct lu_context *ctxt, 
+                                   struct dt_object *dt);
+
+        /*
+         * Del nlink of the object
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
+         */
+        
+        int   (*do_object_ref_del)(const struct lu_context *ctxt, 
+                                   struct dt_object *dt);
+
 };
 
 /*

@@ -438,7 +438,7 @@ static struct lu_object_operations mdd_lu_obj_ops = {
 	.loo_object_release = mdd_object_release,
 	.loo_object_free    = mdd_object_free,
 	.loo_object_print   = mdd_object_print,
-	.loo_object_exists  = mdd_object_exists
+	.loo_object_exists  = mdd_object_exists,
 };
 
 static struct dt_object* mdd_object_child(struct mdd_object *o)
@@ -879,6 +879,37 @@ static int mdd_statfs(const struct lu_context *ctx,
         RETURN(rc);
 }
 
+static int mdd_ref_add(const struct lu_context *ctxt, struct md_object *obj)
+{
+        struct mdd_object *mdd_obj = mdo2mddo(obj);
+        struct dt_object *next;
+        int rc;
+        ENTRY;
+
+        if (!mdd_object_exists(ctxt, &obj->mo_lu)) {
+                next = mdd_object_child(mdd_obj);
+                rc = next->do_ops->do_object_ref_add(ctxt, next);
+        } else
+                rc = -ENOENT;
+        RETURN(rc);
+}
+
+static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj)
+{
+        struct mdd_object *mdd_obj = mdo2mddo(obj);
+        struct dt_object *next;
+        int rc;
+        ENTRY;
+
+        if (!mdd_object_exists(ctxt, &obj->mo_lu)) {
+                next = mdd_object_child(mdd_obj);
+                rc = next->do_ops->do_object_ref_del(ctxt, next);
+        } else
+                rc = -ENOENT;
+
+        RETURN(0);
+}
+
 struct md_device_operations mdd_ops = {
         .mdo_root_get       = mdd_root_get,
         .mdo_config         = mdd_config,
@@ -894,12 +925,15 @@ static struct md_dir_operations mdd_dir_ops = {
         .mdo_name_insert   = mdd_mkname
 };
 
+
 static struct md_object_operations mdd_obj_ops = {
         .moo_attr_get      = mdd_attr_get,
         .moo_attr_set      = mdd_attr_set,
         .moo_xattr_get     = mdd_xattr_get,
         .moo_xattr_set     = mdd_xattr_set,
-        .moo_object_create  = mdd_object_create
+        .moo_object_create  = mdd_object_create,
+        .moo_ref_add       = mdd_ref_add,
+        .moo_ref_del       = mdd_ref_del,
 };
 
 static struct obd_ops mdd_obd_device_ops = {
