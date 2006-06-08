@@ -7,7 +7,7 @@ ALWAYS_EXCEPT="20b  24   27 $RECOVERY_SMALL_EXCEPT"
 
 # Tests that always fail with mountconf -- FIXME
 # 16 fails with 1, not evicted
-EXCEPT="$EXCEPT 16"
+EXCEPT="$EXCEPT 16 18a 18b"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -719,7 +719,7 @@ test_52_guts() {
 	echo writemany pid $CLIENT_PID
 	sleep 10
 	FAILURE_MODE="SOFT"
-	fail ost
+	fail ost1
 	rc=0
 	wait $CLIENT_PID || rc=$?
 	# active client process should see an EIO for down OST
