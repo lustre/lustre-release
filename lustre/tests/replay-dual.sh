@@ -395,12 +395,12 @@ test_17() {
     createmany -o $MOUNT2/$tfile-2- 1
 
     # Make sure the disconnect is lost
-    replay_barrier ost
+    replay_barrier ost1
     umount $MOUNT2
 
-    facet_failover ost
+    facet_failover ost1
     sleep $TIMEOUT
-    facet_failover ost
+    facet_failover ost1
     df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2

@@ -846,11 +846,11 @@ run_test 41 "read from a valid osc while other oscs are invalid"
 test_42() {
     blocks=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
     createmany -o $DIR/$tfile-%d 800
-    replay_barrier ost
+    replay_barrier ost1
     unlinkmany $DIR/$tfile-%d 0 400
     DEBUG42=`sysctl -n lnet.debug`
     sysctl -w lnet.debug=-1
-    facet_failover ost
+    facet_failover ost1
     
     # osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
     #blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
@@ -984,7 +984,7 @@ test_48() {
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local oscdev=`grep ${ost_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    local oscdev=`grep ${ost1_svc}-osc- $LPROC/devices | awk '{print $1}'`
     [ "$oscdev" ] || return 1
     $LCTL --device $oscdev recover &&  $LCTL --device $oscdev recover
     # give the mds_lov_sync threads a chance to run

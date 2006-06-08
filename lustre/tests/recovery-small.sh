@@ -581,7 +581,7 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 	    echo "skipping test 26 (local OST)" && return
 	[ "`lsmod | grep mds`" ] && \
 	    echo "skipping test 26 (local MDS)" && return
-	OST_FILE=$LPROC/obdfilter/ost_svc/num_exports
+	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
         OST_EXP="`do_facet ost1 cat $OST_FILE`"
 	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
 	echo starting with $OST_NEXP1 OST exports
@@ -605,7 +605,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	zconf_mount `hostname` $MOUNT2
 	MDS_FILE=$LPROC/mds/${mds_svc}/num_exports
         MDS_NEXP1="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
-	OST_FILE=$LPROC/obdfilter/${ost_svc}/num_exports
+	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
         OST_NEXP1="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
 	echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
 	zconf_umount `hostname` $MOUNT2 -f

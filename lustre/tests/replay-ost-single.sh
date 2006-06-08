@@ -168,7 +168,7 @@ test_7() {
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1
-    replay_barrier ost
+    replay_barrier ost1
     rm -f $f
     fail ost1
     $CHECKSTAT -t file $f && return 2 || true

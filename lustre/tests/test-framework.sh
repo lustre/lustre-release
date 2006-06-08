@@ -30,7 +30,6 @@ usage() {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
-    export XMLCONFIG=${XMLCONFIG:-${TESTSUITE}.xml}
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=${ROOT:-/r}
@@ -64,9 +63,6 @@ init_test_env() {
 
     shift $((OPTIND - 1))
     ONLY=${ONLY:-$*}
-
-    # save the name of the config file for the upcall
-    echo "XMLCONFIG=$LUSTRE/tests/$XMLCONFIG"  > $LUSTRE/tests/XMLCONFIG
 }
 
 load_module() {
@@ -103,7 +99,8 @@ load_modules() {
     load_module llite/lustre
     load_module mgc/mgc
     load_module mgs/mgs
-    $LCTL modules >> /tmp/ogdb-`hostname`
+    rm -f /tmp/ogdb-`hostname`
+    $LCTL modules > /tmp/ogdb-`hostname`
     # 'mount' doesn't look in $PATH, just sbin
     cp $LUSTRE/utils/mount.lustre /sbin/.
 }
@@ -334,7 +331,7 @@ mds_evict_client() {
 
 ost_evict_client() {
     UUID=`cat /proc/fs/lustre/osc/*_MNT_*/uuid | head -n 1`
-    do_facet ost1 "echo $UUID > /proc/fs/lustre/obdfilter/ost_svc/evict_client"
+    do_facet ost1 "echo $UUID > /proc/fs/lustre/obdfilter/${ost1_svc}/evict_client"
 }
 
 fail() {
