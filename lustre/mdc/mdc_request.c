@@ -269,7 +269,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
 
         /* reply buffers */
         if (opcode == MDS_GETXATTR) {
-                size[0] = sizeof(struct mds_body);
+                size[REPLY_REC_OFF] = sizeof(struct mds_body);
                 bufcnt = 2;
         } else {
                 bufcnt = 1;
