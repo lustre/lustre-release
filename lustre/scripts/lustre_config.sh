@@ -588,6 +588,8 @@ construct_mkfs_cmdline() {
         fi
 
 	declare -i i=$1
+	local mgsnids mgsnids_str
+	local failnids failnids_str
 
 	MKFS_CMD=${MKFS}$" "
 	MKFS_CMD=${MKFS_CMD}${REFORMAT_OPTION}
@@ -618,7 +620,11 @@ construct_mkfs_cmdline() {
 
 	if [ -n "${MGS_NIDS[i]}" ]; then
 		MGS_NIDS[i]=`echo "${MGS_NIDS[i]}" | sed 's/^"//' | sed 's/"$//'`
-		MKFS_CMD=${MKFS_CMD}$"--mgsnode="${MGS_NIDS[i]}$" "
+		mgsnids_str=${MGS_NIDS[i]}
+		while read mgsnids; do
+			MKFS_CMD=${MKFS_CMD}$"--mgsnode="${mgsnids}$" "
+		done < <(echo ${mgsnids_str}|awk '{split($mgsnids_str, a, ":")}\
+                         END {for (j in a) print a[j]}')
 	fi
 
 	if [ -n "${INDEX[i]}" ]; then
@@ -644,7 +650,11 @@ construct_mkfs_cmdline() {
 
 	if [ -n "${FAILOVERS[i]}" ]; then
 		FAILOVERS[i]=`echo "${FAILOVERS[i]}" | sed 's/^"//' | sed 's/"$//'`
-		MKFS_CMD=${MKFS_CMD}$"--failnode="${FAILOVERS[i]}$" "
+		failnids_str=${FAILOVERS[i]}
+		while read failnids; do
+			MKFS_CMD=${MKFS_CMD}$"--failnode="${failnids}$" "
+		done < <(echo ${failnids_str}|awk '{split($failnids_str, a, ":")}\
+                         END {for (k in a) print a[k]}')
 	fi
 
 	MKFS_CMD=${MKFS_CMD}${DEVICE_NAME[i]}
