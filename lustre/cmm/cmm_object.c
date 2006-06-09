@@ -467,7 +467,7 @@ static int cmr_object_create(const struct lu_context *ctx,
 static int cmr_attr_get(const struct lu_context *ctx, struct md_object *mo,
                         struct lu_attr *attr)
 {
-        RETURN(-EFAULT);
+        RETURN(-EREMOTE);
 }
 
 static int cmr_attr_set(const struct lu_context *ctx, struct md_object *mo,
@@ -500,7 +500,7 @@ static int cmr_ref_del(const struct lu_context *ctx, struct md_object *mo)
 
 static int cmr_open(const struct lu_context *ctx, struct md_object *mo)
 {
-        RETURN(-EFAULT);
+        RETURN(-EREMOTE);
 }
 
 static int cmr_close(const struct lu_context *ctx, struct md_object *mo)
@@ -592,7 +592,8 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
                         cmm2child_obj(md2cmm_obj(mo_t)), t_name);
         
         if (mo_t == NULL) { 
-                rc = mdo_name_insert(ctx, c_pn, t_name, lu_object_fid(c_s->mo_lu));
+                rc = mdo_name_insert(ctx, c_pn, t_name,
+                                     lu_object_fid(&c_s->mo_lu));
                 rc = mdo_name_remove(ctx, c_po, s_name); 
         } else {
                 c_t =  cmm2child_obj(md2cmm_obj(mo_t));

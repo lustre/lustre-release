@@ -31,10 +31,8 @@
 #endif
 
 #define DEBUG_SUBSYSTEM S_MDS
-#include <lustre/lustre_idl.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
-#include <lustre_net.h>
 #include <obd_class.h>
 #include "mdc_internal.h"
 
@@ -42,6 +40,192 @@ static struct md_object_operations mdc_mo_ops;
 static struct md_dir_operations mdc_dir_ops;
 static struct lu_object_operations mdc_obj_ops;
 
+#ifdef CMM_CODE
+extern struct lu_context_key mdc_thread_key;
+
+struct lu_object *mdc_object_alloc(const struct lu_context *ctx,
+                                   const struct lu_object_header *hdr,
+                                   struct lu_device *ld)
+{
+	struct mdc_object *mco;
+        ENTRY;
+
+	OBD_ALLOC_PTR(mco);
+	if (mco != NULL) {
+		struct lu_object *lo;
+
+		lo = &mco->mco_obj.mo_lu;
+                lu_object_init(lo, NULL, ld);
+                mco->mco_obj.mo_ops = &mdc_mo_ops;
+                mco->mco_obj.mo_dir_ops = &mdc_dir_ops;
+                lo->lo_ops = &mdc_obj_ops;
+                RETURN(lo);
+	} else
+		RETURN(NULL);
+}
+
+static void mdc_object_free(const struct lu_context *ctx, struct lu_object *lo)
+{
+        struct mdc_object *mco = lu2mdc_obj(lo);
+	lu_object_fini(lo);
+        OBD_FREE_PTR(mco);
+}
+
+static int mdc_object_init(const struct lu_context *ctx, struct lu_object *lo)
+{
+        ENTRY;
+
+        RETURN(0);
+}
+
+static void mdc_object_release(const struct lu_context *ctx,
+                               struct lu_object *lo)
+{
+}
+
+static int mdc_object_exists(const struct lu_context *ctx, struct lu_object *lo)
+{
+        /* we don't know does it exists or not - but suppose that it does*/
+        return 1;
+}
+
+static int mdc_object_print(const struct lu_context *ctx,
+                            struct seq_file *f, const struct lu_object *lo)
+{
+	return seq_printf(f, LUSTRE_MDC0_NAME"-object@%p", lo);
+}
+
+static struct lu_object_operations mdc_obj_ops = {
+        .loo_object_init    = mdc_object_init,
+	.loo_object_release = mdc_object_release,
+        .loo_object_free    = mdc_object_free,
+	.loo_object_print   = mdc_object_print,
+	.loo_object_exists  = mdc_object_exists
+};
+
+/* md_object_operations */
+static int mdc_object_create(const struct lu_context *ctx,
+                             struct md_object *mo, struct lu_attr *attr)
+{
+        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        struct mdc_thread_info *mci;
+        int rc;
+        ENTRY;
+
+        mci = lu_context_get_key(ctx, &mdc_thread_key);
+        LASSERT(mci);
+
+        mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
+        mci->mci_opdata.fid2 = { 0 };
+        mci->mci_opdata.mod_time = attr->la_mtime;
+        mci->mci_opdata.name = NULL;
+        mci->mci_opdata.namelen = 0;
+
+        rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
+                       attr->la_mode, attr->la_uid, attr->la_gid, 0, 0,
+                       &mci->mci_req);
+
+        RETURN(rc);
+}
+static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
+{
+        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        struct mdc_thread_info *mci;
+        int rc;
+        ENTRY;
+
+        mci = lu_context_get_key(ctx, &mdc_thread_key);
+        LASSERT(mci);
+
+        mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
+        mci->mci_opdata.fid2 = { 0 };
+        mci->mci_opdata.mod_time = attr->la_mtime;
+        mci->mci_opdata.name = NULL;
+        mci->mci_opdata.namelen = 0;
+
+        rc = md_link(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
+
+        RETURN(rc);
+}
+
+static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo)
+{
+        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        struct mdc_thread_info *mci;
+        int rc;
+        ENTRY;
+
+        mci = lu_context_get_key(ctx, &mdc_thread_key);
+        LASSERT(mci);
+
+        mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
+        mci->mci_opdata.fid2 = { 0 };
+        mci->mci_opdata.mod_time = attr->la_mtime;
+        mci->mci_opdata.name = NULL;
+        mci->mci_opdata.namelen = 0;
+
+        rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
+
+        RETURN(rc);
+}
+
+static struct md_object_operations mdc_mo_ops = {
+        .moo_object_create  = mdc_object_create,
+        .moo_ref_add        = mdc_ref_add,
+        .moo_ref_del        = mdc_ref_del,
+};
+
+/* md_dir_operations */
+static int mdc_name_insert(const struct lu_context *ctx, struct md_object *mo,
+                           const char *name, const struct lu_fid *lf)
+{
+        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        struct mdc_thread_info *mci;
+        int rc;
+        ENTRY;
+
+        mci = lu_context_get_key(ctx, &mdc_thread_key);
+        LASSERT(mci);
+
+        mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
+        mci->mci_opdata.fid2 = *lf;
+        mci->mci_opdata.mod_time = attr->la_mtime;
+        //TODO: distinguish the name_insert and rename_tgt()
+
+        rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
+                       name, strlen(name), &mci->mci_req);
+
+        RETURN(rc);
+}
+
+static int mdc_rename_tgt(const struct lu_context *ctx,
+                          struct md_object *mo_p, struct md_object *mo_s,
+                          struct md_object *mo_t, const char *name)
+{
+        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        struct mdc_thread_info *mci;
+        int rc;
+        ENTRY;
+
+        mci = lu_context_get_key(ctx, &mdc_thread_key);
+        LASSERT(mci);
+
+        mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
+        mci->mci_opdata.fid2 = *lu_object_fid(&mo_s->mo_lu);
+        mci->mci_opdata.mod_time = attr->la_mtime;
+
+        rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
+                       name, strlen(name), &mci->mci_req);
+
+        RETURN(rc);
+}
+
+static struct md_dir_operations mdc_dir_ops = {
+        .mdo_name_insert = mdc_name_insert,
+        .mdo_rename_tgt  = mdc_rename_tgt,
+};
+
+#else /* CMM_CODE */
 struct lu_object *mdc_object_alloc(const struct lu_context *ctx,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *ld)
@@ -113,46 +297,6 @@ static int mdc_object_create(const struct lu_context *ctx,
         };
         int rc;
 
-
-#if 0
-        req = ptlrpc_prep_req(mc->mc_desc.cl_import, LUSTRE_MDS_VERSION,
-                              MDS_REINT, 1, &size, NULL);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-/*
-        mdc_create_pack(req, MDS_REQ_REC_OFF, op_data, data, datalen, mode,
-                        uid, gid, cap_effective, rdev);
-*/
-        rec = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF, sizeof (*rec));
-        rec->cr_opcode = REINT_CREATE;
-        rec->cr_fsuid = attr->la_uid;
-        rec->cr_fsgid = attr->la_gid;
-        rec->cr_cap = 0;//cap_effective;
-        rec->cr_fid1 = *lu_object_fid(&mo->mo_lu);
-        memset(&rec->cr_fid2, 0, sizeof(rec->cr_fid2));
-        rec->cr_mode = attr->la_mode;
-        rec->cr_rdev = 0;//rdev;
-        rec->cr_time = attr->la_mtime; //op_data->mod_time;
-        rec->cr_suppgid = 0;//op_data->suppgids[0];
-
-
-        size = sizeof(struct mdt_body);
-        req->rq_replen = lustre_msg_size(1, &size);
-
-        level = LUSTRE_IMP_FULL;
-        req->rq_send_state = level;
-        //mdc_get_rpc_lock(rpc_lock, NULL);
-        rc = ptlrpc_queue_wait(req);
-        //mdc_put_rpc_lock(rpc_lock, NULL);
-        if (rc)
-                CDEBUG(D_INFO, "error in handling %d\n", rc);
-        else if (!lustre_swab_repbuf(req, 0, sizeof(struct mdt_body),
-                                     lustre_swab_mdt_body)) {
-                CERROR ("Can't unpack mdt_body\n");
-                rc = -EPROTO;
-        } else
-                CDEBUG(D_INFO, "Done MDC req!\n");
-#endif
         rc = md_create(exp, &op_data, NULL, 0, attr->la_mode, attr->la_uid,
                        attr->la_gid, 0, 0, &req);
         RETURN(rc);
@@ -172,4 +316,4 @@ static struct lu_object_operations mdc_obj_ops = {
 	.loo_object_print   = mdc_object_print,
 	.loo_object_exists  = mdc_object_exists
 };
-
+#endif /* CMM_CODE */
