@@ -981,10 +981,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 sizeof(mop->mo_mkfsopts) - 1);
                         break;
                 case 'L':
-                        if (!(IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd))) {
-                                badopt(long_opt[longidx].name, "MDT,OST");
-                                return 1;
-                        }
                         if (strlen(optarg) > 8) {
                                 fprintf(stderr, "%s: filesystem name must be "
                                         "<= 8 chars\n", progname);

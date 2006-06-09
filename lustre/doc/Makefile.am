@@ -15,7 +15,7 @@ TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
 if UTILS
-man_MANS = lfs.1 lmc.1 lconf.8 lctl.8
+man_MANS = lfs.1 lctl.8
 endif
 
 LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
@@ -24,7 +24,7 @@ LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
 CLEANFILES = *.aux *.tex *.log *.pdf
 
 EXTRA_DIST = tex2pdf $(man_MANS) \
-	$(LYXFILES) lfs.1 lmc.1 lconf.8 lctl.8	
+	$(LYXFILES) lfs.1 lctl.8	
 
 all:
 
