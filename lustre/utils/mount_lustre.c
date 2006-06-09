@@ -391,8 +391,8 @@ int main(int argc, char *const argv[])
                 if (errno == ENOMEDIUM)
                         fprintf(stderr,"This filesystem needs at least 1 OST\n");
                 if (errno == ENOENT)
-                        fprintf(stderr, "Is the MGS specification correct? "
-                                "(%s)\n", source);
+                        fprintf(stderr, "Is the MGS specification correct? Is "
+                                "the filesystem name correct?\n");
                 if (errno == EALREADY)
                         fprintf(stderr, "The target service is already running."
                                 " (%s)\n", source);
