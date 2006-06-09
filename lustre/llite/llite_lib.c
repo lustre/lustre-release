@@ -896,7 +896,9 @@ int ll_fill_super(struct super_block *sb)
 
         lprof = class_get_profile(profilenm);
         if (lprof == NULL) {
-                CERROR("No profile found: %s\n", profilenm);
+                LCONSOLE_ERROR("The client profile '%s' could not be read "
+                               "from the MGS.  Does that filesystem exist?\n",
+                               profilenm);
                 GOTO(out_free, err = -EINVAL);
         }
         CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm, 

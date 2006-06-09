@@ -405,8 +405,13 @@ int main(int argc, char *const argv[])
                 if (errno == EADDRINUSE)
                         fprintf(stderr, "The target service's index is already "
                                 "in use. (%s)\n", source);
-                if (errno == EINVAL)
+                if (errno == EINVAL) {
+                        char *ptr = strchr(source, '/');
+                        fprintf(stderr, "This may have multiple causes. Is "
+                                "'%s' the correct filesystem name?\n",
+                                ptr ? ptr + 1 : source);
                         fprintf(stderr, "Check the syslog for more info\n");
+                }
                 rc = errno;
         } else if (!nomtab) {
                 rc = update_mtab_entry(source, target, "lustre", orig_options,
