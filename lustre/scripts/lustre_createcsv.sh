@@ -1395,6 +1395,54 @@ get_defaultjournalsize() {
 	return 0
 }
 
+# figure_journal_size target_devname hostname
+# Find a reasonable journal file size given the number of blocks 
+# in the filesystem. This algorithm is derived from figure_journal_size()
+# function in util.c of e2fsprogs-1.38.cfs2-1.src.rpm.
+figure_journal_size() {
+	local target_devname=$1
+	local host_name=$2
+	local ret_str
+	declare -i block_count
+	declare -i journal_blocks
+	declare -i journal_size
+
+	# Execute remote command to get the block count 
+	ret_str=`${REMOTE} ${host_name} "/sbin/debugfs -R 'stats -h' \
+		 ${target_devname} | grep 'Block count:'" 2>&1`
+	if [ $? -ne 0 -a -n "${ret_str}" ]; then
+		echo "`basename $0`: figure_journal_size() error:" \
+		     "remote command error: ${ret_str}"
+		return 1
+	fi
+
+	ret_str=${ret_str#${ret_str%Block count:*}}
+	block_count=`echo ${ret_str} | awk '{print $3}'`
+	if [ -z "`echo ${block_count}|awk '/^[[:digit:]]/ {print $0}'`" ]
+	then
+		echo "`basename $0`: figure_journal_size() error: can't" \
+		"get block count of ${target_devname} in ${host_name}!"
+		return 1
+	fi
+
+	if ((block_count < 32768)); then
+		let "journal_blocks = 1024"
+	elif ((block_count < 256*1024)); then
+		let "journal_blocks = 4096"
+	elif ((block_count < 512*1024)); then
+		let "journal_blocks = 8192"
+	elif ((block_count < 1024*1024)); then
+		let "journal_blocks = 16384"
+	else
+		let "journal_blocks = 32768"
+	fi
+
+	let "journal_size = journal_blocks * L_BLOCK_SIZE / 1048576"
+
+	echo ${journal_size}
+	return 0
+}
+
 # get_J_opt hostname target_devname target_devsize
 # Get the mkfs -J option of lustre target @target_devname 
 # from the node @hostname
@@ -1416,7 +1464,12 @@ get_J_opt() {
 	# Get the default journal size of lustre target
 	default_journal_size=$(get_defaultjournalsize ${target_devsize})
 	if [ "${default_journal_size}" = "0" ]; then
-		let "default_journal_size = L_BLOCK_SIZE/1024"
+		default_journal_size=$(figure_journal_size ${target_devname} \
+				       ${host_name})
+		if [ $? -ne 0 ]; then
+			echo "${default_journal_size}"
+			return 1
+		fi
 	fi
 
 	if [ "${journal_size}" != "${default_journal_size}" ]; then
