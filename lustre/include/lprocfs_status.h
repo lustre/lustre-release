@@ -248,8 +248,14 @@ extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
 
 extern int lprocfs_write_helper(const char *buffer, unsigned long count,
                                 int *val);
+extern int lprocfs_write_frac_helper(const char *buffer, unsigned long count,
+                                     int *val, int mult);
+extern int lprocfs_read_frac_helper(char *buffer, unsigned long count, 
+                                    long val, int mult);
 extern int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
                                     __u64 *val);
+extern int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
+                                         __u64 *val, int mult);
 int lprocfs_obd_seq_create(struct obd_device *dev, char *name, mode_t mode,
                            struct file_operations *seq_fops, void *data);
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value);

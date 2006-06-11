@@ -2507,25 +2507,29 @@ Index: linux-stage/fs/ext3/super.c
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0,
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
-+	Opt_extents, Opt_extdebug,
++	Opt_extents, Opt_noextents, Opt_extdebug,
  };
  
  static match_table_t tokens = {
-@@ -639,6 +644,8 @@
+@@ -639,6 +644,9 @@
  	{Opt_iopen, "iopen"},
  	{Opt_noiopen, "noiopen"},
  	{Opt_iopen_nopriv, "iopen_nopriv"},
 +	{Opt_extents, "extents"},
++	{Opt_noextents, "noextents"},
 +	{Opt_extdebug, "extdebug"},
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
-@@ -943,6 +950,12 @@
+@@ -943,6 +950,15 @@
  			match_int(&args[0], &option);
  			*n_blocks_count = option;
  			break;
 +		case Opt_extents:
 +			set_opt (sbi->s_mount_opt, EXTENTS);
++			break;
++		case Opt_noextents:
++			clear_opt (sbi->s_mount_opt, EXTENTS);
 +			break;
 +		case Opt_extdebug:
 +			set_opt (sbi->s_mount_opt, EXTDEBUG);

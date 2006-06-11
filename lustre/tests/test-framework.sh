@@ -7,6 +7,7 @@ set -e
 export REFORMAT=""
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
+export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
 assert_env() {
@@ -224,6 +225,7 @@ reboot_facet() {
 
 # verify that lustre actually cleaned up properly
 cleanup_check() {
+    [ -e $CATASTROPHE -a "`cat $CATASTROPHE`" = "1" ] && echo "LBUG" && exit 206
     BUSY=`dmesg | grep -i destruct || true`
     if [ "$BUSY" ]; then
         echo "$BUSY" 1>&2
@@ -789,6 +791,8 @@ run_one() {
     #check_mds
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
+    [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
+        error "LBUG/LASSERT detected"
     pass "($((`date +%s` - $BEFORE))s)"
 }
 

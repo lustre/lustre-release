@@ -66,21 +66,4 @@ lustre_build_version:
 	echo "#define LUSTRE_RELEASE @RELEASE@" >> tmpver
 	cmp -s $(BUILD_VER_H) tmpver > tmpdiff 2> /dev/null &&		\
                 $(RM) tmpver tmpdiff ||					\
-		mv tmpver $(BUILD_VER_H)
-
-CSTK=/tmp/checkstack
-CSTKO=/tmp/checkstack.orig
-
-checkstack:
-	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv ${CSTK} ${CSTKO} || true
-	for i in ${SUBDIRS} lnet/klnds/*; do				     \
-		MOD=$$i/`basename $$i`.o;				     \
-		[ -f $$MOD ] && objdump -d $$MOD | perl tests/checkstack.pl; \
-	done | sort -nr > ${CSTK}
-	[ -f ${CSTKO} ] && ! diff -u ${CSTKO} ${CSTK} || head -30 ${CSTK}
-
-checkstack-update:
-	[ -f ${CSTK} ] && mv ${CSTK} ${CSTKO}
-
-checkstack-clean:
-	rm -f ${CSTK} ${CSTKO}
+		mv -f tmpver $(BUILD_VER_H)

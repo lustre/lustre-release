@@ -185,19 +185,18 @@ Espan:
         // error = "inode out of bounds";
 bad_entry:
         CERROR("%s: bad entry in directory %lu/%u: %s - "
-                "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d",
-                ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
-                dir->i_generation, error, (page->index<<PAGE_CACHE_SHIFT), offs,
-                (unsigned long)le32_to_cpu(p->inode),
-                rec_len, p->name_len);
+               "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d\n",
+               ll_i2mdcexp(dir)->exp_obd->obd_name, dir->i_ino,
+               dir->i_generation, error, page->index << PAGE_CACHE_SHIFT, offs,
+               (unsigned long)le32_to_cpu(p->inode),
+               rec_len, p->name_len);
         goto fail;
 Eend:
         p = (ext2_dirent *)(kaddr + offs);
-        CERROR("ext2_check_page"
-                "entry in directory #%lu spans the page boundary"
-                "offset=%lu, inode=%lu",
-                dir->i_ino, (page->index<<PAGE_CACHE_SHIFT)+offs,
-                (unsigned long) le32_to_cpu(p->inode));
+        CERROR("%s: entry in directory %lu/%u spans the page boundary "
+               "offset=%lu+%u, inode=%lu\n",ll_i2mdcexp(dir)->exp_obd->obd_name,
+               dir->i_ino, dir->i_generation, page->index << PAGE_CACHE_SHIFT,
+               offs, (unsigned long)le32_to_cpu(p->inode));
 fail:
         SetPageChecked(page);
         SetPageError(page);
@@ -602,7 +601,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         struct lov_stripe_md *lsm;
                         struct lov_user_md_join *lmj;
                         int lmj_size, i, aindex = 0, rc;
- 
+
                         rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
                         if (rc < 0)
                                 GOTO(out_req, rc = -ENOMEM);
@@ -652,7 +651,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 out_free_memmd:
                         obd_free_memmd(sbi->ll_osc_exp, &lsm);
                         if (rc)
-                                GOTO(out_req, rc);
+                                GOTO(out_lmm, rc);
                 }
                 if (cmd == IOC_MDC_GETFILEINFO) {
                         struct lov_user_mds_data *lmdp;
@@ -675,19 +674,20 @@ out_free_memmd:
                         lmdp = (struct lov_user_mds_data *)arg;
                         rc = copy_to_user(&lmdp->lmd_st, &st, sizeof(st));
                         if (rc)
-                                GOTO(out_req, rc = -EFAULT);
+                                GOTO(out_lmm, rc = -EFAULT);
                         lump = &lmdp->lmd_lmm;
                 } else {
                         lump = (struct lov_user_md *)arg;
                 }
 
                 rc = copy_to_user(lump, lmm, lmmsize);
-                if (lmm->lmm_magic == LOV_MAGIC_JOIN)
-                        OBD_FREE(lmm, lmmsize); 
                 if (rc)
-                        GOTO(out_req, rc = -EFAULT);
+                        GOTO(out_lmm, rc = -EFAULT);
 
                 EXIT;
+        out_lmm:
+                if (lmm->lmm_magic == LOV_MAGIC_JOIN)
+                        OBD_FREE(lmm, lmmsize);
         out_req:
                 ptlrpc_req_finished(request);
         out_name:

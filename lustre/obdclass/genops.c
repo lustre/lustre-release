@@ -36,9 +36,9 @@
 extern struct list_head obd_types;
 spinlock_t obd_types_lock;
 
-cfs_mem_cache_t *obdo_cachep = NULL;
+cfs_mem_cache_t *obdo_cachep;
 EXPORT_SYMBOL(obdo_cachep);
-cfs_mem_cache_t *import_cachep = NULL;
+cfs_mem_cache_t *import_cachep;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 

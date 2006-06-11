@@ -13,3 +13,4 @@ ext3-rename-reserve-2.6-suse.patch
 ext3-htree-dot-2.6.5-suse.patch 
 ext3-ialloc-2.6.patch
 ext3-lookup-dotdot-2.6.9.patch
+ext3-sector_t-overflow-2.6.5-suse.patch

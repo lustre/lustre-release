@@ -1289,22 +1289,27 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 obd_flag flags;
+                struct obd_info oinfo = { { { 0 } } };
                 struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
-                
+
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_valid = OBD_MD_FLID;
 
                 flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
                         OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                         OBD_MD_FLFID | OBD_MD_FLGENER;
-                
+
                 obdo_from_inode(&oa, inode, flags);
-                rc = obd_setattr(sbi->ll_osc_exp, &oa, lsm, NULL);
+
+                oinfo.oi_oa = &oa;
+                oinfo.oi_md = lsm;
+
+                rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
                 if (rc)
-                        CERROR("obd_setattr fails: rc=%d\n", rc);
+                        CERROR("obd_setattr_async fails: rc=%d\n", rc);
         }
         RETURN(rc);
 }
@@ -1333,7 +1338,8 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
         CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
 
-        rc = obd_statfs(class_exp2obd(sbi->ll_osc_exp), &obd_osfs, max_age);
+        rc = obd_statfs_rqset(class_exp2obd(sbi->ll_osc_exp),
+                              &obd_osfs, max_age);
         if (rc) {
                 CERROR("obd_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
@@ -1645,42 +1651,42 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         }
         case EXT3_IOC_SETFLAGS: {
                 struct mdc_op_data op_data;
-                struct ll_iattr_struct attr;
-                struct obdo *oa;
+                struct ll_iattr_struct attr = { 0 };
+                struct obd_info oinfo = { { { 0 } } };
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
 
                 if (get_user(flags, (int *)arg))
                         RETURN(-EFAULT);
 
-                oa = obdo_alloc();
-                if (!oa)
+                oinfo.oi_md = lsm;
+                oinfo.oi_oa = obdo_alloc();
+                if (!oinfo.oi_oa)
                         RETURN(-ENOMEM);
 
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
-                memset(&attr, 0x0, sizeof(attr));
                 attr.ia_attr_flags = flags;
                 ((struct iattr *)&attr)->ia_valid |= ATTR_ATTR_FLAG;
 
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
                                  (struct iattr *)&attr, NULL, 0, NULL, 0, &req);
+                ptlrpc_req_finished(req);
                 if (rc || lsm == NULL) {
-                        ptlrpc_req_finished(req);
-                        obdo_free(oa);
+                        obdo_free(oinfo.oi_oa);
                         RETURN(rc);
                 }
-                ptlrpc_req_finished(req);
 
-                oa->o_id = lsm->lsm_object_id;
-                oa->o_flags = flags;
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+                oinfo.oi_oa->o_id = lsm->lsm_object_id;
+                oinfo.oi_oa->o_flags = flags;
+                oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
 
-                obdo_from_inode(oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
-                rc = obd_setattr(sbi->ll_osc_exp, oa, lsm, NULL);
-                obdo_free(oa);
+                obdo_from_inode(oinfo.oi_oa, inode, 
+                                OBD_MD_FLFID | OBD_MD_FLGENER);
+                rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
+                obdo_free(oinfo.oi_oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
-                                CERROR("mdc_setattr fails: rc = %d\n", rc);
+                                CERROR("mdc_setattr_async fails: rc = %d\n", rc);
                         RETURN(rc);
                 }
 

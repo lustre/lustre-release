@@ -962,6 +962,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                       struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_obd *lov;
+        struct obd_info oinfo;
         struct lov_request_set *set = NULL;
         struct obd_statfs osfs;
         unsigned long maxage;
@@ -991,16 +992,16 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         }
 
         maxage = cfs_time_shift(-lov->desc.ld_qos_maxage);
-        obd_statfs(exp->exp_obd, &osfs, maxage);
+        obd_statfs_rqset(exp->exp_obd, &osfs, maxage);
 
-        rc = lov_prep_create_set(exp, ea, src_oa, oti, &set);
+        rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
         if (rc)
                 RETURN(rc);
 
         list_for_each_entry(req, &set->set_list, rq_link) {
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
                 rc = obd_create(lov->tgts[req->rq_idx].ltd_exp,
-                                req->rq_oa, &req->rq_md, oti);
+                                req->rq_oi.oi_oa, &req->rq_oi.oi_md, oti);
                 lov_update_create_set(set, req, rc);
         }
         rc = lov_fini_create_set(set, ea);
@@ -1020,10 +1021,11 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                        struct obd_export *md_exp)
 {
         struct lov_request_set *set;
+        struct obd_info oinfo;
         struct lov_request *req;
         struct list_head *pos;
         struct lov_obd *lov;
-        int rc = 0;
+        int rc = 0, err;
         ENTRY;
 
         ASSERT_LSM_MAGIC(lsm);
@@ -1031,8 +1033,13 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
+        if (oa->o_valid & OBD_MD_FLCOOKIE) {
+                LASSERT(oti);
+                LASSERT(oti->oti_logcookies);
+        }
+
         lov = &exp->exp_obd->u.lov;
-        rc = lov_prep_destroy_set(exp, oa, lsm, oti, &set);
+        rc = lov_prep_destroy_set(exp, &oinfo, oa, lsm, oti, &set);
         if (rc)
                 RETURN(rc);
 
@@ -1040,30 +1047,31 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 int err;
                 req = list_entry(pos, struct lov_request, rq_link);
 
-                /* XXX update the cookie position */
-                oti->oti_logcookies = set->set_cookies + req->rq_stripe;
-                rc = obd_destroy(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
-                                 NULL, oti, NULL);
-                err = lov_update_common_set(set, req, rc);
+                if (oa->o_valid & OBD_MD_FLCOOKIE)
+                        oti->oti_logcookies = set->set_cookies + req->rq_stripe;
+
+                err = obd_destroy(lov->tgts[req->rq_idx].ltd_exp, 
+                                  req->rq_oi.oi_oa, NULL, oti, NULL);
+                err = lov_update_common_set(set, req, err);
                 if (err) {
                         CERROR("error: destroying objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
-                               set->set_oa->o_id, req->rq_oa->o_id,
-                               req->rq_idx, rc);
+                               oa->o_id, req->rq_oi.oi_oa->o_id,
+                               req->rq_idx, err);
                         if (!rc)
                                 rc = err;
                 }
         }
-        rc = lov_fini_destroy_set(set);
+
         if (rc == 0) {
                 LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
                 rc = lsm_op_find(lsm->lsm_magic)->lsm_destroy(lsm, oa, md_exp);
         }
-        RETURN(rc);
+        err = lov_fini_destroy_set(set);
+        RETURN(rc ? rc : err);
 }
 
-static int lov_getattr(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *lsm)
+static int lov_getattr(struct obd_export *exp, struct obd_info *oinfo)
 {
         struct lov_request_set *set;
         struct lov_request *req;
@@ -1072,14 +1080,15 @@ static int lov_getattr(struct obd_export *exp, struct obdo *oa,
         int err = 0, rc = 0;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
+        LASSERT(oinfo);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
 
-        rc = lov_prep_getattr_set(exp, oa, lsm, &set);
+        rc = lov_prep_getattr_set(exp, oinfo, &set);
         if (rc)
                 RETURN(rc);
 
@@ -1087,16 +1096,15 @@ static int lov_getattr(struct obd_export *exp, struct obdo *oa,
                 req = list_entry(pos, struct lov_request, rq_link);
 
                 CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
-                       "%u\n", oa->o_id, req->rq_stripe, req->rq_oa->o_id,
-                       req->rq_idx);
+                       "%u\n", oinfo->oi_oa->o_id, req->rq_stripe, 
+                       req->rq_oi.oi_oa->o_id, req->rq_idx);
 
-                rc = obd_getattr(lov->tgts[req->rq_idx].ltd_exp,
-                                 req->rq_oa, NULL);
+                rc = obd_getattr(lov->tgts[req->rq_idx].ltd_exp, &req->rq_oi);
                 err = lov_update_common_set(set, req, rc);
                 if (err) {
                         CERROR("error: getattr objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
-                               set->set_oa->o_id, req->rq_oa->o_id,
+                               oinfo->oi_oa->o_id, req->rq_oi.oi_oa->o_id,
                                req->rq_idx, err);
                         break;
                 }
@@ -1108,78 +1116,79 @@ static int lov_getattr(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static int lov_getattr_interpret(struct ptlrpc_request_set *rqset, void *data,
-                                 int rc)
+static int lov_getattr_interpret(struct ptlrpc_request_set *rqset, 
+                                 void *data, int rc)
 {
         struct lov_request_set *lovset = (struct lov_request_set *)data;
+        int err;
         ENTRY;
 
         /* don't do attribute merge if this aysnc op failed */
-        if (rc) {
+        if (rc)
                 lovset->set_completes = 0;
-                lov_fini_getattr_set(lovset);
-        } else {
-                rc = lov_fini_getattr_set(lovset);
-        }
-        RETURN (rc);
+        err = lov_fini_getattr_set(lovset);
+        RETURN(rc ? rc : err);
 }
 
-static int lov_getattr_async(struct obd_export *exp, struct obdo *oa,
-                              struct lov_stripe_md *lsm,
+static int lov_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
                               struct ptlrpc_request_set *rqset)
 {
         struct lov_request_set *lovset;
         struct lov_obd *lov;
         struct list_head *pos;
         struct lov_request *req;
-        int rc = 0;
+        int rc = 0, err;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
+        LASSERT(oinfo);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
 
-        rc = lov_prep_getattr_set(exp, oa, lsm, &lovset);
+        rc = lov_prep_getattr_set(exp, oinfo, &lovset);
         if (rc)
                 RETURN(rc);
 
         CDEBUG(D_INFO, "objid "LPX64": %ux%u byte stripes\n",
-               lsm->lsm_object_id, lsm->lsm_stripe_count, lsm->lsm_stripe_size);
+               oinfo->oi_md->lsm_object_id, oinfo->oi_md->lsm_stripe_count, 
+               oinfo->oi_md->lsm_stripe_size);
 
         list_for_each (pos, &lovset->set_list) {
                 req = list_entry(pos, struct lov_request, rq_link);
 
                 CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
-                       "%u\n", oa->o_id, req->rq_stripe, req->rq_oa->o_id,
-                       req->rq_idx);
+                       "%u\n", oinfo->oi_oa->o_id, req->rq_stripe, 
+                       req->rq_oi.oi_oa->o_id, req->rq_idx);
                 rc = obd_getattr_async(lov->tgts[req->rq_idx].ltd_exp,
-                                       req->rq_oa, NULL, rqset);
+                                       &req->rq_oi, rqset);
                 if (rc) {
                         CERROR("error: getattr objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
-                               lovset->set_oa->o_id, req->rq_oa->o_id,
+                               oinfo->oi_oa->o_id, req->rq_oi.oi_oa->o_id,
                                req->rq_idx, rc);
                         GOTO(out, rc);
                 }
-                lov_update_common_set(lovset, req, rc);
         }
 
-        LASSERT(rc == 0);
-        LASSERT (rqset->set_interpret == NULL);
-        rqset->set_interpret = lov_getattr_interpret;
-        rqset->set_arg = (void *)lovset;
-        RETURN(rc);
+        if (!list_empty(&rqset->set_requests)) {
+                LASSERT(rc == 0);
+                LASSERT (rqset->set_interpret == NULL);
+                rqset->set_interpret = lov_getattr_interpret;
+                rqset->set_arg = (void *)lovset;
+                RETURN(rc);
+        }
 out:
-        LASSERT(rc);
-        lov_fini_getattr_set(lovset);
-        RETURN(rc);
+        if (rc)
+                lovset->set_completes = 0;
+        err = lov_fini_getattr_set(lovset);
+        RETURN(rc ? rc : err);
 }
 
-static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
-                       struct lov_stripe_md *lsm, struct obd_trans_info *oti)
+static int lov_setattr(struct obd_export *exp, struct obd_info *oinfo,
+                       struct obd_trans_info *oti)
 {
         struct lov_request_set *set;
         struct lov_obd *lov;
@@ -1188,33 +1197,36 @@ static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
         int err = 0, rc = 0;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
+        LASSERT(oinfo);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
         /* for now, we only expect the following updates here */
-        LASSERT(!(src_oa->o_valid & ~(OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                      OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                      OBD_MD_FLFLAGS | OBD_MD_FLSIZE | OBD_MD_FLGROUP |
-                                      OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLINLINE |
-                                      OBD_MD_FLFID | OBD_MD_FLGENER)));
+        LASSERT(!(oinfo->oi_oa->o_valid & ~(OBD_MD_FLID | OBD_MD_FLTYPE | 
+                                            OBD_MD_FLMODE | OBD_MD_FLATIME | 
+                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                            OBD_MD_FLFLAGS | OBD_MD_FLSIZE | 
+                                            OBD_MD_FLGROUP | OBD_MD_FLUID | 
+                                            OBD_MD_FLGID | OBD_MD_FLINLINE |
+                                            OBD_MD_FLFID | OBD_MD_FLGENER)));
         lov = &exp->exp_obd->u.lov;
-        rc = lov_prep_setattr_set(exp, src_oa, lsm, oti, &set);
+        rc = lov_prep_setattr_set(exp, oinfo, oti, &set);
         if (rc)
                 RETURN(rc);
 
         list_for_each (pos, &set->set_list) {
                 req = list_entry(pos, struct lov_request, rq_link);
 
-                rc = obd_setattr(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
-                                 NULL, NULL);
+                rc = obd_setattr(lov->tgts[req->rq_idx].ltd_exp, 
+                                 &req->rq_oi, NULL);
                 err = lov_update_setattr_set(set, req, rc);
                 if (err) {
                         CERROR("error: setattr objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
-                               set->set_oa->o_id, req->rq_oa->o_id,
-                               req->rq_idx, err);
+                               set->set_oi->oi_oa->o_id, 
+                               req->rq_oi.oi_oa->o_id, req->rq_idx, err);
                         if (!rc)
                                 rc = err;
                 }
@@ -1225,106 +1237,159 @@ static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
         RETURN(rc);
 }
 
-static int lov_setattr_async(struct obd_export *exp, struct obdo *src_oa,
-                       struct lov_stripe_md *lsm, struct obd_trans_info *oti)
+static int lov_setattr_interpret(struct ptlrpc_request_set *rqset,
+                                 void *data, int rc)
 {
-        struct lov_obd *lov;
-        struct lov_oinfo *loi = NULL;
-        int rc = 0, err;
-        obd_id objid = src_oa->o_id;
-        int i;
+        struct lov_request_set *lovset = (struct lov_request_set *)data;
+        int err;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
-        LASSERT(oti);
-        if (src_oa->o_valid & OBD_MD_FLCOOKIE)
+        if (rc)
+                lovset->set_completes = 0;
+        err = lov_fini_setattr_set(lovset);
+        RETURN(rc ? rc : err);
+}
+
+/* If @oti is given, the request goes from MDS and responses from OSTs are not
+   needed. Otherwise, a client is waiting for responses. */
+static int lov_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
+                             struct obd_trans_info *oti,
+                             struct ptlrpc_request_set *rqset)
+{
+        struct lov_request_set *set;
+        struct lov_request *req;
+        struct list_head *pos;
+        struct lov_obd *lov;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(oinfo);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
+        if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE) {
+                LASSERT(oti);
                 LASSERT(oti->oti_logcookies);
+        }
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
-        LASSERT(!(src_oa->o_valid &  ~(OBD_MD_FLID | OBD_MD_FLUID |
-                                       OBD_MD_FLGID| OBD_MD_FLCOOKIE |
-                                       OBD_MD_FLFID | OBD_MD_FLGENER)));
         lov = &exp->exp_obd->u.lov;
+        rc = lov_prep_setattr_set(exp, oinfo, oti, &set);
+        if (rc)
+                RETURN(rc);
 
-        loi = lsm->lsm_oinfo;
-        for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
-                if (lov->tgts[loi->loi_ost_idx].ltd_active == 0) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
-                        goto next;
-                }
+        CDEBUG(D_INFO, "objid "LPX64": %ux%u byte stripes\n",
+               oinfo->oi_md->lsm_object_id, oinfo->oi_md->lsm_stripe_count,
+               oinfo->oi_md->lsm_stripe_size);
 
-                src_oa->o_id = loi->loi_id;
-                src_oa->o_stripe_idx = i;
+        list_for_each (pos, &set->set_list) {
+                req = list_entry(pos, struct lov_request, rq_link);
 
-                /* do chown/chgrp on OST asynchronously */
-                err = obd_setattr_async(lov->tgts[loi->loi_ost_idx].ltd_exp,
-                                        src_oa, NULL, oti);
-                if (err) {
+                if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE)
+                        oti->oti_logcookies = set->set_cookies + req->rq_stripe;
+
+                CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
+                       "%u\n", oinfo->oi_oa->o_id, req->rq_stripe,
+                       req->rq_oi.oi_oa->o_id, req->rq_idx);
+
+                rc = obd_setattr_async(lov->tgts[req->rq_idx].ltd_exp,
+                                       &req->rq_oi, oti, rqset);
+                if (rc) {
                         CERROR("error: setattr objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
-                               objid, src_oa->o_id, i, err);
-                        if (!rc)
-                                rc = err;
+                               set->set_oi->oi_oa->o_id,
+                               req->rq_oi.oi_oa->o_id,
+                               req->rq_idx, rc);
+                        break;
                 }
-        next:
-                if (src_oa->o_valid & OBD_MD_FLCOOKIE)
-                        oti->oti_logcookies++;
         }
 
-        RETURN(rc);
+        /* If we are not waiting for responses on async requests, return. */
+        if (rc || !rqset || list_empty(&rqset->set_requests)) {
+                int err;
+                if (rc)
+                        set->set_completes = 0;
+                err = lov_fini_setattr_set(set);
+                RETURN(rc ? rc : err);
+        }
+
+        LASSERT(rqset->set_interpret == NULL);
+        rqset->set_interpret = lov_setattr_interpret;
+        rqset->set_arg = (void *)set;
+
+        RETURN(0);
+}
+
+static int lov_punch_interpret(struct ptlrpc_request_set *rqset,
+                               void *data, int rc)
+{
+        struct lov_request_set *lovset = (struct lov_request_set *)data;
+        int err;
+        ENTRY;
+
+        if (rc)
+                lovset->set_completes = 0;
+        err = lov_fini_punch_set(lovset);
+        RETURN(rc ? rc : err);
 }
 
 /* FIXME: maybe we'll just make one node the authoritative attribute node, then
  * we can send this 'punch' to just the authoritative node and the nodes
  * that the punch will affect. */
-static int lov_punch(struct obd_export *exp, struct obdo *oa,
-                     struct lov_stripe_md *lsm,
-                     obd_off start, obd_off end, struct obd_trans_info *oti)
+static int lov_punch(struct obd_export *exp, struct obd_info *oinfo,
+                     struct obd_trans_info *oti,
+                     struct ptlrpc_request_set *rqset)
 {
         struct lov_request_set *set;
         struct lov_obd *lov;
         struct list_head *pos;
         struct lov_request *req;
-        int err = 0, rc = 0;
+        int rc = 0;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
+        LASSERT(oinfo);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
-        rc = lov_prep_punch_set(exp, oa, lsm, start, end, oti, &set);
+        rc = lov_prep_punch_set(exp, oinfo, oti, &set);
         if (rc)
                 RETURN(rc);
 
         list_for_each (pos, &set->set_list) {
                 req = list_entry(pos, struct lov_request, rq_link);
 
-                rc = obd_punch(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
-                               NULL, req->rq_extent.start,
-                               req->rq_extent.end, NULL);
-                err = lov_update_punch_set(set, req, rc);
-                if (err) {
+                rc = obd_punch(lov->tgts[req->rq_idx].ltd_exp,
+                               &req->rq_oi, NULL, rqset);
+                if (rc) {
                         CERROR("error: punch objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n", set->set_oa->o_id,
-                               req->rq_oa->o_id, req->rq_idx, rc);
-                        if (!rc)
-                                rc = err;
+                               " on OST idx %d: rc = %d\n",
+                               set->set_oi->oi_oa->o_id,
+                               req->rq_oi.oi_oa->o_id, req->rq_idx, rc);
+                        break;
                 }
         }
-        err = lov_fini_punch_set(set);
-        if (!rc)
-                rc = err;
-        RETURN(rc);
+
+        if (rc || list_empty(&rqset->set_requests)) {
+                int err;
+                err = lov_fini_punch_set(set);
+                RETURN(rc ? rc : err);
+        }
+
+        LASSERT(rqset->set_interpret == NULL);
+        rqset->set_interpret = lov_punch_interpret;
+        rqset->set_arg = (void *)set;
+
+        RETURN(0);
 }
 
 static int lov_sync(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md *lsm, obd_off start, obd_off end)
 {
         struct lov_request_set *set;
+        struct obd_info oinfo;
         struct lov_obd *lov;
         struct list_head *pos;
         struct lov_request *req;
@@ -1337,20 +1402,22 @@ static int lov_sync(struct obd_export *exp, struct obdo *oa,
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
-        rc = lov_prep_sync_set(exp, oa, lsm, start, end, &set);
+        rc = lov_prep_sync_set(exp, &oinfo, oa, lsm, start, end, &set);
         if (rc)
                 RETURN(rc);
 
         list_for_each (pos, &set->set_list) {
                 req = list_entry(pos, struct lov_request, rq_link);
 
-                rc = obd_sync(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
-                              NULL, req->rq_extent.start, req->rq_extent.end);
+                rc = obd_sync(lov->tgts[req->rq_idx].ltd_exp, req->rq_oi.oi_oa,
+                              NULL, req->rq_oi.oi_policy.l_extent.start,
+                              req->rq_oi.oi_policy.l_extent.end);
                 err = lov_update_common_set(set, req, rc);
                 if (err) {
                         CERROR("error: fsync objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n", set->set_oa->o_id,
-                               req->rq_oa->o_id, req->rq_idx, rc);
+                               " on OST idx %d: rc = %d\n",
+                               set->set_oi->oi_oa->o_id,
+                               req->rq_oi.oi_oa->o_id, req->rq_idx, rc);
                         if (!rc)
                                 rc = err;
                 }
@@ -1361,20 +1428,22 @@ static int lov_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static int lov_brw_check(struct lov_obd *lov, struct obdo *oa,
-                         struct lov_stripe_md *lsm,
+static int lov_brw_check(struct lov_obd *lov, struct obd_info *lov_oinfo,
                          obd_count oa_bufs, struct brw_page *pga)
 {
+        struct obd_info oinfo = { { { 0 } } };
         int i, rc = 0;
+
+        oinfo.oi_oa = lov_oinfo->oi_oa;
 
         /* The caller just wants to know if there's a chance that this
          * I/O can succeed */
         for (i = 0; i < oa_bufs; i++) {
-                int stripe = lov_stripe_number(lsm, pga[i].off);
-                int ost = lsm->lsm_oinfo[stripe].loi_ost_idx;
+                int stripe = lov_stripe_number(lov_oinfo->oi_md, pga[i].off);
+                int ost = lov_oinfo->oi_md->lsm_oinfo[stripe].loi_ost_idx;
                 obd_off start, end;
 
-                if (!lov_stripe_intersects(lsm, i, pga[i].off,
+                if (!lov_stripe_intersects(lov_oinfo->oi_md, i, pga[i].off,
                                            pga[i].off + pga[i].count,
                                            &start, &end))
                         continue;
@@ -1383,17 +1452,18 @@ static int lov_brw_check(struct lov_obd *lov, struct obdo *oa,
                         CDEBUG(D_HA, "lov idx %d inactive\n", ost);
                         return -EIO;
                 }
-                rc = obd_brw(OBD_BRW_CHECK, lov->tgts[ost].ltd_exp, oa,
-                             NULL, 1, &pga[i], NULL);
+
+                rc = obd_brw(OBD_BRW_CHECK, lov->tgts[ost].ltd_exp, &oinfo,
+                             1, &pga[i], NULL);
                 if (rc)
                         break;
         }
         return rc;
 }
 
-static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
-                   struct lov_stripe_md *lsm, obd_count oa_bufs,
-                   struct brw_page *pga, struct obd_trans_info *oti)
+static int lov_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
+                   obd_count oa_bufs, struct brw_page *pga,
+                   struct obd_trans_info *oti)
 {
         struct lov_request_set *set;
         struct lov_request *req;
@@ -1402,14 +1472,14 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
         int err, rc = 0;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
 
         if (cmd == OBD_BRW_CHECK) {
-                rc = lov_brw_check(lov, src_oa, lsm, oa_bufs, pga);
+                rc = lov_brw_check(lov, oinfo, oa_bufs, pga);
                 RETURN(rc);
         }
 
-        rc = lov_prep_brw_set(exp, src_oa, lsm, oa_bufs, pga, oti, &set);
+        rc = lov_prep_brw_set(exp, oinfo, oa_bufs, pga, oti, &set);
         if (rc)
                 RETURN(rc);
 
@@ -1420,8 +1490,8 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
 
                 sub_exp = lov->tgts[req->rq_idx].ltd_exp;
                 sub_pga = set->set_pga + req->rq_pgaidx;
-                rc = obd_brw(cmd, sub_exp, req->rq_oa, req->rq_md,
-                             req->rq_oabufs, sub_pga, oti);
+                rc = obd_brw(cmd, sub_exp, &req->rq_oi, req->rq_oabufs,
+                             sub_pga, oti);
                 if (rc)
                         break;
                 lov_update_common_set(set, req, rc);
@@ -1449,10 +1519,10 @@ static int lov_brw_interpret(struct ptlrpc_request_set *reqset, void *data,
         RETURN(rc);
 }
 
-static int lov_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *lsm, obd_count oa_bufs,
-                         struct brw_page *pga, struct ptlrpc_request_set *set,
-                         struct obd_trans_info *oti)
+static int lov_brw_async(int cmd, struct obd_export *exp,
+                         struct obd_info *oinfo, obd_count oa_bufs,
+                         struct brw_page *pga, struct obd_trans_info *oti,
+                         struct ptlrpc_request_set *set)
 {
         struct lov_request_set *lovset;
         struct lov_request *req;
@@ -1461,14 +1531,15 @@ static int lov_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
         int rc = 0;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
+        LASSERT(oinfo);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
 
         if (cmd == OBD_BRW_CHECK) {
-                rc = lov_brw_check(lov, oa, lsm, oa_bufs, pga);
+                rc = lov_brw_check(lov, oinfo, oa_bufs, pga);
                 RETURN(rc);
         }
 
-        rc = lov_prep_brw_set(exp, oa, lsm, oa_bufs, pga, oti, &lovset);
+        rc = lov_prep_brw_set(exp, oinfo, oa_bufs, pga, oti, &lovset);
         if (rc)
                 RETURN(rc);
 
@@ -1479,8 +1550,8 @@ static int lov_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 sub_exp = lov->tgts[req->rq_idx].ltd_exp;
                 sub_pga = lovset->set_pga + req->rq_pgaidx;
-                rc = obd_brw_async(cmd, sub_exp, req->rq_oa, req->rq_md,
-                                   req->rq_oabufs, sub_pga, set, oti);
+                rc = obd_brw_async(cmd, sub_exp, &req->rq_oi, req->rq_oabufs,
+                                   sub_pga, oti, set);
                 if (rc)
                         GOTO(out, rc);
                 lov_update_common_set(lovset, req, rc);
@@ -1720,53 +1791,63 @@ static int lov_teardown_async_page(struct obd_export *exp,
         RETURN(rc);
 }
 
-static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
-                       __u32 type, ldlm_policy_data_t *policy, __u32 mode,
-                       int *flags, void *bl_cb, void *cp_cb, void *gl_cb,
-                       void *data,__u32 lvb_len, void *lvb_swabber,
-                       struct lustre_handle *lockh)
+static int lov_enqueue_interpret(struct ptlrpc_request_set *rqset,
+                                 void *data, int rc)
+{
+        struct lov_request_set *lovset = (struct lov_request_set *)data;
+        int err;
+        ENTRY;
+
+        if (rc)
+                lovset->set_completes = 0;
+        err = lov_fini_enqueue_set(lovset, lovset->set_ei->ei_mode);
+        RETURN(rc ? rc : err);
+}
+
+static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
+                       struct obd_enqueue_info *einfo)
 {
         struct lov_request_set *set;
         struct lov_request *req;
         struct list_head *pos;
-        struct lustre_handle *lov_lockhp;
         struct lov_obd *lov;
         ldlm_error_t rc;
-        int save_flags = *flags;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
+        LASSERT(oinfo);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
 
         /* we should never be asked to replay a lock this way. */
-        LASSERT((*flags & LDLM_FL_REPLAY) == 0);
+        LASSERT((einfo->ei_flags & LDLM_FL_REPLAY) == 0);
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
-        rc = lov_prep_enqueue_set(exp, lsm, policy, mode, lockh, &set);
+        rc = lov_prep_enqueue_set(exp, oinfo, einfo, &set);
         if (rc)
                 RETURN(rc);
 
         list_for_each (pos, &set->set_list) {
-                ldlm_policy_data_t sub_policy;
                 req = list_entry(pos, struct lov_request, rq_link);
-                lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
-                LASSERT(lov_lockhp);
 
-                *flags = save_flags;
-                sub_policy.l_extent = req->rq_extent;
-
-                rc = obd_enqueue(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,
-                                 type, &sub_policy, mode, flags, bl_cb,
-                                 cp_cb, gl_cb, data, lvb_len, lvb_swabber,
-                                 lov_lockhp);
-                rc = lov_update_enqueue_set(set, req, rc, save_flags);
+                rc = obd_enqueue(lov->tgts[req->rq_idx].ltd_exp,
+                                 &req->rq_oi, einfo);
                 if (rc != ELDLM_OK)
-                        break;
+                        GOTO(out, rc);
         }
 
-        lov_fini_enqueue_set(set, mode);
+        if (einfo->ei_rqset && !list_empty(&einfo->ei_rqset->set_requests)) {
+                LASSERT(rc == 0);
+                LASSERT(einfo->ei_rqset->set_interpret == NULL);
+                einfo->ei_rqset->set_interpret = lov_enqueue_interpret;
+                einfo->ei_rqset->set_arg = (void *)set;
+                RETURN(rc);
+        }
+out:
+        if (rc)
+                set->set_completes = 0;
+        lov_fini_enqueue_set(set, einfo->ei_mode);
         RETURN(rc);
 }
 
@@ -1775,6 +1856,7 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                      int *flags, void *data, struct lustre_handle *lockh)
 {
         struct lov_request_set *set;
+        struct obd_info oinfo;
         struct lov_request *req;
         struct list_head *pos;
         struct lov_obd *lov = &exp->exp_obd->u.lov;
@@ -1788,7 +1870,7 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
-        rc = lov_prep_match_set(exp, lsm, policy, mode, lockh, &set);
+        rc = lov_prep_match_set(exp, &oinfo, lsm, policy, mode, lockh, &set);
         if (rc)
                 RETURN(rc);
 
@@ -1799,11 +1881,11 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                 LASSERT(lov_lockhp);
 
                 lov_flags = *flags;
-                sub_policy.l_extent = req->rq_extent;
+                sub_policy.l_extent = req->rq_oi.oi_policy.l_extent;
 
-                rc = obd_match(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,
-                               type, &sub_policy, mode, &lov_flags, data,
-                               lov_lockhp);
+                rc = obd_match(lov->tgts[req->rq_idx].ltd_exp,
+                               req->rq_oi.oi_md, type, &sub_policy,
+                               mode, &lov_flags, data, lov_lockhp);
                 rc = lov_update_match_set(set, req, rc);
                 if (rc != 1)
                         break;
@@ -1842,6 +1924,7 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
                       __u32 mode, struct lustre_handle *lockh)
 {
         struct lov_request_set *set;
+        struct obd_info oinfo;
         struct lov_request *req;
         struct list_head *pos;
         struct lov_obd *lov = &exp->exp_obd->u.lov;
@@ -1856,7 +1939,7 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         LASSERT(lockh);
         lov = &exp->exp_obd->u.lov;
-        rc = lov_prep_cancel_set(exp, lsm, mode, lockh, &set);
+        rc = lov_prep_cancel_set(exp, &oinfo, lsm, mode, lockh, &set);
         if (rc)
                 RETURN(rc);
 
@@ -1864,14 +1947,15 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
                 req = list_entry(pos, struct lov_request, rq_link);
                 lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
 
-                rc = obd_cancel(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,
-                                mode, lov_lockhp);
+                rc = obd_cancel(lov->tgts[req->rq_idx].ltd_exp,
+                                req->rq_oi.oi_md, mode, lov_lockhp);
                 rc = lov_update_common_set(set, req, rc);
                 if (rc) {
                         CERROR("error: cancel objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
                                lsm->lsm_object_id,
-                               req->rq_md->lsm_object_id, req->rq_idx, rc);
+                               req->rq_oi.oi_md->lsm_object_id,
+                               req->rq_idx, rc);
                         err = rc;
                 }
 
@@ -1966,14 +2050,62 @@ static int lov_join_lru(struct obd_export *exp,
         RETURN(count);
 }
 
-#define LOV_U64_MAX ((__u64)~0ULL)
-#define LOV_SUM_MAX(tot, add)                                           \
-        do {                                                            \
-                if ((tot) + (add) < (tot))                              \
-                        (tot) = LOV_U64_MAX;                            \
-                else                                                    \
-                        (tot) += (add);                                 \
-        } while(0)
+static int lov_statfs_interpret(struct ptlrpc_request_set *rqset,
+                                void *data, int rc)
+{
+        struct lov_request_set *lovset = (struct lov_request_set *)data;
+        int err;
+        ENTRY;
+
+        if (rc)
+                lovset->set_completes = 0;
+
+        err = lov_fini_statfs_set(lovset);
+        RETURN(rc ? rc : err);
+}
+
+static int lov_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
+                            unsigned long max_age,
+                            struct ptlrpc_request_set *rqset)
+{
+        struct lov_request_set *set;
+        struct lov_request *req;
+        struct list_head *pos;
+        struct lov_obd *lov;
+        int rc = 0;
+
+        LASSERT(oinfo != NULL);
+        LASSERT(oinfo->oi_osfs != NULL);
+
+        lov = &obd->u.lov;
+        rc = lov_prep_statfs_set(obd, oinfo, &set);
+        if (rc)
+                RETURN(rc);
+
+        list_for_each (pos, &set->set_list) {
+                struct obd_device *osc_obd;
+
+                req = list_entry(pos, struct lov_request, rq_link);
+
+                osc_obd = class_exp2obd(lov->tgts[req->rq_idx].ltd_exp);
+                rc = obd_statfs_async(osc_obd, &req->rq_oi, max_age, rqset);
+                if (rc)
+                        break;
+        }
+
+        if (rc || list_empty(&rqset->set_requests)) {
+                int err;
+                if (rc)
+                        set->set_completes = 0;
+                err = lov_fini_statfs_set(set);
+                RETURN(rc ? rc : err);
+        }
+
+        LASSERT(rqset->set_interpret == NULL);
+        rqset->set_interpret = lov_statfs_interpret;
+        rqset->set_arg = (void *)set;
+        RETURN(0);
+}
 
 static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                       cfs_time_t max_age)
@@ -1981,14 +2113,12 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         struct lov_obd *lov = &obd->u.lov;
         struct obd_statfs lov_sfs;
         int set = 0;
-        int rc = 0;
+        int rc = 0, err;
         int i;
         ENTRY;
 
-
         /* We only get block data from the OBD */
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                int err;
                 if (!lov->tgts[i].ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", i);
                         continue;
@@ -2003,53 +2133,13 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                 }
                 qos_update(lov, i, &lov_sfs);
 
-                if (!set) {
-                        memcpy(osfs, &lov_sfs, sizeof(lov_sfs));
-                        set = 1;
-                } else {
-#ifdef MIN_DF
-                        /* Sandia requested that df (and so, statfs) only
-                           returned minimal available space on
-                           a single OST, so people would be able to
-                           write this much data guaranteed. */
-                        if (osfs->os_bavail > lov_sfs.os_bavail) {
-                                /* Presumably if new bavail is smaller,
-                                   new bfree is bigger as well */
-                                osfs->os_bfree = lov_sfs.os_bfree;
-                                osfs->os_bavail = lov_sfs.os_bavail;
-                        }
-#else
-                        osfs->os_bfree += lov_sfs.os_bfree;
-                        osfs->os_bavail += lov_sfs.os_bavail;
-#endif
-                        osfs->os_blocks += lov_sfs.os_blocks;
-                        /* XXX not sure about this one - depends on policy.
-                         *   - could be minimum if we always stripe on all OBDs
-                         *     (but that would be wrong for any other policy,
-                         *     if one of the OBDs has no more objects left)
-                         *   - could be sum if we stripe whole objects
-                         *   - could be average, just to give a nice number
-                         *
-                         * To give a "reasonable" (if not wholly accurate)
-                         * number, we divide the total number of free objects
-                         * by expected stripe count (watch out for overflow).
-                         */
-                        LOV_SUM_MAX(osfs->os_files, lov_sfs.os_files);
-                        LOV_SUM_MAX(osfs->os_ffree, lov_sfs.os_ffree);
-                }
+                lov_update_statfs(class_exp2obd(lov->tgts[i].ltd_exp),
+                                  osfs, &lov_sfs, set);
+                set++;
         }
 
-        if (set) {
-                __u32 expected_stripes = lov_get_stripecnt(lov, 0);
-
-                if (osfs->os_files != LOV_U64_MAX)
-                        do_div(osfs->os_files, expected_stripes);
-                if (osfs->os_ffree != LOV_U64_MAX)
-                        do_div(osfs->os_ffree, expected_stripes);
-        } else if (!rc)
-                rc = -EIO;
-
-        RETURN(rc);
+        err = lov_fini_statfs(obd, osfs, set);
+        RETURN(rc ? rc : err);
 }
 
 static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
@@ -2063,13 +2153,12 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         switch (cmd) {
         case OBD_IOC_LOV_GET_CONFIG: {
-                struct obd_ioctl_data *data = karg;
+                struct obd_ioctl_data *data;
                 struct lov_tgt_desc *tgtdesc;
                 struct lov_desc *desc;
                 char *buf = NULL;
                 __u32 *genp;
 
-                buf = NULL;
                 len = 0;
                 if (obd_ioctl_getdata(&buf, &len, (void *)uarg))
                         RETURN(-EINVAL);
@@ -2329,7 +2418,7 @@ static int lov_checkmd(struct obd_export *exp, struct obd_export *md_exp,
         LASSERT(md_exp);
         LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
         rc = lsm_op_find(lsm->lsm_magic)->lsm_revalidate(lsm, md_exp->exp_obd);
- 
+
         RETURN(rc);
 }
 
@@ -2464,6 +2553,7 @@ struct obd_ops lov_obd_ops = {
         .o_connect             = lov_connect,
         .o_disconnect          = lov_disconnect,
         .o_statfs              = lov_statfs,
+        .o_statfs_async        = lov_statfs_async,
         .o_packmd              = lov_packmd,
         .o_unpackmd            = lov_unpackmd,
         .o_checkmd             = lov_checkmd,
@@ -2516,7 +2606,7 @@ int __init lov_init(void)
         rc = class_register_type(&lov_obd_ops, lvars.module_vars,
                                  LUSTRE_LOV_NAME);
         if (rc && quota_interface)
-                PORTAL_SYMBOL_PUT(osc_quota_interface);
+                PORTAL_SYMBOL_PUT(lov_quota_interface);
 
         RETURN(rc);
 }

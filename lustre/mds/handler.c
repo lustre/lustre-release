@@ -183,10 +183,10 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 
         res_id.name[0] = de->d_inode->i_ino;
         res_id.name[1] = de->d_inode->i_generation;
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_IBITS, &policy, lock_mode, &flags,
-                              ldlm_blocking_ast, ldlm_completion_ast,
-                              NULL, NULL, NULL, 0, NULL, lockh);
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, 
+                                    LDLM_IBITS, &policy, lock_mode, &flags, 
+                                    ldlm_blocking_ast, ldlm_completion_ast,
+                                    NULL, NULL, 0, NULL, lockh);
         if (rc != ELDLM_OK) {
                 l_dput(de);
                 retval = ERR_PTR(-EIO); /* XXX translate ldlm code */
@@ -1767,8 +1767,7 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
         RETURN(rc);
 }
 
-static
-void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
+static void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
 {
         char *p = options;
 
@@ -1783,22 +1782,24 @@ void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
                     memcmp(options, "user_xattr", len) == 0) {
                         mds->mds_fl_user_xattr = 1;
                 } else if (len == sizeof("nouser_xattr") - 1 &&
-                    memcmp(options, "nouser_xattr", len) == 0) {
+                           memcmp(options, "nouser_xattr", len) == 0) {
                         mds->mds_fl_user_xattr = 0;
                 } else if (len == sizeof("acl") - 1 &&
-                         memcmp(options, "acl", len) == 0) {
+                           memcmp(options, "acl", len) == 0) {
 #ifdef CONFIG_FS_POSIX_ACL
                         mds->mds_fl_acl = 1;
 #else
                         CWARN("ignoring unsupported acl mount option\n");
                         memmove(options, p, strlen(p) + 1);
+                        p = options;
 #endif
                 } else if (len == sizeof("noacl") - 1 &&
-                    memcmp(options, "noacl", len) == 0) {
+                           memcmp(options, "noacl", len) == 0) {
 #ifdef CONFIG_FS_POSIX_ACL
                         mds->mds_fl_acl = 0;
 #else
                         memmove(options, p, strlen(p) + 1);
+                        p = options;
 #endif
                 }
 

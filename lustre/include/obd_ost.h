@@ -23,8 +23,14 @@ struct osc_brw_async_args {
         struct list_head aa_oaps;
 };
 
-struct osc_getattr_async_args {
-        struct obdo     *aa_oa;
+struct osc_async_args {
+        struct obd_info   *aa_oi;
+};
+
+struct osc_enqueue_args {
+        struct obd_export       *oa_exp;
+        struct obd_info         *oa_oi;
+        struct obd_enqueue_info *oa_ei;
 };
 
 #endif

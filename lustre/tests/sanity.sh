@@ -86,9 +86,11 @@ CLEANUP=${CLEANUP:-:}
 
 setup() {
 	echo -n "mnt.."
+        load_modules
 	setupall || exit 10
 	echo "done"
 }
+
 SETUP=${SETUP:-:}
 
 log() {
@@ -2747,11 +2749,11 @@ test_76() { # bug 1443
 	done
 	AFTER_INODES=`num_inodes`
 	echo "after inodes: $AFTER_INODES"
-	[ $AFTER_INODES -gt $((BEFORE_INODES + 10)) ] && \
+	[ $AFTER_INODES -gt $((BEFORE_INODES + 32)) ] && \
 		error "inode slab grew from $BEFORE_INODES to $AFTER_INODES"
 	true
 }
-run_test 76 "destroy duplicate inodes in client inode cache"
+run_test 76 "destroy duplicate inodes in client inode cache ===="
 
 test_77() {
        sh qos.sh

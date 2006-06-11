@@ -467,8 +467,7 @@ static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
         RETURN(rc);
 }
 
-static inline int obd_getattr(struct obd_export *exp, struct obdo *obdo,
-                              struct lov_stripe_md *ea)
+static inline int obd_getattr(struct obd_export *exp, struct obd_info *oinfo)
 {
         int rc;
         ENTRY;
@@ -476,26 +475,25 @@ static inline int obd_getattr(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_OP(exp, getattr);
         OBD_COUNTER_INCREMENT(exp->exp_obd, getattr);
 
-        rc = OBP(exp->exp_obd, getattr)(exp, obdo, ea);
+        rc = OBP(exp->exp_obd, getattr)(exp, oinfo);
         RETURN(rc);
 }
 
 static inline int obd_getattr_async(struct obd_export *exp,
-                                    struct obdo *obdo, struct lov_stripe_md *ea,
+                                    struct obd_info *oinfo,
                                     struct ptlrpc_request_set *set)
 {
         int rc;
         ENTRY;
 
-        EXP_CHECK_OP(exp, getattr);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, getattr);
+        EXP_CHECK_OP(exp, getattr_async);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, getattr_async);
 
-        rc = OBP(exp->exp_obd, getattr_async)(exp, obdo, ea, set);
+        rc = OBP(exp->exp_obd, getattr_async)(exp, oinfo, set);
         RETURN(rc);
 }
 
-static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
-                              struct lov_stripe_md *ea,
+static inline int obd_setattr(struct obd_export *exp, struct obd_info *oinfo,
                               struct obd_trans_info *oti)
 {
         int rc;
@@ -504,14 +502,39 @@ static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_OP(exp, setattr);
         OBD_COUNTER_INCREMENT(exp->exp_obd, setattr);
 
-        rc = OBP(exp->exp_obd, setattr)(exp, obdo, ea, oti);
+        rc = OBP(exp->exp_obd, setattr)(exp, oinfo, oti);
         RETURN(rc);
 }
 
-static inline int obd_setattr_async(struct obd_export *exp,
-                                    struct obdo *obdo,
-                                    struct lov_stripe_md *ea,
+/* This performs all the requests set init/wait/destroy actions. */
+static inline int obd_setattr_rqset(struct obd_export *exp,
+                                    struct obd_info *oinfo,
                                     struct obd_trans_info *oti)
+{
+        struct ptlrpc_request_set *set = NULL;
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, setattr_async);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, setattr_async);
+
+        set =  ptlrpc_prep_set();
+        if (set == NULL)
+                RETURN(-ENOMEM);
+
+        rc = OBP(exp->exp_obd, setattr_async)(exp, oinfo, oti, set);
+        if (rc == 0)
+                rc = ptlrpc_set_wait(set);
+        ptlrpc_set_destroy(set);
+        RETURN(rc);
+}
+
+/* This adds all the requests into @set if @set != NULL, otherwise
+   all requests are sent asynchronously without waiting for response. */
+static inline int obd_setattr_async(struct obd_export *exp,
+                                    struct obd_info *oinfo,
+                                    struct obd_trans_info *oti,
+                                    struct ptlrpc_request_set *set)
 {
         int rc;
         ENTRY;
@@ -519,7 +542,7 @@ static inline int obd_setattr_async(struct obd_export *exp,
         EXP_CHECK_OP(exp, setattr_async);
         OBD_COUNTER_INCREMENT(exp->exp_obd, setattr_async);
 
-        rc = OBP(exp->exp_obd, setattr_async)(exp, obdo, ea, oti);
+        rc = OBP(exp->exp_obd, setattr_async)(exp, oinfo, oti, set);
         RETURN(rc);
 }
 
@@ -639,6 +662,58 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "jiffies + HZ" to guarantee freshness. */
+static inline int obd_statfs_async(struct obd_device *obd,
+                                   struct obd_info *oinfo,
+                                   unsigned long max_age,
+                                   struct ptlrpc_request_set *rqset)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (obd == NULL)
+                RETURN(-EINVAL);
+
+        OBD_CHECK_OP(obd, statfs, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, statfs);
+
+        CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
+        if (time_before(obd->obd_osfs_age, max_age)) {
+                rc = OBP(obd, statfs_async)(obd, oinfo, max_age, rqset);
+        } else {
+                CDEBUG(D_SUPER, "using cached obd_statfs data\n");
+                spin_lock(&obd->obd_osfs_lock);
+                memcpy(oinfo->oi_osfs, &obd->obd_osfs, sizeof(*oinfo->oi_osfs));
+                spin_unlock(&obd->obd_osfs_lock);
+                if (oinfo->oi_cb_up)
+                        oinfo->oi_cb_up(oinfo, 0);
+        }
+        RETURN(rc);
+}
+
+static inline int obd_statfs_rqset(struct obd_device *obd,
+                                   struct obd_statfs *osfs,
+                                   unsigned long max_age)
+{
+        struct ptlrpc_request_set *set = NULL;
+        struct obd_info oinfo = { { { 0 } } };
+        int rc = 0;
+        ENTRY;
+
+        set =  ptlrpc_prep_set();
+        if (set == NULL)
+                RETURN(-ENOMEM);
+
+        oinfo.oi_osfs = osfs;
+        rc = obd_statfs_async(obd, &oinfo, max_age, set);
+        if (rc == 0)
+                rc = ptlrpc_set_wait(set);
+        ptlrpc_set_destroy(set);
+        RETURN(rc);
+}
+
+/* @max_age is the oldest time in jiffies that we accept using a cached data.
+ * If the cache is older than @max_age we will get a new value from the
+ * target.  Use a value of "jiffies + HZ" to guarantee freshness. */
 static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                              cfs_time_t max_age)
 {
@@ -684,9 +759,31 @@ static inline int obd_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static inline int obd_punch(struct obd_export *exp, struct obdo *oa,
-                            struct lov_stripe_md *ea, obd_size start,
-                            obd_size end, struct obd_trans_info *oti)
+static inline int obd_punch_rqset(struct obd_export *exp,
+                                  struct obd_info *oinfo,
+                                  struct obd_trans_info *oti)
+{
+        struct ptlrpc_request_set *set = NULL;
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, punch);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, punch);
+
+        set =  ptlrpc_prep_set();
+        if (set == NULL)
+                RETURN(-ENOMEM);
+
+        rc = OBP(exp->exp_obd, punch)(exp, oinfo, oti, set);
+        if (rc == 0)
+                rc = ptlrpc_set_wait(set);
+        ptlrpc_set_destroy(set);
+        RETURN(rc);
+}
+
+static inline int obd_punch(struct obd_export *exp, struct obd_info *oinfo,
+                            struct obd_trans_info *oti,
+                            struct ptlrpc_request_set *rqset)
 {
         int rc;
         ENTRY;
@@ -694,12 +791,12 @@ static inline int obd_punch(struct obd_export *exp, struct obdo *oa,
         EXP_CHECK_OP(exp, punch);
         OBD_COUNTER_INCREMENT(exp->exp_obd, punch);
 
-        rc = OBP(exp->exp_obd, punch)(exp, oa, ea, start, end, oti);
+        rc = OBP(exp->exp_obd, punch)(exp, oinfo, oti, rqset);
         RETURN(rc);
 }
 
-static inline int obd_brw(int cmd, struct obd_export *exp, struct obdo *oa,
-                          struct lov_stripe_md *ea, obd_count oa_bufs,
+static inline int obd_brw(int cmd, struct obd_export *exp,
+                          struct obd_info *oinfo, obd_count oa_bufs,
                           struct brw_page *pg, struct obd_trans_info *oti)
 {
         int rc;
@@ -714,15 +811,14 @@ static inline int obd_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 LBUG();
         }
 
-        rc = OBP(exp->exp_obd, brw)(cmd, exp, oa, ea, oa_bufs, pg, oti);
+        rc = OBP(exp->exp_obd, brw)(cmd, exp, oinfo, oa_bufs, pg, oti);
         RETURN(rc);
 }
 
 static inline int obd_brw_async(int cmd, struct obd_export *exp,
-                                struct obdo *oa, struct lov_stripe_md *ea,
-                                obd_count oa_bufs, struct brw_page *pg,
-                                struct ptlrpc_request_set *set,
-                                struct obd_trans_info *oti)
+                                struct obd_info *oinfo, obd_count oa_bufs,
+                                struct brw_page *pg, struct obd_trans_info *oti,
+                                struct ptlrpc_request_set *set)
 {
         int rc;
         ENTRY;
@@ -735,8 +831,36 @@ static inline int obd_brw_async(int cmd, struct obd_export *exp,
                 LBUG();
         }
 
-        rc = OBP(exp->exp_obd, brw_async)(cmd, exp, oa, ea, oa_bufs, pg, set,
-                                          oti);
+        rc = OBP(exp->exp_obd, brw_async)(cmd, exp, oinfo, oa_bufs, pg,oti,set);
+        RETURN(rc);
+}
+
+static inline int obd_brw_rqset(int cmd, struct obd_export *exp,
+                                struct obdo *oa, struct lov_stripe_md *lsm,
+                                obd_count oa_bufs, struct brw_page *pg,
+                                struct obd_trans_info *oti)
+{
+        struct ptlrpc_request_set *set = NULL;
+        struct obd_info oinfo = { { { 0 } } };
+        int rc = 0;
+        ENTRY;
+
+        set =  ptlrpc_prep_set();
+        if (set == NULL)
+                RETURN(-ENOMEM);
+
+        oinfo.oi_oa = oa;
+        oinfo.oi_md = lsm;
+        rc = obd_brw_async(cmd, exp, &oinfo, oa_bufs, pg, oti, set);
+        if (rc == 0) {
+                rc = ptlrpc_set_wait(set);
+                if (rc)
+                        CERROR("error from callback: rc = %d\n", rc);
+        } else {
+                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
+                       "error from obd_brw_async: rc = %d\n", rc);
+        }
+        ptlrpc_set_destroy(set);
         RETURN(rc);
 }
 
@@ -915,11 +1039,9 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
-                              __u32 type, ldlm_policy_data_t *policy,
-                              __u32 mode, int *flags, void *bl_cb, void *cp_cb,
-                              void *gl_cb, void *data, __u32 lvb_len,
-                              void *lvb_swabber, struct lustre_handle *lockh)
+static inline int obd_enqueue_rqset(struct obd_export *exp,
+                                    struct obd_info *oinfo,
+                                    struct obd_enqueue_info *einfo)
 {
         int rc;
         ENTRY;
@@ -927,9 +1049,30 @@ static inline int obd_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
         EXP_CHECK_OP(exp, enqueue);
         OBD_COUNTER_INCREMENT(exp->exp_obd, enqueue);
 
-        rc = OBP(exp->exp_obd, enqueue)(exp, ea, type, policy, mode, flags,
-                                        bl_cb, cp_cb, gl_cb, data, lvb_len,
-                                        lvb_swabber, lockh);
+        einfo->ei_rqset =  ptlrpc_prep_set();
+        if (einfo->ei_rqset == NULL)
+                RETURN(-ENOMEM);
+
+        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo);
+        if (rc == 0)
+                rc = ptlrpc_set_wait(einfo->ei_rqset);
+        ptlrpc_set_destroy(einfo->ei_rqset);
+        einfo->ei_rqset = NULL;
+
+        RETURN(rc);
+}
+
+static inline int obd_enqueue(struct obd_export *exp,
+                              struct obd_info *oinfo,
+                              struct obd_enqueue_info *einfo)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, enqueue);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, enqueue);
+
+        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo);
         RETURN(rc);
 }
 

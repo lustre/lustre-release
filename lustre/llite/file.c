@@ -502,12 +502,15 @@ int ll_lsm_getattr(struct obd_export *exp, struct lov_stripe_md *lsm,
                    struct obdo *oa)
 {
         struct ptlrpc_request_set *set;
+        struct obd_info oinfo = { { { 0 } } };
         int rc;
         ENTRY;
 
         LASSERT(lsm != NULL);
 
         memset(oa, 0, sizeof *oa);
+        oinfo.oi_md = lsm;
+        oinfo.oi_oa = oa;
         oa->o_id = lsm->lsm_object_id;
         oa->o_mode = S_IFREG;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
@@ -518,7 +521,7 @@ int ll_lsm_getattr(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (set == NULL) {
                 rc = -ENOMEM;
         } else {
-                rc = obd_getattr_async(exp, oa, lsm, set);
+                rc = obd_getattr_async(exp, &oinfo, set);
                 if (rc == 0)
                         rc = ptlrpc_set_wait(set);
                 ptlrpc_set_destroy(set);
@@ -905,8 +908,9 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
         int rc;
         ENTRY;
@@ -918,8 +922,6 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
                 RETURN(0);
         }
 
-        ast_flags |= LDLM_FL_HAS_INTENT;
-
         /* NOTE: this looks like DLM lock request, but it may not be one. Due
          *       to LDLM_FL_HAS_INTENT flag, this is glimpse request, that
          *       won't revoke any conflicting DLM locks held. Instead,
@@ -927,10 +929,19 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
          *       holding a DLM lock against this file, and resulting size
          *       will be returned for each stripe. DLM lock on [0, EOF] is
          *       acquired only if there were no conflicting locks. */
-        rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
-                         LCK_PR, &ast_flags, ll_extent_lock_callback,
-                         ldlm_completion_ast, ll_glimpse_callback, inode,
-                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = LCK_PR;
+        einfo.ei_flags = ast_flags | LDLM_FL_HAS_INTENT;
+        einfo.ei_cb_bl = ll_extent_lock_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = ll_glimpse_callback;
+        einfo.ei_cbdata = inode;
+
+        oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+        oinfo.oi_lockh = &lockh;
+        oinfo.oi_md = lli->lli_smd;
+
+        rc = obd_enqueue_rqset(sbi->ll_osc_exp, &oinfo, &einfo);
         if (rc == -ENOENT)
                 RETURN(rc);
         if (rc != 0) {
@@ -951,8 +962,6 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
                inode->i_size, inode->i_blocks);
 
-        obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
-
         RETURN(rc);
 }
 
@@ -963,6 +972,8 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ost_lvb lvb;
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
         int rc;
         ENTRY;
 
@@ -981,10 +992,20 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         CDEBUG(D_DLMTRACE, "Locking inode %lu, start "LPU64" end "LPU64"\n",
                inode->i_ino, policy->l_extent.start, policy->l_extent.end);
 
-        rc = obd_enqueue(sbi->ll_osc_exp, lsm, LDLM_EXTENT, policy, mode,
-                         &ast_flags, ll_extent_lock_callback,
-                         ldlm_completion_ast, ll_glimpse_callback, inode,
-                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, lockh);
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = mode;
+        einfo.ei_flags = ast_flags;
+        einfo.ei_cb_bl = ll_extent_lock_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = ll_glimpse_callback;
+        einfo.ei_cbdata = inode;
+
+        oinfo.oi_policy = *policy;
+        oinfo.oi_lockh = lockh;
+        oinfo.oi_md = lsm;
+
+        rc = obd_enqueue(sbi->ll_osc_exp, &oinfo, &einfo);
+        *policy = oinfo.oi_policy;
         if (rc > 0)
                 rc = -EIO;
 
@@ -1933,7 +1954,6 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 {
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct obd_device *obddev;
         struct ldlm_res_id res_id =
                     { .name = {inode->i_ino, inode->i_generation, LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
@@ -2004,11 +2024,10 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
-        obddev = sbi->ll_mdc_exp->exp_obd;
-        rc = ldlm_cli_enqueue(sbi->ll_mdc_exp, NULL, obddev->obd_namespace,
-                              res_id, LDLM_FLOCK, &flock, mode, &flags,
-                              NULL, ldlm_flock_completion_ast, NULL, file_lock,
-                              NULL, 0, NULL, &lockh);
+        rc = ldlm_cli_enqueue(sbi->ll_mdc_exp, NULL, res_id, 
+                              LDLM_FLOCK, &flock, mode, &flags, NULL, 
+                              ldlm_flock_completion_ast, NULL, file_lock,
+                              NULL, 0, NULL, &lockh, 0);
         RETURN(rc);
 }
 

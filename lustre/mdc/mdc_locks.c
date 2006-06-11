@@ -389,10 +389,9 @@ int mdc_enqueue(struct obd_export *exp,
         ptlrpc_req_set_repsize(req, repbufcnt, repsize);
 
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
-        rc = ldlm_cli_enqueue(exp, req, obddev->obd_namespace, res_id,
-                              lock_type, &policy,lock_mode, &flags, cb_blocking,
-                              cb_completion, NULL, cb_data, NULL, 0, NULL,
-                              lockh);
+        rc = ldlm_cli_enqueue(exp, &req, res_id, lock_type, &policy,
+                              lock_mode, &flags, cb_blocking, cb_completion,
+                              NULL, cb_data, NULL, 0, NULL, lockh, 0);
         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
 
         /* Similarly, if we're going to replay this request, we don't want to

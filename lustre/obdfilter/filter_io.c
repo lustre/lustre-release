@@ -312,7 +312,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         inode = dentry->d_inode;
 
         obdo_to_inode(inode, oa, OBD_MD_FLATIME);
-        fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
+        fsfilt_check_slow(obd, now, obd_timeout, "preprw_read setup");
 
         for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt;
              i++, rnb++, lnb++) {
@@ -345,7 +345,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
         }
 
-        fsfilt_check_slow(now, obd_timeout, "start_page_read");
+        fsfilt_check_slow(obd, now, obd_timeout, "start_page_read");
 
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf,
                               exp, NULL, NULL, NULL);
@@ -539,7 +539,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fso.fso_dentry = dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
-        fsfilt_check_slow(now, obd_timeout, "preprw_write setup");
+        fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "preprw_write setup");
 
         spin_lock(&exp->exp_obd->obd_osfs_lock);
         if (oa) {
@@ -630,7 +630,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
                               NULL, NULL, NULL);
 
-        fsfilt_check_slow(now, obd_timeout, "start_page_write");
+        fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "start_page_write");
 
         lprocfs_counter_add(exp->exp_obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                             tot_bytes);
@@ -810,9 +810,9 @@ int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         return -EPROTO;
 }
 
-int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
-               struct lov_stripe_md *lsm, obd_count oa_bufs,
-               struct brw_page *pga, struct obd_trans_info *oti)
+int filter_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
+               obd_count oa_bufs, struct brw_page *pga,
+               struct obd_trans_info *oti)
 {
         struct obd_ioobj ioo;
         struct niobuf_local *lnb;
@@ -833,14 +833,16 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 rnb[i].len = pga[i].count;
         }
 
-        obdo_to_ioobj(oa, &ioo);
+        obdo_to_ioobj(oinfo->oi_oa, &ioo);
         ioo.ioo_bufcnt = oa_bufs;
 
-        ret = filter_preprw(cmd, exp, oa, 1, &ioo, oa_bufs, rnb, lnb, oti);
+        ret = filter_preprw(cmd, exp, oinfo->oi_oa, 1, &ioo,
+                            oa_bufs, rnb, lnb, oti);
         if (ret != 0)
                 GOTO(out, ret);
 
-        ret = filter_commitrw(cmd, exp, oa, 1, &ioo, oa_bufs, lnb, oti, ret);
+        ret = filter_commitrw(cmd, exp, oinfo->oi_oa, 1, &ioo,
+                              oa_bufs, lnb, oti, ret);
 
 out:
         if (lnb)

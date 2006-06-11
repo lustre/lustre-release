@@ -494,6 +494,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                             obd_size count, struct obd_trans_info *oti)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
+        struct obd_info         oinfo = { { { 0 } } };
         obd_count               npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
@@ -540,11 +541,13 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 pgp->flag = 0;
 
                 if (verify)
-                        echo_client_page_debug_setup(lsm, pgp->pg, rw, 
+                        echo_client_page_debug_setup(lsm, pgp->pg, rw,
                                                      oa->o_id, off, pgp->count);
         }
 
-        rc = obd_brw(rw, ec->ec_exp, oa, lsm, npages, pga, oti);
+        oinfo.oi_oa = oa;
+        oinfo.oi_md = lsm;
+        rc = obd_brw(rw, ec->ec_exp, &oinfo, npages, pga, oti);
 
  out:
         if (rc != 0 || rw != OBD_BRW_READ)
@@ -575,6 +578,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
                             struct obd_trans_info *oti)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
+        struct obd_info         oinfo = { { { 0 } } };
         obd_count               npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
@@ -583,8 +587,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
         int                     i;
         int                     rc;
 
-        LASSERT (rw == OBD_BRW_WRITE ||
-                 rw == OBD_BRW_READ);
+        LASSERT (rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
 
         /* NB: for now, only whole pages, page aligned */
 
@@ -622,7 +625,9 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
                 pgp->flag = 0;
         }
 
-        rc = obd_brw(rw, ec->ec_exp, oa, lsm, npages, pga, oti);
+        oinfo.oi_oa = oa;
+        oinfo.oi_md = lsm;
+        rc = obd_brw(rw, ec->ec_exp, &oinfo, npages, pga, oti);
 
         //        if (rw == OBD_BRW_READ)
         //                mark_dirty_kiobuf (kiobuf, count);
@@ -1085,9 +1090,10 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         struct obd_device      *obd = exp->exp_obd;
         struct echo_client_obd *ec = &obd->u.echo_client;
         struct lustre_handle   *ulh = obdo_handle (oa);
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
         struct ec_object       *eco;
         struct ec_lock         *ecl;
-        int                     flags;
         int                     rc;
 
         if (!(mode == LCK_PR || mode == LCK_PW))
@@ -1112,11 +1118,17 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         ecl->ecl_policy.l_extent.end =
                 (nob == 0) ? ((obd_off) -1) : (offset + nob - 1);
 
-        flags = 0;
-        rc = obd_enqueue(ec->ec_exp, eco->eco_lsm, LDLM_EXTENT,
-                         &ecl->ecl_policy, mode, &flags, echo_ldlm_callback,
-                         ldlm_completion_ast, NULL, eco, sizeof(struct ost_lvb),
-                         lustre_swab_ost_lvb, &ecl->ecl_lock_handle);
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = mode;
+        einfo.ei_cb_bl = echo_ldlm_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = NULL;
+        einfo.ei_cbdata = eco;
+
+        oinfo.oi_policy = ecl->ecl_policy;
+        oinfo.oi_lockh = &ecl->ecl_lock_handle;
+        oinfo.oi_md = eco->eco_lsm;
+        rc = obd_enqueue(ec->ec_exp, &oinfo, &einfo);
         if (rc != 0)
                 goto failed_1;
 
@@ -1232,8 +1244,10 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         case OBD_IOC_GETATTR:
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
-                        rc = obd_getattr(ec->ec_exp, &data->ioc_obdo1,
-                                         eco->eco_lsm);
+                        struct obd_info oinfo = { { { 0 } } };
+                        oinfo.oi_md = eco->eco_lsm;
+                        oinfo.oi_oa = &data->ioc_obdo1;
+                        rc = obd_getattr(ec->ec_exp, &oinfo);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);
@@ -1244,8 +1258,11 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
 
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
-                        rc = obd_setattr(ec->ec_exp, &data->ioc_obdo1,
-                                         eco->eco_lsm, NULL);
+                        struct obd_info oinfo = { { { 0 } } };
+                        oinfo.oi_oa = &data->ioc_obdo1;
+                        oinfo.oi_md = eco->eco_lsm;
+
+                        rc = obd_setattr(ec->ec_exp, &oinfo, NULL);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);

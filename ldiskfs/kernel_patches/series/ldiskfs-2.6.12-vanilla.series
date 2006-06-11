@@ -12,3 +12,4 @@ ext3-remove-cond_resched-calls-2.6.12.patch
 ext3-htree-dot-2.6.patch
 ext3-external-journal-2.6.12.patch
 ext3-lookup-dotdot-2.6.9.patch
+ext3-sector_t-overflow-2.6.12.patch

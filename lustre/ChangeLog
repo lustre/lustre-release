@@ -60,14 +60,11 @@ Details    : Clients can be started with a list of OSTs that should be
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.7
+       * Support for kernels:
+	2.6.9-34.EL (RHEL 4)
+	2.6.5-7.252 (SLES 9)
+	2.6.12.6 vanilla (kernel.org)
        * bug fixes
-
-Severity   : enhancement
-Bugzilla   : 9292
-Description: Getattr by fid
-Details    : Getting a file attributes by its fid, obtaining UPDATE|LOOKUP 
-             locks, avoids extra getattr rpc requests to MDS, allows '/' to 
-             have locks and avoids getattr rpc requests for it on every stat.
 
 Severity   : major
 Frequency  : rare
@@ -304,11 +301,54 @@ Details    : In lustre/contrib/ or /usr/share/lustre in RPM a patch for
 Severity   : minor
 Frequency  : Always
 Bugzilla   : 9486
-Description: extended inode attributes work improperly for the case of 2.4/2.6
-             kernels used on client/server or the other way around.
+Description: extended inode attributes (immutable, append-only) work improperly
+	     when 2.4 and 2.6 kernels are used on client/server or vice versa
 Details    : Introduce kernel-independent values for these flags.
 
+Severity   : enhancement
+Frequency  : Always
+Bugzilla   : 10248
+Description: Allow fractional MB tunings for lustre in /proc/ filesystem.
+Details    : Many of the /proc/ tunables can only be tuned at a megabyte
+             granularity. Now, Fractional MB granularity is be supported,
+             this is very useful for low memory system.
 
+Severity   : enhancement
+Bugzilla   : 9292
+Description: Getattr by fid
+Details    : Getting a file attributes by its fid, obtaining UPDATE|LOOKUP 
+	     locks, avoids extra getattr rpc requests to MDS, allows '/' to 
+	     have locks and avoids getattr rpc requests for it on every stat.
+
+Severity   : major
+Frequency  : Always, for filesystems larger than 2TB
+Bugzilla   : 6191
+Description: ldiskfs crash at mount for filesystem larger than 2TB with mballoc
+Details    : Kenrel kmalloc limits allocations to 128kB and this prevents
+	     filesystems larger than 2TB to be mounted with mballoc enabled.
+
+Severity   : critical
+Frequency  : Always, for 32-bit kernel without CONFIG_LBD and filesystem > 2TB
+Bugzilla   : 6191
+Description: ldiskfs crash at mount for filesystem larger than 2TB with mballoc
+Details    : If a 32-bit kernel is compiled without CONFIG_LBD enabled and a
+	     filesystems larger than 2TB is mounted then the kernel will
+	     silently corrupt the start of the filesystem.  CONFIG_LBD is
+	     enabled for all CFS-supported kernels, but the possibility of
+	     this happening with a modified kernel config exists.
+
+Severity   : enhancement
+Bugzilla   : 10462
+Description: add client O_DIRECT support for 2.6 kernels
+Details    : It is now possible to do O_DIRECT reads and writes to files
+	     in the Lustre client mountpoint on 2.6 kernel clients.
+
+Severity   : enhancement
+Bugzilla   : 10446
+Description: parallel glimpse, setattr, statfs, punch, destroy requests
+Details    : Sends glimpse, setattr, statfs, punch, destroy requests to OSTs in
+	     parallel, not waiting for response from every OST before sending
+	     a rpc to the next OST.
 ------------------------------------------------------------------------------
 
 02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -320,9 +360,9 @@ Details    : Introduce kernel-independent values for these flags.
 	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052
 	 for details.
        * bug fixes
-       * Support for newer kernels:
-	2.6.9-22.0.2.EL (RHEL 4),
-	2.6.5-7.244 (SLES 9) - same as 1.4.5.2.
+       * Support for kernels:
+	2.6.9-22.0.2.EL (RHEL 4)
+	2.6.5-7.244 (SLES 9)
 	2.6.12.6 vanilla (kernel.org)
 
 

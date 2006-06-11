@@ -308,7 +308,8 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct obd_export *exp = llu_i2obdexp(inode);
         struct ptlrpc_request_set *set;
-        struct obdo oa;
+        struct obd_info oinfo = { { { 0 } } };
+        struct obdo oa = { 0 };
         obd_flag refresh_valid;
         int rc;
         ENTRY;
@@ -316,7 +317,8 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         LASSERT(lsm);
         LASSERT(lli);
 
-        memset(&oa, 0, sizeof oa);
+        oinfo.oi_md = lsm;
+        oinfo.oi_oa = &oa;
         oa.o_id = lsm->lsm_object_id;
         oa.o_mode = S_IFREG;
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
@@ -328,7 +330,7 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
                 CERROR ("ENOMEM allocing request set\n");
                 rc = -ENOMEM;
         } else {
-                rc = obd_getattr_async(exp, &oa, lsm, set);
+                rc = obd_getattr_async(exp, &oinfo, set);
                 if (rc == 0)
                         rc = ptlrpc_set_wait(set);
                 ptlrpc_set_destroy(set);
@@ -781,17 +783,23 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                                 rc = err;
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
+                struct obd_info oinfo = { { { 0 } } };
                 struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %llu to %lu\n",
                        (long long)st->st_ino, LTIME_S(attr->ia_mtime));
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_valid = OBD_MD_FLID;
+
                 obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                             OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-                rc = obd_setattr(sbi->ll_osc_exp, &oa, lsm, NULL);
+
+                oinfo.oi_oa = &oa;
+                oinfo.oi_md = lsm;
+
+                rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
                 if (rc)
-                        CERROR("obd_setattr fails: rc=%d\n", rc);
+                        CERROR("obd_setattr_async fails: rc=%d\n", rc);
         }
         RETURN(rc);
 }
@@ -1112,7 +1120,8 @@ static int llu_statfs_internal(struct llu_sb_info *sbi,
         CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
 
-        rc = obd_statfs(class_exp2obd(sbi->ll_osc_exp), &obd_osfs, max_age);
+        rc = obd_statfs_rqset(class_exp2obd(sbi->ll_osc_exp),
+                              &obd_statfs, max_age);
         if (rc) {
                 CERROR("obd_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
@@ -1271,7 +1280,6 @@ static int llu_file_flock(struct inode *ino,
                           int cmd,
                           struct file_lock *file_lock)
 {
-        struct obd_device *obddev;
         struct llu_inode_info *lli = llu_i2info(ino);
         struct intnl_stat *st = llu_i2stat(ino);
         struct ldlm_res_id res_id =
@@ -1340,11 +1348,10 @@ static int llu_file_flock(struct inode *ino,
                "start="LPU64", end="LPU64"\n", st->st_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
-        obddev = llu_i2mdcexp(ino)->exp_obd;
-        rc = ldlm_cli_enqueue(llu_i2mdcexp(ino), NULL, obddev->obd_namespace,
-                              res_id, LDLM_FLOCK, &flock, mode, &flags,
-                              NULL, ldlm_flock_completion_ast, NULL, file_lock,
-                              NULL, 0, NULL, &lockh);
+        rc = ldlm_cli_enqueue(llu_i2mdcexp(ino), NULL, res_id, 
+                              LDLM_FLOCK, &flock, mode, &flags, NULL, 
+                              ldlm_flock_completion_ast, NULL, 
+                              file_lock, NULL, 0, NULL, &lockh, 0);
         RETURN(rc);
 }
 

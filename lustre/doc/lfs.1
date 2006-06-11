@@ -26,6 +26,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs setstripe <filename> <stripe-size> <start-ost> <stripe-cnt>
 .br
 .B lfs check <mds| osts| servers>
+.br
+.B lfs df [-i] [-h] [path]
 .SH DESCRIPTION
 .B lfs
 can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and 
@@ -66,6 +68,9 @@ Display the status of MDS or OSTs (as specified in the command) or all the serve
 .TP
 .B osts 
 List all the OSTs for the filesystem
+.TP
+.B df
+Report filesystem disk space usage or inodes usage of each MDS/OSD.
 .TP
 .B help 
 Provides brief help on the various arguments
@@ -114,5 +119,8 @@ Check the status of all servers(mds, osts)
 .TP
 .B $lfs osts
 List all the OSTs
+.TP
+.B $lfs df -i 
+Lists inode consumpton per OST and MDS
 .SH BUGS
 None are known.

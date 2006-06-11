@@ -11,3 +11,4 @@ ext3-mballoc2-2.6.9-rhel4.patch
 ext3-nlinks-2.6.9.patch
 ext3-ialloc-2.6.patch
 ext3-lookup-dotdot-2.6.9.patch
+ext3-sector_t-overflow-2.6.9-rhel4.patch

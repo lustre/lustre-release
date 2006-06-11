@@ -379,7 +379,7 @@ static int qos_calc_rr(struct lov_obd *lov)
 
 void qos_shrink_lsm(struct lov_request_set *set)
 {
-        struct lov_stripe_md *lsm = set->set_md, *lsm_new;
+        struct lov_stripe_md *lsm = set->set_oi->oi_md, *lsm_new;
         /* XXX LOV STACKING call into osc for sizes */
         unsigned oldsize, newsize;
 
@@ -409,7 +409,7 @@ void qos_shrink_lsm(struct lov_request_set *set)
                 memcpy(lsm_new, lsm, newsize);
                 lsm_new->lsm_stripe_count = set->set_count;
                 OBD_FREE(lsm, oldsize);
-                set->set_md = lsm_new;
+                set->set_oi->oi_md = lsm_new;
         } else {
                 CWARN("'leaking' %d bytes\n", oldsize - newsize);
         }
@@ -417,7 +417,7 @@ void qos_shrink_lsm(struct lov_request_set *set)
 
 int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
 {
-        struct lov_stripe_md *lsm = set->set_md;
+        struct lov_stripe_md *lsm = set->set_oi->oi_md;
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
         unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
         int stripe, i, rc = -EIO;
@@ -437,8 +437,9 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
 
                 if (stripe >= lsm->lsm_stripe_count) {
                         req->rq_idx = ost_idx;
-                        rc = obd_create(lov->tgts[ost_idx].ltd_exp, req->rq_oa, 
-                                        &req->rq_md, set->set_oti);
+                        rc = obd_create(lov->tgts[ost_idx].ltd_exp,
+                                        req->rq_oi.oi_oa, &req->rq_oi.oi_md,
+                                        set->set_oti);
                         if (!rc)
                                 break;
                 }
@@ -691,7 +692,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_stripe_md *lsm;
-        struct obdo *src_oa = set->set_oa;
+        struct obdo *src_oa = set->set_oi->oi_oa;
         struct obd_trans_info *oti = set->set_oti;
         int i, stripes, rc = 0, newea = 0;
         int *idx_arr, idx_cnt = 0;
@@ -699,7 +700,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 
         LASSERT(src_oa->o_valid & OBD_MD_FLID);
  
-        if (set->set_md == NULL) {
+        if (set->set_oi->oi_md == NULL) {
                 int stripe_cnt = lov_get_stripecnt(lov, 0);
 
                 /* If the MDS file was truncated up to some size, stripe over
@@ -730,7 +731,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         stripes = stripe_cnt;
                 }
 
-                rc = lov_alloc_memmd(&set->set_md, stripes, 
+                rc = lov_alloc_memmd(&set->set_oi->oi_md, stripes, 
                                      lov->desc.ld_pattern ?
                                      lov->desc.ld_pattern : LOV_PATTERN_RAID0,
                                      LOV_MAGIC);
@@ -739,8 +740,8 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 rc = 0;
                 newea = 1;
         }
-        lsm = set->set_md;
-       
+
+        lsm = set->set_oi->oi_md;
         lsm->lsm_object_id = src_oa->o_id;
         if (!lsm->lsm_stripe_size)
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;
@@ -764,30 +765,30 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         GOTO(out_err, rc = -ENOMEM);
                 lov_set_add_req(req, set);
 
-                req->rq_buflen = sizeof(*req->rq_md);
-                OBD_ALLOC(req->rq_md, req->rq_buflen);
-                if (req->rq_md == NULL)
+                req->rq_buflen = sizeof(*req->rq_oi.oi_md);
+                OBD_ALLOC(req->rq_oi.oi_md, req->rq_buflen);
+                if (req->rq_oi.oi_md == NULL)
                         GOTO(out_err, rc = -ENOMEM);
-                
-                req->rq_oa = obdo_alloc();
-                if (req->rq_oa == NULL)
+
+                req->rq_oi.oi_oa = obdo_alloc();
+                if (req->rq_oi.oi_oa == NULL)
                         GOTO(out_err, rc = -ENOMEM);
-                
+
                 req->rq_idx = ost_idx;
                 req->rq_stripe = i;
                 /* create data objects with "parent" OA */
-                memcpy(req->rq_oa, src_oa, sizeof(*req->rq_oa));
+                memcpy(req->rq_oi.oi_oa, src_oa, sizeof(*req->rq_oi.oi_oa));
 
                 /* XXX When we start creating objects on demand, we need to
                  *     make sure that we always create the object on the
                  *     stripe which holds the existing file size.
                  */
                 if (src_oa->o_valid & OBD_MD_FLSIZE) {
-                        req->rq_oa->o_size = 
+                        req->rq_oi.oi_oa->o_size = 
                                 lov_size_to_stripe(lsm, src_oa->o_size, i);
 
                         CDEBUG(D_INODE, "stripe %d has size "LPU64"/"LPU64"\n",
-                               i, req->rq_oa->o_size, src_oa->o_size);
+                               i, req->rq_oi.oi_oa->o_size, src_oa->o_size);
                 }
 
         }
@@ -804,7 +805,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         }
 out_err:
         if (newea && rc)
-                obd_free_memmd(exp, &set->set_md);
+                obd_free_memmd(exp, &set->set_oi->oi_md);
         free_idx_array(idx_arr, idx_cnt);
         EXIT;
         return rc;

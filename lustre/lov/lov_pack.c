@@ -42,7 +42,7 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
         struct lov_ost_data_v1 *lod;
         int i;
 
-        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+        CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
         CDEBUG(level,"stripe_size %u, stripe_count %u\n",

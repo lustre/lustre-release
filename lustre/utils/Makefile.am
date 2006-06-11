@@ -33,12 +33,23 @@ lload_SOURCES = lload.c
 lload_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 lload_DEPENDENCIES := $(LIBPTLCTL)
 
-llverfs_LDADD := -lext2fs -le2p
-if BLKID
-llverdev_LDADD := -lext2fs -lblkid
+if EXT2FS_DEVEL
+EXT2FSLIB = -lext2fs
+E2PLIB = -le2p
 else
-llverdev_LDADD := -lext2fs
+E2PLIB = 
+EXT2FSLIB =
 endif
+
+if BLKID
+BLKIDLIB = -lblkid
+else
+BLKIDLIB =
+endif
+
+llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
+
+llverdev_LDADD := $(EXT2FSLIB) $(BLKIDLIB)
 
 liblustreapi_a_SOURCES = liblustreapi.c
 

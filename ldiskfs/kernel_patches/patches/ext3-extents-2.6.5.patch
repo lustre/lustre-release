@@ -2512,25 +2512,29 @@ Index: linux-2.6.5-sles9/fs/ext3/super.c
  	Opt_ignore, Opt_barrier,
  	Opt_err,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
-+	Opt_extents, Opt_extdebug,
++	Opt_extents, Opt_noextents, Opt_extdebug,
  };
  
  static match_table_t tokens = {
-@@ -582,6 +585,8 @@
+@@ -582,6 +585,9 @@
  	{Opt_iopen, "iopen"},
  	{Opt_noiopen, "noiopen"},
  	{Opt_iopen_nopriv, "iopen_nopriv"},
 +	{Opt_extents, "extents"},
++	{Opt_noextents, "noextents"},
 +	{Opt_extdebug, "extdebug"},
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL}
  };
-@@ -797,6 +802,12 @@
+@@ -797,6 +802,15 @@
  			break;
  		case Opt_ignore:
  			break;
 +		case Opt_extents:
 +			set_opt (sbi->s_mount_opt, EXTENTS);
++			break;
++		case Opt_noextents:
++			clear_opt (sbi->s_mount_opt, EXTENTS);
 +			break;
 +		case Opt_extdebug:
 +			set_opt (sbi->s_mount_opt, EXTDEBUG);

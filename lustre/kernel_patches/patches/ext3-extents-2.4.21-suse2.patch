@@ -2477,12 +2477,14 @@ Index: linux-2.4.21-suse2/fs/ext3/super.c
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -733,6 +734,10 @@
+@@ -733,6 +734,12 @@
  				return 0;
  			}
  		}
 +		else if (!strcmp (this_char, "extents"))
 +			set_opt (*mount_options, EXTENTS);
++		else if (!strcmp (this_char, "noextents"))
++			clear_opt (*mount_options, EXTENTS);
 +		else if (!strcmp (this_char, "extdebug"))
 +			set_opt (*mount_options, EXTDEBUG);
  		else if (!strcmp (this_char, "grpid") ||

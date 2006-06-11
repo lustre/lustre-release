@@ -54,6 +54,7 @@
 #include <linux/iobuf.h>
 #endif
 #include <linux/lustre_compat25.h>
+#include <linux/lprocfs_status.h>
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #include <linux/ext3_extents.h>
@@ -462,7 +463,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                                struct iattr *iattr, int do_trunc)
 {
         struct inode *inode = dentry->d_inode;
-        int rc;
+        int rc = 0;
 
         lock_kernel();
 
@@ -476,12 +477,26 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                 iattr->ia_valid &= ~ATTR_SIZE;
                 EXT3_I(inode)->i_disksize = inode->i_size = iattr->ia_size;
 
-                /* make sure _something_ gets set - so new inode
-                 * goes to disk (probably won't work over XFS */
-                if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
-                        iattr->ia_valid |= ATTR_MTIME;
-                        iattr->ia_mtime = inode->i_mtime;
+                if (iattr->ia_valid & ATTR_UID)
+                        inode->i_uid = iattr->ia_uid;
+                if (iattr->ia_valid & ATTR_GID)
+                        inode->i_gid = iattr->ia_gid;
+                if (iattr->ia_valid & ATTR_ATIME)
+                        inode->i_atime = iattr->ia_atime;
+                if (iattr->ia_valid & ATTR_MTIME)
+                        inode->i_mtime = iattr->ia_mtime;
+                if (iattr->ia_valid & ATTR_CTIME)
+                        inode->i_ctime = iattr->ia_ctime;
+                if (iattr->ia_valid & ATTR_MODE) {
+                        inode->i_mode = iattr->ia_mode;
+
+                        if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
+                                inode->i_mode &= ~S_ISGID;
                 }
+
+                inode->i_sb->s_op->dirty_inode(inode);
+
+                goto out;
         }
 
         /* Don't allow setattr to change file type */
@@ -501,8 +516,9 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                         rc = inode_setattr(inode, iattr);
         }
 
+ out:
         unlock_kernel();
-        return rc;
+        RETURN(rc);
 }
 
 static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,

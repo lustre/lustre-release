@@ -641,6 +641,9 @@ AC_CHECK_FUNCS([inet_ntoa])
 # llite/xattr.c
 AC_CHECK_HEADERS([linux/xattr_acl.h])
 
+# utils/llverfs.c
+AC_CHECK_HEADERS([ext2fs/ext2fs.h])
+
 # use universal lustre headers 
 # i.e: include/obd.h instead of include/linux/obd.h
 AC_CHECK_FILE($PWD/lustre/include/obd.h, [AC_DEFINE(UNIV_LUSTRE_HEADERS, 1, [Use universal lustre headers])])
@@ -671,7 +674,7 @@ AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
-AM_CONDITIONAL(EXT2FS, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
+AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 ])
 
 #

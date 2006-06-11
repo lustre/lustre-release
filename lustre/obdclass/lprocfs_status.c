@@ -668,6 +668,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, reconnect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, disconnect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, packmd);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpackmd);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, checkmd);
@@ -750,7 +751,13 @@ void lprocfs_free_obd_stats(struct obd_device *obd)
 int lprocfs_write_helper(const char *buffer, unsigned long count,
                          int *val)
 {
-        char kernbuf[20], *end;
+        return lprocfs_write_frac_helper(buffer, count, val, 1);
+}
+
+int lprocfs_write_frac_helper(const char *buffer, unsigned long count,
+                              int *val, int mult)
+{
+        char kernbuf[20], *end, *pbuf;
 
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
@@ -759,33 +766,131 @@ int lprocfs_write_helper(const char *buffer, unsigned long count,
                 return -EFAULT;
 
         kernbuf[count] = '\0';
+        pbuf = kernbuf;
+        if (*pbuf == '-') {
+                mult = -mult;
+                pbuf++;
+        }
 
-        *val = simple_strtol(kernbuf, &end, 0);
-        if (kernbuf == end)
+        *val = (int)simple_strtoul(pbuf, &end, 10) * mult;
+        if (pbuf == end)
                 return -EINVAL;
 
+        if (end != NULL && *end == '.') {
+                int temp_val, pow = 1;
+                int i;
+
+                pbuf = end + 1;
+                if (strlen(pbuf) > 5)
+                        pbuf[5] = '\0'; /*only allow 5bits fractional*/
+
+                temp_val = (int)simple_strtoul(pbuf, &end, 10) * mult;
+
+                if (pbuf < end) {
+                        for (i = 0; i < (end - pbuf); i++)
+                                pow *= 10;
+
+                        *val += temp_val / pow;
+                }
+        }
         return 0;
+}
+
+int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val, int mult)
+{
+        long decimal_val,frac_val;
+        int prtn;
+
+        if (count < 10)
+                return -EINVAL;
+
+        decimal_val =val / mult;
+        prtn = snprintf(buffer, count, "%ld", decimal_val);
+        frac_val = val % mult;
+
+        if (prtn < (count - 4) && frac_val > 0) {
+                long temp_frac;
+                int i, temp_mult = 1, frac_bits = 0;
+
+                temp_frac = frac_val * 10;
+                buffer[prtn++] = '.';
+                while (frac_bits < 2 && (temp_frac / mult) < 1 ) { /*only reserved 2bits fraction*/
+                        buffer[prtn++] ='0';
+                        temp_frac *= 10;
+                        frac_bits++;
+                }
+                /*
+                  Need to think these cases :
+                        1. #echo x.00 > /proc/xxx       output result : x
+                        2. #echo x.0x > /proc/xxx       output result : x.0x
+                        3. #echo x.x0 > /proc/xxx       output result : x.x
+                        4. #echo x.xx > /proc/xxx       output result : x.xx
+                        Only reserved 2bits fraction.       
+                 */
+                for (i = 0; i < (5 - prtn); i++)
+                        temp_mult *= 10;
+
+                frac_bits = min((int)count - prtn, 3 - frac_bits);
+                prtn += snprintf(buffer + prtn, frac_bits, "%ld", frac_val * temp_mult / mult);
+
+                prtn--;
+                while(buffer[prtn] < '1' || buffer[prtn] > '9') {
+                        prtn--;
+                        if (buffer[prtn] == '.') {
+                                prtn--;
+                                break;
+                        }
+                }
+                prtn++;
+        }
+        buffer[prtn++] ='\n';
+        return prtn;
 }
 
 int lprocfs_write_u64_helper(const char *buffer, unsigned long count,__u64 *val)
 {
-        char kernbuf[22], *end;
+        return lprocfs_write_frac_u64_helper(buffer, count, val, 1);
+}
 
-        if (count > (sizeof(kernbuf) - 1))
+int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
+                              __u64 *val, int mult)
+{
+        char kernbuf[22], *end, *pbuf;
+
+        if (count > (sizeof(kernbuf) - 1) )
                 return -EINVAL;
 
         if (copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
 
         kernbuf[count] = '\0';
+        pbuf = kernbuf;
+        if (*pbuf == '-') {
+                mult = -mult;
+                pbuf++;
+        }
 
-        if (kernbuf[0] == '-')
-                *val = -simple_strtoull(kernbuf + 1, &end, 0);
-        else
-                *val = simple_strtoull(kernbuf, &end, 0);
-        if (kernbuf == end)
+        *val = simple_strtoull(pbuf, &end, 10) * mult;
+        if (pbuf == end)
                 return -EINVAL;
 
+        if (end != NULL && *end == '.') {
+                int temp_val;
+                int i, pow = 1;
+
+                pbuf = end + 1;
+                if (strlen(pbuf) > 10)
+                        pbuf[10] = '\0';
+
+                temp_val = (int)simple_strtoull(pbuf, &end, 10) * mult;
+
+                if (pbuf < end) {
+                        for (i = 0; i < (end - pbuf); i++)
+                                pow *= 10;
+
+                        *val += (__u64)(temp_val / pow);
+                }
+        }
         return 0;
 }
 
@@ -950,5 +1055,8 @@ EXPORT_SYMBOL(lprocfs_rd_filestotal);
 EXPORT_SYMBOL(lprocfs_rd_filesfree);
 
 EXPORT_SYMBOL(lprocfs_write_helper);
+EXPORT_SYMBOL(lprocfs_write_frac_helper);
+EXPORT_SYMBOL(lprocfs_read_frac_helper);
 EXPORT_SYMBOL(lprocfs_write_u64_helper);
+EXPORT_SYMBOL(lprocfs_write_frac_u64_helper);
 #endif /* LPROCFS*/

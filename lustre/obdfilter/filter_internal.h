@@ -86,8 +86,8 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct obd_export *);
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
-int filter_setattr(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *oti);
+int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
+                   struct obd_trans_info *oti);
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 
@@ -102,9 +102,8 @@ int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *, int rc);
-int filter_brw(int cmd, struct obd_export *, struct obdo *,
-               struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
-               struct obd_trans_info *);
+int filter_brw(int cmd, struct obd_export *, struct obd_info *oinfo,
+               obd_count oa_bufs, struct brw_page *pga, struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
 
 /* filter_io_*.c */

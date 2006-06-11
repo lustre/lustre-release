@@ -224,23 +224,20 @@ int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
         return -ELDLM_NO_LOCK_DATA;
 }
 
-static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
-                                  struct ldlm_res_id res_id,
-                                  __u32 type,
-                                  ldlm_policy_data_t *policy,
-                                  ldlm_mode_t mode,
-                                  int *flags,
-                                  ldlm_blocking_callback blocking,
-                                  ldlm_completion_callback completion,
-                                  ldlm_glimpse_callback glimpse,
-                                  void *data, __u32 lvb_len,
-                                  void *lvb_swabber,
-                                  struct lustre_handle *lockh)
+int ldlm_cli_enqueue_local(struct ldlm_namespace *ns, struct ldlm_res_id res_id,
+                           ldlm_type_t type, ldlm_policy_data_t *policy,
+                           ldlm_mode_t mode, int *flags,
+                           ldlm_blocking_callback blocking,
+                           ldlm_completion_callback completion,
+                           ldlm_glimpse_callback glimpse,
+                           void *data, __u32 lvb_len, void *lvb_swabber,
+                           struct lustre_handle *lockh)
 {
         struct ldlm_lock *lock;
         int err;
         ENTRY;
 
+        LASSERT(!(*flags & LDLM_FL_REPLAY));
         if (ns->ns_client) {
                 CERROR("Trying to enqueue local lock in a shadow namespace\n");
                 LBUG();
@@ -303,113 +300,21 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
         }
 }
 
-int ldlm_cli_enqueue(struct obd_export *exp,
-                     struct ptlrpc_request *req,
-                     struct ldlm_namespace *ns,
-                     struct ldlm_res_id res_id,
-                     __u32 type,
-                     ldlm_policy_data_t *policy,
-                     ldlm_mode_t mode,
-                     int *flags,
-                     ldlm_blocking_callback blocking,
-                     ldlm_completion_callback completion,
-                     ldlm_glimpse_callback glimpse,
-                     void *data,
-                     void *lvb,
-                     __u32 lvb_len,
-                     void *lvb_swabber,
-                     struct lustre_handle *lockh)
+int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
+                          ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
+                          int *flags, void *lvb, __u32 lvb_len,
+                          void *lvb_swabber, struct lustre_handle *lockh,int rc)
 {
-        struct ldlm_lock *lock;
-        struct ldlm_request *body;
-        struct ldlm_reply *reply;
-        int size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [DLM_LOCKREQ_OFF]     = sizeof(*body),
-                        [DLM_REPLY_REC_OFF]   = lvb_len };
+        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         int is_replay = *flags & LDLM_FL_REPLAY;
-        int req_passed_in = 1, cleanup_phase = 0, rc;
+        struct ldlm_lock *lock;
+        struct ldlm_reply *reply;
+        int cleanup_phase = 1;
         ENTRY;
 
-        if (exp == NULL) {
-                LASSERT(!is_replay);
-                rc = ldlm_cli_enqueue_local(ns, res_id, type, policy, mode,
-                                            flags, blocking, completion,
-                                            glimpse, data, lvb_len, lvb_swabber,
-                                            lockh);
-                RETURN(rc);
-        }
-
-        /* If we're replaying this lock, just check some invariants.
-         * If we're creating a new lock, get everything all setup nice. */
-        if (is_replay) {
-                lock = ldlm_handle2lock(lockh);
-                LDLM_DEBUG(lock, "client-side enqueue START");
-                LASSERT(exp == lock->l_conn_export);
-        } else {
-                lock = ldlm_lock_create(ns, NULL, res_id, type, mode, blocking,
-                                        completion, glimpse, data, lvb_len);
-                if (lock == NULL)
-                        RETURN(-ENOMEM);
-                /* for the local lock, add the reference */
-                ldlm_lock_addref_internal(lock, mode);
-                ldlm_lock2handle(lock, lockh);
-                lock->l_lvb_swabber = lvb_swabber;
-                if (policy != NULL) {
-                        /* INODEBITS_INTEROP: If the server does not support
-                         * inodebits, we will request a plain lock in the
-                         * descriptor (ldlm_lock2desc() below) but use an
-                         * inodebits lock internally with both bits set.
-                         */
-                        if (type == LDLM_IBITS && !(exp->exp_connect_flags &
-                                                    OBD_CONNECT_IBITS))
-                                lock->l_policy_data.l_inodebits.bits =
-                                        MDS_INODELOCK_LOOKUP |
-                                        MDS_INODELOCK_UPDATE;
-                        else
-                                lock->l_policy_data = *policy;
-                }
-
-                if (type == LDLM_EXTENT)
-                        lock->l_req_extent = policy->l_extent;
-                LDLM_DEBUG(lock, "client-side enqueue START");
-        }
-
-        /* lock not sent to server yet */
-        cleanup_phase = 2;
-
-        if (req == NULL) {
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 2, size, NULL);
-                if (req == NULL)
-                        GOTO(cleanup, rc = -ENOMEM);
-                req_passed_in = 0;
-        } else {
-                LASSERTF(lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF) ==
-                         sizeof(*body), "buflen[%d] = %d, not %d\n",
-                         DLM_LOCKREQ_OFF,
-                         lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF),
-                         sizeof(*body));
-        }
-
-        lock->l_conn_export = exp;
-        lock->l_export = NULL;
-        lock->l_blocking_ast = blocking;
-
-        /* Dump lock data into the request buffer */
-        body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
-        ldlm_lock2desc(lock, &body->lock_desc);
-        body->lock_flags = *flags;
-        body->lock_handle1 = *lockh;
-
-        /* Continue as normal. */
-        if (!req_passed_in) {
-                size[DLM_LOCKREPLY_OFF] = sizeof(*reply);
-                ptlrpc_req_set_repsize(req, 2 + (lvb_len > 0), size);
-                                                 
-        }
-        LDLM_DEBUG(lock, "sending request");
-        rc = ptlrpc_queue_wait(req);
-
+        lock = ldlm_handle2lock(lockh);
+        /* ldlm_cli_enqueue is holding a reference on this lock. */
+        LASSERT(lock != NULL);
         if (rc != ELDLM_OK) {
                 LASSERT(!is_replay);
                 LDLM_DEBUG(lock, "client-side enqueue END (%s)",
@@ -438,14 +343,6 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 GOTO(cleanup, rc);
         }
 
-        /*
-         * Liblustre client doesn't get extent locks, except for O_APPEND case
-         * where [0, OBD_OBJECT_EOF] lock is taken, or truncate, where
-         * [i_size, OBD_OBJECT_EOF] lock is taken.
-         */
-        LASSERT(ergo(LIBLUSTRE_CLIENT, type != LDLM_EXTENT ||
-                     policy->l_extent.end == OBD_OBJECT_EOF));
-
         reply = lustre_swab_repbuf(req, DLM_LOCKREPLY_OFF, sizeof(*reply),
                                    lustre_swab_ldlm_reply);
         if (reply == NULL) {
@@ -454,7 +351,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         }
 
         /* lock enqueued on the server */
-        cleanup_phase = 1;
+        cleanup_phase = 0;
 
         l_lock(&ns->ns_lock);
         lock->l_remote_handle = reply->lock_handle;
@@ -495,7 +392,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         }
                         LDLM_DEBUG(lock, "client-side enqueue, new resource");
                 }
-                if (policy != NULL)
+                if (with_policy)
                         if (!(type == LDLM_IBITS && !(exp->exp_connect_flags &
                                                     OBD_CONNECT_IBITS)))
                                 lock->l_policy_data =
@@ -533,7 +430,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         if (!rc)
                                 rc = err;
                         if (rc)
-                                cleanup_phase = 2;
+                                cleanup_phase = 1;
                 }
         }
 
@@ -546,17 +443,142 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         LDLM_DEBUG(lock, "client-side enqueue END");
         EXIT;
 cleanup:
-        switch (cleanup_phase) {
-        case 2:
-                if (rc)
-                        failed_lock_cleanup(ns, lock, lockh, mode);
-        case 1:
-                if (!req_passed_in && req != NULL)
-                        ptlrpc_req_finished(req);
-        }
-
+        if (cleanup_phase == 1 && rc)
+                failed_lock_cleanup(ns, lock, lockh, mode);
+        /* Put lock 2 times, the second reference is held by ldlm_cli_enqueue */
+        LDLM_LOCK_PUT(lock);
         LDLM_LOCK_PUT(lock);
         return rc;
+}
+
+/* If a request has some specific initialisation it is passed in @reqp,
+ * otherwise it is created in ldlm_cli_enqueue.
+ *
+ * Supports sync and async requests, pass @async flag accordingly. If a
+ * request was created in ldlm_cli_enqueue and it is the async request,
+ * pass it to the caller in @reqp. */
+int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
+                     struct ldlm_res_id res_id, ldlm_type_t type,
+                     ldlm_policy_data_t *policy, ldlm_mode_t mode, int *flags,
+                     ldlm_blocking_callback blocking,
+                     ldlm_completion_callback completion,
+                     ldlm_glimpse_callback glimpse,
+                     void *data, void *lvb, __u32 lvb_len, void *lvb_swabber,
+                     struct lustre_handle *lockh, int async)
+{
+        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+        struct ldlm_lock *lock;
+        struct ldlm_request *body;
+        struct ldlm_reply *reply;
+        int size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+                        [DLM_LOCKREQ_OFF]     = sizeof(*body),
+                        [DLM_REPLY_REC_OFF]   = lvb_len };
+        int is_replay = *flags & LDLM_FL_REPLAY;
+        int req_passed_in = 1, rc;
+        struct ptlrpc_request *req;
+        ENTRY;
+
+        LASSERT(exp != NULL);
+
+        /* If we're replaying this lock, just check some invariants.
+         * If we're creating a new lock, get everything all setup nice. */
+        if (is_replay) {
+                lock = ldlm_handle2lock(lockh);
+                LDLM_DEBUG(lock, "client-side enqueue START");
+                LASSERT(exp == lock->l_conn_export);
+        } else {
+                lock = ldlm_lock_create(ns, NULL, res_id, type, mode, blocking,
+                                        completion, glimpse, data, lvb_len);
+                if (lock == NULL)
+                        RETURN(-ENOMEM);
+                /* for the local lock, add the reference */
+                ldlm_lock_addref_internal(lock, mode);
+                ldlm_lock2handle(lock, lockh);
+                lock->l_lvb_swabber = lvb_swabber;
+                if (policy != NULL) {
+                        /* INODEBITS_INTEROP: If the server does not support
+                         * inodebits, we will request a plain lock in the
+                         * descriptor (ldlm_lock2desc() below) but use an
+                         * inodebits lock internally with both bits set.
+                         */
+                        if (type == LDLM_IBITS && !(exp->exp_connect_flags &
+                                                    OBD_CONNECT_IBITS))
+                                lock->l_policy_data.l_inodebits.bits =
+                                        MDS_INODELOCK_LOOKUP |
+                                        MDS_INODELOCK_UPDATE;
+                        else
+                                lock->l_policy_data = *policy;
+                }
+
+                if (type == LDLM_EXTENT)
+                        lock->l_req_extent = policy->l_extent;
+                LDLM_DEBUG(lock, "client-side enqueue START");
+        }
+
+        /* lock not sent to server yet */
+
+        if (reqp == NULL || *reqp == NULL) {
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
+                                      LDLM_ENQUEUE, 2, size, NULL);
+                if (req == NULL) {
+                        failed_lock_cleanup(ns, lock, lockh, mode);
+                        LDLM_LOCK_PUT(lock);
+                        RETURN(-ENOMEM);
+                }
+                req_passed_in = 0;
+                if (reqp)
+                        *reqp = req;
+        } else {
+                req = *reqp;
+                LASSERTF(lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF) ==
+                         sizeof(*body), "buflen[%d] = %d, not %d\n",
+                         DLM_LOCKREQ_OFF,
+                         lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF),
+                         sizeof(*body));
+        }
+
+        lock->l_conn_export = exp;
+        lock->l_export = NULL;
+        lock->l_blocking_ast = blocking;
+
+        /* Dump lock data into the request buffer */
+        body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, sizeof(*body));
+        ldlm_lock2desc(lock, &body->lock_desc);
+        body->lock_flags = *flags;
+        body->lock_handle1 = *lockh;
+
+        /* Continue as normal. */
+        if (!req_passed_in) {
+                size[DLM_LOCKREPLY_OFF] = sizeof(*reply);
+                ptlrpc_req_set_repsize(req, 2 + (lvb_len > 0), size);
+        }
+
+        /*
+         * Liblustre client doesn't get extent locks, except for O_APPEND case
+         * where [0, OBD_OBJECT_EOF] lock is taken, or truncate, where
+         * [i_size, OBD_OBJECT_EOF] lock is taken.
+         */
+        LASSERT(ergo(LIBLUSTRE_CLIENT, type != LDLM_EXTENT ||
+                     policy->l_extent.end == OBD_OBJECT_EOF));
+
+        if (async) {
+                LASSERT(reqp != NULL);
+                RETURN(0);
+        }
+
+        LDLM_DEBUG(lock, "sending request");
+        rc = ptlrpc_queue_wait(req);
+        rc = ldlm_cli_enqueue_fini(exp, req, type, policy ? 1 : 0,
+                                   mode, flags, lvb, lvb_len, lvb_swabber,
+                                   lockh, rc);
+
+        if (!req_passed_in && req != NULL) {
+                ptlrpc_req_finished(req);
+                if (reqp)
+                        *reqp = NULL;
+        }
+
+        RETURN(rc);
 }
 
 static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,

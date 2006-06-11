@@ -49,9 +49,12 @@
 #include <sys/stat.h>
 #include <sys/vfs.h>
 #include <gnu/stubs.h>
-#include <ext2fs/ext2fs.h>
 #include <gnu/stubs.h>
-#include <e2p/e2p.h>
+
+#ifdef HAVE_EXT2FS_EXT2FS_H
+#  include <e2p/e2p.h>
+#  include <ext2fs/ext2fs.h>
+#endif
 
 #define ONE_MB (1024 * 1024)
 #define ONE_GB ((unsigned long long)(1024 * 1024 * 1024))
@@ -334,11 +337,12 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 	int file_num = 999999999;
 	ino_t inode_st = 0;
 
+#ifdef HAVE_EXT2FS_EXT2FS_H
 	if (!full && fsetflags(testdir, EXT2_TOPDIR_FL))
 		fprintf(stderr,
 			"\n%s: can't set TOPDIR_FL on %s: %s (ignoring)",
 			progname, testdir, strerror(errno));
-
+#endif
 	for (; dir_num < num_dirs; num_files++, file_num++) {
 		if (file_num >= files_in_dir) {
 			if (dir_num == num_dirs - 1)
@@ -520,6 +524,7 @@ int main(int argc, char **argv)
 	isatty_flag = isatty(STDOUT_FILENO);
 
 	if (!full) {
+#ifdef HAVE_EXT2FS_EXT2FS_H
 		struct mntent *tempmnt;
 		FILE *fp = NULL;
 		ext2_filsys fs;
@@ -561,6 +566,9 @@ int main(int argc, char **argv)
 			       num_dirs, fs->super->s_blocks_count,
 			       fs->super->s_blocks_per_group);
 		ext2fs_close(fs);
+#else
+                goto guess;
+#endif
 		if (0) { /* ugh */
 			struct statfs64 statbuf;
 		guess:

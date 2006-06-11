@@ -422,37 +422,40 @@ static void llu_truncate(struct inode *inode, obd_flag flags)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct obdo oa = {0};
+        struct obd_info oinfo = { { { 0 } } };
+        struct obdo oa = { 0 };
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p) to %llu\n",
                (long long)st->st_ino, lli->lli_st_generation, inode,
                (long long)st->st_size);
 
-        if (!lsm) {
+        if (!lli->lli_smd) {
                 CDEBUG(D_INODE, "truncate on inode %llu with no objects\n",
                        (long long)st->st_ino);
                 EXIT;
                 return;
         }
 
-        oa.o_id = lsm->lsm_object_id;
+        oinfo.oi_md = lli->lli_smd;
+        oinfo.oi_policy.l_extent.start = st->st_size;
+        oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+        oinfo.oi_oa = &oa;
+        oa.o_id = lli->lli_smd->lsm_object_id;
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
         oa.o_flags = flags; /* We don't actually want to copy inode flags */
-
+ 
         obdo_from_inode(&oa, inode,
                         OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLATIME |
                         OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
-        obd_adjust_kms(llu_i2obdexp(inode), lsm, st->st_size, 1);
+        obd_adjust_kms(llu_i2obdexp(inode), lli->lli_smd, st->st_size, 1);
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
                oa.o_id, (long long)st->st_size);
 
         /* truncate == punch from new size to absolute end of file */
-        rc = obd_punch(llu_i2obdexp(inode), &oa, lsm, st->st_size,
-                       OBD_OBJECT_EOF, NULL);
+        rc = obd_punch_rqset(llu_i2obdexp(inode), &oinfo, NULL);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %llu\n",
                        rc, (long long)st->st_ino);

@@ -180,13 +180,15 @@ static int ll_rd_max_readahead_mb(char *page, char **start, off_t off,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        unsigned val;
+        long pages_number;
+        int mult;
 
         spin_lock(&sbi->ll_lock);
-        val = sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT);
+        pages_number = sbi->ll_ra_info.ra_max_pages;
         spin_unlock(&sbi->ll_lock);
 
-        return snprintf(page, count, "%u\n", val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        return lprocfs_read_frac_helper(page, count, pages_number, mult);
 }
 
 static int ll_wr_max_readahead_mb(struct file *file, const char *buffer,
@@ -194,20 +196,21 @@ static int ll_wr_max_readahead_mb(struct file *file, const char *buffer,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
+        int mult, rc, pages_number;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
         if (rc)
                 return rc;
 
-        if (val < 0 || val > (num_physpages >> (20 - PAGE_CACHE_SHIFT - 1))) {
+        if (pages_number < 0 || pages_number > num_physpages / 2) {
                 CERROR("can't set file readahead more than %lu MB\n",
-                        num_physpages >> (20 - PAGE_CACHE_SHIFT - 1));
+                        num_physpages >> (20 - PAGE_CACHE_SHIFT + 1)); /*1/2 of RAM*/
                 return -ERANGE;
         }
 
         spin_lock(&sbi->ll_lock);
-        sbi->ll_ra_info.ra_max_pages = val << (20 - PAGE_CACHE_SHIFT);
+        sbi->ll_ra_info.ra_max_pages = pages_number;
         spin_unlock(&sbi->ll_lock);
 
         return count;
@@ -218,14 +221,15 @@ static int ll_rd_max_read_ahead_whole_mb(char *page, char **start, off_t off,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        unsigned val;
+        long pages_number;
+        int mult;
 
         spin_lock(&sbi->ll_lock);
-        val = sbi->ll_ra_info.ra_max_read_ahead_whole_pages >>
-              (20 - PAGE_CACHE_SHIFT);
+        pages_number = sbi->ll_ra_info.ra_max_read_ahead_whole_pages;
         spin_unlock(&sbi->ll_lock);
 
-        return snprintf(page, count, "%u\n", val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        return lprocfs_read_frac_helper(page, count, pages_number, mult);
 }
 
 static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
@@ -233,16 +237,16 @@ static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
+        int mult, rc, pages_number;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
         if (rc)
                 return rc;
 
         /* Cap this at the current max readahead window size, the readahead
          * algorithm does this anyway so it's pointless to set it larger. */
-        if (val < 0 ||
-            val > (sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT))) {
+        if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
                 CERROR("can't set max_read_ahead_whole_mb more than "
                        "max_read_ahead_mb: %lu\n",
                        sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT));
@@ -250,8 +254,7 @@ static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
         }
 
         spin_lock(&sbi->ll_lock);
-        sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
-                val << (20 - PAGE_CACHE_SHIFT);
+        sbi->ll_ra_info.ra_max_read_ahead_whole_pages = pages_number;
         spin_unlock(&sbi->ll_lock);
 
         return count;
@@ -262,13 +265,15 @@ static int ll_rd_max_cached_mb(char *page, char **start, off_t off,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        unsigned val;
+        long pages_number;
+        int mult;
 
         spin_lock(&sbi->ll_lock);
-        val = sbi->ll_async_page_max >> (20 - PAGE_CACHE_SHIFT);
+        pages_number = sbi->ll_async_page_max;
         spin_unlock(&sbi->ll_lock);
 
-        return snprintf(page, count, "%u\n", val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        return lprocfs_read_frac_helper(page, count, pages_number, mult);;
 }
 
 static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
@@ -276,20 +281,21 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
+        int mult, rc, pages_number;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
         if (rc)
                 return rc;
 
-        if (val < 0 || val > (num_physpages >> (20 - PAGE_CACHE_SHIFT))) {
+        if (pages_number < 0 || pages_number > num_physpages) {
                 CERROR("can't set max cache more than %lu MB\n",
                         num_physpages >> (20 - PAGE_CACHE_SHIFT));
                 return -ERANGE;
         }
 
         spin_lock(&sbi->ll_lock);
-        sbi->ll_async_page_max = val << (20 - PAGE_CACHE_SHIFT);
+        sbi->ll_async_page_max = pages_number ;
         spin_unlock(&sbi->ll_lock);
 
         if (sbi->ll_async_page_count >= sbi->ll_async_page_max)

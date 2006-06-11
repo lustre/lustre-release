@@ -162,25 +162,25 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_export *exp = obd->obd_self_export;
         struct llog_setattr_rec *lsr;
-        struct obdo *oa;
+        struct obd_info oinfo = { { { 0 } } };
         obd_id oid;
         int rc = 0;
         ENTRY;
 
         lsr = (struct llog_setattr_rec *)rec;
-        oa = obdo_alloc();
+        oinfo.oi_oa = obdo_alloc();
 
-        oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
-                        OBD_MD_FLCOOKIE);
-        oa->o_id = lsr->lsr_oid;
-        oa->o_gr = lsr->lsr_ogen;
-        oa->o_uid = lsr->lsr_uid;
-        oa->o_gid = lsr->lsr_gid;
-        memcpy(obdo_logcookie(oa), cookie, sizeof(*cookie));
-        oid = oa->o_id;
+        oinfo.oi_oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
+                                 OBD_MD_FLCOOKIE);
+        oinfo.oi_oa->o_id = lsr->lsr_oid;
+        oinfo.oi_oa->o_gr = lsr->lsr_ogen;
+        oinfo.oi_oa->o_uid = lsr->lsr_uid;
+        oinfo.oi_oa->o_gid = lsr->lsr_gid;
+        memcpy(obdo_logcookie(oinfo.oi_oa), cookie, sizeof(*cookie));
+        oid = oinfo.oi_oa->o_id;
 
-        rc = filter_setattr(exp, oa, NULL, NULL);
-        obdo_free(oa);
+        rc = filter_setattr(exp, &oinfo, NULL);
+        obdo_free(oinfo.oi_oa);
 
         if (rc == -ENOENT) {
                 CDEBUG(D_HA, "object already removed, send cookie\n");

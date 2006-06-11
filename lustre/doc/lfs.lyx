@@ -108,6 +108,16 @@ setquota [-u|-g] <name> <block-softlimit> <block-hardlimit> <inode-softlimit>
 \series bold 
 lfs\SpecialChar ~
 quota [-o obd_uuid] [-u|-g] <name> <filesystem>
+\layout Standard
+
+\series bold
+lfs\SpecialChar ~
+df [-i] [-h] [path]
+\layout Standard
+
+\series bold
+lfs\SpecialChar ~
+help
 \layout Subsection
 
 DESCRIPTION
@@ -215,6 +225,12 @@ quota
 \layout List
 \labelwidthstring 00.00.0000
 
+\series bold 
+df
+\series default 
+ Report filesystem disk space usage or inodes usage of each MDS/OSD.
+\layout List
+\labelwidthstring 00.00.0000
 
 \series bold 
 help

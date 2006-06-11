@@ -549,30 +549,34 @@ int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                       void *data, int flag);
 int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp);
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data);
-int ldlm_cli_enqueue(struct obd_export *exp,
-                     struct ptlrpc_request *req,
-                     struct ldlm_namespace *ns,
-                     struct ldlm_res_id,
-                     ldlm_type_t type,
-                     ldlm_policy_data_t *,
-                     ldlm_mode_t mode,
-                     int *flags,
+int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **req,
+                     struct ldlm_res_id res_id, ldlm_type_t type,
+                     ldlm_policy_data_t *policy, ldlm_mode_t mode, int *flags,
                      ldlm_blocking_callback blocking,
                      ldlm_completion_callback completion,
                      ldlm_glimpse_callback glimpse,
-                     void *data,
-                     void *lvb,
-                     __u32 lvb_len,
-                     void *lvb_swabber,
-                     struct lustre_handle *lockh);
+                     void *data, void *lvb, __u32 lvb_len, void *lvb_swabber,
+                     struct lustre_handle *lockh, int async);
+int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
+                          ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
+                          int *flags, void *lvb, __u32 lvb_len,
+                          void *lvb_swabber, struct lustre_handle *lockh,
+                          int rc);
+int ldlm_cli_enqueue_local(struct ldlm_namespace *ns, struct ldlm_res_id res_id,
+                           ldlm_type_t type, ldlm_policy_data_t *policy,
+                           ldlm_mode_t mode, int *flags,
+                           ldlm_blocking_callback blocking,
+                           ldlm_completion_callback completion,
+                           ldlm_glimpse_callback glimpse,
+                           void *data, __u32 lvb_len, void *lvb_swabber,
+                           struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
                            int flags, void *opaque);
-int ldlm_cli_join_lru(struct ldlm_namespace *, struct ldlm_res_id *,
-                      int join);
+int ldlm_cli_join_lru(struct ldlm_namespace *, struct ldlm_res_id *, int join);
 
 /* mds/handler.c */
 /* This has to be here because recursive inclusion sucks. */

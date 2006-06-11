@@ -514,7 +514,6 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 rc = filter_client_add(obd, filter, fed, cl_idx);
                 LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 
-
                 fcd = NULL;
                 exp->exp_replay_needed = 1;
                 exp->exp_connecting = 0;
@@ -527,7 +526,6 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 
                 if (last_rcvd > le64_to_cpu(fsd->lsd_last_transno))
                         fsd->lsd_last_transno = cpu_to_le64(last_rcvd);
-
         }
 
         if (fcd)
@@ -952,7 +950,7 @@ struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
                 return dparent;
 
         rc = filter_lock_dentry(obd, dparent);
-        fsfilt_check_slow(now, obd_timeout, "parent lock");
+        fsfilt_check_slow(obd, now, obd_timeout, "parent lock");
         return rc ? ERR_PTR(rc) : dparent;
 }
 
@@ -1033,10 +1031,10 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
         ENTRY;
         /* Tell the clients that the object is gone now and that they should
          * throw away any cached pages. */
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_EXTENT, &policy, LCK_PW,
-                              &flags, ldlm_blocking_ast, ldlm_completion_ast,
-                              NULL, NULL, NULL, 0, NULL, &lockh);
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_EXTENT, 
+                                    &policy, LCK_PW, &flags, ldlm_blocking_ast, 
+                                    ldlm_completion_ast, NULL, NULL, 0, NULL, 
+                                    &lockh);
 
         /* We only care about the side-effects, just drop the lock. */
         if (rc == ELDLM_OK)
@@ -1752,9 +1750,9 @@ static int filter_cleanup(struct obd_device *obd)
 static int filter_connect_internal(struct obd_export *exp,
                                    struct obd_connect_data *data)
 {
-        if (!data) 
+        if (!data)
                 RETURN(0);
-        
+
         CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
                " ocd_version: %x ocd_grant: %d\n",
                exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
@@ -2076,8 +2074,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
         return dchild;
 }
 
-static int filter_getattr(struct obd_export *exp, struct obdo *oa,
-                          struct lov_stripe_md *md)
+static int filter_getattr(struct obd_export *exp, struct obd_info *oinfo)
 {
         struct dentry *dentry = NULL;
         struct obd_device *obd;
@@ -2090,13 +2087,13 @@ static int filter_getattr(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        dentry = filter_oa2dentry(obd, oa);
+        dentry = filter_oa2dentry(obd, oinfo->oi_oa);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
         /* Limit the valid bits in the return data to what we actually use */
-        oa->o_valid = OBD_MD_FLID;
-        obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
+        oinfo->oi_oa->o_valid = OBD_MD_FLID;
+        obdo_from_inode(oinfo->oi_oa, dentry->d_inode, FILTER_VALID_FLAGS);
 
         f_dput(dentry);
         RETURN(rc);
@@ -2260,17 +2257,17 @@ out_unlock:
                 unsigned int cur_ids[MAXQUOTAS] = {oa->o_uid, oa->o_gid};
                 int rc2 = lquota_adjust(quota_interface, exp->exp_obd, cur_ids,
                                         orig_ids, rc, FSFILT_OP_SETATTR);
-                CDEBUG(rc2 ? D_ERROR : D_QUOTA, 
+                CDEBUG(rc2 ? D_ERROR : D_QUOTA,
                        "filter adjust qunit. (rc:%d)\n", rc2);
         }
         return rc;
 }
 
 /* this is called from filter_truncate() until we have filter_punch() */
-int filter_setattr(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *oti)
+int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
+                   struct obd_trans_info *oti)
 {
-        struct ldlm_res_id res_id = { .name = { oa->o_id } };
+        struct ldlm_res_id res_id = { .name = { oinfo->oi_oa->o_id } };
         struct ldlm_valblock_ops *ns_lvbo;
         struct lvfs_run_ctxt saved;
         struct filter_obd *filter;
@@ -2279,7 +2276,8 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         int rc;
         ENTRY;
 
-        dentry = __filter_oa2dentry(exp->exp_obd, oa, __FUNCTION__, 1);
+        dentry = __filter_oa2dentry(exp->exp_obd, oinfo->oi_oa,
+                                    __FUNCTION__, 1);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
@@ -2288,7 +2286,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         lock_kernel();
 
         /* setting objects attributes (including owner/group) */
-        rc = filter_setattr_internal(exp, dentry, oa, oti);
+        rc = filter_setattr_internal(exp, dentry, oinfo->oi_oa, oti);
         if (rc)
                 GOTO(out_unlock, rc);
 
@@ -2302,10 +2300,10 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
                 ldlm_resource_putref(res);
         }
 
-        oa->o_valid = OBD_MD_FLID;
+        oinfo->oi_oa->o_valid = OBD_MD_FLID;
 
         /* Quota release need uid/gid info */
-        obdo_from_inode(oa, dentry->d_inode,
+        obdo_from_inode(oinfo->oi_oa, dentry->d_inode,
                         FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
 
         EXIT;
@@ -2487,7 +2485,7 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         /* set EROFS to state field if FS is mounted as RDONLY. The goal is to
          * stop creating files on MDS if OST is not good shape to create
          * objects.*/
-        osfs->os_state = (filter->fo_obt.obt_sb->s_flags & MS_RDONLY) ? 
+        osfs->os_state = (filter->fo_obt.obt_sb->s_flags & MS_RDONLY) ?
                 EROFS : 0;
         RETURN(rc);
 }
@@ -2753,8 +2751,8 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                         fcc = obdo_logcookie(oa);
                         llog_cancel(llog_get_context(obd, fcc->lgc_subsys + 1),
                                     NULL, 1, fcc, 0);
+                        fcc = NULL; /* we didn't allocate fcc, don't free it */
                 }
-                fcc = NULL;
                 GOTO(cleanup, rc = -ENOENT);
         }
 
@@ -2850,31 +2848,32 @@ cleanup:
         qcids[USRQUOTA] = oa->o_uid;
         qcids[GRPQUOTA] = oa->o_gid;
         rc2 = lquota_adjust(quota_interface, obd, qcids, NULL, rc,
-                            FSFILT_OP_UNLINK); 
-        CDEBUG(rc2 ? D_ERROR : D_QUOTA, 
+                            FSFILT_OP_UNLINK);
+        CDEBUG(rc2 ? D_ERROR : D_QUOTA,
                "filter adjust qunit! (rc:%d)\n", rc2);
         return rc;
 }
 
 /* NB start and end are used for punch, but not truncate */
-static int filter_truncate(struct obd_export *exp, struct obdo *oa,
-                           struct lov_stripe_md *lsm, obd_off start,
-                           obd_off end, struct obd_trans_info *oti)
+static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
+                           struct obd_trans_info *oti,
+                           struct ptlrpc_request_set *rqset)
 {
         int rc;
         ENTRY;
 
-        if (end != OBD_OBJECT_EOF) {
+        if (oinfo->oi_policy.l_extent.end != OBD_OBJECT_EOF) {
                 CERROR("PUNCH not supported, only truncate: end = "LPX64"\n",
-                       end);
+                       oinfo->oi_policy.l_extent.end);
                 RETURN(-EFAULT);
         }
 
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPX64
-               ", o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
-        
-        oa->o_size = start;
-        rc = filter_setattr(exp, oa, NULL, oti);
+               ", o_size = "LPD64"\n", oinfo->oi_oa->o_id,
+               oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start);
+
+        oinfo->oi_oa->o_size = oinfo->oi_policy.l_extent.start;
+        rc = filter_setattr(exp, oinfo, oti);
         RETURN(rc);
 }
 
@@ -2994,7 +2993,7 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         /* setup llog imports */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
-        
+
         lquota_setinfo(quota_interface, exp, obd);
 
         RETURN(rc);
@@ -3188,11 +3187,11 @@ static int __init obdfilter_init(void)
 out:
                 if (quota_interface)
                         PORTAL_SYMBOL_PUT(filter_quota_interface);
-                        
+
                 OBD_FREE(obdfilter_created_scratchpad,
                          OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                          sizeof(*obdfilter_created_scratchpad));
-        } 
+        }
 
         return rc;
 }

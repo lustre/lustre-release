@@ -104,6 +104,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
 static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
+        struct obd_info oinfo = { { { 0 } } };
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
@@ -119,7 +120,9 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_getattr(exp, &repbody->oa, NULL);
+
+        oinfo.oi_oa = &repbody->oa;
+        req->rq_status = obd_getattr(exp, &oinfo);
         RETURN(0);
 }
 
@@ -212,11 +215,10 @@ static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
         else
                 policy.l_extent.end = finis | ~CFS_PAGE_MASK;
 
-        RETURN(ldlm_cli_enqueue(NULL, NULL, exp->exp_obd->obd_namespace,
-                                res_id, LDLM_EXTENT, &policy, LCK_PW, &flags,
-                                ldlm_blocking_ast, ldlm_completion_ast,
-                                ldlm_glimpse_ast,
-                                NULL, NULL, 0, NULL, lh));
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, res_id, 
+                                      LDLM_EXTENT, &policy, LCK_PW, &flags,
+                                      ldlm_blocking_ast, ldlm_completion_ast,
+                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
 }
 
 /*
@@ -235,7 +237,7 @@ static void ost_punch_lock_put(struct obd_export *exp, struct obdo *oa,
 static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
-        struct obdo     *oa;
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_body *body, *repbody;
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         struct lustre_handle lh = {0,};
@@ -249,8 +251,11 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        oa = &body->oa;
-        if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
+        oinfo.oi_oa = &body->oa;
+        oinfo.oi_policy.l_extent.start = oinfo.oi_oa->o_size;
+        oinfo.oi_policy.l_extent.end = oinfo.oi_oa->o_blocks;
+
+        if ((oinfo.oi_oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
                 RETURN(-EINVAL);
 
@@ -260,21 +265,20 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
-        repbody->oa = *oa;
-        rc = ost_punch_lock_get(exp, oa, &lh);
+        repbody->oa = *oinfo.oi_oa;
+        rc = ost_punch_lock_get(exp, oinfo.oi_oa, &lh);
         if (rc == 0) {
-                if (oa->o_valid & OBD_MD_FLFLAGS &&
-                    oa->o_flags == OBD_FL_TRUNCLOCK)
+                if (oinfo.oi_oa->o_valid & OBD_MD_FLFLAGS &&
+                    oinfo.oi_oa->o_flags == OBD_FL_TRUNCLOCK)
                         /*
                          * If OBD_FL_TRUNCLOCK is the only bit set in
                          * ->o_flags, clear OBD_MD_FLFLAGS to avoid falling
                          * through filter_setattr() to filter_iocontrol().
                          */
-                        oa->o_valid &= ~OBD_MD_FLFLAGS;
+                        oinfo.oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
 
-                req->rq_status = obd_punch(exp, oa, NULL,
-                                           oa->o_size, oa->o_blocks, oti);
-                ost_punch_lock_put(exp, oa, &lh);
+                req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
+                ost_punch_lock_put(exp, oinfo.oi_oa, &lh);
         }
         RETURN(rc);
 }
@@ -307,6 +311,7 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
 {
         struct ost_body *body, *repbody;
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        struct obd_info oinfo = { { { 0 } } };
         ENTRY;
 
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
@@ -322,7 +327,8 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
 
-        req->rq_status = obd_setattr(exp, &repbody->oa, NULL, oti);
+        oinfo.oi_oa = &repbody->oa;
+        req->rq_status = obd_setattr(exp, &oinfo, oti);
         RETURN(0);
 }
 
@@ -568,11 +574,10 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
                                  nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
 
-        RETURN(ldlm_cli_enqueue(NULL, NULL, exp->exp_obd->obd_namespace,
-                                res_id, LDLM_EXTENT, &policy, mode, &flags,
-                                ldlm_blocking_ast, ldlm_completion_ast,
-                                ldlm_glimpse_ast,
-                                NULL, NULL, 0, NULL, lh));
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, res_id, 
+                                      LDLM_EXTENT, &policy, mode, &flags,
+                                      ldlm_blocking_ast, ldlm_completion_ast,
+                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
 }
 
 static void ost_brw_lock_put(int mode,

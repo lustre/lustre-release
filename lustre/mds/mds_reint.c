@@ -416,9 +416,8 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                           struct llog_cookie *logcookies, struct ll_fid *fid)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
-        struct obdo *oa = NULL;
+        struct obd_info oinfo = { { { 0 } } };
         int rc;
         ENTRY;
 
@@ -426,48 +425,48 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                 RETURN(0);
 
         /* first get memory EA */
-        oa = obdo_alloc();
-        if (!oa)
+        oinfo.oi_oa = obdo_alloc();
+        if (!oinfo.oi_oa)
                 RETURN(-ENOMEM);
 
         LASSERT(lmm);
 
-        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_osc_exp, &oinfo.oi_md, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p for inode %lu\n", lmm, inode->i_ino);
                 GOTO(out, rc);
         }
 
-        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, oinfo.oi_md);
         if (rc) {
-                CERROR("Error revalidate lsm %p \n", lsm);
+                CERROR("Error revalidate lsm %p \n", oinfo.oi_md);
                 GOTO(out, rc);
         }
 
         /* then fill oa */
-        oa->o_id = lsm->lsm_object_id;
-        oa->o_uid = inode->i_uid;
-        oa->o_gid = inode->i_gid;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
+        oinfo.oi_oa->o_id = oinfo.oi_md->lsm_object_id;
+        oinfo.oi_oa->o_uid = inode->i_uid;
+        oinfo.oi_oa->o_gid = inode->i_gid;
+        oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
         if (logcookies) {
-                oa->o_valid |= OBD_MD_FLCOOKIE;
+                oinfo.oi_oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
         }
 
         LASSERT(fid != NULL);
-        oa->o_fid = fid->id;
-        oa->o_generation = fid->generation;
-        oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+        oinfo.oi_oa->o_fid = fid->id;
+        oinfo.oi_oa->o_generation = fid->generation;
+        oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
 
-        /* do setattr from mds to ost asynchronously */
-        rc = obd_setattr_async(mds->mds_osc_exp, oa, lsm, &oti);
+        /* do async setattr from mds to ost not waiting for responses. */
+        rc = obd_setattr_async(mds->mds_osc_exp, &oinfo, &oti, NULL);
         if (rc)
                 CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
-                       " on ost error %d\n", lsm->lsm_object_id, rc);
+                       " on ost error %d\n", oinfo.oi_md->lsm_object_id, rc);
 out:
-        if (lsm)
-                obd_free_memmd(mds->mds_osc_exp, &lsm);
-        obdo_free(oa);
+        if (oinfo.oi_md)
+                obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
+        obdo_free(oinfo.oi_oa);
         RETURN(rc);
 }
 
@@ -1041,10 +1040,11 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                res_id[0]->name[0], res_id[1]->name[0]);
 
         flags = LDLM_FL_LOCAL_ONLY;
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, *res_id[0],
-                              LDLM_IBITS, policies[0], lock_modes[0], &flags,
-                              ldlm_blocking_ast, ldlm_completion_ast,
-                              NULL, NULL, NULL, 0, NULL, handles[0]);
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, *res_id[0],
+                                    LDLM_IBITS, policies[0], lock_modes[0],
+                                    &flags, ldlm_blocking_ast, 
+                                    ldlm_completion_ast, NULL, NULL, 0, 
+                                    NULL, handles[0]);
         if (rc != ELDLM_OK)
                 RETURN(-EIO);
         ldlm_lock_dump_handle(D_OTHER, handles[0]);
@@ -1055,11 +1055,12 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                 ldlm_lock_addref(handles[1], lock_modes[1]);
         } else if (res_id[1]->name[0] != 0) {
                 flags = LDLM_FL_LOCAL_ONLY;
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                      *res_id[1], LDLM_IBITS, policies[1],
-                                      lock_modes[1], &flags,
-                                      ldlm_blocking_ast, ldlm_completion_ast,
-                                      NULL, NULL, NULL, 0, NULL, handles[1]);
+                rc = ldlm_cli_enqueue_local(obd->obd_namespace, *res_id[1],
+                                            LDLM_IBITS, policies[1],
+                                            lock_modes[1], &flags, 
+                                            ldlm_blocking_ast,
+                                            ldlm_completion_ast, NULL, NULL,
+                                            0, NULL, handles[1]);
                 if (rc != ELDLM_OK) {
                         ldlm_lock_decref(handles[0], lock_modes[0]);
                         RETURN(-EIO);
@@ -1164,13 +1165,13 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                         if (i < 3)
                                 try_to_aggregate_locks(res_id[i], policies[i],
                                                        res_id[i+1], policies[i+1]);
-                        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                              *res_id[i], LDLM_IBITS,
-                                              policies[i],
-                                              lock_modes[i], &flags,
-                                              ldlm_blocking_ast,
-                                              ldlm_completion_ast, NULL, NULL,
-                                              NULL, 0, NULL, dlm_handles[i]);
+                        rc = ldlm_cli_enqueue_local(obd->obd_namespace,
+                                                    *res_id[i], LDLM_IBITS,
+                                                    policies[i], lock_modes[i],
+                                                    &flags, ldlm_blocking_ast,
+                                                    ldlm_completion_ast, NULL, 
+                                                    NULL, 0, NULL, 
+                                                    dlm_handles[i]);
                         if (rc != ELDLM_OK)
                                 GOTO(out_err, rc = -EIO);
                         ldlm_lock_dump_handle(D_OTHER, dlm_handles[i]);
@@ -1255,11 +1256,12 @@ static int mds_verify_child(struct obd_device *obd,
                         GOTO(cleanup, rc = 1);
                 }
 
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                      *child_res_id, LDLM_IBITS, child_policy,
-                                      child_mode, &flags, ldlm_blocking_ast,
-                                      ldlm_completion_ast, NULL, NULL, NULL, 0,
-                                      NULL, child_lockh);
+                rc = ldlm_cli_enqueue_local(obd->obd_namespace, *child_res_id, 
+                                            LDLM_IBITS, child_policy, 
+                                            child_mode, &flags, 
+                                            ldlm_blocking_ast, 
+                                            ldlm_completion_ast, NULL, 
+                                            NULL, 0, NULL, child_lockh);
                 if (rc != ELDLM_OK)
                         GOTO(cleanup, rc = -EIO);
         } else {

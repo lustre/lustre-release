@@ -155,11 +155,10 @@ int echo_destroy(struct obd_export *exp, struct obdo *oa,
         RETURN(0);
 }
 
-static int echo_getattr(struct obd_export *exp, struct obdo *oa,
-                        struct lov_stripe_md *md)
+static int echo_getattr(struct obd_export *exp, struct obd_info *oinfo)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        obd_id id = oa->o_id;
+        obd_id id = oinfo->oi_oa->o_id;
 
         ENTRY;
         if (!obd) {
@@ -168,19 +167,20 @@ static int echo_getattr(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
+        if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
+                       oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
 
-        obdo_cpy_md(oa, &obd->u.echo.eo_oa, oa->o_valid);
-        oa->o_id = id;
+        obdo_cpy_md(oinfo->oi_oa, &obd->u.echo.eo_oa, oinfo->oi_oa->o_valid);
+        oinfo->oi_oa->o_id = id;
 
         RETURN(0);
 }
 
-static int echo_setattr(struct obd_export *exp, struct obdo *oa,
-                        struct lov_stripe_md *md, struct obd_trans_info *oti)
+static int echo_setattr(struct obd_export *exp, struct obd_info *oinfo,
+                        struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -191,14 +191,15 @@ static int echo_setattr(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
+        if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
+                       oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
 
-        memcpy(&obd->u.echo.eo_oa, oa, sizeof(*oa));
+        memcpy(&obd->u.echo.eo_oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
 
-        if (oa->o_id & 4) {
+        if (oinfo->oi_oa->o_id & 4) {
                 /* Save lock to force ACKed reply */
                 ldlm_lock_addref (&obd->u.echo.eo_nl_lock, LCK_NL);
                 oti->oti_ack_locks[0].mode = LCK_NL;
@@ -472,10 +473,10 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-ENOMEM);
         }
 
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_PLAIN, NULL, LCK_NL, &lock_flags,
-                              NULL, ldlm_completion_ast, NULL, NULL,
-                              NULL, 0, NULL, &obd->u.echo.eo_nl_lock);
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_PLAIN, 
+                                    NULL, LCK_NL, &lock_flags, NULL, 
+                                    ldlm_completion_ast, NULL, NULL, 
+                                    0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
         lprocfs_init_vars(echo, &lvars);

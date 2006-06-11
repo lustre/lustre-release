@@ -125,6 +125,50 @@ struct lov_stripe_md {
 #define lsm_pattern      lsm_wire.lw_pattern
 #define lsm_stripe_count lsm_wire.lw_stripe_count
 
+struct obd_info;
+
+typedef int (*obd_enqueue_update_f)(struct obd_info *oinfo, int rc);
+
+/* obd_enqueue parameters common for all levels (lov, osc). */
+struct obd_enqueue_info {
+        /* Flags used while lock handling. */
+        int   ei_flags;
+        /* Type of the lock being enqueued. */
+        __u32 ei_type;
+        /* Mode of the lock being enqueued. */
+        __u32 ei_mode;
+        /* Different callbacks for lock handling (blocking, completion,
+           glimpse */
+        void *ei_cb_bl;
+        void *ei_cb_cp;
+        void *ei_cb_gl;
+        /* Data to be passed into callbacks. */
+        void *ei_cbdata;
+        /* Request set for OSC async requests. */
+        struct ptlrpc_request_set *ei_rqset;
+};
+
+/* obd info for a particular level (lov, osc). */
+struct obd_info {
+        /* Lock policy. It keeps an extent which is specific for a particular
+         * OSC. (e.g. lov_prep_enqueue_set initialises extent of the policy,
+         * and osc_enqueue passes it into ldlm_lock_match & ldlm_cli_enqueue. */
+        ldlm_policy_data_t      oi_policy;
+        /* Lock handle specific for every OSC lock. */
+        struct lustre_handle   *oi_lockh;
+        /* lsm data specific for every OSC. */
+        struct lov_stripe_md   *oi_md;
+        /* obdo data specific for every OSC, if needed at all. */
+        struct obdo            *oi_oa;
+        /* statfs data specific for every OSC, if needed at all. */
+        struct obd_statfs      *oi_osfs;
+        /* An update callback which is called to update some data on upper
+         * level. E.g. it is used for update lsm->lsm_oinfo at every recieved
+         * request in osc level for enqueue requests. It is also possible to
+         * update some caller data from LOV layer if needed. */
+        obd_enqueue_update_f     oi_cb_up;
+};
+
 /* compare all relevant fields. */
 static inline int lov_stripe_md_cmp(struct lov_stripe_md *m1,
                                     struct lov_stripe_md *m2)
@@ -805,6 +849,9 @@ struct obd_ops {
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         cfs_time_t max_age);
+        int (*o_statfs_async)(struct obd_device *obd, struct obd_info *oinfo,
+                              unsigned long max_age,
+                              struct ptlrpc_request_set *set);
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
@@ -818,22 +865,21 @@ struct obd_ops {
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti,
                          struct obd_export *md_exp);
-        int (*o_setattr)(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *ea, struct obd_trans_info *oti);
-        int (*o_setattr_async)(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *ea, struct obd_trans_info *oti);
-        int (*o_getattr)(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *ea);
-        int (*o_getattr_async)(struct obd_export *exp, struct obdo *oa,
-                               struct lov_stripe_md *ea,
+        int (*o_setattr)(struct obd_export *exp, struct obd_info *oinfo,
+                         struct obd_trans_info *oti);
+        int (*o_setattr_async)(struct obd_export *exp, struct obd_info *oinfo,
+                               struct obd_trans_info *oti,
+                               struct ptlrpc_request_set *rqset);
+        int (*o_getattr)(struct obd_export *exp, struct obd_info *oinfo);
+        int (*o_getattr_async)(struct obd_export *exp, struct obd_info *oinfo,
                                struct ptlrpc_request_set *set);
-        int (*o_brw)(int rw, struct obd_export *exp, struct obdo *oa,
-                     struct lov_stripe_md *ea, obd_count oa_bufs,
-                     struct brw_page *pgarr, struct obd_trans_info *oti);
-        int (*o_brw_async)(int rw, struct obd_export *exp, struct obdo *oa,
-                           struct lov_stripe_md *ea, obd_count oa_bufs,
-                           struct brw_page *pgarr, struct ptlrpc_request_set *,
-                           struct obd_trans_info *oti);
+        int (*o_brw)(int rw, struct obd_export *exp, struct obd_info *oinfo,
+                     obd_count oa_bufs, struct brw_page *pgarr,
+                     struct obd_trans_info *oti);
+        int (*o_brw_async)(int rw, struct obd_export *exp,
+                           struct obd_info *oinfo, obd_count oa_bufs,
+                           struct brw_page *pgarr, struct obd_trans_info *oti,
+                           struct ptlrpc_request_set *);
         int (*o_prep_async_page)(struct obd_export *exp,
                                  struct lov_stripe_md *lsm,
                                  struct lov_oinfo *loi,
@@ -866,9 +912,9 @@ struct obd_ops {
                            struct ost_lvb *lvb, int kms_only);
         int (*o_adjust_kms)(struct obd_export *exp, struct lov_stripe_md *lsm,
                             obd_off size, int shrink);
-        int (*o_punch)(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *ea, obd_size start,
-                       obd_size end, struct obd_trans_info *oti);
+        int (*o_punch)(struct obd_export *exp, struct obd_info *oinfo,
+                       struct obd_trans_info *oti,
+                       struct ptlrpc_request_set *rqset);
         int (*o_sync)(struct obd_export *exp, struct obdo *oa,
                       struct lov_stripe_md *ea, obd_size start, obd_size end);
         int (*o_migrate)(struct lustre_handle *conn, struct lov_stripe_md *dst,
@@ -888,11 +934,8 @@ struct obd_ops {
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
                           struct obd_trans_info *oti, int rc);
-        int (*o_enqueue)(struct obd_export *, struct lov_stripe_md *,
-                         __u32 type, ldlm_policy_data_t *, __u32 mode,
-                         int *flags, void *bl_cb, void *cp_cb, void *gl_cb,
-                         void *data, __u32 lvb_len, void *lvb_swabber,
-                         struct lustre_handle *lockh);
+        int (*o_enqueue)(struct obd_export *, struct obd_info *oinfo,
+                         struct obd_enqueue_info *einfo);
         int (*o_match)(struct obd_export *, struct lov_stripe_md *, __u32 type,
                        ldlm_policy_data_t *, __u32 mode, int *flags, void *data,
                        struct lustre_handle *lockh);

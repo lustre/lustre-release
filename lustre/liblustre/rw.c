@@ -225,18 +225,28 @@ int llu_glimpse_size(struct inode *inode)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
-        int rc, flags = LDLM_FL_HAS_INTENT;
+        int rc;
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %llu\n", (long long)st->st_ino);
 
-        rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
-                         LCK_PR, &flags, llu_extent_lock_callback,
-                         ldlm_completion_ast, llu_glimpse_callback, inode,
-                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = LCK_PR;
+        einfo.ei_flags = LDLM_FL_HAS_INTENT;
+        einfo.ei_cb_bl = llu_extent_lock_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = llu_glimpse_callback;
+        einfo.ei_cbdata = inode;
+
+        oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+        oinfo.oi_lockh = &lockh;
+        oinfo.oi_md = lli->lli_smd;
+
+        rc = obd_enqueue_rqset(sbi->ll_osc_exp, &oinfo, &einfo);
         if (rc) {
                 CERROR("obd_enqueue returned rc %d, returning -EIO\n", rc);
                 RETURN(rc > 0 ? -EIO : rc);
@@ -253,8 +263,6 @@ int llu_glimpse_size(struct inode *inode)
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
                (long long)st->st_size, (long long)st->st_blocks);
 
-        obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
-
         RETURN(rc);
 }
 
@@ -265,6 +273,8 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
 {
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
         int rc;
         ENTRY;
@@ -281,10 +291,20 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                (long long)st->st_ino, policy->l_extent.start,
                policy->l_extent.end);
 
-        rc = obd_enqueue(sbi->ll_osc_exp, lsm, LDLM_EXTENT, policy, mode,
-                         &ast_flags, llu_extent_lock_callback,
-                         ldlm_completion_ast, llu_glimpse_callback, inode,
-                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, lockh);
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = mode;
+        einfo.ei_flags = ast_flags;
+        einfo.ei_cb_bl = llu_extent_lock_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = llu_glimpse_callback;
+        einfo.ei_cbdata = inode;
+
+        oinfo.oi_policy = *policy;
+        oinfo.oi_lockh = lockh;
+        oinfo.oi_md = lsm;
+
+        rc = obd_enqueue(sbi->ll_osc_exp, &oinfo, &einfo);
+        *policy = oinfo.oi_policy;
         if (rc > 0)
                 rc = -EIO;
 

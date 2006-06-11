@@ -40,7 +40,7 @@
 
 /* Merge the lock value block(&lvb) attributes from each of the stripes in a
  * file into a single lvb. It is expected that the caller initializes the
- * current atime, mtime, ctime to avoid regressing a more uptodate time on 
+ * current atime, mtime, ctime to avoid regressing a more uptodate time on
  * the local client.
  *
  * If @kms_only is set then we do not consider the recently seen size (rss)
@@ -74,7 +74,7 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                 lov_size = lov_stripe_size(lsm, tmpsize, i);
                 if (lov_size > size)
                         size = lov_size;
-                /* merge blocks, mtime, atime */ 
+                /* merge blocks, mtime, atime */
                 blocks += loi->loi_lvb.lvb_blocks;
                 if (loi->loi_lvb.lvb_mtime > current_mtime)
                         current_mtime = loi->loi_lvb.lvb_mtime;
@@ -86,9 +86,9 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         lvb->lvb_size = size;
         lvb->lvb_blocks = blocks;
-        lvb->lvb_mtime = current_mtime; 
-        lvb->lvb_atime = current_atime; 
-        lvb->lvb_ctime = current_ctime; 
+        lvb->lvb_mtime = current_mtime;
+        lvb->lvb_atime = current_atime;
+        lvb->lvb_ctime = current_ctime;
         RETURN(0);
 }
 
