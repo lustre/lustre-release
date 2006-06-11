@@ -617,23 +617,20 @@ __mdd_index_insert(const struct lu_context *ctxt, struct mdd_object *pobj,
 
 static int
 __mdd_index_delete(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   struct mdd_object *pobj,
-                   struct mdd_object *obj, const char *name,
+                   struct mdd_object *pobj, const char *name,
                    struct thandle *handle)
 {
         int rc;
         struct dt_object *next = mdd_object_child(pobj);
         ENTRY;
 
-        mdd_lock2(ctxt, pobj, obj);
-
         rc = next->do_index_ops->dio_delete(ctxt, next,
                                             (struct dt_key *)name, handle);
-        mdd_unlock2(ctxt, pobj, obj);
 
         RETURN(rc);
 }
 
+/* XXX not used anywhere
 static int
 mdd_index_delete(const struct lu_context *ctxt, struct md_object *pobj,
                  struct md_object *obj, const char *name)
@@ -650,13 +647,13 @@ mdd_index_delete(const struct lu_context *ctxt, struct md_object *pobj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_index_delete(ctxt, mdd, mdd_pobj, mdd_obj, name, handle);
+        rc = __mdd_index_delete(ctxt, mdd, mdd_pobj, name, handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
         RETURN(rc);
 }
-
+*/
 static int
 mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
          struct md_object *src_obj, const char *name)
@@ -695,14 +692,14 @@ exit:
 static void mdd_rename_lock(struct mdd_device *mdd,
                             struct mdd_object *src_pobj,
                             struct mdd_object *tgt_pobj,
-                            struct mdd_object *sobj,
+                            /*struct mdd_object *sobj,*/
                             struct mdd_object *tobj)
 {
         return;
 }
 
 static void mdd_rename_unlock(struct mdd_device *mdd, struct mdd_object *src_pobj,
-                              struct mdd_object *tgt_pobj, struct mdd_object *sobj,
+                              struct mdd_object *tgt_pobj/*, struct mdd_object *sobj*/,
                               struct mdd_object *tobj)
 {
         return;
@@ -710,13 +707,12 @@ static void mdd_rename_unlock(struct mdd_device *mdd, struct mdd_object *src_pob
 
 static int
 mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
-           struct md_object *tgt_pobj, struct md_object *sobj,
+           struct md_object *tgt_pobj, const struct lu_fid *lf,
            const char *sname, struct md_object *tobj, const char *tname)
 {
         struct mdd_device *mdd = mdo2mdd(src_pobj);
         struct mdd_object *mdd_spobj = mdo2mddo(src_pobj);
         struct mdd_object *mdd_tpobj = mdo2mddo(tgt_pobj);
-        struct mdd_object *mdd_sobj = mdo2mddo(sobj);
         struct mdd_object *mdd_tobj = mdo2mddo(tobj);
         int rc;
         struct thandle *handle;
@@ -726,18 +722,18 @@ mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_rename_lock(mdd, mdd_spobj, mdd_tpobj, mdd_sobj, mdd_tobj);
+        mdd_rename_lock(mdd, mdd_spobj, mdd_tpobj, /*mdd_sobj, */ mdd_tobj);
 
-        rc = __mdd_index_delete(ctxt, mdd, mdd_spobj, mdd_sobj, sname, handle);
+        rc = __mdd_index_delete(ctxt, mdd, mdd_spobj, sname, handle);
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = __mdd_index_delete(ctxt, mdd, mdd_tpobj, mdd_tobj, tname, handle);
+        /*TODO: if (mdd_tobj != NULL)*/
+        rc = __mdd_index_delete(ctxt, mdd, mdd_tpobj, tname, handle);
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = __mdd_index_insert(ctxt, mdd_spobj, lu_object_fid(&tobj->mo_lu),
-                                tname, handle);
+        rc = __mdd_index_insert(ctxt, mdd_tpobj, lf, tname, handle);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -747,7 +743,7 @@ mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                         GOTO(cleanup, rc);
         }
 cleanup:
-        mdd_rename_unlock(mdd, mdd_spobj, mdd_tpobj, mdd_sobj, mdd_tobj);
+        mdd_rename_unlock(mdd, mdd_spobj, mdd_tpobj, /*mdd_sobj,*/ mdd_tobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
 }

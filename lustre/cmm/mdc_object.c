@@ -176,31 +176,9 @@ static struct md_object_operations mdc_mo_ops = {
 };
 
 /* md_dir_operations */
-static int mdc_name_insert(const struct lu_context *ctx, struct md_object *mo,
-                           const char *name, const struct lu_fid *lf)
-{
-        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
-        struct mdc_thread_info *mci;
-        int rc;
-        ENTRY;
-
-        mci = lu_context_get_key(ctx, &mdc_thread_key);
-        LASSERT(mci);
-
-        mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
-        mci->mci_opdata.fid2 = *lf;
-        mci->mci_opdata.mod_time = attr->la_mtime;
-        //TODO: distinguish the name_insert and rename_tgt()
-
-        rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
-                       name, strlen(name), &mci->mci_req);
-
-        RETURN(rc);
-}
-
 static int mdc_rename_tgt(const struct lu_context *ctx,
-                          struct md_object *mo_p, struct md_object *mo_s,
-                          struct md_object *mo_t, const char *name)
+                          struct md_object *mo_p, struct md_object *mo_t,
+                          const struct lu_fid *lf, const char *name)
 {
         struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
         struct mdc_thread_info *mci;
@@ -211,7 +189,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
         LASSERT(mci);
 
         mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
-        mci->mci_opdata.fid2 = *lu_object_fid(&mo_s->mo_lu);
+        mci->mci_opdata.fid2 = *lf;
         mci->mci_opdata.mod_time = attr->la_mtime;
 
         rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
@@ -221,7 +199,6 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
 }
 
 static struct md_dir_operations mdc_dir_ops = {
-        .mdo_name_insert = mdc_name_insert,
         .mdo_rename_tgt  = mdc_rename_tgt,
 };
 

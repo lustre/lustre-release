@@ -86,10 +86,9 @@ struct md_dir_operations {
                           struct lu_attr *);
 
         int (*mdo_rename)(const struct lu_context *ctxt,
-                          struct md_object *spobj,
-                          struct md_object *tpobj, struct md_object *sobj,
-                          const char *sname, struct md_object *tobj,
-                          const char *tname);
+                          struct md_object *spobj, struct md_object *tpobj,
+                          const struct lu_fid *lf, const char *sname,
+                          struct md_object *tobj, const char *tname);
 
         int (*mdo_link)(const struct lu_context *ctxt, struct md_object *tobj,
                         struct md_object *sobj, const char *name);
@@ -103,7 +102,7 @@ struct md_dir_operations {
         int (*mdo_name_remove)(const struct lu_context *, struct md_object *,
                                const char *);
         int (*mdo_rename_tgt)(const struct lu_context *, struct md_object *,
-                              struct md_object *, struct md_object *,
+                              struct md_object *, const struct lu_fid *,
                               const char *);
 };
 
@@ -231,11 +230,11 @@ static inline int mdo_create(const struct lu_context *cx,
 
 static inline int mdo_rename(const struct lu_context *cx,
                              struct md_object *sp, struct md_object *tp,
-                             struct md_object *s, const char *sname,
+                             const struct lu_fid *lf, const char *sname,
                              struct md_object *t, const char *tname)
 {
         LASSERT(tp->mo_dir_ops->mdo_rename);
-        return tp->mo_dir_ops->mdo_rename(cx, sp, tp, s, sname, t, tname);
+        return tp->mo_dir_ops->mdo_rename(cx, sp, tp, lf, sname, t, tname);
 }
 
 static inline int mdo_link(const struct lu_context *cx, struct md_object *p,
@@ -269,16 +268,15 @@ static inline int mdo_name_remove(const struct lu_context *cx,
 }
 
 static inline int mdo_rename_tgt(const struct lu_context *cx,
-                                 struct md_object *p,
-                                 struct md_object *s, struct md_object *t,
-                                 const char *name)
+                                 struct md_object *p, struct md_object *t,
+                                 const struct lu_fid *lf, const char *name)
 {
         if (t) {
                 LASSERT(t->mo_dir_ops->mdo_rename_tgt);
-                return t->mo_dir_ops->mdo_rename_tgt(cx, p, s, t, name);
+                return t->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name);
         } else {
                 LASSERT(p->mo_dir_ops->mdo_rename_tgt);
-                return p->mo_dir_ops->mdo_rename_tgt(cx, p, s, t, name);
+                return p->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name);
         }
 }
 #endif /* _LINUX_MD_OBJECT_H */
