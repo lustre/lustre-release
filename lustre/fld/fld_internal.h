@@ -66,14 +66,22 @@ enum fld_op {
 
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
-int fld_handle_insert(const struct lu_context *ctx,
-                      struct lu_fld *fld, fidseq_t seq_num, mdsno_t mdsno);
-int fld_handle_delete(const struct lu_context *ctx,
-                      struct lu_fld *fld, fidseq_t seq_num);
-int fld_handle_lookup(const struct lu_context *ctx,
-                      struct lu_fld *fld, fidseq_t seq_num, mdsno_t *mds);
+int fld_handle_insert(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      fidseq_t seq_num, mdsno_t mdsno);
 
-int fld_iam_init(const struct lu_context *ctx, struct lu_fld *fld);
-void fld_iam_fini(const struct lu_context *ctx, struct lu_fld *fld);
+int fld_handle_delete(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      fidseq_t seq_num);
+
+int fld_handle_lookup(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      fidseq_t seq_num, mdsno_t *mds);
+
+int fld_iam_init(struct lu_server_fld *fld,
+                 const struct lu_context *ctx);
+
+void fld_iam_fini(struct lu_server_fld *fld,
+                  const struct lu_context *ctx);
 
 #endif

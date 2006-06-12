@@ -50,28 +50,7 @@
 #include <lustre_fld.h>
 #include "fld_internal.h"
 
-static int dht_mdt_hash(__u64 seq)
-{
-        return 0;
-}
-
-struct obd_export *
-get_fld_exp(struct obd_export *exp, __u64 seq)
-{
-        int seq_mds;
-
-        seq_mds = dht_mdt_hash(seq);
-        CDEBUG(D_INFO, "mds number %d\n", seq_mds);
-
-        /* get exp according to lu_seq */
-        return exp;
-}
-
 #ifdef __KERNEL__
-static int fld_handle(const struct lu_context *ctx,
-                      struct lu_fld *fld, __u32 opts,
-                      struct md_fld *mf);
-
 /* XXX: maybe these 2 items should go to sbi */
 struct fld_cache_info *fld_cache = NULL;
 
@@ -170,7 +149,50 @@ fld_cache_delete(struct fld_cache_info *fld_cache, __u64 lu_seq)
 }
 #endif
 
-static int fld_rpc(struct obd_export *exp, struct md_fld *mf, __u32 fld_op)
+static int dht_mdt_hash(__u64 seq)
+{
+        return 0;
+}
+
+static struct obd_export *
+fld_client_get_exp(struct lu_client_fld *fld, __u64 seq)
+{
+        int seq_mds;
+
+        seq_mds = dht_mdt_hash(seq);
+        CDEBUG(D_INFO, "mds number %d\n", seq_mds);
+
+        /* XXX: get exp according to lu_seq */
+        return fld->fld_exp;
+}
+
+int fld_client_init(struct lu_client_fld *fld,
+                    struct obd_export *exp)
+{
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(exp != NULL);
+        fld->fld_exp = class_export_get(exp);
+        CDEBUG(D_INFO, "Client FLD initialized\n");
+        
+        RETURN(rc);
+}
+
+void fld_client_fini(struct lu_client_fld *fld)
+{
+        ENTRY;
+        if (fld->fld_exp != NULL) {
+                class_export_put(fld->fld_exp);
+                fld->fld_exp = NULL;
+        }
+        CDEBUG(D_INFO, "Client FLD finalized\n");
+        EXIT;
+}
+
+static int
+fld_client_rpc(struct obd_export *exp,
+               struct md_fld *mf, __u32 fld_op)
 {
         struct ptlrpc_request *req;
         struct md_fld *pmf;
@@ -179,8 +201,9 @@ static int fld_rpc(struct obd_export *exp, struct md_fld *mf, __u32 fld_op)
         int size[2] = {sizeof(*op), mf_size}, rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              FLD_QUERY, 2, size, NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp),
+                              LUSTRE_MDS_VERSION, FLD_QUERY,
+                              2, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -196,7 +219,8 @@ static int fld_rpc(struct obd_export *exp, struct md_fld *mf, __u32 fld_op)
         if (rc)
                 GOTO(out_req, rc);
 
-        pmf = lustre_swab_repbuf(req, 0, sizeof(*pmf), lustre_swab_md_fld);
+        pmf = lustre_swab_repbuf(req, 0, sizeof(*pmf),
+                                 lustre_swab_md_fld);
         *mf = *pmf; 
 out_req:
         ptlrpc_req_finished(req);
@@ -204,21 +228,22 @@ out_req:
 }
 
 int
-fld_create(struct obd_export *exp, __u64 seq, __u64 mds_num)
+fld_client_create(struct lu_client_fld *fld,
+                  __u64 seq, __u64 mds_num)
 {
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
         __u32 rc;
         ENTRY;
 
-        fld_exp = get_fld_exp(exp, seq);
+        fld_exp = fld_client_get_exp(fld, seq);
         if (!fld_exp)
                 RETURN(-EINVAL);
         
         md_fld.mf_seq = seq;
         md_fld.mf_mds = mds_num;
 
-        rc = fld_rpc(fld_exp, &md_fld, FLD_CREATE);
+        rc = fld_client_rpc(fld_exp, &md_fld, FLD_CREATE);
         
 #ifdef __KERNEL__
         fld_cache_insert(fld_cache, seq, mds_num);
@@ -228,7 +253,8 @@ fld_create(struct obd_export *exp, __u64 seq, __u64 mds_num)
 }
 
 int
-fld_delete(struct obd_export *exp, __u64 seq, __u64 mds_num)
+fld_client_delete(struct lu_client_fld *fld,
+                  __u64 seq, __u64 mds_num)
 {
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
@@ -238,32 +264,33 @@ fld_delete(struct obd_export *exp, __u64 seq, __u64 mds_num)
         fld_cache_delete(fld_cache, seq);
 #endif
         
-        fld_exp = get_fld_exp(exp, seq);
+        fld_exp = fld_client_get_exp(fld, seq);
         if (!fld_exp)
                 RETURN(-EINVAL);
 
         md_fld.mf_seq = seq;
         md_fld.mf_mds = mds_num;
 
-        rc = fld_rpc(fld_exp, &md_fld, FLD_DELETE);
+        rc = fld_client_rpc(fld_exp, &md_fld, FLD_DELETE);
         RETURN(rc);
 }
 
 int
-fld_get(struct obd_export *exp, __u64 lu_seq, __u64 *mds_num)
+fld_client_get(struct lu_client_fld *fld,
+               __u64 lu_seq, __u64 *mds_num)
 {
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
         int    vallen, rc;
 
-        fld_exp = get_fld_exp(exp, lu_seq);
+        fld_exp = fld_client_get_exp(fld, lu_seq);
         if (!fld_exp);
                 RETURN(-EINVAL);
 
         md_fld.mf_seq = lu_seq;
         vallen = sizeof(struct md_fld);
 
-        rc = fld_rpc(fld_exp, &md_fld, FLD_GET);
+        rc = fld_client_rpc(fld_exp, &md_fld, FLD_GET);
         if (rc == 0)
                 *mds_num = md_fld.mf_mds;
 
@@ -272,23 +299,24 @@ fld_get(struct obd_export *exp, __u64 lu_seq, __u64 *mds_num)
 
 /* lookup fid in the namespace of pfid according to the name */
 int
-fld_lookup(struct obd_export *exp, __u64 lu_seq, __u64 *mds_num)
+fld_client_lookup(struct lu_client_fld *fld,
+                  __u64 lu_seq, __u64 *mds_num)
 {
-        struct fld_cache *fld;
+        struct fld_cache *fld_entry;
         int rc;
         ENTRY;
 
 #ifdef __KERNEL__
         /* lookup it in the cache */
-        fld = fld_cache_lookup(fld_cache, lu_seq);
-        if (fld != NULL) {
-                *mds_num = fld->fld_mds;
+        fld_entry = fld_cache_lookup(fld_cache, lu_seq);
+        if (fld_entry != NULL) {
+                *mds_num = fld_entry->fld_mds;
                 RETURN(0);
         }
 #endif
         
         /* can not find it in the cache */
-        rc = fld_get(exp, lu_seq, mds_num);
+        rc = fld_client_get(fld, lu_seq, mds_num);
         if (rc)
                 RETURN(rc);
 
@@ -343,8 +371,35 @@ static void __exit fld_mod_exit(void)
 static struct fld_list fld_list_head;
 
 static int
+fld_server_handle(struct lu_server_fld *fld,
+                  const struct lu_context *ctx,
+                  __u32 opts, struct md_fld *mf)
+{
+        int rc;
+        ENTRY;
+
+        switch (opts) {
+        case FLD_CREATE:
+                rc = fld_handle_insert(fld, ctx, mf->mf_seq, mf->mf_mds);
+                break;
+        case FLD_DELETE:
+                rc = fld_handle_delete(fld, ctx, mf->mf_seq);
+                break;
+        case FLD_GET:
+                rc = fld_handle_lookup(fld, ctx, mf->mf_seq, &mf->mf_mds);
+                break;
+        default:
+                rc = -EINVAL;
+                break;
+        }
+        RETURN(rc);
+
+}
+
+static int
 fld_req_handle0(const struct lu_context *ctx,
-                struct lu_fld *fld, struct ptlrpc_request *req)
+                struct lu_server_fld *fld,
+                struct ptlrpc_request *req)
 {
         struct md_fld *in;
         struct md_fld *out;
@@ -367,7 +422,7 @@ fld_req_handle0(const struct lu_context *ctx,
                         LASSERT(out != NULL);
                         *out = *in;
 
-                        rc = fld_handle(ctx, fld, *opt, out);
+                        rc = fld_server_handle(fld, ctx, *opt, out);
                 } else {
                         CERROR("Cannot unpack mf\n");
                 }
@@ -416,8 +471,8 @@ out:
 }
 
 int
-fld_server_init(const struct lu_context *ctx,
-                struct lu_fld *fld,
+fld_server_init(struct lu_server_fld *fld,
+                const struct lu_context *ctx,
                 struct dt_device *dt)
 {
         int result;
@@ -437,7 +492,7 @@ fld_server_init(const struct lu_context *ctx,
         INIT_LIST_HEAD(&fld_list_head.fld_list);
         spin_lock_init(&fld_list_head.fld_lock);
 
-        result = fld_iam_init(ctx, fld);
+        result = fld_iam_init(fld, ctx);
 
         if (result == 0) {
                 fld->fld_service =
@@ -452,14 +507,16 @@ fld_server_init(const struct lu_context *ctx,
         }
 
         if (result != 0)
-                fld_server_fini(ctx, fld);
+                fld_server_fini(fld, ctx);
+        else
+                CDEBUG(D_INFO, "Server FLD initialized\n");
         return result;
 }
 EXPORT_SYMBOL(fld_server_init);
 
 void
-fld_server_fini(const struct lu_context *ctx,
-                struct lu_fld *fld)
+fld_server_fini(struct lu_server_fld *fld,
+                const struct lu_context *ctx)
 {
         struct list_head *pos, *n;
 
@@ -478,40 +535,16 @@ fld_server_fini(const struct lu_context *ctx,
         spin_unlock(&fld_list_head.fld_lock);
         if (fld->fld_dt != NULL) {
                 lu_device_put(&fld->fld_dt->dd_lu_dev);
-                fld_iam_fini(ctx, fld);
+                fld_iam_fini(fld, ctx);
                 fld->fld_dt = NULL;
         }
+        CDEBUG(D_INFO, "Server FLD finalized\n");
 }
 EXPORT_SYMBOL(fld_server_fini);
 
-static int
-fld_handle(const struct lu_context *ctx,
-           struct lu_fld *fld, __u32 opts, struct md_fld *mf)
-{
-        int rc;
-        ENTRY;
-
-        switch (opts) {
-        case FLD_CREATE:
-                rc = fld_handle_insert(ctx, fld, mf->mf_seq, mf->mf_mds);
-                break;
-        case FLD_DELETE:
-                rc = fld_handle_delete(ctx, fld, mf->mf_seq);
-                break;
-        case FLD_GET:
-                rc = fld_handle_lookup(ctx, fld, mf->mf_seq, &mf->mf_mds);
-                break;
-        default:
-                rc = -EINVAL;
-                break;
-        }
-        RETURN(rc);
-
-}
-
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre fld Prototype");
+MODULE_DESCRIPTION("Lustre FLD");
 MODULE_LICENSE("GPL");
 
-cfs_module(mdd, "0.0.3", fld_mod_init, fld_mod_exit);
+cfs_module(mdd, "0.0.4", fld_mod_init, fld_mod_exit);
 #endif

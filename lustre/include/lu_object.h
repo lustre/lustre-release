@@ -429,15 +429,15 @@ struct lu_site {
          *
          * yes, it's heavy.
          */
-        spinlock_t         ls_guard;
+        spinlock_t            ls_guard;
         /*
          * Hash-table where objects are indexed by fid.
          */
-        struct hlist_head *ls_hash;
+        struct hlist_head    *ls_hash;
         /*
          * Bit-mask for hash-table size.
          */
-        int                ls_hash_mask;
+        int                   ls_hash_mask;
 
 
         /*
@@ -448,27 +448,27 @@ struct lu_site {
          * the ->ls_lru.prev (this is due to the non-existence of
          * list_for_each_entry_safe_reverse()).
          */
-        struct list_head   ls_lru;
+        struct list_head      ls_lru;
         /*
          * Total number of objects in this site. Protected by ->ls_guard.
          */
-        unsigned           ls_total;
+        unsigned              ls_total;
         /*
          * Total number of objects in this site with reference counter greater
          * than 0. Protected by ->ls_guard.
          */
-        unsigned           ls_busy;
+        unsigned              ls_busy;
 
         /*
          * Top-level device for this stack.
          */
-        struct lu_device  *ls_top_dev;
+        struct lu_device     *ls_top_dev;
         /* current server index */
-        __u32             ls_node_id;
+        __u32                 ls_node_id;
         /*
          * Fid location database
          */
-        struct lu_fld        *ls_fld;
+        struct lu_server_fld *ls_fld;
 
         /*
          * Server Seq Manager

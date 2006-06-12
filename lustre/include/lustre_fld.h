@@ -22,10 +22,11 @@
 
 #ifndef __LINUX_FLD_H
 #define __LINUX_FLD_H
+
 /*
- * fld (fid location database) interface.
+ * FLD (Fid Location Database) interface.
  */
-struct lu_fld {
+struct lu_server_fld {
         struct proc_dir_entry   *fld_proc_entry;
         struct ptlrpc_service   *fld_service;
         struct dt_device        *fld_dt;
@@ -34,8 +35,35 @@ struct lu_fld {
         struct dt_index_cookie  *fld_cookie;
 };
 
-int  fld_server_init(const struct lu_context *ctx, struct lu_fld *fld,
-                     struct dt_device *dt);
-void fld_server_fini(const struct lu_context *ctx, struct lu_fld *fld);
+struct lu_client_fld {
+        struct proc_dir_entry   *fld_proc_entry;
+        struct obd_export       *fld_exp;
+};
+
+/* server methods */
+int fld_server_init(struct lu_server_fld *fld,
+                    const struct lu_context *ctx, 
+                    struct dt_device *dt);
+
+void fld_server_fini(struct lu_server_fld *fld,
+                     const struct lu_context *ctx);
+
+/* client methods */
+int fld_client_init(struct lu_client_fld *fld,
+                    struct obd_export *exp);
+
+void fld_client_fini(struct lu_client_fld *fld);
+
+int fld_client_create(struct lu_client_fld *fld,
+                      __u64 seq, __u64 mds_num);
+
+int fld_client_delete(struct lu_client_fld *fld,
+                      __u64 seq, __u64 mds_num);
+
+int fld_client_get(struct lu_client_fld *fld,
+                   __u64 lu_seq, __u64 *mds_num);
+
+int fld_client_lookup(struct lu_client_fld *fld,
+                      __u64 lu_seq, __u64 *mds_num);
 
 #endif

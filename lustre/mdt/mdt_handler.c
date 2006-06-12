@@ -1590,7 +1590,7 @@ static int mdt_fld_init(const struct lu_context *ctx, struct mdt_device *m)
         OBD_ALLOC_PTR(ls->ls_fld);
 
         if (ls->ls_fld != NULL)
-                rc = fld_server_init(ctx, ls->ls_fld, m->mdt_bottom);
+                rc = fld_server_init(ls->ls_fld, ctx, m->mdt_bottom);
         else
                 rc = -ENOMEM;
 
@@ -1603,7 +1603,7 @@ static int mdt_fld_fini(const struct lu_context *ctx, struct mdt_device *m)
         ENTRY;
         
         if (ls && ls->ls_fld) {
-                fld_server_fini(ctx, ls->ls_fld);
+                fld_server_fini(ls->ls_fld, ctx);
                 OBD_FREE_PTR(ls->ls_fld);
         }
         RETURN(0);
