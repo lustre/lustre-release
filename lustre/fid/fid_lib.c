@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/fid/fid_misc.c
+ *  lustre/fid/fid_lib.c
  *  Miscellaneous fid functions.
  *
  *  Copyright (c) 2006 Cluster File Systems, Inc.
@@ -26,10 +26,18 @@
  *   license text for more details.
  */
 
-#include <linux/module.h>
-#include <lustre/lustre_idl.h>
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
+#define DEBUG_SUBSYSTEM S_FID
 
-#include <obd.h>
+#ifdef __KERNEL__
+# include <libcfs/libcfs.h>
+# include <linux/module.h>
+#else /* __KERNEL__ */
+# include <liblustre.h>
+#endif
+
 #include <lustre_fid.h>
 
 void fid_to_le(struct lu_fid *dst, const struct lu_fid *src)

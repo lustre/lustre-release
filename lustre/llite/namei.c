@@ -547,6 +547,11 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         struct inode *inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct md_op_data op_data = { { 0 } };
+        struct lu_placement_hint hint = {
+                .ph_pname = NULL,
+                .ph_cname = name,
+                .ph_opc = LUSTRE_OPC_MKNOD
+        };
         int err;
         ENTRY;
 
@@ -564,6 +569,9 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
+                err = ll_fid_md_alloc(sbi, &op_data.fid2, &hint);
+                if (err)
+                        break;
                 ll_prepare_md_op_data(&op_data, dir, NULL, name->name,
                                       name->len, 0);
                 err = md_create(sbi->ll_md_exp, &op_data, NULL, 0, mode,

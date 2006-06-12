@@ -63,6 +63,7 @@ build_obj_list ../lov liblov.a
 build_obj_list ../obdecho libobdecho.a
 build_obj_list ../osc libosc.a
 build_obj_list ../mdc libmdc.a
+build_obj_list ../fid libfid.a
 build_obj_list ../ptlrpc libptlrpc.a
 build_obj_list ../obdclass liblustreclass.a
 build_obj_list ../lvfs liblvfs.a

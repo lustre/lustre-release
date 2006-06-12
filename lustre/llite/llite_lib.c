@@ -244,10 +244,17 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                                  strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
 #endif
 
+        /* init FIDs framework */
+        err = ll_fid_md_init(sbi);
+        if (err) {
+                CERROR("can't init FIDs framework, rc %d\n", err);
+                GOTO(out_mdc, err);
+        }
+        
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
-                GOTO(out_mdc, err = -ENODEV);
+                GOTO(out_md_fid, err = -ENODEV);
         }
 
         data->ocd_connect_flags =
@@ -298,10 +305,17 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                         GOTO(out_osc, -ENOMEM);
         }
 
+        /* init FIDs framework */
+        err = ll_fid_dt_init(sbi);
+        if (err) {
+                CERROR("can't init FIDs framework, rc %d\n", err);
+                GOTO(out_osc, err);
+        }
+        
         err = md_getstatus(sbi->ll_md_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_dt_fid, err);
         }
         CDEBUG(D_SUPER, "rootfid "DFID3"\n", PFID3(&rootfid));
         sbi->ll_root_fid = rootfid;
@@ -329,7 +343,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_osc, err);
         }
 
-        LASSERT(fid_oid(&sbi->ll_root_fid) != 0);
+        LASSERT(fid_is_sane(&sbi->ll_root_fid));
         root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &md);
         ptlrpc_req_finished(request);
 
@@ -363,8 +377,12 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 out_root:
         if (root)
                 iput(root);
+out_dt_fid:
+        obd_fid_fini(sbi->ll_dt_exp);
 out_osc:
         obd_disconnect(sbi->ll_dt_exp);
+out_md_fid:
+        obd_fid_fini(sbi->ll_md_exp);
 out_mdc:
         obd_disconnect(sbi->ll_md_exp);
 out:
@@ -502,6 +520,7 @@ void client_common_put_super(struct super_block *sb)
         prune_deathrow(sbi, 0);
 
         list_del(&sbi->ll_conn_chain);
+        ll_fid_dt_fini(sbi);
         obd_disconnect(sbi->ll_dt_exp);
 
         lprocfs_unregister_mountpoint(sbi);
@@ -510,6 +529,7 @@ void client_common_put_super(struct super_block *sb)
                 sbi->ll_proc_root = NULL;
         }
 
+        ll_fid_md_fini(sbi);
         obd_disconnect(sbi->ll_md_exp);
 
         lustre_throw_orphan_dentries(sb);

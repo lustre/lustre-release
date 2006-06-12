@@ -98,6 +98,7 @@
 #define MGS_REPLY_PORTAL               27
 #define OST_REQUEST_PORTAL             28
 #define MDS_FLD_PORTAL                 29
+#define MDS_SEQ_PORTAL                 30
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -123,6 +124,18 @@
 #define LUSTRE_LOG_VERSION  0x00050000
 #define LUSTRE_MGS_VERSION  0x00060000
 
+struct lu_range {
+        __u64 lr_start;
+        __u64 lr_end;
+};
+
+static inline int range_is_sane(struct lu_range *r)
+{
+        if (r->lr_end >= r->lr_start)
+                return 1;
+        return 0;
+}
+
 struct lu_fid {
         __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
                        * objects, thus even if one sequence has one object we
@@ -137,12 +150,6 @@ struct lu_fid {
 enum {
         LUSTRE_ROOT_FID_SEQ  = 1ULL, /* XXX: should go into mkfs. */
         LUSTRE_ROOT_FID_OID  = 2UL,  /* XXX: should go into mkfs. */
-
-        /* maximal objects in sequence */
-        LUSTRE_FID_SEQ_WIDTH = 10000,
-
-        /* range of seqs for one MDS */
-        LUSTRE_SEQ_RANGE = 1000,
 
         /* initial fid id value */
         LUSTRE_FID_INIT_OID  = 1UL
@@ -171,6 +178,11 @@ static inline int fid_seq_is_sane(__u64 seq)
         return seq != 0;
 }
 
+static inline void fid_zero(struct lu_fid *fid)
+{
+        memset(fid, 0, sizeof(*fid));
+}
+
 static inline int fid_is_sane(const struct lu_fid *fid)
 {
         return
@@ -185,7 +197,8 @@ static inline int fid_is_sane(const struct lu_fid *fid)
         fid_oid(fid), \
         fid_ver(fid)
 
-extern void lustre_swab_lu_fid (struct lu_fid *fid);
+extern void lustre_swab_lu_fid(struct lu_fid *fid);
+extern void lustre_swab_lu_range(struct lu_range *range);
 
 static inline int lu_fid_eq(const struct lu_fid *f0,
                             const struct lu_fid *f1)
@@ -372,11 +385,11 @@ struct obd_connect_data {
         __u32 ocd_index;                /* LOV index to connect to */
         __u32 ocd_unused;
         __u64 ocd_ibits_known;          /* inode bits this client understands */
-        __u64 ocd_seq;                  /* sequence info for client */
         __u64 padding2;                 /* also fix lustre_swab_connect */
         __u64 padding3;                 /* also fix lustre_swab_connect */
         __u64 padding4;                 /* also fix lustre_swab_connect */
         __u64 padding5;                 /* also fix lustre_swab_connect */
+        __u64 padding6;                 /* also fix lustre_swab_connect */
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
@@ -1122,6 +1135,17 @@ enum fld_rpc_opc {
         FLD_QUERY                       = 600,
         FLD_LAST_OPC,
         FLD_FIRST_OPC                   = FLD_QUERY
+};
+
+enum seq_rpc_opc {
+        SEQ_QUERY                       = 700,
+        SEQ_LAST_OPC,
+        SEQ_FIRST_OPC                   = SEQ_QUERY
+};
+
+enum seq_op {
+        SEQ_ALLOC_SUPER = 0,
+        SEQ_ALLOC_META = 1
 };
 
 /*

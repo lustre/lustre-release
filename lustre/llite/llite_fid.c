@@ -28,6 +28,7 @@
 #include <linux/random.h>
 #include <linux/version.h>
 
+#include <lustre_fid.h>
 #include <lustre_lite.h>
 #include <lustre_ha.h>
 #include <lustre_ver.h>
@@ -67,14 +68,75 @@ int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
         RETURN(ll_fid_alloc(sbi->ll_dt_exp, fid, hint));
 }
 
+static int ll_fid_init(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        rc = obd_fid_init(exp);
+        if (rc) {
+                CERROR("cannot initialize FIDs framework, "
+                       "rc %d\n", rc);
+                RETURN(rc);
+        }
+
+        RETURN(rc);
+}
+
+int ll_fid_md_init(struct ll_sb_info *sbi)
+{
+        ENTRY;
+        RETURN(ll_fid_init(sbi->ll_md_exp));
+}
+
+int ll_fid_dt_init(struct ll_sb_info *sbi)
+{
+#if 0
+        ENTRY;
+        RETURN(ll_fid_init(sbi->ll_dt_exp));
+#endif
+        /* XXX: enable this again when OSD is starting sequence-management
+         * service. */
+        ENTRY;
+        RETURN(0);
+}
+
+static int ll_fid_fini(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        rc = obd_fid_fini(exp);
+        if (rc) {
+                CERROR("cannot finalize FIDs framework, "
+                       "rc %d\n", rc);
+                RETURN(rc);
+        }
+
+        RETURN(rc);
+}
+
+int ll_fid_md_fini(struct ll_sb_info *sbi)
+{
+        ENTRY;
+        RETURN(ll_fid_fini(sbi->ll_md_exp));
+}
+
+int ll_fid_dt_fini(struct ll_sb_info *sbi)
+{
+        ENTRY;
+        RETURN(ll_fid_fini(sbi->ll_dt_exp));
+}
+
 /* build inode number on passed @fid */
-ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid)
+ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
+                       struct lu_fid *fid)
 {
         ino_t ino;
         ENTRY;
 
         /* very stupid and having many downsides inode allocation algorithm
          * based on fid. */
-        ino = (fid_seq(fid) - 1) * LUSTRE_FID_SEQ_WIDTH + fid_oid(fid);
+        ino = (fid_seq(fid) - 1) * LUSTRE_SEQ_WIDTH + fid_oid(fid);
         RETURN(ino);
 }

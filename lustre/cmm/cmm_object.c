@@ -32,6 +32,7 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <lustre_fid.h>
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
@@ -40,7 +41,7 @@ static int cmm_fld_lookup(const struct lu_fid *fid)
 {
         int rc;
         /* temporary hack for proto mkdir */
-        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_RANGE;
+        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_SUPER_CHUNK;
         CWARN("Get MDS %d for sequence: "LPU64"\n", rc, fid_seq(fid));
         RETURN(rc);
 }
@@ -620,7 +621,7 @@ static int cmm_fld_lookup(const struct lu_fid *fid)
 {
         int rc;
         /* temporary hack for proto mkdir */
-        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_RANGE;
+        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_SUPER_CHUNK;
         CWARN("Get MDS %d for sequence: "LPU64"\n", rc, fid_seq(fid));
         RETURN(rc);
 }

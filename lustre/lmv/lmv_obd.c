@@ -670,6 +670,42 @@ static int lmv_placment_policy(struct obd_device *obd,
         RETURN(0);
 }
 
+static int lmv_fid_init(struct obd_export *exp)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct lmv_obd *lmv = &obd->u.lmv;
+        int i, rc = 0;
+        ENTRY;
+        
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                if (lmv->tgts[i].ltd_exp == NULL)
+                        continue;
+                
+                rc = obd_fid_init(lmv->tgts[i].ltd_exp);
+                if (rc)
+                        RETURN(rc);
+        }
+        RETURN(rc);
+}
+
+static int lmv_fid_fini(struct obd_export *exp)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct lmv_obd *lmv = &obd->u.lmv;
+        int i, rc = 0;
+        ENTRY;
+
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                if (lmv->tgts[i].ltd_exp == NULL)
+                        continue;
+                
+                rc = obd_fid_fini(lmv->tgts[i].ltd_exp);
+                if (rc)
+                        break;
+        }
+        RETURN(rc);
+}
+
 static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                          struct lu_placement_hint *hint)
 {
@@ -2385,6 +2421,8 @@ struct obd_ops lmv_obd_ops = {
         .o_packmd               = lmv_packmd,
         .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,
+        .o_fid_init             = lmv_fid_init,
+        .o_fid_fini             = lmv_fid_fini,
         .o_fid_alloc            = lmv_fid_alloc,
         .o_fid_delete           = lmv_fid_delete,
         .o_iocontrol            = lmv_iocontrol

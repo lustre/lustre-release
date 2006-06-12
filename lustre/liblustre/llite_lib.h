@@ -37,8 +37,6 @@ struct llu_sb_info {
         struct obd_uuid          ll_mds_uuid;
         struct obd_uuid          ll_mds_peer_uuid;
         char                    *ll_instance;
-
-        struct lu_fid            ll_fid;
 };
 
 #define LL_SBI_NOLCK            0x1
@@ -241,9 +239,20 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
 			       char *buf, size_t nbytes);
 
 /* liblustre/llite_fid.c*/
-int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid);
-int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid);
-unsigned long llu_fid_build_ino(struct llu_sb_info *sbi, struct lu_fid *fid);
+int llu_fid_md_init(struct llu_sb_info *sbi);
+int llu_fid_dt_init(struct llu_sb_info *sbi);
+
+int llu_fid_md_fini(struct llu_sb_info *sbi);
+int llu_fid_dt_fini(struct llu_sb_info *sbi);
+
+int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid, 
+                     struct lu_placement_hint *hint);
+
+int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid,
+                     struct lu_placement_hint *hint);
+
+unsigned long llu_fid_build_ino(struct llu_sb_info *sbi, 
+                                struct lu_fid *fid);
 
 /* ext2 related */
 #define EXT2_NAME_LEN (255)

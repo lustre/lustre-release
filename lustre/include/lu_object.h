@@ -470,6 +470,19 @@ struct lu_site {
          */
         struct lu_fld        *ls_fld;
 
+        /*
+         * Server Seq Manager
+         */
+        struct lu_server_seq *ls_server_seq;
+
+        /*
+         * Clienbt Seq Manager
+         */
+        struct lu_client_seq *ls_client_seq;
+
+        /* sequence controller node */
+        struct obd_export    *ls_controller;
+
         /* statistical counters. Protected by nothing, races are accepted. */
         struct {
                 __u32 s_created;

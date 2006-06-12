@@ -37,6 +37,7 @@
 
 #include <lustre/lustre_idl.h>
 #include <obd_support.h>
+#include <lustre_fid.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_dlm.h>
@@ -53,7 +54,7 @@ int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid)
         LASSERT(fid_is_sane(fid));
 
         /* temporary hack until fld will works */
-        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_RANGE;
+        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_SUPER_CHUNK;
         CWARN("LMV: got MDS %d for sequence: "LPU64"\n", rc, fid_seq(fid));
         RETURN(rc);
 }

@@ -38,6 +38,7 @@
 
 #include <obd_class.h>
 #include <lustre_dlm.h>
+#include <lustre_fid.h>
 #include <lustre_mds.h> /* for LUSTRE_POSIX_ACL_MAX_SIZE */
 #include <md_object.h>
 #include <lprocfs_status.h>
@@ -1087,28 +1088,48 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         RETURN(rc);
 }
 
+static int mdc_fid_init(struct obd_export *exp)
+{
+        struct client_obd *cli = &exp->exp_obd->u.cli;
+        int rc;
+        ENTRY;
+
+        OBD_ALLOC_PTR(cli->cl_seq);
+        if (cli->cl_seq == NULL)
+                RETURN(-ENOMEM);
+
+        /* init client side of sequence-manager */
+        rc = seq_client_init(cli->cl_seq, exp,
+                             LUSTRE_CLI_SEQ_CLIENT);
+        if (rc) {
+                OBD_FREE_PTR(cli->cl_seq);
+                cli->cl_seq = NULL;
+        }
+        RETURN(rc);
+}
+
+static int mdc_fid_fini(struct obd_export *exp)
+{
+        struct client_obd *cli = &exp->exp_obd->u.cli;
+        ENTRY;
+
+        if (cli->cl_seq != NULL) {
+                seq_client_fini(cli->cl_seq);
+                OBD_FREE_PTR(cli->cl_seq);
+                cli->cl_seq = NULL;
+        }
+        
+        RETURN(0);
+}
+
 static int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                          struct lu_placement_hint *hint)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
-        int rc = 0;
+        struct lu_client_seq *seq = cli->cl_seq;
+
         ENTRY;
-
-        LASSERT(fid != NULL);
-        LASSERT(hint != NULL);
-        LASSERT(fid_seq_is_sane(fid_seq(&cli->cl_fid)));
-
-        spin_lock(&cli->cl_fid_lock);
-        if (fid_oid(&cli->cl_fid) < LUSTRE_FID_SEQ_WIDTH) {
-                cli->cl_fid.f_oid += 1;
-                *fid = cli->cl_fid;
-        } else {
-                CERROR("sequence is exhausted. Switching to "
-                       "new one is not yet implemented\n");
-                rc = -ERANGE;
-        }
-        spin_unlock(&cli->cl_fid_lock);
-        RETURN(rc);
+        RETURN(seq_client_alloc_fid(seq, fid));
 }
 
 static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
@@ -1259,6 +1280,8 @@ struct obd_ops mdc_obd_ops = {
         .o_statfs           = mdc_statfs,
         .o_pin              = mdc_pin,
         .o_unpin            = mdc_unpin,
+        .o_fid_init         = mdc_fid_init,
+        .o_fid_fini         = mdc_fid_fini,
         .o_fid_alloc        = mdc_fid_alloc,
         .o_import_event     = mdc_import_event,
         .o_llog_init        = mdc_llog_init,

@@ -45,12 +45,14 @@ struct fld_cache_info {
         spinlock_t fld_lock;
         int fld_hash_mask;
 };
+
 /*XXX use linked list temp for fld in this prototype*/
 struct fld_list {
         struct list_head fld_list;
         spinlock_t       fld_lock;
 };
-struct fld_item{
+
+struct fld_item {
         struct list_head fld_list;
         __u64 fld_seq;
         __u64 fld_mds;

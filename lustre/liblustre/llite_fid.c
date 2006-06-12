@@ -49,39 +49,96 @@
 #include "lutil.h"
 #include "llite_lib.h"
 #include <lustre_ver.h>
+#include <lustre_fid.h>
 
-/* allocates passed fid, that is assigns f_num and f_seq to the @fid */
-int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid)
+static int llu_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
+                         struct lu_placement_hint *hint)
 {
+        int rc;
         ENTRY;
-
-        if (sbi->ll_fid.f_oid < LUSTRE_FID_SEQ_WIDTH) {
-                sbi->ll_fid.f_oid += 1;
-                *fid = sbi->ll_fid;
-        } else {
-                CERROR("sequence is exhausted. Switching to "
-                       "new one is not yet implemented\n");
-                RETURN(-ERANGE);
-        }
-        
-        RETURN(0);
+        rc = obd_fid_alloc(exp, fid, hint);
+        RETURN(rc);
 }
 
 /* allocates passed fid, that is assigns f_num and f_seq to the @fid */
-int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid)
+int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid,
+                     struct lu_placement_hint *hint)
 {
         ENTRY;
-        RETURN(-EOPNOTSUPP);
+        RETURN(llu_fid_alloc(sbi->ll_md_exp, fid, hint));
+}
+
+/* allocates passed fid, that is assigns f_num and f_seq to the @fid */
+int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid,
+                     struct lu_placement_hint *hint)
+{
+        ENTRY;
+        RETURN(llu_fid_alloc(sbi->ll_dt_exp, fid, hint));
+}
+
+static int llu_fid_init(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        rc = obd_fid_init(exp);
+        if (rc) {
+                CERROR("cannot initialize FIDs framework, "
+                       "rc %d\n", rc);
+                RETURN(rc);
+        }
+
+        RETURN(rc);
+}
+
+int llu_fid_md_init(struct llu_sb_info *sbi)
+{
+        ENTRY;
+        RETURN(llu_fid_init(sbi->ll_md_exp));
+}
+
+int llu_fid_dt_init(struct llu_sb_info *sbi)
+{
+        ENTRY;
+        RETURN(llu_fid_init(sbi->ll_dt_exp));
+}
+
+static int llu_fid_fini(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        rc = obd_fid_fini(exp);
+        if (rc) {
+                CERROR("cannot finalize FIDs framework, "
+                       "rc %d\n", rc);
+                RETURN(rc);
+        }
+
+        RETURN(rc);
+}
+
+int llu_fid_md_fini(struct llu_sb_info *sbi)
+{
+        ENTRY;
+        RETURN(llu_fid_fini(sbi->ll_md_exp));
+}
+
+int llu_fid_dt_fini(struct llu_sb_info *sbi)
+{
+        ENTRY;
+        RETURN(llu_fid_fini(sbi->ll_dt_exp));
 }
 
 /* build inode number on passed @fid */
-unsigned long llu_fid_build_ino(struct llu_sb_info *sbi, struct lu_fid *fid)
+unsigned long llu_fid_build_ino(struct llu_sb_info *sbi,
+                                struct lu_fid *fid)
 {
         unsigned long ino;
         ENTRY;
 
         /* very stupid and having many downsides inode allocation algorithm
          * based on fid. */
-        ino = (fid_seq(fid) - 1) * LUSTRE_FID_SEQ_WIDTH + fid_oid(fid);
+        ino = (fid_seq(fid) - 1) * LUSTRE_SEQ_WIDTH + fid_oid(fid);
         RETURN(ino);
 }

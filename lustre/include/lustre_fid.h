@@ -31,47 +31,121 @@
 #include <libcfs/list.h>
 #include <libcfs/kp30.h>
 
-struct lu_context;
-struct lu_seq_mgr_ops {
-        int (*smo_read) (const struct lu_context *, void *opaque, __u64 *);
-        int (*smo_write) (const struct lu_context *, void *opaque, __u64 *);
-};
-
-struct lu_seq_mgr {
-        /* seq management fields */
-        struct semaphore       m_seq_sem;
-        /* each MDS has own range of seqs ended with this value
-         * if it is overflowed the new one should be got from master node */
-        __u64                  m_seq_last;
-        /* last allocated seq */
-        __u64                  m_seq;
-        /* ops related stuff */
-        void                  *m_opaque;
-        struct lu_seq_mgr_ops *m_ops;
-};
-
-/* init/fini methods */
-struct lu_seq_mgr *seq_mgr_init(struct lu_seq_mgr_ops *, void *);
-void seq_mgr_fini(struct lu_seq_mgr *);
-
-/* seq management methods */
-int seq_mgr_setup(const struct lu_context *, struct lu_seq_mgr *);
-int seq_mgr_read(const struct lu_context *, struct lu_seq_mgr *);
-int seq_mgr_write(const struct lu_context *, struct lu_seq_mgr *);
-int seq_mgr_alloc(const struct lu_context *, struct lu_seq_mgr *, __u64 *);
-int seq_mgr_range_alloc(const struct lu_context *,
-                        struct lu_seq_mgr *, __u64 *);
 struct lu_site;
-#if 0
-int fid_is_local(struct lu_site *site, const struct lu_fid *fid);
-#else
-static inline int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
-{
-        return 1;
-}
+struct lu_context;
+
+/* start seq number */
+#define LUSTRE_SEQ_SPACE_START  0x400
+
+/* maximal posible seq number */
+#define LUSTRE_SEQ_SPACE_LIMIT  ((__u64)~0ULL)
+
+/* this is how may FIDs may be allocated in one sequence. */
+#define LUSTRE_SEQ_WIDTH 0x00000000000002800
+
+/* how many sequences may be allocate for meta-sequence (this is 10240
+ * sequences). */
+#define LUSTRE_SEQ_META_CHUNK 0x00000000000002800
+
+/* how many sequences may be allocate for super-sequence (this is 10240 * 10240
+ * sequences), what means that one alloaction for super-sequence allows to
+ * allocate 10240 meta-sequences and each of them may have 10240 sequences. */
+#define LUSTRE_SEQ_SUPER_CHUNK (LUSTRE_SEQ_META_CHUNK * LUSTRE_SEQ_META_CHUNK)
+
+/* client sequence manager interface */
+struct lu_client_seq {
+        /* sequence-controller export. */
+        struct obd_export      *seq_exp;
+        struct semaphore        seq_sem;
+
+        /* different flags. */
+        int                     seq_flags;
+
+        /* range of allowed for allocation sequeces. When using lu_client_seq on
+         * clients, this contains meta-sequence range. And for servers this
+         * contains super-sequence range. */
+        struct lu_range         seq_cl_range;
+
+        /* seq related proc */
+        struct proc_dir_entry  *seq_proc_entry;
+
+        /* this holds last allocated fid in last obtained seq */
+        struct lu_fid           seq_fid;
+};
+
+#ifdef __KERNEL__
+/* server sequence manager interface */
+struct lu_server_seq {
+        /* super-sequence range, all super-sequences for other servers are
+         * allocated from it. */
+        struct lu_range         seq_ss_range;
+        
+        /* meta-sequence range, all meta-sequences for clients are allocated
+         * from it. */
+        struct lu_range         seq_ms_range;
+
+        /* device for server side seq manager needs (saving sequences to backing
+         * store). */
+        struct dt_device       *seq_dev;
+
+        /* different flags: LUSTRE_SEQ_CONTROLLER, etc. */
+        int                     seq_flags;
+
+        /* seq related proc */
+        struct proc_dir_entry  *seq_proc_entry;
+
+        /* server side seq service */
+        struct ptlrpc_service  *seq_service;
+
+        /* client interafce to request controller */
+        struct lu_client_seq   *seq_cli;
+
+        /* semaphore for protecting allocation */
+        struct semaphore        seq_sem;
+};
 #endif
 
-void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
+/* client seq mgr flags */
+#define LUSTRE_CLI_SEQ_CLIENT     (1 << 0)
+#define LUSTRE_CLI_SEQ_SERVER     (1 << 1)
 
+#ifdef __KERNEL__
+/* server seq mgr flags */
+#define LUSTRE_SRV_SEQ_CONTROLLER (1 << 0)
+#define LUSTRE_SRV_SEQ_REGULAR    (1 << 1)
+
+int seq_server_init(struct lu_server_seq *seq,
+                    struct lu_client_seq *cli,
+                    const struct lu_context  *ctx,
+                    struct dt_device *dev,
+                    int flags);
+
+void seq_server_fini(struct lu_server_seq *seq,
+                     const struct lu_context *ctx) ;
+#endif
+
+int seq_client_init(struct lu_client_seq *seq, 
+                    struct obd_export *exp,
+                    int flags);
+
+void seq_client_fini(struct lu_client_seq *seq);
+
+int seq_client_alloc_super(struct lu_client_seq *seq);
+int seq_client_alloc_meta(struct lu_client_seq *seq);
+
+int seq_client_alloc_seq(struct lu_client_seq *seq,
+                         __u64 *seqnr);
+int seq_client_alloc_fid(struct lu_client_seq *seq,
+                         struct lu_fid *fid);
+
+/* Fids common stuff */
+static inline int fid_is_local(struct lu_site *site,
+                               const struct lu_fid *fid)
+{
+        /* XXX: fix this when fld is ready. */
+        return 1;
+}
+
+void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
 
 #endif /* __LINUX_OBD_CLASS_H */

@@ -564,7 +564,6 @@ finish:
                         RETURN(0);
                 }
         } else {
-                struct client_obd *cli = &imp->imp_obd->u.cli;
                 struct obd_connect_data *ocd;
                 struct obd_export *exp;
 
@@ -575,12 +574,6 @@ finish:
                         rc = -EPROTO;
                         GOTO(out, rc);
                 }
-
-                /* get correct start fid from connect data sent by server. */
-                spin_lock(&cli->cl_fid_lock);
-                cli->cl_fid.f_seq = ocd->ocd_seq;
-                cli->cl_fid.f_oid = LUSTRE_FID_INIT_OID;
-                spin_unlock(&cli->cl_fid_lock);
 
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 

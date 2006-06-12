@@ -385,9 +385,8 @@ struct client_obd {
         /* used by quotacheck */
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
 
-        /* this holds last allocated fid in last obtained seq */
-        struct lu_fid            cl_fid;
-        spinlock_t               cl_fid_lock;
+        /* sequence manager */
+        struct lu_client_seq    *cl_seq;
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
@@ -540,7 +539,7 @@ struct niobuf_local {
 
 #define LUSTRE_OPC_MKDIR     (1 << 0)
 #define LUSTRE_OPC_SYMLINK   (1 << 1)
-#define LUSTRE_OPC_MKNODE    (1 << 2)
+#define LUSTRE_OPC_MKNOD     (1 << 2)
 #define LUSTRE_OPC_CREATE    (1 << 3)
         
 struct lu_placement_hint {
@@ -560,6 +559,7 @@ struct lu_placement_hint {
 #define LUSTRE_MDD0_NAME "mdd0"
 #define LUSTRE_OSD0_NAME "osd0"
 #define LUSTRE_FLD0_NAME "fld0"
+#define LUSTRE_SEQ0_NAME "seq0"
 #define LUSTRE_MDC0_NAME "mdc0"
 
 #define LUSTRE_MDC_NAME  "mdc"
@@ -829,7 +829,10 @@ struct obd_ops {
                            struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
 
-        /* may be later these should be moved into separate fid_ops */
+        /* maybe later these should be moved into separate fid_ops */
+        int (*o_fid_init)(struct obd_export *exp);
+        int (*o_fid_fini)(struct obd_export *exp);
+
         int (*o_fid_alloc)(struct obd_export *exp, struct lu_fid *fid,
                            struct lu_placement_hint *hint);
         

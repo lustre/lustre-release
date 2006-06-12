@@ -65,10 +65,6 @@ struct mdt_device {
          * necessary.
          */
         unsigned long              mdt_flags;
-
-        /* Seq management related stuff */
-        struct lu_seq_mgr         *mdt_seq_mgr;
-
         struct dt_device          *mdt_bottom;
         /*
          * Options bit-fields.

@@ -1,4 +1,4 @@
 MODULES := fid
-fid-objs := fid_seq.o fid_misc.o
+fid-objs := fid_handle.o fid_lib.o
 
 @INCLUDE_RULES@

@@ -443,8 +443,13 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         icbd.icbd_parent = parent;
 
         /* allocate new fid for child */
-        if (it->it_op == IT_OPEN || it->it_op == IT_CREAT) {
-                rc = llu_fid_md_alloc(llu_i2sbi(parent), &op_data.fid2);
+        if (it->it_op & IT_CREAT || 
+            (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
+                struct lu_placement_hint hint = { .ph_pname = NULL,
+                                                  .ph_cname = &pnode->p_base->pb_name,
+                                                  .ph_opc = LUSTRE_OPC_CREATE };
+                
+                rc = llu_fid_md_alloc(llu_i2sbi(parent), &op_data.fid2, &hint);
                 if (rc) {
                         CERROR("can't allocate new fid, rc %d\n", rc);
                         LBUG();

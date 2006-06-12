@@ -1308,8 +1308,8 @@ static int mgs_write_log_mds(struct obd_device *obd, struct fs_db *fsdb,
 
 /* Add the ost info to the client/mdt lov */
 static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
-                             struct mgs_target_info *mti,
-                             char *logname, char *lovname, int flags)
+                                    struct mgs_target_info *mti,
+                                    char *logname, char *lovname, int flags)
 {
         struct llog_handle *llh = NULL;
         char *nodeuuid, *oscname, *oscuuid, *lovuuid;

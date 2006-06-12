@@ -96,6 +96,8 @@
                                   num_physpages >> (25 - PAGE_SHIFT)), 2UL)
 #define FLD_NUM_THREADS max(min_t(unsigned long, MDT_MAX_THREADS, \
                                   num_physpages >> (25 - PAGE_SHIFT)), 2UL)
+#define SEQ_NUM_THREADS max(min_t(unsigned long, MDT_MAX_THREADS, \
+                                  num_physpages >> (25 - PAGE_SHIFT)), 2UL)
 
 #define MDS_MAX_THREADS 512UL
 #define MDS_DEF_THREADS max(2UL, min_t(unsigned long, 32, \

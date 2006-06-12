@@ -37,6 +37,7 @@
 #include <linux/module.h>
 #include <obd_support.h>
 #include <lustre_disk.h>
+#include <lustre_fid.h>
 #include <lu_object.h>
 #include <libcfs/list.h>
 
@@ -275,7 +276,7 @@ static __u32 fid_hash(const struct lu_fid *f)
 {
         /* all objects with same id and different versions will belong to same
          * collisions list. */
-        return (fid_seq(f) - 1) * LUSTRE_FID_SEQ_WIDTH + fid_oid(f);
+        return (fid_seq(f) - 1) * LUSTRE_SEQ_WIDTH + fid_oid(f);
 }
 
 /*

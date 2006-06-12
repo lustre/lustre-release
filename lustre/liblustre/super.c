@@ -850,6 +850,11 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         struct ptlrpc_request *request = NULL;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
         struct md_op_data op_data = { { 0 } };
+        struct lu_placement_hint hint = {
+                .ph_pname = NULL,
+                .ph_cname = qstr,
+                .ph_opc = LUSTRE_OPC_SYMLINK
+        };
         int err = -EMLINK;
         ENTRY;
 
@@ -858,7 +863,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
                 RETURN(err);
 
         /* allocate new fid */
-        err = llu_fid_md_alloc(sbi, &op_data.fid2);
+        err = llu_fid_md_alloc(sbi, &op_data.fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 RETURN(err);
@@ -968,6 +973,11 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         struct llu_sb_info *sbi = llu_i2sbi(dir);
         struct md_op_data op_data = { { 0 } };
         int err = -EMLINK;
+        struct lu_placement_hint hint = {
+                .ph_pname = NULL,
+                .ph_cname = &pno->p_base->pb_name,
+                .ph_opc = LUSTRE_OPC_MKNOD
+        };
         ENTRY;
 
         liblustre_wait_event(0);
@@ -987,7 +997,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         case S_IFIFO:
         case S_IFSOCK:
                 /* allocate new fid */
-                err = llu_fid_md_alloc(sbi, &op_data.fid2);
+                err = llu_fid_md_alloc(sbi, &op_data.fid2, &hint);
                 if (err) {
                         CERROR("can't allocate new fid, rc %d\n", err);
                         RETURN(err);
@@ -1216,6 +1226,12 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         struct ptlrpc_request *request = NULL;
         struct intnl_stat *st = llu_i2stat(dir);
         struct md_op_data op_data = { { 0 } };
+        struct lu_placement_hint hint = {
+                .ph_pname = NULL,
+                .ph_cname = qstr,
+                .ph_opc = LUSTRE_OPC_MKDIR
+        };
+        
         int err = -EMLINK;
         ENTRY;
 
@@ -1227,7 +1243,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
                 RETURN(err);
 
         /* allocate new fid */
-        err = llu_fid_md_alloc(llu_i2sbi(dir), &op_data.fid2);
+        err = llu_fid_md_alloc(llu_i2sbi(dir), &op_data.fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 RETURN(err);
@@ -1819,11 +1835,9 @@ llu_fsswop_mount(const char *source,
         if (err)
                 GOTO(out_mdc, err);
 
-        /* initializing ->ll_fid. It is known that root object has separate
-         * sequence, so that we use what MDS returned to us and do not check if
-         * f_oid collides with root or not. */
-        sbi->ll_fid.f_seq = ocd.ocd_seq;
-        sbi->ll_fid.f_oid = LUSTRE_FID_INIT_OID;
+        err = llu_fid_md_init(sbi);
+        if (err)
+                GOTO(out_mdc, err);
 
         /*
          * FIXME fill fs stat data into sbi here!!! FIXME
@@ -1833,7 +1847,7 @@ llu_fsswop_mount(const char *source,
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
-                GOTO(out_mdc, err = -EINVAL);
+                GOTO(out_md_fid, err = -EINVAL);
         }
         obd_set_info_async(obd->obd_self_export, strlen("async"), "async",
                            sizeof(async), &async, NULL);
@@ -1852,12 +1866,16 @@ llu_fsswop_mount(const char *source,
         sbi->ll_dt_exp = class_conn2export(&osc_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
 
+        err = llu_fid_dt_init(sbi);
+        if (err)
+                GOTO(out_osc, err);
+
         llu_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);
 
         err = md_getstatus(sbi->ll_md_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_dt_fid, err);
         }
         CDEBUG(D_SUPER, "rootfid "DFID3"\n", PFID3(&rootfid));
         sbi->ll_root_fid = rootfid;
@@ -1911,8 +1929,12 @@ out_inode:
         _sysio_i_gone(root);
 out_request:
         ptlrpc_req_finished(request);
+out_dt_fid:
+        llu_fid_dt_fini(sbi);
 out_osc:
         obd_disconnect(sbi->ll_dt_exp);
+out_md_fid:
+        llu_fid_md_fini(sbi);
 out_mdc:
         obd_disconnect(sbi->ll_md_exp);
 out_free:

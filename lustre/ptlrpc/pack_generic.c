@@ -509,11 +509,11 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         __swab32s (&ocd->ocd_index);
         __swab32s (&ocd->ocd_unused);
         __swab64s (&ocd->ocd_ibits_known);
-        __swab64s (&ocd->ocd_seq);
         CLASSERT(offsetof(typeof(*ocd), padding2) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding3) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding4) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding5) != 0);
+        CLASSERT(offsetof(typeof(*ocd), padding6) != 0);
 }
 
 void lustre_swab_obdo (struct obdo  *o)

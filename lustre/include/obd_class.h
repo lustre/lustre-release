@@ -720,6 +720,34 @@ static inline int obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+static inline int obd_fid_init(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        if (OBP(exp->exp_obd, fid_init) == NULL)
+                RETURN(-ENOTSUPP);
+
+        OBD_COUNTER_INCREMENT(exp->exp_obd, fid_init);
+
+        rc = OBP(exp->exp_obd, fid_init)(exp);
+        RETURN(rc);
+}
+
+static inline int obd_fid_fini(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        if (OBP(exp->exp_obd, fid_fini) == NULL)
+                RETURN(-ENOTSUPP);
+
+        OBD_COUNTER_INCREMENT(exp->exp_obd, fid_fini);
+
+        rc = OBP(exp->exp_obd, fid_fini)(exp);
+        RETURN(rc);
+}
+
 static inline int obd_fid_alloc(struct obd_export *exp,
                                 struct lu_fid *fid,
                                 struct lu_placement_hint *hint)
