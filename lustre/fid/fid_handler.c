@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/fid/fid_handle.c
+ *  lustre/fid/fid_handler.c
  *  Lustre Sequence Manager
  *
  *  Copyright (c) 2006 Cluster File Systems, Inc.
