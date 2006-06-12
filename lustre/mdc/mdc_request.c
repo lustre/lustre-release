@@ -872,38 +872,6 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
         RETURN(rc);
 }
 
-int mdc_fld(struct obd_export *exp, struct md_fld *mf, __u32 fld_op)
-{
-        struct ptlrpc_request *req;
-        struct md_fld *pmf;
-        int mf_size = sizeof(*mf);
-        __u32 *op;
-        int size[2] = {sizeof(*op), mf_size}, rc;
-        ENTRY;
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              FLD_QUERY, 2, size, NULL);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        op = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*op));
-        *op = fld_op;
-
-        pmf = lustre_msg_buf(req->rq_reqmsg, 1, sizeof (*pmf));
-        memcpy(pmf, mf, sizeof(*mf));
-
-        req->rq_replen = lustre_msg_size(1, &mf_size);
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                GOTO(out_req, rc);
-
-        pmf = lustre_swab_repbuf(req, 0, sizeof(*pmf), lustre_swab_md_fld);
-        *mf = *pmf; 
-out_req:
-        ptlrpc_req_finished(req);
-        RETURN(rc);
-}
-
 static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                       cfs_time_t max_age)
 {
@@ -1345,8 +1313,6 @@ static void /*__exit*/ mdc_exit(void)
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Metadata Client");
 MODULE_LICENSE("GPL");
-
-EXPORT_SYMBOL(mdc_fld);
 
 module_init(mdc_init);
 module_exit(mdc_exit);

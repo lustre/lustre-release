@@ -169,9 +169,14 @@ extern cfs_waitq_t obd_race_waitq;
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901
 #define OBD_FAIL_MGS_ALL_REPLY_NET       0x902
+
 #define OBD_FAIL_SEQ                     0x1000
 #define OBD_FAIL_SEQ_ALL_REQUEST_NET     0x1001
 #define OBD_FAIL_SEQ_ALL_REPLY_NET       0x1002
+
+#define OBD_FAIL_FLD                     0x1100
+#define OBD_FAIL_FLD_ALL_REQUEST_NET     0x1101
+#define OBD_FAIL_FLD_ALL_REPLY_NET       0x1102
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

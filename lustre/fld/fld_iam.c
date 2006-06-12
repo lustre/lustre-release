@@ -27,10 +27,15 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_LLITE
+#define DEBUG_SUBSYSTEM S_FLD
 
-#include <linux/module.h>
-#include <linux/jbd.h>
+#ifdef __KERNEL__
+# include <libcfs/libcfs.h>
+# include <linux/module.h>
+# include <linux/jbd.h>
+#else /* __KERNEL__ */
+# include <liblustre.h>
+#endif
 
 #include <obd.h>
 #include <obd_class.h>

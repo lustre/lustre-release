@@ -34,9 +34,4 @@ struct obd_device;
 int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
-
-/* mdc/mdc_request.c */
-int mdc_fld(struct obd_export *exp, struct md_fld *mf, 
-            __u32 fld_op);
-
 #endif
