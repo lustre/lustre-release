@@ -698,31 +698,31 @@ out_rmdir:
 
 int read_local_files(struct mkfs_opts *mop)
 {
-        char mntpt[] = "/tmp/mntXXXXXX";
+        char tmpdir[] = "/tmp/dirXXXXXX";
+        char cmd[128];
         char filepnm[128];
         char *dev;
         FILE *filep;
         int ret = 0;
 
-        /* Mount this device temporarily in order to read these files */
-        if (!mkdtemp(mntpt)) {
-                fprintf(stderr, "%s: Can't create temp mount point %s: %s\n",
-                        progname, mntpt, strerror(errno));
+        /* Make a temporary directory to hold Lustre data files. */
+        if (!mkdtemp(tmpdir)) {
+                fprintf(stderr, "%s: Can't create temporary directory %s: %s\n",
+                        progname, tmpdir, strerror(errno));
                 return errno;
         }
 
         dev = mop->mo_device;
-        if (mop->mo_flags & MO_IS_LOOP) 
-                dev = mop->mo_loopdev;
-        
-        ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
-        if (ret) {
-                fprintf(stderr, "%s: Unable to mount %s: %s\n", 
-                        progname, dev, strerror(errno));
-                goto out_rmdir;
-        }
 
-        sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
+        /* Construct debugfs command line. */
+        memset(cmd, 0, sizeof(cmd));
+        sprintf(cmd,
+                "debugfs -c -R 'rdump /%s %s' %s",
+                MOUNT_CONFIGS_DIR, tmpdir, dev);
+
+        run_command(cmd);
+
+        sprintf(filepnm, "%s/%s", tmpdir, MOUNT_DATA_FILE);
         filep = fopen(filepnm, "r");
         if (filep) {
                 vprint("Reading %s\n", MOUNT_DATA_FILE);
@@ -733,13 +733,27 @@ int read_local_files(struct mkfs_opts *mop)
                 struct lr_server_data lsd;
                 vprint("%s: Unable to read %s, trying last_rcvd\n",
                        progname, MOUNT_DATA_FILE);
-                sprintf(filepnm, "%s/%s", mntpt, LAST_RCVD);
+
+                /* Construct debugfs command line. */
+                memset(cmd, 0, sizeof(cmd));
+                sprintf(cmd,
+                        "debugfs -c -R 'dump /%s %s/%s' %s",
+                        LAST_RCVD, tmpdir, LAST_RCVD, dev);
+
+                ret=run_command(cmd);
+                if (ret) {
+                        fprintf(stderr, "%s: Unable to dump %s file\n",
+                                progname, LAST_RCVD);
+                        goto out_rmdir;
+                }
+
+                sprintf(filepnm, "%s/%s", tmpdir, LAST_RCVD);
                 filep = fopen(filepnm, "r");
                 if (!filep) {
                         fprintf(stderr, "%s: Unable to read old data\n",
                                 progname);
                         ret = -errno;
-                        goto out_umnt;
+                        goto out_rmdir;
                 }
                 vprint("Reading %s\n", LAST_RCVD);
                 ret = fread(&lsd, 1, sizeof(lsd), filep);
@@ -768,7 +782,15 @@ int read_local_files(struct mkfs_opts *mop)
                         mop->mo_ldd.ldd_svindex = lsd.lsd_mdt_index;
                 } else  {
                         /* If neither is set, we're pre-1.4.6, make a guess. */
-                        sprintf(filepnm, "%s/%s", mntpt, MDT_LOGS_DIR);
+                        /* Construct debugfs command line. */
+                        memset(cmd, 0, sizeof(cmd));
+                        sprintf(cmd,
+                                "debugfs -c -R 'rdump /%s %s' %s",
+                                MDT_LOGS_DIR, tmpdir, dev);
+
+                        run_command(cmd);
+
+                        sprintf(filepnm, "%s/%s", tmpdir, MDT_LOGS_DIR);
                         if (lsd.lsd_ost_index > 0) {
                                 mop->mo_ldd.ldd_flags = LDD_F_SV_TYPE_OST;
                                 mop->mo_ldd.ldd_svindex = lsd.lsd_ost_index;
@@ -798,11 +820,11 @@ int read_local_files(struct mkfs_opts *mop)
         /* end COMPAT_146 */
 out_close:        
         fclose(filep);
-        
-out_umnt:
-        umount(mntpt);    
+
 out_rmdir:
-        rmdir(mntpt);
+        memset(cmd, 0, sizeof(cmd));
+        sprintf(cmd, "rm -rf %s", tmpdir);
+        run_command(cmd);
         return ret;
 }
 
@@ -1082,8 +1104,10 @@ int main(int argc, char *const argv[])
         /* device is last arg */
         strcpy(mop.mo_device, argv[argc - 1]);
 
+#ifndef TUNEFS /* mkfs.lustre */
         if (check_mtab_entry(mop.mo_device))
                 return(EEXIST);
+#endif
 
         /* Are we using a loop device? */
         ret = is_block(mop.mo_device);
@@ -1116,6 +1140,7 @@ int main(int argc, char *const argv[])
                 fatal();
                 fprintf(stderr, "Device %s has not been formatted with "
                         "mkfs.lustre\n", mop.mo_device);
+                ret = ENODEV;
                 goto out;
         }
 
@@ -1154,6 +1179,7 @@ int main(int argc, char *const argv[])
                 fatal();
                 fprintf(stderr, "Must specify either --mgs or --mgsnode\n");
                 usage(stderr);
+                ret = EINVAL;
                 goto out;
         }
 
