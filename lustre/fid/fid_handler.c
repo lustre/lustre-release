@@ -43,49 +43,50 @@
 #include <dt_object.h>
 #include <md_object.h>
 #include <obd_support.h>
+#include <lustre_req_layout.h>
 #include <lustre_fid.h>
 #include "fid_internal.h"
 
 /* client seq mgr interface */
 static int 
 seq_client_alloc_common(struct lu_client_seq *seq, 
-                        struct lu_range *seq_ran,
-                        __u32 seq_op)
+                        struct lu_range *range,
+                        __u32 opc)
 {
-        __u32 *op;
-        struct lu_range *range;
+        int repsize = sizeof(struct lu_range);
+        int rc, reqsize = sizeof(__u32);
         struct ptlrpc_request *req;
-        int ran_size = sizeof(*range);
-        int rc, size[] = {sizeof(*op), ran_size};
-        int repsize[] = {ran_size};
+        struct lu_range *ran;
+        __u32 *op;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(seq->seq_exp), 
 			      LUSTRE_MDS_VERSION, SEQ_QUERY,
-			      2, size, NULL);
+			      1, &reqsize, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
         op = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*op));
-        *op = seq_op;
+        *op = opc;
 
-        range = lustre_msg_buf(req->rq_reqmsg, 1, ran_size);
-        *range = *seq_ran;
-
-        req->rq_replen = lustre_msg_size(1, repsize);
+        req->rq_replen = lustre_msg_size(1, &repsize);
         req->rq_request_portal = MDS_SEQ_PORTAL;
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out_req, rc);
 
-        range = lustre_swab_repbuf(req, 0, sizeof(*range),
-                                   lustre_swab_lu_range);
+        ran = lustre_swab_repbuf(req, 0, sizeof(*ran),
+                                 lustre_swab_lu_range);
 
-        LASSERT(range != NULL);
-        *seq_ran = *range;
+        if (ran == NULL) {
+                CERROR("invalid range is returned\n");
+                GOTO(out_req, rc = -EPROTO);
+        }
+        *range = *ran;
+        EXIT;
 out_req:
         ptlrpc_req_finished(req); 
-        RETURN(rc);
+        return rc;
 }
 
 /* request sequence-controller node to allocate new super-sequence. */
@@ -445,37 +446,35 @@ seq_req_handle0(const struct lu_context *ctx,
                 struct lu_server_seq *seq, 
                 struct ptlrpc_request *req) 
 {
-        struct lu_range *in;
+        int rep_buf_size[2] = { 0, 0 };
+        struct req_capsule pill;
         struct lu_range *out;
-        int size = sizeof(*in);
-        __u32 *opt;
-        int rc;
+        int rc = -EPROTO;
+        __u32 *opc;
         ENTRY;
 
-        rc = lustre_pack_reply(req, 1, &size, NULL);
-        if (rc)
-                RETURN(rc);
+        req_capsule_init(&pill, req, RCL_SERVER,
+                         rep_buf_size);
 
-        rc = -EPROTO;
-        opt = lustre_swab_reqbuf(req, 0, sizeof(*opt),
-                                 lustre_swab_generic_32s);
-        if (opt != NULL) {
-                in = lustre_swab_reqbuf(req, 1, sizeof(*in),
-                                        lustre_swab_lu_range);
-                if (in != NULL) {
-                        out = lustre_msg_buf(req->rq_repmsg, 
-                                             0, sizeof(*out));
-                        LASSERT(out != NULL);
+        req_capsule_set(&pill, &RQF_SEQ_QUERY);
+        req_capsule_pack(&pill);
 
-                        *out = *in;
-                        rc = seq_server_handle(seq, ctx, out, *opt);
-                } else {
-                        CERROR("Cannot unpack seq range\n");
+        opc = req_capsule_client_get(&pill, &RMF_SEQ_OPC);
+        if (opc != NULL) {
+                out = req_capsule_server_get(&pill, &RMF_SEQ_RANGE);
+                if (out == NULL) {
+                        CERROR("can't get range buffer\n");
+                        GOTO(out_pill, rc= -EPROTO);
                 }
+                rc = seq_server_handle(seq, ctx, out, *opc);
         } else {
-                CERROR("Cannot unpack option\n");
+                CERROR("cannot unpack client request\n");
         }
-        RETURN(rc);
+
+out_pill:
+        EXIT;
+        req_capsule_fini(&pill);
+        return rc;
 }
 
 static int 

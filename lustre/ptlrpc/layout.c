@@ -59,6 +59,14 @@ static const struct req_msg_field *mds_statfs_server[] = {
         &RMF_OBD_STATFS
 };
 
+static const struct req_msg_field *seq_query_client[] = {
+        &RMF_SEQ_OPC
+};
+
+static const struct req_msg_field *seq_query_server[] = {
+        &RMF_SEQ_RANGE
+};
+
 static const struct req_msg_field *mds_getattr_name_client[] = {
         &RMF_MDT_BODY,
         &RMF_NAME
@@ -170,6 +178,7 @@ static const struct req_format *req_formats[] = {
         &RQF_LDLM_INTENT_OPEN,
         &RQF_LDLM_INTENT_CREATE,
         &RQF_LDLM_INTENT_UNLINK,
+        &RQF_SEQ_QUERY,
 };
 
 struct req_msg_field {
@@ -195,6 +204,16 @@ struct req_capsule;
         .rmf_size    = (size),                          \
         .rmf_swabber = (void (*)(void*))(swabber)       \
 }
+
+const struct req_msg_field RMF_SEQ_OPC = 
+        DEFINE_MSGF("seq_query_opc", 0,
+                    sizeof(__u32), lustre_swab_generic_32s);
+EXPORT_SYMBOL(RMF_SEQ_OPC);
+
+const struct req_msg_field RMF_SEQ_RANGE = 
+        DEFINE_MSGF("seq_query_range", 0,
+                    sizeof(struct lu_range), lustre_swab_lu_range);
+EXPORT_SYMBOL(RMF_SEQ_RANGE);
 
 const struct req_msg_field RMF_MDT_BODY =
         DEFINE_MSGF("mdt_body", 0,
@@ -325,6 +344,10 @@ struct req_format {
 
 #define DEFINE_REQ_FMT0(name, client, server)                           \
 DEFINE_REQ_FMT(name, client, ARRAY_SIZE(client), server, ARRAY_SIZE(server))
+
+const struct req_format RQF_SEQ_QUERY =
+        DEFINE_REQ_FMT0("SEQ_QUERY", seq_query_client, seq_query_server);
+EXPORT_SYMBOL(RQF_SEQ_QUERY);
 
 const struct req_format RQF_MDS_GETSTATUS =
         DEFINE_REQ_FMT0("MDS_GETSTATUS", empty, mdt_body_only);

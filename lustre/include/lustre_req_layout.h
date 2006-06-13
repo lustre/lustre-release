@@ -79,6 +79,7 @@ int req_capsule_field_present(const struct req_capsule *pill,
 int  req_layout_init(void);
 void req_layout_fini(void);
 
+extern const struct req_format RQF_SEQ_QUERY;
 extern const struct req_format RQF_MDS_GETSTATUS;
 extern const struct req_format RQF_MDS_STATFS;
 extern const struct req_format RQF_MDS_GETATTR;
@@ -124,5 +125,9 @@ extern const struct req_msg_field RMF_REC_SETATTR;
 extern const struct req_msg_field RMF_EADATA;
 extern const struct req_msg_field RMF_LOGCOOKIES;
 extern const struct req_msg_field RMF_REINT_OPC;
+
+/* seq-mgr fields */
+extern const struct req_msg_field RMF_SEQ_OPC;
+extern const struct req_msg_field RMF_SEQ_RANGE;
 
 #endif /* _LUSTRE_REQ_LAYOUT_H__ */
