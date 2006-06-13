@@ -1198,7 +1198,7 @@ modify_fstab() {
 
 		# Execute remote command to modify /etc/fstab
 		device_name=${DEVICE_NAME[i]//\//\\/}
-		COMMAND="(sed -i \"/${device_name}/d\" /etc/fstab; \
+		COMMAND="(sed -i \"/^${device_name}[ 	]/d\" /etc/fstab; \
 			 echo -e \"${mntent}\" >> /etc/fstab)"
 		${REMOTE} ${HOST_NAME[i]} "${COMMAND}" >&2
 		if [ $? -ne 0 ]; then
