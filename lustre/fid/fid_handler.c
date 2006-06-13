@@ -446,7 +446,7 @@ seq_req_handle0(const struct lu_context *ctx,
                 struct lu_server_seq *seq, 
                 struct ptlrpc_request *req) 
 {
-        int rep_buf_size[2] = { 0, 0 };
+        int rep_buf_size[2] = { 0, };
         struct req_capsule pill;
         struct lu_range *out;
         int rc = -EPROTO;

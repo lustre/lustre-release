@@ -80,6 +80,7 @@ int  req_layout_init(void);
 void req_layout_fini(void);
 
 extern const struct req_format RQF_SEQ_QUERY;
+extern const struct req_format RQF_FLD_QUERY;
 extern const struct req_format RQF_MDS_GETSTATUS;
 extern const struct req_format RQF_MDS_STATFS;
 extern const struct req_format RQF_MDS_GETATTR;
@@ -129,5 +130,9 @@ extern const struct req_msg_field RMF_REINT_OPC;
 /* seq-mgr fields */
 extern const struct req_msg_field RMF_SEQ_OPC;
 extern const struct req_msg_field RMF_SEQ_RANGE;
+
+/* FLD fields */
+extern const struct req_msg_field RMF_FLD_OPC;
+extern const struct req_msg_field RMF_FLD_MDFLD;
 
 #endif /* _LUSTRE_REQ_LAYOUT_H__ */

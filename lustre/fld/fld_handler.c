@@ -47,6 +47,7 @@
 
 #include <dt_object.h>
 #include <md_object.h>
+#include <lustre_req_layout.h>
 #include <lustre_fld.h>
 #include "fld_internal.h"
 
@@ -401,35 +402,43 @@ fld_req_handle0(const struct lu_context *ctx,
                 struct lu_server_fld *fld,
                 struct ptlrpc_request *req)
 {
+        int rep_buf_size[3] = { 0, };
+        struct req_capsule pill;
         struct md_fld *in;
         struct md_fld *out;
-        int size = sizeof *in;
-        int rc;
-        __u32 *opt;
+        int rc = -EPROTO;
+        __u32 *opc;
 
         ENTRY;
 
-        rc = lustre_pack_reply(req, 1, &size, NULL);
-        if (rc)
-                RETURN(rc);
+        req_capsule_init(&pill, req, RCL_SERVER,
+                         rep_buf_size);
 
-        rc = -EPROTO;
-        opt = lustre_swab_reqbuf(req, 0, sizeof *opt, lustre_swab_generic_32s);
-        if (opt != NULL) {
-                in = lustre_swab_reqbuf(req, 1, sizeof *in, lustre_swab_md_fld);
-                if (in != NULL) {
-                        out = lustre_msg_buf(req->rq_repmsg, 0, size);
-                        LASSERT(out != NULL);
-                        *out = *in;
+        req_capsule_set(&pill, &RQF_FLD_QUERY);
+        req_capsule_pack(&pill);
 
-                        rc = fld_server_handle(fld, ctx, *opt, out);
-                } else {
-                        CERROR("Cannot unpack mf\n");
+        opc = req_capsule_client_get(&pill, &RMF_FLD_OPC);
+        if (opc != NULL) {
+                in = req_capsule_client_get(&pill, &RMF_FLD_MDFLD);
+                if (in == NULL) {
+                        CERROR("cannot unpack fld request\n");
+                        GOTO(out_pill, rc = -EPROTO);
                 }
+                out = req_capsule_server_get(&pill, &RMF_FLD_MDFLD);
+                if (out == NULL) {
+                        CERROR("cannot allocate fld response\n");
+                        GOTO(out_pill, rc = -EPROTO);
+                }
+                *out = *in;
+                rc = fld_server_handle(fld, ctx, *opc, out);
         } else {
-                CERROR("Cannot unpack option\n");
+                CERROR("cannot unpack FLD operation\n");
         }
-        RETURN(rc);
+        
+out_pill:
+        EXIT;
+        req_capsule_fini(&pill);
+        return rc;
 }
 
 
