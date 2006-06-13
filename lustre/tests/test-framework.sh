@@ -13,10 +13,10 @@ export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 assert_env() {
     local failed=""
     for name in $@; do
-      if [ -z "${!name}" ]; then
-	  echo "$0: $name must be set"
-          failed=1
-      fi
+        if [ -z "${!name}" ]; then
+            echo "$0: $name must be set"
+            failed=1
+        fi
     done
     [ $failed ] && exit 1 || true
 }
@@ -54,12 +54,12 @@ init_test_env() {
     # command line
     
     while getopts "rvf:" opt $*; do 
-	case $opt in
-	    f) CONFIG=$OPTARG;;
-	    r) REFORMAT=--reformat;;
-	    v) VERBOSE=true;;
-	    \?) usage;;
-	esac
+        case $opt in
+            f) CONFIG=$OPTARG;;
+            r) REFORMAT=--reformat;;
+            v) VERBOSE=true;;
+            \?) usage;;
+        esac
     done
 
     shift $((OPTIND - 1))
@@ -76,7 +76,7 @@ load_module() {
 
 load_modules() {
     if [ "$HAVE_MODULES" = true ]; then
-	return 0
+        return 0
     fi
     HAVE_MODULES=true
 
@@ -117,11 +117,11 @@ unload_modules() {
     LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked"`
     LEAK_PORTALS=`dmesg | tail -n 20 | grep "Portals memory leaked"`
     if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
-	echo "$LEAK_LUSTRE" 1>&2
-	echo "$LEAK_PORTALS" 1>&2
-	mv $TMP/debug $TMP/debug-leak.`date +%s`
-	echo "Memory leaks detected"
-	return 254
+        echo "$LEAK_LUSTRE" 1>&2
+        echo "$LEAK_PORTALS" 1>&2
+        mv $TMP/debug $TMP/debug-leak.`date +%s`
+        echo "Memory leaks detected"
+        return 254
     fi
     HAVE_MODULES=false
 }
@@ -138,16 +138,16 @@ start() {
     do_facet ${facet} mount -t lustre $@ ${device} /mnt/${facet} 
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
-	echo mount -t lustre $@ ${device} /mnt/${facet} 
+        echo mount -t lustre $@ ${device} /mnt/${facet} 
         echo Start of ${device} on ${facet} failed ${RC}
     else 
-	do_facet ${facet} sync
-	label=`do_facet ${facet} "e2label ${device}" | grep -v "CMD: "`
-	[ -z "$label" ] && echo no label for ${device} && exit 1
-	eval export ${facet}_svc=${label}
-	eval export ${facet}_dev=${device}
-	eval export ${facet}_opt=\"$@\"
-	echo Started ${label}
+        do_facet ${facet} sync
+        label=`do_facet ${facet} "e2label ${device}" | grep -v "CMD: "`
+        [ -z "$label" ] && echo no label for ${device} && exit 1
+        eval export ${facet}_svc=${label}
+        eval export ${facet}_dev=${device}
+        eval export ${facet}_opt=\"$@\"
+        echo Started ${label}
     fi
     return $RC
 }
@@ -161,8 +161,8 @@ stop() {
 
     running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts" | grep -v "CMD: "`
     if [ ${running} -ne 0 ]; then
-	echo "Stopping /mnt/${facet} (opts:$@)"
-	do_facet ${facet} umount -d $@ /mnt/${facet}
+        echo "Stopping /mnt/${facet} (opts:$@)"
+        do_facet ${facet} umount -d $@ /mnt/${facet}
     fi
 
     [ -e /proc/fs/lustre ] && grep "ST " /proc/fs/lustre/devices && echo "service didn't stop" && exit 1
@@ -180,8 +180,8 @@ zconf_mount() {
     fi
     local device=`facet_nid mgs`:/$FSNAME
     if [ -z "$mnt" -o -z "$FSNAME" ]; then
-	echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
-	exit 1
+        echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
+        exit 1
     fi
 
     echo "Starting client: $OPTIONS $device $mnt" 
@@ -199,27 +199,27 @@ zconf_umount() {
     [ "$3" ] && force=-f
     local running=`do_node $client "grep -c $mnt' ' /proc/mounts" | grep -v "CMD: "`
     if [ $running -ne 0 ]; then
-	echo "Stopping client $mnt (opts:$force)"
-	do_node $client umount $force $mnt
+        echo "Stopping client $mnt (opts:$force)"
+        do_node $client umount $force $mnt
     fi
 }
 
 shutdown_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
-       $POWER_DOWN `facet_active_host $facet`
-       sleep 2 
+        $POWER_DOWN `facet_active_host $facet`
+        sleep 2 
     elif [ "$FAILURE_MODE" = SOFT ]; then
-       stop $facet
+        stop $facet
     fi
 }
 
 reboot_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
-       $POWER_UP `facet_active_host $facet`
+        $POWER_UP `facet_active_host $facet`
     else
-       sleep 10
+        sleep 10
     fi
 }
 
@@ -254,28 +254,28 @@ cleanup_check() {
 }
 
 wait_for_host() {
-   HOST=$1
-   check_network "$HOST" 900
-   while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
+    HOST=$1
+    check_network "$HOST" 900
+    while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
 }
 
 wait_for() {
-   facet=$1
-   HOST=`facet_active_host $facet`
-   wait_for_host $HOST
+    facet=$1
+    HOST=`facet_active_host $facet`
+    wait_for_host $HOST
 }
 
 client_df() {
     # not every config has many clients
     if [ ! -z "$CLIENTS" ]; then
-	$PDSH $CLIENTS "df $MOUNT" > /dev/null
+        $PDSH $CLIENTS "df $MOUNT" > /dev/null
     fi
 }
 
 client_reconnect() {
     uname -n >> $MOUNT/recon
     if [ ! -z "$CLIENTS" ]; then
-	$PDSH $CLIENTS "df $MOUNT; uname -n >> $MOUNT/recon" > /dev/null
+        $PDSH $CLIENTS "df $MOUNT; uname -n >> $MOUNT/recon" > /dev/null
     fi
     echo Connected clients:
     cat $MOUNT/recon
@@ -361,58 +361,58 @@ do_lmc() {
 }
 
 h2gm () {
-   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-       ID=`$PDSH $1 $GMNALNID -l | cut -d\  -f2`
-       echo $ID"@gm"
-   fi
+    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+        ID=`$PDSH $1 $GMNALNID -l | cut -d\  -f2`
+        echo $ID"@gm"
+    fi
 }
 
 h2tcp() {
-   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-   echo $1"@tcp" 
-   fi
+    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+        echo $1"@tcp" 
+    fi
 }
 declare -fx h2tcp
 
 h2elan() {
-   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-   ID=`echo $1 | sed 's/[^0-9]*//g'`
-   echo $ID"@elan"
-   fi
+    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+        ID=`echo $1 | sed 's/[^0-9]*//g'`
+        echo $ID"@elan"
+    fi
 }
 declare -fx h2elan
 
 h2openib() {
-   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-   ID=`echo $1 | sed 's/[^0-9]*//g'`
-   echo $ID"@openib"
-   fi
+    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+        ID=`echo $1 | sed 's/[^0-9]*//g'`
+        echo $ID"@openib"
+    fi
 }
 declare -fx h2openib
 
 facet_host() {
-   local facet=$1
-   varname=${facet}_HOST
-   if [ -z "${!varname}" ]; then
-       if [ "${facet:0:3}" == "ost" ]; then
-	   eval ${facet}_HOST=${ost_HOST}
-       fi
-   fi
-   echo -n ${!varname}
+    local facet=$1
+    varname=${facet}_HOST
+    if [ -z "${!varname}" ]; then
+        if [ "${facet:0:3}" == "ost" ]; then
+            eval ${facet}_HOST=${ost_HOST}
+        fi
+    fi
+    echo -n ${!varname}
 }
 
 facet_nid() {
-   facet=$1
-   HOST=`facet_host $facet`
-   if [ -z "$HOST" ]; then
-	    echo "The env variable ${facet}_HOST must be set."
-	    exit 1
-   fi
-   if [ -z "$NETTYPE" ]; then
-	    echo "The env variable NETTYPE must be set."
-	    exit 1
-   fi
-   echo `h2$NETTYPE $HOST`
+    facet=$1
+    HOST=`facet_host $facet`
+    if [ -z "$HOST" ]; then
+    echo "The env variable ${facet}_HOST must be set."
+        exit 1
+    fi
+    if [ -z "$NETTYPE" ]; then
+        echo "The env variable NETTYPE must be set."
+        exit 1
+    fi
+    echo `h2$NETTYPE $HOST`
 }
 
 facet_active() {
@@ -425,9 +425,9 @@ facet_active() {
 
     active=${!activevar}
     if [ -z "$active" ] ; then 
-	echo -n ${facet}
+        echo -n ${facet}
     else
-	echo -n ${active}
+        echo -n ${active}
     fi
 }
 
@@ -435,9 +435,9 @@ facet_active_host() {
     local facet=$1
     local active=`facet_active $facet`
     if [ "$facet" == client ]; then
-	hostname
+        hostname
     else
-	echo `facet_host $active`
+        echo `facet_host $active`
     fi
 }
 
@@ -512,7 +512,7 @@ stopall() {
     grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 $*
     stop mds -f
     for num in `seq $OSTCOUNT`; do
-	stop ost$num -f
+        stop ost$num -f
     done
     return 0
 }
@@ -528,17 +528,17 @@ formatall() {
     load_modules
     echo Formatting mds, osts
     if $VERBOSE; then
-	add mds $MDS_MKFS_OPTS --reformat $MDSDEV || exit 10
+        add mds $MDS_MKFS_OPTS --reformat $MDSDEV || exit 10
     else
-	add mds $MDS_MKFS_OPTS --reformat $MDSDEV > /dev/null || exit 10
+        add mds $MDS_MKFS_OPTS --reformat $MDSDEV > /dev/null || exit 10
     fi
 
     for num in `seq $OSTCOUNT`; do
-	if $VERBOSE; then
-	    add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
-	else
-	    add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
-	fi
+        if $VERBOSE; then
+            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
+        else
+            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
+        fi
     done
 }
 
@@ -551,8 +551,8 @@ setupall() {
     echo Setup mdt, osts
     start mds $MDSDEV $MDS_MOUNT_OPTS
     for num in `seq $OSTCOUNT`; do
-	DEVNAME=`ostdevname $num`
-	start ost$num $DEVNAME $OST_MOUNT_OPTS
+        DEVNAME=`ostdevname $num`
+        start ost$num $DEVNAME $OST_MOUNT_OPTS
     done
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
@@ -564,33 +564,33 @@ setupall() {
 # General functions
 
 check_network() {
-   local NETWORK=0
-   local WAIT=0
-   local MAX=$2
-   while [ $NETWORK -eq 0 ]; do
-      ping -c 1 -w 3 $1 > /dev/null
-      if [ $? -eq 0 ]; then
-         NETWORK=1
-      else
-         WAIT=$((WAIT + 5))
-	 echo "waiting for $1, $((MAX - WAIT)) secs left"
-         sleep 5
-      fi
-      if [ $WAIT -gt $MAX ]; then
-         echo "Network not available"
-         exit 1
-      fi
-   done
+    local NETWORK=0
+    local WAIT=0
+    local MAX=$2
+    while [ $NETWORK -eq 0 ]; do
+        ping -c 1 -w 3 $1 > /dev/null
+        if [ $? -eq 0 ]; then
+            NETWORK=1
+        else
+            WAIT=$((WAIT + 5))
+            echo "waiting for $1, $((MAX - WAIT)) secs left"
+            sleep 5
+        fi
+        if [ $WAIT -gt $MAX ]; then
+            echo "Network not available"
+            exit 1
+        fi
+    done
 }
 check_port() {
-   while( !($DSH2 $1 "netstat -tna | grep -q $2") ) ; do
-      sleep 9
-   done
+    while( !($DSH2 $1 "netstat -tna | grep -q $2") ) ; do
+        sleep 9
+    done
 }
 
 no_dsh() {
-   shift
-   eval $@
+    shift
+    eval $@
 }
 
 comma_list() {
@@ -600,7 +600,7 @@ comma_list() {
 }
 
 absolute_path() {
-   (cd `dirname $1`; echo $PWD/`basename $1`)
+    (cd `dirname $1`; echo $PWD/`basename $1`)
 }
 
 ##################################
@@ -672,10 +672,10 @@ clear_failloc() {
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks start"
     for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
-	if [ -f $d/lru_size ]; then
-	    echo clear > $d/lru_size
-	    grep "[0-9]" $d/lock_unused_count
-	fi
+        if [ -f $d/lru_size ]; then
+            echo clear > $d/lru_size
+            grep "[0-9]" $d/lock_unused_count
+        fi
     done
     $LCTL mark "cancel_lru_locks stop"
 }
@@ -684,9 +684,9 @@ cancel_lru_locks() {
 pgcache_empty() {
     for a in /proc/fs/lustre/llite/*/dump_page_cache; do
         if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
-                echo there is still data in page cache $a ?
-                cat $a;
-                return 1;
+            echo there is still data in page cache $a ?
+            cat $a;
+            return 1;
         fi
     done
     return 0
@@ -695,22 +695,22 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
-	sysctl -w lustre.fail_loc=0 2> /dev/null || true
-	echo "${TESTSUITE}: **** FAIL:" $@
-	log "FAIL: $@"
-	exit 1
+    sysctl -w lustre.fail_loc=0 2> /dev/null || true
+    echo "${TESTSUITE}: **** FAIL:" $@
+    log "FAIL: $@"
+    exit 1
 }
 
 build_test_filter() {
-        [ "$ONLY" ] && log "only running test `echo $ONLY`"
-        for O in $ONLY; do
-            eval ONLY_${O}=true
-        done
-        [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-		log "skipping tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
-        for E in $EXCEPT $ALWAYS_EXCEPT; do
-            eval EXCEPT_${E}=true
-        done
+    [ "$ONLY" ] && log "only running test `echo $ONLY`"
+    for O in $ONLY; do
+        eval ONLY_${O}=true
+    done
+    [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
+        log "skipping tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
+    for E in $EXCEPT $ALWAYS_EXCEPT; do
+        eval EXCEPT_${E}=true
+    done
 }
 
 _basetest() {
@@ -722,53 +722,53 @@ basetest() {
 }
 
 run_test() {
-        export base=`basetest $1`
-        if [ ! -z "$ONLY" ]; then
-                 testname=ONLY_$1
-                 if [ ${!testname}x != x ]; then
-                     run_one $1 "$2"
-                     return $?
-                 fi
-                 testname=ONLY_$base
-                 if [ ${!testname}x != x ]; then
-                     run_one $1 "$2"
-                     return $?
-                 fi
-                 echo -n "."
-                 return 0
-        fi
-        testname=EXCEPT_$1
+    export base=`basetest $1`
+    if [ ! -z "$ONLY" ]; then
+        testname=ONLY_$1
         if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1"
-                 return 0
+            run_one $1 "$2"
+            return $?
         fi
-        testname=EXCEPT_$base
+        testname=ONLY_$base
         if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1 (base $base)"
-                 return 0
+            run_one $1 "$2"
+            return $?
         fi
-        run_one $1 "$2"
-
-        return $?
+        echo -n "."
+        return 0
+    fi
+    testname=EXCEPT_$1
+    if [ ${!testname}x != x ]; then
+        echo "skipping excluded test $1"
+        return 0
+    fi
+    testname=EXCEPT_$base
+    if [ ${!testname}x != x ]; then
+        echo "skipping excluded test $1 (base $base)"
+        return 0
+    fi
+    run_one $1 "$2"
+    
+    return $?
 }
 
 EQUALS="======================================================================"
 equals_msg() {
-   msg="$@"
+    msg="$@"
 
-   local suffixlen=$((${#EQUALS} - ${#msg}))
-   [ $suffixlen -lt 5 ] && suffixlen=5
-   printf '===== %s %.*s\n' "$msg" $suffixlen $EQUALS
+    local suffixlen=$((${#EQUALS} - ${#msg}))
+    [ $suffixlen -lt 5 ] && suffixlen=5
+    printf '===== %s %.*s\n' "$msg" $suffixlen $EQUALS
 }
 
 log() {
-	echo "$*"
-	lsmod | grep lnet > /dev/null || load_modules
-	$LCTL mark "$*" 2> /dev/null || true
+    echo "$*"
+    lsmod | grep lnet > /dev/null || load_modules
+    $LCTL mark "$*" 2> /dev/null || true
 }
 
 pass() {
-	echo PASS $@
+    echo PASS $@
 }
 
 check_mds() {
@@ -797,6 +797,6 @@ run_one() {
 }
 
 canonical_path() {
-   (cd `dirname $1`; echo $PWD/`basename $1`)
+    (cd `dirname $1`; echo $PWD/`basename $1`)
 }
 
