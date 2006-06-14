@@ -385,7 +385,9 @@ int main(int argc, char *const argv[])
                         source, target, strerror(errno));
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
-                             "Check /etc/modules.conf and /proc/filesystems\n");
+                                "Check /etc/modprobe.conf and /proc/filesystems"
+                                "\nNote 'alias lustre llite' should be removed"
+                                " from modprobe.conf\n");
                 if (errno == ENOTBLK)
                         fprintf(stderr, "Do you need -o loop?\n");
                 if (errno == ENOMEDIUM)

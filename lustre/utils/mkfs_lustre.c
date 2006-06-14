@@ -1104,11 +1104,6 @@ int main(int argc, char *const argv[])
         /* device is last arg */
         strcpy(mop.mo_device, argv[argc - 1]);
 
-#ifndef TUNEFS /* mkfs.lustre */
-        if (check_mtab_entry(mop.mo_device))
-                return(EEXIST);
-#endif
-
         /* Are we using a loop device? */
         ret = is_block(mop.mo_device);
         if (ret < 0) 
@@ -1119,20 +1114,6 @@ int main(int argc, char *const argv[])
 #ifdef TUNEFS
         /* For tunefs, we must read in the old values before parsing any
            new ones. */
-        /* Create the loopback file */
-        if (mop.mo_flags & MO_IS_LOOP) {
-                ret = access(mop.mo_device, F_OK);
-                if (ret == 0)  
-                        ret = loop_setup(&mop);
-                else 
-                        ret = errno;
-                if (ret) {
-                        fatal();
-                        fprintf(stderr, "Loop device setup for %s failed: %s\n",
-                                mop.mo_device, strerror(ret));
-                        goto out;
-                }
-        }
         
         /* Check whether the disk has already been formatted by mkfs.lustre */
         ret = is_lustre_target(&mop);
@@ -1250,23 +1231,30 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 
-#ifndef TUNEFS /* mkfs.lustre */
-        /* Create the loopback file of the correct size */
+        if (check_mtab_entry(mop.mo_device))
+                return(EEXIST);
+
+        /* Create the loopback file */
         if (mop.mo_flags & MO_IS_LOOP) {
                 ret = access(mop.mo_device, F_OK);
-                /* Don't destroy the loopback file if no FORCEFORMAT */
+                if (ret) 
+                        ret = errno;
+#ifndef TUNEFS /* mkfs.lustre */
+                /* Reformat the loopback file */
                 if (ret || (mop.mo_flags & MO_FORCEFORMAT))
                         ret = loop_format(&mop);
+#endif
                 if (ret == 0)  
                         ret = loop_setup(&mop);
                 if (ret) {
                         fatal();
-                        fprintf(stderr, "Loop device setup failed: %s\n", 
-                                strerror(ret));
+                        fprintf(stderr, "Loop device setup for %s failed: %s\n",
+                                mop.mo_device, strerror(ret));
                         goto out;
                 }
         }
 
+#ifndef TUNEFS /* mkfs.lustre */
         /* Check whether the disk has already been formatted by mkfs.lustre */
         if (!(mop.mo_flags & MO_FORCEFORMAT)) {
                 ret = is_lustre_target(&mop);
@@ -1289,6 +1277,7 @@ int main(int argc, char *const argv[])
         }
 #endif
 
+        /* Write our config files */
         ret = write_local_files(&mop);
         if (ret != 0) {
                 fatal();
