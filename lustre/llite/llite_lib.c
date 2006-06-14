@@ -1504,14 +1504,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         } else 
                                 ll_replace_lsm(inode, lsm);
                 }
-                /* bug 2844 - limit i_blksize for broken user-space apps */
-                LASSERTF(lsm->lsm_xfersize != 0, "%lu\n", lsm->lsm_xfersize);
-                inode->i_blksize = min(lsm->lsm_xfersize, LL_MAX_BLKSIZE);
                 if (lli->lli_smd != lsm)
                         obd_free_memmd(ll_i2obdexp(inode), &lsm);
-        } else {
-                inode->i_blksize = max(inode->i_blksize,
-                                       inode->i_sb->s_blocksize);
         }
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -1543,6 +1537,10 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);
         if (body->valid & OBD_MD_FLTYPE)
                 inode->i_mode = (inode->i_mode & ~S_IFMT)|(body->mode & S_IFMT);
+        if (S_ISREG(inode->i_mode))
+                inode->i_blksize = min(2UL*PTLRPC_MAX_BRW_SIZE, LL_MAX_BLKSIZE);
+        else
+                inode->i_blksize = inode->i_sb->s_blocksize;
         if (body->valid & OBD_MD_FLUID)
                 inode->i_uid = body->uid;
         if (body->valid & OBD_MD_FLGID)

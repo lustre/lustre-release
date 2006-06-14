@@ -103,7 +103,6 @@ struct lov_stripe_md {
                 __u64 lw_object_id;        /* lov object id */
                 __u64 lw_object_gr;        /* lov object group */
                 __u64 lw_maxbytes;         /* maximum possible file size */
-                unsigned long lw_xfersize; /* optimal transfer size */
 
                 /* LOV-private members start here -- only for use in lov/. */
                 __u32 lw_magic;
@@ -119,7 +118,6 @@ struct lov_stripe_md {
 #define lsm_object_id    lsm_wire.lw_object_id
 #define lsm_object_gr    lsm_wire.lw_object_gr
 #define lsm_maxbytes     lsm_wire.lw_maxbytes
-#define lsm_xfersize     lsm_wire.lw_xfersize
 #define lsm_magic        lsm_wire.lw_magic
 #define lsm_stripe_size  lsm_wire.lw_stripe_size
 #define lsm_pattern      lsm_wire.lw_pattern

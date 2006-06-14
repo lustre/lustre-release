@@ -86,7 +86,6 @@ static void lsm_unpackmd_common(struct lov_stripe_md *lsm,
         lsm->lsm_object_gr = le64_to_cpu(lmm->lmm_object_gr);
         lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
         lsm->lsm_pattern = le32_to_cpu(lmm->lmm_pattern);
-        lsm->lsm_xfersize = lsm->lsm_stripe_size * lsm->lsm_stripe_count;
 }
 
 static void

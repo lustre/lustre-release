@@ -53,6 +53,11 @@ Description: client OST exclusion list
 Details    : Clients can be started with a list of OSTs that should be
 	     declared "inactive" for known non-responsive OSTs.
 
+Severity   : minor
+Bugzilla   : 6062
+Description: SPEC SFS validation failure on NFS v2 over lustre.
+Details    : Changes the blocksize for regular files to be 2x RPC size,
+             and not depend on stripe size.
 	
 	
 	

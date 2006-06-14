@@ -204,7 +204,6 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
         (*lsmp)->lsm_magic = magic;
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
-        (*lsmp)->lsm_xfersize = PTLRPC_MAX_BRW_SIZE * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
         
@@ -350,7 +349,6 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = lum.lmm_stripe_offset;
         (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
-        (*lsmp)->lsm_xfersize = lum.lmm_stripe_size * stripe_count;
 
         RETURN(0);
 }
