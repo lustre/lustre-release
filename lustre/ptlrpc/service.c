@@ -836,7 +836,7 @@ void ptlrpc_daemonize(char *name)
         cfs_daemonize(name);
         exit_fs(cfs_current());
         current->fs = fs;
-        set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
+        ll_set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
 }
 
 static void

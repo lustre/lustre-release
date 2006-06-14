@@ -7,10 +7,11 @@
 
 #ifdef CONFIG_FS_POSIX_ACL
 # include <linux/fs.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
-#include <linux/posix_acl_xattr.h>
-#else
-#include <linux/xattr_acl.h>        
+#ifdef HAVE_XATTR_ACL
+# include <linux/xattr_acl.h>
+#endif
+#ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
+# include <linux/posix_acl_xattr.h>
 #endif
 #endif
 
@@ -27,8 +28,13 @@ struct lustre_intent_data {
         __u32 it_lock_mode;
         }; */
 
+/* If there is no FMODE_EXEC defined, make it to match nothing */
+#ifndef FMODE_EXEC
+#define FMODE_EXEC 0
+#endif
+
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
+#if !defined(LUSTRE_KERNEL_VERSION) || (LUSTRE_KERNEL_VERSION < 46)
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 #else
 #if (LUSTRE_KERNEL_VERSION < 46)
@@ -38,6 +44,7 @@ struct lustre_intent_data {
 #endif
 #endif
 
+#ifdef LUSTRE_KERNEL_VERSION
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -46,12 +53,16 @@ static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
         return nd->intent;
 #endif
 }
+#endif
 
 struct ll_dentry_data {
         int                      lld_cwd_count;
         int                      lld_mnt_count;
         struct obd_client_handle lld_cwd_och;
         struct obd_client_handle lld_mnt_och;
+#ifndef LUSTRE_KERNEL_VERSION
+        struct lookup_intent     *lld_it;
+#endif
 };
 
 #define ll_d2d(de) ((struct ll_dentry_data*) de->d_fsdata)
@@ -378,6 +389,10 @@ int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 void ll_prepare_mdc_op_data(struct mdc_op_data *,
                             struct inode *i1, struct inode *i2,
                             const char *name, int namelen, int mode);
+#ifndef LUSTRE_KERNEL_VERSION
+struct lookup_intent *ll_convert_intent(struct open_intent *oit,
+                                        int lookup_flags);
+#endif
 
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);

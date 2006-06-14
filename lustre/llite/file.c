@@ -371,7 +371,12 @@ int ll_file_open(struct inode *inode, struct file *file)
         if (inode->i_sb->s_root == file->f_dentry)
                 RETURN(0);
 
+#ifdef LUSTRE_KERNEL_VERSION
         it = file->f_it;
+#else
+        it = file->private_data; /* XXX: compat macro */
+        file->private_data = NULL; /* prevent ll_local_open assertion */
+#endif
 
         fd = ll_file_data_get();
         if (fd == NULL)
@@ -388,6 +393,15 @@ int ll_file_open(struct inode *inode, struct file *file)
 
                 if (oit.it_flags & O_CREAT)
                         oit.it_flags |= MDS_OPEN_OWNEROVERRIDE;
+
+                /* NFS hack - some strange NFS clients create files with zero
+                 * permission bits, and then expect to be able to open such
+                 * files. We are relying on real VFS client to do ll_permission
+                 * first before coming here, so if we got here, we either came
+                 * from NFS or all access checks ar eok, so it is safe to set
+                 * this flag in any case (XXX - race with chmod?)
+                 */ 
+                oit.it_flags |= MDS_OPEN_OWNEROVERRIDE;
 
                 /* We do not want O_EXCL here, presumably we opened the file
                  * already? XXX - NFS implications? */
@@ -2326,11 +2340,13 @@ struct file_operations ll_file_operations_flock = {
 
 
 struct inode_operations ll_file_inode_operations = {
+#ifdef LUSTRE_KERNEL_VERSION
         .setattr_raw    = ll_setattr_raw,
+#endif
         .setattr        = ll_setattr,
         .truncate       = ll_truncate,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        .getattr_it     = ll_getattr_it,
+        .getattr        = ll_getattr,
 #else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif

@@ -506,6 +506,62 @@ AC_DEFUN([LC_XATTR_ACL],
 [])
 ])
 
+AC_DEFUN([LC_STRUCT_INTENT_FILE],
+[AC_MSG_CHECKING([if struct open_intent has a file field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+        #include <linux/namei.h>
+],[
+        struct open_intent intent;
+        &intent.file;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_FILE_IN_STRUCT_INTENT, 1, [struct open_intent has a file field])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+
+AC_DEFUN([LC_POSIX_ACL_XATTR_H],
+[LB_CHECK_FILE([$LINUX/include/linux/posix_acl_xattr.h],[
+        AC_MSG_CHECKING([if linux/posix_acl_xattr.h can be compiled])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/posix_acl_xattr.h>
+        ],[],[
+                AC_MSG_RESULT([yes])
+                AC_DEFINE(HAVE_LINUX_POSIX_ACL_XATTR_H, 1, [linux/posix_acl_xattr.h found])
+
+        ],[
+                AC_MSG_RESULT([no])
+        ])
+$1
+],[
+AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_LUSTRE_VERSION_H],
+[LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
+       rm -f "$LUSTRE/include/linux/lustre_version.h"
+],[
+       touch "$LUSTRE/include/linux/lustre_version.h"
+])
+])
+
+AC_DEFUN([LC_FUNC_SET_FS_PWD],
+[AC_MSG_CHECKING([if kernel exports show_task])
+have_show_task=0
+        if grep -q "EXPORT_SYMBOL(show_task)" \
+                 "$LINUX/fs/namespace.c" 2>/dev/null ; then
+		AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+        fi
+])
+
+
 #
 # LC_PROG_LINUX
 #
@@ -535,6 +591,10 @@ LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL
 LC_FILEMAP_POPULATE
 LC_D_ADD_UNIQUE
 LC_XATTR_ACL
+LC_STRUCT_INTENT_FILE
+LC_POSIX_ACL_XATTR_H
+LC_LUSTRE_VERSION_H
+LC_FUNC_SET_FS_PWD
 ])
 
 #

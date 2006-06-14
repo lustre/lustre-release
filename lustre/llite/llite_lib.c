@@ -103,7 +103,9 @@ void ll_free_sbi(struct super_block *sb)
 }
 
 static struct dentry_operations ll_d_root_ops = {
+#ifdef LUSTRE_KERNEL_VERSION
         .d_compare = ll_dcompare,
+#endif
 };
 
 int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
@@ -1064,8 +1066,12 @@ void ll_clear_inode(struct inode *inode)
         
         if (lli->lli_mds_write_och)
                 ll_mdc_real_close(inode, FMODE_WRITE);
-        if (lli->lli_mds_exec_och)
+        if (lli->lli_mds_exec_och) {
+                if (!FMODE_EXEC)
+                        CERROR("No FMODE exec, bug exec och is present for "
+                               "inode %ld\n", inode->i_ino);
                 ll_mdc_real_close(inode, FMODE_EXEC);
+        }
         if (lli->lli_mds_read_och)
                 ll_mdc_real_close(inode, FMODE_READ);
 
@@ -1290,32 +1296,41 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 obd_flag flags;
                 struct obd_info oinfo = { { { 0 } } };
-                struct obdo oa;
+                struct obdo *oa = obdo_alloc();
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
 
-                oa.o_id = lsm->lsm_object_id;
-                oa.o_valid = OBD_MD_FLID;
+                if (oa) {
+                        oa->o_id = lsm->lsm_object_id;
+                        oa->o_valid = OBD_MD_FLID;
 
-                flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                        OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                        OBD_MD_FLFID | OBD_MD_FLGENER;
+                        flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                OBD_MD_FLFID | OBD_MD_FLGENER;
 
-                obdo_from_inode(&oa, inode, flags);
+                        obdo_from_inode(oa, inode, flags);
 
-                oinfo.oi_oa = &oa;
-                oinfo.oi_md = lsm;
+                        oinfo.oi_oa = oa;
+                        oinfo.oi_md = lsm;
 
-                rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
-                if (rc)
-                        CERROR("obd_setattr_async fails: rc=%d\n", rc);
+                        rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
+                        if (rc)
+                                CERROR("obd_setattr_async fails: rc=%d\n", rc);
+                        obdo_free(oa);
+                } else {
+                        rc = -ENOMEM;
+                }
         }
         RETURN(rc);
 }
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
+        if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
+            (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
+                attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
+
         return ll_setattr_raw(de->d_inode, attr);
 }
 

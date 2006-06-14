@@ -195,7 +195,6 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                 rec->sa_ctime = LTIME_S(iattr->ia_ctime);
                 rec->sa_attr_flags =
                                ((struct ll_iattr_struct *)iattr)->ia_attr_flags;
-
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
                 else

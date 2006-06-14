@@ -160,7 +160,7 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         }
         current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);
-        set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
+        ll_set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
 
         /*
         CDEBUG(D_INFO,
@@ -200,7 +200,7 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
                  current->fs->pwdmnt, new_ctx->pwdmnt);
 
         set_fs(saved->fs);
-        set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
+        ll_set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
 
         dput(saved->pwd);
         mntput(saved->pwdmnt);
@@ -425,6 +425,7 @@ EXPORT_SYMBOL(l_readdir);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_memmax);
 
+#ifdef LUSTRE_KERNEL_VERSION
 #ifdef HAVE_OLD_DEV_SET_RDONLY
 void dev_set_rdonly(lvfs_sbdev_type dev, int no_write);
 void dev_clear_rdonly(int no_write);
@@ -471,6 +472,7 @@ void lvfs_clear_rdonly(lvfs_sbdev_type dev)
 EXPORT_SYMBOL(lvfs_set_rdonly);
 EXPORT_SYMBOL(lvfs_check_rdonly);
 EXPORT_SYMBOL(lvfs_clear_rdonly);
+#endif
 
 int lvfs_check_io_health(struct obd_device *obd, struct file *file)
 {

@@ -23,12 +23,6 @@
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/smp_lock.h>
-#ifdef HAVE_LINUX_XATTR_ACL_H
-#include <linux/xattr_acl.h>
-#else
-#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
-#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
-#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -36,6 +30,19 @@
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
 #include <linux/lustre_version.h>
+
+#ifndef POSIX_ACL_XATTR_ACCESS
+#ifndef XATTR_NAME_ACL_ACCESS
+#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+#endif
+#define POSIX_ACL_XATTR_ACCESS XATTR_NAME_ACL_ACCESS
+#endif
+#ifndef POSIX_ACL_XATTR_DEFAULT
+#ifndef XATTR_NAME_ACL_DEFAULT
+#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
+#endif
+#define POSIX_ACL_XATTR_DEFAULT XATTR_NAME_ACL_DEFAULT
+#endif
 
 #include "llite_internal.h"
 
@@ -53,10 +60,10 @@
 static
 int get_xattr_type(const char *name)
 {
-        if (!strcmp(name, XATTR_NAME_ACL_ACCESS))
+        if (!strcmp(name, POSIX_ACL_XATTR_ACCESS))
                 return XATTR_ACL_ACCESS_T;
 
-        if (!strcmp(name, XATTR_NAME_ACL_DEFAULT))
+        if (!strcmp(name, POSIX_ACL_XATTR_DEFAULT))
                 return XATTR_ACL_DEFAULT_T;
 
         if (!strncmp(name, XATTR_USER_PREFIX,

@@ -31,6 +31,8 @@
 
 #include <libcfs/linux/portals_compat25.h>
 
+#include <linux/lustre_patchless_compat.h>
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
 struct ll_iattr_struct {
         struct iattr    iattr;
@@ -38,6 +40,29 @@ struct ll_iattr_struct {
 };
 #else
 #define ll_iattr_struct iattr
+#endif
+
+#ifndef HAVE_SET_FS_PWD
+static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
+                struct dentry *dentry)
+{
+        struct dentry *old_pwd;
+        struct vfsmount *old_pwdmnt;
+
+        write_lock(&fs->lock);
+        old_pwd = fs->pwd;
+        old_pwdmnt = fs->pwdmnt;
+        fs->pwdmnt = mntget(mnt);
+        fs->pwd = dget(dentry);
+        write_unlock(&fs->lock);
+
+        if (old_pwd) {
+                dput(old_pwd);
+                mntput(old_pwdmnt);
+        }
+}
+#else
+#define ll_set_fs_pwd set_fs_pwd
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
