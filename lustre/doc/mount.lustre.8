@@ -40,7 +40,8 @@ The mgs specification may be a colon-separated list of nodes...
  ...and each node may be specified by a comma-separated list of NIDs.
 .PP
 In addition to the standard mount options, Lustre understands the following
-additional options:
+.I client-specific
+options:
 .TP
 .BI flock
 Enable flock support
@@ -59,6 +60,11 @@ Enable ACL support
 .TP
 .BI noacl
 Disable ACL support
+.PP
+In addition to the standard mount options and backing disk type
+(e.g. LDISKFS) options, Lustre understands the following
+.I server-specific
+options:
 .TP
 .BI nosvc
 Only start the MGC (and MGS, if co-located) for a target service, and not the actual service.

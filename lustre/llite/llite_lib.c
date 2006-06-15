@@ -576,16 +576,14 @@ static inline int ll_set_opt(const char *opt, char *data, int fl)
 }
 
 /* non-client-specific mount options are parsed in lmd_parse */
-void ll_options(char *options, int *flags)
+static int ll_options(char *options, int *flags)
 {
         int tmp;
         char *s1 = options, *s2;
         ENTRY;
 
-        if (!options) {
-                EXIT;
-                return;
-        }
+        if (!options) 
+                RETURN(0);
 
         CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
 
@@ -628,6 +626,9 @@ void ll_options(char *options, int *flags)
                         goto next;
                 }
 
+                LCONSOLE_ERROR("Unknown option '%s', won't mount.\n", s1);
+                RETURN(-EINVAL);
+
 next:
                 /* Find next opt */
                 s2 = strchr(s1, ',');
@@ -635,7 +636,7 @@ next:
                         break;
                 s1 = s2 + 1;
         }
-        EXIT;
+        RETURN(0);
 }
                 
 void ll_lli_init(struct ll_inode_info *lli)
@@ -849,8 +850,10 @@ int ll_fill_super(struct super_block *sb)
         if (!sbi) 
                 RETURN(-ENOMEM);
 
-        ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
-        
+        err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
+        if (err) 
+                GOTO(out_free, err);
+
         /* Generate a string unique to this super, in case some joker tries
            to mount the same fs at two mount points. 
            Use the address of the super itself.*/

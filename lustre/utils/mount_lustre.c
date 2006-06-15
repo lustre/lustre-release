@@ -46,6 +46,8 @@ static char *progname = NULL;
 void usage(FILE *out)
 {
         fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
+        fprintf(out, "\nThis mount helper should only be invoked via the "
+                "mount (8) command,\ne.g. mount -t lustre dev dir\n\n");
         fprintf(out, "usage: %s [-fhnv] [-o <mntopt>] <device> <mountpt>\n", 
                 progname);
         fprintf(out, 
@@ -162,48 +164,36 @@ out_free:
  ****************************************************************************/
 struct opt_map {
         const char *opt;        /* option name */
-        int skip;               /* don't pass this option to Lustre */
         int inv;                /* true if flag value should be inverted */
         int mask;               /* flag mask value */
 };
 
 static const struct opt_map opt_map[] = {
-  /*"optname",skip,inv,ms_mask */
+  /*"optname", inv,ms_mask */
   /* These flags are parsed by mount, not lustre */
-  { "defaults", 1, 0, 0         },      /* default options */
-  { "remount",  1, 0, MS_REMOUNT},      /* remount with different options */
-  { "rw",       1, 1, MS_RDONLY },      /* read-write */
-  { "ro",       1, 0, MS_RDONLY },      /* read-only */
-  { "exec",     1, 1, MS_NOEXEC },      /* permit execution of binaries */
-  { "noexec",   1, 0, MS_NOEXEC },      /* don't execute binaries */
-  { "suid",     1, 1, MS_NOSUID },      /* honor suid executables */
-  { "nosuid",   1, 0, MS_NOSUID },      /* don't honor suid executables */
-  { "dev",      1, 1, MS_NODEV  },      /* interpret device files  */
-  { "nodev",    1, 0, MS_NODEV  },      /* don't interpret devices */
-  { "async",    1, 1, MS_SYNCHRONOUS},  /* asynchronous I/O */
-  { "auto",     1, 0, 0         },      /* Can be mounted using -a */
-  { "noauto",   1, 0, 0         },      /* Can only be mounted explicitly */
-  { "nousers",  1, 1, 0         },      /* Forbid ordinary user to mount */
-  { "nouser",   1, 1, 0         },      /* Forbid ordinary user to mount */
-  { "noowner",  1, 1, 0         },      /* Device owner has no special privs */
-  { "_netdev",  1, 0, 0         },      /* Device accessible only via network */
-  /* These flags are passed through and parsed in lmd_parse & ll_options */
-  { "flock",    0, 0, 0         },      /* Enable flock support */
-  { "noflock",  0, 1, 0         },      /* Disable flock support */
-  { "user_xattr",   0, 0, 0     },      /* Enable get/set user xattr */
-  { "nouser_xattr", 0, 1, 0     },      /* Disable user xattr */
-  { "acl",      0, 0, 0         },      /* Enable ACL support */
-  { "noacl",    0, 1, 0         },      /* Disable ACL support */
-  { "nosvc",    0, 0, 0         },      /* Only start MGS/MGC, nothing else */
-  { "exclude",  0, 0, 0         },      /* OST exclusion list */
-  { "abort_recov",  0, 0, 0     },      /* Abort recovery */
-  { NULL,       0, 0, 0         }
+  { "defaults", 0, 0         },      /* default options */
+  { "remount",  0, MS_REMOUNT},      /* remount with different options */
+  { "rw",       1, MS_RDONLY },      /* read-write */
+  { "ro",       0, MS_RDONLY },      /* read-only */
+  { "exec",     1, MS_NOEXEC },      /* permit execution of binaries */
+  { "noexec",   0, MS_NOEXEC },      /* don't execute binaries */
+  { "suid",     1, MS_NOSUID },      /* honor suid executables */
+  { "nosuid",   0, MS_NOSUID },      /* don't honor suid executables */
+  { "dev",      1, MS_NODEV  },      /* interpret device files  */
+  { "nodev",    0, MS_NODEV  },      /* don't interpret devices */
+  { "async",    1, MS_SYNCHRONOUS},  /* asynchronous I/O */
+  { "auto",     0, 0         },      /* Can be mounted using -a */
+  { "noauto",   0, 0         },      /* Can only be mounted explicitly */
+  { "nousers",  1, 0         },      /* Forbid ordinary user to mount */
+  { "nouser",   1, 0         },      /* Forbid ordinary user to mount */
+  { "noowner",  1, 0         },      /* Device owner has no special privs */
+  { "_netdev",  0, 0         },      /* Device accessible only via network */
+  { NULL,       0, 0         }
 };
 /****************************************************************************/
 
-/* 1  = found, skip
-   0  = found, no skip
-   -1 = not found in above list */
+/* 1  = don't pass on to lustre
+   0  = pass on to lustre */
 static int parse_one_option(const char *check, int *flagp)
 {
         const struct opt_map *opt;
@@ -216,12 +206,12 @@ static int parse_one_option(const char *check, int *flagp)
                                 else
                                         *flagp |= opt->mask;
                         }
-                        return opt->skip;
+                        return 1;
                 }
         }
-        fprintf(stderr, "%s: ignoring unknown option '%s'\n", progname,
-                check);
-        return -1;
+        /* Assume any unknown options are valid and pass them on.  The mount
+           will fail if lmd_parse, ll_options or ldiskfs doesn't recognize it.*/
+        return 0;
 }
 
 /* Replace options with subset of Lustre-specific options, and
@@ -409,8 +399,9 @@ int main(int argc, char *const argv[])
                                 "in use. (%s)\n", source);
                 if (errno == EINVAL) {
                         char *ptr = strchr(source, '/');
-                        fprintf(stderr, "This may have multiple causes. Is "
-                                "'%s' the correct filesystem name?\n",
+                        fprintf(stderr, "This may have multiple causes.\n"
+                                "Is '%s' the correct filesystem name?\n"
+                                "Are the mount options correct?\n",
                                 ptr ? ptr + 1 : source);
                         fprintf(stderr, "Check the syslog for more info\n");
                 }

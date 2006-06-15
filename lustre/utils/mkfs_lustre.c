@@ -1174,14 +1174,13 @@ int main(int argc, char *const argv[])
                                ",iopen_nopriv,user_xattr");
                 if ((get_os_version() == 24) && IS_OST(ldd))
                         strcat(always_mountopts, ",asyncdel");
-#if 0
-                /* Files created while extents are enabled cannot be read if
-                   mounted with a kernel that doesn't include the CFS patches.*/
+                /* NB: Files created while extents are enabled cannot be read
+                   if mounted with a kernel that doesn't include the CFS 
+                   patches! */
                 if (IS_OST(ldd) && 
                     ldd->ldd_mount_type == LDD_MT_LDISKFS) {
                         strcat(default_mountopts, ",extents,mballoc");
                 }
-#endif 
                 break;
         }
         case LDD_MT_SMFS: {
