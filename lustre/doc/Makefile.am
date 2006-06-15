@@ -15,7 +15,7 @@ TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
 if UTILS
-man_MANS = lustre.7 lfs.1 mount.lustre.8 mkfs.lustre.8 tunefs.lustre.8 lctl.8 
+man_MANS = lustre.7 lfs.1 mkfs.lustre.8 tunefs.lustre.8 lctl.8 
 endif
 
 LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
