@@ -92,9 +92,9 @@ void usage(FILE *out)
                 "\t\t\tfor this device on an alternate device\n"
                 */
                 "\t\t--mountfsoptions=<opts> : permanent mount options\n"
+#ifndef TUNEFS
                 "\t\t--backfstype=<fstype> : backing fs type (ext3, ldiskfs)\n"
                 "\t\t--device-size=#N(KB) : device size for loop devices\n"
-#ifndef TUNEFS
                 "\t\t--mkfsoptions=<opts> : format options\n"
                 "\t\t--reformat: overwrite an existing disk\n"
                 "\t\t--stripe-count-hint=#N : used for optimizing MDT inode size\n"

@@ -187,7 +187,7 @@ static const struct opt_map opt_map[] = {
   { "nouser",   1, 1, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  1, 1, 0         },      /* Device owner has no special privs */
   { "_netdev",  1, 0, 0         },      /* Device accessible only via network */
-  /* These flags are passed through and parsed in lustre ll_options */
+  /* These flags are passed through and parsed in lmd_parse & ll_options */
   { "flock",    0, 0, 0         },      /* Enable flock support */
   { "noflock",  0, 1, 0         },      /* Disable flock support */
   { "user_xattr",   0, 0, 0     },      /* Enable get/set user xattr */
