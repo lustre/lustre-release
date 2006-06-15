@@ -49,9 +49,9 @@
 
 /* client seq mgr interface */
 static int 
-seq_client_alloc_common(struct lu_client_seq *seq, 
-                        struct lu_range *range,
-                        __u32 opc)
+seq_client_rpc(struct lu_client_seq *seq, 
+               struct lu_range *range,
+               __u32 opc)
 {
         int repsize = sizeof(struct lu_range);
         int rc, reqsize = sizeof(__u32);
@@ -97,8 +97,8 @@ seq_client_alloc_super(struct lu_client_seq *seq)
         ENTRY;
 
         LASSERT(seq->seq_flags & LUSTRE_CLI_SEQ_SERVER);
-        rc = seq_client_alloc_common(seq, &seq->seq_cl_range,
-                                     SEQ_ALLOC_SUPER);
+        rc = seq_client_rpc(seq, &seq->seq_cl_range,
+                            SEQ_ALLOC_SUPER);
         if (rc == 0) {
                 CDEBUG(D_INFO, "SEQ-MGR(cli): allocated super-sequence "
                        "["LPX64"-"LPX64"]\n", seq->seq_cl_range.lr_start,
@@ -116,8 +116,8 @@ seq_client_alloc_meta(struct lu_client_seq *seq)
         ENTRY;
 
         LASSERT(seq->seq_flags & LUSTRE_CLI_SEQ_CLIENT);
-        rc = seq_client_alloc_common(seq, &seq->seq_cl_range,
-                                     SEQ_ALLOC_META);
+        rc = seq_client_rpc(seq, &seq->seq_cl_range,
+                            SEQ_ALLOC_META);
         if (rc == 0) {
                 CDEBUG(D_INFO, "SEQ-MGR(cli): allocated meta-sequence "
                        "["LPX64"-"LPX64"]\n", seq->seq_cl_range.lr_start,
