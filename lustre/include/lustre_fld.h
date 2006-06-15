@@ -23,9 +23,25 @@
 #ifndef __LINUX_FLD_H
 #define __LINUX_FLD_H
 
+struct lu_client_fld;
+struct lu_server_fld;
+
 /*
  * FLD (Fid Location Database) interface.
  */
+enum {
+        LUSTRE_CLI_FLD_HASH_DHT = 0,
+        LUSTRE_CLI_FLD_HASH_RRB,
+        LUSTRE_CLI_FLD_HASH_LAST
+};
+        
+typedef int (*fld_hash_func_t) (struct lu_client_fld *, __u64);
+
+struct lu_fld_hash {
+        const char              *fh_name;
+        fld_hash_func_t          fh_func;
+};
+
 struct lu_server_fld {
         struct proc_dir_entry   *fld_proc_entry;
         struct ptlrpc_service   *fld_service;
@@ -37,7 +53,10 @@ struct lu_server_fld {
 
 struct lu_client_fld {
         struct proc_dir_entry   *fld_proc_entry;
-        struct obd_export       *fld_exp;
+        struct list_head         fld_exports;
+        struct lu_fld_hash      *fld_hash;
+        int                      fld_count;
+        spinlock_t               fld_lock;
 };
 
 /* server methods */
@@ -50,9 +69,15 @@ void fld_server_fini(struct lu_server_fld *fld,
 
 /* client methods */
 int fld_client_init(struct lu_client_fld *fld,
-                    struct obd_export *exp);
+                    int hash);
 
 void fld_client_fini(struct lu_client_fld *fld);
+
+int fld_client_add_export(struct lu_client_fld *fld,
+                          struct obd_export *exp);
+
+int fld_client_del_export(struct lu_client_fld *fld,
+                          struct obd_export *exp);
 
 int fld_client_create(struct lu_client_fld *fld,
                       __u64 seq, __u64 mds_num);

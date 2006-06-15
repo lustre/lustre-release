@@ -77,18 +77,21 @@ static void *fld_key_init(const struct lu_context *ctx,
                           struct lu_context_key *key)
 {
         struct fld_thread_info *info;
+        ENTRY;
 
         OBD_ALLOC_PTR(info);
         if (info == NULL)
                 info = ERR_PTR(-ENOMEM);
-        return info;
+        RETURN(info);
 }
 
 static void fld_key_fini(const struct lu_context *ctx,
                          struct lu_context_key *key, void *data)
 {
         struct fld_thread_info *info = data;
+        ENTRY;
         OBD_FREE_PTR(info);
+        EXIT;
 }
 
 static int fld_key_registered = 0;
@@ -101,21 +104,27 @@ static struct lu_context_key fld_thread_key = {
 static struct dt_key *fld_key(const struct lu_context *ctx,
                               const fidseq_t seq_num)
 {
-        struct fld_thread_info *info = lu_context_key_get(ctx, &fld_thread_key);
+        struct fld_thread_info *info;
+        ENTRY;
+        
+        info = lu_context_key_get(ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
         info->fti_key = cpu_to_be64(seq_num);
-        return (void *)&info->fti_key;
+        RETURN((void *)&info->fti_key);
 }
 
 static struct dt_rec *fld_rec(const struct lu_context *ctx,
                               const mdsno_t mds_num)
 {
-        struct fld_thread_info *info = lu_context_key_get(ctx, &fld_thread_key);
+        struct fld_thread_info *info;
+        ENTRY;
+        
+        info = lu_context_key_get(ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
         info->fti_rec = cpu_to_be64(mds_num);
-        return (void *)&info->fti_rec;
+        RETURN((void *)&info->fti_rec);
 }
 
 int fld_handle_insert(struct lu_server_fld *fld,
@@ -126,8 +135,8 @@ int fld_handle_insert(struct lu_server_fld *fld,
         struct dt_object *dt_obj = fld->fld_obj;
         struct txn_param txn;
         struct thandle *th;
-        int    rc;
-
+        int rc;
+        ENTRY;
 
         /*stub here, will fix it later*/
         txn.tp_credits = FLD_TXN_INDEX_INSERT_CREDITS;
@@ -150,8 +159,8 @@ int fld_handle_delete(struct lu_server_fld *fld,
         struct dt_object *dt_obj = fld->fld_obj;
         struct txn_param txn;
         struct thandle *th;
-        int    rc;
-
+        int rc;
+        ENTRY;
 
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
@@ -166,16 +175,17 @@ int fld_handle_lookup(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       fidseq_t seq_num, mdsno_t *mds_num)
 {
-        int result;
-
+        int rc;
+        ENTRY;
+        
         struct dt_object *dt_obj = fld->fld_obj;
         struct dt_rec    *rec = fld_rec(ctx, 0);
 
-        result = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
-                                                  fld_key(ctx, seq_num));
-        if (result == 0)
+        rc = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
+                                              fld_key(ctx, seq_num));
+        if (rc == 0)
                 *mds_num = be64_to_cpu(*(__u64 *)rec);
-        return result;
+        RETURN(rc);
 }
 
 int fld_iam_init(struct lu_server_fld *fld,
@@ -184,7 +194,6 @@ int fld_iam_init(struct lu_server_fld *fld,
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj;
         int rc;
-
         ENTRY;
 
         if (fld_key_registered == 0) {
@@ -225,6 +234,7 @@ int fld_iam_init(struct lu_server_fld *fld,
 void fld_iam_fini(struct lu_server_fld *fld,
                   const struct lu_context *ctx)
 {
+        ENTRY;
         if (!IS_ERR(fld->fld_cookie) && fld->fld_cookie != NULL) {
                 fld->fld_dt->dd_ops->dt_index_fini(ctx, fld->fld_cookie);
                 fld->fld_cookie = NULL;
@@ -234,7 +244,8 @@ void fld_iam_fini(struct lu_server_fld *fld,
                 fld->fld_obj = NULL;
         }
         if (fld_key_registered > 0) {
-                if (-- fld_key_registered == 0)
+                if (--fld_key_registered == 0)
                         lu_context_key_degister(&fld_thread_key);
         }
+        EXIT;
 }
