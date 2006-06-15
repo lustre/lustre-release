@@ -74,7 +74,6 @@ struct dx_countlimit {
         u_int16_t count;
 };
 
-#define LEAF_HEAD_MAGIC 0x1976
 int main(int argc, char **argv)
 {
         int rc;
@@ -193,7 +192,7 @@ int main(int argc, char **argv)
         /* form leaf */
         head = memset(buf, 0, blocksize);
         *head = (struct iam_leaf_head) {
-                .ill_magic = cpu_to_le16(LEAF_HEAD_MAGIC),
+                .ill_magic = cpu_to_le16(IAM_LEAF_HEADER_MAGIC),
                 /*
                  * Leaf contains an entry with the smallest possible key
                  * (created by zeroing).

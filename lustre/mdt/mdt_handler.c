@@ -1705,12 +1705,12 @@ static struct lu_device *mdt_layer_setup(const struct lu_context *ctx,
         }
 
         ldt = type->typ_lu;
-        ldt->ldt_obd_type = type;
         if (ldt == NULL) {
                 CERROR("type: '%s'\n", typename);
                 GOTO(out_type, rc = -EINVAL);
         }
-
+        
+        ldt->ldt_obd_type = type;
         d = ldt->ldt_ops->ldto_device_alloc(ctx, ldt, cfg);
         if (IS_ERR(d)) {
                 CERROR("Cannot allocate device: '%s'\n", typename);

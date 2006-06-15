@@ -409,22 +409,51 @@ static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
         return next;
 }
 
+static int mdd_lov_init(struct mdd_device *mdd, struct lustre_cfg *cfg)
+{
+        int rc;
+        ENTRY;
+
+        /*FIXME lov device is a dt or obd device in this cycle?*/ 
+ 
+        rc = dt_device_init(&mdd->mdd_lov_dev, NULL); 
+        if (rc) 
+                GOTO(out, rc);
+               
+        mdd->mdd_lov_dev.dd_lu_dev.ld_obd = 
+                class_name2obd(lustre_cfg_string(cfg, 3));
+out:
+        RETURN(rc); 
+}
+
 static int mdd_process_config(const struct lu_context *ctx,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct mdd_device *m = lu2mdd_dev(d);
         struct lu_device *next = &m->mdd_child->dd_lu_dev;
-        int err;
+        int rc;
 
         switch(cfg->lcfg_command) {
-
+        case LCFG_SETUP:
+                rc = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                if (rc)
+                        GOTO(out, rc);
+                rc = mdd_mount(ctx, m);
+                if (rc)
+                        GOTO(out, rc);
+                rc = mdd_lov_init(m, cfg);
+                if (rc) {
+                        CERROR("lov init error %d \n", rc);
+                        /*FIXME umount the mdd*/
+                        GOTO(out, rc);
+                }
+                break;
         default:
-                err = next->ld_ops->ldo_process_config(ctx, next, cfg);
-                if (err == 0 && cfg->lcfg_command == LCFG_SETUP)
-                        err = mdd_mount(ctx, m);
+                rc = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                break;
         }
-
-        RETURN(err);
+out:
+        RETURN(rc);
 }
 
 static struct lu_device_operations mdd_lu_ops = {
@@ -956,10 +985,13 @@ struct lu_device *mdd_device_alloc(const struct lu_context *ctx,
 static void mdd_device_free(const struct lu_context *ctx, struct lu_device *lu)
 {
         struct mdd_device *m = lu2mdd_dev(lu);
+        struct dt_device *dt_lov = &m->mdd_lov_dev;
 
         LASSERT(atomic_read(&lu->ld_ref) == 0);
         md_device_fini(&m->mdd_md_dev);
-
+        
+        class_put_type(dt_lov->dd_lu_dev.ld_type->ldt_obd_type);
+        
         OBD_FREE_PTR(m);
 }
 
