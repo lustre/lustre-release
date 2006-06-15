@@ -527,8 +527,6 @@ seq_server_init(struct lu_server_seq *seq,
                 int flags) 
 {
         int rc; 
-        ENTRY;
-
         struct ptlrpc_service_conf seq_conf = { 
                 .psc_nbufs = MDS_NBUFS, 
                 .psc_bufsize = MDS_BUFSIZE, 
@@ -539,6 +537,7 @@ seq_server_init(struct lu_server_seq *seq,
                 .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT, 
                 .psc_num_threads = SEQ_NUM_THREADS
         };
+        ENTRY;
 
 	LASSERT(dev != NULL);
 	LASSERT(cli != NULL);

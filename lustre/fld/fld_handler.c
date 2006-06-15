@@ -408,7 +408,6 @@ fld_req_handle0(const struct lu_context *ctx,
         struct md_fld *out;
         int rc = -EPROTO;
         __u32 *opc;
-
         ENTRY;
 
         req_capsule_init(&pill, req, RCL_SERVER,
@@ -447,7 +446,7 @@ static int fld_req_handle(struct ptlrpc_request *req)
         int fail = OBD_FAIL_FLD_ALL_REPLY_NET;
         const struct lu_context *ctx;
         struct lu_site    *site;
-        int result;
+        int rc = -EPROTO;
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_FLD_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
@@ -455,27 +454,26 @@ static int fld_req_handle(struct ptlrpc_request *req)
         ctx = req->rq_svc_thread->t_ctx;
         LASSERT(ctx != NULL);
         LASSERT(ctx->lc_thread == req->rq_svc_thread);
-        result = -EPROTO;
         if (req->rq_reqmsg->opc == FLD_QUERY) {
                 if (req->rq_export != NULL) {
                         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
                         LASSERT(site != NULL);
-                        result = fld_req_handle0(ctx, site->ls_fld, req);
+                        rc = fld_req_handle0(ctx, site->ls_fld, req);
                 } else {
                         CERROR("Unconnected request\n");
                         req->rq_status = -ENOTCONN;
-                        GOTO(out, result = -ENOTCONN);
+                        GOTO(out, rc = -ENOTCONN);
                 }
         } else {
                 CERROR("Wrong opcode: %d\n", req->rq_reqmsg->opc);
                 req->rq_status = -ENOTSUPP;
-                result = ptlrpc_error(req);
-                RETURN(result);
+                rc = ptlrpc_error(req);
+                RETURN(rc);
         }
 
         EXIT;
 out:
-        target_send_reply(req, result, fail);
+        target_send_reply(req, rc, fail);
         return 0;
 }
 
@@ -484,7 +482,7 @@ fld_server_init(struct lu_server_fld *fld,
                 const struct lu_context *ctx,
                 struct dt_device *dt)
 {
-        int result;
+        int rc;
         struct ptlrpc_service_conf fld_conf = {
                 .psc_nbufs            = MDS_NBUFS,
                 .psc_bufsize          = MDS_BUFSIZE,
@@ -495,31 +493,32 @@ fld_server_init(struct lu_server_fld *fld,
                 .psc_watchdog_timeout = FLD_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads      = FLD_NUM_THREADS
         };
+        ENTRY;
 
         fld->fld_dt = dt;
         lu_device_get(&dt->dd_lu_dev);
         INIT_LIST_HEAD(&fld_list_head.fld_list);
         spin_lock_init(&fld_list_head.fld_lock);
 
-        result = fld_iam_init(fld, ctx);
+        rc = fld_iam_init(fld, ctx);
 
-        if (result == 0) {
+        if (rc == 0) {
                 fld->fld_service =
                         ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
                                              LUSTRE_FLD0_NAME,
                                              fld->fld_proc_entry, NULL);
                 if (fld->fld_service != NULL)
-                        result = ptlrpc_start_threads(NULL, fld->fld_service,
-                                                      LUSTRE_FLD0_NAME);
+                        rc = ptlrpc_start_threads(NULL, fld->fld_service,
+                                                  LUSTRE_FLD0_NAME);
                 else
-                        result = -ENOMEM;
+                        rc = -ENOMEM;
         }
 
-        if (result != 0)
+        if (rc != 0)
                 fld_server_fini(fld, ctx);
         else
                 CDEBUG(D_INFO, "Server FLD initialized\n");
-        return result;
+        RETURN(rc);
 }
 EXPORT_SYMBOL(fld_server_init);
 
@@ -528,6 +527,7 @@ fld_server_fini(struct lu_server_fld *fld,
                 const struct lu_context *ctx)
 {
         struct list_head *pos, *n;
+        ENTRY;
 
         if (fld->fld_service != NULL) {
                 ptlrpc_unregister_service(fld->fld_service);
@@ -548,6 +548,7 @@ fld_server_fini(struct lu_server_fld *fld,
                 fld->fld_dt = NULL;
         }
         CDEBUG(D_INFO, "Server FLD finalized\n");
+        EXIT;
 }
 EXPORT_SYMBOL(fld_server_fini);
 
