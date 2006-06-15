@@ -178,7 +178,7 @@ sub main {
         }
         chop($mkfs_options);
 
-        printf "%s,%s,%s,/mnt/%s,mgs|mdt,,,,--device-size=%s,\"%s\"\n", 
+        printf "%s,%s,%s,/mnt/%s,mgs|mdt,,,,--device-size=%s --noformat,\"%s\"\n", 
             $mds->{"node"},
             lnet_options($net),
             $mds->{"dev"},
@@ -191,7 +191,7 @@ sub main {
     foreach my $ost (@{$objs{"ost"}}) {
         # find the net for this node
         my $net = find_obj("net", "node", $ost->{"node"}, @{$objs{"net"}});
-        printf "%s,%s,%s,/mnt/%s,ost,,\"%s\",,--device-size=%s,\"%s\"\n", 
+        printf "%s,%s,%s,/mnt/%s,ost,,\"%s\",,--device-size=%s --noformat,\"%s\"\n", 
         $ost->{"node"},
         lnet_options($net),
         $ost->{"dev"},
