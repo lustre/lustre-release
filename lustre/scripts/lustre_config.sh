@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
 #
 # lustre_config.sh - format and set up multiple lustre servers from a csv file
 #
@@ -16,7 +19,7 @@
 usage() {
 	cat >&2 <<EOF
 
-Usage:	`basename $0` [-t HAtype] [-n] [-f] [-m] [-h] [-v] <csv file>
+Usage:	`basename $0` [-t HAtype] [-n] [-f] [-m ] [ -d opts ] [-h] [-v] <csv file>
 
 	This script is used to format and set up multiple lustre servers from a
 	csv file.
@@ -32,6 +35,10 @@ Usage:	`basename $0` [-t HAtype] [-n] [-f] [-m] [-h] [-v] <csv file>
 	                hostnames in the cluster
 	-f		force-format the Lustre targets using --reformat option
 	-m		modify /etc/fstab to add the new Lustre targets
+    -d opts	list of options that will be put into the mount options field
+            of /etc/fstab (if you specify this option and you are using a
+            failover configuration you should include "noauto" in here in
+            addition to any other options you specify)
 	-v		verbose mode
 	csv file	a spreadsheet that contains configuration parameters
                         (separated by commas) for each target in a Lustre cl-
@@ -211,6 +218,9 @@ while getopts "t:nfmhv" OPTION; do
 	m)
 		MODIFY_FSTAB=true
 		;;
+    f)
+        FSTAB_OPTIONS="$OPTARG"
+        ;;
         h) 
 		sample	
 		;;
@@ -1147,7 +1157,11 @@ get_mntopts() {
 	local mnt_opts=
 	local ret_str
 
-	[ -n "${failovers}" ] && mnt_opts=defaults,noauto || mnt_opts=defaults
+    if [ -n "FSTAB_OPTIONS" ]; then
+        mnt_opts="$FSTAB_OPTIONS"
+    else
+	    [ -n "${failovers}" ] && mnt_opts=defaults,noauto || mnt_opts=defaults
+    fi
 
 	# Execute remote command to check whether the device
 	# is a block device or not
