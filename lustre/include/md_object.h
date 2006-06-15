@@ -190,6 +190,30 @@ static inline int mo_xattr_get(const struct lu_context *cx,
         LASSERT(m->mo_ops->moo_xattr_get);
         return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, name);
 }
+static inline int mo_xattr_del(const struct lu_context *cx,
+                               struct md_object *m,
+                               const char *name)
+{
+        LASSERT(m->mo_ops->moo_xattr_set);
+        /*NULL buffer & zero length for set? or we need a new interface*/
+        return m->mo_ops->moo_xattr_set(cx, m, NULL, 0, name);
+}
+
+static inline int mo_xattr_set(const struct lu_context *cx,
+                               struct md_object *m,
+                               void *buf, int buf_len, const char *name)
+{
+        LASSERT(m->mo_ops->moo_xattr_set);
+        return m->mo_ops->moo_xattr_set(cx, m, buf, buf_len, name);
+}
+static inline int mo_xattr_list(const struct lu_context *cx,
+                               struct md_object *m,
+                               void *buf, int buf_len)
+{
+        LASSERT(m->mo_ops->moo_xattr_get);
+        /*NULL name for get? or we need a new interface*/
+        return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, NULL);
+}
 
 
 static inline int mo_open(const struct lu_context *cx, struct md_object *m)

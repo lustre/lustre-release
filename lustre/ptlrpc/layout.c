@@ -169,6 +169,22 @@ static const struct req_msg_field *ldlm_intent_unlink_client[] = {
         &RMF_NAME
 };
 
+static const struct req_msg_field * mds_getxattr_client[] = {
+        &RMF_MDT_BODY,
+        &RMF_NAME
+};
+
+static const struct req_msg_field * mds_getxattr_server[] = {
+        &RMF_MDT_BODY,
+        &RMF_EADATA
+};
+
+static const struct req_msg_field * mds_setxattr_client[] = {
+        &RMF_MDT_BODY,
+        &RMF_NAME
+        &RMF_EADATA
+};
+
 static const struct req_format *req_formats[] = {
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
@@ -189,6 +205,8 @@ static const struct req_format *req_formats[] = {
         &RQF_LDLM_INTENT_UNLINK,
         &RQF_SEQ_QUERY,
         &RQF_FLD_QUERY,
+        &RQF_MDS_GETXATTR,
+        &RQF_MDS_SETXATTR
 };
 
 struct req_msg_field {
@@ -383,6 +401,14 @@ EXPORT_SYMBOL(RQF_MDS_STATFS);
 
 const struct req_format RQF_MDS_GETATTR =
         DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_only, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_GETATTR);
+
+const struct req_format RQF_MDS_GETXATTR =
+        DEFINE_REQ_FMT0("MDS_GETXATTR", mds_getxattr_client, mds_getxattr_server);
+EXPORT_SYMBOL(RQF_MDS_GETATTR);
+
+const struct req_format RQF_MDS_SETXATTR =
+        DEFINE_REQ_FMT0("MDS_SETXATTR", mds_setxattr_client, empty);
 EXPORT_SYMBOL(RQF_MDS_GETATTR);
 
 const struct req_format RQF_MDS_GETATTR_NAME =
@@ -648,6 +674,19 @@ void req_capsule_set_size(const struct req_capsule *pill,
         pill->rc_area[__req_capsule_offset(pill, field, loc)] = size;
 }
 EXPORT_SYMBOL(req_capsule_set_size);
+
+int req_capsule_get_size(const struct req_capsule *pill,
+                         const struct req_msg_field *field,
+                         enum req_location loc)
+{
+        LASSERT(location == RCL_SERVER || location == RCL_CLIENT);
+        if (loc == RCL_SERVER)
+                return pill->rc_area[__req_capsule_offset(pill, field, loc)];
+        /* else */
+        return lustre_msg_buflen(__req_msg(pill, loc),
+                                 __req_capsule_offset(pill, field, loc));
+}
+EXPORT_SYMBOL(req_capsule_get_size);
 
 #define FMT_FIELD(fmt, i, j) (fmt)->rf_fields[(i)].d[(j)]
 

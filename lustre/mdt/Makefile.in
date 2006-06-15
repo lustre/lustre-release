@@ -1,4 +1,4 @@
 MODULES := mdt
-mdt-objs := mdt_handler.o mdt_lib.o mdt_reint.o
+mdt-objs := mdt_handler.o mdt_lib.o mdt_reint.o mdt_xattr.o
 
 @INCLUDE_RULES@

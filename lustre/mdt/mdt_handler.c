@@ -304,16 +304,6 @@ static int mdt_disconnect(struct mdt_thread_info *info)
         return target_handle_disconnect(mdt_info_req(info));
 }
 
-static int mdt_setxattr(struct mdt_thread_info *info)
-{
-        return -EOPNOTSUPP;
-}
-
-static int mdt_getxattr(struct mdt_thread_info *info)
-{
-        return -EOPNOTSUPP;
-}
-
 static int mdt_readpage(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
@@ -2285,8 +2275,8 @@ DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR,      mdt_getattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
-DEF_MDT_HNDL_0(HABEO_CORPUS,              SETXATTR,     mdt_setxattr),
-DEF_MDT_HNDL_0(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS,              SETXATTR,     mdt_setxattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
 DEF_MDT_HNDL_0(HABEO_CORPUS,              READPAGE,     mdt_readpage),
 DEF_MDT_HNDL_F(0,                         REINT,        mdt_reint),

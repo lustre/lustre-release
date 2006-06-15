@@ -69,6 +69,9 @@ const void *req_capsule_other_get(const struct req_capsule *pill,
 void req_capsule_set_size(const struct req_capsule *pill,
                           const struct req_msg_field *field,
                           enum req_location loc, int size);
+int req_capsule_get_size(const struct req_capsule *pill,
+                          const struct req_msg_field *field,
+                          enum req_location loc);
 void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt);
 
 int req_capsule_has_field(const struct req_capsule *pill,
@@ -83,6 +86,8 @@ extern const struct req_format RQF_SEQ_QUERY;
 extern const struct req_format RQF_FLD_QUERY;
 extern const struct req_format RQF_MDS_GETSTATUS;
 extern const struct req_format RQF_MDS_STATFS;
+extern const struct req_format RQF_MDS_GETXATTR;
+extern const struct req_format RQF_MDS_SETXATTR;
 extern const struct req_format RQF_MDS_GETATTR;
 extern const struct req_format RQF_MDS_CONNECT;
 extern const struct req_format RQF_MDS_DISCONNECT;
