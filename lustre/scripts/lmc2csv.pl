@@ -136,10 +136,9 @@ sub lnet_options {
 my %objs;
 my @mgses;
 
-if (defined($ENV{"MOUNTPT"}) {
+my $MOUNTPT = "/mnt";
+if (defined($ENV{"MOUNTPT"})) {
     $MOUNTPT = $ENV{"MOUNTPT"};
-} else {
-    $MOUNTPT = "/mnt";
 }
 
 while(<>) {
