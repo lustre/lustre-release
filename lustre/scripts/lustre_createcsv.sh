@@ -24,8 +24,8 @@ Usage:	`basename $0` [-t HAtype] [-h] [-v] [-f csv_filename]
 	-t HAtype	collect High-Availability software configurations
 			The argument following -t is used to indicate the High-
 			Availability software type. The HA software types which 
-			are currently supported are: hbv1 (Heartbeat v1), hbv2 
-			(Heartbeat v2) and cluman (CluManager).
+			are currently supported are: hbv1 (Heartbeat version 1)
+			and hbv2 (Heartbeat version 2).
 	-h		help
 	-v		verbose mode
 	-f csv_filename	designate a name for the csv file
@@ -104,6 +104,7 @@ let "LDD_F_SV_TYPE_MGS = 0x0004"
 ALWAYS_MNTOPTS=${ALWAYS_MNTOPTS:-"errors=remount-ro"}
 MDT_MGS_ALWAYS_MNTOPTS=${MDT_MGS_ALWAYS_MNTOPTS:-",iopen_nopriv,user_xattr"}
 OST_ALWAYS_MNTOPTS=${OST_ALWAYS_MNTOPTS:-",asyncdel"}
+OST_DEFAULT_MNTOPTS=${OST_DEFAULT_MNTOPTS:-",extents,mballoc"}
 
 # User-settable parameter keys
 PARAM_MGSNODE=${PARAM_MGSNODE:-"mgsnode="}
@@ -1058,6 +1059,7 @@ get_mntopts() {
 	mount_opts="${ldd_mount_opts#${ALWAYS_MNTOPTS}}"
 	mount_opts="${mount_opts#${MDT_MGS_ALWAYS_MNTOPTS}}"
 	mount_opts="${mount_opts#${OST_ALWAYS_MNTOPTS}}"
+	mount_opts="${mount_opts#${OST_DEFAULT_MNTOPTS}}"
 	mount_opts="`echo \"${mount_opts}\" | sed 's/^,//'`"
 
 	[ "${mount_opts}" != "${mount_opts#*,*}" ] && echo "\""${mount_opts}"\"" \
