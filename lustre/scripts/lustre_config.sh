@@ -19,7 +19,7 @@
 usage() {
     cat >&2 <<EOF
 
-Usage:  `basename $0` [-t HAtype] [-n] [-f] [-m] [-d opts] [-h] [-v] <csv file>
+Usage:  `basename $0` [-t HAtype] [-n] [-f] [-m] [-h] [-v] <csv file>
 
     This script is used to format and set up multiple lustre servers from a
     csv file.
@@ -33,11 +33,11 @@ Usage:  `basename $0` [-t HAtype] [-n] [-f] [-m] [-d opts] [-h] [-v] <csv file>
     -n          no net - don't verify network connectivity and hostnames
                 in the cluster
     -f          force-format the Lustre targets using --reformat option
-    -m          modify /etc/fstab to add the new Lustre targets
-    -d opts     list of options that will be put into the mount options field
-                of /etc/fstab (if you specify this option and you are using a
-                failover configuration you should include "noauto" in here in
-                addition to any other options you specify)
+    -m          no fstab change - don't modify /etc/fstab to add the new
+                Lustre targets
+                If using this option, then the value of "mount options"
+                item in the csv file will be passed to mkfs.lustre, else
+                the value will be added into the /etc/fstab.
     -v          verbose mode
     csv file    a spreadsheet that contains configuration parameters
                 (separated by commas) for each target in a Lustre cluster
@@ -88,7 +88,7 @@ lustre-mgs1,options lnet 'networks="tcp,elan"',/tmp/mgs,/mnt/mgs,mgs,,,,--device
 lustre-mdt1,options lnet 'networks="tcp,elan"',/tmp/mdt,/mnt/mdt,mdt,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,-J size=4,,lustre-mdt2
 
 # ost
-lustre-ost1,options lnet 'networks="tcp,elan"',/tmp/ost,/mnt/ost,ost,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,-J size=4,"extents,mballoc",lustre-ost2
+lustre-ost1,options lnet 'networks="tcp,elan"',/tmp/ost,/mnt/ost,ost,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,-J size=4,,lustre-ost2
 -------------------------------------------------------------------------------
 
 Example 3 - with Heartbeat version 1 configuration options:
@@ -193,9 +193,9 @@ declare -a HB_CHANNELS SRV_IPADDRS HB_OPTIONS
 
 
 VERIFY_CONNECT=true
-MODIFY_FSTAB=false
+MODIFY_FSTAB=true
 # Get and check the positional parameters
-while getopts "t:nfmd:hv" OPTION; do
+while getopts "t:nfmhv" OPTION; do
     case $OPTION in
     t)
         HATYPE_OPT=$OPTARG
@@ -214,10 +214,7 @@ while getopts "t:nfmd:hv" OPTION; do
         REFORMAT_OPTION=$"--reformat "
         ;;
     m)
-        MODIFY_FSTAB=true
-        ;;
-    d)
-        FSTAB_OPTIONS="$OPTARG"
+        MODIFY_FSTAB=false
         ;;
     h)
         sample
@@ -652,7 +649,9 @@ construct_mkfs_cmdline() {
 
     if [ -n "${MOUNT_OPTIONS[i]}" ]; then
         MOUNT_OPTIONS[i]=`echo "${MOUNT_OPTIONS[i]}" | sed 's/^"//' | sed 's/"$//'`
-        MKFS_CMD=${MKFS_CMD}$"--mountfsoptions="$"\""${MOUNT_OPTIONS[i]}$"\""$" "
+        if ! ${MODIFY_FSTAB}; then
+            MKFS_CMD=${MKFS_CMD}$"--mountfsoptions="$"\""${MOUNT_OPTIONS[i]}$"\""$" "
+        fi
     fi
 
     if [ -n "${FAILOVERS[i]}" ]; then
@@ -1153,11 +1152,7 @@ get_mntopts() {
     local mnt_opts=
     local ret_str
 
-    if [ -n "$FSTAB_OPTIONS" ]; then
-        mnt_opts="$FSTAB_OPTIONS"
-    else
-        [ -n "${failovers}" ] && mnt_opts=defaults,noauto || mnt_opts=defaults
-    fi
+    [ -n "${failovers}" ] && mnt_opts=defaults,noauto || mnt_opts=defaults
 
     # Execute remote command to check whether the device
     # is a block device or not
@@ -1197,11 +1192,18 @@ modify_fstab() {
         verbose_output "Modify /etc/fstab of host ${HOST_NAME[i]}"\
                    "to add Lustre target ${DEVICE_NAME[i]}"
         mntent=${DEVICE_NAME[i]}"\t\t"${MOUNT_POINT[i]}"\t\t"${FS_TYPE}
-        mntopts=$(get_mntopts ${HOST_NAME[i]} ${DEVICE_NAME[i]}\
-                  ${FAILOVERS[i]})
-        if [ $? -ne 0 ]; then
-            echo >&2 "${mntopts}"
-            return 1
+
+        # Get mount options
+        if [ -n "${MOUNT_OPTIONS[i]}" ]; then
+            # The mount options already specified in the csv file.
+            mntopts=${MOUNT_OPTIONS[i]}
+        else
+            mntopts=$(get_mntopts ${HOST_NAME[i]} ${DEVICE_NAME[i]}\
+                    ${FAILOVERS[i]})
+            if [ $? -ne 0 ]; then
+                echo >&2 "${mntopts}"
+                return 1
+            fi
         fi
 
         mntent=${mntent}"\t"${mntopts}"\t"0" "0
