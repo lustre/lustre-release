@@ -175,11 +175,10 @@ int fld_handle_lookup(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       fidseq_t seq_num, mdsno_t *mds_num)
 {
-        int rc;
-        ENTRY;
-        
         struct dt_object *dt_obj = fld->fld_obj;
         struct dt_rec    *rec = fld_rec(ctx, 0);
+        int rc;
+        ENTRY;
 
         rc = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
                                               fld_key(ctx, seq_num));

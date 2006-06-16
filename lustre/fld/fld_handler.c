@@ -34,6 +34,7 @@
 # include <libcfs/libcfs.h>
 # include <linux/module.h>
 # include <linux/jbd.h>
+# include <asm/div64.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 # include <libcfs/list.h>
@@ -152,13 +153,13 @@ fld_cache_delete(struct fld_cache_info *fld_cache, __u64 lu_seq)
 
 static int fld_rrb_hash(struct lu_client_fld *fld, __u64 seq)
 {
-        return seq % fld->fld_count;
+        return do_div(seq, fld->fld_count);
 }
 
 static int fld_dht_hash(struct lu_client_fld *fld, __u64 seq)
 {
         CWARN("using Round Robin hash func for while\n");
-        return seq % fld->fld_count;
+        return do_div(seq, fld->fld_count);
 }
 
 static struct lu_fld_hash fld_hash[2] = {

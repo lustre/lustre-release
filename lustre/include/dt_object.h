@@ -227,7 +227,7 @@ struct dt_object_operations {
          */
         
         int   (*do_object_ref_add)(const struct lu_context *ctxt, 
-                                   struct dt_object *dt);
+                                   struct dt_object *dt, struct thandle *th);
 
         /*
          * Del nlink of the object
@@ -235,7 +235,7 @@ struct dt_object_operations {
          */
         
         int   (*do_object_ref_del)(const struct lu_context *ctxt, 
-                                   struct dt_object *dt);
+                                   struct dt_object *dt, struct thandle *th);
 
 };
 

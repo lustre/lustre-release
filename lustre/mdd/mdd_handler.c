@@ -55,7 +55,10 @@ static void mdd_lock(const struct lu_context *ctx,
                      struct mdd_object *obj, enum dt_lock_mode mode);
 static void mdd_unlock(const struct lu_context *ctx,
                        struct mdd_object *obj, enum dt_lock_mode mode);
-
+static int __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
+                         struct thandle *handle);
+static int __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
+                         struct thandle *handle);
 static struct md_object_operations mdd_obj_ops;
 static struct md_dir_operations    mdd_dir_ops;
 static struct lu_object_operations mdd_lu_obj_ops;
@@ -248,6 +251,7 @@ enum mdd_txn_op {
         MDD_TXN_INDEX_INSERT_OP,
         MDD_TXN_INDEX_DELETE_OP,
         MDD_TXN_LINK_OP,
+        MDD_TXN_UNLINK_OP,
         MDD_TXN_RENAME_OP,
         MDD_TXN_MKDIR_OP
 };
@@ -265,6 +269,7 @@ enum {
         MDD_TXN_INDEX_INSERT_CREDITS   = 10,
         MDD_TXN_INDEX_DELETE_CREDITS   = 10,
         MDD_TXN_LINK_CREDITS           = 10,
+        MDD_TXN_UNLINK_CREDITS         = 10,
         MDD_TXN_RENAME_CREDITS         = 10,
         MDD_TXN_MKDIR_CREDITS          = 10
 };
@@ -286,6 +291,7 @@ DEFINE_MDD_TXN_OP_DESC(MDD_TXN_XATTR_SET);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_INSERT);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_DELETE);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_LINK);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_UNLINK);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_RENAME);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_MKDIR);
 
@@ -683,6 +689,7 @@ mdd_index_delete(const struct lu_context *ctxt, struct md_object *pobj,
         RETURN(rc);
 }
 */
+
 static int
 mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
          struct md_object *src_obj, const char *name)
@@ -691,7 +698,7 @@ mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
         struct mdd_object *mdd_sobj = mdo2mddo(src_obj);
         struct mdd_device *mdd = mdo2mdd(src_obj);
         struct thandle *handle;
-        int rc, nlink;
+        int rc;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_LINK);
@@ -706,17 +713,49 @@ mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
         if (rc)
                 GOTO(exit, rc);
 
-        rc = mdd_xattr_get(ctxt, src_obj, &nlink, sizeof(nlink), "NLINK");
-        ++nlink;
-
-        rc = __mdd_xattr_set(ctxt, mdd, mdd_sobj,
-                             &nlink, sizeof(nlink), "NLINK", handle);
+        rc = __mdd_ref_add(ctxt, mdd_sobj, handle);
 exit:
         mdd_unlock2(ctxt, mdd_tobj, mdd_sobj);
 
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
 }
+
+static int
+mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
+           struct md_object *cobj, const char *name)
+{
+        struct mdd_device *mdd = mdo2mdd(pobj);
+        struct mdd_object *mdd_pobj = mdo2mddo(pobj);
+        struct mdd_object *mdd_cobj = mdo2mddo(cobj);
+        struct thandle *handle;
+        int rc;
+        ENTRY;
+
+        mdd_txn_param_build(ctxt, &MDD_TXN_UNLINK);
+        handle = mdd_trans_start(ctxt, mdd);
+        if (IS_ERR(handle))
+                RETURN(PTR_ERR(handle));
+        
+        mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
+        
+        rc = __mdd_index_delete(ctxt, mdd, mdd_pobj, name, handle); 
+        if (rc)
+                GOTO(cleanup, rc);
+        
+        rc = __mdd_ref_del(ctxt, mdd_pobj, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        rc = __mdd_ref_del(ctxt, mdd_cobj, handle);
+        if (rc)
+                GOTO(cleanup, rc); 
+cleanup:
+       /*FIXME: error handling*/ 
+        mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
+        mdd_trans_stop(ctxt, mdd, handle);
+        RETURN(rc);
+} 
 
 static void mdd_rename_lock(struct mdd_device *mdd,
                             struct mdd_object *src_pobj,
@@ -772,6 +811,7 @@ mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                         GOTO(cleanup, rc);
         }
 cleanup:
+       /*FIXME: error handling*/ 
         mdd_rename_unlock(mdd, mdd_spobj, mdd_tpobj, /*mdd_sobj,*/ mdd_tobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
@@ -902,34 +942,64 @@ static int mdd_statfs(const struct lu_context *ctx,
         RETURN(rc);
 }
 
+static int
+__mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
+              struct thandle *handle)
+{
+        struct dt_object *next;
+        
+        LASSERT(!lu_object_exists(ctxt, &obj->mod_obj.mo_lu));
+        next = mdd_object_child(obj);
+        return next->do_ops->do_object_ref_add(ctxt, next, handle);
+}
+
 static int mdd_ref_add(const struct lu_context *ctxt, struct md_object *obj)
 {
         struct mdd_object *mdd_obj = mdo2mddo(obj);
-        struct dt_object *next;
-        int rc;
+        struct mdd_device *mdd = mdo2mdd(obj);
+        struct thandle *handle;
+        int  rc;
         ENTRY;
 
-        LASSERT(!lu_object_exists(ctxt, &obj->mo_lu)); 
-        
-        next = mdd_object_child(mdd_obj);
-        rc = next->do_ops->do_object_ref_add(ctxt, next);
-        
+        mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
+        handle = mdd_trans_start(ctxt, mdd);
+        if (!handle)
+                RETURN(-ENOMEM);
+        rc = __mdd_ref_add(ctxt, mdd_obj, handle);
+
+        mdd_trans_stop(ctxt, mdd, handle);
+               
         RETURN(rc);
+}
+
+static int
+__mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
+              struct thandle *handle)
+{
+        struct dt_object *next;
+        
+        LASSERT(!lu_object_exists(ctxt, &obj->mod_obj.mo_lu)); 
+        next = mdd_object_child(obj);
+        return next->do_ops->do_object_ref_del(ctxt, next, handle);
 }
 
 static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj)
 {
         struct mdd_object *mdd_obj = mdo2mddo(obj);
-        struct dt_object *next;
-        int rc;
+        struct mdd_device *mdd = mdo2mdd(obj);
+        struct thandle *handle;
+        int  rc;
         ENTRY;
 
-        LASSERT(!lu_object_exists(ctxt, &obj->mo_lu));
+        mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
+        handle = mdd_trans_start(ctxt, mdd);
+        if (!handle)
+                RETURN(-ENOMEM);
+        rc = __mdd_ref_del(ctxt, mdd_obj, handle);
 
-        next = mdd_object_child(mdd_obj);
-        rc = next->do_ops->do_object_ref_del(ctxt, next);
-
-        RETURN(0);
+        mdd_trans_stop(ctxt, mdd, handle);
+               
+        RETURN(rc);
 }
 
 struct md_device_operations mdd_ops = {
@@ -944,7 +1014,8 @@ static struct md_dir_operations mdd_dir_ops = {
         .mdo_mkdir         = mdd_mkdir,
         .mdo_rename        = mdd_rename,
         .mdo_link          = mdd_link,
-        .mdo_name_insert   = mdd_mkname
+        .mdo_name_insert   = mdd_mkname,
+        .mdo_unlink        = mdd_unlink
 };
 
 

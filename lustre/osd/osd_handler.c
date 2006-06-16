@@ -32,6 +32,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#include <linux/fs.h>
 
 /* LUSTRE_VERSION_CODE */
 #include <lustre_ver.h>
@@ -594,31 +595,33 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
 }
 
 static void osd_inode_inc_link(const struct lu_context *ctxt, 
-                               struct inode *inode)
+                               struct inode *inode, struct thandle *th)
 {
         inode->i_nlink ++;
+        mark_inode_dirty(inode);
 }
 
 
 static void osd_inode_dec_link(const struct lu_context *ctxt, 
-                               struct inode *inode)
+                               struct inode *inode, struct thandle *th)
 {
         inode->i_nlink --;
+        mark_inode_dirty(inode);
 }
 
 static int osd_object_ref_add(const struct lu_context *ctxt, 
-                              struct dt_object *dt)
+                              struct dt_object *dt, struct thandle *th)
 {
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        osd_inode_inc_link(ctxt, osd_dt_obj(dt)->oo_inode);
+        osd_inode_inc_link(ctxt, osd_dt_obj(dt)->oo_inode, th);
         return 0;
 }
 
 static int osd_object_ref_del(const struct lu_context *ctxt, 
-                              struct dt_object *dt)
+                              struct dt_object *dt, struct thandle *th)
 {
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        osd_inode_dec_link(ctxt, osd_dt_obj(dt)->oo_inode);
+        osd_inode_dec_link(ctxt, osd_dt_obj(dt)->oo_inode, th);
         return 0;
 }
 
