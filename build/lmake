@@ -378,33 +378,42 @@ depend_kernel()
     $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
     rm -f rpm-release
     cp "$CONFIG_FILE" .config
-    # use the expect script to "make oldconfig" and answer the questions for
-    # new items conservatively.  QA will get notified on anything newly added
-    # for them to review and adjust accordingly.
-    local logfile=$(mktemp /tmp/XXXXXX)
-    #timed_run 300 $TOPDIR/build/update_oldconfig $logfile
-    #local RC=${PIPESTATUS[0]}
-    #local RC=$(strace -f -o update_oldconfig.strace bash -c "$TOPDIR/build/update_oldconfig $logfile; echo \$?")
-    $TOPDIR/build/update_oldconfig $logfile
-    local RC=${PIPESTATUS[0]}
-    if [ $RC -eq 143 ]; then
-        fatal 1 "update_oldconfig timed out"
-    elif [ $RC -ne 0 ]; then
-	# dump the log
-        cat $logfile
-        rm -f $logfile
-	if [ -f update_oldconfig.strace ]; then
-	    cat update_oldconfig.strace
-	    rm -f update_oldconfig.strace
+    local UPDATE_OLDCONFIG=
+    for oc in oldconfig_nonint silentoldconfig oldconfig ; do                   
+        if grep -q "$oc" Makefile ; then                                        
+            timed_run 300 $MAKE "$MAKE_CC" $oc || UPDATE_OLDCONFIG=1
+            break
         fi
-        fatal 1 "update_oldconfig failed: $RC. See log above."
-    fi
-    rm -f $logfile
-    # now notify if resulting .config is different than $CONFIG_FILE
-    local tmpfile=$(mktemp /tmp/XXXXXX)
-    diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
-    if [ -s $tmpfile ]; then
-        { cat <<EOF
+    done
+
+    if [ "$UPDATE_OLDCONFIG" ] ; then
+        # use the expect script to "make oldconfig" and answer the questions for
+        # new items conservatively.  QA will get notified on anything newly added
+        # for them to review and adjust accordingly.
+        local logfile=$(mktemp /tmp/XXXXXX)
+        #timed_run 300 $TOPDIR/build/update_oldconfig $logfile
+        #local RC=${PIPESTATUS[0]}
+        local RC=$(strace -f -o update_oldconfig.strace bash -c "$TOPDIR/build/update_oldconfig $logfile; echo \$?")
+        #$TOPDIR/build/update_oldconfig $logfile
+        #local RC=${PIPESTATUS[0]}
+        if [ $RC -eq 143 ]; then
+            fatal 1 "update_oldconfig timed out"
+        elif [ $RC -ne 0 ]; then
+	    # dump the log
+            cat $logfile
+            rm -f $logfile
+	    if [ -f update_oldconfig.strace ]; then
+	        cat update_oldconfig.strace
+	        rm -f update_oldconfig.strace
+            fi
+            fatal 1 "update_oldconfig failed: $RC. See log above."
+        fi
+        rm -f $logfile
+        # now notify if resulting .config is different than $CONFIG_FILE
+        local tmpfile=$(mktemp /tmp/XXXXXX)
+        diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
+        if [ -s $tmpfile ]; then
+            { cat <<EOF
 To: qa@lists.clusterfs.com
 Subject: kernel_config change 
 
@@ -412,14 +421,16 @@ The result of a make oldconfig on file $CONFIG_FILE resulted in a
 difference when compared to .config in the following way:
 
 EOF
-        cat $tmpfile
-        echo -e "\n\nPlease consider updating $CONFIG_FILE."
-	# not sure these are entirely useful.  the above and "patch" are good
-	#echo -e "\nThe entire new .config file:\n"
-        #cat .config
-        } | sendmail -fqa@clusterfs.com -t
+            cat $tmpfile
+            echo -e "\n\nPlease consider updating $CONFIG_FILE."
+	    # not sure these are entirely useful.  the above and "patch" are good
+	    #echo -e "\nThe entire new .config file:\n"
+            #cat .config
+            } | sendmail -fqa@clusterfs.com -t
+        fi
+        rm -f $tmpfile
     fi
-    rm -f $tmpfile
+
     case "$VERSION" in
 	2.6*)
             $MAKE "$MAKE_CC" include/asm
