@@ -131,75 +131,79 @@ sub lnet_options {
 
 }
 
-sub main {
-    my %objs;
-    my @mgses;
+# main
 
-    while(<>) {
-        my @args = split;
+my %objs;
+my @mgses;
 
-        for (my $i = 0; $i <= $#args; $i++) {
-            if ($args[$i] eq "--add") {
-                my $type = "$args[$i + 1]";
-                my $subref = "add_$type";
-                splice(@args, $i, 2);
-                push(@{$objs{$type}}, &$subref(@args));
-                last;
-            }
-            if ($i == $#args) {
-                print STDERR "I don't know how to handle @args\n";
-                exit(1);
-            }
+if (defined($ENV{"MOUNTPT"}) {
+    $MOUNTPT = $ENV{"MOUNTPT"};
+} else {
+    $MOUNTPT = "/mnt";
+}
+
+while(<>) {
+    my @args = split;
+
+    for (my $i = 0; $i <= $#args; $i++) {
+        if ($args[$i] eq "--add") {
+            my $type = "$args[$i + 1]";
+            my $subref = "add_$type";
+            splice(@args, $i, 2);
+            push(@{$objs{$type}}, &$subref(@args));
+            last;
         }
-    }
-
-    # link lovs to mdses
-    foreach my $lov (@{$objs{"lov"}}) {
-        my $mds = find_obj("mds", "mds", $lov->{"mds"}, @{$objs{"mds"}});
-        $mds->{"lov"} = $lov;
-    }
-    # XXX could find failover pairs of osts and mdts here and link them to
-    # one another and then fill in their details in the csv generators below
-    foreach my $mds (@{$objs{"mds"}}) {
-        # find the net for this node
-        my $net = find_obj("net", "node", $mds->{"node"}, @{$objs{"net"}});
-        my $lov = $mds->{"lov"};
-        my $mkfs_options="";
-        if (defined($lov->{"stripe_sz"})) {
-            $mkfs_options .= "default_stripe_size=" . $lov->{"stripe_sz"} . ",";
+        if ($i == $#args) {
+            print STDERR "I don't know how to handle @args\n";
+            exit(1);
         }
-        if (defined($lov->{"stripe_cnt"})) {
-            $mkfs_options .= "default_stripe_count=" .
-                             $lov->{"stripe_cnt"} . ",";
-        }
-        if (defined($lov->{"stripe_pattern"})) {
-            $mkfs_options .= "default_stripe_pattern=" .
-                             $lov->{"stripe_pattern"} . ",";
-        }
-        chop($mkfs_options);
-
-        printf "%s,%s,%s,/mnt/%s,mgs|mdt,,,,--device-size=%s --noformat,\"%s\"\n", 
-            $mds->{"node"},
-            lnet_options($net),
-            $mds->{"dev"},
-            $mds->{"mds"},
-            $mds->{"size"},
-            $mkfs_options;
-        push(@mgses, $net->{"nid"});
-    }
-
-    foreach my $ost (@{$objs{"ost"}}) {
-        # find the net for this node
-        my $net = find_obj("net", "node", $ost->{"node"}, @{$objs{"net"}});
-        printf "%s,%s,%s,/mnt/%s,ost,,\"%s\",,--device-size=%s --noformat,\"%s\"\n", 
-        $ost->{"node"},
-        lnet_options($net),
-        $ost->{"dev"},
-        $ost->{"ost"},
-        join(",", @mgses),
-        $ost->{"size"},
-        $ost->{"mountfsoptions"};
     }
 }
 
-&main;
+# link lovs to mdses
+foreach my $lov (@{$objs{"lov"}}) {
+    my $mds = find_obj("mds", "mds", $lov->{"mds"}, @{$objs{"mds"}});
+    $mds->{"lov"} = $lov;
+}
+# XXX could find failover pairs of osts and mdts here and link them to
+# one another and then fill in their details in the csv generators below
+foreach my $mds (@{$objs{"mds"}}) {
+    # find the net for this node
+    my $net = find_obj("net", "node", $mds->{"node"}, @{$objs{"net"}});
+    my $lov = $mds->{"lov"};
+    my $mkfs_options="";
+    if (defined($lov->{"stripe_sz"})) {
+        $mkfs_options .= "default_stripe_size=" . $lov->{"stripe_sz"} . ",";
+    }
+    if (defined($lov->{"stripe_cnt"})) {
+        $mkfs_options .= "default_stripe_count=" .
+                         $lov->{"stripe_cnt"} . ",";
+    }
+    if (defined($lov->{"stripe_pattern"})) {
+        $mkfs_options .= "default_stripe_pattern=" .
+                         $lov->{"stripe_pattern"} . ",";
+    }
+    chop($mkfs_options);
+
+    printf "%s,%s,%s,$MOUNTPT/%s,mgs|mdt,,,,--device-size=%s --noformat,\"%s\"\n", 
+        $mds->{"node"},
+        lnet_options($net),
+        $mds->{"dev"},
+        $mds->{"mds"},
+        $mds->{"size"},
+        $mkfs_options;
+    push(@mgses, $net->{"nid"});
+}
+
+foreach my $ost (@{$objs{"ost"}}) {
+    # find the net for this node
+    my $net = find_obj("net", "node", $ost->{"node"}, @{$objs{"net"}});
+    printf "%s,%s,%s,$MOUNTPT/%s,ost,,\"%s\",,--device-size=%s --noformat,\"%s\"\n", 
+    $ost->{"node"},
+    lnet_options($net),
+    $ost->{"dev"},
+    $ost->{"ost"},
+    join(",", @mgses),
+    $ost->{"size"},
+    $ost->{"mountfsoptions"};
+}
